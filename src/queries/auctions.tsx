@@ -28,10 +28,30 @@ import {
 import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
+import { getCoordsFromATag } from '@/lib/utils/coords'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '@/lib/auction/events'
+import {
+	validateAuctionImmutableTags,
+	validateBid,
+	validateBidLocalOnly,
+	validatePathReleaseLocalOnly,
+	validateSettlementEventLocalOnly,
+} from '@/lib/auction/validation'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { checkProofStateBatch } from '@/lib/cashu/nut7'
+import { parseBidEvent, type ParseBidEventResult } from '@/lib/schemas/auction/bidEvent'
+import {
+	parsePathReleaseEvent,
+	parseSettlementEvent,
+	type ParsePathReleaseEventResult,
+	type ParseSettlementEventResult,
+} from '@/lib/schemas/auction/settlementEvents'
+import type z from 'zod'
 
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
 
@@ -118,10 +138,11 @@ const chunkStrings = (values: string[], size: number): string[][] => {
 
 const cloneAuctionEventWithRootId = (
 	ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>,
-	event: NDKEvent,
+	event: NDKEvent | NostrEventLike,
 	rootEventId: string,
 ): NDKEvent => {
-	const cloned = new NDKEvent(ndk, event.rawEvent())
+	const rawData = event instanceof NDKEvent ? event.rawEvent() : event
+	const cloned = new NDKEvent(ndk, rawData as NostrEventLike)
 	cloned.tags = [...cloned.tags.filter((tag) => tag[0] !== AUCTION_ROOT_EVENT_ID_TAG), [AUCTION_ROOT_EVENT_ID_TAG, rootEventId]]
 	return cloned
 }
@@ -799,7 +820,7 @@ export const getAuctionSpecs = (event: NDKEvent | null): Array<{ key: string; va
 		}))
 }
 
-export const getBidAmount = (bidEvent: NDKEvent | null): number => {
+export const getBidAmount = (bidEvent: NDKEvent | NostrEventLike | null): number => {
 	if (!bidEvent) return 0
 	const amountTag = bidEvent.tags.find((tag) => tag[0] === 'amount')?.[1]
 	const parsed = amountTag ? parseInt(amountTag, 10) : NaN
@@ -851,7 +872,7 @@ export const getAuctionCurrentPriceFromBids = (auction: NDKEvent | null, bids: N
 export const getAuctionBidCountFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): number =>
 	auction ? getAuctionWindowValidBids(auction, bids).length : bids.length
 
-export const getAuctionTopBidFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): NDKEvent | null => {
+export const getAuctionTopBidFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): NDKEvent | NostrEventLike | null => {
 	const validBids = auction ? getAuctionWindowValidBids(auction, bids) : bids
 	if (validBids.length === 0) return null
 	return validBids.reduce((top, bid) => (getBidAmount(bid) > getBidAmount(top) ? bid : top), validBids[0])
@@ -874,6 +895,21 @@ export const getAuctionSettlementFinalAmount = (settlementEvent: NDKEvent | null
 	if (!settlementEvent) return 0
 	const parsed = parseInt(settlementEvent.tags.find((tag) => tag[0] === 'final_amount')?.[1] || '0', 10)
 	return Number.isFinite(parsed) ? parsed : 0
+}
+
+export const getAuctionTopBidValid = (auction: NDKEvent | null, bids: NDKEvent[]): NDKEvent | NostrEventLike | null | undefined => {
+	const validBids = auction ? getAuctionWindowValidBids(auction, bids) : bids
+	if (validBids.length === 0) return null
+
+	return [...validBids]
+		.sort((a, b) => {
+			const amountDelta = getBidAmount(b) - getBidAmount(a)
+			if (amountDelta !== 0) return amountDelta
+			const timeDelta = (a.created_at || 0) - (b.created_at || 0)
+			if (timeDelta !== 0) return timeDelta
+			return a.id.localeCompare(b.id)
+		})
+		.at(0)
 }
 
 export const isNSFWAuction = (event: NDKEvent | null): boolean => {
@@ -1136,3 +1172,139 @@ export const usePrivateAuctionClaimForOrder = (publicMarker: NDKEvent | null | u
 	useQuery({
 		...privateAuctionClaimQueryOptions(publicMarker, enabled),
 	})
+
+//
+
+export type AuctionWithRelatedEvents = {
+	bids?: ParsedBidEvent[]
+	settlements?: ParsedSettlementEvent[]
+	pathReleases?: ParsedPathReleaseEvent[]
+	claimOrders?: NDKEvent[]
+
+	latestAuction: ParsedAuctionEvent // Latest auction event
+	topBid?: ParsedBidEvent
+	settlement?: ParsedSettlementEvent
+	pathRelease?: ParsedPathReleaseEvent
+	claimOrder?: NDKEvent
+}
+
+const fetchAndValidateAuctionEvent = async (rootAuctionId: string, auctionCoordinates: string): Promise<ParsedAuctionEvent | null> => {
+	const auctionCoords = getCoordsFromATag(auctionCoordinates)
+	const [rootAuctionEvent, latestAuctionEvent] = await Promise.all([
+		fetchAuction(rootAuctionId),
+		fetchAuctionByATag(auctionCoords.pubkey, auctionCoords.identifier),
+	])
+
+	if (!rootAuctionEvent || !latestAuctionEvent) return null
+
+	const rootAuctionEventParsedResult = parseAuctionEvent(rootAuctionEvent)
+	const latestAuctionEventParsedResult = parseAuctionEvent(latestAuctionEvent)
+
+	if (!rootAuctionEventParsedResult.ok || !latestAuctionEventParsedResult.ok) return null
+
+	const rootAuctionEventParsed = rootAuctionEventParsedResult.value
+	const latestAuctionEventParsed = latestAuctionEventParsedResult.value
+
+	const isValidAuctionEvent = validateAuctionImmutableTags(rootAuctionEventParsed, latestAuctionEventParsed)
+
+	if (!isValidAuctionEvent) return null
+
+	return latestAuctionEventParsed
+}
+
+type ParsedAuctionRelatedEvent = ParsedBidEvent | ParsedPathReleaseEvent | ParsedSettlementEvent
+type ParseResult<T> = { ok: true; value: T } | { ok: false; error: z.ZodError | { message: string; code: string } }
+
+const fetchAndValidateRelatedAuctionEvent = async <T extends ParsedAuctionRelatedEvent>(
+	auctionEvent: ParsedAuctionEvent,
+	fetch: (auctionEvent: ParsedAuctionEvent) => Promise<NDKEvent[]>,
+	parse: (event: NDKEvent) => ParseResult<T>,
+	validate: (auctionEvent: ParsedAuctionEvent, event: T) => boolean,
+) => {
+	const relatedEvents = await fetch(auctionEvent)
+
+	return relatedEvents
+		.map((event) => {
+			const result = parse(event)
+			if (!result.ok) return
+
+			return result.value as T
+		})
+		.filter((event): event is T => event !== undefined && validate(auctionEvent, event))
+}
+
+export const fetchAuctionRelatedEvents = async (
+	rootAuctionId: string,
+	limit: number = 500,
+	auctionCoordinates: string,
+): Promise<AuctionWithRelatedEvents | null> => {
+	if (!rootAuctionId || !auctionCoordinates) return null
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return null
+
+	const auctionEvent = await fetchAndValidateAuctionEvent(rootAuctionId, auctionCoordinates)
+
+	if (!auctionEvent) return null
+
+	// Bid Events
+	const bids = await fetchAndValidateRelatedAuctionEvent(
+		auctionEvent,
+		() => fetchAuctionBids('', limit, auctionEvent.coordinate),
+		parseBidEvent,
+		validateBidLocalOnly,
+	)
+
+	const highestBid = bids
+		.sort((a, b) => {
+			const amountDelta = b.amount - a.amount
+			if (amountDelta !== 0) return amountDelta
+			const timeDelta = (a.createdAt || 0) - (b.createdAt || 0)
+			if (timeDelta !== 0) return timeDelta
+			return a.id.localeCompare(b.id)
+		})
+		.at(0)
+
+	if (!bids || !highestBid)
+		return {
+			latestAuction: auctionEvent,
+		}
+
+	const [settlements, pathReleases] = await Promise.all([
+		// Settlement Events
+		fetchAndValidateRelatedAuctionEvent(
+			auctionEvent,
+			() => fetchAuctionSettlements('', limit, auctionEvent.coordinate),
+			parseSettlementEvent,
+			validateSettlementEventLocalOnly,
+		),
+		// Path Release Events
+		fetchAndValidateRelatedAuctionEvent(
+			auctionEvent,
+			() => fetchAuctionPathReleases('', limit, auctionEvent.coordinate),
+			parsePathReleaseEvent,
+			(auctionEvent, pathReleaseEvent) => validatePathReleaseLocalOnly(auctionEvent, pathReleaseEvent, highestBid),
+		),
+	])
+
+	return {
+		latestAuction: auctionEvent,
+		bids: bids,
+		topBid: highestBid,
+		settlements: settlements,
+		// settlement: settlements
+		pathReleases: pathReleases,
+		// pathRelease: pathReleases,
+	}
+}
+
+export const auctionWithRelatedEventsQueryOptions = (auctionRootId: string, auctionCoordinates: string, limit: number = 100) =>
+	queryOptions({
+		queryKey: [...auctionKeys.details(auctionRootId || auctionCoordinates || ''), auctionCoordinates || ''],
+		queryFn: () => fetchAuctionRelatedEvents(auctionRootId, limit, auctionCoordinates),
+		enabled: !!(auctionRootId || auctionCoordinates),
+		staleTime: 5000,
+		refetchInterval: 5000,
+	})
+
+export const useAuctionWithRelatedEvents = (auctionRootId: string, auctionCoordinates: string) =>
+	useQuery({ ...auctionWithRelatedEventsQueryOptions(auctionRootId, auctionCoordinates) })
