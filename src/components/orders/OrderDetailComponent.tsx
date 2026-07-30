@@ -74,6 +74,7 @@ import {
 	getAuctionSettlementStatus,
 	getAuctionSettlementFinalAmount,
 	getAuctionCurrentPriceFromBids,
+	getAuctionMaxEndAt,
 } from '@/queries/auctions'
 
 interface OrderDetailComponentProps {
@@ -133,11 +134,13 @@ function AuctionSettlementStatus({
 	pathReleases,
 	currentPrice,
 	isVerified,
+	auctionEnded = true,
 }: {
 	settlements: NDKEvent[]
 	pathReleases: NDKEvent[]
 	currentPrice: number
 	isVerified?: boolean
+	auctionEnded?: boolean
 }) {
 	const settlement = settlements[0]
 	const settlementStatus = settlement ? getAuctionSettlementStatus(settlement) : null
@@ -151,7 +154,13 @@ function AuctionSettlementStatus({
 	let textColor = 'text-yellow-900'
 	let description = ''
 
-	if (!hasSettlement && !hasPathRelease) {
+	if (!auctionEnded) {
+		statusText = 'Auction in Progress'
+		statusIcon = <Clock className="w-5 h-5 text-blue-600" />
+		statusColor = 'bg-blue-50 border-blue-200'
+		textColor = 'text-blue-900'
+		description = 'This auction is still active. Settlement will begin after the auction ends.'
+	} else if (!hasSettlement && !hasPathRelease) {
 		statusText = 'Awaiting Settlement'
 		statusIcon = <AlertTriangle className="w-5 h-5 text-orange-600" />
 		description = 'Waiting for the buyer to release payment and the seller to confirm the sale.'
@@ -490,12 +499,16 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	// Fetch validated auction data using #1170's local validators
 	// (validateBidLocalOnly, validateSettlementEventLocalOnly, validatePathReleaseLocalOnly)
-	const auctionRootEventId = auctionData ? auctionData.tags.find((t) => t[0] === 'root_id')?.[1] || auctionData.id : ''
+	const auctionRootEventId = auctionData ? auctionData.tags.find((t) => t[0] === 'auction_root_event_id')?.[1] || auctionData.id : ''
 	const { data: validatedAuctionData } = useAuctionWithRelatedEvents(auctionRootEventId, auctionCoordinates || '')
 	const isSettlementVerified = !!(validatedAuctionData?.settlements?.length || validatedAuctionData?.pathReleases?.length)
 
 	// Calculate current price for display in settlement card
 	const currentPrice = isAuctionOrder && auctionData ? getAuctionCurrentPriceFromBids(auctionData, auctionBids) : 0
+
+	// Check if the auction has ended before showing settlement status
+	const auctionMaxEndAt = isAuctionOrder && auctionData ? getAuctionMaxEndAt(auctionData) : 0
+	const auctionEnded = auctionMaxEndAt > 0 && Math.floor(Date.now() / 1000) >= auctionMaxEndAt
 
 	const headerTitle = isAuctionOrder && auctionData ? `Auction: ${getAuctionTitle(auctionData)}` : `Products (${products.length} unique)`
 	const headerSubText = isAuctionOrder ? undefined : `${orderItems.reduce((total, item) => total + item.quantity, 0)} items`
@@ -741,6 +754,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 							pathReleases={auctionPathReleases}
 							currentPrice={currentPrice}
 							isVerified={isSettlementVerified}
+							auctionEnded={auctionEnded}
 						/>
 					</>
 				) : (
