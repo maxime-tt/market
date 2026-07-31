@@ -1264,27 +1264,28 @@ export const fetchAuctionRelatedEvents = async (
 		})
 		.at(0)
 
-	if (!bids || !highestBid)
-		return {
-			latestAuction: auctionEvent,
-		}
+	// Always fetch settlements — they can exist without validated bids
+	// (e.g. reserve_not_met closures, or settlements for bids that later
+	// failed validation but the seller already redeemed).
+	// Only fetch path releases when there's a validated highest bid —
+	// validatePathReleaseLocalOnly requires a winningBid to check against.
+	const settlementPromise = fetchAndValidateRelatedAuctionEvent(
+		auctionEvent,
+		() => fetchAuctionSettlements('', limit, auctionEvent.coordinate),
+		parseSettlementEvent,
+		validateSettlementEventLocalOnly,
+	)
 
-	const [settlementsRaw, pathReleases] = await Promise.all([
-		// Settlement Events
-		fetchAndValidateRelatedAuctionEvent(
-			auctionEvent,
-			() => fetchAuctionSettlements('', limit, auctionEvent.coordinate),
-			parseSettlementEvent,
-			validateSettlementEventLocalOnly,
-		),
-		// Path Release Events
-		fetchAndValidateRelatedAuctionEvent(
-			auctionEvent,
-			() => fetchAuctionPathReleases('', limit, auctionEvent.coordinate),
-			parsePathReleaseEvent,
-			(auctionEvent, pathReleaseEvent) => validatePathReleaseLocalOnly(auctionEvent, pathReleaseEvent, highestBid),
-		),
-	])
+	const pathReleasePromise = highestBid
+		? fetchAndValidateRelatedAuctionEvent(
+				auctionEvent,
+				() => fetchAuctionPathReleases('', limit, auctionEvent.coordinate),
+				parsePathReleaseEvent,
+				(auctionEvent, pathReleaseEvent) => validatePathReleaseLocalOnly(auctionEvent, pathReleaseEvent, highestBid),
+			)
+		: Promise.resolve([] as ParsedPathReleaseEvent[])
+
+	const [settlementsRaw, pathReleases] = await Promise.all([settlementPromise, pathReleasePromise])
 
 	// Deterministic settlement precedence: a 'settled' status means the seller
 	// redeemed the winner's locked proofs and completed settlement. A later
@@ -1299,9 +1300,7 @@ export const fetchAuctionRelatedEvents = async (
 		bids: bids,
 		topBid: highestBid,
 		settlements: settlements,
-		// settlement: settlements
 		pathReleases: pathReleases,
-		// pathRelease: pathReleases,
 	}
 }
 

@@ -112,6 +112,7 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	const reserve = auction.tags.find((t) => t[0] === 'reserve')?.[1]
 		? parseInt(auction.tags.find((t) => t[0] === 'reserve')?.[1] || '0', 10)
 		: 0
+	const hasReserve = reserve > 0
 	const reserveMet = checkReserveMet(topBid, reserve)
 
 	// Check if path release for top bid exists (using validated path releases + validated top bid)
@@ -175,6 +176,26 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 		}
 	}
 
+	// Loading state: while validated data is loading and the auction has
+	// ended, show a verifying card instead of nothing. This prevents a
+	// flash of incorrect state (e.g. 'Reserve Not Met' appearing before
+	// validated bids load).
+	if (ended && !validatedData && auctionWithRelatedEvents.isLoading) {
+		return (
+			<Card className={cn('p-4', className)}>
+				<div className="flex items-start gap-3">
+					<div className="mt-0.5">
+						<AlertTriangle className="w-5 h-5 text-yellow-400" />
+					</div>
+					<div className="flex-1">
+						<h3 className="font-semibold text-foreground">Verifying…</h3>
+						<p className="text-sm text-foreground/80 mt-1">Validating settlement data with #1170 validators.</p>
+					</div>
+				</div>
+			</Card>
+		)
+	}
+
 	// Compute state using the extracted state machine
 	const stateResult = getAuctionSettlementState({
 		isSeller,
@@ -182,6 +203,7 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 		isWinner,
 		ended,
 		reserveMet,
+		hasReserve,
 		settlementWindowExpired,
 		myAlreadyReleased: myAlreadyReleasedEffective,
 		hasBidderRecord: !!myBidderRecord,

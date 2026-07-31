@@ -26,7 +26,6 @@ export type SettlementStateId =
 	| 'seller-settlement-ready'
 	| 'seller-close-auction'
 	| 'seller-awaiting-path-release'
-	| 'bidder-awaiting-settlement'
 	| 'bidder-local-record-missing'
 	| 'auction-not-ended'
 	| 'no-state'
@@ -37,6 +36,7 @@ export interface SettlementStateInput {
 	isWinner: boolean
 	ended: boolean
 	reserveMet: boolean
+	hasReserve: boolean
 	settlementWindowExpired: boolean
 	myAlreadyReleased: boolean
 	hasBidderRecord: boolean
@@ -75,6 +75,7 @@ export function getAuctionSettlementState(input: SettlementStateInput): Settleme
 		isWinner,
 		ended,
 		reserveMet,
+		hasReserve,
 		settlementWindowExpired,
 		myAlreadyReleased,
 		hasBidderRecord,
@@ -220,10 +221,21 @@ export function getAuctionSettlementState(input: SettlementStateInput): Settleme
 
 	// Seller close action for no-bid / below-reserve auctions.
 	if (isSeller && ended && !hasLatestSettlement && !reserveMet) {
+		if (hasReserve) {
+			return {
+				stateId: 'seller-close-auction',
+				title: 'Reserve Not Met',
+				message: 'No bid met the reserve price. Close the auction to publish a reserve_not_met settlement.',
+				buttonTitle: 'Close Auction',
+				theme: 'action',
+				showButton: true,
+				bidAmount: 0,
+			}
+		}
 		return {
 			stateId: 'seller-close-auction',
-			title: 'Reserve Not Met',
-			message: 'No bid met the reserve price. Close the auction to publish a reserve_not_met settlement.',
+			title: 'No Bids Received',
+			message: 'This auction received no bids. Close the auction to finalize it.',
 			buttonTitle: 'Close Auction',
 			theme: 'action',
 			showButton: true,

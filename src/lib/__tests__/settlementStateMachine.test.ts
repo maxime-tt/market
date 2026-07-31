@@ -28,6 +28,7 @@ function baseInput(overrides: Partial<SettlementStateInput> = {}): SettlementSta
 		hasBidderRecord: true,
 		hasLatestSettlement: false,
 		settlementStatus: 'unknown',
+		hasReserve: false,
 		hasPathReleaseForTopBid: false,
 		hasMatchedClaimOrder: false,
 		settlementLocktimeAt: 0,
@@ -305,17 +306,36 @@ describe('getAuctionSettlementState', () => {
 	})
 
 	describe('seller close auction', () => {
-		test('shows close-auction when seller, ended, no settlement, reserve not met', () => {
+		test('shows Reserve Not Met when reserve configured and not met', () => {
 			const result = getAuctionSettlementState(
 				baseInput({
 					isSeller: true,
 					ended: true,
 					hasLatestSettlement: false,
 					reserveMet: false,
+					hasReserve: true,
 					hasPathReleaseForTopBid: false,
 				}),
 			)
 			expect(result.stateId).toBe('seller-close-auction')
+			expect(result.title).toBe('Reserve Not Met')
+			expect(result.showButton).toBe(true)
+			expect(result.buttonTitle).toBe('Close Auction')
+		})
+
+		test('shows No Bids Received when no reserve configured and no bids', () => {
+			const result = getAuctionSettlementState(
+				baseInput({
+					isSeller: true,
+					ended: true,
+					hasLatestSettlement: false,
+					reserveMet: false,
+					hasReserve: false,
+					hasPathReleaseForTopBid: false,
+				}),
+			)
+			expect(result.stateId).toBe('seller-close-auction')
+			expect(result.title).toBe('No Bids Received')
 			expect(result.showButton).toBe(true)
 			expect(result.buttonTitle).toBe('Close Auction')
 		})
