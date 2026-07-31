@@ -412,10 +412,15 @@ async function seedData() {
 				settlementGraceSeconds,
 			})
 
-			// Only seed bids on live auctions (live window, not the
+			// Seed bids on both live and ended auctions (excluding
 			// quick-settle fixtures which are immediately closing).
-			const isLiveForBids = !isQuickSettleAuction && endAt > Math.floor(Date.now() / 1000) + 60
-			if (isLiveForBids) {
+			// Path releases are only published for ended auctions —
+			// publishing them on live auctions is unrealistic and causes
+			// the AuctionSettlement component to show "Awaiting Settlement"
+			// prematurely (see condition 9 missing `ended` guard).
+			const nowSec = Math.floor(Date.now() / 1000)
+			const shouldSeedBids = !isQuickSettleAuction
+			if (shouldSeedBids) {
 				const p2pkXpub = auctionData.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
 				const maxEndAt = parseInt(auctionData.tags.find((tag) => tag[0] === 'max_end_at')?.[1] || String(endAt), 10)
 				seededBidAuctionEvents.push({
@@ -460,6 +465,13 @@ async function seedData() {
 
 			currentBidAmount += auction.bidIncrement * faker.number.int({ min: 1, max: 3 })
 
+			// For ended auctions, set the bid's created_at to before the
+			// auction ended so the bid is realistic (bids can't be placed
+			// after the auction closes). For live auctions, use the default
+			// (now) so the bid appears fresh.
+			const nowSec = Math.floor(Date.now() / 1000)
+			const bidCreatedAt = auction.endAt <= nowSec ? auction.endAt - faker.number.int({ min: 60, max: 3600 }) : undefined
+
 			const result = await createAuctionBidEvent({
 				signer: bidderSigner,
 				ndk,
@@ -474,6 +486,7 @@ async function seedData() {
 				endAt: auction.endAt,
 				maxEndAt: auction.maxEndAt,
 				settlementGraceSeconds: auction.settlementGraceSeconds,
+				createdAt: bidCreatedAt,
 			})
 
 			if (result) {
@@ -490,8 +503,13 @@ async function seedData() {
 	}
 
 	if (highestSeededBids.size > 0) {
-		console.log(`\nPublishing kind-1025 path releases for ${highestSeededBids.size} top seeded bids...`)
-		for (const { auction, bidderUserIndex, bid } of Array.from(highestSeededBids.values())) {
+		const nowSec = Math.floor(Date.now() / 1000)
+		const endedAuctions = Array.from(highestSeededBids.values()).filter(({ auction }) => auction.endAt <= nowSec)
+		const liveAuctions = Array.from(highestSeededBids.values()).filter(({ auction }) => auction.endAt > nowSec)
+		console.log(
+			`\nPublishing kind-1025 path releases for ${endedAuctions.length} ended auctions (skipping ${liveAuctions.length} live auctions)...`,
+		)
+		for (const { auction, bidderUserIndex, bid } of endedAuctions) {
 			const bidderSigner = new NDKPrivateKeySigner(devUsers[bidderUserIndex].sk)
 			await bidderSigner.blockUntilReady()
 			await createAuctionPathReleaseEvent({
