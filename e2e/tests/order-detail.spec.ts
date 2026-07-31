@@ -125,10 +125,8 @@ test.describe('Order Details - Seller View - Auctions', () => {
 		await page.goto(`/dashboard/orders/${orderId}`)
 
 		// ---- Stage 1: Confirmed ----
-		await expect(page.getByRole('paragraph').filter({ hasText: 'Auction Item' })).toBeVisible()
+		await expect(page.getByText('Auction Item').first()).toBeVisible()
 		await expect(page.locator('div').filter({ hasText: /^Confirmed$/ })).toBeVisible()
-
-		// Verify Settlement Status Card
 		// TODO: Needs CVM configuration for seeded bid to show up.
 		// await expect(page.getByText(/The auction has been completed for.*sats/)).toBeVisible()
 
@@ -151,7 +149,7 @@ test.describe('Order Details - Seller View - Auctions', () => {
 		await page.goto(`/dashboard/orders/${orderId}`)
 
 		// ---- Stage 1: Processing ----
-		await expect(page.getByRole('paragraph').filter({ hasText: 'Auction Item' })).toBeVisible()
+		await expect(page.getByText('Auction Item').first()).toBeVisible()
 		await expect(page.locator('div').filter({ hasText: /^Processing$/ })).toBeVisible()
 		await expect(page.getByRole('button', { name: /Mark As Shipped/i })).toBeVisible()
 

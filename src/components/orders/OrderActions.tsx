@@ -46,11 +46,11 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 	const isSeller = userPubkey === sellerPubkey
 
 	// Determine which actions are allowed based on role and current status
-	const canCancel = status === ORDER_STATUS.PENDING && (isBuyer || isSeller)
+	const canCancel = !isAuction && status === ORDER_STATUS.PENDING && (isBuyer || isSeller)
 	const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
 
 	// Seller actions
-	const canConfirm = isSeller && status === ORDER_STATUS.PENDING
+	const canConfirm = !isAuction && isSeller && status === ORDER_STATUS.PENDING
 	const canProcess = isSeller && status === ORDER_STATUS.CONFIRMED
 	const canShip = isSeller && status === ORDER_STATUS.PROCESSING && !hasBeenShipped
 
@@ -110,7 +110,7 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 		<div className={cn('space-y-3 w-full mx-2', className)}>
 			{/* Primary Action Button */}
 			{(canCancel || canConfirm || canProcess || canShip || canReceive) && (
-				<div className="flex gap-3">
+				<div className={cn('flex', isAuction ? 'gap-3' : 'flex-wrap gap-2')}>
 					{canCancel && (
 						<Button
 							variant="outline"

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { getCoordsFromATag, isValidATag } from '@/lib/utils/coords'
 import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
 import { auctionByATagQueryOptions, usePrivateAuctionClaimForOrder } from '@/queries/auctions'
-import { getAuctionCoordinatesFromOrder, getOrderStatus, type OrderWithRelatedEvents } from '@/queries/orders'
+import { getAuctionCoordinatesFromOrder, type OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
 import {
 	getShippingInfo,
@@ -20,6 +20,7 @@ import {
 } from '@/queries/shipping'
 import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { format } from 'date-fns'
@@ -67,14 +68,12 @@ import { AuctionCard } from '@/components/AuctionCard'
 import { UserCard } from '@/components/UserCard'
 import {
 	useAuctionBids,
-	useAuctionSettlements,
-	useAuctionPathReleases,
 	useAuctionWithRelatedEvents,
 	getAuctionTitle,
 	getAuctionSettlementStatus,
 	getAuctionSettlementFinalAmount,
 	getAuctionCurrentPriceFromBids,
-	getAuctionMaxEndAt,
+	getAuctionBiddingCutoffAt,
 } from '@/queries/auctions'
 
 interface OrderDetailComponentProps {
@@ -136,14 +135,14 @@ function AuctionSettlementStatus({
 	isVerified,
 	auctionEnded = true,
 }: {
-	settlements: NDKEvent[]
-	pathReleases: NDKEvent[]
+	settlements: NostrEventLike[]
+	pathReleases: NostrEventLike[]
 	currentPrice: number
 	isVerified?: boolean
 	auctionEnded?: boolean
 }) {
 	const settlement = settlements[0]
-	const settlementStatus = settlement ? getAuctionSettlementStatus(settlement) : null
+	const settlementStatus = settlement ? getAuctionSettlementStatus(settlement as unknown as NDKEvent) : null
 
 	const hasPathRelease = pathReleases.length > 0
 	const hasSettlement = settlements.length > 0
@@ -165,28 +164,25 @@ function AuctionSettlementStatus({
 		statusIcon = <AlertTriangle className="w-5 h-5 text-orange-600" />
 		description = 'Waiting for the buyer to release payment and the seller to confirm the sale.'
 	} else if (!hasSettlement && hasPathRelease) {
-		statusText = 'Funds Released'
+		statusText = 'Path Release Observed'
 		statusIcon = <ArrowRightLeft className="w-5 h-5 text-blue-600" />
 		statusColor = 'bg-blue-50 border-blue-200'
 		textColor = 'text-blue-900'
-		// Task 3: Simplify payment state language - Funds Released
-		description = 'The buyer has sent the payment. Waiting for the seller to confirm receipt.'
+		description = 'The buyer has published a path release. Waiting for the seller to redeem and publish settlement.'
 	} else if (hasSettlement && !hasPathRelease) {
-		statusText = 'Seller Confirmed'
+		statusText = 'Settlement Event Observed'
 		statusIcon = <CheckCircle className="w-5 h-5 text-purple-600" />
 		statusColor = 'bg-purple-50 border-purple-200'
 		textColor = 'text-purple-900'
-		// Task 3: Simplify payment state language - Seller Confirmed
-		description = "The seller has confirmed the sale. Waiting for the buyer's payment to arrive."
+		description = 'The seller has published a settlement event. Verify wallet redemption/balance separately.'
 	} else if (hasSettlement && hasPathRelease) {
 		if (settlementStatus === 'settled') {
 			statusText = 'Settled'
 			statusIcon = <CheckCircle className="w-5 h-5 text-green-600" />
 			statusColor = 'bg-green-50 border-green-200'
 			textColor = 'text-green-900'
-			// Task 3: Simplify payment state language - Settled
 			description =
-				'The auction is complete! The payment has been sent and the seller has confirmed. Funds should be in your wallet shortly.'
+				'The auction is complete. Settlement and path release events have been observed. Verify wallet redemption/balance separately.'
 		} else if (settlementStatus === 'reserve_not_met') {
 			statusText = 'Reserve Not Met'
 			statusIcon = <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -254,13 +250,15 @@ function AuctionSettlementStatus({
 						<div className="flex justify-between items-center bg-gray-50 p-2 rounded">
 							<span>Status:</span>
 							<span className={hasSettlement ? 'text-blue-700 font-medium' : 'text-orange-700'}>
-								{hasSettlement ? getAuctionSettlementStatus(settlement).replace(/_/g, ' ') : 'Pending'}
+								{hasSettlement ? getAuctionSettlementStatus(settlement as unknown as NDKEvent).replace(/_/g, ' ') : 'Pending'}
 							</span>
 						</div>
 						{hasSettlement && settlementStatus === 'settled' && (
 							<div className="flex justify-between items-center bg-gray-50 p-2 rounded">
 								<span>Final Amount:</span>
-								<span className="font-bold">{getAuctionSettlementFinalAmount(settlement).toLocaleString()} sats</span>
+								<span className="font-bold">
+									{getAuctionSettlementFinalAmount(settlement as unknown as NDKEvent).toLocaleString()} sats
+								</span>
 							</div>
 						)}
 					</div>
@@ -494,21 +492,24 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	})
 
 	const { data: auctionBids = [] } = useAuctionBids('', 500, auctionCoordinates || '')
-	const { data: auctionSettlements = [] } = useAuctionSettlements('', 100, auctionCoordinates || '')
-	const { data: auctionPathReleases = [] } = useAuctionPathReleases('', 200, auctionCoordinates || '')
 
 	// Fetch validated auction data using #1170's local validators
 	// (validateBidLocalOnly, validateSettlementEventLocalOnly, validatePathReleaseLocalOnly)
 	const auctionRootEventId = auctionData ? auctionData.tags.find((t) => t[0] === 'auction_root_event_id')?.[1] || auctionData.id : ''
-	const { data: validatedAuctionData } = useAuctionWithRelatedEvents(auctionRootEventId, auctionCoordinates || '')
+	const { data: validatedAuctionData, isLoading: isValidating } = useAuctionWithRelatedEvents(auctionRootEventId, auctionCoordinates || '')
 	const isSettlementVerified = !!(validatedAuctionData?.settlements?.length || validatedAuctionData?.pathReleases?.length)
+
+	// Use validated settlement and path release data from #1170 validators.
+	// Only display settlement UI for events that passed local-only validation.
+	const auctionSettlements = validatedAuctionData?.settlements?.map((s) => s.rawEvent) ?? []
+	const auctionPathReleases = validatedAuctionData?.pathReleases?.map((pr) => pr.rawEvent) ?? []
 
 	// Calculate current price for display in settlement card
 	const currentPrice = isAuctionOrder && auctionData ? getAuctionCurrentPriceFromBids(auctionData, auctionBids) : 0
 
 	// Check if the auction has ended before showing settlement status
-	const auctionMaxEndAt = isAuctionOrder && auctionData ? getAuctionMaxEndAt(auctionData) : 0
-	const auctionEnded = auctionMaxEndAt > 0 && Math.floor(Date.now() / 1000) >= auctionMaxEndAt
+	const auctionBiddingCutoffAt = isAuctionOrder && auctionData ? getAuctionBiddingCutoffAt(auctionData) : 0
+	const auctionEnded = auctionBiddingCutoffAt > 0 && Math.floor(Date.now() / 1000) >= auctionBiddingCutoffAt
 
 	const headerTitle = isAuctionOrder && auctionData ? `Auction: ${getAuctionTitle(auctionData)}` : `Products (${products.length} unique)`
 	const headerSubText = isAuctionOrder ? undefined : `${orderItems.reduce((total, item) => total + item.quantity, 0)} items`

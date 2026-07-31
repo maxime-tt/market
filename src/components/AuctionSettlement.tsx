@@ -11,18 +11,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { auctionKeys } from '@/queries/queryKeyFactory'
 import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
 import {
-	useAuctionSettlements,
-	useAuctionPathReleases,
-	useAuctionClaimOrders,
-	getAuctionSettlementStatus,
-	getAuctionSettlementWinner,
-	getAuctionSettlementFinalAmount,
 	getAuctionSettlementGrace,
-	getAuctionMaxEndAt,
+	getAuctionBiddingCutoffAt,
 	getBidAmount,
 	getAuctionRootEventId,
 	getAuctionTopBidValid,
 	useAuctionWithRelatedEvents,
+	useAuctionClaimOrders,
 } from '@/queries/auctions'
 import { Clock, CheckCircle, Ban, Truck, Gavel, Trophy, BadgeCheck, AlertTriangle } from 'lucide-react'
 import { AuctionClaimDialog } from './AuctionClaimDialog'
@@ -53,22 +48,20 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	// validateSettlementEventLocalOnly, validatePathReleaseLocalOnly, and validateAuctionImmutableTags
 	const validatedData = auctionWithRelatedEvents.data
 	const isVerified = !!validatedData?.latestAuction
-	const hasVerifiedSettlement = !!validatedData?.settlements?.length
-	const hasVerifiedPathRelease = !!validatedData?.pathReleases?.length
 
-	// Fetch settlement-related data
-	const settlementsQuery = useAuctionSettlements(auctionRootEventId, 10, auctionCoordinates)
-	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId, 200, auctionCoordinates)
+	// Fetch claim orders (not validated by #1170 — these are order events, not auction events)
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
-
-	const settlements = settlementsQuery.data ?? []
-	const pathReleases = pathReleasesQuery.data ?? []
 	const claimOrders = claimOrdersQuery.data ?? []
 
+	// Use validated settlement and path release data from #1170 validators.
+	// Only display settlement UI for events that passed local-only validation.
+	const settlements = validatedData?.settlements ?? []
+	const pathReleases = validatedData?.pathReleases ?? []
+
 	const latestSettlement = settlements[0] || null
-	const settlementStatus = latestSettlement ? getAuctionSettlementStatus(latestSettlement) : 'unknown'
-	const settlementWinner = latestSettlement ? getAuctionSettlementWinner(latestSettlement) : ''
-	const settlementFinalAmount = latestSettlement ? getAuctionSettlementFinalAmount(latestSettlement) : 0
+	const settlementStatus = latestSettlement?.status ?? 'unknown'
+	const settlementWinner = latestSettlement?.winnerPubkey ?? ''
+	const settlementFinalAmount = latestSettlement?.finalAmount ?? 0
 
 	const isSeller = currentUserPubkey === auction.pubkey
 	const isWinner = currentUserPubkey && settlementWinner === currentUserPubkey
@@ -85,12 +78,12 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	}, [claimOrders, isSeller, settlementWinner, currentUserPubkey])
 
 	// Get auction timing info
-	const maxEndAt = getAuctionMaxEndAt(auction)
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const settlementGrace = getAuctionSettlementGrace(auction)
-	const settlementLocktimeAt = maxEndAt > 0 && settlementGrace > 0 ? maxEndAt + settlementGrace : 0
+	const settlementLocktimeAt = biddingCutoffAt > 0 && settlementGrace > 0 ? biddingCutoffAt + settlementGrace : 0
 	const now = Math.floor(Date.now() / 1000)
 	const settlementWindowExpired = settlementLocktimeAt > 0 && now >= settlementLocktimeAt
-	const ended = maxEndAt > 0 && now >= maxEndAt
+	const ended = biddingCutoffAt > 0 && now >= biddingCutoffAt
 
 	// Get top bid info
 	const topBid = useMemo(() => getAuctionTopBidValid(auction, bids), [auction, bids])
@@ -100,10 +93,10 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 		: 0
 	const reserveMet = !!topBid && getBidAmount(topBid) >= reserve
 
-	// Check if path release for top bid exists
+	// Check if path release for top bid exists (using validated path releases)
 	const hasPathReleaseForTopBid = useMemo(() => {
 		if (!topBid) return false
-		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === topBid.id)
+		return pathReleases.some((pr) => pr.bidEventId === topBid.id)
 	}, [pathReleases, topBid])
 
 	// Bidder-specific data
@@ -123,7 +116,7 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	const isMyBidTop = !!(myTopBidEvent && topBid && myTopBidEvent.id === topBid.id)
 	const myAlreadyReleased = useMemo(() => {
 		if (!myTopBidEvent) return false
-		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)
+		return pathReleases.some((pr) => pr.bidEventId === myTopBidEvent.id)
 	}, [pathReleases, myTopBidEvent])
 	const myBidderRecord = useMemo(() => (myTopBidEvent ? findBidderRecord(myTopBidEvent.id) : null), [myTopBidEvent])
 
@@ -143,6 +136,7 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 			toast.success('Path release published — seller can now redeem')
 			void result.pathReleaseEventId
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.pathReleases(auctionRootEventId) })
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(auctionRootEventId) })
 		} catch (err) {
 			toast.error(`Failed to release path: ${err instanceof Error ? err.message : String(err)}`)
 		} finally {
@@ -188,8 +182,10 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	}
 
 	// Bidder settle action - shown to the top bidder once the auction ends
-	// so they can publish their kind-1025 path release
-	if (isMyBidTop && ended && !myAlreadyReleased && myBidderRecord && !latestSettlement) {
+	// so they can publish their kind-1025 path release.
+	// Guards: auction ended (canonical cutoff), reserve met, settlement window not expired,
+	// canonical valid top bid exists, no existing settlement.
+	if (isMyBidTop && ended && reserveMet && !settlementWindowExpired && !myAlreadyReleased && myBidderRecord && !latestSettlement) {
 		state = {
 			icon: <Gavel className="w-5 h-5 text-sky-300" />,
 			title: 'You won — release your path to settle',
@@ -221,9 +217,6 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 		if (matchedClaimOrder) {
 			const action = () => {
 				if (matchedClaimOrder.id) {
-					const orderId = matchedClaimOrder.tags.find((t) => t[0] === 'order')?.[1]
-					console.log('Test: ', orderId === matchedClaimOrder.id)
-
 					navigate({ to: `/dashboard/orders/${matchedClaimOrder.id}` })
 				} else {
 					toast.error('Issue with order id. Go to Dashboard -> Your Purchases to find the order.')
@@ -259,9 +252,6 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 		if (matchedClaimOrder) {
 			const action = () => {
 				if (matchedClaimOrder.id) {
-					const orderId = matchedClaimOrder.tags.find((t) => t[0] === 'order')?.[1]
-					console.log('Test: ', orderId === matchedClaimOrder.id)
-
 					navigate({ to: `/dashboard/orders/${matchedClaimOrder.id}` })
 				} else {
 					toast.error('Issue with order id. Go to Dashboard -> Sales to find the order.')
@@ -345,8 +335,23 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 			bidAmount: 0,
 		}
 	}
-	// Seller waiting for path release
-	else if (isSeller && ended && !latestSettlement && !hasPathReleaseForTopBid) {
+	// Seller close action for no-bid / below-reserve auctions.
+	// When no reserve-meeting bid exists, the seller can close the auction
+	// by publishing a `reserve_not_met` settlement — no path release needed.
+	else if (isSeller && ended && !latestSettlement && !reserveMet) {
+		state = {
+			icon: <Ban className="w-5 h-5 text-amber-300" />,
+			title: 'Reserve Not Met',
+			message: 'No bid met the reserve price. Close the auction to publish a reserve_not_met settlement.',
+			buttonTitle: settlementMutation.isPending ? 'Publishing…' : 'Close Auction',
+			buttonAction: () => void handleSubmitSettlement(),
+			theme: 'action',
+			showButton: true,
+			bidAmount: 0,
+		}
+	}
+	// Seller waiting for path release (only when reserve is met — a valid winner exists)
+	else if (isSeller && ended && !latestSettlement && !hasPathReleaseForTopBid && reserveMet) {
 		state = {
 			icon: <Clock className="w-5 h-5 text-blue-300" />,
 			title: 'Awaiting Path Release',
@@ -410,14 +415,14 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 					<div className="mt-0.5">{state.icon}</div>
 					<div className="flex-1">
 						<h3 className="font-semibold text-foreground">{state.title}</h3>
-						<p className="text-sm text-white-200 mt-1">{state.message}</p>
+						<p className="text-sm text-foreground/80 mt-1">{state.message}</p>
 
 						{/* Verification badge from #1170 validators */}
 						{isVerified && (
 							<div className="flex items-center gap-1.5 mt-2 text-xs">
 								<BadgeCheck className="w-3.5 h-3.5 text-green-400" />
 								<span className="text-green-400 font-medium">
-									Verified{hasVerifiedSettlement ? ' · Settlement confirmed' : hasVerifiedPathRelease ? ' · Path release confirmed' : ''}
+									Verified{settlements.length > 0 ? ' · Settlement confirmed' : pathReleases.length > 0 ? ' · Path release confirmed' : ''}
 								</span>
 							</div>
 						)}

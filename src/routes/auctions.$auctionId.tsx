@@ -1,5 +1,4 @@
 import { AuctionCard } from '@/components/AuctionCard'
-import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -342,7 +341,6 @@ function AuctionDetailRoute() {
 	const [isOwnAuction, setIsOwnAuction] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState('')
 	const activeUserPubkey = authUser?.pubkey || currentUserPubkey
-	const [claimDialogOpen, setClaimDialogOpen] = useState(false)
 	const bidMutation = usePublishAuctionBidMutation()
 
 	const auctionQuery = useQuery({
