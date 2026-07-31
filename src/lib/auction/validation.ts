@@ -1110,9 +1110,16 @@ export const validateSettlementEventLocalOnly = (auction: ParsedAuctionEvent, se
 	switch (settlement.status) {
 		case 'settled':
 			return !!settlement.finalAmount && !!settlement.winnerPubkey
+		case 'reserve_not_met':
+			// reserve_not_met settlements are published by the seller to close
+			// an auction where no bid met the reserve price. No winner,
+			// path release, or payout is required — only the seller's
+			// signature (author=seller, already checked above) and correct
+			// auction references. The closeAt must be >= auction maxEndAt
+			// to ensure the auction had ended before closure.
+			return settlement.closeAt >= auction.maxEndAt
 		case 'cancelled':
 		case 'griefed_no_fallback':
-		case 'reserve_not_met':
 			return false
 	}
 }
