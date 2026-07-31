@@ -70,16 +70,23 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	const isSeller = currentUserPubkey === auction.pubkey
 	const isWinner = !!(currentUserPubkey && settlementWinner === currentUserPubkey)
 
+	// #7: Claim orders are matched by event author (pubkey), which is
+	// cryptographically verified by the Nostr signature. For the seller view,
+	// only claim orders authored by the settlement winner are matched.
+	// For the buyer view, only claim orders authored by the current user
+	// are matched. This prevents a malicious user from injecting a claim
+	// order that would be navigated to by someone else.
 	const matchedClaimOrder = useMemo(() => {
 		if (isSeller && settlementWinner) {
-			// Seller view - look for order from the winner
+			// Seller view - only match claim orders authored by the settlement winner
 			return claimOrders.find((order) => order.pubkey === settlementWinner) ?? null
-		} else if (!isSeller && currentUserPubkey) {
-			// Buyer view - look for order from the current user
+		} else if (!isSeller && currentUserPubkey && isWinner) {
+			// Buyer view - only match claim orders authored by the current user
+			// AND only when the current user is the settlement winner
 			return claimOrders.find((order) => order.pubkey === currentUserPubkey) ?? null
 		}
 		return null
-	}, [claimOrders, isSeller, settlementWinner, currentUserPubkey])
+	}, [claimOrders, isSeller, settlementWinner, currentUserPubkey, isWinner])
 
 	// Get auction timing info
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
