@@ -891,9 +891,28 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 					}
 				}
 			} else if (type === 'auction') {
-				// Auction Flow: Path Release -> Settlement
+				// Auction Flow: Bid -> Path Release -> Settlement
 				if (['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
+					// #8 fix: Create a real bid event (kind 1024) instead of using a placeholder ID.
+					const bidEvent = finalizeEvent(
+						{
+							kind: 1024,
+							created_at: now + 3,
+							content: '',
+							tags: [
+								['p', devUser1.pk],
+								['a', itemTagValue],
+								['amount', orderAmount],
+								['mint', 'https://nofees.testnut.cashu.space'],
+								['status', 'locked'],
+							],
+						},
+						buyerSkBytes,
+					)
+					await relay.publish(bidEvent)
+
 					// Buyer publishes Path Release (Kind 1025)
+					// #8 fix: Use 'e' tag with the actual bid event ID, not 'winning_bid' with a placeholder.
 					const pathRelease = finalizeEvent(
 						{
 							kind: AUCTION_PATH_RELEASE_KIND,
@@ -902,7 +921,10 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 							tags: [
 								['p', devUser1.pk],
 								['a', itemTagValue],
-								['winning_bid', 'bid_event_id_placeholder'],
+								['e', bidEvent.id],
+								['derivation_path', 'm/0/1/2'],
+								['child_pubkey', '02' + '00'.repeat(32)],
+								['release_reason', 'settlement'],
 							],
 						},
 						buyerSkBytes,
@@ -917,11 +939,14 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 								created_at: now + 10,
 								content: '',
 								tags: [
-									['p', devUser2.pk],
+									['e', auctionEvent!.id],
 									['a', itemTagValue],
 									['status', 'settled'],
 									['winner', devUser2.pk],
-									['final_amount', '500'],
+									['winning_bid', bidEvent.id],
+									['path_release', pathRelease.id],
+									['final_amount', orderAmount],
+									['close_at', String(now + 10)],
 								],
 							},
 							sellerSkBytes,
