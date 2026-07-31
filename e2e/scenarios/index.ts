@@ -603,6 +603,8 @@ export async function seedAuction(
 		bidIncrement?: number
 		reserve?: number
 		shippingOptions?: Array<{ shippingRef: string; extraCost?: string }>
+		endAt?: number
+		settlementGrace?: number
 	},
 ): Promise<VerifiedEvent> {
 	const now = Math.floor(Date.now() / 1000)
@@ -630,7 +632,7 @@ export async function seedAuction(
 			['summary', 'E2E test auction'],
 			['auction_type', 'english'],
 			['start_at', String(now)],
-			['end_at', String(now + 86400)],
+			['end_at', String(opts.endAt ?? now + 86400)],
 			['currency', 'SAT'],
 			['price', String(startingBid), 'SAT'],
 			['starting_bid', String(startingBid), 'SAT'],
@@ -641,6 +643,7 @@ export async function seedAuction(
 			['key_scheme', 'hd_p2pk'],
 			['p2pk_xpub', 'xpub' + '0'.repeat(100)],
 			['settlement_policy', 'cashu_p2pk_v1'],
+			['settlement_grace', String(opts.settlementGrace ?? 7200)],
 			['schema', 'auction_v1'],
 			['image', 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png'],
 			['t', 'Bitcoin'],
@@ -935,4 +938,77 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 	} finally {
 		relay.close()
 	}
+}
+
+/**
+ * Seed a settlement event (kind 1024) on the relay.
+ * Used for e2e tests of the AuctionSettlement component.
+ */
+export async function seedSettlement(
+	relay: Relay,
+	skHex: string,
+	opts: {
+		auctionRootEventId: string
+		auctionCoordinate: string
+		status: 'settled' | 'reserve_not_met'
+		closeAt: number
+		winnerPubkey?: string
+		winningBidId?: string
+		finalAmount?: number
+	},
+): Promise<VerifiedEvent> {
+	const now = Math.floor(Date.now() / 1000)
+	const tags: string[][] = [
+		['a', opts.auctionCoordinate],
+		['status', opts.status],
+		['close_at', String(opts.closeAt)],
+		['final_amount', String(opts.finalAmount ?? 0)],
+	]
+
+	if (opts.winnerPubkey) {
+		tags.push(['winner', opts.winnerPubkey])
+	}
+	if (opts.winningBidId) {
+		tags.push(['winning_bid', opts.winningBidId])
+	}
+
+	const event = await publish(relay, skHex, {
+		kind: AUCTION_SETTLEMENT_KIND,
+		created_at: now,
+		content: '',
+		tags,
+	})
+
+	console.log(`    Published settlement: ${opts.status}`)
+	return event
+}
+
+/**
+ * Seed a path release event (kind 1025) on the relay.
+ */
+export async function seedPathRelease(
+	relay: Relay,
+	skHex: string,
+	opts: {
+		auctionCoordinate: string
+		sellerPubkey: string
+		bidEventId: string
+		derivationPath?: string
+	},
+): Promise<VerifiedEvent> {
+	const now = Math.floor(Date.now() / 1000)
+	const event = await publish(relay, skHex, {
+		kind: AUCTION_PATH_RELEASE_KIND,
+		created_at: now,
+		content: '',
+		tags: [
+			['a', opts.auctionCoordinate],
+			['p', opts.sellerPubkey],
+			['e', opts.bidEventId],
+			['derivation_path', opts.derivationPath ?? 'm/0/1/2'],
+		],
+	})
+
+	console.log(`    Published path release for bid: ${opts.bidEventId}`)
+	return event
 }
