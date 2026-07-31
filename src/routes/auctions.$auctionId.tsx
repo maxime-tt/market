@@ -25,9 +25,6 @@ import {
 	auctionsByPubkeyQueryOptions,
 	filterNSFWAuctions,
 	getAuctionBidCountFromBids,
-	getAuctionSettlementFinalAmount,
-	getAuctionSettlementStatus,
-	getAuctionSettlementWinner,
 	getBidAmount,
 	getBidMint,
 	getBidStatus,
@@ -57,8 +54,7 @@ import {
 	isNSFWAuction,
 	useStreamingAuctionBids,
 	useAuctionClaimOrders,
-	useAuctionPathReleases,
-	useAuctionSettlements,
+	useAuctionWithRelatedEvents,
 	getAuctionSettlementGrace,
 } from '@/queries/auctions'
 import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@/queries/shipping'
@@ -452,11 +448,15 @@ function AuctionDetailRoute() {
 	}, [auctionId, sellerAuctionsQuery.data])
 
 	// Settlement and claim order state
-	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 10, auctionCoordinates)
-	const latestSettlement = (settlementsQuery.data ?? [])[0] || null
-	const settlementStatus = getAuctionSettlementStatus(latestSettlement)
-	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
-	const settlementFinalAmount = getAuctionSettlementFinalAmount(latestSettlement)
+	// #4 fix: Use validated data from useAuctionWithRelatedEvents for settlement winner display.
+	// This ensures only #1170-validated settlement events (author=seller, correct auction refs)
+	// are surfaced as the canonical settlement winner — not raw relay data.
+	const auctionWithRelatedEvents = useAuctionWithRelatedEvents(auctionRootEventId || auctionId, auctionCoordinates)
+	const validatedSettlements = auctionWithRelatedEvents.data?.settlements ?? []
+	const latestSettlement = validatedSettlements[0] || null
+	const settlementStatus = latestSettlement?.status ?? 'unknown'
+	const settlementWinner = latestSettlement?.winnerPubkey ?? ''
+	const settlementFinalAmount = latestSettlement?.finalAmount ?? 0
 	const isWinner = !!(currentUserPubkey && settlementWinner && currentUserPubkey === settlementWinner)
 
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
@@ -469,8 +469,8 @@ function AuctionDetailRoute() {
 	// "Release path / Settle" button when the current user is the top
 	// bidder, the auction has ended, and they haven't already released
 	// (no kind-1025 from them on this auction yet).
-	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId || auctionId, 200, auctionCoordinates)
-	const pathReleases = pathReleasesQuery.data ?? []
+	// #4 fix: Use validated path releases from useAuctionWithRelatedEvents.
+	const pathReleases = auctionWithRelatedEvents.data?.pathReleases ?? []
 	const queryClient = useQueryClient()
 
 	const myTopBidEvent = useMemo(() => {
@@ -552,7 +552,7 @@ function AuctionDetailRoute() {
 	const isMyBidTop = !!(myTopBidEvent && topBidOverall && myTopBidEvent.id === topBidOverall.id)
 	const myAlreadyReleased = useMemo(() => {
 		if (!myTopBidEvent) return false
-		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)
+		return pathReleases.some((pr) => pr.bidEventId === myTopBidEvent.id)
 	}, [pathReleases, myTopBidEvent])
 	const canReleaseNow = !!(isMyBidTop && ended && !myAlreadyReleased && myTopBidEvent && findBidderRecord(myTopBidEvent.id))
 	const [isReleasing, setIsReleasing] = useState(false)
