@@ -338,8 +338,8 @@ describe('getAuctionSettlementState', () => {
 		})
 	})
 
-	describe('bidder awaiting settlement', () => {
-		test('shows awaiting-settlement when bidder has released and waiting for seller', () => {
+	describe('bidder awaiting settlement (merged into bidder-path-released)', () => {
+		test('bidder-path-released handles the waiting state', () => {
 			const result = getAuctionSettlementState(
 				baseInput({
 					isMyBidTop: true,
@@ -349,8 +349,6 @@ describe('getAuctionSettlementState', () => {
 					hasLatestSettlement: false,
 				}),
 			)
-			// Note: 'bidder-path-released' takes priority over 'bidder-awaiting-settlement'
-			// because both check isMyBidTop && ended && myAlreadyReleased && status !== 'settled'
 			expect(result.stateId).toBe('bidder-path-released')
 		})
 	})
@@ -378,7 +376,7 @@ describe('getAuctionSettlementState', () => {
 			// then seller-settlement-ready (isSeller=false → skip),
 			// then seller-close-auction (isSeller=false → skip),
 			// then seller-awaiting-path-release (isSeller=false → skip),
-			// then bidder-awaiting-settlement (myAlreadyReleased=false → skip),
+			// then bidder-path-released (myAlreadyReleased=false → skip),
 			// then bidder-local-record-missing
 			expect(result.stateId).toBe('bidder-local-record-missing')
 			expect(result.showButton).toBe(true)

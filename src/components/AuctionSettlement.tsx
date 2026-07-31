@@ -30,6 +30,11 @@ import type { NDKEvent } from '@/lib/nostr/ndk-events'
 
 interface AuctionSettlementProps {
 	auction: NDKEvent
+	/**
+	 * Raw streamed bids from useStreamingAuctionBids. Kept for backwards
+	 * compatibility but no longer used for custody-action gating — all bid
+	 * data now comes from validatedData (useAuctionWithRelatedEvents).
+	 */
 	bids: NDKEvent[]
 	className?: string
 }
@@ -370,19 +375,6 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 			break
 
 		case 'seller-awaiting-path-release':
-			state = {
-				icon: <Clock className="w-5 h-5 text-blue-300" />,
-				title: stateResult.title,
-				message: stateResult.message,
-				buttonTitle: '',
-				buttonAction: () => {},
-				theme: 'waiting',
-				showButton: false,
-				bidAmount: 0,
-			}
-			break
-
-		case 'bidder-awaiting-settlement':
 			state = {
 				icon: <Clock className="w-5 h-5 text-blue-300" />,
 				title: stateResult.title,

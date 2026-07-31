@@ -1269,7 +1269,7 @@ export const fetchAuctionRelatedEvents = async (
 			latestAuction: auctionEvent,
 		}
 
-	const [settlements, pathReleases] = await Promise.all([
+	const [settlementsRaw, pathReleases] = await Promise.all([
 		// Settlement Events
 		fetchAndValidateRelatedAuctionEvent(
 			auctionEvent,
@@ -1285,6 +1285,14 @@ export const fetchAuctionRelatedEvents = async (
 			(auctionEvent, pathReleaseEvent) => validatePathReleaseLocalOnly(auctionEvent, pathReleaseEvent, highestBid),
 		),
 	])
+
+	// Deterministic settlement precedence: a 'settled' status means the seller
+	// redeemed the winner's locked proofs and completed settlement. A later
+	// 'reserve_not_met' is contradictory — the seller cannot both have redeemed
+	// proofs AND claim reserve was not met. Filter out 'reserve_not_met' when a
+	// valid 'settled' exists, so the newest 'settled' is always canonical.
+	const hasSettled = settlementsRaw.some((s) => s.status === 'settled')
+	const settlements = hasSettled ? settlementsRaw.filter((s) => s.status === 'settled') : settlementsRaw
 
 	return {
 		latestAuction: auctionEvent,

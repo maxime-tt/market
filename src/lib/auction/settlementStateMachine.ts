@@ -244,18 +244,10 @@ export function getAuctionSettlementState(input: SettlementStateInput): Settleme
 		}
 	}
 
-	// Bidder waiting for seller after releasing path
-	if (!isSeller && isMyBidTop && ended && myAlreadyReleased && settlementStatus !== 'settled') {
-		return {
-			stateId: 'bidder-awaiting-settlement',
-			title: 'Awaiting Settlement',
-			message: 'Waiting for seller to complete settlement.',
-			buttonTitle: '',
-			theme: 'waiting',
-			showButton: false,
-			bidAmount: 0,
-		}
-	}
+	// (The 'bidder-awaiting-settlement' branch was merged into 'bidder-path-released'
+	// above — both had the same condition isMyBidTop && ended && myAlreadyReleased
+	// && settlementStatus !== 'settled', differing only in the !isSeller guard
+	// which was redundant since the first match wins.)
 
 	// Bidder local record missing - prompt for refresh page
 	if (!isSeller && isMyBidTop && !hasBidderRecord && ended) {
