@@ -359,7 +359,7 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 		}
 	}
 	// Bidder waiting for seller after releasing path
-	else if (!isSeller && isMyBidTop && myAlreadyReleased && settlementStatus !== 'settled') {
+	else if (!isSeller && isMyBidTop && ended && myAlreadyReleased && settlementStatus !== 'settled') {
 		state = {
 			icon: <Clock className="w-5 h-5 text-blue-300" />,
 			title: 'Awaiting Settlement',
