@@ -13,12 +13,16 @@ import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
 import {
 	getAuctionSettlementGrace,
 	getAuctionBiddingCutoffAt,
-	getBidAmount,
 	getAuctionRootEventId,
-	getAuctionTopBidValid,
 	useAuctionWithRelatedEvents,
 	useAuctionClaimOrders,
 } from '@/queries/auctions'
+import {
+	getAuctionSettlementState,
+	getValidatedBidContext,
+	checkPathReleaseForTopBid,
+	checkReserveMet,
+} from '@/lib/auction/settlementStateMachine'
 import { Clock, CheckCircle, Ban, Truck, Gavel, Trophy, BadgeCheck, AlertTriangle } from 'lucide-react'
 import { AuctionClaimDialog } from './AuctionClaimDialog'
 import { useNavigate } from '@tanstack/react-router'
@@ -64,7 +68,7 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	const settlementFinalAmount = latestSettlement?.finalAmount ?? 0
 
 	const isSeller = currentUserPubkey === auction.pubkey
-	const isWinner = currentUserPubkey && settlementWinner === currentUserPubkey
+	const isWinner = !!(currentUserPubkey && settlementWinner === currentUserPubkey)
 
 	const matchedClaimOrder = useMemo(() => {
 		if (isSeller && settlementWinner) {
@@ -85,35 +89,22 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	const settlementWindowExpired = settlementLocktimeAt > 0 && now >= settlementLocktimeAt
 	const ended = biddingCutoffAt > 0 && now >= biddingCutoffAt
 
-	// Get top bid info
-	const topBid = useMemo(() => getAuctionTopBidValid(auction, bids), [auction, bids])
+	// #1 fix: Derive top bid and my top bid from #1170-validated data, not raw streamed bids.
+	// The raw `bids` prop is still passed for backwards compatibility but is no longer used
+	// for winner determination or custody-action gating.
+	const { topBid, myTopBidEvent, isMyBidTop } = useMemo(
+		() => getValidatedBidContext(validatedData?.bids, validatedData?.topBid, currentUserPubkey),
+		[validatedData?.bids, validatedData?.topBid, currentUserPubkey],
+	)
 
 	const reserve = auction.tags.find((t) => t[0] === 'reserve')?.[1]
 		? parseInt(auction.tags.find((t) => t[0] === 'reserve')?.[1] || '0', 10)
 		: 0
-	const reserveMet = !!topBid && getBidAmount(topBid) >= reserve
+	const reserveMet = checkReserveMet(topBid, reserve)
 
-	// Check if path release for top bid exists (using validated path releases)
-	const hasPathReleaseForTopBid = useMemo(() => {
-		if (!topBid) return false
-		return pathReleases.some((pr) => pr.bidEventId === topBid.id)
-	}, [pathReleases, topBid])
+	// Check if path release for top bid exists (using validated path releases + validated top bid)
+	const hasPathReleaseForTopBid = useMemo(() => checkPathReleaseForTopBid(pathReleases, topBid), [pathReleases, topBid])
 
-	// Bidder-specific data
-	const myTopBidEvent = useMemo(() => {
-		if (!currentUserPubkey) return null
-		const mine = bids.filter((b) => b.pubkey === currentUserPubkey)
-		if (!mine.length) return null
-		return mine.reduce<(typeof mine)[0] | null>((best, bid) => {
-			if (!best) return bid
-			const delta = getBidAmount(bid) - getBidAmount(best)
-			if (delta > 0) return bid
-			if (delta < 0) return best
-			return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
-		}, mine[0])
-	}, [bids, currentUserPubkey])
-
-	const isMyBidTop = !!(myTopBidEvent && topBid && myTopBidEvent.id === topBid.id)
 	const myAlreadyReleased = useMemo(() => {
 		if (!myTopBidEvent) return false
 		return pathReleases.some((pr) => pr.bidEventId === myTopBidEvent.id)
@@ -125,6 +116,16 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	const settlementMutation = usePublishAuctionSettlementMutation()
 	const [isReleasing, setIsReleasing] = useState(false)
 
+	// #3 fix: Optimistic update — immediately mark as released after successful publish,
+	// before the query refetch completes. This prevents the button from re-appearing
+	// during the gap between publish completion and query refetch.
+	const [optimisticallyReleased, setOptimisticallyReleased] = useState(false)
+	const myAlreadyReleasedEffective = useMemo(() => {
+		if (optimisticallyReleased) return true
+		if (!myTopBidEvent) return false
+		return pathReleases.some((pr) => pr.bidEventId === myTopBidEvent.id)
+	}, [pathReleases, myTopBidEvent, optimisticallyReleased])
+
 	const handleReleasePath = async () => {
 		if (!myTopBidEvent) return
 		setIsReleasing(true)
@@ -135,6 +136,8 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 			})
 			toast.success('Path release published — seller can now redeem')
 			void result.pathReleaseEventId
+			// Optimistically mark as released so the UI transitions immediately
+			setOptimisticallyReleased(true)
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.pathReleases(auctionRootEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(auctionRootEventId) })
 		} catch (err) {
@@ -160,7 +163,25 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 		}
 	}
 
-	// Determine state and content
+	// Compute state using the extracted state machine
+	const stateResult = getAuctionSettlementState({
+		isSeller,
+		isMyBidTop,
+		isWinner,
+		ended,
+		reserveMet,
+		settlementWindowExpired,
+		myAlreadyReleased: myAlreadyReleasedEffective,
+		hasBidderRecord: !!myBidderRecord,
+		hasLatestSettlement: !!latestSettlement,
+		settlementStatus,
+		hasPathReleaseForTopBid,
+		hasMatchedClaimOrder: !!matchedClaimOrder,
+		settlementLocktimeAt,
+		now,
+	})
+
+	// Map state machine output to renderable state
 	let state: {
 		icon: ReactElement | null
 		title: string
@@ -169,235 +190,216 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 		buttonAction: (event: React.MouseEvent) => void
 		theme: string
 		showButton: boolean
-		bidAmount?: number
+		bidAmount: number
 	} = {
 		icon: null,
 		title: '',
 		message: '',
 		buttonTitle: '',
 		buttonAction: () => {},
-		theme: 'default', // 'action', 'waiting', 'completed'
+		theme: 'default',
 		showButton: false,
 		bidAmount: 0,
 	}
 
-	// Bidder settle action - shown to the top bidder once the auction ends
-	// so they can publish their kind-1025 path release.
-	// Guards: auction ended (canonical cutoff), reserve met, settlement window not expired,
-	// canonical valid top bid exists, no existing settlement.
-	if (isMyBidTop && ended && reserveMet && !settlementWindowExpired && !myAlreadyReleased && myBidderRecord && !latestSettlement) {
-		state = {
-			icon: <Gavel className="w-5 h-5 text-sky-300" />,
-			title: 'You won — release your path to settle',
-			message: `Bid: ${getBidAmount(myTopBidEvent!).toLocaleString()} sats. Publishing your kind-1025 reveals the derivation path so the seller can redeem your locked proofs.`,
-			buttonTitle: isReleasing ? 'Releasing…' : 'Release path & settle',
-			buttonAction: () => void handleReleasePath(),
-			theme: 'action',
-			showButton: true,
-			bidAmount: getBidAmount(myTopBidEvent!),
-		}
-	}
-	// Path release published - waiting for seller to redeem and publish settlement
-	else if (isMyBidTop && ended && myAlreadyReleased && settlementStatus !== 'settled') {
-		state = {
-			icon: <CheckCircle className="w-5 h-5 text-emerald-300" />,
-			title: 'Path release published',
-			message: 'Waiting for seller to redeem and publish settlement.',
-			buttonTitle: '',
-			buttonAction: () => {},
-			theme: 'waiting',
-			showButton: false,
-			bidAmount: 0,
-		}
-	}
+	switch (stateResult.stateId) {
+		case 'auction-not-ended':
+		case 'no-state':
+			return null
 
-	// Winner banner - shown to the auction winner after settlement
-	else if (isWinner && settlementStatus === 'settled') {
-		// Task 1: Update navigation logic to use matchedClaimOrder?.id for the route
-		if (matchedClaimOrder) {
-			const action = () => {
-				if (matchedClaimOrder.id) {
-					navigate({ to: `/dashboard/orders/${matchedClaimOrder.id}` })
-				} else {
-					toast.error('Issue with order id. Go to Dashboard -> Your Purchases to find the order.')
-				}
+		case 'bidder-release-path':
+			state = {
+				icon: <Gavel className="w-5 h-5 text-sky-300" />,
+				title: stateResult.title,
+				message: `Bid: ${(myTopBidEvent?.amount ?? 0).toLocaleString()} sats. ${stateResult.message}`,
+				buttonTitle: isReleasing ? 'Releasing…' : stateResult.buttonTitle,
+				buttonAction: () => void handleReleasePath(),
+				theme: 'action',
+				showButton: true,
+				bidAmount: myTopBidEvent?.amount ?? 0,
 			}
+			break
 
+		case 'bidder-path-released':
 			state = {
 				icon: <CheckCircle className="w-5 h-5 text-emerald-300" />,
-				title: 'You won this auction!',
+				title: stateResult.title,
+				message: stateResult.message,
+				buttonTitle: '',
+				buttonAction: () => {},
+				theme: 'waiting',
+				showButton: false,
+				bidAmount: 0,
+			}
+			break
+
+		case 'winner-with-order':
+			state = {
+				icon: <CheckCircle className="w-5 h-5 text-emerald-300" />,
+				title: stateResult.title,
 				message: `Shipping details submitted — awaiting seller. Final price: ${settlementFinalAmount.toLocaleString()} sats`,
-				buttonTitle: 'View Order',
-				buttonAction: action,
+				buttonTitle: stateResult.buttonTitle,
+				buttonAction: () => {
+					if (matchedClaimOrder?.id) {
+						navigate({ to: `/dashboard/orders/${matchedClaimOrder.id}` })
+					} else {
+						toast.error('Issue with order id. Go to Dashboard -> Your Purchases to find the order.')
+					}
+				},
 				theme: 'completed',
 				showButton: true,
 				bidAmount: settlementFinalAmount,
 			}
-		} else {
+			break
+
+		case 'winner-claim-dialog':
 			state = {
 				icon: <Trophy className="w-5 h-5 text-emerald-300" />,
-				title: 'You won this auction!',
+				title: stateResult.title,
 				message: `Final price: ${settlementFinalAmount.toLocaleString()} sats`,
-				buttonTitle: 'Submit Shipping Address',
+				buttonTitle: stateResult.buttonTitle,
 				buttonAction: () => setIsClaimDialogOpen(true),
 				theme: 'action',
 				showButton: true,
 				bidAmount: settlementFinalAmount,
 			}
-		}
-	}
-	// Seller side - check if winner has submitted shipping details
-	else if (isSeller && settlementStatus === 'settled' && settlementWinner) {
-		// Task 1: Update navigation logic to use matchedClaimOrder?.id for the route
-		if (matchedClaimOrder) {
-			const action = () => {
-				if (matchedClaimOrder.id) {
-					navigate({ to: `/dashboard/orders/${matchedClaimOrder.id}` })
-				} else {
-					toast.error('Issue with order id. Go to Dashboard -> Sales to find the order.')
-				}
-			}
+			break
 
+		case 'seller-order-received':
 			state = {
 				icon: <Truck className="w-5 h-5 text-emerald-300" />,
-				title: 'Order Received',
-				message: 'Winner has submitted shipping details. Process and ship the item.',
-				buttonTitle: 'View Order',
-				buttonAction: action,
+				title: stateResult.title,
+				message: stateResult.message,
+				buttonTitle: stateResult.buttonTitle,
+				buttonAction: () => {
+					if (matchedClaimOrder?.id) {
+						navigate({ to: `/dashboard/orders/${matchedClaimOrder.id}` })
+					} else {
+						toast.error('Issue with order id. Go to Dashboard -> Sales to find the order.')
+					}
+				},
 				theme: 'completed',
 				showButton: true,
 				bidAmount: 0,
 			}
-		} else {
+			break
+
+		case 'seller-awaiting-shipping':
 			state = {
 				icon: <Clock className="w-5 h-5 text-blue-300" />,
-				title: 'Awaiting Shipping Details',
-				message: 'Waiting for winner to submit shipping details.',
+				title: stateResult.title,
+				message: stateResult.message,
 				buttonTitle: '',
 				buttonAction: () => {},
 				theme: 'waiting',
 				showButton: false,
 				bidAmount: 0,
 			}
-		}
-	}
-	// Reserve not met states
-	else if (latestSettlement && settlementStatus === 'reserve_not_met') {
-		// Check if refund is ready
-		if (now >= settlementLocktimeAt && settlementLocktimeAt > 0) {
-			// Task 2: Remove the "Claim Refund" button and replace with static informational message
+			break
+
+		case 'reserve-not-met-refund-ready':
 			state = {
 				icon: <CheckCircle className="w-5 h-5 text-green-300" />,
-				title: 'Refund Ready',
-				message: 'Refund window opened - verify the unlocked funds have returned to your wallet.',
+				title: stateResult.title,
+				message: stateResult.message,
 				buttonTitle: '',
 				buttonAction: () => {},
 				theme: 'completed',
-				showButton: false, // Task 2: Ensure showButton is set to false
+				showButton: false,
 				bidAmount: 0,
 			}
-		} else {
+			break
+
+		case 'reserve-not-met-refund-pending':
 			state = {
 				icon: <Clock className="w-5 h-5 text-blue-300" />,
-				title: 'Refund Pending',
-				message: 'Refund window opens soon.',
+				title: stateResult.title,
+				message: stateResult.message,
 				buttonTitle: '',
 				buttonAction: () => {},
 				theme: 'waiting',
 				showButton: false,
 				bidAmount: 0,
 			}
-		}
-	}
-	// Settlement window expired
-	else if (settlementWindowExpired && !latestSettlement) {
-		state = {
-			icon: <Ban className="w-5 h-5 text-red-300" />,
-			title: 'Settlement Expired',
-			message: 'Settlement window has passed.',
-			buttonTitle: '',
-			buttonAction: () => {},
-			theme: 'completed',
-			showButton: false,
-			bidAmount: 0,
-		}
-	}
-	// Seller settlement action
-	else if (isSeller && ended && !latestSettlement && hasPathReleaseForTopBid) {
-		state = {
-			icon: <Gavel className="w-5 h-5 text-amber-300" />,
-			title: 'Settlement Ready',
-			message: 'Complete settlement by publishing the settlement event.',
-			buttonTitle: settlementMutation.isPending ? 'Publishing…' : 'Publish Settlement',
-			buttonAction: () => void handleSubmitSettlement(),
-			theme: 'action',
-			showButton: true,
-			bidAmount: 0,
-		}
-	}
-	// Seller close action for no-bid / below-reserve auctions.
-	// When no reserve-meeting bid exists, the seller can close the auction
-	// by publishing a `reserve_not_met` settlement — no path release needed.
-	else if (isSeller && ended && !latestSettlement && !reserveMet) {
-		state = {
-			icon: <Ban className="w-5 h-5 text-amber-300" />,
-			title: 'Reserve Not Met',
-			message: 'No bid met the reserve price. Close the auction to publish a reserve_not_met settlement.',
-			buttonTitle: settlementMutation.isPending ? 'Publishing…' : 'Close Auction',
-			buttonAction: () => void handleSubmitSettlement(),
-			theme: 'action',
-			showButton: true,
-			bidAmount: 0,
-		}
-	}
-	// Seller waiting for path release (only when reserve is met — a valid winner exists)
-	else if (isSeller && ended && !latestSettlement && !hasPathReleaseForTopBid && reserveMet) {
-		state = {
-			icon: <Clock className="w-5 h-5 text-blue-300" />,
-			title: 'Awaiting Path Release',
-			message: 'Waiting for the winning bidder to release their path.',
-			buttonTitle: '',
-			buttonAction: () => {},
-			theme: 'waiting',
-			showButton: false,
-			bidAmount: 0,
-		}
-	}
-	// Bidder waiting for seller after releasing path
-	else if (!isSeller && isMyBidTop && ended && myAlreadyReleased && settlementStatus !== 'settled') {
-		state = {
-			icon: <Clock className="w-5 h-5 text-blue-300" />,
-			title: 'Awaiting Settlement',
-			message: 'Waiting for seller to complete settlement.',
-			buttonTitle: '',
-			buttonAction: () => {},
-			theme: 'waiting',
-			showButton: false,
-			bidAmount: 0,
-		}
-	}
-	// Bidder local record missing - prompt for refresh page (addresses NIP-60 wallet bug failing to refresh wallet state)
-	else if (!isSeller && isMyBidTop && !myBidderRecord && ended) {
-		state = {
-			icon: <Ban className="w-5 h-5 text-red-300" />,
-			title: 'Local Record Missing',
-			message:
-				'Cannot find the release path for the bid. Refreshing the page to reload wallet data may help - otherwise the bid may have been placed from another browser or device.',
-			buttonTitle: 'Refresh Page',
-			buttonAction: () => window.location.reload(),
-			theme: 'completed',
-			showButton: true,
-			bidAmount: 0,
-		}
-	}
-	// Auction not ended yet
-	else if (!ended) {
-		return null
-	}
+			break
 
-	// Default state - no settlement state to display
-	if (state.theme === 'default') {
-		return null
+		case 'settlement-expired':
+			state = {
+				icon: <Ban className="w-5 h-5 text-red-300" />,
+				title: stateResult.title,
+				message: stateResult.message,
+				buttonTitle: '',
+				buttonAction: () => {},
+				theme: 'completed',
+				showButton: false,
+				bidAmount: 0,
+			}
+			break
+
+		case 'seller-settlement-ready':
+			state = {
+				icon: <Gavel className="w-5 h-5 text-amber-300" />,
+				title: stateResult.title,
+				message: stateResult.message,
+				buttonTitle: settlementMutation.isPending ? 'Publishing…' : stateResult.buttonTitle,
+				buttonAction: () => void handleSubmitSettlement(),
+				theme: 'action',
+				showButton: true,
+				bidAmount: 0,
+			}
+			break
+
+		case 'seller-close-auction':
+			state = {
+				icon: <Ban className="w-5 h-5 text-amber-300" />,
+				title: stateResult.title,
+				message: stateResult.message,
+				buttonTitle: settlementMutation.isPending ? 'Publishing…' : stateResult.buttonTitle,
+				buttonAction: () => void handleSubmitSettlement(),
+				theme: 'action',
+				showButton: true,
+				bidAmount: 0,
+			}
+			break
+
+		case 'seller-awaiting-path-release':
+			state = {
+				icon: <Clock className="w-5 h-5 text-blue-300" />,
+				title: stateResult.title,
+				message: stateResult.message,
+				buttonTitle: '',
+				buttonAction: () => {},
+				theme: 'waiting',
+				showButton: false,
+				bidAmount: 0,
+			}
+			break
+
+		case 'bidder-awaiting-settlement':
+			state = {
+				icon: <Clock className="w-5 h-5 text-blue-300" />,
+				title: stateResult.title,
+				message: stateResult.message,
+				buttonTitle: '',
+				buttonAction: () => {},
+				theme: 'waiting',
+				showButton: false,
+				bidAmount: 0,
+			}
+			break
+
+		case 'bidder-local-record-missing':
+			state = {
+				icon: <Ban className="w-5 h-5 text-red-300" />,
+				title: stateResult.title,
+				message: stateResult.message,
+				buttonTitle: stateResult.buttonTitle,
+				buttonAction: () => window.location.reload(),
+				theme: 'completed',
+				showButton: true,
+				bidAmount: 0,
+			}
+			break
 	}
 
 	// Theme classes
@@ -434,7 +436,12 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 						)}
 
 						{state.showButton && (
-							<Button onClick={state.buttonAction} disabled={isReleasing || settlementMutation.isPending} className="mt-3" size="sm">
+							<Button
+								onClick={state.buttonAction}
+								disabled={isReleasing || settlementMutation.isPending || optimisticallyReleased}
+								className="mt-3"
+								size="sm"
+							>
 								{state.buttonTitle}
 							</Button>
 						)}
