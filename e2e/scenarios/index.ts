@@ -642,8 +642,10 @@ export async function seedAuction(
 			['escrow_pubkey', '02' + '00'.repeat(32)],
 			['key_scheme', 'hd_p2pk'],
 			['p2pk_xpub', 'xpub' + '0'.repeat(100)],
-			['settlement_policy', 'cashu_p2pk_v1'],
+			['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
 			['settlement_grace', String(opts.settlementGrace ?? 7200)],
+			['auditors', devUser1.pk],
+			['auditor_quorum', '1'],
 			['schema', 'auction_v1'],
 			['image', 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png'],
 			['t', 'Bitcoin'],
@@ -724,6 +726,18 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 						['start_at', String(now - 100)],
 						['end_at', String(now + 100)],
 						['reserve', '1000'],
+						['currency', 'SAT'],
+						['starting_bid', '500', 'SAT'],
+						['bid_increment', '100'],
+						['auction_type', 'english'],
+						['mint', 'https://nofees.testnut.cashu.space'],
+						['key_scheme', 'hd_p2pk'],
+						['p2pk_xpub', 'xpub' + '0'.repeat(100)],
+						['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
+						['settlement_grace', '7200'],
+						['auditors', devUser1.pk],
+						['auditor_quorum', '1'],
+						['schema', 'auction_v1'],
 					],
 				},
 				sellerSkBytes,
@@ -980,10 +994,12 @@ export async function seedSettlement(
 		winnerPubkey?: string
 		winningBidId?: string
 		finalAmount?: number
+		pathReleaseEventId?: string
 	},
 ): Promise<VerifiedEvent> {
 	const now = Math.floor(Date.now() / 1000)
 	const tags: string[][] = [
+		['e', opts.auctionRootEventId],
 		['a', opts.auctionCoordinate],
 		['status', opts.status],
 		['close_at', String(opts.closeAt)],
@@ -995,6 +1011,9 @@ export async function seedSettlement(
 	}
 	if (opts.winningBidId) {
 		tags.push(['winning_bid', opts.winningBidId])
+	}
+	if (opts.pathReleaseEventId) {
+		tags.push(['path_release', opts.pathReleaseEventId])
 	}
 
 	const event = await publish(relay, skHex, {
