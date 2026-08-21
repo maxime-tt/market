@@ -172,6 +172,15 @@ export interface Nip60State {
 	depositStatus: Nip60DepositStatus
 	// Pending tokens tracking (tokens generated but not yet claimed by recipient)
 	pendingTokens: PendingNip60Token[]
+	/** Survives error/cancel/close; lets a later retry re-check the SAME quote. */
+	recoverableDeposit: RecoverableDeposit | null
+}
+
+export interface RecoverableDeposit {
+	mint: string
+	quoteId: string
+	amount: number
+	invoice: string | null
 }
 
 const initialState: Nip60State = {
@@ -187,6 +196,7 @@ const initialState: Nip60State = {
 	depositInvoice: null,
 	depositStatus: 'idle',
 	pendingTokens: [],
+	recoverableDeposit: null,
 }
 
 // Default to the public testnet mint. Set APP_DEV_TEST_MINT_URL to override
@@ -724,6 +734,45 @@ export const waitForDepositConfirmation = async (
 
 const isDepositConfirmationTimeoutError = (error: unknown, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): boolean =>
 	error instanceof Error && error.message === getDepositConfirmationTimeoutMessage(timeoutMs)
+
+const buildRecoverableDeposit = (deposit: NDKCashuDeposit | null, invoice: string | null): RecoverableDeposit | null =>
+	deposit?.mint && deposit?.quoteId ? { mint: deposit.mint, quoteId: deposit.quoteId, amount: deposit.amount, invoice } : null
+
+const attachDepositListeners = (deposit: NDKCashuDeposit): void => {
+	deposit.on('success', () => {
+		nip60Store.setState((s) => ({
+			...s,
+			depositStatus: 'success',
+			activeDeposit: null,
+			depositInvoice: null,
+			recoverableDeposit: null,
+		}))
+		void nip60Actions.refresh()
+	})
+
+	deposit.on('error', (err: Error | string) => {
+		console.error('[nip60] Deposit error:', err)
+		nip60Store.setState((s) => ({
+			...s,
+			recoverableDeposit: buildRecoverableDeposit(deposit, s.depositInvoice) ?? s.recoverableDeposit,
+			depositStatus: 'error',
+			error: typeof err === 'string' ? err : err.message,
+			activeDeposit: null,
+			depositInvoice: null,
+		}))
+	})
+}
+
+const reconcileDeposit = (): NDKCashuDeposit | null => {
+	const { wallet, activeDeposit, recoverableDeposit } = nip60Store.state
+	if (activeDeposit) return activeDeposit
+	if (!wallet || !recoverableDeposit) return null
+	const deposit = wallet.deposit(recoverableDeposit.amount, recoverableDeposit.mint)
+	deposit.quoteId = recoverableDeposit.quoteId
+	attachDepositListeners(deposit)
+	nip60Store.setState((s) => ({ ...s, activeDeposit: deposit, depositInvoice: recoverableDeposit.invoice }))
+	return deposit
+}
 
 const monitorDepositConfirmation = (deposit: NDKCashuDeposit, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): void => {
 	void waitForDepositConfirmation(deposit, timeoutMs).catch((error) => {
@@ -1688,28 +1737,7 @@ export const nip60Actions = {
 				depositInvoice: invoice ?? null,
 			}))
 
-			// Listen for deposit completion
-			deposit.on('success', (token) => {
-				nip60Store.setState((s) => ({
-					...s,
-					depositStatus: 'success',
-					activeDeposit: null,
-					depositInvoice: null,
-				}))
-				// Refresh to update balance
-				void nip60Actions.refresh()
-			})
-
-			deposit.on('error', (err: Error | string) => {
-				console.error('[nip60] Deposit error:', err)
-				nip60Store.setState((s) => ({
-					...s,
-					depositStatus: 'error',
-					error: typeof err === 'string' ? err : err.message,
-					activeDeposit: null,
-					depositInvoice: null,
-				}))
-			})
+			attachDepositListeners(deposit)
 
 			monitorDepositConfirmation(deposit)
 
@@ -1728,8 +1756,11 @@ export const nip60Actions = {
 	},
 
 	retryDepositConfirmation: (): void => {
-		const { activeDeposit, depositStatus } = nip60Store.state
-		if (!activeDeposit || depositStatus !== 'awaiting_confirmation_retry') return
+		const { depositStatus } = nip60Store.state
+		if (!['awaiting_confirmation_retry', 'error'].includes(depositStatus)) return
+
+		const deposit = reconcileDeposit()
+		if (!deposit) return
 
 		nip60Store.setState((state) => ({
 			...state,
@@ -1737,8 +1768,8 @@ export const nip60Actions = {
 			error: null,
 		}))
 
-		monitorDepositConfirmation(activeDeposit)
-		void activeDeposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS).catch((error) => {
+		monitorDepositConfirmation(deposit)
+		void deposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS).catch((error) => {
 			console.error('[nip60] Deposit confirmation retry failed:', error)
 		})
 	},
@@ -1751,16 +1782,18 @@ export const nip60Actions = {
 	 * still transitions `depositStatus` normally.
 	 */
 	checkDepositNow: async (): Promise<void> => {
-		const { activeDeposit, depositStatus } = nip60Store.state
-		if (!activeDeposit || (depositStatus !== 'pending' && depositStatus !== 'awaiting_confirmation_retry')) return
+		const { depositStatus } = nip60Store.state
+		if (depositStatus !== 'pending' && depositStatus !== 'awaiting_confirmation_retry' && depositStatus !== 'error') return
 
-		if (depositStatus === 'awaiting_confirmation_retry') {
+		if (depositStatus === 'awaiting_confirmation_retry' || depositStatus === 'error') {
 			nip60Actions.retryDepositConfirmation()
 			return
 		}
 
+		const deposit = reconcileDeposit()
+		if (!deposit) return
 		try {
-			await activeDeposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS)
+			await deposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS)
 		} catch (error) {
 			console.error('[nip60] Manual deposit check failed:', error)
 		}
@@ -1800,6 +1833,7 @@ export const nip60Actions = {
 	cancelDeposit: (): void => {
 		nip60Store.setState((s) => ({
 			...s,
+			recoverableDeposit: buildRecoverableDeposit(s.activeDeposit, s.depositInvoice) ?? s.recoverableDeposit,
 			activeDeposit: null,
 			depositInvoice: null,
 			depositStatus: 'idle',
