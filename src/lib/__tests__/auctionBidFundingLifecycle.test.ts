@@ -459,23 +459,4 @@ describe('classifyDepositTerminalErrorOutcome (#1235 round-3 B3)', () => {
 	test('invoice existed → deposit_outcome_uncertain (a payment may have been made)', () => {
 		expect(classifyDepositTerminalErrorOutcome({ invoiceExisted: true })).toBe('deposit_outcome_uncertain')
 	})
-
-	test('all post-invoice terminal error inputs map to uncertain — the app never picks between paid/unpaid', () => {
-		// QR payer (NWC never attempted), NWC payment failed, NWC payment sent —
-		// for a terminal deposit error after an invoice existed, none of these
-		// inputs can evidence either outcome, so they must all classify the
-		// same way: uncertain.
-		for (const invoiceExisted of [true]) {
-			for (const paymentAcknowledged of [false, true]) {
-				for (const nwcPaymentAttempted of [false, true]) {
-					// The classifier is evidence-gated on the invoice's existence
-					// only; wallet acknowledgements are NOT settlement evidence.
-					const outcome = classifyDepositTerminalErrorOutcome({ invoiceExisted })
-					expect(outcome).toBe('deposit_outcome_uncertain')
-					expect(paymentAcknowledged || !paymentAcknowledged).toBe(true) // input combo exercised
-					expect(nwcPaymentAttempted || !nwcPaymentAttempted).toBe(true)
-				}
-			}
-		}
-	})
 })
