@@ -1,5 +1,10 @@
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
-import { AuctionBidLockedButUnpublishedError, AuctionBidPublishFailedError, type AuctionBidFormData } from '@/publish/auctions'
+import {
+	AuctionBidLockedButUnpublishedError,
+	AuctionBidLockOutcomeUncertainError,
+	AuctionBidPublishFailedError,
+	type AuctionBidFormData,
+} from '@/publish/auctions'
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -348,6 +353,23 @@ export const nextPublishedBidEventIdOnSessionStart = (_previousSessionBidEventId
 export const nextLockedUnpublishedTokenIdOnSessionStart = (_previousSessionLockedUnpublishedTokenId: string | null): string | null => null
 
 /**
+ * #1235 round-3 B1 — session-scoped "lock outcome uncertain" tracker.
+ *
+ * `AuctionBidLockOutcomeUncertainError` is thrown when the mint lock's
+ * outcome is uncertain (a swap/lock request may already have been sent).
+ * The funding lifecycle records the pre-lock recovery record id so
+ * `retryBidPublish` can refuse the retry with an honest RECLAIM-ONLY-GUIDANCE
+ * message instead of falling back to the full re-submit pipeline (which
+ * could double-consume the bidder's inputs at the mint).
+ *
+ * Like `lockedUnpublishedTokenId`, this tracker is session-scoped: whatever
+ * the previous session's uncertain leg left behind stays recoverable via the
+ * persisted recovery record + the wallet, but it must not block or steer a
+ * NEW session.
+ */
+export const nextLockOutcomeUncertainOnSessionStart = (_previousSessionRecoveryRecordId: string | null): string | null => null
+
+/**
  * #1235 follow-ups 1+2 — session-token guard on async completion writes.
  *
  * A funding session's async completions (`submitPreparedBid` /
@@ -389,6 +411,12 @@ export function useAuctionBidFunding({
 	// means funds for THIS session's leg are known to be locked, so a retry
 	// must be RECLAIM-ONLY, never a re-locking re-submit.
 	const [lockedUnpublishedTokenId, setLockedUnpublishedTokenId] = useState<string | null>(null)
+	// #1235 round-3 B1: pre-lock recovery record id of a leg whose lock
+	// outcome is UNCERTAIN (see AuctionBidLockOutcomeUncertainError) — non-null
+	// means a lock request may already have been sent for THIS session's leg,
+	// so a retry must be refused outright (no re-locking re-submit, and there
+	// may be nothing publishable or reclaimable yet either).
+	const [lockOutcomeUncertainRecoveryRecordId, setLockOutcomeUncertainRecoveryRecordId] = useState<string | null>(null)
 	// #1235 follow-ups 1+2: epoch token for the CURRENT funding session —
 	// bumped at the top of every `startFundingForBid` call so async
 	// continuations from older sessions can detect (and refuse) writing.
@@ -434,6 +462,12 @@ export function useAuctionBidFunding({
 					setPublishedBidEventId(error.bidEventId)
 				} else if (error instanceof AuctionBidLockedButUnpublishedError) {
 					setLockedUnpublishedTokenId(error.lockTokenId)
+				} else if (error instanceof AuctionBidLockOutcomeUncertainError) {
+					// #1235 round-3 B1 — the lock outcome is uncertain: a recovery
+					// record was durably persisted BEFORE the mint call; record its id
+					// so retryBidPublish refuses the retry (no second lock) with the
+					// honest reclaim guidance.
+					setLockOutcomeUncertainRecoveryRecordId(error.recoveryRecordId)
 				}
 				setBidFundingLifecycleState((currentState) =>
 					resolveAuctionBidFundingTransition(currentState, 'mint_succeeded_bid_publish_failed_reclaimable'),
@@ -462,6 +496,13 @@ export function useAuctionBidFunding({
 			// same rule as publishedBidEventId).
 			setLockedUnpublishedTokenId((previousSessionLockedTokenId) =>
 				nextLockedUnpublishedTokenIdOnSessionStart(previousSessionLockedTokenId),
+			)
+			// #1235 round-3 B1: the previous session's uncertain leg stays
+			// recoverable via its persisted recovery record + the wallet — a NEW
+			// session starts with no uncertain-outcome state (session-scoped
+			// state, same rule as lockedUnpublishedTokenId).
+			setLockOutcomeUncertainRecoveryRecordId((previousSessionRecoveryRecordId) =>
+				nextLockOutcomeUncertainOnSessionStart(previousSessionRecoveryRecordId),
 			)
 			if (hasInsufficientBidFunds) {
 				if (!depositMint) {
@@ -597,15 +638,20 @@ export function useAuctionBidFunding({
 	 */
 	const retryBidPublish = useCallback(async () => {
 		if (!pendingBidSubmission) return
-		// #1235 follow-up 3 — RECLAIM-ONLY path: this session's leg failed
-		// post-lock but pre-publishable (event finalization or the STRICT
-		// recovery-record write failed). Funds are known to be locked, so the
-		// retry must NEVER fall back to the full re-submit pipeline (it would
-		// re-derive a fresh path and re-lock the delta — double-lock) and
-		// there is no publishable event to rebroadcast either.
-		if (lockedUnpublishedTokenId) {
+		// #1235 follow-up 3 / round-3 B1 — RECLAIM-ONLY / retry-refused paths:
+		// this session's leg either failed post-lock but pre-publishable (event
+		// finalization or the STRICT recovery-record write failed — funds KNOWN
+		// locked, nothing publishable), or its lock OUTCOME IS UNCERTAIN (a lock
+		// request may already have been sent — funds may or may not be locked).
+		// Either way the retry must NEVER fall back to the full re-submit
+		// pipeline (it would re-derive a fresh path and re-lock the delta —
+		// double-lock / double-consume) and there is no publishable event to
+		// rebroadcast either.
+		if (lockedUnpublishedTokenId || lockOutcomeUncertainRecoveryRecordId) {
 			toast.error(
-				'Your bid funds are locked and reclaimable, but the bid could not be prepared for publishing. Retry is unavailable — reclaim your funds from the wallet once the refund timelock opens. No second lock was attempted.',
+				lockOutcomeUncertainRecoveryRecordId
+					? 'The outcome of your bid lock is uncertain — a lock request may already have been sent to the mint, so retry is refused and no second lock was attempted. A recovery record with your refund key was saved; your funds may be reclaimable from the wallet once the refund timelock opens.'
+					: 'Your bid funds are locked and reclaimable, but the bid could not be prepared for publishing. Retry is unavailable — reclaim your funds from the wallet once the refund timelock opens. No second lock was attempted.',
 			)
 			return
 		}
@@ -652,7 +698,15 @@ export function useAuctionBidFunding({
 		// nothing was locked for this leg yet: a full re-submit is safe
 		// (no double-lock).
 		await submitPreparedBid(pendingBidSubmission)
-	}, [pendingBidSubmission, publishedBidEventId, lockedUnpublishedTokenId, republishBid, submitPreparedBid, onBidSuccess])
+	}, [
+		pendingBidSubmission,
+		publishedBidEventId,
+		lockedUnpublishedTokenId,
+		lockOutcomeUncertainRecoveryRecordId,
+		republishBid,
+		submitPreparedBid,
+		onBidSuccess,
+	])
 
 	const handleInvoiceCreated = useCallback(() => {
 		setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'invoice_created'))
@@ -707,5 +761,11 @@ export function useAuctionBidFunding({
 		// failure. Additive to the return shape; no existing consumer is
 		// affected.
 		lockedUnpublishedTokenId,
+		// #1235 round-3 B1: exposed so the UI (and tests) can distinguish an
+		// uncertain lock outcome (a recovery record was saved; retry refused,
+		// reclaim MAY be available after the refund timelock) from both the
+		// rebroadcastable and the known-locked failures. Additive to the return
+		// shape; no existing consumer is affected.
+		lockOutcomeUncertainRecoveryRecordId,
 	}
 }

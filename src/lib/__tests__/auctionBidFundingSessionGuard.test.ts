@@ -29,10 +29,16 @@ import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { toast } from 'sonner'
 import { nip60Store } from '@/lib/stores/nip60'
-import { AuctionBidLockedButUnpublishedError, AuctionBidPublishFailedError, type AuctionBidFormData } from '@/publish/auctions'
+import {
+	AuctionBidLockedButUnpublishedError,
+	AuctionBidLockOutcomeUncertainError,
+	AuctionBidPublishFailedError,
+	type AuctionBidFormData,
+} from '@/publish/auctions'
 import {
 	isSessionCurrent,
 	nextLockedUnpublishedTokenIdOnSessionStart,
+	nextLockOutcomeUncertainOnSessionStart,
 	useAuctionBidFunding,
 	type UseAuctionBidFundingOptions,
 } from '@/hooks/useAuctionBidFunding'
@@ -739,5 +745,114 @@ describe('locked-but-unpublished legs map to a RECLAIM-ONLY retry (#1235 follow-
 	test('nextLockedUnpublishedTokenIdOnSessionStart: a new session starts with no locked-unpublished token', () => {
 		expect(nextLockedUnpublishedTokenIdOnSessionStart('pending-token-7')).toBeNull()
 		expect(nextLockedUnpublishedTokenIdOnSessionStart(null)).toBeNull()
+	})
+})
+
+// =============================================================================
+// #1235 round-3 B1 — lock-outcome-uncertain failures: the mint lock's outcome
+// is uncertain (a swap/lock request may already have been sent), so the retry
+// must be REFUSED outright — no full re-submit (double-consume risk) and no
+// rebroadcast (nothing is known to be publishable). The recovery record id is
+// session-scoped, mirroring lockedUnpublishedTokenId.
+// =============================================================================
+
+describe('lock-outcome-uncertain legs refuse the retry outright (#1235 round-3 B1)', () => {
+	const UNCERTAIN_RECOVERY_RECORD_ID = '11111111-2222-3333-4444-555555555555'
+
+	const driveSessionToLockOutcomeUncertainFailure = async (h: FundingHarness, bidData: AuctionBidFormData): Promise<void> => {
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidData)
+			h.latest.current.handleInvoiceCreated()
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 } }))
+		})
+		const publish = deferred<string>()
+		h.setPublishBid(() => publish.promise)
+		await act(async () => {
+			h.latest.current.handleFundingSuccess()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		await settleInsideAct(() =>
+			publish.reject(
+				new AuctionBidLockOutcomeUncertainError({
+					recoveryRecordId: UNCERTAIN_RECOVERY_RECORD_ID,
+					mintUrl: MINT_URL,
+					legAmount: bidData.amount,
+					refundPubkey: '03' + 'e'.repeat(64),
+					cause: new Error('swap send failed mid-flight'),
+				}),
+			),
+		)
+		expect(h.latest.current.lockOutcomeUncertainRecoveryRecordId).toBe(UNCERTAIN_RECOVERY_RECORD_ID)
+		expect(h.latest.current.publishedBidEventId).toBeNull()
+		expect(h.latest.current.bidFundingLifecycleState).toBe('mint_succeeded_bid_publish_failed_reclaimable')
+	}
+
+	test('lock-outcome-uncertain failure → retry refused, no second publishBid (no second lock attempt)', async () => {
+		const h = await mountFundingHook()
+		const bidDataA = buildBidData(1_000)
+
+		await driveSessionToLockOutcomeUncertainFailure(h, bidDataA)
+
+		const publishCallsBeforeRetry = h.calls.publishBid
+		const republishCallsBeforeRetry = h.calls.republishBid
+
+		// Retry: must be REFUSED — neither a full re-submit (would re-lock the
+		// delta / double-consume inputs at the mint) nor a rebroadcast
+		// (nothing is known to be publishable for this leg).
+		await act(async () => {
+			await h.latest.current.retryBidPublish()
+		})
+
+		expect(h.calls.publishBid).toBe(publishCallsBeforeRetry) // NO second publishBid → NO second lock
+		expect(h.calls.republishBid).toBe(republishCallsBeforeRetry) // no rebroadcast either
+		expect(h.calls.onBidSuccess).toBe(0)
+		// Honest reclaim guidance: the outcome is uncertain, a recovery record
+		// was saved, NO second lock was attempted.
+		const lastToast = toastErrorMessages[toastErrorMessages.length - 1]
+		expect(lastToast).toContain('no second lock')
+		expect(lastToast.toLowerCase()).toContain('uncertain')
+		expect(lastToast.toLowerCase()).toContain('recovery record')
+		// The session stays in the retry/reclaim bucket with the submission
+		// preserved, and the tracker still holds the record id.
+		expect(h.latest.current.bidFundingLifecycleState).toBe('mint_succeeded_bid_publish_failed_reclaimable')
+		expect(h.latest.current.pendingBidSubmission).toEqual(bidDataA)
+		expect(h.latest.current.lockOutcomeUncertainRecoveryRecordId).toBe(UNCERTAIN_RECOVERY_RECORD_ID)
+
+		await h.unmount()
+	})
+
+	test('a NEW funding session resets the uncertain-outcome tracker — the new session is not blocked', async () => {
+		const h = await mountFundingHook()
+		const bidDataA = buildBidData(1_000)
+		const bidDataB = buildBidData(2_500)
+
+		await driveSessionToLockOutcomeUncertainFailure(h, bidDataA)
+
+		// The uncertain leg stays recoverable via its persisted recovery record
+		// + the wallet — a NEW session starts clean.
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidDataB)
+		})
+		expect(h.latest.current.lockOutcomeUncertainRecoveryRecordId).toBeNull()
+		expect(h.latest.current.pendingBidSubmission).toEqual(bidDataB)
+
+		// The new session's retry falls back to the full pipeline — nothing is
+		// known to be locked or uncertain for the NEW session.
+		const publishB = deferred<string>()
+		h.setPublishBid(() => publishB.promise)
+		await act(async () => {
+			void h.latest.current.retryBidPublish()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		expect(h.calls.publishBid).toBe(2)
+		await settleInsideAct(() => publishB.resolve(LEG_B_EVENT_ID))
+		expect(h.calls.onBidSuccess).toBe(1)
+
+		await h.unmount()
+	})
+
+	test('nextLockOutcomeUncertainOnSessionStart: a new session starts with no uncertain-outcome record id', () => {
+		expect(nextLockOutcomeUncertainOnSessionStart('recovery-record-1')).toBeNull()
+		expect(nextLockOutcomeUncertainOnSessionStart(null)).toBeNull()
 	})
 })

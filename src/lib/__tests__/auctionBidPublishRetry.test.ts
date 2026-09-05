@@ -21,7 +21,13 @@ import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import type { Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from 'nostr-tools'
 import { authStore } from '../stores/auth'
-import { findBidderRecord, type BidderBidRecord } from '../auction/bidderRecords'
+import {
+	findBidderRecord,
+	findPreLockRecoveryRecordByRefundPubkey,
+	loadBidderRecords,
+	loadPreLockRecoveryRecords,
+	type BidderBidRecord,
+} from '../auction/bidderRecords'
 
 // =============================================================================
 // localStorage polyfill — Bun's test runtime doesn't provide one.
@@ -120,9 +126,14 @@ const buildFormData = (amount: number) => {
 // Mocks — nip60 (mint lock) and ndk (relay publish). No network, ever.
 // =============================================================================
 
-const lockAuctionBidFundsMock = mock(async (input: { amount: number; locktime?: number }) =>
-	buildLockResult(input, lockAuctionBidFundsMock.mock.calls.length),
-)
+const lockAuctionBidFundsMock = mock(async (input: { amount: number; locktime?: number }) => {
+	// #1235 round-3 B1 test hook: an injected throw models a lock failure
+	// (raw pre-lock validation error, or AuctionBidLockMutationPossibleError).
+	if (lockShouldThrow) throw lockShouldThrow
+	return buildLockResult(input, lockAuctionBidFundsMock.mock.calls.length)
+})
+
+let lockShouldThrow: unknown = null
 
 const updatePendingTokenContextMock = mock(() => ({ tokenId: 'pending-token-1', context: {} }))
 
@@ -151,10 +162,27 @@ mock.module('@/lib/stores/ndk', () => ({
 	},
 }))
 
+// #1235 round-3 B1: capture the REAL nip60 surface BEFORE registering the
+// mock — the publish layer's instanceof check needs the same
+// AuctionBidLockMutationPossibleError class reference, and the mock must
+// re-export it (bun re-imports the module graph when mock.module runs, so
+// publish/auctions binds to the mocked module).
+const realNip60 = await import('@/lib/stores/nip60')
+
+mock.module('@/lib/stores/nip60', () => ({
+	nip60Actions: {
+		lockAuctionBidFunds: lockAuctionBidFundsMock,
+		updatePendingTokenContext: updatePendingTokenContextMock,
+	},
+	AuctionBidLockMutationPossibleError: realNip60.AuctionBidLockMutationPossibleError,
+}))
+
 // Import the module under test AFTER the mocks are registered (same module
 // ordering as `orders.test.ts` — bun applies mock.module to this import).
 import {
 	AuctionBidLockedButUnpublishedError,
+	AuctionBidLockOutcomeUncertainError,
+	AuctionBidPreLockRecordWriteFailedError,
 	AuctionBidPublishFailedError,
 	publishAuctionBid,
 	republishAuctionBid,
@@ -188,6 +216,7 @@ beforeEach(() => {
 	setAuthUser()
 	publishedPayloads.length = 0
 	publishShouldFail = false
+	lockShouldThrow = null
 	// Re-arm the mock implementations (do NOT mockReset — that drops them).
 	lockAuctionBidFundsMock.mockClear()
 	updatePendingTokenContextMock.mockClear()
@@ -529,5 +558,125 @@ describe('publishAuctionBid post-lock error model (#1235 follow-up 3)', () => {
 		expect(locked).not.toBeInstanceOf(AuctionBidPublishFailedError)
 		expect(publishFailed.bidEventId).toBe('f'.repeat(64))
 		expect(locked.lockTokenId).toBe('pending-token-1')
+	})
+})
+
+// =============================================================================
+// #1235 round-3 B1 — pre-lock recovery record: the refund authority (the
+// leg's refund PRIVATE KEY) must be durably observable BEFORE the mint lock
+// call that could consume it, with CONFIRMED-WRITE semantics (strict save +
+// read-back). A persist failure must abort the publish with ZERO mint
+// interaction; a mutation-possible lock failure must surface the DISTINCT
+// uncertain error (never a bare error) and PRESERVE the record.
+// =============================================================================
+
+describe('pre-lock recovery record (#1235 round-3 B1)', () => {
+	test('pre-lock recovery write fails → AuctionBidPreLockRecordWriteFailedError → zero mint interaction', async () => {
+		const originalSetItem = localStorage.setItem.bind(localStorage)
+		let preLockWriteFailed = false
+		try {
+			// Storage fails for the pre-lock recovery key only — everything
+			// else keeps working.
+			localStorage.setItem = (key: string, _value: string) => {
+				if (key.startsWith('auction_bid_pre_lock_recovery_v1')) {
+					preLockWriteFailed = true
+					throw new Error('QuotaExceededError: setItem failed')
+				}
+				originalSetItem(key, _value)
+			}
+			let caught: unknown
+			try {
+				await publishAuctionBid(buildFormData(500), signer, ndkInstance)
+			} catch (error) {
+				caught = error
+			}
+
+			// The injection genuinely fired (the write was attempted).
+			expect(preLockWriteFailed).toBe(true)
+
+			// Fail-closed ordering max: the mint lock was NEVER attempted —
+			// provably zero mint interaction.
+			expect(caught).toBeInstanceOf(AuctionBidPreLockRecordWriteFailedError)
+			expect(lockAuctionBidFundsMock).not.toHaveBeenCalled()
+			// Nothing was broadcast, and no residue exists: no bidder record,
+			// no pre-lock record (the write failed, the read-back guards it).
+			expect(publishEventMock).not.toHaveBeenCalled()
+			expect(loadBidderRecords()).toHaveLength(0)
+			expect(Object.keys(loadPreLockRecoveryRecords())).toHaveLength(0)
+		} finally {
+			localStorage.setItem = originalSetItem
+		}
+	})
+
+	test('mutation-possible lock error surfaces the DISTINCT uncertain error — never a bare error, record preserved', async () => {
+		lockShouldThrow = new realNip60.AuctionBidLockMutationPossibleError({
+			mintUrl: 'https://mint.test',
+			amount: 500,
+			lockPubkey: '02' + 'c'.repeat(64),
+			refundPubkey: '03' + 'e'.repeat(64),
+			locktime: 0,
+			cause: new Error('swap send failed mid-flight'),
+		})
+
+		let caught: unknown
+		try {
+			await publishAuctionBid(buildFormData(500), signer, ndkInstance)
+		} catch (error) {
+			caught = error
+		}
+
+		// The distinct uncertain error — a SIBLING of the two existing tiers
+		// (never a subclass, never a bare error).
+		expect(caught).toBeInstanceOf(AuctionBidLockOutcomeUncertainError)
+		expect(caught).not.toBeInstanceOf(AuctionBidPublishFailedError)
+		expect(caught).not.toBeInstanceOf(AuctionBidLockedButUnpublishedError)
+		const uncertain = caught as AuctionBidLockOutcomeUncertainError
+		expect(uncertain.recoveryRecordId).toHaveLength(36) // uuid
+		expect(uncertain.mintUrl).toBe('https://mint.test')
+		expect(uncertain.legAmount).toBe(500)
+		expect((uncertain.cause as Error).message).toContain('swap send failed mid-flight')
+
+		// The lock was attempted EXACTLY once; nothing was broadcast.
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
+		expect(publishEventMock).not.toHaveBeenCalled()
+
+		// The pre-lock record SURVIVES the uncertain outcome — it is the
+		// refund authority for this leg (reclaim after the refund timelock).
+		const record = findPreLockRecoveryRecordByRefundPubkey(uncertain.refundPubkey)
+		expect(record).toBeDefined()
+		expect(record?.id).toBe(uncertain.recoveryRecordId)
+		expect(record?.refundPrivateKey).toHaveLength(64)
+		expect(record?.legLockAmount).toBe(500)
+	})
+
+	test('RAW pre-lock lock error (provably nothing mutated) → pre-lock record removed, raw error rethrown', async () => {
+		lockShouldThrow = new Error('No trusted mint has 500 sats.')
+
+		let caught: unknown
+		try {
+			await publishAuctionBid(buildFormData(500), signer, ndkInstance)
+		} catch (error) {
+			caught = error
+		}
+
+		// Raw pre-mint validation errors stay RAW: a full re-submit is
+		// provably safe (nothing was mutated at the mint).
+		expect(caught).not.toBeInstanceOf(AuctionBidLockOutcomeUncertainError)
+		expect(caught).toBeInstanceOf(Error)
+		expect((caught as Error).message).toContain('No trusted mint has 500 sats.')
+
+		// The pre-lock record was removed — no residue for a leg that never
+		// reached the mint.
+		expect(Object.keys(loadPreLockRecoveryRecords())).toHaveLength(0)
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
+		expect(publishEventMock).not.toHaveBeenCalled()
+	})
+
+	test('successful publish supersedes the pre-lock record (no residue once the full bidder record exists)', async () => {
+		const bidEventId = await publishAuctionBid(buildFormData(900), signer, ndkInstance)
+		expect(bidEventId).toHaveLength(64)
+		// The full bidder record exists and the pre-lock record is gone.
+		expect(findBidderRecord(bidEventId)).toBeDefined()
+		expect(Object.keys(loadPreLockRecoveryRecords())).toHaveLength(0)
 	})
 })

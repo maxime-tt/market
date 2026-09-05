@@ -35,7 +35,12 @@ import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { ndkActions, ndkStore } from './ndk'
-import { findBidderRecordByRefundPubkey } from '@/lib/auction/bidderRecords'
+import {
+	findBidderRecordByRefundPubkey,
+	findPreLockRecoveryRecordByRefundPubkey,
+	removePreLockRecoveryRecord,
+} from '@/lib/auction/bidderRecords'
+import type { SaveUserDataOptions } from '@/lib/wallet/storage'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
 const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
@@ -664,7 +669,7 @@ export const NIP60_WALLET_DEV_MODE = isNip60WalletDevModeEnabled()
 
 const loadPendingTokens = (): PendingToken[] => loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [])
 
-const savePendingTokens = (tokens: PendingToken[]): void => saveUserData(PENDING_TOKENS_KEY, tokens)
+const savePendingTokens = (tokens: PendingToken[], options?: SaveUserDataOptions): void => saveUserData(PENDING_TOKENS_KEY, tokens, options)
 
 const updatePendingTokenRecord = (tokenId: string, updater: (token: PendingNip60Token) => PendingNip60Token): PendingNip60Token | null => {
 	let updatedToken: PendingNip60Token | null = null
@@ -963,6 +968,58 @@ const lockAuctionBidProofs = async (
 			refundKeys: [params.refundPubkey],
 		},
 	})
+}
+
+/**
+ * #1235 round-3 B1 — the mint boundary is irreversible.
+ *
+ * Thrown by `lockAuctionBidFunds` for any failure that occurs once the lock
+ * flow may have sent a swap/lock request to the mint: the mint may have
+ * consumed the bidder's input proofs and/or issued P2PK-locked proofs. The
+ * outcome is UNCERTAIN — callers must NOT retry the lock in-session (a retry
+ * could double-consume inputs) and must NOT claim the leg is either locked
+ * or untouched. Recovery material (the pre-lock recovery record holding the
+ * refund private key) is persisted by the publish layer BEFORE the call that
+ * can throw this class; the wallet's pending-token record, when the swap
+ * response was processed, makes the leg reclaimable after the refund
+ * timelock opens.
+ *
+ * Conservative by design: errors from wallet creation or DLEQ-filter
+ * insufficiency INSIDE the swap phase are also classified mutation-possible
+ * (fail closed — a classification refinement inside the lock is deliberately
+ * not taken; see the round-3 plan's risk notes). Pre-lock validation errors
+ * (amount / wallet readiness / balance / proof selection) are thrown raw
+ * BEFORE any request could have been sent and are provably pre-mint.
+ */
+export class AuctionBidLockMutationPossibleError extends Error {
+	/** Mint the swap/lock request may have been sent to. */
+	public readonly mintUrl: string
+	/** Amount (sats) the leg attempted to lock. */
+	public readonly amount: number
+	/** P2PK pubkey the proofs were to be locked to. */
+	public readonly lockPubkey: string
+	/** Refund pubkey for the lock's refund branch. */
+	public readonly refundPubkey: string
+	/** Cashu locktime (unix seconds) the leg attempted. */
+	public readonly locktime: number
+	/** The underlying failure. */
+	public override readonly cause: unknown
+
+	constructor(params: { mintUrl: string; amount: number; lockPubkey: string; refundPubkey: string; locktime: number; cause: unknown }) {
+		const causeMessage = params.cause instanceof Error ? params.cause.message : String(params.cause)
+		super(
+			`Auction bid lock outcome is uncertain: a swap/lock request may already have been sent to ${params.mintUrl} ` +
+				`for ${params.amount} sats (${causeMessage}). The mint may or may not have issued locked proofs — do NOT retry the lock; ` +
+				'reclaim may be possible after the refund timelock opens.',
+		)
+		this.name = 'AuctionBidLockMutationPossibleError'
+		this.mintUrl = params.mintUrl
+		this.amount = params.amount
+		this.lockPubkey = params.lockPubkey
+		this.refundPubkey = params.refundPubkey
+		this.locktime = params.locktime
+		this.cause = params.cause
+	}
 }
 
 const assertAuctionBidProofsLockedToP2pk = (proofs: Proof[], expectedLockPubkey: string): void => {
@@ -2103,7 +2160,6 @@ export const nip60Actions = {
 			if (!lockedProofs.length) {
 				throw new Error('Mint returned no locked proofs for bid')
 			}
-			assertAuctionBidProofsLockedToP2pk(lockedProofs, lockPubkey)
 
 			const token = getEncodedToken({
 				mint: targetMint,
@@ -2138,8 +2194,19 @@ export const nip60Actions = {
 				...(pendingContext ? { context: pendingContext } : {}),
 			}
 			const pendingTokens = [...nip60Store.state.pendingTokens, pendingToken]
-			savePendingTokens(pendingTokens)
+			// #1235 round-3 B1 — STRICT + BEFORE the post-lock assert: the swap
+			// above already ran, so the mint may have issued locked proofs. The
+			// pending-token record is the wallet's durable observation of those
+			// proofs — it must be durably persisted (fail-closed: a storage
+			// failure here surfaces as mutation-possible) BEFORE the first
+			// fallible post-swap check (the P2PK-lock assert below) can throw.
+			// With the record on disk, a leg whose proofs turn out to be locked
+			// to the wrong key is still reclaim-eligible after the refund
+			// timelock instead of silently stranded.
+			savePendingTokens(pendingTokens, { strict: true })
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
+
+			assertAuctionBidProofsLockedToP2pk(lockedProofs, lockPubkey)
 
 			// Apply the wallet-state delta SYNCHRONOUSLY before returning so
 			// the balance UI doesn't briefly double-count the consumed
@@ -2206,7 +2273,22 @@ export const nip60Actions = {
 			}
 		} catch (err) {
 			console.error('[nip60] Failed to lock auction bid funds:', err)
-			throw err
+			// #1235 round-3 B1 — conservative mutation-possible wrap. Everything
+			// this catch can see escaped from the post-selection try above:
+			// wallet creation, the swap attempts, or the post-swap local work. A
+			// swap request may already have been sent — fail closed and classify
+			// the outcome as mutation-possible unless it already is. Pre-try
+			// validation errors (amount / wallet readiness / balance / proof
+			// selection) never reach this catch and stay raw (provably pre-mint).
+			if (err instanceof AuctionBidLockMutationPossibleError) throw err
+			throw new AuctionBidLockMutationPossibleError({
+				mintUrl: targetMint,
+				amount,
+				lockPubkey,
+				refundPubkey,
+				locktime,
+				cause: err,
+			})
 		}
 	},
 
@@ -2696,16 +2778,23 @@ export const nip60Actions = {
 		//      intentionally NOT added to `wallet.privkeys` because that
 		//      map is for the wallet's general signing keys; mixing in
 		//      per-bid throwaway keys would bloat it across many bids.
-		//   2. The wallet's `privkeys` map. Legacy path; covers older
+		//   2. The pre-lock recovery record (#1235 round-3 B1). A leg whose
+		//      lock outcome was UNCERTAIN never got a full bidder record,
+		//      but its refund privkey was durably persisted before the
+		//      mint call — that record is exactly the recovery authority
+		//      for the pending token the swap may have left behind.
+		//   3. The wallet's `privkeys` map. Legacy path; covers older
 		//      bids placed before the BidderBidRecord scheme existed and
 		//      provides a safety net if the local record is missing but
 		//      the user happens to also hold the privkey in their wallet.
-		//   3. None → stop. Without the privkey the timelock refund
+		//   4. None → stop. Without the privkey the timelock refund
 		//      branch can't be signed; falling through would just spam
 		//      the mint with "witness missing" 4xx responses.
 		const bidderRecord = auctionContext ? findBidderRecordByRefundPubkey(auctionContext.refundPubkey) : null
+		const preLockRecoveryRecord = auctionContext ? findPreLockRecoveryRecordByRefundPubkey(auctionContext.refundPubkey) : null
 		const refundPrivkey =
-			bidderRecord?.refundPrivateKey ?? (auctionContext ? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey) : null)
+			bidderRecord?.refundPrivateKey ??
+			(auctionContext ? (preLockRecoveryRecord?.refundPrivateKey ?? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey)) : null)
 
 		if (auctionContext && !refundPrivkey) {
 			const walletPrivkeyCount = wallet.privkeys.size
@@ -2759,6 +2848,13 @@ export const nip60Actions = {
 			)
 			savePendingTokens(pendingTokens)
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
+
+			// #1235 round-3 B1 — the leg is recovered: drop its pre-lock recovery
+			// record (GC). The record held the refund authority while the leg was
+			// in limbo; a successful reclaim makes it obsolete.
+			if (preLockRecoveryRecord) {
+				removePreLockRecoveryRecord(preLockRecoveryRecord.refundPubkey)
+			}
 
 			await nip60Actions.refresh()
 		} catch (err) {
