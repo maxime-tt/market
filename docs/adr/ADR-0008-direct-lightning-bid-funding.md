@@ -103,6 +103,7 @@ Implementations must preserve and expose at least these distinct failure classes
 - invoice expired or unpaid
 - invoice paid but mint failed
 - mint succeeded but bid publish failed
+- deposit outcome uncertain (payment outcome unevidenced either way — see Round-3 Amendment R3-3)
 
 Each class should support deterministic retry or compensating action, instead of collapsing into a generic payment failed outcome.
 
@@ -151,6 +152,7 @@ Minimum states for this flow:
 - Invoice payment attempted
 - Invoice paid
 - Invoice expired or unpaid
+- Deposit outcome uncertain (round-3 R3-3)
 - Wallet acknowledged payment
 - E-cash minting attempted
 - E-cash minted
@@ -256,3 +258,29 @@ Rejected because it keeps unnecessary custodial friction and repeated balance-ma
 ## Notes
 
 This ADR defines flow and state semantics. Specific UI copy, retry policy, timeout values, and relay/publication sequencing remain implementation details to be finalized in code and tests.
+
+## Round-3 Review Amendments (2026-09)
+
+Maximotodev's round-3 review of PR #1235 (2026-09-03) surfaced four monetary-safety gaps in the direct-funding implementation. These amendments record the accepted mechanisms (implemented in the round-3 fix branch); they refine — and never weaken — the decisions above.
+
+### Amendment R3-1: Pre-lock recovery record with confirmed-write semantics (the mint boundary is irreversible)
+
+Once a Cashu swap/lock request may have been sent to the mint, failure handling must assume the mint mutated state (inputs consumed, P2PK-locked proofs issued). The refund authority for a bid leg — the per-leg refund private key, a non-seed-derived secret that cannot be reconstructed — must therefore be durably observable BEFORE the mint call that could consume it, or a post-swap throw strands the locked leg with no usable refund branch (not even timelock-reclaimable).
+
+- The publish flow persists an `AuctionBidPreLockRecoveryRecord` (refund keypair + auction/leg/mint/lock metadata, bounded at 25 entries, keyed by refund pubkey) before every `lockAuctionBidFunds` call, with CONFIRMED-WRITE semantics: a strict user-scoped save plus a read-back equality check. If the record is not confirmed, the publish aborts with `AuctionBidPreLockRecordWriteFailedError` and provably zero mint interaction (fail closed BEFORE the irreversible boundary).
+- The record is removed once the full bidder record supersedes it (the leg became publishable), on a provably-pre-mint lock failure, or after a successful reclaim.
+- The wallet's pending-token store is written STRICTLY and reordered before the first fallible post-swap check (the P2PK-lock assert), so the locked proofs become durably observable before any post-swap local failure can strand them. A strict-write failure after the swap surfaces as mutation-possible (see R3-2) — honest "uncertain", no in-session retry.
+
+This is the NIP-60-runtime implementation of the auctions gate in the proposed ADR-0010 (PR #1255) §7/G8 — refund authority durable and verified before the mint lock; locked result durable before bid publication. It is consistent with the proposed ADR-0010, not required by it (that ADR is unaccepted). Cutover deltas if ADR-0010 is accepted: the record gains a Coco operation-id/durable-link field, the locked-result authority re-homes to Coco operation state, and refund-key protected storage plus a user-controlled disaster-recovery/export path (ADR-0010 §7 step 5, §11) land at cutover.
+
+### Amendment R3-2: Mutation-possible lock outcomes refuse retries
+
+Any escape from the lock flow once a swap request may have been sent is classified `AuctionBidLockMutationPossibleError` (conservative: wallet creation and DLEQ-filter failures inside the swap phase are included; fail closed). The publish layer surfaces it as `AuctionBidLockOutcomeUncertainError` — a sibling (never a subclass) of the two existing post-lock tiers — carrying the persisted recovery record id. The funding lifecycle records the record id and REFUSES the retry outright: no full re-submit (double-consume risk at the mint), no rebroadcast (nothing is known publishable), with honest guidance that reclaim MAY be available after the refund timelock. Raw pre-lock validation errors (amount / wallet / balance / selection) stay raw: provably pre-mint, so a full re-submit remains legitimate. `reclaimToken` falls back to the pre-lock record for the refund privkey so an uncertain leg with a persisted pending token is actually reclaimable.
+
+### Amendment R3-3: `deposit_outcome_uncertain` — Lightning outcomes are claimed only with evidence
+
+Lightning payment outcomes are uncertain until positively confirmed or disproven. A terminal deposit error is only classifiable when an invoice existed for the session (a payment could have been made); pre-invoice errors create nothing and get no classification. Closing the deposit modal while a payment may be in flight lands the new `deposit_outcome_uncertain` lifecycle state — terminal for the session, close-preserves the pending submission, but NOT reclaimable-branded (claiming "reclaimable" without evidence is as dishonest as claiming "paid"). The close preserves the deposit's recovery so the SAME deposit can still settle late; a late success walks the lifecycle forward (`payment_acknowledged → minting_started → ecash_minted → publish`), which keeps the user-confirmed publish retry (Decision 9a) reachable, and a fresh funding session can start from the state. The progress dialog renders a distinct "Payment outcome unconfirmed" branch that claims neither unpaid nor reclaimable. The no-mint pre-flight branch lands `funding_canceled` — nothing was ever created.
+
+### Amendment R3-4: Retry identity binding — an unsigned cached bid republish is bound to the original bidder
+
+Signing a Nostr event fixes its identity: NDK's `sign` overwrites the event's pubkey with the active signer, so re-signing an unsigned cached kind-1023 from a different account would publish a foreign-authored bid carrying the original bidder's lock secrets under a DRIFTED event id (the bidder record — refund key + proofs — exists only under the original id). `republishAuctionBid` therefore guards twice without publishing and without discarding the cached entry: pre-sign, the signer's pubkey must equal the cached event's author; post-sign, the recomputed event hash/id must equal the original bid event id. The publish pipeline asserts the same invariant before broadcasting, and failure copies carry the finalized (pre-sign) event id so a drift can never poison the retry tracker with a foreign id.
