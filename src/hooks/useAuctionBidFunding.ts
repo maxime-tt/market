@@ -22,8 +22,12 @@ export type AuctionBidFundingLifecycleState =
 	| 'invoice_paid_mint_failed_reclaimable'
 	| 'mint_succeeded_bid_publish_failed_reclaimable'
 	| 'funding_canceled'
+	| 'deposit_outcome_uncertain'
 
-export type AuctionBidFundingFailureReason = 'invoice_unpaid_or_expired_reclaimable' | 'invoice_paid_mint_failed_reclaimable'
+export type AuctionBidFundingFailureReason =
+	| 'invoice_unpaid_or_expired_reclaimable'
+	| 'invoice_paid_mint_failed_reclaimable'
+	| 'deposit_outcome_uncertain'
 
 /**
  * #12: ADR-0008 state mapping. The ADR lists a full payment/bid state model
@@ -172,6 +176,12 @@ const TERMINAL_FUNDING_STATES: AuctionBidFundingLifecycleState[] = [
 	'invoice_unpaid_or_expired_reclaimable',
 	'invoice_paid_mint_failed_reclaimable',
 	'mint_succeeded_bid_publish_failed_reclaimable',
+	// #1235 round-3 B3: a deposit whose Lightning outcome could not be
+	// evidenced either way. Terminal for the funding session (the deposit
+	// modal is closed) but NOT reclaimable-branded — claiming "reclaimable"
+	// would be as unevidenced as claiming "paid". A late success can still
+	// walk out of it via the preserved deposit.
+	'deposit_outcome_uncertain',
 ]
 
 const FUNDED_IN_FLIGHT_FUNDING_STATES: AuctionBidFundingLifecycleState[] = [
@@ -196,6 +206,10 @@ const CLOSE_PRESERVE_PENDING_SUBMISSION_STATES = new Set<AuctionBidFundingLifecy
 	// close classification + deposit-error classification).
 	'invoice_unpaid_or_expired_reclaimable',
 	'invoice_paid_mint_failed_reclaimable',
+	// #1235 round-3 B3: an uncertain deposit outcome still holds the pending
+	// submission — the preserved deposit may still settle late and continue
+	// the flow, or the user re-enters from it.
+	'deposit_outcome_uncertain',
 ])
 
 const AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS: Record<AuctionBidFundingLifecycleState, ReadonlySet<AuctionBidFundingLifecycleState>> = {
@@ -204,11 +218,18 @@ const AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS: Record<AuctionBidFundingLifecycle
 		'invoice_unpaid_or_expired_reclaimable',
 		'bid_publish_attempted',
 		'funding_canceled',
+		// #1235 round-3 B3: symmetric defense edge — a pending deposit
+		// classified as uncertain while the lifecycle is still idle must not
+		// be stranded behind "nothing started".
+		'deposit_outcome_uncertain',
 	]),
 	funding_session_created: new Set<AuctionBidFundingLifecycleState>([
 		'invoice_created',
 		'invoice_unpaid_or_expired_reclaimable',
 		'funding_canceled',
+		// #1235 round-3 B3: closing (or a terminal error) with a deposit in
+		// flight from the funding session means a payment may have been made.
+		'deposit_outcome_uncertain',
 	]),
 	invoice_created: new Set<AuctionBidFundingLifecycleState>([
 		'payment_acknowledged',
@@ -217,10 +238,22 @@ const AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS: Record<AuctionBidFundingLifecycle
 		// a paid-or-unknown classification while the deposit is pending must be
 		// able to land in the reclaimable state directly from invoice_created.
 		'invoice_paid_mint_failed_reclaimable',
+		// #1235 round-3 B3: a terminal deposit error after an invoice existed, or
+		// a close while the deposit is pending — the payment's outcome is
+		// unevidenced either way.
+		'deposit_outcome_uncertain',
 		'funding_canceled',
 	]),
-	payment_acknowledged: new Set<AuctionBidFundingLifecycleState>(['minting_started', 'invoice_paid_mint_failed_reclaimable']),
-	minting_started: new Set<AuctionBidFundingLifecycleState>(['ecash_minted', 'invoice_paid_mint_failed_reclaimable']),
+	payment_acknowledged: new Set<AuctionBidFundingLifecycleState>([
+		'minting_started',
+		'invoice_paid_mint_failed_reclaimable',
+		'deposit_outcome_uncertain',
+	]),
+	minting_started: new Set<AuctionBidFundingLifecycleState>([
+		'ecash_minted',
+		'invoice_paid_mint_failed_reclaimable',
+		'deposit_outcome_uncertain',
+	]),
 	ecash_minted: new Set<AuctionBidFundingLifecycleState>([
 		'ecash_minted_pending_rules_ack',
 		'bid_publish_attempted',
@@ -244,7 +277,13 @@ const AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS: Record<AuctionBidFundingLifecycle
 		// stranding a paid user's sats behind "canceled".
 		'invoice_unpaid_or_expired_reclaimable',
 		'invoice_paid_mint_failed_reclaimable',
+		// #1235 round-3 B3: same defense for the uncertain classification.
+		'deposit_outcome_uncertain',
 	]),
+	// #1235 round-3 B3: out-edges ONLY — (a) the late-success walk re-enters
+	// the normal progression via payment_acknowledged when the preserved
+	// deposit settles, and (b) a fresh funding session can be started.
+	deposit_outcome_uncertain: new Set<AuctionBidFundingLifecycleState>(['payment_acknowledged', 'funding_session_created']),
 }
 
 export const canTransitionAuctionBidFundingState = (from: AuctionBidFundingLifecycleState, to: AuctionBidFundingLifecycleState): boolean =>
@@ -271,31 +310,50 @@ export const isDepositPendingOrAwaitingConfirmation = (depositStatus: string | n
 	depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry'
 
 /**
- * #1235 Blocking 2 — close/cancel must never erase paid-or-uncertain state.
+ * #1235 round-3 B3 — evidence-gated terminal deposit-error classifier.
+ *
+ * A terminal `depositStatus === 'error'` is ambiguous by construction: NDK's
+ * `NDKCashuDeposit` emits 'error' only AFTER `mintProofs()` returned proofs
+ * (the mint issued!) when the wallet-state update fails — yet pre-invoice
+ * errors (invalid amount / no mint) land in the SAME status with nothing
+ * ever created. The app must never pick between "paid" and "unpaid"
+ * without evidence, so the ONLY honest classification is
+ * `deposit_outcome_uncertain` — and it applies ONLY when an invoice existed
+ * for this session (a payment could have been made). Pre-invoice errors get
+ * NO classification (null): the lifecycle stays put and the close path
+ * cleanly cancels.
+ */
+export const classifyDepositTerminalErrorOutcome = ({
+	invoiceExisted,
+}: {
+	invoiceExisted: boolean
+}): AuctionBidFundingFailureReason | null => (invoiceExisted ? 'deposit_outcome_uncertain' : null)
+
+/**
+ * #1235 Blocking 2 / round-3 B3 — close/cancel must never erase
+ * paid-or-uncertain state.
  *
  * A QR payer's payment is unobservable by the app: closing the deposit modal
  * while the deposit is `pending` or `awaiting_confirmation_retry` means a
- * payment may have been made. The close must land the lifecycle in a
- * reclaimable state and preserve the session — NEVER `funding_canceled` with
- * a cleared `pendingBidSubmission` (which would claim "nothing was paid"
- * while the user's sats may already be at the mint).
+ * payment may have been made — but unlike round-2's classification, the
+ * close no longer claims the payment was PAID (the old
+ * `invoice_paid_mint_failed_reclaimable` landing claimed both "paid" and
+ * "reclaimable" without evidence). The honest resolution is
+ * `deposit_outcome_uncertain`, with the session preserved — the SAME deposit
+ * stays reconcilable (the close preserves its recovery), so a late success
+ * can still walk the flow forward; a fresh attempt can start from it.
  *
- * This resolves the lifecycle state for a deposit-modal close given the
- * deposit store's status at close time:
- *
- * - deposit still pending/awaiting-confirmation-retry → the reclaimable
- *   failure state (`invoice_paid_mint_failed_reclaimable`), preserving the
- *   pending submission;
+ * - deposit still pending/awaiting-confirmation-retry →
+ *   `deposit_outcome_uncertain`, preserving the pending submission;
  * - otherwise → the pre-existing close semantics: `funding_canceled` for
- *   cancelable states (idle / funding_session_created / invoice_created
- *   with no deposit in flight), current state otherwise.
+ *   cancelable states, current state otherwise.
  */
 export const resolveDepositModalCloseLifecycleState = (
 	currentState: AuctionBidFundingLifecycleState,
 	depositStatus: string | null | undefined,
 ): AuctionBidFundingLifecycleState => {
 	if (isDepositPendingOrAwaitingConfirmation(depositStatus)) {
-		return resolveAuctionBidFundingTransition(currentState, 'invoice_paid_mint_failed_reclaimable')
+		return resolveAuctionBidFundingTransition(currentState, 'deposit_outcome_uncertain')
 	}
 	if (shouldCancelFundingOnModalClose(currentState)) {
 		return resolveAuctionBidFundingTransition(currentState, 'funding_canceled')
@@ -506,10 +564,12 @@ export function useAuctionBidFunding({
 			)
 			if (hasInsufficientBidFunds) {
 				if (!depositMint) {
+					// #1235 round-3 B3 honesty fix: nothing was ever created — no
+					// invoice, no payment, no mint interaction — so claiming an
+					// "unpaid/expired reclaimable" outcome would be as unevidenced
+					// as claiming "paid". Land the honest neutral state.
 					toast.error(mintError || 'No suitable mint available for bidding.')
-					setBidFundingLifecycleState((currentState) =>
-						resolveAuctionBidFundingTransition(currentState, 'invoice_unpaid_or_expired_reclaimable'),
-					)
+					setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'funding_canceled'))
 					return null
 				}
 

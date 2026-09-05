@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import { ndkActions } from '@/lib/stores/ndk'
 import { useWallets, walletActions } from '@/lib/stores/wallet'
+import { classifyDepositTerminalErrorOutcome } from '@/hooks/useAuctionBidFunding'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, Copy, Check, Zap } from 'lucide-react'
 import { toast } from 'sonner'
@@ -44,7 +45,10 @@ interface DepositLightningModalProps {
 	variant?: 'bid' | 'topup'
 }
 
-export type AuctionFundingFailureReason = 'invoice_unpaid_or_expired_reclaimable' | 'invoice_paid_mint_failed_reclaimable'
+export type AuctionFundingFailureReason =
+	| 'invoice_unpaid_or_expired_reclaimable'
+	| 'invoice_paid_mint_failed_reclaimable'
+	| 'deposit_outcome_uncertain'
 
 type NwcDepositPaymentStatus = 'idle' | 'paying' | 'sent'
 
@@ -83,6 +87,14 @@ export function DepositLightningModal({
 	const paymentAcknowledgedRef = useRef(false)
 	const failureNotifiedRef = useRef(false)
 	const notifiedInvoiceRef = useRef<string | null>(null)
+	// #1235 round-3 B3: whether an invoice was notified for THIS deposit
+	// session. Unlike `notifiedInvoiceRef` (cleared as soon as `depositInvoice`
+	// clears — which happens in the SAME store update that lands a terminal
+	// 'error', so the error effect can never observe it), this latches for the
+	// whole session and only resets on modal close. It is the evidence gate for
+	// classifying a terminal deposit error as 'deposit_outcome_uncertain': a
+	// payment could have been made only if an invoice existed.
+	const sessionInvoiceExistedRef = useRef(false)
 	const filteredMints = useMemo(() => {
 		const normalizedWalletMints = mints.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null)
 		const normalizedAllowedMints = allowedMints?.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null) ?? []
@@ -162,6 +174,7 @@ export function DepositLightningModal({
 		}
 		if (notifiedInvoiceRef.current === depositInvoice) return
 		notifiedInvoiceRef.current = depositInvoice
+		sessionInvoiceExistedRef.current = true
 		onInvoiceCreated?.(depositInvoice)
 	}, [depositInvoice, depositStatus, onInvoiceCreated])
 
@@ -178,14 +191,18 @@ export function DepositLightningModal({
 	useEffect(() => {
 		if (depositStatus !== 'error') return
 		if (failureNotifiedRef.current) return
+		// #1235 round-3 B3 — evidence-gated classification. A terminal deposit
+		// error is 'deposit_outcome_uncertain' ONLY when an invoice existed for
+		// this session (a payment could have been made — NDK emits 'error' only
+		// AFTER mintProofs() returned proofs when the wallet-state update
+		// fails). Pre-invoice errors (invalid amount / no mint / quote failure)
+		// created nothing: NO classification — the lifecycle stays put, the
+		// error still renders below, and a close cleanly cancels.
+		const outcome = classifyDepositTerminalErrorOutcome({ invoiceExisted: sessionInvoiceExistedRef.current })
+		if (!outcome) return
 		failureNotifiedRef.current = true
-		// NWC: paymentAcknowledgedRef tells us whether the invoice was actually
-		// sent/paid. QR: we can't observe the external wallet's payment, so lean
-		// toward "paid but mint failed" rather than stranding a paid user's sats
-		// behind an "invoice unpaid/expired" message that implies nothing was paid.
-		const paidOrUnknown = paymentAcknowledgedRef.current || !nwcPaymentAttempted
-		onFundingFailed?.(paidOrUnknown ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
-	}, [depositStatus, onFundingFailed, nwcPaymentAttempted])
+		onFundingFailed?.(outcome)
+	}, [depositStatus, onFundingFailed])
 
 	useEffect(() => {
 		if (depositStatus !== 'success') {
@@ -296,19 +313,21 @@ export function DepositLightningModal({
 		nip60Actions.retryDepositConfirmation()
 	}
 
-	// #1235 Blocking 2 — classify a pending deposit as paid-or-unknown.
-	// A QR payer's payment is unobservable by the app, so leaning toward
-	// "paid but mint failed (reclaimable)" instead of claiming "unpaid" is
-	// what keeps a paid user's sats recoverable. Shared by the user-driven
-	// close path (handleClose) and the open→closed effect's fallback so every
-	// close path classifies before the funding session is torn down.
+	// #1235 Blocking 2 / round-3 B3 — classify a pending deposit close as
+	// OUTCOME-UNCERTAIN. A QR payer's payment is unobservable by the app, and
+	// even an NWC "sent" acknowledgement is not settlement — the app must
+	// claim neither "paid" nor "unpaid" without evidence. The close preserves
+	// the deposit's recovery so the SAME Lightning payment stays reconcilable
+	// and a late success can still continue the flow. Shared by the
+	// user-driven close path (handleClose) and the open→closed effect's
+	// fallback so every close path classifies before the funding session is
+	// torn down.
 	const notifyFundingFailureForPendingDeposit = useCallback(() => {
 		const isPendingDeposit = depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry'
 		if (!isPendingDeposit || failureNotifiedRef.current) return
 		failureNotifiedRef.current = true
-		const paidOrUnknown = paymentAcknowledgedRef.current || !nwcPaymentAttempted
-		onFundingFailed?.(paidOrUnknown ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
-	}, [depositStatus, onFundingFailed, nwcPaymentAttempted])
+		onFundingFailed?.('deposit_outcome_uncertain')
+	}, [depositStatus, onFundingFailed])
 
 	// Root-cause reset: when the modal closes — whether by user action
 	// (overlay/escape → handleClose → onClose) or programmatically (parent
@@ -342,6 +361,7 @@ export function DepositLightningModal({
 			paymentAcknowledgedRef.current = false
 			failureNotifiedRef.current = false
 			notifiedInvoiceRef.current = null
+			sessionInvoiceExistedRef.current = false
 			sentNwcInvoiceRef.current = null
 			setShowClassicTopUp(false)
 			setIsCheckingDeposit(false)

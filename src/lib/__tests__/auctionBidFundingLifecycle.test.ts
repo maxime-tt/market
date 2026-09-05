@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
 	canTransitionAuctionBidFundingState,
+	classifyDepositTerminalErrorOutcome,
 	isAuctionBidFundingReclaimableState,
 	isDepositPendingOrAwaitingConfirmation,
 	resolveAuctionBidFundingTransition,
@@ -42,12 +43,11 @@ describe('auction bid funding modal close lifecycle', () => {
 	test('invoice_created cancels on close only when no deposit is in flight', () => {
 		// Pure close predicate still classifies invoice_created as cancelable…
 		expect(shouldCancelFundingOnModalClose('invoice_created')).toBe(true)
-		// …but the close handler routes a pending deposit to the reclaimable
-		// failure state instead of funding_canceled.
-		expect(resolveDepositModalCloseLifecycleState('invoice_created', 'pending')).toBe('invoice_paid_mint_failed_reclaimable')
-		expect(resolveDepositModalCloseLifecycleState('invoice_created', 'awaiting_confirmation_retry')).toBe(
-			'invoice_paid_mint_failed_reclaimable',
-		)
+		// …but the close handler routes a pending deposit to the UNCERTAIN
+		// outcome state instead of funding_canceled (round-3 B3: the payment's
+		// result is unevidenced either way — never "canceled", never "paid").
+		expect(resolveDepositModalCloseLifecycleState('invoice_created', 'pending')).toBe('deposit_outcome_uncertain')
+		expect(resolveDepositModalCloseLifecycleState('invoice_created', 'awaiting_confirmation_retry')).toBe('deposit_outcome_uncertain')
 		expect(resolveDepositModalCloseLifecycleState('invoice_created', 'idle')).toBe('funding_canceled')
 	})
 })
@@ -59,25 +59,31 @@ describe('auction bid funding modal close lifecycle', () => {
 // must land the lifecycle in a reclaimable state or preserve the session —
 // NEVER funding_canceled with a cleared pendingBidSubmission.
 describe('modal close from a state in which a payment may have been made (#1235 Blocking 2)', () => {
-	test('exact sequence: close from invoice_created with a pending deposit lands reclaimable and preserves the session', () => {
-		// Step 1 — the modal classifies paid-or-unknown BEFORE the parent
-		// cancels the funding (handleClose → onFundingFailed → onClose).
-		let state = resolveAuctionBidFundingTransition('invoice_created', 'invoice_paid_mint_failed_reclaimable')
-		expect(state).toBe('invoice_paid_mint_failed_reclaimable')
+	test('exact sequence: close from invoice_created with a pending deposit lands uncertain and preserves the session', () => {
+		// Step 1 — the modal classifies the pending deposit as OUTCOME-UNCERTAIN
+		// BEFORE the parent cancels the funding (handleClose → onFundingFailed →
+		// onClose): the payment's result is unevidenced either way.
+		let state = resolveAuctionBidFundingTransition('invoice_created', 'deposit_outcome_uncertain')
+		expect(state).toBe('deposit_outcome_uncertain')
 
 		// Step 2 — handleDepositModalClose then routes the pending deposit to
-		// the same reclaimable state (idempotent self-transition) instead of
-		// funding_canceled, and preserves the pending submission.
+		// the same uncertain state (idempotent self-transition) instead of
+		// funding_canceled, and preserves the pending submission. The state is
+		// NOT reclaimable-branded — claiming "reclaimable" without evidence
+		// would be as dishonest as claiming "paid".
 		state = resolveDepositModalCloseLifecycleState(state, 'pending')
-		expect(state).toBe('invoice_paid_mint_failed_reclaimable')
-		expect(isAuctionBidFundingReclaimableState(state)).toBe(true)
+		expect(state).toBe('deposit_outcome_uncertain')
+		expect(isAuctionBidFundingReclaimableState(state)).toBe(false)
 		expect(shouldPreservePendingBidSubmissionOnDepositModalClose(state, 'pending')).toBe(true)
 	})
 
 	test('close from invoice_created with a pending deposit never lands in funding_canceled', () => {
 		const state = resolveDepositModalCloseLifecycleState('invoice_created', 'pending')
 		expect(state).not.toBe('funding_canceled')
-		expect(isAuctionBidFundingReclaimableState(state)).toBe(true)
+		// #1235 round-3 B3: NOT reclaimable-branded — "reclaimable" would claim
+		// evidence the app does not have.
+		expect(isAuctionBidFundingReclaimableState(state)).toBe(false)
+		expect(state).toBe('deposit_outcome_uncertain')
 	})
 
 	test('close from invoice_created with no deposit in flight still cancels and clears the submission', () => {
@@ -97,11 +103,14 @@ describe('modal close from a state in which a payment may have been made (#1235 
 		expect(isAuctionBidFundingReclaimableState(rescued)).toBe(true)
 	})
 
-	test('close from a funding_session_created with a deposit in flight preserves the session (reclaimable transition is not yet applicable)', () => {
-		// No invoice has been acknowledged yet, so the lifecycle cannot claim
-		// invoice_paid; the invariant allows preserving the session instead.
+	test('close from a funding_session_created with a deposit in flight lands uncertain and preserves the session', () => {
+		// #1235 round-3 B3: a deposit in flight means an invoice may exist and
+		// a payment may have been made — the close lands the honest uncertain
+		// state (the round-2 behavior kept funding_session_created, implicitly
+		// claiming nothing was paid) and preserves the session so the same
+		// deposit can still settle late.
 		const state = resolveDepositModalCloseLifecycleState('funding_session_created', 'pending')
-		expect(state).toBe('funding_session_created')
+		expect(state).toBe('deposit_outcome_uncertain')
 		expect(shouldPreservePendingBidSubmissionOnDepositModalClose('funding_session_created', 'pending')).toBe(true)
 	})
 
@@ -361,5 +370,112 @@ describe('retryBidPublish state transitions', () => {
 
 	test('retry path can fail again: bid_publish_attempted → mint_succeeded_bid_publish_failed_reclaimable', () => {
 		expect(canTransitionAuctionBidFundingState('bid_publish_attempted', 'mint_succeeded_bid_publish_failed_reclaimable')).toBe(true)
+	})
+})
+
+// =============================================================================
+// #1235 round-3 B3 — deposit_outcome_uncertain: a deposit whose Lightning
+// outcome could not be evidenced either way. The app must never pick between
+// "paid" and "unpaid" without evidence, and must never brand the state
+// "reclaimable" (equally unevidenced). The preserved deposit can still settle
+// late, so a late success must be able to walk the flow forward, and a fresh
+// session must be startable.
+// =============================================================================
+
+describe('deposit_outcome_uncertain lifecycle state (#1235 round-3 B3)', () => {
+	test.each<[AuctionBidFundingLifecycleState, AuctionBidFundingLifecycleState]>([
+		['funding_session_created', 'deposit_outcome_uncertain'],
+		['invoice_created', 'deposit_outcome_uncertain'],
+		['payment_acknowledged', 'deposit_outcome_uncertain'],
+		['minting_started', 'deposit_outcome_uncertain'],
+		['idle', 'deposit_outcome_uncertain'],
+		['funding_canceled', 'deposit_outcome_uncertain'],
+	])('in-edge: %s → deposit_outcome_uncertain is allowed', (from, to) => {
+		expect(canTransitionAuctionBidFundingState(from, to)).toBe(true)
+	})
+
+	test.each<[AuctionBidFundingLifecycleState, AuctionBidFundingLifecycleState]>([
+		['deposit_outcome_uncertain', 'payment_acknowledged'],
+		['deposit_outcome_uncertain', 'funding_session_created'],
+	])('out-edge: deposit_outcome_uncertain → %s is allowed (late success / fresh attempt)', (from, to) => {
+		expect(canTransitionAuctionBidFundingState(from, to)).toBe(true)
+	})
+
+	test.each<[AuctionBidFundingLifecycleState, AuctionBidFundingLifecycleState]>([
+		['deposit_outcome_uncertain', 'bid_publish_attempted'],
+		['deposit_outcome_uncertain', 'ecash_minted'],
+		['deposit_outcome_uncertain', 'bid_published'],
+		['deposit_outcome_uncertain', 'invoice_paid_mint_failed_reclaimable'],
+		['deposit_outcome_uncertain', 'funding_canceled'],
+		['ecash_minted', 'deposit_outcome_uncertain'],
+	])('no out/in edge: %s → %s is rejected (the walk re-enters via payment_acknowledged)', (from, to) => {
+		expect(canTransitionAuctionBidFundingState(from, to)).toBe(false)
+	})
+
+	test('deposit_outcome_uncertain is NOT in the reclaimable states set (no unevidenced reclaim claim)', () => {
+		expect(AUCTION_BID_FUNDING_RECLAIMABLE_STATES).not.toContain('deposit_outcome_uncertain')
+		expect(isAuctionBidFundingReclaimableState('deposit_outcome_uncertain')).toBe(false)
+	})
+
+	test('deposit_outcome_uncertain preserves the pending submission on close (session survives)', () => {
+		expect(shouldPreservePendingBidSubmissionOnModalClose('deposit_outcome_uncertain')).toBe(true)
+		expect(shouldPreservePendingBidSubmissionOnDepositModalClose('deposit_outcome_uncertain', 'idle')).toBe(true)
+	})
+
+	test('deposit_outcome_uncertain is terminal for the funding session (close does not cancel it)', () => {
+		expect(shouldCancelFundingOnModalClose('deposit_outcome_uncertain')).toBe(false)
+	})
+
+	test('the late-success walk completes: uncertain → payment_acknowledged → minting_started → ecash_minted', () => {
+		let state = resolveAuctionBidFundingTransition('deposit_outcome_uncertain', 'payment_acknowledged')
+		expect(state).toBe('payment_acknowledged')
+		state = resolveAuctionBidFundingTransition(state, 'minting_started')
+		expect(state).toBe('minting_started')
+		state = resolveAuctionBidFundingTransition(state, 'ecash_minted')
+		expect(state).toBe('ecash_minted')
+		state = resolveAuctionBidFundingTransition(state, 'bid_publish_attempted')
+		expect(state).toBe('bid_publish_attempted')
+		state = resolveAuctionBidFundingTransition(state, 'bid_published')
+		expect(state).toBe('bid_published')
+	})
+
+	test('self-transition is a safe no-op', () => {
+		expect(canTransitionAuctionBidFundingState('deposit_outcome_uncertain', 'deposit_outcome_uncertain')).toBe(true)
+	})
+
+	test('close resolution: pending → deposit_outcome_uncertain; error (pre-invoice) → funding_canceled', () => {
+		expect(resolveDepositModalCloseLifecycleState('invoice_created', 'pending')).toBe('deposit_outcome_uncertain')
+		expect(resolveDepositModalCloseLifecycleState('invoice_created', 'awaiting_confirmation_retry')).toBe('deposit_outcome_uncertain')
+		// Pre-invoice close (no deposit in flight): cleanly canceled.
+		expect(resolveDepositModalCloseLifecycleState('invoice_created', 'error')).toBe('funding_canceled')
+	})
+})
+
+describe('classifyDepositTerminalErrorOutcome (#1235 round-3 B3)', () => {
+	test('no invoice existed → null (pre-invoice errors get NO classification; the close path cancels)', () => {
+		expect(classifyDepositTerminalErrorOutcome({ invoiceExisted: false })).toBeNull()
+	})
+
+	test('invoice existed → deposit_outcome_uncertain (a payment may have been made)', () => {
+		expect(classifyDepositTerminalErrorOutcome({ invoiceExisted: true })).toBe('deposit_outcome_uncertain')
+	})
+
+	test('all post-invoice terminal error inputs map to uncertain — the app never picks between paid/unpaid', () => {
+		// QR payer (NWC never attempted), NWC payment failed, NWC payment sent —
+		// for a terminal deposit error after an invoice existed, none of these
+		// inputs can evidence either outcome, so they must all classify the
+		// same way: uncertain.
+		for (const invoiceExisted of [true]) {
+			for (const paymentAcknowledged of [false, true]) {
+				for (const nwcPaymentAttempted of [false, true]) {
+					// The classifier is evidence-gated on the invoice's existence
+					// only; wallet acknowledgements are NOT settlement evidence.
+					const outcome = classifyDepositTerminalErrorOutcome({ invoiceExisted })
+					expect(outcome).toBe('deposit_outcome_uncertain')
+					expect(paymentAcknowledged || !paymentAcknowledged).toBe(true) // input combo exercised
+					expect(nwcPaymentAttempted || !nwcPaymentAttempted).toBe(true)
+				}
+			}
+		}
 	})
 })

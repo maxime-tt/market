@@ -182,16 +182,21 @@ export function AuctionBidProgressDialog({
 	const isFundingActive = FUNDING_STATES.has(lifecycleState)
 	const isFundingDone = FUNDING_DONE_STATES.has(lifecycleState)
 	const isFundingFailed = FUNDING_FAILED_STATES.has(lifecycleState)
+	// #1235 round-3 B3: deposit closed with an unevidenced Lightning outcome —
+	// terminal for the session, but NOT evidenced as "failed" (neither paid
+	// nor unpaid is claimable), so it must not render the funding-failed copy.
+	const isDepositOutcomeUncertain = lifecycleState === 'deposit_outcome_uncertain'
 	const isPublishActive = PUBLISH_ACTIVE_STATES.has(lifecycleState)
 	const isPublishDone = PUBLISH_DONE_STATES.has(lifecycleState)
 	const isPublishFailed = PUBLISH_FAILED_STATES.has(lifecycleState)
 
 	const isAwaitingValidator = isPublishDone && !hasPositiveVerdict && !hasNegativeVerdict
 
-	const isTerminal = hasPositiveVerdict || hasNegativeVerdict || isPublishFailed || isFundingFailed
+	const isTerminal = hasPositiveVerdict || hasNegativeVerdict || isPublishFailed || isFundingFailed || isDepositOutcomeUncertain
 
 	// Stage statuses
-	const fundingStage: StageStatus = isFundingFailed ? 'error' : isFundingDone ? 'done' : isFundingActive ? 'active' : 'pending'
+	const fundingStage: StageStatus =
+		isFundingFailed || isDepositOutcomeUncertain ? 'error' : isFundingDone ? 'done' : isFundingActive ? 'active' : 'pending'
 
 	const lockStage: StageStatus = isPublishFailed
 		? 'error'
@@ -237,8 +242,8 @@ export function AuctionBidProgressDialog({
 					<DialogTitle className="flex items-center gap-2">
 						{hasPositiveVerdict ? (
 							<Check className="w-5 h-5 text-green-500" />
-						) : isFundingFailed || isPublishFailed || hasNegativeVerdict ? (
-							<AlertCircle className="w-5 h-5 text-destructive" />
+						) : isFundingFailed || isPublishFailed || hasNegativeVerdict || isDepositOutcomeUncertain ? (
+							<AlertCircle className="w-5 h-5 text-amber-500" />
 						) : (
 							<Loader2 className="w-5 h-5 animate-spin text-blue-500" />
 						)}
@@ -248,9 +253,11 @@ export function AuctionBidProgressDialog({
 								? 'Funding Failed'
 								: isPublishFailed
 									? 'Bid Publish Failed'
-									: hasNegativeVerdict
-										? 'Bid Rejected'
-										: 'Placing Your Bid'}
+									: isDepositOutcomeUncertain
+										? 'Payment outcome unconfirmed'
+										: hasNegativeVerdict
+											? 'Bid Rejected'
+											: 'Placing Your Bid'}
 					</DialogTitle>
 					<DialogDescription>
 						{hasPositiveVerdict
@@ -259,9 +266,11 @@ export function AuctionBidProgressDialog({
 								? 'The Lightning payment could not be completed. Your funds are reclaimable.'
 								: isPublishFailed
 									? 'Your e-cash was minted but the bid could not be published to relays. You can retry or reclaim your funds.'
-									: hasNegativeVerdict
-										? `A validator has flagged this bid: ${representativeVerdict?.claim ?? 'rejected'}`
-										: 'Tracking your bid through confirmation stages.'}
+									: isDepositOutcomeUncertain
+										? 'The result of your Lightning payment could not be confirmed — we can neither claim it was paid nor that it went unpaid. The deposit stays preserved: if it settles, this flow continues automatically. Your wallet recovery paths remain available.'
+										: hasNegativeVerdict
+											? `A validator has flagged this bid: ${representativeVerdict?.claim ?? 'rejected'}`
+											: 'Tracking your bid through confirmation stages.'}
 					</DialogDescription>
 				</DialogHeader>
 
@@ -297,7 +306,13 @@ export function AuctionBidProgressDialog({
 							label="Funding e-cash"
 							status={fundingStage}
 							description={
-								isFundingFailed ? 'Lightning payment failed or expired' : isFundingDone ? 'E-cash minted and ready' : fundingDescription
+								isDepositOutcomeUncertain
+									? 'Payment outcome unconfirmed — neither paid nor unpaid is evidenced; the preserved deposit may still settle'
+									: isFundingFailed
+										? 'Lightning payment failed or expired'
+										: isFundingDone
+											? 'E-cash minted and ready'
+											: fundingDescription
 							}
 						/>
 						<ProgressStage

@@ -856,3 +856,150 @@ describe('lock-outcome-uncertain legs refuse the retry outright (#1235 round-3 B
 		expect(nextLockOutcomeUncertainOnSessionStart(null)).toBeNull()
 	})
 })
+
+// =============================================================================
+// #1235 round-3 B3 — close-while-pending deposits land the honest
+// deposit_outcome_uncertain state, and the SAME preserved deposit can still
+// settle late: the late success must walk the lifecycle forward out of the
+// uncertain state (payment_acknowledged → minting_started → ecash_minted →
+// publish) so the bid proceeds — including the Retry-publish affordance on a
+// publish failure.
+// =============================================================================
+
+describe('late success after uncertain close (#1235 round-3 B3)', () => {
+	/** Drive a deposit-funded session to invoice_created with a pending deposit. */
+	const driveToPendingDeposit = async (h: FundingHarness, bidData: AuctionBidFormData): Promise<void> => {
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidData)
+			h.latest.current.handleInvoiceCreated()
+			nip60Store.setState((s) => ({ ...s, depositStatus: 'pending' }))
+		})
+		expect(h.latest.current.bidFundingLifecycleState).toBe('invoice_created')
+	}
+
+	test('close pending QR deposit → same preserved deposit later succeeds → publish failure still exposes Retry publish', async () => {
+		const h = await mountFundingHook()
+		const bidData = buildBidData(1_000)
+
+		await driveToPendingDeposit(h, bidData)
+
+		// Act 1 — the user closes the deposit modal while the payment's outcome
+		// is unevidenced: the lifecycle lands the honest uncertain state and
+		// the pending submission is PRESERVED.
+		await act(async () => {
+			h.latest.current.handleDepositModalClose()
+		})
+		expect(h.latest.current.bidFundingLifecycleState).toBe('deposit_outcome_uncertain')
+		expect(h.latest.current.pendingBidSubmission).toEqual(bidData)
+		expect(h.latest.current.isDepositOpen).toBe(false)
+
+		// Act 2 — late success: the SAME preserved deposit settles (the deposit
+		// object kept checking after the preserveRecovery close); the minted
+		// funds walk the lifecycle forward out of the uncertain state and the
+		// publish then fails AFTER the leg was locked (broadcast failure).
+		const publish = deferred<string>()
+		h.setPublishBid(() => publish.promise)
+		await act(async () => {
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 }, depositStatus: 'success' }))
+			h.latest.current.handleFundingSuccess()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		await settleInsideAct(() => publish.reject(new AuctionBidPublishFailedError(LEG_A_EVENT_ID, new Error('relay down'))))
+
+		// Assert 2 — hook-level proxy for "the Retry-publish affordance is
+		// exposed": the dialog renders the button iff
+		// mint_succeeded_bid_publish_failed_reclaimable (PUBLISH_FAILED_STATES)
+		// + this tracker.
+		expect(h.latest.current.bidFundingLifecycleState).toBe('mint_succeeded_bid_publish_failed_reclaimable')
+		expect(h.latest.current.publishedBidEventId).toBe(LEG_A_EVENT_ID)
+		expect(h.latest.current.lockedUnpublishedTokenId).toBeNull()
+
+		// Act 3 — Retry publish: the idempotent rebroadcast path — republishBid
+		// (NO second publishBid → NO second lock).
+		const republish = deferred<string>()
+		h.setRepublishBid(() => republish.promise)
+		await act(async () => {
+			void h.latest.current.retryBidPublish()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		expect(h.calls.republishBid).toBe(1)
+		await settleInsideAct(() => republish.resolve(LEG_A_EVENT_ID))
+
+		const publishCallsAfterRetry = h.calls.publishBid
+		expect(h.latest.current.bidFundingLifecycleState).toBe('bid_published')
+		expect(publishCallsAfterRetry).toBe(1) // exactly one publishBid — no second lock
+		expect(h.latest.current.pendingBidSubmission).toBeNull()
+		expect(h.calls.onBidSuccess).toBe(1)
+
+		await h.unmount()
+	})
+
+	test('late success → publish resolves → bid_published, success fired, submission cleared', async () => {
+		const h = await mountFundingHook()
+		const bidData = buildBidData(1_500)
+
+		await driveToPendingDeposit(h, bidData)
+		await act(async () => {
+			h.latest.current.handleDepositModalClose()
+		})
+		expect(h.latest.current.bidFundingLifecycleState).toBe('deposit_outcome_uncertain')
+
+		const publish = deferred<string>()
+		h.setPublishBid(() => publish.promise)
+		await act(async () => {
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 }, depositStatus: 'success' }))
+			h.latest.current.handleFundingSuccess()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		await settleInsideAct(() => publish.resolve(LEG_B_EVENT_ID))
+
+		expect(h.latest.current.bidFundingLifecycleState).toBe('bid_published')
+		expect(h.latest.current.publishedBidEventId).toBe(LEG_B_EVENT_ID)
+		expect(h.latest.current.pendingBidSubmission).toBeNull()
+		expect(h.calls.onBidSuccess).toBe(1)
+
+		await h.unmount()
+	})
+
+	test('fresh session from deposit_outcome_uncertain: startFundingForBid re-enters cleanly with trackers reset', async () => {
+		const h = await mountFundingHook()
+		const bidDataA = buildBidData(1_000)
+		const bidDataB = buildBidData(2_500)
+
+		await driveToPendingDeposit(h, bidDataA)
+		await act(async () => {
+			h.latest.current.handleDepositModalClose()
+		})
+		expect(h.latest.current.bidFundingLifecycleState).toBe('deposit_outcome_uncertain')
+
+		// A fresh funding session can start directly from the uncertain state.
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidDataB)
+		})
+		expect(h.latest.current.bidFundingLifecycleState).toBe('funding_session_created')
+		expect(h.latest.current.pendingBidSubmission).toEqual(bidDataB)
+		expect(h.latest.current.publishedBidEventId).toBeNull()
+		expect(h.latest.current.lockOutcomeUncertainRecoveryRecordId).toBeNull()
+		expect(h.latest.current.isDepositOpen).toBe(true)
+
+		await h.unmount()
+	})
+
+	test('close with NO deposit in flight still cleanly cancels (funding_canceled)', async () => {
+		const h = await mountFundingHook()
+		const bidData = buildBidData(1_000)
+
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidData)
+			h.latest.current.handleInvoiceCreated()
+			nip60Store.setState((s) => ({ ...s, depositStatus: 'idle' }))
+		})
+		await act(async () => {
+			h.latest.current.handleDepositModalClose()
+		})
+		expect(h.latest.current.bidFundingLifecycleState).toBe('funding_canceled')
+		expect(h.latest.current.pendingBidSubmission).toBeNull()
+
+		await h.unmount()
+	})
+})
