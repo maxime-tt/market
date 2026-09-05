@@ -683,6 +683,16 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		cacheAuctionBidEventForRepublish(bidEvent)
 		try {
 			await bidEvent.sign(signer)
+			// #1235 round-3 B2 — same invariant as republishAuctionBid's
+			// post-sign guard: a signer whose identity drifted since
+			// `bidderPubkey` was captured would re-key the event and change its
+			// id. Refuse to broadcast a foreign event; the cached UNSIGNED event
+			// (serialized pre-sign, still keyed to the original id) is preserved.
+			if (bidEvent.getEventHash() !== finalizedBidEventId) {
+				throw new Error(
+					`Refusing to publish auction bid: signing changed the event identity (expected ${finalizedBidEventId}, got ${bidEvent.id}). Nothing was published.`,
+				)
+			}
 			cacheAuctionBidEventForRepublish(bidEvent)
 			await ndkActions.publishEvent(bidEvent)
 		} catch (error) {
@@ -690,7 +700,10 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			// persisted — surface the event id so the funding lifecycle retries
 			// with a pure rebroadcast (republishAuctionBid) instead of re-running
 			// the lock pipeline (which would swap/lock funds a second time).
-			throw new AuctionBidPublishFailedError(bidEvent.id, error)
+			// #1235 round-3 B2: the FINALIZED id (captured pre-sign), never the
+			// possibly-drifted `bidEvent.id` — a drift must not poison the retry
+			// tracker with a foreign event id.
+			throw new AuctionBidPublishFailedError(finalizedBidEventId ?? bidEvent.id, error)
 		}
 		// Published — the rebroadcast cache entry is no longer needed.
 		discardAuctionBidEventRepublishCacheEntry(bidEvent.id)
@@ -905,10 +918,33 @@ export const republishAuctionBid = async (bidEventId: string, signer: NDKSigner,
 	}
 
 	if (!bidEvent.sig) {
+		// #1235 round-3 B2 — retry identity binding. The cached unsigned event
+		// was authored by the original bidder; NDK's `sign` overwrites the
+		// event's pubkey with the active signer's user, so a retry from a
+		// DIFFERENT account would publish a foreign-authored kind-1023 carrying
+		// the original bidder's lock secrets under a drifted event id. Refuse
+		// PRE-SIGN — zero mint interaction, zero signing, cache entry preserved.
+		const signerUser = await signer.user()
+		if (signerUser.pubkey !== bidEvent.pubkey) {
+			throw new Error(
+				`Refusing to republish auction bid ${bidEventId}: cached bid was created by ${bidEvent.pubkey} ` +
+					`but the active signer is ${signerUser.pubkey}. Switch back to the original bidder account and retry. ` +
+					`No signing, no publishing, and no mint interaction was performed; the cached event is preserved.`,
+			)
+		}
 		// Cached between event construction and signing (a sign failure).
 		// Signing is local, does not touch the mint, and does not change the
-		// event id — this stays idempotent.
+		// event id — this stays idempotent… unless the signer's identity drifts
+		// between the pre-sign guard above and `sign`'s internal `author`
+		// assignment (a stateful or remote signer). Belt-and-braces: recompute
+		// the hash/id and require equality with the ORIGINAL event id before
+		// publishing anything.
 		await bidEvent.sign(signer)
+		if (bidEvent.getEventHash() !== bidEventId || bidEvent.id !== bidEventId) {
+			throw new Error(
+				`Refusing to republish auction bid ${bidEventId}: re-signing produced a different event id (${bidEvent.id}). Nothing was published; the cached entry is preserved.`,
+			)
+		}
 		cacheAuctionBidEventForRepublish(bidEvent)
 	}
 

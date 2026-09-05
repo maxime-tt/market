@@ -327,6 +327,98 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 })
 
 // =============================================================================
+// #1235 round-3 B2 — retry identity binding: an unsigned cached event must
+// only ever be re-signed by the ORIGINAL bidder. NDK's `sign` overwrites the
+// event's pubkey with the active signer's user, so re-signing an A-authored
+// event with signer B would publish a B-authored kind-1023 carrying A's lock
+// secrets under a DRIFTED event id — the original bidder record (refund key +
+// proofs) exists only under the original id. Both guards must refuse WITHOUT
+// publishing and WITHOUT discarding the cached entry.
+// =============================================================================
+
+describe('republishAuctionBid retry identity binding (#1235 round-3 B2)', () => {
+	test('cached unsigned event for A → retry with signer B → reject before publish, zero additional mint interaction', async () => {
+		// Arrange: the cache holds the UNSIGNED event authored by A (the sign
+		// failed after the lock + recovery record + cache write).
+		const failure = await publishAndExpectBroadcastFailure(700, signFailingSigner)
+		const bidEventId = failure.bidEventId
+		expect(publishedPayloads).toHaveLength(0) // never reached the relay
+		expect(findBidderRecord(bidEventId)).toBeDefined()
+
+		// Account switch A → B, then retry the republish with B's signer.
+		const signerB = new NDKPrivateKeySigner('5'.repeat(64))
+		let caught: unknown
+		try {
+			await republishAuctionBid(bidEventId, signerB, ndkInstance)
+		} catch (error) {
+			caught = error
+		}
+
+		// Refused pre-sign with an actionable mismatch message.
+		expect(caught).toBeInstanceOf(Error)
+		const message = (caught as Error).message
+		expect(message).toContain('Refusing to republish auction bid')
+		expect(message).toContain('cached bid was created by')
+		expect(message).toContain('but the active signer is')
+		expect(message).toContain('cached event is preserved')
+
+		// Zero additional mint interaction and zero relay interaction.
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
+		expect(publishEventMock).not.toHaveBeenCalled()
+		expect(publishedPayloads).toHaveLength(0)
+
+		// The ORIGINAL cache entry survived the refusal (never discarded on
+		// failure) — retrying with the original bidder's signer still
+		// rebroadcasts the SAME event id.
+		const retriedId = await republishAuctionBid(bidEventId, signer, ndkInstance)
+		expect(retriedId).toBe(bidEventId)
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1) // still no re-lock
+		expect(publishedPayloads).toHaveLength(1)
+		expect(publishedPayloads[0].id).toBe(bidEventId)
+		expect(publishedPayloads[0].sig).toBeTruthy()
+	})
+
+	test('post-sign identity drift (signer user() flips mid-sign) → republish refuses, nothing published, cache preserved', async () => {
+		const failure = await publishAndExpectBroadcastFailure(700, signFailingSigner)
+		const bidEventId = failure.bidEventId
+
+		// A stateful signer whose identity flips between the pre-sign guard's
+		// `user()` call and `sign`'s internal `author` assignment — `sign` then
+		// re-keys the event's pubkey and recomputes a DIFFERENT event id.
+		const otherPubkey = getPublicKey(new Uint8Array(32).fill(9))
+		let userCalls = 0
+		const driftingSigner = {
+			user: async () => {
+				userCalls += 1
+				return { pubkey: userCalls === 1 ? bidderPubkey : otherPubkey }
+			},
+			sign: async () => 'f'.repeat(128),
+		} as unknown as NDKSigner
+
+		let caught: unknown
+		try {
+			await republishAuctionBid(bidEventId, driftingSigner, ndkInstance)
+		} catch (error) {
+			caught = error
+		}
+
+		// The pre-sign guard passed (first user() → A), but the post-sign guard
+		// catches the re-keyed event: NOTHING was published.
+		expect(caught).toBeInstanceOf(Error)
+		expect((caught as Error).message).toContain('re-signing produced a different event id')
+		expect(publishEventMock).not.toHaveBeenCalled()
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
+
+		// Cache preserved: the original unsigned A event is still retryable
+		// with the original bidder's real signer — same event id.
+		const retriedId = await republishAuctionBid(bidEventId, signer, ndkInstance)
+		expect(retriedId).toBe(bidEventId)
+		expect(publishedPayloads).toHaveLength(1)
+		expect(publishedPayloads[0].id).toBe(bidEventId)
+	})
+})
+
+// =============================================================================
 // #1235 follow-up 3 — post-lock error model: locked-but-unpublished failures
 // must be DISTINCT from publish-failed-with-id failures, so the funding
 // lifecycle never falls back to the full re-locking pipeline for a leg whose
