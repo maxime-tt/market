@@ -129,8 +129,14 @@ test.describe('Order Details - Seller View - Auctions', () => {
 		// The seeded auction order surfaces a Product-vs-Auction type chip and
 		// the auction title (kind-30408 'title' tag) in the sales table. The
 		// scenario also seeds product orders, so 'Product' chips coexist.
-		await expect(page.getByTestId('order-type').filter({ hasText: 'Auction' }).first()).toBeVisible()
-		await expect(page.locator('[data-testid="order-item-title"]').filter({ hasText: 'Test Auction' }).first()).toBeVisible()
+		//
+		// Every row renders its cells TWICE: a compact card layout
+		// (`block xl:hidden`) and a desktop grid (`hidden xl:grid`). At the
+		// default 1280px viewport the xl: breakpoint applies, so the compact
+		// copy is `display:none`. `.first()` would pick that hidden copy —
+		// select the visible instance instead.
+		await expect(page.locator('[data-testid="order-type"]:visible').filter({ hasText: 'Auction' }).first()).toBeVisible()
+		await expect(page.locator('[data-testid="order-item-title"]:visible').filter({ hasText: 'Test Auction' }).first()).toBeVisible()
 	})
 
 	test('views confirmed auction order and marks as processed', async ({ merchantPage: page }) => {
