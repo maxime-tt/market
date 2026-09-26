@@ -83,6 +83,29 @@ optional attribution map keyed like the existing state map:
 **4. State the expectation as an expectation.** The expected-payout construction keeps its shape but is
 documented as the expectation, with redemption decided by the observation.
 
+## Where the code already reasons this way (found while implementing)
+
+The time-based version of this argument is not only in the masking heuristic — the pre-publish gate
+(`validateBidChainNut7PrePublish`, `src/lib/auction/bidValidation.ts`) states it in full:
+
+> _"All proofs spent. Pre-locktime, only the seller's child privkey can spend (the refund branch is
+> timelocked), so all-spent pre-locktime IS seller-bound redemption evidence (e.g. a previous
+> settlement attempt that crashed after this leg). Post-locktime the bidder's refund path is also open —
+> then all-spent is ambiguous and we must abort (can't safely settle)."_
+
+So the repository already knows that "who spent it" follows from the locktime — and where that reasoning
+_runs out_ (post-locktime), it aborts because the evidence does not decide. Attribution is exactly the
+missing evidence at that point, which means this ADR does not replace that reasoning, it completes it:
+
+| Site                                                                 | Today                                                          | With attribution                                                                                                                         |
+| -------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `validateBidChainNut7PrePublish` (pre-publish gate)                  | post-locktime `spent` is **ambiguous → abort**                 | `redeemed` → seller-bound, safe to settle; `reclaimed` → the bidder took it (never settle as paid); `unattributed` → **abort, as today** |
+| `computeValidatedBids` (`hasDisqualifyingSpentLeg`)                  | `spent` disqualifies, masked after a settled settlement exists | `reclaimed` disqualifies and is **never** masked; `redeemed` does not disqualify; `unattributed` keeps today's behaviour exactly         |
+| `settlementDescriptor` (spend masking #11, `nut7_not_spent → valid`) | `spent` is benign after a settlement exists                    | a reclaimed leg makes the settlement **not** `valid`; the masking stays for `redeemed` and for the absent case                           |
+
+The third column is the change; the second is why the change is narrowing, not widening — every case
+where the evidence is absent behaves exactly as it does today.
+
 ## Consequences
 
 - The spend-masking heuristic stops being the mechanism: the two facts (who, and when) are no longer
