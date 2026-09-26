@@ -211,6 +211,9 @@ export const checkProofStateDetailsBatch = async (
 		for (const entry of response.states) {
 			if (!entry || typeof entry.Y !== 'string') continue
 			const y = entry.Y.toLowerCase()
+			// Only answer for Ys we asked about: the mint is untrusted input, and a response that
+			// injects entries of its own must not shape the caller's map.
+			if (!out.has(y)) continue
 			out.set(y, {
 				state: normaliseState(entry.state),
 				...(typeof entry.witness === 'string' && entry.witness.length > 0 ? { witness: entry.witness } : {}),

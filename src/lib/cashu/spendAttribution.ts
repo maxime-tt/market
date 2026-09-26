@@ -156,16 +156,37 @@ export const readWitnessSignatures = (witness: string | null | undefined): strin
 
 const messageHashForSecret = (secret: string): Uint8Array => sha256(new TextEncoder().encode(secret))
 
-const signatureMatchesAny = (signatures: readonly string[], keys: readonly string[], messageHash: Uint8Array): boolean =>
-	signatures.some((signature) =>
-		keys.some((key) => {
+/**
+ * Hex-decode, because `@noble/curves` 2.x takes bytes and **throws** on a hex string.
+ *
+ * This is not a nicety: `schnorr.verify(hexString, …)` throws `"signature" expected Uint8Array of
+ * length 64`, and a try/catch around it turns every genuine signature into "does not match" — which
+ * would make every spend `unattributed` and the whole module quietly useless. Found by the tests
+ * written against this module (which used real signatures and failed for exactly this reason).
+ */
+const hexToBytes = (hex: string): Uint8Array | null => {
+	const clean = hex.trim().toLowerCase()
+	if (clean.length % 2 !== 0 || !/^[0-9a-f]*$/.test(clean)) return null
+	const out = new Uint8Array(clean.length / 2)
+	for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16)
+	return out
+}
+
+const signatureMatchesAny = (signatures: readonly string[], keys: readonly string[], messageHash: Uint8Array): boolean => {
+	const decodedKeys = keys.map(hexToBytes).filter((key): key is Uint8Array => key !== null)
+	if (!decodedKeys.length) return false
+	return signatures.some((signature) => {
+		const decoded = hexToBytes(signature)
+		if (!decoded || decoded.length !== 64) return false
+		return decodedKeys.some((key) => {
 			try {
-				return schnorr.verify(signature.toLowerCase(), messageHash, key)
+				return schnorr.verify(decoded, messageHash, key)
 			} catch {
 				return false
 			}
-		}),
-	)
+		})
+	})
+}
 
 /**
  * Attribute one observation.
