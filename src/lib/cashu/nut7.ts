@@ -13,6 +13,11 @@
  *
  * - {@link checkProofState}     — query the state of one proof by its Y.
  * - {@link checkProofStateBatch} — batch lookup for multiple Ys, one mint.
+ * - {@link checkProofStateDetails} / {@link checkProofStateDetailsBatch} — the same reads **keeping
+ *   the `witness`** the mint returns alongside the state. The witness is the signatures that were
+ *   actually presented to spend the proof, i.e. the only evidence of *who* spent it
+ *   (`src/lib/cashu/spendAttribution.ts` attributes it). The two state-only helpers delegate here, so
+ *   there is one request path and one parser.
  *
  * Both return a normalized {@link Nut7ProofState} (`'unspent' | 'pending'
  * | 'spent' | 'missing' | 'unknown'`) — `'unknown'` is reserved for
@@ -26,6 +31,7 @@
 
 import { CashuMint, CheckStateEnum, type CheckStateResponse } from '@cashu/cashu-ts'
 import type { Nut7ProofState } from '../auction/constants'
+import type { Nut7SpendObservation } from './spendAttribution'
 
 // ---------- Configuration ------------------------------------------------
 
@@ -72,6 +78,16 @@ export type CashuCustomRequest = (options: {
 	signal?: AbortSignal
 }) => Promise<unknown>
 
+/** Options for the witness-keeping reads: the state options plus the secrets to attach. */
+export interface CheckProofStateDetailsOptions extends CheckProofStateOptions {
+	/**
+	 * Secrets by `Y`, so the returned observations can be handed straight to `attributeSpend`.
+	 * The mint never sees these — `Y` is derived from the secret, not the reverse — so a caller
+	 * that holds the proofs passes them here rather than correlating the answers afterwards.
+	 */
+	secretsByY?: ReadonlyMap<string, string>
+}
+
 /**
  * Query the state of a single proof at a mint.
  *
@@ -86,8 +102,24 @@ export type CashuCustomRequest = (options: {
  * Callers MUST treat `'unknown'` as "no signal, retry" — not "safe".
  */
 export const checkProofState = async (mintUrl: string, proofY: string, options: CheckProofStateOptions = {}): Promise<Nut7ProofState> => {
-	const states = await checkProofStateBatch(mintUrl, [proofY], options)
-	return states.get(proofY.toLowerCase()) ?? 'missing'
+	const observation = await checkProofStateDetails(mintUrl, proofY, options)
+	return observation.state
+}
+
+/**
+ * Query one proof's state **keeping the witness**.
+ *
+ * The witness is what makes the answer attributable — see `spendAttribution.ts`. Callers that only
+ * need the state should keep using {@link checkProofState}; this one exists so the evidence is
+ * available where it is asked for instead of being discarded at the only place it arrives.
+ */
+export const checkProofStateDetails = async (
+	mintUrl: string,
+	proofY: string,
+	options: CheckProofStateDetailsOptions = {},
+): Promise<Nut7SpendObservation> => {
+	const details = await checkProofStateDetailsBatch(mintUrl, [proofY], options)
+	return details.get(proofY.toLowerCase()) ?? { state: 'missing' }
 }
 
 export const checkMintReachability = async (mintUrl: string, options: CheckProofStateOptions = {}): Promise<boolean> => {
@@ -116,10 +148,40 @@ export const checkProofStateBatch = async (
 	proofYs: string[],
 	options: CheckProofStateOptions = {},
 ): Promise<Map<string, Nut7ProofState>> => {
+	const details = await checkProofStateDetailsBatch(mintUrl, proofYs, options)
 	const out = new Map<string, Nut7ProofState>()
+	for (const [y, observation] of details) out.set(y, observation.state)
+	return out
+}
+
+/**
+ * Batch state lookup **keeping the witness**.
+ *
+ * Same request path as {@link checkProofStateBatch} (which delegates here), same normalization and
+ * the same non-throwing semantics — the difference is that each entry carries the mint's `witness`
+ * alongside the state, and the caller's secrets when it passes them. That pair is what
+ * `attributeSpend` needs; the state alone is what made "spent" ambiguous between the lock owner and
+ * the refund path.
+ *
+ * `secretsByY` is matched case-insensitively, like the Ys themselves.
+ */
+export const checkProofStateDetailsBatch = async (
+	mintUrl: string,
+	proofYs: string[],
+	options: CheckProofStateDetailsOptions = {},
+): Promise<Map<string, Nut7SpendObservation>> => {
+	const out = new Map<string, Nut7SpendObservation>()
 	if (!proofYs.length) return out
 
-	for (const y of proofYs) out.set(y.toLowerCase(), 'unknown')
+	const secrets = new Map<string, string>()
+	for (const [y, secret] of options.secretsByY ?? []) secrets.set(y.toLowerCase(), secret)
+
+	const withSecret = (y: string): Nut7SpendObservation => ({
+		state: 'unknown',
+		...(secrets.has(y) ? { secret: secrets.get(y) } : {}),
+	})
+
+	for (const y of proofYs) out.set(y.toLowerCase(), withSecret(y.toLowerCase()))
 
 	const timeoutMs = options.timeoutMs ?? DEFAULT_NUT7_TIMEOUT_MS
 	const mint = options.mintClient ?? new CashuMint(mintUrl, options.customRequest as never)
@@ -144,11 +206,16 @@ export const checkProofStateBatch = async (
 
 		if (!response || !Array.isArray(response.states)) continue
 
-		for (const y of batch) out.set(y.toLowerCase(), 'missing')
+		for (const y of batch) out.set(y.toLowerCase(), { ...withSecret(y.toLowerCase()), state: 'missing' })
 
 		for (const entry of response.states) {
 			if (!entry || typeof entry.Y !== 'string') continue
-			out.set(entry.Y.toLowerCase(), normaliseState(entry.state))
+			const y = entry.Y.toLowerCase()
+			out.set(y, {
+				state: normaliseState(entry.state),
+				...(typeof entry.witness === 'string' && entry.witness.length > 0 ? { witness: entry.witness } : {}),
+				...(secrets.has(y) ? { secret: secrets.get(y) } : {}),
+			})
 		}
 	}
 
