@@ -245,5 +245,5 @@ capture's own closing comment at `01-build-and-tests.txt:285` said "both on the 
 and its recorded output is never rewritten, so that capture is left exactly as it was executed; the stale
 expectation comment belongs to the generator, and `signer/evidence/run.sh` now states the four call sites
 (two in `nip46.ts`, two in `session.ts`) that the next regeneration of the capture will print. The prose in this
-record and in `signer/visuals/architecture/README.md` has been corrected in place to the four call sites the tree
+record has been corrected in place to the four call sites the tree
 holds. This is a documentation-consistency defect — the clock is a timer, not a content decision under §10.1.

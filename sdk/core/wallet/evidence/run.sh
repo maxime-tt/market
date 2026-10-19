@@ -19,8 +19,7 @@ export PATH="$(dirname "$BUN"):$PATH"
 
 for path in \
 	"$MODULE/wallet.md" \
-	"$TS/index.ts" "$TS/types.ts" "$TS/errors.ts" "$TS/gate.ts" "$TS/aggregator.ts" "$TS/memory.ts" "$TS/aggregator.test.ts" \
-	"$MODULE/visuals/webui/index.html" "$MODULE/visuals/webui/run.ts" "$MODULE/visuals/webui/SKILL.md"; do
+	"$TS/index.ts" "$TS/types.ts" "$TS/errors.ts" "$TS/gate.ts" "$TS/aggregator.ts" "$TS/memory.ts" "$TS/aggregator.test.ts"; do
 	[ -f "$path" ] || {
 		echo "missing subject: $path" >&2
 		exit 1
@@ -211,60 +210,3 @@ for mount in "${MOUNTS[@]}"; do
 	fi
 done
 echo 'mounts asserted clean: core/, plebeian-market/market/'
-
-banner "7 · the page is a self-contained model, and it serves on the reserved port"
-# The page is the module's declared webui (wallet.md's `webui:` block): index.html, run.ts and
-# SKILL.md. This section ASSERTS the properties the page must have — it parses as HTML and carries no
-# remote reference (the page depends on no relay, mint or wallet), it renders the required semantics,
-# run.ts's --help prints the reserved port, and the run program actually serves the page over HTTP.
-python3 - "$MODULE/visuals/webui/index.html" <<'PY_HTML_GATE'
-import sys
-from html.parser import HTMLParser
-
-path = sys.argv[1]
-text = open(path, encoding="utf-8").read()
-HTMLParser().feed(text)  # raises on a malformed document
-for bad in ("http://", "https://", "//cdn", "@font-face", "ws://", "wss://"):
-    if bad in text:
-        raise SystemExit("index.html carries a remote reference (%s) — the page must depend on no network" % bad)
-for needed in ("deriveSetState", "witnessed-settled", "untrusted", "short-settled", "over-settled", "no-reconcile-step"):
-    if needed not in text:
-        raise SystemExit("index.html does not render a required semantic (%s)" % needed)
-print("index.html parses, carries no remote reference, and renders the required semantics")
-PY_HTML_GATE
-
-HELP_OUT="$("$BUN" run "$MODULE/visuals/webui/run.ts" --help)"
-printf '%s\n' "$HELP_OUT"
-printf '%s\n' "$HELP_OUT" | grep -q '4329' || { echo "run.ts --help does not print the reserved port 4329" >&2; exit 1; }
-echo 'run.ts --help exits 0 and prints the reserved port 4329'
-
-PAGE_PORT=4399
-PAGE_TMP="$(mktemp -d)"
-"$BUN" run "$MODULE/visuals/webui/run.ts" --port "$PAGE_PORT" > "$PAGE_TMP/srv.out" 2>&1 &
-PAGE_PID=$!
-cleanup_page() { kill "$PAGE_PID" 2>/dev/null || true; rm -rf "$PAGE_TMP"; }
-trap cleanup_page EXIT
-python3 - "$PAGE_PORT" <<'PY_SERVE_GATE'
-import sys, time, urllib.request
-
-port = sys.argv[1]
-url = "http://127.0.0.1:%s/" % port
-body = None
-for _ in range(60):
-    try:
-        with urllib.request.urlopen(url, timeout=1) as response:
-            body = response.read().decode("utf-8", "replace")
-        break
-    except Exception:
-        time.sleep(0.25)
-if body is None:
-    raise SystemExit("the run program did not answer on port %s" % port)
-if "wallet.md" not in body or "deriveSetState" not in body:
-    raise SystemExit("the served page is not the payment model")
-print("the run program served the page on a scratch port (%d bytes)" % len(body))
-PY_SERVE_GATE
-kill "$PAGE_PID" 2>/dev/null || true
-wait "$PAGE_PID" 2>/dev/null || true
-trap - EXIT
-rm -rf "$PAGE_TMP"
-echo 'the page serves as a self-contained model on the reserved port'

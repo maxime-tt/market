@@ -4,9 +4,9 @@ kind: module
 schema: architecture
 applies: core@0.1
 inherits: [platform-core]
-implements: ["#815e0d", "#465561"]
+implements: ['#815e0d', '#465561']
 opt-out: []
-test-support: ["ts/harness.ts", "ts/*.test.ts"]   # R3 — test tooling is exempt by declaration, the way a mount is: a spec statement is never fulfilled by test support
+test-support: ['ts/harness.ts', 'ts/*.test.ts'] # R3 — test tooling is exempt by declaration, the way a mount is: a spec statement is never fulfilled by test support
 levels:
   objective: present
   technical-spec: present — the contract, the session states, the capability model, the settings, the five invariants
@@ -14,20 +14,94 @@ levels:
   tests: present — the module's own suite, 90 cases in 5 files, run by `cd signer/ts && bun test`
 contract:
   entry: ts/index.ts
-  operations: [getPublicKey, signEvent, capabilities, startSession, endSession, restoreSession, observeSession, attachSigner, detachSigner, encrypt, decrypt, currentSigner, availableLanes]
-  exports: [createSignerSession, createSignerFromKey, hasNip04, hasNip44, isSignerCapability, createExtensionLane, SIGNER, SignerError, InvalidTransitionError, IdentityUnresolvedError, IdentityMismatchError, NoActiveSessionError, CapabilityUnavailableError, SessionAttachedError, LaneUnavailableError, TransportRequiredError, ClockRequiredError, AuthSinkRequiredError, SessionVaultError, PortError, PasswordSignerLockedError, Nip46RpcTimeoutError, PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS, VAULT_STORAGE_KEY, LEGACY_LOCAL_SIGNER_KEY, LEGACY_CONNECT_URL_KEY]
-  types: [SignerSession, EventTemplate, NostrEvent, SignedEvent, LaneKind, EncryptionScheme, NipEncryptionCapability, SignerCapability, SignerCapabilities, SessionState, SessionRecordKind, SessionSnapshot, SessionObserver, StoragePort, TransportPort, ClockPort, CryptoPort, ExtensionTransportPort, PassphraseSource, SignerPorts, SignerSettings, SessionAtRestSettings, RpcTimeoutSettings, SessionStartInput, RestoreInput, LaneAvailability, SignerDeps, SessionVaultCode]
+  operations:
+    [
+      getPublicKey,
+      signEvent,
+      capabilities,
+      startSession,
+      endSession,
+      restoreSession,
+      observeSession,
+      attachSigner,
+      detachSigner,
+      encrypt,
+      decrypt,
+      currentSigner,
+      availableLanes,
+    ]
+  exports:
+    [
+      createSignerSession,
+      createSignerFromKey,
+      hasNip04,
+      hasNip44,
+      isSignerCapability,
+      createExtensionLane,
+      SIGNER,
+      SignerError,
+      InvalidTransitionError,
+      IdentityUnresolvedError,
+      IdentityMismatchError,
+      NoActiveSessionError,
+      CapabilityUnavailableError,
+      SessionAttachedError,
+      LaneUnavailableError,
+      TransportRequiredError,
+      ClockRequiredError,
+      AuthSinkRequiredError,
+      SessionVaultError,
+      PortError,
+      PasswordSignerLockedError,
+      Nip46RpcTimeoutError,
+      PBKDF2_ITERATIONS,
+      MIN_PBKDF2_ITERATIONS,
+      VAULT_STORAGE_KEY,
+      LEGACY_LOCAL_SIGNER_KEY,
+      LEGACY_CONNECT_URL_KEY,
+    ]
+  types:
+    [
+      SignerSession,
+      EventTemplate,
+      NostrEvent,
+      SignedEvent,
+      LaneKind,
+      EncryptionScheme,
+      NipEncryptionCapability,
+      SignerCapability,
+      SignerCapabilities,
+      SessionState,
+      SessionRecordKind,
+      SessionSnapshot,
+      SessionObserver,
+      StoragePort,
+      TransportPort,
+      ClockPort,
+      CryptoPort,
+      ExtensionTransportPort,
+      PassphraseSource,
+      SignerPorts,
+      SignerSettings,
+      SessionAtRestSettings,
+      RpcTimeoutSettings,
+      SessionStartInput,
+      RestoreInput,
+      LaneAvailability,
+      SignerDeps,
+      SessionVaultCode,
+    ]
 implementations:
-  - id: ts                       # the selector a composition names
+  - id: ts # the selector a composition names
     lang: typescript
-    dir: ts                      # relative to the module directory
+    dir: ts # relative to the module directory
     entry: ts/index.ts
-    package: null                # consumed as a directory, not shipped as a package
-    install: [bun, install]      # every action is a token array, never a shell string
+    package: null # consumed as a directory, not shipped as a package
+    install: [bun, install] # every action is a token array, never a shell string
     build: []
     test: [bun, test]
     typecheck: [bun, run, typecheck]
-    needs: []                    # CODE dependencies (module names), not `inherits`
+    needs: [] # CODE dependencies (module names), not `inherits`
 access:
   group: m_signer
   read: [self]
@@ -40,26 +114,21 @@ consumers:
 source:
   repo: https://github.com/PlebeianApp/market
   commit: 4bc7f8c0c73ae4ba2ff2a78f0c66d28347d1c1ce
-  paths: [src/lib/nostr/signer-capability.ts, src/lib/nostr/signer-registry.ts, src/lib/nostr/password-signer-session.ts, src/lib/nostr/nostr-connect-uri.ts, src/lib/nostr/nostr-connect-signer.ts, src/lib/nostr/nostr-connect-session.ts, src/lib/nostr/session-vault.ts]
+  paths:
+    [
+      src/lib/nostr/signer-capability.ts,
+      src/lib/nostr/signer-registry.ts,
+      src/lib/nostr/password-signer-session.ts,
+      src/lib/nostr/nostr-connect-uri.ts,
+      src/lib/nostr/nostr-connect-signer.ts,
+      src/lib/nostr/nostr-connect-session.ts,
+      src/lib/nostr/session-vault.ts,
+    ]
 spec:
   adr: docs/adr/ADR-0002-nostr-io-migration-ndk-to-applesauce.md
   blob: e0082e331e59bb16784f9dd49f4563bda3a594a7
   lines: 264-316
-webui:
-  - id: webui
-    title: The signer, in plain language
-    entry: visuals/webui/index.html
-    skill: visuals/webui/SKILL.md
-  - id: architecture
-    title: Module architecture map
-    entry: visuals/architecture/signer-architecture.html
-  - id: bpmn
-    title: Session lifecycle (BPMN)
-    entry: visuals/bpmn/viewer.html
-    generated: true
-    build: [python3, visuals/bpmn/build.py]
 evidence: evidence/ — the build and isolation log (`run.sh`), the invariant falsification (`falsify.py`), the state machine's three-way table diff (`transitions.py`), the red team's probes re-run (`probe.sh`), the spec↔implementation cross-reference (`hash-refs.py`, printing `04-hash-refs.txt`) and the record that indexes them; never hand-edited
-visuals: visuals/ — the module rendered for a reader, not part of the module and not evidence: the architecture as a hand-written page + SVG, an explorer page for a non-programmer, and the session lifecycle as BPMN, whose five outputs are generated by `visuals/bpmn/build.py` (one command, ~25 s, no network) and are therefore not tracked — `visuals/bpmn/README.md` says what is kept and why; `visuals/webui/` is the plain-language page, a **static file** the launcher serves (its run program was dropped 2026-10-02 — the page calls no backend), and `visuals/webui/SKILL.md` is its skill file (both declared in `webui:`)
 ---
 
 # signer — who the user is, what may be signed for them, and the session that makes both true
@@ -612,9 +681,9 @@ sections above are the claim, and the claim is unproven. Two things that used to
 transition table is now one list the machine and the document share, and the contract owns its protocol nouns —
 one type remains ecosystem-bound, and it is named rather than implied (`#07df21`).
 
-**Amended 2026-10-02 — `visuals/webui/` is now a static surface, and its run program was dropped.** The five
-modules whose pages call no backend — `signer`, `nostr-io`, `event-access`, `validation`, `event-store` — had
-their `webui` `run` programs removed by the launcher/router order (§1.7): a page that calls no backend is
-served as a static file by the launcher and needs no process. The `visuals:` front-matter line above is
-corrected accordingly, and this module's `webui:` entry now declares only `entry` and `skill`. What the page
-and its `SKILL.md` show is unchanged; only the claim that a run program serves them is gone.
+**Removed 2026-10-19 — the module's `visuals/` tree, with the rest of the methodology tooling.** The
+architecture page and SVG, the BPMN session-lifecycle viewer and its build script, and the plain-language web
+UI are gone. The module is a TypeScript library export now: its spec and its conformance suite are the whole
+account of it, and no generated or vendored page is carried beside the code. The `webui:`, `visuals:` and
+`bpmn:` front-matter blocks and the note that explained them are removed with the files, rather than left
+pointing at nothing.

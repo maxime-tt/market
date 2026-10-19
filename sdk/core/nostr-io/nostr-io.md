@@ -62,11 +62,6 @@ source:
   adr: plebeian-market/market/docs/adr/ADR-0002-nostr-io-migration-ndk-to-applesauce.md
   replaced: plebeian-market/market/src/lib/nostr/io.ts (104 lines), io-applesauce.ts (196), io-ndk.ts, eventLike.ts, useSubscriptionEvents.ts at the pin 56258b55
   direction: runs/2026-09-29-reframing/order.md sections 0 to 4; platform-core/platform-core.md section 2 as re-cut 2026-09-29
-webui:
-  - id: webui
-    title: The wire seam, in plain language
-    entry: visuals/webui/index.html
-    skill: visuals/webui/SKILL.md
 ---
 
 # nostr-io — the connection, the query and the publish point, with no store behind it
@@ -408,12 +403,6 @@ citation), prints each token with the declaration text it resolves to, separates
 from a **provenance** one (the `(provenance)` marker of FANOUT R2), and lists the declarations and the files
 no statement covers. A declaration living in a file the front matter above names `test-support:` is exempt
 (FANOUT R3) and is reported as exempt rather than as a question.
-
-Two asset families under `visuals/webui/` are pinned bytes rather than prose, so no comment reaches them and
-this sentence is their accounting: `visuals/webui/README.md` (the page's own notes and file table), and the
-vendored GSAP 3.12.5 `vendor/gsap.min.js` beside its `vendor/ScrollTrigger.min.js` plugin, vendored so scroll
-motion never depends on a CDN. `visuals/webui/index.html` and `visuals/webui/SKILL.md` are named in the front
-matter above.
 
 ## Findings reported rather than repaired
 

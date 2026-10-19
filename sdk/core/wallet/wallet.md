@@ -10,7 +10,7 @@ test-support: ["ts/*.test.ts", "ts/memory.ts"]
 levels:
   objective: present
   technical-spec: present — the set record and its derivation, the conservation rule and its two directions, the acceptance gate, the watcher and the refund guard
-  implementation: present — dependency-free TypeScript in ts/, the set's owner, with the contract's types obtained from the ancestor and every wrapper injected as a port; and the interactive page under visuals/webui/ — a self-contained model of the semantics, with a console that drives the derived set state
+  implementation: present — dependency-free TypeScript in ts/, the set's owner, with the contract's types obtained from the ancestor and every wrapper injected as a port
   tests: present — the module's conformance suite, run by `cd wallet/ts && bun test`
 contract:
   entry: ts/index.ts
@@ -46,14 +46,6 @@ source:
   direction: architect-O5-wrappers-and-aggregator.md (the set the aggregator owns, and the line that would make it a host); architect-B2-acceptance-gate.md (the registration shape, the mechanical-versus-declared split and the refusal vocabulary)
   corrected: refine-gate-and-refund.md (the plan/port tie, the no-echo refusal and the refund guard); fix-money-mechanisms.md (the aggregate band and its two directions, the terminal, the deadline); refine-state-machine-and-rungs.md (the states and which terminals a rule reaches); refine-witness-trust.md (the cryptographic-versus-declared split)
   decision: the aggregator inherits core and the contract only — it names no rail — and takes the wrappers as injected ports, so it stays byte-identical when a new rail lands
-webui:
-  - id: webui
-    title: The payment state machine, laid out to be driven
-    entry: visuals/webui/index.html
-    run: [bun, run, visuals/webui/run.ts]
-    skill: visuals/webui/SKILL.md
-    port: 4329
-    ready: { kind: http, target: http://127.0.0.1:4329/ }
 evidence: evidence/ — regenerated, never hand-edited: run.sh (the gate this module passes) and hash-refs.py (the spec <-> implementation cross-reference)
 ---
 
@@ -87,11 +79,7 @@ built so that property is true of it.
 `wallet/ts/errors.ts` (the closed error surface), `wallet/ts/gate.ts` (the acceptance gate),
 `wallet/ts/aggregator.ts` (the set's owner), `wallet/ts/memory.ts` (the test-only in-memory
 set store) and `wallet/ts/aggregator.test.ts` (the conformance suite); and
-`wallet/evidence/run.sh` and `wallet/evidence/hash-refs.py`; and the interactive page under
-`wallet/visuals/webui/` — `visuals/webui/index.html` (the self-contained model), `visuals/webui/run.ts`
-(the run program that serves it on the reserved payment-surface port) and `visuals/webui/SKILL.md` (its skill
-file), all three declared in the front-matter's `webui:` block. The toolchain files
-(`ts/package.json`, `ts/tsconfig.json`, `ts/bun.lock`) are the toolchain's, not this document's. The
+`wallet/evidence/run.sh` and `wallet/evidence/hash-refs.py`. The
 in-memory store and the test file are **test support**, declared in the front-matter's `test-support:` and
 out of contract: a statement must not be fulfilled by tooling, so the store cites the set-store statement as
 its provenance, never as a behaviour.
