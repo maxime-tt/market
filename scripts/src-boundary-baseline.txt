@@ -1,0 +1,34 @@
+# Source-boundary baseline for scripts/check-src-boundary.sh.
+#
+# src/ is transitional and will be deleted. Every import edge between src/
+# and the trees replacing it is frozen here: counts may fall, never rise.
+# Measured at a93c5f2d (PR #1420 head + strip of SDK tooling).
+#
+# One line per direction and per file kind so a failure names both the
+# direction that grew and whether production or test code grew it:
+#
+#   <from> -> <to> <production|test> <import statements> <files>
+#
+# The production and test lines are kept separate on purpose: test-only
+# imports into src/ still hold src/ in place, but they move for reasons
+# unrelated to production architecture and must be visible as such.
+#
+# When a change lowers a count, lower that line in the same commit.
+
+platform -> src production 446 73
+platform -> src test 0 0
+
+ui -> src production 0 0
+ui -> src test 0 0
+
+sdk -> src production 0 0
+sdk -> src test 0 0
+
+src -> platform production 28 23
+src -> platform test 31 17
+
+src -> ui production 243 121
+src -> ui test 0 0
+
+src -> sdk production 165 121
+src -> sdk test 8 7

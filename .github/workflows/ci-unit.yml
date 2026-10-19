@@ -27,6 +27,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check source-boundary footprint
+        # Fails when any import edge between src/ and platform/, ui/ or sdk/
+        # grows past scripts/src-boundary-baseline.txt. See
+        # scripts/check-src-boundary.sh for the measured directions.
+        run: bash scripts/check-src-boundary.sh
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
