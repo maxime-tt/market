@@ -15,6 +15,11 @@ export * as signer from './signer'
 export * as nostrIo from './nostr-io'
 export * as payAggregator from './wallet'
 export * as fundsContract from './funds-contract'
+// The payment rails: each implements funds-contract's port over one authority, and their rail vocabularies
+// (leg kinds, error taxonomies, stores) do not overlap, so each is namespaced like the contract modules.
+export * as cashuWrapper from './cashu-wrapper'
+export * as nwcWrapper from './nwc-wrapper'
+export * as bolt11Wrapper from './bolt11-wrapper'
 export * as capability from './capability'
 export * from './event-store'
 export * from './profile'

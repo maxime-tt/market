@@ -9,6 +9,7 @@
         "@contextvm/sdk": "^0.11.10",
         "@formkit/auto-animate": "^0.9.0",
         "@getalby/lightning-tools": "^8.1.1",
+        "@getalby/sdk": "8.0.3",
         "@icons-pack/react-simple-icons": "^13.13.0",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@noble/hashes": "^2.2.0",
@@ -148,6 +149,8 @@
     "@formkit/auto-animate": ["@formkit/auto-animate@0.9.0", "", {}, "sha512-VhP4zEAacXS3dfTpJpJ88QdLqMTcabMg0jwpOSxZ/VzfQVfl3GkZSCZThhGC5uhq/TxPHPzW0dzr4H9Bb1OgKA=="],
 
     "@getalby/lightning-tools": ["@getalby/lightning-tools@8.1.1", "", {}, "sha512-gB+3fvTGz9bbl31JNgKMWqG4dZWgCxSB51fYn+F4tZ3x2h5oI/yHjvb6W9GBo2Zscr5gMP64gs0LlzKYoETlvQ=="],
+
+    "@getalby/sdk": ["@getalby/sdk@8.0.3", "", { "dependencies": { "@getalby/lightning-tools": "^8.1.1", "nostr-tools": "^2.23.3" } }, "sha512-vPEogAWwLHbL55COeXrRN7yRBXMDGDxX1M2A+o3Lqw60FFng6fa9FK9sw8ptdILMD1dQZq8FzPXuabQ7seoDBA=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.11", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g=="],
 
