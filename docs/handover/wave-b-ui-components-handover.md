@@ -466,15 +466,48 @@ errors on this base (all in files unrelated to the wallet). "tsc clean" here mea
 
 ## 9. Status of wave B, and what changes under you
 
-| Stage                                                                                                                   | State                           | Commit     |
-| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ---------- |
-| B1 — coco is the mint authority (the dependency inversion that has to land first)                                       | **landed**                      | `bfb09804` |
-| B2-pre — the wallet P2PK keypair + auction HD root get a local store behind an injected port                            | **landed**                      | `bb6f5ed4` |
-| B2a — upgrade coco to the renamed `@cashu/coco-core@2.0.0` (+ `@cashu/coco-indexeddb`), port `src/lib/stores/cashu.ts`  | **blocked — needs cashu-ts v5** | —          |
-| B2 — cut NIP-60: delete `src/lib/stores/nip60.ts`, re-home the wallet store onto coco, retarget every consumer and test | not started                     | —          |
-| B3 — wire the coco-backed port + the rail registry behind `sdk/core/wallet`                                             | not started                     | —          |
+| Stage                                                                                                                   | State                                  | Commit     |
+| ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ---------- |
+| B1 — coco is the mint authority (the dependency inversion that has to land first)                                       | **landed**                             | `bfb09804` |
+| B2-pre — the wallet P2PK keypair + auction HD root get a local store behind an injected port                            | **landed**                             | `bb6f5ed4` |
+| B2a — upgrade coco to the renamed `@cashu/coco-core@2.0.0` (+ `@cashu/coco-indexeddb`), port `src/lib/stores/cashu.ts`  | **blocked — see the coupling in §9.1** | —          |
+| B2-i — the deposit session moves onto coco's mint quote (`src/lib/wallet/depositQuote.ts`)                              | **landed**                             | `8638fa92` |
+| B2 — cut NIP-60: delete `src/lib/stores/nip60.ts`, re-home the wallet store onto coco, retarget every consumer and test | **in progress** (deposit half done)    | —          |
+| B3 — wire the coco-backed port + the rail registry behind `sdk/core/wallet`                                             | not started                            | —          |
 
-Test-count floor: **2578** (base 2561 + 7 from B1 + 10 from B2-pre). Your work raises it.
+Test-count floor: **2590** (base 2561 + 7 B1 + 10 B2-pre + 1 rail rename + 11 deposit slices). Your work raises it.
+
+### 9.1 The cashu-ts v5 upgrade is gated on removing `@nostr-dev-kit/wallet`, not on its type errors
+
+Decided: take the pre-release coco ships with (`@cashu/coco-core@2.0.0` +
+`@cashu/cashu-ts@5.0.0-rc.4`), since the project is not in production and cashu-ts 5 is
+expected to stabilise before it is.
+
+The vendor chain is what sets the price, and it is not the type migration:
+
+- `@nostr-dev-kit/wallet@1.0.0` declares a **peer dependency on `@cashu/cashu-ts@^2.1`**, and
+  its published `dist/index.d.ts` opens with
+  `import { CashuWallet, GetInfoResponse, MintKeys, Proof, SendResponse } from '@cashu/cashu-ts'`.
+  Those names are gone in v5 (`CashuWallet` → `Wallet`, the response types moved).
+- The package publishes **one entry point** — no subpath exports — so importing anything from
+  it (even `NDKNWCWallet`) loads that declaration file, and `skipLibCheck` is unset in this
+  repo, so the break is a hard error rather than a hidden one.
+- coco 2.0 pins cashu-ts v5 and the app's own code must match it: one cashu-ts can win. So the
+  upgrade cannot be green while `@nostr-dev-kit/wallet` is in the tree.
+
+Five files import it, and only one of them is the file B2 deletes: `src/lib/stores/nip60.ts`,
+`src/lib/stores/wallet.ts` (the **NWC store**, 7 importers — not otherwise part of the cut),
+`src/lib/wallet/proofs.ts`, `src/publish/payment.tsx`, `scripts/seed.ts`.
+
+Measured cost with the dependency bumped and the `cashu.ts` port applied: **355 tsc errors
+against the 274 baseline (+81)** — see
+`work/pr1420-runs/2026-10-19-sdk-integration/w2-0/` for the error list, the incomplete patch and
+a note correcting an earlier +89 figure (that run had 8 errors from a stale `coco-cashu-core`
+directory still on disk).
+
+Ordering that follows: finish the cut's wallet-state slices first (they are unblocked on today's
+pin), then move the NWC store and the other four off NDK's wallet, and only then the version
+bump — so the auction P2PK rails are re-homed once rather than twice.
 
 ### What B2 will do to the surface you consume
 
