@@ -143,3 +143,6 @@ export * from './components/orders/OrderDetailViews'
 export * from './components/orders/OrderInvoiceTracking'
 export * from './components/orders/OrderListView'
 export { cn } from './utils/cn'
+
+export { ThemeMigrationWrapper, applyThemeTokens, useThemeMigration, useThemePortal } from './theme/theme-migration-wrapper'
+export type { ThemeMigrationWrapperProps, ThemeTokens } from './theme/theme-migration-wrapper'

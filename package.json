@@ -23,6 +23,8 @@
 		"seed": "bun run scripts/seed.ts",
 		"startup": "bun run scripts/startup.ts",
 		"build-icons": "bun run scripts/build-icons.ts",
+		"widget-book:dev": "bun --hot widget-book/server.ts",
+		"widget-book:test": "playwright test --config=widget-book/playwright.config.ts",
 		"test:e2e": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts",
 		"test:e2e:self-hosted": "E2E_SELF_HOSTED_INSTANCE=true NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts",
 		"test:e2e:headed": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts --headed",

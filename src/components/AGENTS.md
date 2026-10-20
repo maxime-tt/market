@@ -32,7 +32,6 @@ src/components/
   nostr/           ← Nostr-domain components (users, products, auctions, profiles)
   layout/          ← Structural components (Header, Footer, Sidebar)
   dialogs/         ← Dialog compositions built on ui/dialog
-  theme-migration/ ← ThemeMigrationWrapper + scoped theme infrastructure
 ```
 
 New components must be placed in the appropriate subdirectory above. Legacy
@@ -58,7 +57,6 @@ permitted (importer → importee). All other directions are prohibited:
 | `nostr/`                         | `ui/`, `ui-wrappers/`, `shared/`, `lib/`, `hooks/`, `queries/` (read-only adapters)  |
 | `layout/`                        | `ui/`, `ui-wrappers/`, `shared/`, `nostr/`, `lib/`, `hooks/`, `queries/` (read-only) |
 | `dialogs/`                       | `ui/`, `ui-wrappers/`, `shared/`, `nostr/`, `lib/`, `hooks/`, `queries/`             |
-| `theme-migration/`               | (infrastructure only — no component imports)                                         |
 | Feature dirs (`checkout/`, etc.) | Any `components/` subdirectory                                                       |
 
 **Dependency cycles are prohibited.** If directory A imports from B, B must
@@ -101,10 +99,10 @@ host here.
     **Do not** wrap the primitive in an extra DOM element solely to attach a
     ref. This keeps the wrapper a single element. Per-subdirectory `AGENTS.md`
     files (e.g. `ui-wrappers/AGENTS.md`) restate this rule.
-  - **Canonical example:** `ThemeMigrationWrapper` in `theme-migration/` uses
+  - **Canonical example:** `ThemeMigrationWrapper` in `ui/theme/` uses
     React 19 ref-as-prop — it accepts `HTMLAttributes<HTMLDivElement>` and
-    spreads `{...props}` (including `ref`) onto its root `<div>`. No
-    `forwardRef` needed.
+    passes `ref` to its root `<div>`. No `forwardRef` needed. Theme
+    infrastructure now lives under `ui/`, not `src/components/`.
 
 ## Safe Checks
 
