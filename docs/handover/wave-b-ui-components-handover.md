@@ -509,6 +509,52 @@ Ordering that follows: finish the cut's wallet-state slices first (they are unbl
 pin), then move the NWC store and the other four off NDK's wallet, and only then the version
 bump — so the auction P2PK rails are re-homed once rather than twice.
 
+### 9.2 The remaining B2 surface, measured (2026-10-20)
+
+29 files under `src/` and `platform/` still read `nip60Store` / `nip60Actions` (excluding the store
+itself). The split matters, because the two halves have very different costs.
+
+**State reads are already mostly coco's.** They are dominated by the deposit session —
+`activeDeposit` 26, `depositStatus` 24, `depositInvoice` 9, `error` 8 — and after `8638fa92` that
+whole group _is_ coco's adapter, so the deposit UI (including `DepositLightningModal`'s four
+actions) is end-to-end coco today. Everything else is negligible: `mints` 2, `mintBalances` 2,
+`balance` 1, `defaultMint` 1.
+
+**The weight is in the actions**, and most of them already have a coco-backed implementation
+sitting in `src/lib/stores/cashu.ts`: `send`, `receive`, `melt`, `reclaimToken`,
+`removePendingToken`, `addMint`, `getMints`, `setMints`, `createMintQuote`, `redeemMintQuote`,
+`refreshBalances`, `reset`, plus the state fields `manager`, `status`, `error`, `balances`,
+`totalBalance`, `mints`, `pendingTokens`. So the remaining slices are mostly **retargeting, not
+re-implementation** — with four known semantic deltas to respect:
+
+- `sendEcash(amount, mint?)` takes the mint last and optionally (falling back to the default
+  mint); `send(mintUrl, amount)` takes it first and requires it.
+- `withdrawLightning(invoice)` has no mint argument, while `melt(mintUrl, invoice)` needs one —
+  each call site has to resolve a mint.
+- `zapWithNutzap` (NIP-61) has **no coco equivalent** in the store today; it needs a decision, not
+  a rename.
+- `createWallet` / `publishWallet` / `getWallet` are kind-17375 relay-wallet concepts. They are
+  **deleted with the relay state**, not ported — nothing replaces them.
+
+Production call sites, by file → action, as measured:
+
+| File                                                                                                                                       | Actions                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/publish/auctions.tsx`                                                                                                                 | `lockAuctionBidFunds`, `receiveLockedEcash`, `updatePendingTokenContext`, `loadAuctionMintKeysets`, `getAuctionHdChildPrivkey`                                                                        |
+| `src/feature/wallet/components/Nip60Wallet.tsx`                                                                                            | `addMint`, `removeMint`, `setDefaultMint`, `refresh`, `reclaimToken`, `removePendingToken`, `createWallet`, `getWallet`, `publishWallet`, `initialize`, `mintTestEcash`, `placeDevBidOnSeededAuction` |
+| `src/hooks/useAuctionBidFunding.ts`, `…/dashboard/products/bids.tsx`                                                                       | `reclaimToken`, `refresh`                                                                                                                                                                             |
+| `src/lib/sdkAdapters.ts`                                                                                                                   | `payLightningInvoice`, `receiveEcash`, `reclaimToken`                                                                                                                                                 |
+| the four settlement consumers (`src/components/AuctionSettlement.tsx`, `AuctionWonModal.tsx`, `platform/web/…/auctions.$auctionId.tsx` ×2) | `settleAuctionAsWinner`                                                                                                                                                                               |
+| `SendEcashModal` / `ReceiveEcashModal` / `WithdrawLightningModal`                                                                          | `sendEcash` / `receiveEcash` / `withdrawLightning` (one call site each)                                                                                                                               |
+| `ZapDialog.tsx`                                                                                                                            | `zapWithNutzap`                                                                                                                                                                                       |
+| `src/lib/stores/ndk.ts`                                                                                                                    | `initialize`, `reset`                                                                                                                                                                                 |
+
+Proposed order, cheapest-and-safest first: (1) the three wallet-op modals, (2) the mint surface,
+(3) settlement for the four `settleAuctionAsWinner` consumers, (4) reclaim + pending tokens,
+(5) the auction lock/receive rails **last**, since those are the ones that gain coco's native P2PK
+after the version bump — then delete `nip60.ts` and retarget the residue (`src/lib/wallet/nip60.test.ts`
+becomes the wallet suite).
+
 ### What B2 will do to the surface you consume
 
 - `src/lib/stores/nip60.ts` (2,993 lines, kind-17375/7375/7376 relay wallet state) is
