@@ -2,6 +2,7 @@ import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
 import { publishShareProductNote } from '@/publish/shareNotes'
 import { Media } from '@ui/components/Media'
 import { DashboardListItem } from '@ui/components/DashboardListItem'
+import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { Button } from '@ui/primitives/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { authStore } from '@/lib/stores/auth'
@@ -129,6 +130,7 @@ function ProductsOverviewComponent() {
 	const [orderBy, setOrderBy] = useState<string>('newest')
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 	const [productToShare, setProductToShare] = useState<NDKEvent | null>(null)
+	const [pendingDeleteProduct, setPendingDeleteProduct] = useState<NDKEvent | null>(null)
 	useDashboardTitle('Products')
 
 	useEffect(() => {
@@ -218,13 +220,8 @@ function ProductsOverviewComponent() {
 		setShareDialogOpen(true)
 	}
 
-	const handleDeleteProductClick = async (product: NDKEvent) => {
-		if (confirm(`Are you sure you want to delete "${getProductTitle(product)}"?`)) {
-			const productDTag = getProductId(product)
-			if (productDTag) {
-				deleteMutation.mutate(productDTag)
-			}
-		}
+	const handleDeleteProductClick = (product: NDKEvent) => {
+		setPendingDeleteProduct(product)
 	}
 
 	if (!isAuthenticated || !user) {
@@ -338,6 +335,26 @@ function ProductsOverviewComponent() {
 					onPost={publishShareProductNote}
 				/>
 			)}
+
+			<ConfirmDialog
+				open={pendingDeleteProduct !== null}
+				onOpenChange={(open) => {
+					if (!open && !deleteMutation.isPending) setPendingDeleteProduct(null)
+				}}
+				title="Delete product?"
+				description={pendingDeleteProduct ? `Are you sure you want to delete "${getProductTitle(pendingDeleteProduct)}"?` : undefined}
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={() => {
+					if (pendingDeleteProduct) {
+						const productDTag = getProductId(pendingDeleteProduct)
+						if (productDTag) {
+							deleteMutation.mutate(productDTag)
+						}
+					}
+				}}
+			/>
 		</div>
 	)
 }

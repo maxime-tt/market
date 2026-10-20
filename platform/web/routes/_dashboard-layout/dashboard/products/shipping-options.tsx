@@ -42,6 +42,7 @@ import {
 	ShippingOptionsMobileToolbar,
 	ShippingOptionsToolbar,
 } from '@ui/components/ShippingOptionsViews'
+import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { Checkbox } from '@ui/primitives/checkbox'
 import { AlertCircleIcon, ChevronLeftIcon, DownloadIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -74,6 +75,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	const { getUser } = useNDK()
 	const [user, setUser] = useState<any>(null)
 	const [isSubmitting, setIsSubmitting] = useState(false)
+	const [confirmOpen, setConfirmOpen] = useState(false)
 	const [isOptionalDetailsOpen, setIsOptionalDetailsOpen] = useState(false)
 	const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 	const [isWorldwide, setIsWorldwide] = useState(() => {
@@ -1098,7 +1100,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 						</Button>
 
 						{isEditing && (
-							<Button type="button" variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
+							<Button type="button" variant="destructive" onClick={() => setConfirmOpen(true)} disabled={isSubmitting}>
 								<TrashIcon className="w-4 h-4" />
 							</Button>
 						)}
@@ -1110,6 +1112,17 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 					</div>
 				</form>
 			</div>
+
+			<ConfirmDialog
+				open={confirmOpen}
+				onOpenChange={setConfirmOpen}
+				title="Delete shipping option?"
+				description={shippingOption ? `Are you sure you want to delete "${getShippingTitle(shippingOption)}"?` : undefined}
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={handleDelete}
+			/>
 		</DashboardListItem>
 	)
 }

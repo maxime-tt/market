@@ -1,5 +1,6 @@
 import { Button } from '@ui/primitives/button'
 import { Media } from '@ui/components/Media'
+import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { authStore } from '@/lib/stores/auth'
@@ -93,6 +94,7 @@ function CollectionsComponent() {
 	const matchRoute = useMatchRoute()
 	const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
 	const [orderBy, setOrderBy] = useState<string>('newest')
+	const [pendingDeleteCollection, setPendingDeleteCollection] = useState<NDKEvent | null>(null)
 	useDashboardTitle('Collections')
 
 	// Auto-animate for smooth list transitions
@@ -156,13 +158,8 @@ function CollectionsComponent() {
 		setExpandedCollection(expandedCollection === collectionId ? null : collectionId)
 	}
 
-	const handleDeleteCollectionClick = async (collection: any) => {
-		if (confirm(`Are you sure you want to delete "${getCollectionTitle(collection)}"?`)) {
-			const collectionDTag = getCollectionId(collection)
-			if (collectionDTag) {
-				deleteMutation.mutate(collectionDTag)
-			}
-		}
+	const handleDeleteCollectionClick = (collection: NDKEvent) => {
+		setPendingDeleteCollection(collection)
 	}
 
 	if (!isAuthenticated || !user) {
@@ -266,6 +263,28 @@ function CollectionsComponent() {
 					)}
 				</div>
 			</div>
+
+			<ConfirmDialog
+				open={pendingDeleteCollection !== null}
+				onOpenChange={(open) => {
+					if (!open && !deleteMutation.isPending) setPendingDeleteCollection(null)
+				}}
+				title="Delete collection?"
+				description={
+					pendingDeleteCollection ? `Are you sure you want to delete "${getCollectionTitle(pendingDeleteCollection)}"?` : undefined
+				}
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={() => {
+					if (pendingDeleteCollection) {
+						const collectionDTag = getCollectionId(pendingDeleteCollection)
+						if (collectionDTag) {
+							deleteMutation.mutate(collectionDTag)
+						}
+					}
+				}}
+			/>
 		</div>
 	)
 }

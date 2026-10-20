@@ -1,5 +1,6 @@
 import { DashboardListItem } from '@ui/components/DashboardListItem'
 import { ProfileWalletCheck } from '@/components/ProfileWalletCheck'
+import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { Button } from '@ui/primitives/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@ui/primitives/card'
 import { Checkbox } from '@ui/primitives/checkbox'
@@ -276,6 +277,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	const [formState, setFormState] = useState<FormState>('idle')
 	const [validationMessage, setValidationMessage] = useState('')
 	const [showConfirmation, setShowConfirmation] = useState(false)
+	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 	const [tempValidatedValue, setTempValidatedValue] = useState('')
 	const [confirmationType, setConfirmationType] = useState<OnChainConfirmationType>('single_address')
 
@@ -708,7 +710,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 								<Button
 									type="button"
 									variant="destructive"
-									onClick={handleDelete}
+									onClick={() => setDeleteConfirmOpen(true)}
 									disabled={formState !== 'idle'}
 									data-testid="delete-payment-button"
 								>
@@ -724,6 +726,17 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 					</div>
 				</form>
 			)}
+
+			<ConfirmDialog
+				open={deleteConfirmOpen}
+				onOpenChange={setDeleteConfirmOpen}
+				title="Delete payment detail?"
+				description="This permanently removes this saved payment detail."
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={handleDelete}
+			/>
 		</div>
 	)
 }
@@ -738,6 +751,7 @@ interface PaymentDetailListItemProps {
 
 function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting, onSuccess }: PaymentDetailListItemProps) {
 	const deleteMutation = useDeletePaymentDetail()
+	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
 	const handleDelete = () => {
 		if (paymentDetail && paymentDetail.dTag) {
@@ -782,7 +796,7 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 			size="icon"
 			onClick={(e) => {
 				e.stopPropagation()
-				handleDelete()
+				setDeleteConfirmOpen(true)
 			}}
 			className="h-8 w-8 text-destructive hover:bg-destructive/10"
 			aria-label="Delete payment detail"
@@ -793,16 +807,29 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 	)
 
 	return (
-		<DashboardListItem
-			isOpen={isOpen}
-			onOpenChange={onOpenChange}
-			triggerContent={triggerContent}
-			actions={actions}
-			isDeleting={deleteMutation.isPending}
-			icon={<PaymentMethodIcon method={paymentDetail.paymentMethod} />}
-		>
-			<PaymentDetailForm paymentDetail={paymentDetail} isOpen={isOpen} onOpenChange={onOpenChange} onSuccess={onSuccess} />
-		</DashboardListItem>
+		<>
+			<DashboardListItem
+				isOpen={isOpen}
+				onOpenChange={onOpenChange}
+				triggerContent={triggerContent}
+				actions={actions}
+				isDeleting={deleteMutation.isPending}
+				icon={<PaymentMethodIcon method={paymentDetail.paymentMethod} />}
+			>
+				<PaymentDetailForm paymentDetail={paymentDetail} isOpen={isOpen} onOpenChange={onOpenChange} onSuccess={onSuccess} />
+			</DashboardListItem>
+
+			<ConfirmDialog
+				open={deleteConfirmOpen}
+				onOpenChange={setDeleteConfirmOpen}
+				title="Delete payment detail?"
+				description="This permanently removes this saved payment detail."
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={handleDelete}
+			/>
+		</>
 	)
 }
 
