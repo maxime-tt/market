@@ -108,7 +108,7 @@ component exists, use it:
 | Destructive confirmation                        | `shared/confirm-dialog` (never `window.confirm`)                    |
 | Notice / banner (info, warning, error, success) | `shared/notice`                                                     |
 | Status chip                                     | `shared/status-badge` (status → variant map)                        |
-| Label/value row                                 | `primitives/detail-field`                                           |
+| Label/value row                                 | `shared/detail-field`                                               |
 | Entity list item                                | `shared/entity-list-item`                                           |
 | Copy to clipboard                               | `shared/copy-button` / `shared/use-copy-to-clipboard`               |
 | Invoice + QR                                    | `shared/invoice-card`                                               |
