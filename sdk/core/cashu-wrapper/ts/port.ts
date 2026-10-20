@@ -641,6 +641,14 @@ export class CocoWalletPortAdapter<TEngine extends CocoOperationPort = CocoOpera
 	 * `#7a7f2d` submit — the step that crosses the monetary boundary. It refuses a cancelled command before
 	 * anything is spent, drives the host's boundary step, and then performs the melt itself: the
 	 * irreversible call is the adapter's, so the cancelled guard is what keeps it from being reached.
+	 *
+	 * `#f4028b` / `#417d51` — the boundary is crossed AT MOST ONCE per leg, and the leg's own `progress` is
+	 * the durable record of it: `attempted` is the reference obtained before the boundary, `submitted` is
+	 * the boundary taken (`#6f9f08`). The marker is written BEFORE the irreversible call, so a melt that
+	 * threw after the mint had already been asked — or a crash between the call and its answer — leaves the
+	 * leg `submitted` rather than `attempted`. A retry then reports the state the leg holds and leaves the
+	 * reading to `reconcile` (`#badc9a`), which never melts: asking the mint a second time for a leg that
+	 * already crossed is the double spend this refuses.
 	 */
 	async submit(quote: FundsQuote, reference: string): Promise<FundsHandle> {
 		const record = await this.requireLeg(reference)
@@ -648,6 +656,8 @@ export class CocoWalletPortAdapter<TEngine extends CocoOperationPort = CocoOpera
 			throw new CocoPortAdapterError('coco_leg_unknown', 'submit: the quote names a different leg than the reference')
 		}
 		if (record.rung === 'witnessed-settled') return handleFor(record)
+		// The leg has already crossed the melt boundary: a retry reports what it holds, never melts again.
+		if (record.progress === 'submitted') return handleFor(record)
 		const host = this.requireHost()
 		const snapshot = await host.get(record.commandId)
 		if (!snapshot) {
@@ -666,14 +676,18 @@ export class CocoWalletPortAdapter<TEngine extends CocoOperationPort = CocoOpera
 		// The host operation: cross the boundary. The command is already claimed, so this only records it.
 		await host.run(walletCommandFromSnapshot(snapshot), { through: BOUNDARY_STEP })
 
+		// Write the crossing down BEFORE the irreversible call: from here on the leg is `submitted`, so a
+		// retry that finds it that way reads the state and reconciles instead of asking the mint again.
+		const crossed = await this.writeLeg(record, { ...stateOf(record), progress: 'submitted' })
+
 		// THE IRREVERSIBLE STEP. The durable reference (the engine's operation) already exists from `obtain`.
 		let result: CocoMeltResult
 		try {
 			result = await this.options.rail.melt({ quoteId: record.meltQuoteId, invoice: record.invoice })
 		} catch {
-			return handleFor(record)
+			return handleFor(crossed)
 		}
-		return handleFor(await this.writeLeg(record, this.judgeMelt(record, result)))
+		return handleFor(await this.writeLeg(crossed, this.judgeMelt(crossed, result)))
 	}
 
 	/**

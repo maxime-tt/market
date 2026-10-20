@@ -123,6 +123,8 @@ class FakeMeltRail implements CocoMeltRail {
 	meltResult: CocoMeltResult = { quoteId: 'quote-1', engineOperationId: 'leg-1', state: 'paid' }
 	readQuoteResult: CocoMeltQuote | null = null
 	preimageValid = true
+	/** A call that fails AFTER the mint was already asked — the retry hazard the suite below locks. */
+	meltThrows = false
 
 	async quote(): Promise<CocoMeltQuote> {
 		this.calls.push('quote')
@@ -131,6 +133,7 @@ class FakeMeltRail implements CocoMeltRail {
 
 	async melt(): Promise<CocoMeltResult> {
 		this.calls.push('melt')
+		if (this.meltThrows) throw new Error('the mint was asked and the call failed')
 		return { ...this.meltResult }
 	}
 
@@ -359,6 +362,53 @@ describe('the port is carried onto the host lifecycle', () => {
 		expect(first.rung).toBe('witnessed-settled')
 		expect(second.rung).toBe('witnessed-settled')
 		expect(rail.calls.filter((call) => call === 'melt')).toHaveLength(1)
+	})
+
+	test('a retry after a first melt that did not settle never melts a second time', async () => {
+		const { port, store, rail } = setup()
+		// the mint answers "not settled": no preimage and not paid
+		rail.meltResult = { quoteId: 'quote-1', engineOperationId: 'leg-1', state: 'pending' }
+		const quote = await obtainQuote(port, command())
+
+		const first = await port.submit(quote, 'leg-1')
+		const second = await port.submit(quote, 'leg-1')
+
+		expect(first.rung).toBe('unresolved')
+		expect(second.rung).toBe('unresolved')
+		// the leg crossed the boundary once: the retry reports the state it holds, it does not ask again
+		expect(rail.calls.filter((call) => call === 'melt')).toHaveLength(1)
+		expect((await store.get({ wrapperId: WRAPPER_ID, legId: 'leg-1' }))?.progress).toBe('submitted')
+	})
+
+	test('a retry after a first melt that threw after the mint was asked never melts a second time', async () => {
+		const { port, store, rail } = setup()
+		rail.meltThrows = true
+		const quote = await obtainQuote(port, command())
+
+		const first = await port.submit(quote, 'leg-1')
+		const second = await port.submit(quote, 'leg-1')
+
+		// the crossing is written BEFORE the call, so a call that failed after asking the mint still
+		// leaves the leg `submitted` and the retry reads that instead of re-melting
+		expect(first.progress).toBe('submitted')
+		expect(first.rung).toBe('unresolved')
+		expect(second.rung).toBe('unresolved')
+		expect(rail.calls.filter((call) => call === 'melt')).toHaveLength(1)
+		expect((await store.get({ wrapperId: WRAPPER_ID, legId: 'leg-1' }))?.progress).toBe('submitted')
+	})
+
+	test('the leg a retry leaves behind is read by the reconcile, which never melts', async () => {
+		const { port, rail } = setup()
+		rail.meltResult = { quoteId: 'quote-1', engineOperationId: 'leg-1', state: 'pending' }
+		const quote = await obtainQuote(port, command())
+		await port.submit(quote, 'leg-1')
+		await port.submit(quote, 'leg-1')
+		rail.calls.length = 0
+
+		const handle = await port.reconcile(quote.reference)
+
+		expect(rail.calls).not.toContain('melt')
+		expect(handle.rung).toBe('unresolved')
 	})
 })
 
