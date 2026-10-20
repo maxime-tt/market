@@ -469,11 +469,12 @@ errors on this base (all in files unrelated to the wallet). "tsc clean" here mea
 | Stage                                                                                                                   | State                           | Commit     |
 | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ---------- |
 | B1 — coco is the mint authority (the dependency inversion that has to land first)                                       | **landed**                      | `bfb09804` |
+| B2-pre — the wallet P2PK keypair + auction HD root get a local store behind an injected port                            | **landed**                      | `bb6f5ed4` |
 | B2a — upgrade coco to the renamed `@cashu/coco-core@2.0.0` (+ `@cashu/coco-indexeddb`), port `src/lib/stores/cashu.ts`  | **blocked — needs cashu-ts v5** | —          |
 | B2 — cut NIP-60: delete `src/lib/stores/nip60.ts`, re-home the wallet store onto coco, retarget every consumer and test | not started                     | —          |
 | B3 — wire the coco-backed port + the rail registry behind `sdk/core/wallet`                                             | not started                     | —          |
 
-Test-count floor: **2568** (base 2561 + 7 from B1). Your work raises it.
+Test-count floor: **2578** (base 2561 + 7 from B1 + 10 from B2-pre). Your work raises it.
 
 ### What B2 will do to the surface you consume
 
@@ -520,6 +521,11 @@ Test-count floor: **2568** (base 2561 + 7 from B1). Your work raises it.
    would change the auction HD root and strand in-flight auctions' locked funds.
    B2 needs an explicit local key store (plus a documented one-time migration, which
    is the residue `grep -rn nip60 src/` is allowed to find).
+   **The seam now exists** (`src/lib/wallet/walletKeys.ts`, `bb6f5ed4`): the material, a
+   correspondence check that refuses a pair whose halves disagree, the child derivation with
+   the expected-pubkey guard, and the store as an injected port. What is still open is the
+   **medium and its protection** — a plaintext `localStorage` copy of the private half is not
+   acceptable — so the adapter and the one-time read of the existing event land with the cut.
 3. **Deposit engine swap.** `NDKCashuDeposit` becomes a coco mint quote plus a polling
    adapter that keeps the same `on('success'|'error')` / `check()` shape, so the
    deposit-identity contract (`activeDeposit` identity, `preserveRecovery`) and its
@@ -530,6 +536,9 @@ Test-count floor: **2568** (base 2561 + 7 from B1). Your work raises it.
 
 ## 10. Amendments to this document
 
+- **B2-pre landed (`bb6f5ed4`).** §9 only: the stage table gains B2-pre and the floor moves to
+  2578; blocker 2 records that the key seam exists while the _medium_ remains open. No §5 props
+  contract changed.
 - **B2a measured and blocked; the P2PK blocker corrected.** §3 (engine named and versioned), §4
   (import path), §9 (stage table gains B2a — now _blocked_ — and blocker 1 rewritten). The
   withdrawn claim was that coco cannot send to a P2PK output — that holds only for the pinned
