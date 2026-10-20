@@ -19,10 +19,10 @@ export interface NoticeProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title
 }
 
 const TONE_CLASS: Record<NoticeTone, string> = {
-	info: 'bg-info-muted border-info-border text-info-foreground',
-	warning: 'bg-warning-muted border-warning-border text-warning-foreground',
-	error: 'bg-error-muted border-error-border text-error-foreground',
-	success: 'bg-success-muted border-success-border text-success-foreground',
+	info: 'bg-info-muted border-info-border text-info-muted-foreground',
+	warning: 'bg-warning-muted border-warning-border text-warning-muted-foreground',
+	error: 'bg-error-muted border-error-border text-error-muted-foreground',
+	success: 'bg-success-muted border-success-border text-success-muted-foreground',
 }
 
 /** Inline banner for info, warning, error, and success messaging. */

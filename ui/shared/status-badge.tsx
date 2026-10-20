@@ -17,10 +17,10 @@ export interface StatusBadgeProps {
 
 const TONE_CLASS: Record<StatusTone, string> = {
 	neutral: 'bg-muted text-muted-foreground border-border',
-	info: 'bg-info-muted text-info-foreground border-info-border',
-	warning: 'bg-warning-muted text-warning-foreground border-warning-border',
-	error: 'bg-error-muted text-error-foreground border-error-border',
-	success: 'bg-success-muted text-success-foreground border-success-border',
+	info: 'bg-info-muted text-info-muted-foreground border-info-border',
+	warning: 'bg-warning-muted text-warning-muted-foreground border-warning-border',
+	error: 'bg-error-muted text-error-muted-foreground border-error-border',
+	success: 'bg-success-muted text-success-muted-foreground border-success-border',
 }
 
 /** Generic status chip; domain code maps status → tone and passes the label. */

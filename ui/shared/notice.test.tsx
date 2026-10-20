@@ -11,7 +11,7 @@ describe('Notice', () => {
 		expect(markup).toContain('role="status"')
 		expect(markup).toContain('bg-info-muted')
 		expect(markup).toContain('border-info-border')
-		expect(markup).toContain('text-info-foreground')
+		expect(markup).toContain('text-info-muted-foreground')
 		expect(markup).toContain('Heads up')
 	})
 
@@ -20,14 +20,14 @@ describe('Notice', () => {
 		expect(warning).toContain('role="alert"')
 		expect(warning).toContain('bg-warning-muted')
 		expect(warning).toContain('border-warning-border')
-		expect(warning).toContain('text-warning-foreground')
+		expect(warning).toContain('text-warning-muted-foreground')
 		expect(warning).toContain('font-medium')
 
 		const error = renderToStaticMarkup(createElement(Notice, { tone: 'error' }, 'The invoice expired'))
 		expect(error).toContain('role="alert"')
 		expect(error).toContain('bg-error-muted')
 		expect(error).toContain('border-error-border')
-		expect(error).toContain('text-error-foreground')
+		expect(error).toContain('text-error-muted-foreground')
 	})
 
 	test('renders the success tone with a status role', () => {
@@ -36,7 +36,7 @@ describe('Notice', () => {
 		expect(markup).toContain('role="status"')
 		expect(markup).toContain('bg-success-muted')
 		expect(markup).toContain('border-success-border')
-		expect(markup).toContain('text-success-foreground')
+		expect(markup).toContain('text-success-muted-foreground')
 	})
 
 	test('renders a trailing action and dismiss control only when provided', () => {
