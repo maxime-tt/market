@@ -40,6 +40,27 @@ Consequences, stated plainly:
 - If a component needs app state that cannot be expressed as props, the
   abstraction is wrong — add the prop or move the wiring up, do not import it.
 
+## Declared boundary duplicates (`#b22838`)
+
+The method allows a duplicate that must exist across a spec/trust boundary
+**only when the shared parent spec declares it with its reason**. Two are
+declared here:
+
+1. **`cn()`** — byte-identical in `ui/utils/cn.ts` and `src/lib/utils.ts`.
+   Declared because `ui/boundary.test.ts` forbids `@/…`, so `ui/` cannot import
+   the legacy copy. This is one spec realised twice across a trust boundary,
+   not the same language maintained twice by choice. Do not merge; do not
+   "fix" it by importing `@/lib/utils`.
+2. **`src/components/*` host → `ui/components/*View` split** — the legacy host
+   wires stores/queries and passes props into the presentational view. Declared
+   by ADR-0007 §1b/§2a (the legacy host is progressively retired). Not
+   duplication.
+
+**Not declared, and therefore a finding to resolve rather than keep:**
+`ui/components/Media.tsx` vs `ui/provider/UiProvider.tsx` `UiImage` — one spec
+implemented twice inside the same module. Resolve by making `Media` consume the
+provider image seam.
+
 ## Directory structure
 
 ```
@@ -61,6 +82,17 @@ New components go in the narrowest directory that fits. Domain-agnostic
 building blocks belong in `shared/`; Nostr-specific presentational components
 in `nostr/`; page-section compositions in the matching feature directory.
 
+`ui/components/` is **transitional**: it is the pre-contract pool (77 files)
+and drains into the taxonomy above slice by slice. New and migrated components
+must not be added there.
+
+## Import convention
+
+Canonical internal path is `@ui/{directory}/{component}` (or a relative import
+inside `ui/`). `ui/index.ts` is an outward-facing aggregate for consumers
+outside `ui/` (widget-book, future clients) — it is **not** a required internal
+import path, and adding a component does not require touching it.
+
 ## Component classes and the props contract
 
 Classify every component before writing it:
@@ -76,7 +108,9 @@ Classify every component before writing it:
 ### Required for every new or migrated component (ADR-0007 §1c)
 
 1. **`className` + `cn()`** — accept `className?: string`, merge with internal
-   classes through `cn()` from `@/lib/utils` (re-exported locally if needed).
+   classes through `cn()` from `ui/utils/cn.ts` (import it relatively as
+   `../utils/cn`, or as `@ui/utils/cn`). Never import `@/lib/utils` from `ui/`;
+   the two copies are a declared boundary duplicate (see above).
 2. **Ref exposure** — prefer React 19 ref-as-prop; use `forwardRef` only where
    a dependency requires it. Expose `ref` on the root element.
 3. **Callbacks for actions** — `onX` props. Never call stores, queries, or
@@ -113,6 +147,12 @@ component exists, use it:
 | Copy to clipboard                               | `shared/copy-button` / `shared/use-copy-to-clipboard`               |
 | Invoice + QR                                    | `shared/invoice-card`                                               |
 | Dialog shell (header/footer)                    | `shared/dialog-shell`                                               |
+
+**Kit status (2026-10-20).** Present: `empty-state`, `error-state`,
+`loading-state`, `confirm-dialog`, `notice`, `status-badge`, `detail-field`,
+`entity-list-item`. Absent (Wave 2): `copy-button` / `use-copy-to-clipboard`,
+`invoice-card`, `dialog-shell`. Do not add a second ad-hoc implementation of an
+absent component — extend the nearest existing atom and record the gap.
 
 **Escalation rule.** The same concern may vary only by escalation level:
 modal/dialog for high importance, in-page banner for medium, toast for low.
@@ -172,3 +212,16 @@ Components currently under `ui/components/` were written before this contract
 and are being migrated slice by slice (ADR-0007 §2a: Keep / Modify / Extract /
 Replace). Do not rewrite unrelated components while making a change; apply the
 contract to the component you touch and record the rest in the slice notes.
+
+## Method accounting (`method/`)
+
+`method/checks/check.py` reports `ui/`, `platform/web/`, and `src/components/`
+as non-modules (they have `AGENTS.md`, not the `<module>.md` the routine looks
+for). This is a **declared opt-out**, not silence (`#11d72f`): the method is
+carried in-tree as a declared divergence (`#51692c`), and its `modularization`
+accounting level is advisory here during the UI migration. These trees are
+governed by this contract instead.
+
+**Exit criterion:** when the migration completes, either add `<module>.md`
+front-matter for the settled trees or record a permanent opt-out with its
+reason, per `#11d72f`.
