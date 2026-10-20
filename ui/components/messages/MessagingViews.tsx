@@ -1,9 +1,12 @@
 import { useState, type ReactNode } from 'react'
-import { Loader2, MessageSquareText, Send } from 'lucide-react'
+import { MessageSquareText, Send } from 'lucide-react'
 import { Button } from '../../primitives/button'
 import { Card } from '../../primitives/card'
 import { Textarea } from '../../primitives/textarea'
 import { UiLink } from '../../provider/UiProvider'
+import { EmptyState } from '../../shared/empty-state'
+import { ErrorState } from '../../shared/error-state'
+import { LoadingState } from '../../shared/loading-state'
 
 export interface MessageInputViewProps {
 	onSendMessage: (content: string) => Promise<void>
@@ -132,24 +135,10 @@ export function ConversationViewLayout({
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-				{isLoading && (
-					<div className="flex justify-center items-center h-full">
-						<Loader2 className="w-8 h-8 animate-spin text-primary" />
-						<p className="ml-2">Loading messages...</p>
-					</div>
-				)}
-				{errorMessage !== null && (
-					<div className="text-center text-destructive">
-						<p>Error loading messages: {errorMessage}</p>
-						<Button onClick={onRetry} className="mt-2">
-							Try Again
-						</Button>
-					</div>
-				)}
+				{isLoading && <LoadingState label="Loading messages..." className="h-full" />}
+				{errorMessage !== null && <ErrorState title={`Error loading messages: ${errorMessage}`} onRetry={onRetry} retryLabel="Try Again" />}
 				{!isLoading && errorMessage === null && isEmpty && (
-					<div className="text-center text-muted-foreground pt-10">
-						<p>No messages yet. Start the conversation!</p>
-					</div>
+					<EmptyState title="No messages yet. Start the conversation!" className="pt-10" />
 				)}
 				{!isLoading && errorMessage === null && messages}
 				<div ref={endRef} />

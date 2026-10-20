@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { atoms } from './libraries/atoms'
+import { shared } from './libraries/shared'
 
 export interface WidgetEntry {
 	/** Display name; also used as the `data-widget` attribute for tests. */
@@ -22,7 +23,7 @@ export interface WidgetLibrary {
  * per component variant/state worth reviewing or asserting. Libraries must only
  * import `ui/` (and `sdk/` types) — never `platform/` or `src/`.
  */
-export const libraries: WidgetLibrary[] = [atoms]
+export const libraries: WidgetLibrary[] = [atoms, shared]
 
 /**
  * Resolves the `LIBRARY` selection. `*` (or undefined) means every library.

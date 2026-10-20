@@ -3,6 +3,7 @@ import type { ComponentType, ReactNode, SVGProps } from 'react'
 import { Button } from '../primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../primitives/card'
 import { Label } from '../primitives/label'
+import { EmptyState } from '../shared/empty-state'
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>
 
@@ -144,10 +145,7 @@ export function TeamRoleSection({ role, members }: TeamRoleSectionProps) {
 			</CardHeader>
 			<CardContent className="space-y-4">
 				{members.length === 0 ? (
-					<div className="py-8 text-center text-gray-500">
-						<EmptyIcon className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-						<p>{copy.empty}</p>
-					</div>
+					<EmptyState icon={<EmptyIcon />} title={copy.empty} />
 				) : (
 					<div className="space-y-3">
 						{members.map((member) => (

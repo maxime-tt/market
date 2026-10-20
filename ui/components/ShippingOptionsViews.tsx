@@ -4,6 +4,7 @@ import { Card, CardContent } from '../primitives/card'
 import { Label } from '../primitives/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../primitives/select'
 import { Spinner } from '../primitives/spinner'
+import { EmptyState } from '../shared/empty-state'
 
 export interface ShippingServiceOption {
 	value: string
@@ -118,13 +119,15 @@ export function ShippingOptionsEmptyState({
 	const serviceLabel = serviceTypes.find((service) => service.value === serviceFilter)?.label.toLowerCase()
 	return (
 		<Card>
-			<CardContent className="flex flex-col items-center justify-center py-10">
-				<TruckIcon className="mb-4 h-16 w-16 text-muted-foreground" />
-				<p className="mb-4 text-center text-muted-foreground">
-					{serviceFilter === 'all'
-						? 'No shipping options configured yet. Add a shipping option to start offering delivery to your customers.'
-						: `No ${serviceLabel} shipping options found.`}
-				</p>
+			<CardContent className="py-10">
+				<EmptyState
+					icon={<TruckIcon />}
+					title={
+						serviceFilter === 'all'
+							? 'No shipping options configured yet. Add a shipping option to start offering delivery to your customers.'
+							: `No ${serviceLabel} shipping options found.`
+					}
+				/>
 			</CardContent>
 		</Card>
 	)

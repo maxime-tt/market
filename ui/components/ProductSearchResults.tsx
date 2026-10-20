@@ -1,6 +1,8 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { getProductId, getProductImages, getProductPubkey, getProductTitle, type ProductReadEvent } from '@sdk/commerce/discovery'
 import { UiImage } from '../provider/UiProvider'
+import { EmptyState } from '../shared/empty-state'
+import { LoadingState } from '../shared/loading-state'
 import { cn } from '../utils/cn'
 
 export type ProductSearchResultEvent = ProductReadEvent & { id: string }
@@ -31,9 +33,11 @@ export function ProductSearchResults<TProduct extends ProductSearchResultEvent =
 	return (
 		<div className={cn('flex w-full flex-col gap-2 rounded-lg bg-[#1c1c1c] p-2 shadow-lg', className)} {...props}>
 			{products.length === 0 ? (
-				<div className="p-4 text-center text-white" role="status" aria-live="polite">
-					{isLoading ? 'Searching...' : 'No products found'}
-				</div>
+				isLoading ? (
+					<LoadingState compact label="Searching..." className="p-4 text-white" />
+				) : (
+					<EmptyState compact title="No products found" className="p-4 text-white" role="status" aria-live="polite" />
+				)
 			) : (
 				<ul className="max-h-[320px] divide-y divide-white/10 overflow-y-auto" aria-label="Product search results">
 					{products.map((product) => {

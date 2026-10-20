@@ -4,6 +4,7 @@ import { Card } from '../../primitives/card'
 import { Input } from '../../primitives/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../primitives/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../primitives/tooltip'
+import { EmptyState } from '../../shared/empty-state'
 
 export interface OrderListCell {
 	id: string
@@ -161,7 +162,7 @@ export function OrderListView({ heading, search, orderBy, statusFilter, isCompac
 					</div>
 				) : (
 					<div className="px-4 xl:px-6">
-						<Card className="rounded-md border p-6 text-center mt-4">{emptyMessage}</Card>
+						<EmptyState title={emptyMessage} className="mt-4 rounded-md border bg-card p-6" />
 					</div>
 				)}
 			</div>
