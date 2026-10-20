@@ -5,22 +5,30 @@
  * Invariants under test:
  *  1. `cancelDeposit({ preserveRecovery: true })` keeps the deposit/quote
  *     identity so `checkDepositNow()` / `retryDepositConfirmation()` can
- *     still reconcile the SAME Lightning payment without creating a new
- *     funding session.
+ *     still reconcile the SAME mint quote without creating a new funding
+ *     session.
  *  2. Default `cancelDeposit()` still fully clears the session
  *     (backward compatibility).
  *  3. The `success`/`error` listeners `startDeposit` attaches are
  *     identity-guarded: a late event from deposit #1 must not corrupt
  *     deposit #2's status.
  *
- * The tests drive the real store actions with an in-memory wallet mock —
- * zero external network calls (ADR-0005). The mock invoice is a
- * checksum-valid bolt11 string for 2000 sats (taken from
- * light-bolt11-decoder's own fixtures) so `startDeposit`'s real invoice
- * validation path (`extractInvoiceAmountSats` +
- * `validateAuctionDepositInvoiceQuote`) executes as in production.
+ * The deposit engine is coco's mint quote (`@/lib/wallet/depositQuote`), so the stimulus is
+ * coco's own event bus rather than a stand-in deposit object: a quote is marked paid (coco's
+ * processor then issues it when the check nudges it), issued outright, or left unpaid so the
+ * check's window closes. "The same quote" is asserted **by quote id** — which is what
+ * `preserveRecovery` actually protects: a fresh funding session would show up as a second
+ * `createMintQuote` call and a different id.
+ *
+ * The tests drive the real store actions with an in-memory wallet mock and an in-memory coco —
+ * zero external network calls (ADR-0005). The mock invoice is a checksum-valid bolt11 string for
+ * 2000 sats (taken from light-bolt11-decoder's own fixtures) so `startDeposit`'s real invoice
+ * validation path (`extractInvoiceAmountSats` + `validateAuctionDepositInvoiceQuote`) executes
+ * as in production.
  */
 import { afterEach, describe, expect, test } from 'bun:test'
+
+import { cashuStore } from '../stores/cashu'
 
 // Bun applies `mock.module()` across every test file in a single run, and
 // `auctionBidPublishRetry.test.ts` registers a PARTIAL mock for
@@ -40,84 +48,116 @@ const TEST_MINT = 'https://mint.example.test'
 const BOLT11_INVOICE_2000_SATS =
 	'lnbc20u1p3y0x3hpp5743k2g0fsqqxj7n8qzuhns5gmkk4djeejk3wkp64ppevgekvc0jsdqcve5kzar2v9nr5gpqd4hkuetesp5ez2g297jduwc20t6lmqlsg3man0vf2jfd8ar9fh8fhn2g8yttfkqxqy9gcqcqzys9qrsgqrzjqtx3k77yrrav9hye7zar2rtqlfkytl094dsp0ms5majzth6gt7ca6uhdkxl983uywgqqqqlgqqqvx5qqjqrzjqd98kxkpyw0l9tyy8r8q57k7zpy9zjmh6sez752wj6gcumqnj3yxzhdsmg6qq56utgqqqqqqqqqqqeqqjq7jd56882gtxhrjm03c93aacyfy306m4fq0tskf83c0nmet8zc2lxyyg3saz8x6vwcp26xnrlagf9semau3qm2glysp7sv95693fphvsp54l567'
 
-type DepositEventName = 'success' | 'error'
-type DepositHandler = (value?: unknown) => void
+type QuoteState = 'UNPAID' | 'PAID' | 'ISSUED'
 
-interface MockDeposit {
-	on: (event: DepositEventName, handler: DepositHandler) => undefined
-	start: () => Promise<string>
-	check: (timeoutMs?: number) => Promise<void>
-	/**
-	 * Whether the next check() call finds the quote paid — mimics the real
-	 * NDKCashuDeposit.check() emitting 'success' when the mint reports the
-	 * Lightning invoice settled.
-	 */
-	checkFindsPayment: boolean
-	emitSuccess: () => void
-	emitError: (error: string) => void
-	getCheckCalls: () => number
+/** One mint quote the fake coco handed out, in creation order. */
+interface QuoteControl {
+	readonly quoteId: string
+	/** The mint reports the quote paid; coco's processor issues it on the next nudge. */
+	markPaid: () => void
+	/** The mint issues the quote outright. */
+	emitIssued: () => void
 }
 
-const createMockDeposit = (invoice: string): MockDeposit => {
-	// EventEmitter semantics: multiple listeners per event (the store
-	// listeners and monitorDepositConfirmation both subscribe).
-	const handlers: Record<DepositEventName, DepositHandler[]> = { success: [], error: [] }
-	let checkCalls = 0
-	let checkFindsPayment = false
-	const deposit: MockDeposit = {
-		on: (event, handler) => {
-			handlers[event].push(handler)
-			return undefined
+/**
+ * An in-memory coco: a quote repository and one event bus, which is all the deposit adapter
+ * reads. Nothing here reaches the network, so the store's real flow runs end to end while the
+ * mint stays fictional.
+ */
+const installFakeCoco = () => {
+	let handler: ((payload: { mintUrl: string; quoteId: string; state: QuoteState }) => void) | undefined
+	const issued = new Set<string>()
+	const paid = new Set<string>()
+	const quotes: QuoteControl[] = []
+	let created = 0
+	let expireNextQuote = false
+
+	const emit = (quoteId: string, state: QuoteState) => handler?.({ mintUrl: TEST_MINT, quoteId, state })
+
+	const manager = {
+		quotes: {
+			createMintQuote: async () => {
+				created += 1
+				const quoteId = `mock-quote-${created}`
+				quotes.push({
+					quoteId,
+					markPaid: () => paid.add(quoteId),
+					emitIssued: () => {
+						issued.add(quoteId)
+						emit(quoteId, 'ISSUED')
+					},
+				})
+				// The engine reads a quote's window once, when it is created — so a quote can only
+				// be born already expired, which is how a mint that never saw the payment looks.
+				const expiry = expireNextQuote ? Math.floor(Date.now() / 1000) - 1 : Math.floor(Date.now() / 1000) + 3600
+				expireNextQuote = false
+				return { quote: quoteId, request: BOLT11_INVOICE_2000_SATS, expiry }
+			},
+			// coco's processor redeems a paid quote when it is nudged, which is what the
+			// adapter's check() asks for. A quote the test marked paid is issued here.
+			requeuePaidMintQuotes: async () => {
+				for (const quote of quotes) {
+					if (!paid.has(quote.quoteId) || issued.has(quote.quoteId)) continue
+					quote.emitIssued()
+				}
+				return { requeued: [] }
+			},
 		},
-		start: async () => invoice,
-		check: async () => {
-			checkCalls += 1
-			if (checkFindsPayment) deposit.emitSuccess()
+		on: (_event: string, next: typeof handler) => {
+			handler = next
+			return () => {
+				handler = undefined
+			}
 		},
-		get checkFindsPayment() {
-			return checkFindsPayment
-		},
-		set checkFindsPayment(value: boolean) {
-			checkFindsPayment = value
-		},
-		emitSuccess: () => handlers.success.forEach((handler) => handler(null)),
-		emitError: (error) => handlers.error.forEach((handler) => handler(error)),
-		getCheckCalls: () => checkCalls,
 	}
-	return deposit
+
+	cashuStore.setState((s) => ({ ...s, manager: manager as never, status: 'ready' }))
+
+	return {
+		quotes,
+		get createdQuotes() {
+			return created
+		},
+		expireNextQuote: () => {
+			expireNextQuote = true
+		},
+	}
 }
 
 interface MockWallet {
 	mints: string[]
 	mintBalances: Record<string, number>
 	state: { getProofs: () => never[]; dump: () => { proofs: unknown[] } }
-	deposit: (amount: number, mint: string) => MockDeposit
 	fetchTransactions: () => Promise<never[]>
 	subscribeTransactions: (callback: (tx: unknown) => void) => () => void
 }
 
-const createMockWallet = (deposits: MockDeposit[]): MockWallet => ({
+const createMockWallet = (): MockWallet => ({
 	mints: [],
 	mintBalances: {},
 	state: {
 		getProofs: () => [],
 		dump: () => ({ proofs: [] }),
 	},
-	deposit: (_amount, _mint) => {
-		const deposit = createMockDeposit(BOLT11_INVOICE_2000_SATS)
-		deposits.push(deposit)
-		return deposit
-	},
 	fetchTransactions: async () => [],
 	subscribeTransactions: () => () => undefined,
 })
 
-/** Install a mock wallet in the store and start a real `startDeposit` flow. */
-const startMockDeposit = async (): Promise<MockDeposit[]> => {
-	const deposits: MockDeposit[] = []
+/** Let the engine's own await chain (quote lookup → nudge → event → settle) run to rest. */
+const flushEngine = () => new Promise((resolve) => setTimeout(resolve, 25))
+
+/**
+ * Install a mock wallet plus a fake coco, then start a real `startDeposit` flow. The returned
+ * handle lists the mint quotes the engine actually asked for, in creation order.
+ *
+ * `quoteExpired` makes the quote arrive past its window, i.e. a mint that never saw the payment.
+ */
+const startMockDeposit = async (options?: { quoteExpired?: boolean }): Promise<ReturnType<typeof installFakeCoco>> => {
+	const coco = installFakeCoco()
+	if (options?.quoteExpired) coco.expireNextQuote()
 	nip60Store.setState((s) => ({
 		...s,
-		wallet: createMockWallet(deposits) as never,
+		wallet: createMockWallet() as never,
 		status: 'ready',
 		activeDeposit: null,
 		depositInvoice: null,
@@ -126,10 +166,11 @@ const startMockDeposit = async (): Promise<MockDeposit[]> => {
 	}))
 	const invoice = await nip60Actions.startDeposit(2000, TEST_MINT)
 	expect(invoice).toBe(BOLT11_INVOICE_2000_SATS)
-	return deposits
+	return coco
 }
 
 afterEach(() => {
+	cashuStore.setState((s) => ({ ...s, manager: null, status: 'idle' }))
 	nip60Store.setState((state) => ({
 		...state,
 		wallet: null,
@@ -142,35 +183,39 @@ afterEach(() => {
 })
 
 describe('cancelDeposit preserveRecovery (PR #1235 blocker 3)', () => {
-	test('keeps the quote identity so checkDepositNow reconciles the same payment', async () => {
-		const deposits = await startMockDeposit()
-		const deposit = deposits[0]
+	test('keeps the quote identity so checkDepositNow reconciles the same quote', async () => {
+		const coco = await startMockDeposit()
+		const quote = coco.quotes[0]
+		const deposit = nip60Store.state.activeDeposit
 
 		expect(nip60Store.state.depositStatus).toBe('pending')
-		expect(nip60Store.state.activeDeposit).toBe(deposit as never)
+		expect(deposit?.quoteId).toBe(quote.quoteId)
 		expect(nip60Store.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
 
 		// Paid-or-uncertain close, as DepositLightningModal performs it.
 		nip60Actions.cancelDeposit({ preserveRecovery: true })
 
 		// Identity retained: the SAME quote can still be reconciled without a
-		// fresh funding session (no new wallet.deposit() call happens).
+		// fresh funding session.
 		expect(nip60Store.state.activeDeposit).toBe(deposit as never)
+		expect(nip60Store.state.activeDeposit?.quoteId).toBe(quote.quoteId)
 		expect(nip60Store.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
 		expect(nip60Store.state.depositStatus).toBe('pending')
 
 		// The mint finds the payment on the next check of the same quote.
-		deposit.checkFindsPayment = true
+		quote.markPaid()
 		await nip60Actions.checkDepositNow()
 
-		expect(deposit.getCheckCalls()).toBe(1)
+		// No second quote was ever asked for — that is what "the same payment" means.
+		expect(coco.createdQuotes).toBe(1)
 		expect(nip60Store.state.depositStatus).toBe('success')
 		expect(nip60Store.state.activeDeposit).toBeNull()
 	})
 
-	test('keeps the quote identity so retryDepositConfirmation reconciles the same payment', async () => {
-		const deposits = await startMockDeposit()
-		const deposit = deposits[0]
+	test('keeps the quote identity so retryDepositConfirmation reconciles the same quote', async () => {
+		const coco = await startMockDeposit()
+		const quote = coco.quotes[0]
+		const deposit = nip60Store.state.activeDeposit
 
 		// Simulate the 15s confirmation timeout having lapsed.
 		nip60Store.setState((s) => ({
@@ -187,33 +232,34 @@ describe('cancelDeposit preserveRecovery (PR #1235 blocker 3)', () => {
 
 		// The same quote is still retryable: retry re-enters pending and the
 		// mint finds the payment.
-		deposit.checkFindsPayment = true
+		quote.markPaid()
 		nip60Actions.retryDepositConfirmation()
-		await Promise.resolve()
+		await flushEngine()
 
-		expect(deposit.getCheckCalls()).toBe(1)
+		expect(coco.createdQuotes).toBe(1)
 		expect(nip60Store.state.depositStatus).toBe('success')
 		expect(nip60Store.state.activeDeposit).toBeNull()
 	})
 
 	test('resets only the transient error display, not the deposit identity', async () => {
-		const deposits = await startMockDeposit()
-		const deposit = deposits[0]
+		const coco = await startMockDeposit()
+		const quote = coco.quotes[0]
+		const deposit = nip60Store.state.activeDeposit
 
 		nip60Store.setState((s) => ({ ...s, error: 'transient display noise' }))
 		nip60Actions.cancelDeposit({ preserveRecovery: true })
 
 		expect(nip60Store.state.error).toBeNull()
 		expect(nip60Store.state.activeDeposit).toBe(deposit as never)
+		expect(nip60Store.state.activeDeposit?.quoteId).toBe(quote.quoteId)
 		expect(nip60Store.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
 	})
 })
 
 describe('cancelDeposit default (backward compat)', () => {
 	test('with no options fully clears the deposit session', async () => {
-		const deposits = await startMockDeposit()
-		const deposit = deposits[0]
-		expect(nip60Store.state.activeDeposit).toBe(deposit as never)
+		const coco = await startMockDeposit()
+		expect(nip60Store.state.activeDeposit?.quoteId).toBe(coco.quotes[0].quoteId)
 
 		nip60Actions.cancelDeposit()
 
@@ -224,9 +270,8 @@ describe('cancelDeposit default (backward compat)', () => {
 	})
 
 	test('with preserveRecovery explicitly false fully clears', async () => {
-		const deposits = await startMockDeposit()
-		const deposit = deposits[0]
-		expect(nip60Store.state.activeDeposit).toBe(deposit as never)
+		const coco = await startMockDeposit()
+		expect(nip60Store.state.activeDeposit?.quoteId).toBe(coco.quotes[0].quoteId)
 
 		nip60Actions.cancelDeposit({ preserveRecovery: false })
 
@@ -236,11 +281,10 @@ describe('cancelDeposit default (backward compat)', () => {
 	})
 
 	test('preserveRecovery on a terminal state has no recoverable quote and fully clears', async () => {
-		const deposits = await startMockDeposit()
-		const deposit = deposits[0]
+		const coco = await startMockDeposit()
 
 		// Terminal success: the success listener already cleared the identity.
-		deposit.emitSuccess()
+		coco.quotes[0].emitIssued()
 		expect(nip60Store.state.depositStatus).toBe('success')
 		expect(nip60Store.state.activeDeposit).toBeNull()
 
@@ -253,41 +297,64 @@ describe('cancelDeposit default (backward compat)', () => {
 })
 
 describe('deposit listener identity guard (stale session race)', () => {
-	test('a late success/error event from deposit #1 must not corrupt deposit #2 status', async () => {
-		const deposits = await startMockDeposit()
-		const deposit1 = deposits[0]
-		await nip60Actions.startDeposit(2000, TEST_MINT)
-		const deposit2 = deposits[1]
+	test('an unpaid quote whose check window closes reports failure', async () => {
+		// The power check for the late-failure stimulus below: on the ACTIVE deposit, the same
+		// call that the guard test makes must actually produce a failure. Without this, a guard
+		// assertion could pass simply because nothing was ever emitted.
+		const coco = await startMockDeposit({ quoteExpired: true })
+		const deposit = nip60Store.state.activeDeposit
 
-		expect(nip60Store.state.activeDeposit).toBe(deposit2 as never)
+		await deposit?.check(1).catch(() => undefined)
+
+		expect(coco.createdQuotes).toBe(1)
+		expect(nip60Store.state.depositStatus).toBe('error')
+		expect(nip60Store.state.error).not.toBeNull()
+		expect(nip60Store.state.activeDeposit).toBeNull()
+	})
+
+	test('a late event from deposit #1 must not corrupt deposit #2 status', async () => {
+		// Deposit #1's quote is born past its window (the mint never saw the payment), so the
+		// late failure below is a real one rather than a call that quietly does nothing.
+		const coco = await startMockDeposit({ quoteExpired: true })
+		const quote1 = coco.quotes[0]
+		const deposit1 = nip60Store.state.activeDeposit
+		expect(deposit1).not.toBeNull()
+
+		await nip60Actions.startDeposit(2000, TEST_MINT)
+		const quote2 = coco.quotes[1]
+		const deposit2 = nip60Store.state.activeDeposit
+
+		expect(deposit2?.quoteId).toBe(quote2.quoteId)
 		expect(nip60Store.state.depositStatus).toBe('pending')
 
-		// Deposit #1's stale listeners fire — the identity guard rejects them.
-		deposit1.emitSuccess()
+		// Deposit #1's stale listener fires — the identity guard rejects it.
+		quote1.emitIssued()
 		expect(nip60Store.state.depositStatus).toBe('pending')
 		expect(nip60Store.state.activeDeposit).toBe(deposit2 as never)
 		expect(nip60Store.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
 
-		deposit1.emitError('mint exploded')
+		// A late *failure* from the superseded session is rejected too: deposit #1's quote never
+		// settles, so its check window closes and the engine reports failure. That failure
+		// belongs to #1, and the guard must not let it land on #2.
+		await deposit1?.check(1).catch(() => undefined)
 		expect(nip60Store.state.depositStatus).toBe('pending')
 		expect(nip60Store.state.error).toBeNull()
 		expect(nip60Store.state.activeDeposit).toBe(deposit2 as never)
 
 		// Deposit #2's own event still reconciles normally.
-		deposit2.emitSuccess()
+		quote2.emitIssued()
 		expect(nip60Store.state.depositStatus).toBe('success')
 		expect(nip60Store.state.activeDeposit).toBeNull()
 	})
 
 	test('stale deposit events after a default cancelDeposit cannot resurrect the deposit session', async () => {
-		const deposits = await startMockDeposit()
-		const deposit1 = deposits[0]
+		const coco = await startMockDeposit()
+		const quote1 = coco.quotes[0]
 
 		nip60Actions.cancelDeposit()
 		expect(nip60Store.state.depositStatus).toBe('idle')
 
-		deposit1.emitSuccess()
-		deposit1.emitError('late failure')
+		quote1.emitIssued()
 
 		expect(nip60Store.state.depositStatus).toBe('idle')
 		expect(nip60Store.state.activeDeposit).toBeNull()

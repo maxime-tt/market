@@ -37,6 +37,13 @@ import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { ndkActions, ndkStore } from './ndk'
+import { cashuActions, cashuStore } from './cashu'
+import {
+	type CocoDepositQuote,
+	DEPOSIT_CONFIRMATION_TIMEOUT_LABEL,
+	createCocoDepositQuote,
+	getDepositConfirmationTimeoutMessage,
+} from '@/lib/wallet/depositQuote'
 import {
 	findBidderRecordByRefundPubkey,
 	findPreLockRecoveryRecordByRefundPubkey,
@@ -173,8 +180,9 @@ export interface Nip60State {
 	defaultMint: string | null
 	transactions: NDKWalletTransaction[]
 	error: string | null
-	// Active deposit tracking
-	activeDeposit: NDKCashuDeposit | null
+	// Active deposit tracking. The session is coco's mint-quote deposit, not the relay
+	// wallet's: the type is the adapter's, so nothing here can reach into an NDK deposit.
+	activeDeposit: CocoDepositQuote | null
 	depositInvoice: string | null
 	depositStatus: Nip60DepositStatus
 	// Pending tokens tracking (tokens generated but not yet claimed by recipient)
@@ -715,13 +723,8 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: str
 	}
 }
 
-const DEPOSIT_CONFIRMATION_TIMEOUT_LABEL = 'wallet acknowledgment and mint confirmation'
-
-const getDepositConfirmationTimeoutMessage = (timeoutMs: number): string =>
-	`${DEPOSIT_CONFIRMATION_TIMEOUT_LABEL} timeout after ${timeoutMs}ms`
-
 export const waitForDepositConfirmation = async (
-	deposit: Pick<NDKCashuDeposit, 'on'>,
+	deposit: Pick<CocoDepositQuote, 'on'>,
 	timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS,
 ): Promise<void> =>
 	withTimeout(
@@ -736,7 +739,7 @@ export const waitForDepositConfirmation = async (
 const isDepositConfirmationTimeoutError = (error: unknown, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): boolean =>
 	error instanceof Error && error.message === getDepositConfirmationTimeoutMessage(timeoutMs)
 
-const monitorDepositConfirmation = (deposit: NDKCashuDeposit, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): void => {
+const monitorDepositConfirmation = (deposit: CocoDepositQuote, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): void => {
 	void waitForDepositConfirmation(deposit, timeoutMs).catch((error) => {
 		const state = nip60Store.state
 		if (state.activeDeposit !== deposit || state.depositStatus !== 'pending') return
@@ -1276,24 +1279,6 @@ export const nip60Actions = {
 						error: nip60Store.state.error,
 					}),
 					/**
-					 * Dev-only: simulate a Lightning invoice payment by emitting
-					 * the 'success' event on the active NDKCashuDeposit. This
-					 * triggers the same store transition as a real mint
-					 * confirmation, making it possible to e2e-test the funding
-					 * → mint → bid-publish flow without a Lightning node.
-					 */
-					simulateDepositSuccess: () => {
-						const deposit = nip60Store.state.activeDeposit
-						if (deposit) {
-							// Dev-only fake: the real 'success' event carries the minted
-							// NDKCashuToken, but this simulation never minted one. Store
-							// listeners ignore the payload, so the null payload is cast to
-							// the emitter's expected event type instead of relying on
-							// emit()'s unsound acceptance of null (review #1235, blocker 3).
-							deposit.emit('success', null as never)
-						}
-					},
-					/**
 					 * Dev-only: explicitly register a mint URL in the wallet.
 					 * Exposed via the __nip60 bridge so e2e tests can call
 					 * nip60Actions.addMint() after fundWallet to ensure the
@@ -1743,7 +1728,19 @@ export const nip60Actions = {
 				depositAmount = requestedAmount + getAuctionDepositFeePadding(requestedAmount)
 			}
 
-			const deposit = wallet.deposit(depositAmount, targetMint)
+			// The deposit engine is coco's mint quote (see @/lib/wallet/depositQuote), not the
+			// relay wallet's own deposit. coco must therefore be up before a quote exists, and
+			// initializing is idempotent — so it is done here rather than assumed to have
+			// happened on some earlier screen.
+			if (!cashuStore.state.manager) {
+				await cashuActions.initialize()
+			}
+			const cashuManager = cashuStore.state.manager
+			if (!cashuManager) {
+				throw new Error('The Cashu wallet is not ready to start a deposit.')
+			}
+
+			const deposit = createCocoDepositQuote({ manager: cashuManager, mintUrl: targetMint, amount: depositAmount })
 			// #3: Wrap deposit.start() in a 15s timeout so a hung mint quote
 			// request doesn't leave the user staring at a spinner indefinitely.
 			// The ADR §3b timeout also covers the post-payment confirmation phase
@@ -1773,7 +1770,7 @@ export const nip60Actions = {
 			// (`activeDeposit === deposit`, the same guard monitorDepositConfirmation
 			// applies below): a stale listener from an earlier deposit session must
 			// never overwrite a newer session's status (review #1235, blocker 3).
-			deposit.on('success', (token) => {
+			deposit.on('success', () => {
 				if (nip60Store.state.activeDeposit !== deposit) return
 				nip60Store.setState((s) => ({
 					...s,
@@ -1785,13 +1782,13 @@ export const nip60Actions = {
 				void nip60Actions.refresh()
 			})
 
-			deposit.on('error', (err: Error | string) => {
+			deposit.on('error', (err?: Error) => {
 				if (nip60Store.state.activeDeposit !== deposit) return
 				console.error('[nip60] Deposit error:', err)
 				nip60Store.setState((s) => ({
 					...s,
 					depositStatus: 'error',
-					error: typeof err === 'string' ? err : err.message,
+					error: err instanceof Error ? err.message : 'The deposit failed.',
 					activeDeposit: null,
 					depositInvoice: null,
 				}))

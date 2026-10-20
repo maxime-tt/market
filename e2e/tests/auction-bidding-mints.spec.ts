@@ -517,7 +517,8 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 // and the wallet's deposit monitor completes the real NUT-05 minting round
 // trip on its own — the __nip60 dev bridge is used only for wallet set-up
 // (mintTestEcash, addMint) and to READ deposit status (getDepositStatus).
-// No payment is faked via simulateDepositSuccess.
+// No payment is faked: the bridge exposes no way to force a deposit success,
+// so the mint round trip below is always the real one.
 //
 // NOTE: These tests require a running dev server (port 34567), local relay
 // (nak serve on port 10547), and a local Cashu mint (port 3338, started

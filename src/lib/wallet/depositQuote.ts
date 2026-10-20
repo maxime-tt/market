@@ -76,7 +76,7 @@ export interface CocoDepositQuoteOptions {
 export const DEFAULT_DEPOSIT_CONFIRMATION_TIMEOUT_MS = 15_000
 
 /** The label the timeout error carries; the caller classifies "we timed out" by this message. */
-const DEPOSIT_CONFIRMATION_TIMEOUT_LABEL = 'wallet acknowledgment and mint confirmation'
+export const DEPOSIT_CONFIRMATION_TIMEOUT_LABEL = 'wallet acknowledgment and mint confirmation'
 
 export const getDepositConfirmationTimeoutMessage = (timeoutMs: number): string =>
 	`${DEPOSIT_CONFIRMATION_TIMEOUT_LABEL} timeout after ${timeoutMs}ms`
