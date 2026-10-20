@@ -3,6 +3,8 @@
  *
  * This provides:
  * - IndexedDB persistence for proofs via coco
+ * - IndexedDB persistence for the mint list via coco — coco is the authority
+ *   for which mints this wallet knows, not a relay-backed wallet event
  * - Local persistence for pending tokens (tokens that have been generated but not yet claimed)
  * - Recovery of pending tokens on startup
  */
@@ -10,7 +12,6 @@ import { Store } from '@tanstack/store'
 import { initializeCoco, Manager, getEncodedToken } from 'coco-cashu-core'
 import { IndexedDbRepositories } from 'coco-cashu-indexeddb'
 import { authStore } from './auth'
-import { nip60Store } from './nip60'
 import { loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
 
 const CASHU_SEED_KEY = 'cashu_wallet_seed'
@@ -25,6 +26,12 @@ export interface CashuState {
 	error: string | null
 	balances: Record<string, number>
 	totalBalance: number
+	/**
+	 * The mint list coco holds for this wallet. It is read from coco's own
+	 * repository (`manager.mint`), never from a relay-backed wallet event, so
+	 * this field is a projection of coco's state and not a second authority.
+	 */
+	mints: string[]
 	// Track pending send operations that have generated tokens
 	pendingTokens: PendingToken[]
 }
@@ -35,6 +42,7 @@ const initialState: CashuState = {
 	error: null,
 	balances: {},
 	totalBalance: 0,
+	mints: [],
 	pendingTokens: [],
 }
 
@@ -152,8 +160,8 @@ export const cashuActions = {
 			// Initial balance fetch
 			await cashuActions.refreshBalances()
 
-			// Sync mints from nip60 store
-			await cashuActions.syncMintsFromNip60()
+			// Load the mint list coco itself holds
+			await cashuActions.syncMints()
 		} catch (err) {
 			console.error('[cashu] Failed to initialize:', err)
 			cashuStore.setState((s) => ({
@@ -165,31 +173,47 @@ export const cashuActions = {
 	},
 
 	/**
-	 * Sync mints from the NIP-60 wallet to coco
+	 * Read the wallet's mint list from coco and keep the store's projection of
+	 * it current.
+	 *
+	 * coco is the authority: the mints it has persisted are the wallet's mints,
+	 * and every one of them is trusted, exactly as the wallet treated the mints
+	 * it previously copied across from the relay-backed wallet event. This is
+	 * the only place the mint list is read, so there is no second source that
+	 * could disagree with what the wallet will actually spend from.
 	 */
-	syncMintsFromNip60: async (): Promise<void> => {
+	syncMints: async (): Promise<void> => {
 		const manager = cashuStore.state.manager
 		if (!manager) return
 
-		const nip60Mints = nip60Store.state.mints
-		console.log('[cashu] Syncing mints from NIP-60:', nip60Mints)
+		try {
+			const knownMints = await manager.mint.getAllMints()
 
-		for (const mintUrl of nip60Mints) {
-			try {
-				const existingMints = await manager.mint.getAllMints()
-				const exists = existingMints.some((m) => m.mintUrl === mintUrl)
-
-				if (!exists) {
-					console.log('[cashu] Adding mint:', mintUrl)
-					await manager.mint.addMint(mintUrl, { trusted: true })
-				} else {
-					// Ensure mint is trusted
-					await manager.mint.trustMint(mintUrl)
+			for (const mint of knownMints) {
+				if (mint.trusted) continue
+				try {
+					await manager.mint.trustMint(mint.mintUrl)
+				} catch (err) {
+					console.error('[cashu] Failed to trust mint:', mint.mintUrl, err)
 				}
-			} catch (err) {
-				console.error('[cashu] Failed to add mint:', mintUrl, err)
 			}
+
+			cashuActions.setMints(knownMints.map((mint) => mint.mintUrl))
+		} catch (err) {
+			console.error('[cashu] Failed to read mints from coco:', err)
 		}
+	},
+
+	/**
+	 * Publish a mint list onto the store. Only `syncMints` should call this —
+	 * the list it publishes comes from coco, so a caller that writes a list
+	 * from anywhere else would reintroduce a second authority.
+	 */
+	setMints: (mints: string[]): void => {
+		cashuStore.setState((s) => ({
+			...s,
+			mints,
+		}))
 	},
 
 	/**
@@ -208,6 +232,8 @@ export const cashuActions = {
 			console.error('[cashu] Failed to add mint:', err)
 			throw err
 		}
+
+		await cashuActions.syncMints()
 	},
 
 	/**
@@ -428,13 +454,11 @@ export const cashuActions = {
 	},
 
 	/**
-	 * Get all trusted mints
+	 * Get the wallet's mint list. It is coco's own list, projected into state by
+	 * `syncMints`, so a caller reads what the wallet will actually spend from.
 	 */
-	getMints: async () => {
-		const manager = cashuStore.state.manager
-		if (!manager) return []
-
-		return manager.mint.getAllTrustedMints()
+	getMints: (): string[] => {
+		return cashuStore.state.mints
 	},
 
 	/**
