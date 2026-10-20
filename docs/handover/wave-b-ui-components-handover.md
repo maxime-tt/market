@@ -42,7 +42,7 @@ replaced.
 ## 3. The final architecture (target end state)
 
 ```
-                 coco-cashu-core  (IndexedDB: proofs, mints, quotes, counters, history)
+                 @cashu/coco-core 2.0.0  (IndexedDB: proofs, mints, quotes, counters, history)
                           │
         ┌─────────────────┴───────────────────────────────┐
         │  src/lib/stores/cashu.ts      THE wallet module │  coco is the only authority
@@ -90,7 +90,9 @@ Invariants the end state must satisfy (so your props do not fight them):
 1. **One wallet module.** `src/lib/stores/cashu.ts` is it. There is no second store
    holding balances, mints or proofs.
 2. **coco is the authority** for proofs, mints, balances, quotes, history and pending
-   tokens. Nothing reads a relay-backed wallet event for them.
+   tokens — `@cashu/coco-core@2.0.0` over `@cashu/coco-indexeddb`, not the
+   `coco-cashu-core@1.0.0-rc11` alpha-line pin this tree still carries (stage B2a). Nothing
+   reads a relay-backed wallet event for them.
 3. **One conservation rule** — `deriveSetState` in `sdk/core/wallet`. The app does not
    get a second one.
 4. **Payment lifecycle is never a boolean.** Your views must be able to render
@@ -110,7 +112,7 @@ Today's store still exposes a subset under the old names; see §9.
 ### 4.1 State
 
 ```ts
-import type { Manager } from 'coco-cashu-core'
+import type { Manager } from '@cashu/coco-core'
 
 export interface WalletTransactionView {
 	id: string
@@ -467,7 +469,8 @@ errors on this base (all in files unrelated to the wallet). "tsc clean" here mea
 | Stage                                                                                                                   | State                     | Commit     |
 | ----------------------------------------------------------------------------------------------------------------------- | ------------------------- | ---------- |
 | B1 — coco is the mint authority (the dependency inversion that has to land first)                                       | **landed**                | `bfb09804` |
-| B2 — cut NIP-60: delete `src/lib/stores/nip60.ts`, re-home the wallet store onto coco, retarget every consumer and test | **in flight, not landed** | —          |
+| B2a — upgrade coco to the renamed `@cashu/coco-core@2.0.0` (+ `@cashu/coco-indexeddb`), port `src/lib/stores/cashu.ts`  | **in flight, not landed** | —          |
+| B2 — cut NIP-60: delete `src/lib/stores/nip60.ts`, re-home the wallet store onto coco, retarget every consumer and test | not started               | —          |
 | B3 — wire the coco-backed port + the rail registry behind `sdk/core/wallet`                                             | not started               | —          |
 
 Test-count floor: **2568** (base 2561 + 7 from B1). Your work raises it.
@@ -488,12 +491,20 @@ Test-count floor: **2568** (base 2561 + 7 from B1). Your work raises it.
 
 ### Known blockers in B2 (relevant to you only as "why the shape is what it is")
 
-1. **coco cannot send to a P2PK output.** `WalletApi.send(mintUrl, amount)` takes no
-   output/secret options, so the auction bid lock (NUT-11 P2PK + NUT-12 DLEQ, ADR-0011)
-   cannot be expressed through coco's public API. B2 either drives
-   `ProofService.createOutputsAndIncrementCounters` plus a cashu-ts `swap` over coco's
-   proof repository, or leaves that leg on the relay wallet — which is a decision, not
-   a refactor. Nothing in your props depends on which way it goes.
+1. **The coco pin is the blocker, not the feature.** P2PK _is_ supported upstream.
+   `@cashu/coco-core@2.0.0` declares `SendMethod = 'default' | 'p2pk'` with
+   `P2pkSendOptions = (Omit<P2PKOptions,'kind'> & { kind: 'P2PK' }) | LegacyP2pkSendOptions`,
+   i.e. `pubkey`, `locktime`, `refundKeys`, `requiredSignatures`,
+   `requiredRefundSignatures`, `additionalTags`, `blindKeys`, `sigFlag` — only
+   HTLC/NUT-14 `hashlock` is out of scope (stated in the type's own doc comment). The
+   auction lock maps onto it directly (`lockPubkey → pubkey`, `locktime → locktime`,
+   `refundPubkey → refundKeys: [refundPubkey]`, 1-of-1 → `requiredSignatures: 1`), so the
+   leg is a coco P2PK send — not hand-rolled cashu-ts proof surgery. What is unavailable is
+   that API _in the version this repo pins_: `coco-cashu-core@1.0.0-rc11` (the `latest` tag
+   of the package's old name) contains no `p2pk` at all. Hence **B2a: upgrade to the renamed
+   `@cashu/coco-core` 2.0.0 before B2.** (An earlier revision of this document claimed coco
+   could not send to a P2PK output. That was measured on the pin, not on the library, and
+   is withdrawn.)
 2. **Wallet key continuity.** The wallet's P2PK keypair and the auction HD root live in
    the encrypted kind-17375 event and nowhere else (no `localStorage` in
    `@nostr-dev-kit/wallet`). Deleting the NIP-60 read path without a local key store
@@ -510,4 +521,10 @@ Test-count floor: **2568** (base 2561 + 7 from B1). Your work raises it.
 
 ## 10. Amendments to this document
 
-(empty — wave B appends here, with the commit sha, when a §5 contract changes)
+- **B2a inserted; the P2PK blocker corrected.** §3 (engine named and versioned), §4
+  (import path), §9 (stage table gains B2a; blocker 1 rewritten). The withdrawn claim was
+  that coco cannot send to a P2PK output — that holds only for the pinned
+  `coco-cashu-core@1.0.0-rc11`; `@cashu/coco-core@2.0.0` supports full NUT-11 P2PK
+  (`locktime`, `refundKeys`, `sigFlags`, multisig). Verified by reading the published
+  tarballs' type definitions, not from documentation. **No §5 props contract changed**, so
+  nothing you have written is affected.
