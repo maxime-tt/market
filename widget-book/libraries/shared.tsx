@@ -4,8 +4,10 @@ import { ErrorState } from '@ui/shared/error-state'
 import { LoadingState } from '@ui/shared/loading-state'
 import { StatCard } from '@ui/shared/stat-card'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
+import { EntityListItem } from '@ui/shared/entity-list-item'
 import { Notice } from '@ui/shared/notice'
 import { StatusBadge } from '@ui/shared/status-badge'
+import { PackageIcon, PencilIcon, StoreIcon, TrashIcon } from 'lucide-react'
 
 import type { WidgetLibrary } from '../libraries'
 
@@ -100,6 +102,60 @@ export const shared: WidgetLibrary = {
 						destructive
 						onConfirm={() => {}}
 					/>
+				</div>
+			),
+		},
+		{
+			name: 'EntityListItem',
+			render: () => (
+				<div className="w-full">
+					<EntityListItem
+						isOpen
+						onOpenChange={() => {}}
+						trigger={
+							<div>
+								<p className="font-semibold">Handmade mug</p>
+								<p className="text-sm text-muted-foreground">12,000 sats · Active</p>
+							</div>
+						}
+						icon={<PackageIcon className="h-5 w-5" />}
+						actions={[
+							{ key: 'edit', label: 'Edit product', icon: <PencilIcon className="h-4 w-4" />, onClick: () => {} },
+							{ key: 'delete', label: 'Delete product', icon: <TrashIcon className="h-4 w-4" />, onClick: () => {}, destructive: true },
+						]}
+					>
+						<p className="text-sm text-muted-foreground">Expanded details for the selected product.</p>
+					</EntityListItem>
+				</div>
+			),
+		},
+		{
+			name: 'EntityListItemPending',
+			render: () => (
+				<div className="w-full">
+					<EntityListItem
+						isOpen={false}
+						onOpenChange={() => {}}
+						trigger={
+							<div>
+								<p className="font-semibold">Summer favourites</p>
+								<p className="text-sm text-muted-foreground">8 products</p>
+							</div>
+						}
+						icon={<StoreIcon className="h-5 w-5" />}
+						actions={[
+							{
+								key: 'delete',
+								label: 'Delete collection',
+								icon: <TrashIcon className="h-4 w-4" />,
+								onClick: () => {},
+								destructive: true,
+								pending: true,
+							},
+						]}
+					>
+						<p className="text-sm text-muted-foreground">Deleting…</p>
+					</EntityListItem>
 				</div>
 			),
 		},

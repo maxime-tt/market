@@ -1,15 +1,5 @@
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-	AlertDialogTrigger,
-} from '@ui/primitives/alert-dialog'
 import { Button } from '@ui/primitives/button'
+import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@ui/primitives/card'
 import { Checkbox } from '@ui/primitives/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
@@ -496,47 +486,24 @@ function WalletListItem({
 							</div>
 						</div>
 						<div className="flex items-center">
-							<AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-								<AlertDialogTrigger asChild>
-									<Button
-										variant="ghost"
-										size="icon"
-										// Stop the click from toggling the collapsible header
-										onClick={(e) => e.stopPropagation()}
-										className="h-8 w-8 text-destructive hover:bg-destructive/10"
-										aria-label="Delete wallet"
-										disabled={isSavingNostr || isDeleting}
-									>
-										{isDeleting ? (
-											<div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" />
-										) : (
-											<TrashIcon className="h-4 w-4" />
-										)}
-									</Button>
-								</AlertDialogTrigger>
-								<AlertDialogContent>
-									<AlertDialogHeader>
-										<AlertDialogTitle>Delete wallet?</AlertDialogTitle>
-										<AlertDialogDescription>
-											This will permanently remove the wallet &quot;{wallet.name}&quot; and its NWC connection secret. If this wallet holds
-											funds, deleting it may make those funds unrecoverable. This action cannot be undone.
-										</AlertDialogDescription>
-									</AlertDialogHeader>
-									<AlertDialogFooter>
-										<AlertDialogCancel>Cancel</AlertDialogCancel>
-										<AlertDialogAction
-											className="bg-destructive text-white hover:bg-destructive/90"
-											onClick={(e) => {
-												e.stopPropagation()
-												setConfirmDeleteOpen(false)
-												onDeleteWallet()
-											}}
-										>
-											Delete wallet
-										</AlertDialogAction>
-									</AlertDialogFooter>
-								</AlertDialogContent>
-							</AlertDialog>
+							<Button
+								variant="ghost"
+								size="icon"
+								// Stop the click from toggling the collapsible header
+								onClick={(e) => {
+									e.stopPropagation()
+									setConfirmDeleteOpen(true)
+								}}
+								className="h-8 w-8 text-destructive hover:bg-destructive/10"
+								aria-label="Delete wallet"
+								disabled={isSavingNostr || isDeleting}
+							>
+								{isDeleting ? (
+									<div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" />
+								) : (
+									<TrashIcon className="h-4 w-4" />
+								)}
+							</Button>
 							<ChevronDownIcon className="h-4 w-4 ml-1 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
 						</div>
 					</CardHeader>
@@ -645,6 +612,15 @@ function WalletListItem({
 					</CardContent>
 				</CollapsibleContent>
 			</Card>
+			<ConfirmDialog
+				open={confirmDeleteOpen}
+				onOpenChange={setConfirmDeleteOpen}
+				title="Delete wallet?"
+				description={`This will permanently remove the wallet "${wallet.name}" and its NWC connection secret. If this wallet holds funds, deleting it may make those funds unrecoverable. This action cannot be undone.`}
+				confirmLabel="Delete wallet"
+				destructive
+				onConfirm={onDeleteWallet}
+			/>
 		</Collapsible>
 	)
 }

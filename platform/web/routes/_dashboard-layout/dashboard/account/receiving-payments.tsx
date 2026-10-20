@@ -1,6 +1,6 @@
-import { DashboardListItem } from '@ui/components/DashboardListItem'
 import { ProfileWalletCheck } from '@/components/ProfileWalletCheck'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
+import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
 import { Button } from '@ui/primitives/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@ui/primitives/card'
 import { Checkbox } from '@ui/primitives/checkbox'
@@ -790,34 +790,29 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 		</div>
 	)
 
-	const actions = (
-		<Button
-			variant="ghost"
-			size="icon"
-			onClick={(e) => {
-				e.stopPropagation()
-				setDeleteConfirmOpen(true)
-			}}
-			className="h-8 w-8 text-destructive hover:bg-destructive/10"
-			aria-label="Delete payment detail"
-			disabled={deleteMutation.isPending}
-		>
-			{deleteMutation.isPending ? <Spinner className="h-4 w-4" /> : <TrashIcon className="h-4 w-4" />}
-		</Button>
-	)
+	const actions: EntityListItemAction[] = [
+		{
+			key: 'delete',
+			label: 'Delete payment detail',
+			icon: <TrashIcon className="h-4 w-4" />,
+			onClick: () => setDeleteConfirmOpen(true),
+			destructive: true,
+			pending: deleteMutation.isPending,
+		},
+	]
 
 	return (
 		<>
-			<DashboardListItem
+			<EntityListItem
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
-				triggerContent={triggerContent}
+				trigger={triggerContent}
 				actions={actions}
 				isDeleting={deleteMutation.isPending}
 				icon={<PaymentMethodIcon method={paymentDetail.paymentMethod} />}
 			>
 				<PaymentDetailForm paymentDetail={paymentDetail} isOpen={isOpen} onOpenChange={onOpenChange} onSuccess={onSuccess} />
-			</DashboardListItem>
+			</EntityListItem>
 
 			<ConfirmDialog
 				open={deleteConfirmOpen}

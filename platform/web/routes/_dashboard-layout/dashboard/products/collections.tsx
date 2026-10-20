@@ -1,6 +1,7 @@
 import { Button } from '@ui/primitives/button'
 import { Media } from '@ui/components/Media'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
+import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { authStore } from '@/lib/stores/auth'
@@ -14,7 +15,6 @@ import { useStore } from '@tanstack/react-store'
 import { useState, useMemo } from 'react'
 import { ChevronDown, PlusIcon, StoreIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
-import { DashboardListItem } from '@ui/components/DashboardListItem'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { DashboardCollectionDetails, DashboardCollectionTrigger } from '@ui/components/DashboardCollectionListItem'
 
@@ -35,43 +35,28 @@ function CollectionListItem({
 }) {
 	const triggerContent = <DashboardCollectionTrigger collection={collection} />
 
-	const actions = (
-		<>
-			<Button
-				variant="ghost"
-				size="sm"
-				onClick={(e) => {
-					e.stopPropagation()
-					onEdit()
-				}}
-				aria-label={`Edit ${getCollectionTitle(collection)}`}
-			>
-				<span className="i-edit w-5 h-5" />
-			</Button>
-			<Button
-				variant="ghost"
-				size="sm"
-				onClick={(e) => {
-					e.stopPropagation()
-					onDelete()
-				}}
-				aria-label={`Delete ${getCollectionTitle(collection)}`}
-				disabled={isDeleting}
-			>
-				{isDeleting ? (
-					<div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" />
-				) : (
-					<Trash className="w-4 h-4 text-destructive" />
-				)}
-			</Button>
-		</>
-	)
+	const actions: EntityListItemAction[] = [
+		{
+			key: 'edit',
+			label: `Edit ${getCollectionTitle(collection)}`,
+			icon: <span className="i-edit w-5 h-5" />,
+			onClick: () => onEdit(),
+		},
+		{
+			key: 'delete',
+			label: `Delete ${getCollectionTitle(collection)}`,
+			icon: <Trash className="w-4 h-4 text-destructive" />,
+			onClick: () => onDelete(),
+			destructive: true,
+			pending: isDeleting,
+		},
+	]
 
 	return (
-		<DashboardListItem
+		<EntityListItem
 			isOpen={isExpanded}
 			onOpenChange={onToggleExpanded}
-			triggerContent={triggerContent}
+			trigger={triggerContent}
 			actions={actions}
 			isDeleting={isDeleting}
 			icon={<StoreIcon className="h-5 w-5 text-black" />}
@@ -80,7 +65,7 @@ function CollectionListItem({
 				collection={collection}
 				renderImage={(url) => <Media src={url} alt="Collection header" className="w-full h-full object-cover" />}
 			/>
-		</DashboardListItem>
+		</EntityListItem>
 	)
 }
 
