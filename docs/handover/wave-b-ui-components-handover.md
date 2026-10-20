@@ -466,12 +466,12 @@ errors on this base (all in files unrelated to the wallet). "tsc clean" here mea
 
 ## 9. Status of wave B, and what changes under you
 
-| Stage                                                                                                                   | State                     | Commit     |
-| ----------------------------------------------------------------------------------------------------------------------- | ------------------------- | ---------- |
-| B1 — coco is the mint authority (the dependency inversion that has to land first)                                       | **landed**                | `bfb09804` |
-| B2a — upgrade coco to the renamed `@cashu/coco-core@2.0.0` (+ `@cashu/coco-indexeddb`), port `src/lib/stores/cashu.ts`  | **in flight, not landed** | —          |
-| B2 — cut NIP-60: delete `src/lib/stores/nip60.ts`, re-home the wallet store onto coco, retarget every consumer and test | not started               | —          |
-| B3 — wire the coco-backed port + the rail registry behind `sdk/core/wallet`                                             | not started               | —          |
+| Stage                                                                                                                   | State                           | Commit     |
+| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ---------- |
+| B1 — coco is the mint authority (the dependency inversion that has to land first)                                       | **landed**                      | `bfb09804` |
+| B2a — upgrade coco to the renamed `@cashu/coco-core@2.0.0` (+ `@cashu/coco-indexeddb`), port `src/lib/stores/cashu.ts`  | **blocked — needs cashu-ts v5** | —          |
+| B2 — cut NIP-60: delete `src/lib/stores/nip60.ts`, re-home the wallet store onto coco, retarget every consumer and test | not started                     | —          |
+| B3 — wire the coco-backed port + the rail registry behind `sdk/core/wallet`                                             | not started                     | —          |
 
 Test-count floor: **2568** (base 2561 + 7 from B1). Your work raises it.
 
@@ -505,6 +505,15 @@ Test-count floor: **2568** (base 2561 + 7 from B1). Your work raises it.
    `@cashu/coco-core` 2.0.0 before B2.** (An earlier revision of this document claimed coco
    could not send to a P2PK output. That was measured on the pin, not on the library, and
    is withdrawn.)
+   **B2a is now measured and blocked, not merely pending.** coco 2.0.0 pins
+   `@cashu/cashu-ts@5.0.0-rc.4` exactly, while this app is on 2.9.0; porting `cashu.ts`
+   compiles (`tsc` 273 vs 274) but `bun test` fails at import —
+   `Export named 'Amount' not found in node_modules/@cashu/cashu-ts/...` — because coco's
+   `Amount` resolves to the root v2 copy. Making it one version means migrating the app to
+   cashu-ts v5: **+88 error sites across 28 files**, concentrated in the auction money paths,
+   and `Amount` becoming a class whose `toJSON()` returns a _string_. None of that touches the
+   props in §5. Until it lands, the auction P2PK legs stay on the cashu-ts v2 helpers they use
+   today.
 2. **Wallet key continuity.** The wallet's P2PK keypair and the auction HD root live in
    the encrypted kind-17375 event and nowhere else (no `localStorage` in
    `@nostr-dev-kit/wallet`). Deleting the NIP-60 read path without a local key store
@@ -521,10 +530,12 @@ Test-count floor: **2568** (base 2561 + 7 from B1). Your work raises it.
 
 ## 10. Amendments to this document
 
-- **B2a inserted; the P2PK blocker corrected.** §3 (engine named and versioned), §4
-  (import path), §9 (stage table gains B2a; blocker 1 rewritten). The withdrawn claim was
-  that coco cannot send to a P2PK output — that holds only for the pinned
-  `coco-cashu-core@1.0.0-rc11`; `@cashu/coco-core@2.0.0` supports full NUT-11 P2PK
-  (`locktime`, `refundKeys`, `sigFlags`, multisig). Verified by reading the published
-  tarballs' type definitions, not from documentation. **No §5 props contract changed**, so
-  nothing you have written is affected.
+- **B2a measured and blocked; the P2PK blocker corrected.** §3 (engine named and versioned), §4
+  (import path), §9 (stage table gains B2a — now _blocked_ — and blocker 1 rewritten). The
+  withdrawn claim was that coco cannot send to a P2PK output — that holds only for the pinned
+  `coco-cashu-core@1.0.0-rc11`; `@cashu/coco-core@2.0.0` declares
+  `P2pkSendOptions` with `locktime`, `refundKeys`, `sigFlag` and multisig tags. What blocks the
+  upgrade is the dependency line: 2.0.0 pins `@cashu/cashu-ts@5.0.0-rc.4`, and the single-version
+  fix is a measured 28-file migration in the auction money paths. Verified by reading the
+  published tarballs' type definitions and by running the gates, not from documentation. **No §5
+  props contract changed**, so nothing you have written is affected.
