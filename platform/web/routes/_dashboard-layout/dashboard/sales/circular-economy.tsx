@@ -1,5 +1,5 @@
 import { V4VManager } from '@/components/v4v/V4VManager'
-import { salesV4VConfig, salesV4VLabels } from '@/lib/v4v/labels'
+import { salesV4VConfig, salesV4VLabels } from '@sdk/commerce/v4v/labels'
 import { salesV4VManagerProps } from '@/lib/v4v/sales-props'
 import { deriveInitialSharesFromStored } from '@/lib/v4v/splits'
 import { authStore } from '@/lib/stores/auth'
