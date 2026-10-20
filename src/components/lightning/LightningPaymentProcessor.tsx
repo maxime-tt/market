@@ -528,7 +528,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					return
 				}
 
-				handlePaymentSuccess({ type: 'wallet_ack', method: 'nip60', atMs: Date.now() })
+				handlePaymentSuccess({ type: 'wallet_ack', method: 'cashu', atMs: Date.now() })
 			} catch (error) {
 				console.error('❌ NIP-60 wallet payment failed:', error)
 				setIsPaymentInProgress(false)

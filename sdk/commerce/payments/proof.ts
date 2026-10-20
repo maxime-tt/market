@@ -1,4 +1,15 @@
-export type WalletPaymentMethod = 'nwc' | 'webln' | 'nip60'
+/**
+ * The rail that moved the money: a connected NWC wallet, an in-page WebLN provider, or the
+ * app's own Cashu wallet.
+ *
+ * This names a *rail*, not the store the wallet keeps its proofs in: the app's Cashu rail is
+ * the same rail whether the wallet is the relay-backed NIP-60 store or the local coco
+ * repository behind it, so the name does not move when the storage does.
+ *
+ * Nothing persists it. `paymentProofToReceiptPreimage` writes no method for a `wallet_ack` —
+ * a receipt carries a preimage or an event id, never a claim about which rail paid.
+ */
+export type WalletPaymentMethod = 'nwc' | 'webln' | 'cashu'
 
 export type PaymentProof =
 	| { type: 'preimage'; preimage: string }

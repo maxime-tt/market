@@ -17,4 +17,12 @@ describe('paymentProofToReceiptPreimage', () => {
 	test('wallet_ack proof encodes as empty string', () => {
 		expect(paymentProofToReceiptPreimage({ type: 'wallet_ack', method: 'nwc', atMs: 1700000000000 })).toBe('')
 	})
+
+	test('every rail name encodes a wallet_ack as the empty string', () => {
+		// The receipt never carries a rail name — the method is a classification for the caller,
+		// not a wire field — so renaming a rail cannot change a published receipt.
+		for (const method of ['nwc', 'webln', 'cashu'] as const) {
+			expect(paymentProofToReceiptPreimage({ type: 'wallet_ack', method, atMs: 1700000000000 })).toBe('')
+		}
+	})
 })
