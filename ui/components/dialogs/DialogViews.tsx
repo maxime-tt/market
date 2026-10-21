@@ -4,6 +4,7 @@ import { Button } from '../../primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../primitives/dialog'
 import { QRCode } from '../../primitives/qr-code'
 import { Textarea } from '../../primitives/textarea'
+import { useCopyToClipboard } from '../../shared/use-copy-to-clipboard'
 
 export interface NSFWConfirmationDialogViewProps {
 	open: boolean
@@ -143,17 +144,15 @@ export interface ShareProfileDialogViewProps {
 
 export function ShareProfileDialogView({ open, onOpenChange, npub, profileName, onCopyResult }: ShareProfileDialogViewProps) {
 	const [isCopied, setIsCopied] = useState(false)
+	const { copy } = useCopyToClipboard()
 
 	const handleCopyNpub = async () => {
-		try {
-			await navigator.clipboard.writeText(npub)
-			setIsCopied(true)
-			onCopyResult?.(true)
-			setTimeout(() => setIsCopied(false), 2000)
-		} catch (error) {
-			console.error('Failed to copy npub:', error)
-			onCopyResult?.(false)
-		}
+		const action = await copy(npub)
+		const didCopy = action.type === 'copied'
+		setIsCopied(didCopy)
+		// The failure path is reported to the host rather than swallowed.
+		onCopyResult?.(didCopy)
+		if (didCopy) setTimeout(() => setIsCopied(false), 2000)
 	}
 
 	return (

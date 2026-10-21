@@ -4,6 +4,8 @@ import { Button } from '../../primitives/button'
 import { Input } from '../../primitives/input'
 import { Label } from '../../primitives/label'
 import { Spinner } from '../../primitives/spinner'
+import { Notice } from '../../shared/notice'
+import { useCopyToClipboard } from '../../shared/use-copy-to-clipboard'
 
 export type PrivateKeyLoginStep = 'stored-key' | 'set-password' | 'enter-key'
 
@@ -43,6 +45,8 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 	const [showPrivateKey, setShowPrivateKey] = useState(false)
 	const [acknowledgedWarning, setAcknowledgedWarning] = useState(false)
 	const [copied, setCopied] = useState(false)
+	const [copyError, setCopyError] = useState<string | null>(null)
+	const { copy } = useCopyToClipboard()
 	const privateKeyInputRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
@@ -58,13 +62,16 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 
 	const handleCopyToClipboard = async () => {
 		if (!privateKey) return
-		try {
-			await navigator.clipboard.writeText(privateKey)
+		const action = await copy(privateKey)
+		if (action.type === 'copied') {
+			setCopyError(null)
 			setCopied(true)
 			setTimeout(() => setCopied(false), 2000)
-		} catch (error) {
-			console.error('Failed to copy to clipboard:', error)
+			return
 		}
+		// Previously console.error only — the failure was invisible to the user.
+		setCopied(false)
+		setCopyError('Could not copy to clipboard. Select the key and copy it manually.')
 	}
 
 	if (step === 'stored-key') {
@@ -183,6 +190,12 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 						{showPrivateKey ? <EyeOff className="h-4 w-4 text-gray-500" /> : <Eye className="h-4 w-4 text-gray-500" />}
 					</Button>
 				</div>
+
+				{copyError && (
+					<Notice tone="error" compact>
+						{copyError}
+					</Notice>
+				)}
 
 				{props.keyError && (
 					<div className="flex items-center gap-2 text-sm text-red-500">

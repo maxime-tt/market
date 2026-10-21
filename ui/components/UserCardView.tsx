@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SyntheticEvent } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
+import { useCopyToClipboard } from '../shared/use-copy-to-clipboard'
 import { UiLink } from '../provider/UiProvider'
 import { cn } from '../utils/cn'
 
@@ -67,6 +68,7 @@ export function UserCardView({
 }: UserCardViewProps) {
 	const [textTooltip, setTextTooltip] = useState(TOOLTIP_DEFAULT)
 	const [forceShowTooltip, setForceShowTooltip] = useState(false)
+	const { copy } = useCopyToClipboard()
 
 	const textDisplayNpub = npub ? formatNpubForDisplay(npub) : 'Unknown user'
 	const textTitle = getUserCardTitle({ isProfileLoading: isLoading, profileDisplayName: displayName, textDisplayNpub })
@@ -87,13 +89,15 @@ export function UserCardView({
 		event.preventDefault()
 		if (npub == null) return
 
-		navigator.clipboard.writeText(npub)
-		setTextTooltip('Copied!')
-		setForceShowTooltip(true)
-		setTimeout(() => {
-			setTextTooltip(TOOLTIP_DEFAULT)
-			setForceShowTooltip(false)
-		}, 2000)
+		void copy(npub).then((action) => {
+			// A failed write used to leave the tooltip claiming success; surface it instead.
+			setTextTooltip(action.type === 'copied' ? 'Copied!' : 'Copy failed')
+			setForceShowTooltip(true)
+			setTimeout(() => {
+				setTextTooltip(TOOLTIP_DEFAULT)
+				setForceShowTooltip(false)
+			}, 2000)
+		})
 	}
 
 	const copyNpubWrapper = (child: ReactNode) =>

@@ -2,8 +2,7 @@ import { ChevronDown } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Button } from '../primitives/button'
 import { Separator } from '../primitives/separator'
-
-const formatSats = (sats: number): string => Math.round(sats).toLocaleString()
+import { formatSats } from '../utils/format'
 
 export function CartShippingReminder({ count, context = 'cart' }: { count: number; context?: 'cart' | 'checkout' }) {
 	if (count <= 0) return null

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../primitives/card'
 import { Progress } from '../../primitives/progress'
 import { QRCode } from '../../primitives/qr-code'
 import { Spinner } from '../../primitives/spinner'
+import { formatSats } from '../../utils/format'
 
 export type OnChainPaymentStatus = 'idle' | 'checking' | 'completed' | 'expired' | 'error'
 
@@ -29,8 +30,6 @@ export interface OnChainPaymentViewProps {
 	onManualCheck: () => void
 	onCancel: () => void
 }
-
-const formatSats = (sats: number): string => Math.round(sats).toLocaleString()
 
 function formatTime(seconds: number): string {
 	const minutes = Math.floor(seconds / 60)

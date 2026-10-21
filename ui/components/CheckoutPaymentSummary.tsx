@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../primitives/card'
 import { Check, Clock, Users, CreditCard, SkipForward } from 'lucide-react'
+import { formatSats } from '../utils/format'
 
 /** Display fields only; invoice lifecycle is decided by the host checkout flow. */
 export interface CheckoutInvoiceSummaryItem {
@@ -18,8 +19,6 @@ interface PaymentSummaryProps {
 }
 
 export function CheckoutPaymentSummary({ invoices, currentIndex, onSelectInvoice }: PaymentSummaryProps) {
-	const formatSats = (sats: number) => Math.round(sats).toLocaleString()
-
 	const paidCount = invoices.filter((inv) => inv.status === 'paid').length
 	const skippedCount = invoices.filter((inv) => inv.status === 'skipped').length
 	const totalAmount = invoices.reduce((sum, inv) => sum + inv.amount, 0)

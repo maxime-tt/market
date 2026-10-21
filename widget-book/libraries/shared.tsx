@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { DetailField } from '@ui/shared/detail-field'
 import { EmptyState } from '@ui/shared/empty-state'
 import { ErrorState } from '@ui/shared/error-state'
@@ -7,9 +8,39 @@ import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { EntityListItem } from '@ui/shared/entity-list-item'
 import { Notice } from '@ui/shared/notice'
 import { StatusBadge } from '@ui/shared/status-badge'
+import { CopyButton } from '@ui/shared/copy-button'
+import { TruncatedText } from '@ui/shared/truncated-text'
 import { PackageIcon, PencilIcon, StoreIcon, TrashIcon } from 'lucide-react'
 
 import type { WidgetLibrary } from '../libraries'
+
+/**
+ * Confirmation dialog demo. Kept closed at rest: a mounted open modal hides the
+ * whole catalogue from the accessibility tree, which broke every role-based
+ * assertion in this spec, so the dialog is opened from a trigger instead.
+ */
+function ConfirmDialogDemo({ destructive = false }: { destructive?: boolean }) {
+	const [open, setOpen] = useState(false)
+
+	return (
+		<div className="min-h-20 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+			<button type="button" className="rounded-md border px-3 py-1.5 text-sm" onClick={() => setOpen(true)}>
+				{destructive ? 'Open destructive confirmation' : 'Open confirmation'}
+			</button>
+			<ConfirmDialog
+				open={open}
+				onOpenChange={setOpen}
+				title={destructive ? 'Delete collection?' : 'Delete product?'}
+				description={
+					destructive ? 'Are you sure you want to delete "Summer favourites"?' : 'Are you sure you want to delete "Handmade mug"?'
+				}
+				confirmLabel="Delete"
+				destructive={destructive}
+				onConfirm={() => setOpen(false)}
+			/>
+		</div>
+	)
+}
 
 /**
  * Shared state atoms (ADR-0007 slice 1). Each entry is a literal-prop render so
@@ -74,36 +105,11 @@ export const shared: WidgetLibrary = {
 		},
 		{
 			name: 'ConfirmDialog',
-			render: () => (
-				<div className="min-h-20 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-					Open confirmation dialog (portalled to the catalogue body).
-					<ConfirmDialog
-						open
-						onOpenChange={() => {}}
-						title="Delete product?"
-						description='Are you sure you want to delete "Handmade mug"?'
-						confirmLabel="Delete"
-						onConfirm={() => {}}
-					/>
-				</div>
-			),
+			render: () => <ConfirmDialogDemo />,
 		},
 		{
 			name: 'ConfirmDialogDestructive',
-			render: () => (
-				<div className="min-h-20 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-					Open destructive confirmation dialog (portalled to the catalogue body).
-					<ConfirmDialog
-						open
-						onOpenChange={() => {}}
-						title="Delete collection?"
-						description='Are you sure you want to delete "Summer favourites"?'
-						confirmLabel="Delete"
-						destructive
-						onConfirm={() => {}}
-					/>
-				</div>
-			),
+			render: () => <ConfirmDialogDemo destructive />,
 		},
 		{
 			name: 'EntityListItem',
@@ -190,6 +196,23 @@ export const shared: WidgetLibrary = {
 					<StatusBadge status="Warning" tone="warning" />
 					<StatusBadge status="Error" tone="error" />
 					<StatusBadge status="Success" tone="success" />
+				</div>
+			),
+		},
+		{
+			name: 'CopyButton',
+			render: () => <CopyButton value="npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq" label="Copy npub" />,
+		},
+		{
+			name: 'CopyButtonIconOnly',
+			render: () => <CopyButton value="nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq" />,
+		},
+		{
+			name: 'TruncatedText',
+			render: () => (
+				<div className="flex flex-col gap-1">
+					<TruncatedText text="npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq" />
+					<TruncatedText text="short" />
 				</div>
 			),
 		},
