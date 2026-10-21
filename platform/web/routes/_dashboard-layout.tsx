@@ -1,5 +1,17 @@
 import { Button } from '@ui/primitives/button'
-import { dashboardNavigation } from '@/config/dashboardNavigation'
+import { BackButton } from '@ui/nav/back-button'
+import { SidebarNav } from '@ui/nav/sidebar-nav'
+import {
+	DASHBOARD_NAV,
+	findNavEmoji,
+	isFullBleedRoute,
+	resolveBackTarget,
+	resolveNavView,
+	shouldShowSidebarOnMobile,
+	showsPageTitle,
+	type NavBackTarget,
+	type NavBadgeCounts,
+} from '@ui/nav/model'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { cn } from '@/lib/utils'
 import { useAmIAdmin } from '@/queries/app-settings'
@@ -12,7 +24,7 @@ import { uiStore, uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { notificationStore } from '@/lib/stores/notifications'
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link, Outlet, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
 import { UserCard } from '@/components/UserCard'
 
@@ -26,134 +38,6 @@ export function useDashboardTitle(title: string) {
 		uiActions.setDashboardTitle(title)
 		return () => uiActions.setDashboardTitle('') // Reset to default on unmount
 	}, [title])
-}
-
-// Configuration for pages that need back buttons
-const backButtonRoutes: Record<string, { parentPath: string; parentTitle: string }> = {
-	'/dashboard/products/products/new': {
-		parentPath: '/dashboard/products/products',
-		parentTitle: '📦 Products',
-	},
-	// Dynamic route for editing products
-	'/dashboard/products/products/': {
-		parentPath: '/dashboard/products/products',
-		parentTitle: '📦 Products',
-	},
-	'/dashboard/products/collections/new': {
-		parentPath: '/dashboard/products/collections',
-		parentTitle: '🗂️ Collections',
-	},
-	// Dynamic route for editing collections
-	'/dashboard/products/collections/': {
-		parentPath: '/dashboard/products/collections',
-		parentTitle: '🗂️ Collections',
-	},
-	// Dynamic route for auction details/settlement
-	'/dashboard/products/auctions/': {
-		parentPath: '/dashboard/products/auctions',
-		parentTitle: '🔨 Auctions',
-	},
-	// Dynamic route for order details - uses browser history to return to correct page (sales or purchases)
-	'/dashboard/orders/': {
-		parentPath: '', // Empty path signals to use browser history
-		parentTitle: 'Orders',
-	},
-	// Dynamic route for message details
-	'/dashboard/sales/messages/': {
-		parentPath: '/dashboard/sales/messages',
-		parentTitle: '✉️ Messages',
-	},
-}
-
-// Helper to check if current route needs a back button
-function getBackButtonInfo(currentPath: string): { parentPath: string; parentTitle: string } | null {
-	// Check exact matches first
-	if (backButtonRoutes[currentPath]) {
-		return backButtonRoutes[currentPath]
-	}
-
-	// Check for product edit pages (pattern: /dashboard/products/products/[productId])
-	if (currentPath.startsWith('/dashboard/products/products/') && currentPath !== '/dashboard/products/products') {
-		return backButtonRoutes['/dashboard/products/products/']
-	}
-
-	// Check for collection edit pages (pattern: /dashboard/products/collections/[collectionId])
-	if (currentPath.startsWith('/dashboard/products/collections/') && currentPath !== '/dashboard/products/collections') {
-		return backButtonRoutes['/dashboard/products/collections/']
-	}
-
-	// Check for auction detail pages (pattern: /dashboard/products/auctions/[auctionId])
-	if (currentPath.startsWith('/dashboard/products/auctions/') && currentPath !== '/dashboard/products/auctions') {
-		return backButtonRoutes['/dashboard/products/auctions/']
-	}
-
-	// Check for order detail pages (pattern: /dashboard/orders/[orderId])
-	if (currentPath.startsWith('/dashboard/orders/') && currentPath !== '/dashboard/orders') {
-		return backButtonRoutes['/dashboard/orders/']
-	}
-
-	// Check for message detail pages (pattern: /dashboard/sales/messages/[pubkey])
-	if (currentPath.startsWith('/dashboard/sales/messages/') && currentPath !== '/dashboard/sales/messages') {
-		return backButtonRoutes['/dashboard/sales/messages/']
-	}
-
-	return null
-}
-
-// Helper to get emoji for current route
-function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | null {
-	if (showSidebar) return null
-
-	for (const section of dashboardNavigation) {
-		for (const item of section.items) {
-			if (currentPath.startsWith(item.path)) {
-				const match = item.title.match(/^([^ ]+) /)
-				return match ? match[1] : null
-			}
-		}
-	}
-	return null
-}
-
-// Helper to get notification count for a navigation item
-function getNotificationCount(
-	path: string,
-	unseenOrders: number,
-	unseenMessages: number,
-	unseenPurchases: number,
-	unseenAuctionBids: number,
-	unseenAuctionLiveChatComments: number,
-	unseenAuctionThreadComments: number,
-	unseenProductThreadComments: number,
-	unseenScheduledAuctionsNowLive: number,
-	unseenAuctionSettlementBegins: number,
-	unseenBidUpdates: number,
-): number {
-	if (path === '/dashboard/sales/sales') {
-		return unseenOrders
-	}
-	if (path === '/dashboard/sales/messages') {
-		return unseenMessages
-	}
-	if (path === '/dashboard/account/your-purchases') {
-		return unseenPurchases
-	}
-	if (path === '/dashboard/products/auctions') {
-		return (
-			unseenAuctionBids +
-			unseenAuctionLiveChatComments +
-			unseenAuctionThreadComments +
-			unseenScheduledAuctionsNowLive +
-			unseenAuctionSettlementBegins
-		)
-	}
-	if (path === '/dashboard/products/products') {
-		return unseenProductThreadComments
-	}
-	if (path === '/dashboard/products/bids') {
-		return unseenBidUpdates
-	}
-	return 0
 }
 
 // Component to show when user is not authenticated
@@ -175,7 +59,6 @@ function LoginPrompt() {
 }
 
 function DashboardLayout() {
-	const matchRoute = useMatchRoute()
 	const navigate = useNavigate()
 	const location = useLocation()
 	const breakpoint = useBreakpoint()
@@ -202,18 +85,41 @@ function DashboardLayout() {
 	const { data: config } = useConfigQuery()
 	const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
 
-	// Filter navigation based on admin status
-	const filteredNavigation = React.useMemo(() => {
-		if (isLoadingAdmin) return dashboardNavigation // Show all while loading
+	// Badge counters the nav model keys off; the model sums each item's declared keys.
+	const badgeCounts: NavBadgeCounts = {
+		unseenOrders,
+		unseenMessages,
+		unseenPurchases,
+		unseenAuctionBids,
+		unseenAuctionLiveChatComments,
+		unseenAuctionThreadComments,
+		unseenProductThreadComments,
+		unseenScheduledAuctionsNowLive,
+		unseenAuctionSettlementBegins,
+		unseenBidUpdates,
+	}
 
-		return dashboardNavigation
-			.filter((section) => !section.adminOnly || amIAdmin) // Filter out admin-only sections for non-admins
-			.map((section) => ({
-				...section,
-				items: section.items.filter((item) => !item.adminOnly || amIAdmin), // Filter out admin-only items for non-admins
-			}))
-			.filter((section) => section.items.length > 0) // Remove empty sections
-	}, [amIAdmin, isLoadingAdmin])
+	// Admin filtering, badge resolution and active state all come from the model.
+	const navSections = React.useMemo(
+		() => resolveNavView(DASHBOARD_NAV, location.pathname, badgeCounts, { isAdmin: amIAdmin, isAdminLoading: isLoadingAdmin }),
+		// badgeCounts is rebuilt every render, so depend on its members instead.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[
+			location.pathname,
+			amIAdmin,
+			isLoadingAdmin,
+			unseenOrders,
+			unseenMessages,
+			unseenPurchases,
+			unseenAuctionBids,
+			unseenAuctionLiveChatComments,
+			unseenAuctionThreadComments,
+			unseenProductThreadComments,
+			unseenScheduledAuctionsNowLive,
+			unseenAuctionSettlementBegins,
+			unseenBidUpdates,
+		],
+	)
 
 	// Simple emoji detection - match common emoji patterns at start
 	const emojiRegex =
@@ -233,18 +139,15 @@ function DashboardLayout() {
 		enabled: !!chatPubkey,
 	})
 
-	// Check if current route needs a back button
-	const backButtonInfo = getBackButtonInfo(location.pathname)
-	const needsBackButton = !!backButtonInfo && !isMobile
+	// Back control comes from the model's rules, not a per-path table.
+	const backTarget = resolveBackTarget(location.pathname)
+	const needsBackButton = !!backTarget && !isMobile
+	const fullBleed = isFullBleedRoute(DASHBOARD_NAV, location.pathname)
 
 	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
 	React.useEffect(() => {
 		if (isMobile) {
-			if (location.pathname === '/dashboard') {
-				setShowSidebar(true)
-			} else {
-				setShowSidebar(false)
-			}
+			setShowSidebar(shouldShowSidebarOnMobile(location.pathname))
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [location.pathname, isMobile])
@@ -253,47 +156,35 @@ function DashboardLayout() {
 		if (isMobile) setShowSidebar(false)
 	}
 
-	const handleBackToSidebar = () => {
-		if (isMobile) {
-			// Check if we're on a product creation/edit page and navigate accordingly
-			if (location.pathname.startsWith('/dashboard/products/products/')) {
-				navigate({ to: '/dashboard/products/products' })
-			}
-			// Check if we're on a collection creation/edit page and navigate accordingly
-			else if (location.pathname.startsWith('/dashboard/products/collections/')) {
-				navigate({ to: '/dashboard/products/collections' })
-			}
-			// Check if we're on an auction detail page and navigate accordingly
-			else if (location.pathname.startsWith('/dashboard/products/auctions/')) {
-				navigate({ to: '/dashboard/products/auctions' })
-			}
-			// Check if we're on an order detail page and navigate accordingly
-			else if (location.pathname.startsWith('/dashboard/orders/')) {
-				navigate({ to: '/dashboard/sales/sales' })
-			}
-			// Check if we're on a message detail page and navigate accordingly
-			else if (location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages') {
-				navigate({ to: '/dashboard/sales/messages' })
-			} else {
-				// Default behavior - back to dashboard
-				setShowSidebar(true)
-				navigate({ to: '/dashboard' })
-			}
+	const followBackTarget = (target: NavBackTarget) => {
+		// A `history` target means "go back in browser history": order details are
+		// reachable from both sales and purchases, so there is no single parent.
+		if (target.kind === 'history') {
+			window.history.back()
+			return
 		}
+		navigate({ to: target.path })
+	}
+
+	const handleBackToSidebar = () => {
+		if (!isMobile) return
+		// Unified with the desktop path. The legacy mobile handler duplicated this
+		// branch logic and disagreed with it for order details, which it forced to
+		// /dashboard/sales/sales while desktop used browser history.
+		if (backTarget) {
+			followBackTarget(backTarget)
+			return
+		}
+		setShowSidebar(true)
+		navigate({ to: '/dashboard' })
 	}
 
 	const handleBackToParent = () => {
-		if (backButtonInfo) {
-			// If parentPath is empty, use browser history to go back (for order details)
-			if (!backButtonInfo.parentPath) {
-				window.history.back()
-			} else {
-				navigate({ to: backButtonInfo.parentPath })
-			}
-		}
+		if (backTarget) followBackTarget(backTarget)
 	}
 
-	const emoji = getCurrentEmoji(showSidebar, typeof window !== 'undefined' ? window.location.pathname : '')
+	const emoji = findNavEmoji(DASHBOARD_NAV, location.pathname)
+	const showTitle = showsPageTitle(DASHBOARD_NAV, location.pathname, needsBackButton)
 
 	return (
 		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
@@ -301,15 +192,7 @@ function DashboardLayout() {
 			<div className="lg:hidden top-[8.5rem] z-10 sticky">
 				<h1 className="relative flex justify-center items-center gap-2 bg-secondary-black p-4 font-heading text-secondary text-center">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
-					{!showSidebar && isMobile && (
-						<button
-							onClick={handleBackToSidebar}
-							className="top-1/2 left-2 sm:left-3 md:left-4 z-20 absolute flex justify-center items-center focus:outline-none w-12 h-12 text-secondary -translate-y-1/2 cursor-pointer"
-							aria-label="Back to sidebar"
-						>
-							<span className="w-6 h-6 i-back" />
-						</button>
-					)}
+					{!showSidebar && isMobile && <BackButton variant="icon" ariaLabel="Back to sidebar" onClick={handleBackToSidebar} />}
 
 					{/* Title */}
 					<span className="flex justify-center items-center gap-2 px-8 sm:px-12 md:px-16 w-full min-w-0 text-3xl truncate">
@@ -350,49 +233,21 @@ function DashboardLayout() {
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
 						<aside className="lg:flex-shrink-0 lg:bg-white lg:border lg:border-black lg:rounded w-full lg:w-80 lg:max-h-full lg:overflow-y-auto">
-							<div className="lg:space-y-2">
-								{filteredNavigation.map((section) => (
-									<div key={section.title}>
-										<h3 className="bg-tertiary-black mb-0 lg:mb-2 px-4 py-2 font-heading text-white">{section.title}</h3>
-										<nav className="space-y-2 p-4 lg:p-0 lg:text-base text-xl">
-											{section.items.map((item) => {
-												const isActive = matchRoute({ to: item.path, fuzzy: true })
-												const notificationCount = getNotificationCount(
-													item.path,
-													unseenOrders,
-													unseenMessages,
-													unseenPurchases,
-													unseenAuctionBids,
-													unseenAuctionLiveChatComments,
-													unseenAuctionThreadComments,
-													unseenProductThreadComments,
-													unseenScheduledAuctionsNowLive,
-													unseenAuctionSettlementBegins,
-													unseenBidUpdates,
-												)
-												return (
-													<Link
-														key={item.path}
-														to={item.path}
-														className="block relative bg-white data-[status=active]:bg-secondary lg:bg-transparent p-4 lg:px-6 lg:py-2 border border-black data-[status=active]:border-secondary lg:border-0 rounded lg:rounded-none font-bold data-[status=active]:text-white hover:text-pink-500 transition-colors"
-														onClick={handleSidebarItemClick}
-														data-status={isActive ? 'active' : 'inactive'}
-													>
-														<span className="flex justify-between items-center">
-															<span>{item.title}</span>
-															{notificationCount > 0 && (
-																<span className="inline-flex justify-center items-center bg-pink-500 ml-2 px-2 rounded-full min-w-[1.5rem] h-6 font-bold text-white text-xs">
-																	{notificationCount > 99 ? '99+' : notificationCount}
-																</span>
-															)}
-														</span>
-													</Link>
-												)
-											})}
-										</nav>
-									</div>
-								))}
-							</div>
+							<SidebarNav
+								sections={navSections}
+								onNavigate={handleSidebarItemClick}
+								renderLink={({ item, className, active, onNavigate, children }) => (
+									<Link
+										key={item.path}
+										to={item.path}
+										className={className}
+										onClick={onNavigate}
+										data-status={active ? 'active' : 'inactive'}
+									>
+										{children}
+									</Link>
+								)}
+							/>
 						</aside>
 					)}
 
@@ -406,16 +261,12 @@ function DashboardLayout() {
 							{/* Desktop back button and title - fixed to top of container */}
 							{needsBackButton && (
 								<div className="top-0 z-10 relative sticky flex flex-shrink-0 items-center bg-white mb-0 p-4 lg:p-8 pb-4 border-gray-200 border-b">
-									<button
+									<BackButton
+										variant="inline"
+										label={backTarget.kind === 'route' ? `Back to ${backTarget.label}` : 'Back'}
+										ariaLabel={backTarget.kind === 'route' ? `Back to ${backTarget.label}` : 'Go back'}
 										onClick={handleBackToParent}
-										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors cursor-pointer"
-										aria-label={backButtonInfo?.parentPath ? `Back to ${backButtonInfo?.parentTitle}` : 'Go back'}
-									>
-										<span className="w-5 h-5 i-back" />
-										<span className="font-medium text-sm">
-											{backButtonInfo?.parentPath ? `Back to ${backButtonInfo?.parentTitle}` : 'Back'}
-										</span>
-									</button>
+									/>
 
 									{!isMobile && (
 										<h1 className="left-1/2 absolute flex items-center gap-2 font-bold text-[1.6rem] -translate-x-1/2">
@@ -444,95 +295,13 @@ function DashboardLayout() {
 									<div className="h-full">{!isAuthenticated ? <LoginPrompt /> : <Outlet />}</div>
 								) : (
 									<div className="h-full">
-										<div
-											className={cn(
-												'bg-white lg:bg-transparent p-4 lg:p-8 h-full',
-												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
-												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/products/products' && 'p-0 lg:p-0',
-												location.pathname.startsWith('/dashboard/products/auctions') && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/products/bids' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/products/collections' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/products/migration-tool' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/products/receiving-payments' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/products/shipping-options' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/account/profile' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/account/making-payments' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/account/receiving-payments' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/account/your-purchases' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/account/network' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/account/preferences' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/account/vanity-url' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/account/nostr-address' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/app-settings/app-miscelleneous' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/app-settings/team' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/app-settings/blacklists' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/app-settings/featured-items' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/about' && 'p-0 lg:p-0',
-											)}
-										>
+										<div className={cn('bg-white lg:bg-transparent p-4 lg:p-8 h-full', fullBleed && 'p-0 lg:p-0')}>
 											{/* Only show title here if there's no back button */}
-											{!isMobile &&
-												!needsBackButton &&
-												location.pathname !== '/dashboard' &&
-												location.pathname !== '/dashboard/sales/sales' &&
-												!location.pathname.startsWith('/dashboard/sales/messages') &&
-												location.pathname !== '/dashboard/sales/circular-economy' &&
-												location.pathname !== '/dashboard/products/products' &&
-												location.pathname !== '/dashboard/products/auctions' &&
-												location.pathname !== '/dashboard/products/bids' &&
-												location.pathname !== '/dashboard/products/collections' &&
-												location.pathname !== '/dashboard/products/migration-tool' &&
-												location.pathname !== '/dashboard/products/receiving-payments' &&
-												location.pathname !== '/dashboard/products/shipping-options' &&
-												location.pathname !== '/dashboard/account/profile' &&
-												location.pathname !== '/dashboard/account/making-payments' &&
-												location.pathname !== '/dashboard/account/receiving-payments' &&
-												location.pathname !== '/dashboard/account/your-purchases' &&
-												location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
-												location.pathname !== '/dashboard/app-settings/team' &&
-												location.pathname !== '/dashboard/app-settings/blacklists' &&
-												location.pathname !== '/dashboard/app-settings/featured-items' &&
-												location.pathname !== '/dashboard/account/network' &&
-												location.pathname !== '/dashboard/about' &&
-												location.pathname !== '/dashboard/account/preferences' &&
-												location.pathname !== '/dashboard/account/vanity-url' &&
-												location.pathname !== '/dashboard/account/nostr-address' && (
-													<h1 className="mb-4 font-bold text-[1.6rem]">{dashboardTitle}</h1>
-												)}
+											{!isMobile && showTitle && <h1 className="mb-4 font-bold text-[1.6rem]">{dashboardTitle}</h1>}
 											{!isAuthenticated ? (
 												<LoginPrompt />
 											) : (
 												<>
-													{/* Only show title here if there's no back button */}
-													{!isMobile &&
-														!needsBackButton &&
-														location.pathname !== '/dashboard/sales/sales' &&
-														!location.pathname.startsWith('/dashboard/sales/messages') &&
-														location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
-														location.pathname !== '/dashboard/app-settings/team' &&
-														location.pathname !== '/dashboard/app-settings/blacklists' &&
-														location.pathname !== '/dashboard/app-settings/featured-items' &&
-														location.pathname !== '/dashboard/sales/circular-economy' &&
-														location.pathname !== '/dashboard/products/products' &&
-														location.pathname !== '/dashboard/products/auctions' &&
-														location.pathname !== '/dashboard/products/bids' &&
-														location.pathname !== '/dashboard/products/collections' &&
-														location.pathname !== '/dashboard/products/migration-tool' &&
-														location.pathname !== '/dashboard/products/receiving-payments' &&
-														location.pathname !== '/dashboard/products/shipping-options' &&
-														location.pathname !== '/dashboard/account/profile' &&
-														location.pathname !== '/dashboard/account/making-payments' &&
-														location.pathname !== '/dashboard/account/receiving-payments' &&
-														location.pathname !== '/dashboard/account/your-purchases' &&
-														location.pathname !== '/dashboard/account/network' &&
-														location.pathname !== '/dashboard/about' &&
-														location.pathname !== '/dashboard/account/preferences' &&
-														location.pathname !== '/dashboard/account/vanity-url' &&
-														location.pathname !== '/dashboard/account/nostr-address' && (
-															<h1 className="mb-4 font-bold text-[1.6rem]">{dashboardTitle}</h1>
-														)}
 													<Outlet />
 												</>
 											)}
