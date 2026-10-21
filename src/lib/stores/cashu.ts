@@ -237,6 +237,29 @@ export const cashuActions = {
 	},
 
 	/**
+	 * Remove a mint from the wallet.
+	 *
+	 * coco has no `removeMint` on this pin, so the mint is re-added untrusted:
+	 * that is what takes it out of the set the wallet will spend from. The
+	 * store's projection of the mint list belongs to `syncMints`, so this
+	 * action does not write it.
+	 */
+	removeMint: async (mintUrl: string): Promise<void> => {
+		const manager = cashuStore.state.manager
+		if (!manager) {
+			throw new Error('Wallet not initialized')
+		}
+
+		try {
+			await manager.mint.addMint(mintUrl, { trusted: false })
+			console.log('[cashu] Mint removed:', mintUrl)
+		} catch (err) {
+			console.error('[cashu] Failed to remove mint:', err)
+			throw err
+		}
+	},
+
+	/**
 	 * Refresh balances from coco
 	 */
 	refreshBalances: async (): Promise<void> => {

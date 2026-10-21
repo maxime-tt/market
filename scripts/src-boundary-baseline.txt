@@ -27,7 +27,7 @@ sdk -> src test 0 0
 src -> platform production 28 23
 src -> platform test 31 17
 
-src -> ui production 243 121
+src -> ui production 241 121
 src -> ui test 0 0
 
 src -> sdk production 165 121

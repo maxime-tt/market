@@ -1,32 +1,16 @@
-import { DEFAULT_TRUSTED_MINTS } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
-import { configStore } from '@/lib/stores/config'
-import {
-	nip60Actions,
-	nip60Store,
-	NIP60_DEV_TEST_MINTS,
-	isNip60WalletDevModeEnabled,
-	type PendingNip60Token,
-	type Nip60DevAuctionBidResult,
-	type Nip60TestMintResult,
-} from '@/lib/stores/nip60'
+import { nip60Actions, type Nip60DevAuctionBidResult, type Nip60TestMintResult } from '@/lib/stores/nip60'
 import { cashuActions, cashuStore, type PendingToken } from '@/lib/stores/cashu'
 import { useStore } from '@tanstack/react-store'
 import {
-	ArrowDownLeft,
-	ArrowUpRight,
-	ArrowUpDown,
 	Loader2,
 	Landmark,
 	Plus,
 	RefreshCw,
 	X,
-	Save,
-	Star,
 	Zap,
 	Send,
 	QrCode,
-	ChevronRight,
 	Coins,
 	Gavel,
 	Clock,
@@ -53,32 +37,22 @@ import {
 	AlertDialogTitle,
 } from '@ui/primitives/alert-dialog'
 import { Input } from '@ui/primitives/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
-import { extractProofsByMint, getMintHostname, type ProofInfo } from '@/lib/wallet'
+import { getMintHostname } from '@/lib/wallet'
 import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'
 import { cn } from '@/lib/utils'
-
-// Unified pending token type for UI
-type UnifiedPendingToken = (PendingToken | PendingNip60Token) & { source: 'cashu' | 'nip60' }
 
 type ModalType = 'deposit' | 'withdraw' | 'send' | 'receive' | null
 
 export function Nip60Wallet() {
 	const { isAuthenticated, user } = useStore(authStore)
-	const appStage = useStore(configStore, (state) => state.config.stage)
-	const { status, balance, mintBalances, mints, defaultMint, transactions, error, pendingTokens: nip60PendingTokens } = useStore(nip60Store)
-	const { pendingTokens: cashuPendingTokens } = useStore(cashuStore)
-	const [isCreating, setIsCreating] = useState(false)
+	const { status, totalBalance, balances, mints, error, pendingTokens } = useStore(cashuStore)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [newMintUrl, setNewMintUrl] = useState('')
-	const [isSaving, setIsSaving] = useState(false)
 	const [openModal, setOpenModal] = useState<ModalType>(null)
-	const [openSection, setOpenSection] = useState<'mints' | 'transactions' | 'proofs' | 'pending' | null>(null)
-	const [expandedMints, setExpandedMints] = useState<Set<string>>(new Set())
-	const [viewingToken, setViewingToken] = useState<UnifiedPendingToken | null>(null)
+	const [openSection, setOpenSection] = useState<'mints' | 'pending' | null>(null)
+	const [viewingToken, setViewingToken] = useState<PendingToken | null>(null)
 	const [isReclaiming, setIsReclaiming] = useState<string | null>(null)
 	const [copied, setCopied] = useState(false)
 	const [devMintAmount, setDevMintAmount] = useState('1000')
@@ -87,51 +61,17 @@ export function Nip60Wallet() {
 	const [isDevBidding, setIsDevBidding] = useState(false)
 	const [lastDevMint, setLastDevMint] = useState<Nip60TestMintResult | null>(null)
 	const [lastDevBid, setLastDevBid] = useState<Nip60DevAuctionBidResult | null>(null)
-	const walletDevMode = appStage === 'staging' || isNip60WalletDevModeEnabled()
-	// Instance-configured allowlist (ADR-018) takes precedence; DEFAULT_TRUSTED_MINTS
-	// is only the shipped tier-3 fallback for before config loads or an instance
-	// that hasn't set its own list.
-	const configTrustedMints = useStore(configStore, (state) => state.config.trustedMints)
-	const defaultMints = useMemo(
-		() =>
-			Array.from(
-				new Set([
-					...(configTrustedMints?.length ? configTrustedMints : DEFAULT_TRUSTED_MINTS),
-					...(walletDevMode ? NIP60_DEV_TEST_MINTS : []),
-				]),
-			),
-		[configTrustedMints, walletDevMode],
+	// Dev-only tools are gated on the bundler's dev flag. It is read defensively
+	// because reading `.DEV` off a missing `import.meta.env` would throw at
+	// module load (Bun does not define `import.meta.env` in its client bundle).
+	const walletDevMode = Boolean(import.meta.env && import.meta.env.DEV)
+	const [tokenPendingRemoval, setTokenPendingRemoval] = useState<PendingToken | null>(null)
+
+	// Pending tokens coco has generated but the recipient has not claimed.
+	const activePendingTokens: PendingToken[] = useMemo(
+		() => pendingTokens.filter((t) => t.status === 'pending').sort((a, b) => b.createdAt - a.createdAt),
+		[pendingTokens],
 	)
-	const [tokenPendingRemoval, setTokenPendingRemoval] = useState<UnifiedPendingToken | null>(null)
-
-	// Combine pending tokens from both stores
-	const activePendingTokens: UnifiedPendingToken[] = useMemo(
-		() =>
-			[
-				...cashuPendingTokens.filter((t) => t.status === 'pending').map((t) => ({ ...t, source: 'cashu' as const })),
-				...nip60PendingTokens.filter((t) => t.status === 'pending').map((t) => ({ ...t, source: 'nip60' as const })),
-			].sort((a, b) => b.createdAt - a.createdAt),
-		[cashuPendingTokens, nip60PendingTokens],
-	)
-
-	// Get proofs from wallet state using shared utility
-	const proofsByMint = useMemo(() => {
-		const wallet = nip60Actions.getWallet()
-		if (!wallet) return new Map<string, ProofInfo[]>()
-		return extractProofsByMint(wallet, mints)
-	}, [balance, mints]) // Re-compute when balance or mints change
-
-	const toggleMintExpanded = (mint: string) => {
-		setExpandedMints((prev) => {
-			const next = new Set(prev)
-			if (next.has(mint)) {
-				next.delete(mint)
-			} else {
-				next.add(mint)
-			}
-			return next
-		})
-	}
 
 	useEffect(() => {
 		if (!isAuthenticated || !user?.pubkey) {
@@ -140,45 +80,36 @@ export function Nip60Wallet() {
 
 		// Initialize wallet if not already initialized
 		if (status === 'idle') {
-			nip60Actions.initialize(user.pubkey)
+			cashuActions.initialize()
 		}
 	}, [isAuthenticated, user?.pubkey, status])
-
-	const handleCreateWallet = async () => {
-		setIsCreating(true)
-		try {
-			await nip60Actions.createWallet(defaultMints)
-		} finally {
-			setIsCreating(false)
-		}
-	}
 
 	const handleRefresh = async () => {
 		setIsRefreshing(true)
 		try {
-			// Always consolidate on manual refresh to clean up spent proofs
-			await nip60Actions.refresh({ consolidate: true })
+			// Re-read balances from coco
+			await cashuActions.refreshBalances()
 		} finally {
 			setIsRefreshing(false)
 		}
 	}
 
-	const handleAddMint = () => {
-		if (!newMintUrl.trim()) return
-		nip60Actions.addMint(newMintUrl)
-		setNewMintUrl('')
-	}
-
-	const handleRemoveMint = (mintUrl: string) => {
-		nip60Actions.removeMint(mintUrl)
-	}
-
-	const handleSaveWallet = async () => {
-		setIsSaving(true)
+	const handleAddMint = async () => {
+		const mintUrl = newMintUrl.trim()
+		if (!mintUrl) return
 		try {
-			await nip60Actions.publishWallet()
-		} finally {
-			setIsSaving(false)
+			await cashuActions.addMint(mintUrl)
+			setNewMintUrl('')
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to add mint')
+		}
+	}
+
+	const handleRemoveMint = async (mintUrl: string) => {
+		try {
+			await cashuActions.removeMint(mintUrl)
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to remove mint')
 		}
 	}
 
@@ -193,15 +124,10 @@ export function Nip60Wallet() {
 		}
 	}
 
-	const handleReclaim = async (pendingToken: UnifiedPendingToken) => {
+	const handleReclaim = async (pendingToken: PendingToken) => {
 		setIsReclaiming(pendingToken.id)
 		try {
-			let success: boolean
-			if (pendingToken.source === 'cashu') {
-				success = await cashuActions.reclaimToken(pendingToken.id)
-			} else {
-				success = await nip60Actions.reclaimToken(pendingToken.id)
-			}
+			const success = await cashuActions.reclaimToken(pendingToken.id)
 			if (success) {
 				toast.success('Token reclaimed! Funds returned to wallet.')
 			} else {
@@ -215,12 +141,8 @@ export function Nip60Wallet() {
 		}
 	}
 
-	const handleRemovePendingToken = (token: UnifiedPendingToken) => {
-		if (token.source === 'cashu') {
-			cashuActions.removePendingToken(token.id)
-		} else {
-			nip60Actions.removePendingToken(token.id)
-		}
+	const handleRemovePendingToken = (token: PendingToken) => {
+		cashuActions.removePendingToken(token.id)
 		toast.success('Token removed from history')
 	}
 
@@ -233,8 +155,7 @@ export function Nip60Wallet() {
 
 		setIsDevMinting(true)
 		try {
-			const preferredMintUrl = defaultMint || mints[0]
-			const result = await nip60Actions.mintTestEcash(amount, preferredMintUrl)
+			const result = await nip60Actions.mintTestEcash(amount, mints[0])
 			setLastDevMint(result)
 			toast.success(`Minted ${result.amount.toLocaleString()} sats from ${getMintHostname(result.mintUrl)}`)
 		} catch (err) {
@@ -253,8 +174,7 @@ export function Nip60Wallet() {
 
 		setIsDevBidding(true)
 		try {
-			const preferredMintUrl = defaultMint || mints[0]
-			const result = await nip60Actions.placeDevBidOnSeededAuction({ preferredBidAmount, preferredMintUrl })
+			const result = await nip60Actions.placeDevBidOnSeededAuction({ preferredBidAmount, preferredMintUrl: mints[0] })
 			setLastDevBid(result)
 			toast.success(`Bid placed: ${result.bidAmount.toLocaleString()} sats on "${result.auctionTitle}"`)
 		} catch (err) {
@@ -311,18 +231,6 @@ export function Nip60Wallet() {
 		)
 	}
 
-	if (status === 'no_wallet') {
-		return (
-			<div className="bg-primary p-4 rounded-lg w-80 text-center">
-				<p className="mb-4 text-gray-400">No Cashu wallet found</p>
-				<Button onClick={handleCreateWallet} disabled={isCreating} variant="secondary">
-					{isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-					Create Wallet
-				</Button>
-			</div>
-		)
-	}
-
 	return (
 		<div className="bg-primary p-4 rounded-lg max-w-full overflow-hidden text-white">
 			<div className="relative mb-4 text-center">
@@ -332,7 +240,7 @@ export function Nip60Wallet() {
 					</Button>
 				</div>
 				<p className="mb-1 text-gray-400 text-sm">Balance</p>
-				<p className="font-bold text-white text-2xl">{balance.toLocaleString()} sats</p>
+				<p className="font-bold text-white text-2xl">{totalBalance.toLocaleString()} sats</p>
 			</div>
 
 			{/* Action Buttons */}
@@ -341,7 +249,7 @@ export function Nip60Wallet() {
 					<Zap className="w-4 h-4" />
 					Deposit
 				</Button>
-				<Button className={classNameWarning} size="sm" onClick={() => setOpenModal('withdraw')} disabled={balance === 0}>
+				<Button className={classNameWarning} size="sm" onClick={() => setOpenModal('withdraw')} disabled={totalBalance === 0}>
 					<Zap className="w-4 h-4" />
 					Withdraw
 				</Button>
@@ -349,7 +257,7 @@ export function Nip60Wallet() {
 					<QrCode className="w-4 h-4" />
 					Receive eCash
 				</Button>
-				<Button className={classNameMuted} size="sm" onClick={() => setOpenModal('send')} disabled={balance === 0}>
+				<Button className={classNameMuted} size="sm" onClick={() => setOpenModal('send')} disabled={totalBalance === 0}>
 					<Send className="w-4 h-4" />
 					Send eCash
 				</Button>
@@ -358,7 +266,7 @@ export function Nip60Wallet() {
 			{walletDevMode && (
 				<div className="mb-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 space-y-2">
 					<p className="text-xs uppercase tracking-wide text-amber-300 font-semibold">Auction Test Tools</p>
-					<p className="text-xs text-amber-100/80">Available on staging and local dev for seeded auctions and fallback testnut mints.</p>
+					<p className="text-xs text-amber-100/80">Available in local development for seeded auctions and fallback testnut mints.</p>
 
 					<div className="flex gap-2">
 						<Input
@@ -415,46 +323,7 @@ export function Nip60Wallet() {
 				</div>
 			)}
 
-			{/* Default Mint Selector */}
-			<div className="mb-2 pt-2 overflow-hidden">
-				<p className="mb-2 font-medium text-gray-300 text-sm">Default Mint</p>
-				{mints.length > 0 ? (
-					<Select value={defaultMint ?? ''} onValueChange={(value) => nip60Actions.setDefaultMint(value || null)}>
-						<SelectTrigger className="bg-white/10 hover:bg-white/15 border-white/20 w-full text-white">
-							<SelectValue placeholder="Select a default mint">
-								{defaultMint ? (
-									<span className="flex items-center gap-2 truncate">
-										<Star className="fill-current w-4 h-4 text-yellow-500 shrink-0" />
-										<span className="truncate">{getMintHostname(defaultMint)}</span>
-										{mintBalances[defaultMint] !== undefined && (
-											<span className="text-gray-400 shrink-0">({mintBalances[defaultMint].toLocaleString()})</span>
-										)}
-									</span>
-								) : (
-									'Select a default mint'
-								)}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent className="bg-primary border-white/20 max-w-[calc(100vw-2rem)]">
-							{mints.map((mint) => (
-								<SelectItem key={mint} value={mint} className="hover:bg-white/10 focus:bg-white/10 text-white focus:text-white">
-									<div className="flex items-center gap-2">
-										<Landmark className="w-4 h-4 shrink-0" />
-										<span className="truncate">{getMintHostname(mint)}</span>
-										{mintBalances[mint] !== undefined && (
-											<span className="text-gray-400 shrink-0">({mintBalances[mint].toLocaleString()})</span>
-										)}
-									</div>
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				) : (
-					<p className="text-gray-400 text-sm">No mints configured</p>
-				)}
-			</div>
-
-			{/* Toggle Row: Mints, Transactions, Proofs */}
+			{/* Toggle Row: Mints, Pending */}
 			<div className="pt-2 overflow-hidden">
 				{/* Toggle buttons row */}
 				<div className="flex gap-1 mb-2">
@@ -467,27 +336,9 @@ export function Nip60Wallet() {
 						<Landmark className="w-4 h-4 shrink-0" />
 						<span className="text-xs">{mints.length}</span>
 					</Button>
-					<Button
-						className={cn(openSection === 'transactions' ? classNameActive : classNameSubtle, 'flex-1 gap-1.5 px-2')}
-						size="sm"
-						onClick={() => setOpenSection(openSection === 'transactions' ? null : 'transactions')}
-						title="Transactions"
-					>
-						<ArrowUpDown className="w-4 h-4 shrink-0" />
-						<span className="text-xs">{transactions.length}</span>
-					</Button>
-					<Button
-						className={cn(openSection === 'transactions' ? classNameActive : classNameSubtle, 'flex-1 gap-1.5 px-2')}
-						size="sm"
-						onClick={() => setOpenSection(openSection === 'proofs' ? null : 'proofs')}
-						title="Proofs"
-					>
-						<Coins className="w-4 h-4 shrink-0" />
-						<span className="text-xs">{Array.from(proofsByMint.values()).flat().length}</span>
-					</Button>
 					{activePendingTokens.length > 0 && (
 						<Button
-							className={cn(openSection === 'transactions' ? classNameActive : classNameSubtle, 'flex-1 gap-1.5 px-2')}
+							className={cn(openSection === 'pending' ? classNameActive : classNameSubtle, 'flex-1 gap-1.5 px-2')}
 							size="sm"
 							onClick={() => setOpenSection(openSection === 'pending' ? null : 'pending')}
 							title="Pending tokens"
@@ -507,8 +358,13 @@ export function Nip60Wallet() {
 									{getMintHostname(mint)}
 								</span>
 								<div className="flex items-center gap-1 shrink-0">
-									{mintBalances[mint] !== undefined && <span className="text-gray-400 text-xs">{mintBalances[mint].toLocaleString()}</span>}
-									<Button className={cn(classNameGhost, 'w-6 h-6')} size="icon" onClick={() => handleRemoveMint(mint)} title="Remove mint">
+									{balances[mint] !== undefined && <span className="text-gray-400 text-xs">{balances[mint].toLocaleString()}</span>}
+									<Button
+										className={cn(classNameGhost, 'w-6 h-6')}
+										size="icon"
+										onClick={() => void handleRemoveMint(mint)}
+										title="Remove mint"
+									>
 										<X className="w-3 h-3" />
 									</Button>
 								</div>
@@ -519,84 +375,19 @@ export function Nip60Wallet() {
 								type="url"
 								value={newMintUrl}
 								onChange={(e) => setNewMintUrl(e.target.value)}
-								onKeyDown={(e) => e.key === 'Enter' && handleAddMint()}
+								onKeyDown={(e) => e.key === 'Enter' && void handleAddMint()}
 								placeholder="https://mint.example.com"
 								className="flex-1 bg-white/10 border-white/20 min-w-0 h-8 text-white placeholder:text-gray-500 text-sm"
 							/>
-							<Button className={cn(classNameMuted, 'px-2 h-8 shrink-0')} size="sm" onClick={handleAddMint} disabled={!newMintUrl.trim()}>
+							<Button
+								className={cn(classNameMuted, 'px-2 h-8 shrink-0')}
+								size="sm"
+								onClick={() => void handleAddMint()}
+								disabled={!newMintUrl.trim()}
+							>
 								<Plus className="w-4 h-4" />
 							</Button>
 						</div>
-						<Button className={cn(classNameActive, 'w-full')} size="sm" onClick={handleSaveWallet} disabled={isSaving}>
-							{isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-							Save Wallet
-						</Button>
-					</div>
-				)}
-
-				{openSection === 'transactions' && (
-					<div className="pt-2 border-white/10 border-t overflow-hidden">
-						{transactions.length > 0 ? (
-							<div className="space-y-2 max-h-48 overflow-y-auto">
-								{transactions.map((tx) => (
-									<div key={tx.id} className="flex justify-between items-center gap-2 text-sm">
-										<div className="flex items-center gap-2 min-w-0">
-											{tx.direction === 'in' ? (
-												<ArrowDownLeft className="w-4 h-4 text-green-400 shrink-0" />
-											) : (
-												<ArrowUpRight className="w-4 h-4 text-red-400 shrink-0" />
-											)}
-											<span className="text-gray-400 truncate">{new Date(tx.timestamp * 1000).toLocaleDateString()}</span>
-										</div>
-										<span className={`shrink-0 ${tx.direction === 'in' ? 'text-green-400' : 'text-red-400'}`}>
-											{tx.direction === 'in' ? '+' : '-'}
-											{tx.amount.toLocaleString()}
-										</span>
-									</div>
-								))}
-							</div>
-						) : (
-							<p className="text-gray-400 text-sm">No transactions yet</p>
-						)}
-					</div>
-				)}
-
-				{openSection === 'proofs' && (
-					<div className="space-y-2 pt-2 border-white/10 border-t max-h-48 overflow-x-hidden overflow-y-auto">
-						{proofsByMint.size === 0 ? (
-							<p className="text-gray-400 text-sm">No proofs in wallet</p>
-						) : (
-							Array.from(proofsByMint.entries()).map(([mint, proofs]) => (
-								<Collapsible key={mint} open={expandedMints.has(mint)} onOpenChange={() => toggleMintExpanded(mint)}>
-									<div className="bg-white/5 p-2 rounded-md overflow-hidden">
-										<CollapsibleTrigger asChild>
-											<Button className={cn(classNameGhost, 'justify-start gap-2 px-1 py-1 w-full h-auto overflow-hidden')} size="sm">
-												<ChevronRight className="w-3 h-3 [[data-state=open]>&]:rotate-90 transition-transform shrink-0" />
-												<span className="flex-1 min-w-0 font-medium text-white text-left truncate">{getMintHostname(mint)}</span>
-												<span className="text-gray-400 text-xs whitespace-nowrap shrink-0">
-													{proofs.length} • {proofs.reduce((s, p) => s + p.amount, 0).toLocaleString()}
-												</span>
-											</Button>
-										</CollapsibleTrigger>
-										<CollapsibleContent>
-											<div className="space-y-1 mt-2 pl-5 overflow-hidden">
-												{proofs.map((proof, idx) => (
-													<div
-														key={`${proof.id}-${proof.secret.slice(0, 8)}-${idx}`}
-														className="flex justify-between items-center gap-2 bg-white/10 px-2 py-1 rounded text-xs"
-													>
-														<span className="min-w-0 font-mono text-gray-400 truncate" title={`Keyset: ${proof.id}`}>
-															{proof.id.slice(0, 8)}...
-														</span>
-														<span className="font-medium text-white shrink-0">{proof.amount}</span>
-													</div>
-												))}
-											</div>
-										</CollapsibleContent>
-									</div>
-								</Collapsible>
-							))
-						)}
 					</div>
 				)}
 
