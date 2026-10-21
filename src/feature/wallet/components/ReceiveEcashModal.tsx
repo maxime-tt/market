@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
 import { Button } from '@ui/primitives/button'
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
-import { nip60Actions } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, Check, QrCode, ScanLine } from 'lucide-react'
 import { toast } from 'sonner'
@@ -44,10 +43,9 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 		setIsReceiving(true)
 		setError(null)
 		try {
-			// Always use nip60 for receiving since that's where the wallet proofs are stored
-			// This ensures the proofs are synced to Nostr events for cross-device access
-			console.log('[Receive] Using nip60 for receive')
-			await nip60Actions.receiveEcash(normalizedToken)
+			// Receive through coco's local wallet. Relay recovery of wallet state after a
+			// device change goes away (see docs/handover/wave-b-ui-components-handover.md §9).
+			await cashuActions.receive(normalizedToken)
 			setIsSuccess(true)
 			toast.success('eCash received successfully!')
 		} catch (err) {
