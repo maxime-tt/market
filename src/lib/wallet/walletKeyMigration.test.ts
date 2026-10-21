@@ -38,9 +38,9 @@ const sealer = (): WalletKeySealer => ({
 const fixture = (pair: { walletP2pk: string; walletPrivkey: string } | null) => {
 	let sourceCalls = 0
 	const source: WalletKeyMigrationSource = {
-		loadWalletPair: async () => {
+		loadWalletPairs: async () => {
 			sourceCalls += 1
-			return pair
+			return pair ? [pair] : []
 		},
 	}
 	const store = new SealedWalletKeyStore({ sealer: sealer(), storage: memoryStorage() })
@@ -68,7 +68,7 @@ describe('migrateWalletKeyMaterial', () => {
 		const other = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 		const second = await migrateWalletKeyMaterial({
 			store,
-			source: { loadWalletPair: async () => ({ walletP2pk: other, walletPrivkey: '02'.repeat(32) }) },
+			source: { loadWalletPairs: async () => [{ walletP2pk: other, walletPrivkey: '02'.repeat(32) }] },
 			ownerPubkey: OWNER,
 		})
 
@@ -130,5 +130,30 @@ describe('migrateWalletKeyMaterial', () => {
 		// OWNER has no local record of its own, so it migrates its own rather than reading OTHER's
 		expect(result.outcome).toBe('migrated')
 		expect(result.material?.ownerPubkey).toBe(OWNER)
+	})
+
+	test('an ambiguous event is reported, never resolved by picking one of its keys', async () => {
+		const storage = memoryStorage()
+		const store = new SealedWalletKeyStore({ sealer: sealer(), storage })
+		const OTHER_PRIV = '0000000000000000000000000000000000000000000000000000000000000002'
+		const OTHER_PUB = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+		const source: WalletKeyMigrationSource = {
+			loadWalletPairs: async () => [
+				{ walletP2pk: P2PK, walletPrivkey: PRIVKEY },
+				{ walletP2pk: OTHER_PUB, walletPrivkey: OTHER_PRIV },
+			],
+		}
+
+		const result = await migrateWalletKeyMaterial({ store, source, ownerPubkey: OWNER })
+
+		expect(result.outcome).toBe('no-matching-pair')
+		expect(result.material).toBeNull()
+		// the rule that keeps an HD root from moving: nothing is written on a guess
+		expect(await store.load(OWNER)).toBeNull()
+
+		// and naming the key it means resolves it
+		const named = await migrateWalletKeyMaterial({ store, source, ownerPubkey: OWNER, expectedP2pk: OTHER_PUB })
+		expect(named.outcome).toBe('migrated')
+		expect(named.material?.walletPrivkey).toBe(OTHER_PRIV)
 	})
 })

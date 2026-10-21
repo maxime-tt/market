@@ -10,6 +10,8 @@ export type { WalletKeySealer, WalletKeySigner, WalletKeyStorage, WalletKeyStore
 export { createAppWalletKeyStorage, createAppWalletKeyStore } from './walletKeyStorage'
 export { migrateWalletKeyMaterial } from './walletKeyMigration'
 export type { WalletKeyMigrationOutcome, WalletKeyMigrationResult, WalletKeyMigrationSource } from './walletKeyMigration'
+export { Nip60WalletEventError, parseNip60WalletEventContent, selectWalletKeyPair } from './nip60WalletEvent'
+export type { Nip60WalletEventContent, Nip60WalletEventReason, WalletKeyPairCandidate } from './nip60WalletEvent'
 
 // Storage utilities
 export { loadUserData, saveUserData, removeUserData } from './storage'

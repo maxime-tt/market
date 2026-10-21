@@ -19,18 +19,23 @@
  * the app passes a reader, and the tests pass a stand-in.
  */
 import { normalizeWalletKeyMaterial } from './walletKeys'
+import { selectWalletKeyPair } from './nip60WalletEvent'
+import type { WalletKeyPairCandidate } from './nip60WalletEvent'
 import type { WalletKeyMaterial, WalletKeyStore } from './walletKeys'
 
-/** Where the pair currently lives: the owner's existing relay wallet event. */
+/**
+ * Where the pair currently lives: the owner's existing relay wallet event.
+ *
+ * It answers with **candidates**, plural, because that event carries a list of keys. Selecting
+ * one is {@link selectWalletKeyPair}'s job, against a pubkey the caller names — a source that
+ * returned one pair would be choosing, and choosing is how an HD root moves.
+ */
 export interface WalletKeyMigrationSource {
-	/**
-	 * The pair in the owner's kind-17375 event, or null when the owner has none. Reading it is
-	 * the caller's business; this module only requires the two halves.
-	 */
-	loadWalletPair(ownerPubkey: string): Promise<{ walletP2pk: string; walletPrivkey: string } | null>
+	/** Every keypair the owner's kind-17375 event carries; empty when the owner has none. */
+	loadWalletPairs(ownerPubkey: string): Promise<WalletKeyPairCandidate[]>
 }
 
-export type WalletKeyMigrationOutcome = 'already-local' | 'migrated' | 'nothing-to-migrate' | 'local-unreadable'
+export type WalletKeyMigrationOutcome = 'already-local' | 'migrated' | 'nothing-to-migrate' | 'no-matching-pair' | 'local-unreadable'
 
 export interface WalletKeyMigrationResult {
 	readonly outcome: WalletKeyMigrationOutcome
@@ -42,6 +47,11 @@ export const migrateWalletKeyMaterial = async (deps: {
 	store: WalletKeyStore
 	source: WalletKeyMigrationSource
 	ownerPubkey: string
+	/**
+	 * The pubkey this caller means. When the event holds several keys the expectation is what
+	 * decides, and an unmatched expectation is reported rather than resolved by picking one.
+	 */
+	expectedP2pk?: string
 }): Promise<WalletKeyMigrationResult> => {
 	const owner = deps.ownerPubkey.trim().toLowerCase()
 
@@ -61,11 +71,15 @@ export const migrateWalletKeyMaterial = async (deps: {
 		return { outcome: 'local-unreadable', material: null }
 	}
 
-	// 3: validate before writing, so a stale event cannot seed the store with a bad pair
-	const fromRelay = await deps.source.loadWalletPair(owner)
-	if (!fromRelay) return { outcome: 'nothing-to-migrate', material: null }
+	// 3: the event's keys are candidates until the caller's expectation names one
+	const candidates = await deps.source.loadWalletPairs(owner)
+	if (candidates.length === 0) return { outcome: 'nothing-to-migrate', material: null }
 
-	const material = normalizeWalletKeyMaterial({ ownerPubkey: owner, ...fromRelay })
+	const selected = selectWalletKeyPair(candidates, deps.expectedP2pk)
+	if (!selected) return { outcome: 'no-matching-pair', material: null }
+
+	// 4: validate before writing, so a stale event cannot seed the store with a bad pair
+	const material = normalizeWalletKeyMaterial({ ownerPubkey: owner, ...selected })
 	await deps.store.save(material)
 	return { outcome: 'migrated', material }
 }
