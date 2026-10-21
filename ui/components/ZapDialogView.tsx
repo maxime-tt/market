@@ -1,10 +1,12 @@
 import type { ChangeEvent, ReactNode } from 'react'
-import { Loader2, Zap } from 'lucide-react'
+import { Zap } from 'lucide-react'
 import { Button } from '../primitives/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../primitives/dialog'
 import { Input } from '../primitives/input'
 import { Label } from '../primitives/label'
+import { Spinner } from '../primitives/spinner'
 import { Switch } from '../primitives/switch'
+import { LoadingState } from '../shared/loading-state'
 
 export interface ZapRecipientSupport {
 	canReceiveZaps: boolean
@@ -93,10 +95,7 @@ export function ZapDialogView({
 					<DialogHeader>
 						<DialogTitle>Loading Zap Information...</DialogTitle>
 					</DialogHeader>
-					<div className="flex justify-center items-center py-8">
-						<Loader2 className="w-8 h-8 animate-spin" />
-						<span className="ml-2">Fetching zap data...</span>
-					</div>
+					<LoadingState label="Fetching zap data..." className="py-8" />
 					<DialogFooter>
 						<DialogClose asChild>
 							<Button type="button" variant="secondary">
@@ -187,7 +186,7 @@ export function ZapDialogView({
 							<div className="flex flex-col gap-2">
 								{hasNip60Wallet && support.hasNip61 && (
 									<Button onClick={onSendNutzap} className="w-full" variant="secondary" disabled={!canSendNutzap}>
-										{isSubmittingNutzap ? <Loader2 className="mr-2 w-4 h-4 animate-spin" /> : <Zap className="mr-2 w-4 h-4" />}
+										{isSubmittingNutzap ? <Spinner className="mr-2" /> : <Zap className="mr-2 w-4 h-4" />}
 										Zap with Nutzap (NIP-60)
 									</Button>
 								)}

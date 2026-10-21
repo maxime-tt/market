@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Copy, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Copy, Eye, EyeOff } from 'lucide-react'
 import { Button } from '../../primitives/button'
 import { Input } from '../../primitives/input'
 import { Label } from '../../primitives/label'
+import { Spinner } from '../../primitives/spinner'
 
 export type PrivateKeyLoginStep = 'stored-key' | 'set-password' | 'enter-key'
 
@@ -87,7 +88,7 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 					{props.passwordError && <p className="text-sm text-red-500">{props.passwordError}</p>}
 				</div>
 				<Button onClick={props.onStoredKeyLogin} disabled={isLoading} className="w-full" data-testid="stored-key-login-button">
-					{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Login'}
+					{isLoading ? <Spinner /> : 'Login'}
 				</Button>
 
 				<Divider />
@@ -124,7 +125,7 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 					{props.passwordError && <p className="text-sm text-red-500">{props.passwordError}</p>}
 				</div>
 				<Button onClick={props.onEncryptAndStore} disabled={isLoading} className="w-full" data-testid="encrypt-continue-button">
-					{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Encrypt & Continue'}
+					{isLoading ? <Spinner /> : 'Encrypt & Continue'}
 				</Button>
 			</div>
 		)
@@ -215,7 +216,7 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 				className="w-full"
 				data-testid="continue-button"
 			>
-				{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue'}
+				{isLoading ? <Spinner /> : 'Continue'}
 			</Button>
 		</div>
 	)

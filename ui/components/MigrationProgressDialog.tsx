@@ -1,7 +1,8 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { Circle, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Circle, CheckCircle2, XCircle } from 'lucide-react'
 import { Progress } from '../primitives/progress'
 import { Button } from '../primitives/button'
+import { Spinner } from '../primitives/spinner'
 import { cn } from '../utils/cn'
 
 export interface MigrationStep {
@@ -29,7 +30,7 @@ function StepIcon({ status }: { status: MigrationStep['status'] }) {
 		case 'pending':
 			return <Circle className="w-5 h-5 text-muted-foreground" />
 		case 'active':
-			return <Loader2 className="w-5 h-5 text-primary animate-spin" />
+			return <Spinner className="size-5 text-primary" />
 		case 'complete':
 			return <CheckCircle2 className="w-5 h-5 text-green-600" />
 		case 'error':
@@ -40,7 +41,7 @@ function StepIcon({ status }: { status: MigrationStep['status'] }) {
 function RelayStatusIcon({ status }: { status: RelayStatus['status'] }) {
 	switch (status) {
 		case 'pending':
-			return <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+			return <Spinner className="text-muted-foreground" />
 		case 'success':
 			return <CheckCircle2 className="w-4 h-4 text-green-600" />
 		case 'error':

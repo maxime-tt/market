@@ -4,6 +4,7 @@ import { Button } from '../primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../primitives/card'
 import { Label } from '../primitives/label'
 import { EmptyState } from '../shared/empty-state'
+import { LoadingState } from '../shared/loading-state'
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>
 
@@ -45,13 +46,7 @@ export function SettingsMobileHeader(props: SettingsPageHeaderProps) {
 export function SettingsLoadingSkeleton() {
 	return (
 		<div className="space-y-6 p-6">
-			<div className="animate-pulse">
-				<div className="mb-4 h-8 w-1/4 rounded bg-gray-200"></div>
-				<div className="space-y-3">
-					<div className="h-4 w-1/2 rounded bg-gray-200"></div>
-					<div className="h-4 w-1/3 rounded bg-gray-200"></div>
-				</div>
-			</div>
+			<LoadingState variant="skeleton" rows={3} />
 		</div>
 	)
 }

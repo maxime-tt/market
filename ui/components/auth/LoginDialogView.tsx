@@ -4,6 +4,7 @@ import { Checkbox } from '../../primitives/checkbox'
 import { Dialog, DialogContent } from '../../primitives/dialog'
 import { Label } from '../../primitives/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../primitives/tabs'
+import { Notice } from '../../shared/notice'
 import { cn } from '../../utils/cn'
 
 export interface LoginDialogViewProps {
@@ -110,10 +111,9 @@ export function LoginDialogView({
 							<div className="space-y-4 py-4">
 								<p className="text-muted-foreground text-sm">Login using your Nostr browser extension (e.g., Alby, nos2x).</p>
 								{extensionError && (
-									<div className="bg-red-50 px-4 py-3 border border-red-200 rounded text-red-700 text-sm" role="alert">
-										<p className="font-medium">Login Failed</p>
-										<p>{extensionError}</p>
-									</div>
+									<Notice tone="error" title="Login Failed">
+										{extensionError}
+									</Notice>
 								)}
 								<Button onClick={onConnectExtension} className="w-full" data-testid="connect-extension-button">
 									Connect to Extension

@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { UiImage } from '../provider/UiProvider'
+import { EmptyState } from '../shared/empty-state'
+import { LoadingState } from '../shared/loading-state'
 import { cn } from '../utils/cn'
 
 export interface ProductSelectionItem {
@@ -28,19 +30,17 @@ export function ProductSelectionList({
 	className,
 }: ProductSelectionListProps) {
 	if (isLoading) {
-		return (
-			<div className={cn('flex h-32 items-center justify-center text-muted-foreground', className)} role="status" aria-live="polite">
-				Loading your products...
-			</div>
-		)
+		return <LoadingState label="Loading your products..." aria-live="polite" className={cn('h-32 py-0', className)} />
 	}
 
 	if (items.length === 0) {
 		return (
-			<div className={cn('flex h-32 flex-col items-center justify-center space-y-2 text-muted-foreground', className)} role="status">
-				<div>No products found</div>
-				<div className="text-sm">Create some products first to add them to collections</div>
-			</div>
+			<EmptyState
+				role="status"
+				title="No products found"
+				description="Create some products first to add them to collections"
+				className={cn('h-32 py-0', className)}
+			/>
 		)
 	}
 
