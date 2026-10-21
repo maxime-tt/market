@@ -1,5 +1,6 @@
 import { Button } from '@ui/primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
+import { truncateMiddle } from '@ui/shared/truncated-text'
 import { PageHeader } from '@ui/layout/page-header'
 import { useConfigQuery } from '@/queries/config'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
@@ -54,9 +55,11 @@ function PubkeyField({
 	hex: string
 	icon: React.ComponentType<{ className?: string }>
 }) {
-	// Truncate for display
-	const displayNpub = npub.length > 40 ? `${npub.slice(0, 20)}...${npub.slice(-16)}` : npub
-	const displayHex = hex.length > 40 ? `${hex.slice(0, 20)}...${hex.slice(-16)}` : hex
+	// Truncate for display. `truncateMiddle` guards on `head + tail + separator`
+	// rather than a bare `length > 40`, so the two are equal for every real
+	// identifier (npub 63, hex 64) and differ only at exactly length 40.
+	const displayNpub = truncateMiddle(npub, 20, 16, '...')
+	const displayHex = truncateMiddle(hex, 20, 16, '...')
 
 	return (
 		<div className="p-3 border rounded-md bg-muted/50 space-y-2">

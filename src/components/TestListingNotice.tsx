@@ -1,3 +1,4 @@
+import { truncateNpub } from '@ui/nostr/npub-display'
 import { Button } from '@ui/primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
 import { useTestLabelForCoordinate } from '@/queries/testLabels'
@@ -16,8 +17,7 @@ const TEAM_FALLBACK = 'the Plebeian team'
  */
 const shortenNpub = (pubkey: string): string | null => {
 	try {
-		const npub = npubEncode(pubkey)
-		return `${npub.slice(0, 14)}…${npub.slice(-6)}`
+		return truncateNpub(npubEncode(pubkey), { head: 14, tail: 6, separator: '…' })
 	} catch {
 		return null
 	}

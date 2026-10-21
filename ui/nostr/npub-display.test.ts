@@ -28,6 +28,11 @@ describe('truncateNpub', () => {
 		expect(truncateNpub('npub1short')).toBe('npub1short')
 	})
 
+	test('supports head-only truncation, which two call sites used', () => {
+		expect(truncateNpub(NPUB, { head: 10, tail: 0 })).toBe(`${NPUB.slice(0, 10)}...`)
+		expect(truncateNpub('npub1short', { head: 10, tail: 0 })).toBe('npub1short')
+	})
+
 	test('never truncates when a bound is negative', () => {
 		expect(truncateNpub(NPUB, { head: -1 })).toBe(NPUB)
 		expect(truncateNpub(NPUB, { tail: -1 })).toBe(NPUB)

@@ -1,3 +1,4 @@
+import { truncateNpub } from '@ui/nostr/npub-display'
 import { Card } from '@ui/primitives/card'
 import {
 	getProductImages,
@@ -38,7 +39,7 @@ export function FeaturedUserCard({ userPubkey }: FeaturedUserCardProps) {
 	const userProducts = userProductsData?.slice(0, 4) || []
 
 	// Get user display info
-	const displayName = profile?.name || profile?.display_name || (isValidPubkey ? npub!.slice(0, 12) + '...' : 'Unknown')
+	const displayName = profile?.name || profile?.display_name || (isValidPubkey ? truncateNpub(npub!, { head: 12, tail: 0 }) : 'Unknown')
 	const about = profile?.about
 	const picture = profile?.picture
 

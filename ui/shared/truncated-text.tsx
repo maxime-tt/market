@@ -14,6 +14,10 @@ export const TRUNCATED_TEXT_ELLIPSIS = '…'
  * padded, never re-escaped. This is the one implementation of middle
  * truncation in `ui/`; `truncateNpub` delegates to it with its own numbers and
  * separator rather than re-deriving the slice arithmetic.
+ *
+ * `end: 0` is head-only truncation. It is handled explicitly because
+ * `text.slice(-0)` returns the whole string, which would otherwise append the
+ * ellipsis to the full input.
  */
 export function truncateMiddle(
 	text: string,
@@ -22,6 +26,9 @@ export function truncateMiddle(
 	ellipsis = TRUNCATED_TEXT_ELLIPSIS,
 ): string {
 	if (start < 0 || end < 0) return text
+	if (end === 0) {
+		return text.length <= start + ellipsis.length ? text : `${text.slice(0, start)}${ellipsis}`
+	}
 	// Nothing to gain from truncating when the kept parts already cover the string.
 	if (text.length <= start + end + ellipsis.length) return text
 	return `${text.slice(0, start)}${ellipsis}${text.slice(text.length - end)}`

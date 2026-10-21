@@ -34,4 +34,14 @@ describe('truncateMiddle', () => {
 		expect(truncateMiddle('abcdefghijklmnop', -1, 3)).toBe('abcdefghijklmnop')
 		expect(truncateMiddle('abcdefghijklmnop', 3, -1)).toBe('abcdefghijklmnop')
 	})
+
+	test('truncates head-only when end is zero', () => {
+		// `slice(-0)` would return the whole string, so this case is explicit.
+		expect(truncateMiddle('abcdefghijklmnop', 4, 0)).toBe('abcd…')
+		expect(truncateMiddle('abc', 4, 0)).toBe('abc')
+	})
+
+	test('honours a multi-character separator, including a trailing space', () => {
+		expect(truncateMiddle('abcdefghijklmnop', 4, 3, '... ')).toBe('abcd... nop')
+	})
 })

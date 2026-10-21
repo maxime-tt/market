@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { truncateNpub } from '@ui/nostr/npub-display'
 import { Input } from '@ui/primitives/input'
 import { Button } from '@ui/primitives/button'
 import { WotBadge } from '@/components/WotScore'
@@ -267,10 +268,12 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 										>
 											<UserCard pubkey={event.pubkey} size="xs" onPress="none" />
 											<span className="flex flex-col flex-1">
-												<span className="font-bold">{profile?.name || profile?.displayName || npub.slice(0, 10) + '...'}</span>
+												<span className="font-bold">
+													{profile?.name || profile?.displayName || truncateNpub(npub, { head: 10, tail: 0 })}
+												</span>
 												{profile?.nip05 && <span className="text-xs">{profile.nip05}</span>}
 												<span className="text-xs text-muted-foreground">
-													{npub.slice(0, 12)}... {npub.slice(-6)}
+													{truncateNpub(npub, { head: 12, tail: 6, separator: '... ' })}
 												</span>
 											</span>
 											<WotBadge pubkey={event.pubkey} />
