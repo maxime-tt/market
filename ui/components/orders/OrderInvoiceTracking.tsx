@@ -3,6 +3,8 @@ import { Button } from '../../primitives/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../primitives/card'
 import { Progress } from '../../primitives/progress'
 import { QRCode } from '../../primitives/qr-code'
+import { StatusBadge } from '../../shared/status-badge'
+import type { StatusTone } from '../../shared/status-badge'
 import { formatDistance } from 'date-fns'
 import { AlertTriangle, Check, Clock, Copy, RefreshCw, Users, Zap } from 'lucide-react'
 import { useState } from 'react'
@@ -76,17 +78,19 @@ export function OrderInvoiceTracking({
 		}
 	}
 
-	const getStatusColor = (status: InvoiceData['status']) => {
+	const getStatusTone = (status: InvoiceData['status'] | OrderInvoiceSet['status']): StatusTone => {
 		switch (status) {
 			case 'paid':
-				return 'bg-green-100 text-green-800'
+			case 'complete':
+				return 'success'
 			case 'pending':
-				return 'bg-yellow-100 text-yellow-800'
+			case 'partial':
+				return 'warning'
 			case 'expired':
 			case 'failed':
-				return 'bg-red-100 text-red-800'
+				return 'error'
 			default:
-				return 'bg-gray-100 text-gray-800'
+				return 'neutral'
 		}
 	}
 
@@ -105,7 +109,7 @@ export function OrderInvoiceTracking({
 					<CardTitle className="flex justify-between items-center">
 						<span>Payment Status</span>
 						<div className="flex items-center gap-2">
-							<Badge variant={invoiceSet.status === 'complete' ? 'default' : 'secondary'}>{invoiceSet.status.toUpperCase()}</Badge>
+							<StatusBadge tone={getStatusTone(invoiceSet.status)} status={invoiceSet.status} label={invoiceSet.status.toUpperCase()} />
 							{onRefresh && (
 								<Button variant="outline" size="sm" onClick={onRefresh}>
 									<RefreshCw className="w-4 h-4" />
@@ -166,7 +170,7 @@ export function OrderInvoiceTracking({
 									<div className="flex items-center gap-2">
 										{getStatusIcon(invoice.status)}
 										<span className="font-medium">Invoice {invoice.id.substring(0, 8)}...</span>
-										<Badge className={getStatusColor(invoice.status)}>{invoice.status}</Badge>
+										<StatusBadge tone={getStatusTone(invoice.status)} status={invoice.status} />
 									</div>
 									<div className="text-gray-600 text-sm">{invoice.amountSats.toLocaleString()} sats</div>
 								</div>
@@ -251,7 +255,7 @@ export function OrderInvoiceTracking({
 									<div className="flex items-center gap-2">
 										{getStatusIcon(invoice.status)}
 										<span className="font-medium">V4V {invoice.id.substring(0, 8)}...</span>
-										<Badge className={getStatusColor(invoice.status)}>{invoice.status}</Badge>
+										<StatusBadge tone={getStatusTone(invoice.status)} status={invoice.status} />
 									</div>
 									<div className="text-gray-600 text-sm">{invoice.amountSats.toLocaleString()} sats</div>
 								</div>

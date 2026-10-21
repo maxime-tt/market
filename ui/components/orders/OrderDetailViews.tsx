@@ -6,6 +6,7 @@ import { Badge } from '../../primitives/badge'
 import { Button } from '../../primitives/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../primitives/card'
 import { UiLink } from '../../provider/UiProvider'
+import { StatusBadge } from '../../shared/status-badge'
 import { cn } from '../../utils/cn'
 
 export function getInvoiceStatusColor(status: string): string {
@@ -227,12 +228,11 @@ export function InvoiceCardView({
 						</p>
 					</div>
 				</div>
-				<Badge
-					className={cn('flex-shrink-0', getInvoiceStatusColor(isPaid ? 'paid' : isExpired ? 'expired' : 'pending'))}
-					variant="outline"
-				>
-					{isPaid ? 'Paid' : isExpired ? 'Expired' : 'Pending'}
-				</Badge>
+				<StatusBadge
+					status={isPaid ? 'Paid' : isExpired ? 'Expired' : 'Pending'}
+					tone={isPaid ? 'success' : isExpired ? 'error' : 'warning'}
+					className="flex-shrink-0"
+				/>
 			</div>
 
 			{isBuyer && !isPaid && (

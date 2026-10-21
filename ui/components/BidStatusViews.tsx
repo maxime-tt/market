@@ -1,4 +1,7 @@
 import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
+import { Notice } from '../shared/notice'
+import { StatusBadge } from '../shared/status-badge'
+import type { StatusTone } from '../shared/status-badge'
 
 export interface BidStatusDisplayInput {
 	status: BidGroupStatus
@@ -13,7 +16,7 @@ export interface BidStatusDisplayInput {
 export interface BidStatusCopy {
 	label: string
 	helper: string
-	toneClass: string
+	tone: StatusTone
 }
 
 const NO_LOCAL_TOKEN = 'This device has no tracked reclaim token for the bid chain.'
@@ -28,51 +31,51 @@ export function getBidStatusCopy(input: BidStatusDisplayInput): BidStatusCopy {
 			return {
 				label: 'Winning bid',
 				helper: 'This bid won the auction. Submit your shipping address from the auction page.',
-				toneClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+				tone: 'success',
 			}
 		case 'refund_received':
 			return {
 				label: 'Refund received',
 				helper: 'The seller settlement refund has already been claimed into your wallet.',
-				toneClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+				tone: 'success',
 			}
 		case 'reclaimed':
 			return {
 				label: 'Reclaimed',
 				helper: 'You reclaimed this locked bid chain back into your wallet after locktime.',
-				toneClass: 'border-sky-200 bg-sky-50 text-sky-700',
+				tone: 'info',
 			}
 		case 'reclaim_available': {
 			const count = input.reclaimableCount
 			return {
 				label: 'Reclaim available',
 				helper: `${count} locked bid ${count === 1 ? 'part is' : 'parts are'} past locktime and can be reclaimed now.`,
-				toneClass: 'border-amber-200 bg-amber-50 text-amber-700',
+				tone: 'warning',
 			}
 		}
 		case 'outbid':
 			return {
 				label: 'Outbid',
 				helper: waitingOr(input.hasTrackedTokens ? 'Your bid stays timelocked until reclaim opens after locktime.' : NO_LOCAL_TOKEN),
-				toneClass: 'border-zinc-200 bg-zinc-50 text-zinc-700',
+				tone: 'neutral',
 			}
 		case 'reserve_not_met':
 			return {
 				label: 'Reserve not met',
 				helper: waitingOr(input.hasTrackedTokens ? 'Reclaim opens automatically after the bid locktime.' : NO_LOCAL_TOKEN),
-				toneClass: 'border-violet-200 bg-violet-50 text-violet-700',
+				tone: 'warning',
 			}
 		case 'cancelled':
 			return {
 				label: 'Auction cancelled',
 				helper: waitingOr(input.hasTrackedTokens ? 'Reclaim opens automatically after the bid locktime.' : NO_LOCAL_TOKEN),
-				toneClass: 'border-rose-200 bg-rose-50 text-rose-700',
+				tone: 'error',
 			}
 		case 'locked':
 			return {
 				label: 'Locked',
 				helper: waitingOr(`No settlement refund yet. Manual reclaim opens after ${formatMaybeDate(input.latestLocktime)}.`),
-				toneClass: 'border-blue-200 bg-blue-50 text-blue-700',
+				tone: 'info',
 			}
 		case 'recorded':
 			return {
@@ -80,22 +83,19 @@ export function getBidStatusCopy(input: BidStatusDisplayInput): BidStatusCopy {
 				helper: input.hasTrackedTokens
 					? 'Waiting for settlement or for locktime reclaim to open.'
 					: 'This device is missing the local reclaim token for this bid.',
-				toneClass: 'border-zinc-200 bg-zinc-50 text-zinc-700',
+				tone: 'neutral',
 			}
 	}
 }
 
 export function BidStatusPill({ copy }: { copy: BidStatusCopy }) {
-	return (
-		<span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${copy.toneClass}`}>{copy.label}</span>
-	)
+	return <StatusBadge status={copy.label} tone={copy.tone} />
 }
 
 export function BidStatusBanner({ copy }: { copy: BidStatusCopy }) {
 	return (
-		<div className={`rounded-lg border px-3 py-2 text-sm ${copy.toneClass}`}>
-			<p className="font-semibold">{copy.label}</p>
-			<p className="mt-1 text-xs">{copy.helper}</p>
-		</div>
+		<Notice tone={copy.tone === 'neutral' ? 'info' : copy.tone} title={copy.label}>
+			{copy.helper}
+		</Notice>
 	)
 }
