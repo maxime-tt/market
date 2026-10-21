@@ -1,5 +1,6 @@
 import { Edit, Shield, ShieldCheck, UserPlus } from 'lucide-react'
 import type { ComponentType, ReactNode, SVGProps } from 'react'
+import { PageHeader } from '../layout/page-header'
 import { Button } from '../primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../primitives/card'
 import { Label } from '../primitives/label'
@@ -26,12 +27,15 @@ function SettingsHeading({ icon: Icon, title, description }: SettingsPageHeaderP
 	)
 }
 
-/** Sticky desktop page header used across operator settings pages. */
+/**
+ * Sticky desktop page header used across operator settings pages. Composes the
+ * shared band so this header and the raw route headers cannot drift apart.
+ */
 export function SettingsPageHeader(props: SettingsPageHeaderProps) {
 	return (
-		<div className="sticky top-0 z-10 hidden items-center justify-between border-b bg-white px-4 py-4 lg:flex lg:px-6">
+		<PageHeader>
 			<SettingsHeading {...props} />
-		</div>
+		</PageHeader>
 	)
 }
 

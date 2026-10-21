@@ -166,3 +166,27 @@ export {
 	type UseCopyToClipboardResult,
 } from './shared/use-copy-to-clipboard'
 export { formatSats } from './utils/format'
+export { MobilePageHeader, PAGE_HEADER_CLASS, PageHeader, type MobilePageHeaderProps, type PageHeaderProps } from './layout/page-header'
+export { BackButton, type BackButtonProps, type BackButtonVariant } from './nav/back-button'
+export { SIDEBAR_NAV_LINK_CLASS, SidebarNav, type NavLinkRenderArgs, type SidebarNavProps } from './nav/sidebar-nav'
+export {
+	DASHBOARD_BACK_RULES,
+	DASHBOARD_NAV,
+	findNavEmoji,
+	findNavItem,
+	isFullBleedRoute,
+	isNavItemActive,
+	navItemLabel,
+	resolveBackTarget,
+	resolveBadgeCount,
+	resolveNavView,
+	shouldShowSidebarOnMobile,
+	showsPageTitle,
+	type NavBackTarget,
+	type NavBadgeCounts,
+	type NavBadgeKey,
+	type NavItem,
+	type NavItemWithBadge,
+	type NavSection,
+	type NavSectionView,
+} from './nav/model'
