@@ -598,11 +598,22 @@ this after the version bump, because coco 2.0 provides native P2PK send
 (`SendMethod: 'p2pk'`, `P2pkSendOptions` with locktime, refund keys, etc.) — currently
 P2PK is hand-rolled cashu-ts proof surgery. Waiting means re-homing once.
 
+> **Corrected 2026-10-21 — the bump is a SEND-side win only.** coco has native P2PK
+> _output creation_; it has no way to _spend_ an incoming P2PK-locked token. Verified
+> against the published typings of both the pin and 2.0.0: `receive(token: Token | string, …)`
+> takes only a token, and **no `spendingKey` / `privkey` / `privateKey` parameter exists
+> anywhere in either `.d.ts`**. 2.0's `reclaim(operationId)` is documented as "attempts to
+> reclaim a **pending send operation**" — rolling back an outgoing send, not claiming an
+> incoming output. So the auction _lock_ (send side) gains coco's P2PK after the bump, while
+> the auction _receive/reclaim_ legs must stay on cashu-ts, which does support P2PK spending.
+> Holding items 3–4 for the bump is still right for the lock, but the "re-home once" argument
+> covers only half of each leg.
+
 **4. Auction lock rails — publish/auctions.tsx (2,213 lines)**
 
 Same reason as settlement: the lock creates P2PK outputs with locktime. **Hold** for the
 version bump. This is the single largest file in the census and the one that benefits
-most from coco 2.0's native P2PK.
+most from coco 2.0's native P2PK — sending only, see the correction above.
 
 **5. ZapDialog.tsx — nutzap (separate module)**
 
@@ -643,6 +654,35 @@ needing a closing slice rather than being forgotten:
    exposes, so on this pin there is no durable removal at all. The action, its handler and its
    button were dropped rather than shipped, with the reason recorded in `cashu.ts`; revisit
    against coco 2.0's mint API during the version bump.
+
+### 9.5 Slice 2 landed as a partial, and the boundary it hit (2026-10-21)
+
+`b1ce5434` moved **one** call: `useAuctionBidFunding.ts`'s best-effort `refresh()` →
+`cashuActions.refreshBalances()` (no options were passed, so nothing option-expressed was lost).
+
+**The reclaim call was deliberately NOT moved, and the reasons are verified:**
+
+- `bids.tsx`'s `reclaimToken(token.id, { manual: true })` is for auction tokens, which still
+  live in `nip60_pending_tokens` (the held lock rails write them). coco's `reclaimToken` looks
+  the id up in `cashuStore.state.pendingTokens` and throws `Pending token not found` — so the
+  retarget would turn a working reclaim into a guaranteed failure on a money path.
+- Even if it found the token, coco's reclaim is `manager.wallet.receive(pendingToken.token)` —
+  a plain receive with no spending key, no timelock check and no refund-key signing. It cannot
+  sweep a P2PK-locked auction token. See the correction under item 3.
+- `manual: true` (override the auto-reclaim "permanently failed" flag) has no coco target at
+  all, since coco's action takes no options bag.
+
+**A structural blocker worth knowing before the auction slices: a `platform/` route cannot
+gain a `src/` import.** Adding `cashuActions` to `bids.tsx` grows `platform → src` production
+imports 412 → 413, and `scripts/check-src-boundary.sh` is a downward-only ratchet, so it fails
+by design. `bids.tsx` therefore keeps its nip60 import until the auction rails move, at which
+point both the pending tokens and the `platform → src` edge move together legitimately.
+Anything in `platform/` that needs the coco store must reach it through an existing seam
+(the sdk ports), not a new direct import.
+
+Also carried forward: the fundable-mint check a few lines below that retargeted refresh still
+reads `nip60Store.state.mintBalances`, so the refresh no longer freshens the state that check
+reads — same class as the §9.4 hole 1, and it closes with the same slice.
 
 **6. NDK-wallet unwind — before the version bump can be green**
 
