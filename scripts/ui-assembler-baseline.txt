@@ -5,7 +5,7 @@
 # Lower a row when a migration removes a violation; remove the row at zero.
 platform/web/routes/$vanityName.tsx|inline-component|1
 platform/web/routes/auctions.$auctionId.tsx|primitive-import|6
-platform/web/routes/auctions.$auctionId.tsx|inline-component|6
+platform/web/routes/auctions.$auctionId.tsx|inline-component|1
 platform/web/routes/auctions.index.tsx|primitive-import|2
 platform/web/routes/auctions.index.tsx|inline-component|1
 platform/web/routes/checkout.tsx|primitive-import|3
