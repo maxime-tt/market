@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
 import { Button } from '@ui/primitives/button'
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
-import { nip60Store, nip60Actions } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, Check, Zap, ScanLine } from 'lucide-react'
 import { toast } from 'sonner'
@@ -14,12 +13,7 @@ interface WithdrawLightningModalProps {
 }
 
 export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModalProps) {
-	const { balance: nip60Balance, mints, defaultMint, mintBalances } = useStore(nip60Store)
-	const { status: cashuStatus, balances: cashuBalances } = useStore(cashuStore)
-
-	// Always use nip60 balances for display since that's where the actual proofs are stored
-	const balance = nip60Balance
-	const balances = mintBalances
+	const { mints, balances, totalBalance: balance, status: cashuStatus } = useStore(cashuStore)
 
 	const [invoice, setInvoice] = useState('')
 	const [selectedMint, setSelectedMint] = useState<string>('')
@@ -31,13 +25,13 @@ export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModal
 	// Sync selectedMint with defaultMint when modal opens
 	useEffect(() => {
 		if (open) {
-			setSelectedMint(defaultMint ?? mints[0] ?? '')
+			setSelectedMint(mints[0] ?? '')
 			// Initialize cashu if not ready
 			if (cashuStatus === 'idle') {
 				cashuActions.initialize()
 			}
 		}
-	}, [open, defaultMint, mints, cashuStatus])
+	}, [open, mints, cashuStatus])
 
 	const handleWithdraw = async () => {
 		if (!invoice.trim()) {
@@ -64,16 +58,10 @@ export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModal
 			const cleanInvoice = invoice.replace(/^lightning:/i, '').trim()
 
 			// Check if coco has balance at the selected mint
-			const cashuMintBalance = cashuBalances[selectedMint] ?? 0
-			const useCoco = cashuStatus === 'ready' && cashuMintBalance > 0
+			const cashuMintBalance = balances[selectedMint] ?? 0
 
-			if (useCoco) {
-				console.log('[Withdraw] Using coco for melt')
-				await cashuActions.melt(selectedMint, cleanInvoice)
-			} else {
-				console.log('[Withdraw] Using nip60 for melt (coco balance:', cashuMintBalance, ')')
-				await nip60Actions.withdrawLightning(cleanInvoice)
-			}
+			console.log('[Withdraw] Using coco for melt')
+			await cashuActions.melt(selectedMint, cleanInvoice)
 
 			setIsSuccess(true)
 			toast.success('Withdrawal successful!')
