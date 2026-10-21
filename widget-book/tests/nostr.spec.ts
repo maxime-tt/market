@@ -18,9 +18,31 @@ test('renders the nostr library', async ({ page }) => {
 		'VerifiedBadgeInvalid',
 		'VerifiedBadgeLoading',
 		'VerifiedBadgeAddressHidden',
+		'FeaturedUserCard',
+		'FeaturedUserCardNoProducts',
+		'FeaturedUserCardLoading',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
+})
+
+test('renders the featured user card states', async ({ page }) => {
+	await page.goto('/?library=nostr')
+
+	const card = page.getByTestId('widget-FeaturedUserCard')
+	await expect(card).toContainText('Mugsmith')
+	await expect(card).toContainText('Handmade ceramics, fired in small batches.')
+	// The total product count, not the number of rendered tiles.
+	await expect(card).toContainText('12 products')
+	await expect(card.locator('[data-slot="featured-user-card"]')).toHaveCount(1)
+	// Two profile links plus one tile per supplied product.
+	await expect(card.locator('a[href^="/product/"]')).toHaveCount(3)
+
+	await expect(page.getByTestId('widget-FeaturedUserCardNoProducts')).toContainText('0 products')
+
+	// While loading, the strip shows pulse placeholders and no tile links.
+	const loading = page.getByTestId('widget-FeaturedUserCardLoading')
+	await expect(loading.locator('a[href^="/product/"]')).toHaveCount(0)
 })
 
 test('truncates the npub and keeps the full value available', async ({ page }) => {

@@ -1,13 +1,7 @@
-import { truncateNpub } from '@ui/nostr/npub-display'
-import { Card } from '@ui/primitives/card'
-import {
-	getProductImages,
-	getProductPrice,
-	getProductTitle,
-	productByATagQueryOptions,
-	productsByPubkeyQueryOptions,
-} from '@/queries/products'
+import { getProductImages, productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileQueryOptions } from '@/queries/profiles'
+import { FeaturedUserCardView, type FeaturedUserCardProduct } from '@ui/nostr/featured-user-card'
+import { truncateNpub } from '@ui/nostr/npub-display'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { safeNpubEncode } from '@/lib/utils'
@@ -16,94 +10,58 @@ interface FeaturedUserCardProps extends React.HTMLAttributes<'div'> {
 	userPubkey: string
 }
 
-export function FeaturedUserCard({ userPubkey }: FeaturedUserCardProps) {
-	// Ensure userPubkey is a string
+/** How many product tiles the strip shows. */
+const PRODUCT_TILES = 4
+
+/**
+ * Host for `@ui/nostr/featured-user-card`: resolves the profile and the
+ * product strip, resolves the avatar and per-product image URLs, and injects
+ * the router link. The view owns all markup.
+ */
+export function FeaturedUserCard({ userPubkey, className }: FeaturedUserCardProps) {
 	const pubkeyString = userPubkey.toString()
 	const npub = safeNpubEncode(pubkeyString)
 	const isValidPubkey = npub !== null
 
-	// Query user's profile
 	const { data: profile } = useQuery({
 		...profileQueryOptions(npub ?? ''),
 		enabled: isValidPubkey,
 	})
 
-	// Query user's products
 	const productOptions = productsByPubkeyQueryOptions(pubkeyString)
 	const { data: userProductsData, isLoading: isLoadingProducts } = useQuery({
 		...productOptions,
 		enabled: productOptions.enabled,
 	})
 
-	// Get first 4 products for display
-	const userProducts = userProductsData?.slice(0, 4) || []
+	const allProducts = userProductsData ?? []
+	// Profile fields are not guaranteed to be strings (`name` is typed `string | number`),
+	// which is why the previous inline version called `.toString()` at the call site.
+	const displayName = String(
+		profile?.name || profile?.display_name || (isValidPubkey ? truncateNpub(npub, { head: 12, tail: 0 }) : 'Unknown'),
+	)
 
-	// Get user display info
-	const displayName = profile?.name || profile?.display_name || (isValidPubkey ? truncateNpub(npub!, { head: 12, tail: 0 }) : 'Unknown')
-	const about = profile?.about
-	const picture = profile?.picture
+	const products: FeaturedUserCardProduct[] = allProducts.slice(0, PRODUCT_TILES).map((product) => ({
+		id: product.id,
+		href: `/product/${product.id}`,
+		imageUrl: getProductImages(product)?.[0]?.[1],
+	}))
 
 	return (
-		<Card className="hover:shadow-lg h-50 transition-shadow bg-background overflow-hidden py-0">
-			<div className="flex h-full">
-				{/* Avatar on the left */}
-				<div className="shrink-0 w-50 h-full">
-					<Link to="/profile/$profileId" params={{ profileId: pubkeyString }}>
-						<img
-							src={picture || `https://robohash.org/${pubkeyString}?set=set4&size=200x200`}
-							alt={displayName.toString()}
-							className="w-full h-full object-cover"
-						/>
-					</Link>
-				</div>
-
-				{/* User info and products */}
-				<div className="flex flex-col justify-between  p-4 min-w-0">
-					{/* User info */}
-					<div className="flex-1 min-w-0">
-						<Link to="/profile/$profileId" params={{ profileId: pubkeyString }} className="block">
-							<h3 className="font-semibold text-foreground/90 truncate hover:text-blue-600 transition-colors">{displayName}</h3>
-							{about && <p className="text-sm text-foreground/80 line-clamp-2 mt-1">{about}</p>}
-							<p className="text-xs text-foreground/70 mt-1">{userProducts.length} products</p>
-						</Link>
-					</div>
-
-					{/* Product grid at the bottom */}
-					<div className="shrink-0 mt-2">
-						{isLoadingProducts ? (
-							<div className="flex flex-row gap-1">
-								{Array.from({ length: 4 }).map((_, index) => (
-									<div key={index} className="bg-background/80 rounded animate-pulse w-12 h-12"></div>
-								))}
-							</div>
-						) : (
-							<div className="flex flex-row gap-1">
-								{Array.from({ length: 4 }).map((_, index) => {
-									const product = userProducts[index]
-									if (product) {
-										const images = getProductImages(product)
-										return (
-											<Link key={product.id} to="/product/$productId" params={{ productId: product.id }} className="block">
-												<img
-													src={images?.[0]?.[1] || '/images/placeholder.png'}
-													alt="Product"
-													className="w-12 h-12 rounded object-cover hover:opacity-80 transition-opacity"
-												/>
-											</Link>
-										)
-									} else {
-										return (
-											<div key={index} className="w-12 h-12 bg-background/90 rounded flex items-center justify-center">
-												<span className="text-foreground/70 text-xs">•</span>
-											</div>
-										)
-									}
-								})}
-							</div>
-						)}
-					</div>
-				</div>
-			</div>
-		</Card>
+		<FeaturedUserCardView
+			profileHref={`/profile/${pubkeyString}`}
+			displayName={displayName}
+			about={profile?.about}
+			picture={profile?.picture || `https://robohash.org/${pubkeyString}?set=set4&size=200x200`}
+			productCount={allProducts.length}
+			products={products}
+			isLoadingProducts={isLoadingProducts}
+			className={className}
+			renderLink={({ href, className: linkClassName, children }) => (
+				<Link to={href as never} className={linkClassName}>
+					{children}
+				</Link>
+			)}
+		/>
 	)
 }

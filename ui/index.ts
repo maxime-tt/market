@@ -185,3 +185,10 @@ export {
 } from './nav/model'
 export { NpubDisplay, NPUB_HEAD, NPUB_TAIL, truncateNpub, type NpubDisplayProps, type TruncateNpubOptions } from './nostr/npub-display'
 export { VerifiedBadge, elideNip05Address, type Nip05VerificationState, type VerifiedBadgeProps } from './nostr/verified-badge'
+export {
+	FeaturedUserCardView,
+	FEATURED_USER_CARD_SLOTS,
+	type FeaturedUserCardProduct,
+	type FeaturedUserCardRenderLink,
+	type FeaturedUserCardViewProps,
+} from './nostr/featured-user-card'

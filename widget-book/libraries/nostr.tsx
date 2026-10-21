@@ -1,3 +1,4 @@
+import { FeaturedUserCardView, type FeaturedUserCardRenderLink } from '@ui/nostr/featured-user-card'
 import { NpubDisplay } from '@ui/nostr/npub-display'
 import { VerifiedBadge } from '@ui/nostr/verified-badge'
 import type { WidgetLibrary } from '../libraries'
@@ -11,6 +12,22 @@ import type { WidgetLibrary } from '../libraries'
  */
 
 const SAMPLE_NPUB = 'npub1plebeianmarket0000000000000000000000000000000000000000000000'
+
+/**
+ * The catalogue cannot use the app router (libraries may only import `ui/` and
+ * `sdk/`), so the featured card's injected link renderer is a plain anchor.
+ */
+const plainLink: FeaturedUserCardRenderLink = ({ href, className, children }) => (
+	<a href={href} className={className}>
+		{children}
+	</a>
+)
+
+const SAMPLE_PRODUCTS = [
+	{ id: 'p1', href: '/product/p1', imageUrl: 'https://placehold.co/96x96/131313/ff3eb5?text=1' },
+	{ id: 'p2', href: '/product/p2', imageUrl: 'https://placehold.co/96x96/ff3eb5/131313?text=2' },
+	{ id: 'p3', href: '/product/p3' },
+]
 
 export const nostr: WidgetLibrary = {
 	name: 'nostr',
@@ -38,6 +55,45 @@ export const nostr: WidgetLibrary = {
 		{
 			name: 'VerifiedBadgeAddressHidden',
 			render: () => <VerifiedBadge state="verified" showAddress={false} />,
+		},
+		{
+			name: 'FeaturedUserCard',
+			render: () => (
+				<FeaturedUserCardView
+					profileHref="/profile/abc"
+					displayName="Mugsmith"
+					about="Handmade ceramics, fired in small batches."
+					picture="https://placehold.co/400x400/ff3eb5/131313?text=M"
+					productCount={12}
+					products={SAMPLE_PRODUCTS}
+					renderLink={plainLink}
+				/>
+			),
+		},
+		{
+			name: 'FeaturedUserCardNoProducts',
+			render: () => (
+				<FeaturedUserCardView
+					profileHref="/profile/abc"
+					displayName="New Seller"
+					picture="https://placehold.co/400x400/131313/ff3eb5?text=N"
+					productCount={0}
+					renderLink={plainLink}
+				/>
+			),
+		},
+		{
+			name: 'FeaturedUserCardLoading',
+			render: () => (
+				<FeaturedUserCardView
+					profileHref="/profile/abc"
+					displayName="Loading Seller"
+					picture="https://placehold.co/400x400/131313/ff3eb5?text=L"
+					productCount={0}
+					isLoadingProducts
+					renderLink={plainLink}
+				/>
+			),
 		},
 	],
 }
