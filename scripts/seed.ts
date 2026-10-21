@@ -44,8 +44,7 @@ import { createUserProfileEvent, generateUserProfileData } from './gen_user'
 import { createV4VSharesEvent } from './gen_v4v'
 import { createUserNwcWallets } from './gen_wallets'
 import { getAuctionXpubFromWalletKeys } from '@/lib/auctionHd'
-import { NDKRelaySet } from '@nostr-dev-kit/ndk'
-import { NDKCashuWallet } from '@nostr-dev-kit/wallet'
+import { parseNip60WalletEventContent, selectWalletKeyPair } from '@/lib/wallet'
 import { resolveCvmServerPubkey } from '@platform/server/runtime'
 
 // Force local relay only mode to prevent connecting to public relays during seeding
@@ -121,25 +120,25 @@ async function ensureAuctionWalletForSeller(signer: NDKPrivateKeySigner, pubkey:
 			),
 		).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0]
 
-		const wallet = walletEvent ? await NDKCashuWallet.from(walletEvent) : new NDKCashuWallet(ndk)
-		if (!wallet) {
-			throw new Error(`Failed to load NIP-60 wallet for ${pubkey}`)
-		}
-
-		wallet.mints = Array.from(new Set([...(wallet.mints ?? []), ...mints]))
-		wallet.relaySet = NDKRelaySet.fromRelayUrls([RELAY_URL!], ndk)
-
-		const walletP2pk = await wallet.getP2pk()
-		const walletPrivkey = wallet.privkeys.get(walletP2pk)?.privateKey
-		if (!walletPrivkey) {
-			throw new Error(`Wallet private key for ${walletP2pk} is not available`)
-		}
-
 		if (!walletEvent) {
-			await wallet.publish()
+			// The NIP-60 cut stopped creating relay wallet events: the wallet lives locally now, so
+			// a seller without one is seeded without an auction xpub rather than by writing an
+			// event nothing reads any more.
+			throw new Error(`No NIP-60 wallet event for ${pubkey}; the seed no longer creates them`)
 		}
 
-		const p2pkXpub = await getAuctionXpubFromWalletKeys(walletP2pk, walletPrivkey)
+		// Read the pair the way the app now does: open the event, parse its pair-list, and name the
+		// key rather than take whichever came first. The decryption goes through the event, which is
+		// what NDK's own wallet loader does — reaching for `signer.nip44` is not available here,
+		// because NDKPrivateKeySigner does not declare it. The signer set just above is the seller.
+		await walletEvent.decrypt()
+		const parsed = parseNip60WalletEventContent(walletEvent.content)
+		const pair = selectWalletKeyPair(parsed.pairs, undefined)
+		if (!pair) {
+			throw new Error(`Wallet event for ${pubkey} carries ${parsed.pairs.length} keys; this seed cannot choose`)
+		}
+
+		const p2pkXpub = await getAuctionXpubFromWalletKeys(pair.walletP2pk, pair.walletPrivkey)
 		return { p2pkXpub }
 	} finally {
 		ndk.signer = previousSigner
