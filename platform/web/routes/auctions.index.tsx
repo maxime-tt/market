@@ -31,26 +31,9 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
+import { useHeroBackground } from '@platform/web/app/useHeroBackground'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
-
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-      .${className} {
-        background-image: url(${imageUrl}) !important;
-      }
-    `
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
 
 function useFeaturedAuctionEvents(featuredAuctions: string[] | undefined) {
 	const queries = (featuredAuctions || []).map((auctionCoords) => {

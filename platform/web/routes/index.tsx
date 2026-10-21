@@ -5,7 +5,8 @@ import { productFormActions } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useMemo } from 'react'
+import { useHeroBackground } from '@platform/web/app/useHeroBackground'
+import { useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { FeaturedSections } from '@/components/FeaturedSections'
 import { InfiniteProductList } from '@/components/InfiniteProductList'
@@ -16,25 +17,6 @@ import { productsQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
 import { SelectableBadge } from '@ui/components/SelectableBadge'
-
-// Hook to inject dynamic CSS for background image
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-      .${className} {
-        background-image: url(${imageUrl}) !important;
-      }
-    `
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
 
 const homeSearchSchema = z.object({
 	tag: z.string().optional(),

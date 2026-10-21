@@ -29,28 +29,9 @@ import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Edit, MessageCircle, Share2 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useHeroBackground } from '@platform/web/app/useHeroBackground'
 import { toast } from 'sonner'
 import { TooltipButton } from '@ui/components/TooltipButton'
-
-// Hook to inject dynamic CSS for background image
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-      .${className} {
-        background-image: url(${imageUrl}) !important;
-      }
-    `
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
 
 declare module '@tanstack/react-router' {
 	interface FileRoutesByPath {

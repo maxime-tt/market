@@ -60,6 +60,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Truck } from 'lucide-react'
+import { useHeroBackground } from '@platform/web/app/useHeroBackground'
 import {
 	useEffect,
 	useMemo,
@@ -76,25 +77,6 @@ import SocialInteractions from '@/components/social/SocialInteractions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { scrollToElementWithOffset } from '@/lib/utils/ui'
 import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@sdk/commerce/products'
-
-// Hook to inject dynamic CSS
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-			.${className} {
-				background-image: url(${imageUrl}) !important;
-			}
-		`
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
 
 // Hook to inject Open Graph and Twitter Card meta tags for social sharing
 interface MetaTagsConfig {

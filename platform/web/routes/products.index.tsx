@@ -11,6 +11,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
+import { useHeroBackground } from '@platform/web/app/useHeroBackground'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import {
@@ -25,25 +26,6 @@ import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
 import { SelectableBadge } from '@ui/components/SelectableBadge'
 import { ShowTestListingsToggle } from '@/components/ShowTestListingsToggle'
-
-// Hook to inject dynamic CSS for background image
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-      .${className} {
-        background-image: url(${imageUrl}) !important;
-      }
-    `
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
 
 // Hook to fetch featured product events using useQueries
 function useFeaturedProductEvents(featuredProducts: string[] | undefined) {

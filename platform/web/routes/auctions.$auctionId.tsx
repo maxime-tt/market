@@ -75,6 +75,7 @@ import { InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
 import { TestListingNotice } from '@/components/TestListingNotice'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { AUCTION_KIND } from '@/lib/auction/constants'
+import { useHeroBackground } from '@platform/web/app/useHeroBackground'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
@@ -94,24 +95,6 @@ import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, Parsed
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
 import AuctionTimelineChart from '@/components/AuctionTimelineChart'
 import { AuctionBidsContainer } from '@/components/AuctionBidsContainer'
-
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-      .${className} {
-        background-image: url(${imageUrl}) !important;
-      }
-    `
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
 
 function formatSats(value: number): string {
 	return `${value.toLocaleString()} sats`

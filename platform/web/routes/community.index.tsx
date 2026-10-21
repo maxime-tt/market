@@ -6,6 +6,7 @@ import { Skeleton } from '@ui/primitives/skeleton'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
+import { useHeroBackground } from '@platform/web/app/useHeroBackground'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
@@ -24,25 +25,6 @@ import { filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedCollections } from '@/queries/featured'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-
-// Hook to inject dynamic CSS for background image
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-      .${className} {
-        background-image: url(${imageUrl}) !important;
-      }
-    `
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
 
 // Hook to fetch featured collection events using useQueries
 function useFeaturedCollectionEvents(featuredCollections: string[] | undefined) {
