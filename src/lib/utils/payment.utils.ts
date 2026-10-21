@@ -72,7 +72,7 @@ export async function handleNWCPayment(
 	}
 
 	try {
-		const response = await nwcClient.wallet.lnPay({ pr: bolt11 })
+		const response = await nwcClient.wallet.payInvoice({ invoice: bolt11 })
 		const candidate = extractPreimageCandidate(response)
 		if (candidate) {
 			const isValid = validatePreimage(bolt11, candidate)

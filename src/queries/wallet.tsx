@@ -109,7 +109,7 @@ export interface NwcBalance {
 
 /**
  * Fetches the balance from an NWC wallet URI.
- * This function creates a temporary NDKNWCWallet instance.
+ * This function uses the cached NWC client (@getalby/sdk).
  */
 export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance | null> => {
 	if (!nwcUri) {
@@ -127,25 +127,18 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 	if (!nwcClient) return null
 
 	try {
-		await nwcClient.wallet.updateBalance()
+		const { balance: balanceMsats } = await nwcClient.wallet.getBalance()
 
-		const balanceResponse = nwcClient.wallet.balance
-
-		if (balanceResponse && typeof balanceResponse === 'object' && typeof balanceResponse.amount === 'number') {
-			const balanceInSats = balanceResponse.amount
-			return {
-				balance: balanceInSats,
-				timestamp: Date.now(),
-			}
-		} else if (typeof balanceResponse === 'number') {
-			const balanceInSats = balanceResponse
-			return {
-				balance: balanceInSats,
-				timestamp: Date.now(),
-			}
-		} else {
-			console.error('Failed to get balance or balance is not in expected format. Received:', balanceResponse)
+		// NIP-47 answers get_balance in MILLISATS and NwcBalance is documented in sats. The
+		// NDK-based path stored the raw figure as sats, so what it displayed was 1000x the
+		// wallet's balance; convert here rather than carry that forward.
+		if (typeof balanceMsats !== 'number' || !Number.isFinite(balanceMsats)) {
+			console.error('Failed to get balance or balance is not in expected format. Received:', balanceMsats)
 			return null
+		}
+		return {
+			balance: Math.floor(balanceMsats / 1000),
+			timestamp: Date.now(),
 		}
 	} catch (error: any) {
 		console.error('❌ Error fetching NWC wallet balance:', error)
@@ -161,7 +154,7 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 		}
 		return null
 	} finally {
-		// keep NWC client cached; no explicit disconnect in NDK
+		// the client stays cached for reuse; teardown happens when the signer changes
 	}
 }
 

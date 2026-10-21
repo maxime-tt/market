@@ -2,8 +2,8 @@ import { Store } from '@tanstack/store'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { useEffect, useState } from 'react'
-import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
-import { NDKNWCWallet } from '@nostr-dev-kit/wallet'
+import { type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NWCClient } from '@getalby/sdk/nwc'
 
 // Wallet interface
 export interface Wallet {
@@ -72,8 +72,7 @@ export const parseNwcUri: NwcUriParser = (uri: string) => {
 export interface NwcClient {
 	nwcUri: string
 	relayUrl: string
-	ndk: NDK
-	wallet: NDKNWCWallet
+	wallet: NWCClient
 }
 
 const nwcClientCache = new Map<string, Promise<NwcClient>>()
@@ -179,6 +178,18 @@ const sanitizeNwcPaymentErrorMessage = (error: unknown): string => {
 	return 'Could not pay invoice with connected wallet'
 }
 
+/**
+ * Wait until the NWC client has a connected relay. @getalby/sdk's client runs its own
+ * reconnecting pool and has no `connect()`, so readiness is observed rather than requested.
+ */
+const waitForNwcConnection = async (client: NWCClient, timeoutMs: number): Promise<void> => {
+	const deadline = Date.now() + timeoutMs
+	while (!client.connected) {
+		if (Date.now() >= deadline) throw new Error('NWC relay connect timeout')
+		await new Promise((resolve) => setTimeout(resolve, 100))
+	}
+}
+
 const cleanupAllCachedNwcWalletListeners = async (): Promise<void> => {
 	const entries = Array.from(nwcClientCache.values())
 	nwcClientCache.clear()
@@ -186,7 +197,7 @@ const cleanupAllCachedNwcWalletListeners = async (): Promise<void> => {
 		entries.map(async (clientPromise) => {
 			try {
 				const client = await clientPromise
-				client.wallet.removeAllListeners?.()
+				client.wallet.close()
 			} catch {
 				// ignore
 			}
@@ -373,7 +384,7 @@ export const walletActions = {
 	},
 
 	/**
-	 * Returns a cached NWC client (NDK + NDKNWCWallet) for a given NWC URI and signer.
+	 * Returns a cached NWC client for a given NWC URI and signer.
 	 * Cache is cleared automatically when signer instance changes.
 	 */
 	getOrCreateNwcClient: async (nwcUri: string, signer: NDKSigner, timeoutMs: number = 10000): Promise<NwcClient | null> => {
@@ -394,15 +405,14 @@ export const walletActions = {
 				const client = await existing
 				if (client.relayUrl !== parsed.relay) {
 					try {
-						client.wallet.removeAllListeners?.()
+						client.wallet.close()
 					} catch {
 						// ignore
 					}
 					nwcClientCache.delete(nwcUri)
 				} else {
-					const connectedRelays = client.ndk?.pool?.connectedRelays?.() || []
-					if (connectedRelays.length === 0) {
-						await withTimeout(client.ndk.connect(), timeoutMs, 'NWC relay connect')
+					if (!client.wallet.connected) {
+						await waitForNwcConnection(client.wallet, timeoutMs)
 					}
 					return client
 				}
@@ -412,21 +422,16 @@ export const walletActions = {
 		}
 
 		const createPromise = (async (): Promise<NwcClient> => {
-			const ndk = new NDK({ explicitRelayUrls: [parsed.relay] })
-			ndk.signer = signer
-
-			try {
-				await withTimeout(ndk.connect(), timeoutMs, 'NWC relay connect')
-			} catch (error) {
-				throw error
-			}
-
-			const wallet = new NDKNWCWallet(ndk as any, { pairingCode: nwcUri })
+			// The NWC URI carries its own client secret (NIP-47) and that secret is what the
+			// wallet service authenticates. @nostr-dev-kit/wallet read it from the URI and built
+			// its signer from it, ignoring ndk.signer entirely; this client does the same, so the
+			// payment identity is unchanged by the swap.
+			const wallet = new NWCClient({ nostrWalletConnectUrl: nwcUri })
+			await waitForNwcConnection(wallet, timeoutMs)
 
 			return {
 				nwcUri,
 				relayUrl: parsed.relay,
-				ndk,
 				wallet,
 			}
 		})()
@@ -462,7 +467,7 @@ export const walletActions = {
 		}
 
 		try {
-			const result = await withTimeout(nwcClient.wallet.lnPay({ pr: invoice }), timeoutMs, 'NWC payment')
+			const result = await withTimeout(nwcClient.wallet.payInvoice({ invoice }), timeoutMs, 'NWC payment')
 			const preimage = extractPreimageCandidate(result)
 			const feesPaidMsats = extractFeesPaidMsats(result)
 

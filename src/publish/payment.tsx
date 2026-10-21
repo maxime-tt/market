@@ -4,8 +4,7 @@ import { parseNwcUri } from '@/lib/stores/wallet'
 import type { PublishPaymentDetailParams } from '@/queries/payment'
 import { publishPaymentDetail } from '@/queries/payment'
 import { paymentDetailsKeys } from '@/queries/queryKeyFactory'
-import NDK from '@nostr-dev-kit/ndk'
-import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/wallet'
+import { NWCClient } from '@getalby/sdk/nwc'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { validatePreimage } from '@/lib/utils/payment.utils'
@@ -146,33 +145,17 @@ export const payInvoiceWithNwc = async (params: PayWithNwcParams): Promise<strin
 		throw new Error('Failed to parse NWC URI or missing relay URL')
 	}
 
-	// Create a dedicated NDK instance for this specific NWC wallet
-	const nwcNdk = new NDK({
-		explicitRelayUrls: [parsedUri.relay],
-	})
+	// The NWC URI carries its own client secret (NIP-47) and that secret is what the wallet
+	// service authenticates -- @nostr-dev-kit/wallet read it from the URI and ignored the app
+	// signer, so this client keeps the same payment identity. It also runs its own relay pool,
+	// which is why the dedicated NDK instance and its signer wiring are gone.
+	const nwcWalletForPayment = new NWCClient({ nostrWalletConnectUrl: nwcUri })
 
-	// Set the signer from the main NDK instance
-	const mainNdk = ndkActions.getNDK()
-	if (!mainNdk || !mainNdk.signer) {
-		throw new Error('Main NDK instance or signer not available')
-	}
-	nwcNdk.signer = mainNdk.signer
-
-	// Connect to the NWC relay
-	try {
-		console.log('Connecting to NWC relay for payment:', parsedUri.relay)
-		await nwcNdk.connect()
-	} catch (error) {
-		throw new Error(`Failed to connect to NWC relay: ${error}`)
-	}
-
-	const nwcWalletForPayment = new NDKNWCWallet(nwcNdk, { pairingCode: nwcUri })
-
-	// Wait for the wallet to connect
+	// Wait for a connected relay
 	const timeout = 10000 // 10 seconds
 	const startTime = Date.now()
 
-	while (nwcWalletForPayment.status !== NDKWalletStatus.READY) {
+	while (!nwcWalletForPayment.connected) {
 		if (Date.now() - startTime > timeout) {
 			throw new Error('NWC wallet connection timeout')
 		}
@@ -182,8 +165,8 @@ export const payInvoiceWithNwc = async (params: PayWithNwcParams): Promise<strin
 	console.log(`Initiating NWC pay_invoice request for ${params.amount} sats`)
 
 	try {
-		const response = await nwcWalletForPayment.lnPay({
-			pr: bolt11,
+		const response = await nwcWalletForPayment.payInvoice({
+			invoice: bolt11,
 		})
 
 		const candidate =
@@ -208,7 +191,7 @@ export const payInvoiceWithNwc = async (params: PayWithNwcParams): Promise<strin
 		console.error('❌ NWC payment failed:', error)
 		throw new Error(`NWC payment failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
 	} finally {
-		// NDK doesn't expose a disconnect API
+		// the client stays open for the session; it is closed when the wallet is removed
 	}
 }
 
