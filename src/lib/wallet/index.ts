@@ -8,6 +8,8 @@ export { extractProofsByMint, getProofsForMint, getSpendableProofsForMint } from
 export { SealedWalletKeyStore, WalletKeySealerUnavailableError, WalletKeyStoreError, createSignerWalletKeySealer } from './walletKeyStore'
 export type { WalletKeySealer, WalletKeySigner, WalletKeyStorage, WalletKeyStoreReason } from './walletKeyStore'
 export { createAppWalletKeyStorage, createAppWalletKeyStore } from './walletKeyStorage'
+export { migrateWalletKeyMaterial } from './walletKeyMigration'
+export type { WalletKeyMigrationOutcome, WalletKeyMigrationResult, WalletKeyMigrationSource } from './walletKeyMigration'
 
 // Storage utilities
 export { loadUserData, saveUserData, removeUserData } from './storage'
