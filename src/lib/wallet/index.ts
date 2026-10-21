@@ -7,6 +7,7 @@ export { extractProofsByMint, getProofsForMint, getSpendableProofsForMint } from
 // The wallet keypair's local home (sealed at rest)
 export { SealedWalletKeyStore, WalletKeySealerUnavailableError, WalletKeyStoreError, createSignerWalletKeySealer } from './walletKeyStore'
 export type { WalletKeySealer, WalletKeySigner, WalletKeyStorage, WalletKeyStoreReason } from './walletKeyStore'
+export { createAppWalletKeyStorage, createAppWalletKeyStore } from './walletKeyStorage'
 
 // Storage utilities
 export { loadUserData, saveUserData, removeUserData } from './storage'
