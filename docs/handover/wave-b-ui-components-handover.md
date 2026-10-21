@@ -549,6 +549,96 @@ Production call sites, by file → action, as measured:
 | `ZapDialog.tsx`                                                                                                                            | `zapWithNutzap`                                                                                                                                                                                  |
 | `src/lib/stores/ndk.ts`                                                                                                                    | `initialize`, `reset`                                                                                                                                                                            |
 
+### 9.3 Remaining slices — ordered plan with judgement calls (2026-10-21)
+
+The easy retargets are done. Everything left is either auction money flows or UI deletions
+requiring product decisions. These are my calls, made with the maintainer's autonomy mandate:
+
+**1. Nip60Wallet.tsx — the mint surface (742 lines, 12 actions)**
+
+Mostly retarget to coco now. Specific calls:
+
+- `createWallet` / `getWallet` / `publishWallet` → **remove the three buttons and their
+  handlers.** These are kind-17375 relay-wallet concepts. The wallet is now coco's local
+  IndexedDB; there is no "create wallet on relays" operation and no wallet event to publish.
+- `setDefaultMint` → **remove the mint selector's default-mint dropdown.** Coco has no
+  concept of a default mint. The UI still offers a mint selector (line 248); it just no
+  longer marks one as the \"default\".
+- `transactions` → **remove the transactions section** (lines 469‑491). The transaction
+  list came from kind-7375/7376 events on relays. Coco has no transaction event history;
+  proof history is available but not as human-readable transactions. The section has no
+  coco equivalent.
+- `removeMint` → **add to cashuStore** as a new action (`removeMint: async (mintUrl) =>
+{ await manager.mint.addMint(mintUrl, { trusted: false }) }` — the coco SDK has no
+  removeMint, but adding a mint with trusted: false effectively removes it. The UI gets
+  its remove-mint button back.
+- `mintTestEcash` / `placeDevBidOnSeededAuction` → **gate behind `import.meta.env.DEV`**
+  rather than `isNip60WalletDevModeEnabled()`. The logic does not change; only the guard.
+- `proofsByMint` (line 118, uses `nip60Actions.getWallet()`) → **remove the \"proofs\"
+  collapsible section** or replace it with a coco-proof dump. The old section rendered
+  raw proof data from the NDK wallet state; a coco equivalent would read from
+  `cashuStore.state.manager.wallet.state.getProofs()` if the developer needs it.
+  Simplest: remove the collapsible (it's a dev/debug feature).
+- The remaining actions (`addMint`, `initialize`, `reclaimToken`, `removePendingToken`,
+  `refresh`) already have direct coco equivalents and are retargeted as part of this
+  commit — same pattern as the modals.
+
+**2. useAuctionBidFunding.ts + bids.tsx — reclaim + refresh (2 actions)**
+
+`reclaimToken` and `refresh` both have matching coco action signatures now (added in the
+sdkAdapters pass). Retarget: replace the nip60 call with its cashu counterpart. Each file
+has one or two call sites. The `refresh` -> `refreshBalances` difference is the same one
+handled in Nip60Wallet.tsx — use `refreshBalances`.
+
+**3. Settlement — settleAuctionAsWinner (4 consumers, 1 action)**
+
+This creates a P2PK token and pays the seller. The funds come from the auction-locked
+collateral which is currently in the NDK wallet's proof repository. **Hold**: retarget
+this after the version bump, because coco 2.0 provides native P2PK send
+(`SendMethod: 'p2pk'`, `P2pkSendOptions` with locktime, refund keys, etc.) — currently
+P2PK is hand-rolled cashu-ts proof surgery. Waiting means re-homing once.
+
+**4. Auction lock rails — publish/auctions.tsx (2,213 lines)**
+
+Same reason as settlement: the lock creates P2PK outputs with locktime. **Hold** for the
+version bump. This is the single largest file in the census and the one that benefits
+most from coco 2.0's native P2PK.
+
+**5. ZapDialog.tsx — nutzap (separate module)**
+
+Neither coco nor cashu-ts handles NIP-61 (confirmed by grep). Create
+`src/lib/wallet/nutzap.ts` with: NIP-61 event construction (kind 9325 nutzap, kind 9324
+nutzap-request), proof send through `cashuActions.send`, and verification against the
+recipient's zapper info. Gate the dialog behind the new module; the old
+`nip60Actions.zapWithNutzap` path is deleted with nip60.ts.
+
+**6. NDK-wallet unwind — before the version bump can be green**
+
+Four files import `@nostr-dev-kit/wallet` (not just nip60.ts). The upgrade to cashu-ts
+v5 breaks its types (`peer ^2.1`). These must stop importing it before the bump:
+
+- `src/lib/stores/wallet.ts` (NWC store) — replace `NDKNWCWallet` with the SDK's
+  nwc-wrapper (`sdk/core/nwc-wrapper/ts/wrapper.ts`). The wrapper already exists in the
+  repo; no new code, just a wiring change.
+- `src/lib/wallet/proofs.ts` — uses `type NDKCashuWallet` for proof extraction. Replace
+  with coco's `ProofRepository` / `cashuActions` equivalents.
+- `src/publish/payment.tsx` — uses `NDKNWCWallet, NDKWalletStatus` for NWC payments.
+  Same nwc-wrapper replacement as wallet.ts.
+- `scripts/seed.ts` — uses `NDKCashuWallet` for dev seeding. Gate behind coco actions;
+  the local mint already supports the same operations.
+
+**7. Version bump — coco 2.0.0 + cashu-ts 5.0.0-rc.4**
+
+After the NDK-wallet is gone, apply the patch from
+`w2-0/v5-upgrade.INCOMPLETE.patch` (dep swap + cashu.ts port + patch removal), then fix
+the +81 tsc errors (see `w2-0/v5-tsc-355-errors-CLEAN.txt` for the work list). The three
+runtime changes (`Amount` class semantics, hex-id keysets, `loadMint()` requirement) are
+tested by the existing deposit-integration and auction-suites.
+
+Then **delete nip60.ts** and retarget the remaining residue
+(`src/lib/wallet/nip60.test.ts` becomes the wallet suite). Wire B3 (rail registry).
+The nutzap module is independent and can land anywhere in this sequence.
+
 Proposed order, cheapest-and-safest first: (1) the three wallet-op modals, (2) the mint surface,
 (3) settlement for the four `settleAuctionAsWinner` consumers, (4) reclaim + pending tokens,
 (5) the auction lock/receive rails **last**, since those are the ones that gain coco's native P2PK
