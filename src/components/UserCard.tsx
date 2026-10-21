@@ -10,9 +10,9 @@ import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { Nip05Badge } from './Nip05Badge'
 import { nip19 } from 'nostr-tools'
 import { isValidHexKey, isValidNpub } from '@/lib/utils'
-import { UserCardView } from '@ui/components/UserCardView'
+import { UserCardView } from '@ui/nostr/user-card'
 
-export { getUserCardTitle, isKeyboardCopyActivationKey } from '@ui/components/UserCardView'
+export { getUserCardTitle, isKeyboardCopyActivationKey } from '@ui/nostr/user-card'
 
 interface UserCardProps {
 	pubkey?: string

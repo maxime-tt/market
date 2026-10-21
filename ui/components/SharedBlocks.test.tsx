@@ -5,7 +5,7 @@ import { TooltipProvider } from '../primitives/tooltip'
 import { PriceDisplayView } from './PriceDisplayView'
 import { CommentButtonView, ReactionButtonView, ShareButtonView, ZapButtonView } from './SocialButtons'
 import { TimelineEventCard } from './TimelineEventCard'
-import { getUserCardTitle, UserCardView } from './UserCardView'
+import { getUserCardTitle, UserCardView } from '../nostr/user-card'
 
 const noop = () => {}
 const renderToStaticMarkup = (element: ReactElement) => renderBare(createElement(TooltipProvider, null, element))

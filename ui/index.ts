@@ -40,7 +40,7 @@ export { NoPaymentRequestsCard } from './components/NoPaymentRequestsCard'
 export { IncompleteInvoicesBanner } from './components/IncompleteInvoicesBanner'
 export { PriceDisplayView, type PriceDisplayViewProps } from './components/PriceDisplayView'
 export { TimelineEventCard, type TimelineEventCardEvent, type TimelineEventCardProps } from './components/TimelineEventCard'
-export { UserCardView, type UserCardSize, type UserCardViewProps } from './components/UserCardView'
+export { UserCardView, type UserCardSize, type UserCardViewProps } from './nostr/user-card'
 export {
 	CommentButtonView,
 	ReactionButtonView,
@@ -115,7 +115,7 @@ export * from './components/CheckoutPaymentSummary'
 export * from './components/EditorFields'
 export * from './components/ShippingOptionsViews'
 export * from './components/OperatorSettingsViews'
-export * from './components/ProfileViews'
+export * from './nostr/identity'
 export * from './components/BidStatusViews'
 export * from './components/CountryCombobox'
 export * from './components/CityCombobox'

@@ -19,7 +19,7 @@ describe('truncateNpub', () => {
 	})
 
 	test('honours the per-call-site presentation used before the hoist', () => {
-		// `ui/components/UserCardView` used 9 head / 6 tail with a two-dot separator.
+		// `ui/nostr/user-card` used 9 head / 6 tail with a two-dot separator.
 		const result = truncateNpub(NPUB, { head: 9, tail: 6, separator: '..' })
 		expect(result).toBe(`${NPUB.slice(0, 9)}..${NPUB.slice(-6)}`)
 	})

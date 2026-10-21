@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SyntheticEvent } from 'react'
-import { NpubDisplay, truncateNpub, type TruncateNpubOptions } from '../nostr/npub-display'
+import { NpubDisplay, truncateNpub, type TruncateNpubOptions } from './npub-display'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { useCopyToClipboard } from '../shared/use-copy-to-clipboard'
 import { UiLink } from '../provider/UiProvider'

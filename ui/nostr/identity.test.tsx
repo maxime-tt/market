@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ProfileAvatarView, ProfileNameView } from './ProfileViews'
+import { ProfileAvatarView, ProfileNameView } from './identity'
 
 describe('profile views', () => {
 	test('name links to the profile and truncates long names', () => {
