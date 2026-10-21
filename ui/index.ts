@@ -82,12 +82,6 @@ export { PrivateKeyLoginView, type PrivateKeyLoginStep, type PrivateKeyLoginView
 export { OnChainPaymentView, type OnChainPaymentStatus, type OnChainPaymentViewProps } from './components/checkout/OnChainPaymentView'
 export { OrderFinalizeView, type OrderFinalizeViewProps } from './components/checkout/OrderFinalizeView'
 export { PaymentContentView, type PaymentContentViewProps } from './components/checkout/PaymentContentView'
-export {
-	formatPaymentMethodLabel,
-	getPaymentMethodByType,
-	PaymentMethodSelector,
-	type PaymentMethodOption,
-} from './components/checkout/PaymentMethodSelector'
 export { PaymentDialogView, WalletSelectorView, type WalletSelectorOption } from './components/checkout/PaymentViews'
 export {
 	ShippingAddressFormView,
@@ -140,7 +134,6 @@ export * from './components/migration/MigrationFormView'
 export * from './components/orders/OrderActionsView'
 export * from './components/orders/OrderDetailLayout'
 export * from './components/orders/OrderDetailViews'
-export * from './components/orders/OrderInvoiceTracking'
 export * from './components/orders/OrderListView'
 export { cn } from './utils/cn'
 

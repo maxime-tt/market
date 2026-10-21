@@ -3,7 +3,6 @@ import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { Button } from '../../primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../primitives/dialog'
 import { QRCode } from '../../primitives/qr-code'
-import { Textarea } from '../../primitives/textarea'
 import { useCopyToClipboard } from '../../shared/use-copy-to-clipboard'
 
 export interface NSFWConfirmationDialogViewProps {
@@ -45,89 +44,6 @@ export function NSFWConfirmationDialogView({ open, onConfirm, onCancel }: NSFWCo
 						I understand, show adult content
 					</Button>
 				</DialogFooter>
-			</DialogContent>
-		</Dialog>
-	)
-}
-
-export interface ShareEventDialogViewProps {
-	open: boolean
-	onOpenChange: (open: boolean) => void
-	title?: string
-	description?: string
-	canPost: boolean
-	shareText: string
-	onShareTextChange: (text: string) => void
-	isCopied: boolean
-	isPosting: boolean
-	onCopyUrl: () => void
-	onPost: () => void
-}
-
-export function ShareEventDialogView({
-	open,
-	onOpenChange,
-	title,
-	description,
-	canPost,
-	shareText,
-	onShareTextChange,
-	isCopied,
-	isPosting,
-	onCopyUrl,
-	onPost,
-}: ShareEventDialogViewProps) {
-	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-x-hidden overflow-y-auto bg-white">
-				<DialogHeader>
-					<DialogTitle>Share Event</DialogTitle>
-					<DialogDescription id="share-dialog-description">Share this event with others or post it to your Nostr feed.</DialogDescription>
-				</DialogHeader>
-
-				<div className="space-y-6 py-4 overflow-x-hidden">
-					{title && description && (
-						<div className="space-y-2">
-							<h3 className="font-semibold">{title}</h3>
-							<p className="text-sm text-muted-foreground">{description}</p>
-						</div>
-					)}
-
-					{canPost && (
-						<div className="space-y-2">
-							<label htmlFor="share-text" className="text-sm font-medium text-gray-700">
-								Content to post to Nostr
-							</label>
-							<Textarea
-								id="share-text"
-								aria-describedby="share-dialog-description"
-								value={shareText}
-								onChange={(e) => onShareTextChange(e.target.value)}
-								rows={8}
-								className="resize-none break-words whitespace-pre-wrap w-full overflow-wrap-anywhere"
-								placeholder="Write something about this event..."
-							/>
-						</div>
-					)}
-
-					<div className="flex gap-2 flex-wrap">
-						<Button variant="outline" onClick={onCopyUrl} className="shrink-0">
-							{isCopied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-							{isCopied ? 'Copied!' : 'Copy URL'}
-						</Button>
-
-						{canPost && (
-							<Button
-								onClick={onPost}
-								disabled={isPosting || !shareText.trim()}
-								className="flex-1 flex items-center justify-center gap-2 bg-secondary hover:bg-secondary/90 text-white"
-							>
-								<span className="i-send-message w-4 h-4" />
-								{isPosting ? 'Posting...' : 'Post to Nostr'}
-							</Button>
-						)}
-					</div>
-				</div>
 			</DialogContent>
 		</Dialog>
 	)
