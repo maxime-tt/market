@@ -2,7 +2,6 @@ import { useState, useEffect, Component, type ReactNode } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
 import { Button } from '@ui/primitives/button'
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
-import { nip60Store } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, Copy, Check, Send, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -46,12 +45,7 @@ class QRErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNo
 }
 
 export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
-	const { mints, defaultMint, mintBalances, balance: nip60Balance } = useStore(nip60Store)
-	const { status: cashuStatus, balances: cashuBalances } = useStore(cashuStore)
-
-	// Always use nip60 balances for display since that's where the actual proofs are stored
-	const balances = mintBalances
-	const totalBalance = nip60Balance
+	const { mints, balances, totalBalance, status: cashuStatus } = useStore(cashuStore)
 
 	const [amount, setAmount] = useState('')
 	const [selectedMint, setSelectedMint] = useState<string>('')
@@ -64,13 +58,13 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 	// Sync selectedMint with defaultMint when modal opens or defaultMint changes
 	useEffect(() => {
 		if (open) {
-			setSelectedMint(defaultMint ?? mints[0] ?? '')
+			setSelectedMint(mints[0] ?? '')
 			// Initialize cashu if not ready
 			if (cashuStatus === 'idle') {
 				cashuActions.initialize()
 			}
 		}
-	}, [open, defaultMint, mints, cashuStatus])
+	}, [open, mints, cashuStatus])
 
 	const handleGenerate = async () => {
 		const amountNum = parseInt(amount, 10)
@@ -90,21 +84,10 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 		setError(null)
 		try {
 			// Check if coco has balance at the selected mint
-			const cashuMintBalance = cashuBalances[selectedMint] ?? 0
-			const useCoco = cashuStatus === 'ready' && selectedMint && cashuMintBalance >= amountNum
+			const cocoMintBalance = balances[selectedMint] ?? 0
 
-			let token: string | null = null
-
-			if (useCoco) {
-				// Use coco if it has sufficient balance
-				console.log('[SendEcash] Using coco for send')
-				token = await cashuActions.send(selectedMint, amountNum)
-			} else {
-				// Fall back to nip60 which has the actual proofs from Nostr
-				console.log('[SendEcash] Using nip60 for send (coco balance:', cashuMintBalance, ')')
-				const { nip60Actions } = await import('@/lib/stores/nip60')
-				token = await nip60Actions.sendEcash(amountNum, selectedMint || undefined)
-			}
+			console.log('[SendEcash] Using coco for send')
+			const token = await cashuActions.send(selectedMint, amountNum)
 
 			if (token) {
 				// Pre-flight check: warn if the token is likely too large for a QR code
