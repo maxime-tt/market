@@ -32,7 +32,7 @@ import { getP2PKLocktime } from '@/lib/utils/cashu'
 import { buildDleqProofs } from '@/lib/cashu/dleq'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
-import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
+import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus } from '@nostr-dev-kit/wallet'
 import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
@@ -178,7 +178,6 @@ export interface Nip60State {
 	mintBalances: Record<string, number>
 	mints: string[]
 	defaultMint: string | null
-	transactions: NDKWalletTransaction[]
 	error: string | null
 	// Active deposit tracking. The session is coco's mint-quote deposit, not the relay
 	// wallet's: the type is the adapter's, so nothing here can reach into an NDK deposit.
@@ -196,7 +195,6 @@ const initialState: Nip60State = {
 	mintBalances: {},
 	mints: [],
 	defaultMint: typeof localStorage !== 'undefined' ? localStorage.getItem(DEFAULT_MINT_KEY) : null,
-	transactions: [],
 	error: null,
 	activeDeposit: null,
 	depositInvoice: null,
@@ -403,7 +401,6 @@ const isPermanentReclaimFailure = (err: unknown): boolean => {
 export const nip60Store = new Store<Nip60State>(initialState)
 
 // Keep track of transaction subscription cleanup
-let transactionUnsubscribe: (() => void) | null = null
 let autoCleanupPromise: Promise<void> | null = null
 let lastAutoCleanupAt = 0
 
@@ -1247,13 +1244,9 @@ export const nip60Actions = {
 				mintBalances,
 			}))
 
-			// Only load transactions if we have a wallet
-			if (hasWallet) {
-				if (!startTimedOut) {
-					void nip60Actions.loadTransactions()
-					// Perform a background cleanup pass so spent proofs are removed without manual refresh.
-					void nip60Actions.runAutoCleanup({ force: true })
-				}
+			// Perform a background cleanup pass so spent proofs are removed without manual refresh.
+			if (hasWallet && !startTimedOut) {
+				void nip60Actions.runAutoCleanup({ force: true })
 			}
 
 			// Load pending tokens from localStorage
@@ -1295,58 +1288,6 @@ export const nip60Actions = {
 				error: err instanceof Error ? err.message : 'Failed to initialize wallet',
 			}))
 		}
-	},
-
-	loadTransactions: async (): Promise<void> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) {
-			console.warn('[nip60] Cannot load transactions without wallet')
-			return
-		}
-
-		try {
-			const txs = await wallet.fetchTransactions()
-			nip60Store.setState((s) => ({
-				...s,
-				transactions: txs,
-			}))
-
-			// Subscribe to new transactions
-			nip60Actions.subscribeToTransactions()
-		} catch (err) {
-			console.error('[nip60] Failed to fetch transactions:', err)
-		}
-	},
-
-	subscribeToTransactions: (): void => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) return
-
-		// Clean up existing subscription
-		if (transactionUnsubscribe) {
-			transactionUnsubscribe()
-			transactionUnsubscribe = null
-		}
-
-		transactionUnsubscribe = wallet.subscribeTransactions((tx: NDKWalletTransaction) => {
-			nip60Store.setState((s) => {
-				// Check if transaction already exists
-				const exists = s.transactions.some((t) => t.id === tx.id)
-				if (exists) return s
-
-				// Add new transaction at the beginning (newest first)
-				return {
-					...s,
-					transactions: [tx, ...s.transactions],
-				}
-			})
-
-			// Outgoing payments can leave stale proofs visible until consolidation.
-			// Run cleanup in the background to keep balances accurate without manual refresh.
-			if (tx.direction === 'out') {
-				void nip60Actions.runAutoCleanup()
-			}
-		})
 	},
 
 	/**
@@ -1412,10 +1353,6 @@ export const nip60Actions = {
 
 	reset: (): void => {
 		// Clean up transaction subscription
-		if (transactionUnsubscribe) {
-			transactionUnsubscribe()
-			transactionUnsubscribe = null
-		}
 
 		const state = nip60Store.state
 		if (state.wallet) {
@@ -1546,7 +1483,7 @@ export const nip60Actions = {
 	},
 
 	/**
-	 * Refresh wallet balance and transactions
+	 * Refresh wallet balance and mint balances
 	 * @param options.consolidate If true, consolidate tokens first (checks for spent proofs)
 	 */
 	refresh: async (options?: { consolidate?: boolean }): Promise<void> => {
@@ -1578,8 +1515,6 @@ export const nip60Actions = {
 			mints: getAllMints(wallet),
 		}))
 
-		// Reload transactions
-		await nip60Actions.loadTransactions()
 		await nip60Actions.syncAuctionTransfers()
 	},
 
