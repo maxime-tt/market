@@ -1,16 +1,35 @@
-import type { NDKCashuWallet } from '@nostr-dev-kit/wallet'
 import type { Proof } from '@cashu/cashu-ts'
 import type { ProofInfo } from './types'
 
 /**
- * Extract proofs grouped by mint from an NDKCashuWallet's state dump.
+ * What these extractors actually need from a wallet: a state dump, and optionally a per-mint
+ * read. It is declared structurally rather than imported, for two reasons. It removes this
+ * module's dependency on the relay wallet class — one of the three remaining imports of
+ * `@nostr-dev-kit/wallet`, and a blocker for the cashu-ts version bump — and it states the
+ * contract plainly, which is what a coco-backed source will have to satisfy when the auction
+ * flows move onto it. A caller passing a wallet of the old shape still fits.
+ */
+export interface WalletProofSource {
+	state: {
+		dump(): { proofs?: unknown }
+		/**
+		 * The per-mint read. The flags are part of the contract, not decoration:
+		 * `onlyAvailable` keeps already-spent proofs out of selection, and
+		 * `includeDeleted: false` is what stops a deleted proof being offered again.
+		 */
+		getProofs(filter: { mint: string; onlyAvailable?: boolean; includeDeleted?: boolean }): Proof[] | null | undefined
+	}
+}
+
+/**
+ * Extract proofs grouped by mint from a wallet source's state dump.
  * Handles multiple proof structure variants that the NDK wallet may return.
  *
- * @param wallet The NDKCashuWallet instance
+ * @param wallet The wallet source to read (see {@link WalletProofSource})
  * @param knownMints Optional list of mints to query via getProofs() as fallback
  * @returns Map of mint URL to array of proofs
  */
-export function extractProofsByMint(wallet: NDKCashuWallet, knownMints?: string[]): Map<string, ProofInfo[]> {
+export function extractProofsByMint(wallet: WalletProofSource, knownMints?: string[]): Map<string, ProofInfo[]> {
 	const result = new Map<string, ProofInfo[]>()
 
 	try {
@@ -60,11 +79,11 @@ export function extractProofsByMint(wallet: NDKCashuWallet, knownMints?: string[
 /**
  * Get proofs for a specific mint from wallet state.
  *
- * @param wallet The NDKCashuWallet instance
+ * @param wallet The wallet source to read (see {@link WalletProofSource})
  * @param mintUrl The mint URL to get proofs for
  * @returns Array of proofs or empty array
  */
-export function getProofsForMint(wallet: NDKCashuWallet, mintUrl: string): Proof[] {
+export function getProofsForMint(wallet: WalletProofSource, mintUrl: string): Proof[] {
 	// Pass onlyAvailable: true explicitly — dump() would otherwise return
 	// deleted proofs too, letting selectProofs pick already-spent inputs.
 	return wallet.state.getProofs({ mint: mintUrl, onlyAvailable: true }) ?? []
@@ -75,7 +94,7 @@ export function getProofsForMint(wallet: NDKCashuWallet, mintUrl: string): Proof
  * This intentionally avoids proofs already marked as spent/deleted so they
  * cannot be reused for a new bid or ecash send.
  */
-export function getSpendableProofsForMint(wallet: NDKCashuWallet, mintUrl: string): Proof[] {
+export function getSpendableProofsForMint(wallet: WalletProofSource, mintUrl: string): Proof[] {
 	if (typeof wallet.state?.getProofs === 'function') {
 		try {
 			const proofs = wallet.state.getProofs({
