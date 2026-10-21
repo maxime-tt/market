@@ -2,7 +2,7 @@ import type { KeyValueStoragePort, NostrRelayPort, WalletPort, WalletRecoveryPor
 import { getNostrIo } from '@/lib/nostr/io'
 import type { NostrIo, NostrFilter as AppNostrFilter, NostrEvent as RawNostrEvent } from '@/lib/nostr/io'
 import { loadUserData, removeUserData, saveUserData } from '@/lib/wallet/storage'
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 
 type UserStorageBindings = {
 	load<T>(key: string, fallback: T): T
@@ -72,11 +72,18 @@ export interface Nip60WalletAdapterBindings {
 
 export function createNip60WalletPort(
 	bindings: Nip60WalletAdapterBindings = {
-		isReady: () => nip60Store.state.status === 'ready' && nip60Store.state.wallet !== null,
-		getMintBalance: (mintUrl) => nip60Store.state.mintBalances[mintUrl] ?? 0,
-		payLightningInvoice: (invoice) => nip60Actions.payLightningInvoice(invoice),
-		receiveEcash: (token) => nip60Actions.receiveEcash(token),
-		reclaimToken: (tokenId, options) => nip60Actions.reclaimToken(tokenId, options),
+		isReady: () => cashuStore.state.status === 'ready' && cashuStore.state.manager !== null,
+		getMintBalance: (mintUrl) => cashuStore.state.balances[mintUrl] ?? 0,
+		payLightningInvoice: async (invoice) => {
+			const mintUrl = cashuStore.state.mints[0]
+			if (!mintUrl) throw new Error('No mint available to melt invoice')
+			await cashuActions.melt(mintUrl, invoice)
+			return {}
+		},
+		receiveEcash: (token) => cashuActions.receive(token),
+		reclaimToken: async (tokenId) => {
+			await cashuActions.reclaimToken(tokenId)
+		},
 	},
 ): WalletPort<
 	Nip60SdkAccount,
@@ -100,7 +107,9 @@ export function createNip60WalletPort(
 
 export function createNip60WalletRecoveryPort(
 	bindings: Pick<Nip60WalletAdapterBindings, 'reclaimToken'> = {
-		reclaimToken: (tokenId, options) => nip60Actions.reclaimToken(tokenId, options),
+		reclaimToken: async (tokenId) => {
+			await cashuActions.reclaimToken(tokenId)
+		},
 	},
 ): WalletRecoveryPort<{ tokenId: string; manual?: boolean }, void> {
 	return {
