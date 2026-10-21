@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SyntheticEvent } from 'react'
+import { NpubDisplay, truncateNpub, type TruncateNpubOptions } from '../nostr/npub-display'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { useCopyToClipboard } from '../shared/use-copy-to-clipboard'
 import { UiLink } from '../provider/UiProvider'
@@ -24,9 +25,13 @@ export interface UserCardViewProps {
 	copyNpub?: boolean
 }
 
-export function formatNpubForDisplay(npub: string): string {
-	return `${npub.slice(0, 9)}..${npub.slice(-6)}`
-}
+/**
+ * The card's compact npub presentation: 9 head / 6 tail with a two-dot
+ * separator. This was a sixth hand-written copy of the same slice/join before
+ * the hoist to `ui/nostr/npub-display`; the numbers and the separator are kept
+ * verbatim so the rendered text does not change.
+ */
+const NPUB_CARD_FORMAT: TruncateNpubOptions = { head: 9, tail: 6, separator: '..' }
 
 export function getUserCardTitle({
 	isProfileLoading,
@@ -70,7 +75,7 @@ export function UserCardView({
 	const [forceShowTooltip, setForceShowTooltip] = useState(false)
 	const { copy } = useCopyToClipboard()
 
-	const textDisplayNpub = npub ? formatNpubForDisplay(npub) : 'Unknown user'
+	const textDisplayNpub = npub ? truncateNpub(npub, NPUB_CARD_FORMAT) : 'Unknown user'
 	const textTitle = getUserCardTitle({ isProfileLoading: isLoading, profileDisplayName: displayName, textDisplayNpub })
 
 	const showNip05AddressAfterBadge = !isLoading && nip05 != null && !(subtitle === 'nip-05' || compact)
@@ -143,8 +148,13 @@ export function UserCardView({
 						<p className={cn(classSizeNIP05[size], 'text-gray-400 truncate', className)}>{nip05}</p>
 					) : (
 						showNpubAsSubtitle &&
+						npub &&
 						copyNpubWrapper(
-							<span className={cn('text-xs font-medium text-gray-400 truncate lowercase', classNpub, className)}>{textDisplayNpub}</span>,
+							<NpubDisplay
+								npub={npub}
+								{...NPUB_CARD_FORMAT}
+								className={cn('text-xs font-medium text-gray-400 truncate', classNpub, className)}
+							/>,
 						)
 					))}
 			</div>

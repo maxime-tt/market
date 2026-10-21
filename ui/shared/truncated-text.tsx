@@ -5,17 +5,26 @@ import { cn } from '../utils/cn'
 export const TRUNCATED_TEXT_START = 8
 /** Default characters kept at the tail. */
 export const TRUNCATED_TEXT_END = 6
+/** Default separator inserted where the string was cut. */
+export const TRUNCATED_TEXT_ELLIPSIS = '…'
 
 /**
- * Middle-truncates `text` with an ellipsis, keeping `start` head characters and
- * `end` tail characters. Short strings are returned unchanged — never padded,
- * never re-escaped. Exported so the truncation is unit-testable on its own.
+ * Middle-truncates `text`, keeping `start` head characters and `end` tail
+ * characters joined by `ellipsis`. Short strings are returned unchanged — never
+ * padded, never re-escaped. This is the one implementation of middle
+ * truncation in `ui/`; `truncateNpub` delegates to it with its own numbers and
+ * separator rather than re-deriving the slice arithmetic.
  */
-export function truncateMiddle(text: string, start = TRUNCATED_TEXT_START, end = TRUNCATED_TEXT_END): string {
+export function truncateMiddle(
+	text: string,
+	start = TRUNCATED_TEXT_START,
+	end = TRUNCATED_TEXT_END,
+	ellipsis = TRUNCATED_TEXT_ELLIPSIS,
+): string {
 	if (start < 0 || end < 0) return text
 	// Nothing to gain from truncating when the kept parts already cover the string.
-	if (text.length <= start + end + 1) return text
-	return `${text.slice(0, start)}…${text.slice(text.length - end)}`
+	if (text.length <= start + end + ellipsis.length) return text
+	return `${text.slice(0, start)}${ellipsis}${text.slice(text.length - end)}`
 }
 
 export interface TruncatedTextProps {
