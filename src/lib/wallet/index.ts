@@ -4,6 +4,10 @@ export type { ProofInfo, PendingToken, PendingTokenContext, AuctionBidPendingTok
 // Proof utilities
 export { extractProofsByMint, getProofsForMint, getSpendableProofsForMint } from './proofs'
 
+// The wallet keypair's local home (sealed at rest)
+export { SealedWalletKeyStore, WalletKeyStoreError } from './walletKeyStore'
+export type { WalletKeySealer, WalletKeyStorage, WalletKeyStoreReason } from './walletKeyStore'
+
 // Storage utilities
 export { loadUserData, saveUserData, removeUserData } from './storage'
 
