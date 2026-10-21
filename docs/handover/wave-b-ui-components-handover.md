@@ -606,11 +606,43 @@ most from coco 2.0's native P2PK.
 
 **5. ZapDialog.tsx — nutzap (separate module)**
 
-Neither coco nor cashu-ts handles NIP-61 (confirmed by grep). Create
-`src/lib/wallet/nutzap.ts` with: NIP-61 event construction (kind 9325 nutzap, kind 9324
-nutzap-request), proof send through `cashuActions.send`, and verification against the
-recipient's zapper info. Gate the dialog behind the new module; the old
+Neither coco nor cashu-ts handles NIP-61 (confirmed by grep of both dist trees). A full
+implementation spec now exists at
+`work/pr1420-runs/2026-10-19-sdk-integration/w2-1/NUTZAP-SPEC.md` (1,306 lines): protocol
+shapes, the dependency search, the current flow traced through `NDKZapper`, the proposed
+module API, the test strategy and 14 open questions with recommendations. Build
+`src/lib/wallet/nutzap.ts` from it. Gate the dialog behind the new module; the old
 `nip60Actions.zapWithNutzap` path is deleted with nip60.ts.
+
+**Event kinds — corrected.** The real NIP-61 kinds are **10019** (the info event carrying a
+user's accepted mints, relays and nutzap pubkey), **9321** (the nutzap itself), and **7376**
+(redemption history, shared with NIP-60). An earlier revision of this section said 9325 and
+9324; **those kinds do not exist** — they were a transcription error and were verified absent
+from the spec and from every file in `nostr-protocol/nips`. Do not implement them.
+Two protocol details that shape the module: the sender **MUST** prefix the recipient's pubkey
+with `"02"` when P2PK-locking, and the `kind:10019` pubkey "corresponds to the `privkey` field
+encrypted in a user's NIP-60 wallet event" — which is exactly the pair `walletKeys.ts` now
+holds locally, so the nutzap key is derivable from `WalletKeyMaterial` rather than from a
+relay event.
+
+### 9.4 Slice 1 landed, and the two holes it opened (2026-10-21)
+
+`55ecf78f` retargeted `Nip60Wallet.tsx`. Two interim consequences, both deliberate and both
+needing a closing slice rather than being forgotten:
+
+1. **The wallet panel no longer lists auction-locked pending tokens.** The panel used to merge
+   `cashuStore.pendingTokens` with `nip60Store.pendingTokens`; it is now coco-only, and the
+   auction lock flows still write to the nip60 store until slices 3–4 move them. Closing slice:
+   the auction rails (item 4), after which the list is coco-only in fact and not just in
+   appearance. Reclaim is not lost in the meantime — `bids.tsx` and `useAuctionBidFunding.ts`
+   have their own paths (item 2).
+2. **There is no remove-mint affordance, on purpose.** The plan's proposed shape
+   (`addMint(url, { trusted: false })`) does not work: `syncMints` re-trusts every mint coco
+   holds, which `walletMintAuthority.test.ts` pins as intended behaviour. `deleteMint` exists
+   only on coco's internal `MintRepository` / `MintService`, not on the `MintApi` the manager
+   exposes, so on this pin there is no durable removal at all. The action, its handler and its
+   button were dropped rather than shipped, with the reason recorded in `cashu.ts`; revisit
+   against coco 2.0's mint API during the version bump.
 
 **6. NDK-wallet unwind — before the version bump can be green**
 

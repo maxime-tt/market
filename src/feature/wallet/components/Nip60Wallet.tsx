@@ -7,7 +7,6 @@ import {
 	Landmark,
 	Plus,
 	RefreshCw,
-	X,
 	Zap,
 	Send,
 	QrCode,
@@ -102,14 +101,6 @@ export function Nip60Wallet() {
 			setNewMintUrl('')
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to add mint')
-		}
-	}
-
-	const handleRemoveMint = async (mintUrl: string) => {
-		try {
-			await cashuActions.removeMint(mintUrl)
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to remove mint')
 		}
 	}
 
@@ -359,14 +350,6 @@ export function Nip60Wallet() {
 								</span>
 								<div className="flex items-center gap-1 shrink-0">
 									{balances[mint] !== undefined && <span className="text-gray-400 text-xs">{balances[mint].toLocaleString()}</span>}
-									<Button
-										className={cn(classNameGhost, 'w-6 h-6')}
-										size="icon"
-										onClick={() => void handleRemoveMint(mint)}
-										title="Remove mint"
-									>
-										<X className="w-3 h-3" />
-									</Button>
 								</div>
 							</div>
 						))}

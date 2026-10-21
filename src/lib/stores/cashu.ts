@@ -236,28 +236,13 @@ export const cashuActions = {
 		await cashuActions.syncMints()
 	},
 
-	/**
-	 * Remove a mint from the wallet.
-	 *
-	 * coco has no `removeMint` on this pin, so the mint is re-added untrusted:
-	 * that is what takes it out of the set the wallet will spend from. The
-	 * store's projection of the mint list belongs to `syncMints`, so this
-	 * action does not write it.
-	 */
-	removeMint: async (mintUrl: string): Promise<void> => {
-		const manager = cashuStore.state.manager
-		if (!manager) {
-			throw new Error('Wallet not initialized')
-		}
-
-		try {
-			await manager.mint.addMint(mintUrl, { trusted: false })
-			console.log('[cashu] Mint removed:', mintUrl)
-		} catch (err) {
-			console.error('[cashu] Failed to remove mint:', err)
-			throw err
-		}
-	},
+	// There is deliberately no `removeMint` here. coco's public mint API on this pin
+	// (`MintApi`) exposes `trustMint` / `untrustMint` but no delete: `deleteMint` lives on the
+	// internal `MintRepository` / `MintService` and is not reachable through `manager.mint`.
+	// And `syncMints` re-trusts every mint coco holds (see walletMintAuthority.test.ts), so
+	// untrusting one is undone at the next sync. A control wired to either would appear to
+	// work and quietly resurrect the mint, so the wallet UI has no remove-mint affordance
+	// until the coco 2.0 upgrade, where the mint API is the right place to revisit it.
 
 	/**
 	 * Refresh balances from coco
