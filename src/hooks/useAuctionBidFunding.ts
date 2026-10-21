@@ -1,4 +1,5 @@
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { nip60Store } from '@/lib/stores/nip60'
+import { cashuActions } from '@/lib/stores/cashu'
 import { planAuctionBidRecovery } from '@sdk/commerce/auctions'
 import {
 	AuctionBidLockedButUnpublishedError,
@@ -700,7 +701,7 @@ export function useAuctionBidFunding({
 
 		void (async () => {
 			try {
-				await nip60Actions.refresh()
+				await cashuActions.refreshBalances()
 			} catch {
 				// Best-effort refresh; we still evaluate from current wallet state below.
 			}
