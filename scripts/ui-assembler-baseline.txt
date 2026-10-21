@@ -79,7 +79,6 @@ platform/web/routes/products.$productId.tsx|inline-component|1
 platform/web/routes/products.index.tsx|primitive-import|2
 platform/web/routes/products.index.tsx|inline-component|1
 platform/web/routes/profile.$profileId.tsx|inline-component|1
-platform/web/routes/__root.tsx|primitive-import|1
 platform/web/routes/__root.tsx|inline-component|2
 platform/web/routes/search.products.tsx|primitive-import|3
 platform/web/routes/search.products.tsx|inline-component|1
