@@ -7,7 +7,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { SealedWalletKeyStore, WalletKeyStoreError } from './walletKeyStore'
+import { SealedWalletKeyStore, WalletKeySealerUnavailableError, WalletKeyStoreError, createSignerWalletKeySealer } from './walletKeyStore'
 import type { WalletKeySealer, WalletKeyStorage } from './walletKeyStore'
 import type { WalletKeyMaterial } from './walletKeys'
 
@@ -127,3 +127,88 @@ function storeFactory() {
 	const storage = memoryStorage()
 	return { storage, store: new SealedWalletKeyStore({ sealer: fakeSealer(), storage }) }
 }
+
+describe('createSignerWalletKeySealer', () => {
+	/** A signer stand-in: NIP-44 in the shape the app's signer offers it. */
+	const signerWith = (nip44?: {
+		encrypt: (r: string, p: string) => Promise<string>
+		decrypt: (s: string, c: string) => Promise<string>
+	}) => (nip44 ? { nip44 } : {})
+
+	const workingNip44 = () => ({
+		encrypt: async (_r: string, plaintext: string) => `sealed(${Buffer.from(plaintext, 'utf8').toString('base64')})`,
+		decrypt: async (_s: string, ciphertext: string) => {
+			const match = /^sealed\((.*)\)$/.exec(ciphertext)
+			if (!match) throw new Error('cannot open')
+			return Buffer.from(match[1], 'base64').toString('utf8')
+		},
+	})
+
+	test('seals and opens through the signer, so the store round-trips', async () => {
+		const storage = memoryStorage()
+		const store = new SealedWalletKeyStore({
+			sealer: createSignerWalletKeySealer(() => signerWith(workingNip44())),
+			storage,
+		})
+
+		await store.save(material())
+
+		expect(await store.load(OWNER)).toEqual(material({ ownerPubkey: OWNER }))
+		expect(JSON.stringify(storage.dump())).not.toContain(PRIVKEY)
+	})
+
+	test('a signer with no nip44 stops the save and stores nothing', async () => {
+		const storage = memoryStorage()
+		const store = new SealedWalletKeyStore({ sealer: createSignerWalletKeySealer(() => signerWith()), storage })
+
+		const err = await store.save(material()).then(
+			() => null,
+			(e: unknown) => e,
+		)
+
+		expect(err).toBeInstanceOf(WalletKeySealerUnavailableError)
+		// the point of the whole module: no seal means no private half anywhere near storage
+		expect(storage.dump()).toEqual({})
+	})
+
+	test('no signer at all stops the save too', async () => {
+		const storage = memoryStorage()
+		const store = new SealedWalletKeyStore({ sealer: createSignerWalletKeySealer(() => undefined), storage })
+
+		const err = await store.save(material()).then(
+			() => null,
+			(e: unknown) => e,
+		)
+
+		expect(err).toBeInstanceOf(WalletKeySealerUnavailableError)
+		expect(storage.dump()).toEqual({})
+	})
+
+	test('a record the current signer cannot open is unopenable, not absent', async () => {
+		const storage = memoryStorage()
+		const savingStore = new SealedWalletKeyStore({
+			sealer: createSignerWalletKeySealer(() => signerWith(workingNip44())),
+			storage,
+		})
+		await savingStore.save(material())
+
+		const otherSignerStore = new SealedWalletKeyStore({
+			sealer: createSignerWalletKeySealer(() =>
+				signerWith({
+					encrypt: async () => 'x',
+					decrypt: async () => {
+						throw new Error('no')
+					},
+				}),
+			),
+			storage,
+		})
+
+		const err = await otherSignerStore.load(OWNER).then(
+			() => null,
+			(e: unknown) => e,
+		)
+		expect(err).toBeInstanceOf(WalletKeyStoreError)
+		expect((err as WalletKeyStoreError).code).toBe('unopenable')
+	})
+})

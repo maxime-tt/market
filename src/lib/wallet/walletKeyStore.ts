@@ -46,6 +46,47 @@ export class WalletKeyStoreError extends Error {
 	}
 }
 
+/**
+ * The signer's NIP-44 surface, structurally. It is declared here rather than imported so this
+ * module stays free of the signer library: any signer that can encrypt to a pubkey fits.
+ */
+export interface WalletKeySigner {
+	readonly nip44?: {
+		encrypt(recipientPubkey: string, plaintext: string): Promise<string>
+		decrypt(senderPubkey: string, ciphertext: string): Promise<string>
+	}
+}
+
+/** Raised when the signer cannot seal or open a record. It carries no value by construction. */
+export class WalletKeySealerUnavailableError extends Error {
+	constructor() {
+		super('wallet key sealer unavailable: the signer offers no nip44')
+		this.name = 'WalletKeySealerUnavailableError'
+	}
+}
+
+/**
+ * The production sealer: the app's signer does the sealing, so the wallet's key material is
+ * protected by the same key that protects everything else the user signs.
+ *
+ * A signer without NIP-44 cannot seal, and that must stop a save rather than degrade it — the
+ * alternative to sealing is storing the private half in the clear, which is the one outcome
+ * this module exists to prevent. Reading takes the same path, so a record written by an earlier
+ * signer the current one cannot open is reported by the store as `unopenable`, not as absent.
+ */
+export const createSignerWalletKeySealer = (getSigner: () => WalletKeySigner | null | undefined): WalletKeySealer => ({
+	encrypt: async (recipientPubkey, plaintext) => {
+		const nip44 = getSigner()?.nip44
+		if (!nip44) throw new WalletKeySealerUnavailableError()
+		return nip44.encrypt(recipientPubkey, plaintext)
+	},
+	decrypt: async (senderPubkey, ciphertext) => {
+		const nip44 = getSigner()?.nip44
+		if (!nip44) throw new WalletKeySealerUnavailableError()
+		return nip44.decrypt(senderPubkey, ciphertext)
+	},
+})
+
 const SCHEMA_VERSION = 'wallet-key-v1'
 const KEY_PREFIX = 'wallet_key_material'
 
