@@ -35,7 +35,7 @@ import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute } from '@tanstack/react-router'
 
-import { DashboardListItem } from '@ui/components/DashboardListItem'
+import { EntityListItem } from '@ui/shared/entity-list-item'
 import {
 	ShippingOptionsEmptyState,
 	ShippingOptionsLoading,
@@ -294,14 +294,11 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		</div>
 	)
 
-	const triggerActions = null
-
 	return (
-		<DashboardListItem
+		<EntityListItem
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
-			triggerContent={triggerContent}
-			actions={triggerActions}
+			trigger={triggerContent}
 			icon={<ServiceIcon service={formData.service} />}
 			data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
 			className="w-full max-w-full overflow-hidden"
@@ -1123,7 +1120,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 				isPending={deleteMutation.isPending}
 				onConfirm={handleDelete}
 			/>
-		</DashboardListItem>
+		</EntityListItem>
 	)
 }
 

@@ -1,7 +1,7 @@
 import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { AvatarUser } from '@/components/AvatarUser'
 import { ProfileName } from '@/components/ProfileName'
-import { DashboardListItem } from '@ui/components/DashboardListItem'
+import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
 import { BidStatusBanner, BidStatusPill, getBidStatusCopy } from '@ui/components/BidStatusViews'
 import { resolveBidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import { Badge } from '@ui/primitives/badge'
@@ -30,7 +30,7 @@ import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useQueries } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { CheckCircle, Clock, Eye, Loader2, MapPin, RotateCcw, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -100,6 +100,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/bids
 function BidsOverviewComponent() {
 	useDashboardTitle('Bids')
 
+	const navigate = useNavigate()
 	const { user, isAuthenticated } = useStore(authStore)
 	const { pendingTokens } = useStore(nip60Store)
 	const [expandedBidGroup, setExpandedBidGroup] = useState<string | null>(null)
@@ -361,14 +362,30 @@ function BidsOverviewComponent() {
 							// chronological order. The "headline" bid amount lives on the
 							// most recent part; earlier parts are the rebid chain.
 							const bidParts = [...group.bids].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+							const actions: EntityListItemAction[] = [
+								{
+									key: 'open',
+									label: `Open auction route for ${getAuctionTitle(auction) || 'auction'}`,
+									icon: <Eye className="w-4 h-4" />,
+									onClick: () => navigate({ to: '/dashboard/products/auctions/$auctionId', params: { auctionId: group.auctionEventId } }),
+								},
+								{
+									key: 'reclaim',
+									label: `Reclaim bid for ${getAuctionTitle(auction) || 'auction'}`,
+									icon: <RotateCcw className="w-4 h-4" />,
+									onClick: () => void handleReclaimBidGroup(group, state.reclaimable),
+									disabled: state.reclaimable.length === 0,
+									pending: reclaimingGroup === group.key,
+								},
+							]
 
 							return (
 								<li key={group.key}>
-									<DashboardListItem
+									<EntityListItem
 										isOpen={expandedBidGroup === group.key}
 										onOpenChange={() => setExpandedBidGroup((prev) => (prev === group.key ? null : group.key))}
 										icon={false}
-										triggerContent={
+										trigger={
 											<div className="flex items-center gap-3">
 												<div className="min-w-0 flex-1">
 													<p className="font-semibold truncate">
@@ -405,32 +422,7 @@ function BidsOverviewComponent() {
 												</div>
 											</div>
 										}
-										actions={
-											<>
-												<Link
-													to="/dashboard/products/auctions/$auctionId"
-													params={{ auctionId: group.auctionEventId }}
-													onClick={(e) => e.stopPropagation()}
-													aria-label={`Open auction route for ${getAuctionTitle(auction) || 'auction'}`}
-												>
-													<Button variant="ghost" size="sm">
-														<Eye className="w-4 h-4" />
-													</Button>
-												</Link>
-												<Button
-													variant="ghost"
-													size="sm"
-													onClick={(e) => {
-														e.stopPropagation()
-														void handleReclaimBidGroup(group, state.reclaimable)
-													}}
-													disabled={state.reclaimable.length === 0 || reclaimingGroup === group.key}
-													aria-label={`Reclaim bid for ${getAuctionTitle(auction) || 'auction'}`}
-												>
-													{reclaimingGroup === group.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-												</Button>
-											</>
-										}
+										actions={actions}
 									>
 										<div className="space-y-4 p-4 bg-gray-50 border-t">
 											{/* Status banner with countdown if applicable */}
@@ -525,7 +517,7 @@ function BidsOverviewComponent() {
 												</Button>
 											</div>
 										</div>
-									</DashboardListItem>
+									</EntityListItem>
 								</li>
 							)
 						})}
