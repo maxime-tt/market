@@ -1,5 +1,6 @@
 import { Button } from '@ui/primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
+import { PageHeader } from '@ui/layout/page-header'
 import { useConfigQuery } from '@/queries/config'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useQuery } from '@tanstack/react-query'
@@ -166,7 +167,7 @@ function AboutComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<div className="flex items-center gap-3">
 					<Info className="w-6 h-6 text-muted-foreground" />
 					<div>
@@ -174,7 +175,7 @@ function AboutComponent() {
 						<p className="text-muted-foreground text-sm">App information and verification</p>
 					</div>
 				</div>
-			</div>
+			</PageHeader>
 			<div className="p-4 lg:p-8">
 				<div className="lg:hidden mb-6">
 					<div className="flex items-center gap-3">

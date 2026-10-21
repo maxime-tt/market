@@ -5,6 +5,7 @@ import { Checkbox } from '@ui/primitives/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
+import { PageHeader } from '@ui/layout/page-header'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
 import { parseNwcUri, useWallets, walletActions, type Wallet } from '@/lib/stores/wallet'
@@ -248,7 +249,7 @@ function MakingPaymentsComponent() {
 	// Main View (List Wallets)
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Making Payments</h1>
 				{combinedWallets.length > 0 && (
 					<Button
@@ -258,7 +259,7 @@ function MakingPaymentsComponent() {
 						<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
 					</Button>
 				)}
-			</div>
+			</PageHeader>
 
 			{/* Mobile Add Wallet Button - full width, no padding */}
 			<div className="lg:hidden">

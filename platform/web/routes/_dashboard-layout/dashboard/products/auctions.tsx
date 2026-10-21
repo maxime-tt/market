@@ -7,6 +7,7 @@ import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/primitives/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
+import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions, notificationStore } from '@/lib/stores/notifications'
 import { uiActions } from '@/lib/stores/ui'
@@ -596,7 +597,7 @@ function AuctionsOverviewComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Auctions</h1>
 				<div className="flex items-center gap-4">
 					<Select value={sort} onValueChange={(value) => setSort(value as AuctionSortOption)}>
@@ -625,7 +626,7 @@ function AuctionsOverviewComponent() {
 						Add An Auction
 					</Button>
 				</div>
-			</div>
+			</PageHeader>
 
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden space-y-4">

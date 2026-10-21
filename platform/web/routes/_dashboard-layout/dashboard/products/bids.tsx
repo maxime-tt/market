@@ -6,6 +6,7 @@ import { BidStatusBanner, BidStatusPill, getBidStatusCopy } from '@ui/components
 import { resolveBidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/primitives/button'
+import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { formatReclaimWaitSeconds, getAuctionReclaimReadyAt, nip60Actions, nip60Store, type PendingNip60Token } from '@/lib/stores/nip60'
@@ -274,7 +275,7 @@ function BidsOverviewComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between gap-4">
+			<PageHeader className="gap-4">
 				<div>
 					<h1 className="text-2xl font-bold">Bids</h1>
 					<p className="text-sm text-muted-foreground">Bids stay locked until settlement or until reclaim opens at the bid locktime.</p>
@@ -283,7 +284,7 @@ function BidsOverviewComponent() {
 					{isRefreshingBids ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
 					Refresh wallet state
 				</Button>
-			</div>
+			</PageHeader>
 
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden space-y-3">

@@ -9,6 +9,7 @@ import { Label } from '@ui/primitives/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { Spinner } from '@ui/primitives/spinner'
 import { WalletSetupGuide } from '@ui/components/WalletSetupGuide'
+import { PageHeader } from '@ui/layout/page-header'
 import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@/lib/constants'
 import { useNDK } from '@/lib/stores/ndk'
 import { isValidNip05 } from '@/lib/utils'
@@ -865,7 +866,7 @@ function ReceivingPaymentsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Receiving Payments</h1>
 				{hasPaymentDetails && (
 					<Button
@@ -876,7 +877,7 @@ function ReceivingPaymentsComponent() {
 						Add Payment Method
 					</Button>
 				)}
-			</div>
+			</PageHeader>
 			<div className="space-y-4 p-4 lg:p-6">
 				{!hasPaymentDetails && openPaymentDetailId !== 'new' ? (
 					<>

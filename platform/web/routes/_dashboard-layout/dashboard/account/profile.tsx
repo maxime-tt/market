@@ -8,6 +8,7 @@ import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { toast } from 'sonner'
 import { Textarea } from '@ui/primitives/textarea'
+import { PageHeader } from '@ui/layout/page-header'
 import { useUpdateProfileMutation } from '@/publish/profiles'
 import { useQuery } from '@tanstack/react-query'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
@@ -172,7 +173,7 @@ function ProfileComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Profile</h1>
 				<Button
 					type="button"
@@ -183,7 +184,7 @@ function ProfileComponent() {
 				>
 					{isLoading ? 'Saving...' : canSave ? (Object.keys(originalProfile).length === 0 ? 'Create Profile' : 'Save Changes') : 'Saved'}
 				</Button>
-			</div>
+			</PageHeader>
 			<div className="space-y-6 p-4 lg:p-8">
 				{isLoadingProfile ? (
 					<div className="flex items-center justify-center p-8">

@@ -1,5 +1,6 @@
 import { Switch } from '@ui/primitives/switch'
 import { Label } from '@ui/primitives/label'
+import { PageHeader } from '@ui/layout/page-header'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useStore } from '@tanstack/react-store'
@@ -24,7 +25,7 @@ function PreferencesComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<div className="flex items-center gap-3">
 					<Settings className="w-6 h-6 text-muted-foreground" />
 					<div>
@@ -32,7 +33,7 @@ function PreferencesComponent() {
 						<p className="text-muted-foreground text-sm">Manage your browsing preferences</p>
 					</div>
 				</div>
-			</div>
+			</PageHeader>
 			<div className="p-4 lg:p-8">
 				<div className="lg:hidden mb-6">
 					<div className="flex items-center gap-3">

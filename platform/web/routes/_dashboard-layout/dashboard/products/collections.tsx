@@ -17,6 +17,7 @@ import { ChevronDown, PlusIcon, StoreIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { DashboardCollectionDetails, DashboardCollectionTrigger } from '@ui/components/DashboardCollectionListItem'
+import { PageHeader } from '@ui/layout/page-header'
 
 function CollectionListItem({
 	collection,
@@ -162,7 +163,7 @@ function CollectionsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Collections</h1>
 				<div className="flex items-center gap-4">
 					<Select value={orderBy} onValueChange={setOrderBy}>
@@ -185,7 +186,7 @@ function CollectionsComponent() {
 						Create A Collection
 					</Button>
 				</div>
-			</div>
+			</PageHeader>
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden space-y-4">
 					<Select value={orderBy} onValueChange={setOrderBy}>

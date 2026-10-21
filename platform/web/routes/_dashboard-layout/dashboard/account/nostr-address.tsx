@@ -15,6 +15,7 @@ import { Badge } from '@ui/primitives/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { LightningPaymentProcessor } from '@/components/lightning/LightningPaymentProcessor'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
+import { PageHeader } from '@ui/layout/page-header'
 import { purchaseNip05ForPubkey } from '@/lib/zapPurchase'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/nostr-address')({
@@ -206,9 +207,9 @@ function NostrAddressComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Nostr Address (NIP-05)</h1>
-			</div>
+			</PageHeader>
 
 			<div className="space-y-6 p-4 lg:p-8">
 				{isLoading ? (
