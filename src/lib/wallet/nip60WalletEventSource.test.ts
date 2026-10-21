@@ -16,7 +16,7 @@ const PUB = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
 const reader = (overrides: Partial<WalletEventReader> = {}): WalletEventReader => ({
 	readWalletEventContent: async () => JSON.stringify([['privkey', PRIV]]),
-	decrypt: async (ciphertext) => ciphertext,
+	decrypt: async (_owner, ciphertext) => ciphertext,
 	...overrides,
 })
 
@@ -38,7 +38,7 @@ describe('createRelayWalletKeyMigrationSource', () => {
 	test('an event that cannot be opened raises, and does not read as "no wallet"', async () => {
 		const source = createRelayWalletKeyMigrationSource(
 			reader({
-				decrypt: async () => {
+				decrypt: async (_owner) => {
 					throw new Error('cannot decrypt')
 				},
 			}),

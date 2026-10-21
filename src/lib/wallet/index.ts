@@ -12,6 +12,10 @@ export { migrateWalletKeyMaterial } from './walletKeyMigration'
 export type { WalletKeyMigrationOutcome, WalletKeyMigrationResult, WalletKeyMigrationSource } from './walletKeyMigration'
 export { Nip60WalletEventError, parseNip60WalletEventContent, selectWalletKeyPair } from './nip60WalletEvent'
 export type { Nip60WalletEventContent, Nip60WalletEventReason, WalletKeyPairCandidate } from './nip60WalletEvent'
+export { WalletEventUnreadableError, createRelayWalletKeyMigrationSource } from './nip60WalletEventSource'
+export type { WalletEventReader } from './nip60WalletEventSource'
+export { createWalletEventReader, latestByCreatedAt } from './walletEventReader'
+export type { WalletEventOpener, WalletEventRelay } from './walletEventReader'
 
 // Storage utilities
 export { loadUserData, saveUserData, removeUserData } from './storage'

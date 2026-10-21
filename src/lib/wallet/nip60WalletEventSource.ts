@@ -30,8 +30,8 @@ export class WalletEventUnreadableError extends Error {
 export interface WalletEventReader {
 	/** The latest kind-17375 event's content for this owner, as stored, or null if there is none. */
 	readWalletEventContent(ownerPubkey: string): Promise<string | null>
-	/** NIP-44 to self. The owner is both sender and recipient. */
-	decrypt(ciphertext: string): Promise<string>
+	/** NIP-44 to self: the owner is both sender and recipient, so it names the sender. */
+	decrypt(ownerPubkey: string, ciphertext: string): Promise<string>
 }
 
 export const createRelayWalletKeyMigrationSource = (reader: WalletEventReader): WalletKeyMigrationSource => ({
@@ -42,7 +42,7 @@ export const createRelayWalletKeyMigrationSource = (reader: WalletEventReader): 
 
 		let plaintext: string
 		try {
-			plaintext = await reader.decrypt(content)
+			plaintext = await reader.decrypt(ownerPubkey, content)
 		} catch {
 			// an event we cannot open is NOT "no wallet" — see the module note
 			throw new WalletEventUnreadableError()
