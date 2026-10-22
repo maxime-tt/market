@@ -755,6 +755,45 @@ reclaim-prepare timing, the AUCTION\_\* constants) that several of them read.
 - `NDKPrivateKeySigner` does not declare `nip44`; the wallet event is opened through the event's own
   `decrypt()`, which is what NDK's loader does. Do not reach for `signer.nip44`.
 
+### 9.7 Two corrections to §9.6, from reading the code (2026-10-22)
+
+§9.6 was written from line ranges and reference counts. Reading the two functions it nominates
+first changed both recommendations, so read this before starting step 1.
+
+**1. The extraction unit is a helper, not the action.** `receiveLockedEcash` (2637–2665) is 29
+lines of orchestration: it obtains the wallet, calls **`receiveTokenWithPrivkey`** (module-level,
+line 919, 25 lines) and then `refresh()`. All of the P2PK spend is in that helper — so extracting
+the _action_ would leave it reaching the wallet through the helper and move nothing. The helper is
+the unit, and it has **two** call sites rather than one:
+
+- 2645, from `receiveLockedEcash`
+- 2788, from inside `reclaimToken` (`await receiveTokenWithPrivkey(wallet, pendingToken.token,
+refundPrivkey, pendingToken.mintUrl)`)
+
+So it serves both of §9.6's steps 1 and 3. Extracting it once covers the P2PK spend for the
+settlement leg and the reclaim leg together, which is better than the order §9.6 proposed.
+
+**2. The HD path already funnels through the shared module, so `getAuctionHdChildPrivkey` is a
+small replacement rather than a move.** Its apparent dependency on the wallet is one thin adapter:
+`getAuctionHdAccountFromWallet(wallet)` (line 860) pulls `(walletP2pk, walletPrivkey)` out of the
+wallet and calls `getAuctionHdAccountFromWalletKeys(walletP2pk, walletPrivkey)` — **the same
+`@/lib/auctionHd` function that `walletKeys.ts` uses** (line 24 there). `walletKeys` then
+implements the identical expected-pubkey guard that `getAuctionHdChildPrivkey` hand-rolls at
+1401–1458.
+
+So retargeting `getAuctionHdChildPrivkey` onto `walletKeys.deriveAuctionChildPrivkey` is: get the
+material from the key store instead of from `wallet.state`, and delete the hand-rolled guard
+because the seam already enforces it (and refuses with a typed code rather than a string). That is
+the "wire the key path at a call site" step, and it is the smallest genuine reduction of the
+store's wallet dependency available: it drops the wallet read inside that function plus its own
+`getAuctionHdAccountFromWallet` call at 1407. It does **not** touch the other call to that helper
+at 1393, which sits in a different function — that one has to be counted separately, and anyone
+reading §9.6's counts should re-measure rather than subtract this one from the total.
+
+**Revised order:** (a) extract `receiveTokenWithPrivkey` — 25 lines, 2 call sites, the hardest
+dependency; (b) retarget `getAuctionHdChildPrivkey` onto `walletKeys`; (c) then the reclaim pair;
+(d) the lock and settlement last, ideally after B2a.
+
 **6. NDK-wallet unwind — before the version bump can be green**
 
 Four files import `@nostr-dev-kit/wallet` (not just nip60.ts). The upgrade to cashu-ts
