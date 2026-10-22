@@ -18,7 +18,7 @@ import { uiStore } from '@/lib/stores/ui'
 import { settleAuctionAsWinner, usePublishAuctionBidMutation } from '@/publish/auctions'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
 import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
-import { toRawEvent } from '@/lib/nostr/eventLike'
+import { toRawEvent } from '@sdk/core'
 import { useQueryClient } from '@tanstack/react-query'
 import { auctionKeys } from '@/queries/queryKeyFactory'
 import {

@@ -1,5 +1,5 @@
 import { applesauceIo, type NostrFilter } from '@/lib/nostr/io'
-import type { NostrEventLike } from '@/lib/nostr/eventLike'
+import type { NostrEventLike } from '@sdk/core'
 import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 
 // Raw-event reads (the applesauce seam used by auctions) get their own store; NDKEvent reads use ndkReadContext.
