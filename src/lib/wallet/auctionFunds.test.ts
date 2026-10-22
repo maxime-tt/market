@@ -11,7 +11,7 @@
  * tokens carry a caller-supplied mint URL so the receive never tries to decode them.
  */
 import { beforeEach, describe, expect, test } from 'bun:test'
-import type { CashuWallet, Proof } from '@cashu/cashu-ts'
+import { Amount, type Proof, type Wallet } from '@cashu/cashu-ts'
 
 import { authStore } from '../stores/auth'
 import { persistPreLockRecoveryRecord, upsertBidderRecord } from '../auction/bidderRecords'
@@ -121,9 +121,9 @@ const makeHost = (params: {
 					receive: async (token: string, options: { privkey?: string }) => {
 						mintCalls.push({ token, privkey: options?.privkey })
 						if (params.receiveFails) throw params.receiveFails
-						return [{ amount: 21, id: '00', secret: 's', C: 'C' }] as unknown as Proof[]
+						return [{ amount: Amount.from(21), id: '00', secret: 's', C: 'C' }] as unknown as Proof[]
 					},
-				} as unknown as CashuWallet,
+				} as unknown as Wallet,
 				keysetId: undefined,
 			}),
 		},

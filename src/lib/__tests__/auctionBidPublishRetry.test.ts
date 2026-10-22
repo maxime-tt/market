@@ -18,7 +18,7 @@
 import { beforeEach, describe, expect, mock, spyOn, test } from 'bun:test'
 import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
-import type { Proof } from '@cashu/cashu-ts'
+import { Amount, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from 'nostr-tools'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { authStore } from '../stores/auth'
@@ -84,7 +84,7 @@ const signFailingSigner: NDKSigner = {
 function dummyProof(amount: number, secret: string): Proof {
 	return {
 		id: '00' + '1'.repeat(14),
-		amount,
+		amount: Amount.from(amount),
 		secret,
 		C: '02' + '7'.repeat(64),
 	}

@@ -24,7 +24,7 @@
  * downgrade individual readings to `'unknown'`, not crash the loop.
  */
 
-import { CashuMint, CheckStateEnum, type CheckStateResponse } from '@cashu/cashu-ts'
+import { Mint, CheckStateEnum, type CheckStateResponse } from '@cashu/cashu-ts'
 
 /** NUT-7 proof-state values as reported by a Cashu mint. */
 export type Nut7ProofState = 'unspent' | 'pending' | 'spent' | 'missing' | 'unknown'
@@ -50,7 +50,7 @@ export interface CheckProofStateOptions {
 	 * constructed — useful for callers that already maintain mint
 	 * pools (e.g. the validator process subscribed to many mints).
 	 */
-	mintClient?: CashuMint
+	mintClient?: Mint
 	/**
 	 * Policy-enforcing custom request transport for the CashuMint
 	 * constructor (`_customRequest`). When provided and no `mintClient`
@@ -94,7 +94,7 @@ export const checkProofState = async (mintUrl: string, proofY: string, options: 
 
 export const checkMintReachability = async (mintUrl: string, options: CheckProofStateOptions = {}): Promise<boolean> => {
 	const timeoutMs = options.timeoutMs ?? DEFAULT_NUT7_TIMEOUT_MS
-	const mint = options.mintClient ?? new CashuMint(mintUrl, options.customRequest as never)
+	const mint = options.mintClient ?? new Mint(mintUrl, { customRequest: options.customRequest as never })
 
 	try {
 		const response = await withTimeout(mint.check({ Ys: [NUT7_REACHABILITY_PROBE_Y] }), timeoutMs, `NUT-7 reachability ${mintUrl}`)
@@ -124,7 +124,7 @@ export const checkProofStateBatch = async (
 	for (const y of proofYs) out.set(y.toLowerCase(), 'unknown')
 
 	const timeoutMs = options.timeoutMs ?? DEFAULT_NUT7_TIMEOUT_MS
-	const mint = options.mintClient ?? new CashuMint(mintUrl, options.customRequest as never)
+	const mint = options.mintClient ?? new Mint(mintUrl, { customRequest: options.customRequest as never })
 
 	const batches: string[][] = []
 	for (let i = 0; i < proofYs.length; i += DEFAULT_NUT7_BATCH_SIZE) {

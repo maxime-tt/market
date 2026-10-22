@@ -9,7 +9,7 @@
  */
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import type { Proof } from '@cashu/cashu-ts'
+import { Amount, type Proof } from '@cashu/cashu-ts'
 import { getDecodedToken } from '@cashu/cashu-ts'
 import { authStore } from '../stores/auth'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
@@ -61,7 +61,7 @@ const LOCK_SECRET =
 
 const PROOF: Proof = {
 	id: '0000000000000000',
-	amount: 50_000,
+	amount: Amount.from(50_000),
 	secret: LOCK_SECRET,
 	C: '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa',
 }

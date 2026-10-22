@@ -12,7 +12,7 @@ import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, Parsed
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { makeDleqKeyset, makeHonestDleqProof } from '@/lib/cashu/dleqFixture'
-import { getEncodedToken, type MintKeys, type Proof } from '@cashu/cashu-ts'
+import { Amount, getEncodedToken, type MintKeys, type Proof } from '@cashu/cashu-ts'
 
 /**
  * DLEQ keysets covering every proof amount committed by `bids`, keyed
@@ -189,7 +189,7 @@ const makeReleasedBid = (params: {
 	])
 	const proof: Proof = {
 		id: '0000000000000000',
-		amount: params.legAmount,
+		amount: Amount.from(params.legAmount),
 		secret: lockSecret,
 		C: '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa',
 	}
@@ -437,7 +437,7 @@ describe('auction win path-release resolution', () => {
 		const complete = await resolveAuctionWin(...args, [first.release, latest.release], nut7States, 220, keysets, dleqKeysets)
 		const wrongChildProof: Proof = {
 			id: '0000000000000000',
-			amount: latest.bid.amount,
+			amount: Amount.from(latest.bid.amount),
 			secret: latest.bid.lockSecrets[0],
 			C: '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa',
 		}

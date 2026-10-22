@@ -22,7 +22,7 @@
  * polling many bids should not crash on a single bad proof.
  */
 
-import { CashuMint, hasValidDleq, type MintKeys, type Proof } from '@cashu/cashu-ts'
+import { Amount, Mint, hasValidDleq, type MintKeys, type Proof } from '@cashu/cashu-ts'
 import type { CashuCustomRequest } from './nut7'
 
 // ---------- Public types ----------------------------------------------------
@@ -144,7 +144,9 @@ export const buildDleqProofs = (proofs: Proof[]): DleqProof[] => {
 		}
 		return {
 			id: proof.id,
-			amount: proof.amount,
+			// cashu-ts v5 models `Proof.amount` as an `Amount` value object; this
+			// serialized DLEQ record keeps the plain sat number its wire shape needs.
+			amount: proof.amount.toNumber(),
 			C: proof.C,
 			e: dleq.e,
 			s: dleq.s,
@@ -175,7 +177,8 @@ export const verifyProofDleq = (proof: DleqProof & { secret: string }, keyset: M
 
 		const p: Proof = {
 			id: proof.id,
-			amount: proof.amount,
+			// `hasValidDleq` expects the v5 `Proof` shape, whose `amount` is an `Amount`.
+			amount: Amount.from(proof.amount),
 			secret: proof.secret,
 			C: proof.C,
 			dleq: {
@@ -307,7 +310,7 @@ export const verifyBidDleqWithKeysets = (bid: DleqKeysetVerifyInput, keysets: Ma
  *   or a keyset whose `unit` is not `sat`.
  */
 export const getMintKeyset = async (mintUrl: string, keysetId: string, opts?: GetMintKeysetOptions): Promise<MintKeys> => {
-	const mint = new CashuMint(mintUrl, opts?.customRequest as never)
+	const mint = new Mint(mintUrl, { customRequest: opts?.customRequest as never })
 	const timeoutMs = opts?.timeoutMs ?? DEFAULT_DLEQ_KEYSET_TIMEOUT_MS
 	// Bound the mint call (R3): a reachable-but-slow mint must not hang, and a
 	// timeout is TRANSIENT (evidence may arrive later), not terminal.

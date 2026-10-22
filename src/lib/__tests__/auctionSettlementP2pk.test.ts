@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { HDKey } from '@scure/bip32'
-import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
+import { Amount, getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import {
 	addAuctionSettlementProofAmount,
@@ -39,7 +39,7 @@ const makeP2pkSecret = (lockPubkey: string): string =>
 const makeToken = (secret: string, amount = 1, mint = 'https://mint.example'): string => {
 	const proof: Proof = {
 		id: '009a1f293253e41e',
-		amount,
+		amount: Amount.from(amount),
 		secret,
 		C: '02'.padEnd(66, '1'),
 	}

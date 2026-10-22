@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
+import { Amount, getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../auction/events'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
@@ -150,7 +150,7 @@ const buildBidState = (bid: ParsedBidEvent, observedAt: number, overrides: Parti
 const buildCashuToken = (mint: string, secrets: string[], amounts?: number[]): string => {
 	const proofs: Proof[] = secrets.map((secret, index) => ({
 		id: '009a1f293253e41e',
-		amount: amounts?.[index] ?? 1,
+		amount: Amount.from(amounts?.[index] ?? 1),
 		secret,
 		C: `02${String(index + 1).padStart(64, '1')}`,
 	}))

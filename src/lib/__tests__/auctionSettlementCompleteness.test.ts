@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getEncodedToken, type Proof, type MintKeyset } from '@cashu/cashu-ts'
+import { Amount, getEncodedToken, type Proof, type MintKeyset } from '@cashu/cashu-ts'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../auction/events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
@@ -100,7 +100,7 @@ const buildBid = (
 const buildToken = (mint: string, secret: string, amount: number): string => {
 	const proof: Proof = {
 		id: '009a1f293253e41e',
-		amount,
+		amount: Amount.from(amount),
 		secret,
 		C: '02' + '1'.repeat(64),
 	}
@@ -113,7 +113,7 @@ const V2_MINT_KEYSETS: MintKeyset[] = [{ id: V2_KEYSET_ID, unit: 'sat', active: 
 const buildTokenV2 = (mint: string, secret: string, amount: number): string => {
 	const proof: Proof = {
 		id: V2_KEYSET_ID,
-		amount,
+		amount: Amount.from(amount),
 		secret,
 		C: '02' + '1'.repeat(64),
 	}
@@ -341,8 +341,8 @@ describe('validateSettlementCompleteness', () => {
 		const release = {
 			...buildPathRelease(multiProofBid, 'm/0/0/0/0/0', '3'.repeat(64)),
 			cashuToken: buildTokenFromProofs(multiProofBid.mint, [
-				{ id: '009a1f293253e41e', amount: 50, secret: lockSecretA, C: '02' + '1'.repeat(64) },
-				{ id: '009a1f293253e41e', amount: 50, secret: lockSecretB, C: '02' + '2'.repeat(64) },
+				{ id: '009a1f293253e41e', amount: Amount.from(50), secret: lockSecretA, C: '02' + '1'.repeat(64) },
+				{ id: '009a1f293253e41e', amount: Amount.from(50), secret: lockSecretB, C: '02' + '2'.repeat(64) },
 			]),
 		}
 		const settlement = buildSettlement(auction, multiProofBid, release.id)
@@ -383,8 +383,8 @@ describe('validateSettlementCompleteness', () => {
 		const release = {
 			...buildPathRelease(multiProofBid, 'm/0/0/0/0/0', '3'.repeat(64)),
 			cashuToken: buildTokenFromProofs(multiProofBid.mint, [
-				{ id: '009a1f293253e41e', amount: 50, secret: lockSecretA, C: '02' + '1'.repeat(64) },
-				{ id: '009a1f293253e41e', amount: 50, secret: lockSecretB, C: '02' + '2'.repeat(64) },
+				{ id: '009a1f293253e41e', amount: Amount.from(50), secret: lockSecretA, C: '02' + '1'.repeat(64) },
+				{ id: '009a1f293253e41e', amount: Amount.from(50), secret: lockSecretB, C: '02' + '2'.repeat(64) },
 			]),
 		}
 		const settlement = buildSettlement(auction, multiProofBid, release.id)

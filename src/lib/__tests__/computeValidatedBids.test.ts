@@ -660,7 +660,11 @@ describe('computeValidatedBids — rebid collateral-chain authority', () => {
 		const overLimit = run(chain)
 		expect(overLimit.invalidBids.map((bid) => bid.id)).toContain(chain[256]?.id)
 		expect(overLimit.canonicalWinner).toBeNull()
-	})
+		// The chain is built with 257 real NUT-12 DLEQ fixtures; cashu-ts v5's curve arithmetic
+		// (via @noble/curves 2.2.x) makes each honest proof ~13ms, so the build alone is ~3.5s
+		// and the two runs push this past bun's 5s default. The assertions above are unchanged —
+		// only the wall-clock ceiling is raised.
+	}, 30_000)
 
 	test('trusted collateral derivation is invariant to input-array permutation', () => {
 		const auction = buildAuction()

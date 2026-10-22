@@ -16,9 +16,9 @@
  *      observable (reclaim-eligible after the refund timelock).
  *
  * ADR-0005 — zero external network: the only Cashu surface that would touch
- * the network (`CashuWallet.loadMint` / `CashuWallet.swap`) is stubbed via a
+ * the network (`Wallet.loadMint` / `Wallet.send`) is stubbed via a
  * module mock that spreads the REAL `@cashu/cashu-ts` exports and replaces
- * ONLY `CashuWallet` with a subclass (so every other export — including the
+ * ONLY `Wallet` with a subclass (so every other export — including the
  * pure token codecs used by other test files — stays the real implementation
  * even if bun applies the module mock to a later file in the same run).
  * Everything else (store actions, proof selection, encoding, strict
@@ -26,7 +26,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import type { Proof, SendResponse, SwapOptions } from '@cashu/cashu-ts'
+import type { Proof, SendResponse } from '@cashu/cashu-ts'
 import { authStore } from '../stores/auth'
 
 // =============================================================================
@@ -56,8 +56,8 @@ const installLocalStoragePolyfill = (): void => {
 installLocalStoragePolyfill()
 
 // =============================================================================
-// Mint-boundary stub — the real cashu-ts module with ONLY CashuWallet swapped
-// for a subclass whose loadMint/swap never touch the network.
+// Mint-boundary stub — the real cashu-ts module with ONLY Wallet swapped
+// for a subclass whose loadMint/send never touch the network.
 // =============================================================================
 
 const actualCashu = await import('@cashu/cashu-ts')
@@ -73,22 +73,29 @@ let wrongLockPubkeyForSwap: string | null = null
 /** Proof secret encoding a 1-of-1 P2PK lock to `lockPubkey` (compressed hex). */
 const p2pkSecret = (lockPubkey: string): string => `["P2PK",{"nonce":"lock-1","data":"${lockPubkey}","tags":[[]]}]`
 
-class StubbedCashuWallet extends actualCashu.CashuWallet {
+type WalletSendArgs = Parameters<InstanceType<typeof actualCashu.Wallet>['send']>
+
+/**
+ * cashu-ts v5 retired `Wallet.swap`; the lock mints its fresh P2PK send outputs through
+ * `Wallet.send(amount, proofs, config, { send: { type: 'p2pk', options } })`. This subclass stubs
+ * `loadMint` and `send` so no network is touched, and reads the lock pubkey off the v5
+ * `outputConfig.send` P2PK options.
+ */
+class StubbedWallet extends actualCashu.Wallet {
 	override async loadMint(): Promise<void> {
-		// No keyset fetch in unit tests (ADR-0005) — swap() below is stubbed
+		// No keyset fetch in unit tests (ADR-0005) — send() below is stubbed
 		// too, so no mint metadata is ever needed.
 	}
 
-	override async swap(amount: number, _proofs: Proof[], options?: SwapOptions): Promise<SendResponse> {
-		// cashu-ts types `p2pk.pubkey` as string | string[]; the lock flow
-		// always passes a single compressed pubkey.
-		const rawLockPubkey = options?.p2pk?.pubkey
-		const lockPubkey = Array.isArray(rawLockPubkey) ? rawLockPubkey[0] : rawLockPubkey
-		swapCalls.push({ amount, lockPubkey })
+	override async send(...args: WalletSendArgs): Promise<SendResponse> {
+		const [amount, _proofs, _config, outputConfig] = args
+		const sendType = outputConfig?.send
+		const lockPubkey = sendType?.type === 'p2pk' ? sendType.options.data : undefined
+		swapCalls.push({ amount: Number(amount), lockPubkey })
 		const effectiveLockPubkey = wrongLockPubkeyForSwap ?? lockPubkey ?? '02' + 'a'.repeat(64)
 		const sendProof: Proof = {
 			id: '00' + '1'.repeat(14),
-			amount,
+			amount: actualCashu.Amount.from(amount),
 			secret: p2pkSecret(effectiveLockPubkey),
 			C: '02' + '7'.repeat(64),
 			// DLEQ is unconditional (ADR-0011): the freshly issued P2PK outputs
@@ -101,7 +108,7 @@ class StubbedCashuWallet extends actualCashu.CashuWallet {
 
 mock.module('@cashu/cashu-ts', () => ({
 	...actualCashu,
-	CashuWallet: StubbedCashuWallet,
+	Wallet: StubbedWallet,
 }))
 
 // Import the REAL wallet-ops module via a UNIQUE query-string specifier: bun
@@ -109,7 +116,7 @@ mock.module('@cashu/cashu-ts', () => ({
 // file's `mock.module('@/lib/stores/walletOps')` would otherwise shadow this
 // file's alias import), and no other file can have mocked this specifier.
 // The fresh module body loads AFTER the cashu overlay above is registered,
-// so its `@cashu/cashu-ts` imports resolve to the stubbed `CashuWallet`.
+// so its `@cashu/cashu-ts` imports resolve to the stubbed `Wallet`.
 // This file drives the store instance it loads here — self-consistent,
 // order-independent, zero network (ADR-0005).
 const realWalletOps: typeof import('@/lib/stores/walletOps') = await import(`${import.meta.dir}/../stores/walletOps.ts?b1-real-store=1`)
@@ -130,7 +137,7 @@ const REFUND_PUBKEY = '03' + 'e'.repeat(64)
 /** Wallet input proof (spendable, with DLEQ metadata so the first swap attempt selects it). */
 const inputProof = (amount: number): Proof => ({
 	id: '00' + '1'.repeat(14),
-	amount,
+	amount: actualCashu.Amount.from(amount),
 	secret: 'input-secret',
 	C: '02' + '7'.repeat(64),
 	dleq: { e: 'aa', s: 'bb', r: 'cc' },

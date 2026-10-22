@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { hasValidDleq } from '@cashu/cashu-ts'
+import { Amount, hasValidDleq } from '@cashu/cashu-ts'
 import type { MintKeys, Proof } from '@cashu/cashu-ts'
 import {
 	makeDleqKeyset,
@@ -41,7 +41,7 @@ const isValid = (proof: Proof, keyset: MintKeys): boolean => {
 
 const toProofShape = (p: DleqProofWithSecret): Proof => ({
 	id: p.id,
-	amount: p.amount,
+	amount: Amount.from(p.amount),
 	secret: p.secret,
 	C: p.C,
 	dleq: { e: p.e, s: p.s, r: p.r },

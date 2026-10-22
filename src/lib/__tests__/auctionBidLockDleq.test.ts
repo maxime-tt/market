@@ -1,42 +1,48 @@
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { CashuWallet } from '@cashu/cashu-ts'
+import { Amount, Wallet } from '@cashu/cashu-ts'
 
-// Track `swap` invocations + control the swap outputs so we can assert the
+// Track wallet send/swap invocations + control the send outputs so we can assert the
 // ADR-0011 Blocker 2 behaviour: the DLEQ security property lives on the
 // freshly issued P2PK swap OUTPUTS, not on the input proofs. The lock must
 // swap ALL eligible inputs (so a legacy non-DLEQ balance can still lock on a
 // grandfathered auction) and then validate OUTPUT DLEQ.
-let swapCalls = 0
-let nextSwapResult: { send: unknown[]; keep: unknown[] } = { send: [], keep: [] }
-let originalLoadMint: typeof CashuWallet.prototype.loadMint | undefined
-let originalSwap: typeof CashuWallet.prototype.swap | undefined
+//
+// cashu-ts v5 retired `Wallet.swap(amount, proofs, { p2pk })`; the lock now mints its fresh
+// P2PK outputs through `Wallet.send(amount, proofs, config, { send: { type: 'p2pk', options } })`,
+// so the stub patches `send` (the v5 send that always re-mints the send portion).
+let sendCalls = 0
+let nextSendResult: { send: unknown[]; keep: unknown[] } = { send: [], keep: [] }
+let originalLoadMint: typeof Wallet.prototype.loadMint | undefined
+let originalSend: typeof Wallet.prototype.send | undefined
 
 beforeEach(() => {
-	swapCalls = 0
-	nextSwapResult = { send: [], keep: [] }
-	originalLoadMint = CashuWallet.prototype.loadMint
-	originalSwap = CashuWallet.prototype.swap
+	sendCalls = 0
+	nextSendResult = { send: [], keep: [] }
+	originalLoadMint = Wallet.prototype.loadMint
+	originalSend = Wallet.prototype.send
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	;(CashuWallet.prototype as any).loadMint = async (): Promise<void> => {}
+	;(Wallet.prototype as any).loadMint = async (): Promise<void> => {}
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	;(CashuWallet.prototype as any).swap = async (
+	;(Wallet.prototype as any).send = async (
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		_amount: number,
+		_amount: unknown,
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		_proofs: unknown[],
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		_opts: unknown,
+		_config: unknown,
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		_outputConfig: unknown,
 	): Promise<{ send: unknown[]; keep: unknown[] }> => {
-		swapCalls += 1
-		return nextSwapResult
+		sendCalls += 1
+		return nextSendResult
 	}
 })
 
 afterEach(() => {
-	if (originalLoadMint) CashuWallet.prototype.loadMint = originalLoadMint
-	if (originalSwap) CashuWallet.prototype.swap = originalSwap
+	if (originalLoadMint) Wallet.prototype.loadMint = originalLoadMint
+	if (originalSend) Wallet.prototype.send = originalSend
 	originalLoadMint = undefined
-	originalSwap = undefined
+	originalSend = undefined
 })
 
 import { cashuStore } from '@/lib/stores/cashu'
@@ -80,7 +86,7 @@ const LOCKTIME = 1_700_000_000
 
 interface FakeProof {
 	id: string
-	amount: number
+	amount: Amount
 	C: string
 	secret: string
 	dleq?: unknown
@@ -89,7 +95,7 @@ interface FakeProof {
 }
 
 /** A wallet proof with NO DLEQ metadata (a legacy/grandfathered balance). */
-const noDleqProof = (amount: number): FakeProof => ({ id: 'p', amount, C: '02', secret: '', dleq: undefined })
+const noDleqProof = (amount: number): FakeProof => ({ id: 'p', amount: Amount.from(amount), C: '02', secret: '', dleq: undefined })
 
 /**
  * A swap-output proof locked to LOCK_PUBKEY. Secret encodes a P2PK lock to
@@ -104,7 +110,7 @@ const lockedOutputProof = (amount: number, includeDleq: boolean): FakeProof => {
 	// checks the pubkey, so a plain hex Y is fine for the count.
 	return {
 		id: '00' + 'a'.repeat(14),
-		amount,
+		amount: Amount.from(amount),
 		C: '02' + '7'.repeat(64),
 		secret,
 		dleq: includeDleq ? { e: 'aa', s: 'bb', r: 'cc' } : undefined,
@@ -146,7 +152,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 		const proofsWithoutDleq: FakeProof[] = [noDleqProof(2000), noDleqProof(2000)]
 		installWallet(proofsWithoutDleq)
 		// The mint returns locked outputs WITH DLEQ.
-		nextSwapResult = {
+		nextSendResult = {
 			send: [lockedOutputProof(1000, true)],
 			keep: [noDleqProof(3000)],
 		}
@@ -156,7 +162,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 		await expect(walletOps.lockAuctionBidFunds(baseParams)).resolves.toMatchObject({ amount: 1000 })
 		// The swap WAS attempted exactly once with the full input set (no
 		// input-side DLEQ filter).
-		expect(swapCalls).toBe(1)
+		expect(sendCalls).toBe(1)
 	})
 
 	test('a DLEQ-required lock fails closed when the freshly issued P2PK OUTPUT proof lacks DLEQ', async () => {
@@ -164,7 +170,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 		installWallet(proofsWithoutDleq)
 		// The mint returns a locked P2PK output proof WITHOUT a DLEQ proof → the
 		// output-side DLEQ requirement must fail closed (Blocker 2).
-		nextSwapResult = {
+		nextSendResult = {
 			send: [lockedOutputProof(1000, false)],
 			keep: [noDleqProof(3000)],
 		}
@@ -173,27 +179,27 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 
 		// The swap was attempted (output validation happens after swap + after
 		// the pending-token persist).
-		expect(swapCalls).toBe(1)
+		expect(sendCalls).toBe(1)
 	})
 
 	test('a DLEQ-required lock succeeds when the output proof carries DLEQ', async () => {
 		const proofsWithoutDleq: FakeProof[] = [noDleqProof(2000)]
 		installWallet(proofsWithoutDleq)
-		nextSwapResult = {
+		nextSendResult = {
 			send: [lockedOutputProof(1000, true)],
 			keep: [noDleqProof(3000)],
 		}
 		await expect(walletOps.lockAuctionBidFunds({ ...baseParams })).resolves.toMatchObject({
 			amount: 1000,
 		})
-		expect(swapCalls).toBe(1)
+		expect(sendCalls).toBe(1)
 	})
 
 	test('still fails closed when the swap returns no locked proofs (mint misbehaviour)', async () => {
 		const proofsWithoutDleq: FakeProof[] = [noDleqProof(2000)]
 		installWallet(proofsWithoutDleq)
-		nextSwapResult = { send: [], keep: [] }
+		nextSendResult = { send: [], keep: [] }
 		await expect(walletOps.lockAuctionBidFunds({ ...baseParams })).rejects.toThrow(/outcome is uncertain/i)
-		expect(swapCalls).toBe(1)
+		expect(sendCalls).toBe(1)
 	})
 })

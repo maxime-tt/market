@@ -1,5 +1,5 @@
 /**
- * Cashu wallet store using coco-cashu-core for robust operation management.
+ * Cashu wallet store using @cashu/coco-core for robust operation management.
  *
  * This provides:
  * - IndexedDB persistence for proofs via coco
@@ -9,8 +9,8 @@
  * - Recovery of pending tokens on startup
  */
 import { Store } from '@tanstack/store'
-import { initializeCoco, Manager, getEncodedToken } from 'coco-cashu-core'
-import { IndexedDbRepositories } from 'coco-cashu-indexeddb'
+import { initializeCoco, Manager, getEncodedToken, getMintQuoteAmount, getMintQuoteAvailableAmount, sumAmounts } from '@cashu/coco-core'
+import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { authStore } from './auth'
 import {
@@ -28,6 +28,7 @@ import {
 	DEPOSIT_CONFIRMATION_TIMEOUT_LABEL,
 	createCocoDepositQuote,
 	getDepositConfirmationTimeoutMessage,
+	toCocoDepositManager,
 } from '@/lib/wallet/depositQuote'
 
 const CASHU_SEED_KEY = 'cashu_wallet_seed'
@@ -427,16 +428,20 @@ export const cashuActions = {
 
 			const seed = await getOrCreateSeed()
 
-			// Initialize coco with watchers enabled
+			// Initialize coco with watchers enabled. coco 2.0 renamed the mint-side pair:
+			// the quote watcher and processor are now the mint *operation* watcher and
+			// processor. The deposit path still rides coco's quote state (see the deposit
+			// manager adapter below), and the mint operation processor auto-claims paid
+			// quotes, so its default 3000ms cadence is kept explicit here.
 			const manager = await initializeCoco({
 				repo: repos,
 				seedGetter: async () => seed,
 				watchers: {
-					mintQuoteWatcher: { watchExistingPendingOnStart: true },
+					mintOperationWatcher: { watchExistingPendingOnStart: true },
 					proofStateWatcher: {},
 				},
 				processors: {
-					mintQuoteProcessor: { processIntervalMs: 3000 },
+					mintOperationProcessor: { processIntervalMs: 3000 },
 				},
 			})
 
@@ -577,12 +582,22 @@ export const cashuActions = {
 		if (!manager) return
 
 		try {
-			const balances = await manager.wallet.getBalances()
-			const total = Object.values(balances).reduce((sum, b) => sum + b, 0)
+			// coco 2.0 reports a per-mint snapshot (spendable / reserved / total). The
+			// store's `balances` is the *spendable* amount per mint — reserved proofs are
+			// not available to spend — and `totalBalance` is their sum.
+			const balances = await manager.wallet.balances.byMint()
+			const spendableByMint: Record<string, number> = {}
+			let total = 0
+
+			for (const [mintUrl, snapshot] of Object.entries(balances)) {
+				const spendable = snapshot.spendable.toNumber()
+				spendableByMint[mintUrl] = spendable
+				total += spendable
+			}
 
 			cashuStore.setState((s) => ({
 				...s,
-				balances,
+				balances: spendableByMint,
 				totalBalance: total,
 			}))
 
@@ -591,7 +606,7 @@ export const cashuActions = {
 			// the rails ask synchronously.
 			await cashuStore.state.walletSource?.hydrate()
 
-			console.log('[cashu] Balances updated:', { balances, total })
+			console.log('[cashu] Balances updated:', { balances: spendableByMint, total })
 		} catch (err) {
 			console.error('[cashu] Failed to refresh balances:', err)
 		}
@@ -616,8 +631,11 @@ export const cashuActions = {
 
 		console.log('[cashu] Sending:', { mintUrl, amount })
 
-		// Generate the token
-		const token = await manager.wallet.send(mintUrl, amount)
+		// Generate the token. coco 2.0 splits a send into `prepare` (which reserves the
+		// inputs and reports the fee) and `execute` (which spends them and returns the
+		// outgoing token), so the token the wallet hands out is the executed operation's.
+		const prepared = await manager.ops.send.prepare({ mintUrl, amount })
+		const { token } = await manager.ops.send.execute(prepared)
 		const tokenString = getEncodedToken(token)
 
 		// Store as pending token BEFORE returning
@@ -625,7 +643,7 @@ export const cashuActions = {
 		const pendingToken: PendingToken = {
 			id: generateId(),
 			token: tokenString,
-			amount: token.proofs.reduce((sum, p) => sum + p.amount, 0),
+			amount: sumAmounts(token.proofs.map((proof) => proof.amount)).toNumber(),
 			mintUrl: token.mint,
 			createdAt: Date.now(),
 			status: 'pending',
@@ -774,7 +792,9 @@ export const cashuActions = {
 		}
 
 		console.log('[cashu] Creating mint quote:', { mintUrl, amount })
-		return manager.quotes.createMintQuote(mintUrl, amount)
+		// coco 2.0 keeps canonical quote state: `quotes.mint.create` returns the durable
+		// MintQuote (quote id, invoice, expiry). Redemption is a separate mint operation.
+		return manager.quotes.mint.create({ mintUrl, method: 'bolt11', amount })
 	},
 
 	/**
@@ -787,7 +807,21 @@ export const cashuActions = {
 		}
 
 		console.log('[cashu] Redeeming mint quote:', { mintUrl, quoteId })
-		await manager.quotes.redeemMintQuote(mintUrl, quoteId)
+
+		// coco 2.0 puts redemption in the mint operation lifecycle: read the canonical
+		// quote, prepare the operation against it (the quote's own amount is what is
+		// minted) and execute. The amount comes from the quote, never from the caller,
+		// and a quote that cannot be read is refused rather than redeemed blind.
+		const quote = await manager.quotes.mint.get({ mintUrl, quoteId })
+		if (!quote) {
+			throw new Error(`No mint quote ${quoteId} at ${mintUrl}`)
+		}
+		const amount = getMintQuoteAmount(quote) ?? getMintQuoteAvailableAmount(quote)
+		const prepared = await manager.ops.mint.prepare({
+			quote: { mintUrl, quoteId, method: 'bolt11' },
+			amount,
+		})
+		await manager.ops.mint.execute(prepared)
 		await cashuActions.refreshBalances()
 	},
 
@@ -809,12 +843,15 @@ export const cashuActions = {
 
 		console.log('[cashu] Creating melt quote:', { mintUrl, invoice: invoice.slice(0, 50) })
 
-		// Create melt quote
-		const quote = await manager.quotes.createMeltQuote(mintUrl, invoice)
+		// coco 2.0 separates the melt into a durable quote and an operation: create the
+		// quote from the invoice, then prepare and execute the melt operation against it.
+		const quote = await manager.quotes.melt.create({ mintUrl, method: 'bolt11', methodData: { invoice } })
 		console.log('[cashu] Melt quote created:', quote)
 
-		// Pay the melt quote
-		await manager.quotes.payMeltQuote(mintUrl, quote.quote)
+		const prepared = await manager.ops.melt.prepare({
+			quote: { mintUrl, quoteId: quote.quoteId, method: 'bolt11' },
+		})
+		await manager.ops.melt.execute(prepared)
 		console.log('[cashu] Melt paid successfully')
 
 		await cashuActions.refreshBalances()
@@ -883,7 +920,7 @@ export const cashuActions = {
 				depositAmount = requestedAmount + getAuctionDepositFeePadding(requestedAmount)
 			}
 
-			const deposit = createCocoDepositQuote({ manager: cashuManager, mintUrl: targetMint, amount: depositAmount })
+			const deposit = createCocoDepositQuote({ manager: toCocoDepositManager(cashuManager), mintUrl: targetMint, amount: depositAmount })
 			// #3: Wrap deposit.start() in a 15s timeout so a hung mint quote request doesn't
 			// leave the user staring at a spinner indefinitely.
 			const invoice = await withTimeout(deposit.start(), CASHU_DEPOSIT_CONFIRMATION_TIMEOUT_MS, 'deposit invoice creation')

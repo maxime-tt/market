@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { CashuMint } from '@cashu/cashu-ts'
+import type { Mint } from '@cashu/cashu-ts'
 import { mintSupportsDleq } from '../cashu/mintCapability'
 
 /**
@@ -11,8 +11,8 @@ import { mintSupportsDleq } from '../cashu/mintCapability'
  */
 
 /** Build a fake CashuMint whose `getInfo()` returns a caller-controlled object. */
-function fakeMint(info: unknown): CashuMint {
-	return { getInfo: async () => info } as unknown as CashuMint
+function fakeMint(info: unknown): Mint {
+	return { getInfo: async () => info } as unknown as Mint
 }
 
 const DLEQ_SUPPORTED = { nuts: { '12': { supported: true } } }
@@ -49,7 +49,7 @@ describe('mintSupportsDleq', () => {
 			getInfo: async () => {
 				throw new Error('network down')
 			},
-		} as unknown as CashuMint
+		} as unknown as Mint
 		await expect(mintSupportsDleq('https://mint.example', { mintClient: mint })).resolves.toBe(false)
 	})
 
@@ -59,7 +59,7 @@ describe('mintSupportsDleq', () => {
 				new Promise((_resolve) => {
 					// never resolves — simulate a hung mint
 				}),
-		} as unknown as CashuMint
+		} as unknown as Mint
 		await expect(mintSupportsDleq('https://mint.example', { mintClient: mint, timeoutMs: 20 })).resolves.toBe(false)
 	})
 

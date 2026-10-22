@@ -13,7 +13,7 @@ import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 import { ProjectivePoint, etc } from '@noble/secp256k1'
 import { HDKey } from '@scure/bip32'
-import { getEncodedToken, type Proof, type MintKeys, type MintKeyset } from '@cashu/cashu-ts'
+import { Amount, getEncodedToken, type Proof, type MintKeys, type MintKeyset } from '@cashu/cashu-ts'
 import { makeDleqKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
 import { parseBidEvent } from '../schemas/auction/bidEvent'
 
@@ -65,7 +65,7 @@ const LOCK_SECRET_2 = JSON.stringify([
 ])
 const PROOF_Y_2 = hashToCurveHexFromString(LOCK_SECRET_2)
 const TEST_PROOF: Proof = {
-	amount: 50000,
+	amount: Amount.from(50000),
 	secret: LOCK_SECRET,
 	C: ProjectivePoint.fromPrivateKey(etc.hexToBytes('11'.repeat(32))).toHex(true),
 	id: '00'.repeat(16),
@@ -1196,7 +1196,7 @@ describe('rebid chain path release validation', () => {
 		mint: 'https://mint.example.com',
 		proofs: [
 			{
-				amount: 50000,
+				amount: Amount.from(50000),
 				secret: SECRET_1,
 				C: ProjectivePoint.fromPrivateKey(etc.hexToBytes('11'.repeat(32))).toHex(true),
 				id: '00'.repeat(16),
@@ -1207,7 +1207,7 @@ describe('rebid chain path release validation', () => {
 		mint: 'https://mint.example.com',
 		proofs: [
 			{
-				amount: 3000,
+				amount: Amount.from(3000),
 				secret: SECRET_2,
 				C: ProjectivePoint.fromPrivateKey(etc.hexToBytes('22'.repeat(32))).toHex(true),
 				id: '00'.repeat(16),
@@ -1274,13 +1274,13 @@ describe('rebid chain path release validation', () => {
 		const childBefore = JSON.stringify(child)
 		const rootToken = getEncodedToken({
 			mint: 'https://mint.example.com',
-			proofs: [{ amount: 5_000, secret: SECRET_1, C: TEST_PROOF.C, id: TEST_PROOF.id }],
+			proofs: [{ amount: Amount.from(5_000), secret: SECRET_1, C: TEST_PROOF.C, id: TEST_PROOF.id }],
 		})
 		const childToken = getEncodedToken({
 			mint: 'https://mint.example.com',
 			proofs: [
 				{
-					amount: 300,
+					amount: Amount.from(300),
 					secret: SECRET_2,
 					C: ProjectivePoint.fromPrivateKey(etc.hexToBytes('22'.repeat(32))).toHex(true),
 					id: TEST_PROOF.id,
@@ -1446,7 +1446,7 @@ describe('rebid chain path release validation', () => {
 			mint: 'https://mint.example.com',
 			proofs: [
 				{
-					amount: 53000,
+					amount: Amount.from(53000),
 					secret: SECRET_2,
 					C: ProjectivePoint.fromPrivateKey(etc.hexToBytes('22'.repeat(32))).toHex(true),
 					id: '00'.repeat(16),

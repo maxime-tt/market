@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import type { Proof } from '@cashu/cashu-ts'
+import { Amount, type Proof } from '@cashu/cashu-ts'
 import { createCocoWalletSource, type CashuProofRepository } from './cashuWalletSource'
 
 const MINT = 'https://mint.example'
 const OTHER_MINT = 'https://mint.other'
 
-const proof = (secret: string, amount: number): Proof => ({ id: '00aa', amount, C: `02${'a'.repeat(64)}`, secret })
+const proof = (secret: string, amount: number): Proof => ({ id: '00aa', amount: Amount.from(amount), C: `02${'a'.repeat(64)}`, secret })
 
 /**
  * A fake coco repository: the authority the source must mirror, and the thing every write must

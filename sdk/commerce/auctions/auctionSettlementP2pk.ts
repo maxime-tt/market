@@ -118,7 +118,11 @@ export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPrefl
 
 	let decodedToken: ReturnType<typeof getDecodedToken>
 	try {
-		decodedToken = getDecodedToken(input.token, input.mintKeysets)
+		// cashu-ts v5 decodes against keyset *ids* (`readonly string[]`), not keyset objects.
+		decodedToken = getDecodedToken(
+			input.token,
+			(input.mintKeysets ?? []).map((keyset) => keyset.id),
+		)
 	} catch (cause) {
 		// Surface diagnostic info — when this fires in production the
 		// raw cashu-ts error is the only signal that tells us whether
@@ -144,10 +148,13 @@ export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPrefl
 	let tokenLockPubkey = ''
 	let tokenAmount = 0
 	for (const proof of decodedToken.proofs) {
-		if (!Number.isSafeInteger(proof.amount) || proof.amount <= 0) {
+		// cashu-ts v5 `Proof.amount` is an `Amount` value object; the amount math here is
+		// sat-denominated, so it is normalised to a safe integer number.
+		const proofAmount = proof.amount.toNumber()
+		if (!Number.isSafeInteger(proofAmount) || proofAmount <= 0) {
 			throw new Error('Winner token proof amount is malformed')
 		}
-		tokenAmount = addAuctionSettlementProofAmount(tokenAmount, proof.amount)
+		tokenAmount = addAuctionSettlementProofAmount(tokenAmount, proofAmount)
 		const proofLockPubkey = requireCompressedTokenLockPubkey(extractP2pkLockPubkeyFromSecret(proof.secret))
 		if (proofLockPubkey !== derivedChildPubkey) {
 			throw new Error('Winner token P2PK lock pubkey does not match auction p2pk_xpub + derivation path')

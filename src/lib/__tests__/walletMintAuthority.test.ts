@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import type { Manager } from 'coco-cashu-core'
+import type { Manager } from '@cashu/coco-core'
 
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 

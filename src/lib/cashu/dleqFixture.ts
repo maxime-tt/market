@@ -24,11 +24,18 @@
  * tested accordingly.
  */
 
-import { createDLEQProof } from '@cashu/cashu-ts/crypto/mint/NUT12'
-import { getPubKeyFromPrivKey } from '@cashu/cashu-ts/crypto/mint'
-import { hashToCurve, pointFromHex } from '@cashu/cashu-ts/crypto/common'
-import { bytesToNumber } from '@cashu/cashu-ts/crypto/util'
-import type { MintKeys } from '@cashu/cashu-ts'
+import { createDLEQProof, getPubKeyFromPrivKey, hashToCurve, pointFromHex, type MintKeys } from '@cashu/cashu-ts'
+
+/**
+ * Big-endian bytes to a bigint scalar. cashu-ts v5 dropped its `crypto/*` subpath exports
+ * (and the `bytesToNumber` helper that lived under them), so the fixture carries its own — the
+ * one place this file needed it is `Y.multiply(a)`, where `a` is a 32-byte big-endian key.
+ */
+const bytesToNumber = (bytes: Uint8Array): bigint => {
+	let out = 0n
+	for (let i = 0; i < bytes.length; i++) out = (out << 8n) | BigInt(bytes[i])
+	return out
+}
 
 // ---------- Public types ----------------------------------------------------
 

@@ -16,7 +16,7 @@
  */
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import type { Proof } from '@cashu/cashu-ts'
+import { Amount, type Proof } from '@cashu/cashu-ts'
 import { authStore } from '../stores/auth'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 import {
@@ -91,7 +91,7 @@ const DEFAULT_REFUND_PK = '03' + 'e'.repeat(64)
 
 const dummyProof = (amount: number, secret: string): Proof => ({
 	id: '00' + '1'.repeat(14),
-	amount,
+	amount: Amount.from(amount),
 	secret,
 	C: '02' + '7'.repeat(64),
 })

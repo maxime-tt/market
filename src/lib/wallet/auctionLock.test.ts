@@ -21,7 +21,7 @@
  * construction assertion is against the same builder the wallet uses, not a hand-rolled copy.
  */
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { OutputData, type CashuWallet, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import { Amount, OutputData, type MintKeyset, type P2PKOptions, type Proof, type Wallet } from '@cashu/cashu-ts'
 
 import { AuctionBidLockMutationPossibleError, createAuctionLock, createAuctionReceipt, loadAuctionMintKeysets } from './auctionFunds'
 import type {
@@ -59,52 +59,68 @@ beforeEach(() => localStorage.clear())
 const MINT = 'https://mint.example'
 const OTHER_MINT = 'https://other.example'
 const KEYSET_ID = '00' + '1'.repeat(14)
-const LOCK_PUBKEY = '02' + 'c'.repeat(64)
-const REFUND_PUBKEY = '03' + 'e'.repeat(64)
+/**
+ * Valid compressed secp256k1 points. cashu-ts v5's P2PK output builder validates that a lock
+ * pubkey is really on the curve, so these are the generator `G` (02-prefixed) and its negation
+ * `-G` (03-prefixed, same x) rather than arbitrary hex.
+ */
+const GENERATOR_X = '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const LOCK_PUBKEY = '02' + GENERATOR_X
+const REFUND_PUBKEY = '03' + GENERATOR_X
+/** A different valid pubkey (2G), for the wrong-key mint-misbehaviour case. */
+const OTHER_PUBKEY = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
 const LOCKTIME = Math.floor(Date.now() / 1000) + 3_600
 
 const inputProof = (amount: number): Proof => ({
 	id: KEYSET_ID,
-	amount,
+	amount: Amount.from(amount),
 	secret: 'input-secret',
 	C: '02' + '7'.repeat(64),
 	dleq: { e: 'aa', s: 'bb', r: 'cc' },
 })
 
-/** The real cashu-ts P2PK secret for the options the module asks the swap for. */
-const p2pkSecretFor = (p2pk: { pubkey: string | string[]; locktime?: number; refundKeys?: string[] }): string =>
-	new TextDecoder().decode(OutputData.createSingleP2PKData(p2pk, 500, KEYSET_ID).secret)
+/** The real cashu-ts P2PK secret for the options the module asks the mint for. */
+const p2pkSecretFor = (p2pk: P2PKOptions): string => new TextDecoder().decode(OutputData.createSingleP2PKData(p2pk, 500, KEYSET_ID).secret)
 
-interface SwapCall {
+interface SendCall {
 	amount: number
 	proofs: Proof[]
-	p2pk?: { pubkey: string | string[]; locktime?: number; refundKeys?: string[]; requiredSignatures?: number }
+	p2pk?: P2PKOptions
 }
 
-/** A stub mint whose `swap` echoes the module's P2PK options into a real cashu-ts secret. */
-const makeMint = (options: { returnPubkey?: string; swapError?: Error; dropDleq?: boolean } = {}) => {
-	const swapCalls: SwapCall[] = []
+/**
+ * A stub mint whose `send` echoes the module's v5 P2PK *output* options into a real cashu-ts
+ * secret. cashu-ts v5 retired `Wallet.swap`; the lock now mints its fresh P2PK outputs through
+ * `Wallet.send(amount, proofs, config, { send: { type: 'p2pk', options } })`.
+ */
+const makeMint = (options: { returnPubkey?: string; sendError?: Error; dropDleq?: boolean } = {}) => {
+	const sendCalls: SendCall[] = []
 	const cashuWallet = {
-		swap: async (amount: number, proofs: Proof[], swapOptions?: { p2pk?: SwapCall['p2pk'] }): Promise<{ send: Proof[]; keep: Proof[] }> => {
-			swapCalls.push({ amount, proofs, p2pk: swapOptions?.p2pk })
-			if (options.swapError) throw options.swapError
-			const p2pk = swapOptions?.p2pk
-			if (!p2pk) throw new Error('test swap called without p2pk options')
-			const effective = { ...p2pk, pubkey: options.returnPubkey ?? p2pk.pubkey }
+		send: async (
+			amount: number,
+			proofs: Proof[],
+			_config?: unknown,
+			outputConfig?: { send?: { type: string; options: P2PKOptions } },
+		): Promise<{ send: Proof[]; keep: Proof[] }> => {
+			const p2pk = outputConfig?.send?.type === 'p2pk' ? outputConfig.send.options : undefined
+			sendCalls.push({ amount, proofs, p2pk })
+			if (options.sendError) throw options.sendError
+			if (!p2pk) throw new Error('test send called without p2pk output options')
+			const effective: P2PKOptions = { ...p2pk, data: options.returnPubkey ?? p2pk.data }
 			const locked: Proof = {
 				id: KEYSET_ID,
-				amount,
+				amount: Amount.from(amount),
 				secret: p2pkSecretFor(effective),
 				C: '02' + '7'.repeat(64),
 				...(options.dropDleq ? {} : { dleq: { e: 'aa', s: 'bb', r: 'cc' } }),
 			}
 			return { send: [locked], keep: [] }
 		},
-	} as unknown as CashuWallet
+	} as unknown as Wallet
 	const mint: AuctionFundsMintAccess = {
 		cashuWalletForMint: async () => ({ cashuWallet, keysetId: KEYSET_ID }),
 	}
-	return { mint, swapCalls }
+	return { mint, sendCalls }
 }
 
 interface Update extends Record<string, unknown> {
@@ -188,7 +204,7 @@ const makeLockHost = (params: MakeLockHostParams) => {
 
 describe('lockAuctionBidFunds — the P2PK lock construction', () => {
 	test('asks the mint for a 1-of-1 lock to the path-oracle pubkey with the locktime and refund key', async () => {
-		const { mint, swapCalls } = makeMint()
+		const { mint, sendCalls } = makeMint()
 		const spent = inputProof(1_000)
 		const { host, committed, balanceWrites } = makeLockHost({
 			balances: { totalBalance: 1_000, mintBalances: { [MINT]: 1_000 } },
@@ -201,15 +217,16 @@ describe('lockAuctionBidFunds — the P2PK lock construction', () => {
 		const result = await createAuctionLock(lockHost).lockAuctionBidFunds(baseParams())
 
 		// 1-of-1 P2PK, exactly the store's construction: lock pubkey, locktime, refund key.
-		expect(swapCalls).toHaveLength(1)
-		expect(swapCalls[0].amount).toBe(500)
-		expect(swapCalls[0].p2pk).toEqual({
-			pubkey: LOCK_PUBKEY,
+		expect(sendCalls).toHaveLength(1)
+		expect(sendCalls[0].amount).toBe(500)
+		expect(sendCalls[0].p2pk).toEqual({
+			kind: 'P2PK',
+			data: LOCK_PUBKEY,
 			locktime: LOCKTIME,
 			refundKeys: [REFUND_PUBKEY],
 		})
 		// No requiredSignatures override — NUT-11 1-of-1 default.
-		expect('requiredSignatures' in (swapCalls[0].p2pk as object)).toBe(false)
+		expect('requiredSignatures' in (sendCalls[0].p2pk as object)).toBe(false)
 
 		// The secret the real cashu-ts builder produces from those options.
 		const secret = JSON.parse(result.proofs[0].secret) as [string, { data: string; tags: string[][] }]
@@ -248,23 +265,23 @@ describe('lockAuctionBidFunds — the P2PK lock construction', () => {
 
 describe('lockAuctionBidFunds — mint resolution and pre-mint validation', () => {
 	test('rejects an amount below the auction leg minimum before any mint call', async () => {
-		const { mint, swapCalls } = makeMint()
+		const { mint, sendCalls } = makeMint()
 		const { host } = makeLockHost({ mint, balances: { totalBalance: 1_000, mintBalances: { [MINT]: 1_000 } } })
 
 		await expect(createAuctionLock(host).lockAuctionBidFunds(baseParams({ amount: 1 }))).rejects.toThrow(/at least/)
-		expect(swapCalls).toHaveLength(0)
+		expect(sendCalls).toHaveLength(0)
 	})
 
 	test('rejects a not-ready wallet before any mint call', async () => {
-		const { mint, swapCalls } = makeMint()
+		const { mint, sendCalls } = makeMint()
 		const { host } = makeLockHost({ mint, ready: false, balances: { totalBalance: 1_000, mintBalances: { [MINT]: 1_000 } } })
 
 		await expect(createAuctionLock(host).lockAuctionBidFunds(baseParams())).rejects.toThrow('NIP-60 wallet not ready')
-		expect(swapCalls).toHaveLength(0)
+		expect(sendCalls).toHaveLength(0)
 	})
 
 	test('preferredMints are walked in order and the first funded one wins', async () => {
-		const { mint, swapCalls } = makeMint()
+		const { mint, sendCalls } = makeMint()
 		const spent = inputProof(1_000)
 		const { host } = makeLockHost({ mint, balances: { totalBalance: 1_000, mintBalances: { [MINT]: 0, [OTHER_MINT]: 1_000 } } })
 		const real = makeWallet({ [OTHER_MINT]: [spent] })
@@ -274,21 +291,21 @@ describe('lockAuctionBidFunds — mint resolution and pre-mint validation', () =
 		)
 
 		expect(result.mintUrl).toBe(OTHER_MINT)
-		expect(swapCalls).toHaveLength(1)
+		expect(sendCalls).toHaveLength(1)
 	})
 
 	test('no trusted mint with enough balance throws a raw error listing the balances', async () => {
-		const { mint, swapCalls } = makeMint()
+		const { mint, sendCalls } = makeMint()
 		const { host } = makeLockHost({ mint, balances: { totalBalance: 100, mintBalances: { [MINT]: 100 } } })
 
 		await expect(createAuctionLock(host).lockAuctionBidFunds(baseParams({ preferredMints: [MINT] }))).rejects.toThrow(
 			/No trusted mint has 500 sats/,
 		)
-		expect(swapCalls).toHaveLength(0)
+		expect(sendCalls).toHaveLength(0)
 	})
 
 	test('falls back to the wallet default mint when no preferred list is given', async () => {
-		const { mint, swapCalls } = makeMint()
+		const { mint, sendCalls } = makeMint()
 		const spent = inputProof(1_000)
 		const { host } = makeLockHost({
 			mint,
@@ -302,26 +319,26 @@ describe('lockAuctionBidFunds — mint resolution and pre-mint validation', () =
 		)
 
 		expect(result.mintUrl).toBe(MINT)
-		expect(swapCalls).toHaveLength(1)
+		expect(sendCalls).toHaveLength(1)
 	})
 
 	test('normalizes a padded, upper-case refund and lock pubkey before locking', async () => {
-		const { mint, swapCalls } = makeMint()
+		const { mint, sendCalls } = makeMint()
 		const spent = inputProof(1_000)
 		const { host } = makeLockHost({ mint, balances: { totalBalance: 1_000, mintBalances: { [MINT]: 1_000 } } })
 		const real = makeWallet({ [MINT]: [spent] })
 
 		const result = await createAuctionLock({ ...host, getWallet: () => real.wallet }).lockAuctionBidFunds(
 			baseParams({
-				refundPubkey: `  ${'03' + 'E'.repeat(64)}  `,
-				lockPubkey: `  ${'02' + 'C'.repeat(64)}  `,
+				refundPubkey: `  ${('03' + GENERATOR_X).toUpperCase()}  `,
+				lockPubkey: `  ${('02' + GENERATOR_X).toUpperCase()}  `,
 			}),
 		)
 
-		expect(result.refundPubkey).toBe('03' + 'e'.repeat(64))
-		expect(result.lockPubkey).toBe('02' + 'c'.repeat(64))
-		expect(swapCalls[0].p2pk?.refundKeys).toEqual(['03' + 'e'.repeat(64)])
-		expect(swapCalls[0].p2pk?.pubkey).toBe('02' + 'c'.repeat(64))
+		expect(result.refundPubkey).toBe(REFUND_PUBKEY)
+		expect(result.lockPubkey).toBe(LOCK_PUBKEY)
+		expect(sendCalls[0].p2pk?.refundKeys).toEqual([REFUND_PUBKEY])
+		expect(sendCalls[0].p2pk?.data).toBe(LOCK_PUBKEY)
 	})
 })
 
@@ -329,7 +346,7 @@ describe('lockAuctionBidFunds — mint resolution and pre-mint validation', () =
 
 describe('lockAuctionBidFunds — the irreversible mint boundary', () => {
 	test('a wrong-key lock outcome is mutation-possible WITH the durable-observation flag set', async () => {
-		const { mint } = makeMint({ returnPubkey: '02' + 'd'.repeat(64) })
+		const { mint } = makeMint({ returnPubkey: OTHER_PUBKEY })
 		const spent = inputProof(1_000)
 		const real = makeWallet({ [MINT]: [spent] })
 		const { host, committed } = makeLockHost({ mint, balances: { totalBalance: 1_000, mintBalances: { [MINT]: 1_000 } } })
@@ -368,7 +385,7 @@ describe('lockAuctionBidFunds — the irreversible mint boundary', () => {
 	})
 
 	test('a failed STRICT pending-token write is mutation-possible WITHOUT the flag (record-only leg)', async () => {
-		const { mint, swapCalls } = makeMint()
+		const { mint, sendCalls } = makeMint()
 		const spent = inputProof(1_000)
 		const real = makeWallet({ [MINT]: [spent] })
 		const { host } = makeLockHost({
@@ -389,11 +406,11 @@ describe('lockAuctionBidFunds — the irreversible mint boundary', () => {
 		expect(err.pendingTokenPersisted).toBe(false)
 		expect((err.cause as Error).message).toContain('QuotaExceededError')
 		// The swap ran exactly once — no hidden retry.
-		expect(swapCalls).toHaveLength(1)
+		expect(sendCalls).toHaveLength(1)
 	})
 
 	test('a swap failure is wrapped with the fields a caller needs to reason about the leg', async () => {
-		const { mint } = makeMint({ swapError: new Error('mint 503') })
+		const { mint } = makeMint({ sendError: new Error('mint 503') })
 		const spent = inputProof(1_000)
 		const real = makeWallet({ [MINT]: [spent] })
 		const { host } = makeLockHost({ mint, balances: { totalBalance: 1_000, mintBalances: { [MINT]: 1_000 } } })
@@ -433,9 +450,9 @@ describe('receiveLockedEcash — the settlement spend', () => {
 			receive: async (token: string, options: { privkey?: string; keysetId?: string }) => {
 				receiveCalls.push({ token, privkey: options?.privkey, keysetId: options?.keysetId })
 				if (params.receiveError) throw params.receiveError
-				return [{ id: KEYSET_ID, amount: 500, secret: 's', C: '02' + '7'.repeat(64) }] as unknown as Proof[]
+				return [{ id: KEYSET_ID, amount: Amount.from(500), secret: 's', C: '02' + '7'.repeat(64) }] as unknown as Proof[]
 			},
-		} as unknown as CashuWallet
+		} as unknown as Wallet
 		const host: AuctionReceiveHost = {
 			getWallet: () => (params.wallet === null ? null : (params.wallet ?? wallet)),
 			mint: { cashuWalletForMint: async () => ({ cashuWallet, keysetId: KEYSET_ID }) },
@@ -477,7 +494,10 @@ describe('loadAuctionMintKeysets', () => {
 	test('returns the mint keysets', async () => {
 		const keysets = [{ id: KEYSET_ID }] as unknown as MintKeyset[]
 		const mint: AuctionFundsMintAccess = {
-			cashuWalletForMint: async () => ({ cashuWallet: { keysets } as unknown as CashuWallet, keysetId: KEYSET_ID }),
+			cashuWalletForMint: async () => ({
+				cashuWallet: { mint: { getKeySets: async () => ({ keysets }) } } as unknown as Wallet,
+				keysetId: KEYSET_ID,
+			}),
 		}
 		await expect(loadAuctionMintKeysets(mint, MINT)).resolves.toEqual(keysets)
 	})

@@ -54,43 +54,46 @@ interface QuoteControl {
  * mint stays fictional.
  */
 const installFakeCoco = () => {
-	let handler: ((payload: { mintUrl: string; quoteId: string; state: QuoteState }) => void) | undefined
+	let handler: ((payload: { mintUrl: string; quoteId: string; quote: { state: QuoteState } }) => void) | undefined
 	const issued = new Set<string>()
 	const paid = new Set<string>()
 	const quotes: QuoteControl[] = []
 	let created = 0
 	let expireNextQuote = false
 
-	const emit = (quoteId: string, state: QuoteState) => handler?.({ mintUrl: TEST_MINT, quoteId, state })
+	const emit = (quoteId: string, state: QuoteState) => handler?.({ mintUrl: TEST_MINT, quoteId, quote: { state } })
 
 	const manager = {
 		quotes: {
-			createMintQuote: async () => {
-				created += 1
-				const quoteId = `mock-quote-${created}`
-				quotes.push({
-					quoteId,
-					markPaid: () => paid.add(quoteId),
-					emitIssued: () => {
-						issued.add(quoteId)
-						emit(quoteId, 'ISSUED')
-					},
-				})
-				// The engine reads a quote's window once, when it is created — so a quote can only
-				// be born already expired, which is how a mint that never saw the payment looks.
-				const expiry = expireNextQuote ? Math.floor(Date.now() / 1000) - 1 : Math.floor(Date.now() / 1000) + 3600
-				expireNextQuote = false
-				return { quote: quoteId, request: BOLT11_INVOICE_2000_SATS, expiry }
+			// coco 2.0 keeps canonical quotes under `quotes.mint`.
+			mint: {
+				create: async () => {
+					created += 1
+					const quoteId = `mock-quote-${created}`
+					quotes.push({
+						quoteId,
+						markPaid: () => paid.add(quoteId),
+						emitIssued: () => {
+							issued.add(quoteId)
+							emit(quoteId, 'ISSUED')
+						},
+					})
+					// The engine reads a quote's window once, when it is created — so a quote can only
+					// be born already expired, which is how a mint that never saw the payment looks.
+					const expiry = expireNextQuote ? Math.floor(Date.now() / 1000) - 1 : Math.floor(Date.now() / 1000) + 3600
+					expireNextQuote = false
+					return { quoteId, request: BOLT11_INVOICE_2000_SATS, expiry }
+				},
 			},
-			// coco's processor redeems a paid quote when it is nudged, which is what the
-			// adapter's check() asks for. A quote the test marked paid is issued here.
-			requeuePaidMintQuotes: async () => {
-				for (const quote of quotes) {
-					if (!paid.has(quote.quoteId) || issued.has(quote.quoteId)) continue
-					quote.emitIssued()
-				}
-				return { requeued: [] }
-			},
+		},
+		// coco 2.0 moved the processor nudge onto the manager, and reports quote observations on
+		// `mint-quote:updated`. A quote the test marked paid is issued when the engine nudges.
+		requeuePaidMintQuotes: async () => {
+			for (const quote of quotes) {
+				if (!paid.has(quote.quoteId) || issued.has(quote.quoteId)) continue
+				quote.emitIssued()
+			}
+			return { requeued: [] }
 		},
 		on: (_event: string, next: typeof handler) => {
 			handler = next

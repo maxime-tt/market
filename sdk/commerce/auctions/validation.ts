@@ -50,7 +50,7 @@ import { hashToCurveHexFromString } from '../payments/cashu/hashToCurve'
 import { parseAuctionLockSecret } from '../payments/cashu/p2pkSecret'
 import type { DleqProof } from '../payments/cashu/dleq'
 import { mintSupportsDleq, type MintDleqSupportOptions } from '../payments/cashu/mintCapability'
-import { getDecodedToken, type MintKeyset, type Token, CashuMint } from '@cashu/cashu-ts'
+import { getDecodedToken, type MintKeyset, type Token, Mint } from '@cashu/cashu-ts'
 import { addAuctionSettlementProofAmount } from './auctionSettlementP2pk'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from './auctionP2pk'
 
@@ -122,7 +122,7 @@ export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 	}
 	let keysets: MintKeyset[]
 	try {
-		const response = await CashuMint.getKeySets(mintUrl, requestWithTimeout)
+		const response = await new Mint(mintUrl).getKeySets(requestWithTimeout as never)
 		keysets = response.keysets
 	} catch (err) {
 		// Never silently swallow — operators must be able to distinguish a dead
@@ -769,7 +769,11 @@ export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseVal
 
 	let decodedToken: Token
 	try {
-		decodedToken = getDecodedToken(release.cashuToken, input.mintKeysets)
+		// cashu-ts v5 decodes against keyset *ids* (`readonly string[]`), not keyset objects.
+		decodedToken = getDecodedToken(
+			release.cashuToken,
+			(input.mintKeysets ?? []).map((keyset) => keyset.id),
+		)
 	} catch (err) {
 		return invalidRelease(
 			'cashu_token_decode_failed',
@@ -805,14 +809,17 @@ export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseVal
 
 	for (let index = 0; index < decodedToken.proofs.length; index++) {
 		const proof = decodedToken.proofs[index]
-		if (!Number.isSafeInteger(proof.amount) || proof.amount <= 0) {
+		// cashu-ts v5 `Proof.amount` is an `Amount` value object; the amount math here is
+		// sat-denominated and always a safe integer, so it is normalised to a number.
+		const proofAmount = proof.amount.toNumber()
+		if (!Number.isSafeInteger(proofAmount) || proofAmount <= 0) {
 			return invalidRelease(
 				'cashu_token_amount_mismatch',
 				releaseTiming,
-				`cashu_token proof ${index + 1} has invalid amount ${proof.amount}`,
+				`cashu_token proof ${index + 1} has invalid amount ${proofAmount}`,
 			)
 		}
-		tokenAmount = addAuctionSettlementProofAmount(tokenAmount, proof.amount)
+		tokenAmount = addAuctionSettlementProofAmount(tokenAmount, proofAmount)
 
 		const parsedLock = parseAuctionLockSecret(proof.secret, {
 			expectedLocktime: bid.locktime,

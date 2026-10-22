@@ -9,7 +9,7 @@
  *
  * We've verified the algorithms line up by reading both sources:
  *   - Ours: src/lib/cashu/hashToCurve.ts
- *   - cashu-ts: @cashu/cashu-ts/crypto/common
+ *   - cashu-ts: its `hashToCurve` (the root export; v5 has no `crypto/*` subpaths)
  * — but a byte-level cross-check on real auction-shaped P2PK secret
  * strings is much stronger than a code review.
  *
@@ -18,7 +18,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { hashToCurve as cashuTsHashToCurve } from '@cashu/cashu-ts/crypto/common'
+import { hashToCurve as cashuTsHashToCurve } from '@cashu/cashu-ts'
 import { hashToCurveHex, hashToCurveHexFromString } from '../cashu/hashToCurve'
 
 const enc = new TextEncoder()

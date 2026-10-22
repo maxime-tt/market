@@ -30,7 +30,7 @@
  */
 
 import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
-import { CashuMint } from '@cashu/cashu-ts'
+import { Mint } from '@cashu/cashu-ts'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 
 interface Args {
@@ -134,7 +134,7 @@ const main = async () => {
 
 	// Hit the mint.
 	console.log(`\nQuerying mint NUT-7 with ${recomputed.length} Y(s)…`)
-	const mint = new CashuMint(mintUrl)
+	const mint = new Mint(mintUrl)
 	const ourYs = recomputed.map((r) => r.ourY)
 	let response: Awaited<ReturnType<typeof mint.check>>
 	try {

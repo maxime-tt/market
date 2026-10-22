@@ -3,9 +3,9 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { MemoryRepositories, initializeCoco, type Manager } from 'coco-cashu-core'
+import { MemoryRepositories, initializeCoco, type Manager } from '@cashu/coco-core'
 
-import { createCocoDepositQuote } from '../wallet/depositQuote'
+import { createCocoDepositQuote, toCocoDepositManager } from '../wallet/depositQuote'
 
 /**
  * I4 — the deposit lifecycle against a real local mint.
@@ -74,10 +74,10 @@ beforeAll(async () => {
 		seedGetter: async () => new Uint8Array(64).fill(1),
 		logger: silentLogger,
 		watchers: {
-			mintQuoteWatcher: { watchExistingPendingOnStart: false },
+			mintOperationWatcher: { watchExistingPendingOnStart: false },
 			proofStateWatcher: {},
 		},
-		processors: { mintQuoteProcessor: { processIntervalMs: 200 } },
+		processors: { mintOperationProcessor: { processIntervalMs: 200 } },
 	})
 	await manager.mint.addMint(MINT_URL, { trusted: true })
 }, 120_000)
@@ -103,7 +103,9 @@ describe('a real deposit over a real mint', () => {
 	test('check() resolves only once the mint has issued the proofs', async () => {
 		if (!manager) throw new Error('coco manager not initialised')
 
-		const deposit = createCocoDepositQuote({ manager, mintUrl: MINT_URL, amount: DEPOSIT_AMOUNT })
+		// The deposit engine settles on coco's mint-quote state channel, so the real manager is
+		// adapted onto that contract (coco 2.0 renamed it; see `toCocoDepositManager`).
+		const deposit = createCocoDepositQuote({ manager: toCocoDepositManager(manager), mintUrl: MINT_URL, amount: DEPOSIT_AMOUNT })
 		try {
 			const invoice = await deposit.start()
 
@@ -113,14 +115,14 @@ describe('a real deposit over a real mint', () => {
 			expect(deposit.quoteId).toBeTruthy()
 
 			// Before settlement the wallet holds nothing at this mint.
-			const before = await manager.wallet.getBalances()
-			expect(before[MINT_URL] ?? 0).toBe(0)
+			const before = await manager.wallet.balances.byMint()
+			expect(before[MINT_URL]?.spendable.toNumber() ?? 0).toBe(0)
 
 			await deposit.check(60_000)
 
 			// The deposit's definition of success: the proofs exist and are spendable.
-			const after = await manager.wallet.getBalances()
-			expect(after[MINT_URL]).toBe(DEPOSIT_AMOUNT)
+			const after = await manager.wallet.balances.byMint()
+			expect(after[MINT_URL]?.spendable.toNumber()).toBe(DEPOSIT_AMOUNT)
 		} finally {
 			deposit.dispose()
 		}

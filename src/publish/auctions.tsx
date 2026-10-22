@@ -1853,7 +1853,12 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		}
 		let decodedToken
 		try {
-			decodedToken = getDecodedToken(leg.cashuToken, mintKeysetsByMint.get(leg.mintUrl))
+			// cashu-ts v5 `getDecodedToken` maps short keyset ids to keysets, so it takes the
+			// keyset *ids* for the mint, not the keyset objects.
+			decodedToken = getDecodedToken(
+				leg.cashuToken,
+				(mintKeysetsByMint.get(leg.mintUrl) ?? []).map((keyset) => keyset.id),
+			)
 		} catch (err) {
 			throw new Error(
 				`M7: Failed to decode cashu token for leg ${leg.bid.id.slice(0, 8)}…: ${err instanceof Error ? err.message : String(err)}`,

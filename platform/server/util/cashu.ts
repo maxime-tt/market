@@ -1,4 +1,4 @@
-import { CashuMint, type MintKeyset } from '@cashu/cashu-ts'
+import { Mint, type MintKeyset } from '@cashu/cashu-ts'
 
 const mintKeysetCache = new Map<string, MintKeyset[]>()
 
@@ -10,7 +10,7 @@ export async function getMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 	const cached = mintKeysetCache.get(normalizedMintUrl)
 	if (cached) return cached
 
-	const cashuMint = new CashuMint(normalizedMintUrl)
+	const cashuMint = new Mint(normalizedMintUrl)
 	const keysetResponse = await cashuMint.getKeySets()
 	const satKeysets = keysetResponse.keysets.filter((keyset) => keyset.unit === 'sat')
 	const keysets = satKeysets.length > 0 ? satKeysets : keysetResponse.keysets

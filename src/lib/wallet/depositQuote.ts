@@ -39,6 +39,57 @@ export interface CocoDepositManager {
 	): () => void
 }
 
+/**
+ * The coco 2.0 surface {@link toCocoDepositManager} adapts, declared structurally so this
+ * module keeps its coco-free contract (the real `@cashu/coco-core` `Manager` satisfies it).
+ *
+ * coco 2.0 keeps quotes as durable canonical state (`quotes.mint.create`) and reports each
+ * observation on a `mint-quote:updated` event; redemption moved into the mint *operation*
+ * lifecycle, and paid quotes are re-offered to the processor through the manager's
+ * `requeuePaidMintQuotes`.
+ */
+export interface CocoMintQuoteManager {
+	quotes: {
+		mint: {
+			create(input: { mintUrl: string; method: 'bolt11'; amount: number }): Promise<{
+				quoteId: string
+				request: string
+				expiry: number | null
+			}>
+		}
+	}
+	requeuePaidMintQuotes(mintUrl?: string): Promise<{ requeued: string[] }>
+	on(
+		event: 'mint-quote:updated',
+		handler: (payload: { mintUrl: string; quoteId: string; quote: { state?: DepositQuoteState } }) => void,
+	): () => void
+}
+
+/**
+ * Adapt a coco 2.0 manager to the {@link CocoDepositManager} contract this module settles on.
+ *
+ * The deposit engine is event-driven over coco's mint-quote state channel — a design from coco
+ * 1.0, where `manager.quotes.createMintQuote` plus a `mint-quote:state-changed` event was the
+ * whole surface. coco 2.0 renames both, so this factory is the seam: it creates the quote
+ * through `quotes.mint.create`, re-offers paid quotes through `requeuePaidMintQuotes`, and
+ * projects each `mint-quote:updated` observation onto the `{ mintUrl, quoteId, state }` event.
+ * The state is coco's own BOLT11 projection, so `ISSUED` keeps meaning exactly what it meant:
+ * the proofs exist.
+ */
+export const toCocoDepositManager = (manager: CocoMintQuoteManager): CocoDepositManager => ({
+	quotes: {
+		createMintQuote: async (mintUrl, amount) => {
+			const quote = await manager.quotes.mint.create({ mintUrl, method: 'bolt11', amount })
+			return { quote: quote.quoteId, request: quote.request, expiry: quote.expiry ?? undefined }
+		},
+		requeuePaidMintQuotes: (mintUrl) => manager.requeuePaidMintQuotes(mintUrl),
+	},
+	on: (_event, handler) =>
+		manager.on('mint-quote:updated', (payload) => {
+			handler({ mintUrl: payload.mintUrl, quoteId: payload.quoteId, state: payload.quote.state ?? 'UNPAID' })
+		}),
+})
+
 /** What a caller is told when a deposit resolves or fails. `undefined` means "settled". */
 export type DepositListener = (error?: Error) => void
 

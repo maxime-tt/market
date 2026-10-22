@@ -57,7 +57,7 @@ import {
 import { auctionP2pkPubkeysMatch } from '@/lib/auctionP2pk'
 import { AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS } from '@/lib/auction/constants'
 import { toEncryptingSigner } from '@/lib/nostr/ndkEncryptingSigner'
-import { CashuMint, CashuWallet, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import { KeyChain, Mint, Wallet, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { NDKEvent, NDKNutzap, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { ndkActions, ndkStore } from './ndk'
 import { cashuActions, cashuStore } from './cashu'
@@ -113,7 +113,7 @@ const isKeysetVerificationError = (err: unknown): err is Error => err instanceof
 
 const getErrorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
-const getDevTestMintKeyset = async (cashuMint: CashuMint, targetMint: string): Promise<{ keysets: MintKeyset[]; mintKeys: MintKeys }> => {
+const getDevTestMintKeyset = async (cashuMint: Mint, targetMint: string): Promise<{ keysets: MintKeyset[]; mintKeys: MintKeys }> => {
 	const keysetResponse = await cashuMint.getKeySets()
 	const satKeysets = keysetResponse.keysets.filter((keyset) => keyset.unit === 'sat')
 	const activeSatKeyset = satKeysets.find((keyset) => keyset.active) ?? satKeysets[0]
@@ -133,10 +133,10 @@ const getDevTestMintKeyset = async (cashuMint: CashuMint, targetMint: string): P
 	}
 }
 
-const createCashuWalletForMint = async (targetMint: string): Promise<{ cashuWallet: CashuWallet; keysetId?: string }> => {
+const createCashuWalletForMint = async (targetMint: string): Promise<{ cashuWallet: Wallet; keysetId?: string }> => {
 	const normalizedTargetMint = normalizeMintUrl(targetMint)
-	const cashuMint = new CashuMint(normalizedTargetMint)
-	const cashuWallet = new CashuWallet(cashuMint)
+	const cashuMint = new Mint(normalizedTargetMint)
+	const cashuWallet = new Wallet(cashuMint)
 
 	try {
 		await cashuWallet.loadMint()
@@ -148,12 +148,13 @@ const createCashuWalletForMint = async (targetMint: string): Promise<{ cashuWall
 
 		// testnut is currently serving a keyset ID that cashu-ts rejects. Seed the dev wallet
 		// with the raw keyset metadata so we can keep exercising the faucet flow in dev mode.
+		// cashu-ts v5 drops the old constructor `{ keysets, keys }` options: a pre-fetched
+		// keyset set is loaded through `loadMintFromCache` with a `KeyChainCache` instead.
 		const { keysets, mintKeys } = await getDevTestMintKeyset(cashuMint, normalizedTargetMint)
+		const mintInfo = await cashuMint.getInfo()
+		cashuWallet.loadMintFromCache(mintInfo, KeyChain.mintToCacheDTO(normalizedTargetMint, keysets, [mintKeys]))
 		return {
-			cashuWallet: new CashuWallet(cashuMint, {
-				keysets,
-				keys: mintKeys,
-			}),
+			cashuWallet,
 			keysetId: mintKeys.id,
 		}
 	}
@@ -407,14 +408,16 @@ const getAuctionHost = (): ReturnType<typeof createAuctionHost> => {
  */
 function selectProofs(proofs: Proof[], amount: number): { selected: Proof[]; total: number } {
 	// Sort proofs by amount (smallest first) for better selection
-	const sorted = [...proofs].sort((a, b) => a.amount - b.amount)
+	// cashu-ts v5 `Proof.amount` is an `Amount` value object; ordering uses its comparator and
+	// the running total is sat-denominated (always a safe integer).
+	const sorted = [...proofs].sort((a, b) => a.amount.compareTo(b.amount))
 	const selected: Proof[] = []
 	let total = 0
 
 	for (const proof of sorted) {
 		if (total >= amount) break
 		selected.push(proof)
-		total += proof.amount
+		total += proof.amount.toNumber()
 	}
 
 	return { selected, total }
@@ -438,7 +441,7 @@ function getBalancesFromState(wallet: CashuWalletSource): { totalBalance: number
 
 	for (const mint of getAllMints(wallet)) {
 		const spendableProofs = getSpendableProofsForMint(wallet, mint)
-		const balance = spendableProofs.reduce((sum, proof) => sum + proof.amount, 0)
+		const balance = spendableProofs.reduce((sum, proof) => sum + proof.amount.toNumber(), 0)
 		mintBalances[mint] = balance
 		totalBalance += balance
 	}
@@ -491,7 +494,7 @@ const cashuPay = async (payment: NutzapCashuPayRequest): Promise<{ proofs: Proof
 
 	const mintCandidates = payment.mints?.length ? payment.mints : getAllMints(source)
 	const targetMint = mintCandidates.find((mint) => {
-		const balance = getSpendableProofsForMint(source, mint).reduce((sum, proof) => sum + proof.amount, 0)
+		const balance = getSpendableProofsForMint(source, mint).reduce((sum, proof) => sum + proof.amount.toNumber(), 0)
 		return balance >= amount
 	})
 	if (!targetMint) return undefined
@@ -501,10 +504,14 @@ const cashuPay = async (payment: NutzapCashuPayRequest): Promise<{ proofs: Proof
 	if (total < amount) return undefined
 
 	const { cashuWallet } = await createCashuWalletForMint(targetMint)
-	const result = await cashuWallet.send(amount, selected, {
-		proofsWeHave,
-		...(payment.p2pk ? { pubkey: payment.p2pk } : {}),
-	})
+	// cashu-ts v5 splits send options: proof/selection config in the third argument, and the
+	// output shape (a NUT-11 P2PK lock for a nutzap) in the fourth.
+	const result = await cashuWallet.send(
+		amount,
+		selected,
+		{ proofsWeHave },
+		payment.p2pk ? { send: { type: 'p2pk', options: { kind: 'P2PK', data: payment.p2pk } } } : undefined,
+	)
 
 	await source.state.update({
 		mint: targetMint,
@@ -730,7 +737,18 @@ export const walletOps = {
 			ndk,
 			signer: ndk.signer,
 			comment,
-			cashuPay: async (payment) => cashuPay(payment),
+			cashuPay: async (payment) => {
+				const result = await cashuPay(payment)
+				if (!result) return undefined
+				// @nostr-dev-kit/ndk still types its cashu callback against cashu-ts v2 proofs
+				// (`amount: number`). cashu-ts v5 makes `Proof.amount` an `Amount` value object,
+				// so the amount is converted back to a plain sat number at this boundary —
+				// NDK's nutzap serialisation and balance math keep seeing the shape they expect.
+				return {
+					mint: result.mint,
+					proofs: result.proofs.map((proof) => ({ ...proof, amount: proof.amount.toNumber() })),
+				}
+			},
 		})
 
 		const results = await zapper.zap(['nip61'])
@@ -786,8 +804,10 @@ export const walletOps = {
 		for (const targetMint of candidates) {
 			try {
 				const { cashuWallet, keysetId } = await createCashuWalletForMint(targetMint)
-				const quote = await cashuWallet.createMintQuote(mintAmount)
-				const proofs = await cashuWallet.mintProofs(mintAmount, quote.quote, keysetId ? { keysetId } : undefined)
+				// cashu-ts v5: create the BOLT11 quote on the mint client, then mint from it
+				// through the wallet's method-specific helper.
+				const quote = await cashuWallet.mint.createMintQuoteBolt11({ amount: mintAmount, unit: 'sat' })
+				const proofs = await cashuWallet.mintProofsBolt11(mintAmount, quote, keysetId ? { keysetId } : undefined)
 
 				if (!proofs.length) {
 					throw new Error('Mint returned no proofs')

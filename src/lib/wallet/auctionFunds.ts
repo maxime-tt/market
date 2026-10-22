@@ -22,7 +22,7 @@
  * of the receive and the state write — is identical to the store helper this replaces,
  * because it moves money.
  */
-import { getDecodedToken, getEncodedToken, type CashuWallet, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import { getDecodedToken, getEncodedToken, type MintKeyset, type Proof, type Wallet } from '@cashu/cashu-ts'
 import { executeAuctionBidReclaimWorkflow, planAuctionBidReclaimTiming } from '@sdk/commerce/auctions'
 import { getAuctionP2pkLockPubkeyFromSecret, toCompressedAuctionP2pkPubkey } from '@/lib/auctionP2pk'
 import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
@@ -65,7 +65,7 @@ export interface AuctionFundsWallet extends WalletProofSource {
  * should decode against — and `undefined` when the caller should decode without one.
  */
 export interface AuctionFundsMintAccess {
-	cashuWalletForMint(mintUrl: string): Promise<{ cashuWallet: CashuWallet; keysetId?: string }>
+	cashuWalletForMint(mintUrl: string): Promise<{ cashuWallet: Wallet; keysetId?: string }>
 }
 
 export interface ReceiveTokenDeps {
@@ -102,7 +102,7 @@ export const receiveTokenIntoWallet = async (deps: ReceiveTokenDeps): Promise<{ 
 	if (deps.mintUrl) {
 		mintUrl = normalizeMintUrl(deps.mintUrl)
 	} else {
-		mintUrl = normalizeMintUrl(getDecodedToken(deps.token).mint)
+		mintUrl = normalizeMintUrl(getDecodedToken(deps.token, []).mint)
 	}
 	const proofsWeHave = getProofsForMint(deps.wallet, mintUrl)
 	const { cashuWallet, keysetId } = await deps.mint.cashuWalletForMint(mintUrl)
@@ -119,7 +119,9 @@ export const receiveTokenIntoWallet = async (deps: ReceiveTokenDeps): Promise<{ 
 		})
 
 		return {
-			amount: receivedProofs.reduce((sum, proof) => sum + proof.amount, 0),
+			// cashu-ts v5 `Proof.amount` is an `Amount` value object; the returned amount is
+			// sat-denominated, so it is normalised to a number.
+			amount: receivedProofs.reduce((sum, proof) => sum + proof.amount.toNumber(), 0),
 			mintUrl,
 		}
 	} catch (error) {
@@ -169,7 +171,7 @@ export const getAuctionReclaimReadyAt = (token: string, contextLocktime?: number
 	const fallback = contextLocktime && contextLocktime > 0 ? contextLocktime : 0
 	let maxLocktime = fallback
 	try {
-		const decoded = getDecodedToken(token)
+		const decoded = getDecodedToken(token, [])
 		if (decoded?.proofs?.length) {
 			for (const proof of decoded.proofs) {
 				try {
@@ -585,28 +587,30 @@ const sha256Hex = async (value: string): Promise<string> => {
  * and error messages depend on which proofs it picks.
  */
 const selectProofs = (proofs: Proof[], amount: number): { selected: Proof[]; total: number } => {
-	const sorted = [...proofs].sort((a, b) => a.amount - b.amount)
+	// cashu-ts v5 `Proof.amount` is an `Amount` value object; ordering uses its comparator and
+	// the running total is sat-denominated.
+	const sorted = [...proofs].sort((a, b) => a.amount.compareTo(b.amount))
 	const selected: Proof[] = []
 	let total = 0
 
 	for (const proof of sorted) {
 		if (total >= amount) break
 		selected.push(proof)
-		total += proof.amount
+		total += proof.amount.toNumber()
 	}
 
 	return { selected, total }
 }
 
 /** Store `getProofsTotal`. */
-const getProofsTotal = (proofs: Proof[]): number => proofs.reduce((sum, proof) => sum + proof.amount, 0)
+const getProofsTotal = (proofs: Proof[]): number => proofs.reduce((sum, proof) => sum + proof.amount.toNumber(), 0)
 
 /**
  * Store `lockAuctionBidProofs` — the swap that mints fresh NUT-11 P2PK outputs. The P2PK
  * secret construction (lock pubkey, locktime, refund key) is exactly the store's.
  */
 const lockAuctionBidProofs = async (
-	cashuWallet: CashuWallet,
+	cashuWallet: Wallet,
 	amount: number,
 	proofs: Proof[],
 	params: {
@@ -621,14 +625,20 @@ const lockAuctionBidProofs = async (
 		throw new Error('Not enough funds available to send')
 	}
 
-	// cashu-ts 2.9 `send()` ignores `p2pk` when existing proofs exactly
-	// satisfy the amount. Use `swap()` so every auction bid always receives
-	// freshly minted NUT-11 P2PK proofs.
-	return cashuWallet.swap(amount, proofs, {
-		p2pk: {
-			pubkey: params.lockPubkey,
-			locktime: params.locktime,
-			refundKeys: [params.refundPubkey],
+	// cashu-ts v5 states the send output shape explicitly through `outputConfig`: the SEND
+	// portion is minted as fresh NUT-11 P2PK outputs (`data` is the main lock pubkey, plus
+	// `locktime` and the refund key), while the KEEP portion is the ordinary change. This is
+	// the v5 equivalent of the retired `swap(amount, proofs, { p2pk })` call — every auction
+	// bid still receives freshly minted P2PK proofs rather than reusing satisfying inputs.
+	return cashuWallet.send(amount, proofs, undefined, {
+		send: {
+			type: 'p2pk',
+			options: {
+				kind: 'P2PK',
+				data: params.lockPubkey,
+				locktime: params.locktime,
+				refundKeys: [params.refundPubkey],
+			},
 		},
 	})
 }
@@ -870,7 +880,7 @@ export const createAuctionLock = (host: AuctionLockHost): AuctionLock => ({
 				mint: targetMint,
 				proofs: lockedProofs,
 			})
-			const tokenAmount = lockedProofs.reduce((sum, proof) => sum + proof.amount, 0)
+			const tokenAmount = lockedProofs.reduce((sum, proof) => sum + proof.amount.toNumber(), 0)
 			const tokenId = generateId()
 			const pendingContext: AuctionBidPendingTokenContext | undefined =
 				params.auctionEventId && params.sellerPubkey
@@ -1065,7 +1075,10 @@ export const createAuctionReceipt = (host: AuctionReceiveHost): AuctionReceipt =
 export const loadAuctionMintKeysets = async (mint: AuctionFundsMintAccess, mintUrl: string): Promise<MintKeyset[]> => {
 	try {
 		const { cashuWallet } = await mint.cashuWalletForMint(mintUrl)
-		return cashuWallet.keysets
+		// cashu-ts v5 exposes the keyset list through the wallet's mint client rather than a
+		// `wallet.keysets` property.
+		const response = await cashuWallet.mint.getKeySets()
+		return response.keysets
 	} catch (err) {
 		console.warn(`[wallet] loadAuctionMintKeysets failed for ${getMintHostname(mintUrl)}:`, err)
 		return []
