@@ -1,7 +1,11 @@
 import {
+	createAppWalletKeyStore,
+	deriveAuctionChildPrivkey,
 	getMintHostname,
 	getSpendableProofsForMint,
 	loadUserData,
+	migrateWalletKeyMaterial,
+	normalizeWalletKeyMaterial,
 	receiveTokenIntoWallet,
 	receiveTokenWithPrivkey,
 	saveUserData,
@@ -9,17 +13,17 @@ import {
 	type AuctionFundsMintAccess,
 	type PendingToken,
 	type PendingTokenContext,
+	type WalletKeyMaterial,
+	type WalletKeyMigrationSource,
+	type WalletKeyPairCandidate,
+	type WalletKeySigner,
+	type WalletKeyStore,
 } from '@/lib/wallet'
-import {
-	auctionP2pkPubkeysMatch,
-	deriveAuctionChildP2pkPubkeyFromXpub,
-	getAuctionP2pkLockPubkeyFromSecret,
-	normalizeAuctionDerivationPath,
-	toCompressedAuctionP2pkPubkey,
-} from '@/lib/auctionP2pk'
+import { auctionP2pkPubkeysMatch, getAuctionP2pkLockPubkeyFromSecret, toCompressedAuctionP2pkPubkey } from '@/lib/auctionP2pk'
 import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
 import { executeAuctionBidReclaimWorkflow, planAuctionBidReclaimTiming } from '@sdk/commerce/auctions'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
+import { toEncryptingSigner } from '@/lib/nostr/ndkEncryptingSigner'
 import {
 	CashuMint,
 	CashuWallet,
@@ -612,15 +616,6 @@ const resolveLatestActiveBidByBidder = (bidEvents: NDKEvent[], bidderPubkey: str
 	})[0]
 }
 
-const deriveChildPrivkeyFromXpriv = (xpriv: string, path: string): string => {
-	const hdRoot = HDKey.fromExtendedKey(xpriv.trim())
-	const child = hdRoot.derive(normalizeAuctionDerivationPath(path))
-	if (!child.privateKey) {
-		throw new Error('Failed to derive child private key from auction xpriv')
-	}
-	return toHex(child.privateKey)
-}
-
 const getCompressedCashuPubkeyFromPrivkey = (privkey: string): string => toHex(secp256k1.getPublicKey(hexToUint8(privkey.trim()), true))
 
 const toHex = (bytes: Uint8Array): string =>
@@ -867,6 +862,100 @@ const getAuctionHdAccountFromWallet = async (wallet: NDKCashuWallet): Promise<HD
 	}
 
 	return getAuctionHdAccountFromWalletKeys(walletP2pk, walletPrivkey)
+}
+
+/**
+ * The sealer's signer: the app's NDK signer, adapted to the nip44 surface `walletKeyStore`
+ * expects. `NDKSigner` does not declare `nip44` (the wallet event is opened through the
+ * event's own `decrypt()` — see §9.6's trap note), so the sealer is built from the signer's
+ * NIP-44 `encrypt`/`decrypt` through the same adapter the SDK uses.
+ */
+const auctionWalletKeySigner = (): WalletKeySigner | null => {
+	const signer = ndkStore.state.ndk?.signer
+	return signer ? { nip44: toEncryptingSigner(signer) } : null
+}
+
+/** The app's key store: the pair's durable, sealed home. The signer is read lazily per call. */
+let auctionWalletKeyStoreInstance: WalletKeyStore | null = null
+const getAuctionWalletKeyStore = (): WalletKeyStore => {
+	// Built lazily, not at module scope: the wallet barrel and this store are in an import
+	// cycle (via `./ndk` and the auth store), so an eager call here can touch
+	// `createAppWalletKeyStore` before that module has initialised.
+	auctionWalletKeyStoreInstance ??= createAppWalletKeyStore({ getSigner: auctionWalletKeySigner })
+	return auctionWalletKeyStoreInstance
+}
+
+/**
+ * Read the wallet's `(walletP2pk, walletPrivkey)` pair — the same pair the store has always
+ * derived the auction HD root from. `getOrCreateWalletP2pk` keeps its side effect of persisting
+ * a freshly generated p2pk; a wallet that exposes no private half answers null.
+ */
+const readWalletKeyPair = async (wallet: NDKCashuWallet): Promise<WalletKeyPairCandidate | null> => {
+	const walletP2pk = await getOrCreateWalletP2pk(wallet)
+	const walletPrivkey = getWalletPrivkeyForPubkey(wallet, walletP2pk)
+	if (!walletPrivkey) return null
+	return { walletP2pk, walletPrivkey }
+}
+
+/**
+ * The migration source, for now the OLD path: the pair is read from the loaded relay wallet
+ * rather than from the kind-17375 event directly.
+ *
+ * STUB (increment B): this is the part not finished. `createRelayWalletKeyMigrationSource` /
+ * `createWalletEventReader` (both in `src/lib/wallet/`) are NOT wired here — that needs a
+ * kind-17375 fetch and the signer's decryption of the event content. Until then the one-way
+ * migration seeds the sealed store from the wallet's pair on first use, and the relay event is
+ * still reached through the wallet.
+ */
+const createWalletBackedKeyMigrationSource = (wallet: NDKCashuWallet): WalletKeyMigrationSource => ({
+	loadWalletPairs: async (): Promise<WalletKeyPairCandidate[]> => {
+		const pair = await readWalletKeyPair(wallet)
+		return pair ? [pair] : []
+	},
+})
+
+/**
+ * Resolve the wallet key material the auction HD root derives from, for the authenticated
+ * owner. The pair's durable home is the sealed key store; the one-way migration reads the pair
+ * once (from the wallet, for now — see the STUB note) and writes it there, after which every
+ * call reads it back without consulting the relay wallet again.
+ *
+ * The store is a home, not a gate: while the relay reader is still unwired and the wallet is
+ * the only source, a store that cannot be written (quota, disabled storage) must not strand a
+ * redemption the wallet can still answer for. So a migration that yields nothing — or throws
+ * on its strict save — falls back to the pair read straight from the wallet, which is exactly
+ * where this came from before the increment. That fallback goes when the relay reader lands.
+ *
+ * The owner pubkey is the one the wallet was initialised for. Without it the pair cannot be
+ * attributed to an owner, so it is refused — the same fail-closed stance `walletKeys` takes for
+ * material it cannot trust.
+ */
+const resolveAuctionKeyMaterial = async (wallet: NDKCashuWallet): Promise<WalletKeyMaterial> => {
+	const ownerPubkey =
+		(await ndkStore.state.ndk?.signer
+			?.user()
+			.then((user) => user.pubkey)
+			.catch(() => '')) ?? ''
+	if (!ownerPubkey) {
+		throw new Error('Current wallet does not expose the auction HD root private key')
+	}
+
+	try {
+		const migration = await migrateWalletKeyMaterial({
+			store: getAuctionWalletKeyStore(),
+			source: createWalletBackedKeyMigrationSource(wallet),
+			ownerPubkey,
+		})
+		if (migration.material) return migration.material
+	} catch {
+		// A failed store write falls through to the direct wallet read below.
+	}
+
+	const pair = await readWalletKeyPair(wallet)
+	if (!pair) {
+		throw new Error('Current wallet does not expose the auction HD root private key')
+	}
+	return normalizeWalletKeyMaterial({ ownerPubkey, ...pair })
 }
 
 /**
@@ -1359,21 +1448,14 @@ export const nip60Actions = {
 			throw new Error('NIP-60 wallet not ready')
 		}
 
-		const account = await getAuctionHdAccountFromWallet(wallet)
-		const xpriv = account.privateExtendedKey
-		const xpub = account.publicExtendedKey
-		if (!xpriv || !xpub) {
-			throw new Error('Failed to derive auction hd account keys')
-		}
-
-		if (params.expectedPubkey) {
-			const derivedPubkey = deriveAuctionChildP2pkPubkeyFromXpub(xpub, params.derivationPath)
-			if (!auctionP2pkPubkeysMatch(derivedPubkey, params.expectedPubkey)) {
-				throw new Error('Auction bid child pubkey does not match current wallet-derived HD root')
-			}
-		}
-
-		return deriveChildPrivkeyFromXpriv(xpriv, params.derivationPath)
+		// The pair comes from the app's key store now, not from the wallet's HD account. The
+		// expected-pubkey guard lives in `walletKeys.deriveAuctionChildPrivkey`, which refuses
+		// with the typed code `unexpected-child` rather than the hand-rolled string this threw.
+		const material = await resolveAuctionKeyMaterial(wallet)
+		return deriveAuctionChildPrivkey(material, {
+			derivationPath: params.derivationPath,
+			expectedPubkey: params.expectedPubkey,
+		})
 	},
 
 	getWalletPrivkey: (pubkey?: string): string | null => {
