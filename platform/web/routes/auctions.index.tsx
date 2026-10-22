@@ -31,7 +31,7 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
-import { useHeroBackground } from '@platform/web/app/useHeroBackground'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 
@@ -175,11 +175,6 @@ function AuctionsRoute() {
 	const backgroundImageUrl = !isHomepageSlide && currentImages.length > 0 ? currentImages[0][1] : ''
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
 
-	const heroClassName = currentAuctionId ? `hero-bg-auctions-${currentAuctionId.replace(/[^a-zA-Z0-9]/g, '')}` : 'hero-bg-auctions-default'
-	const marketHeroClassName = 'hero-bg-market-auctions'
-	useHeroBackground(backgroundImageUrl, heroClassName)
-	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
-
 	const handleDotClick = (index: number) => {
 		setCurrentSlideIndex(index)
 	}
@@ -279,7 +274,8 @@ function AuctionsRoute() {
 		<div>
 			{isHomepageSlide ? (
 				<div
-					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}
+					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					style={heroBackgroundStyle(marketBackgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
@@ -292,7 +288,8 @@ function AuctionsRoute() {
 				</div>
 			) : (
 				<div
-					className={`relative hero-container-carousel ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-gray-700'}`}
+					className={`relative hero-container-carousel ${backgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					style={heroBackgroundStyle(backgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}

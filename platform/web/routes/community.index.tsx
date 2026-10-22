@@ -6,7 +6,7 @@ import { Skeleton } from '@ui/primitives/skeleton'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { useHeroBackground } from '@platform/web/app/useHeroBackground'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
@@ -125,14 +125,6 @@ function CommunityRoute() {
 	// Use the market image for homepage background instead of random collection
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
 
-	// Use the hook to inject dynamic CSS for the background image
-	const heroClassName = currentCollectionId
-		? `hero-bg-collections-${currentCollectionId.replace(/[^a-zA-Z0-9]/g, '')}`
-		: 'hero-bg-collectionss-default'
-	const marketHeroClassName = 'hero-bg-market'
-	useHeroBackground(backgroundImageUrl, heroClassName)
-	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
-
 	const handleStartSelling = () => {
 		if (isAuthenticated) {
 			uiActions.openDrawer('createCollection')
@@ -249,7 +241,8 @@ function CommunityRoute() {
 				// Homepage hero styling with random collection background
 				<div
 					data-testid="community-hero"
-					className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}
+					className={`relative hero-container ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					style={heroBackgroundStyle(marketBackgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
@@ -265,7 +258,8 @@ function CommunityRoute() {
 				// Collection hero styling (existing collection page style)
 				<div
 					data-testid="community-hero"
-					className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-gray-700'}`}
+					className={`relative hero-container ${backgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					style={heroBackgroundStyle(backgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}

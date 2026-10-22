@@ -5,7 +5,7 @@ import { productFormActions } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { useHeroBackground } from '@platform/web/app/useHeroBackground'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { FeaturedSections } from '@/components/FeaturedSections'
@@ -70,8 +70,6 @@ function Index() {
 
 	// Use the market image for homepage background
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
-	const marketHeroClassName = 'hero-bg-market'
-	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
 
 	const handleStartSelling = () => {
 		if (isAuthenticated) {
@@ -84,7 +82,10 @@ function Index() {
 	return (
 		<div>
 			{/* Hero Section */}
-			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}>
+			<div
+				className={`relative hero-container ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+				style={heroBackgroundStyle(marketBackgroundImageUrl)}
+			>
 				<div className="hero-overlays">
 					<div className="z-10 absolute inset-0 bg-radial-overlay opacity-40" />
 					<div className="z-10 absolute inset-0 bg-dots-overlay opacity-20" />

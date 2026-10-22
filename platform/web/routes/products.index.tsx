@@ -11,7 +11,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useHeroBackground } from '@platform/web/app/useHeroBackground'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import {
@@ -156,12 +156,6 @@ function ProductsRoute() {
 	// Use the market image for homepage background instead of random product
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
 
-	// Use the hook to inject dynamic CSS for the background image
-	const heroClassName = currentProductId ? `hero-bg-products-${currentProductId.replace(/[^a-zA-Z0-9]/g, '')}` : 'hero-bg-products-default'
-	const marketHeroClassName = 'hero-bg-market'
-	useHeroBackground(backgroundImageUrl, heroClassName)
-	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
-
 	const handleStartSelling = () => {
 		if (isAuthenticated) {
 			productFormActions.openCreateProductDrawer()
@@ -286,7 +280,8 @@ function ProductsRoute() {
 			{isHomepageSlide ? (
 				// Homepage hero styling with random product background
 				<div
-					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}
+					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					style={heroBackgroundStyle(marketBackgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
@@ -301,7 +296,8 @@ function ProductsRoute() {
 			) : (
 				// Product hero styling (existing product page style)
 				<div
-					className={`relative hero-container-carousel ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-gray-700'}`}
+					className={`relative hero-container-carousel ${backgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					style={heroBackgroundStyle(backgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}

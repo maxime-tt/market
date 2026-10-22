@@ -29,7 +29,7 @@ import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Edit, MessageCircle, Share2 } from 'lucide-react'
-import { useHeroBackground } from '@platform/web/app/useHeroBackground'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { toast } from 'sonner'
 import { TooltipButton } from '@ui/components/TooltipButton'
 
@@ -80,9 +80,7 @@ function RouteComponent() {
 	// Use the market image for homepage background
 	// const marketBackgroundImageUrl = '/images/market-background.jpg'
 	const marketBackgroundImageUrl = currentImages.length > 0 ? currentImages[0][1] : '/images/market-background.jpg'
-	const marketHeroClassName = 'hero-bg-market'
-	// Get background image from current collection (only if not homepage slide)
-	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
+	// Background image from the current collection (falls back to the market image).
 	const queryClient = useQueryClient()
 
 	// Get app config
@@ -183,7 +181,10 @@ function RouteComponent() {
 						<span className="hidden sm:inline">Back to Community</span>
 					</Button>
 				)}
-				<div className={`relative hero-container-small ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
+				<div
+					className={`relative hero-container-small ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-black'}`}
+					style={heroBackgroundStyle(marketBackgroundImageUrl)}
+				>
 					<div className="hero-overlays">
 						<div className="z-10 absolute inset-0 bg-radial-overlay" />
 						<div className="z-10 absolute inset-0 bg-dots-overlay opacity-30" />

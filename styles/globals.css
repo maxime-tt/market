@@ -426,6 +426,8 @@ button {
 	}
 
 	.bg-hero-image {
+		/* The host sets --hero-image on the band; see platform/web/app/heroBackground.ts. */
+		background-image: var(--hero-image, none);
 		background-size: cover;
 		background-position: center;
 		background-repeat: no-repeat;

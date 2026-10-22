@@ -80,7 +80,7 @@ import { InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
 import { TestListingNotice } from '@/components/TestListingNotice'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { AUCTION_KIND } from '@/lib/auction/constants'
-import { useHeroBackground } from '@platform/web/app/useHeroBackground'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
@@ -274,8 +274,6 @@ function AuctionDetailRoute() {
 	}))
 
 	const backgroundImageUrl = formattedImages[0]?.url || ''
-	const heroClassName = `hero-bg-auction-detail-${auctionId.replace(/[^a-zA-Z0-9]/g, '')}`
-	useHeroBackground(backgroundImageUrl, heroClassName)
 
 	const startAt = getAuctionStartAt(auction)
 	const startingBid = getAuctionStartingBid(auction)
@@ -672,7 +670,10 @@ function AuctionDetailRoute() {
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="relative z-10">
-				<div className={`relative dark hero-container-product ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
+				<div
+					className={`relative dark hero-container-product ${backgroundImageUrl ? 'bg-hero-image' : 'bg-black'}`}
+					style={heroBackgroundStyle(backgroundImageUrl)}
+				>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay" />
 						<div className="absolute inset-0 opacity-30 bg-dots-overlay" />
