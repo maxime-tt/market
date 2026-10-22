@@ -309,7 +309,7 @@ export const createAuctionReclaim = (host: AuctionReclaimHost): AuctionReclaim =
 		if (auctionContext && !refundPrivkey) {
 			const walletPrivkeyCount = host.getWalletPrivkeyCount()
 			console.warn(
-				`[nip60] Reclaim aborted: no refund privkey found for refundPubkey ${auctionContext.refundPubkey} ` +
+				`[wallet] Reclaim aborted: no refund privkey found for refundPubkey ${auctionContext.refundPubkey} ` +
 					`(checked BidderBidRecord + wallet.privkeys; wallet holds ${walletPrivkeyCount} privkey(s)). ` +
 					`The bid was likely placed with a different browser/profile or local storage was cleared.`,
 			)
@@ -399,7 +399,7 @@ export const createAuctionReclaim = (host: AuctionReclaimHost): AuctionReclaim =
 			)
 			host.setPendingTokens(pendingTokens)
 
-			console.error('[nip60] Failed to reclaim token:', err)
+			console.error('[wallet] Failed to reclaim token:', err)
 			throw err
 		}
 	}
@@ -436,7 +436,7 @@ export const createAuctionReclaim = (host: AuctionReclaimHost): AuctionReclaim =
 			try {
 				await reclaimToken(token.id)
 			} catch (err) {
-				console.warn(`[nip60] Auto-reclaim skipped for token ${token.id}:`, err instanceof Error ? err.message : err)
+				console.warn(`[wallet] Auto-reclaim skipped for token ${token.id}:`, err instanceof Error ? err.message : err)
 			}
 		}
 	}
@@ -952,7 +952,7 @@ export const createAuctionLock = (host: AuctionLockHost): AuctionLock => ({
 				try {
 					await wallet.publish()
 				} catch (publishErr) {
-					console.error('[nip60] Failed to publish wallet after bid lock (non-fatal):', publishErr)
+					console.error('[wallet] Failed to publish wallet after bid lock (non-fatal):', publishErr)
 				}
 				// Synchronously re-read balance from wallet.state into the
 				// store so the UI updates immediately (avoids a stale
@@ -960,7 +960,7 @@ export const createAuctionLock = (host: AuctionLockHost): AuctionLock => ({
 				const { totalBalance, mintBalances } = host.getBalances()
 				host.setWalletBalances({ balance: totalBalance, mintBalances })
 			} catch (stateErr) {
-				console.error('[nip60] Failed to reconcile wallet state after bid lock (non-fatal):', stateErr)
+				console.error('[wallet] Failed to reconcile wallet state after bid lock (non-fatal):', stateErr)
 			}
 
 			// Note: we used to also kick off `consolidateProofs()` here
@@ -989,7 +989,7 @@ export const createAuctionLock = (host: AuctionLockHost): AuctionLock => ({
 				grantId: params.grantId,
 			}
 		} catch (err) {
-			console.error('[nip60] Failed to lock auction bid funds:', err)
+			console.error('[wallet] Failed to lock auction bid funds:', err)
 			// #1235 round-3 B1 — conservative mutation-possible wrap. Everything
 			// this catch can see escaped from the post-selection try above:
 			// wallet creation, the swap attempts, or the post-swap local work. A
@@ -1043,7 +1043,7 @@ export const createAuctionReceipt = (host: AuctionReceiveHost): AuctionReceipt =
 	receiveLockedEcash: async (token: string, privkey: string, mintUrl?: string): Promise<boolean> => {
 		const wallet = host.getWallet()
 		if (!wallet) {
-			console.warn('[nip60] Cannot receive locked ecash without wallet')
+			console.warn('[wallet] Cannot receive locked ecash without wallet')
 			return false
 		}
 
@@ -1052,7 +1052,7 @@ export const createAuctionReceipt = (host: AuctionReceiveHost): AuctionReceipt =
 			await host.refresh()
 			return true
 		} catch (err) {
-			console.error('[nip60] Failed to receive locked ecash:', err)
+			console.error('[wallet] Failed to receive locked ecash:', err)
 			throw err
 		}
 	},
@@ -1067,7 +1067,7 @@ export const loadAuctionMintKeysets = async (mint: AuctionFundsMintAccess, mintU
 		const { cashuWallet } = await mint.cashuWalletForMint(mintUrl)
 		return cashuWallet.keysets
 	} catch (err) {
-		console.warn(`[nip60] loadAuctionMintKeysets failed for ${getMintHostname(mintUrl)}:`, err)
+		console.warn(`[wallet] loadAuctionMintKeysets failed for ${getMintHostname(mintUrl)}:`, err)
 		return []
 	}
 }

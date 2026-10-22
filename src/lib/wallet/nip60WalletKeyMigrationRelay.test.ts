@@ -1,5 +1,5 @@
 /**
- * Tests for the migration source the app runs, composed the way `nip60.ts` composes it:
+ * Tests for the migration source the app runs, composed the way `walletOps.ts` composes it:
  * `createWalletEventReader` over a relay read and the signer, then
  * `createRelayWalletKeyMigrationSource` over the reader.
  *

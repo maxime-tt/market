@@ -92,8 +92,10 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		// The real directory must be scanned via a glob, not `src/lib/auction*.ts`.
 		expect(source).toContain('src/lib/auction/*.ts')
 		expect(source).toContain('AUCTIONS_GUARD_REQUIRE_COVERAGE')
-		// The named out-of-scope file is documented, not silently ignored.
-		expect(source).toContain('src/lib/stores/nip60.ts')
+		// The out-of-scope files are named, not silently ignored: the wallet store
+		// directory, and the sanctioned first-party NDK wrapper.
+		expect(source).toContain('src/lib/stores/')
+		expect(source).toContain('src/lib/nostr/ndk-events.ts')
 	})
 
 	test('the guard source documents the #1252 allowlist', async () => {

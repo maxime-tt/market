@@ -17,13 +17,16 @@
 # set AUCTIONS_GUARD_REQUIRE_COVERAGE=0 for their throwaway repos; the real repo
 # always runs strict.
 #
-# Out of scope (named, not silently ignored): `src/lib/stores/nip60.ts` carries
-# 13 NDK-surface hits and is imported by nine auction production files, but it is
-# the shared NIP-60 wallet store (NDKCashuWallet / NDKZapper). The earlier ADR-0002
-# assignment of this file to the auctions team is SUPERSEDED: migrating the shared
-# NIP-60 wallet store is explicitly OUT OF SCOPE for the auctions-line migration
-# and is tracked separately. It is deliberately NOT in the scanned set and NOT in
-# the #1252 allowlist below.
+# Out of scope (named, not silently ignored): the wallet stores under
+# `src/lib/stores/` — `walletOps.ts` reads the active signer and the NDK bridge,
+# and `cashu.ts` is imported by every wallet consumer — carry NDK-surface hits of
+# their own, but they are not auction files: the auctions-line migration put its
+# relay I/O, signing and identity behind `src/lib/nostr/io.ts` instead. The
+# earlier ADR-0002 assignment of the shared wallet store to the auctions team is
+# SUPERSEDED: migrating it is explicitly OUT OF SCOPE for this migration and was
+# tracked separately. That store — the relay-backed NIP-60 wallet store — has
+# since been deleted with the wallet cut. These files are deliberately NOT in the
+# scanned set and NOT in the #1252 allowlist below.
 #
 # First-party wrapper: `src/lib/nostr/ndk-events.ts` re-exports NDK types and is
 # part of the seam, not an auction file — auction files may import it. Six scanned

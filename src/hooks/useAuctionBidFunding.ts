@@ -302,7 +302,7 @@ export const shouldPreservePendingBidSubmissionOnModalClose = (state: AuctionBid
 	CLOSE_PRESERVE_PENDING_SUBMISSION_STATES.has(state)
 
 /**
- * Whether the nip60 deposit store still has a Lightning payment in flight —
+ * Whether the cashu deposit store still has a Lightning payment in flight —
  * `pending` (invoice shown, payment unobservable by the app) or
  * `awaiting_confirmation_retry` (paid-or-unknown, mint confirmation timed
  * out once and is retryable).
