@@ -992,7 +992,72 @@ Four things this increment did **not** do, and they are the remaining work:
 Measured at `fb4140e3`: `bun run test:unit` 2,725 pass / 0 fail across 260 files; `tsc` **271**, a
 drop of 3 against the 274 baseline; boundary, format and `git diff --check` all clean.
 
+### 9.11 The store is deleted; the state is coco's and the rails are a sibling module (2026-10-22)
+
+`db69265a` moved the store's state and action surface off it, and `8ffc27e4` ran
+`git rm src/lib/stores/nip60.ts`. Both finish-line greps are empty:
+
+- `grep -rn "from '@nostr-dev-kit/wallet'" src/ platform/ sdk/ scripts/` — nothing.
+- `grep -rln "nip60Store\|nip60Actions" src/ platform/ sdk/` — nothing.
+
+**State.** `cashuStore` owns it: `walletSource` (the coco proof source), `balances`, `mints`,
+`status`, `pendingTokens`, `defaultMint`. Every consumer reads those; `state.wallet` /
+`state.mintBalances` are gone. One judgement call: `status` is now coco's own vocabulary, so the
+retired store's `no_wallet` state is gone — a wallet with a live coco manager but no mints reads
+`ready`, and the bid's mint selection refuses on _balance_ rather than on readiness. The refusal
+still happens, one step later; no money path loses a guard.
+
+**Pending tokens, merged WITH the key migration.** One list, one key. On first read the store
+drains `LEGACY_PENDING_TOKENS_KEY = 'nip60_pending_tokens'`, merges by token id, writes
+`cashu_pending_tokens`, and **removes** the legacy record so a token the user deleted cannot be
+resurrected by a later read. That literal lives in `@/lib/wallet/legacyStorage.ts` and the store
+names it through a nip60-free identifier — which is what keeps `walletMintAuthority.test.ts`'s
+"_the store module names no relay-backed wallet module_" assertion true (`cashu.ts` still contains
+no `/nip60/i`). The retired `defaultMint` key was deliberately **not** migrated: nothing but the
+dev faucet ever wrote it, and `cashu.ts` already records that decision.
+
+**Actions — a deviation from §9.8's plan, for a measured reason.** §9.8 said the action names fold
+into `cashuActions`. They went instead to a sibling, `@/lib/stores/walletOps` (export
+`walletOps`), which re-exports `cashuStore`, the reclaim helpers and `PendingToken` so
+`platform/…/products/bids.tsx` still reaches the store, the rails, `formatReclaimWaitSeconds` /
+`getAuctionReclaimReadyAt` and the pending-token type through **one** src/ import (the boundary
+guard only ratchets down). Why not `cashuActions`: `auctionBidPublishRetry.test.ts` isolates the
+lock surface with `mock.module()`, and bun applies module mocks process-wide for a whole run —
+mocking `@/lib/stores/cashu` would replace the store that every deposit, mint-authority and
+adapter test in the same run imports. A sibling keeps the mock pointed at the same
+narrowly-consumed module it pointed at before the cut. For the same reason the names that would
+collide on the store object stay distinct: `initialize` (coco's init vs the wallet bring-up),
+`reset`, and `reclaimToken` — the auction reclaim is **not** the generic send-reclaim.
+
+**The dev bridges keep their names.** `window.__nip60` / `window.__nip60Wallet` are still written,
+from `@/lib/wallet/devWallet`'s `isWalletDevModeEnabled` gate; the e2e specs read them by name and
+cannot be run here. `isNip60WalletDevModeEnabled` / `NIP60_DEV_TEST_MINTS` became
+`isWalletDevModeEnabled` / `WALLET_DEV_TEST_MINTS` in that module. The component name
+(`Nip60Wallet`) and the SDK port names (`createNip60WalletPort`, provider `'nip60'`) are untouched:
+they name a component and a protocol, not the retired store.
+
+**The guard moved with the file.** `scripts/check-auctions-ndk-surface.sh`'s out-of-scope note no
+longer names the deleted path — it names the wallet store directory and the sanctioned
+`src/lib/nostr/ndk-events.ts` wrapper — and
+`src/lib/__tests__/auctions-ndk-surface-guard.test.ts` moved its assertion in the SAME commit, so
+the "named, not silently ignored" coverage note is still pinned rather than dropped.
+
+Measured at `db69265a` and `8ffc27e4`: `bun run test:unit` **2,725 pass / 0 fail** across 260
+files (7,546 expects); `tsc` **271** at both — the deletion did **not** lower it, because the
+deleted file carried no errors at this HEAD (so 271 stands, measured, not assumed); boundary,
+format and `git diff --check` clean at both.
+
+**Still open, unchanged by this cut:** `zapWithNutzap` still rides `NDKZapper` for the protocol
+half (only its `cashuPay` leg is local); the `@cashu/cashu-ts` v5 upgrade (B2a) is still blocked on
+the dependency line; and the deliberate loss ADR-0010's amendment records — no relay rebuild of
+proofs, mints or pending tokens, a second device starts empty — stands.
+
 ### What B2 will do to the surface you consume
+
+> **Landed — see §9.11.** This section was the plan; the cut shipped in `db69265a`/`8ffc27e4`.
+> Two things below differ from what shipped: the action surface went to the sibling
+> `@/lib/stores/walletOps` (`walletOps`) rather than folding names onto `cashuActions` (reason in
+> §9.11), and the `hasNip60`/`onPayNip60` rename below did ship, in this increment.
 
 - `src/lib/stores/nip60.ts` (2,993 lines, kind-17375/7375/7376 relay wallet state) is
   **deleted**. Its state fields and action names are folded into
@@ -1064,3 +1129,9 @@ drop of 3 against the 274 baseline; boundary, format and `git diff --check` all 
   fix is a measured 28-file migration in the auction money paths. Verified by reading the
   published tarballs' type definitions and by running the gates, not from documentation. **No §5
   props contract changed**, so nothing you have written is affected.
+- **The store is deleted (`db69265a`, `8ffc27e4`).** §9 gains §9.11; §9.8's plan section carries a
+  "landed" pointer with its two deltas. The wallet state is `cashuStore`'s, the action surface is
+  the sibling `@/lib/stores/walletOps`, and `src/lib/stores/nip60.ts` is gone. `tsc` did **not**
+  drop (271 at both commits — the deleted file carried no errors at this HEAD). **No §5 props
+  contract changed** beyond the `hasNip60` → `hasCashuWallet` / `onPayNip60` → `onPayCashuWallet`
+  rename, which §9.8 already assigned to this lane and which landed in the same increment.
