@@ -894,6 +894,64 @@ Proposed order, cheapest-and-safest first: (1) the three wallet-op modals, (2) t
 after the version bump — then delete `nip60.ts` and retarget the residue (`src/lib/wallet/nip60.test.ts`
 becomes the wallet suite).
 
+### 9.9 The wallet lifecycle does NOT need the version bump — it needs the B3 migration (2026-10-22)
+
+§9.8 called the re-homing of `initialize`/`reset` and the wallet lifecycle "the B2a/B3 work, and
+the real gate". Reading the pinned coco's public surface corrects that in one direction and
+worsens it in another: the pin is not what blocks it, and what blocks it is bigger than a bump.
+
+**The pin is not the blocker.** `coco-cashu-core@1.0.0-rc11`'s public surface does include a
+proof read and a proof write — not on `WalletApi` (receive/send/getBalances/restore only), but on
+the repositories the app itself constructs and hands to `initializeCoco`:
+
+```
+IndexedDbRepositories.proofRepository: ProofRepository      (readonly, public)
+  saveProofs(mintUrl, proofs) / getReadyProofs(mintUrl) / getAllReadyProofs()
+  setProofState(mintUrl, secrets, state) / deleteProofs(mintUrl, secrets)
+```
+
+That is the shape `WalletProofSource` (`state.getProofs` / `state.dump`) and `AuctionFundsWallet`
+(`state.update({ store, mint, destroy })`) need — a mapping, not a missing capability:
+`getReadyProofs` is the spendable read; `saveProofs` + `setProofState('spent')` / `deleteProofs`
+is the write-and-destroy. And the P2PK lock never needed coco's send: `lockAuctionBidProofs` is a
+cashu-ts `swap` over a `CashuWallet` that `createCashuWalletForMint` builds from the mint URL
+alone. The rest of the lifecycle already has a pin counterpart: the deposit session is coco
+(part 14), melt is `quotes.createMeltQuote` + `payMeltQuote` (already ported in `cashu.ts`), the
+mint list is `manager.mint`, and the wallet keypair is `walletKeys`. (`NDKCashuDeposit` is
+imported at line 53 and never used at all.)
+
+So nothing in the lifecycle needs `@cashu/coco-core@2.0.0`. §9.1's own argument runs the other
+way: the bump cannot be green while `@nostr-dev-kit/wallet` is imported, so removing the import
+is the _precondition_ for the bump, and the pin is enough to remove it.
+
+**What actually blocks it is scope, and the scope is B3.** Re-homing the lifecycle is not a move;
+it is deleting the relay-event lifecycle and retargeting ~30 `state.wallet` reads:
+
+- lifecycle: `NDKCashuWallet.from` / `new` / `.create`, `wallet.start({ pubkey })` (the kind-7375
+  relay token subscription), `wallet.on('status_changed')` + `NDKWalletStatus`,
+  `wallet.publish()` (the kind-17375 event), `wallet.stop()` — deleted, not ported: there is no
+  relay wallet to start, status, or publish.
+- reads/writes: `wallet.state.getProofs`/`dump`/`update` → the proofRepository adapter above;
+  `wallet.privkeys` / `getP2pk()` / privkey count → `walletKeys`; `wallet.mints` /
+  `mintBalances` / `cashuWallets` → `manager.mint` + `getBalances`; `wallet.lnPay` → coco melt.
+- consumers: `src/lib/stores/ndk.ts` (`initialize`/`reset`), `Nip60Wallet.tsx` (the mint
+  surface), `ZapDialog.tsx` (through `src/lib/wallet/nutzap.ts`, whose proof source is the
+  adapter above), and all seven store test files, each injecting an `NDKCashuWallet`-shaped mock
+  that would need a manager-shaped one.
+
+That is a wave, not an increment, and its money paths change semantics (a proof write becomes
+`saveProofs` + a state transition; the post-lock `wallet.publish()` becomes a no-op; `lnPay`
+becomes a melt quote). A half-done version leaves one proof store disagreeing with another —
+the exact failure mode this migration exists to remove. It also lands the deliberate loss, which
+has to be written where the cut happens: relay recovery of wallet state after a device change
+goes away, so a new device starts empty. No ADR authorises that cut today (ADR-0002 declares
+`nip60.ts` out of scope; ADR-0011 cites it as the DLEQ fail-closed lock path).
+
+**Boundary at the end of this stretch:** (a) the auction host, (b) the deposit session and
+(c) the NIP-61 module have landed; (d) is scoped, evidenced and NOT started. `nip60.ts` — 2,340
+lines at `bd2c1a7d`, 1,871 after (a)–(c) — still stands, and `@nostr-dev-kit/wallet` is still
+imported at line 53 for the lifecycle alone.
+
 ### What B2 will do to the surface you consume
 
 - `src/lib/stores/nip60.ts` (2,993 lines, kind-17375/7375/7376 relay wallet state) is
