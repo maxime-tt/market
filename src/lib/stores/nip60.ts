@@ -1,10 +1,12 @@
 import {
 	getMintHostname,
-	getProofsForMint,
 	getSpendableProofsForMint,
 	loadUserData,
+	receiveTokenIntoWallet,
+	receiveTokenWithPrivkey,
 	saveUserData,
 	type AuctionBidPendingTokenContext,
+	type AuctionFundsMintAccess,
 	type PendingToken,
 	type PendingTokenContext,
 } from '@/lib/wallet'
@@ -867,61 +869,14 @@ const getAuctionHdAccountFromWallet = async (wallet: NDKCashuWallet): Promise<HD
 	return getAuctionHdAccountFromWalletKeys(walletP2pk, walletPrivkey)
 }
 
-const receiveTokenIntoWallet = async (
-	wallet: NDKCashuWallet,
-	token: string,
-	options?: {
-		privkey?: string
-		/**
-		 * Caller-supplied mint URL. When provided we skip the top-level
-		 * `getDecodedToken(token)` call entirely. Necessary when the
-		 * token carries NUT-2 v2 short keyset IDs (cashu-ts ≥2.x default)
-		 * — without a keyset map cashu-ts cannot decode and the call
-		 * would throw "A short keyset ID v2 was encountered, but got no
-		 * keysets to map it to." The seller settlement path knows the
-		 * mint from the bid event, so it can pass it in.
-		 */
-		mintUrl?: string
-	},
-): Promise<{ amount: number; mintUrl: string }> => {
-	// Resolve mint URL up front. Prefer the caller's explicit value to
-	// avoid the v2-short-ID decode trap (see the option doc above). Fall
-	// back to decoding the token only if no override was provided.
-	let mintUrl: string
-	if (options?.mintUrl) {
-		mintUrl = normalizeMintUrl(options.mintUrl)
-	} else {
-		mintUrl = normalizeMintUrl(getDecodedToken(token).mint)
-	}
-	const proofsWeHave = getProofsForMint(wallet, mintUrl)
-	const { cashuWallet, keysetId } = await createCashuWalletForMint(mintUrl)
-	try {
-		const receivedProofs = await cashuWallet.receive(token, {
-			proofsWeHave,
-			...(options?.privkey ? { privkey: options.privkey } : {}),
-			...(keysetId ? { keysetId } : {}),
-		})
-
-		await wallet.state.update({
-			store: receivedProofs,
-			mint: mintUrl,
-		})
-
-		return {
-			amount: receivedProofs.reduce((sum, proof) => sum + proof.amount, 0),
-			mintUrl,
-		}
-	} catch (error) {
-		throw error
-	}
+/**
+ * The mint/keyset port the extracted receive needs. It is the store's own
+ * `createCashuWalletForMint`, with its dev-test-mint keyset fallback intact, injected so
+ * `@/lib/wallet/auctionFunds` never reaches back into this store for a mint.
+ */
+const auctionFundsMintAccess: AuctionFundsMintAccess = {
+	cashuWalletForMint: (mintUrl) => createCashuWalletForMint(mintUrl),
 }
-
-const receiveTokenWithPrivkey = async (
-	wallet: NDKCashuWallet,
-	token: string,
-	privkey: string,
-	mintUrl?: string,
-): Promise<{ amount: number; mintUrl: string }> => receiveTokenIntoWallet(wallet, token, { privkey, mintUrl })
 
 /**
  * Select proofs from available proofs to meet the target amount.
@@ -2611,7 +2566,7 @@ export const nip60Actions = {
 		}
 
 		try {
-			await receiveTokenIntoWallet(wallet, token)
+			await receiveTokenIntoWallet({ wallet, mint: auctionFundsMintAccess, token })
 
 			// Refresh to update balance
 			await nip60Actions.refresh()
@@ -2642,7 +2597,7 @@ export const nip60Actions = {
 		}
 
 		try {
-			await receiveTokenWithPrivkey(wallet, token, privkey, mintUrl)
+			await receiveTokenWithPrivkey({ wallet, mint: auctionFundsMintAccess, token, privkey, mintUrl })
 			await nip60Actions.refresh()
 			return true
 		} catch (err) {
@@ -2785,11 +2740,17 @@ export const nip60Actions = {
 				{
 					reclaim: async () => {
 						if (refundPrivkey) {
-							await receiveTokenWithPrivkey(wallet, pendingToken.token, refundPrivkey, pendingToken.mintUrl)
+							await receiveTokenWithPrivkey({
+								wallet,
+								mint: auctionFundsMintAccess,
+								token: pendingToken.token,
+								privkey: refundPrivkey,
+								mintUrl: pendingToken.mintUrl,
+							})
 						} else {
 							// Non-auction pending token (e.g. a regular sendEcash token
 							// the recipient hasn't claimed). Best-effort unsigned receive.
-							await receiveTokenIntoWallet(wallet, pendingToken.token)
+							await receiveTokenIntoWallet({ wallet, mint: auctionFundsMintAccess, token: pendingToken.token })
 						}
 					},
 				},

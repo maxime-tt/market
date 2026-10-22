@@ -4,6 +4,10 @@ export type { ProofInfo, PendingToken, PendingTokenContext, AuctionBidPendingTok
 // Proof utilities
 export { extractProofsByMint, getProofsForMint, getSpendableProofsForMint } from './proofs'
 
+// The auction P2PK spend (the leg coco cannot do), behind injected ports
+export { receiveTokenIntoWallet, receiveTokenWithPrivkey } from './auctionFunds'
+export type { AuctionFundsMintAccess, AuctionFundsWallet, ReceiveTokenDeps } from './auctionFunds'
+
 // The wallet keypair's local home (sealed at rest)
 export { SealedWalletKeyStore, WalletKeySealerUnavailableError, WalletKeyStoreError, createSignerWalletKeySealer } from './walletKeyStore'
 export type { WalletKeySealer, WalletKeySigner, WalletKeyStorage, WalletKeyStoreReason } from './walletKeyStore'
