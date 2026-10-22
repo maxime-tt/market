@@ -14,6 +14,7 @@ describe('getAuctionStatusTone', () => {
 	test('maps the lifecycle status to a semantic tone', () => {
 		expect(getAuctionStatusTone('Live')).toBe('success')
 		expect(getAuctionStatusTone('Scheduled')).toBe('info')
+		expect(getAuctionStatusTone('Settlement')).toBe('info')
 		expect(getAuctionStatusTone('Ended')).toBe('neutral')
 	})
 

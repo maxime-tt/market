@@ -58,6 +58,19 @@ test('renders the auction detail and party cards', async ({ page }) => {
 	await expect(party.locator('[data-slot="auction-party-card"]')).toHaveCount(2)
 })
 
+test('renders the activity summary with a new-items highlight', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const row = page.getByTestId('widget-AuctionActivityRow')
+	await expect(row.locator('[data-slot="auction-activity-row"]')).toHaveCount(3)
+	// Plural at three, singular at one, plural at zero.
+	await expect(row).toContainText('3 Bids')
+	await expect(row).toContainText('1 Comment')
+	await expect(row).toContainText('0 Messages')
+	// Only the first row carries unseen items.
+	await expect(row.getByText('1 New')).toHaveCount(1)
+})
+
 test('renders the technical row with a copy control only when copyable', async ({ page }) => {
 	await page.goto('/?library=auction')
 

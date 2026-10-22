@@ -2,8 +2,9 @@ import { AuctionCard } from '@/components/AuctionCard'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
-import { Badge } from '@ui/primitives/badge'
 import { AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
+import { StatusBadge } from '@ui/shared/status-badge'
+import { formatSatsWithUnit } from '@ui/utils/format'
 import { DetailField } from '@ui/shared/detail-field'
 import { EmptyState } from '@ui/shared/empty-state'
 import { truncateMiddle } from '@ui/shared/truncated-text'
@@ -99,10 +100,6 @@ import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, Parsed
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
 import AuctionTimelineChart from '@/components/AuctionTimelineChart'
 import { AuctionBidsContainer } from '@/components/AuctionBidsContainer'
-
-function formatSats(value: number): string {
-	return `${value.toLocaleString()} sats`
-}
 
 function formatMaybeDate(timestamp: number): string {
 	if (!timestamp) return 'N/A'
@@ -766,7 +763,7 @@ function AuctionDetailRoute() {
 							<div className="grid grid-cols-2 gap-3 text-sm">
 								<div className="bg-black/35 border border-white/20 rounded p-2">
 									<div className="text-white/70 text-xs">{ended ? 'Final price' : 'Current price'}</div>
-									<div className="font-semibold">{currentPrice.toLocaleString()} sats</div>
+									<div className="font-semibold">{formatSatsWithUnit(currentPrice)}</div>
 								</div>
 								<div className="bg-black/35 border border-white/20 rounded p-2">
 									<div className="text-white/70 text-xs">Bids</div>
@@ -981,9 +978,7 @@ function AuctionDetailRoute() {
 									<h2 className="text-xl font-semibold text-foreground">Participants</h2>
 									<p className="mt-1 text-sm text-muted-foreground">Read-only identities visible from this auction and its visible bids.</p>
 								</div>
-								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
-									{bidderSummaries.length} visible {bidderSummaries.length === 1 ? 'bidder' : 'bidders'}
-								</Badge>
+								<StatusBadge status={`${bidderSummaries.length} visible ${bidderSummaries.length === 1 ? 'bidder' : 'bidders'}`} />
 							</div>
 
 							<div className="grid gap-4 lg:grid-cols-2">
@@ -1004,7 +999,7 @@ function AuctionDetailRoute() {
 											<DetailField
 												className="border-b border-border py-3 last:border-b-0"
 												label="Highest visible bid"
-												value={formatSats(getBidAmount(topBidOverall))}
+												value={formatSatsWithUnit(getBidAmount(topBidOverall))}
 											/>
 										</div>
 									) : (
@@ -1030,7 +1025,7 @@ function AuctionDetailRoute() {
 											<DetailField
 												className="border-b border-border py-3 last:border-b-0"
 												label="Final amount"
-												value={formatSats(settlementFinalAmount)}
+												value={formatSatsWithUnit(settlementFinalAmount)}
 											/>
 										</div>
 									)}
@@ -1058,16 +1053,8 @@ function AuctionDetailRoute() {
 														<UserCard pubkey={summary.pubkey} />
 													</div>
 													<div className="flex flex-wrap justify-end gap-2">
-														{summary.isCurrentLeader && (
-															<Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
-																Current leading bidder
-															</Badge>
-														)}
-														{summary.isSettlementWinner && (
-															<Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
-																Settlement winner
-															</Badge>
-														)}
+														{summary.isCurrentLeader && <StatusBadge status="Current leading bidder" tone="success" />}
+														{summary.isSettlementWinner && <StatusBadge status="Settlement winner" tone="success" />}
 													</div>
 												</div>
 
@@ -1075,7 +1062,7 @@ function AuctionDetailRoute() {
 													<DetailField
 														className="border-b border-border py-3 last:border-b-0"
 														label="Highest visible bid"
-														value={formatSats(summary.highestVisibleBidAmount)}
+														value={formatSatsWithUnit(summary.highestVisibleBidAmount)}
 													/>
 													<DetailField
 														className="border-b border-border py-3 last:border-b-0"

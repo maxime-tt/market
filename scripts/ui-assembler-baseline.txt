@@ -4,7 +4,7 @@
 # This is a ratcheting migration baseline: the guard fails on any INCREASE.
 # Lower a row when a migration removes a violation; remove the row at zero.
 platform/web/routes/$vanityName.tsx|inline-component|1
-platform/web/routes/auctions.$auctionId.tsx|primitive-import|6
+platform/web/routes/auctions.$auctionId.tsx|primitive-import|5
 platform/web/routes/auctions.$auctionId.tsx|inline-component|1
 platform/web/routes/auctions.index.tsx|primitive-import|2
 platform/web/routes/auctions.index.tsx|inline-component|1
@@ -45,7 +45,7 @@ platform/web/routes/_dashboard-layout/dashboard/orders/$orderId.tsx|inline-compo
 platform/web/routes/_dashboard-layout/dashboard/products/auctions.$auctionId.tsx|primitive-import|4
 platform/web/routes/_dashboard-layout/dashboard/products/auctions.$auctionId.tsx|inline-component|1
 platform/web/routes/_dashboard-layout/dashboard/products/auctions.tsx|primitive-import|4
-platform/web/routes/_dashboard-layout/dashboard/products/auctions.tsx|inline-component|4
+platform/web/routes/_dashboard-layout/dashboard/products/auctions.tsx|inline-component|3
 platform/web/routes/_dashboard-layout/dashboard/products/bids.tsx|primitive-import|2
 platform/web/routes/_dashboard-layout/dashboard/products/bids.tsx|inline-component|1
 platform/web/routes/_dashboard-layout/dashboard/products/collections/$collectionId.tsx|inline-component|1

@@ -1,3 +1,4 @@
+import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import {
 	AuctionDetailCard,
 	AuctionPartyCard,
@@ -70,6 +71,16 @@ export const auction: WidgetLibrary = {
 				<div className="grid max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
 					<AuctionPartyCard label="Seller" helper="You" identity={<SamplePartyIdentity />} />
 					<AuctionPartyCard label="Winner" identity={<SamplePartyIdentity />} />
+				</div>
+			),
+		},
+		{
+			name: 'AuctionActivityRow',
+			render: () => (
+				<div className="max-w-xs space-y-3 rounded-xl border p-5">
+					<AuctionActivityRow header="Bids" unit="Bid" count={3} newCount={1} />
+					<AuctionActivityRow header="Comments" unit="Comment" count={1} newCount={0} />
+					<AuctionActivityRow header="Live Chat" unit="Message" count={0} newCount={0} />
 				</div>
 			),
 		},

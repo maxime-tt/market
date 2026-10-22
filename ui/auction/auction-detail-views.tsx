@@ -31,10 +31,12 @@ import { cn } from '../utils/cn'
 const AUCTION_STATUS_TONE: Record<string, StatusTone> = {
 	Live: 'success',
 	Scheduled: 'info',
+	/** Bidding closed, settlement still open. */
+	Settlement: 'info',
 	Ended: 'neutral',
 }
 
-/** Auction lifecycle status (`Live` / `Scheduled` / `Ended`) -> semantic tone. */
+/** Auction lifecycle status (`Live` / `Scheduled` / `Settlement` / `Ended`) -> semantic tone. */
 export function getAuctionStatusTone(status: string): StatusTone {
 	return AUCTION_STATUS_TONE[status] ?? 'neutral'
 }

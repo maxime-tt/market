@@ -38,6 +38,9 @@ never acquire it.
   - `AuctionTechnicalRow` — a labelled technical value with an optional copy
     control. The control is `shared/copy-button`; a failed write is reported
     through `onCopyError`, so the host keeps its own error surface.
+- `auction-overview-views` — the dashboard list surface's presentational
+  pieces. Today that is `AuctionActivityRow` (one line of the bids / comments /
+  live-chat activity summary, with the "N New" highlight).
 
 ## What does not
 
