@@ -952,6 +952,46 @@ goes away, so a new device starts empty. No ADR authorises that cut today (ADR-0
 lines at `bd2c1a7d`, 1,871 after (a)–(c) — still stands, and `@nostr-dev-kit/wallet` is still
 imported at line 53 for the lifecycle alone.
 
+### 9.10 The relay wallet lifecycle has landed; `@nostr-dev-kit/wallet` has no importer left (2026-10-22)
+
+`fb4140e3` took §9.9's item 1 and did it **without** the version bump, exactly as §9.9 predicted.
+`src/lib/wallet/cashuWalletSource.ts` puts coco's `IndexedDbRepositories.proofRepository`
+(`saveProofs` / `getReadyProofs` / `deleteProofs`) behind the synchronous read/write shape the
+rails are written against, with a per-mint mirror as a **read cache** — every write goes to coco
+first. `nip60.ts` is 1,229 lines (was 1,871): the lifecycle is deleted, not ported.
+
+**The objective is already met.** `grep -rn "from '@nostr-dev-kit/wallet'" src/ platform/ sdk/
+scripts/` returns **nothing** — `nip60.ts` was the last importer, and its import is gone. The
+cashu-ts v5 bump is unblocked on this axis.
+
+Four things this increment did **not** do, and they are the remaining work:
+
+1. **The store is still named `nip60.ts` and still owns the projection.** `initialize`, `reset`,
+   `refresh`, the pending-token bookkeeping, the four auction hosts and the dev helpers are still
+   there; the _name_ and the file are the residue, not a second authority. Nothing in it reads a
+   relay-backed wallet event any more.
+2. **`zapWithNutzap` is still on `NDKZapper`,** with only its `cashuPay` leg replaced by a local
+   helper over the coco source. That helper reproduces the relay wallet's behaviour exactly:
+   mint choice, `pubkey` passed through **verbatim** (no `02` prefixing — `NDKZapper` supplies it),
+   and `proofTags` NOT written into the secret (cashu-ts 2.9's `SendOptions` has no `tags`; the
+   relay wallet's `tags` option was ignored too). Wiring `src/lib/wallet/nutzap.ts` in as the
+   sender instead of NDKZapper is still open, and it is a protocol decision, not a rename.
+3. **The ADR.** See **ADR-0010, "Amendment — the relay wallet lifecycle cut"**: it records the
+   cut, reconciles ADR-0010 §8's `KEEP_RUNTIME` sentence (now true only of the one-time key
+   import) and §9's multi-device requirement (unmet: a second device starts empty), and names the
+   deliberate loss — relays no longer rebuild proofs, the mint list or pending tokens after a
+   device change, and per-bid refund keys never leave the device that made them.
+4. **The dead surface deleted with the lifecycle** had no consumer: `createWallet`, `publishWallet`,
+   `getWallet`, `removeMint`, `sendEcash`, `receiveEcash`, `withdrawLightning`,
+   `payLightningInvoice`, `consolidateProofs`, `runAutoCleanup`, `getWalletPrivkey`,
+   `ensureWalletPrivkey`, `getWalletP2pk`, `getWalletCashuP2pk`. `getWalletPrivkey` survives as a
+   _private_ helper over the sealed key store, because the reclaim host's legacy refund-key
+   fallback is a money path — it kept its meaning ("the pair the wallet itself holds") and now
+   answers from `walletKeys` instead of the relay wallet's `privkeys` map.
+
+Measured at `fb4140e3`: `bun run test:unit` 2,725 pass / 0 fail across 260 files; `tsc` **271**, a
+drop of 3 against the 274 baseline; boundary, format and `git diff --check` all clean.
+
 ### What B2 will do to the surface you consume
 
 - `src/lib/stores/nip60.ts` (2,993 lines, kind-17375/7375/7376 relay wallet state) is

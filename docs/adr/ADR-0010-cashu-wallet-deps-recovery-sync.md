@@ -388,6 +388,16 @@ existing user state. It cannot be deleted, demoted to import-only, or described
 as optional at runtime before migration and legacy workflow drainage are
 complete.
 
+> **Conflict with current code (2026-10-22) — see the amendment at the end of
+> this ADR.** The relay wallet _lifecycle_ has since been cut: NIP-60 is now
+> read exactly once, by the one-time wallet-key migration, and no longer holds
+> proofs, the mint list or pending tokens at runtime. That is the `KEEP_INTEROP`
+> shape below rather than `KEEP_RUNTIME`, reached without the Coco v2 migration
+> this ADR conditions on. The cut is recorded, with its deliberate loss, in
+> **Amendment — the relay wallet lifecycle cut**, and this section's
+> `KEEP_RUNTIME` claim is superseded for the lifecycle by that amendment while
+> this ADR remains **Proposed**.
+
 ### Target state: `KEEP_INTEROP`
 
 After Coco becomes canonical, NIP-60 may remain for compatibility,
@@ -834,3 +844,101 @@ If the generic wallet-engine invariants cannot be delivered upstream without a
 permanent Plebeian fork:
 
 > **Coco adoption becomes NO-GO.**
+
+---
+
+# Amendment — the relay wallet lifecycle cut
+
+## Status of this amendment
+
+**Decision delta, recorded against a Proposed ADR. It does not accept ADR-0010,
+and it does not put the cut beyond review: it records that the cut has been
+taken, what it removes, and what it gives up.**
+
+ADR-0010's own status is unchanged: **Proposed — conditional adoption**. Nothing
+below is an approval to ship Coco v2 or to skip the acceptance gates above.
+
+## What the code does now
+
+Taken on `inc/wave-b` (`fb4140e3`), in `src/lib/stores/nip60.ts` and
+`src/lib/wallet/cashuWalletSource.ts`:
+
+- The relay wallet **lifecycle** is deleted, not ported: no kind-17375 fetch, no
+  `NDKCashuWallet.from` / `new` / `.create`, no `wallet.start({ pubkey })`
+  (kind-7375 token subscription), no `wallet.on('status_changed')` /
+  `NDKWalletStatus`, no `wallet.publish()` (kind-17375), no `wallet.stop()`.
+- Proofs, the mint list and balances are coco's. The auction rails read them
+  through coco's `IndexedDbRepositories.proofRepository`
+  (`saveProofs` / `getReadyProofs` / `deleteProofs`) behind a per-mint mirror
+  that answers the synchronous read the rails are written against. The mirror is
+  a read cache: every write goes to coco first.
+- `@nostr-dev-kit/wallet` is no longer imported anywhere under `src/`,
+  `platform/`, `sdk/` or `scripts/`. This is the precondition §9.1 of the wave-B
+  handover names for the `@cashu/cashu-ts` v5 upgrade, and it is now met.
+- NIP-60 is **import-only** in practice: the owner's latest kind-17375 event is
+  read exactly once, by the one-time wallet-key migration
+  (`src/lib/wallet/walletKeyMigration.ts`), to recover the wallet's P2PK pair.
+  Nothing else reads a relay-backed wallet event.
+
+## §8 reconciliation
+
+§8's `KEEP_RUNTIME` classification ("the present application still depends on
+NIP-60 for working wallet paths and existing user state … cannot be deleted,
+demoted to import-only, or described as optional at runtime before migration and
+legacy workflow drainage are complete") no longer describes the lifecycle. For
+the lifecycle this ADR is already at its `KEEP_INTEROP` shape; the KEEP_RUNTIME
+sentence remains true only of the one-time key import. This amendment is that
+reconciliation, not a silent divergence.
+
+## The deliberate loss — recorded, not discovered
+
+**Relay recovery of wallet state after a device change goes away.** Proofs, the
+mint list and pending tokens now live in exactly two local places:
+
+- coco's IndexedDB — proofs, mints, quotes, history;
+- `localStorage` — pending tokens, bidder records and the pre-lock recovery
+  records, and the wallet-key store.
+
+A new device with a restored signer therefore starts **empty**: no proofs, no
+mint list, no pending tokens. Nothing on the relay can rebuild them, because
+nothing writes them there any more. Two consequences are named explicitly rather
+than left to be found:
+
+1. **Locked auction collateral is not recoverable on another device.** A bid
+   leg's refund private key is generated per bid and stored only in that
+   device's `localStorage`. The reclaim path already refuses with "This device
+   does not hold the refund private key for this bid"; this cut is what makes
+   that refusal stand for every device but the one that placed the bid. Losing
+   the device means the sats stay at the mint until the refund timelock, and no
+   client can sweep them.
+2. **The wallet's P2PK pair does not move** — it is recovered from the kind-17375
+   event by the one-time migration — so auction addresses (and the auction HD
+   root derived from that pair) stay put across the cut. The pair is the one
+   thing still recoverable from the relay while the event exists.
+
+## §9 reconciliation (replication and multi-device sync)
+
+§9 selects **no** replication transport on purpose, and requires only that "the
+local durable operation engine remains crash-safe when replication is
+unavailable". That still holds. What does **not** hold is §9's multi-device
+requirement: with the cut taken and no replication transport yet, a second
+device cannot see, mutate or recover a first device's wallet at all. §9's
+"Remote replication state ≠ local spendability authority" is satisfied trivially,
+by there being no remote state.
+
+This makes ADR-0010's recovery work **load-bearing rather than aspirational**: the
+user-controlled disaster-recovery / export path §7 step 5 requires _while locks
+are active_ is now the only thing that could recover locked collateral from a
+lost device. This amendment does not select that path, and does not claim it
+exists.
+
+## What this amendment does not decide
+
+- Whether Plebeian publishes NIP-60 state by default (§8's separate product
+  decision) — untouched.
+- Which replication transport, if any, lands (§9) — untouched.
+- The recovery/export surface, and its scope for in-flight auction locks — left
+  open, and named above as the thing that must land before the loss is
+  survivable.
+- Any acceptance gate above. The cut is a scope decision taken on a transitional
+  store; it is not evidence that Coco v2 passes G1–G10 or T1–T8.
