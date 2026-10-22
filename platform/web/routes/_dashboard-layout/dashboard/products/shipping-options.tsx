@@ -4,7 +4,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primiti
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { Spinner } from '@ui/primitives/spinner'
 import { Textarea } from '@ui/primitives/textarea'
 import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
 import { validateShippingForm } from '@sdk/commerce/shipping'
@@ -1102,8 +1101,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 							</Button>
 						)}
 
-						<Button type="submit" disabled={isSubmitting} data-testid="shipping-submit-button">
-							{isSubmitting && <Spinner />}
+						<Button type="submit" pending={isSubmitting} data-testid="shipping-submit-button">
 							{isEditing ? 'Update Shipping' : 'Publish Shipping'}
 						</Button>
 					</div>

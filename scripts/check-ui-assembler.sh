@@ -15,6 +15,7 @@
 # Usage:
 #   scripts/check-ui-assembler.sh            # check against baseline
 #   scripts/check-ui-assembler.sh --update   # rewrite baseline from current tree
+#   scripts/check-ui-assembler.sh --ratchet  # lower every improved row, keep header/order/zeros
 set -euo pipefail
 export LC_ALL=C
 
@@ -45,6 +46,38 @@ compute() {
 CURRENT="$(mktemp)"
 trap 'rm -f "$CURRENT"' EXIT
 compute "$CURRENT"
+
+# Lower-only ratchet: never raise a row, drop rows that reached zero, and keep
+# the header and the existing row order so the diff is only real improvements.
+if [[ "${1:-}" == "--ratchet" ]]; then
+	declare -A NOW=()
+	while IFS='|' read -r file rule count; do
+		[[ -z "$file" ]] && continue
+		NOW["$file|$rule"]="$count"
+	done < "$CURRENT"
+
+	RATCHETED="$(mktemp)"
+	trap 'rm -f "$CURRENT" "$RATCHETED"' EXIT
+	lowered=0
+	while IFS= read -r line; do
+		if [[ -z "$line" || "$line" == \#* ]]; then
+			printf '%s\n' "$line" >> "$RATCHETED"
+			continue
+		fi
+		key="${line%|*}"
+		count="${line##*|}"
+		now="${NOW["$key"]:-0}"
+		if (( now == 0 )); then
+			lowered=$((lowered + 1))
+			continue
+		fi
+		(( now < count )) && lowered=$((lowered + 1))
+		printf '%s|%s\n' "$key" "$now" >> "$RATCHETED"
+	done < "$BASELINE"
+	mv "$RATCHETED" "$BASELINE"
+	echo "Ratchet: $lowered row(s) lowered in scripts/ui-assembler-baseline.txt"
+	exit 0
+fi
 
 if [[ "${1:-}" == "--update" ]]; then
 	{

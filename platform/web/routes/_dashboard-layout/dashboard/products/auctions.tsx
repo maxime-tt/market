@@ -6,7 +6,6 @@ import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { Button } from '@ui/wrappers/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { Spinner } from '@ui/primitives/spinner'
 import { AuctionStatusBadge } from '@ui/auction/auction-detail-views'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import { EmptyState } from '@ui/shared/empty-state'
@@ -430,16 +429,10 @@ function AuctionListItem({
 						<Button
 							className="mt-auto w-full bg-neutral-800 text-white hover:bg-neutral-700 disabled:border disabled:border-zinc-300 disabled:bg-zinc-200 disabled:text-zinc-500"
 							onClick={onPublishSettlement}
-							disabled={!canPublishSettlementNow || isSettling}
+							disabled={!canPublishSettlementNow}
+							pending={isSettling}
 						>
-							{isSettling ? (
-								<>
-									<Spinner className="mr-2 h-3.5 w-3.5" />
-									Publishing…
-								</>
-							) : (
-								'Publish Settlement'
-							)}
+							{isSettling ? 'Publishing…' : 'Publish Settlement'}
 						</Button>
 					)}
 

@@ -2,12 +2,12 @@ import { ProfileWalletCheck } from '@/components/ProfileWalletCheck'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
 import { Button } from '@ui/wrappers/button'
+import { LoadingState } from '@ui/shared/loading-state'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@ui/primitives/card'
 import { Checkbox } from '@ui/primitives/checkbox'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { Spinner } from '@ui/primitives/spinner'
 import { WalletSetupGuide } from '@ui/components/WalletSetupGuide'
 import { PageHeader } from '@ui/layout/page-header'
 import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@/lib/constants'
@@ -677,10 +677,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 					{validationMessage && formState === 'idle' && <p className="text-red-500 text-sm">{validationMessage}</p>}
 
 					{formState !== 'idle' && (
-						<div className="flex items-center gap-2">
-							<Spinner />
-							<span className="text-sm">{formState === 'validating' ? 'Validating...' : 'Saving...'}</span>
-						</div>
+						<LoadingState compact className="justify-start py-0" label={formState === 'validating' ? 'Validating…' : 'Saving…'} />
 					)}
 
 					<div className="space-y-4">
@@ -719,8 +716,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 								</Button>
 							)}
 
-							<Button type="submit" disabled={formState !== 'idle'} data-testid="save-payment-button">
-								{formState === 'submitting' && <Spinner />}
+							<Button type="submit" disabled={formState !== 'idle'} pending={formState === 'submitting'} data-testid="save-payment-button">
 								{formState === 'validating' ? 'Validating...' : formState === 'submitting' ? 'Saving...' : isEditing ? 'Update' : 'Save'}
 							</Button>
 						</div>
