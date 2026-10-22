@@ -9,6 +9,11 @@ import { WalletSelector, type WalletOption } from '@/components/checkout/WalletS
 import { Button } from '@ui/primitives/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@ui/primitives/card'
 import { ScrollArea } from '@ui/primitives/scroll-area'
+import { NwcWalletStatusView } from '@ui/checkout/nwc-wallet-status-view'
+import { EmptyState } from '@ui/shared/empty-state'
+import { ErrorState } from '@ui/shared/error-state'
+import { LoadingState } from '@ui/shared/loading-state'
+import { Notice } from '@ui/shared/notice'
 import {
 	isValidDigitalDeliveryContact,
 	findNextActionableInvoiceIndex,
@@ -67,6 +72,8 @@ function RouteComponent() {
 	const [isDeliveryRequirementsLoading, setIsDeliveryRequirementsLoading] = useState(false)
 	const [deliveryRequirementsError, setDeliveryRequirementsError] = useState<string | null>(null)
 	const [partialOrderOutcome, setPartialOrderOutcome] = useState<Extract<SellerOrderPublishOutcome, { status: 'partial' }> | null>(null)
+	/** Last payment failure, kept on screen instead of only flashing a toast. */
+	const [paymentFailure, setPaymentFailure] = useState<string | null>(null)
 
 	// Ref to control PaymentContent
 	const paymentContentRef = useRef<PaymentContentRef>(null)
@@ -139,6 +146,8 @@ function RouteComponent() {
 
 		return hasValidWallets
 	}, [walletsInitialized, wallets])
+
+	const nwcWalletCount = useMemo(() => wallets.filter((wallet) => wallet.nwcUri && parseNwcUri(wallet.nwcUri)).length, [wallets])
 
 	// Get the first valid NWC wallet URI to pass to payment processors
 	const nwcWalletUri = useMemo(() => {
@@ -556,6 +565,7 @@ function RouteComponent() {
 	}
 
 	const handlePaymentComplete = async (invoiceId: string, preimage: string, skipAutoAdvance = false) => {
+		setPaymentFailure(null)
 		console.log(`🎯 handlePaymentComplete called:`, {
 			invoiceId,
 			preimagePreview: preimage.substring(0, 16) + '...',
@@ -598,6 +608,7 @@ function RouteComponent() {
 
 	const handlePaymentFailed = (invoiceId: string, error: string) => {
 		console.error(`Payment failed for invoice ${invoiceId}:`, error)
+		setPaymentFailure(error)
 
 		setInvoices((prev) =>
 			prev.map((invoice) => {
@@ -854,25 +865,22 @@ function RouteComponent() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [pendingContinueToPayment, user, isReconcilingRemoteCart])
 
-	const formatSats = (sats: number): string => {
-		return Math.round(sats).toLocaleString()
-	}
-
 	// When waiting for login, show a visual cue on the "Continue to Payment" button
 	const isAwaitingAuth = pendingContinueToPayment && !user
 
 	// Redirect to home if cart is empty (but allow complete step to show summary)
 	if (isCartEmpty && currentStep !== 'complete') {
 		return (
-			<div className="min-h-screen bg-gray-50 flex items-center justify-center">
-				<div className="max-w-md mx-auto text-center">
-					<h1 className="text-2xl font-bold text-gray-900 mb-4">Your cart is empty</h1>
-					<p className="text-gray-600 mb-6">Add some products to your cart before checking out.</p>
+			<EmptyState
+				className="min-h-screen justify-center bg-muted/40"
+				title="Your cart is empty"
+				description="Add some products to your cart before checking out."
+				action={
 					<Button onClick={goBackToShopping} className="btn-black">
 						Continue Shopping
 					</Button>
-				</div>
-			</div>
+				}
+			/>
 		)
 	}
 
@@ -880,7 +888,7 @@ function RouteComponent() {
 		<>
 			<div className="flex-grow flex flex-col">
 				{/* Fixed Progress Bar */}
-				<div className="sticky top-[8.5rem] lg:top-[5rem] z-20 bg-white border-b border-gray-200">
+				<div className="sticky top-[8.5rem] lg:top-[5rem] z-20 border-b border-border bg-card">
 					<CheckoutProgress
 						currentStepNumber={currentStepNumber}
 						totalSteps={totalSteps}
@@ -908,42 +916,20 @@ function RouteComponent() {
 							{mobileOrderSummaryOpen && (
 								<CardContent>
 									{currentStep === 'payment' && isGeneratingInvoices ? (
-										<div className="flex items-center justify-center py-8">
-											<div className="text-center">
-												<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full mx-auto mb-4" />
-												<p className="text-gray-600">Loading payment details...</p>
-											</div>
-										</div>
+										<LoadingState className="py-8" label="Loading payment details…" />
 									) : currentStep === 'payment' && invoices.length > 0 ? (
 										<>
 											{/* NWC Status Indicator */}
-											<div className="mb-4 p-3 bg-gray-50 rounded-lg border">
-												<div className="flex items-center justify-between text-sm">
-													<span className="font-medium text-gray-700">Wallet Status:</span>
-													<div className="flex items-center gap-2">
-														{nwcEnabled ? (
-															<>
-																<div className="w-2 h-2 bg-green-500 rounded-full" />
-																<span className="text-green-700 font-medium">
-																	{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length} NWC wallet
-																	{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length !== 1 ? 's' : ''} connected
-																</span>
-															</>
-														) : (
-															<>
-																<div className="w-2 h-2 bg-gray-400 rounded-full" />
-																<span className="text-gray-600">
-																	Fast Payments available with NWC, setup in{' '}
-																	<Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">
-																		settings
-																	</Link>
-																</span>
-															</>
-														)}
-													</div>
-												</div>
-												{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Use NWC to action all payments at once</p>}
-											</div>
+											<NwcWalletStatusView
+												className="mb-4"
+												connected={nwcEnabled}
+												connectedWalletCount={nwcWalletCount}
+												settingsLink={
+													<Link to="/dashboard/account/making-payments" className="text-primary hover:underline">
+														settings
+													</Link>
+												}
+											/>
 
 											<PaymentSummary invoices={invoices} currentIndex={safeInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
 										</>
@@ -1009,13 +995,12 @@ function RouteComponent() {
 									<div className="h-full flex flex-col">
 										<div className="flex-1 overflow-y-auto">
 											{partialOrderOutcome && (
-												<div role="alert" className="mb-4 rounded-md border border-amber-500 bg-amber-50 p-4 text-sm text-amber-950">
-													<p className="font-semibold">Some seller orders were published, but checkout did not finish.</p>
+												<Notice className="mb-4" tone="warning" title="Some seller orders were published, but checkout did not finish.">
 													<p>Do not retry this checkout. Published order IDs: {partialOrderOutcome.orderIds.join(', ') || 'none'}.</p>
 													<p>
 														Failure phase: {partialOrderOutcome.failedPhase}. {partialOrderOutcome.error}
 													</p>
-												</div>
+												</Notice>
 											)}
 											<OrderFinalizeComponent
 												shippingData={shippingData}
@@ -1026,7 +1011,7 @@ function RouteComponent() {
 												// Note: onContinueToPayment moved to footer
 											/>
 										</div>
-										<div className="flex-shrink-0 bg-white border-t pt-4">
+										<div className="flex-shrink-0 border-t bg-card pt-4">
 											<Button
 												onClick={handleContinueToPayment}
 												className="w-full btn-black"
@@ -1052,46 +1037,35 @@ function RouteComponent() {
 
 								{/* Loading State for Invoice Generation */}
 								{currentStep === 'payment' && isGeneratingInvoices && (
-									<div className="h-full flex items-center justify-center">
-										<div className="text-center">
-											<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full mx-auto mb-4" />
-											<p className="text-gray-600">Generating Lightning invoices...</p>
-										</div>
-									</div>
+									<LoadingState className="h-full" label="Generating Lightning invoices…" />
 								)}
 
 								{/* Error State - No Invoices Generated */}
 								{currentStep === 'payment' && !isGeneratingInvoices && invoices.length === 0 && (
-									<div className="text-center py-12">
-										<div className="text-gray-600 mb-6">
-											<Zap className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-											<h3 className="text-lg font-medium mb-2">Unable to generate payment invoices</h3>
-											<p className="text-sm text-gray-500 max-w-md mx-auto">
-												There may be an issue with the seller's Lightning configuration, or the Lightning service may be temporarily
-												unavailable.
-											</p>
-										</div>
-										<div className="space-y-2">
-											<Button
-												onClick={() => {
-													setInvoices([])
-													// This will trigger the useEffect to regenerate invoices
-												}}
-												variant="outline"
-												className="mr-2"
-											>
-												Try Again
-											</Button>
+									<ErrorState
+										title="Unable to generate payment invoices"
+										message="There may be an issue with the seller's Lightning configuration, or the Lightning service may be temporarily unavailable."
+										retryLabel="Try Again"
+										onRetry={() => {
+											setInvoices([])
+											// This will trigger the useEffect to regenerate invoices
+										}}
+										action={
 											<Button onClick={goBackToPreviousStep} variant="ghost">
 												Go Back
 											</Button>
-										</div>
-									</div>
+										}
+									/>
 								)}
 
 								{/* Payment Interface - Only show when invoices are ready */}
 								{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
 									<div className="space-y-6">
+										{paymentFailure && (
+											<Notice tone="error" title="Payment failed" onDismiss={() => setPaymentFailure(null)}>
+												{paymentFailure}
+											</Notice>
+										)}
 										{/* desktop header nav exists; mobile under-QR nav is handled inside LightningPaymentProcessor */}
 
 										{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
@@ -1145,44 +1119,20 @@ function RouteComponent() {
 						</CardHeader>
 						<CardContent className="flex-1 overflow-y-auto pb-0">
 							{currentStep === 'payment' && isGeneratingInvoices ? (
-								<div className="flex items-center justify-center h-full">
-									<div className="text-center">
-										<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full mx-auto mb-4" />
-										<p className="text-gray-600">Loading payment details...</p>
-									</div>
-								</div>
+								<LoadingState className="h-full" label="Loading payment details…" />
 							) : currentStep === 'payment' && invoices.length > 0 ? (
 								<>
 									{/* NWC Status Indicator */}
-									<div className="mb-4 p-3 bg-gray-50 rounded-lg border">
-										<div className="flex items-center justify-between text-sm">
-											<span className="font-medium text-gray-700">Wallet Status:</span>
-											<div className="flex items-center gap-2">
-												{nwcEnabled ? (
-													<>
-														<div className="w-2 h-2 bg-green-500 rounded-full" />
-														<span className="text-green-700 font-medium">
-															{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length} NWC wallet
-															{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length !== 1 ? 's' : ''} connected
-														</span>
-													</>
-												) : (
-													<>
-														<div className="w-2 h-2 bg-gray-400 rounded-full" />
-														<span className="text-gray-600">
-															Fast Payments available with NWC, setup in{' '}
-															<Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">
-																settings
-															</Link>
-														</span>
-													</>
-												)}
-											</div>
-										</div>
-										{nwcEnabled && (
-											<p className="text-xs text-gray-500 mt-1">Fast payments available • Configure more wallets in settings</p>
-										)}
-									</div>
+									<NwcWalletStatusView
+										className="mb-4"
+										connected={nwcEnabled}
+										connectedWalletCount={nwcWalletCount}
+										settingsLink={
+											<Link to="/dashboard/account/making-payments" className="text-primary hover:underline">
+												settings
+											</Link>
+										}
+									/>
 
 									<div className="pb-6">
 										<PaymentSummary invoices={invoices} currentIndex={safeInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />

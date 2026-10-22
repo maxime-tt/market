@@ -9,6 +9,8 @@ export interface ErrorStateProps extends HTMLAttributes<HTMLDivElement> {
 	message?: ReactNode
 	/** Renders a retry button when provided. */
 	onRetry?: () => void
+	/** Extra control rendered beside the retry button, e.g. a "Go back" action. */
+	action?: ReactNode
 	/** Label for the retry button. */
 	retryLabel?: string
 	/** Tightens the vertical rhythm for inline or card-embedded usage. */
@@ -21,6 +23,7 @@ export function ErrorState({
 	title = 'Something went wrong',
 	message,
 	onRetry,
+	action,
 	retryLabel = 'Try again',
 	compact = false,
 	className,
@@ -39,10 +42,15 @@ export function ErrorState({
 				<p className="font-medium text-destructive">{title}</p>
 				{message && <p className="text-sm text-muted-foreground">{message}</p>}
 			</div>
-			{onRetry && (
-				<Button variant="secondary" onClick={onRetry}>
-					{retryLabel}
-				</Button>
+			{(onRetry || action) && (
+				<div className="flex flex-wrap items-center justify-center gap-2">
+					{onRetry && (
+						<Button variant="secondary" onClick={onRetry}>
+							{retryLabel}
+						</Button>
+					)}
+					{action}
+				</div>
 			)}
 		</div>
 	)

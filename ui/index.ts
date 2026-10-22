@@ -83,6 +83,7 @@ export { OnChainPaymentView, type OnChainPaymentStatus, type OnChainPaymentViewP
 export { OrderFinalizeView, type OrderFinalizeViewProps } from './components/checkout/OrderFinalizeView'
 export { PaymentContentView, type PaymentContentViewProps } from './components/checkout/PaymentContentView'
 export { PaymentDialogView, WalletSelectorView, type WalletSelectorOption } from './components/checkout/PaymentViews'
+export { NwcWalletStatusView, type NwcWalletStatusViewProps } from './checkout/nwc-wallet-status-view'
 export {
 	ShippingAddressFormView,
 	type CheckoutFieldBinding,

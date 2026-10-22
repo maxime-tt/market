@@ -42,6 +42,12 @@ describe('ErrorState', () => {
 		expect(calls).toBe(1)
 	})
 
+	test('renders an extra action beside the retry button', () => {
+		const markup = renderToStaticMarkup(<ErrorState onRetry={() => {}} action={<Button variant="ghost">Go back</Button>} />)
+		expect(markup).toContain('Try again')
+		expect(markup).toContain('Go back')
+	})
+
 	test('merges host className and switches to compact spacing', () => {
 		const markup = renderToStaticMarkup(<ErrorState compact className="host-error" />)
 		expect(markup).toContain('host-error')
