@@ -684,6 +684,77 @@ Also carried forward: the fundable-mint check a few lines below that retargeted 
 reads `nip60Store.state.mintBalances`, so the refresh no longer freshens the state that check
 reads — same class as the §9.4 hole 1, and it closes with the same slice.
 
+### 9.6 The auction extraction, measured (2026-10-21)
+
+The store has shrunk in this stretch — 2,990 lines to 2,925 — after the transaction subsystem and
+the two non-store importers went. What is left to move is the auction cluster and the
+pending-token bookkeeping around it.
+
+**The actions, with measured line ranges** (`src/lib/stores/nip60.ts`, 2,925 lines):
+
+- `lockAuctionBidFunds` 1967–2260 (≈294 lines) — the P2PK lock with locktime and refund key
+- `sendEcash` 2261–2587 (≈327) — not auction-specific, but shares the proof plumbing
+- `settleAuctionAsWinner` 2588–2605 (≈18) — thin, delegates to the lock/receive helpers
+- `receiveEcash` 2606–2636 (≈31)
+- `receiveLockedEcash` 2637–2665 (≈29) — the P2PK _spend_, the leg coco cannot do
+- `loadAuctionMintKeysets` 2666–2683 (≈18)
+- `syncAuctionTransfers` 2684–2690 (≈7)
+- `loadPendingTokens` 2691–2705 (≈15)
+- `reclaimToken` 2706–2854 (≈149) — timelock-aware reclaim with backoff
+- `autoReclaimTimelockedBids` 2855–2888 (≈34)
+- `removePendingToken` 2889–2900, `removePendingTokens` 2901–2914, `getActivePendingTokens` 2915–2925
+- `updatePendingTokenContext` 1459–1488, `getAuctionHdChildPrivkey` 1401–1458, `runAutoCleanup` 1297–1400
+
+That is roughly **630 lines of auction-specific code** plus shared helpers (reclaim backoff,
+reclaim-prepare timing, the AUCTION\_\* constants) that several of them read.
+
+**What they reach for**, measured by counting reads inside the file:
+
+- `nip60Store.state.wallet` ×25 — the NDK wallet, and the reason the package is still imported
+- `nip60Store.state.pendingTokens` ×13 — the pending-token bookkeeping
+- `nip60Store.state.status` ×12
+- everything else is single digits
+
+**What now exists to move them onto**, all landed in this stretch:
+
+- the `(walletP2pk, walletPrivkey)` pair and the auction HD root — `walletKeys.ts` plus the sealed
+  store, the signer sealer, the fail-closed binding and the one-way migration (§9.4/§9.5 and the
+  four commits of the key medium)
+- a proof source that is a **structural contract** now, not a class (`WalletProofSource` in
+  `proofs.ts`) — so a coco-backed source can satisfy it without this module importing the relay
+  wallet
+- the coco store's own `send` / `receive` / `reclaimToken` / `pendingTokens`
+
+**Extraction order, and why:**
+
+1. `receiveLockedEcash` first (≈29 lines, one call site). It is the P2PK **spend** — the leg coco
+   cannot do on either the pin or 2.0 — so it must stay on cashu-ts with the key from
+   `deriveAuctionChildPrivkey`. Proving the pattern on the smallest leg that has the hardest
+   dependency is the point: if the key path works here it works everywhere.
+2. `loadAuctionMintKeysets` + `syncAuctionTransfers` (≈25 lines) — no wallet reads beyond keysets.
+3. `reclaimToken` + `autoReclaimTimelockedBids` (≈183 lines) — the reclaim pair, which is where
+   the backoff and timelock semantics live, and where `bids.tsx` reads from.
+4. `lockAuctionBidFunds` + `settleAuctionAsWinner` (≈312 lines) **last**, and ideally after B2a:
+   the lock is the leg that gains coco's native P2PK send after the bump, so moving it twice
+   would be wasted work.
+5. The pending-token bookkeeping: decide once whether it moves to `cashuStore.pendingTokens` (which
+   already exists and is already coco's) or to a wallet-local store of its own. It is read 13 times
+   inside the store and by `bids.tsx` in `platform/` — and that file **cannot** gain a `src/` import
+   (the boundary guard only ratchets down), so whichever way it goes, `platform/` reaches it
+   through an existing seam or not at all.
+
+**Structural traps for whoever does this:**
+
+- `platform/` routes cannot take new `src/` imports (412 → 413 fails by design). `bids.tsx` keeps
+  its nip60 import until its pending-token read moves with the rest.
+- The suite is flaky under load — a single red at ~3× the normal duration (126s vs 42s) should be
+  re-run before it is believed. Both patterns were seen tonight: a non-zero exit reporting "0 fail"
+  (stale expects) and a transient "1 fail" that two clean runs did not reproduce.
+- Every refusal added by the key medium is a specific way an HD root could move. If a slice finds
+  one inconvenient, that is the moment to be suspicious rather than to relax the rule.
+- `NDKPrivateKeySigner` does not declare `nip44`; the wallet event is opened through the event's own
+  `decrypt()`, which is what NDK's loader does. Do not reach for `signer.nip44`.
+
 **6. NDK-wallet unwind — before the version bump can be green**
 
 Four files import `@nostr-dev-kit/wallet` (not just nip60.ts). The upgrade to cashu-ts
