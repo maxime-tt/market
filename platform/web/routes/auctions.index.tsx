@@ -1,5 +1,6 @@
 import { AuctionCard } from '@/components/AuctionCard'
 import { Media } from '@ui/components/Media'
+import { LoadingState } from '@ui/shared/loading-state'
 import { AuctionFilters } from '@/components/AuctionFilters'
 import { ShowTestListingsToggle } from '@/components/ShowTestListingsToggle'
 import { AuctionSectionGrid } from '@/components/nostr/AuctionSectionGrid'
@@ -30,7 +31,6 @@ import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Loader2 } from 'lucide-react'
 import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
@@ -369,10 +369,7 @@ function AuctionsRoute() {
 						</Button>
 					</div>
 				) : auctionsQuery.isLoading && auctions.length === 0 ? (
-					<div className="flex flex-col items-center justify-center py-16 min-h-[40vh]">
-						<Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
-						<p className="text-sm text-gray-500">Loading auctions...</p>
-					</div>
+					<LoadingState className="min-h-[40vh] py-16" label="Loading auctions…" />
 				) : filteredAndSortedAuctions.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-16 text-center gap-2 min-h-[40vh]">
 						<h2 className="text-xl font-semibold">No auctions found</h2>

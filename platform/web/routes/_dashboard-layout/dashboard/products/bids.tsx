@@ -2,6 +2,7 @@ import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { AvatarUser } from '@/components/AvatarUser'
 import { ProfileName } from '@/components/ProfileName'
 import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
+import { LoadingState } from '@ui/shared/loading-state'
 import { BidStatusBanner, BidStatusPill, getBidStatusCopy } from '@ui/components/BidStatusViews'
 import { resolveBidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import { Badge } from '@ui/primitives/badge'
@@ -33,7 +34,7 @@ import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useQueries } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { CheckCircle, Clock, Eye, Loader2, MapPin, RotateCcw, Trophy } from 'lucide-react'
+import { CheckCircle, Eye, Loader2, MapPin, RotateCcw, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -314,12 +315,7 @@ function BidsOverviewComponent() {
 					</div>
 				)}
 
-				{isLoading && (
-					<div className="text-center py-8 text-gray-500">
-						<Clock className="animate-spin h-6 w-6 mx-auto mb-2" />
-						Loading bids...
-					</div>
-				)}
+				{isLoading && <LoadingState label="Loading bids…" />}
 
 				{error && (
 					<div className="text-center py-8 text-red-500">
