@@ -16,13 +16,16 @@ export {
 	getAuctionReclaimReadyAtForGroup,
 } from './auctionFunds'
 export type { AuctionReclaim, AuctionReclaimHost } from './auctionFunds'
-// The auction P2PK lock (1-of-1 locktime + refund key), behind injected ports
-export { AuctionBidLockMutationPossibleError, createAuctionLock } from './auctionFunds'
+// The auction P2PK lock (1-of-1 locktime + refund key) and the settlement receipt/keyset
+// helpers, behind injected ports
+export { AuctionBidLockMutationPossibleError, createAuctionLock, createAuctionReceipt, loadAuctionMintKeysets } from './auctionFunds'
 export type {
 	AuctionLock,
 	AuctionLockHost,
 	AuctionLockWallet,
 	AuctionP2pkKeyScheme,
+	AuctionReceipt,
+	AuctionReceiveHost,
 	LockAuctionBidFundsParams,
 	LockAuctionBidFundsResult,
 } from './auctionFunds'

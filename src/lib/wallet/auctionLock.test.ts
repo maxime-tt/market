@@ -1,6 +1,7 @@
 /**
- * Tests for the extracted auction lock — `lockAuctionBidFunds`, now in `auctionFunds.ts` behind
- * `AuctionLockHost`.
+ * Tests for the extracted auction lock + settlement cluster — `lockAuctionBidFunds`,
+ * `receiveLockedEcash` and `loadAuctionMintKeysets`, now in `auctionFunds.ts` behind
+ * `AuctionLockHost` / `AuctionReceiveHost`.
  *
  * This is money handling, so the tests pin the decisions that move sats:
  *
@@ -11,17 +12,26 @@
  *  - the four-step mint-resolution order and the pre-mint validation errors (raw, retryable);
  *  - the durable-observation ordering — the STRICT pending-token write happens BEFORE the
  *    post-swap P2PK/DLEQ checks, so a bad-key leg is still reclaim-eligible, and a failed
- *    write is classified `pendingTokenPersisted: false`.
+ *    write is classified `pendingTokenPersisted: false`;
+ *  - the settlement receipt — the mint receive is asked with the caller's spending key.
  *
- * No relay, no mint, no network: the host and the mint are stand-ins. The P2PK secret in the
+ * No relay, no mint, no network: the host and the mint are stand-ins, and the settlement tests
+ * pass a mint URL so the receive never tries to decode the token. The P2PK secret in the
  * fixtures is built with the REAL `@cashu/cashu-ts` `OutputData.createSingleP2PKData`, so the
  * construction assertion is against the same builder the wallet uses, not a hand-rolled copy.
  */
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { OutputData, type CashuWallet, type Proof } from '@cashu/cashu-ts'
+import { OutputData, type CashuWallet, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 
-import { AuctionBidLockMutationPossibleError, createAuctionLock } from './auctionFunds'
-import type { AuctionFundsMintAccess, AuctionLockHost, AuctionLockWallet, LockAuctionBidFundsParams } from './auctionFunds'
+import { AuctionBidLockMutationPossibleError, createAuctionLock, createAuctionReceipt, loadAuctionMintKeysets } from './auctionFunds'
+import type {
+	AuctionFundsMintAccess,
+	AuctionFundsWallet,
+	AuctionLockHost,
+	AuctionLockWallet,
+	AuctionReceiveHost,
+	LockAuctionBidFundsParams,
+} from './auctionFunds'
 import type { PendingToken } from './types'
 
 // ---------- localStorage polyfill (the inherited modules read it) ----------
@@ -403,5 +413,81 @@ describe('lockAuctionBidFunds — the irreversible mint boundary', () => {
 		expect(err.refundPubkey).toBe(REFUND_PUBKEY)
 		expect(err.locktime).toBe(LOCKTIME)
 		expect(err.pendingTokenPersisted).toBe(false)
+	})
+})
+
+// ---------- settlement: receiveLockedEcash ----------
+
+describe('receiveLockedEcash — the settlement spend', () => {
+	const makeReceiveHost = (params: { wallet?: AuctionFundsWallet | null; receiveError?: Error } = {}) => {
+		const receiveCalls: { token: string; privkey?: string; keysetId?: string }[] = []
+		let refreshCalls = 0
+		const wallet: AuctionFundsWallet = {
+			state: {
+				dump: () => ({ proofs: [] }),
+				getProofs: () => [],
+				update: async () => undefined,
+			},
+		}
+		const cashuWallet = {
+			receive: async (token: string, options: { privkey?: string; keysetId?: string }) => {
+				receiveCalls.push({ token, privkey: options?.privkey, keysetId: options?.keysetId })
+				if (params.receiveError) throw params.receiveError
+				return [{ id: KEYSET_ID, amount: 500, secret: 's', C: '02' + '7'.repeat(64) }] as unknown as Proof[]
+			},
+		} as unknown as CashuWallet
+		const host: AuctionReceiveHost = {
+			getWallet: () => (params.wallet === null ? null : (params.wallet ?? wallet)),
+			mint: { cashuWalletForMint: async () => ({ cashuWallet, keysetId: KEYSET_ID }) },
+			refresh: async () => {
+				refreshCalls += 1
+			},
+		}
+		return { host, receiveCalls, refreshCalls: () => refreshCalls }
+	}
+
+	test('with no wallet it warns and returns false without touching the mint', async () => {
+		const { host, receiveCalls, refreshCalls } = makeReceiveHost({ wallet: null })
+		const ok = await createAuctionReceipt(host).receiveLockedEcash('cashuB-token', 'aa'.repeat(32), MINT)
+		expect(ok).toBe(false)
+		expect(receiveCalls).toHaveLength(0)
+		expect(refreshCalls()).toBe(0)
+	})
+
+	test('spends with the caller-supplied key and refreshes', async () => {
+		const { host, receiveCalls, refreshCalls } = makeReceiveHost()
+		const ok = await createAuctionReceipt(host).receiveLockedEcash('cashuB-token', 'aa'.repeat(32), MINT)
+		expect(ok).toBe(true)
+		expect(receiveCalls).toEqual([{ token: 'cashuB-token', privkey: 'aa'.repeat(32), keysetId: KEYSET_ID }])
+		expect(refreshCalls()).toBe(1)
+	})
+
+	test('a mint failure propagates unchanged (the caller owns the leg outcome)', async () => {
+		const { host, refreshCalls } = makeReceiveHost({ receiveError: new Error('witness is missing for p2pk signature') })
+		await expect(createAuctionReceipt(host).receiveLockedEcash('cashuB-token', 'aa'.repeat(32), MINT)).rejects.toThrow(
+			'witness is missing for p2pk signature',
+		)
+		expect(refreshCalls()).toBe(0)
+	})
+})
+
+// ---------- loadAuctionMintKeysets ----------
+
+describe('loadAuctionMintKeysets', () => {
+	test('returns the mint keysets', async () => {
+		const keysets = [{ id: KEYSET_ID }] as unknown as MintKeyset[]
+		const mint: AuctionFundsMintAccess = {
+			cashuWalletForMint: async () => ({ cashuWallet: { keysets } as unknown as CashuWallet, keysetId: KEYSET_ID }),
+		}
+		await expect(loadAuctionMintKeysets(mint, MINT)).resolves.toEqual(keysets)
+	})
+
+	test('returns an empty array when the mint call fails', async () => {
+		const mint: AuctionFundsMintAccess = {
+			cashuWalletForMint: async () => {
+				throw new Error('mint unreachable')
+			},
+		}
+		await expect(loadAuctionMintKeysets(mint, MINT)).resolves.toEqual([])
 	})
 })

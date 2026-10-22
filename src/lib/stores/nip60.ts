@@ -2,22 +2,25 @@ import {
 	createAppWalletKeyStore,
 	createAuctionLock,
 	createAuctionReclaim,
+	createAuctionReceipt,
 	createRelayWalletKeyMigrationSource,
 	createWalletEventReader,
 	deriveAuctionChildPrivkey,
 	getMintHostname,
 	getSpendableProofsForMint,
 	latestByCreatedAt,
+	loadAuctionMintKeysets,
 	loadUserData,
 	migrateWalletKeyMaterial,
 	receiveTokenIntoWallet,
-	receiveTokenWithPrivkey,
 	saveUserData,
 	AuctionBidLockMutationPossibleError,
 	type AuctionBidPendingTokenContext,
 	type AuctionFundsMintAccess,
 	type AuctionLock,
 	type AuctionLockHost,
+	type AuctionReceipt,
+	type AuctionReceiveHost,
 	type AuctionReclaim,
 	type LockAuctionBidFundsParams,
 	type LockAuctionBidFundsResult,
@@ -904,6 +907,26 @@ let auctionLockInstance: AuctionLock | null = null
 const getAuctionLock = (): AuctionLock => {
 	auctionLockInstance ??= createAuctionLock(auctionLockHost)
 	return auctionLockInstance
+}
+
+/**
+ * The host the settlement receipt reads the store through: the wallet to swap into, the mint
+ * access for the receive, and the refresh that follows.
+ */
+const auctionReceiptHost: AuctionReceiveHost = {
+	getWallet: () => nip60Store.state.wallet,
+	mint: auctionFundsMintAccess,
+	refresh: () => nip60Actions.refresh(),
+}
+
+/**
+ * The single receipt instance the action delegates to; built lazily and held once, mirroring
+ * the lock and reclaim instances.
+ */
+let auctionReceiptInstance: AuctionReceipt | null = null
+const getAuctionReceipt = (): AuctionReceipt => {
+	auctionReceiptInstance ??= createAuctionReceipt(auctionReceiptHost)
+	return auctionReceiptInstance
 }
 
 /**
@@ -2216,22 +2239,8 @@ export const nip60Actions = {
 	 * event, so it can pass it in and skip the decode-to-find-mint
 	 * step entirely.
 	 */
-	receiveLockedEcash: async (token: string, privkey: string, mintUrl?: string): Promise<boolean> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) {
-			console.warn('[nip60] Cannot receive locked ecash without wallet')
-			return false
-		}
-
-		try {
-			await receiveTokenWithPrivkey({ wallet, mint: auctionFundsMintAccess, token, privkey, mintUrl })
-			await nip60Actions.refresh()
-			return true
-		} catch (err) {
-			console.error('[nip60] Failed to receive locked ecash:', err)
-			throw err
-		}
-	},
+	receiveLockedEcash: async (token: string, privkey: string, mintUrl?: string): Promise<boolean> =>
+		getAuctionReceipt().receiveLockedEcash(token, privkey, mintUrl),
 
 	/**
 	 * Fetch a mint's current keysets — required to pass into
@@ -2245,15 +2254,8 @@ export const nip60Actions = {
 	 * "short keyset ID" error for new ones, giving the seller a
 	 * useful actionable message instead of a silent hang.
 	 */
-	loadAuctionMintKeysets: async (mintUrl: string): Promise<import('@cashu/cashu-ts').MintKeyset[]> => {
-		try {
-			const { cashuWallet } = await createCashuWalletForMint(mintUrl)
-			return cashuWallet.keysets
-		} catch (err) {
-			console.warn(`[nip60] loadAuctionMintKeysets failed for ${getMintHostname(mintUrl)}:`, err)
-			return []
-		}
-	},
+	loadAuctionMintKeysets: async (mintUrl: string): Promise<import('@cashu/cashu-ts').MintKeyset[]> =>
+		loadAuctionMintKeysets(auctionFundsMintAccess, mintUrl),
 
 	/**
 	 * Auction transfer sweep — under the path-oracle profile this is just
@@ -2264,7 +2266,7 @@ export const nip60Actions = {
 	 * proofs (see spec §8.1). Losing bidders self-refund here.
 	 */
 	syncAuctionTransfers: async (): Promise<void> => {
-		await nip60Actions.autoReclaimTimelockedBids()
+		await getAuctionReclaim().autoReclaimTimelockedBids()
 	},
 
 	/**

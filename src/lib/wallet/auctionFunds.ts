@@ -523,6 +523,11 @@ export interface AuctionLockWallet extends AuctionFundsWallet {
 /**
  * What the lock needs from the store it came from. Every member is a read or write the store
  * already performs; none of it is the relay wallet class.
+ *
+ * Pending tokens stay an injected port (`setPendingTokens`) rather than moving to a wallet-local
+ * store: it is the smallest diff, and the store still owns the read side and the
+ * `nip60_pending_tokens` key (`platform/` reads auction pending tokens through the store seam).
+ * The `strict` flag carries the lock's fail-closed write across the seam.
  */
 export interface AuctionLockHost {
 	/** The wallet to lock from, or null when there is none. */
@@ -1010,3 +1015,59 @@ export const createAuctionLock = (host: AuctionLockHost): AuctionLock => ({
 		}
 	},
 })
+
+// ============================================================================
+// The settlement receipt and the keyset/transfer helpers
+// ============================================================================
+
+/**
+ * What the P2PK settlement receipt needs: the wallet to swap into, the mint access for the
+ * receive, and the post-receive refresh.
+ */
+export interface AuctionReceiveHost {
+	getWallet(): AuctionFundsWallet | null
+	mint: AuctionFundsMintAccess
+	refresh(): Promise<void>
+}
+
+export interface AuctionReceipt {
+	receiveLockedEcash(token: string, privkey: string, mintUrl?: string): Promise<boolean>
+}
+
+/**
+ * `nip60Actions.receiveLockedEcash` moved out of the store. Thin orchestration over the
+ * already-extracted {@link receiveTokenWithPrivkey}: warn + false when there is no wallet,
+ * receive with the caller's key, refresh, and rethrow on failure.
+ */
+export const createAuctionReceipt = (host: AuctionReceiveHost): AuctionReceipt => ({
+	receiveLockedEcash: async (token: string, privkey: string, mintUrl?: string): Promise<boolean> => {
+		const wallet = host.getWallet()
+		if (!wallet) {
+			console.warn('[nip60] Cannot receive locked ecash without wallet')
+			return false
+		}
+
+		try {
+			await receiveTokenWithPrivkey({ wallet, mint: host.mint, token, privkey, mintUrl })
+			await host.refresh()
+			return true
+		} catch (err) {
+			console.error('[nip60] Failed to receive locked ecash:', err)
+			throw err
+		}
+	},
+})
+
+/**
+ * `nip60Actions.loadAuctionMintKeysets` moved out of the store. Returns an empty array on
+ * failure — callers treat that as "decode without keysets".
+ */
+export const loadAuctionMintKeysets = async (mint: AuctionFundsMintAccess, mintUrl: string): Promise<MintKeyset[]> => {
+	try {
+		const { cashuWallet } = await mint.cashuWalletForMint(mintUrl)
+		return cashuWallet.keysets
+	} catch (err) {
+		console.warn(`[nip60] loadAuctionMintKeysets failed for ${getMintHostname(mintUrl)}:`, err)
+		return []
+	}
+}
