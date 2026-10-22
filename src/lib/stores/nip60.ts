@@ -13,7 +13,6 @@ import {
 	loadAuctionMintKeysets,
 	loadUserData,
 	migrateWalletKeyMaterial,
-	receiveTokenIntoWallet,
 	saveUserData,
 	AuctionBidLockMutationPossibleError,
 	type AuctionBidPendingTokenContext,
@@ -24,6 +23,7 @@ import {
 	type AuctionReceipt,
 	type AuctionReceiveHost,
 	type AuctionReclaim,
+	type CashuWalletSource,
 	type LockAuctionBidFundsParams,
 	type LockAuctionBidFundsResult,
 	type PendingToken,
@@ -38,19 +38,8 @@ import {
 import { auctionP2pkPubkeysMatch } from '@/lib/auctionP2pk'
 import { AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS } from '@/lib/auction/constants'
 import { toEncryptingSigner } from '@/lib/nostr/ndkEncryptingSigner'
-import {
-	CashuMint,
-	CashuWallet,
-	CheckStateEnum,
-	getDecodedToken,
-	getEncodedToken,
-	type MintKeys,
-	type MintKeyset,
-	type Proof,
-} from '@cashu/cashu-ts'
-import { secp256k1 } from '@noble/curves/secp256k1.js'
-import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
-import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus } from '@nostr-dev-kit/wallet'
+import { CashuMint, CashuWallet, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import { NDKEvent, NDKNutzap, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions, ndkStore } from './ndk'
 import { cashuActions, cashuStore } from './cashu'
@@ -96,7 +85,14 @@ export type { AuctionP2pkKeyScheme, LockAuctionBidFundsParams, LockAuctionBidFun
 export { AuctionBidLockMutationPossibleError } from '@/lib/wallet'
 
 export interface Nip60State {
-	wallet: NDKCashuWallet | null
+	/**
+	 * The wallet the rails spend through. It is no longer the relay-backed `NDKCashuWallet`: that
+	 * class is gone from this store, and `@/lib/wallet/cashuWalletSource` puts coco's proof
+	 * repository behind the same synchronous read/write shape the rails were written against.
+	 * The field keeps its name and its truthiness meaning so every consumer's readiness check is
+	 * unchanged.
+	 */
+	wallet: CashuWalletSource | null
 	status: 'idle' | 'initializing' | 'ready' | 'no_wallet' | 'error'
 	balance: number
 	mintBalances: Record<string, number>
@@ -168,10 +164,6 @@ export {
 
 export const nip60Store = new Store<Nip60State>(initialState)
 
-// Keep track of transaction subscription cleanup
-let autoCleanupPromise: Promise<void> | null = null
-let lastAutoCleanupAt = 0
-
 function generateId(): string {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
@@ -187,24 +179,6 @@ const getDevTestMintCandidates = (preferredMintUrl?: string): string[] => {
 const isKeysetVerificationError = (err: unknown): err is Error => err instanceof Error && err.message.includes("Couldn't verify keyset ID")
 
 const getErrorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err))
-
-const ensureWalletRuntimeDefaults = (wallet: NDKCashuWallet, ndk: NDKEvent['ndk']): void => {
-	if (!ndk) return
-
-	if (isNip60WalletDevModeEnabled()) {
-		wallet.mints = Array.from(new Set([...(wallet.mints ?? []), ...NIP60_DEV_TEST_MINTS]))
-	}
-
-	if (!wallet.relaySet) {
-		const connectedRelayUrls = (ndk.pool?.connectedRelays?.() ?? []).map((relay) => relay.url)
-		const fallbackRelayUrls = Array.from(ndk.pool?.relays?.keys() ?? [])
-		const relayCandidates = connectedRelayUrls.length > 0 ? connectedRelayUrls : fallbackRelayUrls
-		const relayUrls = relayCandidates.map(normalizeRelayUrl).filter((url) => !!url)
-		if (relayUrls.length > 0) {
-			wallet.relaySet = NDKRelaySet.fromRelayUrls(relayUrls, ndk)
-		}
-	}
-}
 
 const getDevTestMintKeyset = async (cashuMint: CashuMint, targetMint: string): Promise<{ keysets: MintKeyset[]; mintKeys: MintKeys }> => {
 	const keysetResponse = await cashuMint.getKeySets()
@@ -252,76 +226,6 @@ const createCashuWalletForMint = async (targetMint: string): Promise<{ cashuWall
 	}
 }
 
-const primeDevTestMintDepositWalletCache = async (wallet: NDKCashuWallet, targetMint: string): Promise<void> => {
-	const normalizedTargetMint = normalizeMintUrl(targetMint)
-
-	if (!isNip60WalletDevModeEnabled()) return
-	if (!NIP60_DEV_TEST_MINTS.includes(normalizedTargetMint)) return
-	if (wallet.cashuWallets.has(normalizedTargetMint)) return
-
-	const { cashuWallet } = await createCashuWalletForMint(normalizedTargetMint)
-	wallet.cashuWallets.set(normalizedTargetMint, cashuWallet)
-}
-
-const consolidateMintProofs = async (wallet: NDKCashuWallet, mint: string): Promise<void> => {
-	const allProofs = wallet.state.getProofs({ mint, includeDeleted: true, onlyAvailable: false })
-	if (allProofs.length === 0) return
-
-	const { cashuWallet } = await createCashuWalletForMint(mint)
-	const proofStates = await cashuWallet.checkProofsStates(allProofs)
-
-	const spentProofs: Proof[] = []
-	const unspentProofs: Proof[] = []
-	const pendingProofs: Proof[] = []
-
-	allProofs.forEach((proof, index) => {
-		const state = proofStates[index]?.state
-		if (state === CheckStateEnum.SPENT) {
-			spentProofs.push(proof)
-		} else if (state === CheckStateEnum.UNSPENT) {
-			unspentProofs.push(proof)
-		} else {
-			pendingProofs.push(proof)
-		}
-	})
-
-	if (spentProofs.length === 0) return
-
-	if (pendingProofs.length > 0) {
-		const pendingAmount = pendingProofs.reduce((sum, proof) => sum + proof.amount, 0)
-		wallet.state.reserveProofs(pendingProofs, pendingAmount)
-	}
-
-	await wallet.state.update(
-		{
-			mint,
-			store: [...unspentProofs, ...pendingProofs],
-			destroy: spentProofs,
-		},
-		'Consolidate',
-	)
-}
-
-const consolidateWalletProofs = async (wallet: NDKCashuWallet): Promise<void> => {
-	const mints = Array.from(
-		wallet.state
-			.getMintsProofs({
-				validStates: new Set(['available', 'reserved', 'deleted'] as any),
-			})
-			.keys(),
-	).filter(Boolean)
-
-	for (const mint of mints) {
-		try {
-			await consolidateMintProofs(wallet, mint)
-		} catch (err) {
-			console.error(`[nip60] Failed to consolidate mint ${mint}:`, err)
-		}
-	}
-}
-
-const normalizeRelayUrl = (relayUrl: string): string => relayUrl.trim().replace(/\/+$/, '')
-
 const getFirstTagValue = (event: NDKEvent, tagName: string): string => event.tags.find((tag) => tag[0] === tagName)?.[1] || ''
 
 const getTagValues = (event: NDKEvent, tagName: string): string[] =>
@@ -349,25 +253,6 @@ const resolveLatestActiveBidByBidder = (bidEvents: NDKEvent[], bidderPubkey: str
 		if (createdAtDelta !== 0) return createdAtDelta
 		return b.id.localeCompare(a.id)
 	})[0]
-}
-
-const getCompressedCashuPubkeyFromPrivkey = (privkey: string): string => toHex(secp256k1.getPublicKey(hexToUint8(privkey.trim()), true))
-
-const toHex = (bytes: Uint8Array): string =>
-	Array.from(bytes)
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('')
-
-const hexToUint8 = (hex: string): Uint8Array => {
-	const normalized = hex.trim()
-	if (normalized.length % 2 !== 0) {
-		throw new Error('Hex string must have an even length')
-	}
-	const bytes = new Uint8Array(normalized.length / 2)
-	for (let index = 0; index < normalized.length; index += 2) {
-		bytes[index / 2] = parseInt(normalized.slice(index, index + 2), 16)
-	}
-	return bytes
 }
 
 const isLocalDevHost = (): boolean => {
@@ -414,121 +299,23 @@ const markPendingTokensByBidEventIds = (bidEventIds: string[], status: PendingNi
 	nip60Store.setState((s) => ({ ...s, pendingTokens }))
 }
 
-const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
-	let timer: ReturnType<typeof setTimeout> | undefined
-	try {
-		return await Promise.race([
-			promise,
-			new Promise<never>((_, reject) => {
-				timer = setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs)
-			}),
-		])
-	} finally {
-		if (timer) clearTimeout(timer)
-	}
-}
+/**
+ * The wallet's own P2PK pair, as a synchronous lookup, so the reclaim host's legacy refund-key
+ * fallback keeps its old meaning ("the key the wallet itself holds") now that the pair lives in
+ * the sealed key store rather than in the relay wallet's `privkeys` map. It is filled from the
+ * same one-way migration the auction HD root uses; until that has run, the wallet holds no key
+ * and the lookup answers null, exactly as an empty map did.
+ *
+ * The pair is only ever the wallet's OWN p2pk — per-bid refund keys are deliberately never in it
+ * (see `auctionFunds.ts`'s refund-key preference), so this stays a safety net and not a second
+ * authority for refund keys.
+ */
+let walletKeyMaterialCache: WalletKeyMaterial | null = null
 
-function extractPreimageCandidate(result: unknown): string | undefined {
-	if (!result || typeof result !== 'object') return undefined
-	const r = result as Record<string, unknown>
-
-	const candidates = [
-		r.preimage,
-		r.payment_preimage,
-		r.paymentPreimage,
-		r.preimage_hex,
-		r.preimageHex,
-		(r.result as any)?.preimage,
-		(r.response as any)?.preimage,
-	].filter((v): v is string => typeof v === 'string' && v.length > 0)
-
-	return candidates[0]
-}
-
-const getWalletPrivkeyForPubkey = (wallet: NDKCashuWallet, pubkey?: string): string | null => {
-	if (!pubkey) return null
-	const exact = wallet.privkeys.get(pubkey)?.privateKey
-	if (exact) return exact
-
-	for (const [walletPubkey, signer] of wallet.privkeys.entries()) {
-		if (auctionP2pkPubkeysMatch(walletPubkey, pubkey) && signer.privateKey) {
-			return signer.privateKey
-		}
-	}
-
-	return null
-}
-
-const adoptWalletAccess = async (targetWallet: NDKCashuWallet, sourceWallet: NDKCashuWallet): Promise<void> => {
-	for (const signer of sourceWallet.privkeys.values()) {
-		if (signer.privateKey) {
-			await targetWallet.addPrivkey(signer.privateKey)
-		}
-	}
-
-	targetWallet.mints = Array.from(new Set([...(targetWallet.mints ?? []), ...(sourceWallet.mints ?? [])]))
-	targetWallet.relaySet ??= sourceWallet.relaySet
-
-	const sourceP2pk = await sourceWallet.getP2pk()
-	const sourceSigner = sourceWallet.privkeys.get(sourceP2pk)
-	if (sourceSigner?.privateKey) {
-		;(targetWallet as NDKCashuWallet & { _p2pk?: string; signer?: NDKCashuWallet['signer'] })._p2pk = sourceP2pk
-		targetWallet.signer = sourceSigner
-	}
-}
-
-const loadWalletFromLatestEvent = async (ownerPubkey: string): Promise<NDKCashuWallet | null> => {
-	const ndk = ndkStore.state.ndk
-	if (!ndk) return null
-
-	try {
-		const events = Array.from(
-			await ndkActions.fetchEventsWithTimeout(
-				{
-					kinds: [NIP60_WALLET_KIND],
-					authors: [ownerPubkey],
-					limit: 5,
-				},
-				{ timeoutMs: NIP60_WALLET_FETCH_TIMEOUT_MS },
-			),
-		)
-		const walletEvent = events.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0] ?? null
-		if (!walletEvent) return null
-
-		const loadedWallet = await withTimeout(NDKCashuWallet.from(walletEvent), NIP60_WALLET_LOAD_TIMEOUT_MS, 'nip60 wallet reload')
-		if (!loadedWallet) return null
-
-		ensureWalletRuntimeDefaults(loadedWallet, ndk)
-		return loadedWallet
-	} catch (err) {
-		console.warn('[nip60] Failed to reload wallet from latest event:', err)
-		return null
-	}
-}
-
-const getOrCreateWalletP2pk = async (wallet: NDKCashuWallet): Promise<string> => {
-	const hadPrivkeys = wallet.privkeys.size > 0
-	const p2pk = await wallet.getP2pk()
-
-	if (!hadPrivkeys && wallet.privkeys.size > 0) {
-		try {
-			await wallet.publish()
-		} catch (err) {
-			console.error('[nip60] Failed to persist generated wallet p2pk:', err)
-		}
-	}
-
-	return p2pk
-}
-
-const getOrCreateWalletCashuP2pk = async (wallet: NDKCashuWallet): Promise<string> => {
-	const walletP2pk = await getOrCreateWalletP2pk(wallet)
-	const walletPrivkey = getWalletPrivkeyForPubkey(wallet, walletP2pk)
-	if (!walletPrivkey) {
-		throw new Error('Current wallet does not expose a private key for Cashu P2PK')
-	}
-
-	return getCompressedCashuPubkeyFromPrivkey(walletPrivkey)
+const getWalletPrivkey = (pubkey?: string): string | null => {
+	const material: WalletKeyMaterial | null = walletKeyMaterialCache
+	if (!pubkey || !material) return null
+	return auctionP2pkPubkeysMatch(material.walletP2pk, pubkey) ? material.walletPrivkey : null
 }
 
 /**
@@ -658,11 +445,8 @@ const getAuctionReclaim = (): AuctionReclaim => {
 		getWallet: () => nip60Store.state.wallet,
 		isWalletReady: () => nip60Store.state.status === 'ready',
 		mint: auctionFundsMintAccess,
-		getWalletPrivkey: (pubkey) => {
-			const wallet = nip60Store.state.wallet
-			return wallet ? getWalletPrivkeyForPubkey(wallet, pubkey) : null
-		},
-		getWalletPrivkeyCount: () => nip60Store.state.wallet?.privkeys.size ?? 0,
+		getWalletPrivkey: (pubkey) => getWalletPrivkey(pubkey),
+		getWalletPrivkeyCount: () => (walletKeyMaterialCache ? 1 : 0),
 		getPendingTokens: () => nip60Store.state.pendingTokens,
 		setPendingTokens: (tokens) => {
 			savePendingTokens(tokens)
@@ -773,20 +557,18 @@ function selectProofs(proofs: Proof[], amount: number): { selected: Proof[]; tot
 }
 
 /**
- * Get all mints - combines configured mints with mints that have balances
+ * Get all mints. The list is coco's — the source reads it straight off the coco store — so there
+ * is no second list a balance can be attached to.
  */
-function getAllMints(wallet: NDKCashuWallet): string[] {
-	const configuredMints = wallet.mints ?? []
-	const balanceMints = Object.keys(wallet.mintBalances ?? {})
-	// Combine and deduplicate
-	return Array.from(new Set([...configuredMints, ...balanceMints]))
+function getAllMints(wallet: CashuWalletSource): string[] {
+	return Array.from(new Set(wallet.mints ?? []))
 }
 
 /**
- * Get accurate balances directly from wallet state.
- * wallet.state.dump() provides the source of truth for proofs and balances.
+ * Get accurate balances directly from the wallet source's proof read. The source mirrors coco's
+ * ready proofs, so this is the same money the rails will select inputs from.
  */
-function getBalancesFromState(wallet: NDKCashuWallet): { totalBalance: number; mintBalances: Record<string, number> } {
+function getBalancesFromState(wallet: CashuWalletSource): { totalBalance: number; mintBalances: Record<string, number> } {
 	const mintBalances: Record<string, number> = {}
 	let totalBalance = 0
 
@@ -803,16 +585,100 @@ function getBalancesFromState(wallet: NDKCashuWallet): { totalBalance: number; m
 	}
 }
 
+/**
+ * NDKZapper's `cashuPay` leg, over the coco-backed wallet source.
+ *
+ * `NDKZapper.zapNip61` calls this to get the funds for a nutzap and then builds, signs and
+ * publishes the `kind:9321` itself; the return value it wants is `{ proofs, mint }`. The relay
+ * wallet's own `cashuPay` was a cashu-ts `send` over its proof set, and the mint/flags it was
+ * given are reproduced here exactly:
+ *
+ *   - the mint is the first of the payment's mints (or, when it names none, of the wallet's own
+ *     mint list) with enough spendable balance;
+ *   - `pubkey` is passed through **verbatim**, exactly as the relay wallet passed it — this leg
+ *     does not prefix or normalise it. A NIP-61 nutzap lock key is already the `02`-prefixed
+ *     cashu form by the time it reaches here (the recipient's `kind:10019` `pubkey` tag, via
+ *     `toCashuP2pkPubkey` in `./nutzap`), and silently rewriting a key would lock funds to a
+ *     different one;
+ *   - `proofTags` is passed through as the relay wallet passed it. cashu-ts 2.9's `SendOptions`
+ *     has no `tags` field (only `p2pk.additionalTags`), so the relay wallet's tags never reached
+ *     the proof secret either — this leg does not invent them;
+ *   - the consumed inputs are destroyed and the change is stored, in one write to coco.
+ *
+ * Returns `undefined` when there is no wallet, no fundable mint, or a non-sat unit — the same
+ * "could not create a token" answer the relay wallet gave, which NDKZapper turns into a failed
+ * zap rather than a fabricated one.
+ */
+interface NutzapCashuPayRequest {
+	amount: number
+	unit?: string
+	mints?: string[]
+	p2pk?: string
+	proofTags?: string[][]
+}
+
+const cashuPay = async (payment: NutzapCashuPayRequest): Promise<{ proofs: Proof[]; mint: string } | undefined> => {
+	const source = nip60Store.state.wallet
+	if (!source) return undefined
+	if (payment.unit && !payment.unit.startsWith('sat')) return undefined
+
+	const amount = Math.floor(payment.amount)
+	if (!Number.isFinite(amount) || amount <= 0) return undefined
+
+	const mintCandidates = payment.mints?.length ? payment.mints : getAllMints(source)
+	const targetMint = mintCandidates.find((mint) => {
+		const balance = getSpendableProofsForMint(source, mint).reduce((sum, proof) => sum + proof.amount, 0)
+		return balance >= amount
+	})
+	if (!targetMint) return undefined
+
+	const proofsWeHave = getSpendableProofsForMint(source, targetMint)
+	const { selected, total } = selectProofs(proofsWeHave, amount)
+	if (total < amount) return undefined
+
+	const { cashuWallet } = await createCashuWalletForMint(targetMint)
+	const result = await cashuWallet.send(amount, selected, {
+		proofsWeHave,
+		...(payment.p2pk ? { pubkey: payment.p2pk } : {}),
+	})
+
+	await source.state.update({
+		mint: targetMint,
+		store: result.keep,
+		destroy: selected,
+	})
+
+	return { proofs: result.send, mint: targetMint }
+}
+
 export const nip60Actions = {
-	initialize: async (pubkey: string): Promise<void> => {
+	/**
+	 * Bring the wallet up.
+	 *
+	 * The relay-event lifecycle that used to live here is gone, and that is the whole change:
+	 *
+	 *   - no kind-17375 fetch + `NDKCashuWallet.from` / `new` (there is no relay wallet to load);
+	 *   - no `wallet.start({ pubkey })` (no kind-7375 token subscription to open);
+	 *   - no `wallet.on('status_changed')` + `NDKWalletStatus` (coco's status is the store's own);
+	 *   - no `wallet.publish()` (no kind-17375 event to republish) and no `wallet.stop()`.
+	 *
+	 * What replaces it is coco's own initialisation plus the coco-backed wallet source: coco is
+	 * already the authority for proofs, mints and balances, so the store hydrates the source from
+	 * it and projects the same numbers its consumers already read. The one-time key migration is
+	 * run here (best effort) so the wallet's own P2PK pair is available to the reclaim path's
+	 * legacy refund-key fallback before any bid needs it.
+	 *
+	 * The `pubkey` parameter is kept because `./ndk` is its only caller and the call site is not
+	 * this module's to change yet; the authenticated user it names is what coco's init reads.
+	 */
+	initialize: async (_pubkey: string): Promise<void> => {
 		const state = nip60Store.state
 
 		// Don't re-initialize if already initializing or ready
 		if (state.status === 'initializing') return
 		if (state.status === 'ready' && state.wallet) return
 
-		const ndk = ndkStore.state.ndk
-		if (!ndk) {
+		if (!ndkStore.state.ndk) {
 			console.warn('[nip60] NDK not initialized')
 			return
 		}
@@ -824,147 +690,54 @@ export const nip60Actions = {
 		}))
 
 		try {
-			// First, try to fetch the existing wallet event (kind 17375) with timeout.
-			let walletEvent: NDKEvent | null = null
-			try {
-				const events = Array.from(
-					await ndkActions.fetchEventsWithTimeout(
-						{
-							kinds: [NIP60_WALLET_KIND],
-							authors: [pubkey],
-							limit: 5,
-						},
-						{ timeoutMs: NIP60_WALLET_FETCH_TIMEOUT_MS },
-					),
-				)
-				walletEvent = events.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0] ?? null
-			} catch (fetchErr) {
-				console.warn('[nip60] Wallet event fetch timed out or failed, continuing with empty wallet:', fetchErr)
+			// coco owns proofs, mints and balances now; bring it up (idempotent) and take the
+			// wallet source it built. Without coco there is no wallet to spend from.
+			await cashuActions.initialize()
+			const wallet = cashuStore.state.walletSource
+			if (!cashuStore.state.manager || !wallet) {
+				throw new Error('Cashu wallet is not available')
 			}
 
-			let wallet: NDKCashuWallet
+			await wallet.hydrate()
 
-			if (walletEvent) {
-				try {
-					// Load wallet from existing event - this decrypts and loads mints/privkeys
-					const loadedWallet = await withTimeout(
-						NDKCashuWallet.from(walletEvent),
-						NIP60_WALLET_LOAD_TIMEOUT_MS,
-						'nip60 wallet decrypt/load',
-					)
-					if (!loadedWallet) {
-						throw new Error('Failed to load wallet from event')
-					}
-					wallet = loadedWallet
-				} catch (loadErr) {
-					console.warn('[nip60] Failed to load wallet event, falling back to new wallet instance:', loadErr)
-					wallet = new NDKCashuWallet(ndk)
-				}
-			} else {
-				// No wallet event found - create a new wallet instance
-				wallet = new NDKCashuWallet(ndk)
-			}
-
-			ensureWalletRuntimeDefaults(wallet, ndk)
-
-			// Store wallet in state FIRST so event handlers can use it
 			nip60Store.setState((s) => ({
 				...s,
 				wallet,
 			}))
 
-			// M8 FIX: Strip key material before exposing wallet on window.
-			// The raw wallet object may contain privkey, seed, p2pk privkey, and
-			// other sensitive key material. Exposing the full wallet object on
-			// window.__nip60Wallet lets any script (including third-party) read
-			// private keys. Instead, expose a sanitized wrapper that only
-			// exposes non-sensitive methods and properties needed for e2e tests.
-			if (typeof window !== 'undefined' && isNip60WalletDevModeEnabled()) {
-				// M8: Expose a sanitized wallet wrapper. No privkey/seed is exposed
-				// here except the p2pk + privkeys map below, which the settlement
-				// e2e test needs to derive the auction HD xpub and P2PK lock
-				// (c03rad0r #5). The staging exposure is closed by the gate above:
-				// isNip60WalletDevModeEnabled() is true only on localhost/dev
-				// (isLocalDevHost) or via an explicit APP_NIP60_DEV_MODE flag —
-				// never via `stage === 'staging'` (removed in M8).
-				;(window as any).__nip60Wallet = {
-					// Read-only state accessors (no key material)
-					getMints: () => wallet.wallet?.mints ?? [],
-					getBalance: () => {
-						const { totalBalance } = getBalancesFromState(wallet)
-						return totalBalance
-					},
-					// Method proxies for test infrastructure (no key exposure)
-					relay: wallet.relay,
-					// Key material for the settlement e2e test (dev/localhost only,
-					// per the gate above). wallet.wallet (full NDKCashuWallet with
-					// seed) and wallet.seed are NOT exposed.
-					getP2pk: () => wallet.getP2pk(),
-					privkeys: wallet.privkeys,
-				}
-			}
-
-			// Subscribe to balance updates
-			wallet.on('balance_updated', () => {
-				const { totalBalance, mintBalances } = getBalancesFromState(wallet)
-				nip60Store.setState((s) => ({
-					...s,
-					balance: totalBalance,
-					mintBalances,
-					mints: getAllMints(wallet),
-				}))
-			})
-
-			// Listen for status changes
-			wallet.on('status_changed', (status: NDKWalletStatus) => {
-				if (status === NDKWalletStatus.READY) {
-					const { totalBalance, mintBalances } = getBalancesFromState(wallet)
-					const allMints = getAllMints(wallet)
-					const hasWallet = allMints.length > 0 || totalBalance > 0
-
-					nip60Store.setState((s) => ({
-						...s,
-						status: hasWallet ? 'ready' : 'no_wallet',
-						balance: totalBalance,
-						mints: allMints,
-						mintBalances,
-					}))
-				} else if (status === NDKWalletStatus.FAILED) {
-					nip60Store.setState((s) => ({
-						...s,
-						status: 'error',
-						error: 'Wallet failed to load',
-					}))
-				}
-			})
-
-			// Start the wallet - this subscribes to token events and loads balance.
-			// In local relay-only mode, this can hang if relays don't respond; force timeout so UI can recover.
-			let startTimedOut = false
+			// The pair the auction HD root and the reclaim fallback derive from. Best effort: a
+			// fresh profile with no wallet event yet has no pair, and that must not fail the
+			// wallet's own startup — the auction paths raise for it when they actually need it.
 			try {
-				await withTimeout(wallet.start({ pubkey }), NIP60_WALLET_START_TIMEOUT_MS, 'nip60 wallet start')
-			} catch (startErr) {
-				startTimedOut = true
-				console.warn('[nip60] Wallet start timed out, continuing with fallback state:', startErr)
+				walletKeyMaterialCache = await resolveAuctionKeyMaterial()
+			} catch (keyErr) {
+				console.warn('[nip60] Wallet key material is not available yet:', keyErr)
 			}
+
+			// Dev-only bridge for e2e. It exposes read-only status and the wallet's OWN p2pk pair
+			// (gated on isNip60WalletDevModeEnabled(), i.e. localhost/dev or an explicit
+			// APP_NIP60_DEV_MODE flag — never `stage === 'staging'`, removed in M8). Nothing else
+			// is exposed: there is no relay wallet object left to leak.
+			if (typeof window !== 'undefined' && isNip60WalletDevModeEnabled()) {
+				const material = walletKeyMaterialCache as WalletKeyMaterial | null
+				;(window as any).__nip60Wallet = {
+					getMints: () => getAllMints(wallet),
+					getBalance: () => getBalancesFromState(wallet).totalBalance,
+					getP2pk: async () => material?.walletP2pk ?? '',
+					privkeys: new Map(material ? [[material.walletP2pk, { privateKey: material.walletPrivkey }]] : []),
+				}
+			}
+
 			const { totalBalance, mintBalances } = getBalancesFromState(wallet)
 			const allMints = getAllMints(wallet)
 
-			// Determine if user has an existing wallet (we found a wallet event OR have mints/balance)
-			const hasWallet = walletEvent !== null || allMints.length > 0 || totalBalance > 0
-
 			nip60Store.setState((s) => ({
 				...s,
-				status: hasWallet ? 'ready' : 'no_wallet',
+				status: allMints.length > 0 || totalBalance > 0 ? 'ready' : 'no_wallet',
 				balance: totalBalance,
 				mints: allMints,
 				mintBalances,
 			}))
-
-			// Perform a background cleanup pass so spent proofs are removed without manual refresh.
-			if (hasWallet && !startTimedOut) {
-				void nip60Actions.runAutoCleanup({ force: true })
-			}
 
 			// Load pending tokens from localStorage
 			nip60Actions.loadPendingTokens()
@@ -1008,97 +781,14 @@ export const nip60Actions = {
 	},
 
 	/**
-	 * Consolidate spent proofs and refresh wallet state in the background.
-	 * Uses dedupe + cooldown so we can call this from multiple lifecycle points safely.
+	 * Tear the wallet down. coco owns the manager and its repositories, so its own `reset`
+	 * disposes them; this store only drops the projection (including the key-material cache) and
+	 * can no longer leave a relay subscription open — there is none.
 	 */
-	runAutoCleanup: async (options?: { force?: boolean; minIntervalMs?: number }): Promise<void> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) return
-
-		const force = options?.force ?? false
-		const minIntervalMs = options?.minIntervalMs ?? 30_000
-		const now = Date.now()
-
-		if (!force && now - lastAutoCleanupAt < minIntervalMs) return
-		if (autoCleanupPromise) return await autoCleanupPromise
-
-		autoCleanupPromise = (async () => {
-			try {
-				await nip60Actions.refresh({ consolidate: true })
-				lastAutoCleanupAt = Date.now()
-			} catch (err) {
-				console.error('[nip60] Auto cleanup failed:', err)
-			}
-		})()
-
-		try {
-			await autoCleanupPromise
-		} finally {
-			autoCleanupPromise = null
-		}
-	},
-
-	/**
-	 * Create a new NIP-60 wallet with the specified mints
-	 */
-	createWallet: async (mints: string[]): Promise<void> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) {
-			console.error('[nip60] Cannot create wallet - wallet instance not initialized')
-			return
-		}
-
-		try {
-			const result = await NDKCashuWallet.create(wallet.ndk, mints)
-			// Re-initialize to pick up the new wallet
-			nip60Store.setState(() => initialState)
-			const ndk = ndkStore.state.ndk
-			if (ndk?.signer) {
-				const user = await ndk.signer.user()
-				if (user?.pubkey) {
-					await nip60Actions.initialize(user.pubkey)
-				}
-			}
-		} catch (err) {
-			console.error('[nip60] Failed to create wallet:', err)
-			nip60Store.setState((s) => ({
-				...s,
-				error: err instanceof Error ? err.message : 'Failed to create wallet',
-			}))
-		}
-	},
-
-	reset: (): void => {
-		// Clean up transaction subscription
-
-		const state = nip60Store.state
-		if (state.wallet) {
-			state.wallet.stop()
-			state.wallet.removeAllListeners?.()
-		}
+	reset: async (): Promise<void> => {
+		walletKeyMaterialCache = null
+		await cashuActions.reset()
 		nip60Store.setState(() => initialState)
-	},
-
-	getWallet: (): NDKCashuWallet | null => {
-		return nip60Store.state.wallet
-	},
-
-	getWalletP2pk: async (): Promise<string> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet || nip60Store.state.status !== 'ready') {
-			throw new Error('NIP-60 wallet not ready')
-		}
-
-		return await getOrCreateWalletP2pk(wallet)
-	},
-
-	getWalletCashuP2pk: async (): Promise<string> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet || nip60Store.state.status !== 'ready') {
-			throw new Error('NIP-60 wallet not ready')
-		}
-
-		return await getOrCreateWalletCashuP2pk(wallet)
 	},
 
 	/**
@@ -1126,41 +816,6 @@ export const nip60Actions = {
 		})
 	},
 
-	getWalletPrivkey: (pubkey?: string): string | null => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) return null
-		return getWalletPrivkeyForPubkey(wallet, pubkey)
-	},
-
-	ensureWalletPrivkey: async (pubkey?: string, ownerPubkey?: string): Promise<string | null> => {
-		if (!pubkey) return null
-
-		const currentWallet = nip60Store.state.wallet
-		const existingPrivkey = currentWallet ? getWalletPrivkeyForPubkey(currentWallet, pubkey) : null
-		if (existingPrivkey) return existingPrivkey
-
-		const resolvedOwnerPubkey =
-			ownerPubkey ??
-			(await ndkStore.state.ndk?.signer
-				?.user()
-				.then((user) => user.pubkey)
-				.catch(() => '')) ??
-			''
-		if (!resolvedOwnerPubkey) return null
-
-		const loadedWallet = await loadWalletFromLatestEvent(resolvedOwnerPubkey)
-		if (!loadedWallet) return null
-
-		if (currentWallet) {
-			await adoptWalletAccess(currentWallet, loadedWallet)
-			nip60Store.setState((s) => ({ ...s, wallet: currentWallet }))
-			return getWalletPrivkeyForPubkey(currentWallet, pubkey)
-		}
-
-		nip60Store.setState((s) => ({ ...s, wallet: loadedWallet }))
-		return getWalletPrivkeyForPubkey(loadedWallet, pubkey)
-	},
-
 	/**
 	 * Attach a context to one pending token. The body now lives in `@/lib/wallet/auctionHost`
 	 * (`createAuctionHost`) behind {@link AuctionHost}; this is the store binding. Returns the
@@ -1173,45 +828,25 @@ export const nip60Actions = {
 		markPendingTokensByBidEventIds(bidEventIds, 'claimed')
 	},
 
-	consolidateProofs: async (): Promise<void> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) {
-			console.warn('[nip60] Cannot consolidate without wallet')
-			return
-		}
-
-		try {
-			await consolidateWalletProofs(wallet)
-		} catch (err) {
-			console.error('[nip60] Failed to consolidate tokens:', err)
-			throw err
-		}
-	},
-
 	/**
-	 * Refresh wallet balance and mint balances
-	 * @param options.consolidate If true, consolidate tokens first (checks for spent proofs)
+	 * Refresh the balance projection from the wallet source.
+	 *
+	 * `options.consolidate` is accepted and ignored on purpose. It used to drive a NUT-7
+	 * spent-proof sweep (`consolidateProofs`), which existed only because the relay wallet's
+	 * proof set could go stale: coco's `proofStateWatcher` is what does that job now, and the
+	 * write path (`saveProofs` + `deleteProofs`) removes the consumed inputs as it goes. The
+	 * parameter stays so the call sites that pass it (`bids.tsx`) are unchanged.
 	 */
-	refresh: async (options?: { consolidate?: boolean }): Promise<void> => {
+	refresh: async (_options?: { consolidate?: boolean }): Promise<void> => {
 		const wallet = nip60Store.state.wallet
 		if (!wallet) {
 			console.warn('[nip60] Cannot refresh without wallet')
 			return
 		}
 
-		const shouldConsolidate = options?.consolidate ?? false
-
-		// Consolidate tokens if requested - this checks for spent proofs
-		if (shouldConsolidate) {
-			try {
-				await nip60Actions.consolidateProofs()
-			} catch (err) {
-				console.error('[nip60] Failed to consolidate tokens:', err)
-				// Continue with refresh even if consolidation fails
-			}
-		}
-
-		// Get balances directly from wallet state (source of truth)
+		// coco is the authority for the totals; re-read them and refresh the source's mirror,
+		// then project the source's own per-mint money (the same proofs the rails will spend).
+		await cashuActions.refreshBalances()
 		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
 
 		nip60Store.setState((s) => ({
@@ -1225,70 +860,12 @@ export const nip60Actions = {
 	},
 
 	/**
-	 * Add a mint to the wallet (locally, call publish to save)
+	 * Register a mint with the wallet. The list is coco's, so this writes through coco (which
+	 * re-reads and re-projects its own list) rather than appending to a local copy — a local
+	 * append would be a second mint list, which is exactly what this store must not have.
 	 */
-	addMint: (mintUrl: string): void => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) {
-			console.warn('[nip60] Cannot add mint without wallet')
-			return
-		}
-
-		// Normalize URL
-		const normalizedUrl = mintUrl.trim().replace(/\/$/, '')
-		if (!normalizedUrl) return
-
-		// Check if already exists
-		if (wallet.mints.includes(normalizedUrl)) {
-			console.log('[nip60] Mint already exists:', normalizedUrl)
-			return
-		}
-
-		wallet.mints = [...wallet.mints, normalizedUrl]
-
-		// Update store state
-		nip60Store.setState((s) => ({
-			...s,
-			mints: getAllMints(wallet),
-		}))
-	},
-
-	/**
-	 * Remove a mint from the wallet (locally, call publish to save)
-	 */
-	removeMint: (mintUrl: string): void => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) {
-			console.warn('[nip60] Cannot remove mint without wallet')
-			return
-		}
-
-		wallet.mints = wallet.mints.filter((m) => m !== mintUrl)
-
-		// Update store state - note: mints with balance will still show even after removal from config
-		nip60Store.setState((s) => ({
-			...s,
-			mints: getAllMints(wallet),
-			mintBalances: Object.fromEntries(Object.entries(s.mintBalances).filter(([m]) => m !== mintUrl)),
-		}))
-	},
-
-	/**
-	 * Publish wallet changes to Nostr
-	 */
-	publishWallet: async (): Promise<void> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) {
-			console.warn('[nip60] Cannot publish without wallet')
-			return
-		}
-
-		try {
-			await wallet.publish()
-		} catch (err) {
-			console.error('[nip60] Failed to publish wallet:', err)
-			throw err
-		}
+	addMint: async (mintUrl: string): Promise<void> => {
+		await cashuActions.addMint(mintUrl)
 	},
 
 	/**
@@ -1307,53 +884,13 @@ export const nip60Actions = {
 	},
 
 	/**
-	 * Pay a Lightning invoice using this NIP-60 wallet.
-	 * Returns preimage when the wallet provides it.
-	 */
-	payLightningInvoice: async (invoice: string): Promise<Nip60LightningPaymentResult> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet || nip60Store.state.status !== 'ready') {
-			throw new Error('NIP-60 wallet not ready')
-		}
-
-		const attemptPayInvoice = async (): Promise<Nip60LightningPaymentResult> => {
-			const result = await wallet.lnPay({ pr: invoice })
-			await new Promise((resolve) => setTimeout(resolve, 500))
-			await nip60Actions.runAutoCleanup({ force: true, minIntervalMs: 0 })
-			return { preimage: extractPreimageCandidate(result) }
-		}
-
-		try {
-			return await attemptPayInvoice()
-		} catch (err) {
-			console.error('[nip60] Failed to pay lightning invoice (first attempt):', err)
-			const errorMessage = err instanceof Error ? err.message : String(err)
-
-			// Handle state sync errors - consolidate and retry
-			const isStateError =
-				errorMessage.toLowerCase().includes('already spent') ||
-				errorMessage.toLowerCase().includes('token spent') ||
-				errorMessage.toLowerCase().includes('proof not found')
-
-			if (isStateError) {
-				try {
-					await nip60Actions.consolidateProofs()
-					await nip60Actions.refresh()
-					return await attemptPayInvoice()
-				} catch (retryErr) {
-					console.error('[nip60] Retry after consolidation failed:', retryErr)
-					await nip60Actions.refresh()
-					throw retryErr
-				}
-			}
-
-			await nip60Actions.refresh()
-			throw err
-		}
-	},
-
-	/**
 	 * Send a NIP-61 nutzap from this NIP-60 wallet.
+	 *
+	 * The protocol half is NDK's `NDKZapper` (recipient `kind:10019` discovery, the `9321` it
+	 * builds and signs, the publish to the recipient's relays) — unchanged. What changed is the
+	 * one thing that used to come from the relay wallet: `cashuPay`, the leg that locks the
+	 * funds. It is now {@link cashuPay} over the coco-backed source, so the money still leaves
+	 * through one proof store.
 	 */
 	zapWithNutzap: async (params: { target: NDKEvent | NDKUser; amountSats: number; comment?: string }): Promise<Nip60NutzapResult> => {
 		const wallet = nip60Store.state.wallet
@@ -1374,7 +911,7 @@ export const nip60Actions = {
 			ndk,
 			signer: ndk.signer,
 			comment,
-			cashuPay: async (payment) => wallet.cashuPay(payment),
+			cashuPay: async (payment) => cashuPay(payment),
 		})
 
 		const results = await zapper.zap(['nip61'])
@@ -1384,22 +921,10 @@ export const nip60Actions = {
 			throw new Error(error?.message || 'Failed to send nutzap')
 		}
 
-		await nip60Actions.runAutoCleanup({ force: true, minIntervalMs: 0 })
+		// The locked proofs left the wallet, so re-read the balance (coco's watcher also fires
+		// on the proof write; this makes the UI right immediately).
+		await cashuActions.refreshBalances()
 		return { eventId: nutzap.id, event: nutzap }
-	},
-
-	/**
-	 * Withdraw to Lightning (melt ecash)
-	 * @param invoice Lightning invoice to pay
-	 */
-	withdrawLightning: async (invoice: string): Promise<boolean> => {
-		try {
-			await nip60Actions.payLightningInvoice(invoice)
-			return true
-		} catch (err) {
-			console.error('[nip60] Failed to withdraw:', err)
-			throw err
-		}
 	},
 
 	/**
@@ -1408,150 +933,6 @@ export const nip60Actions = {
 	 */
 	lockAuctionBidFunds: async (params: LockAuctionBidFundsParams): Promise<LockAuctionBidFundsResult> =>
 		getAuctionLock().lockAuctionBidFunds(params),
-
-	/**
-	 * Send eCash - generates a Cashu token string
-	 * Uses cashu-ts directly to avoid NDKCashuWallet state sync bugs.
-	 * @param amount Amount in sats to send
-	 * @param mint Optional mint URL to send from
-	 */
-	sendEcash: async (amount: number, mint?: string): Promise<string | null> => {
-		const wallet = nip60Store.state.wallet
-		const state = nip60Store.state
-		if (!wallet) {
-			console.warn('[nip60] Cannot send without wallet')
-			return null
-		}
-
-		// Get current state
-		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
-
-		// Determine target mint
-		let targetMint = mint ?? state.defaultMint ?? undefined
-
-		// If no mint specified, find one with sufficient balance
-		if (!targetMint) {
-			targetMint = Object.keys(mintBalances).find((m) => mintBalances[m] >= amount)
-		}
-
-		if (!targetMint) {
-			throw new Error(`No mint with sufficient balance. Available: ${totalBalance} sats`)
-		}
-
-		const mintBalance = mintBalances[targetMint] ?? 0
-		if (mintBalance < amount) {
-			throw new Error(`Insufficient balance at ${getMintHostname(targetMint)}. Available: ${mintBalance} sats`)
-		}
-
-		// Get proofs for this mint using shared utility
-		const mintProofs = getSpendableProofsForMint(wallet, targetMint)
-
-		if (mintProofs.length === 0) {
-			throw new Error(`No proofs available at ${getMintHostname(targetMint)}. Try refreshing your wallet.`)
-		}
-
-		// Select proofs to use
-		const { selected: selectedProofs, total: selectedTotal } = selectProofs(mintProofs, amount)
-
-		if (selectedTotal < amount) {
-			throw new Error(`Could not select enough proofs. Need ${amount}, have ${selectedTotal}`)
-		}
-
-		try {
-			const { cashuWallet } = await createCashuWalletForMint(targetMint)
-
-			let tokenProofs: Proof[]
-			let changeProofs: Proof[] = []
-
-			if (selectedTotal === amount) {
-				// Exact amount - use proofs directly
-				tokenProofs = selectedProofs
-			} else {
-				// Need to swap for exact amount + change
-				const swapResult = await cashuWallet.swap(amount, selectedProofs)
-				tokenProofs = swapResult.send
-				changeProofs = swapResult.keep
-			}
-
-			// Create the token
-			const token = getEncodedToken({
-				mint: targetMint,
-				proofs: tokenProofs,
-			})
-
-			// Save to pending tokens IMMEDIATELY before any state updates
-			const pendingToken: PendingNip60Token = {
-				id: generateId(),
-				token,
-				amount: tokenProofs.reduce((s, p) => s + p.amount, 0),
-				mintUrl: targetMint,
-				createdAt: Date.now(),
-				status: 'pending',
-			}
-
-			const pendingTokens = [...nip60Store.state.pendingTokens, pendingToken]
-			savePendingTokens(pendingTokens)
-			nip60Store.setState((s) => ({ ...s, pendingTokens }))
-
-			// The proofs we used are now "spent" at the mint.
-			// NDKCashuWallet stores proofs in Nostr events, and the wallet will detect
-			// spent proofs on the next consolidateTokens() call.
-			//
-			// The token is already saved to pending list, so even if state sync fails,
-			// the token won't be lost - user can reclaim or share it.
-			//
-			// Destroy the inputs we consumed — the mint already burned
-			// them during the swap. Without this, a subsequent bid or
-			// sendEcash in the same session will try to spend the
-			// same proofs and get "Token Already Spent" from the mint.
-			await wallet.state.update({
-				mint: targetMint,
-				destroy: selectedProofs,
-				...(changeProofs.length > 0 ? { store: changeProofs } : {}),
-			})
-			// Persist so the wallet event is current on page refresh.
-			try {
-				await wallet.publish()
-			} catch (publishErr) {
-				console.error('[nip60] Failed to publish wallet after send (non-fatal):', publishErr)
-			}
-
-			// Consolidate to sync state (detect spent proofs)
-			try {
-				await nip60Actions.consolidateProofs()
-			} catch (consolidateErr) {
-				console.error('[nip60] Consolidation error (non-fatal):', consolidateErr)
-			}
-
-			// Refresh to update balance display
-			await nip60Actions.refresh()
-
-			return token
-		} catch (err) {
-			console.error('[nip60] Failed to send eCash:', err)
-
-			// Check if this is a "proofs already spent" error from the mint
-			const errorMessage = err instanceof Error ? err.message : String(err)
-			if (errorMessage.toLowerCase().includes('already spent') || errorMessage.toLowerCase().includes('token spent')) {
-				try {
-					await nip60Actions.consolidateProofs()
-					await nip60Actions.refresh()
-				} catch (consolidateErr) {
-					console.error('[nip60] Consolidation failed:', consolidateErr)
-				}
-				throw new Error('Some proofs were already spent. Please try again.')
-			}
-
-			// Provide more user-friendly error messages
-			if (err instanceof Error) {
-				if (err.message.includes('amount preferences') || err.message.includes('keyset')) {
-					throw new Error(`Cannot create exact amount of ${amount} sats. Try a different amount.`)
-				}
-			}
-
-			throw err
-		}
-	},
 
 	/**
 	 * Dev-only helper: mint free test ecash from configured dev mints into the NIP-60 wallet.
@@ -1598,8 +979,8 @@ export const nip60Actions = {
 					mint: targetMint,
 				})
 
-				if (!wallet.mints.includes(targetMint)) {
-					nip60Actions.addMint(targetMint)
+				if (!getAllMints(wallet).includes(targetMint)) {
+					await cashuActions.addMint(targetMint)
 				}
 				if (!nip60Store.state.defaultMint) {
 					nip60Actions.setDefaultMint(targetMint)
@@ -1732,29 +1113,6 @@ export const nip60Actions = {
 			bidAmount,
 			minBid,
 			topUpAmount: Math.max(0, bidAmount - balanceAtMint),
-		}
-	},
-
-	/**
-	 * Receive eCash - redeem a Cashu token
-	 * @param token Cashu token string to receive
-	 */
-	receiveEcash: async (token: string): Promise<boolean> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) {
-			console.warn('[nip60] Cannot receive without wallet')
-			return false
-		}
-
-		try {
-			await receiveTokenIntoWallet({ wallet, mint: auctionFundsMintAccess, token })
-
-			// Refresh to update balance
-			await nip60Actions.refresh()
-			return true
-		} catch (err) {
-			console.error('[nip60] Failed to receive eCash:', err)
-			throw err
 		}
 	},
 

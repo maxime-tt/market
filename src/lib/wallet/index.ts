@@ -4,6 +4,11 @@ export type { ProofInfo, PendingToken, PendingTokenContext, AuctionBidPendingTok
 // Proof utilities
 export { extractProofsByMint, getProofsForMint, getSpendableProofsForMint } from './proofs'
 
+// The coco-backed wallet object the rails spend through (coco's proof repository behind the
+// synchronous proof read)
+export { createCocoWalletSource } from './cashuWalletSource'
+export type { CashuProofRepository, CashuWalletSource, CashuWalletSourcePorts } from './cashuWalletSource'
+
 // The auction P2PK spend (the leg coco cannot do), behind injected ports
 export { receiveTokenIntoWallet, receiveTokenWithPrivkey } from './auctionFunds'
 export type { AuctionFundsMintAccess, AuctionFundsWallet, ReceiveTokenDeps } from './auctionFunds'

@@ -14,6 +14,7 @@ import { IndexedDbRepositories } from 'coco-cashu-indexeddb'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { authStore } from './auth'
 import { getMintHostname, loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
+import { createCocoWalletSource, type CashuWalletSource } from '@/lib/wallet/cashuWalletSource'
 import {
 	type CocoDepositQuote,
 	DEPOSIT_CONFIRMATION_TIMEOUT_LABEL,
@@ -107,6 +108,13 @@ export interface CashuDepositQuoteEstimate {
 
 export interface CashuState {
 	manager: Manager | null
+	/**
+	 * The wallet object the auction rails spend through: coco's proof repository behind the
+	 * synchronous proof read the rails are written against (`@/lib/wallet/cashuWalletSource`).
+	 * Implementation detail — containers must not read it. It is the SAME source the rails get,
+	 * so there is no second place a proof can live.
+	 */
+	walletSource: CashuWalletSource | null
 	status: 'idle' | 'initializing' | 'ready' | 'error'
 	error: string | null
 	balances: Record<string, number>
@@ -134,6 +142,7 @@ export interface CashuState {
 
 const initialState: CashuState = {
 	manager: null,
+	walletSource: null,
 	status: 'idle',
 	error: null,
 	balances: {},
@@ -401,6 +410,20 @@ export const cashuActions = {
 
 			console.log('[cashu] Coco manager initialized')
 
+			// The wallet object the rails spend through: coco's proof repository behind the
+			// synchronous proof read they are written against. Built here, from the same
+			// repositories the manager was initialised with, so there is exactly one proof
+			// store and one mint list behind it.
+			const walletSource = createCocoWalletSource({
+				getMints: () => cashuStore.state.mints,
+				proofs: {
+					saveProofs: (mintUrl, proofs) =>
+						repos.proofRepository.saveProofs(mintUrl, proofs as Parameters<typeof repos.proofRepository.saveProofs>[1]),
+					getReadyProofs: (mintUrl) => repos.proofRepository.getReadyProofs(mintUrl),
+					deleteProofs: (mintUrl, secrets) => repos.proofRepository.deleteProofs(mintUrl, secrets),
+				},
+			})
+
 			// Subscribe to balance updates
 			manager.on('proofs:saved', async () => {
 				await cashuActions.refreshBalances()
@@ -418,6 +441,7 @@ export const cashuActions = {
 			cashuStore.setState((s) => ({
 				...s,
 				manager,
+				walletSource,
 				status: 'ready',
 				pendingTokens,
 			}))
@@ -464,6 +488,10 @@ export const cashuActions = {
 			}
 
 			cashuActions.setMints(knownMints.map((mint) => mint.mintUrl))
+
+			// The mirror reads coco per mint, so it can only be filled once the mint list is
+			// known. Nothing else refreshes it from the repository.
+			await cashuStore.state.walletSource?.hydrate()
 		} catch (err) {
 			console.error('[cashu] Failed to read mints from coco:', err)
 		}
@@ -525,6 +553,11 @@ export const cashuActions = {
 				balances,
 				totalBalance: total,
 			}))
+
+			// Every proof event lands here, so this is where the rails' synchronous proof mirror
+			// is re-read from coco. coco stays the authority; the mirror only answers a question
+			// the rails ask synchronously.
+			await cashuStore.state.walletSource?.hydrate()
 
 			console.log('[cashu] Balances updated:', { balances, total })
 		} catch (err) {
