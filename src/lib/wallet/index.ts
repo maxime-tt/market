@@ -7,6 +7,15 @@ export { extractProofsByMint, getProofsForMint, getSpendableProofsForMint } from
 // The auction P2PK spend (the leg coco cannot do), behind injected ports
 export { receiveTokenIntoWallet, receiveTokenWithPrivkey } from './auctionFunds'
 export type { AuctionFundsMintAccess, AuctionFundsWallet, ReceiveTokenDeps } from './auctionFunds'
+// The auction reclaim pair (timelock refund + throttled sweep), behind injected ports
+export {
+	AUCTION_RECLAIM_SKEW_BUFFER_SECONDS,
+	createAuctionReclaim,
+	formatReclaimWaitSeconds,
+	getAuctionReclaimReadyAt,
+	getAuctionReclaimReadyAtForGroup,
+} from './auctionFunds'
+export type { AuctionReclaim, AuctionReclaimHost } from './auctionFunds'
 
 // The wallet keypair's local home (sealed at rest)
 export { SealedWalletKeyStore, WalletKeySealerUnavailableError, WalletKeyStoreError, createSignerWalletKeySealer } from './walletKeyStore'

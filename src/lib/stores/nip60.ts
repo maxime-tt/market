@@ -1,5 +1,6 @@
 import {
 	createAppWalletKeyStore,
+	createAuctionReclaim,
 	createRelayWalletKeyMigrationSource,
 	createWalletEventReader,
 	deriveAuctionChildPrivkey,
@@ -13,6 +14,7 @@ import {
 	saveUserData,
 	type AuctionBidPendingTokenContext,
 	type AuctionFundsMintAccess,
+	type AuctionReclaim,
 	type PendingToken,
 	type PendingTokenContext,
 	type WalletEventOpener,
@@ -24,7 +26,6 @@ import {
 } from '@/lib/wallet'
 import { auctionP2pkPubkeysMatch, getAuctionP2pkLockPubkeyFromSecret, toCompressedAuctionP2pkPubkey } from '@/lib/auctionP2pk'
 import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
-import { executeAuctionBidReclaimWorkflow, planAuctionBidReclaimTiming } from '@sdk/commerce/auctions'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
 import { toEncryptingSigner } from '@/lib/nostr/ndkEncryptingSigner'
 import {
@@ -37,7 +38,6 @@ import {
 	type MintKeyset,
 	type Proof,
 } from '@cashu/cashu-ts'
-import { getP2PKLocktime } from '@/lib/utils/cashu'
 import { buildDleqProofs } from '@/lib/cashu/dleq'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -53,11 +53,6 @@ import {
 	createCocoDepositQuote,
 	getDepositConfirmationTimeoutMessage,
 } from '@/lib/wallet/depositQuote'
-import {
-	findBidderRecordByRefundPubkey,
-	findPreLockRecoveryRecordByRefundPubkey,
-	removePreLockRecoveryRecord,
-} from '@/lib/auction/bidderRecords'
 import type { SaveUserDataOptions } from '@/lib/wallet/storage'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
@@ -257,29 +252,19 @@ const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[numb
  */
 export const AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS = 7200
 export const getAuctionSettlementGraceSeconds = (): number => AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS
+
 /**
- * Wall-clock skew buffer added on top of a proof's embedded P2PK locktime before
- * the client attempts a refund-path reclaim. Guards against the local clock
- * briefly racing ahead of the mint's, which would produce a
- * "Witness is missing for p2pk signature" error from the mint.
+ * Re-exported from `@/lib/wallet/auctionFunds`, where the reclaim pair now lives with its
+ * timing helpers, backoff constants and error classification. Kept exported here because
+ * `platform/…/bids.tsx` reads the two UI helpers off this module; that import moves when the
+ * store itself is deleted.
  */
-export const AUCTION_RECLAIM_SKEW_BUFFER_SECONDS = 30
-/**
- * Minimum wall-clock gap between auto-reclaim sweeps. Without this the sweep
- * would fire on every wallet refresh (and every bid) and hammer the mint with
- * /swap calls per pending token, causing HTTP 429s that block the bid flow.
- */
-const AUCTION_AUTO_RECLAIM_MIN_INTERVAL_MS = 60_000
-/** Exponential backoff (seconds) between successive reclaim retries per token. */
-const AUCTION_RECLAIM_BACKOFF_SECONDS = [30, 120, 600, 1800, 7200]
-/**
- * Substrings in a mint error message that indicate the refund path will never
- * work for this token — retrying burns rate-limit budget for no reason. These
- * come from cashu-ts / mint responses when the proof's lock secret can't be
- * satisfied with any key the wallet holds.
- */
-const AUCTION_RECLAIM_PERMANENT_ERROR_KEYWORDS = ['witness is missing', 'signature is not valid', 'spending conditions not met']
-let auctionAutoReclaimLastSweepMs = 0
+export {
+	AUCTION_RECLAIM_SKEW_BUFFER_SECONDS,
+	formatReclaimWaitSeconds,
+	getAuctionReclaimReadyAt,
+	getAuctionReclaimReadyAtForGroup,
+} from '@/lib/wallet'
 
 /**
  * Returns the bounded safety buffer for an auction funding deposit.
@@ -345,66 +330,6 @@ export const validateAuctionDepositInvoiceQuote = (params: {
 				`Maximum allowed is ${maxAllowedQuoteFeeSats} sats. Please choose another mint.`,
 		)
 	}
-}
-
-/**
- * Resolve the earliest-reclaim timestamp for a bid token. We prefer the
- * authoritative locktime embedded in each proof's NUT-11 P2PK secret, but fall
- * back to the caller-supplied `contextLocktime` (the value the bidder stashed
- * when they placed the bid) when the secret parse turns up no usable value —
- * otherwise a token whose secret isn't parseable would look "never ready" and
- * produce the misleading "in a moment" error. A small buffer is always added
- * on top to ride out client/mint clock drift.
- */
-export const getAuctionReclaimReadyAt = (token: string, contextLocktime?: number): number => {
-	const fallback = contextLocktime && contextLocktime > 0 ? contextLocktime : 0
-	let maxLocktime = fallback
-	try {
-		const decoded = getDecodedToken(token)
-		if (decoded?.proofs?.length) {
-			for (const proof of decoded.proofs) {
-				try {
-					const locktime = getP2PKLocktime(proof.secret)
-					if (Number.isFinite(locktime) && locktime > maxLocktime) maxLocktime = locktime
-				} catch {
-					// Proof isn't a P2PK secret — doesn't contribute a locktime.
-				}
-			}
-		}
-	} catch {
-		// Token won't decode — rely on the context fallback below.
-	}
-	return maxLocktime + AUCTION_RECLAIM_SKEW_BUFFER_SECONDS
-}
-
-/** Human-readable "Xs / Xm / Xh" label for a pending-reclaim wait period. */
-export const formatReclaimWaitSeconds = (seconds: number): string => {
-	if (!Number.isFinite(seconds) || seconds <= 0) return 'a moment'
-	if (seconds < 60) return `${Math.ceil(seconds)}s`
-	const minutes = Math.ceil(seconds / 60)
-	if (minutes < 60) return `${minutes}m`
-	const hours = Math.ceil(seconds / 3600)
-	return `${hours}h`
-}
-
-/** Helper for UI: compute the ready-at across every pending leg of a bid group. */
-export const getAuctionReclaimReadyAtForGroup = (tokens: { token: string; context?: { locktime?: number } }[]): number => {
-	if (!tokens.length) return 0
-	return tokens.reduce((max, entry) => {
-		const readyAt = getAuctionReclaimReadyAt(entry.token, entry.context?.locktime)
-		return readyAt > max ? readyAt : max
-	}, 0)
-}
-
-const getReclaimBackoffSeconds = (previousAttempts: number): number => {
-	if (previousAttempts <= 0) return 0
-	const index = Math.min(previousAttempts - 1, AUCTION_RECLAIM_BACKOFF_SECONDS.length - 1)
-	return AUCTION_RECLAIM_BACKOFF_SECONDS[index]
-}
-
-const isPermanentReclaimFailure = (err: unknown): boolean => {
-	const message = (err instanceof Error ? err.message : String(err)).toLowerCase()
-	return AUCTION_RECLAIM_PERMANENT_ERROR_KEYWORDS.some((keyword) => message.includes(keyword))
 }
 
 export const nip60Store = new Store<Nip60State>(initialState)
@@ -828,10 +753,6 @@ const loadWalletFromLatestEvent = async (ownerPubkey: string): Promise<NDKCashuW
 	}
 }
 
-const resolveAuctionBidPendingContext = (pendingToken: PendingNip60Token): AuctionBidPendingTokenContext | null => {
-	return pendingToken.context?.kind === 'auction_bid' ? pendingToken.context : null
-}
-
 const getOrCreateWalletP2pk = async (wallet: NDKCashuWallet): Promise<string> => {
 	const hadPrivkeys = wallet.privkeys.size > 0
 	const p2pk = await wallet.getP2pk()
@@ -981,6 +902,32 @@ const resolveAuctionKeyMaterial = async (): Promise<WalletKeyMaterial> => {
  */
 const auctionFundsMintAccess: AuctionFundsMintAccess = {
 	cashuWalletForMint: (mintUrl) => createCashuWalletForMint(mintUrl),
+}
+
+/**
+ * The single reclaim instance the two actions delegate to. Built lazily and held once, so the
+ * host closures read the store's live pending tokens and wallet, and the sweep's "at most one
+ * per minute" throttle is shared across every caller of `autoReclaimTimelockedBids`.
+ */
+let auctionReclaimInstance: AuctionReclaim | null = null
+const getAuctionReclaim = (): AuctionReclaim => {
+	auctionReclaimInstance ??= createAuctionReclaim({
+		getWallet: () => nip60Store.state.wallet,
+		isWalletReady: () => nip60Store.state.status === 'ready',
+		mint: auctionFundsMintAccess,
+		getWalletPrivkey: (pubkey) => {
+			const wallet = nip60Store.state.wallet
+			return wallet ? getWalletPrivkeyForPubkey(wallet, pubkey) : null
+		},
+		getWalletPrivkeyCount: () => nip60Store.state.wallet?.privkeys.size ?? 0,
+		getPendingTokens: () => nip60Store.state.pendingTokens,
+		setPendingTokens: (tokens) => {
+			savePendingTokens(tokens)
+			nip60Store.setState((s) => ({ ...s, pendingTokens: tokens }))
+		},
+		refresh: () => nip60Actions.refresh(),
+	})
+	return auctionReclaimInstance
 }
 
 /**
@@ -2749,198 +2696,23 @@ export const nip60Actions = {
 	/**
 	 * Reclaim a pending token (if the recipient hasn't claimed it yet).
 	 *
-	 * Source of truth for the timelock is the Cashu proof secret itself, not the
-	 * cached auction context (which may be stale/missing from an older session).
-	 * A small skew buffer guards against the local clock briefly leading the
-	 * mint's. Errors propagate so the caller can show the real message. A
-	 * manual invocation resets `reclaimPermanentlyFailed` so the user can
-	 * retry tokens auto-reclaim has given up on.
+	 * The whole reclaim money path — readiness from the proof secret (not the cached context),
+	 * the refund-key preference (bidder record → pre-lock recovery record → the wallet's key
+	 * map), the `receiveTokenWithPrivkey` mint call, the pending-token bookkeeping and the
+	 * error semantics — now lives in `@/lib/wallet/auctionFunds` (`createAuctionReclaim`),
+	 * behind `AuctionReclaimHost`. This action is the thin store binding; the host is read
+	 * lazily per call, so a wallet that appears later is still seen and the sweep's throttle
+	 * is shared across calls.
 	 */
-	reclaimToken: async (tokenId: string, options?: { manual?: boolean }): Promise<void> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) {
-			throw new Error('Wallet not initialized')
-		}
-
-		const pendingToken = nip60Store.state.pendingTokens.find((t) => t.id === tokenId)
-		if (!pendingToken) {
-			throw new Error('Pending token not found')
-		}
-
-		const auctionContext = resolveAuctionBidPendingContext(pendingToken)
-		const now = Math.floor(Date.now() / 1000)
-		const reclaimReadyAt = getAuctionReclaimReadyAt(pendingToken.token, auctionContext?.locktime)
-		const reclaimPlan = planAuctionBidReclaimTiming({ tokenId, readyAt: reclaimReadyAt, now })
-		if (reclaimPlan.status === 'waiting') {
-			throw new Error(`Bid refund opens in ${formatReclaimWaitSeconds(reclaimPlan.waitSeconds)}`)
-		}
-
-		// Look up the refund privkey from three sources in order of
-		// preference:
-		//
-		//   1. The auction's BidderBidRecord (`refundPrivateKey`). This
-		//      is THE authoritative store under cashu_p2pk_bidder_path_v1
-		//      — each bid leg generates a fresh refund keypair at lock
-		//      time and persists the privkey there. Refund keys are
-		//      intentionally NOT added to `wallet.privkeys` because that
-		//      map is for the wallet's general signing keys; mixing in
-		//      per-bid throwaway keys would bloat it across many bids.
-		//   2. The pre-lock recovery record (#1235 round-3 B1). A leg whose
-		//      lock outcome was UNCERTAIN never got a full bidder record,
-		//      but its refund privkey was durably persisted before the
-		//      mint call — that record is exactly the recovery authority
-		//      for the pending token the swap may have left behind.
-		//   3. The wallet's `privkeys` map. Legacy path; covers older
-		//      bids placed before the BidderBidRecord scheme existed and
-		//      provides a safety net if the local record is missing but
-		//      the user happens to also hold the privkey in their wallet.
-		//   4. None → stop. Without the privkey the timelock refund
-		//      branch can't be signed; falling through would just spam
-		//      the mint with "witness missing" 4xx responses.
-		const bidderRecord = auctionContext ? findBidderRecordByRefundPubkey(auctionContext.refundPubkey) : null
-		const preLockRecoveryRecord = auctionContext ? findPreLockRecoveryRecordByRefundPubkey(auctionContext.refundPubkey) : null
-		const refundPrivkey =
-			bidderRecord?.refundPrivateKey ??
-			(auctionContext ? (preLockRecoveryRecord?.refundPrivateKey ?? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey)) : null)
-
-		if (auctionContext && !refundPrivkey) {
-			const walletPrivkeyCount = wallet.privkeys.size
-			console.warn(
-				`[nip60] Reclaim aborted: no refund privkey found for refundPubkey ${auctionContext.refundPubkey} ` +
-					`(checked BidderBidRecord + wallet.privkeys; wallet holds ${walletPrivkeyCount} privkey(s)). ` +
-					`The bid was likely placed with a different browser/profile or local storage was cleared.`,
-			)
-			const reason =
-				"This device does not hold the refund private key for this bid. The key only exists in the wallet that originally placed the bid (per-bid refund keys are stored in localStorage and aren't synced). Locked sats stay at the mint until that device reclaims them."
-			const updatedTokens = nip60Store.state.pendingTokens.map((t) =>
-				t.id === tokenId
-					? {
-							...t,
-							reclaimAttempts: (t.reclaimAttempts ?? 0) + 1,
-							lastReclaimAttemptAt: now,
-							reclaimFailureReason: reason,
-							// Key mismatch is permanent — a new privkey won't
-							// appear. Mark so auto-reclaim skips forever. A
-							// manual retry from the UI will clear the flag in
-							// case the user imports the original wallet later.
-							reclaimPermanentlyFailed: !options?.manual,
-						}
-					: t,
-			)
-			savePendingTokens(updatedTokens)
-			nip60Store.setState((s) => ({ ...s, pendingTokens: updatedTokens }))
-			throw new Error(reason)
-		}
-
-		try {
-			const reclaimOutcome = await executeAuctionBidReclaimWorkflow(
-				{ tokenId, readyAt: reclaimReadyAt, now },
-				{
-					reclaim: async () => {
-						if (refundPrivkey) {
-							await receiveTokenWithPrivkey({
-								wallet,
-								mint: auctionFundsMintAccess,
-								token: pendingToken.token,
-								privkey: refundPrivkey,
-								mintUrl: pendingToken.mintUrl,
-							})
-						} else {
-							// Non-auction pending token (e.g. a regular sendEcash token
-							// the recipient hasn't claimed). Best-effort unsigned receive.
-							await receiveTokenIntoWallet({ wallet, mint: auctionFundsMintAccess, token: pendingToken.token })
-						}
-					},
-				},
-			)
-			if (reclaimOutcome.status === 'waiting') {
-				throw new Error(`Bid refund opens in ${formatReclaimWaitSeconds(reclaimOutcome.waitSeconds)}`)
-			}
-			if (reclaimOutcome.status === 'failed') throw reclaimOutcome.cause
-
-			// Mark reclaimed so auto-reclaim won't retry it.
-			const pendingTokens = nip60Store.state.pendingTokens.map((t) =>
-				t.id === tokenId
-					? {
-							...t,
-							status: 'reclaimed' as const,
-							lastReclaimAttemptAt: now,
-							reclaimFailureReason: undefined,
-							reclaimPermanentlyFailed: false,
-						}
-					: t,
-			)
-			savePendingTokens(pendingTokens)
-			nip60Store.setState((s) => ({ ...s, pendingTokens }))
-
-			// #1235 round-3 B1 — the leg is recovered: drop its pre-lock recovery
-			// record (GC). The record held the refund authority while the leg was
-			// in limbo; a successful reclaim makes it obsolete.
-			if (preLockRecoveryRecord) {
-				removePreLockRecoveryRecord(preLockRecoveryRecord.refundPubkey)
-			}
-
-			await nip60Actions.refresh()
-		} catch (err) {
-			const attempts = (pendingToken.reclaimAttempts ?? 0) + 1
-			const permanent = isPermanentReclaimFailure(err)
-			const reason = err instanceof Error ? err.message : String(err)
-			const pendingTokens = nip60Store.state.pendingTokens.map((t) =>
-				t.id === tokenId
-					? {
-							...t,
-							reclaimAttempts: attempts,
-							lastReclaimAttemptAt: now,
-							reclaimFailureReason: reason,
-							// Manual retry resets the "permanent" flag so the user can try again.
-							reclaimPermanentlyFailed: options?.manual ? false : permanent || t.reclaimPermanentlyFailed,
-						}
-					: t,
-			)
-			savePendingTokens(pendingTokens)
-			nip60Store.setState((s) => ({ ...s, pendingTokens }))
-
-			console.error('[nip60] Failed to reclaim token:', err)
-			throw err
-		}
-	},
+	reclaimToken: (tokenId: string, options?: { manual?: boolean }): Promise<void> => getAuctionReclaim().reclaimToken(tokenId, options),
 
 	/**
-	 * Silently reclaim every pending auction bid whose P2PK timelock has expired.
-	 * Throttled to at most one sweep per AUCTION_AUTO_RECLAIM_MIN_INTERVAL_MS and
-	 * skips tokens that are in cooldown or marked permanently-failed, so a bad
-	 * token can't loop the bid flow into 429s from the mint.
+	 * Silently reclaim every pending auction bid whose P2PK timelock has expired. Throttled to
+	 * at most one sweep per AUCTION_AUTO_RECLAIM_MIN_INTERVAL_MS — the throttle state lives on
+	 * the single `getAuctionReclaim()` instance — and skips tokens that are in cooldown or
+	 * marked permanently-failed, so a bad token can't loop the bid flow into 429s.
 	 */
-	autoReclaimTimelockedBids: async (): Promise<void> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet || nip60Store.state.status !== 'ready') return
-
-		const nowMs = Date.now()
-		if (nowMs - auctionAutoReclaimLastSweepMs < AUCTION_AUTO_RECLAIM_MIN_INTERVAL_MS) return
-		auctionAutoReclaimLastSweepMs = nowMs
-
-		const now = Math.floor(nowMs / 1000)
-		const candidates = nip60Store.state.pendingTokens.filter((token) => {
-			if (token.status !== 'pending') return false
-			if (token.reclaimPermanentlyFailed) return false
-			const context = resolveAuctionBidPendingContext(token)
-			if (!context) return false
-			if (getAuctionReclaimReadyAt(token.token, context.locktime) > now) return false
-			// Exponential backoff per token so a transient mint error doesn't
-			// turn into a tight retry loop.
-			const cooldown = getReclaimBackoffSeconds(token.reclaimAttempts ?? 0)
-			const last = token.lastReclaimAttemptAt ?? 0
-			return now - last >= cooldown
-		})
-
-		for (const token of candidates) {
-			try {
-				await nip60Actions.reclaimToken(token.id)
-			} catch (err) {
-				console.warn(`[nip60] Auto-reclaim skipped for token ${token.id}:`, err instanceof Error ? err.message : err)
-			}
-		}
-	},
+	autoReclaimTimelockedBids: (): Promise<void> => getAuctionReclaim().autoReclaimTimelockedBids(),
 
 	/**
 	 * Remove a pending token from the list
