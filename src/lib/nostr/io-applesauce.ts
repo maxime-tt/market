@@ -14,7 +14,9 @@ import { RelayGroup, RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import { getWriteRelays, ndkStore } from '@/lib/stores/ndk'
-import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, PublishResult, SubscribeOptions } from './io'
+// The contract is imported from `./io-types`, not `./io`: `./io` imports this
+// adapter to re-export it, so importing back from it would be a cycle.
+import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, PublishResult, SubscribeOptions } from './io-types'
 
 let pool: RelayPool | null = null
 

@@ -9,7 +9,9 @@ import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
-import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, PublishResult, SubscribeOptions } from './io'
+// The contract is imported from `./io-types`, not `./io`: `./io` imports this
+// adapter to register the default, so importing back from it would be a cycle.
+import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, PublishResult, SubscribeOptions } from './io-types'
 
 /** Convert an NDKEvent into a raw nostr-tools event. */
 function toRaw(event: NDKEvent): NostrEvent {
