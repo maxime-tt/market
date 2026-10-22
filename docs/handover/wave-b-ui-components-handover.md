@@ -794,6 +794,73 @@ reading §9.6's counts should re-measure rather than subtract this one from the 
 dependency; (b) retarget `getAuctionHdChildPrivkey` onto `walletKeys`; (c) then the reclaim pair;
 (d) the lock and settlement last, ideally after B2a.
 
+### 9.8 The deletion is NOT the final increment — measured (2026-10-22)
+
+§9.7 proposed the extraction order and implied the deletion followed closely. A deletion attempt at
+`100c3410` refused, measured the cost, and reverted cleanly. Its finding, independently re-verified
+here: **the auction cluster was not the store's remaining surface**, and deleting the file today
+costs far more than the two errors it carries.
+
+**The corrected tsc arithmetic.** Measured by actually deleting the file and running tsc, then
+restoring it (HEAD and worktree byte-identical afterwards):
+
+- baseline at `100c3410`: **274** errors (171 in-tree, 103 in `node_modules` `.d.ts`)
+- with `nip60.ts` deleted: **356** (254 in-tree) — **86 new in-tree errors, 3 removed, net +83**
+- the 3 removed: the two `nip60.ts` errors plus one `publish/auctions.tsx(562)` error that is
+  merely _replaced_ by different errors
+
+New errors land across 17 files, headed by `DepositLightningModal.tsx` (11), `AuctionBidder.tsx`
+(7), `LightningPaymentProcessor.tsx` (7), `publish/auctions.tsx` (5), both platform routes,
+`bids.tsx` (2), `ZapDialog.tsx` (3), `ndk.ts` (1). So there is no single "remaining wallet-typed
+reference" to swap out — it is the store's whole relay-wallet lifecycle.
+
+**What the store still owns** (`nip60Actions` exposes **40** keys, not 43 line-ranges of auction
+code): relay-wallet construction in `initialize`/`reset` (`NDKCashuWallet.from`, `.create`,
+`wallet.on('status_changed')`, and the `wallet: NDKCashuWallet | null` state field at line 132 plus
+~15 wallet helpers), the deposit session (`startDeposit`, `checkDepositNow`,
+`retryDepositConfirmation`, `cancelDeposit`), the zap path (`zapWithNutzap` — NIP-61; a
+`src/lib/wallet/nutzap.ts` does not exist yet), the dev helpers (`mintTestEcash`,
+`placeDevBidOnSeededAuction`, `NIP60_DEV_TEST_MINTS`, `isNip60WalletDevModeEnabled`), and
+`getAuctionP2pkXpub` / `updatePendingTokenContext`.
+
+**The consumer census in `w2-1/consumer-census.md` is STALE** and must be re-measured before any
+deletion attempt. It grepped only `nip60Store|nip60Actions` (15 production files) and missed at
+least: `src/components/sheet-contents/auctions/AuctionFormContent.tsx`, a `type Nip60State` import
+in `src/lib/__tests__/auctionMintSelection.integration.test.ts`, and
+`src/lib/__tests__/auctions-ndk-surface-guard.test.ts`, which asserts at line 96 that the boundary
+guard script's source **contains** `src/lib/stores/nip60.ts` — so the delete has to move that
+assertion and the guard script together. A correct count at HEAD is **24 consumer files** by
+`grep -rln "nip60Store\|nip60Actions\|NIP60_DEV_TEST_MINTS\|isNip60WalletDevModeEnabled"`.
+
+**Every test covering the store covers live behaviour, and all of them stay.** The seven test files
+assert lock DLEQ fail-closed behaviour, STRICT pending-token persistence on lock, deposit-session
+identity, the in-session lock guard, publish retry/idempotency, and deposit retry/quote estimation.
+None may be deleted to make a deletion go green. (`walletMintAuthority.test.ts` is a census false
+positive — it matches the `/nip60/i` assertion string, not the module.)
+
+**What actually unblocks the delete**, in order:
+
+1. Re-home `initialize`/`reset` and the wallet lifecycle onto coco's manager — this is the B2a/B3
+   work, and it is the real gate, not the auction rails.
+2. Build `src/lib/wallet/nutzap.ts` for `zapWithNutzap` (NIP-61; kinds 10019 / 9321 / 7376 — see
+   `w2-1/NUTZAP-SPEC.md`; 9324/9325 do not exist).
+3. Give the deposit session a coco store home.
+4. Extract `getAuctionP2pkXpub` and `updatePendingTokenContext` plus a shared auction-host factory,
+   so `publish/auctions.tsx` and the two `platform/` routes reach the auction rails without a new
+   `src/` import (the boundary guard only ratchets down; `sdk` → `src` is 0, so
+   `auctionSettlementP2pk.ts` is under the same rule).
+5. Only then delete the file — and with it the single remaining
+   `import ... from '@nostr-dev-kit/wallet'`.
+
+That is several increments. Stage 3 of §9.7's plan ("delete `nip60.ts`") was scheduled one wave too
+early, and the earlier brief that said "everything that can be moved has been moved" was wrong: the
+auction rails moved, the wallet lifecycle did not.
+
+**Good news for whoever picks this up:** the file being undeletable is now the _only_ thing between
+this branch and the version bump. `@nostr-dev-kit/wallet` has exactly one importer left, and it is
+`nip60.ts` line 51. Everything else — `wallet.ts`, `proofs.ts`, `payment.tsx`, `seed.ts` — is
+already off it.
+
 **6. NDK-wallet unwind — before the version bump can be green**
 
 Four files import `@nostr-dev-kit/wallet` (not just nip60.ts). The upgrade to cashu-ts
