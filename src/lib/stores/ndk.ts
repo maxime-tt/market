@@ -6,7 +6,6 @@ import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nos
 import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
-import { walletOps } from './walletOps'
 import { walletActions, walletStore, type Wallet } from './wallet'
 
 /**
@@ -701,9 +700,9 @@ export const ndkActions = {
 	/**
 	 * Assign the signer to both NDK instances and the store. NO side
 	 * effects beyond the assignment — for the downstream "user is
-	 * signed in" pipeline (relay-list load, NWC selection, NIP-60
-	 * wallet bootstrap, etc.) the auth flow calls
-	 * `runSignerOnboarding(signer)` explicitly. Decoupling those steps
+	 * signed in" pipeline (relay-list load, NWC selection, etc.) the
+	 * auth flow calls `runSignerOnboarding(signer)` explicitly, and it
+	 * bootstraps the NIP-60 Cashu wallet itself. Decoupling those steps
 	 * keeps `setSigner` readable and the auth flow's effects visible
 	 * at the call site instead of buried inside a setter.
 	 */
@@ -727,13 +726,16 @@ export const ndkActions = {
 	},
 
 	/**
-	 * Post-signer pipeline: load the user's NIP-65 relay list, select
-	 * the best NWC wallet by balance, and bootstrap the NIP-60 Cashu
-	 * wallet. The three are run concurrently — they only share `user`
-	 * (derived once up front) and don't observe each other.
+	 * Post-signer pipeline: load the user's NIP-65 relay list and select
+	 * the best NWC wallet by balance. The two run concurrently — they
+	 * only share `user` (derived once up front) and don't observe each
+	 * other.
 	 *
 	 * The auth flow MUST call this after `setSigner(s)` for a fresh
-	 * login. Logout calls `clearSignerOnboarding()` instead.
+	 * login, and calls `clearSignerOnboarding()` on logout. The NIP-60
+	 * Cashu bootstrap that used to ride along here now runs from the
+	 * auth flow instead, because this module importing `./walletOps` was
+	 * the hub of the 36-file import cycle blocking the src/ retirement.
 	 */
 	runSignerOnboarding: async (signer: NDKSigner): Promise<void> => {
 		let user: NDKUser | null = null
@@ -749,30 +751,22 @@ export const ndkActions = {
 		}
 
 		// Run in parallel — each step handles its own failure (caller
-		// just sees a warning) so a failed NWC lookup doesn't block
-		// Cashu init and vice versa.
-		const userPubkey = user.pubkey
+		// just sees a warning).
 		await Promise.all([
 			ndkActions.loadRelaysFromNostr().catch((e) => console.error('[ndk] loadRelaysFromNostr failed:', e)),
 			ndkActions.selectAndSetInitialNwcWallet().catch((e) => console.error('[ndk] selectAndSetInitialNwcWallet failed:', e)),
-			(async () => {
-				try {
-					await walletOps.initialize(userPubkey)
-				} catch (e) {
-					console.error('[ndk] walletOps.initialize failed:', e)
-				}
-			})(),
 		])
 	},
 
 	/**
 	 * Tear-down counterpart to `runSignerOnboarding`. Auth logout calls
 	 * this after `setSigner(undefined)` so the store doesn't carry
-	 * stale NWC / Cashu state into the unauthenticated session.
+	 * stale NWC state into the unauthenticated session. The Cashu
+	 * teardown that used to sit here now runs from the auth flow, with
+	 * the bootstrap it mirrors.
 	 */
 	clearSignerOnboarding: (): void => {
 		ndkActions.setActiveNwcWalletUri(null)
-		walletOps.reset()
 	},
 
 	/**

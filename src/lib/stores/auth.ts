@@ -1,6 +1,7 @@
 import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
+import { walletOps } from './walletOps'
 import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
@@ -37,6 +38,26 @@ const initialState: AuthState = {
 }
 
 export const authStore = new Store<AuthState>(initialState)
+
+/**
+ * Bootstrap the NIP-60 Cashu wallet after a successful sign-in.
+ *
+ * This was the third step of `ndkActions.runSignerOnboarding` until the ndk
+ * store stopped importing the wallet: `src/lib/stores/ndk.ts` is the highest
+ * fan-in contract in the tree (96 dependents) and its edge to `./walletOps`
+ * was the hub of the 36-file import cycle blocking the src/ retirement. The
+ * semantics are unchanged — fire and forget, a failure is logged and never
+ * blocks login, and it runs alongside the relay-list and NWC steps.
+ */
+const bootstrapCashuWalletInBackground = (): void => {
+	void (async () => {
+		try {
+			await walletOps.initialize()
+		} catch (e) {
+			console.error('[auth] walletOps.initialize failed:', e)
+		}
+	})()
+}
 
 export const authActions = {
 	getAuthFromLocalStorageAndLogin: async () => {
@@ -160,10 +181,13 @@ export const authActions = {
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
 			// Kick off the post-signer onboarding pipeline (relay list,
-			// NWC select, NIP-60 init) in the background — login can
-			// resolve before these finish so the user isn't gated on a
-			// slow relay-list fetch.
+			// NWC select, NIP-60 wallet bootstrap) in the background —
+			// login can resolve before these finish so the user isn't
+			// gated on a slow relay-list fetch. The wallet step runs from
+			// here, not inside `./ndk`, so the ndk store does not import
+			// the wallet (see `bootstrapCashuWalletInBackground`).
 			void ndkActions.runSignerOnboarding(signer)
+			bootstrapCashuWalletInBackground()
 
 			const user = await signer.user()
 
@@ -215,10 +239,13 @@ export const authActions = {
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
 			// Kick off the post-signer onboarding pipeline (relay list,
-			// NWC select, NIP-60 init) in the background — login can
-			// resolve before these finish so the user isn't gated on a
-			// slow relay-list fetch.
+			// NWC select, NIP-60 wallet bootstrap) in the background —
+			// login can resolve before these finish so the user isn't
+			// gated on a slow relay-list fetch. The wallet step runs from
+			// here, not inside `./ndk`, so the ndk store does not import
+			// the wallet (see `bootstrapCashuWalletInBackground`).
 			void ndkActions.runSignerOnboarding(signer)
+			bootstrapCashuWalletInBackground()
 
 			const user = await signer.user()
 
@@ -271,10 +298,13 @@ export const authActions = {
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
 			// Kick off the post-signer onboarding pipeline (relay list,
-			// NWC select, NIP-60 init) in the background — login can
-			// resolve before these finish so the user isn't gated on a
-			// slow relay-list fetch.
+			// NWC select, NIP-60 wallet bootstrap) in the background —
+			// login can resolve before these finish so the user isn't
+			// gated on a slow relay-list fetch. The wallet step runs from
+			// here, not inside `./ndk`, so the ndk store does not import
+			// the wallet (see `bootstrapCashuWalletInBackground`).
 			void ndkActions.runSignerOnboarding(signer)
+			bootstrapCashuWalletInBackground()
 			const user = await signer.user()
 
 			// Wait until user is logged in successfully before saving the bunkerURL/private key.
@@ -307,9 +337,11 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
 		ndkActions.removeSigner()
-		// Tear down per-user state (NWC selection, NIP-60 wallet).
-		// Mirrors `runSignerOnboarding` on the login side.
+		// Tear down per-user state: NWC selection through the ndk store,
+		// the NIP-60 wallet here. Mirrors the sign-in side, where both are
+		// started from this store rather than from `./ndk`.
 		ndkActions.clearSignerOnboarding()
+		void walletOps.reset()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)

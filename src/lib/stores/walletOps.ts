@@ -539,10 +539,10 @@ export const walletOps = {
 	 * the wallet's own P2PK pair is available to the reclaim path's legacy refund-key fallback
 	 * before any bid needs it.
 	 *
-	 * The `pubkey` parameter is kept because `./ndk` is its only caller and the call site names
-	 * the authenticated user coco's init reads.
+	 * Takes no argument. The sign-in pipeline used to pass the authenticated user's pubkey and
+	 * the body never read it — coco's init resolves the signer from the stores itself.
 	 */
-	initialize: async (_pubkey: string): Promise<void> => {
+	initialize: async (): Promise<void> => {
 		if (cashuStore.state.status === 'ready' && cashuStore.state.walletSource) return
 
 		await cashuActions.initialize()
