@@ -1,5 +1,5 @@
 import { Badge } from '@ui/primitives/badge'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'

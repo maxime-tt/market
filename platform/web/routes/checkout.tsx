@@ -6,7 +6,7 @@ import { PaymentContent, type PaymentContentRef } from '@/components/checkout/Pa
 import { CheckoutPaymentSummary as PaymentSummary } from '@ui/components/CheckoutPaymentSummary'
 import { ShippingAddressForm, type CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
 import { WalletSelector, type WalletOption } from '@/components/checkout/WalletSelector'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@ui/primitives/card'
 import { ScrollArea } from '@ui/primitives/scroll-area'
 import { NwcWalletStatusView } from '@ui/checkout/nwc-wallet-status-view'
@@ -37,7 +37,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ChevronLeft, ChevronRight, Loader2, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -1016,20 +1016,13 @@ function RouteComponent() {
 												onClick={handleContinueToPayment}
 												className="w-full btn-black"
 												disabled={isCreatingOrder || isAwaitingAuth || !canContinueToPayment}
+												pending={isCreatingOrder || isAwaitingAuth || (pendingContinueToPayment && isReconcilingRemoteCart)}
 											>
-												{isCreatingOrder ? (
-													<>
-														<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-														Creating Order...
-													</>
-												) : isAwaitingAuth || (pendingContinueToPayment && isReconcilingRemoteCart) ? (
-													<>
-														<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-														Waiting for login...
-													</>
-												) : (
-													'Continue to Payment'
-												)}
+												{isCreatingOrder
+													? 'Creating Order...'
+													: isAwaitingAuth || (pendingContinueToPayment && isReconcilingRemoteCart)
+														? 'Waiting for login...'
+														: 'Continue to Payment'}
 											</Button>
 										</div>
 									</div>

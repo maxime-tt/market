@@ -1,4 +1,4 @@
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { BackButton } from '@ui/nav/back-button'
 import { SidebarNav } from '@ui/nav/sidebar-nav'
 import {

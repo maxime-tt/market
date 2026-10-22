@@ -1,5 +1,5 @@
 import { OrderCard } from '@/components/orders/OrderCard'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { Skeleton } from '@ui/primitives/skeleton'
 import { EmptyState } from '@ui/shared/empty-state'

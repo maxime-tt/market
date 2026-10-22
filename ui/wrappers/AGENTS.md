@@ -20,6 +20,9 @@ behaviour, and the layer routes must consume instead of importing
 
 ## What belongs here
 
+- `button` — the primitive plus a `pending` state (canonical spinner, disabled,
+  `aria-busy`). Routes import this instead of `@ui/primitives/button`, which is
+  what lets them drop the primitive import (ADR-0007 §1d).
 - `tooltip-button` — button + tooltip + `disabledTooltip` reason.
 - `tooltip-toggle-group-item`, `selectable-badge`, `info-tooltip`,
   `collection-select-field`, `editor-fields`.

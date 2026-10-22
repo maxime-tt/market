@@ -1,7 +1,7 @@
 import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
 import { MessageInput } from '@/components/messages/MessageInput'
 import { PrivateOrderDetailsCard } from '@/components/orders/PrivateOrderDetailsCard'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { LoadingState } from '@ui/shared/loading-state'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'

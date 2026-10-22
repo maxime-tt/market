@@ -1,7 +1,7 @@
 import { CollectionDisplayComponent } from '@/components/CollectionDisplayComponent'
 import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
 import { UserDisplayComponent } from '@/components/UserDisplayComponent'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { EmptyState } from '@ui/shared/empty-state'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import {
@@ -327,13 +327,12 @@ function BlacklistsComponent() {
 											placeholder="npub1... or hex pubkey"
 											className="flex-1"
 										/>
-										<Button onClick={handleAddUser} disabled={isAddingUser || addToBlacklistMutation.isPending || !newUserInput.trim()}>
-											{isAddingUser || addToBlacklistMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<UserMinus className="w-4 h-4" />
-											)}
-											Add
+										<Button
+											onClick={handleAddUser}
+											pending={isAddingUser || addToBlacklistMutation.isPending}
+											disabled={isAddingUser || addToBlacklistMutation.isPending || !newUserInput.trim()}
+										>
+											{!(isAddingUser || addToBlacklistMutation.isPending) && <UserMinus className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
@@ -391,14 +390,10 @@ function BlacklistsComponent() {
 										/>
 										<Button
 											onClick={handleAddProduct}
+											pending={isAddingProduct || addProductMutation.isPending}
 											disabled={isAddingProduct || addProductMutation.isPending || !newProductInput.trim()}
 										>
-											{isAddingProduct || addProductMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<Package className="w-4 h-4" />
-											)}
-											Add
+											{!(isAddingProduct || addProductMutation.isPending) && <Package className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
@@ -456,14 +451,10 @@ function BlacklistsComponent() {
 										/>
 										<Button
 											onClick={handleAddCollection}
+											pending={isAddingCollection || addCollectionMutation.isPending}
 											disabled={isAddingCollection || addCollectionMutation.isPending || !newCollectionInput.trim()}
 										>
-											{isAddingCollection || addCollectionMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<FolderOpen className="w-4 h-4" />
-											)}
-											Add
+											{!(isAddingCollection || addCollectionMutation.isPending) && <FolderOpen className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>

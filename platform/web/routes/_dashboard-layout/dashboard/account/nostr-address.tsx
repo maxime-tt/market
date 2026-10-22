@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react'
 import { ndkActions } from '@/lib/stores/ndk'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { LoadingState } from '@ui/shared/loading-state'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'

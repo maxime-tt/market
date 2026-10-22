@@ -7,6 +7,7 @@ import { community } from './libraries/community'
 import { layout } from './libraries/layout'
 import { nostr } from './libraries/nostr'
 import { shared } from './libraries/shared'
+import { wrappers } from './libraries/wrappers'
 
 export interface WidgetEntry {
 	/** Display name; also used as the `data-widget` attribute for tests. */
@@ -28,7 +29,7 @@ export interface WidgetLibrary {
  * per component variant/state worth reviewing or asserting. Libraries must only
  * import `ui/` (and `sdk/` types) — never `platform/` or `src/`.
  */
-export const libraries: WidgetLibrary[] = [atoms, auction, checkout, community, layout, nostr, shared]
+export const libraries: WidgetLibrary[] = [atoms, auction, checkout, community, layout, nostr, shared, wrappers]
 
 /**
  * Resolves the `LIBRARY` selection. `*` (or undefined) means every library.

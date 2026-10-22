@@ -2,13 +2,14 @@ import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { AvatarUser } from '@/components/AvatarUser'
 import { ProfileName } from '@/components/ProfileName'
 import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
+import { CheckCircle, Eye, MapPin, RotateCcw, Trophy } from 'lucide-react'
 import { LoadingState } from '@ui/shared/loading-state'
 import { EmptyState } from '@ui/shared/empty-state'
 import { ErrorState } from '@ui/shared/error-state'
 import { BidStatusBanner, BidStatusPill, getBidStatusCopy } from '@ui/components/BidStatusViews'
 import { resolveBidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import { Badge } from '@ui/primitives/badge'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
@@ -36,7 +37,6 @@ import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useQueries } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { CheckCircle, Eye, Loader2, MapPin, RotateCcw, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -283,8 +283,15 @@ function BidsOverviewComponent() {
 					<h1 className="text-2xl font-bold">Bids</h1>
 					<p className="text-sm text-muted-foreground">Bids stay locked until settlement or until reclaim opens at the bid locktime.</p>
 				</div>
-				<Button variant="outline" size="sm" className="gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
-					{isRefreshingBids ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+				<Button
+					variant="outline"
+					size="sm"
+					className="gap-2"
+					onClick={handleRefreshBidStatuses}
+					disabled={isRefreshingBids}
+					pending={isRefreshingBids}
+				>
+					{!isRefreshingBids && <RotateCcw className="w-4 h-4" />}
 					Refresh wallet state
 				</Button>
 			</PageHeader>
@@ -292,8 +299,14 @@ function BidsOverviewComponent() {
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden space-y-3">
 					<p className="text-sm text-muted-foreground">Bids stay locked until settlement or until reclaim opens at the bid locktime.</p>
-					<Button variant="outline" className="w-full gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
-						{isRefreshingBids ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+					<Button
+						variant="outline"
+						className="w-full gap-2"
+						onClick={handleRefreshBidStatuses}
+						disabled={isRefreshingBids}
+						pending={isRefreshingBids}
+					>
+						{!isRefreshingBids && <RotateCcw className="w-4 h-4" />}
 						Refresh wallet state
 					</Button>
 				</div>
@@ -310,8 +323,15 @@ function BidsOverviewComponent() {
 							they may be needed to recover funds or diagnose a failed bid. Do not clear browser storage, local wallet data, or local
 							auction bid records while locked bid funds may still be recoverable.
 						</p>
-						<Button variant="outline" size="sm" className="mt-2 gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
-							{isRefreshingBids ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+						<Button
+							variant="outline"
+							size="sm"
+							className="mt-2 gap-2"
+							onClick={handleRefreshBidStatuses}
+							disabled={isRefreshingBids}
+							pending={isRefreshingBids}
+						>
+							{!isRefreshingBids && <RotateCcw className="w-3.5 h-3.5" />}
 							Refresh wallet state
 						</Button>
 					</div>
@@ -503,12 +523,9 @@ function BidsOverviewComponent() {
 													className="gap-2"
 													onClick={() => void handleReclaimBidGroup(group, state.reclaimable)}
 													disabled={state.reclaimable.length === 0 || reclaimingGroup === group.key}
+													pending={reclaimingGroup === group.key}
 												>
-													{reclaimingGroup === group.key ? (
-														<Loader2 className="w-3.5 h-3.5 animate-spin" />
-													) : (
-														<RotateCcw className="w-3.5 h-3.5" />
-													)}
+													{reclaimingGroup !== group.key && <RotateCcw className="w-3.5 h-3.5" />}
 													Reclaim eligible parts
 												</Button>
 											</div>

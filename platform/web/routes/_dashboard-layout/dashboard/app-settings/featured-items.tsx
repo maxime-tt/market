@@ -1,7 +1,7 @@
 import { AuctionDisplayComponent } from '@/components/AuctionDisplayComponent'
 import { CollectionDisplayComponent } from '@/components/CollectionDisplayComponent'
 import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { EmptyState } from '@ui/shared/empty-state'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import {
@@ -694,14 +694,10 @@ function FeaturedItemsComponent() {
 										/>
 										<Button
 											onClick={handleAddProduct}
+											pending={isAddingProduct || addProductMutation.isPending}
 											disabled={isAddingProduct || addProductMutation.isPending || !newProductInput.trim()}
 										>
-											{isAddingProduct || addProductMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<Plus className="w-4 h-4" />
-											)}
-											Add
+											{!(isAddingProduct || addProductMutation.isPending) && <Plus className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
@@ -771,14 +767,10 @@ function FeaturedItemsComponent() {
 										/>
 										<Button
 											onClick={handleAddCollection}
+											pending={isAddingCollection || addCollectionMutation.isPending}
 											disabled={isAddingCollection || addCollectionMutation.isPending || !newCollectionInput.trim()}
 										>
-											{isAddingCollection || addCollectionMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<Plus className="w-4 h-4" />
-											)}
-											Add
+											{!(isAddingCollection || addCollectionMutation.isPending) && <Plus className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
@@ -846,14 +838,10 @@ function FeaturedItemsComponent() {
 										/>
 										<Button
 											onClick={handleAddAuction}
+											pending={isAddingAuction || addAuctionMutation.isPending}
 											disabled={isAddingAuction || addAuctionMutation.isPending || !newAuctionInput.trim()}
 										>
-											{isAddingAuction || addAuctionMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<Plus className="w-4 h-4" />
-											)}
-											Add
+											{!(isAddingAuction || addAuctionMutation.isPending) && <Plus className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
@@ -921,13 +909,12 @@ function FeaturedItemsComponent() {
 											placeholder="npub1... or hex pubkey"
 											className="flex-1"
 										/>
-										<Button onClick={handleAddUser} disabled={isAddingUser || addUserMutation.isPending || !newUserInput.trim()}>
-											{isAddingUser || addUserMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<Plus className="w-4 h-4" />
-											)}
-											Add
+										<Button
+											onClick={handleAddUser}
+											pending={isAddingUser || addUserMutation.isPending}
+											disabled={isAddingUser || addUserMutation.isPending || !newUserInput.trim()}
+										>
+											{!(isAddingUser || addUserMutation.isPending) && <Plus className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>

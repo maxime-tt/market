@@ -1,4 +1,4 @@
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { truncateMiddle } from '@ui/shared/truncated-text'
 import { PageHeader } from '@ui/layout/page-header'

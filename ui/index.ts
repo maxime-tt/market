@@ -150,6 +150,7 @@ export { ConfirmDialog, type ConfirmDialogProps } from './shared/confirm-dialog'
 export { Notice, type NoticeProps, type NoticeTone } from './shared/notice'
 export { StatusBadge, type StatusBadgeProps, type StatusTone } from './shared/status-badge'
 export { EntityListItem, type EntityListItemAction, type EntityListItemProps } from './shared/entity-list-item'
+export { Button, buttonVariants } from './wrappers/button'
 export { CopyButton, type CopyButtonProps } from './shared/copy-button'
 export { TruncatedText, truncateMiddle, type TruncatedTextProps } from './shared/truncated-text'
 export {

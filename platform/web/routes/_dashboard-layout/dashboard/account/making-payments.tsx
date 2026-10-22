@@ -1,4 +1,4 @@
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { LoadingState } from '@ui/shared/loading-state'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@ui/primitives/card'
@@ -15,7 +15,7 @@ import { walletKeys } from '@/queries/queryKeyFactory'
 import { useSaveUserNwcWalletsMutation } from '@/publish/wallet'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeftIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshCwIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
+import { ChevronDownIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshCwIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
@@ -492,12 +492,9 @@ function WalletListItem({
 								className="h-8 w-8 text-destructive hover:bg-destructive/10"
 								aria-label="Delete wallet"
 								disabled={isSavingNostr || isDeleting}
+								pending={isDeleting}
 							>
-								{isDeleting ? (
-									<div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" />
-								) : (
-									<TrashIcon className="h-4 w-4" />
-								)}
+								{!isDeleting && <TrashIcon className="h-4 w-4" />}
 							</Button>
 							<ChevronDownIcon className="h-4 w-4 ml-1 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
 						</div>
