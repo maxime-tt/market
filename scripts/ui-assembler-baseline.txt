@@ -12,8 +12,8 @@ platform/web/routes/checkout.tsx|primitive-import|3
 platform/web/routes/checkout.tsx|inline-component|1
 platform/web/routes/collection.$collectionId.tsx|primitive-import|1
 platform/web/routes/collection.$collectionId.tsx|inline-component|1
-platform/web/routes/community.index.tsx|primitive-import|2
-platform/web/routes/community.index.tsx|inline-component|5
+platform/web/routes/community.index.tsx|primitive-import|1
+platform/web/routes/community.index.tsx|inline-component|1
 platform/web/routes/_dashboard-layout/dashboard/about.tsx|primitive-import|2
 platform/web/routes/_dashboard-layout/dashboard/about.tsx|inline-component|4
 platform/web/routes/_dashboard-layout/dashboard/account/making-payments.tsx|primitive-import|6

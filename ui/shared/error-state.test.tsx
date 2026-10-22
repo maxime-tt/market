@@ -48,6 +48,11 @@ describe('ErrorState', () => {
 		expect(markup).toContain('Go back')
 	})
 
+	test('carries a host testid onto the retry button', () => {
+		const markup = renderToStaticMarkup(<ErrorState onRetry={() => {}} retryTestId="community-collections-retry" />)
+		expect(markup).toContain('data-testid="community-collections-retry"')
+	})
+
 	test('merges host className and switches to compact spacing', () => {
 		const markup = renderToStaticMarkup(<ErrorState compact className="host-error" />)
 		expect(markup).toContain('host-error')

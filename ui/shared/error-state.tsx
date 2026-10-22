@@ -13,6 +13,8 @@ export interface ErrorStateProps extends HTMLAttributes<HTMLDivElement> {
 	action?: ReactNode
 	/** Label for the retry button. */
 	retryLabel?: string
+	/** `data-testid` for the retry button, for hosts whose tests target it. */
+	retryTestId?: string
 	/** Tightens the vertical rhythm for inline or card-embedded usage. */
 	compact?: boolean
 	ref?: Ref<HTMLDivElement>
@@ -25,6 +27,7 @@ export function ErrorState({
 	onRetry,
 	action,
 	retryLabel = 'Try again',
+	retryTestId,
 	compact = false,
 	className,
 	ref,
@@ -45,7 +48,7 @@ export function ErrorState({
 			{(onRetry || action) && (
 				<div className="flex flex-wrap items-center justify-center gap-2">
 					{onRetry && (
-						<Button variant="secondary" onClick={onRetry}>
+						<Button variant="secondary" onClick={onRetry} data-testid={retryTestId}>
 							{retryLabel}
 						</Button>
 					)}

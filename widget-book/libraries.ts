@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { atoms } from './libraries/atoms'
 import { auction } from './libraries/auction'
 import { checkout } from './libraries/checkout'
+import { community } from './libraries/community'
 import { layout } from './libraries/layout'
 import { nostr } from './libraries/nostr'
 import { shared } from './libraries/shared'
@@ -27,7 +28,7 @@ export interface WidgetLibrary {
  * per component variant/state worth reviewing or asserting. Libraries must only
  * import `ui/` (and `sdk/` types) — never `platform/` or `src/`.
  */
-export const libraries: WidgetLibrary[] = [atoms, auction, checkout, layout, nostr, shared]
+export const libraries: WidgetLibrary[] = [atoms, auction, checkout, community, layout, nostr, shared]
 
 /**
  * Resolves the `LIBRARY` selection. `*` (or undefined) means every library.

@@ -2,7 +2,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { ItemGrid } from '@ui/components/ItemGrid'
 import { Button } from '@ui/primitives/button'
-import { Skeleton } from '@ui/primitives/skeleton'
+import { CollectionSkeletons, MerchantSkeletons } from '@ui/community/community-skeletons'
+import { ErrorState } from '@ui/shared/error-state'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
@@ -279,7 +280,13 @@ function CommunityRoute() {
 						{isLoadingCollections ? (
 							<CollectionSkeletons count={12} />
 						) : collectionsError ? (
-							<CollectionsError error={collectionsError as Error} onRetry={() => collectionsQuery.refetch()} />
+							<ErrorState
+								title="Unable to load collections"
+								message={collectionsError instanceof Error ? collectionsError.message : 'There was a problem connecting to relays.'}
+								onRetry={() => collectionsQuery.refetch()}
+								retryTestId="community-collections-retry"
+								data-testid="community-collections-error"
+							/>
 						) : collections.length === 0 ? (
 							<div className="col-span-full py-8 text-gray-500 text-center" data-testid="community-collections-empty">
 								No collections found
@@ -298,7 +305,13 @@ function CommunityRoute() {
 						{isLoadingMerchants ? (
 							<MerchantSkeletons count={6} />
 						) : merchantsError ? (
-							<MerchantsError error={merchantsError as Error} onRetry={() => merchantsQuery.refetch()} />
+							<ErrorState
+								title="Unable to load merchants"
+								message={merchantsError instanceof Error ? merchantsError.message : 'There was a problem connecting to relays.'}
+								onRetry={() => merchantsQuery.refetch()}
+								retryTestId="community-merchants-retry"
+								data-testid="community-merchants-error"
+							/>
 						) : filteredMerchantPubkeys.length === 0 ? (
 							<div className="col-span-full py-8 text-gray-500 text-center" data-testid="community-merchants-empty">
 								No merchants found
@@ -313,74 +326,6 @@ function CommunityRoute() {
 					</ItemGrid>
 				</section>
 			</div>
-		</div>
-	)
-}
-
-// Skeleton loading component for collections grid
-function CollectionSkeletons({ count = 12 }: { count?: number }) {
-	return (
-		<>
-			{Array.from({ length: count }).map((_, i) => (
-				<div key={i} className="flex flex-col gap-3" data-testid="community-collections-skeleton">
-					<Skeleton className="h-40 w-full rounded-lg" />
-					<Skeleton className="h-4 w-full" />
-					<Skeleton className="h-3 w-1/2" />
-				</div>
-			))}
-		</>
-	)
-}
-
-// Skeleton loading component for merchants grid
-function MerchantSkeletons({ count = 6 }: { count?: number }) {
-	return (
-		<>
-			{Array.from({ length: count }).map((_, i) => (
-				<div key={i} className="flex flex-col gap-3" data-testid="community-merchants-skeleton">
-					<Skeleton className="h-40 w-full rounded-lg" />
-					<Skeleton className="h-4 w-full" />
-					<Skeleton className="h-3 w-3/4" />
-				</div>
-			))}
-		</>
-	)
-}
-
-// Render error state for collections
-function CollectionsError({ error, onRetry }: { error: Error | null; onRetry: () => void }) {
-	if (!error) return null
-	return (
-		<div
-			className="col-span-full flex flex-col justify-center items-center gap-4 px-4 py-12 text-center"
-			data-testid="community-collections-error"
-		>
-			<h3 className="font-semibold text-lg">Unable to load collections</h3>
-			<p className="max-w-md text-muted-foreground">
-				{error instanceof Error ? error.message : 'There was a problem connecting to relays.'}
-			</p>
-			<Button variant="secondary" size="sm" onClick={onRetry} data-testid="community-collections-retry">
-				Retry
-			</Button>
-		</div>
-	)
-}
-
-// Render error state for merchants
-function MerchantsError({ error, onRetry }: { error: Error | null; onRetry: () => void }) {
-	if (!error) return null
-	return (
-		<div
-			className="col-span-full flex flex-col justify-center items-center gap-4 px-4 py-12 text-center"
-			data-testid="community-merchants-error"
-		>
-			<h3 className="font-semibold text-lg">Unable to load merchants</h3>
-			<p className="max-w-md text-muted-foreground">
-				{error instanceof Error ? error.message : 'There was a problem connecting to relays.'}
-			</p>
-			<Button variant="secondary" size="sm" onClick={onRetry} data-testid="community-merchants-retry">
-				Retry
-			</Button>
 		</div>
 	)
 }
