@@ -52,15 +52,8 @@ import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus } from '@nostr-dev-kit/wallet'
 import { Store } from '@tanstack/store'
-import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { ndkActions, ndkStore } from './ndk'
 import { cashuActions, cashuStore } from './cashu'
-import {
-	type CocoDepositQuote,
-	DEPOSIT_CONFIRMATION_TIMEOUT_LABEL,
-	createCocoDepositQuote,
-	getDepositConfirmationTimeoutMessage,
-} from '@/lib/wallet/depositQuote'
 import type { SaveUserDataOptions } from '@/lib/wallet/storage'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
@@ -71,33 +64,6 @@ export type PendingNip60Token = PendingToken
 
 export interface Nip60LightningPaymentResult {
 	preimage?: string
-}
-
-export interface Nip60DepositOptions {
-	includeFeePadding?: boolean
-}
-
-export type Nip60DepositStatus = 'idle' | 'pending' | 'awaiting_confirmation_retry' | 'success' | 'error'
-
-/**
- * #10: Deposit quote estimate. `usedFallbackEstimate` and `feeSource` are
- * derived from the per-component `mintFeeSource`/`lightningFeeSource` fields
- * (see buildDepositQuoteEstimate). They are kept as convenience accessors so
- * callers can check "did we fall back?" without OR-ing two fields, and so
- * tests can assert on a single `feeSource` value. The per-component fields
- * remain the source of truth for which specific fee used a fallback.
- */
-export interface Nip60DepositQuoteEstimate {
-	requiredBidFundingAmount: number
-	totalDepositAmount: number
-	mintFeePaddingAmount: number
-	lightningFeePaddingAmount: number
-	/** Convenience: true when either mintFeeSource or lightningFeeSource is 'fallback'. */
-	usedFallbackEstimate: boolean
-	/** Convenience: 'fallback' if usedFallbackEstimate, else 'quote'. */
-	feeSource: 'quote' | 'fallback'
-	mintFeeSource: 'quote' | 'fallback'
-	lightningFeeSource: 'quote' | 'fallback'
 }
 
 export interface Nip60NutzapResult {
@@ -137,11 +103,6 @@ export interface Nip60State {
 	mints: string[]
 	defaultMint: string | null
 	error: string | null
-	// Active deposit tracking. The session is coco's mint-quote deposit, not the relay
-	// wallet's: the type is the adapter's, so nothing here can reach into an NDK deposit.
-	activeDeposit: CocoDepositQuote | null
-	depositInvoice: string | null
-	depositStatus: Nip60DepositStatus
 	// Pending tokens tracking (tokens generated but not yet claimed by recipient)
 	pendingTokens: PendingNip60Token[]
 }
@@ -154,9 +115,6 @@ const initialState: Nip60State = {
 	mints: [],
 	defaultMint: typeof localStorage !== 'undefined' ? localStorage.getItem(DEFAULT_MINT_KEY) : null,
 	error: null,
-	activeDeposit: null,
-	depositInvoice: null,
-	depositStatus: 'idle',
 	pendingTokens: [],
 }
 
@@ -184,13 +142,6 @@ const NIP60_WALLET_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[nu
 const NIP60_WALLET_FETCH_TIMEOUT_MS = 5000
 const NIP60_WALLET_LOAD_TIMEOUT_MS = 5000
 const NIP60_WALLET_START_TIMEOUT_MS = 7000
-export const NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS = 15_000
-const AUCTION_DEPOSIT_PADDING_RATE = 0.005
-const AUCTION_DEPOSIT_MIN_PADDING_SATS = 5
-const AUCTION_DEPOSIT_MAX_PADDING_SATS = 100
-const AUCTION_MINT_QUOTE_FEE_MIN_CAP_SATS = 25
-const AUCTION_MINT_QUOTE_FEE_RELATIVE_CAP_RATE = 0.1
-const AUCTION_MINT_QUOTE_FEE_ABSOLUTE_CAP_SATS = 2000
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 /**
@@ -215,72 +166,6 @@ export {
 	getAuctionReclaimReadyAtForGroup,
 } from '@/lib/wallet'
 
-/**
- * Returns the bounded safety buffer for an auction funding deposit.
- *
- * The buffer is 0.5% of the requested deposit, rounded up, with a 5 sat
- * minimum and 100 sat maximum. It is used only when the mint quote does not
- * provide a fee component; it is not a fee reported by the mint.
- */
-export const getAuctionDepositFeePadding = (depositAmount: number): number =>
-	Math.min(
-		Math.max(Math.ceil(depositAmount * AUCTION_DEPOSIT_PADDING_RATE), AUCTION_DEPOSIT_MIN_PADDING_SATS),
-		AUCTION_DEPOSIT_MAX_PADDING_SATS,
-	)
-
-export const getAuctionDepositMaxMintQuoteFeeSats = (requestedAmount: number): number => {
-	const relativeCap = Math.ceil(requestedAmount * AUCTION_MINT_QUOTE_FEE_RELATIVE_CAP_RATE)
-	return Math.min(AUCTION_MINT_QUOTE_FEE_ABSOLUTE_CAP_SATS, Math.max(AUCTION_MINT_QUOTE_FEE_MIN_CAP_SATS, relativeCap))
-}
-
-const extractInvoiceAmountSats = (invoice: string): number | null => {
-	const normalizedInvoice = invoice.trim().replace(/^lightning:/i, '')
-	if (!normalizedInvoice) return null
-
-	try {
-		const decoded = decodeBolt11(normalizedInvoice)
-		const amountMillisatsRaw = decoded.sections.find((section) => section.name === 'amount')?.value
-		if (amountMillisatsRaw == null) return null
-
-		const amountMillisats =
-			typeof amountMillisatsRaw === 'number'
-				? amountMillisatsRaw
-				: Number.parseInt(typeof amountMillisatsRaw === 'string' ? amountMillisatsRaw : String(amountMillisatsRaw), 10)
-
-		if (!Number.isFinite(amountMillisats) || amountMillisats <= 0) return null
-		return Math.ceil(amountMillisats / 1000)
-	} catch {
-		return null
-	}
-}
-
-export const validateAuctionDepositInvoiceQuote = (params: {
-	requestedAmount: number
-	depositAmount: number
-	invoiceAmountSats: number
-	mintUrl: string
-}): void => {
-	const { requestedAmount, depositAmount, invoiceAmountSats, mintUrl } = params
-	if (!Number.isFinite(invoiceAmountSats) || invoiceAmountSats <= 0) {
-		throw new Error('Mint returned an invalid Lightning invoice amount. Please retry with a different mint.')
-	}
-
-	if (invoiceAmountSats < depositAmount) {
-		throw new Error(
-			`Mint ${getMintHostname(mintUrl)} returned an invoice below the requested deposit amount. Please retry with a different mint.`,
-		)
-	}
-
-	const quoteFeeSats = invoiceAmountSats - depositAmount
-	const maxAllowedQuoteFeeSats = getAuctionDepositMaxMintQuoteFeeSats(requestedAmount)
-	if (quoteFeeSats > maxAllowedQuoteFeeSats) {
-		throw new Error(
-			`Mint ${getMintHostname(mintUrl)} returned an unusually high Lightning fee quote (${quoteFeeSats} sats on a ${requestedAmount} sat deposit). ` +
-				`Maximum allowed is ${maxAllowedQuoteFeeSats} sats. Please choose another mint.`,
-		)
-	}
-}
-
 export const nip60Store = new Store<Nip60State>(initialState)
 
 // Keep track of transaction subscription cleanup
@@ -302,33 +187,6 @@ const getDevTestMintCandidates = (preferredMintUrl?: string): string[] => {
 const isKeysetVerificationError = (err: unknown): err is Error => err instanceof Error && err.message.includes("Couldn't verify keyset ID")
 
 const getErrorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err))
-
-const computePaddedDepositAmount = (
-	requiredBidFundingAmount: number,
-	mintFeePaddingAmount: number,
-	lightningFeePaddingAmount: number,
-): number => requiredBidFundingAmount + mintFeePaddingAmount + lightningFeePaddingAmount
-
-const buildDepositQuoteEstimate = (params: {
-	requiredBidFundingAmount: number
-	mintFeePaddingAmount: number
-	lightningFeePaddingAmount: number
-	mintFeeSource: 'quote' | 'fallback'
-	lightningFeeSource: 'quote' | 'fallback'
-}): Nip60DepositQuoteEstimate => {
-	const { requiredBidFundingAmount, mintFeePaddingAmount, lightningFeePaddingAmount, mintFeeSource, lightningFeeSource } = params
-	const usedFallbackEstimate = mintFeeSource === 'fallback' || lightningFeeSource === 'fallback'
-	return {
-		requiredBidFundingAmount,
-		totalDepositAmount: computePaddedDepositAmount(requiredBidFundingAmount, mintFeePaddingAmount, lightningFeePaddingAmount),
-		mintFeePaddingAmount,
-		lightningFeePaddingAmount,
-		usedFallbackEstimate,
-		feeSource: usedFallbackEstimate ? 'fallback' : 'quote',
-		mintFeeSource,
-		lightningFeeSource,
-	}
-}
 
 const ensureWalletRuntimeDefaults = (wallet: NDKCashuWallet, ndk: NDKEvent['ndk']): void => {
 	if (!ndk) return
@@ -568,36 +426,6 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: str
 	} finally {
 		if (timer) clearTimeout(timer)
 	}
-}
-
-export const waitForDepositConfirmation = async (
-	deposit: Pick<CocoDepositQuote, 'on'>,
-	timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS,
-): Promise<void> =>
-	withTimeout(
-		new Promise<void>((resolve, reject) => {
-			deposit.on('success', () => resolve())
-			deposit.on('error', (error) => reject(new Error(typeof error === 'string' ? error : String(error))))
-		}),
-		timeoutMs,
-		DEPOSIT_CONFIRMATION_TIMEOUT_LABEL,
-	)
-
-const isDepositConfirmationTimeoutError = (error: unknown, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): boolean =>
-	error instanceof Error && error.message === getDepositConfirmationTimeoutMessage(timeoutMs)
-
-const monitorDepositConfirmation = (deposit: CocoDepositQuote, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): void => {
-	void waitForDepositConfirmation(deposit, timeoutMs).catch((error) => {
-		const state = nip60Store.state
-		if (state.activeDeposit !== deposit || state.depositStatus !== 'pending') return
-		if (!isDepositConfirmationTimeoutError(error, timeoutMs)) return
-
-		nip60Store.setState((current) => ({
-			...current,
-			depositStatus: 'awaiting_confirmation_retry',
-			error: 'Payment confirmation timed out. Retry confirmation to check the mint again.',
-		}))
-	})
 }
 
 function extractPreimageCandidate(result: unknown): string | undefined {
@@ -1156,9 +984,9 @@ export const nip60Actions = {
 						mintBalances: nip60Store.state.mintBalances,
 					}),
 					getDepositStatus: () => ({
-						depositStatus: nip60Store.state.depositStatus,
-						depositInvoice: nip60Store.state.depositInvoice,
-						error: nip60Store.state.error,
+						depositStatus: cashuStore.state.depositStatus,
+						depositInvoice: cashuStore.state.depositInvoice,
+						error: cashuStore.state.error,
 					}),
 					/**
 					 * Dev-only: explicitly register a mint URL in the wallet.
@@ -1475,274 +1303,6 @@ export const nip60Actions = {
 		nip60Store.setState((s) => ({
 			...s,
 			defaultMint: mintUrl,
-		}))
-	},
-
-	/**
-	 * Start a Lightning deposit (mint ecash)
-	 * @param amount Amount in sats to deposit
-	 * @param mint Optional mint URL (uses default if not specified)
-	 */
-	startDeposit: async (amount: number, mint?: string, options?: Nip60DepositOptions): Promise<string | null> => {
-		const wallet = nip60Store.state.wallet
-		const state = nip60Store.state
-		if (!wallet) {
-			console.warn('[nip60] Cannot deposit without wallet')
-			return null
-		}
-
-		const requestedAmount = Math.ceil(amount)
-		if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
-			nip60Store.setState((s) => ({
-				...s,
-				depositStatus: 'error',
-				error: 'Deposit amount must be a positive integer.',
-			}))
-			return null
-		}
-
-		const targetMint = mint ? normalizeMintUrl(mint) : state.defaultMint ? normalizeMintUrl(state.defaultMint) : null
-		if (!targetMint) {
-			console.warn('[nip60] No mint specified and no default mint set')
-			nip60Store.setState((s) => ({
-				...s,
-				depositStatus: 'error',
-				error: 'No mint specified. Please select a default mint first.',
-			}))
-			return null
-		}
-
-		// Ensure wallet has the target mint configured
-		if (!wallet.mints.includes(targetMint)) {
-			wallet.mints = [...wallet.mints, targetMint]
-		}
-
-		try {
-			nip60Store.setState((s) => ({
-				...s,
-				depositStatus: 'pending',
-				error: null,
-			}))
-
-			await primeDevTestMintDepositWalletCache(wallet, targetMint)
-
-			let depositAmount = requestedAmount
-			if (options?.includeFeePadding) {
-				// #4: Fallback-only fee design — we do NOT call the mint quote API
-				// here to estimate fees. Instead, we add a conservative static padding
-				// (0.5%, min 5 sats, max 100 sats) via getAuctionDepositFeePadding().
-				// This avoids creating an abandoned mint quote (and consuming mint
-				// rate-limit budget) just for estimation. The actual Lightning fee
-				// is whatever the mint embeds in the invoice returned by
-				// deposit.start(); validateAuctionDepositInvoiceQuote() then checks
-				// that the invoice fee is within acceptable caps before we show it.
-				// estimateDepositQuote() exposes the same fallback logic for callers
-				// that need a pre-flight estimate without side effects.
-				depositAmount = requestedAmount + getAuctionDepositFeePadding(requestedAmount)
-			}
-
-			// The deposit engine is coco's mint quote (see @/lib/wallet/depositQuote), not the
-			// relay wallet's own deposit. coco must therefore be up before a quote exists, and
-			// initializing is idempotent — so it is done here rather than assumed to have
-			// happened on some earlier screen.
-			if (!cashuStore.state.manager) {
-				await cashuActions.initialize()
-			}
-			const cashuManager = cashuStore.state.manager
-			if (!cashuManager) {
-				throw new Error('The Cashu wallet is not ready to start a deposit.')
-			}
-
-			const deposit = createCocoDepositQuote({ manager: cashuManager, mintUrl: targetMint, amount: depositAmount })
-			// #3: Wrap deposit.start() in a 15s timeout so a hung mint quote
-			// request doesn't leave the user staring at a spinner indefinitely.
-			// The ADR §3b timeout also covers the post-payment confirmation phase
-			// via monitorDepositConfirmation() below.
-			const invoice = await withTimeout(deposit.start(), NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS, 'deposit invoice creation')
-
-			if (invoice) {
-				const invoiceAmountSats = extractInvoiceAmountSats(invoice)
-				if (invoiceAmountSats == null) {
-					throw new Error('Mint returned an invoice without a parseable amount. Please retry with a different mint.')
-				}
-				validateAuctionDepositInvoiceQuote({
-					requestedAmount,
-					depositAmount,
-					invoiceAmountSats,
-					mintUrl: targetMint,
-				})
-			}
-
-			nip60Store.setState((s) => ({
-				...s,
-				activeDeposit: deposit,
-				depositInvoice: invoice ?? null,
-			}))
-
-			// Listen for deposit completion. Both listeners are identity-guarded
-			// (`activeDeposit === deposit`, the same guard monitorDepositConfirmation
-			// applies below): a stale listener from an earlier deposit session must
-			// never overwrite a newer session's status (review #1235, blocker 3).
-			deposit.on('success', () => {
-				if (nip60Store.state.activeDeposit !== deposit) return
-				nip60Store.setState((s) => ({
-					...s,
-					depositStatus: 'success',
-					activeDeposit: null,
-					depositInvoice: null,
-				}))
-				// Refresh to update balance
-				void nip60Actions.refresh()
-			})
-
-			deposit.on('error', (err?: Error) => {
-				if (nip60Store.state.activeDeposit !== deposit) return
-				console.error('[nip60] Deposit error:', err)
-				nip60Store.setState((s) => ({
-					...s,
-					depositStatus: 'error',
-					error: err instanceof Error ? err.message : 'The deposit failed.',
-					activeDeposit: null,
-					depositInvoice: null,
-				}))
-			})
-
-			monitorDepositConfirmation(deposit)
-
-			return invoice ?? null
-		} catch (err) {
-			console.error('[nip60] Failed to start deposit:', err)
-			nip60Store.setState((s) => ({
-				...s,
-				depositStatus: 'error',
-				error: err instanceof Error ? err.message : 'Failed to start deposit',
-				activeDeposit: null,
-				depositInvoice: null,
-			}))
-			return null
-		}
-	},
-
-	retryDepositConfirmation: (): void => {
-		const { activeDeposit, depositStatus } = nip60Store.state
-		if (!activeDeposit || depositStatus !== 'awaiting_confirmation_retry') return
-
-		nip60Store.setState((state) => ({
-			...state,
-			depositStatus: 'pending',
-			error: null,
-		}))
-
-		monitorDepositConfirmation(activeDeposit)
-		void activeDeposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS).catch((error) => {
-			console.error('[nip60] Deposit confirmation retry failed:', error)
-		})
-	},
-
-	/**
-	 * Manual "check now" for a "Confirm" button — unlike `retryDepositConfirmation`,
-	 * this isn't gated behind the `awaiting_confirmation_retry` timeout state, so it
-	 * works while a deposit is still `pending`. Reuses the success/error listeners
-	 * `startDeposit` already attached to `activeDeposit`, so a payment found here
-	 * still transitions `depositStatus` normally.
-	 */
-	checkDepositNow: async (): Promise<void> => {
-		const { activeDeposit, depositStatus } = nip60Store.state
-		if (!activeDeposit || (depositStatus !== 'pending' && depositStatus !== 'awaiting_confirmation_retry')) return
-
-		if (depositStatus === 'awaiting_confirmation_retry') {
-			nip60Actions.retryDepositConfirmation()
-			return
-		}
-
-		try {
-			await activeDeposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS)
-		} catch (error) {
-			console.error('[nip60] Manual deposit check failed:', error)
-		}
-	},
-
-	estimateDepositQuote: async (amount: number, mintUrl: string): Promise<Nip60DepositQuoteEstimate> => {
-		const requiredBidFundingAmount = Math.ceil(amount)
-		const targetMint = normalizeMintUrl(mintUrl)
-		if (!Number.isFinite(requiredBidFundingAmount) || requiredBidFundingAmount <= 0) {
-			throw new Error('Deposit quote amount must be a positive integer')
-		}
-		if (!targetMint) {
-			throw new Error('Mint URL is required for deposit quote estimation')
-		}
-
-		const fallbackPaddingAmount = getAuctionDepositFeePadding(requiredBidFundingAmount)
-
-		// Conservative fallback estimate: apply the same bounded safety buffer to
-		// BOTH the Lightning routing fee and the mint's own minting fee. The real
-		// fees are validated (and the mint fee capped) by
-		// validateAuctionDepositInvoiceQuote when the actual invoice arrives; here
-		// we never call mint quote APIs (which would consume rate-limit budget for
-		// a pre-flight estimate), so we use the same static buffer for both
-		// components. Over-estimating is the safe direction for a pre-flight total.
-		return buildDepositQuoteEstimate({
-			requiredBidFundingAmount,
-			mintFeePaddingAmount: fallbackPaddingAmount,
-			lightningFeePaddingAmount: fallbackPaddingAmount,
-			mintFeeSource: 'fallback',
-			lightningFeeSource: 'fallback',
-		})
-	},
-
-	/**
-	 * Cancel an active deposit.
-	 *
-	 * Default (no options / `preserveRecovery` unset): full clear of the
-	 * deposit session — quote identity, invoice, and UI status are all reset
-	 * (unchanged historical behavior).
-	 *
-	 * `{ preserveRecovery: true }`: the deposit UI is being closed while the
-	 * payment outcome is paid-or-uncertain (`depositStatus` 'pending' or
-	 * 'awaiting_confirmation_retry'). Release the UI but KEEP the deposit /
-	 * quote identity (`activeDeposit` + `depositInvoice`) so
-	 * `retryDepositConfirmation()` and `checkDepositNow()` can still
-	 * reconcile the SAME Lightning payment without a fresh funding session
-	 * (review #1235, blocker 3); only the transient error display is reset.
-	 * Terminal (`success`/`error`) and `idle` states have no recoverable
-	 * quote to preserve, so they fall through to the full clear.
-	 */
-	cancelDeposit: (options?: { preserveRecovery?: boolean }): void => {
-		const preserveRecovery = options?.preserveRecovery ?? false
-		nip60Store.setState((s) => {
-			const recoverable = s.depositStatus === 'pending' || s.depositStatus === 'awaiting_confirmation_retry'
-			if (preserveRecovery && s.activeDeposit && recoverable) {
-				// Keep activeDeposit / depositInvoice / depositStatus — the
-				// reconciliation handle for the SAME Lightning payment.
-				return { ...s, error: null }
-			}
-			return {
-				...s,
-				activeDeposit: null,
-				depositInvoice: null,
-				depositStatus: 'idle',
-				error: null,
-			}
-		})
-	},
-
-	/**
-	 * Clear a completed deposit result from the UI.
-	 *
-	 * This is intentionally separate from cancelDeposit(): cancelDeposit() is
-	 * for abandoning an active pending deposit, while this only clears terminal
-	 * success/error UI state after the mint has already resolved the deposit.
-	 */
-	clearDepositResult: (): void => {
-		const { depositStatus } = nip60Store.state
-		if (depositStatus !== 'success' && depositStatus !== 'error') return
-
-		nip60Store.setState((s) => ({
-			...s,
-			activeDeposit: null,
-			depositInvoice: null,
-			depositStatus: 'idle',
-			error: null,
 		}))
 	},
 

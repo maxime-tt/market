@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
 import { Button } from '@ui/primitives/button'
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 import { ndkActions } from '@/lib/stores/ndk'
 import { useWallets, walletActions } from '@/lib/stores/wallet'
 import { classifyDepositTerminalErrorOutcome } from '@/hooks/useAuctionBidFunding'
@@ -64,7 +64,7 @@ export function DepositLightningModal({
 	onFundingFailed,
 	variant = 'topup',
 }: DepositLightningModalProps) {
-	const { mints, defaultMint, depositInvoice, depositStatus, error: depositError } = useStore(nip60Store)
+	const { mints, defaultMint, depositInvoice, depositStatus, error: depositError } = useStore(cashuStore)
 	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
 	const [amount, setAmount] = useState('')
 	const [selectedMint, setSelectedMint] = useState<string>('')
@@ -232,7 +232,7 @@ export function DepositLightningModal({
 
 		setIsGenerating(true)
 		resetNwcPaymentState()
-		void nip60Actions
+		void cashuActions
 			.startDeposit(amountNum, selectedMint, { includeFeePadding: !!allowedMints?.length })
 			.finally(() => setIsGenerating(false))
 	}, [isBidQuickView, open, selectedMint, depositInvoice, depositStatus, amount, allowedMints, resetNwcPaymentState])
@@ -240,7 +240,7 @@ export function DepositLightningModal({
 	const handleConfirmCheckNow = async () => {
 		setIsCheckingDeposit(true)
 		try {
-			await nip60Actions.checkDepositNow()
+			await cashuActions.checkDepositNow()
 		} finally {
 			setIsCheckingDeposit(false)
 		}
@@ -261,7 +261,7 @@ export function DepositLightningModal({
 		setIsGenerating(true)
 		resetNwcPaymentState()
 		try {
-			await nip60Actions.startDeposit(amountNum, selectedMint, {
+			await cashuActions.startDeposit(amountNum, selectedMint, {
 				includeFeePadding: !!allowedMints?.length,
 			})
 		} finally {
@@ -310,7 +310,7 @@ export function DepositLightningModal({
 	}
 
 	const handleRetryConfirmation = () => {
-		nip60Actions.retryDepositConfirmation()
+		cashuActions.retryDepositConfirmation()
 	}
 
 	// #1235 Blocking 2 / round-3 B3 — classify a pending deposit close as
@@ -352,7 +352,7 @@ export function DepositLightningModal({
 			// cleared as before.
 			const isPendingDeposit = depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry'
 			const paidOrUnknown = paymentAcknowledgedRef.current || !nwcPaymentAttempted
-			nip60Actions.cancelDeposit(isPendingDeposit && paidOrUnknown ? { preserveRecovery: true } : undefined)
+			cashuActions.cancelDeposit(isPendingDeposit && paidOrUnknown ? { preserveRecovery: true } : undefined)
 
 			setAmount('')
 			setCopied(false)

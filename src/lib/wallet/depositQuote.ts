@@ -52,6 +52,13 @@ export interface CocoDepositQuote {
 	/** Subscribe to the deposit's outcome. Returns an unsubscribe function. */
 	on(event: 'success' | 'error', handler: DepositListener): () => void
 	/**
+	 * Subscribe to every quote state the manager reports for THIS deposit, in order. `ISSUED` is
+	 * also announced on the outcome channel; this channel exists so a caller can observe the
+	 * intermediate `PAID` (the payment landed, redemption still in flight) rather than being
+	 * forced to treat "not yet issued" as one undifferentiated wait.
+	 */
+	on(event: 'state', handler: (state: DepositQuoteState) => void): () => void
+	/**
 	 * Wait until the deposit is issued. Rejects on an expired quote, and rejects with the
 	 * confirmation-timeout message when the wait runs out first.
 	 */
@@ -102,6 +109,7 @@ export const createCocoDepositQuote = (options: CocoDepositQuoteOptions): CocoDe
 	let disposed = false
 
 	const listeners: Array<{ event: 'success' | 'error'; handler: DepositListener }> = []
+	const stateListeners: Array<(state: DepositQuoteState) => void> = []
 
 	const notify = (event: 'success' | 'error', error?: Error): void => {
 		for (const listener of listeners) {
@@ -110,6 +118,17 @@ export const createCocoDepositQuote = (options: CocoDepositQuoteOptions): CocoDe
 				listener.handler(error)
 			} catch (listenerError) {
 				console.error('[deposit] deposit listener threw:', listenerError)
+			}
+		}
+	}
+
+	/** Announce a quote state to the state channel, and only to it. */
+	const notifyState = (next: DepositQuoteState): void => {
+		for (const listener of stateListeners) {
+			try {
+				listener(next)
+			} catch (listenerError) {
+				console.error('[deposit] deposit state listener threw:', listenerError)
 			}
 		}
 	}
@@ -127,6 +146,7 @@ export const createCocoDepositQuote = (options: CocoDepositQuoteOptions): CocoDe
 		if (disposed) return
 		if (!quoteId || payload.mintUrl !== options.mintUrl || payload.quoteId !== quoteId) return
 		state = payload.state
+		notifyState(payload.state)
 		if (payload.state === 'ISSUED') settle('success')
 	})
 
@@ -146,21 +166,40 @@ export const createCocoDepositQuote = (options: CocoDepositQuoteOptions): CocoDe
 			// The mint reports `expiry` in Unix seconds (NUT-04); this module works in ms.
 			expiryAt = typeof quote.expiry === 'number' ? quote.expiry * 1000 : null
 			state = 'UNPAID'
+			notifyState('UNPAID')
 			return invoice
 		},
 
-		on: (event, handler) => {
-			listeners.push({ event, handler })
+		on: (event: 'success' | 'error' | 'state', handler: DepositListener | ((state: DepositQuoteState) => void)) => {
+			if (event === 'state') {
+				const stateHandler = handler as (state: DepositQuoteState) => void
+				stateListeners.push(stateHandler)
+				// A caller that subscribes after a state was reported still hears the latest one.
+				if (state !== null) {
+					try {
+						stateHandler(state)
+					} catch (listenerError) {
+						console.error('[deposit] deposit state listener threw:', listenerError)
+					}
+				}
+				return () => {
+					const index = stateListeners.indexOf(stateHandler)
+					if (index >= 0) stateListeners.splice(index, 1)
+				}
+			}
+
+			const outcomeHandler = handler as DepositListener
+			listeners.push({ event, handler: outcomeHandler })
 			// A caller that subscribes after the outcome already landed still hears it.
 			if (outcome === event) {
 				try {
-					handler(outcomeError)
+					outcomeHandler(outcomeError)
 				} catch (listenerError) {
 					console.error('[deposit] deposit listener threw:', listenerError)
 				}
 			}
 			return () => {
-				const index = listeners.findIndex((listener) => listener.event === event && listener.handler === handler)
+				const index = listeners.findIndex((listener) => listener.event === event && listener.handler === outcomeHandler)
 				if (index >= 0) listeners.splice(index, 1)
 			}
 		},

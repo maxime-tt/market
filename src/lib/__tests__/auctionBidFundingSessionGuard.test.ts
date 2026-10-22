@@ -29,6 +29,7 @@ import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { toast } from 'sonner'
 import { nip60Store } from '@/lib/stores/nip60'
+import { cashuStore } from '@/lib/stores/cashu'
 import {
 	AuctionBidLockedButUnpublishedError,
 	AuctionBidLockOutcomeUncertainError,
@@ -403,7 +404,8 @@ beforeEach(() => {
 	// Deterministic wallet-store state regardless of file ordering — the hook
 	// reads mintBalances during handleFundingSuccess and refresh() is a
 	// no-op without a wallet.
-	nip60Store.setState((s) => ({ ...s, wallet: null, mintBalances: {}, pendingTokens: [], depositStatus: 'idle' }))
+	nip60Store.setState((s) => ({ ...s, wallet: null, mintBalances: {}, pendingTokens: [] }))
+	cashuStore.setState((s) => ({ ...s, depositStatus: 'idle', depositPhase: 'idle' }))
 })
 
 afterEach(() => {
@@ -983,7 +985,7 @@ describe('late success after uncertain close (#1235 round-3 B3)', () => {
 		await act(async () => {
 			startDepositFunding(h.latest.current, bidData)
 			h.latest.current.handleInvoiceCreated()
-			nip60Store.setState((s) => ({ ...s, depositStatus: 'pending' }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'pending' }))
 		})
 		expect(h.latest.current.bidFundingLifecycleState).toBe('invoice_created')
 	}
@@ -1011,7 +1013,8 @@ describe('late success after uncertain close (#1235 round-3 B3)', () => {
 		const publish = deferred<string>()
 		h.setPublishBid(() => publish.promise)
 		await act(async () => {
-			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 }, depositStatus: 'success' }))
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 } }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'success' }))
 			h.latest.current.handleFundingSuccess()
 			await new Promise((resolve) => setTimeout(resolve, 0))
 		})
@@ -1058,7 +1061,8 @@ describe('late success after uncertain close (#1235 round-3 B3)', () => {
 		const publish = deferred<string>()
 		h.setPublishBid(() => publish.promise)
 		await act(async () => {
-			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 }, depositStatus: 'success' }))
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 } }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'success' }))
 			h.latest.current.handleFundingSuccess()
 			await new Promise((resolve) => setTimeout(resolve, 0))
 		})
@@ -1103,7 +1107,7 @@ describe('late success after uncertain close (#1235 round-3 B3)', () => {
 		await act(async () => {
 			startDepositFunding(h.latest.current, bidData)
 			h.latest.current.handleInvoiceCreated()
-			nip60Store.setState((s) => ({ ...s, depositStatus: 'idle' }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'idle' }))
 		})
 		await act(async () => {
 			h.latest.current.handleDepositModalClose()
@@ -1133,7 +1137,7 @@ describe('uncertain deposit-modal close surfaces toast.info (#1235 round-3 fix 2
 		await act(async () => {
 			startDepositFunding(h.latest.current, bidData)
 			h.latest.current.handleInvoiceCreated()
-			nip60Store.setState((s) => ({ ...s, depositStatus: 'pending' }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'pending' }))
 		})
 		expect(h.latest.current.bidFundingLifecycleState).toBe('invoice_created')
 
@@ -1159,7 +1163,7 @@ describe('uncertain deposit-modal close surfaces toast.info (#1235 round-3 fix 2
 		await act(async () => {
 			startDepositFunding(h.latest.current, bidData)
 			h.latest.current.handleInvoiceCreated()
-			nip60Store.setState((s) => ({ ...s, depositStatus: 'idle' }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'idle' }))
 		})
 		await act(async () => {
 			h.latest.current.handleDepositModalClose()
@@ -1188,14 +1192,15 @@ describe('duplicate deposit-success guards (#1235 round-3.5)', () => {
 		await act(async () => {
 			startDepositFunding(h.latest.current, bidData)
 			h.latest.current.handleInvoiceCreated()
-			nip60Store.setState((s) => ({ ...s, depositStatus: 'pending' }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'pending' }))
 		})
 
 		// First success → the submission pipeline is in flight (deferred publish).
 		const publish = deferred<string>()
 		h.setPublishBid(() => publish.promise)
 		await act(async () => {
-			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 }, depositStatus: 'success' }))
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 } }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'success' }))
 			h.latest.current.handleFundingSuccess()
 			await new Promise((resolve) => setTimeout(resolve, 0))
 		})
@@ -1226,14 +1231,15 @@ describe('duplicate deposit-success guards (#1235 round-3.5)', () => {
 		await act(async () => {
 			startDepositFunding(h.latest.current, bidData)
 			h.latest.current.handleInvoiceCreated()
-			nip60Store.setState((s) => ({ ...s, depositStatus: 'pending' }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'pending' }))
 		})
 
 		// First success → lock crossed, publish failed (the locked-unpublished tier).
 		const publish = deferred<string>()
 		h.setPublishBid(() => publish.promise)
 		await act(async () => {
-			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 }, depositStatus: 'success' }))
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 } }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'success' }))
 			h.latest.current.handleFundingSuccess()
 			await new Promise((resolve) => setTimeout(resolve, 0))
 		})
@@ -1245,7 +1251,7 @@ describe('duplicate deposit-success guards (#1235 round-3.5)', () => {
 		// pending bid); the minted funds stay in the wallet.
 		const publishCallsBefore = h.calls.publishBid
 		await act(async () => {
-			nip60Store.setState((s) => ({ ...s, depositStatus: 'success' }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'success' }))
 			h.latest.current.handleFundingSuccess()
 			await new Promise((resolve) => setTimeout(resolve, 0))
 		})
@@ -1264,14 +1270,15 @@ describe('duplicate deposit-success guards (#1235 round-3.5)', () => {
 		await act(async () => {
 			startDepositFunding(h.latest.current, bidDataA)
 			h.latest.current.handleInvoiceCreated()
-			nip60Store.setState((s) => ({ ...s, depositStatus: 'pending' }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'pending' }))
 		})
 
 		// The deposit settles → the continuation starts (synchronous up to the
 		// refresh await). While it is suspended, the user starts a NEW funding
 		// session (session-token bump + lifecycle reset + new pending bid).
 		await act(async () => {
-			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 }, depositStatus: 'success' }))
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 } }))
+			cashuStore.setState((s) => ({ ...s, depositStatus: 'success' }))
 			h.latest.current.handleFundingSuccess()
 			startDepositFunding(h.latest.current, bidDataB)
 			await new Promise((resolve) => setTimeout(resolve, 0))

@@ -1,5 +1,5 @@
 import { nip60Store } from '@/lib/stores/nip60'
-import { cashuActions } from '@/lib/stores/cashu'
+import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 import { planAuctionBidRecovery } from '@sdk/commerce/auctions'
 import {
 	AuctionBidLockedButUnpublishedError,
@@ -918,7 +918,7 @@ export function useAuctionBidFunding({
 		// awaiting_confirmation_retry) must land the lifecycle in a
 		// reclaimable state with the session preserved, never funding_canceled
 		// with a cleared pendingBidSubmission.
-		const depositStatus = nip60Store.state.depositStatus
+		const depositStatus = cashuStore.state.depositStatus
 		// #1235 round-3 fix 2 (felixfelix #1) — resolve the close's landing state
 		// BEFORE setState (the updater must stay pure — React may invoke it
 		// twice), so the uncertain-outcome guidance fires exactly once per

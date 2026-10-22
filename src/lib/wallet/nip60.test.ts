@@ -2,12 +2,12 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import {
 	getAuctionDepositFeePadding,
 	getAuctionDepositMaxMintQuoteFeeSats,
-	NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS,
-	nip60Actions,
-	nip60Store,
+	CASHU_DEPOSIT_CONFIRMATION_TIMEOUT_MS,
+	cashuActions,
+	cashuStore,
 	validateAuctionDepositInvoiceQuote,
 	waitForDepositConfirmation,
-} from '@/lib/stores/nip60'
+} from '@/lib/stores/cashu'
 
 type DepositEventName = 'success' | 'error'
 
@@ -31,7 +31,7 @@ const createMockDeposit = () => {
 }
 
 afterEach(() => {
-	nip60Store.setState((state) => ({
+	cashuStore.setState((state) => ({
 		...state,
 		activeDeposit: null,
 		depositInvoice: null,
@@ -54,7 +54,7 @@ describe('getAuctionDepositFeePadding', () => {
 
 describe('waitForDepositConfirmation', () => {
 	test('uses a 15s default confirmation timeout', () => {
-		expect(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS).toBe(15_000)
+		expect(CASHU_DEPOSIT_CONFIRMATION_TIMEOUT_MS).toBe(15_000)
 	})
 
 	test('rejects when confirmation times out', async () => {
@@ -79,7 +79,7 @@ describe('retryDepositConfirmation', () => {
 	test('re-enters pending state and triggers a deposit re-check', async () => {
 		const deposit = createMockDeposit()
 
-		nip60Store.setState((state) => ({
+		cashuStore.setState((state) => ({
 			...state,
 			activeDeposit: deposit as never,
 			depositInvoice: 'lnbc1test',
@@ -87,18 +87,18 @@ describe('retryDepositConfirmation', () => {
 			error: 'Payment confirmation timed out. Retry confirmation to check the mint again.',
 		}))
 
-		nip60Actions.retryDepositConfirmation()
+		cashuActions.retryDepositConfirmation()
 		await Promise.resolve()
 
-		expect(nip60Store.state.depositStatus).toBe('pending')
-		expect(nip60Store.state.error).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('pending')
+		expect(cashuStore.state.error).toBeNull()
 		expect(deposit.getCheckCalls()).toBe(1)
 	})
 })
 
 describe('estimateDepositQuote', () => {
 	test('returns deterministic fallback padding without depending on mint quote side effects', async () => {
-		const estimate = await nip60Actions.estimateDepositQuote(10_000, 'https://mint.minibits.cash/Bitcoin')
+		const estimate = await cashuActions.estimateDepositQuote(10_000, 'https://mint.minibits.cash/Bitcoin')
 
 		expect(estimate.requiredBidFundingAmount).toBe(10_000)
 		expect(estimate.totalDepositAmount).toBe(10_100)
@@ -158,7 +158,7 @@ describe('checkDepositNow', () => {
 
 		// Simulate the success handler that startDeposit attaches to the deposit
 		deposit.on('success', () => {
-			nip60Store.setState((s) => ({
+			cashuStore.setState((s) => ({
 				...s,
 				depositStatus: 'success',
 				activeDeposit: null,
@@ -166,7 +166,7 @@ describe('checkDepositNow', () => {
 			}))
 		})
 
-		nip60Store.setState((state) => ({
+		cashuStore.setState((state) => ({
 			...state,
 			activeDeposit: deposit as never,
 			depositInvoice: 'lnbc1test',
@@ -174,9 +174,9 @@ describe('checkDepositNow', () => {
 			error: null,
 		}))
 
-		await nip60Actions.checkDepositNow()
+		await cashuActions.checkDepositNow()
 
-		expect(nip60Store.state.depositStatus).toBe('success')
+		expect(cashuStore.state.depositStatus).toBe('success')
 		expect(deposit.getCheckCalls()).toBe(1)
 	})
 
@@ -194,7 +194,7 @@ describe('checkDepositNow', () => {
 			emitError: (error: string) => handlers.error?.(error),
 		}
 
-		nip60Store.setState((state) => ({
+		cashuStore.setState((state) => ({
 			...state,
 			activeDeposit: failingDeposit as never,
 			depositInvoice: 'lnbc1test',
@@ -202,16 +202,16 @@ describe('checkDepositNow', () => {
 			error: null,
 		}))
 
-		await nip60Actions.checkDepositNow()
+		await cashuActions.checkDepositNow()
 
 		// checkDepositNow catches the check error; depositStatus stays pending
-		expect(nip60Store.state.depositStatus).toBe('pending')
+		expect(cashuStore.state.depositStatus).toBe('pending')
 	})
 
 	test('while awaiting_confirmation_retry delegates to retryDepositConfirmation', async () => {
 		const deposit = createMockDeposit()
 
-		nip60Store.setState((state) => ({
+		cashuStore.setState((state) => ({
 			...state,
 			activeDeposit: deposit as never,
 			depositInvoice: 'lnbc1test',
@@ -219,32 +219,32 @@ describe('checkDepositNow', () => {
 			error: 'Payment confirmation timed out. Retry confirmation to check the mint again.',
 		}))
 
-		await nip60Actions.checkDepositNow()
+		await cashuActions.checkDepositNow()
 
 		// retryDepositConfirmation sets status to pending and triggers a re-check
-		expect(nip60Store.state.depositStatus).toBe('pending')
-		expect(nip60Store.state.error).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('pending')
+		expect(cashuStore.state.error).toBeNull()
 		expect(deposit.getCheckCalls()).toBe(1)
 	})
 
 	test('while idle is a no-op (no active deposit)', async () => {
-		await nip60Actions.checkDepositNow()
-		expect(nip60Store.state.depositStatus).toBe('idle')
+		await cashuActions.checkDepositNow()
+		expect(cashuStore.state.depositStatus).toBe('idle')
 	})
 
 	test('while success is a no-op (does not re-check a completed deposit)', async () => {
 		const deposit = createMockDeposit()
 
-		nip60Store.setState((state) => ({
+		cashuStore.setState((state) => ({
 			...state,
 			activeDeposit: deposit as never,
 			depositStatus: 'success',
 		}))
 
-		await nip60Actions.checkDepositNow()
+		await cashuActions.checkDepositNow()
 
 		expect(deposit.getCheckCalls()).toBe(0)
-		expect(nip60Store.state.depositStatus).toBe('success')
+		expect(cashuStore.state.depositStatus).toBe('success')
 	})
 })
 

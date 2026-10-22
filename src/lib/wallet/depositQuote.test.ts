@@ -113,6 +113,35 @@ describe('coco deposit quote — what a mint quote means for a deposit', () => {
 		expect(successes[0]).toBeUndefined()
 	})
 
+	test('the state channel reports PAID before ISSUED, so "paid but not yet minted" is observable', async () => {
+		const r = rig()
+		await r.deposit.start()
+
+		const states: DepositQuoteState[] = []
+		r.deposit.on('state', (state) => states.push(state))
+
+		r.emit('PAID')
+		r.emit('ISSUED')
+
+		// The subscribe-time replay of the current state, then every change after it.
+		expect(states).toEqual(['UNPAID', 'PAID', 'ISSUED'])
+	})
+
+	test('a state subscriber that arrives after PAID still hears it', async () => {
+		const r = rig()
+		await r.deposit.start()
+		r.emit('PAID')
+
+		const states: DepositQuoteState[] = []
+		const unsubscribe = r.deposit.on('state', (state) => states.push(state))
+
+		expect(states).toEqual(['PAID'])
+
+		unsubscribe()
+		r.emit('ISSUED')
+		expect(states).toEqual(['PAID'])
+	})
+
 	test('a paid quote is not success until it is issued', async () => {
 		const r = rig({
 			// The mint answers PAID first, then ISSUED — the redemption is in flight in between.

@@ -28,20 +28,9 @@
  */
 import { afterEach, describe, expect, test } from 'bun:test'
 
-import { cashuStore } from '../stores/cashu'
-
-// Bun applies `mock.module()` across every test file in a single run, and
-// `auctionBidPublishRetry.test.ts` registers a PARTIAL mock for
-// `@/lib/stores/nip60` (only lockAuctionBidFunds / updatePendingTokenContext).
-// A plain `@/lib/stores/nip60` alias import here can therefore bind to that
-// mock and lose `startDeposit`/`cancelDeposit` entirely. Import the REAL store
-// through a UNIQUE query-string specifier — no other file can have mocked it —
-// so this test is self-consistent and independent of file order or of which
-// worker process bun assigns it to (same pattern as
-// nip60LockAuctionBidFunds.test.ts). This file drives the store instance it
-// loads here, so a fresh module body is exactly what it wants.
-const realNip60: typeof import('@/lib/stores/nip60') = await import(`${import.meta.dir}/../stores/nip60.ts?deposit-identity-real=1`)
-const { nip60Actions, nip60Store } = realNip60
+// The deposit session now lives on the coco-backed store, so no module mock can shadow it:
+// `auctionBidPublishRetry.test.ts` mocks `@/lib/stores/nip60`, not this module.
+import { cashuActions, cashuStore } from '../stores/cashu'
 
 const TEST_MINT = 'https://mint.example.test'
 /** Checksum-valid bolt11 invoice encoding a 2,000 sat amount. */
@@ -124,25 +113,6 @@ const installFakeCoco = () => {
 	}
 }
 
-interface MockWallet {
-	mints: string[]
-	mintBalances: Record<string, number>
-	state: { getProofs: () => never[]; dump: () => { proofs: unknown[] } }
-	fetchTransactions: () => Promise<never[]>
-	subscribeTransactions: (callback: (tx: unknown) => void) => () => void
-}
-
-const createMockWallet = (): MockWallet => ({
-	mints: [],
-	mintBalances: {},
-	state: {
-		getProofs: () => [],
-		dump: () => ({ proofs: [] }),
-	},
-	fetchTransactions: async () => [],
-	subscribeTransactions: () => () => undefined,
-})
-
 /** Let the engine's own await chain (quote lookup → nudge → event → settle) run to rest. */
 const flushEngine = () => new Promise((resolve) => setTimeout(resolve, 25))
 
@@ -155,29 +125,28 @@ const flushEngine = () => new Promise((resolve) => setTimeout(resolve, 25))
 const startMockDeposit = async (options?: { quoteExpired?: boolean }): Promise<ReturnType<typeof installFakeCoco>> => {
 	const coco = installFakeCoco()
 	if (options?.quoteExpired) coco.expireNextQuote()
-	nip60Store.setState((s) => ({
+	cashuStore.setState((s) => ({
 		...s,
-		wallet: createMockWallet() as never,
-		status: 'ready',
 		activeDeposit: null,
 		depositInvoice: null,
 		depositStatus: 'idle',
+		depositPhase: 'idle',
 		error: null,
 	}))
-	const invoice = await nip60Actions.startDeposit(2000, TEST_MINT)
+	const invoice = await cashuActions.startDeposit(2000, TEST_MINT)
 	expect(invoice).toBe(BOLT11_INVOICE_2000_SATS)
 	return coco
 }
 
 afterEach(() => {
-	cashuStore.setState((s) => ({ ...s, manager: null, status: 'idle' }))
-	nip60Store.setState((state) => ({
+	cashuStore.setState((state) => ({
 		...state,
-		wallet: null,
+		manager: null,
 		status: 'idle',
 		activeDeposit: null,
 		depositInvoice: null,
 		depositStatus: 'idle',
+		depositPhase: 'idle',
 		error: null,
 	}))
 })
@@ -186,98 +155,98 @@ describe('cancelDeposit preserveRecovery (PR #1235 blocker 3)', () => {
 	test('keeps the quote identity so checkDepositNow reconciles the same quote', async () => {
 		const coco = await startMockDeposit()
 		const quote = coco.quotes[0]
-		const deposit = nip60Store.state.activeDeposit
+		const deposit = cashuStore.state.activeDeposit
 
-		expect(nip60Store.state.depositStatus).toBe('pending')
+		expect(cashuStore.state.depositStatus).toBe('pending')
 		expect(deposit?.quoteId).toBe(quote.quoteId)
-		expect(nip60Store.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
+		expect(cashuStore.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
 
 		// Paid-or-uncertain close, as DepositLightningModal performs it.
-		nip60Actions.cancelDeposit({ preserveRecovery: true })
+		cashuActions.cancelDeposit({ preserveRecovery: true })
 
 		// Identity retained: the SAME quote can still be reconciled without a
 		// fresh funding session.
-		expect(nip60Store.state.activeDeposit).toBe(deposit as never)
-		expect(nip60Store.state.activeDeposit?.quoteId).toBe(quote.quoteId)
-		expect(nip60Store.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
-		expect(nip60Store.state.depositStatus).toBe('pending')
+		expect(cashuStore.state.activeDeposit).toBe(deposit as never)
+		expect(cashuStore.state.activeDeposit?.quoteId).toBe(quote.quoteId)
+		expect(cashuStore.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
+		expect(cashuStore.state.depositStatus).toBe('pending')
 
 		// The mint finds the payment on the next check of the same quote.
 		quote.markPaid()
-		await nip60Actions.checkDepositNow()
+		await cashuActions.checkDepositNow()
 
 		// No second quote was ever asked for — that is what "the same payment" means.
 		expect(coco.createdQuotes).toBe(1)
-		expect(nip60Store.state.depositStatus).toBe('success')
-		expect(nip60Store.state.activeDeposit).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('success')
+		expect(cashuStore.state.activeDeposit).toBeNull()
 	})
 
 	test('keeps the quote identity so retryDepositConfirmation reconciles the same quote', async () => {
 		const coco = await startMockDeposit()
 		const quote = coco.quotes[0]
-		const deposit = nip60Store.state.activeDeposit
+		const deposit = cashuStore.state.activeDeposit
 
 		// Simulate the 15s confirmation timeout having lapsed.
-		nip60Store.setState((s) => ({
+		cashuStore.setState((s) => ({
 			...s,
 			depositStatus: 'awaiting_confirmation_retry',
 			error: 'Payment confirmation timed out. Retry confirmation to check the mint again.',
 		}))
 
 		// Paid-or-uncertain close.
-		nip60Actions.cancelDeposit({ preserveRecovery: true })
+		cashuActions.cancelDeposit({ preserveRecovery: true })
 
-		expect(nip60Store.state.activeDeposit).toBe(deposit as never)
-		expect(nip60Store.state.depositStatus).toBe('awaiting_confirmation_retry')
+		expect(cashuStore.state.activeDeposit).toBe(deposit as never)
+		expect(cashuStore.state.depositStatus).toBe('awaiting_confirmation_retry')
 
 		// The same quote is still retryable: retry re-enters pending and the
 		// mint finds the payment.
 		quote.markPaid()
-		nip60Actions.retryDepositConfirmation()
+		cashuActions.retryDepositConfirmation()
 		await flushEngine()
 
 		expect(coco.createdQuotes).toBe(1)
-		expect(nip60Store.state.depositStatus).toBe('success')
-		expect(nip60Store.state.activeDeposit).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('success')
+		expect(cashuStore.state.activeDeposit).toBeNull()
 	})
 
 	test('resets only the transient error display, not the deposit identity', async () => {
 		const coco = await startMockDeposit()
 		const quote = coco.quotes[0]
-		const deposit = nip60Store.state.activeDeposit
+		const deposit = cashuStore.state.activeDeposit
 
-		nip60Store.setState((s) => ({ ...s, error: 'transient display noise' }))
-		nip60Actions.cancelDeposit({ preserveRecovery: true })
+		cashuStore.setState((s) => ({ ...s, error: 'transient display noise' }))
+		cashuActions.cancelDeposit({ preserveRecovery: true })
 
-		expect(nip60Store.state.error).toBeNull()
-		expect(nip60Store.state.activeDeposit).toBe(deposit as never)
-		expect(nip60Store.state.activeDeposit?.quoteId).toBe(quote.quoteId)
-		expect(nip60Store.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
+		expect(cashuStore.state.error).toBeNull()
+		expect(cashuStore.state.activeDeposit).toBe(deposit as never)
+		expect(cashuStore.state.activeDeposit?.quoteId).toBe(quote.quoteId)
+		expect(cashuStore.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
 	})
 })
 
 describe('cancelDeposit default (backward compat)', () => {
 	test('with no options fully clears the deposit session', async () => {
 		const coco = await startMockDeposit()
-		expect(nip60Store.state.activeDeposit?.quoteId).toBe(coco.quotes[0].quoteId)
+		expect(cashuStore.state.activeDeposit?.quoteId).toBe(coco.quotes[0].quoteId)
 
-		nip60Actions.cancelDeposit()
+		cashuActions.cancelDeposit()
 
-		expect(nip60Store.state.activeDeposit).toBeNull()
-		expect(nip60Store.state.depositInvoice).toBeNull()
-		expect(nip60Store.state.depositStatus).toBe('idle')
-		expect(nip60Store.state.error).toBeNull()
+		expect(cashuStore.state.activeDeposit).toBeNull()
+		expect(cashuStore.state.depositInvoice).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('idle')
+		expect(cashuStore.state.error).toBeNull()
 	})
 
 	test('with preserveRecovery explicitly false fully clears', async () => {
 		const coco = await startMockDeposit()
-		expect(nip60Store.state.activeDeposit?.quoteId).toBe(coco.quotes[0].quoteId)
+		expect(cashuStore.state.activeDeposit?.quoteId).toBe(coco.quotes[0].quoteId)
 
-		nip60Actions.cancelDeposit({ preserveRecovery: false })
+		cashuActions.cancelDeposit({ preserveRecovery: false })
 
-		expect(nip60Store.state.activeDeposit).toBeNull()
-		expect(nip60Store.state.depositInvoice).toBeNull()
-		expect(nip60Store.state.depositStatus).toBe('idle')
+		expect(cashuStore.state.activeDeposit).toBeNull()
+		expect(cashuStore.state.depositInvoice).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('idle')
 	})
 
 	test('preserveRecovery on a terminal state has no recoverable quote and fully clears', async () => {
@@ -285,14 +254,14 @@ describe('cancelDeposit default (backward compat)', () => {
 
 		// Terminal success: the success listener already cleared the identity.
 		coco.quotes[0].emitIssued()
-		expect(nip60Store.state.depositStatus).toBe('success')
-		expect(nip60Store.state.activeDeposit).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('success')
+		expect(cashuStore.state.activeDeposit).toBeNull()
 
-		nip60Actions.cancelDeposit({ preserveRecovery: true })
+		cashuActions.cancelDeposit({ preserveRecovery: true })
 
-		expect(nip60Store.state.depositStatus).toBe('idle')
-		expect(nip60Store.state.activeDeposit).toBeNull()
-		expect(nip60Store.state.depositInvoice).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('idle')
+		expect(cashuStore.state.activeDeposit).toBeNull()
+		expect(cashuStore.state.depositInvoice).toBeNull()
 	})
 })
 
@@ -302,14 +271,14 @@ describe('deposit listener identity guard (stale session race)', () => {
 		// call that the guard test makes must actually produce a failure. Without this, a guard
 		// assertion could pass simply because nothing was ever emitted.
 		const coco = await startMockDeposit({ quoteExpired: true })
-		const deposit = nip60Store.state.activeDeposit
+		const deposit = cashuStore.state.activeDeposit
 
 		await deposit?.check(1).catch(() => undefined)
 
 		expect(coco.createdQuotes).toBe(1)
-		expect(nip60Store.state.depositStatus).toBe('error')
-		expect(nip60Store.state.error).not.toBeNull()
-		expect(nip60Store.state.activeDeposit).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('error')
+		expect(cashuStore.state.error).not.toBeNull()
+		expect(cashuStore.state.activeDeposit).toBeNull()
 	})
 
 	test('a late event from deposit #1 must not corrupt deposit #2 status', async () => {
@@ -317,48 +286,48 @@ describe('deposit listener identity guard (stale session race)', () => {
 		// late failure below is a real one rather than a call that quietly does nothing.
 		const coco = await startMockDeposit({ quoteExpired: true })
 		const quote1 = coco.quotes[0]
-		const deposit1 = nip60Store.state.activeDeposit
+		const deposit1 = cashuStore.state.activeDeposit
 		expect(deposit1).not.toBeNull()
 
-		await nip60Actions.startDeposit(2000, TEST_MINT)
+		await cashuActions.startDeposit(2000, TEST_MINT)
 		const quote2 = coco.quotes[1]
-		const deposit2 = nip60Store.state.activeDeposit
+		const deposit2 = cashuStore.state.activeDeposit
 
 		expect(deposit2?.quoteId).toBe(quote2.quoteId)
-		expect(nip60Store.state.depositStatus).toBe('pending')
+		expect(cashuStore.state.depositStatus).toBe('pending')
 
 		// Deposit #1's stale listener fires — the identity guard rejects it.
 		quote1.emitIssued()
-		expect(nip60Store.state.depositStatus).toBe('pending')
-		expect(nip60Store.state.activeDeposit).toBe(deposit2 as never)
-		expect(nip60Store.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
+		expect(cashuStore.state.depositStatus).toBe('pending')
+		expect(cashuStore.state.activeDeposit).toBe(deposit2 as never)
+		expect(cashuStore.state.depositInvoice).toBe(BOLT11_INVOICE_2000_SATS)
 
 		// A late *failure* from the superseded session is rejected too: deposit #1's quote never
 		// settles, so its check window closes and the engine reports failure. That failure
 		// belongs to #1, and the guard must not let it land on #2.
 		await deposit1?.check(1).catch(() => undefined)
-		expect(nip60Store.state.depositStatus).toBe('pending')
-		expect(nip60Store.state.error).toBeNull()
-		expect(nip60Store.state.activeDeposit).toBe(deposit2 as never)
+		expect(cashuStore.state.depositStatus).toBe('pending')
+		expect(cashuStore.state.error).toBeNull()
+		expect(cashuStore.state.activeDeposit).toBe(deposit2 as never)
 
 		// Deposit #2's own event still reconciles normally.
 		quote2.emitIssued()
-		expect(nip60Store.state.depositStatus).toBe('success')
-		expect(nip60Store.state.activeDeposit).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('success')
+		expect(cashuStore.state.activeDeposit).toBeNull()
 	})
 
 	test('stale deposit events after a default cancelDeposit cannot resurrect the deposit session', async () => {
 		const coco = await startMockDeposit()
 		const quote1 = coco.quotes[0]
 
-		nip60Actions.cancelDeposit()
-		expect(nip60Store.state.depositStatus).toBe('idle')
+		cashuActions.cancelDeposit()
+		expect(cashuStore.state.depositStatus).toBe('idle')
 
 		quote1.emitIssued()
 
-		expect(nip60Store.state.depositStatus).toBe('idle')
-		expect(nip60Store.state.activeDeposit).toBeNull()
-		expect(nip60Store.state.depositInvoice).toBeNull()
-		expect(nip60Store.state.error).toBeNull()
+		expect(cashuStore.state.depositStatus).toBe('idle')
+		expect(cashuStore.state.activeDeposit).toBeNull()
+		expect(cashuStore.state.depositInvoice).toBeNull()
+		expect(cashuStore.state.error).toBeNull()
 	})
 })
