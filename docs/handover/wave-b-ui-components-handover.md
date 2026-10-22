@@ -466,14 +466,14 @@ errors on this base (all in files unrelated to the wallet). "tsc clean" here mea
 
 ## 9. Status of wave B, and what changes under you
 
-| Stage                                                                                                                   | State                                  | Commit     |
-| ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ---------- |
-| B1 — coco is the mint authority (the dependency inversion that has to land first)                                       | **landed**                             | `bfb09804` |
-| B2-pre — the wallet P2PK keypair + auction HD root get a local store behind an injected port                            | **landed**                             | `bb6f5ed4` |
-| B2a — upgrade coco to the renamed `@cashu/coco-core@2.0.0` (+ `@cashu/coco-indexeddb`), port `src/lib/stores/cashu.ts`  | **blocked — see the coupling in §9.1** | —          |
-| B2-i — the deposit session moves onto coco's mint quote (`src/lib/wallet/depositQuote.ts`)                              | **landed**                             | `8638fa92` |
-| B2 — cut NIP-60: delete `src/lib/stores/nip60.ts`, re-home the wallet store onto coco, retarget every consumer and test | **in progress** (deposit half done)    | —          |
-| B3 — wire the coco-backed port + the rail registry behind `sdk/core/wallet`                                             | not started                            | —          |
+| Stage                                                                                                                   | State                               | Commit     |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ---------- |
+| B1 — coco is the mint authority (the dependency inversion that has to land first)                                       | **landed**                          | `bfb09804` |
+| B2-pre — the wallet P2PK keypair + auction HD root get a local store behind an injected port                            | **landed**                          | `bb6f5ed4` |
+| B2a — upgrade coco to the renamed `@cashu/coco-core@2.0.0` (+ `@cashu/coco-indexeddb`), port `src/lib/stores/cashu.ts`  | **landed — see §9.12**              | `6071efdb` |
+| B2-i — the deposit session moves onto coco's mint quote (`src/lib/wallet/depositQuote.ts`)                              | **landed**                          | `8638fa92` |
+| B2 — cut NIP-60: delete `src/lib/stores/nip60.ts`, re-home the wallet store onto coco, retarget every consumer and test | **in progress** (deposit half done) | —          |
+| B3 — wire the coco-backed port + the rail registry behind `sdk/core/wallet`                                             | not started                         | —          |
 
 Test-count floor: **2590** (base 2561 + 7 B1 + 10 B2-pre + 1 rail rename + 11 deposit slices). Your work raises it.
 
@@ -508,6 +508,9 @@ directory still on disk).
 Ordering that follows: finish the cut's wallet-state slices first (they are unblocked on today's
 pin), then move the NWC store and the other four off NDK's wallet, and only then the version
 bump — so the auction P2PK rails are re-homed once rather than twice.
+
+> **Closed 2026-10-22 (`6071efdb`).** The gate is gone: no file imports `@nostr-dev-kit/wallet`
+> anymore, and the bump landed. See §9.12 for the port and its measured cost.
 
 ### 9.2 The remaining B2 surface, measured (2026-10-20)
 
@@ -1113,6 +1116,22 @@ proofs, mints or pending tokens, a second device starts empty — stands.
    tests survive. Your `WalletDepositView` props above are exactly that contract's
    product surface — `awaiting_confirmation_retry` exists because of it.
 
+### 9.12 B2a landed — the stack is coco 2.0 + cashu-ts 5 (2026-10-22)
+
+`6071efdb`. The gate §9.1 named is closed: nothing imports `@nostr-dev-kit/wallet`, so the rename-and-major bump could land. It landed as **one commit**, and that is not a staging shortcut — it is the shape of the change. A dependency swap cannot be green in isolation: removing the `coco-cashu-core@1.0.0-rc11` pin breaks four importers the same second its `node_modules` entry goes, and the renamed `@cashu/coco-core@2.0.0` line pins `@cashu/cashu-ts@5.0.0-rc.4` **exactly**, so cashu-ts v5 becomes the app's own version in the same step. There is no ordering of `package.json`, `bun.lock` and the port in which a prefix of it compiles.
+
+What the bump costs and buys, verified against the compiler and the installed dists:
+
+- **The userland API rename is small; the value-object change is the work.** `CashuMint → Mint` and `CashuWallet → Wallet` touch a dozen files mechanically. `Proof.amount` becoming an `Amount` class (whose `toJSON()` returns a string) is what reaches the auction money paths: every sum, `+` and sort on a proof amount reads `toNumber()` now, every constructed proof wraps `Amount.from()`, and only the test fixtures had to be re-shaped — they are the fakes that feed those paths.
+- **The lock is a SEND-side win, and it now uses it.** v5 retired `swap(amount, proofs, { p2pk })`; `lockAuctionBidProofs` mints its fresh P2PK outputs through `Wallet.send(amount, proofs, undefined, { send: { type: 'p2pk', options } })` with `kind: 'P2PK'`, `data` = the lock pubkey, `locktime` and the refund key. The money tests in `auctionLock.test.ts` pin that exact options object, and the receive/reclaim leg keeps its shape (`Wallet.receive(token, { proofsWeHave, privkey, keysetId })` still exists).
+- **v5 validates that P2PK keys are on the curve.** The test fixtures' placeholder pubkeys (`'02' + 'c'.repeat(64)`) are no longer accepted by `createSingleP2PKData`; they are real points now (the generator and its negation). The construction assertions are otherwise unchanged.
+- **`getDecodedToken` takes keyset ids now,** not `MintKeyset[]`; every settlement decode maps `.id` at the call. The `@cashu/cashu-ts/crypto/*` subpaths are gone — the root exports carry `hashToCurve`/`pointFromHex`/`createDLEQProof`, and `bytesToNumber` was dropped, so the DLEQ fixture carries a four-line big-endian helper.
+- **The deposit engine's coco contract is adapted, not redesigned.** `createCocoDepositQuote` stays event-driven; `toCocoDepositManager` (in `depositQuote.ts`) bridges coco 2.0's `quotes.mint.create` + `manager.requeuePaidMintQuotes` + `mint-quote:updated` onto the shape it settles on. Its 11 unit tests are **unchanged**; only the store-level fakes moved to the 2.0 shape.
+- **`@nostr-dev-kit/ndk` is still typed against cashu-ts v2.** The `NDKZapper` cashu callback returns proofs whose `amount` must be a plain number, so `walletOps` converts at that one boundary. NDK's own dependency, not ours, is the v2 holdout.
+- **The seed-print question is settled by reading the dist, not assuming.** coco 2.0.0's `dist/` contains **zero** `console.log` calls and no logging of seed material anywhere; `coco-indexeddb` likewise. The retired patch's `console.log("seed", seed)` leak has no counterpart to delete.
+
+Gates at the commit: `tsc` **264** against the 271 baseline (no error site added; the count falls because the old cashu-ts v2 `.d.ts` carried errors of its own), `bun test` **2725 pass / 0 fail across 260 files** — the floor is held — `format:check` clean, and the `src/` boundary guard unchanged (no cross-tree edge moved).
+
 ---
 
 ## 10. Amendments to this document
@@ -1129,6 +1148,13 @@ proofs, mints or pending tokens, a second device starts empty — stands.
   fix is a measured 28-file migration in the auction money paths. Verified by reading the
   published tarballs' type definitions and by running the gates, not from documentation. **No §5
   props contract changed**, so nothing you have written is affected.
+- **B2a landed (`6071efdb`).** §9 gains §9.12; §9.1 records the gate as closed and the stage table
+  moves B2a from blocked to landed. The stack is `@cashu/coco-core@2.0.0` +
+  `@cashu/coco-indexeddb@2.0.0` + `@cashu/cashu-ts@5.0.0-rc.4`, the patched `coco-cashu-core`
+  pin and its `patches/` directory are gone, and every direct cashu-ts consumer is ported.
+  Gates: `tsc` 264 (baseline 271), `bun test` 2725 / 0 across 260 files, format clean, boundary
+  unchanged. **No §5 props contract changed.** Written as one commit because a dependency swap
+  has no green prefix; the report says so rather than pretending otherwise.
 - **The store is deleted (`db69265a`, `8ffc27e4`).** §9 gains §9.11; §9.8's plan section carries a
   "landed" pointer with its two deltas. The wallet state is `cashuStore`'s, the action surface is
   the sibling `@/lib/stores/walletOps`, and `src/lib/stores/nip60.ts` is gone. `tsc` did **not**
