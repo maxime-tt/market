@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react'
 import { ndkActions } from '@/lib/stores/ndk'
 import { Button } from '@ui/primitives/button'
+import { LoadingState } from '@ui/shared/loading-state'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { toast } from 'sonner'
@@ -213,9 +214,7 @@ function NostrAddressComponent() {
 
 			<div className="space-y-6 p-4 lg:p-8">
 				{isLoading ? (
-					<div className="flex items-center justify-center p-8">
-						<div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-					</div>
+					<LoadingState className="p-8" label="Loading…" />
 				) : (
 					<>
 						{/* Current NIP-05 Address Status */}

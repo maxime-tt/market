@@ -4,6 +4,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { type NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Button } from '@ui/primitives/button'
+import { LoadingState } from '@ui/shared/loading-state'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { toast } from 'sonner'
@@ -187,9 +188,7 @@ function ProfileComponent() {
 			</PageHeader>
 			<div className="space-y-6 p-4 lg:p-8">
 				{isLoadingProfile ? (
-					<div className="flex items-center justify-center p-8">
-						<div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-					</div>
+					<LoadingState className="p-8" label="Loading…" />
 				) : (
 					<div className="space-y-6">
 						<div className="space-y-4">

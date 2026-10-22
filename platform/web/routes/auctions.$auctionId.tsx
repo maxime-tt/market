@@ -4,6 +4,7 @@ import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
 import { AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
 import { StatusBadge } from '@ui/shared/status-badge'
+import { LoadingState } from '@ui/shared/loading-state'
 import { formatSatsWithUnit } from '@ui/utils/format'
 import { DetailField } from '@ui/shared/detail-field'
 import { EmptyState } from '@ui/shared/empty-state'
@@ -618,12 +619,7 @@ function AuctionDetailRoute() {
 	}
 
 	if (!auction && (auctionQuery.isLoading || auctionQuery.isFetching)) {
-		return (
-			<div className="flex h-[50vh] flex-col items-center justify-center gap-3 px-4 text-center">
-				<div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-				<p className="text-muted-foreground">Loading auction...</p>
-			</div>
-		)
+		return <LoadingState className="h-[50vh] px-4" label="Loading auction…" />
 	}
 
 	if (!auction && auctionQuery.isError) {

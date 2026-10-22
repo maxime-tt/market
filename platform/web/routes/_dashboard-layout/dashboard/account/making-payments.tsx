@@ -1,4 +1,5 @@
 import { Button } from '@ui/primitives/button'
+import { LoadingState } from '@ui/shared/loading-state'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@ui/primitives/card'
 import { Checkbox } from '@ui/primitives/checkbox'
@@ -236,14 +237,7 @@ function MakingPaymentsComponent() {
 
 	if (isLoading && !isInitialized) {
 		// Show initial loading screen
-		return (
-			<div className="flex items-center justify-center h-64">
-				<div className="flex flex-col items-center gap-2">
-					<div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-					<p className="text-muted-foreground">Loading wallets...</p>
-				</div>
-			</div>
-		)
+		return <LoadingState className="h-64" label="Loading wallets…" />
 	}
 
 	// Main View (List Wallets)
