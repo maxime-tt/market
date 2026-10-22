@@ -1,6 +1,6 @@
 import { defaultRelaysUrls, type Stage } from '@/lib/constants'
 import { computeNdkConfig, resolveMainRelay } from '@/lib/relay-policy'
-import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
+import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/lib/wallet/nwcWalletRead'
 import { fetchUserRelayListWithPreferences } from '@/lib/nostr/relayListRead'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
@@ -844,7 +844,7 @@ export const ndkActions = {
 		await walletActions.initialize()
 
 		try {
-			const nostrWallets = await fetchUserNwcWallets(userPubkey)
+			const nostrWallets = await fetchUserNwcWallets(ndk, userPubkey)
 			if (nostrWallets && nostrWallets.length > 0) {
 				walletActions.setNostrWallets(nostrWallets as Wallet[])
 			}
@@ -868,7 +868,7 @@ export const ndkActions = {
 			.filter((wallet) => wallet.nwcUri)
 			.map(async (wallet) => {
 				try {
-					const balanceInfo = await fetchNwcWalletBalance(wallet.nwcUri)
+					const balanceInfo = await fetchNwcWalletBalance(ndk, wallet.nwcUri)
 					const currentBalance = balanceInfo?.balance ?? -1
 					return { ...wallet, balance: currentBalance }
 				} catch (error) {

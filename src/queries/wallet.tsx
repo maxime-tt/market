@@ -1,90 +1,37 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { walletActions } from '@/lib/stores/wallet'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
-import { toast } from 'sonner'
 import { walletKeys } from './queryKeyFactory'
-import { USER_NWC_WALLET_LIST_KIND, USER_NWC_WALLET_LIST_LABEL } from '@sdk/commerce/payments'
+import { fetchNwcWalletBalance, fetchUserNwcWallets, type NwcBalance } from '@/lib/wallet/nwcWalletRead'
 
-export { USER_NWC_WALLET_LIST_KIND, USER_NWC_WALLET_LIST_LABEL }
+export type { NwcBalance }
 
 // Using the Wallet interface from the local store for now.
 // If it diverges, we might need a separate UserNwcWallet interface here.
 export type UserNwcWallet = import('@/lib/stores/wallet').Wallet
 
 /**
- * Fetches the user's NWC wallet list from Nostr.
- * This event is encrypted by the user for themselves.
+ * The store-free readers in `@/lib/wallet/nwcWalletRead`, bound to the
+ * connection this store holds. The readers take the ndk instance as an argument
+ * so that the ndk store — which calls them during sign-in — does not have to
+ * import this module back, which is what the cycle was. The "no connection yet"
+ * guards live here, where the connection is owned.
  */
-export const fetchUserNwcWallets = async (userPubkey: string): Promise<UserNwcWallet[]> => {
+const fetchWalletsThroughStore = (userPubkey: string): Promise<UserNwcWallet[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) {
 		console.error('NDK not initialized for fetching NWC wallets')
 		throw new Error('NDK not initialized for fetching NWC wallets')
 	}
-	if (!userPubkey) {
-		console.error('User pubkey is required to fetch NWC wallets')
-		throw new Error('User pubkey is required to fetch NWC wallets')
+	return fetchUserNwcWallets(ndk, userPubkey)
+}
+
+const fetchBalanceThroughStore = (nwcUri: string): Promise<NwcBalance | null> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk || !ndk.signer) {
+		console.error('Main NDK instance or signer not available for NWC balance fetch')
+		return Promise.resolve(null)
 	}
-
-	try {
-		const events = await ndk.fetchEvents({
-			kinds: [USER_NWC_WALLET_LIST_KIND],
-			authors: [userPubkey],
-			'#l': [USER_NWC_WALLET_LIST_LABEL],
-		})
-
-		if (events.size === 0) {
-			return []
-		}
-
-		let mostRecentEvent: NDKEvent | undefined
-		let mostRecentTimestamp = 0
-		events.forEach((event) => {
-			if (event.created_at && event.created_at > mostRecentTimestamp) {
-				mostRecentEvent = event
-				mostRecentTimestamp = event.created_at
-			}
-		})
-
-		if (!mostRecentEvent) {
-			return []
-		}
-
-		let decryptedContentJson = mostRecentEvent.content
-		const signer = ndkActions.getSigner()
-
-		if (signer) {
-			const ndkUserForDecryption = await signer.user()
-			if (ndkUserForDecryption && mostRecentEvent.pubkey === ndkUserForDecryption.pubkey) {
-				try {
-					decryptedContentJson = await signer.decrypt(ndkUserForDecryption, mostRecentEvent.content)
-				} catch (e) {
-					console.error('Failed to decrypt NWC wallet list, attempting to parse as plaintext:', e)
-				}
-			} else if (mostRecentEvent.pubkey !== userPubkey) {
-				console.warn("Event pubkey does not match user's pubkey, decryption might be needed differently or skipped.")
-			}
-		} else {
-			console.warn('No signer available, cannot attempt decryption of NWC wallet list.')
-		}
-
-		const wallets = JSON.parse(decryptedContentJson) as UserNwcWallet[]
-		return wallets.map((wallet: any) => ({
-			id: wallet.id || '', // Ensure id is always a string, use uuidv4 if it were imported and needed for new ones
-			name: wallet.name || `Wallet ${Math.floor(Math.random() * 1000)}`,
-			nwcUri: wallet.nwcUri,
-			pubkey: wallet.pubkey || '',
-			relays: wallet.relays || [],
-			storedOnNostr: true, // Fetched from Nostr, so this is true
-			createdAt: wallet.createdAt || Date.now(),
-			updatedAt: wallet.updatedAt || Date.now(),
-		}))
-	} catch (error) {
-		console.error('Failed to fetch or parse NWC wallets from Nostr:', error)
-		toast.error('Could not load your wallets from Nostr.')
-		return [] // Return empty array on error to prevent breaking UI
-	}
+	return fetchNwcWalletBalance(ndk, nwcUri)
 }
 
 /**
@@ -95,67 +42,11 @@ export const useUserNwcWalletsQuery = (userPubkey: string | undefined) => {
 		queryKey: walletKeys.userNwcWallets(userPubkey || ''),
 		queryFn: () => {
 			if (!userPubkey) return Promise.resolve([])
-			return fetchUserNwcWallets(userPubkey)
+			return fetchWalletsThroughStore(userPubkey)
 		},
 		enabled: !!userPubkey,
 		// Consider staleTime or refetchOnWindowFocus based on app needs
 	})
-}
-
-export interface NwcBalance {
-	balance: number // in satoshis
-	timestamp: number
-}
-
-/**
- * Fetches the balance from an NWC wallet URI.
- * This function uses the cached NWC client (@getalby/sdk).
- */
-export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance | null> => {
-	if (!nwcUri) {
-		console.warn('NWC URI is undefined, cannot fetch balance.')
-		return null
-	}
-
-	const mainNdk = ndkActions.getNDK()
-	if (!mainNdk || !mainNdk.signer) {
-		console.error('Main NDK instance or signer not available for NWC balance fetch')
-		return null
-	}
-
-	const nwcClient = await walletActions.getOrCreateNwcClient(nwcUri, mainNdk.signer)
-	if (!nwcClient) return null
-
-	try {
-		const { balance: balanceMsats } = await nwcClient.wallet.getBalance()
-
-		// NIP-47 answers get_balance in MILLISATS and NwcBalance is documented in sats. The
-		// NDK-based path stored the raw figure as sats, so what it displayed was 1000x the
-		// wallet's balance; convert here rather than carry that forward.
-		if (typeof balanceMsats !== 'number' || !Number.isFinite(balanceMsats)) {
-			console.error('Failed to get balance or balance is not in expected format. Received:', balanceMsats)
-			return null
-		}
-		return {
-			balance: Math.floor(balanceMsats / 1000),
-			timestamp: Date.now(),
-		}
-	} catch (error: any) {
-		console.error('❌ Error fetching NWC wallet balance:', error)
-		const rawMessage = error?.message || (typeof error === 'string' ? error : '')
-
-		// "Cannot find square root" means the wallet pubkey is all zeros (invalid/missing Lightning key)
-		if (rawMessage.toLowerCase().includes('cannot find square root')) {
-			toast.error('Wallet has no valid Lightning key configured', { id: 'balance-fetch-invalid-key' })
-		} else if (rawMessage) {
-			toast.error(`Balance fetch failed: ${rawMessage}`, { id: 'balance-fetch-error' })
-		} else {
-			toast.error('Failed to fetch balance', { id: 'balance-fetch-error' })
-		}
-		return null
-	} finally {
-		// the client stays cached for reuse; teardown happens when the signer changes
-	}
 }
 
 /**
@@ -166,7 +57,7 @@ export const useNwcWalletBalanceQuery = (nwcUri: string | undefined, enabled: bo
 		queryKey: walletKeys.nwcBalance(nwcUri || ''),
 		queryFn: async () => {
 			if (!nwcUri) return null
-			return fetchNwcWalletBalance(nwcUri)
+			return fetchBalanceThroughStore(nwcUri)
 		},
 		enabled: !!nwcUri && enabled,
 		staleTime: 1000 * 60 * 2, // 2 minutes (reduced from 5 for more frequent updates)
