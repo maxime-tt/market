@@ -16,6 +16,16 @@ export {
 	getAuctionReclaimReadyAtForGroup,
 } from './auctionFunds'
 export type { AuctionReclaim, AuctionReclaimHost } from './auctionFunds'
+// The auction P2PK lock (1-of-1 locktime + refund key), behind injected ports
+export { AuctionBidLockMutationPossibleError, createAuctionLock } from './auctionFunds'
+export type {
+	AuctionLock,
+	AuctionLockHost,
+	AuctionLockWallet,
+	AuctionP2pkKeyScheme,
+	LockAuctionBidFundsParams,
+	LockAuctionBidFundsResult,
+} from './auctionFunds'
 
 // The wallet keypair's local home (sealed at rest)
 export { SealedWalletKeyStore, WalletKeySealerUnavailableError, WalletKeyStoreError, createSignerWalletKeySealer } from './walletKeyStore'

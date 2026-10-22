@@ -1,5 +1,6 @@
 import {
 	createAppWalletKeyStore,
+	createAuctionLock,
 	createAuctionReclaim,
 	createRelayWalletKeyMigrationSource,
 	createWalletEventReader,
@@ -12,9 +13,14 @@ import {
 	receiveTokenIntoWallet,
 	receiveTokenWithPrivkey,
 	saveUserData,
+	AuctionBidLockMutationPossibleError,
 	type AuctionBidPendingTokenContext,
 	type AuctionFundsMintAccess,
+	type AuctionLock,
+	type AuctionLockHost,
 	type AuctionReclaim,
+	type LockAuctionBidFundsParams,
+	type LockAuctionBidFundsResult,
 	type PendingToken,
 	type PendingTokenContext,
 	type WalletEventOpener,
@@ -24,8 +30,7 @@ import {
 	type WalletKeySigner,
 	type WalletKeyStore,
 } from '@/lib/wallet'
-import { auctionP2pkPubkeysMatch, getAuctionP2pkLockPubkeyFromSecret, toCompressedAuctionP2pkPubkey } from '@/lib/auctionP2pk'
-import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
+import { auctionP2pkPubkeysMatch } from '@/lib/auctionP2pk'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
 import { toEncryptingSigner } from '@/lib/nostr/ndkEncryptingSigner'
 import {
@@ -38,7 +43,6 @@ import {
 	type MintKeyset,
 	type Proof,
 } from '@cashu/cashu-ts'
-import { buildDleqProofs } from '@/lib/cashu/dleq'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus } from '@nostr-dev-kit/wallet'
@@ -115,65 +119,11 @@ export interface Nip60DevAuctionBidResult {
 	topUpAmount: number
 }
 
-export type AuctionP2pkKeyScheme = 'hd_p2pk'
-
-export interface LockAuctionBidFundsParams {
-	amount: number
-	/**
-	 * Single mint URL — kept for backwards compatibility with non-auction
-	 * callers (e.g. legacy lock flows). If both `mint` and
-	 * `preferredMints` are provided, `mint` wins (interpreted as an
-	 * explicit override). Most call sites should pass `preferredMints`.
-	 */
-	mint?: string
-	/**
-	 * Ordered list of trusted mints (seller-declared). Walked in order;
-	 * the first mint where the bidder's wallet has at least `amount`
-	 * sats is used. When omitted, falls back to the wallet's default
-	 * mint or any mint with sufficient balance.
-	 */
-	preferredMints?: string[]
-	locktime: number
-	refundPubkey: string
-	/**
-	 * Child pubkey (compressed secp256k1 hex) issued by the auction's path
-	 * oracle. This is the 1-of-1 P2PK spend key on the resulting locked
-	 * Cashu proofs. The bidder MUST have already verified (via
-	 * verifyAuctionPathGrant) that this pubkey was derived from the
-	 * auction's p2pk_xpub before calling lockAuctionBidFunds.
-	 */
-	lockPubkey: string
-	auctionEventId?: string
-	auctionCoordinates?: string
-	sellerPubkey?: string
-	pathIssuerPubkey?: string
-	derivationPath?: string
-	childPubkey?: string
-	grantId?: string
-}
-
-export interface LockAuctionBidFundsResult {
-	tokenId: string
-	token: string
-	/**
-	 * The locked Cashu proofs themselves — same set the encoded `token`
-	 * holds, exposed as the structured proof array so callers don't have
-	 * to re-decode (which fails on v2 short keyset IDs without a mint
-	 * keyset map). Callers that need the proof's `secret` / `Y` lookup
-	 * should read these directly.
-	 */
-	proofs: Proof[]
-	amount: number
-	mintUrl: string
-	lockPubkey: string
-	locktime: number
-	refundPubkey: string
-	commitment: string
-	keyScheme: AuctionP2pkKeyScheme
-	derivationPath?: string
-	childPubkey?: string
-	grantId?: string
-}
+// The auction P2PK lock's parameter/result shapes and the key scheme now live with the lock
+// itself, in `@/lib/wallet/auctionFunds`; re-exported here so callers' import path is unchanged.
+export type { AuctionP2pkKeyScheme, LockAuctionBidFundsParams, LockAuctionBidFundsResult } from '@/lib/wallet'
+// The irreversible-mint-boundary error moved with the lock; re-exported for the same reason.
+export { AuctionBidLockMutationPossibleError } from '@/lib/wallet'
 
 export interface Nip60State {
 	wallet: NDKCashuWallet | null
@@ -563,15 +513,6 @@ const hexToUint8 = (hex: string): Uint8Array => {
 	return bytes
 }
 
-const sha256Hex = async (value: string): Promise<string> => {
-	if (!globalThis.crypto?.subtle) {
-		return ''
-	}
-	const encoded = new TextEncoder().encode(value)
-	const digest = await globalThis.crypto.subtle.digest('SHA-256', encoded)
-	return toHex(new Uint8Array(digest))
-}
-
 const isLocalDevHost = (): boolean => {
 	if (typeof window === 'undefined') return false
 	// Total predicate: never throw when `location` is absent (some test
@@ -931,6 +872,41 @@ const getAuctionReclaim = (): AuctionReclaim => {
 }
 
 /**
+ * The host the lock reads the store through: wallet, readiness, balances, default mint and the
+ * pending-token bookkeeping. All closures, so the lock sees the store's live state and this
+ * module holds no relay-wallet reference.
+ */
+const auctionLockHost: AuctionLockHost = {
+	getWallet: () => nip60Store.state.wallet,
+	isWalletReady: () => nip60Store.state.status === 'ready',
+	mint: auctionFundsMintAccess,
+	getBalances: () => {
+		const wallet = nip60Store.state.wallet
+		return wallet ? getBalancesFromState(wallet) : { totalBalance: 0, mintBalances: {} }
+	},
+	getDefaultMint: () => nip60Store.state.defaultMint,
+	getPendingTokens: () => nip60Store.state.pendingTokens,
+	setPendingTokens: (tokens, options) => {
+		savePendingTokens(tokens, options)
+		nip60Store.setState((s) => ({ ...s, pendingTokens: tokens }))
+	},
+	setWalletBalances: ({ balance, mintBalances }) => {
+		const wallet = nip60Store.state.wallet
+		nip60Store.setState((s) => ({ ...s, balance, mintBalances, mints: wallet ? getAllMints(wallet) : s.mints }))
+	},
+}
+
+/**
+ * The single lock instance the action delegates to. Built lazily and held once, mirroring the
+ * reclaim instance; the host closures read the store's live state.
+ */
+let auctionLockInstance: AuctionLock | null = null
+const getAuctionLock = (): AuctionLock => {
+	auctionLockInstance ??= createAuctionLock(auctionLockHost)
+	return auctionLockInstance
+}
+
+/**
  * Select proofs from available proofs to meet the target amount.
  * Returns selected proofs and their total value.
  */
@@ -947,119 +923,6 @@ function selectProofs(proofs: Proof[], amount: number): { selected: Proof[]; tot
 	}
 
 	return { selected, total }
-}
-
-const getProofsTotal = (proofs: Proof[]): number => proofs.reduce((sum, proof) => sum + proof.amount, 0)
-
-const lockAuctionBidProofs = async (
-	cashuWallet: CashuWallet,
-	amount: number,
-	proofs: Proof[],
-	params: {
-		lockPubkey: string
-		locktime: number
-		refundPubkey: string
-	},
-) => {
-	// No input-side DLEQ filtering. The mint consumes whatever inputs are
-	// selected and issues freshly locked P2PK proofs.
-	if (getProofsTotal(proofs) < amount) {
-		throw new Error('Not enough funds available to send')
-	}
-
-	// cashu-ts 2.9 `send()` ignores `p2pk` when existing proofs exactly
-	// satisfy the amount. Use `swap()` so every auction bid always receives
-	// freshly minted NUT-11 P2PK proofs.
-	return cashuWallet.swap(amount, proofs, {
-		p2pk: {
-			pubkey: params.lockPubkey,
-			locktime: params.locktime,
-			refundKeys: [params.refundPubkey],
-		},
-	})
-}
-
-/**
- * #1235 round-3 B1 — the mint boundary is irreversible.
- *
- * Thrown by `lockAuctionBidFunds` for any failure that occurs once the lock
- * flow may have sent a swap/lock request to the mint: the mint may have
- * consumed the bidder's input proofs and/or issued P2PK-locked proofs. The
- * outcome is UNCERTAIN — callers must NOT retry the lock in-session (a retry
- * could double-consume inputs) and must NOT claim the leg is either locked
- * or untouched. Recovery material (the pre-lock recovery record holding the
- * refund private key) is persisted by the publish layer BEFORE the call that
- * can throw this class; the wallet's pending-token record, when the swap
- * response was processed, makes the leg reclaimable after the refund
- * timelock opens.
- *
- * Conservative by design: errors from wallet creation or DLEQ-filter
- * insufficiency INSIDE the swap phase are also classified mutation-possible
- * (fail closed — a classification refinement inside the lock is deliberately
- * not taken; see the round-3 plan's risk notes). Pre-lock validation errors
- * (amount / wallet readiness / balance / proof selection) are thrown raw
- * BEFORE any request could have been sent and are provably pre-mint.
- */
-export class AuctionBidLockMutationPossibleError extends Error {
-	/** Mint the swap/lock request may have been sent to. */
-	public readonly mintUrl: string
-	/** Amount (sats) the leg attempted to lock. */
-	public readonly amount: number
-	/** P2PK pubkey the proofs were to be locked to. */
-	public readonly lockPubkey: string
-	/** Refund pubkey for the lock's refund branch. */
-	public readonly refundPubkey: string
-	/** Cashu locktime (unix seconds) the leg attempted. */
-	public readonly locktime: number
-	/**
-	 * #1235 round-3 fix 5 (felixfelix #11) — whether the wallet's STRICT
-	 * pending-token save had already succeeded when the failure escaped.
-	 * When false the leg is record-only: the wallet holds no durable
-	 * observation of the mint-issued proofs, so an in-app reclaim is NOT
-	 * promised. Honest default: false.
-	 */
-	public readonly pendingTokenPersisted: boolean
-	/** The underlying failure. */
-	public override readonly cause: unknown
-
-	constructor(params: {
-		mintUrl: string
-		amount: number
-		lockPubkey: string
-		refundPubkey: string
-		locktime: number
-		cause: unknown
-		pendingTokenPersisted?: boolean
-	}) {
-		const causeMessage = params.cause instanceof Error ? params.cause.message : String(params.cause)
-		super(
-			`Auction bid lock outcome is uncertain: a swap/lock request may already have been sent to ${params.mintUrl} ` +
-				`for ${params.amount} sats (${causeMessage}). The mint may or may not have issued locked proofs — do NOT retry the lock; ` +
-				'reclaim may be possible after the refund timelock opens.',
-		)
-		this.name = 'AuctionBidLockMutationPossibleError'
-		this.mintUrl = params.mintUrl
-		this.amount = params.amount
-		this.lockPubkey = params.lockPubkey
-		this.refundPubkey = params.refundPubkey
-		this.locktime = params.locktime
-		this.pendingTokenPersisted = params.pendingTokenPersisted ?? false
-		this.cause = params.cause
-	}
-}
-
-const assertAuctionBidProofsLockedToP2pk = (proofs: Proof[], expectedLockPubkey: string): void => {
-	for (const proof of proofs) {
-		let proofLockPubkey: string
-		try {
-			proofLockPubkey = toCompressedAuctionP2pkPubkey(getAuctionP2pkLockPubkeyFromSecret(proof.secret))
-		} catch (error) {
-			throw new Error(`Mint returned an unlocked auction bid proof: ${error instanceof Error ? error.message : String(error)}`)
-		}
-		if (proofLockPubkey !== expectedLockPubkey) {
-			throw new Error('Mint returned an auction bid proof locked to the wrong P2PK pubkey')
-		}
-	}
 }
 
 /**
@@ -1964,293 +1827,12 @@ export const nip60Actions = {
 		}
 	},
 
-	lockAuctionBidFunds: async (params: LockAuctionBidFundsParams): Promise<LockAuctionBidFundsResult> => {
-		const amount = Math.floor(params.amount)
-		if (!Number.isFinite(amount) || amount < AUCTION_MIN_BID_LEG_SATS) {
-			throw new Error(`Bid lock amount must be at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
-		}
-
-		const wallet = nip60Store.state.wallet
-		const state = nip60Store.state
-		if (!wallet || state.status !== 'ready') {
-			throw new Error('NIP-60 wallet not ready')
-		}
-
-		const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
-		const locktime = Math.floor(params.locktime)
-		if (!Number.isFinite(locktime) || locktime <= 0) {
-			throw new Error('Invalid bid locktime')
-		}
-
-		const rawRefundPubkey = params.refundPubkey?.trim()
-		if (!rawRefundPubkey) {
-			throw new Error('Refund pubkey is required')
-		}
-		let refundPubkey: string
-		try {
-			refundPubkey = toCompressedAuctionP2pkPubkey(rawRefundPubkey)
-		} catch (error) {
-			throw new Error(`Refund pubkey is invalid: ${error instanceof Error ? error.message : String(error)}`)
-		}
-
-		const rawLockPubkey = params.lockPubkey?.trim()
-		if (!rawLockPubkey) {
-			throw new Error('Lock pubkey is required — the bidder must obtain a path grant before locking')
-		}
-		let lockPubkey: string
-		try {
-			lockPubkey = toCompressedAuctionP2pkPubkey(rawLockPubkey)
-		} catch (error) {
-			throw new Error(`Lock pubkey is invalid: ${error instanceof Error ? error.message : String(error)}`)
-		}
-
-		// Mint selection order (AUCTIONS.md §4.1 + bid flow):
-		//   1. `params.mint` explicit override — legacy callers only.
-		//   2. `params.preferredMints` in order — auction's trusted mints
-		//      walked seller-declared first; pick the first one where the
-		//      bidder has enough balance for `amount` (delta).
-		//   3. wallet's `defaultMint` — only when no preferred list given.
-		//   4. any mint in the wallet with enough balance — last resort.
-		// Falling through all four with no match yields a clear error
-		// listing per-trusted-mint balances so the bidder knows where
-		// to top up.
-		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
-		let targetMint: string | undefined
-		if (params.mint) {
-			targetMint = params.mint
-		} else if (params.preferredMints && params.preferredMints.length > 0) {
-			targetMint = params.preferredMints.find((mint) => (mintBalances[mint] ?? 0) >= amount)
-			if (!targetMint) {
-				const breakdown = params.preferredMints.map((mint) => `${getMintHostname(mint)}: ${mintBalances[mint] ?? 0} sats`).join(', ')
-				throw new Error(
-					`No trusted mint has ${amount} sats. ${breakdown}. Deposit to one of the auction's trusted mints (or move existing funds there) and try again.`,
-				)
-			}
-		} else if (state.defaultMint && (mintBalances[state.defaultMint] ?? 0) >= amount) {
-			targetMint = state.defaultMint
-		} else {
-			targetMint = Object.keys(mintBalances).find((mint) => mintBalances[mint] >= amount)
-		}
-		if (!targetMint) {
-			throw new Error(`No mint with sufficient balance. Available: ${totalBalance} sats`)
-		}
-
-		const mintBalance = mintBalances[targetMint] ?? 0
-		if (mintBalance < amount) {
-			throw new Error(`Insufficient balance at ${getMintHostname(targetMint)}. Available: ${mintBalance} sats`)
-		}
-
-		const mintProofs = getSpendableProofsForMint(wallet, targetMint)
-		if (mintProofs.length === 0) {
-			throw new Error(`No proofs available at ${getMintHostname(targetMint)}. Try refreshing your wallet.`)
-		}
-
-		const { selected: selectedProofs, total: selectedTotal } = selectProofs(mintProofs, amount)
-		if (selectedTotal < amount) {
-			throw new Error(`Could not select enough proofs. Need ${amount}, have ${selectedTotal}`)
-		}
-
-		// #1235 round-3 fix 5 (felixfelix #11) — whether the wallet durably
-		// observed the mint-issued proofs (the STRICT pending-token save below
-		// succeeded) before any later failure escaped. Read by the catch below
-		// and threaded onto AuctionBidLockMutationPossibleError: without the
-		// pending token the leg is record-only and an in-app reclaim must not
-		// be promised.
-		let pendingTokenPersisted = false
-
-		try {
-			const { cashuWallet } = await createCashuWalletForMint(targetMint)
-
-			let lockedProofs: Proof[] = []
-			let changeProofs: Proof[] = []
-
-			// 1-of-1 P2PK lock. The seller alone cannot spend pre-locktime because
-			// the derivation path that produced `lockPubkey` is held secret by the
-			// auction's path oracle — see AUCTIONS.md §5.2.
-			// ADR-0011 Blocker 2: the DLEQ security property lives on the NEWLY
-			// ISSUED P2PK swap outputs, not on the input proofs. `lockAuctionBidProofs`
-			// swaps ALL eligible inputs (no input DLEQ filter) and we validate the
-			// output proofs' DLEQ below. `requireDleqOnOutput` is unconditional:
-			// DLEQ is required for every auction bid.
-			const result = await lockAuctionBidProofs(cashuWallet, amount, selectedProofs, {
-				lockPubkey,
-				locktime,
-				refundPubkey,
-			})
-			lockedProofs = result.send
-			changeProofs = result.keep
-
-			if (!lockedProofs.length) {
-				throw new Error('Mint returned no locked proofs for bid')
-			}
-
-			// ADR-0011 Blocker 2: validate the freshly issued outputs' security
-			// properties — P2PK lock pubkey (already done by
-			// assertAuctionBidProofsLockedToP2pk below) AND, for DLEQ-required
-			// auctions, a DLEQ proof on each output. Validation stays AFTER the
-			// swap so a bad output is still reclaim-eligible (the pending-token
-			// record, persisted below, is the wallet's durable observation).
-			// When the auction requires DLEQ, every locked output proof MUST carry
-			// a NUT-12 DLEQ proof — the publisher cannot build verifiable
-			// `dleq_proof` tags otherwise. Fail closed (buildDleqProofs throws on
-			// a missing DLEQ proof), but do this AFTER the strict pending-token
-			// persist so a check failure leaves a reclaim-eligible leg.
-			const requireDleqOnOutput = true
-
-			const token = getEncodedToken({
-				mint: targetMint,
-				proofs: lockedProofs,
-			})
-			const tokenAmount = lockedProofs.reduce((sum, proof) => sum + proof.amount, 0)
-			const tokenId = generateId()
-			const pendingContext: AuctionBidPendingTokenContext | undefined =
-				params.auctionEventId && params.sellerPubkey
-					? {
-							kind: 'auction_bid',
-							auctionEventId: params.auctionEventId,
-							auctionCoordinates: params.auctionCoordinates,
-							sellerPubkey: params.sellerPubkey,
-							pathIssuerPubkey: params.pathIssuerPubkey || '',
-							lockPubkey,
-							refundPubkey,
-							locktime,
-							derivationPath: params.derivationPath,
-							childPubkey: params.childPubkey,
-							grantId: params.grantId,
-						}
-					: undefined
-
-			const pendingToken: PendingNip60Token = {
-				id: tokenId,
-				token,
-				amount: tokenAmount,
-				mintUrl: targetMint,
-				createdAt: Date.now(),
-				status: 'pending',
-				...(pendingContext ? { context: pendingContext } : {}),
-			}
-			const pendingTokens = [...nip60Store.state.pendingTokens, pendingToken]
-			// #1235 round-3 B1 — STRICT + BEFORE the post-lock assert: the swap
-			// above already ran, so the mint may have issued locked proofs. The
-			// pending-token record is the wallet's durable observation of those
-			// proofs — it must be durably persisted (fail-closed: a storage
-			// failure here surfaces as mutation-possible) BEFORE the first
-			// fallible post-swap check (the P2PK-lock assert below) can throw.
-			// With the record on disk, a leg whose proofs turn out to be locked
-			// to the wrong key is still reclaim-eligible after the refund
-			// timelock instead of silently stranded.
-			savePendingTokens(pendingTokens, { strict: true })
-			// #1235 round-3 fix 5: the STRICT save succeeded — from here on, any
-			// escaping failure leaves a leg the wallet CAN observe (and reclaim
-			// after the refund timelock).
-			pendingTokenPersisted = true
-			nip60Store.setState((s) => ({ ...s, pendingTokens }))
-
-			assertAuctionBidProofsLockedToP2pk(lockedProofs, lockPubkey)
-
-			// ADR-0011 Blocker 2 — validate the freshly issued P2PK swap outputs'
-			// DLEQ property when the auction requires it. Fail-closed and AFTER
-			// the durable pending-token persist, so a leg whose outputs fail the
-			// P2PK or DLEQ check is still reclaim-eligible (the pending token is
-			// the wallet's durable observation).
-			if (requireDleqOnOutput) {
-				// A DLEQ-required lock must emit NUT-12 DLEQ proofs on its
-				// freshly issued P2PK outputs — the bid publisher cannot build
-				// verifiable `dleq_proof` tags otherwise. Fail closed via
-				// buildDleqProofs (which throws on any proof lacking a DLEQ
-				// proof), inside the post-swap durable path.
-				buildDleqProofs(lockedProofs)
-			}
-
-			// Apply the wallet-state delta SYNCHRONOUSLY before returning so
-			// the balance UI doesn't briefly double-count the consumed
-			// inputs. The mint already burned `selectedProofs` during the
-			// swap, so we MUST pass them as `destroy:` — otherwise local
-			// state retains them alongside the new `changeProofs` and the
-			// displayed balance over-reports by `selectedTotal - amount`.
-			// (The previous version offloaded this to a void-async block
-			// + NUT-7 consolidation, which races the UI: refresh before
-			// consolidation lands and you see the inflated number.)
-			try {
-				await wallet.state.update({
-					mint: targetMint,
-					store: changeProofs,
-					destroy: selectedProofs,
-				})
-				// Persist the wallet event to Nostr so the token event
-				// references are current. Without this, a page refresh
-				// reloads the stale wallet event whose e-tags still
-				// point at old token events containing spent proofs.
-				try {
-					await wallet.publish()
-				} catch (publishErr) {
-					console.error('[nip60] Failed to publish wallet after bid lock (non-fatal):', publishErr)
-				}
-				// Synchronously re-read balance from wallet.state into the
-				// store so the UI updates immediately (avoids a stale
-				// inflated display until the async consolidation lands).
-				const { totalBalance, mintBalances } = getBalancesFromState(wallet)
-				nip60Store.setState((s) => ({
-					...s,
-					balance: totalBalance,
-					mintBalances,
-					mints: getAllMints(wallet),
-				}))
-			} catch (stateErr) {
-				console.error('[nip60] Failed to reconcile wallet state after bid lock (non-fatal):', stateErr)
-			}
-
-			// Note: we used to also kick off `consolidateProofs()` here
-			// in a void async block. That's no longer needed — `destroy:
-			// selectedProofs` above already removes the spent proofs
-			// locally, so we don't have to NUT-7-check them to discover
-			// they're spent. Removing the consolidate eliminates a per-
-			// bid mint round-trip (and the CORS / 429 noise it produced
-			// against testnut).
-
-			const commitment = await sha256Hex(token)
-
-			return {
-				tokenId,
-				token,
-				proofs: lockedProofs,
-				amount: tokenAmount,
-				mintUrl: targetMint,
-				lockPubkey,
-				locktime,
-				refundPubkey,
-				commitment,
-				keyScheme,
-				derivationPath: params.derivationPath,
-				childPubkey: params.childPubkey || lockPubkey,
-				grantId: params.grantId,
-			}
-		} catch (err) {
-			console.error('[nip60] Failed to lock auction bid funds:', err)
-			// #1235 round-3 B1 — conservative mutation-possible wrap. Everything
-			// this catch can see escaped from the post-selection try above:
-			// wallet creation, the swap attempts, or the post-swap local work. A
-			// swap request may already have been sent — fail closed and classify
-			// the outcome as mutation-possible unless it already is. Pre-try
-			// validation errors (amount / wallet readiness / balance / proof
-			// selection) never reach this catch and stay raw (provably pre-mint).
-			if (err instanceof AuctionBidLockMutationPossibleError) throw err
-			throw new AuctionBidLockMutationPossibleError({
-				mintUrl: targetMint,
-				amount,
-				lockPubkey,
-				refundPubkey,
-				locktime,
-				cause: err,
-				// #1235 round-3 fix 5 (felixfelix #11): thread the durable-observation
-				// flag through — the post-lock copy above decides between honest
-				// reclaim guidance (persisted) and honest record-only guidance
-				// (never persisted). Honest default false (never claims a reclaim
-				// the wallet cannot perform).
-				pendingTokenPersisted,
-			})
-		}
-	},
+	/**
+	 * The P2PK lock moved to `@/lib/wallet/auctionFunds`, behind {@link AuctionLockHost}. The action
+	 * keeps its signature and delegates 1:1.
+	 */
+	lockAuctionBidFunds: async (params: LockAuctionBidFundsParams): Promise<LockAuctionBidFundsResult> =>
+		getAuctionLock().lockAuctionBidFunds(params),
 
 	/**
 	 * Send eCash - generates a Cashu token string
