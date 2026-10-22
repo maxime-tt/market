@@ -1,7 +1,7 @@
 import { defaultRelaysUrls, type Stage } from '@/lib/constants'
 import { computeNdkConfig, resolveMainRelay } from '@/lib/relay-policy'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
-import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
+import { fetchUserRelayListWithPreferences } from '@/lib/nostr/relayListRead'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
@@ -794,7 +794,7 @@ export const ndkActions = {
 		}
 
 		try {
-			const relayPrefs = await fetchUserRelayListWithPreferences(user.pubkey)
+			const relayPrefs = await fetchUserRelayListWithPreferences(ndk, user.pubkey)
 			if (relayPrefs && relayPrefs.length > 0) {
 				console.log(`📡 Loading ${relayPrefs.length} relays from user's Nostr relay list`)
 				for (const relay of relayPrefs) {

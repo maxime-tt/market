@@ -2,7 +2,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { type RelayPreference } from '@/publish/relay-list'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { publishRelayList } from '@/publish/relay-list'
-import { buildRelayListFilter, parseRelayListEvents } from '@sdk/core/relays'
+import { fetchUserRelayListWithPreferences } from '@/lib/nostr/relayListRead'
 
 export const relayListKeys = {
 	all: ['relay-list'] as const,
@@ -10,17 +10,16 @@ export const relayListKeys = {
 } as const
 
 /**
- * Fetches user's relay list (kind 10002) with full read/write preferences
- *
- * @param userPubkey The pubkey of the user to fetch relay list for
- * @returns Array of RelayPreference objects with read/write flags
+ * The store-free reader in `@/lib/nostr/relayListRead`, bound to the
+ * connection this store holds. The reader itself takes the ndk instance as an
+ * argument so that it — and the ndk store that calls it — do not import this
+ * query module back, which is what the cycle was.
  */
-export async function fetchUserRelayListWithPreferences(userPubkey: string): Promise<RelayPreference[]> {
+async function fetchRelayListThroughStore(userPubkey: string): Promise<RelayPreference[]> {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await ndk.fetchEvents(buildRelayListFilter(userPubkey))
-	return parseRelayListEvents(events)
+	return fetchUserRelayListWithPreferences(ndk, userPubkey)
 }
 
 /**
@@ -29,7 +28,7 @@ export async function fetchUserRelayListWithPreferences(userPubkey: string): Pro
 export function useUserRelayList(pubkey: string | undefined) {
 	return useQuery({
 		queryKey: relayListKeys.user(pubkey ?? ''),
-		queryFn: () => fetchUserRelayListWithPreferences(pubkey!),
+		queryFn: () => fetchRelayListThroughStore(pubkey!),
 		enabled: !!pubkey,
 		staleTime: 5 * 60 * 1000, // 5 minutes
 		gcTime: 10 * 60 * 1000, // 10 minutes
