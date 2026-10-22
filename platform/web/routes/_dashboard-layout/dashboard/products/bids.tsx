@@ -3,6 +3,8 @@ import { AvatarUser } from '@/components/AvatarUser'
 import { ProfileName } from '@/components/ProfileName'
 import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
 import { LoadingState } from '@ui/shared/loading-state'
+import { EmptyState } from '@ui/shared/empty-state'
+import { ErrorState } from '@ui/shared/error-state'
 import { BidStatusBanner, BidStatusPill, getBidStatusCopy } from '@ui/components/BidStatusViews'
 import { resolveBidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import { Badge } from '@ui/primitives/badge'
@@ -317,18 +319,15 @@ function BidsOverviewComponent() {
 
 				{isLoading && <LoadingState label="Loading bids…" />}
 
-				{error && (
-					<div className="text-center py-8 text-red-500">
-						Failed to load your bids: {error instanceof Error ? error.message : 'Unknown error'}
-					</div>
-				)}
+				{error && <ErrorState title="Failed to load your bids" message={error instanceof Error ? error.message : 'Unknown error'} />}
 
 				{!isLoading && !error && bidGroups.length === 0 && (
-					<div className="text-center py-10 border rounded-lg bg-white">
-						<Trophy className="h-10 w-10 mx-auto mb-3 text-gray-400" />
-						<h3 className="text-lg font-medium mb-1">No bids yet</h3>
-						<p className="text-muted-foreground">Bid on an auction and it will show up here with refund and reclaim status.</p>
-					</div>
+					<EmptyState
+						className="rounded-lg border bg-card"
+						icon={<Trophy />}
+						title="No bids yet"
+						description="Bid on an auction and it will show up here with refund and reclaim status."
+					/>
 				)}
 
 				{!isLoading && !error && bidGroups.length > 0 && (

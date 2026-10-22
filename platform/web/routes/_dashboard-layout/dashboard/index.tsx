@@ -2,6 +2,7 @@ import { OrderCard } from '@/components/orders/OrderCard'
 import { Button } from '@ui/primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { Skeleton } from '@ui/primitives/skeleton'
+import { EmptyState } from '@ui/shared/empty-state'
 import { authStore } from '@/lib/stores/auth'
 import { useConversationsList } from '@/queries/messages'
 import { useOrders } from '@/queries/orders'
@@ -161,9 +162,7 @@ function DashboardInnerComponent() {
 							))}
 						</div>
 					) : recentOrders.length === 0 ? (
-						<div className="text-center py-8">
-							<p className="text-muted-foreground">No orders yet</p>
-						</div>
+						<EmptyState compact title="No orders yet" />
 					) : (
 						<div className="space-y-4">
 							{recentOrders.map((orderData) => (
