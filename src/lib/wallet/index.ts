@@ -48,6 +48,43 @@ export type { WalletEventOpener, WalletEventRelay } from './walletEventReader'
 export { createAuctionHost } from './auctionHost'
 export type { AuctionHost, AuctionHostActions } from './auctionHost'
 
+// NIP-61 (nutzap): the P2PK token whose receipt is the event, as its own module in the family
+export {
+	NUTZAP_INFO_KIND,
+	NUTZAP_KIND,
+	NUTZAP_REDEMPTION_KIND,
+	NutzapRefusalError,
+	buildNutzapFilter,
+	buildNutzapInfoTemplate,
+	buildNutzapTags,
+	buildNutzapTemplate,
+	buildRedemptionTags,
+	createNutzapSender,
+	parseNutzapRecipientInfo,
+	toCashuP2pkPubkey,
+	toNostrPubkey,
+	validateNutzap,
+} from './nutzap'
+export type {
+	NutzapClock,
+	NutzapErrorCode,
+	NutzapEventTemplate,
+	NutzapInfoSource,
+	NutzapInfoTemplate,
+	NutzapProofSet,
+	NutzapProofSource,
+	NutzapPublisher,
+	NutzapRecipientInfo,
+	NutzapRefusalReason,
+	NutzapSendRequest,
+	NutzapSender,
+	NutzapSenderOptions,
+	NutzapSigner,
+	NutzapValidationIssue,
+	NutzapValidationResult,
+	NutzapWarningCode,
+} from './nutzap'
+
 // Storage utilities
 export { loadUserData, saveUserData, removeUserData } from './storage'
 
