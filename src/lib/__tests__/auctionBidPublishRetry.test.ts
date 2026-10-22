@@ -9,7 +9,7 @@
  *     even when the publish throws.
  *
  * Strategy: run the REAL `publishAuctionBid` against the REAL NDKEvent
- * implementation (real event hashing, real signing) with the nip60 store and
+ * implementation (real event hashing, real signing) with the wallet-ops store and
  * the NDK publish surface mocked, and a polyfilled user-scoped localStorage
  * (as in `bidderChainRecords.test.ts`). ADR-0005: zero external network
  * calls — the mint lock and the relay publish are both in-process mocks.
@@ -156,7 +156,7 @@ const setAuctionFixture = (formData: ReturnType<typeof buildFormData>) => {
 }
 
 // =============================================================================
-// Mocks — nip60 (mint lock) and ndk (relay publish). No network, ever.
+// Mocks — the wallet ops (mint lock) and ndk (relay publish). No network, ever.
 // =============================================================================
 
 /**
@@ -207,8 +207,8 @@ const publishEventMock = mock(async (event: NDKEvent) => {
 // from the store singleton. Tests drive the seam by swapping `currentSigner`.
 let currentSigner: NDKSigner = signer
 
-mock.module('@/lib/stores/nip60', () => ({
-	nip60Actions: {
+mock.module('@/lib/stores/walletOps', () => ({
+	walletOps: {
 		lockAuctionBidFunds: lockAuctionBidFundsMock,
 		updatePendingTokenContext: updatePendingTokenContextMock,
 	},
@@ -233,19 +233,19 @@ mock.module('@/queries/auctions', () => ({
 	fetchAuction: mock(async () => auctionEventFixture),
 }))
 
-// #1235 round-3 B1: capture the REAL nip60 surface BEFORE registering the
+// #1235 round-3 B1: capture the REAL wallet-ops surface BEFORE registering the
 // mock — the publish layer's instanceof check needs the same
 // AuctionBidLockMutationPossibleError class reference, and the mock must
 // re-export it (bun re-imports the module graph when mock.module runs, so
 // publish/auctions binds to the mocked module).
-const realNip60 = await import('@/lib/stores/nip60')
+const realWalletOps = await import('@/lib/stores/walletOps')
 
-mock.module('@/lib/stores/nip60', () => ({
-	nip60Actions: {
+mock.module('@/lib/stores/walletOps', () => ({
+	walletOps: {
 		lockAuctionBidFunds: lockAuctionBidFundsMock,
 		updatePendingTokenContext: updatePendingTokenContextMock,
 	},
-	AuctionBidLockMutationPossibleError: realNip60.AuctionBidLockMutationPossibleError,
+	AuctionBidLockMutationPossibleError: realWalletOps.AuctionBidLockMutationPossibleError,
 }))
 
 // Import the module under test AFTER the mocks are registered (same module
@@ -763,7 +763,7 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 	})
 
 	test('mutation-possible lock error surfaces the DISTINCT uncertain error — never a bare error, record preserved', async () => {
-		lockShouldThrow = new realNip60.AuctionBidLockMutationPossibleError({
+		lockShouldThrow = new realWalletOps.AuctionBidLockMutationPossibleError({
 			mintUrl: 'https://mint.test',
 			amount: 500,
 			lockPubkey: '02' + 'c'.repeat(64),

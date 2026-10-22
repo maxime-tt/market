@@ -92,6 +92,13 @@ export type {
 
 // Storage utilities
 export { loadUserData, saveUserData, removeUserData } from './storage'
+export type { SaveUserDataOptions } from './storage'
+
+// The dev-only wallet affordances (dev-mode predicate + dev test mints)
+export { DEV_TEST_MINT_URL, WALLET_DEV_TEST_MINTS, isWalletDevModeEnabled } from './devWallet'
+
+// The retired store's user-data keys, read once by the migration into the wallet store
+export { LEGACY_PENDING_TOKENS_KEY } from './legacyStorage'
 
 // Display utilities
 export { getMintHostname, formatSats, normalizeMintUrl } from './display'

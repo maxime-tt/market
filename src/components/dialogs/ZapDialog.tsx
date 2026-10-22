@@ -1,7 +1,8 @@
 import { LightningPaymentProcessor, type LightningPaymentData, type PaymentResult } from '@/components/lightning/LightningPaymentProcessor'
 import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
 import { useNDK } from '@/lib/stores/ndk'
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { cashuStore } from '@/lib/stores/cashu'
+import { walletOps } from '@/lib/stores/walletOps'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { profileKeys, zapKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
@@ -35,7 +36,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 
 	// NDK state for NWC functionality
 	const ndkState = useNDK()
-	const nip60State = useStore(nip60Store)
+	const cashuState = useStore(cashuStore)
 
 	// Extract recipient information
 	const recipientPubkey = event instanceof NDKUser ? event.pubkey : event.pubkey
@@ -74,7 +75,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 
 	const recipientName = profile?.displayName || profile?.name || 'Unknown User'
 	const lightningAddress = profile?.lud16 || profile?.lud06 || ''
-	const hasNip60Wallet = nip60State.status === 'ready' && !!nip60State.wallet
+	const hasCashuWallet = cashuState.status === 'ready' && !!cashuState.walletSource
 	const effectiveZapMessage = isAnonymousZap ? '' : zapMessage
 
 	// Check if NWC is available
@@ -127,7 +128,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 			toast.error('Please enter a valid zap amount')
 			return
 		}
-		if (!hasNip60Wallet) {
+		if (!hasCashuWallet) {
 			toast.error('NIP-60 wallet is required for nutzaps')
 			return
 		}
@@ -138,7 +139,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 
 		setIsSubmittingNutzap(true)
 		try {
-			const result = await nip60Actions.zapWithNutzap({
+			const result = await walletOps.zapWithNutzap({
 				target: event,
 				amountSats: numericAmount,
 				comment: effectiveZapMessage || undefined,
@@ -154,7 +155,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 		} finally {
 			setIsSubmittingNutzap(false)
 		}
-	}, [isValidAmount, hasNip60Wallet, recipientZapSupport.hasNip61, event, numericAmount, effectiveZapMessage, onZapComplete, onOpenChange])
+	}, [isValidAmount, hasCashuWallet, recipientZapSupport.hasNip61, event, numericAmount, effectiveZapMessage, onZapComplete, onOpenChange])
 
 	const resetState = () => {
 		setAmount('21')
@@ -203,7 +204,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 			isAnonymous={isAnonymousZap}
 			onAnonymousChange={setIsAnonymousZap}
 			support={recipientZapSupport}
-			hasNip60Wallet={hasNip60Wallet}
+			hasCashuWallet={hasCashuWallet}
 			hasNwc={hasNwc}
 			isSubmittingNutzap={isSubmittingNutzap}
 			onSendNutzap={handleSendNutzap}

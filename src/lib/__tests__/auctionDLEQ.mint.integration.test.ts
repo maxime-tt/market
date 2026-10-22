@@ -188,7 +188,7 @@ describe('DLEQ via a real local mint (NUT-12)', () => {
 
 	// ADR-0011 Blocker 2: the security property lives on the NEWLY ISSUED
 	// P2PK swap outputs — this is the exact swap shape the bid lock path
-	// (`lockAuctionBidProofs` in src/lib/stores/nip60.ts) performs. The
+	// (`lockAuctionBidProofs` in @/lib/wallet/auctionFunds) performs. The
 	// re-enabled Direct Lightning funding e2e scenarios depend on the local
 	// mint returning NUT-12 DLEQ proofs on this swap, and on the outputs
 	// surviving the lock path's fail-closed `buildDleqProofs` serialization

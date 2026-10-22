@@ -51,8 +51,8 @@ export const defaultRelaysUrls: string[] = DEFAULT_PUBLIC_RELAYS
 export const BUG_RELAY = 'wss://bugs.plebeian.market/'
 
 // Default Cashu mints offered to users when creating wallets and auctions.
-// Production mints only — dev/staging callers should append NIP60_DEV_TEST_MINTS
-// from @/lib/stores/nip60 when wallet dev mode is enabled.
+// Production mints only — dev/staging callers should append WALLET_DEV_TEST_MINTS
+// from `@/lib/wallet` when wallet dev mode is enabled.
 export const DEFAULT_TRUSTED_MINTS: readonly string[] = [
 	'https://mint.minibits.cash/Bitcoin',
 	'https://mint.coinos.io',

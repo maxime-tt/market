@@ -1,26 +1,26 @@
 import { describe, expect, test } from 'bun:test'
 import { resolveAuctionMintSelection } from '@/lib/auctionMintSelection'
-import type { Nip60State } from '@/lib/stores/nip60'
+import type { CashuState } from '@/lib/stores/cashu'
 
 const MINT_A = 'https://mint-a.example.com'
 const MINT_B = 'https://mint-b.example.com'
 const MINT_C = 'https://mint-c.example.com'
 
-function makeNip60Snapshot(overrides: Partial<Nip60State> = {}): {
+function makeWalletSnapshot(overrides: Partial<CashuState> = {}): {
 	mints: string[]
 	mintBalances: Record<string, number>
 } {
 	return {
 		mints: overrides.mints ?? [MINT_A, MINT_B],
-		mintBalances: overrides.mintBalances ?? { [MINT_A]: 1000, [MINT_B]: 500 },
+		mintBalances: overrides.balances ?? { [MINT_A]: 1000, [MINT_B]: 500 },
 	}
 }
 
-describe('auctionMintSelection integration with nip60 store state', () => {
+describe('auctionMintSelection integration with the cashu store state', () => {
 	test('resolves mint from fresh wallet with single mint', () => {
-		const wallet = makeNip60Snapshot({
+		const wallet = makeWalletSnapshot({
 			mints: [MINT_A],
-			mintBalances: { [MINT_A]: 2000 },
+			balances: { [MINT_A]: 2000 },
 		})
 		const result = resolveAuctionMintSelection({
 			trustedMints: [MINT_A, MINT_B],
@@ -33,9 +33,9 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 	})
 
 	test('resolves second mint when first has no balance', () => {
-		const wallet = makeNip60Snapshot({
+		const wallet = makeWalletSnapshot({
 			mints: [MINT_A, MINT_B],
-			mintBalances: { [MINT_A]: 0, [MINT_B]: 2000 },
+			balances: { [MINT_A]: 0, [MINT_B]: 2000 },
 		})
 		const result = resolveAuctionMintSelection({
 			trustedMints: [MINT_A, MINT_B],
@@ -48,9 +48,9 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 	})
 
 	test('handles wallet with only untrusted mints', () => {
-		const wallet = makeNip60Snapshot({
+		const wallet = makeWalletSnapshot({
 			mints: [MINT_C],
-			mintBalances: { [MINT_C]: 5000 },
+			balances: { [MINT_C]: 5000 },
 		})
 		const result = resolveAuctionMintSelection({
 			trustedMints: [MINT_A, MINT_B],
@@ -63,9 +63,9 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 	})
 
 	test('handles rebid with higher amount requiring mint switch', () => {
-		const wallet = makeNip60Snapshot({
+		const wallet = makeWalletSnapshot({
 			mints: [MINT_A, MINT_B],
-			mintBalances: { [MINT_A]: 200, [MINT_B]: 2000 },
+			balances: { [MINT_A]: 200, [MINT_B]: 2000 },
 		})
 		const firstResult = resolveAuctionMintSelection({
 			trustedMints: [MINT_A, MINT_B],
@@ -88,9 +88,9 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 	})
 
 	test('handles wallet not yet initialized (empty state)', () => {
-		const wallet = makeNip60Snapshot({
+		const wallet = makeWalletSnapshot({
 			mints: [],
-			mintBalances: {},
+			balances: {},
 		})
 		const result = resolveAuctionMintSelection({
 			trustedMints: [MINT_A],
@@ -103,9 +103,9 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 	})
 
 	test('handles multiple eligible mints - picks first by auction order', () => {
-		const wallet = makeNip60Snapshot({
+		const wallet = makeWalletSnapshot({
 			mints: [MINT_A, MINT_B],
-			mintBalances: { [MINT_A]: 5000, [MINT_B]: 5000 },
+			balances: { [MINT_A]: 5000, [MINT_B]: 5000 },
 		})
 		const result = resolveAuctionMintSelection({
 			trustedMints: [MINT_A, MINT_B],
@@ -119,9 +119,9 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 	})
 
 	test('bid amount of zero is handled gracefully', () => {
-		const wallet = makeNip60Snapshot({
+		const wallet = makeWalletSnapshot({
 			mints: [MINT_A],
-			mintBalances: { [MINT_A]: 500 },
+			balances: { [MINT_A]: 500 },
 		})
 		const result = resolveAuctionMintSelection({
 			trustedMints: [MINT_A],
@@ -134,9 +134,9 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 	})
 
 	test('reports partial balance correctly for error messaging', () => {
-		const wallet = makeNip60Snapshot({
+		const wallet = makeWalletSnapshot({
 			mints: [MINT_A, MINT_B],
-			mintBalances: { [MINT_A]: 50, [MINT_B]: 75 },
+			balances: { [MINT_A]: 50, [MINT_B]: 75 },
 		})
 		const result = resolveAuctionMintSelection({
 			trustedMints: [MINT_A, MINT_B],
@@ -152,9 +152,9 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 	})
 
 	test('rebid with small delta keeps first mint eligible', () => {
-		const wallet = makeNip60Snapshot({
+		const wallet = makeWalletSnapshot({
 			mints: [MINT_A, MINT_B],
-			mintBalances: { [MINT_A]: 200, [MINT_B]: 2000 },
+			balances: { [MINT_A]: 200, [MINT_B]: 2000 },
 		})
 		const result = resolveAuctionMintSelection({
 			trustedMints: [MINT_A, MINT_B],
@@ -169,9 +169,9 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 	})
 
 	test('rebid with large delta falls back to second mint', () => {
-		const wallet = makeNip60Snapshot({
+		const wallet = makeWalletSnapshot({
 			mints: [MINT_A, MINT_B],
-			mintBalances: { [MINT_A]: 100, [MINT_B]: 2000 },
+			balances: { [MINT_A]: 100, [MINT_B]: 2000 },
 		})
 		const result = resolveAuctionMintSelection({
 			trustedMints: [MINT_A, MINT_B],

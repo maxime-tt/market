@@ -252,7 +252,7 @@ export interface AuctionReclaim {
 
 /**
  * The timelock-refund reclaim of an unclaimed bid, and the throttled sweep that runs it for
- * every ready token — the pair `nip60Actions.reclaimToken` + `nip60Actions.autoReclaimTimelockedBids`
+ * every ready token — the pair `walletOps.reclaimToken` + `walletOps.autoReclaimTimelockedBids`
  * moved out of the store behind {@link AuctionReclaimHost}.
  *
  * This is a money path, so the body is the store's, unchanged: the same readiness check
@@ -526,7 +526,7 @@ export interface AuctionLockWallet extends AuctionFundsWallet {
  *
  * Pending tokens stay an injected port (`setPendingTokens`) rather than moving to a wallet-local
  * store: it is the smallest diff, and the store still owns the read side and the
- * `nip60_pending_tokens` key (`platform/` reads auction pending tokens through the store seam).
+ * `@/lib/stores/cashu` pending-token key (`platform/` reads auction pending tokens through the store seam).
  * The `strict` flag carries the lock's fail-closed write across the seam.
  */
 export interface AuctionLockHost {
@@ -721,7 +721,7 @@ export class AuctionBidLockMutationPossibleError extends Error {
 }
 
 /**
- * The P2PK lock — `nip60Actions.lockAuctionBidFunds` moved out of the store behind
+ * The P2PK lock — `walletOps.lockAuctionBidFunds` moved out of the store behind
  * {@link AuctionLockHost}.
  *
  * This is money handling, so the body is the store's, unchanged: the same amount / wallet /
@@ -1035,7 +1035,7 @@ export interface AuctionReceipt {
 }
 
 /**
- * `nip60Actions.receiveLockedEcash` moved out of the store. Thin orchestration over the
+ * `walletOps.receiveLockedEcash` moved out of the store. Thin orchestration over the
  * already-extracted {@link receiveTokenWithPrivkey}: warn + false when there is no wallet,
  * receive with the caller's key, refresh, and rethrow on failure.
  */
@@ -1059,7 +1059,7 @@ export const createAuctionReceipt = (host: AuctionReceiveHost): AuctionReceipt =
 })
 
 /**
- * `nip60Actions.loadAuctionMintKeysets` moved out of the store. Returns an empty array on
+ * `walletOps.loadAuctionMintKeysets` moved out of the store. Returns an empty array on
  * failure — callers treat that as "decode without keysets".
  */
 export const loadAuctionMintKeysets = async (mint: AuctionFundsMintAccess, mintUrl: string): Promise<MintKeyset[]> => {

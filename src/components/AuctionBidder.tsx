@@ -51,7 +51,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@ui/primitives/inp
 import { cn } from '@/lib/utils'
 import { TooltipToggleGroupItem } from '@ui/components/TooltipToggleGroupItem'
 import { useStore } from '@tanstack/react-store'
-import { nip60Store } from '@/lib/stores/nip60'
+import { cashuStore } from '@/lib/stores/cashu'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl, getMintHostname } from '@/lib/wallet'
@@ -71,7 +71,7 @@ interface AuctionBidderProps {
 }
 
 export function useAuctionMintSelection(trustedMints: string[], bidAmount: number, previousBidAmount: number = 0) {
-	const nip60State = useStore(nip60Store)
+	const cashuState = useStore(cashuStore)
 	const [manualMint, setManualMint] = useState<string | null>(null)
 
 	const deltaAmount = Math.max(0, bidAmount - previousBidAmount)
@@ -80,18 +80,18 @@ export function useAuctionMintSelection(trustedMints: string[], bidAmount: numbe
 		() =>
 			resolveAuctionMintSelection({
 				trustedMints,
-				walletMints: nip60State.mints ?? [],
-				mintBalances: nip60State.mintBalances ?? {},
+				walletMints: cashuState.mints ?? [],
+				mintBalances: cashuState.balances ?? {},
 				bidAmount,
 				previousBidAmount,
 			}),
-		[trustedMints, nip60State.mints, nip60State.mintBalances, bidAmount, previousBidAmount],
+		[trustedMints, cashuState.mints, cashuState.balances, bidAmount, previousBidAmount],
 	)
 
 	const manualMintValid = manualMint ? result.availableMints.some((m) => m.mintUrl === manualMint) : false
 
 	const selectedMint = manualMintValid ? manualMint : result.selectedMint
-	const walletMintSet = new Set((nip60State.mints ?? []).map(normalizeMintUrl))
+	const walletMintSet = new Set((cashuState.mints ?? []).map(normalizeMintUrl))
 	const unfundedWalletMint = result.unfundedTrustedMints.find((mint) => walletMintSet.has(normalizeMintUrl(mint))) ?? null
 	const depositMint = manualMintValid
 		? manualMint
@@ -124,7 +124,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// #1235 Blocking 1: idempotent rebroadcast for a funded-but-unpublished
 	// bid — never re-locks funds on retry.
 	const republishBidMutation = useRepublishAuctionBidMutation()
-	const { status: nip60Status } = useStore(nip60Store)
+	const { status: walletStatus } = useStore(cashuStore)
 	const { isAuthenticated, user } = useStore(authStore)
 
 	// Derive auction state
@@ -200,8 +200,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const bidStep = Math.max(bidIncrement, AUCTION_MIN_BID_LEG_SATS)
 	const signedInBidderPubkey = isAuthenticated ? user?.pubkey || currentUserPubkey || '' : ''
 	const hasSignedInBidder = !!signedInBidderPubkey
-	const isNip60Ready = nip60Status === 'ready'
-	const isNip60Loading = nip60Status === 'idle' || nip60Status === 'initializing'
+	const isWalletReady = walletStatus === 'ready'
+	const isWalletLoading = walletStatus === 'idle' || walletStatus === 'initializing'
 	const previousBidAmount = useMemo(() => {
 		if (!signedInBidderPubkey) return 0
 		const myBids = bids.filter((b) => b.pubkey === signedInBidderPubkey)
@@ -387,7 +387,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const hasInsufficientBidFunds =
 		hasSignedInBidder &&
-		isNip60Ready &&
+		isWalletReady &&
 		!ended &&
 		!notStarted &&
 		!isOwnAuction &&
@@ -493,7 +493,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			return null
 		}
 
-		if (isNip60Loading) {
+		if (isWalletLoading) {
 			toast.info('Wallet is still loading. Try again in a moment.')
 			return null
 		}

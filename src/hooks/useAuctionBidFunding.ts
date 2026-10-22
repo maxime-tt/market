@@ -1,4 +1,3 @@
-import { nip60Store } from '@/lib/stores/nip60'
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 import { planAuctionBidRecovery } from '@sdk/commerce/auctions'
 import {
@@ -110,14 +109,14 @@ export const AUCTION_BID_FUNDING_RECLAIMABLE_STATES: readonly AuctionBidFundingL
  *    failed. Funds may be at the mint in a partially-minted state. The user
  *    can retry the funding session (transition back to funding_session_created
  *    is allowed), which re-attempts minting. If minting keeps failing, the
- *    pending token entry in nip60Store will eventually become eligible for
+ *    pending token entry on the wallet store will eventually become eligible for
  *    reclaimToken() once the timelock expires.
  *
  * 3. `mint_succeeded_bid_publish_failed_reclaimable`: E-cash was minted but
  *    the bid event could not be published to relays. The proofs are in the
  *    user's wallet as a pending token. The user can retry publishing (transition
  *    back to bid_publish_attempted is allowed). If they abandon the bid, the
- *    funds are reclaimable via nip60Actions.reclaimToken() after the timelock.
+ *    funds are reclaimable via walletOps.reclaimToken() after the timelock.
  *
  * 4. `ecash_minted_pending_rules_ack`: E-cash was minted but the user hasn't
  *    acknowledged the auction rules yet. The funds are in the wallet as a
@@ -126,8 +125,8 @@ export const AUCTION_BID_FUNDING_RECLAIMABLE_STATES: readonly AuctionBidFundingL
  *    are acknowledged, publishing resumes. If abandoned, reclaimToken() recovers
  *    funds after the timelock.
  *
- * The actual reclaim implementation lives in nip60Actions.reclaimToken() in
- * src/lib/stores/nip60.ts. It:
+ * The actual reclaim implementation lives in `walletOps.reclaimToken()` in
+ * `@/lib/stores/walletOps` (over `@/lib/wallet/auctionFunds`). It:
  *   - Checks the timelock from the proof secret (not cached context)
  *   - Looks up the refund private key from BidderBidRecord or wallet.privkeys
  *   - Calls receiveTokenWithPrivkey() to sweep the locked proofs back
@@ -736,9 +735,9 @@ export function useAuctionBidFunding({
 				return
 			}
 
-			const latestNip60State = nip60Store.state
+			const latestCashuState = cashuStore.state
 			const requiredDelta = Math.max(0, pendingBidSubmission.amount - previousBidAmount)
-			const fundableMint = fundingMintCandidates.find((mintUrl) => (latestNip60State.mintBalances[mintUrl] ?? 0) >= requiredDelta)
+			const fundableMint = fundingMintCandidates.find((mintUrl) => (latestCashuState.balances[mintUrl] ?? 0) >= requiredDelta)
 
 			if (!fundableMint) {
 				setBidFundingLifecycleState((currentState) =>

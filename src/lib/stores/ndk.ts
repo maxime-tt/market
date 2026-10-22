@@ -6,7 +6,7 @@ import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nos
 import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
-import { nip60Actions } from './nip60'
+import { walletOps } from './walletOps'
 import { walletActions, walletStore, type Wallet } from './wallet'
 
 /**
@@ -750,16 +750,16 @@ export const ndkActions = {
 
 		// Run in parallel — each step handles its own failure (caller
 		// just sees a warning) so a failed NWC lookup doesn't block
-		// NIP-60 init and vice versa.
+		// Cashu init and vice versa.
 		const userPubkey = user.pubkey
 		await Promise.all([
 			ndkActions.loadRelaysFromNostr().catch((e) => console.error('[ndk] loadRelaysFromNostr failed:', e)),
 			ndkActions.selectAndSetInitialNwcWallet().catch((e) => console.error('[ndk] selectAndSetInitialNwcWallet failed:', e)),
 			(async () => {
 				try {
-					await nip60Actions.initialize(userPubkey)
+					await walletOps.initialize(userPubkey)
 				} catch (e) {
-					console.error('[ndk] nip60Actions.initialize failed:', e)
+					console.error('[ndk] walletOps.initialize failed:', e)
 				}
 			})(),
 		])
@@ -768,11 +768,11 @@ export const ndkActions = {
 	/**
 	 * Tear-down counterpart to `runSignerOnboarding`. Auth logout calls
 	 * this after `setSigner(undefined)` so the store doesn't carry
-	 * stale NWC / NIP-60 state into the unauthenticated session.
+	 * stale NWC / Cashu state into the unauthenticated session.
 	 */
 	clearSignerOnboarding: (): void => {
 		ndkActions.setActiveNwcWalletUri(null)
-		nip60Actions.reset()
+		walletOps.reset()
 	},
 
 	/**

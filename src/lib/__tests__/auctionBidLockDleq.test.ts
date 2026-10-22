@@ -39,7 +39,8 @@ afterEach(() => {
 	originalSwap = undefined
 })
 
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { cashuStore } from '@/lib/stores/cashu'
+import { walletOps } from '@/lib/stores/walletOps'
 import { authStore } from '@/lib/stores/auth'
 
 // Bun's test runtime doesn't provide localStorage by default.
@@ -129,10 +130,10 @@ function installWallet(proofs: FakeProof[]): void {
 		},
 		publish: async () => {},
 	}
-	nip60Store.setState((s) => ({
+	cashuStore.setState((s) => ({
 		...s,
 		status: 'ready',
-		wallet: mockWallet as never,
+		walletSource: mockWallet as never,
 		pendingTokens: [],
 	}))
 }
@@ -152,7 +153,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 
 		// DLEQ is unconditional: the lock always validates the freshly issued
 		// P2PK OUTPUT proofs, which here carry DLEQ → the lock succeeds.
-		await expect(nip60Actions.lockAuctionBidFunds(baseParams)).resolves.toMatchObject({ amount: 1000 })
+		await expect(walletOps.lockAuctionBidFunds(baseParams)).resolves.toMatchObject({ amount: 1000 })
 		// The swap WAS attempted exactly once with the full input set (no
 		// input-side DLEQ filter).
 		expect(swapCalls).toBe(1)
@@ -168,7 +169,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 			keep: [noDleqProof(3000)],
 		}
 
-		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams })).rejects.toThrow(/locked proof at index 0 lacks a NUT-12 DLEQ proof/i)
+		await expect(walletOps.lockAuctionBidFunds({ ...baseParams })).rejects.toThrow(/locked proof at index 0 lacks a NUT-12 DLEQ proof/i)
 
 		// The swap was attempted (output validation happens after swap + after
 		// the pending-token persist).
@@ -182,7 +183,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 			send: [lockedOutputProof(1000, true)],
 			keep: [noDleqProof(3000)],
 		}
-		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams })).resolves.toMatchObject({
+		await expect(walletOps.lockAuctionBidFunds({ ...baseParams })).resolves.toMatchObject({
 			amount: 1000,
 		})
 		expect(swapCalls).toBe(1)
@@ -192,7 +193,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 		const proofsWithoutDleq: FakeProof[] = [noDleqProof(2000)]
 		installWallet(proofsWithoutDleq)
 		nextSwapResult = { send: [], keep: [] }
-		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams })).rejects.toThrow(/outcome is uncertain/i)
+		await expect(walletOps.lockAuctionBidFunds({ ...baseParams })).rejects.toThrow(/outcome is uncertain/i)
 		expect(swapCalls).toBe(1)
 	})
 })

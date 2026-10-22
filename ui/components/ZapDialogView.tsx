@@ -41,7 +41,7 @@ export interface ZapDialogViewProps {
 	isAnonymous: boolean
 	onAnonymousChange: (anonymous: boolean) => void
 	support: ZapRecipientSupport
-	hasNip60Wallet: boolean
+	hasCashuWallet: boolean
 	hasNwc: boolean
 	isSubmittingNutzap: boolean
 	onSendNutzap: () => void
@@ -73,7 +73,7 @@ export function ZapDialogView({
 	isAnonymous,
 	onAnonymousChange,
 	support,
-	hasNip60Wallet,
+	hasCashuWallet,
 	hasNwc,
 	isSubmittingNutzap,
 	onSendNutzap,
@@ -84,7 +84,7 @@ export function ZapDialogView({
 	const isValidAmount = numericAmount !== null
 	const effectiveZapMessage = isAnonymous ? '' : zapMessage
 	const canProceedToPayment = isValidAmount && support.hasNip57
-	const canSendNutzap = isValidAmount && hasNip60Wallet && support.hasNip61 && !isSubmittingNutzap
+	const canSendNutzap = isValidAmount && hasCashuWallet && support.hasNip61 && !isSubmittingNutzap
 
 	if (open && isLoading) {
 		return (
@@ -185,7 +185,7 @@ export function ZapDialogView({
 
 						<div className="py-2">
 							<div className="flex flex-col gap-2">
-								{hasNip60Wallet && support.hasNip61 && (
+								{hasCashuWallet && support.hasNip61 && (
 									<Button onClick={onSendNutzap} className="w-full" variant="secondary" disabled={!canSendNutzap}>
 										{isSubmittingNutzap ? <Loader2 className="mr-2 w-4 h-4 animate-spin" /> : <Zap className="mr-2 w-4 h-4" />}
 										Zap with Nutzap (NIP-60)

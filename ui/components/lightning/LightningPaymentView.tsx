@@ -15,10 +15,10 @@ export interface LightningPaymentViewProps {
 	isPaymentInProgress: boolean
 	/** Passively watching for a zap receipt after an external payment. */
 	isCheckingForReceipt: boolean
-	capabilities: { hasNwc: boolean; hasNip60: boolean; hasWebLn: boolean; canManualVerify: boolean }
+	capabilities: { hasNwc: boolean; hasCashuWallet: boolean; hasWebLn: boolean; canManualVerify: boolean }
 	manualPreimage: string
 	onManualPreimageChange: (value: string) => void
-	onPayNip60: () => void
+	onPayCashuWallet: () => void
 	onPayNwc: () => void
 	onPayWebLn: () => void
 	onVerifyPreimage: () => void
@@ -53,7 +53,7 @@ export function LightningPaymentView({
 	capabilities,
 	manualPreimage,
 	onManualPreimageChange,
-	onPayNip60,
+	onPayCashuWallet,
 	onPayNwc,
 	onPayWebLn,
 	onVerifyPreimage,
@@ -158,8 +158,8 @@ export function LightningPaymentView({
 					{showInvoice && (
 						<div className="space-y-3">
 							<div className="flex sm:flex-row flex-col sm:flex-wrap gap-2">
-								{capabilities.hasNip60 && (
-									<Button onClick={onPayNip60} disabled={isPaymentInProgress} className="sm:flex-1 w-full" variant="outline">
+								{capabilities.hasCashuWallet && (
+									<Button onClick={onPayCashuWallet} disabled={isPaymentInProgress} className="sm:flex-1 w-full" variant="outline">
 										<Zap className="mr-2 w-4 h-4" />
 										Pay with NIP-60 Wallet
 									</Button>

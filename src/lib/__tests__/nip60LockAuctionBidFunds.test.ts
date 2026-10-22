@@ -104,17 +104,18 @@ mock.module('@cashu/cashu-ts', () => ({
 	CashuWallet: StubbedCashuWallet,
 }))
 
-// Import the REAL store module via a UNIQUE query-string specifier: bun
+// Import the REAL wallet-ops module via a UNIQUE query-string specifier: bun
 // applies module mocks across every test file in one run (an earlier-loading
-// file's `mock.module('@/lib/stores/nip60')` would otherwise shadow this
+// file's `mock.module('@/lib/stores/walletOps')` would otherwise shadow this
 // file's alias import), and no other file can have mocked this specifier.
 // The fresh module body loads AFTER the cashu overlay above is registered,
 // so its `@cashu/cashu-ts` imports resolve to the stubbed `CashuWallet`.
 // This file drives the store instance it loads here — self-consistent,
 // order-independent, zero network (ADR-0005).
-const realNip60: typeof import('@/lib/stores/nip60') = await import(`${import.meta.dir}/../stores/nip60.ts?b1-real-store=1`)
-type AuctionBidLockMutationPossibleErrorInstance = InstanceType<typeof realNip60.AuctionBidLockMutationPossibleError>
-const { nip60Actions, nip60Store } = realNip60
+const realWalletOps: typeof import('@/lib/stores/walletOps') = await import(`${import.meta.dir}/../stores/walletOps.ts?b1-real-store=1`)
+type AuctionBidLockMutationPossibleErrorInstance = InstanceType<typeof realWalletOps.AuctionBidLockMutationPossibleError>
+const { walletOps } = realWalletOps
+import { cashuStore } from '@/lib/stores/cashu'
 import { loadUserData } from '@/lib/wallet/storage'
 
 // =============================================================================
@@ -172,16 +173,16 @@ beforeEach(() => {
 	setAuthUser()
 	swapCalls.length = 0
 	wrongLockPubkeyForSwap = null
-	nip60Store.setState((s) => ({
+	cashuStore.setState((s) => ({
 		...s,
-		wallet: createMockWallet({ [TEST_MINT]: [inputProof(1_000)] }) as never,
+		walletSource: createMockWallet({ [TEST_MINT]: [inputProof(1_000)] }) as never,
 		status: 'ready',
 		pendingTokens: [],
 	}))
 })
 
 afterEach(() => {
-	nip60Store.setState((s) => ({ ...s, wallet: null, status: 'idle', pendingTokens: [] }))
+	cashuStore.setState((s) => ({ ...s, walletSource: null, status: 'idle', pendingTokens: [] }))
 })
 
 // =============================================================================
@@ -193,7 +194,7 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 		const originalSetItem = localStorage.setItem.bind(localStorage)
 		let pendingTokenWriteFailed = false
 		localStorage.setItem = (key: string, _value: string) => {
-			if (key.startsWith('nip60_pending_tokens')) {
+			if (key.startsWith('cashu_pending_tokens')) {
 				pendingTokenWriteFailed = true
 				throw new Error('QuotaExceededError: setItem failed')
 			}
@@ -201,7 +202,7 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 		}
 		let caught: unknown
 		try {
-			await nip60Actions.lockAuctionBidFunds(lockParams)
+			await walletOps.lockAuctionBidFunds(lockParams)
 		} catch (error) {
 			caught = error
 		}
@@ -212,7 +213,7 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 
 		// The swap already ran — the mint may have issued the locked proofs,
 		// so the failure is classified mutation-possible (uncertain), NOT raw.
-		expect(caught).toBeInstanceOf(realNip60.AuctionBidLockMutationPossibleError)
+		expect(caught).toBeInstanceOf(realWalletOps.AuctionBidLockMutationPossibleError)
 		const mutationPossible = caught as AuctionBidLockMutationPossibleErrorInstance
 		expect(mutationPossible.mintUrl).toBe(TEST_MINT)
 		expect(mutationPossible.amount).toBe(500)
@@ -227,16 +228,16 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 		expect(swapCalls).toHaveLength(1)
 		// The store did not gain a pending token (the strict write threw
 		// before the state update).
-		expect(nip60Store.state.pendingTokens).toHaveLength(0)
+		expect(cashuStore.state.pendingTokens).toHaveLength(0)
 	})
 
 	test('(b) pre-lock selection failure (insufficient balance) stays RAW — not mutation-possible', async () => {
 		// The wallet holds only 100 sats at the mint; the lock wants 500.
-		nip60Store.setState((s) => ({ ...s, wallet: createMockWallet({ [TEST_MINT]: [inputProof(100)] }) as never }))
+		cashuStore.setState((s) => ({ ...s, walletSource: createMockWallet({ [TEST_MINT]: [inputProof(100)] }) as never }))
 
 		let caught: unknown
 		try {
-			await nip60Actions.lockAuctionBidFunds(lockParams)
+			await walletOps.lockAuctionBidFunds(lockParams)
 		} catch (error) {
 			caught = error
 		}
@@ -245,7 +246,7 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 		// swap never ran), so a retry is legitimate and must NOT be refused
 		// as mutation-possible.
 		expect(caught).toBeInstanceOf(Error)
-		expect(caught).not.toBeInstanceOf(realNip60.AuctionBidLockMutationPossibleError)
+		expect(caught).not.toBeInstanceOf(realWalletOps.AuctionBidLockMutationPossibleError)
 		expect((caught as Error).message).toContain('No trusted mint has')
 		expect(swapCalls).toHaveLength(0)
 	})
@@ -257,7 +258,7 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 
 		let caught: unknown
 		try {
-			await nip60Actions.lockAuctionBidFunds(lockParams)
+			await walletOps.lockAuctionBidFunds(lockParams)
 		} catch (error) {
 			caught = error
 		}
@@ -265,7 +266,7 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 
 		// The assert failure is classified mutation-possible (a swap request
 		// WAS sent — the inputs may already be consumed).
-		expect(caught).toBeInstanceOf(realNip60.AuctionBidLockMutationPossibleError)
+		expect(caught).toBeInstanceOf(realWalletOps.AuctionBidLockMutationPossibleError)
 		expect(((caught as AuctionBidLockMutationPossibleErrorInstance).cause as Error).message).toContain('wrong P2PK pubkey')
 		// #1235 round-3 fix 5: the STRICT pending-token save SUCCEEDED before the
 		// assert threw — the flag must be true (the wallet can observe and
@@ -276,16 +277,16 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 		// THE ORDERING INVARIANT: the pending-token record IS durably on disk
 		// despite the assert failure — the leg is reclaim-eligible after the
 		// refund timelock instead of silently stranded.
-		const persisted = loadUserData<Array<{ amount?: number; mintUrl?: string; status?: string }>>('nip60_pending_tokens', [])
+		const persisted = loadUserData<Array<{ amount?: number; mintUrl?: string; status?: string }>>('cashu_pending_tokens', [])
 		expect(persisted).toHaveLength(1)
 		expect(persisted[0].amount).toBe(500)
 		expect(persisted[0].mintUrl).toBe(TEST_MINT)
 		expect(persisted[0].status).toBe('pending')
-		expect(nip60Store.state.pendingTokens).toHaveLength(1)
+		expect(cashuStore.state.pendingTokens).toHaveLength(1)
 	})
 
 	test('happy path: locked proofs persist as a strict pending token and the result carries the lock identity', async () => {
-		const result = await nip60Actions.lockAuctionBidFunds(lockParams)
+		const result = await walletOps.lockAuctionBidFunds(lockParams)
 
 		expect(swapCalls).toHaveLength(1)
 		expect(swapCalls[0].lockPubkey).toBe(LOCK_PUBKEY)
@@ -295,7 +296,7 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 		expect(result.refundPubkey).toBe(REFUND_PUBKEY)
 		expect(result.proofs).toHaveLength(1)
 		// The pending-token record was durably persisted (strict write).
-		const persisted = loadUserData<Array<{ amount?: number }>>('nip60_pending_tokens', [])
+		const persisted = loadUserData<Array<{ amount?: number }>>('cashu_pending_tokens', [])
 		expect(persisted).toHaveLength(1)
 		expect(persisted[0].amount).toBe(500)
 	})

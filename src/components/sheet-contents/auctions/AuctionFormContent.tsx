@@ -12,7 +12,7 @@ import { syncMintSelection } from '@/lib/auctionMintSync'
 import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { configStore } from '@/lib/stores/config'
-import { isNip60WalletDevModeEnabled, NIP60_DEV_TEST_MINTS } from '@/lib/stores/nip60'
+import { isWalletDevModeEnabled, WALLET_DEV_TEST_MINTS } from '@/lib/wallet'
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@sdk/commerce/products'
 import { usePublishAuctionMutation, type AuctionFormData, type AuctionSpecEntry } from '@/publish/auctions'
 import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
@@ -210,7 +210,7 @@ export function AuctionFormContent() {
 	const authState = useStore(authStore)
 	const userPubkey = authState.user?.pubkey || ''
 	const appStage = useStore(configStore, (state) => state.config.stage)
-	const walletDevMode = appStage === 'staging' || isNip60WalletDevModeEnabled()
+	const walletDevMode = appStage === 'staging' || isWalletDevModeEnabled()
 	// Instance-configured allowlist (ADR-018) takes precedence; DEFAULT_TRUSTED_MINTS
 	// is only the shipped tier-3 fallback for before config loads or an instance
 	// that hasn't set its own list.
@@ -221,7 +221,7 @@ export function AuctionFormContent() {
 			Array.from(
 				new Set([
 					...(configTrustedMints?.length ? configTrustedMints : DEFAULT_TRUSTED_MINTS),
-					...(walletDevMode ? NIP60_DEV_TEST_MINTS : []),
+					...(walletDevMode ? WALLET_DEV_TEST_MINTS : []),
 				]),
 			),
 		[configTrustedMints, walletDevMode],

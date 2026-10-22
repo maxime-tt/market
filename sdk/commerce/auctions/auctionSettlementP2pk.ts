@@ -19,7 +19,7 @@ export interface AuctionSettlementP2pkPreflightInput {
 	 * embedded in the token. cashu-ts ≥2.x rejects decode of a token
 	 * with short IDs unless it can map them to full IDs from the mint;
 	 * the caller is expected to fetch these once per unique mint
-	 * (e.g. via `nip60Actions.loadAuctionMintKeysets`) and pass them
+	 * (e.g. via `walletOps.loadAuctionMintKeysets`) and pass them
 	 * in. Omitting them works for older tokens whose `proof.id` is
 	 * already a long-form hex keyset id — including the unit-test
 	 * fixtures — so existing tests don't need to change.

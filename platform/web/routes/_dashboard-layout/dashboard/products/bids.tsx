@@ -8,7 +8,7 @@ import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/primitives/button'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
-import { formatReclaimWaitSeconds, getAuctionReclaimReadyAt, nip60Actions, nip60Store, type PendingNip60Token } from '@/lib/stores/nip60'
+import { cashuStore, walletOps, formatReclaimWaitSeconds, getAuctionReclaimReadyAt, type PendingToken } from '@/lib/stores/walletOps'
 import { getMintHostname } from '@/lib/wallet'
 import {
 	auctionClaimOrdersQueryOptions,
@@ -43,7 +43,7 @@ type BidGroup = {
 	sellerPubkey: string
 	latestBid: NDKEvent
 	bids: NDKEvent[]
-	pendingTokens: PendingNip60Token[]
+	pendingTokens: PendingToken[]
 }
 
 const formatMaybeDate = (timestamp: number): string => {
@@ -51,7 +51,7 @@ const formatMaybeDate = (timestamp: number): string => {
 	return new Date(timestamp * 1000).toLocaleString()
 }
 
-const getPendingAuctionBidTokens = (tokens: PendingNip60Token[]): PendingNip60Token[] =>
+const getPendingAuctionBidTokens = (tokens: PendingToken[]): PendingToken[] =>
 	tokens.filter((token) => token.context?.kind === 'auction_bid')
 
 /**
@@ -61,7 +61,7 @@ const getPendingAuctionBidTokens = (tokens: PendingNip60Token[]): PendingNip60To
  * here keeps the "Reclaim available" banner consistent with the reclaim gate
  * (so users don't see "Reclaim available" and then "Bid refund opens in …").
  */
-const getPendingTokenReclaimReadyAt = (token: PendingNip60Token): number => getAuctionReclaimReadyAt(token.token, token.context?.locktime)
+const getPendingTokenReclaimReadyAt = (token: PendingToken): number => getAuctionReclaimReadyAt(token.token, token.context?.locktime)
 
 const getLatestBidForGroup = (bids: NDKEvent[]): NDKEvent =>
 	[...bids].sort((a, b) => {
@@ -73,7 +73,7 @@ const getLatestBidForGroup = (bids: NDKEvent[]): NDKEvent =>
 	})[0]
 
 const getBidGroupState = (group: BidGroup, settlementEvent: NDKEvent | null, userPubkey: string, now: number) =>
-	resolveBidGroupStatus<PendingNip60Token>({
+	resolveBidGroupStatus<PendingToken>({
 		latestBidId: group.latestBid.id,
 		latestBidLocktime: getBidLocktime(group.latestBid),
 		tokens: group.pendingTokens.map((token) => ({
@@ -101,7 +101,7 @@ function BidsOverviewComponent() {
 	useDashboardTitle('Bids')
 
 	const { user, isAuthenticated } = useStore(authStore)
-	const { pendingTokens } = useStore(nip60Store)
+	const { pendingTokens } = useStore(cashuStore)
 	const [expandedBidGroup, setExpandedBidGroup] = useState<string | null>(null)
 	const [reclaimingGroup, setReclaimingGroup] = useState<string | null>(null)
 	const [isRefreshingBids, setIsRefreshingBids] = useState(false)
@@ -222,13 +222,13 @@ function BidsOverviewComponent() {
 	const handleRefreshBidStatuses = async () => {
 		setIsRefreshingBids(true)
 		try {
-			await nip60Actions.refresh({ consolidate: true })
+			await walletOps.refresh({ consolidate: true })
 		} finally {
 			setIsRefreshingBids(false)
 		}
 	}
 
-	const handleReclaimBidGroup = async (group: BidGroup, reclaimableTokens: PendingNip60Token[]) => {
+	const handleReclaimBidGroup = async (group: BidGroup, reclaimableTokens: PendingToken[]) => {
 		if (reclaimableTokens.length === 0) return
 
 		setReclaimingGroup(group.key)
@@ -240,7 +240,7 @@ function BidsOverviewComponent() {
 					// manual:true lets the user override the auto-reclaim
 					// "permanently failed" flag in case they want to retry a
 					// token the sweeper has given up on.
-					await nip60Actions.reclaimToken(token.id, { manual: true })
+					await walletOps.reclaimToken(token.id, { manual: true })
 					reclaimedCount += 1
 				} catch (legError) {
 					const message = legError instanceof Error ? legError.message : String(legError)

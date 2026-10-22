@@ -1,5 +1,5 @@
 import { authStore } from '@/lib/stores/auth'
-import { nip60Actions, type Nip60DevAuctionBidResult, type Nip60TestMintResult } from '@/lib/stores/nip60'
+import { walletOps, type WalletDevAuctionBidResult, type WalletTestMintResult } from '@/lib/stores/walletOps'
 import { cashuActions, cashuStore, type PendingToken } from '@/lib/stores/cashu'
 import { useStore } from '@tanstack/react-store'
 import {
@@ -58,8 +58,8 @@ export function Nip60Wallet() {
 	const [devBidAmount, setDevBidAmount] = useState('')
 	const [isDevMinting, setIsDevMinting] = useState(false)
 	const [isDevBidding, setIsDevBidding] = useState(false)
-	const [lastDevMint, setLastDevMint] = useState<Nip60TestMintResult | null>(null)
-	const [lastDevBid, setLastDevBid] = useState<Nip60DevAuctionBidResult | null>(null)
+	const [lastDevMint, setLastDevMint] = useState<WalletTestMintResult | null>(null)
+	const [lastDevBid, setLastDevBid] = useState<WalletDevAuctionBidResult | null>(null)
 	// Dev-only tools are gated on the bundler's dev flag. It is read defensively
 	// because reading `.DEV` off a missing `import.meta.env` would throw at
 	// module load (Bun does not define `import.meta.env` in its client bundle).
@@ -146,7 +146,7 @@ export function Nip60Wallet() {
 
 		setIsDevMinting(true)
 		try {
-			const result = await nip60Actions.mintTestEcash(amount, mints[0])
+			const result = await walletOps.mintTestEcash(amount, mints[0])
 			setLastDevMint(result)
 			toast.success(`Minted ${result.amount.toLocaleString()} sats from ${getMintHostname(result.mintUrl)}`)
 		} catch (err) {
@@ -165,7 +165,7 @@ export function Nip60Wallet() {
 
 		setIsDevBidding(true)
 		try {
-			const result = await nip60Actions.placeDevBidOnSeededAuction({ preferredBidAmount, preferredMintUrl: mints[0] })
+			const result = await walletOps.placeDevBidOnSeededAuction({ preferredBidAmount, preferredMintUrl: mints[0] })
 			setLastDevBid(result)
 			toast.success(`Bid placed: ${result.bidAmount.toLocaleString()} sats on "${result.auctionTitle}"`)
 		} catch (err) {

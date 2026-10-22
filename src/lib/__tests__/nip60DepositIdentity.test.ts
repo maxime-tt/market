@@ -29,7 +29,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
 // The deposit session now lives on the coco-backed store, so no module mock can shadow it:
-// `auctionBidPublishRetry.test.ts` mocks `@/lib/stores/nip60`, not this module.
+// `auctionBidPublishRetry.test.ts` mocks `@/lib/stores/walletOps`, not this module.
 import { cashuActions, cashuStore } from '../stores/cashu'
 
 const TEST_MINT = 'https://mint.example.test'

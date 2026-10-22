@@ -2,7 +2,7 @@ import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_SETTLEMENT_POLICY, getAuctionTa
 import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
-import { nip60Actions, type AuctionP2pkKeyScheme, AuctionBidLockMutationPossibleError } from '@/lib/stores/nip60'
+import { walletOps, type AuctionP2pkKeyScheme, AuctionBidLockMutationPossibleError } from '@/lib/stores/walletOps'
 import type { KeyValueStoragePort } from '@sdk/core'
 import {
 	buildPathReleaseTags,
@@ -219,7 +219,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 	// configured default. Phase 7 (reputation UI) will grow this into a
 	// multi-select.
 	const auditorsList = getAuctionAuditorsOrThrow(formData.auditorPubkey)
-	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
+	const p2pkXpub = await walletOps.getAuctionP2pkXpub()
 
 	const imageTags: string[][] = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)])
 	const categoryTags: string[][] = []
@@ -515,7 +515,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 		locktime,
 		prevBidEventId: prevLeg?.bidEventId ?? null,
 	}
-	type BidLockResult = Awaited<ReturnType<typeof nip60Actions.lockAuctionBidFunds>>
+	type BidLockResult = Awaited<ReturnType<typeof walletOps.lockAuctionBidFunds>>
 	const lockIntent = { derivationPath, childPubkey, refundPubkey, refundPrivateKey, createdAt: now }
 	let lockResult: BidLockResult | undefined
 	let finalizedBidEventId: string | null = null
@@ -531,7 +531,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 		},
 		lockFunds: async (intent, plan) => {
 			try {
-				lockResult = await nip60Actions.lockAuctionBidFunds({
+				lockResult = await walletOps.lockAuctionBidFunds({
 					amount: plan.legAmount,
 					preferredMints: mintCandidates,
 					locktime: plan.locktime,
@@ -614,7 +614,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 				createdAt: intent.createdAt,
 				status: 'live',
 			})
-			const updatedPendingToken = nip60Actions.updatePendingTokenContext(funding.tokenId, {
+			const updatedPendingToken = walletOps.updatePendingTokenContext(funding.tokenId, {
 				kind: 'auction_bid',
 				auctionEventId: formData.auctionEventId,
 				auctionCoordinates: formData.auctionCoordinates,
@@ -1843,7 +1843,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// both the bid event and the release token).
 	const mintKeysetsByMint = new Map<string, MintKeyset[]>()
 	for (const legMintUrl of Array.from(new Set(resolvedLegs.map((leg) => leg.mintUrl)))) {
-		mintKeysetsByMint.set(legMintUrl, await nip60Actions.loadAuctionMintKeysets(legMintUrl))
+		mintKeysetsByMint.set(legMintUrl, await walletOps.loadAuctionMintKeysets(legMintUrl))
 	}
 
 	for (const leg of resolvedLegs) {
@@ -1992,12 +1992,12 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			inspectLeg: async (leg) => (alreadyRedeemedLegs.has(leg.bidEventId) ? 'redeemed_by_seller' : 'unspent'),
 			redeemLeg: async (leg) => {
 				const data = leg.redemptionData
-				const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({
+				const childPrivkey = await walletOps.getAuctionHdChildPrivkey({
 					derivationPath: data.derivationPath,
 					expectedPubkey: data.childPubkey,
 				})
 				try {
-					const redeemed = await nip60Actions.receiveLockedEcash(data.cashuToken, childPrivkey, data.mintUrl)
+					const redeemed = await walletOps.receiveLockedEcash(data.cashuToken, childPrivkey, data.mintUrl)
 					if (!redeemed) throw new Error(`Cashu redemption did not complete for leg ${leg.bidEventId.slice(0, 8)}…`)
 				} catch (error) {
 					throw tagBidError(`settlement-receive-leg-${leg.bidEventId.slice(0, 8)}`, error)

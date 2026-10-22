@@ -8,8 +8,8 @@
  * refusal — the money has left the wallet either way.
  *
  * This module decides what a nutzap is, and takes the wallet, the signer, the relay read and the
- * publisher as ports. It imports no store: the NIP-60 relay wallet it replaces
- * (`src/lib/stores/nip60.ts`) is being deleted, and the proof source it needs is exactly the shape
+ * publisher as ports. It imports no store: the relay-backed NIP-60 wallet it replaces is gone,
+ * and the proof source it needs is exactly the shape
  * a coco-backed source will have when coco can P2PK-lock (`@cashu/coco-core@2.0.0`'s
  * `send.prepare({ target: { type: 'p2pk' } })`); on the pinned coco it has to be a cashu-ts swap
  * over the wallet's proofs, and that adapter lives in the composing app, not here.

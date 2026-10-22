@@ -2,7 +2,7 @@
  * The wallet's mint list has exactly one authority: coco.
  *
  * `src/lib/stores/cashu.ts` used to take its mint list from the relay-backed
- * NIP-60 wallet store (`nip60Store.state.mints`) and copy it into coco. That
+ * NIP-60 wallet store's own projection and copy it into coco. That
  * made a relay event the authority for a fact coco already persists in its own
  * repository, and it left the coco store unable to outlive the relay store.
  * These tests pin the inversion:

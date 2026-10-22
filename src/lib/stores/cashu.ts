@@ -13,7 +13,15 @@ import { initializeCoco, Manager, getEncodedToken } from 'coco-cashu-core'
 import { IndexedDbRepositories } from 'coco-cashu-indexeddb'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { authStore } from './auth'
-import { getMintHostname, loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
+import {
+	getMintHostname,
+	LEGACY_PENDING_TOKENS_KEY,
+	loadUserData,
+	removeUserData,
+	saveUserData,
+	type PendingToken,
+	type SaveUserDataOptions,
+} from '@/lib/wallet'
 import { createCocoWalletSource, type CashuWalletSource } from '@/lib/wallet/cashuWalletSource'
 import {
 	type CocoDepositQuote,
@@ -162,9 +170,33 @@ function generateId(): string {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-const loadPendingTokens = (): PendingToken[] => loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [])
+/**
+ * Read the wallet's pending-token list, draining the retired store's key on first read.
+ *
+ * The retired relay-wallet store kept its own list under {@link LEGACY_PENDING_TOKENS_KEY}; a
+ * device that already used it holds locked bid legs and unclaimed sends there. The two lists are
+ * one list from here on — merged by token id so a record present in both is taken once, written
+ * under this store's key, and the retired key dropped. Without the drop a later read could
+ * resurrect a token this list has already forgotten, and a pending token that has been
+ * deliberately removed must stay removed.
+ */
+const loadPendingTokens = (): PendingToken[] => {
+	const current = loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [])
+	const legacy = loadUserData<PendingToken[]>(LEGACY_PENDING_TOKENS_KEY, [])
+	if (!legacy.length) return current
 
-const savePendingTokens = (tokens: PendingToken[]): void => saveUserData(PENDING_TOKENS_KEY, tokens)
+	const byId = new Map<string, PendingToken>()
+	for (const token of legacy) byId.set(token.id, token)
+	for (const token of current) byId.set(token.id, token)
+	const merged = Array.from(byId.values())
+
+	saveUserData(PENDING_TOKENS_KEY, merged)
+	removeUserData(LEGACY_PENDING_TOKENS_KEY)
+	console.log('[cashu] Merged pending tokens from the retired storage key:', legacy.length)
+	return merged
+}
+
+const savePendingTokens = (tokens: PendingToken[], options?: SaveUserDataOptions): void => saveUserData(PENDING_TOKENS_KEY, tokens, options)
 
 /**
  * Get or generate a seed for the wallet.
@@ -678,6 +710,36 @@ export const cashuActions = {
 			...s,
 			pendingTokens,
 		}))
+	},
+
+	/**
+	 * Publish the pending-token list this store now owns.
+	 *
+	 * The auction rails read and write this same list through their hosts, so the store exposes
+	 * the write rather than keeping a second copy: `strict` carries the lock's fail-closed
+	 * durable-observation write (see `@/lib/wallet/storage`), and the default keeps the
+	 * historical swallow-on-failure behaviour for cosmetic writes.
+	 */
+	setPendingTokens: (tokens: PendingToken[], options?: SaveUserDataOptions): void => {
+		savePendingTokens(tokens, options)
+		cashuStore.setState((s) => ({ ...s, pendingTokens: tokens }))
+	},
+
+	/** Re-read the pending-token list from storage (draining the retired key on first read). */
+	loadPendingTokens: (): void => {
+		cashuStore.setState((s) => ({ ...s, pendingTokens: loadPendingTokens() }))
+	},
+
+	/**
+	 * Set the default mint a deposit falls back to when the caller names none.
+	 */
+	setDefaultMint: (mintUrl: string | null): void => {
+		if (mintUrl) {
+			localStorage.setItem(DEFAULT_MINT_KEY, mintUrl)
+		} else {
+			localStorage.removeItem(DEFAULT_MINT_KEY)
+		}
+		cashuStore.setState((s) => ({ ...s, defaultMint: mintUrl }))
 	},
 
 	/**

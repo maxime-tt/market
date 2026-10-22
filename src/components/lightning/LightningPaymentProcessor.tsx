@@ -1,5 +1,5 @@
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
-import { nip60Store } from '@/lib/stores/nip60'
+import { cashuStore } from '@/lib/stores/cashu'
 import { createNip60WalletPort } from '@/lib/sdkAdapters'
 import type { PaymentProof } from '@/lib/payments/proof'
 import { paymentProofToReceiptPreimage } from '@/lib/payments/proof'
@@ -44,7 +44,7 @@ export interface PaymentResult {
 
 export interface PaymentCapabilities {
 	hasNwc: boolean
-	hasNip60: boolean
+	hasCashuWallet: boolean
 	hasWebLn: boolean
 	canManualVerify: boolean
 }
@@ -105,7 +105,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		ref,
 	) => {
 		const ndkState = useStore(ndkStore)
-		const nip60State = useStore(nip60Store)
+		const cashuState = useStore(cashuStore)
 
 		// Component state
 		const [invoice, setInvoice] = useState<string | null>(data.bolt11 || null)
@@ -131,7 +131,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		// Check payment capabilities
 		const capabilities: PaymentCapabilities = {
 			hasNwc: !!effectiveNwcWalletUri,
-			hasNip60: nip60State.status === 'ready' && !!nip60State.wallet,
+			hasCashuWallet: cashuState.status === 'ready' && !!cashuState.walletSource,
 			hasWebLn: hasWebLN(),
 			canManualVerify: showManualVerification,
 		}
@@ -481,14 +481,14 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		}, [data.invoiceId, handlePaymentSuccess, invoice, onPaymentFailed, requireZapReceipt, stopZapMonitoring, waitForZapReceipt])
 
 		/**
-		 * Handle Lightning payment via NIP-60 wallet (Cashu melt).
+		 * Handle Lightning payment via the Cashu wallet (melt).
 		 */
-		const handleNip60Payment = useCallback(async () => {
+		const handleCashuPayment = useCallback(async () => {
 			if (!invoice) {
 				toast.error('No invoice available to pay')
 				return
 			}
-			if (nip60State.status !== 'ready' || !nip60State.wallet) {
+			if (cashuState.status !== 'ready' || !cashuState.walletSource) {
 				toast.error('NIP-60 wallet not connected')
 				return
 			}
@@ -546,8 +546,8 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			data.invoiceId,
 			handlePaymentSuccess,
 			invoice,
-			nip60State.status,
-			nip60State.wallet,
+			cashuState.status,
+			cashuState.walletSource,
 			onPaymentFailed,
 			requireZapReceipt,
 			stopZapMonitoring,
@@ -687,7 +687,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				capabilities={capabilities}
 				manualPreimage={manualPreimage}
 				onManualPreimageChange={setManualPreimage}
-				onPayNip60={handleNip60Payment}
+				onPayCashuWallet={handleCashuPayment}
 				onPayNwc={handleNwcPayment}
 				onPayWebLn={handleWebLnPayment}
 				onVerifyPreimage={handleManualVerification}
