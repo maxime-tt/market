@@ -2,8 +2,13 @@ import { PAYMENT_DETAILS_METHOD, ZAP_RELAYS, type PaymentDetailsMethod } from '@
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
 import { isValidHexKey } from '@/lib/utils'
-import type { PayWithNwcParams } from '@/publish/payment'
-import { payInvoiceWithNwc, payInvoiceWithWebln } from '@/publish/payment'
+import {
+	payInvoiceWithNwc,
+	payInvoiceWithWebln,
+	publishPaymentDetail,
+	type PublishPaymentDetailParams,
+	type PayWithNwcParams,
+} from '@/publish/payment'
 import { LightningAddress, type Invoice, type NostrProvider } from '@getalby/lightning-tools'
 import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -206,95 +211,6 @@ export const useProductPaymentDetails = (coordinates: string, userPubkey?: strin
 		queryKey: paymentDetailsKeys.byProductOrCollection(coordinates),
 		queryFn: () => fetchProductPaymentDetails(coordinates, userPubkey),
 		enabled: !!coordinates,
-	})
-}
-
-/**
- * Interface for publishing payment details
- */
-export interface PublishPaymentDetailParams {
-	paymentMethod: PaymentMethod
-	paymentDetail: string
-	coordinates?: string | string[] // Optional product/collection coordinates (single or multiple)
-	appPubkey?: string // Optional app pubkey
-	dTag?: string // Optional d tag for replaceable events (for updates)
-	isDefault?: boolean // Whether this is the default payment method
-}
-
-/**
- * Publishes payment details
- */
-export const publishPaymentDetail = async (params: PublishPaymentDetailParams): Promise<string> => {
-	try {
-		const ndk = ndkActions.getNDK()
-		if (!ndk) throw new Error('NDK not initialized')
-
-		const signer = ndkActions.getSigner()
-		if (!signer) throw new Error('No signer available to publish payment details')
-
-		// Get user
-		const user = await signer.user()
-		if (!user) throw new Error('User not available')
-
-		// Get app pubkey
-		const appPubkey = params.appPubkey || configStore.state.config.appPublicKey
-		if (!appPubkey) throw new Error('App public key not available')
-
-		// Create the content object
-		const contentObj = {
-			payment_method: params.paymentMethod,
-			payment_detail: params.paymentDetail,
-			is_default: params.isDefault || false,
-		}
-
-		// Payment details are public (Lightning addresses, BTC addresses)
-		// No encryption needed - buyers need to read these to generate invoices
-		const contentStr = JSON.stringify(contentObj)
-
-		// Create the event
-		const event = new NDKEvent(ndk)
-		event.kind = NDKKind.AppSpecificData
-		event.content = contentStr
-		event.tags = [
-			['d', params.dTag || uuidv4()],
-			['l', 'payment_detail'],
-			['p', appPubkey], // Reference to the app
-		]
-
-		// Add coordinates if provided (can be single string or array)
-		if (params.coordinates) {
-			const coordinatesArray = Array.isArray(params.coordinates) ? params.coordinates : [params.coordinates]
-			coordinatesArray.forEach((coord) => {
-				event.tags.push(['a', coord])
-			})
-		}
-
-		// Sign and publish
-		await event.sign(signer)
-		await ndkActions.publishEvent(event)
-
-		return event.id
-	} catch (error) {
-		console.error('Error publishing payment details:', error)
-		throw new Error(`Failed to publish payment details: ${error instanceof Error ? error.message : String(error)}`)
-	}
-}
-
-/**
- * React query mutation hook for publishing payment details
- */
-export const usePublishPaymentDetail = () => {
-	return useMutation({
-		mutationKey: paymentDetailsKeys.publish(),
-		mutationFn: publishPaymentDetail,
-		onSuccess: (eventId) => {
-			toast.success('Payment details saved successfully')
-			return eventId
-		},
-		onError: (error) => {
-			console.error('Failed to publish payment details:', error)
-			toast.error('Failed to save payment details')
-		},
 	})
 }
 

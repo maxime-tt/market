@@ -1,14 +1,114 @@
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
 import { parseNwcUri } from '@/lib/stores/wallet'
-import type { PublishPaymentDetailParams } from '@/queries/payment'
-import { publishPaymentDetail } from '@/queries/payment'
+import { type PaymentDetailsMethod } from '@/lib/constants'
 import { paymentDetailsKeys } from '@/queries/queryKeyFactory'
+import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
 import { NWCClient } from '@getalby/sdk/nwc'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { v4 as uuidv4 } from 'uuid'
 import { validatePreimage } from '@/lib/utils/payment.utils'
 import { createBuyerPaymentReceiptTemplate } from '@sdk/commerce/orders'
+
+/**
+ * Interface for publishing payment details.
+ *
+ * `paymentMethod` is `PaymentDetailsMethod` (`@/lib/constants`) rather than the
+ * `PaymentMethod` alias: this lived in `@/queries/payment` and the alias stayed
+ * there with the read-side types, and importing it back is the edge this move
+ * removes.
+ */
+export interface PublishPaymentDetailParams {
+	paymentMethod: PaymentDetailsMethod
+	paymentDetail: string
+	coordinates?: string | string[] // Optional product/collection coordinates (single or multiple)
+	appPubkey?: string // Optional app pubkey
+	dTag?: string // Optional d tag for replaceable events (for updates)
+	isDefault?: boolean // Whether this is the default payment method
+}
+
+/**
+ * Publishes payment details.
+ *
+ * Moved here from `@/queries/payment`, which is where the read side lives and
+ * where it had no business being: the queries module imported it back to build
+ * its rich/update variants, and this module imported it to wrap it in a
+ * mutation — a cycle between a read file and a publish file.
+ */
+export const publishPaymentDetail = async (params: PublishPaymentDetailParams): Promise<string> => {
+	try {
+		const ndk = ndkActions.getNDK()
+		if (!ndk) throw new Error('NDK not initialized')
+
+		const signer = ndkActions.getSigner()
+		if (!signer) throw new Error('No signer available to publish payment details')
+
+		// Get user
+		const user = await signer.user()
+		if (!user) throw new Error('User not available')
+
+		// Get app pubkey
+		const appPubkey = params.appPubkey || configStore.state.config.appPublicKey
+		if (!appPubkey) throw new Error('App public key not available')
+
+		// Create the content object
+		const contentObj = {
+			payment_method: params.paymentMethod,
+			payment_detail: params.paymentDetail,
+			is_default: params.isDefault || false,
+		}
+
+		// Payment details are public (Lightning addresses, BTC addresses)
+		// No encryption needed - buyers need to read these to generate invoices
+		const contentStr = JSON.stringify(contentObj)
+
+		// Create the event
+		const event = new NDKEvent(ndk)
+		event.kind = NDKKind.AppSpecificData
+		event.content = contentStr
+		event.tags = [
+			['d', params.dTag || uuidv4()],
+			['l', 'payment_detail'],
+			['p', appPubkey], // Reference to the app
+		]
+
+		// Add coordinates if provided (can be single string or array)
+		if (params.coordinates) {
+			const coordinatesArray = Array.isArray(params.coordinates) ? params.coordinates : [params.coordinates]
+			coordinatesArray.forEach((coord) => {
+				event.tags.push(['a', coord])
+			})
+		}
+
+		// Sign and publish
+		await event.sign(signer)
+		await ndkActions.publishEvent(event)
+
+		return event.id
+	} catch (error) {
+		console.error('Error publishing payment details:', error)
+		throw new Error(`Failed to publish payment details: ${error instanceof Error ? error.message : String(error)}`)
+	}
+}
+
+/**
+ * React query mutation hook for publishing payment details
+ */
+export const usePublishPaymentDetail = () => {
+	return useMutation({
+		mutationKey: paymentDetailsKeys.publish(),
+		mutationFn: publishPaymentDetail,
+		onSuccess: (eventId) => {
+			toast.success('Payment details saved successfully')
+			return eventId
+		},
+		onError: (error) => {
+			console.error('Failed to publish payment details:', error)
+			toast.error('Failed to save payment details')
+		},
+	})
+}
 
 /**
  * Mutation hook for publishing payment details with query invalidation
