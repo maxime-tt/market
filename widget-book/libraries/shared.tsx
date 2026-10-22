@@ -90,6 +90,8 @@ export const shared: WidgetLibrary = {
 				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 					<StatCard label="Revenue" value="128,400 sats" helper="Last 30 days" trend="up" />
 					<StatCard label="Refunds" value="4,200 sats" helper="Last 30 days" trend="down" />
+					<StatCard eyebrow="Live pulse" label="Current price" value="12,000 sats" />
+					<StatCard eyebrow="Ready to settle" label="Reserve" value="10,000 sats" />
 				</div>
 			),
 		},

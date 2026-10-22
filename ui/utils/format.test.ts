@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { formatSats } from './format'
+import { formatSats, formatSatsWithUnit } from './format'
 
 describe('formatSats', () => {
 	test('rounds to the nearest integer', () => {
@@ -20,5 +20,18 @@ describe('formatSats', () => {
 		expect(formatSats(Number.NaN)).toBe('NaN')
 		expect(formatSats(Number.POSITIVE_INFINITY)).toBe('∞')
 		expect(formatSats(Number.NEGATIVE_INFINITY)).toBe('-∞')
+	})
+})
+
+describe('formatSatsWithUnit', () => {
+	test('appends the unit to the canonical number', () => {
+		expect(formatSatsWithUnit(1234.5)).toBe('1,235 sats')
+		expect(formatSatsWithUnit(0)).toBe('0 sats')
+	})
+
+	test('delegates the number to formatSats', () => {
+		for (const value of [0, 1, 999, 1000, 1_234_567, Number.NaN]) {
+			expect(formatSatsWithUnit(value)).toBe(`${formatSats(value)} sats`)
+		}
 	})
 })

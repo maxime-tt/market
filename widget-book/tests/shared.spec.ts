@@ -34,6 +34,7 @@ test('shows the meaningful state copy', async ({ page }) => {
 	await expect(page.getByTestId('widget-ErrorState')).toContainText('Try again')
 	await expect(page.getByTestId('widget-LoadingStateSkeleton').locator('[data-slot="skeleton"]')).toHaveCount(3)
 	await expect(page.getByTestId('widget-StatCard')).toContainText('128,400 sats')
+	await expect(page.getByTestId('widget-StatCard')).toContainText('Live pulse')
 	await expect(page.getByTestId('widget-DetailField')).toContainText('includes shipping')
 })
 

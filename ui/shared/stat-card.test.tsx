@@ -25,6 +25,14 @@ describe('StatCard', () => {
 		expect(renderToStaticMarkup(<StatCard label="None" value="1" />)).toContain('<p class="text-2xl font-medium">1</p>')
 	})
 
+	test('renders an optional eyebrow above the label', () => {
+		const withEyebrow = renderToStaticMarkup(<StatCard eyebrow="Live pulse" label="Current price" value="12,000 sats" />)
+		expect(withEyebrow).toContain('Live pulse')
+		expect(withEyebrow.indexOf('Live pulse')).toBeLessThan(withEyebrow.indexOf('Current price'))
+
+		expect(renderToStaticMarkup(<StatCard label="Current price" value="12,000 sats" />)).not.toContain('uppercase')
+	})
+
 	test('merges host className', () => {
 		expect(renderToStaticMarkup(<StatCard label="Revenue" value="1" className="col-span-2" />)).toContain('col-span-2')
 	})

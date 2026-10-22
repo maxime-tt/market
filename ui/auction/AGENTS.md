@@ -25,13 +25,25 @@ never acquire it.
 
 - `shipping-option-views` — `AuctionShippingOptionCard`,
   `AuctionShippingDetailRow`.
-- `auction-detail-views` — the operator-side detail rows (`StatCard`- and
-  `DetailField`-shaped rows collapsed onto `shared/`; bespoke ones here).
+- `auction-detail-views` — the operator-side detail presentations:
+  - `AuctionStatusBadge` / `AuctionSettlementBadge` — the auction's lifecycle
+    and settlement chips. The status → tone maps live here (next to the view),
+    not as raw style maps in the route, and render through `shared/status-badge`.
+  - `AuctionDetailCard` — a bordered card wrapping `shared/detail-field`
+    (`align="start"`). It is a **composition**, not a second field
+    implementation: the field itself is still `shared/detail-field`.
+  - `AuctionPartyCard` — one party (seller, winner). The avatar and display name
+    arrive as an injected node, because resolving a pubkey to a profile is host
+    work.
+  - `AuctionTechnicalRow` — a labelled technical value with an optional copy
+    control. The control is `shared/copy-button`; a failed write is reported
+    through `onCopyError`, so the host keeps its own error surface.
 
 ## What does not
 
 - Anything that calls `useQuery`/`useStore`/`fetch`, formats protocol data, or
   resolves tags. Those stay in the route; pass the resolved values in.
-- A second implementation of a `shared/` atom. If a row is just
-  label/value/helper, use `shared/detail-field` or `shared/stat-card` at the
-  call site instead of adding a wrapper here.
+- A second implementation of a `shared/` atom. A card that only adds a border
+  and a spacing rhythm around a `shared/` atom is a composition and belongs
+  here; a row that re-implements the atom's own label/value/helper structure
+  does not — use `shared/detail-field` or `shared/stat-card` at the call site.

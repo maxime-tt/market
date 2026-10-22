@@ -43,7 +43,7 @@ platform/web/routes/_dashboard-layout/dashboard/index.tsx|inline-component|1
 platform/web/routes/_dashboard-layout/dashboard/orders/$orderId.tsx|primitive-import|2
 platform/web/routes/_dashboard-layout/dashboard/orders/$orderId.tsx|inline-component|1
 platform/web/routes/_dashboard-layout/dashboard/products/auctions.$auctionId.tsx|primitive-import|4
-platform/web/routes/_dashboard-layout/dashboard/products/auctions.$auctionId.tsx|inline-component|5
+platform/web/routes/_dashboard-layout/dashboard/products/auctions.$auctionId.tsx|inline-component|1
 platform/web/routes/_dashboard-layout/dashboard/products/auctions.tsx|primitive-import|4
 platform/web/routes/_dashboard-layout/dashboard/products/auctions.tsx|inline-component|4
 platform/web/routes/_dashboard-layout/dashboard/products/bids.tsx|primitive-import|2
