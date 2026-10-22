@@ -21,7 +21,7 @@ import { UserCard } from '@/components/UserCard'
 import { ConfettiBurst } from '@ui/components/ConfettiBurst'
 import { auctionWonActions, auctionWonStore } from '@/lib/stores/auctionWon'
 import { authStore } from '@/lib/stores/auth'
-import { nip60Actions } from '@/lib/stores/nip60'
+import { settleAuctionAsWinner } from '@/publish/auctions'
 import { useAuctionCountdown } from '@/components/AuctionCountdown'
 import { getAuctionCoordinate } from '@/lib/auctionSettlement'
 import {
@@ -163,7 +163,7 @@ export function AuctionWonModal() {
 				return
 			}
 
-			await nip60Actions.settleAuctionAsWinner({
+			await settleAuctionAsWinner({
 				bidEventId: active.bidEventId,
 				releaseReason: 'settlement',
 			})

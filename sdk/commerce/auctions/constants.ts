@@ -81,6 +81,18 @@ export const DEFAULT_MAX_SKEW_SECONDS = 120
 export const DEFAULT_AUDITOR_QUORUM = 1
 
 /**
+ * Default `settlement_grace` (seconds) baked into a freshly-created auction event, and the
+ * fallback a client reads when a listing omits the tag. Per-auction grace is authoritative at
+ * bid time — the bidder reads `settlement_grace` from the auction event itself (§4.1) — so this
+ * constant only seeds the default; quick-settle dev fixtures override to a much shorter value
+ * (see `scripts/seed.ts`).
+ *
+ * 7200s (2 h) gives the seller a comfortable window to publish the kind-1024 settlement after
+ * bidding closes, without locking losers' capital unreasonably long.
+ */
+export const AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS = 7200
+
+/**
  * Default ratio of `settlement_grace` after which validators emit
  * `griefed_pending_fallback` if no path release has arrived. The seller
  * uses this signal to start offering the bid to second-highest.

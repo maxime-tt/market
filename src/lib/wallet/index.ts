@@ -43,6 +43,11 @@ export type { WalletEventReader } from './nip60WalletEventSource'
 export { createWalletEventReader, latestByCreatedAt } from './walletEventReader'
 export type { WalletEventOpener, WalletEventRelay } from './walletEventReader'
 
+// The auction host: the HD xpub an auction publishes and the pending-token context attach, behind
+// injected ports
+export { createAuctionHost } from './auctionHost'
+export type { AuctionHost, AuctionHostActions } from './auctionHost'
+
 // Storage utilities
 export { loadUserData, saveUserData, removeUserData } from './storage'
 

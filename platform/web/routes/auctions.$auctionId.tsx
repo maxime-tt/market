@@ -14,9 +14,8 @@ import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auct
 import { getUniqueAuctionShippingRefs } from '@sdk/commerce/auctions/shippingRefs'
 import { authStore } from '@/lib/stores/auth'
 import { applesauceIo } from '@/lib/nostr/io'
-import { getAuctionSettlementGraceSeconds, nip60Actions } from '@/lib/stores/nip60'
 import { uiStore } from '@/lib/stores/ui'
-import { usePublishAuctionBidMutation } from '@/publish/auctions'
+import { settleAuctionAsWinner, usePublishAuctionBidMutation } from '@/publish/auctions'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
 import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
 import { toRawEvent } from '@/lib/nostr/eventLike'
@@ -692,7 +691,7 @@ function AuctionDetailRoute() {
 		if (!myTopBidEvent) return
 		setIsReleasing(true)
 		try {
-			await nip60Actions.settleAuctionAsWinner({
+			await settleAuctionAsWinner({
 				bidEventId: myTopBidEvent.id,
 				releaseReason: 'settlement',
 			})

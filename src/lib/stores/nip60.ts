@@ -1,5 +1,6 @@
 import {
 	createAppWalletKeyStore,
+	createAuctionHost,
 	createAuctionLock,
 	createAuctionReclaim,
 	createAuctionReceipt,
@@ -17,6 +18,7 @@ import {
 	AuctionBidLockMutationPossibleError,
 	type AuctionBidPendingTokenContext,
 	type AuctionFundsMintAccess,
+	type AuctionHost,
 	type AuctionLock,
 	type AuctionLockHost,
 	type AuctionReceipt,
@@ -34,7 +36,7 @@ import {
 	type WalletKeyStore,
 } from '@/lib/wallet'
 import { auctionP2pkPubkeysMatch } from '@/lib/auctionP2pk'
-import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
+import { AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS } from '@/lib/auction/constants'
 import { toEncryptingSigner } from '@/lib/nostr/ndkEncryptingSigner'
 import {
 	CashuMint,
@@ -49,7 +51,6 @@ import {
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus } from '@nostr-dev-kit/wallet'
-import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { ndkActions, ndkStore } from './ndk'
@@ -194,16 +195,11 @@ const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 /**
  * Default `settlement_grace` value (seconds) baked into a freshly-created
- * auction event. Per-auction grace is authoritative at bid time — the bidder
- * reads `settlement_grace` from the auction event itself (see AUCTIONS.md
- * §4.1). This constant only seeds the default; quick-settle dev fixtures
- * override to a much shorter value, see scripts/seed.ts.
- *
- * 7200s (2 h) gives the seller a comfortable window to publish the kind-1024
- * settlement after bidding closes, without locking losers' capital
- * unreasonably long.
+ * auction event. The value now lives with the protocol constant it is, in
+ * `@sdk/commerce/auctions/constants`; this getter stays exported (deleted
+ * with the store) so the dev bid helper and any legacy caller keep their
+ * import path until the store goes.
  */
-export const AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS = 7200
 export const getAuctionSettlementGraceSeconds = (): number => AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS
 
 /**
@@ -547,21 +543,6 @@ const loadPendingTokens = (): PendingToken[] => loadUserData<PendingToken[]>(PEN
 
 const savePendingTokens = (tokens: PendingToken[], options?: SaveUserDataOptions): void => saveUserData(PENDING_TOKENS_KEY, tokens, options)
 
-const updatePendingTokenRecord = (tokenId: string, updater: (token: PendingNip60Token) => PendingNip60Token): PendingNip60Token | null => {
-	let updatedToken: PendingNip60Token | null = null
-	const pendingTokens = nip60Store.state.pendingTokens.map((token) => {
-		if (token.id !== tokenId) return token
-		updatedToken = updater(token)
-		return updatedToken
-	})
-
-	if (!updatedToken) return null
-
-	savePendingTokens(pendingTokens)
-	nip60Store.setState((s) => ({ ...s, pendingTokens }))
-	return updatedToken
-}
-
 const markPendingTokensByBidEventIds = (bidEventIds: string[], status: PendingNip60Token['status']): void => {
 	if (!bidEventIds.length) return
 	const wanted = new Set(bidEventIds)
@@ -720,16 +701,6 @@ const getOrCreateWalletCashuP2pk = async (wallet: NDKCashuWallet): Promise<strin
 	}
 
 	return getCompressedCashuPubkeyFromPrivkey(walletPrivkey)
-}
-
-const getAuctionHdAccountFromWallet = async (wallet: NDKCashuWallet): Promise<HDKey> => {
-	const walletP2pk = await getOrCreateWalletP2pk(wallet)
-	const walletPrivkey = getWalletPrivkeyForPubkey(wallet, walletP2pk)
-	if (!walletPrivkey) {
-		throw new Error('Current wallet does not expose the auction HD root private key')
-	}
-
-	return getAuctionHdAccountFromWalletKeys(walletP2pk, walletPrivkey)
 }
 
 /**
@@ -927,6 +898,31 @@ let auctionReceiptInstance: AuctionReceipt | null = null
 const getAuctionReceipt = (): AuctionReceipt => {
 	auctionReceiptInstance ??= createAuctionReceipt(auctionReceiptHost)
 	return auctionReceiptInstance
+}
+
+/**
+ * The host the two non-money auction-rail actions read the store through: wallet readiness, the
+ * coin's key material (the auction HD root's authority now that it is local), and the
+ * pending-token bookkeeping. All closures, so the host sees the store's live state.
+ */
+const auctionHost: AuctionHost = {
+	isWalletReady: () => nip60Store.state.status === 'ready',
+	resolveKeyMaterial: () => resolveAuctionKeyMaterial(),
+	getPendingTokens: () => nip60Store.state.pendingTokens,
+	setPendingTokens: (tokens) => {
+		savePendingTokens(tokens)
+		nip60Store.setState((s) => ({ ...s, pendingTokens: tokens }))
+	},
+}
+
+/**
+ * The single auction-host instance the two actions delegate to; built lazily and held once,
+ * mirroring the lock, reclaim and receipt instances.
+ */
+let auctionHostInstance: ReturnType<typeof createAuctionHost> | null = null
+const getAuctionHost = (): ReturnType<typeof createAuctionHost> => {
+	auctionHostInstance ??= createAuctionHost(auctionHost)
+	return auctionHostInstance
 }
 
 /**
@@ -1277,19 +1273,14 @@ export const nip60Actions = {
 		return await getOrCreateWalletCashuP2pk(wallet)
 	},
 
-	getAuctionP2pkXpub: async (): Promise<string> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet || nip60Store.state.status !== 'ready') {
-			throw new Error('NIP-60 wallet not ready')
-		}
-
-		const account = await getAuctionHdAccountFromWallet(wallet)
-		const xpub = account.publicExtendedKey
-		if (!xpub) {
-			throw new Error('Failed to derive auction hd xpub')
-		}
-		return xpub
-	},
+	/**
+	 * The auction HD account's xpub — the value an auction publishes as `p2pk_xpub`. The body
+	 * now lives in `@/lib/wallet/auctionHost` (`createAuctionHost`) behind {@link AuctionHost};
+	 * this is the store binding. It derives from the same key material
+	 * `getAuctionHdChildPrivkey` uses, so the xpub an auction publishes and the child key the
+	 * bidder later spends with can no longer disagree.
+	 */
+	getAuctionP2pkXpub: (): Promise<string> => getAuctionHost().getAuctionP2pkXpub(),
 
 	getAuctionHdChildPrivkey: async (params: { derivationPath: string; expectedPubkey?: string }): Promise<string> => {
 		const wallet = nip60Store.state.wallet
@@ -1342,12 +1333,13 @@ export const nip60Actions = {
 		return getWalletPrivkeyForPubkey(loadedWallet, pubkey)
 	},
 
-	updatePendingTokenContext: (tokenId: string, context: PendingTokenContext): PendingNip60Token | null => {
-		return updatePendingTokenRecord(tokenId, (token) => ({
-			...token,
-			context,
-		}))
-	},
+	/**
+	 * Attach a context to one pending token. The body now lives in `@/lib/wallet/auctionHost`
+	 * (`createAuctionHost`) behind {@link AuctionHost}; this is the store binding. Returns the
+	 * updated token, or null (writing nothing) when the id is unknown.
+	 */
+	updatePendingTokenContext: (tokenId: string, context: PendingTokenContext): PendingNip60Token | null =>
+		getAuctionHost().updatePendingTokenContext(tokenId, context),
 
 	markPendingAuctionBidTokensClaimed: (bidEventIds: string[]): void => {
 		markPendingTokensByBidEventIds(bidEventIds, 'claimed')
@@ -2181,27 +2173,6 @@ export const nip60Actions = {
 			minBid,
 			topUpAmount: Math.max(0, bidAmount - balanceAtMint),
 		}
-	},
-
-	/**
-	 * Dev/wallet helper: settle one of the user's bids by publishing
-	 * the kind-1025 path release. Thin wrapper over
-	 * `publishBidderPathRelease` for the wallet dev panel (so the
-	 * happy path is one click away from the existing
-	 * `placeDevBidOnSeededAuction` helper).
-	 */
-	settleAuctionAsWinner: async (params: {
-		bidEventId: string
-		releaseReason?: 'settlement' | 'fallback_settlement' | 'voluntary_late'
-		note?: string
-	}): Promise<{ pathReleaseEventId: string }> => {
-		const { publishBidderPathRelease } = await import('@/publish/auctions')
-		const result = await publishBidderPathRelease({
-			bidEventId: params.bidEventId,
-			releaseReason: params.releaseReason,
-			note: params.note,
-		})
-		return { pathReleaseEventId: result.pathReleaseEventId }
 	},
 
 	/**

@@ -1338,6 +1338,30 @@ export const publishBidderPathRelease = async (input: PublishBidderPathReleaseIn
 	}
 }
 
+/**
+ * Release a winning bidder's Cashu path so the seller can redeem — the settlement leg the bidder
+ * publishes. This is a **publish** concern and lives here rather than in the wallet store: it
+ * only signs and publishes the kind-1025 `publishBidderPathRelease` builds. It reads no wallet
+ * state and moves no money, which is why the wallet store was the wrong home for it (the store's
+ * own copy dynamically imported this module to reach the same function).
+ *
+ * The four settlement consumers (the two `platform/` auction routes, `AuctionSettlement` and
+ * `AuctionWonModal`) reach it through this module — a `@/publish/auctions` import they already
+ * hold — so no `platform/` route needs a `src/` import of its own for it.
+ */
+export const settleAuctionAsWinner = async (params: {
+	bidEventId: string
+	releaseReason?: 'settlement' | 'fallback_settlement' | 'voluntary_late'
+	note?: string
+}): Promise<{ pathReleaseEventId: string }> => {
+	const result = await publishBidderPathRelease({
+		bidEventId: params.bidEventId,
+		releaseReason: params.releaseReason,
+		note: params.note,
+	})
+	return { pathReleaseEventId: result.pathReleaseEventId }
+}
+
 export const usePublishAuctionBidMutation = () => {
 	const queryClient = useQueryClient()
 
