@@ -2,6 +2,7 @@ import { AuctionDisplayComponent } from '@/components/AuctionDisplayComponent'
 import { CollectionDisplayComponent } from '@/components/CollectionDisplayComponent'
 import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
 import { Button } from '@ui/primitives/button'
+import { EmptyState } from '@ui/shared/empty-state'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import {
 	SettingsAccessDenied,
@@ -649,10 +650,7 @@ function FeaturedItemsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{!featuredProducts?.featuredProducts || featuredProducts.featuredProducts.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No featured products yet</p>
-									</div>
+									<EmptyState icon={<Package />} title="No featured products yet" />
 								) : (
 									<div className="space-y-3">
 										{featuredProducts.featuredProducts.map((productCoords, index) => (
@@ -729,10 +727,7 @@ function FeaturedItemsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{!featuredCollections?.featuredCollections || featuredCollections.featuredCollections.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<FolderOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No featured collections yet</p>
-									</div>
+									<EmptyState icon={<FolderOpen />} title="No featured collections yet" />
 								) : (
 									<div className="space-y-3">
 										{featuredCollections.featuredCollections.map((collectionCoords, index) => (
@@ -808,10 +803,7 @@ function FeaturedItemsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{!featuredAuctions?.featuredAuctions || featuredAuctions.featuredAuctions.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<Gavel className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No featured auctions yet</p>
-									</div>
+									<EmptyState icon={<Gavel />} title="No featured auctions yet" />
 								) : (
 									<div className="space-y-3">
 										{featuredAuctions.featuredAuctions.map((auctionCoords, index) => (
@@ -887,10 +879,7 @@ function FeaturedItemsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{!featuredUsers?.featuredUsers || featuredUsers.featuredUsers.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No featured users yet</p>
-									</div>
+									<EmptyState icon={<Users />} title="No featured users yet" />
 								) : (
 									<div className="space-y-3">
 										{featuredUsers.featuredUsers.map((userPubkey, index) => (

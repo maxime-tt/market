@@ -2,6 +2,7 @@ import { CollectionDisplayComponent } from '@/components/CollectionDisplayCompon
 import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
 import { UserDisplayComponent } from '@/components/UserDisplayComponent'
 import { Button } from '@ui/primitives/button'
+import { EmptyState } from '@ui/shared/empty-state'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import {
 	SettingsAccessDenied,
@@ -290,10 +291,7 @@ function BlacklistsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{formattedBlacklist.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<UserMinus className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No users are currently blacklisted</p>
-									</div>
+									<EmptyState icon={<UserMinus />} title="No users are currently blacklisted" />
 								) : (
 									<div className="space-y-3">
 										{formattedBlacklist.map((user, index) => (
@@ -355,10 +353,7 @@ function BlacklistsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{blacklistedProducts.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No products are currently blacklisted</p>
-									</div>
+									<EmptyState icon={<Package />} title="No products are currently blacklisted" />
 								) : (
 									<div className="space-y-3">
 										{blacklistedProducts.map((productCoords, index) => (
@@ -423,10 +418,7 @@ function BlacklistsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{blacklistedCollections.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<FolderOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No collections are currently blacklisted</p>
-									</div>
+									<EmptyState icon={<FolderOpen />} title="No collections are currently blacklisted" />
 								) : (
 									<div className="space-y-3">
 										{blacklistedCollections.map((collectionCoords, index) => (
