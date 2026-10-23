@@ -32,7 +32,7 @@ interpreter.
 
 ## Current libraries
 
-Seventeen libraries, one per taxonomy directory (or component family). The count
+Eighteen libraries, one per taxonomy directory (or component family). The count
 is entries, not components: an entry is one _state worth seeing_, so a component
 with a meaningful second state has two.
 
@@ -55,6 +55,7 @@ with a meaningful second state has two.
 | `migration` | `MigrationFormView`, `MigrationProgressDialog`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `nostr`     | `NpubDisplay`, `VerifiedBadge`, `FeaturedUserCard`, `PubkeyField`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `layout`    | `PageHeader`, `MobilePageHeader`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `nav`       | `SidebarNav` (projected from `DASHBOARD_NAV` through `resolveNavView`) and `BackButton`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### Dialogs stay closed at rest
 

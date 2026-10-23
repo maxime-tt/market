@@ -10,6 +10,7 @@ import { dialogs } from './libraries/dialogs'
 import { layout } from './libraries/layout'
 import { lightning } from './libraries/lightning'
 import { messages } from './libraries/messages'
+import { nav } from './libraries/nav'
 import { migration } from './libraries/migration'
 import { nostr } from './libraries/nostr'
 import { orders } from './libraries/orders'
@@ -49,6 +50,7 @@ export const libraries: WidgetLibrary[] = [
 	layout,
 	lightning,
 	messages,
+	nav,
 	migration,
 	nostr,
 	orders,
