@@ -157,9 +157,9 @@ export function ShippingAddressFormView({
 					)}
 
 					{isAllDigital && (
-						<div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-							<h3 className="text-sm font-medium text-purple-800 mb-2">Digital Delivery</h3>
-							<p className="text-sm text-purple-700">
+						<div className="bg-info-muted border border-info-border rounded-lg p-4">
+							<h3 className="text-sm font-medium text-info-foreground mb-2">Digital Delivery</h3>
+							<p className="text-sm text-info-foreground">
 								All items in your order will be delivered digitally. No shipping address is required. The seller will use your delivery
 								contact after payment settles.
 							</p>
@@ -167,9 +167,9 @@ export function ShippingAddressFormView({
 					)}
 
 					{noAddressRequired && !isAllPickup && !isAllDigital && (
-						<div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-							<h3 className="text-sm font-medium text-indigo-800 mb-2">No Shipping Required</h3>
-							<p className="text-sm text-indigo-700">
+						<div className="bg-info-muted border border-info-border rounded-lg p-4">
+							<h3 className="text-sm font-medium text-info-foreground mb-2">No Shipping Required</h3>
+							<p className="text-sm text-info-foreground">
 								All items in your order are either for pickup or digital delivery. No shipping address is required. Sellers will use any
 								digital delivery contact after payment settles.
 							</p>

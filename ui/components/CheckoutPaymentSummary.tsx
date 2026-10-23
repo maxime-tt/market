@@ -94,11 +94,7 @@ export function CheckoutPaymentSummary({ invoices, currentIndex, onSelectInvoice
 							>
 								<div className="flex items-center justify-between mb-1">
 									<div className="flex items-center gap-2">
-										{invoice.type === 'v4v' ? (
-											<Users className="w-4 h-4 text-purple-600" />
-										) : (
-											<CreditCard className="w-4 h-4 text-blue-600" />
-										)}
+										{invoice.type === 'v4v' ? <Users className="w-4 h-4 text-info" /> : <CreditCard className="w-4 h-4 text-blue-600" />}
 										<span className="font-medium text-sm truncate">{invoice.recipientName}</span>
 										{invoice.status === 'paid' && <Check className="w-4 h-4 text-green-600" />}
 										{invoice.status === 'skipped' && <SkipForward className="w-4 h-4 text-orange-600" />}

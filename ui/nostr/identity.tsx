@@ -24,10 +24,14 @@ export interface ProfileAvatarViewProps extends ComponentProps<typeof AvatarPrim
 	 * `src/components/AuctionBidProgressDialog.tsx:391`).
 	 *
 	 * They are destructured out below instead of forwarded. The fallback stays
-	 * `bg-neo-purple` + the display-name initial, which is what renders today —
+	 * `bg-fill-accent` (legacy `bg-neo-purple`, which is the brand pink under a
+	 * wrong name) + the display-name initial, which is what renders today —
 	 * `getColorFromNpub` in `src/lib/utils.ts` looks like the dropped
 	 * implementation of `colored`, and restoring either behaviour is a visual
-	 * change that needs a ruling.
+	 * change that needs a ruling. The label is `text-on-fill-accent` rather than
+	 * `text-background`: the fill is scheme-stable but `--background` inverts, so
+	 * the old pairing rendered white on pink in light and dark-on-pink in dark
+	 * (the "role switching identity" defect the token split exists to remove).
 	 */
 	colored?: boolean
 	deterministicFallbackText?: boolean
@@ -64,9 +68,9 @@ export function ProfileAvatarView({
 			)}
 			<AvatarPrimitive.Fallback
 				data-slot="avatar-fallback"
-				className="bg-neo-purple text-background flex size-full items-center justify-center rounded-full text-center"
+				className="bg-fill-accent text-on-fill-accent flex size-full items-center justify-center rounded-full text-center"
 			>
-				{showSpinner ? <Spinner className="h-1/2 w-1/2 text-background" /> : (name || 'N').charAt(0).toUpperCase()}
+				{showSpinner ? <Spinner className="h-1/2 w-1/2 text-on-fill-accent" /> : (name || 'N').charAt(0).toUpperCase()}
 			</AvatarPrimitive.Fallback>
 		</AvatarPrimitive.Root>
 	)

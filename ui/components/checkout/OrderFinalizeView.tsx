@@ -124,22 +124,22 @@ export function OrderFinalizeView({
 					</div>
 				</div>
 			) : isAllDigital ? (
-				<div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+				<div className="bg-info-muted p-4 rounded-lg border border-info-border">
 					<div className="flex items-center gap-2 mb-2">
-						<Download className="h-5 w-5 text-purple-600" />
-						<h3 className="font-medium text-purple-800">Digital Delivery</h3>
+						<Download className="h-5 w-5 text-info" />
+						<h3 className="font-medium text-info-foreground">Digital Delivery</h3>
 					</div>
-					<p className="text-sm text-purple-700">The seller will use your delivery contact after payment settles.</p>
-					{shippingData?.email && <p className="text-sm text-purple-600 mt-2">Digital delivery contact: {shippingData.email}</p>}
+					<p className="text-sm text-info-foreground">The seller will use your delivery contact after payment settles.</p>
+					{shippingData?.email && <p className="text-sm text-info mt-2">Digital delivery contact: {shippingData.email}</p>}
 				</div>
 			) : noAddressRequired ? (
-				<div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
-					<h3 className="font-medium text-indigo-800 mb-2">No Shipping Required</h3>
-					<p className="text-sm text-indigo-700">
+				<div className="bg-info-muted p-4 rounded-lg border border-info-border">
+					<h3 className="font-medium text-info-foreground mb-2">No Shipping Required</h3>
+					<p className="text-sm text-info-foreground">
 						Items are for pickup or digital delivery. Sellers will use any digital delivery contact after payment settles.
 					</p>
 					{hasDigitalDelivery && shippingData?.email && (
-						<p className="text-sm text-indigo-600 mt-2">Digital delivery contact: {shippingData.email}</p>
+						<p className="text-sm text-info mt-2">Digital delivery contact: {shippingData.email}</p>
 					)}
 				</div>
 			) : (

@@ -207,12 +207,12 @@ export function OrderShippingCard({ mode, shippingInfo, pickupAddress, deliveryA
 					{mode === 'pickup' && pickupAddress && <PickupAddressDisplay pickupAddress={pickupAddress} />}
 
 					{mode === 'digital' && (
-						<div className="mt-4 rounded-lg border border-purple-200 bg-purple-50 p-4">
+						<div className="mt-4 rounded-lg border border-info-border bg-info-muted p-4">
 							<div className="flex items-start gap-2">
-								<Download className="mt-0.5 h-4 w-4 text-purple-600" />
+								<Download className="mt-0.5 h-4 w-4 text-info" />
 								<div>
-									<p className="font-medium text-purple-900">Digital Delivery</p>
-									<p className="mt-1 text-sm text-purple-800">
+									<p className="font-medium text-info-foreground">Digital Delivery</p>
+									<p className="mt-1 text-sm text-info-foreground">
 										The seller will use the buyer-provided delivery contact after payment settles.
 									</p>
 								</div>

@@ -61,10 +61,10 @@ export function ReactionButtonView({
 	useEffect(() => clearCloseTimer, [])
 
 	const classNameButton = latestEmoji
-		? 'border-neo-purple bg-neo-purple hover:bg-neo-purple/80 active:bg-neo-purple/70 text-white hover:text-light-gray'
-		: 'border-neo-purple bg-transparent hover:bg-neo-purple active:bg-neo-purple/80 text-neo-purple hover:text-white'
+		? 'border-fill-accent bg-fill-accent hover:bg-fill-accent/80 active:bg-fill-accent/70 text-on-fill-accent hover:text-on-fill-accent'
+		: 'border-fill-accent bg-transparent hover:bg-fill-accent active:bg-fill-accent/80 text-fill-accent hover:text-on-fill-accent'
 	const classNameVariant =
-		variant === 'ghost' ? 'bg-transparent text-neo-purple hover:bg-neo-purple/20 active:bg-neo-purple/30' : classNameButton
+		variant === 'ghost' ? 'bg-transparent text-fill-accent hover:bg-fill-accent/20 active:bg-fill-accent/30' : classNameButton
 
 	return (
 		<Popover open={isOpen}>
@@ -147,7 +147,7 @@ export function ZapButtonView({
 			variant={variant ?? 'default'}
 			size="icon"
 			className={cn(
-				'group gap-2 bg-transparent hover:bg-focus border-2 border-focus rounded text-focus hover:text-black hover:animate-pulse',
+				'group gap-2 bg-transparent hover:bg-focus border-2 border-focus rounded text-focus hover:text-focus-foreground hover:animate-pulse',
 				className,
 			)}
 			{...props}

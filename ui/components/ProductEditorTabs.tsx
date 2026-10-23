@@ -243,7 +243,7 @@ function SubCategoryField({
 					placeholder="e.g Bitcoin Miners"
 				/>
 				{onRemove && (
-					<Button type="button" variant="ghost" className="absolute right-0 top-0 h-full px-2 text-black" onClick={onRemove}>
+					<Button type="button" variant="ghost" className="absolute right-0 top-0 h-full px-2 text-text-high" onClick={onRemove}>
 						<span className="i-delete w-5 h-5"></span>
 					</Button>
 				)}
@@ -539,7 +539,7 @@ export function ProductShippingView(props: ProductShippingViewProps) {
 										disabled={props.isCreating}
 										className="flex items-center gap-3 p-4 border rounded-md hover:bg-gray-50 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 									>
-										{template.icon === 'digital' && <DownloadIcon className="w-5 h-5 text-purple-500 flex-shrink-0" />}
+										{template.icon === 'digital' && <DownloadIcon className="w-5 h-5 text-info flex-shrink-0" />}
 										{template.icon === 'worldwide' && <TruckIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />}
 										{template.icon === 'pickup' && <PackageIcon className="w-5 h-5 text-green-500 flex-shrink-0" />}
 										<div className="flex-1 min-w-0">

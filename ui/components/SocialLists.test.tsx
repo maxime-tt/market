@@ -35,8 +35,8 @@ describe('ReactionsListView', () => {
 			}),
 		)
 		expect(markup).toContain('🔥')
-		expect(markup).toContain('bg-neo-purple')
-		expect(markup).toContain('bg-purple-50')
+		expect(markup).toContain('bg-fill-accent')
+		expect(markup).toContain('bg-info-muted')
 	})
 })
 
