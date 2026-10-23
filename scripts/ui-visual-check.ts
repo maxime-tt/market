@@ -56,6 +56,7 @@ const ROUTES: Array<[path: string, name: string]> = [
 	['/dashboard/account/making-payments', 'making-payments'],
 	['/dashboard/app-settings/blacklists', 'blacklists'],
 	['/dashboard/app-settings/featured-items', 'featured-items'],
+	['/dashboard/app-settings/app-miscelleneous', 'app-miscelleneous'],
 	['/dashboard/products/bids', 'bids'],
 	['/dashboard/about', 'about'],
 	['/checkout', 'checkout'],
@@ -69,8 +70,16 @@ const ROUTES: Array<[path: string, name: string]> = [
  */
 const IGNORED_HOSTS = ['bugs.plebeian.market', 'example.com', 'picsum.photos']
 
-/** A cancelled request (navigation, lazy-load) is not a failure. */
-const CANCELLED = 'net::ERR_ABORTED'
+/**
+ * Failure reasons that are environmental rather than defects:
+ * - `ERR_ABORTED` — a cancelled request (navigation, lazy-load).
+ * - `ERR_BLOCKED_BY_ORB` — Opaque Response Blocking on a cross-origin no-cors
+ *   asset. The seeded instance settings reference production asset URLs
+ *   (`plebeian.market/banner.png`), which this local stack cannot serve.
+ * Both are matched on the reason, not the host, so any *other* failure to the
+ * same host still surfaces.
+ */
+const IGNORED_REASONS = ['net::ERR_ABORTED', 'net::ERR_BLOCKED_BY_ORB']
 
 const isIgnored = (url: string) => IGNORED_HOSTS.some((host) => url.includes(host))
 
@@ -104,7 +113,7 @@ page.on('pageerror', (error) => errors.push(`[pageerror] ${error.message.slice(0
 // a URL, so only unexpected targets count.
 page.on('requestfailed', (request) => {
 	const reason = request.failure()?.errorText ?? '?'
-	if (reason === CANCELLED || isIgnored(request.url())) return
+	if (IGNORED_REASONS.includes(reason) || isIgnored(request.url())) return
 	errors.push(`[requestfailed] ${reason} ${request.url().slice(0, 180)}`)
 })
 

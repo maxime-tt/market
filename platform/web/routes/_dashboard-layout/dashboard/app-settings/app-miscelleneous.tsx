@@ -1,4 +1,5 @@
 import { Button } from '@ui/wrappers/button'
+import { CopyButton } from '@ui/shared/copy-button'
 import { Checkbox } from '@ui/primitives/checkbox'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
@@ -17,8 +18,6 @@ import { sign } from '@/lib/nostr/io'
 import { useForm, useStore } from '@tanstack/react-form'
 import { createFileRoute } from '@tanstack/react-router'
 import { nip19 } from 'nostr-tools'
-import { Copy, Check } from 'lucide-react'
-import { useState } from 'react'
 import { toast } from 'sonner'
 import { UserCard } from '@/components/UserCard'
 
@@ -45,6 +44,12 @@ function createSocialLinks(value: { twitterUrl: string; newsletterUrl: string; t
 	}
 
 	return Object.values(socialLinks).some(Boolean) ? socialLinks : undefined
+}
+
+/** Surfaces a failed clipboard write from the shared copy control. */
+function handleCopyError(error: unknown) {
+	console.error('Failed to copy to clipboard:', error)
+	toast.error('Failed to copy to clipboard')
 }
 
 function AppMiscelleneousComponent() {
@@ -759,8 +764,6 @@ function AppMiscelleneousComponent() {
 }
 
 function OwnerField({ ownerPk }: { ownerPk?: string }) {
-	const [copied, setCopied] = useState(false)
-
 	const ownerNpub = ownerPk
 		? (() => {
 				try {
@@ -771,13 +774,6 @@ function OwnerField({ ownerPk }: { ownerPk?: string }) {
 			})()
 		: ''
 
-	const handleCopy = () => {
-		if (!ownerNpub) return
-		navigator.clipboard.writeText(ownerNpub)
-		setCopied(true)
-		setTimeout(() => setCopied(false), 2000)
-	}
-
 	return (
 		<div>
 			<Label className="font-medium">Owner</Label>
@@ -786,9 +782,14 @@ function OwnerField({ ownerPk }: { ownerPk?: string }) {
 			</div>
 			<div className="flex items-center gap-2">
 				<Input value={ownerNpub} disabled className="bg-gray-50 border-2 text-muted-foreground" />
-				<Button type="button" variant="outline" size="icon" className="shrink-0" onClick={handleCopy}>
-					{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-				</Button>
+				<CopyButton
+					value={ownerNpub}
+					ariaLabel="Copy owner public key"
+					variant="outline"
+					size="icon"
+					className="shrink-0"
+					onError={handleCopyError}
+				/>
 			</div>
 			<p className="mt-1 text-muted-foreground text-xs">Owner public key cannot be changed.</p>
 		</div>

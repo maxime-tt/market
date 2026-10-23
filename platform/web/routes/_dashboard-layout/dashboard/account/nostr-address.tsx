@@ -2,6 +2,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react'
 import { ndkActions } from '@/lib/stores/ndk'
 import { Button } from '@ui/wrappers/button'
+import { CopyButton } from '@ui/shared/copy-button'
+import { AlertCircle, CheckCircle2, Clock, Zap, RefreshCw, AtSign } from 'lucide-react'
 import { LoadingState } from '@ui/shared/loading-state'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
@@ -11,7 +13,6 @@ import { useConfigQuery } from '@/queries/config'
 import { useNip05Settings, getNip05ForPubkey, getExpiredNip05ForPubkey } from '@/queries/nip05'
 import { nip05Actions } from '@/lib/stores/nip05'
 import { NIP05_PRICING } from '@platform/server/Nip05Manager'
-import { AlertCircle, CheckCircle2, Clock, Copy, Zap, RefreshCw, AtSign } from 'lucide-react'
 import { Badge } from '@ui/primitives/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { LightningPaymentProcessor } from '@/components/lightning/LightningPaymentProcessor'
@@ -22,6 +23,12 @@ import { purchaseNip05ForPubkey } from '@/lib/zapPurchase'
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/nostr-address')({
 	component: NostrAddressComponent,
 })
+
+/** Surfaces a failed clipboard write from the shared copy control. */
+function handleCopyError(error: unknown) {
+	console.error('Failed to copy to clipboard:', error)
+	toast.error('Failed to copy to clipboard')
+}
 
 function NostrAddressComponent() {
 	useDashboardTitle('Nostr Address (NIP-05)')
@@ -148,13 +155,6 @@ function NostrAddressComponent() {
 		}
 	}
 
-	const copyNip05Address = () => {
-		if (!currentNip05) return
-		const address = `${currentNip05.username}@${domain}`
-		navigator.clipboard.writeText(address)
-		toast.success('Nostr address copied to clipboard!')
-	}
-
 	// Payment state
 	const [paymentState, setPaymentState] = useState<{
 		isOpen: boolean
@@ -233,9 +233,13 @@ function NostrAddressComponent() {
 										<code className="text-lg font-mono flex-1">
 											{currentNip05.username}@{domain}
 										</code>
-										<Button variant="ghost" size="icon" onClick={copyNip05Address}>
-											<Copy className="h-4 w-4" />
-										</Button>
+										<CopyButton
+											value={`${currentNip05.username}@${domain}`}
+											ariaLabel="Copy Nostr address"
+											variant="ghost"
+											size="icon"
+											onError={handleCopyError}
+										/>
 									</div>
 
 									<div className="flex items-center gap-2">
