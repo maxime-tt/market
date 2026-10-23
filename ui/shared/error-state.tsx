@@ -42,7 +42,7 @@ export function ErrorState({
 			{...props}
 		>
 			<div className="space-y-1">
-				<p className="font-medium text-destructive">{title}</p>
+				<p className="font-medium text-error">{title}</p>
 				{message && <p className="text-sm text-text-mid">{message}</p>}
 			</div>
 			{(onRetry || action) && (

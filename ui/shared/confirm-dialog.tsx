@@ -68,11 +68,7 @@ export function ConfirmDialog({
 				</AlertDialogHeader>
 				<AlertDialogFooter>
 					<AlertDialogCancel disabled={isPending}>{cancelLabel}</AlertDialogCancel>
-					<AlertDialogAction
-						className={cn(destructive && buttonVariants({ variant: 'destructive' }))}
-						disabled={isPending}
-						onClick={onConfirm}
-					>
+					<AlertDialogAction className={cn(destructive && buttonVariants({ variant: 'destructive' }))} disabled={isPending} onClick={onConfirm}>
 						{isPending && <Spinner className="mr-2" />}
 						{confirmLabel}
 					</AlertDialogAction>

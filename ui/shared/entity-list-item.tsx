@@ -76,7 +76,7 @@ export function EntityListItem({
 						{action.pending ? (
 							<Spinner className="size-4" />
 						) : action.destructive ? (
-							<span className="text-destructive">{action.icon}</span>
+							<span className="text-error">{action.icon}</span>
 						) : (
 							action.icon
 						)}

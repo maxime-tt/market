@@ -87,7 +87,7 @@ export function DecryptPasswordDialogView({ open, onDecrypt, onLogout }: Decrypt
 						onClick={handleLogout}
 						variant="outline"
 						disabled={isLoading || isLoggingOut}
-						className="w-full text-destructive hover:text-destructive"
+						className="w-full text-error hover:text-error"
 						data-testid="logout-clear-key-button"
 					>
 						{isLoggingOut ? <Spinner className="mr-2" /> : <LogOut className="h-4 w-4 mr-2" />}

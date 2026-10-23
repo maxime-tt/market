@@ -52,7 +52,7 @@ export function VerifiedBadge({ state, nip05, showAddress = true, className, ref
 					{state === 'verified' ? (
 						<BadgeCheck aria-hidden="true" className="size-6 fill-fill-accent text-fill-accent" />
 					) : (
-						<BadgeAlert aria-hidden="true" className="size-6 fill-destructive text-fill-accent" />
+						<BadgeAlert aria-hidden="true" className="size-6 fill-error text-fill-accent" />
 					)}
 				</span>
 			)}

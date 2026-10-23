@@ -34,7 +34,7 @@ function StepIcon({ status }: { status: MigrationStep['status'] }) {
 		case 'complete':
 			return <CheckCircle2 className="w-5 h-5 text-green-600" />
 		case 'error':
-			return <XCircle className="w-5 h-5 text-destructive" />
+			return <XCircle className="w-5 h-5 text-error" />
 	}
 }
 
@@ -45,7 +45,7 @@ function RelayStatusIcon({ status }: { status: RelayStatus['status'] }) {
 		case 'success':
 			return <CheckCircle2 className="w-4 h-4 text-green-600" />
 		case 'error':
-			return <XCircle className="w-4 h-4 text-destructive" />
+			return <XCircle className="w-4 h-4 text-error" />
 	}
 }
 
@@ -94,7 +94,7 @@ export function MigrationProgressDialog({ open, steps, relayStatuses, error, onR
 												step.status === 'pending' && 'text-muted-foreground',
 												step.status === 'active' && 'text-foreground font-medium',
 												step.status === 'complete' && 'text-muted-foreground',
-												step.status === 'error' && 'text-destructive',
+												step.status === 'error' && 'text-error',
 											)}
 										>
 											{step.label}
@@ -127,8 +127,8 @@ export function MigrationProgressDialog({ open, steps, relayStatuses, error, onR
 
 						{/* Error Message */}
 						{error && (
-							<div className="bg-destructive/10 border border-destructive/20 rounded-md p-3">
-								<p className="text-sm text-destructive">{error}</p>
+							<div className="bg-error/10 border border-error/20 rounded-md p-3">
+								<p className="text-sm text-error">{error}</p>
 							</div>
 						)}
 

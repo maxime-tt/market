@@ -95,7 +95,7 @@ export function CollectionDisplayView({
 					onClick={onRemove}
 					disabled={isRemoving}
 					aria-label={`Remove collection ${index + 1}`}
-					className="flex size-8 items-center justify-center rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50"
+					className="flex size-8 items-center justify-center rounded-md bg-error text-on-error hover:bg-error/90 disabled:cursor-not-allowed disabled:opacity-50"
 				>
 					<Trash2 className="size-4" aria-hidden="true" />
 				</button>
