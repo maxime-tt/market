@@ -8,8 +8,10 @@ The current docs tree contains:
 
 - `docs/adr/`: architecture decision records.
 - `docs/github-issues/`: issue and review context captured from GitHub work.
-- `docs/handover/`: handover material.
-- `docs/handovers/`: additional handover material.
+
+Handovers are **development-time artifacts and never part of the tree**: they live in the
+project's `runs/` directory, outside this repository. Do not add one here, and do not
+reference one — a reference to a handover is a dangling reference by construction.
 
 ADRs record accepted architecture decisions and should not be contradicted
 casually by AGENTS guidance. If docs disagree with code, tests, accepted ADRs,

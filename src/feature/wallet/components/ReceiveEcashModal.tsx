@@ -44,7 +44,7 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 		setError(null)
 		try {
 			// Receive through coco's local wallet. Relay recovery of wallet state after a
-			// device change goes away (see docs/handover/wave-b-ui-components-handover.md §9).
+			// device change goes away (see docs/adr/ADR-0010-cashu-wallet-deps-recovery-sync.md).
 			await cashuActions.receive(normalizedToken)
 			setIsSuccess(true)
 			toast.success('eCash received successfully!')
