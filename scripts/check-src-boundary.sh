@@ -2,16 +2,24 @@
 # Source-boundary guard for the src/ retirement.
 #
 # src/ is transitional: it will be deleted once its contents have moved to
-# sdk/, ui/ and platform/. Until then every import edge that crosses a tree
-# boundary is a little more of src/ cemented in place, so each direction is
-# frozen at a committed baseline and may only ratchet downward.
+# sdk/, ui/ and platform/. The six measured directions are every cross-tree edge
+# that touches src/, but they are NOT equal (user ruling, 2026-10-23):
 #
-# The six measured directions are every cross-tree edge that touches src/:
+#   INBOUND - code outside src/ reaching in. This is what cements src/ in place
+#   and blocks its deletion: FROZEN, may only ratchet down, target zero.
 #
 #   platform/ -> src/     code outside src/ reaching into it
 #   ui/       -> src/     "
 #   sdk/      -> src/     "
-#   src/      -> platform/   src/ reaching out, which keeps it alive
+#
+#   OUTBOUND - src/ reaching out to its own destinations. This is the DRAIN,
+#   the mechanism of retirement rather than debt: a rise means src/ is being
+#   repointed onto sdk/ui/platform. MEASURED BUT NOT GATED - a rise is reported
+#   as informational and never fails the guard, and owes no "price". (A rise can
+#   also mean a NEW src/ module was born, so the honest progress datum is the
+#   src/ file count, not this number.)
+#
+#   src/      -> platform/   src/ reaching out, which is how it retires
 #   src/      -> ui/         "
 #   src/      -> sdk/        "
 #
@@ -28,8 +36,8 @@
 # the importing file before the tree is taken from their first path segment.
 #
 # Exit codes:
-#   0  every count is at or below its baseline
-#   1  at least one count exceeded its baseline
+#   0  every INBOUND count is at or below its baseline
+#   1  an INBOUND count exceeded its baseline
 #   2  the guard could not run (missing tool, unreadable tree, bad baseline)
 #
 # When a change REDUCES a count, lower scripts/src-boundary-baseline.txt in
@@ -187,8 +195,12 @@ for direction in "${DIRECTIONS[@]}"; do
 		base_f="${BASE_FILES[$key]}"
 		marker=""
 		if [ "$cur" -gt "$base" ] || [ "$cur_f" -gt "$base_f" ]; then
-			marker="  <== GREW"
-			gre_w+=("$key")
+			if [ "$to" = "src" ]; then
+				marker="  <== GREW"
+				gre_w+=("$key")
+			else
+				marker="  (grew: drain, informational)"
+			fi
 		elif [ "$cur" -lt "$base" ] || [ "$cur_f" -lt "$base_f" ]; then
 			marker="  (decreased)"
 		fi
@@ -213,11 +225,14 @@ if [ "${#gre_w[@]}" -gt 0 ]; then
 		fi
 	done
 	echo ""
-	echo "Nothing outside src/ may depend on src/, and src/ must not grow new"
-	echo "dependencies on the trees that replace it. Move the import to the sdk/ui/"
-	echo "platform seam it belongs to instead of adding a line to"
-	echo "scripts/src-boundary-baseline.txt. If an edge is genuinely unavoidable,"
-	echo "raise the baseline in a dedicated commit that explains why."
+	echo "Nothing outside src/ may depend on src/: those INBOUND edges are what keep"
+	echo "src/ from being deleted, so they are frozen and may only fall. Move the"
+	echo "import to the sdk/ui/platform seam it belongs to instead of adding a line to"
+	echo "scripts/src-boundary-baseline.txt. If an edge is genuinely unavoidable, raise"
+	echo "the baseline in a dedicated commit that explains why."
+	echo ""
+	echo "(Outbound src/ -> sdk|ui|platform growth is the drain and does not fail this"
+	echo "guard - see the header.)"
 	exit 1
 fi
 
