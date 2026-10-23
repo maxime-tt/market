@@ -50,7 +50,7 @@ export function VerifiedBadge({ state, nip05, showAddress = true, className, ref
 			) : (
 				<span role="img" aria-label={label} title={label} className="inline-flex">
 					{state === 'verified' ? (
-						<BadgeCheck aria-hidden="true" className="size-6 fill-secondary text-fill-accent" />
+						<BadgeCheck aria-hidden="true" className="size-6 fill-fill-accent text-fill-accent" />
 					) : (
 						<BadgeAlert aria-hidden="true" className="size-6 fill-destructive text-fill-accent" />
 					)}

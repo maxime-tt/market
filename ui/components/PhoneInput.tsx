@@ -256,7 +256,7 @@ export function PhoneInput({ value, onChange, onBlur, placeholder = '7751892718'
 							}}
 							onKeyDown={handleKeyDown}
 							placeholder="Search country..."
-							className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:border-secondary"
+							className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:border-border-default"
 							autoFocus
 						/>
 					</div>

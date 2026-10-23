@@ -68,7 +68,7 @@ export function ProductSearchResults<TProduct extends ProductSearchResultEvent =
 											</span>
 										)}
 									</span>
-									<span aria-hidden="true" className="i-external-link size-4 shrink-0 text-secondary" />
+									<span aria-hidden="true" className="i-external-link size-4 shrink-0 text-fill-accent" />
 								</button>
 							</li>
 						)
@@ -79,7 +79,7 @@ export function ProductSearchResults<TProduct extends ProductSearchResultEvent =
 				<button
 					type="button"
 					onClick={onShowAll}
-					className="w-full py-2 text-center text-xs font-medium text-secondary transition-colors hover:text-white"
+					className="w-full py-2 text-center text-xs font-medium text-fill-accent transition-colors hover:text-white"
 				>
 					Show search results in page
 				</button>

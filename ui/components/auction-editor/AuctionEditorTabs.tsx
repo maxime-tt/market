@@ -997,8 +997,8 @@ export function AuctionTabContent({
 										}}
 										className={`rounded-full px-3 py-1 text-xs font-semibold border ${
 											isActive
-												? 'border-secondary bg-secondary text-white'
-												: 'border-zinc-300 bg-white text-zinc-700 hover:border-secondary'
+												? 'border-border-default bg-surface-raised text-white'
+												: 'border-zinc-300 bg-white text-zinc-700 hover:border-border-default'
 										}`}
 									>
 										{preset.label}
@@ -1168,7 +1168,7 @@ export function AuctionTabContent({
 												key={mint}
 												type="button"
 												onClick={() => addMint(mint)}
-												className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left text-sm text-zinc-700 hover:border-secondary"
+												className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left text-sm text-zinc-700 hover:border-border-default"
 											>
 												<span className="truncate" title={mint}>
 													{mint}
@@ -1469,7 +1469,7 @@ export function AuctionShippingView({
 				) : !hasAnyOptions ? (
 					<div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-600">
 						You don&apos;t have any shipping options yet. Create some from the{' '}
-						<UiLink href="/dashboard/products/shipping-options" className="text-secondary underline">
+						<UiLink href="/dashboard/products/shipping-options" className="text-fill-accent underline">
 							shipping options
 						</UiLink>{' '}
 						page, then come back here.
@@ -1483,7 +1483,7 @@ export function AuctionShippingView({
 								key={option.id}
 								type="button"
 								onClick={() => onAdd(option)}
-								className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white p-3 text-left hover:border-secondary"
+								className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white p-3 text-left hover:border-border-default"
 							>
 								<div className="min-w-0 flex-1">
 									<p className="font-medium text-zinc-900 truncate">{option.name}</p>
