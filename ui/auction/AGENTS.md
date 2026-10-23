@@ -39,8 +39,16 @@ never acquire it.
     control. The control is `shared/copy-button`; a failed write is reported
     through `onCopyError`, so the host keeps its own error surface.
 - `auction-overview-views` — the dashboard list surface's presentational
-  pieces. Today that is `AuctionActivityRow` (one line of the bids / comments /
-  live-chat activity summary, with the "N New" highlight).
+  pieces: `AuctionActivityRow` (one line of the bids / comments / live-chat
+  activity summary, with the "N New" highlight) and `AuctionSortSelect` (the
+  list's ordering control — it lives here because a route may not import
+  `@ui/primitives/*`, so the option list arrives as props).
+- `auction-list-views` — the dashboard list row: `AuctionTopBidBox` (the top-bid
+  panel, including the settlement-details disclosure) and `AuctionListItemView`
+  (the card frame, thumbnail, identity block and activity summary). Host-owned
+  pieces are injected as nodes: the bidder identity link, the open-auction
+  action, the countdown, the test-label control, and the settlement / order
+  actions. Its host is `src/components/dashboard/AuctionListItemHost.tsx`.
 
 ## What does not
 

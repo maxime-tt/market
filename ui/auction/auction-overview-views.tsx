@@ -1,4 +1,5 @@
 import type { Ref } from 'react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../primitives/select'
 import { cn } from '../utils/cn'
 
 /**
@@ -39,5 +40,53 @@ export function AuctionActivityRow({ header, unit, count, newCount, className, r
 				{newCount > 0 && <span className="ml-2 font-semibold text-primary">{newCount} New</span>}
 			</p>
 		</div>
+	)
+}
+
+export interface AuctionSortOptionItem {
+	value: string
+	label: string
+}
+
+export interface AuctionSortSelectProps {
+	/** Currently selected option value. */
+	value: string
+	onValueChange: (value: string) => void
+	/** Options in render order; the host derives them from the domain helper. */
+	options: AuctionSortOptionItem[]
+	/** The header instance is `w-56`, the mobile block `w-full`. */
+	triggerClassName?: string
+	placeholder?: string
+	className?: string
+	ref?: Ref<HTMLButtonElement>
+}
+
+/**
+ * The list's ordering control. Lifted out of the dashboard auctions route, which
+ * may not import `@ui/primitives/*`; the option list arrives as props so the
+ * domain helper that names them stays in the host.
+ */
+export function AuctionSortSelect({
+	value,
+	onValueChange,
+	options,
+	triggerClassName,
+	placeholder = 'Order By',
+	className,
+	ref,
+}: AuctionSortSelectProps) {
+	return (
+		<Select value={value} onValueChange={onValueChange}>
+			<SelectTrigger ref={ref} className={cn(triggerClassName, className)}>
+				<SelectValue placeholder={placeholder} />
+			</SelectTrigger>
+			<SelectContent>
+				{options.map((option) => (
+					<SelectItem key={option.value} value={option.value}>
+						{option.label}
+					</SelectItem>
+				))}
+			</SelectContent>
+		</Select>
 	)
 }

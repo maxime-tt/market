@@ -29,8 +29,15 @@
 # unrelated to production architecture and must be visible as such.
 #
 # When a change lowers a count, lower that line in the same commit.
+#
+# 2026-10-23 (T3.0, dashboard auctions list): the route now reaches one host
+# container instead of a dozen modules, so the INBOUND row fell 405 -> 398 and
+# is ratcheted. The two OUTBOUND rows are re-measured rather than ratcheted:
+# they are the drain, and the drain moved (241/118 -> 243/119, 160/117 ->
+# 162/118) because the lifted host reaches ui/ and sdk/ where the route used to
+# reach src/.
 
-platform -> src production 405 68
+platform -> src production 398 68
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -42,8 +49,8 @@ sdk -> src test 0 0
 src -> platform production 28 23
 src -> platform test 22 11
 
-src -> ui production 241 118
+src -> ui production 243 119
 src -> ui test 0 0
 
-src -> sdk production 160 117
+src -> sdk production 162 118
 src -> sdk test 8 7
