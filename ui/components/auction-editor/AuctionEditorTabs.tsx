@@ -22,7 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../../primitives/popove
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../primitives/select'
 import { Slider } from '../../primitives/slider'
 import { Switch } from '../../primitives/switch'
-import { InfoTooltip } from '../InfoTooltip'
+import { InfoTooltip } from '../../shared/info-tooltip'
 import { UiLink } from '../../provider/UiProvider'
 
 export type AuctionImage = { imageUrl: string; imageOrder: number }

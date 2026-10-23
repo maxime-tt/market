@@ -1,7 +1,7 @@
 import { AuctionWonModal } from '@/components/AuctionWonModal'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
-import { Pattern } from '@ui/components/Pattern'
+import { Pattern } from '@ui/shared/pattern'
 import { useDocumentIdentity } from '@platform/web/app/useDocumentIdentity'
 import { useRootRedirects } from '@platform/web/app/useRootRedirects'
 import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'

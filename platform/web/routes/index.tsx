@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query'
 import { productsQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
-import { SelectableBadge } from '@ui/components/SelectableBadge'
+import { SelectableBadge } from '@ui/wrappers/selectable-badge'
 
 const homeSearchSchema = z.object({
 	tag: z.string().optional(),

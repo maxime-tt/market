@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { SelectableBadge } from './SelectableBadge'
+import { SelectableBadge } from './selectable-badge'
 
 describe('SelectableBadge', () => {
 	test('renders its selected state and caller props', () => {

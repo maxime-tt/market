@@ -1,3 +1,23 @@
+/**
+ * PARKED-T6.4 — declared relaxation (ADR-0007 §1c, purpose-specific, documented in-file):
+ *
+ * This atom is the one component in the library whose surface colour is a
+ * caller-supplied value, not a theme role:
+ *
+ * - `color` / `backgroundColor` are hex string props (defaults `#05e35e` /
+ *   `#444444`) applied through inline styles and the `hexToRgb` glow helper.
+ *   The auction countdown drives them per-urgency, so no Tier-1 role token can
+ *   express the prop without hard-coding an app-specific ramp into the theme.
+ * - `text-white` / `text-tertiary-black` on the label overlay are
+ *   text-over-media choices: the correct ink depends on the caller-supplied
+ *   bar colour at runtime (see `textOnDark`), which a static token cannot
+ *   encode. There is no Tier-1 text-over-media token; adding one is the known
+ *   gap that blocks T6.4 (token addition per ruling R8, with a deletion in the
+ *   same commit).
+ *
+ * Everything else already follows the contract: `className` merges through
+ * `cn()` from `../utils/cn`, no other raw palette classes.
+ */
 import React, { useEffect, useMemo } from 'react'
 import { cn } from '../utils/cn'
 

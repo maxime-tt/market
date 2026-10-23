@@ -24,7 +24,7 @@ import {
 } from '@/queries/products'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
-import { SelectableBadge } from '@ui/components/SelectableBadge'
+import { SelectableBadge } from '@ui/wrappers/selectable-badge'
 import { ShowTestListingsToggle } from '@/components/ShowTestListingsToggle'
 
 // Hook to fetch featured product events using useQueries

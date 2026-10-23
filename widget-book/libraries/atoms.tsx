@@ -1,7 +1,7 @@
-import { InfoTooltip } from '@ui/components/InfoTooltip'
-import { Pattern } from '@ui/components/Pattern'
-import { SelectableBadge } from '@ui/components/SelectableBadge'
-import ProgressBar from '@ui/components/ProgressBar'
+import { InfoTooltip } from '@ui/shared/info-tooltip'
+import { Pattern } from '@ui/shared/pattern'
+import { SelectableBadge } from '@ui/wrappers/selectable-badge'
+import ProgressBar from '@ui/shared/progress-bar'
 
 import type { WidgetLibrary } from '../libraries'
 
