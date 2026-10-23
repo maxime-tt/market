@@ -70,7 +70,7 @@ export function DecryptPasswordDialogView({ open, onDecrypt, onLogout }: Decrypt
 							}}
 							data-testid="decrypt-password-input"
 						/>
-						{error && <p className="text-sm text-red-500">{error}</p>}
+						{error && <p className="text-sm text-error">{error}</p>}
 					</div>
 
 					<Button onClick={handleSubmit} disabled={isLoading || isLoggingOut} className="w-full" data-testid="decrypt-login-button">
@@ -178,7 +178,7 @@ export function MigratePrivateKeyDialogView({ open, minPasswordLength, onEncrypt
 						/>
 					</div>
 
-					{error && <p className="text-sm text-red-500">{error}</p>}
+					{error && <p className="text-sm text-error">{error}</p>}
 
 					<Button
 						onClick={handleSubmit}

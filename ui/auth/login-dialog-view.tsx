@@ -24,7 +24,7 @@ const classNameTab = cn(
 	// Remove the default tab shadow.
 	'shadow-none!',
 	'border-x-0 border-t-0 border-b border-fill-accent',
-	'text-black hover:text-fill-accent',
+	'text-text-high hover:text-fill-accent',
 	'data-[state=active]:border-border-default',
 	'data-[state=active]:text-fill-accent',
 	'data-[state=active]:shadow-none',
@@ -33,7 +33,7 @@ const classNameTab = cn(
 )
 
 const classNameSubTab =
-	'flex-1 data-[state=active]:bg-surface-raised data-[state=inactive]:bg-gray-100 px-4 py-2 rounded-none font-medium data-[state=active]:text-white data-[state=inactive]:text-black text-xs'
+	'flex-1 data-[state=active]:bg-surface-raised data-[state=inactive]:bg-surface-sunken px-4 py-2 rounded-none font-medium data-[state=active]:text-text-high data-[state=inactive]:text-text-mid text-xs'
 
 export function LoginDialogView({
 	open,
@@ -51,10 +51,10 @@ export function LoginDialogView({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
-				className="sm:max-w-[425px] p-0 gap-0 overflow-hidden [&>button:not([data-dialog-close])]:text-white [&>button:not([data-dialog-close])]:hover:text-gray-300"
+				className="sm:max-w-[425px] p-0 gap-0 overflow-hidden [&>button:not([data-dialog-close])]:text-on-fill-ink [&>button:not([data-dialog-close])]:hover:text-text-mid"
 				data-testid="login-dialog"
 			>
-				<div className="relative bg-black px-4 sm:px-6 py-6 w-full max-w-full overflow-hidden text-white">
+				<div className="relative bg-fill-ink px-4 sm:px-6 py-6 w-full max-w-full overflow-hidden text-on-fill-ink">
 					<div
 						className="absolute inset-0 opacity-80"
 						style={{
@@ -65,7 +65,7 @@ export function LoginDialogView({
 					/>
 					<div className="z-10 relative">
 						<h2 className="mb-2 font-semibold text-xl">Login</h2>
-						<p className="text-gray-300 text-sm">Choose your preferred login method below.</p>
+						<p className="text-text-mid text-sm">Choose your preferred login method below.</p>
 					</div>
 				</div>
 				<div className="px-4 sm:px-6 pt-0 pb-6 w-full max-w-full overflow-hidden">

@@ -69,7 +69,7 @@ export function NostrConnectQRView({
 				<LoadingState label="Generating connection..." />
 			) : isConnected ? (
 				<div className="flex flex-col items-center gap-2 py-8">
-					<div className="text-green-500 mb-2">
+					<div className="text-success mb-2">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="36"
@@ -85,7 +85,7 @@ export function NostrConnectQRView({
 							<polyline points="22 4 12 14.01 9 11.01" />
 						</svg>
 					</div>
-					<p className="text-sm text-green-500 font-medium">Connected successfully!</p>
+					<p className="text-sm text-success font-medium">Connected successfully!</p>
 					<p className="text-sm text-muted-foreground">Logging you in...</p>
 				</div>
 			) : connectionUrl ? (

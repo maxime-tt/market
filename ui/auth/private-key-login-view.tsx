@@ -92,7 +92,7 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 						}}
 						data-testid="stored-password-input"
 					/>
-					{props.passwordError && <p className="text-sm text-red-500">{props.passwordError}</p>}
+					{props.passwordError && <p className="text-sm text-error">{props.passwordError}</p>}
 				</div>
 				<Button onClick={props.onStoredKeyLogin} disabled={isLoading} className="w-full" data-testid="stored-key-login-button">
 					{isLoading ? <Spinner /> : 'Login'}
@@ -129,7 +129,7 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 						onChange={(e) => props.onConfirmPasswordChange(e.target.value)}
 						data-testid="confirm-password-input"
 					/>
-					{props.passwordError && <p className="text-sm text-red-500">{props.passwordError}</p>}
+					{props.passwordError && <p className="text-sm text-error">{props.passwordError}</p>}
 				</div>
 				<Button onClick={props.onEncryptAndStore} disabled={isLoading} className="w-full" data-testid="encrypt-continue-button">
 					{isLoading ? <Spinner /> : 'Encrypt & Continue'}
@@ -165,7 +165,7 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 						onKeyDown={(e) => {
 							if (e.key === 'Enter') props.onContinue()
 						}}
-						className={`pr-20 min-w-0 ${props.keyError ? 'border-red-500 focus-visible:ring-red-500' : ''} ${showPrivateKey ? 'text-red-500' : ''}`}
+						className={`pr-20 min-w-0 ${props.keyError ? 'border-error focus-visible:ring-error' : ''} ${showPrivateKey ? 'text-error' : ''}`}
 						data-testid="private-key-input"
 					/>
 					<Button
@@ -177,7 +177,7 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 						data-testid="copy-private-key-button"
 						title={copied ? 'Copied!' : 'Copy to clipboard'}
 					>
-						<Copy className={`h-4 w-4 ${copied ? 'text-green-500' : isGeneratedKey ? 'text-red-500' : 'text-gray-500'}`} />
+						<Copy className={`h-4 w-4 ${copied ? 'text-success' : isGeneratedKey ? 'text-error' : 'text-text-mid'}`} />
 					</Button>
 					<Button
 						type="button"
@@ -187,7 +187,7 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 						onClick={() => setShowPrivateKey(!showPrivateKey)}
 						data-testid="toggle-private-key-visibility"
 					>
-						{showPrivateKey ? <EyeOff className="h-4 w-4 text-gray-500" /> : <Eye className="h-4 w-4 text-gray-500" />}
+						{showPrivateKey ? <EyeOff className="h-4 w-4 text-text-mid" /> : <Eye className="h-4 w-4 text-text-mid" />}
 					</Button>
 				</div>
 
@@ -198,15 +198,15 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 				)}
 
 				{props.keyError && (
-					<div className="flex items-center gap-2 text-sm text-red-500">
+					<div className="flex items-center gap-2 text-sm text-error">
 						<span>{props.keyError}</span>
 					</div>
 				)}
 
 				{isGeneratedKey && (
 					<div className="space-y-2">
-						<p className="text-sm text-red-500 font-medium">⚠️ Copy this text and save it somewhere safe, it cannot be recovered.</p>
-						<p className="text-sm text-red-500 font-medium">It is the key to your new nostr identity.</p>
+						<p className="text-sm text-error font-medium">⚠️ Copy this text and save it somewhere safe, it cannot be recovered.</p>
+						<p className="text-sm text-error font-medium">It is the key to your new nostr identity.</p>
 						<div className="flex items-start space-x-2">
 							<input
 								type="checkbox"
