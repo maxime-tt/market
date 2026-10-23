@@ -1,336 +1,415 @@
-# `inc/wave-b` handover — the cashu stack bump and the src/ import-cycle work
+# PR #1420 — program state, and the `inc/wave-b` increment
 
-**For:** whoever rebases the UI migration (or the ADR-0002 relay-I/O stack) onto this branch.
-**Branch:** `inc/wave-b`
-**Base:** `fedab687` (`docs: §9.11 — the store is deleted and the wallet state is coco's (NDK cut, part 18)`)
-**Remote:** `fork` → `github.com/maxime-tt/market`, branch `inc/wave-b` at `fedab687` before this push.
-**Worktree:** `/home/admin_maxime/work/pr1420-inc-p6`
-
-> **This is deliberately not 100% complete.** It is the cashu 2.0 bump (finished, verified) plus
-> the _enabling_ work for the `src/` retirement (cycle-breaking, shim removal, one platform
-> retarget). The actual migration of `src/` modules into `sdk/` is blocked on one decision recorded
-> in §6, and nothing in this branch pretends otherwise.
+**Compiled:** 2026-10-23 (Friday), on `blue-zone`, by the session that ran `inc/wave-b`.
+**Rewritten from:** the previous version of this file (commit `767e52df`), which covered only
+`inc/wave-b` and was written without reading the program's own plan documents. The earlier
+measurements stand; its _placement in the program_ was under-informed. This version fixes that.
+**Status of this document:** a **report with a recommendation, not an instruction.** Where the
+program's own documents disagree with it, they win — they are cited by absolute path.
 
 ---
 
-## 1. Status in one line
+## 0. How to use this, and how to reach this machine
 
-`src/` is still importable and still holds the app-level modules, but the import graph no longer
-contains a 36-file knot, the four dead re-export shims are gone, and the cashu stack is on
-`@cashu/coco-core@2.0.0` + `@cashu/coco-indexeddb@2.0.0` + `@cashu/cashu-ts@5.0.0-rc.4`. All four
-gates are green at this commit (§5).
+The reader has SSH access to this host. Everything cited below is a real path on it.
 
-## 2. What landed (10 commits, oldest → newest)
+```
+ssh -p 60009 admin_maxime@185.207.81.40      # hostname: blue-zone
+scp -P 60009 admin_maxime@185.207.81.40:/home/admin_maxime/work/pr1420-inc-p6/docs/handover/inc-wave-b-handover.md .
+```
 
-6071efdb wallet: the cashu stack moves to coco 2.0 and cashu-ts 5 (B2a)
-bbde01f9 docs: §9.12 — the cashu stack is coco 2.0 + cashu-ts 5, and the gate is closed
-45b89e82 platform: move the src-free auction-validator tests beside the code they test
-c2ee2d24 src: delete four re-export shims nothing imports
-4a40ca94 platform: import the Nostr event helpers from @sdk/core, not the src shim
-f14b8038 stores: the ndk store stops importing the wallet - the 36-file cycle is cut
-2240370a nostr: the relay-list read stops coupling the query layer to the ndk store
-25427920 wallet: the NWC reads stop coupling the ndk store to the query layer
-c036e632 nostr: split the io port's contract out of the module that imports its adapters
-12d40e54 payment: publishing a payment detail belongs in publish/, not in the read layer
+**Read the artifacts, not this summary.** State here moves daily; this document was written the day
+after the increment it describes. Every claim carries a label:
 
-`6071efdb` + `bbde01f9` are the wave-B B2a stage; §9.12 of
-`docs/handover/wave-b-ui-components-handover.md` is its record. The other eight are this branch's
-own work and have no other documentation — this file is it.
+- **[V]** — I verified it myself in this session; the command is given and re-runnable.
+- **[R]** — read from a document on this machine that I did **not** reproduce. A lead, not a fact.
+- **[J]** — my judgement, not a measurement.
 
-## 3. Public-surface changes a rebase has to handle
+Two rules the maintainer set for this program are carried into §3:
 
-**Dependencies.** `package.json` and `bun.lock` changed. The removed package names are gone for
-good: `coco-cashu-core` → `@cashu/coco-core`, `coco-cashu-indexeddb` → `@cashu/coco-indexeddb`,
-`@cashu/cashu-ts` `^2.1` → `5.0.0-rc.4`, and the `patchedDependencies` block plus
-`patches/coco-cashu-core@1.0.0-rc11.patch` are deleted. Anything touching cashu must use the v5
-API surface — see §4 of the wave-B handover for the call-site rules that were needed
-(`Mint`/`Wallet` renames, `Proof.amount` as an `Amount` value object, `getDecodedToken(token, ids)`
-taking keyset ids, `new Mint(url, { customRequest })`, no `@cashu/cashu-ts/crypto/*` subpaths).
+> **Work from this week (Mon 2026-10-19 → Fri 2026-10-23) is to be taken seriously. Work from
+> before this week is material to read and mine for data — not to rebase onto.**
 
-**New modules (all inside `src/`, all leaf modules with no store coupling):**
+---
 
-- `src/lib/nostr/io-types.ts` — the Nostr I/O port's contract. `src/lib/nostr/io.ts` re-exports the
-  whole type surface, so existing `import type { NostrIo | NostrFilter | NostrEvent } from
-'@/lib/nostr/io'` sites are unaffected.
-- `src/lib/nostr/relayListRead.ts` — `fetchUserRelayListWithPreferences(ndk, userPubkey)`.
-- `src/lib/wallet/nwcWalletRead.ts` — `fetchUserNwcWallets(ndk, userPubkey)`,
-  `fetchNwcWalletBalance(ndk, nwcUri)`, `NwcBalance`.
+## 1. This increment, in one paragraph
 
-**Signature changes (breaking for callers):**
+`inc/wave-b` — worktree `/home/admin_maxime/work/pr1420-inc-p6`, branch `inc/wave-b`, **11 commits**,
+tip `767e52df` (2026-10-23), pushed to `fork` (`github.com/maxime-tt/market`), base `fedab687`.
+Its merge-base with the integration branch is `74bcde43` — the integration tip — so it is the only
+line stacked **directly on the current base of record** [V — `git merge-base inc/wave-b
+feat/pr1420-sdk-integration`].
 
-- `walletOps.initialize()` no longer takes a pubkey — it never read it.
-- The three `fetch*` functions above take the ndk instance as their first argument; the React hooks
-  in `src/queries/{relay-list,wallet}.tsx` bind them to the store's connection, so hook callers are
-  unaffected.
-- `USER_NWC_WALLET_LIST_KIND` / `..._LABEL` are no longer re-exported from `src/queries/wallet`.
-  They had no consumer; import them from `@sdk/commerce/payments`.
+It is the **cashu 2.0 stack bump** plus the **import-cycle work** that unblocks the `src/`
+retirement. All four gates green at the tip (§8). **It is not the program's state of record.**
 
-**Moved:**
+---
 
-- `PublishPaymentDetailParams`, `publishPaymentDetail`, `usePublishPaymentDetail`:
-  `src/queries/payment.tsx` → `src/publish/payment.tsx`. `paymentMethod` is now typed
-  `PaymentDetailsMethod` (the `PaymentMethod` alias stayed behind with the read-side types).
-- 6 tests: `src/lib/__tests__/auctionValidator{Index,ObservedAtRecovery,PendingBuffer}.test.ts` →
-  `platform/server/auction-validator/`, and `cvm-server-key`, `ogMeta`,
-  `server-bootstrap-persistence` → `platform/server/`. Platform's convention is co-located tests,
-  which is what these now are.
+## 2. The program's state of record — read these four first
 
-**Deleted:** `patches/coco-cashu-core@1.0.0-rc11.patch`,
-`src/components/shared/SelectableBadge.tsx`, `src/lib/auction/immutability.ts`,
-`src/lib/cashu/p2pkSecret.ts`, `src/lib/checkout/deliveryRequirements.ts` — the last four were
-re-export shims with no consumer anywhere.
+1. `/home/admin_maxime/work/pr1420-runs/2026-10-19-sdk-integration/order.md` — **the order of
+   record**: base, scope, the maintainer's instructions restated, definitions of done, entailments,
+   supersession record. _2026-10-19_
+2. `/home/admin_maxime/work/pr1420-runs/2026-10-19-sdk-integration/increments.md` — **the increment
+   board** (550 lines): waves W0–W3; each increment's job · touch points · contract · gate · **done**
+   · falsifier, with results. _2026-10-19_
+3. `/home/admin_maxime/tmp/pr1420-handover.md` — **the PR-1420 review packet**: activity, evidence,
+   findings, open decisions, proposed plan. _compiled 2026-10-18_
+4. `/home/admin_maxime/work/CLEANUP-PLAN-sdk-architecture.md` — **both sibling PRs** (#1420 and
+   #1412) side by side, with `[V]`/`[P]`/`[X]` evidence labels. _2026-10-19_
 
-**Behaviour-adjacent — read this if the UI migration touches sign-in.** The NIP-60 Cashu bootstrap
-and its teardown moved out of `src/lib/stores/ndk.ts` into `src/lib/stores/auth.ts`
-(`bootstrapCashuWalletInBackground`, called at all three sign-in sites, `walletOps.reset()` on
-logout). Same fire-and-forget semantics, same position alongside the relay-list and NWC steps. The
-one observable difference is a log prefix, `[ndk]` → `[auth]`.
+What the board says the program is [R — read this session]:
 
-**Shared mutable file:** `scripts/src-boundary-baseline.txt`. Both branches will want to edit it.
-The rule is in its header — lower the matching lines in the same commit that lowers a count. Whoever
-lands second must re-run `bash scripts/check-src-boundary.sh` and reconcile rather than take either
-side.
+- **Base = PR #1420.** Repo `PlebeianApp/market`; branch `feat/pr1420-sdk-integration`; worktree
+  `/home/admin_maxime/work/pr1420`. Run artifacts deliberately live **outside** the worktree so the
+  PR carries no process files.
+- **Ladder order:** strip the tree → bring the missing modules in → repoint → gates. Do not start a
+  module whose contract is still under review.
+- **Baseline:** `2447 pass / 0 fail / 240 files` — and the baseline is **flaky** (one run came back
+  2446/1; the flaky test was never named). Treat "0 fail" as the usual result, not a hard invariant.
+- **Definition of done #6**, which states the `src/` retirement better than I did:
+  > _"`src/` imports nothing from `sdk/` that the ports do not declare, and `platform/` imports
+  > nothing from `src/` (the loop is cut)."_
+- **Standing rule:** local branch only, stop at the gate, do not merge, never push, no GitHub write.
+  (This branch's push to `maxime-tt/market` was under the maintainer's explicit instruction; nothing
+  was written to `PlebeianApp/market`.)
+- **Out of scope:** the market-retrofit assembly's tooling, its `core/` submodule, its ngit remote,
+  its `runs/` convention.
 
-## 4. Rebase mechanics
+**The packet's open decision, which outranks my §9** [R]:
+
+> _"Both branches land incompatible `sdk/core/event-store/` implementations. Integration order must
+> be decided before module-level review/migration work."_
+
+i.e. **#1420 vs #1412 first.**
+
+---
+
+## 3. Every piece of work, timestamped, with its most advanced state
+
+38 worktrees, 121 local branches [V — `git worktree list`, `git for-each-ref refs/heads`]. Grouped by
+the maintainer's rule: this week first, then before.
+
+### 3a. THIS WEEK (2026-10-19 → 2026-10-23) — take seriously
+
+**The integration branch — the base of record and the latest state of everything landed into it.**
+
+`feat/pr1420-sdk-integration` · tip **`74bcde43`** · **2026-10-20** · worktree
+`/home/admin_maxime/work/pr1420` · 840 commits ahead of `origin/master`. [V]
+
+Its **last six commits are this week's increments**, landed under new hashes (cherry-pick/rebase, so
+the increment branches' own SHAs are not ancestors — the _work_ is):
+
+    74bcde43  cashu: never re-melt a leg that already crossed the boundary        (inc/double-melt-guard)
+    d526748c  platform: retarget the remaining pure-shim imports onto the SDK     (inc/shim-retargets-2)
+    50099e1c  platform: retarget auction-validator shim imports onto the SDK      (inc/shim-retargets)
+    51d3c3c2  sdk: take the three payment-rail modules in as source (W1.2)        (feat/payment-rails)
+    8aefffbb  ci: guard the src/ boundary with a per-direction import census      (feat/src-boundary-guard)
+    a93c5f2d  sdk: strip the methodology tooling — visuals/, BPMN, per-module packaging   (W0.2)
+
+**This week's increment branches — all already folded in, so all are working copies, not later
+states:**
+
+- **`inc/double-melt-guard`** — `pr1420-inc-p3` · tip `1223284b` · 2026-10-20 · 838 ahead.
+  **Latest state = the integration tip `74bcde43`** (same subject).
+- **`inc/shim-retargets-2`** — `pr1420-inc-p5` · tip `1d2a53e9` · 2026-10-20 · 839 ahead.
+  **Landed as `d526748c`.**
+- **`inc/shim-retargets`** — `pr1420-inc-p4` · tip `8374538b` · 2026-10-19 · 838 ahead.
+  **Landed as `50099e1c`.**
+- **`feat/payment-rails`** — `pr1420-w-rails` · tip `2edca7b5` · 2026-10-19 · 836 ahead. **W1.2**:
+  takes `bolt11-wrapper`, `cashu-wrapper`, `nwc-wrapper` in as source, adapted to PR-1420's
+  structure. **Landed as `51d3c3c2`.** [V — `git show --stat` of `core/bolt11-rail` vs
+  `feat/payment-rails`: same module files, **minus** the per-module
+  `package.json`/`bun.lock`/`tsconfig.json`/`evidence/`.]
+- **`feat/src-boundary-guard`** — `pr1420-w-guard` · tip `4906ada9` · 2026-10-19 · 836 ahead. Origin
+  of the boundary guard and its baseline. **Landed as `8aefffbb`** — the commit my own baseline was
+  measured at.
+
+**Mine:**
+
+- **`inc/wave-b`** — `pr1420-inc-p6` · tip `767e52df` · **2026-10-23** · 903 ahead · base
+  `74bcde43` [V]. The only line stacked on the _current_ integration tip. **Not folded in.**
+  Contents in §6.
+
+**Adjacent, different axis — possibly your "UI migration":**
+
+- **`feat/cms-theme-studio`** — `market-cms` · tip `12312ef5` · **2026-10-22** · 786 ahead.
+  Storefront/CMS: colourway and layout work. Merge-base with the integration branch is `eacc4256`,
+  i.e. **a different, older ancestry — not stacked on the PR-1420 line** [V]. Rebasing it onto
+  `inc/wave-b` would be a cross-ancestry rebase, not a fast-forward.
+
+### 3b. BEFORE THIS WEEK (2026-10-14 → 2026-10-16) — read and mine, do not rebase onto
+
+**The `core/*` line — 15 branches, 2026-10-14/15, all unmerged.** Worktrees `money-p1`, `money-i0`,
+`money-i2`, `money-i4`, `inc1-event-store`, `inc2-relay-config`, `inc3-event-access`,
+`relay-layer`, `repoint`, `rp-dm`, `rp-events`, `val-layer`, `val-con`, `val-docs`, `mr-1412`. [V]
+
+This is the **market-retrofit assembly's** module line: its subjects carry the assembly's
+methodology (minted rule IDs, `I0`–`I4` / `V4` increments, per-module manifests, `evidence/`).
+
+- **Most advanced tip: `core/reclaim-statement` (`0dc642cc`, 2026-10-15)** — contains **12 of its 14
+  siblings** [V — pairwise `git merge-base --is-ancestor`]. Then `core/compose-bolt11` (11/14),
+  `core/bolt11-rail` (10/14), `core/funds-port` (9/14).
+- Four are roots (0 siblings contained): `core/relay-event-store`, `core/relay-relay-config`,
+  `core/relay-event-access`, and `core/migration` (the #1412 line).
+- **No `core/*` branch is an ancestor of the integration branch** [V].
+- **Its module content has already been carried forward:** `feat/payment-rails` → `51d3c3c2` landed
+  the bolt11/cashu/nwc modules into the integration branch _without_ the assembly ceremony.
+
+→ **For those modules, the integration branch is the later state.** The `core/*` branches remain
+the right place to read the **specs** (front-matter contracts, evidence harnesses) that the
+source-import dropped. See §4 for why this corrects the earlier "core might be worth rebasing onto".
+
+**The apps + commerce line — 12 branches, 2026-10-15/16, all unmerged.** [V] A different axis
+entirely: order placement, money truth, messaging, shipping, currency, and the storefront demos.
+
+- `commerce/*` — `money-truth`, `order-placement`, `order-messaging`, `currency-conversion`,
+  `shipping-read-30406` (all 2026-10-16)
+- `apps/*` — `order-page`, `order-page-routes`, `order-page-relay-shipping`,
+  `integration-assumptions` (2026-10-16); `rename-platform` (ADR-0021 `platform/` → `apps/`),
+  `checkout-slice-1`, `demo-shop-style-and-cart` (2026-10-15)
+- Worktrees: `e2e-m1/o1/o2/o3/r1/r2`, `e2e-int`, `o3-a`, `o3-b`, `demo-1`, `demo-2`, `apps-rename`
+
+**PR #1412** — head **`9172219e`** (2026-10-15), checked out detached in
+`/home/admin_maxime/work/audit-feat-architecutre`; last subject _"core: the validation contribution
+path — per-kind rules declared from inside commerce (#1418)"_. Title `feat: sdk port`, branch
+`feat/architecutre`, 415 files, +75,193/−4,656 [R — CLEANUP-PLAN]. **Neither PR is an ancestor of
+the other**; they share base `auctions@6be7496c` and diverge at `7ad658d4` [R].
+
+### 3c. Other machinery on this machine (not this migration)
+
+- **Two Hermes profiles:** `maxime` (this one; `state.db` ≈1.1 GB, active today) and `vincent`
+  (`state.db` ≈226 MB, last active 2026-10-22). Separate session histories and cron.
+- **Cron / PR watch:** `/home/admin_maxime/.hermes/profiles/maxime/cron/jobs.json`;
+  `/home/admin_maxime/.hermes/cron/data/{pr_watch_state,pr_review_ledger,pr_review_mode,weekly_report}.json`.
+- **Other repos under the home directory:** `~/repos/{doop,snipe-relay,v4v-payout-node}`,
+  `~/fluid-qiosks`, `~/routstrd-auth`, `~/ditto`, `~/nips_src`, `~/snipe-relay`. Unrelated projects.
+
+---
+
+## 4. Recommendation — explicitly non-authoritative
+
+**Correcting the earlier message: do not rebase onto `core/*`.** [J] On content it is the most
+advanced _migration_ line, but (a) it is from before this week, (b) it is the **superseded
+assembly's tree** — per-module manifests, `evidence/`, the ceremony the maintainer asked to
+simplify — and (c) its module content has **already** been carried into the integration branch by
+W1.2. Read it for specs; do not base on it. My earlier phrasing ("core might be worth rebasing
+onto") over-read its date-blind content advantage and under-read `order.md`.
+
+**What I would base on, in order:** [J]
+
+1. **`feat/pr1420-sdk-integration` @ `74bcde43`** — the base of record, and already the latest state
+   of this week's five landed increments plus the board's first two waves.
+2. **`inc/wave-b` @ `767e52df`** on top, **only if** you want the cashu 2.0 stack and the
+   import-cycle work with it. It is the one line stacked directly on the current integration tip, so
+   it is a clean rebase rather than a cross-ancestry one. §6 lists every public-surface change.
+3. **`feat/cms-theme-studio`** only if your UI work _is_ the storefront/CMS line — and then note it
+   is on a different ancestry (`eacc4256`): a merge, not a rebase-onto.
+
+**Before any module-level migration work, settle #1412 vs #1420** [R — the packet's words]. My §9
+decision below is _second_ to that: raising the frozen boundary line is pointless if the tree being
+migrated into is about to be replaced by the other PR's `event-store`.
+
+**For anything from before this week: mine it, don't continue it.** [J] The `apps/*`/`commerce/*`
+line has no relationship to the `src/` retirement — if it is still live work it wants its own
+decision, not a rebase onto a migration branch.
+
+---
+
+## 5. What the board says is still open [R]
+
+- **Wave 0** (strip; one-install resolution) — **partly done**: `a93c5f2d` stripped the methodology
+  tooling (37 files). W0.3 (prove `sdk/` resolves as plain TypeScript from one root install) reads
+  as pending.
+- **Wave 1** (bring the missing modules in) — **started**: W1.2 landed the three payment rails. The
+  board's W1.1 (module inventory, take/merge/skip verdict per module) gates the rest.
+- **Wave 2** (repoint) — **partly done**: both shim-retarget increments landed. A wholesale
+  retarget of PR-1420's ~441 `platform -> src` edges is explicitly out of scope — "only the edges
+  an increment needs" [R — `order.md` §7]. My increment continued that pattern where it was free.
+- **Wave 3** (gates) — not reached.
+
+---
+
+## 6. What landed in `inc/wave-b` (11 commits, oldest → newest)
+
+    6071efdb  wallet: the cashu stack moves to coco 2.0 and cashu-ts 5 (B2a)
+    bbde01f9  docs: §9.12 — the cashu stack is coco 2.0 + cashu-ts 5, and the gate is closed
+    45b89e82  platform: move the src-free auction-validator tests beside the code they test
+    c2ee2d24  src: delete four re-export shims nothing imports
+    4a40ca94  platform: import the Nostr event helpers from @sdk/core, not the src shim
+    f14b8038  stores: the ndk store stops importing the wallet - the 36-file cycle is cut
+    2240370a  nostr: the relay-list read stops coupling the query layer to the ndk store
+    25427920  wallet: the NWC reads stop coupling the ndk store to the query layer
+    c036e632  nostr: split the io port's contract out of the module that imports its adapters
+    12d40e54  payment: publishing a payment detail belongs in publish/, not in the read layer
+    e45659d9  docs: handover for inc/wave-b
+    767e52df  docs: add the module map to the inc/wave-b handover
+
+`6071efdb` + `bbde01f9` are the board's B2a stage; `docs/handover/wave-b-ui-components-handover.md`
+§9.12 is its record.
+
+**Public-surface changes a rebase must handle**
+
+- **Dependencies.** `coco-cashu-core` → `@cashu/coco-core`, `coco-cashu-indexeddb` →
+  `@cashu/coco-indexeddb`, `@cashu/cashu-ts` `^2.1` → `5.0.0-rc.4`; the `patchedDependencies` block
+  and `patches/coco-cashu-core@1.0.0-rc11.patch` are deleted. The v5 call-site rules (`Mint`/`Wallet`
+  renames, `Proof.amount` as an `Amount`, `getDecodedToken(token, ids)` with keyset ids,
+  `new Mint(url, { customRequest })`, no `@cashu/cashu-ts/crypto/*` subpaths) are in §4 of
+  `docs/handover/wave-b-ui-components-handover.md`.
+- **New modules, all inside `src/`:** `src/lib/nostr/io-types.ts` (the io contract; `io.ts`
+  re-exports it, so type importers are unaffected), `src/lib/nostr/relayListRead.ts`,
+  `src/lib/wallet/nwcWalletRead.ts`.
+- **Signature changes:** `walletOps.initialize()` lost its never-read pubkey argument; the three
+  `fetch*` readers take the ndk instance first (hooks bind it, so hook callers are unaffected);
+  `USER_NWC_WALLET_LIST_KIND`/`..._LABEL` are no longer re-exported from `src/queries/wallet`
+  (import them from `@sdk/commerce/payments`).
+- **Moved:** `PublishPaymentDetailParams` / `publishPaymentDetail` / `usePublishPaymentDetail` from
+  `src/queries/payment.tsx` → `src/publish/payment.tsx`; six tests from `src/lib/__tests__/` to
+  `platform/server/**`.
+- **Deleted:** the four shims named in `c2ee2d24`.
+- **Sign-in behaviour:** the NIP-60 Cashu bootstrap moved from `src/lib/stores/ndk.ts` to
+  `src/lib/stores/auth.ts` — same fire-and-forget semantics; only observable change is a log prefix,
+  `[ndk]` → `[auth]`.
+- **Shared mutable file:** `scripts/src-boundary-baseline.txt` — lower the matching lines in the
+  same commit that lowers a count; whoever lands second must re-run the guard and reconcile.
+
+---
+
+## 7. Rebase mechanics
 
     git fetch fork
-    git rebase fork/inc/wave-b        # after this branch is pushed
+    git rebase fork/inc/wave-b        # or trust the integration branch only, per §4
     bash scripts/check-src-boundary.sh
 
-Expect conflicts in the areas this branch rewrote: `src/queries/{payment,wallet,relay-list}.tsx`,
-`src/publish/{auctions,payment}.tsx`, `src/lib/nostr/io.ts`, `src/lib/stores/{ndk,auth,walletOps}.ts`,
-`src/lib/wallet/*`, `platform/server/**` (test locations), `platform/web/routes/**` (import lines
-only) and `scripts/src-boundary-baseline.txt`.
+The guard is the acceptance test: it must print `OK`, and a count that fell should have its baseline
+line lowered in the same commit. Expect conflicts in
+`src/queries/{payment,wallet,relay-list}.tsx`, `src/publish/{auctions,payment}.tsx`,
+`src/lib/nostr/io.ts`, `src/lib/stores/{ndk,auth,walletOps}.ts`, `src/lib/wallet/*`,
+`platform/server/**` and `scripts/src-boundary-baseline.txt`.
 
-The boundary guard is the acceptance test for a rebase: it must print `OK`, and if any count fell,
-the matching baseline line should be lowered in the same commit.
+---
 
-## 5. Verification at this commit — what was measured
+## 8. Verification at `767e52df` — measured, and what was not
 
-- `npx tsc --noEmit` → **264** errors against the **264** baseline. Equal, no new error site.
-  The repo carries pre-existing type debt; the rule used throughout was _no new error site_, never
-  zero.
+- `npx tsc --noEmit` → **264** errors against a **264** baseline. Equal; no new error site. The repo
+  carries pre-existing type debt, so the rule was _no new error site_, never zero.
 - `bun run test:unit` → **2725 pass / 0 fail / 7546 expect() across 260 files**, unchanged across
-  every one of these commits (so no test silently stopped being collected).
-- `bun run format:check` → clean.
-- `bash scripts/check-src-boundary.sh` → `OK`, every direction at or below its baseline.
+  every commit, so no test stopped being collected. (A different baseline from the board's
+  2447/240 — different base; both green.)
+- `bun run format:check` → clean. `bash scripts/check-src-boundary.sh` → `OK`.
+- **Not run:** `bun run test:integration` (starts the local nutshell mint; needs explicit approval
+  per `AGENTS.md`), any Playwright e2e suite, any deploy. No live-instance verification.
+- **Pre-existing errors flagged, not fixed:** `src/publish/payment.tsx(155,88)` (a
+  `string | string[]` coordinates union reaching a string-typed key factory) and `(206,5)`
+  (`useOnChainPaymentDetailMutation` passes `paymentMethod: 'on-chain'` while
+  `PAYMENT_DETAILS_METHOD` declares only `'ln'`), plus `src/lib/stores/ndk.ts(380,15)` (implicit
+  `any`).
 
-**Not run, do not assume:** `bun run test:integration` (it starts the local nutshell mint, which
-needs explicit approval per `AGENTS.md`), the Playwright e2e suites, any deploy. No live-instance
-verification was done on this branch.
+---
 
-**Pre-existing errors worth someone's attention (deliberately not fixed here):**
+## 9. The frozen `src -> sdk` line — recommendation, qualified
 
-- `src/publish/payment.tsx(155,88)` — a `string | string[]` coordinates union reaches a key factory
-  that takes a string.
-- `src/publish/payment.tsx(206,5)` — `useOnChainPaymentDetailMutation` passes
-  `paymentMethod: 'on-chain'` while `PAYMENT_DETAILS_METHOD` in `src/lib/constants.ts` declares only
-  `'ln'` (its `'on-chain'` key is commented out).
-- `src/lib/stores/ndk.ts(380,15)` — an implicit `any` parameter.
+`scripts/src-boundary-baseline.txt` allows each direction to fall only. Re-pointing a consumer
+**inside `src/`** onto `@sdk/...` therefore _raises_ the frozen count — the mechanism of draining
+`src/`, which the counter cannot distinguish from cementing it.
 
-## 6. The blocked decision (the reason the migration is not done)
+- **(a) Raise the line, paid for** [J; recommended *if* #1412/#1420 is settled first]: make a raise
+  legal only in a commit that **deletes the `src/` module it replaces** and **states the ceiling**.
+  The guard's header already sanctions a justified raise; the condition would make it explicit.
+- **(b) Hold the freeze:** cycle work and platform/ui-side retargets only. Its measured ceiling is
+  nearly reached — the dead shims are gone, and the remaining cycles are enablers, not movement.
 
-**The frozen `src -> sdk` line, and the amendment I recommend.**
+**Both are second to the packet's prior decision** (§2). If `sdk/core/event-store` is about to be
+replaced wholesale, the migration target itself is unsettled.
 
-`scripts/src-boundary-baseline.txt` allows each direction to fall only. Re-pointing a consumer that
-lives _inside_ `src/` onto `@sdk/...` therefore **raises** the frozen `src -> sdk` count — the old
-same-tree import was never counted, the new absolute one is. That is not cementing `src/` in place;
-it is the mechanism of draining it, but the counter cannot tell the two apart.
+---
 
-Two options, and the recommendation:
+## 10. Traps that cost real time here
 
-- **(a) Raise the line, paid for.** Recommended. Amend the rule so a raise is legal only in a commit
-  that **deletes the `src/` module it replaces** and **states the ceiling** it raises to. That keeps
-  the guard's real purpose — no half-migrations leaving a dead `src/` original behind, which is the
-  failure the sibling retarget commits tracked — while allowing travel. Each raise is then paired
-  with a real reduction in `src/`, and the number falls again as the remaining consumers drain.
-- **(b) Hold the freeze.** Continue with cycle work and platform/ui-side retargets only. Measured
-  ceiling of this path: the dead shims are gone, the remaining cycles are _enablers_ rather than
-  movement, and `platform -> src` is 406 imports across 64 files that reach into src's real modules
-  (`stores/auth` 24 consumers, `stores/ndk` 17). Those cannot move without (a).
-
-If (a) is chosen it is an architecture decision and wants an ADR line (or an amendment to the guard's
-header), not just a baseline edit — this document deliberately does not make that call.
-
-## 7. Next targets, in dependency order
-
-1. **`src/lib/nostr/relayListRead.ts` → `sdk/core/relays`** and
-   **`src/lib/wallet/nwcWalletRead.ts` → `sdk/commerce/payments`.** Small, both delete their `src/`
-   original in the same commit, and both give (a) its first honest test at a size where getting it
-   wrong is cheap. Prerequisite: `sdk/core/relays` is one of nine `sdk/core` directories with no
-   `<module>.md`, so its spec has to be written as part of the move.
-2. **Do not start with the io seam.** `src/lib/nostr/io.ts` belongs to ADR-0002 — its own header
-   says `io-ndk.ts` and the NDK singleton are deleted in Wave D, and there are unmerged
-   `wave-0/io-seam-and-ci-guard` and `feat/applesauce-wave-a1b-flip` branches on the remote. That
-   seam's migration is theirs to sequence. Note that `sdk/core/nostr-io` is already a complete,
-   spec'd module (`createNostrIo`, `toUpstreamPool`, `RelaySeamError`, `MAX_EVENTS_PER_READ`, over
-   `applesauce-relay`), so that collision is a deletion job, not a build job.
-3. Remaining import cycles, all now small and independent (§8): `stores/product` ↔
-   `utils/productFormStorage` (needs the six form types moved out of `stores/product.ts` — they
-   cannot live in the storage because the store's own consumers import them from the store);
-   `sdk/core/nostr-io/ts/{errors,types}` (inside the SDK tree, independent of `src/`); and the cart
-   4-cycle (`cart-persistence`, `stores/cart`, `queries/cart`, `queries/v4v`).
-4. The wallet/money 11-cycle is the largest and contains the cashu work from `6071efdb`; it is the
-   natural place to apply (a) at scale.
-
-## 8. Measured architecture state at this commit
-
-**Cross-tree footprint** (`bash scripts/check-src-boundary.sh`):
-
-- `platform/ -> src/` production: **406 imports / 64 files** (was 410 — the platform retarget)
-- `src/ -> platform/` production 28 / 23, test **22 / 11** (was 31 / 17 — the test move)
-- `src/ -> ui/` production 239 / 120 (was 241 — two shims deleted)
-- `src/ -> sdk/` production 161 / 118 (was 165 — three shims deleted), test 8 / 7
-- `ui/ -> src/` and `sdk/ -> src/`: **0 / 0**, both already clean
-
-**Import cycles** were one strongly-connected component of 36 files (86 internal edges, spanning
-`platform/web`, `src/lib`, `src/queries`, `src/publish`). They are now four:
-
-- 11 — wallet/money: `stores/auth`, `stores/cashu`, `stores/walletOps`, `wallet/*`,
-  `auction/bidderRecords`, `sdkAdapters`, `publish/auctions.tsx`
-- 4 — cart: `cart-persistence`, `stores/cart`, `queries/cart`, `queries/v4v`
-- 2 — `stores/product` ↔ `utils/productFormStorage`
-- 2 — `sdk/core/nostr-io/ts/{errors,types}`
-
-**`src/lib/stores/ndk.ts` is out of every cycle** — the highest fan-in contract in the tree at 96
-dependents. Its out-edges are now `@/lib/constants`, `@/lib/relay-policy`, the config store, the
-wallet store and the two new read modules, all leaves or lower layers. **It is extractable**, which
-was the point of the cycle work.
-
-## 9. Traps that cost real time here (do not re-derive)
-
-- **Moving a test out of `src/` can create a NEW cross-tree edge.** Tests under
-  `src/lib/__tests__/` that exercise `platform/` code often reach into `src/` by _relative_ path
-  (`../cashu/nut7`, `../auction/events`). From `src/` those are same-tree and uncounted; from
-  `platform/` the same line becomes a forbidden `platform -> src` edge, and type-only ones still
-  fail tsc (`TS2307`). Detect them with `grep -nE "from '\\.\\.?/"`, not only by looking for `@/`.
-  Moving three of them turned 264 tsc errors into 267, which is how it surfaced.
+- **Moving a test out of `src/` can create a NEW cross-tree edge.** Tests under `src/lib/__tests__/`
+  that exercise `platform/` code often reach into `src/` by _relative_ path (`../cashu/nut7`,
+  `../auction/events`). From `src/` those are same-tree and uncounted; from `platform/` the same
+  line becomes a forbidden `platform -> src` edge, and type-only ones still fail tsc (`TS2307`).
+  Detect with `grep -nE "from '\\.\\.?/"`. Moving three of them turned 264 tsc errors into 267.
 - **A re-export detector written with `;` splitting lies.** `src/lib/constants.ts` looks like a shim
-  because it contains `export { ... } from '@sdk/core/geo'` — it is a real module that merely also
-  re-exports. Decide shim-ness structurally: strip comments, `re.sub` every
-  `export (*|{|type {) ... from '...'` statement out, and require the remainder to be empty. Read a
-  file in full before deleting it, and back a zero-consumer claim with a grep across every tree.
-- **Rank single-edge removals before choosing one.** Of the 36-file knot's 86 internal edges,
-  exactly one collapsed it (36 → 9); the next best bought 36 → 30. Simulate, don't eyeball.
-- **Simulate the obvious fix too — it can be worse.** Moving the wallet bootstrap to `auth.ts` _adds_
-  `auth -> walletOps`, which closes `auth -> walletOps -> cashu -> auth` and leaves an 11-file group
-  instead of 9. It was taken anyway, deliberately, because the alternative needed a
-  load-order-guaranteed wiring point that would have added a `platform -> src` edge.
+  because it contains `export { ... } from '@sdk/core/geo'`; it is a real module that also
+  re-exports. Decide shim-ness structurally (strip comments, `re.sub` out every
+  `export (*|{|type {) ... from '...'`, require an empty remainder). Read a file in full before
+  deleting it.
+- **Rank single-edge removals before choosing one.** Of the 36-file knot's 86 internal edges exactly
+  one collapsed it (36 → 9); the next best bought 36 → 30. Simulate; don't eyeball.
+- **Simulate the obvious fix too — it can be worse.** Moving the wallet bootstrap to `auth.ts` adds
+  `auth -> walletOps`, closing `auth -> walletOps -> cashu -> auth`: an 11-file group instead of 9.
+  Taken anyway, deliberately, because the alternative needed a load-order-guaranteed wiring point
+  that would have added a `platform -> src` edge.
 - **Keep the import census neutral when you move a function.** A moved function that drags an
-  `@sdk/...` import must have that import deleted (and any dead re-export) on the old side in the
-  same commit, or `src -> sdk` rises. That is how the two read-module moves stayed neutral.
+  `@sdk/...` import must have that import (and any dead re-export) deleted on the old side in the
+  same commit, or `src -> sdk` rises.
+- **An inherited summary can be wrong about placement.** The first version of this document was
+  derived from the tree alone and missed that the program had a board, a packet and an unresolved
+  two-PR decision. Read §2's four documents before acting on §9.
 
-More detail, including the full cycle history: the `src-boundary-guard.md` reference in the
+Deeper detail, including the full cycle history: the `src-boundary-guard.md` reference in the
 `plebeian-market-engineering` skill.
 
-## 10. Branch neighbours to reconcile with
+---
 
-All unmerged at the time of writing, all sharing ancestry around `a93c5f2d`:
+## 11. Module map — the `src/` remainder in the units the work is done in
 
-- `core/*` (16 branches) — the module extraction line: `core/bolt11-rail`, `core/compose-bolt11`,
-  `core/funds-port`, `core/reclaim-statement`, `core/relay-event-access`, `core/relay-event-store`,
-  `core/relay-layer`, `core/relay-relay-config`, `core/validation-layer`,
-  `core/validation-contribution`, `core/verify-contract`, `core/repoint`, `core/repoint-dm`,
-  `core/repoint-events`, `core/migration`.
-- `inc/shim-retargets`, `inc/shim-retargets-2` — the same shim-retarget pattern, on a different base.
-  They retargeted `platform/` consumers only (17 edges, `platform -> src` 429 → 412 on their tree);
-  this branch's equivalent work is `4a40ca94`.
-- `wave-0/io-seam-and-ci-guard`, `feat/applesauce-wave-a1b-flip` on both remotes — ADR-0002's stack.
+File counts are a rough measure; the method's unit is a **module** (a directory plus a
+`<module>.md`, extracted in one commit that deletes its `src/` original). Measured at `e45659d9`
+over the **169 production files `platform/` reaches** (406 import statements from 64 platform
+files). Each entry: files · platform importers · total dependents (all four trees) · knots.
 
-None of these were merged during this work, so nothing here assumes their contents.
+1. **Read layer — `src/queries/`** · 22 · 43 · 188 · 1 knot (`v4v.tsx`, in the cart 4-cycle).
+   Contract: `auctionKeys`, `auctionQueryOptions`, `collectionByIdQueryOptions`,
+   `OrderWithRelatedEvents`, `PaymentDetail`, `UserNwcWallet`, … **Largest single win.**
+2. **App stores — `src/lib/stores/`** · 13 · 40 · **209** · 4 knots (`auth.ts` 73 dependents/24
+   platform, `cart.ts`, `walletOps.ts`, `product.ts`). Contract: `authStore`/`authActions`,
+   `cartStore`/`cartActions`, `configStore`/`configActions`, `cashuStore`, `blacklistStore`,
+   `Wallet`, `PendingToken`. Deepest fan-in left.
+3. **Publish layer — `src/publish/`** · 13 · 15 · 44 · 1 knot (`auctions.tsx`, wallet/money 11).
+   Contract: `publishPaymentReceipt`, `publishOrderWorkflowWithDependencies`, `addToFeatured*`,
+   `addToBlacklist*`, `ShippingFormData`.
+4. **Helpers — `src/lib/utils/`** · 11 · 12 · 38 · 1 knot (`productFormStorage.ts`). Contract:
+   `getCoordsFromATag`/`getATagFromCoords`, `filterBlacklistedPubkeys`, `defaultAuctionFilters`,
+   `PIIScanResult`.
+5. **`src/hooks/`** · 10 · 7 · 15 · **0 knots** — the easiest tier: `useAuctionWinMonitor`,
+   `useBlacklistSync`, `useBreakpoint`, `useNip05Sync`, `useNotificationMonitor`, `usePIIMonitor`,
+   `useServiceWorker`, `useV4VManager`, `useVanitySync`, `useEntityPermissions`.
+6. **Event parsers — `src/lib/schemas/`** · 5 · 8 · 29 · **0 knots** — `parseAuctionEvent`,
+   `parseBidEvent`, `parsePathReleaseEvent`, `parseSettlementEvent`, `parseValidatorVerdictEvent`,
+   `AppSettingsSchema`. Clean, but needs a **placement decision**: `AGENTS.md` ties these to the
+   validation doctrine and no `sdk/` tree holds a schema level.
+7. **`src/lib/nostr/`** · 4 · 10 · 49 · **0 knots** — **ADR-0002's seam, not this lane's.** Remote
+   branches `wave-0/io-seam-and-ci-guard` and `feat/applesauce-wave-a1b-flip` exist; `sdk/core/nostr-io`
+   is already a complete spec'd module, so that collision is a deletion job.
+8. **Auction domain — `src/lib/auction/` + `src/lib/auction*.ts`** · 5 · 2 · 22 · 1 knot
+   (`bidderRecords.ts`) — `findBidderRecord`, `getAuctionBidderStatus`, `useDleqKeysetPolling`,
+   `useNut7Polling`. Destination `sdk/commerce/auctions` exists.
+9. **UI components — `src/components/**`** · **74** · 42 · 101 · **0 knots** — largest block, least
+blocked (42 of 74 have a single platform consumer). Destination is **`ui/`**, not `sdk/`.
 
-## 11. Module map — the remainder in the units the work is done in
+**Single-file leaf contracts worth their own commit:** `src/lib/utils.ts` (47 dependents — `cn`,
+`isValidHexKey`, `isValidNip05`, `isValidNpub`, `truncateText`), `src/lib/constants.ts` (30 · 7
+platform — `CURRENCIES`, `PRODUCT_CATEGORIES`, `SHIPPING_TEMPLATES`, `ZAP_RELAYS`,
+`PAYMENT_DETAILS_METHOD`), `src/lib/instance-config.ts` (5·9), `src/lib/appSettings.ts` (3·6),
+`src/lib/ogTags.ts` (3·4), then `queryClient.ts`, `router-utils.ts`, `zapPurchase.ts`,
+`src/config/*`.
 
-File counts are a rough measure. The method's unit is a **module**: a directory plus a
-`<module>.md`, extracted in one commit that deletes its `src/` original. Measured at `e45659d9`
-(the 169 production files `platform/` reaches), the queue groups like this.
-
-Each entry: files · platform importers · total dependents (all four trees) · knot status.
-"Platform imports" lists what actually crosses the boundary — the contract.
-
-**Module-scale candidates**
-
-1. **The read layer — `src/queries/`** — 22 files · 43 platform importers · 188 dependents
-   - job: read relay data into the typed query options and view types the routes render.
-   - contract: `auctionKeys`, `auctionQueryOptions`, `collectionByIdQueryOptions`,
-     `OrderWithRelatedEvents`, `PaymentDetail`, `RichPaymentDetail`, `UserNwcWallet`, …
-   - knot: **1 member**, `queries/v4v.tsx` (in the cart 4-cycle). Everything else is clean.
-   - verdict: `extract` after cutting `v4v` — the largest single win in the queue.
-2. **The app stores — `src/lib/stores/`** — 13 files · 40 platform importers · 209 dependents
-   - job: hold the app's session, relay, cart, wallet, config and UI state, with their actions.
-   - contract: `authStore`/`authActions`, `cartStore`/`cartActions`, `configStore`/`configActions`,
-     `cashuStore`, `blacklistStore`, `Wallet`, `PendingToken`, `RichShippingInfo`, …
-   - knots: **4 members** — `auth.ts` (73 dependents, 24 platform), `cart.ts`, `walletOps.ts`,
-     `product.ts`.
-   - verdict: `extract` the clean members; `knot` for the four, which is what the paid-for-raise
-     work in §6 is for.
-3. **The publish layer — `src/publish/`** — 13 files · 15 platform importers · 44 dependents
-   - job: build, sign and publish the app's events.
-   - contract: `publishPaymentReceipt`, `publishOrderWorkflowWithDependencies`,
-     `addToFeaturedAuctions`/`Collections`/`Products`/`Users`, `addToBlacklist*`, `ShippingFormData`, …
-   - knot: **1 member** — `publish/auctions.tsx` (in the wallet/money 11-cycle).
-   - verdict: `extract`; `auctions.tsx` waits on the wallet cluster.
-4. **Helpers — `src/lib/utils/`** — 11 files · 12 platform importers · 38 dependents
-   - job: pure helpers — coordinates, sorting/filters, PII scanning, invoice sets.
-   - contract: `getCoordsFromATag`/`getATagFromCoords`, `filterBlacklistedPubkeys`,
-     `defaultAuctionFilters`, `PIIScanResult`, `OrderInvoiceSet`, …
-   - knot: **1 member** — `productFormStorage.ts` (the `stores/product` 2-cycle).
-   - verdict: `extract` after that one cut.
-5. **`src/hooks/`** — 10 files · 7 platform importers · 15 dependents — **0 knots**
-   - job: app-level React hooks that sync external state into the stores.
-   - contract: `useAuctionWinMonitor`, `useBlacklistSync`, `useBreakpoint`, `useNip05Sync`,
-     `useNotificationMonitor`, `usePIIMonitor`, `useServiceWorker`, `useV4VManager`, `useVanitySync`,
-     `useEntityPermissions`.
-   - verdict: `extract` — clean, small, and the easiest of the ten.
-6. **Event parsers — `src/lib/schemas/`** — 5 files · 8 platform importers · 29 dependents — **0 knots**
-   - job: the single definition of a valid item per event kind, applied before anything renders.
-   - contract: `parseAuctionEvent`, `parseBidEvent`, `parsePathReleaseEvent`, `parseSettlementEvent`,
-     `parseValidatorVerdictEvent`, `AppSettingsSchema`.
-   - verdict: `extract` — but note the destination question: `AGENTS.md` ties these to the
-     repository's validation doctrine ("every event kind the app renders must have a parser under
-     `src/lib/schemas/`"), and no `sdk/` tree currently holds a schema level. This one needs a
-     placement decision, not just a move.
-7. **`src/lib/nostr/`** — 4 files · 10 platform importers · 49 dependents — **0 knots**
-   - contract: `NDKEvent`/`NDKFilter`/`NDKSigner`/`NostrFilter` re-exports, `applesauceIo`,
-     `getApplesauceRelayPool`, `naddrFromAddress`, `sign`.
-   - verdict: **not this lane's** — this is ADR-0002's seam (§7, item 2). Listed for completeness.
-8. **The auction domain — `src/lib/auction/` + `src/lib/auction*.ts`** — 5 files · 2 platform
-   importers · 22 dependents
-   - job: auction-specific reads and helpers beyond the SDK's auction module.
-   - contract: `findBidderRecord`, `getAuctionBidderStatus`, `AuctionBidderStatusKind`,
-     `PrivateAuctionClaimPayload`, `useDleqKeysetPolling`, `useNut7Polling`.
-   - knot: **1 member** — `auction/bidderRecords.ts` (wallet/money 11).
-   - verdict: `extract`; destination is `sdk/commerce/auctions`, which already exists.
-9. **The UI components — `src/components/**`** — 74 files · 42 platform importers · 101 dependents —
-   **0 knots\*\*
-   - job: render the marketplace — auction views, order views, dialogs, forms, badges, cards.
-   - contract: component + prop types, e.g. `AuctionCard`, `AuctionCountdown`, `AvatarUser`,
-     `UserCard` (25 dependents), `ProductCard`, `TestListingNotice`, …
-   - verdict: `extract`, and the destination is **`ui/`**, not `sdk/`. This is the largest block by
-     file count and the least blocked: zero cycle members, 42 of its 74 files have a single platform
-     consumer.
-
-**Single-file leaf contracts worth their own commit** (high fan-in, no wrapper):
-
-- `src/lib/utils.ts` — 5 platform importers · **47 dependents** — `cn`, `isValidHexKey`,
-  `isValidNip05`, `isValidNpub`, `truncateText`. Highest fan-in leaf in the tree.
-- `src/lib/constants.ts` — 7 platform importers · 30 dependents — `CURRENCIES`,
-  `PRODUCT_CATEGORIES`, `SHIPPING_TEMPLATES`, `ZAP_RELAYS`, `COUNTRIES_ISO`,
-  `PAYMENT_DETAILS_METHOD`, `PaymentDetailsMethod`. Not a shim: it re-exports four symbols from
-  `@sdk/core/geo` but declares the rest itself.
-- `src/lib/instance-config.ts` — 5 platform importers · 9 dependents.
-- `src/lib/appSettings.ts` — 3 · 6. `src/lib/ogTags.ts` — 3 · 4.
-- Then one-file singletons: `src/lib/queryClient.ts`, `src/lib/router-utils.ts`,
-  `src/lib/zapPurchase.ts`, `src/config/*`.
-
-**The knots, in full.** Of the 169, only **8 files** sit in a cycle: `stores/auth.ts`,
-`stores/cart.ts`, `stores/product.ts`, `stores/walletOps.ts`, `utils/productFormStorage.ts`,
+**The knots, in full.** Only **8 of the 169** sit in a cycle: `stores/auth.ts`, `stores/cart.ts`,
+`stores/product.ts`, `stores/walletOps.ts`, `utils/productFormStorage.ts`,
 `auction/bidderRecords.ts`, `publish/auctions.tsx`, `queries/v4v.tsx`. Seven more cyclic files are
-_not_ in the queue at all (`lib/cart-persistence.ts`, `lib/sdkAdapters.ts`, `stores/cashu.ts`,
-`wallet/auctionFunds.ts`, `wallet/cashuWalletSource.ts`, `wallet/storage.ts`, `queries/cart.tsx`).
-So cycle-breaking is a **15-file** problem, not a 169-file one — and it is what frees the four store
-contracts with the most dependents.
+outside the queue (`lib/cart-persistence.ts`, `lib/sdkAdapters.ts`, `stores/cashu.ts`,
+`wallet/{auctionFunds,cashuWalletSource,storage}.ts`, `queries/cart.tsx`). Cycle-breaking is a
+**15-file** problem, not 169 — and it is what frees the four store contracts with the most
+dependents. `src/lib/stores/ndk.ts` (96 dependents, the highest fan-in contract in the tree) is now
+out of every cycle and **extractable**.
 
-_One measurement note:_ an earlier run in this session reported 9 cyclic files in the queue against
-the 8 above; the two runs built their edge sets slightly differently. Treat it as 8–9 and re-measure
-with `method/checks/audit.py` before quoting it.
+_Measurement note:_ an earlier run in this session reported 9 cyclic files in the queue against the
+8 above, from a slightly different edge set. Treat as 8–9; re-measure with
+`python3 method/checks/audit.py . --top 25` before quoting.
+
+**Headline file counts (at `767e52df`):** `src/` **507** source files (360 production, 147 test) —
+514 at the branch base, net −7. `sdk/` 277 · `ui/` 154 · `platform/` 110. 117 of `src/`'s 360
+production files already import from `@sdk`.
