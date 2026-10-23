@@ -36,8 +36,21 @@
 # they are the drain, and the drain moved (241/118 -> 243/119, 160/117 ->
 # 162/118) because the lifted host reaches ui/ and sdk/ where the route used to
 # reach src/.
+#
+# 2026-10-23 (T3.1, useCheckout extraction): the checkout route no longer
+# imports the store/query/publish modules directly - it imports
+# src/feature/checkout/useCheckout, which does. Those edges were
+# platform -> src and are now src -> src, so the INBOUND row falls again,
+# 398/68 -> 388/68, and is ratcheted; the file count is unchanged because every
+# module it used to reach is still reached, one hop deeper. The OUTBOUND rows
+# are re-measured, not ratcheted: src -> sdk production 162/118 -> 165/120 and
+# src -> sdk test 8/7 -> 9/8, both from the new host module and its test
+# importing @sdk/commerce/checkout and orders directly. This is the drain
+# moving, and it is the expected shape of a src/ -> host-lift (T3.0 trap 4):
+# moving wiring out of a route converts uncounted platform -> src edges into
+# counted src -> * ones.
 
-platform -> src production 398 68
+platform -> src production 388 68
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -52,5 +65,5 @@ src -> platform test 22 11
 src -> ui production 243 119
 src -> ui test 0 0
 
-src -> sdk production 162 118
-src -> sdk test 8 7
+src -> sdk production 165 120
+src -> sdk test 9 8

@@ -8,7 +8,6 @@ platform/web/routes/auctions.$auctionId.tsx|primitive-import|4
 platform/web/routes/auctions.$auctionId.tsx|inline-component|1
 platform/web/routes/auctions.index.tsx|primitive-import|1
 platform/web/routes/auctions.index.tsx|inline-component|1
-platform/web/routes/checkout.tsx|primitive-import|2
 platform/web/routes/checkout.tsx|inline-component|1
 platform/web/routes/collection.$collectionId.tsx|inline-component|1
 platform/web/routes/community.index.tsx|inline-component|1

@@ -28,6 +28,13 @@ directories until it does.
 
 ## What belongs here
 
+- `checkout-layout-views` — `CheckoutMobileSummaryCard`, `CheckoutMainCard`,
+  `CheckoutSidebarCard`: the page's three card frames. They were built inline in
+  `platform/web/routes/checkout.tsx`, which imported `@ui/primitives/card` and
+  `@ui/primitives/scroll-area` to do it; an assembler may do neither. The frames
+  own the layout only — title, toggle state, header controls and every branch of
+  content arrive as props or as already-resolved children, and the scroll region
+  is opt-in (`scrollable`) because only the cart branch needs one.
 - `nwc-wallet-status-view` — `NwcWalletStatusView`: NWC wallet readiness for the
   checkout summaries. It replaced two divergent copies in the checkout route
   (mobile summary + desktop sidebar) that shared a status dot and count but had
@@ -37,5 +44,8 @@ directories until it does.
 
 - Anything that calls `useQuery`/`useStore`/`fetch` or reads the wallet store.
   Those stay in the host; pass the resolved count and the `connected` flag in.
+  The checkout flow's host half is `src/feature/checkout/useCheckout.ts` (with its
+  pure transitions in `src/feature/checkout/checkoutFlow.ts`) — the route is an
+  assembler that composes these views with that hook's members.
 - A second implementation of a `shared/` atom. Use `shared/notice` for
   info/warning/error banners and `shared/error-state` for a retryable failure.
