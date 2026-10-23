@@ -115,14 +115,12 @@ button {
 	--popover-foreground: #32011f;
 	/* primary */
 	--primary: #1d1d1d;
-	--primary-hover: #0a0a0a;
 	--primary-foreground: #fafafa;
 	--primary-foreground-hover: #ff3eb5;
 	--primary-border: #1d1d1d;
 	--primary-border-hover: #ff3eb5;
 	/* secondary */
 	--secondary: #ff3eb5;
-	--secondary-hover: #0a0a0a;
 	--secondary-foreground: #312222;
 	--secondary-foreground-hover: #ff3eb5;
 	--secondary-border: #ff3eb5;
@@ -218,6 +216,43 @@ button {
 	--grain: 0;
 	--gap: 1;
 	--handmade: 0;
+
+	/* ───────────────────────────────────────────────────────────────────
+	   TIER 0 — IDENTITY (scheme-stable; never consumed directly by a
+	   component — use --fill-accent / --on-fill-accent, ruling R5).
+	   TIER 1 — ROLES: the public design API. Names are NEW and must never
+	   collide with a legacy name (ruling R1a), so this block changes no
+	   rendering; the legacy declarations above remain the Tier-2
+	   compatibility tier until the migration completes (T6.5).
+	   Contract: runs/union-1420/TOKEN-ARCHITECTURE-DECISION.md
+	   ─────────────────────────────────────────────────────────────────── */
+	--brand-pink: oklch(0.688 0.249 348);
+
+	--bg: oklch(1 0 0);
+	--surface-raised: oklch(1 0 0);
+	--surface-sunken: oklch(0.961 0.005 314.8);
+	--surface-hover: oklch(0.92 0.008 319.4);
+
+	--fill-accent: var(--brand-pink);
+	--on-fill-accent: oklch(0.145 0 0);
+	--fill-ink: oklch(0.231 0 0);
+	--on-fill-ink: oklch(0.985 0 0);
+	--fill-ink-hover: oklch(0.145 0 0);
+
+	--text-high: oklch(0.218 0 0);
+	--text-mid: oklch(0.51 0 0);
+
+	--border-default: oklch(0.851 0.025 340.4);
+	--border-strong: oklch(0.574 0.078 342.7);
+
+	--focus-ring: var(--brand-pink);
+	--focus-attention: oklch(0.885 0.164 92.6);
+
+	--radius-pill: 2rem;
+
+	/* .tilt consumes var(--tilt, 0); declaring it keeps the fallback and the
+	   declaration in agreement (T6.0 fix F2). */
+	--tilt: 0;
 }
 
 .dark {
@@ -275,6 +310,33 @@ button {
 	--sidebar-accent-foreground: hsl(240 4.8% 95.9%);
 	--sidebar-border: hsl(240 3.7% 15.9%);
 	--sidebar-ring: hsl(217.2 91.2% 59.8%);
+
+	/* TIER 0 + TIER 1 — dark mode. Same names as :root, dark values; the
+	   identity tokens are deliberately identical in both modes (R1/R5). */
+	--brand-pink: oklch(0.688 0.249 348);
+
+	--bg: oklch(0.135 0.005 285.8);
+	--surface-raised: oklch(0.135 0.005 285.8);
+	--surface-sunken: oklch(0.274 0.006 286);
+	--surface-hover: oklch(0.274 0.006 286);
+
+	--fill-accent: var(--brand-pink);
+	--on-fill-accent: oklch(0.145 0 0);
+	--fill-ink: oklch(0.982 0 0);
+	--on-fill-ink: oklch(0.206 0.008 285.7);
+	--fill-ink-hover: oklch(0.9 0.01 286);
+
+	--text-high: oklch(0.982 0 0);
+	--text-mid: oklch(0.712 0.012 286.1);
+
+	--border-default: oklch(0.274 0.006 286);
+	--border-strong: oklch(0.274 0.006 286);
+
+	--focus-ring: var(--brand-pink);
+	--focus-attention: oklch(0.885 0.164 92.6);
+
+	--radius-pill: 2rem;
+	--tilt: 0;
 }
 
 @theme inline {
@@ -289,6 +351,26 @@ button {
 	--color-primary-foreground-hover: var(--primary-foreground-hover);
 	--color-primary-border: var(--primary-border);
 	--color-primary-border-hover: var(--primary-border-hover);
+
+	/* Tier 1 roles — the public design API (TOKEN-ARCHITECTURE-DECISION §1).
+	   --brand-pink is deliberately NOT registered: Tier 0 is never consumed
+	   directly by a component (ruling R5) — use the fill/on-fill pair. */
+	--color-bg: var(--bg);
+	--color-surface-raised: var(--surface-raised);
+	--color-surface-sunken: var(--surface-sunken);
+	--color-surface-hover: var(--surface-hover);
+	--color-fill-accent: var(--fill-accent);
+	--color-on-fill-accent: var(--on-fill-accent);
+	--color-fill-ink: var(--fill-ink);
+	--color-on-fill-ink: var(--on-fill-ink);
+	--color-fill-ink-hover: var(--fill-ink-hover);
+	--color-text-high: var(--text-high);
+	--color-text-mid: var(--text-mid);
+	--color-border-default: var(--border-default);
+	--color-border-strong: var(--border-strong);
+	--color-focus-ring: var(--focus-ring);
+	--color-focus-attention: var(--focus-attention);
+	--radius-pill: 2rem;
 	--color-secondary: var(--secondary);
 	--color-secondary-foreground: var(--secondary-foreground);
 	--color-secondary-foreground-hover: var(--secondary-foreground-hover);

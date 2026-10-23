@@ -42,7 +42,6 @@
 
 	/* ── Primary ──────────────────────────────────────────────────────── */
 	--primary: oklch(0.231 0 0);
-	--primary-hover: oklch(0.145 0 0);
 	--primary-foreground: oklch(0.985 0 0);
 	--primary-foreground-hover: oklch(0.688 0.249 348);
 	--primary-border: oklch(0.231 0 0);
@@ -50,7 +49,6 @@
 
 	/* ── Secondary ────────────────────────────────────────────────────── */
 	--secondary: oklch(0.688 0.249 348);
-	--secondary-hover: oklch(0.145 0 0);
 	--secondary-foreground: oklch(0.145 0 0);
 	--secondary-foreground-hover: oklch(0.688 0.249 348);
 	--secondary-border: oklch(0.688 0.249 348);
@@ -166,6 +164,37 @@
 	--sidebar-accent-foreground: oklch(0.269 0 0);
 	--sidebar-border: oklch(0.851 0.025 340.4);
 	--sidebar-ring: oklch(0.688 0.249 348);
+
+	/* ───────────────────────────────────────────────────────────────────
+	   TIER 0 + TIER 1 — the public design API, mirrored into the theme
+	   scope so the widget-book theme studio carries the full set. Values
+	   are byte-identical to the :root/.dark declarations in globals.css.
+	   Contract: runs/union-1420/TOKEN-ARCHITECTURE-DECISION.md
+	   ─────────────────────────────────────────────────────────────────── */
+	--brand-pink: oklch(0.688 0.249 348);
+
+	--bg: oklch(1 0 0);
+	--surface-raised: oklch(1 0 0);
+	--surface-sunken: oklch(0.961 0.005 314.8);
+	--surface-hover: oklch(0.92 0.008 319.4);
+
+	--fill-accent: var(--brand-pink);
+	--on-fill-accent: oklch(0.145 0 0);
+	--fill-ink: oklch(0.231 0 0);
+	--on-fill-ink: oklch(0.985 0 0);
+	--fill-ink-hover: oklch(0.145 0 0);
+
+	--text-high: oklch(0.218 0 0);
+	--text-mid: oklch(0.51 0 0);
+
+	--border-default: oklch(0.851 0.025 340.4);
+	--border-strong: oklch(0.574 0.078 342.7);
+
+	--focus-ring: var(--brand-pink);
+	--focus-attention: oklch(0.885 0.164 92.6);
+
+	--radius-pill: 2rem;
+	--tilt: 0;
 }
 
 /* ── Dark mode (ancestor selector: .dark on <html> or any ancestor) ─── */
@@ -180,14 +209,12 @@
 	--popover-foreground: oklch(0.982 0 0);
 
 	--primary: oklch(0.982 0 0);
-	--primary-hover: oklch(0.982 0 0);
 	--primary-foreground: oklch(0.206 0.008 285.7);
 	--primary-foreground-hover: oklch(0.206 0.008 285.7);
 	--primary-border: oklch(0.982 0 0);
 	--primary-border-hover: oklch(0.982 0 0);
 
 	--secondary: oklch(0.274 0.006 286);
-	--secondary-hover: oklch(0.274 0.006 286);
 	--secondary-foreground: oklch(0.982 0 0);
 	--secondary-foreground-hover: oklch(0.982 0 0);
 	--secondary-border: oklch(0.274 0.006 286);
@@ -270,6 +297,32 @@
 	--sidebar-accent-foreground: oklch(0.982 0 0);
 	--sidebar-border: oklch(0.274 0.006 286);
 	--sidebar-ring: oklch(0.868 0.006 286.3);
+
+	/* TIER 0 + TIER 1 — dark mode (identical to globals.css .dark). */
+	--brand-pink: oklch(0.688 0.249 348);
+
+	--bg: oklch(0.135 0.005 285.8);
+	--surface-raised: oklch(0.135 0.005 285.8);
+	--surface-sunken: oklch(0.274 0.006 286);
+	--surface-hover: oklch(0.274 0.006 286);
+
+	--fill-accent: var(--brand-pink);
+	--on-fill-accent: oklch(0.145 0 0);
+	--fill-ink: oklch(0.982 0 0);
+	--on-fill-ink: oklch(0.206 0.008 285.7);
+	--fill-ink-hover: oklch(0.9 0.01 286);
+
+	--text-high: oklch(0.982 0 0);
+	--text-mid: oklch(0.712 0.012 286.1);
+
+	--border-default: oklch(0.274 0.006 286);
+	--border-strong: oklch(0.274 0.006 286);
+
+	--focus-ring: var(--brand-pink);
+	--focus-attention: oklch(0.885 0.164 92.6);
+
+	--radius-pill: 2rem;
+	--tilt: 0;
 }
 
 /* ── Base resets scoped to .theme-new (ADR §1a permits @layer base) ─ */
