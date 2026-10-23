@@ -47,7 +47,7 @@ export interface ShippingOptionsToolbarProps {
 /** Sticky desktop header with filter + add; mobile gets the stacked variant via `ShippingOptionsMobileToolbar`. */
 export function ShippingOptionsToolbar({ serviceFilter, onServiceFilterChange, serviceTypes, onAdd }: ShippingOptionsToolbarProps) {
 	return (
-		<div className="sticky top-0 z-10 hidden items-center justify-between border-b bg-white px-4 py-4 lg:flex lg:px-6">
+		<div className="sticky top-0 z-10 hidden items-center justify-between border-b bg-bg px-4 py-4 lg:flex lg:px-6">
 			<h1 className="text-2xl font-bold">Shipping Options</h1>
 			<div className="flex items-center gap-4">
 				<div className="flex items-center gap-2">
@@ -64,7 +64,7 @@ export function ShippingOptionsToolbar({ serviceFilter, onServiceFilterChange, s
 				</div>
 				<Button
 					onClick={onAdd}
-					className="flex items-center gap-2 bg-neutral-800 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-700"
+					className="flex items-center gap-2 bg-fill-ink px-4 py-2 text-sm font-semibold text-on-fill-ink hover:bg-fill-ink-hover"
 				>
 					<PlusIcon className="h-5 w-5" />
 					Add Shipping Option
@@ -91,7 +91,7 @@ export function ShippingOptionsMobileToolbar({ serviceFilter, onServiceFilterCha
 
 			<Button
 				onClick={onAdd}
-				className="flex w-full items-center justify-center gap-2 rounded-t-md rounded-b-none border-b border-neutral-600 bg-neutral-800 py-3 text-base font-semibold text-white hover:bg-neutral-700"
+				className="flex w-full items-center justify-center gap-2 rounded-t-md rounded-b-none border-b border-border-strong bg-fill-ink py-3 text-base font-semibold text-on-fill-ink hover:bg-fill-ink-hover"
 			>
 				<PlusIcon className="h-5 w-5" />
 				Add Shipping Option

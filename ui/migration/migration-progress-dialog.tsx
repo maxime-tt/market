@@ -32,7 +32,7 @@ function StepIcon({ status }: { status: MigrationStep['status'] }) {
 		case 'active':
 			return <Spinner className="size-5 text-fill-accent" />
 		case 'complete':
-			return <CheckCircle2 className="w-5 h-5 text-green-600" />
+			return <CheckCircle2 className="w-5 h-5 text-success" />
 		case 'error':
 			return <XCircle className="w-5 h-5 text-error" />
 	}
@@ -43,7 +43,7 @@ function RelayStatusIcon({ status }: { status: RelayStatus['status'] }) {
 		case 'pending':
 			return <Spinner className="text-muted-foreground" />
 		case 'success':
-			return <CheckCircle2 className="w-4 h-4 text-green-600" />
+			return <CheckCircle2 className="w-4 h-4 text-success" />
 		case 'error':
 			return <XCircle className="w-4 h-4 text-error" />
 	}
@@ -80,8 +80,8 @@ export function MigrationProgressDialog({ open, steps, relayStatuses, error, onR
 									if (step.status !== 'complete') return null
 									return (
 										<div key={step.id} className="flex items-center gap-3 pt-2 border-t">
-											<CheckCircle2 className="w-6 h-6 text-green-600" />
-											<span className="text-sm font-medium text-green-600">{step.label}</span>
+											<CheckCircle2 className="w-6 h-6 text-success" />
+											<span className="text-sm font-medium text-success">{step.label}</span>
 										</div>
 									)
 								}

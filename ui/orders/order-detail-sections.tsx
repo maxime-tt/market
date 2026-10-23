@@ -44,26 +44,26 @@ export function OrderDetailHeader({ title, subText, totalSats, createdAt, status
 				<div className={cn('rounded-t-xl p-4', status.headerBgColor)}>
 					<div className="mb-4 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
 						<div className="flex items-center space-x-3">
-							<div className="rounded-lg bg-blue-100 p-2">
-								<Package className="h-5 w-5 text-blue-700" />
+							<div className="rounded-lg bg-info-muted p-2">
+								<Package className="h-5 w-5 text-info-foreground" />
 							</div>
 							<div>
-								<p className="text-sm font-medium text-gray-900">Products</p>
-								<h2 className="max-w-[300px] truncate font-semibold text-gray-800" title={title}>
+								<p className="text-sm font-medium text-text-high">Products</p>
+								<h2 className="max-w-[300px] truncate font-semibold text-text-high" title={title}>
 									{title}
 								</h2>
-								{subText && <p className="mt-0.5 text-xs text-gray-600">{subText}</p>}
+								{subText && <p className="mt-0.5 text-xs text-text-high">{subText}</p>}
 							</div>
 						</div>
 					</div>
 
 					<div className="border-t border-white/20 pt-4">
 						<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-							<DetailField label="Amount:" value={`${totalSats} sats`} valueClassName="font-bold text-gray-900" />
+							<DetailField label="Amount:" value={`${totalSats} sats`} valueClassName="font-bold text-text-high" />
 							<DetailField
 								label="Date:"
 								value={createdAt ? format(new Date(createdAt * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
-								valueClassName="text-gray-900"
+								valueClassName="text-text-high"
 							/>
 						</div>
 					</div>
@@ -71,12 +71,12 @@ export function OrderDetailHeader({ title, subText, totalSats, createdAt, status
 			</CardHeader>
 
 			<CardContent className="pt-4">
-				<div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+				<div className="mb-6 rounded-lg border border-border-default bg-surface-sunken p-4">
 					<div className="mb-2 flex items-center gap-2">
 						<div className={cn('rounded-md p-1.5', status.badgeBgColor)}>{StatusIcon && <StatusIcon className="h-4 w-4" />}</div>
-						<span className="font-semibold capitalize text-gray-900">{status.label}</span>
+						<span className="font-semibold capitalize text-text-high">{status.label}</span>
 					</div>
-					<p className="ml-9 text-sm text-gray-700">{status.explanation || 'No pending actions required.'}</p>
+					<p className="ml-9 text-sm text-text-high">{status.explanation || 'No pending actions required.'}</p>
 				</div>
 				{actions}
 			</CardContent>
@@ -91,10 +91,10 @@ export function OrderBuyerContactCard({ deliveryContact }: { deliveryContact: st
 				<CardTitle>Buyer Contact</CardTitle>
 			</CardHeader>
 			<CardContent>
-				<p className="text-sm text-gray-700">
+				<p className="text-sm text-text-high">
 					<strong>Delivery contact:</strong> {deliveryContact}
 				</p>
-				<p className="mt-2 text-xs text-gray-500">The seller can use this contact for order coordination after payment settles.</p>
+				<p className="mt-2 text-xs text-text-mid">The seller can use this contact for order coordination after payment settles.</p>
 			</CardContent>
 		</Card>
 	)
@@ -139,23 +139,23 @@ export function PrivateAuctionClaimCard({ isLoading, claim, unavailableMessage }
 				<CardTitle>Private Auction Claim Details</CardTitle>
 			</CardHeader>
 			<CardContent>
-				{isLoading && <p className="text-sm text-gray-600">Loading private auction claim details...</p>}
+				{isLoading && <p className="text-sm text-text-high">Loading private auction claim details...</p>}
 
 				{!isLoading && claim && (
 					<div className="space-y-4">
 						<div>
-							<p className="text-sm font-semibold text-gray-900">Private shipping address</p>
-							<p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{formatPrivateAuctionClaimAddress(claim)}</p>
+							<p className="text-sm font-semibold text-text-high">Private shipping address</p>
+							<p className="mt-2 whitespace-pre-wrap text-sm text-text-high">{formatPrivateAuctionClaimAddress(claim)}</p>
 						</div>
 
 						<div className="grid gap-3 sm:grid-cols-2">
 							{claim.email && (
-								<p className="text-sm text-gray-700">
+								<p className="text-sm text-text-high">
 									<strong>Contact email:</strong> {claim.email}
 								</p>
 							)}
 							{claim.phone && (
-								<p className="text-sm text-gray-700">
+								<p className="text-sm text-text-high">
 									<strong>Contact phone:</strong> {claim.phone}
 								</p>
 							)}
@@ -163,14 +163,14 @@ export function PrivateAuctionClaimCard({ isLoading, claim, unavailableMessage }
 
 						{claim.notes && (
 							<div>
-								<p className="text-sm font-semibold text-gray-900">Message to seller</p>
-								<p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{claim.notes}</p>
+								<p className="text-sm font-semibold text-text-high">Message to seller</p>
+								<p className="mt-1 whitespace-pre-wrap text-sm text-text-high">{claim.notes}</p>
 							</div>
 						)}
 					</div>
 				)}
 
-				{!isLoading && !claim && <p className="text-sm text-gray-600">{unavailableMessage}</p>}
+				{!isLoading && !claim && <p className="text-sm text-text-high">{unavailableMessage}</p>}
 			</CardContent>
 		</Card>
 	)
@@ -225,8 +225,8 @@ export function OrderShippingCard({ mode, shippingInfo, pickupAddress, deliveryA
 					{tracking}
 
 					{shippingInfo?.description && (
-						<div className="mt-4 rounded-lg bg-gray-50 p-3">
-							<p className="text-sm text-gray-700">{shippingInfo.description}</p>
+						<div className="mt-4 rounded-lg bg-surface-sunken p-3">
+							<p className="text-sm text-text-high">{shippingInfo.description}</p>
 						</div>
 					)}
 				</div>

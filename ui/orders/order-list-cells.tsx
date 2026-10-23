@@ -11,7 +11,7 @@ export function OrderReferenceBadge({
 	const reference = getOrderReference(order)
 
 	return (
-		<div className="inline-block rounded border border-gray-300 px-3 py-1">
+		<div className="inline-block rounded border border-border-default px-3 py-1">
 			{renderLink(reference || 'unknown', reference ? `${reference.substring(0, 8)}...` : 'Unknown')}
 		</div>
 	)

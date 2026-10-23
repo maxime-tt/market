@@ -30,7 +30,7 @@ export function ShareProductDialogView({
 }: ShareProductDialogViewProps) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="bg-white max-w-[calc(100%-2rem)] sm:max-w-[40em] max-h-[90vh] overflow-x-hidden overflow-y-auto">
+			<DialogContent className="bg-surface-raised max-w-[calc(100%-2rem)] sm:max-w-[40em] max-h-[90vh] overflow-x-hidden overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>Share Product</DialogTitle>
 					<DialogDescription id="share-dialog-description">Share this product with others or post it to your Nostr feed.</DialogDescription>
@@ -39,7 +39,7 @@ export function ShareProductDialogView({
 				<div className="space-y-6 py-4 overflow-x-hidden">
 					{canPost && (
 						<div className="space-y-2">
-							<label htmlFor="share-text" className="font-medium text-gray-700 text-sm">
+							<label htmlFor="share-text" className="font-medium text-text-high text-sm">
 								Content to post to Nostr
 							</label>
 							<Textarea

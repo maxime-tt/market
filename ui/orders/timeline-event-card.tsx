@@ -68,7 +68,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex, onC
 		}
 		if (amount > 0 && type === 'payment') {
 			extraInfo = (
-				<Badge variant="outline" className={`${badgeClass} border-green-300 bg-green-100 text-green-800`}>
+				<Badge variant="outline" className={`${badgeClass} border-success-border bg-success-muted text-success-foreground`}>
 					Paid: {amount.toLocaleString()} sats
 				</Badge>
 			)
@@ -78,24 +78,24 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex, onC
 			if (preimage) {
 				paymentDetails = (
 					<div className="space-y-3">
-						<div className="flex items-center gap-2 text-green-700">
+						<div className="flex items-center gap-2 text-success-foreground">
 							<CheckCircle className="w-4 h-4" />
 							<span className="text-sm font-medium">Payment Verified</span>
 						</div>
-						<div className="bg-green-50 border border-green-200 rounded-lg p-3">
+						<div className="bg-success-muted border border-success-border rounded-lg p-3">
 							<div className="space-y-2">
 								<div className="flex items-center justify-between">
-									<span className="text-xs font-medium text-green-700 uppercase tracking-wide">Payment Proof (Preimage)</span>
+									<span className="text-xs font-medium text-success-foreground uppercase tracking-wide">Payment Proof (Preimage)</span>
 									<Button
 										variant="ghost"
 										size="sm"
-										className="h-6 px-2 text-green-700 hover:text-green-900 hover:bg-green-100"
+										className="h-6 px-2 text-success-foreground hover:text-success-foreground hover:bg-success-muted"
 										onClick={() => onCopyPreimage(preimage)}
 									>
 										<Copy className="h-3 w-3" />
 									</Button>
 								</div>
-								<div className="font-mono text-xs text-green-900 break-all bg-white rounded px-2 py-1 border border-green-200">
+								<div className="font-mono text-xs text-success-foreground break-all bg-surface-raised rounded px-2 py-1 border border-success-border">
 									{preimage}
 								</div>
 							</div>
@@ -128,14 +128,16 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex, onC
 	}
 
 	const indexBadge = (
-		<div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">{timelineIndex}</div>
+		<div className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-hover text-xs font-bold text-text-high">
+			{timelineIndex}
+		</div>
 	)
 
 	if (hasGreyContainer) {
 		return (
 			<Card>
 				<CardHeader className="p-0">
-					<div className="bg-gray-50 p-4 rounded-t-xl">
+					<div className="bg-surface-sunken p-4 rounded-t-xl">
 						<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 							<div className="flex items-center gap-2">
 								{indexBadge}
@@ -148,7 +150,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex, onC
 				</CardHeader>
 				{(content || shippingDetails || paymentDetails) && (
 					<CardContent className="pt-4 space-y-4">
-						{content && <p className="text-gray-700">{content}</p>}
+						{content && <p className="text-text-high">{content}</p>}
 						{shippingDetails}
 						{paymentDetails}
 					</CardContent>
@@ -174,7 +176,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex, onC
 			</CardHeader>
 			{content && (
 				<CardContent className="pt-0">
-					<p className="text-gray-700">{content}</p>
+					<p className="text-text-high">{content}</p>
 				</CardContent>
 			)}
 			<CardFooter className="flex justify-center">
