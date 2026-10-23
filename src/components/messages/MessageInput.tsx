@@ -1,6 +1,6 @@
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { MessageInputView } from '@ui/components/messages/MessagingViews'
+import { MessageInputView } from '@ui/messages/messaging-views'
 
 interface MessageInputProps {
 	onSendMessage: (content: string) => Promise<void>

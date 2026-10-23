@@ -1,6 +1,6 @@
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useStore } from '@tanstack/react-store'
-import { NSFWConfirmationDialogView } from '@ui/components/dialogs/DialogViews'
+import { NSFWConfirmationDialogView } from '@ui/dialogs/dialog-views'
 
 export function NSFWConfirmationDialog() {
 	const { dialogs } = useStore(uiStore)

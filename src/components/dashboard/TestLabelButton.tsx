@@ -5,7 +5,7 @@ import { useUserRole } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
 import { useTestLabelForCoordinate } from '@/queries/testLabels'
 import { useState } from 'react'
-import { TestLabelButtonView, type TestLabelDialogMode } from '@ui/components/dashboard/TestLabelViews'
+import { TestLabelButtonView, type TestLabelDialogMode } from '@ui/dashboard/test-label-views'
 
 interface TestLabelButtonProps {
 	/** Item event kind: 30402 (product) or 30408 (auction) */

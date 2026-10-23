@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { MessageSquareText, Send } from 'lucide-react'
-import { Button } from '../../primitives/button'
-import { Card } from '../../primitives/card'
-import { Textarea } from '../../primitives/textarea'
-import { UiLink } from '../../provider/UiProvider'
-import { EmptyState } from '../../shared/empty-state'
-import { ErrorState } from '../../shared/error-state'
-import { LoadingState } from '../../shared/loading-state'
+import { Button } from '../primitives/button'
+import { Card } from '../primitives/card'
+import { Textarea } from '../primitives/textarea'
+import { UiLink } from '../provider/UiProvider'
+import { EmptyState } from '../shared/empty-state'
+import { ErrorState } from '../shared/error-state'
+import { LoadingState } from '../shared/loading-state'
 
 export interface MessageInputViewProps {
 	onSendMessage: (content: string) => Promise<void>
@@ -83,7 +83,7 @@ export function ConversationListItemView({
 		<UiLink href={href} className={isActive ? 'block w-full bg-muted/20 rounded-lg' : 'block w-full'}>
 			<Card className="p-4 hover:bg-muted/50 transition-colors relative">
 				{unseenCount > 0 && (
-					<div className="absolute top-2 right-2 inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 text-xs font-bold text-white bg-pink-500 rounded-full">
+					<div className="absolute top-2 right-2 inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 text-xs font-bold text-on-fill-accent bg-fill-accent rounded-full">
 						{unseenCount > 99 ? '99+' : unseenCount}
 					</div>
 				)}

@@ -1,5 +1,5 @@
 import { useConfigQuery } from '@/queries/config'
-import { TermsConditionsDialogView } from '@ui/components/dialogs/TermsConditionsDialogView'
+import { TermsConditionsDialogView } from '@ui/dialogs/terms-conditions-dialog-view'
 
 export const TERMS_ACCEPTED_KEY = 'plebeian_terms_accepted'
 

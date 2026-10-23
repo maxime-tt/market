@@ -1,6 +1,6 @@
 import { nip19 } from 'nostr-tools'
 import { toast } from 'sonner'
-import { ShareProfileDialogView } from '@ui/components/dialogs/DialogViews'
+import { ShareProfileDialogView } from '@ui/dialogs/dialog-views'
 
 interface ShareProfileDialogProps {
 	open: boolean

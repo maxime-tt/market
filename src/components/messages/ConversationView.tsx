@@ -9,7 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { ConversationViewLayout } from '@ui/components/messages/MessagingViews'
+import { ConversationViewLayout } from '@ui/messages/messaging-views'
 
 interface ConversationViewProps {
 	/** The pubkey of the other user in the conversation */

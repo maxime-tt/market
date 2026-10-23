@@ -2,7 +2,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { notificationStore } from '@/lib/stores/notifications'
 import { useRouterState } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ConversationListItemView } from '@ui/components/messages/MessagingViews'
+import { ConversationListItemView } from '@ui/messages/messaging-views'
 import { UserCard } from '../UserCard'
 
 export interface ConversationItemData {

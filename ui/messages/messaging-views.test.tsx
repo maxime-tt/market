@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ChatMessageBubbleView, ChatOrderItemView } from './ChatMessageBubbleView'
-import { ConversationViewLayout, MessageInputView } from './MessagingViews'
+import { ChatMessageBubbleView, ChatOrderItemView } from './chat-message-bubble-view'
+import { ConversationViewLayout, MessageInputView } from './messaging-views'
 
 const noop = () => {}
 

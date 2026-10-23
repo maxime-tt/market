@@ -1,12 +1,12 @@
 import { ChevronLeft, ChevronRight, Copy, CreditCard, Loader2, Zap } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { Button } from '../../primitives/button'
-import { Card, CardContent, CardHeader, CardTitle } from '../../primitives/card'
-import { Input } from '../../primitives/input'
-import { Label } from '../../primitives/label'
-import { QRCode } from '../../primitives/qr-code'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../primitives/tooltip'
-import { Notice } from '../../shared/notice'
+import { Button } from '../primitives/button'
+import { Card, CardContent, CardHeader, CardTitle } from '../primitives/card'
+import { Input } from '../primitives/input'
+import { Label } from '../primitives/label'
+import { QRCode } from '../primitives/qr-code'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/tooltip'
+import { Notice } from '../shared/notice'
 
 export interface LightningPaymentViewProps {
 	className?: string

@@ -9,7 +9,7 @@ import { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { LightningPaymentView } from '@ui/components/lightning/LightningPaymentView'
+import { LightningPaymentView } from '@ui/lightning/lightning-payment-view'
 
 const nip60WalletPort = createNip60WalletPort()
 

@@ -1,6 +1,6 @@
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../primitives/dialog'
-import { Button } from '../../primitives/button'
-import { ScrollArea } from '../../primitives/scroll-area'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../primitives/dialog'
+import { Button } from '../primitives/button'
+import { ScrollArea } from '../primitives/scroll-area'
 import { ExternalLink } from 'lucide-react'
 
 export interface TermsConditionsDialogViewProps {

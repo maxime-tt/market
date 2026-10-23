@@ -9,10 +9,10 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from '../../primitives/alert-dialog'
-import { Button } from '../../primitives/button'
-import { Label } from '../../primitives/label'
-import { Textarea } from '../../primitives/textarea'
+} from '../primitives/alert-dialog'
+import { Button } from '../primitives/button'
+import { Label } from '../primitives/label'
+import { Textarea } from '../primitives/textarea'
 
 export type TestLabelKindSlug = 'product' | 'auction'
 export type TestLabelDialogMode = 'mark' | 'unmark'

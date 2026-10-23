@@ -1,5 +1,5 @@
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../primitives/dialog'
-import { Spinner } from '../../primitives/spinner'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../primitives/dialog'
+import { Spinner } from '../primitives/spinner'
 import { MapPin } from 'lucide-react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -122,7 +122,7 @@ export function PickupLocationDialogView({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-lg max-w-[calc(100%-2rem)] bg-white">
+			<DialogContent className="sm:max-w-lg max-w-[calc(100%-2rem)] bg-surface-raised">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
 						<MapPin className="w-5 h-5" />
@@ -139,7 +139,7 @@ export function PickupLocationDialogView({
 					{hasMultipleLocations && (
 						<div className="text-sm space-y-2 max-h-[120px] overflow-y-auto">
 							{locations.map((location, index) => (
-								<div key={index} className="p-2 bg-zinc-50 rounded-md">
+								<div key={index} className="p-2 bg-surface-sunken rounded-md">
 									<p className="font-medium text-text-high">{location.name}</p>
 									<p className="text-muted-foreground text-xs">{location.address}</p>
 								</div>
@@ -156,15 +156,17 @@ export function PickupLocationDialogView({
 
 					<div className="h-[300px] w-full rounded-lg overflow-hidden border">
 						{loading ? (
-							<div className="h-full w-full flex items-center justify-center bg-zinc-100">
+							<div className="h-full w-full flex items-center justify-center bg-surface-sunken">
 								<Spinner className="w-8 h-8" />
 							</div>
 						) : error ? (
-							<div className="h-full w-full flex items-center justify-center bg-zinc-100 text-muted-foreground text-sm">{error}</div>
+							<div className="h-full w-full flex items-center justify-center bg-surface-sunken text-muted-foreground text-sm">{error}</div>
 						) : geocodedLocations.length > 0 ? (
 							<div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
 						) : (
-							<div className="h-full w-full flex items-center justify-center bg-zinc-100 text-muted-foreground text-sm">Loading map...</div>
+							<div className="h-full w-full flex items-center justify-center bg-surface-sunken text-muted-foreground text-sm">
+								Loading map...
+							</div>
 						)}
 					</div>
 				</div>

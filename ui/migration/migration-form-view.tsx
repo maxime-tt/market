@@ -1,15 +1,15 @@
 import type { ReactNode } from 'react'
 import { ArrowLeft, PlusIcon, X } from 'lucide-react'
 import type { Nip15ProductData } from '@sdk/commerce/products/nip15Migration'
-import { Button } from '../../primitives/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../primitives/card'
-import { Input } from '../../primitives/input'
-import { Label } from '../../primitives/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../primitives/select'
-import { Textarea } from '../../primitives/textarea'
-import { EmptyState } from '../../shared/empty-state'
-import { LoadingState } from '../../shared/loading-state'
-import { Media } from '../Media'
+import { Button } from '../primitives/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../primitives/card'
+import { Input } from '../primitives/input'
+import { Label } from '../primitives/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../primitives/select'
+import { Textarea } from '../primitives/textarea'
+import { EmptyState } from '../shared/empty-state'
+import { LoadingState } from '../shared/loading-state'
+import { Media } from '../components/Media'
 
 export interface MigrationFormData {
 	name: string
@@ -68,7 +68,7 @@ export interface MigrationFormViewProps {
 function RequiredLabel({ htmlFor, children }: { htmlFor?: string; children: ReactNode }) {
 	return (
 		<Label htmlFor={htmlFor}>
-			<span className="after:content-['*'] after:ml-0.5 after:text-red-500">{children}</span>
+			<span className="after:content-['*'] after:ml-0.5 after:text-error">{children}</span>
 		</Label>
 	)
 }
@@ -104,7 +104,7 @@ function UnitValueField({
 	return (
 		<div>
 			<Label>{label}</Label>
-			{hint && <p className="text-sm text-gray-500 mt-1 mb-2">{hint}</p>}
+			{hint && <p className="text-sm text-text-mid mt-1 mb-2">{hint}</p>}
 			<div className={hint ? 'flex gap-2' : 'flex gap-2 mt-2'}>
 				<Input
 					{...(numeric ? { type: 'number', step: '0.01', min: '0' } : {})}
@@ -166,21 +166,21 @@ export function MigrationFormView({
 					<CardContent className="space-y-4">
 						<div>
 							<Label>Name</Label>
-							<Input value={original.name} readOnly className="bg-gray-50" />
+							<Input value={original.name} readOnly className="bg-surface-sunken" />
 						</div>
 						<div>
 							<Label>Description</Label>
-							<Textarea value={original.description} readOnly className="bg-gray-50 min-h-[100px]" />
+							<Textarea value={original.description} readOnly className="bg-surface-sunken min-h-[100px]" />
 						</div>
 						<div className="grid grid-cols-2 gap-4">
 							<div>
 								<Label>Price</Label>
-								<Input value={`${original.price} ${original.currency}`} readOnly className="bg-gray-50" />
+								<Input value={`${original.price} ${original.currency}`} readOnly className="bg-surface-sunken" />
 							</div>
 							{original.quantity !== null && (
 								<div>
 									<Label>Quantity</Label>
-									<Input value={original.quantity.toString()} readOnly className="bg-gray-50" />
+									<Input value={original.quantity.toString()} readOnly className="bg-surface-sunken" />
 								</div>
 							)}
 						</div>
@@ -335,7 +335,7 @@ export function MigrationFormView({
 						{formData.mainCategory && (
 							<div>
 								<Label>Sub Categories (optional)</Label>
-								<p className="text-sm text-gray-500 mt-1 mb-2">Add sub-categories to better describe your product</p>
+								<p className="text-sm text-text-mid mt-1 mb-2">Add sub-categories to better describe your product</p>
 								<div className="space-y-2">
 									{formData.categories.map((category, index) => (
 										<div key={category.key} className="flex gap-2">
@@ -373,7 +373,7 @@ export function MigrationFormView({
 
 						<div>
 							<Label>Shipping Options</Label>
-							<p className="text-sm text-gray-500 mt-1 mb-2">Select shipping methods available for this product</p>
+							<p className="text-sm text-text-mid mt-1 mb-2">Select shipping methods available for this product</p>
 							{isLoadingShipping ? (
 								<LoadingRow label="Loading shipping options..." />
 							) : shippingOptions.length === 0 ? (
@@ -382,9 +382,9 @@ export function MigrationFormView({
 								<div className="space-y-2">
 									{formData.shippings.length > 0 && (
 										<div className="space-y-2 mb-3">
-											<Label className="text-sm text-gray-600">Selected:</Label>
+											<Label className="text-sm text-text-high">Selected:</Label>
 											{formData.shippings.map((shipping, index) => (
-												<div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded border">
+												<div key={index} className="flex items-center gap-2 p-2 bg-surface-sunken rounded border">
 													<div className="flex-1">
 														<span className="font-medium">{shipping.shipping?.name}</span>
 													</div>
@@ -419,12 +419,12 @@ export function MigrationFormView({
 											return (
 												<div
 													key={option.id}
-													className={`flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50 ${isSelected ? 'opacity-50' : ''}`}
+													className={`flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-surface-hover ${isSelected ? 'opacity-50' : ''}`}
 													onClick={() => !isSelected && onAddShipping(option)}
 												>
 													<div className="flex-1">
 														<div className="font-medium">{option.name}</div>
-														<div className="text-sm text-gray-500">
+														<div className="text-sm text-text-mid">
 															{option.cost} {option.currency} • {describeCountries(option.countries)}
 														</div>
 													</div>
@@ -461,7 +461,7 @@ export function MigrationFormView({
 
 						<div>
 							<Label>Collection (optional)</Label>
-							<p className="text-sm text-gray-500 mt-1 mb-2">Assign this product to a collection</p>
+							<p className="text-sm text-text-mid mt-1 mb-2">Assign this product to a collection</p>
 							{isLoadingCollections ? (
 								<LoadingRow label="Loading collections..." />
 							) : collections.length === 0 ? (

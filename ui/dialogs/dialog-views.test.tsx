@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { PickupLocationDialogView } from './PickupLocationDialogView'
+import { PickupLocationDialogView } from './pickup-location-dialog-view'
 
 describe('PickupLocationDialogView', () => {
 	test('renders nothing while closed', () => {

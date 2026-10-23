@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { npubEncode } from 'nostr-tools/nip19'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { TestLabelDialogView } from '@ui/components/dashboard/TestLabelViews'
+import { TestLabelDialogView } from '@ui/dashboard/test-label-views'
 
 export interface TestLabelDialogProps {
 	/** Item event kind: 30402 (product) or 30408 (auction) */

@@ -1,9 +1,9 @@
 import { useState, type ReactNode } from 'react'
 import { AlertTriangle, Check, Copy } from 'lucide-react'
-import { Button } from '../../primitives/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../primitives/dialog'
-import { QRCode } from '../../primitives/qr-code'
-import { useCopyToClipboard } from '../../shared/use-copy-to-clipboard'
+import { Button } from '../primitives/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../primitives/dialog'
+import { QRCode } from '../primitives/qr-code'
+import { useCopyToClipboard } from '../shared/use-copy-to-clipboard'
 
 export interface NSFWConfirmationDialogViewProps {
 	open: boolean
@@ -17,7 +17,7 @@ export function NSFWConfirmationDialogView({ open, onConfirm, onCancel }: NSFWCo
 			<DialogContent className="max-w-md">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
-						<AlertTriangle className="w-5 h-5 text-amber-500" />
+						<AlertTriangle className="w-5 h-5 text-warning" />
 						Adult Content Warning
 					</DialogTitle>
 					<DialogDescription>You are about to enable viewing of adult and sensitive content.</DialogDescription>
@@ -40,7 +40,7 @@ export function NSFWConfirmationDialogView({ open, onConfirm, onCancel }: NSFWCo
 					<Button variant="outline" onClick={onCancel}>
 						Cancel
 					</Button>
-					<Button onClick={onConfirm} className="bg-amber-600 hover:bg-amber-700">
+					<Button onClick={onConfirm} className="bg-warning hover:bg-warning/90">
 						I understand, show adult content
 					</Button>
 				</DialogFooter>
@@ -73,7 +73,7 @@ export function ShareProfileDialogView({ open, onOpenChange, npub, profileName, 
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="bg-white max-w-[calc(100%-2rem)] sm:max-w-md">
+			<DialogContent className="bg-surface-raised max-w-[calc(100%-2rem)] sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle>Share Profile</DialogTitle>
 					<DialogDescription>
@@ -85,9 +85,9 @@ export function ShareProfileDialogView({ open, onOpenChange, npub, profileName, 
 					<QRCode value={npub} size={200} showBorder={false} />
 
 					<div className="space-y-2 w-full">
-						<p className="text-gray-500 text-xs text-center">npub</p>
+						<p className="text-text-mid text-xs text-center">npub</p>
 						<div className="flex items-center gap-2">
-							<code className="flex-1 bg-gray-100 p-2 rounded text-xs break-all select-all">{npub}</code>
+							<code className="flex-1 bg-surface-sunken p-2 rounded text-xs break-all select-all">{npub}</code>
 							<Button variant="outline" size="icon" onClick={handleCopyNpub} className="shrink-0">
 								{isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
 							</Button>

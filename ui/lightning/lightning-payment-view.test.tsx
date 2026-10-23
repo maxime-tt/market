@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { LightningPaymentView, type LightningPaymentViewProps } from './LightningPaymentView'
+import { LightningPaymentView, type LightningPaymentViewProps } from './lightning-payment-view'
 
 const noop = () => {}
 

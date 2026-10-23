@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { Media } from '../Media'
-import { UiLink } from '../../provider/UiProvider'
+import { Media } from '../components/Media'
+import { UiLink } from '../provider/UiProvider'
 import { format } from 'date-fns'
 import { ShoppingCartIcon, CreditCardIcon, PackageCheckIcon, ClipboardListIcon, ReceiptIcon, PackageIcon } from 'lucide-react'
 import { extractActualContent, isSafeImageUrl } from '@sdk/commerce/messaging/messageContent'
@@ -233,9 +233,9 @@ export interface ChatOrderItemViewProps {
 
 export function ChatOrderItemView({ title, quantity, price, imageUrl }: ChatOrderItemViewProps) {
 	return (
-		<li className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+		<li className="flex items-center gap-3 py-2 border-b border-border-default last:border-0">
 			{imageUrl && (
-				<div className="h-12 w-12 flex-shrink-0 rounded-md border overflow-hidden bg-gray-100">
+				<div className="h-12 w-12 flex-shrink-0 rounded-md border overflow-hidden bg-surface-sunken">
 					<Media src={imageUrl} alt={title || 'Product image'} className="h-full w-full object-cover object-center" />
 				</div>
 			)}
@@ -276,14 +276,14 @@ const EmbeddedProductMessage = ({ productData }: { productData: EmbeddedProductE
 
 	return (
 		<div className="text-sm space-y-2">
-			<div className="flex items-center font-semibold mb-1 text-blue-600">
+			<div className="flex items-center font-semibold mb-1 text-info">
 				<PackageIcon className="w-4 h-4 mr-2 flex-shrink-0" />
 				Shared Product
 			</div>
 
-			<div className="flex gap-3 p-2 bg-gray-50 rounded-md border border-gray-200">
+			<div className="flex gap-3 p-2 bg-surface-sunken rounded-md border border-border-default">
 				{imageUrl && (
-					<div className="w-16 h-16 flex-shrink-0 rounded-md overflow-hidden bg-gray-100">
+					<div className="w-16 h-16 flex-shrink-0 rounded-md overflow-hidden bg-surface-sunken">
 						<Media src={imageUrl} alt={title} className="w-full h-full object-cover" />
 					</div>
 				)}
@@ -291,14 +291,14 @@ const EmbeddedProductMessage = ({ productData }: { productData: EmbeddedProductE
 				<div className="flex-1 min-w-0">
 					<p className="font-medium text-sm truncate">{title}</p>
 					{price && <p className="text-xs text-muted-foreground mt-0.5">{price}</p>}
-					{description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{description}</p>}
+					{description && <p className="text-xs text-text-mid mt-1 line-clamp-2">{description}</p>}
 				</div>
 			</div>
 
 			{productId && (
 				<UiLink
 					href={`/products/${productId}`}
-					className="inline-flex items-center text-xs text-blue-600 hover:text-blue-800 hover:underline"
+					className="inline-flex items-center text-xs text-info hover:text-info-foreground hover:underline"
 				>
 					View Product →
 				</UiLink>
@@ -514,7 +514,7 @@ const PaymentReceiptMessage = ({ event }: { event: ChatMessageEvent }) => {
 
 export function ChatMessageBubbleView({ event, isCurrentUser, renderOrderItem }: ChatMessageBubbleViewProps) {
 	const alignment = isCurrentUser ? 'justify-end' : 'justify-start'
-	const bubbleStyles = isCurrentUser ? 'bg-gray-50 border border-black text-off-black' : 'bg-muted'
+	const bubbleStyles = isCurrentUser ? 'bg-surface-sunken border border-border-strong text-text-high' : 'bg-muted'
 
 	const renderStructuredContent = () => {
 		if (event.kind === 14) {

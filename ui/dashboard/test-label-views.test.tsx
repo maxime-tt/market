@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { TestLabelButtonView } from './TestLabelViews'
+import { TestLabelButtonView } from './test-label-views'
 
 const noop = () => {}
 

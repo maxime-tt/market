@@ -1,6 +1,6 @@
 import { useProductImages, useProductPrice, useProductTitle } from '@/queries/products'
 import { getCoordsFromATag } from '@/lib/utils/coords'
-import { ChatMessageBubbleView, ChatOrderItemView, type ChatMessageEvent } from '@ui/components/messages/ChatMessageBubbleView'
+import { ChatMessageBubbleView, ChatOrderItemView, type ChatMessageEvent } from '@ui/messages/chat-message-bubble-view'
 
 function OrderItem({ itemTag }: { itemTag: string[] }) {
 	const quantity = itemTag[2] || '1'

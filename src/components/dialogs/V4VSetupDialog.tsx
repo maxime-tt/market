@@ -5,7 +5,7 @@ import { deriveInitialSharesFromStored } from '@/lib/v4v/splits'
 import { useV4VManager } from '@/hooks/useV4VManager'
 import { useV4VShares } from '@/queries/v4v'
 import { useMemo } from 'react'
-import { V4VSetupDialogView } from '@ui/components/dialogs/DialogViews'
+import { V4VSetupDialogView } from '@ui/dialogs/dialog-views'
 
 interface V4VSetupDialogProps {
 	open: boolean

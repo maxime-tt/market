@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-	PickupLocationDialogView,
-	type GeocodedPickupLocation,
-	type PickupLocationSummary,
-} from '@ui/components/dialogs/PickupLocationDialogView'
+import { PickupLocationDialogView, type GeocodedPickupLocation, type PickupLocationSummary } from '@ui/dialogs/pickup-location-dialog-view'
 
 interface PickupAddress {
 	street: string
