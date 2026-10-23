@@ -46,14 +46,14 @@ export function EditorTextField({
 
 	return (
 		<div className="grid w-full gap-1.5">
-			<Label htmlFor={id}>{required ? <span className="after:ml-0.5 after:text-red-500 after:content-['*']">{label}</span> : label}</Label>
+			<Label htmlFor={id}>{required ? <span className="after:ml-0.5 after:text-error after:content-['*']">{label}</span> : label}</Label>
 			{multiline ? (
 				<textarea {...shared} onChange={(event) => onChange(event.target.value)} className="min-h-24 rounded-md border-2 p-2" />
 			) : (
 				<Input {...shared} onChange={(event) => onChange(event.target.value)} className="border-2" />
 			)}
-			{hint && <p className="text-xs text-gray-500">{hint}</p>}
-			{visibleErrors.length > 0 && <div className="mt-1 text-sm text-red-500">{visibleErrors.join(', ')}</div>}
+			{hint && <p className="text-xs text-text-mid">{hint}</p>}
+			{visibleErrors.length > 0 && <div className="mt-1 text-sm text-error">{visibleErrors.join(', ')}</div>}
 		</div>
 	)
 }

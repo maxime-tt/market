@@ -50,7 +50,7 @@ export function ProductPricingView(props: ProductPricingViewProps) {
 		<div className="space-y-6">
 			<div className="space-y-2">
 				<Label htmlFor="currency" className="text-sm font-medium">
-					Choose your local currency <span className="text-red-500">*</span>
+					Choose your local currency <span className="text-error">*</span>
 				</Label>
 				<Select value={currency} onValueChange={props.onCurrencyChange}>
 					<SelectTrigger>
@@ -70,7 +70,7 @@ export function ProductPricingView(props: ProductPricingViewProps) {
 				{showFiatField && (
 					<div className="space-y-2 flex-1">
 						<Label htmlFor="fiat-price" className="text-sm font-medium">
-							Price <span className="text-red-500">*</span>
+							Price <span className="text-error">*</span>
 							<span className="text-xs text-muted-foreground ml-1">(In {currency})</span>
 						</Label>
 						<Input
@@ -88,7 +88,7 @@ export function ProductPricingView(props: ProductPricingViewProps) {
 				{showFiatField && <ArrowRightLeft className="m-2 w-6 h-6 flex-shrink-0" />}
 				<div className="space-y-2 flex-1">
 					<Label htmlFor="bitcoin-price" className="text-sm font-medium">
-						Price in {bitcoinUnit} <span className="text-red-500">*</span>
+						Price in {bitcoinUnit} <span className="text-error">*</span>
 						<span className="text-xs text-muted-foreground ml-1">(Bitcoin)</span>
 					</Label>
 					<div className="relative">
@@ -144,7 +144,7 @@ export function ProductPricingView(props: ProductPricingViewProps) {
 
 			<div className="grid w-full gap-1.5">
 				<Label htmlFor="quantity">
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Quantity</span>
+					<span className="after:content-['*'] after:ml-0.5 after:text-error">Quantity</span>
 				</Label>
 				<Input
 					id="quantity"
@@ -162,12 +162,12 @@ export function ProductPricingView(props: ProductPricingViewProps) {
 					pattern="[0-9]*"
 					inputMode="numeric"
 				/>
-				{quantityError && quantityTouched && <div className="text-red-500 text-sm mt-1">{quantityError}</div>}
+				{quantityError && quantityTouched && <div className="text-error text-sm mt-1">{quantityError}</div>}
 			</div>
 
 			<div className="grid w-full gap-1.5">
 				<Label>
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Status</span>
+					<span className="after:content-['*'] after:ml-0.5 after:text-error">Status</span>
 				</Label>
 				<Select value={props.status} onValueChange={(value) => props.onStatusChange(value as ProductStatus)}>
 					<SelectTrigger className="border-2" data-testid="product-status-select">
@@ -187,7 +187,7 @@ export function ProductPricingView(props: ProductPricingViewProps) {
 				</Select>
 			</div>
 
-			<div className="flex items-start space-x-3 p-4 border rounded-lg bg-amber-50/50 border-amber-200">
+			<div className="flex items-start space-x-3 p-4 border rounded-lg bg-warning-muted/50 border-warning-border">
 				<Checkbox
 					id="nsfw-content"
 					checked={props.isNSFW}
@@ -196,7 +196,7 @@ export function ProductPricingView(props: ProductPricingViewProps) {
 				/>
 				<div className="space-y-1">
 					<Label htmlFor="nsfw-content" className="text-sm font-medium cursor-pointer flex items-center gap-2">
-						<AlertTriangle className="w-4 h-4 text-amber-600" />
+						<AlertTriangle className="w-4 h-4 text-warning" />
 						This product contains adult/sensitive content
 					</Label>
 					<p className="text-xs text-muted-foreground">
@@ -265,7 +265,7 @@ export function ProductCategoryView({
 		<div className="space-y-4">
 			<div className="grid w-full gap-1.5">
 				<Label>
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Main Category</span>
+					<span className="after:content-['*'] after:ml-0.5 after:text-error">Main Category</span>
 				</Label>
 				<Select value={mainCategory} onValueChange={onMainCategoryChange}>
 					<SelectTrigger className="border-2" data-testid="product-main-category-select">
@@ -283,7 +283,7 @@ export function ProductCategoryView({
 
 			{mainCategory && (
 				<>
-					<p className="text-gray-600">Pick a sub category that better represents the nature of your product</p>
+					<p className="text-text-high">Pick a sub category that better represents the nature of your product</p>
 
 					<div className="space-y-2">
 						{/* The first field is always shown so a seller can type straight into it. */}
@@ -323,12 +323,12 @@ export function ProductCategoryView({
 export function ProductImagesView({ hasImages, children }: { hasImages: boolean; children: ReactNode }) {
 	return (
 		<div className="space-y-4 overflow-visible" data-testid="product-images-tab-panel">
-			<p className="text-gray-600">We recommend using square images of 1600x1600 and under 2mb.</p>
+			<p className="text-text-high">We recommend using square images of 1600x1600 and under 2mb.</p>
 			<div className="flex flex-col gap-4">
 				<Label>
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Image Upload</span>
+					<span className="after:content-['*'] after:ml-0.5 after:text-error">Image Upload</span>
 					<span className="sr-only">required</span>
-					{!hasImages && <span className="text-sm text-red-500 ml-2">(At least one image required)</span>}
+					{!hasImages && <span className="text-sm text-error ml-2">(At least one image required)</span>}
 				</Label>
 				{children}
 			</div>
@@ -382,9 +382,9 @@ function ServiceIcon({ service }: { service: string }) {
 	switch (service) {
 		case 'express':
 		case 'overnight':
-			return <TruckIcon className="w-4 h-4 text-orange-500" />
+			return <TruckIcon className="w-4 h-4 text-warning" />
 		case 'pickup':
-			return <PackageIcon className="w-4 h-4 text-blue-500" />
+			return <PackageIcon className="w-4 h-4 text-info" />
 		default:
 			return <TruckIcon className="w-4 h-4" />
 	}
@@ -408,7 +408,7 @@ function PickupAddressForm(
 	const renderField = ({ field, id, label, placeholder, required }: (typeof PICKUP_FIELDS)[number]) => (
 		<div key={id}>
 			<Label htmlFor={id} className="text-sm">
-				{label} {required && <span className="text-red-500">*</span>}
+				{label} {required && <span className="text-error">*</span>}
 			</Label>
 			<Input
 				id={id}
@@ -421,12 +421,12 @@ function PickupAddressForm(
 	)
 
 	return (
-		<div className="border rounded-md p-4 space-y-4 bg-gray-50">
+		<div className="border rounded-md p-4 space-y-4 bg-surface-sunken">
 			<div className="flex items-center gap-2">
-				<PackageIcon className="w-5 h-5 text-green-500" />
+				<PackageIcon className="w-5 h-5 text-success" />
 				<h4 className="font-medium">Local Pickup Address</h4>
 			</div>
-			<p className="text-sm text-gray-500">Enter the address where customers can pick up their orders:</p>
+			<p className="text-sm text-text-mid">Enter the address where customers can pick up their orders:</p>
 			<div className="space-y-3">
 				{renderField({ field: 'street', id: 'pickup-street', label: 'Street Address', placeholder: '123 Main Street', required: true })}
 				<div className="grid grid-cols-2 gap-3">{PICKUP_FIELDS.slice(0, 2).map(renderField)}</div>
@@ -459,11 +459,11 @@ export function ProductShippingView(props: ProductShippingViewProps) {
 		<div className="space-y-6">
 			<div className="space-y-2">
 				<Label>
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Shipping Options</span>
+					<span className="after:content-['*'] after:ml-0.5 after:text-error">Shipping Options</span>
 					<span className="sr-only">required</span>
-					{!props.hasValidShipping && <span className="text-sm text-red-500 ml-2">(At least one shipping option required)</span>}
+					{!props.hasValidShipping && <span className="text-sm text-error ml-2">(At least one shipping option required)</span>}
 				</Label>
-				<p className="text-gray-600">Select shipping options that will be available for this product</p>
+				<p className="text-text-high">Select shipping options that will be available for this product</p>
 			</div>
 
 			{selected.length > 0 && (
@@ -473,21 +473,21 @@ export function ProductShippingView(props: ProductShippingViewProps) {
 						{selected.map((shipping, index) => {
 							const option = shipping.option
 							return (
-								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-gray-50">
-									{option?.service ? <ServiceIcon service={option.service} /> : <AlertTriangle className="w-4 h-4 text-amber-500" />}
+								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-surface-sunken">
+									{option?.service ? <ServiceIcon service={option.service} /> : <AlertTriangle className="w-4 h-4 text-warning" />}
 									<div className="flex-1">
 										<div className="font-medium">
 											{option?.name || (isFetched ? 'Unavailable shipping option' : 'Resolving shipping option...')}
 										</div>
 										{option ? (
-											<div className="text-sm text-gray-500">
+											<div className="text-sm text-text-mid">
 												{option.cost} {option.currency} • {describeCountries(option.countries, 'No countries')} •{' '}
 												{option.service || 'Unknown service'}
 											</div>
 										) : isFetched ? (
-											<div className="text-sm text-amber-600">This shipping reference is no longer available: {shipping.shippingRef}</div>
+											<div className="text-sm text-warning">This shipping reference is no longer available: {shipping.shippingRef}</div>
 										) : (
-											<div className="text-sm text-gray-500">Looking up current shipping metadata...</div>
+											<div className="text-sm text-text-mid">Looking up current shipping metadata...</div>
 										)}
 									</div>
 									<div className="flex items-center gap-2">
@@ -505,7 +505,7 @@ export function ProductShippingView(props: ProductShippingViewProps) {
 											variant="outline"
 											size="sm"
 											onClick={() => props.onRemove(index)}
-											className="text-red-600 hover:text-red-700"
+											className="text-error hover:text-error-foreground"
 										>
 											<X className="w-4 h-4" />
 										</Button>
@@ -523,7 +523,7 @@ export function ProductShippingView(props: ProductShippingViewProps) {
 					<LoadingState label="Loading shipping options..." className="py-8" />
 				) : available.length === 0 ? (
 					<div className="space-y-4">
-						<div className="text-center p-4 text-gray-500">
+						<div className="text-center p-4 text-text-mid">
 							<p>No shipping options available.</p>
 							<p className="text-sm mt-2">Quick-create a shipping option to get started:</p>
 						</div>
@@ -537,34 +537,34 @@ export function ProductShippingView(props: ProductShippingViewProps) {
 										type="button"
 										onClick={() => props.onQuickCreate(template)}
 										disabled={props.isCreating}
-										className="flex items-center gap-3 p-4 border rounded-md hover:bg-gray-50 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+										className="flex items-center gap-3 p-4 border rounded-md hover:bg-surface-hover text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 									>
 										{template.icon === 'digital' && <DownloadIcon className="w-5 h-5 text-info flex-shrink-0" />}
-										{template.icon === 'worldwide' && <TruckIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />}
-										{template.icon === 'pickup' && <PackageIcon className="w-5 h-5 text-green-500 flex-shrink-0" />}
+										{template.icon === 'worldwide' && <TruckIcon className="w-5 h-5 text-info flex-shrink-0" />}
+										{template.icon === 'pickup' && <PackageIcon className="w-5 h-5 text-success flex-shrink-0" />}
 										<div className="flex-1 min-w-0">
 											<div className="font-medium">{template.name}</div>
-											<div className="text-sm text-gray-500">{template.description}</div>
+											<div className="text-sm text-text-mid">{template.description}</div>
 										</div>
 										{props.isCreating ? (
 											<Spinner className="size-5 text-muted-foreground" />
 										) : (
-											<PlusIcon className="w-5 h-5 text-gray-400" />
+											<PlusIcon className="w-5 h-5 text-text-mid" />
 										)}
 									</button>
 								))}
 							</div>
 						)}
-						<p className="text-xs text-gray-400 text-center">You can customize these options later in Dashboard → Shipping Options</p>
+						<p className="text-xs text-text-mid text-center">You can customize these options later in Dashboard → Shipping Options</p>
 					</div>
 				) : (
 					<div className="grid gap-3">
 						{unselected.map((option) => (
-							<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
+							<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-surface-hover">
 								{option.service && <ServiceIcon service={option.service} />}
 								<div className="flex-1">
 									<div className="font-medium">{option.name}</div>
-									<div className="text-sm text-gray-500">
+									<div className="text-sm text-text-mid">
 										{option.cost} {option.currency} • {describeCountries(option.countries, 'Worldwide')} •{' '}
 										{option.service || 'Unknown service'}
 									</div>
@@ -593,7 +593,7 @@ export function ProductSpecsView({ specs, onSpecChange, onAddSpec, onRemoveSpec 
 		<div className="space-y-6">
 			<div className="space-y-2">
 				<Label className="text-base font-medium">Product Specifications</Label>
-				<p className="text-gray-600">Add detailed specifications for your product</p>
+				<p className="text-text-high">Add detailed specifications for your product</p>
 			</div>
 
 			<div className="space-y-4">
@@ -618,7 +618,7 @@ export function ProductSpecsView({ specs, onSpecChange, onAddSpec, onRemoveSpec 
 							variant="outline"
 							size="sm"
 							onClick={() => onRemoveSpec(index)}
-							className="text-red-600 hover:text-red-700"
+							className="text-error hover:text-error-foreground"
 						>
 							<X className="w-4 h-4" />
 						</Button>

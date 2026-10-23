@@ -45,14 +45,14 @@ export function ProductNotFoundState() {
 export function AdultContentGate({ onEnable }: { onEnable: () => void }) {
 	return (
 		<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
-			<AlertTriangle className="h-16 w-16 text-amber-500" />
+			<AlertTriangle className="h-16 w-16 text-warning" />
 			<h1 className="text-2xl font-bold">Adult Content</h1>
-			<p className="max-w-md text-gray-600">
+			<p className="max-w-md text-text-high">
 				This product contains adult or sensitive content. To view it, you need to enable adult content viewing in your settings.
 			</p>
 			<div className="flex gap-3">
 				<BackToProductsLink />
-				<Button onClick={onEnable} className="bg-amber-600 hover:bg-amber-700">
+				<Button onClick={onEnable} className="bg-warning hover:bg-warning/90">
 					Enable adult content
 				</Button>
 			</div>
@@ -105,7 +105,7 @@ export function ProductPurchasePanel({
 	return (
 		<>
 			{visibility === 'pre-order' ? (
-				<Badge className="bg-blue-500">Pre-order</Badge>
+				<Badge className="bg-info">Pre-order</Badge>
 			) : (
 				<Badge>{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
 			)}
@@ -134,7 +134,7 @@ export function ProductPurchasePanel({
 									<Minus className="h-6 w-6" />
 								</Button>
 								<Input
-									className="w-12 bg-white text-center font-medium text-black"
+									className="w-12 bg-bg text-center font-medium text-text-high"
 									value={quantity}
 									onChange={(event) => {
 										const value = parseInt(event.target.value)

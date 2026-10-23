@@ -34,9 +34,9 @@ export function ProductSearchResults<TProduct extends ProductSearchResultEvent =
 		<div className={cn('flex w-full flex-col gap-2 rounded-lg bg-[#1c1c1c] p-2 shadow-lg', className)} {...props}>
 			{products.length === 0 ? (
 				isLoading ? (
-					<LoadingState compact label="Searching..." className="p-4 text-white" />
+					<LoadingState compact label="Searching..." className="p-4 text-on-media" />
 				) : (
-					<EmptyState compact title="No products found" className="p-4 text-white" role="status" aria-live="polite" />
+					<EmptyState compact title="No products found" className="p-4 text-on-media" role="status" aria-live="polite" />
 				)
 			) : (
 				<ul className="max-h-[320px] divide-y divide-white/10 overflow-y-auto" aria-label="Product search results">
@@ -60,10 +60,10 @@ export function ProductSearchResults<TProduct extends ProductSearchResultEvent =
 										<span aria-hidden="true" className="size-8 shrink-0 rounded bg-white/10" />
 									)}
 									<span className="flex min-w-0 flex-1 items-center gap-2">
-										<span className="truncate text-sm text-white">{title || productId || product.id}</span>
+										<span className="truncate text-sm text-on-media">{title || productId || product.id}</span>
 										{sellerPubkey && renderSeller && (
 											<span className="flex shrink-0 items-center gap-2">
-												<span className="text-xs text-gray-400">by</span>
+												<span className="text-xs text-on-media">by</span>
 												{renderSeller(sellerPubkey)}
 											</span>
 										)}
@@ -79,7 +79,7 @@ export function ProductSearchResults<TProduct extends ProductSearchResultEvent =
 				<button
 					type="button"
 					onClick={onShowAll}
-					className="w-full py-2 text-center text-xs font-medium text-fill-accent transition-colors hover:text-white"
+					className="w-full py-2 text-center text-xs font-medium text-fill-accent transition-colors hover:text-on-media"
 				>
 					Show search results in page
 				</button>

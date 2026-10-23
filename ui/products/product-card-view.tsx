@@ -63,7 +63,7 @@ export function ProductCardView({
 
 	return (
 		<div className={cn('flex h-full w-full flex-col', className)} {...props}>
-			<div className="relative block aspect-square overflow-hidden border-b border-zinc-800">
+			<div className="relative block aspect-square overflow-hidden border-b border-border-strong">
 				{imageUrl ? (
 					(renderImage?.(imageUrl, title) ?? (
 						<UiImage
@@ -73,11 +73,13 @@ export function ProductCardView({
 						/>
 					))
 				) : (
-					<div className="flex h-full w-full items-center justify-center rounded-lg bg-gray-100 text-gray-400 transition-colors duration-200 hover:bg-gray-200">
+					<div className="flex h-full w-full items-center justify-center rounded-lg bg-surface-sunken text-text-mid transition-colors duration-200 hover:bg-surface-hover">
 						No image
 					</div>
 				)}
-				{isNsfw && <div className="absolute top-2 left-2 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">NSFW</div>}
+				{isNsfw && (
+					<div className="absolute top-2 left-2 rounded bg-warning px-1.5 py-0.5 text-[10px] font-bold text-warning-foreground">NSFW</div>
+				)}
 				{renderNotice}
 			</div>
 
@@ -92,9 +94,9 @@ export function ProductCardView({
 							</span>
 						))}
 					{visibility === 'pre-order' ? (
-						<div className="rounded-full bg-blue-100 px-4 py-1 text-xs font-medium text-blue-800">Pre-order</div>
+						<div className="rounded-full bg-info-muted px-4 py-1 text-xs font-medium text-info-foreground">Pre-order</div>
 					) : isOutOfStock ? (
-						<div className="rounded-full bg-red-100 px-4 py-1 text-xs font-medium text-red-800">Out of stock</div>
+						<div className="rounded-full bg-error-muted px-4 py-1 text-xs font-medium text-error-foreground">Out of stock</div>
 					) : stockQuantity !== undefined ? (
 						<div className="rounded-full bg-[var(--light-gray)] px-4 py-1 text-xs font-medium">{stockQuantity} in stock</div>
 					) : null}
@@ -108,20 +110,20 @@ export function ProductCardView({
 							<button
 								type="button"
 								disabled
-								className="w-full rounded-lg bg-black px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-400"
+								className="w-full rounded-lg bg-fill-ink px-4 py-3 font-medium text-on-fill-ink disabled:cursor-not-allowed disabled:bg-surface-hover"
 							>
 								Your Product
 							</button>
 						) : isInCart ? (
 							<div className="flex w-full gap-2">
-								<div className="flex h-10 items-center justify-center rounded-lg border-2 border-pink-300 bg-pink-100 px-2 text-sm font-medium text-pink-800">
+								<div className="flex h-10 items-center justify-center rounded-lg border-2 border-fill-accent bg-fill-accent/10 px-2 text-sm font-medium text-fill-accent">
 									{cartQuantity}
 								</div>
 								<button
 									type="button"
 									onClick={handleAddClick}
 									disabled={isAddingToCart || visibility === 'hidden' || cartAtLimit}
-									className="flex-grow rounded-lg bg-black px-4 py-3 font-medium text-white transition-all duration-200 ease-in-out disabled:cursor-not-allowed disabled:bg-gray-400"
+									className="flex-grow rounded-lg bg-fill-ink px-4 py-3 font-medium text-on-fill-ink transition-all duration-200 ease-in-out disabled:cursor-not-allowed disabled:bg-surface-hover"
 								>
 									{isAddingToCart ? 'Adding...' : showConfirmation ? 'Added' : cartAtLimit ? 'Max' : 'Add'}
 								</button>
@@ -132,7 +134,7 @@ export function ProductCardView({
 								onClick={handleAddClick}
 								disabled={isOwnProduct || isAddingToCart || visibility === 'hidden' || isOutOfStock}
 								className={cn(
-									'w-full rounded-lg bg-black px-4 py-3 font-medium text-white transition-all duration-300 disabled:cursor-not-allowed disabled:bg-gray-400',
+									'w-full rounded-lg bg-fill-ink px-4 py-3 font-medium text-on-fill-ink transition-all duration-300 disabled:cursor-not-allowed disabled:bg-surface-hover',
 									isAddingToCart && 'scale-95 opacity-75',
 								)}
 							>

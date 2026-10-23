@@ -7,7 +7,7 @@ describe('EditorTextField', () => {
 		const markup = renderToStaticMarkup(
 			<EditorTextField id="name" label="Title" required value="Mug" onChange={() => {}} data-testid="product-name-input" />,
 		)
-		expect(markup).toContain('after:text-red-500')
+		expect(markup).toContain('after:text-error')
 		expect(markup).toContain('data-testid="product-name-input"')
 		expect(markup).toContain('value="Mug"')
 		expect(markup).toContain('required=""')

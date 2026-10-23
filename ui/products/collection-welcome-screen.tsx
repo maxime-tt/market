@@ -10,7 +10,7 @@ export function CollectionWelcomeScreen({ onGetStarted }: { onGetStarted: () => 
 				</div>
 
 				<h1 className="text-2xl font-heading text-balance text-center">CREATE COLLECTION</h1>
-				<h2 className="text-xl font-mono text-balance text-center text-gray-600">
+				<h2 className="text-xl font-mono text-balance text-center text-text-high">
 					Organize your products
 					<br />
 					into collections

@@ -24,15 +24,15 @@ export function CollectionCardView({ collection, renderLink, renderImage, render
 	const imageUrl = getCollectionImages(collection)[0]?.[1]
 
 	return (
-		<div className={cn('flex flex-col rounded-lg border border-zinc-800 bg-white shadow-sm', className)} {...props}>
+		<div className={cn('flex flex-col rounded-lg border border-border-strong bg-surface-raised shadow-sm', className)} {...props}>
 			{renderLink(
 				imageUrl ? (
 					(renderImage?.(imageUrl, title) ?? <UiImage src={imageUrl} alt={title} className="h-full w-full object-cover" />)
 				) : (
-					<div className="flex h-full w-full items-center justify-center rounded-lg bg-gray-100 text-gray-400">No image</div>
+					<div className="flex h-full w-full items-center justify-center rounded-lg bg-surface-sunken text-text-mid">No image</div>
 				),
 				collectionId,
-				'relative block aspect-square overflow-hidden border-b border-zinc-800',
+				'relative block aspect-square overflow-hidden border-b border-border-strong',
 			)}
 
 			<div className="flex flex-grow flex-col gap-2 p-4">
