@@ -83,39 +83,39 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 									size="icon"
 									onClick={handleZoomOut}
 									disabled={zoom <= 50}
-									className="text-white hover:bg-white/20"
+									className="text-on-media hover:bg-white/20"
 									aria-label="Zoom out"
 								>
 									<ZoomOut className="h-5 w-5" />
 								</Button>
-								<span className="text-white text-sm font-medium min-w-[4rem] text-center">{zoom}%</span>
+								<span className="text-on-media text-sm font-medium min-w-[4rem] text-center">{zoom}%</span>
 								<Button
 									variant="ghost"
 									size="icon"
 									onClick={handleZoomIn}
 									disabled={zoom >= 300}
-									className="text-white hover:bg-white/20"
+									className="text-on-media hover:bg-white/20"
 									aria-label="Zoom in"
 								>
 									<ZoomIn className="h-5 w-5" />
 								</Button>
-								<Button variant="ghost" size="icon" onClick={handleRotate} className="text-white hover:bg-white/20" aria-label="Rotate">
+								<Button variant="ghost" size="icon" onClick={handleRotate} className="text-on-media hover:bg-white/20" aria-label="Rotate">
 									<RotateCw className="h-5 w-5" />
 								</Button>
 							</>
 						)}
-						<Button variant="ghost" size="icon" onClick={handleDownload} className="text-white hover:bg-white/20" aria-label="Download">
+						<Button variant="ghost" size="icon" onClick={handleDownload} className="text-on-media hover:bg-white/20" aria-label="Download">
 							<Download className="h-5 w-5" />
 						</Button>
 					</div>
 					<div className="flex items-center gap-4">
 						{/* Image counter */}
 						{images.length > 1 && (
-							<span className="text-white text-sm">
+							<span className="text-on-media text-sm">
 								{currentIndex + 1} of {images.length}
 							</span>
 						)}
-						<Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/20" aria-label="Close">
+						<Button variant="ghost" size="icon" onClick={onClose} className="text-on-media hover:bg-white/20" aria-label="Close">
 							<X className="h-5 w-5" />
 						</Button>
 					</div>
@@ -129,7 +129,7 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 							variant="ghost"
 							size="icon"
 							onClick={handlePrev}
-							className="hidden sm:inline-flex absolute left-4 top-1/2 -translate-y-1/2 z-40 bg-black/40 hover:bg-black/60 text-white"
+							className="hidden sm:inline-flex absolute left-4 top-1/2 -translate-y-1/2 z-40 bg-black/40 hover:bg-black/60 text-on-media"
 							aria-label="Previous image"
 							style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
 						>
@@ -143,7 +143,7 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 							variant="ghost"
 							size="icon"
 							onClick={handleNext}
-							className="hidden sm:inline-flex absolute right-4 top-1/2 -translate-y-1/2 z-40 bg-black/40 hover:bg-black/60 text-white"
+							className="hidden sm:inline-flex absolute right-4 top-1/2 -translate-y-1/2 z-40 bg-black/40 hover:bg-black/60 text-on-media"
 							aria-label="Next image"
 							style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
 						>
@@ -158,7 +158,7 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 								variant="ghost"
 								size="icon"
 								onClick={handlePrev}
-								className="bg-black/40 hover:bg-black/60 text-white"
+								className="bg-black/40 hover:bg-black/60 text-on-media"
 								aria-label="Previous image"
 								style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
 							>
@@ -169,7 +169,7 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 								variant="ghost"
 								size="icon"
 								onClick={handleNext}
-								className="bg-black/40 hover:bg-black/60 text-white"
+								className="bg-black/40 hover:bg-black/60 text-on-media"
 								aria-label="Next image"
 								style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
 							>

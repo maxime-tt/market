@@ -29,7 +29,7 @@ describe('ProgressBar', () => {
 	})
 
 	test('switches the label ink with textOnDark', () => {
-		expect(renderToStaticMarkup(<ProgressBar progress={0.5} label="x" textOnDark />)).toContain('text-white')
+		expect(renderToStaticMarkup(<ProgressBar progress={0.5} label="x" textOnDark />)).toContain('text-on-media')
 		expect(renderToStaticMarkup(<ProgressBar progress={0.5} label="x" textOnDark={false} />)).toContain('text-tertiary-black')
 	})
 })

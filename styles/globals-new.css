@@ -123,8 +123,6 @@
 	--neo-purple: oklch(0.688 0.249 348);
 	--secondary-black: oklch(0.187 0 0);
 	--tertiary-black: oklch(0.231 0 0);
-	--neo-blue: oklch(0.743 0.154 235.1);
-	--neo-gray: oklch(0.979 0 0);
 
 	/* ── Custom radius values ─────────────────────────────────────────── */
 	--radius-sm: 2rem;
@@ -192,6 +190,7 @@
 
 	--focus-ring: var(--brand-pink);
 	--focus-attention: oklch(0.885 0.164 92.6);
+	--on-media: oklch(1 0 0);
 
 	--radius-pill: 2rem;
 	--tilt: 0;
@@ -278,8 +277,6 @@
 	--neo-purple: oklch(0.688 0.249 348);
 	--secondary-black: oklch(0.187 0 0);
 	--tertiary-black: oklch(0.231 0 0);
-	--neo-blue: oklch(0.743 0.154 235.1);
-	--neo-gray: oklch(0.274 0.006 286);
 
 	/* Chart tokens — dark mode (same values, oklch handles perception) */
 	--chart-1: oklch(0.527 0.193 262.2);
@@ -320,6 +317,7 @@
 
 	--focus-ring: var(--brand-pink);
 	--focus-attention: oklch(0.885 0.164 92.6);
+	--on-media: oklch(1 0 0);
 
 	--radius-pill: 2rem;
 	--tilt: 0;

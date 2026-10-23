@@ -233,11 +233,11 @@ The palette is three tiers, decided in
 `runs/union-1420/proposal-1-decision-architecture.md` is its evidence and is
 **superseded on every name**). Enforced by `theme/token-contract.test.ts`.
 
-| tier             | what                                                                                                                                                                                                | rule                                                                                                                                                                                      |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0 — Identity** | `--brand-pink`                                                                                                                                                                                      | **Never used by a component** (ruling R5). It is the brand constant; components use the role.                                                                                             |
-| **1 — Roles**    | `--bg`, `--surface-{raised,sunken,hover}`, `--fill-{accent,ink,ink-hover}`, `--on-fill-{accent,ink}`, `--text-{high,mid}`, `--border-{default,strong}`, `--focus-{ring,attention}`, `--radius-pill` | **This is the API.** New and migrated components use these.                                                                                                                               |
-| **2 — Compat**   | `--primary`, `--secondary`, `--background`, `--card`, `--sidebar-*`, `--chart-*`, `--neo-*`, …                                                                                                      | Frozen legacy names so generated `primitives/**` keep resolving. **No design authority** — never use in new code, never hand-edit. It is permanent (ruling R9), not a migration leftover. |
+| tier             | what                                                                                                                                                                                                              | rule                                                                                                                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0 — Identity** | `--brand-pink`                                                                                                                                                                                                    | **Never used by a component** (ruling R5). It is the brand constant; components use the role.                                                                                             |
+| **1 — Roles**    | `--bg`, `--surface-{raised,sunken,hover}`, `--fill-{accent,ink,ink-hover}`, `--on-fill-{accent,ink}`, `--on-media`, `--text-{high,mid}`, `--border-{default,strong}`, `--focus-{ring,attention}`, `--radius-pill` | **This is the API.** New and migrated components use these.                                                                                                                               |
+| **2 — Compat**   | `--primary`, `--secondary`, `--background`, `--card`, `--sidebar-*`, `--chart-*`, `--neo-*`, …                                                                                                                    | Frozen legacy names so generated `primitives/**` keep resolving. **No design authority** — never use in new code, never hand-edit. It is permanent (ruling R9), not a migration leftover. |
 
 The five rules that follow from it:
 
@@ -246,8 +246,9 @@ The five rules that follow from it:
 2. **A fill always ships with its label.** `--fill-*` pairs with `--on-fill-*`;
    the state families pair `--info` with `--info-foreground`. Never use a fill
    token as text.
-3. **Scheme-stable vs inverting.** `--brand-pink`, `--fill-accent` and
-   `--focus-ring` are the _same value in light and dark_ — they carry identity.
+3. **Scheme-stable vs inverting.** `--brand-pink`, `--fill-accent`,
+   `--focus-ring` and `--on-media` are the _same value in light and dark_ — they
+   carry identity.
    `--bg`, `--fill-ink`, `--text-*`, `--surface-*` **must** differ between modes —
    they carry a role. A token that switches _meaning_ between modes (legacy
    `--primary`: ink in light, pink in dark) is the defect this architecture
@@ -259,6 +260,21 @@ The five rules that follow from it:
 5. **Two focus colours, deliberately** (ruling R4): `--focus-ring` (brand pink,
    the ring the primitives use) and `--focus-attention` (the legacy yellow
    `#ffd53d`, an accessibility signal). Do not collapse them.
+
+**Text on something the theme does not own: three different roles.** Picking the
+wrong one is the most common mistake in this tree, so state it explicitly:
+
+| the text sits on…                                           | use                   | why                                                                                                                          |
+| ----------------------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| a **brand** fill (`bg-fill-accent`)                         | `text-on-fill-accent` | the fill is a role and it inverts with its label                                                                             |
+| a **deliberate ink surface** (`bg-fill-ink`)                | `text-on-fill-ink`    | the ink surface is a role; label and fill invert together                                                                    |
+| **imagery, an overlay/scrim, or a caller-supplied surface** | `text-on-media`       | the pixels behind the text do **not** invert, so the ink cannot either — this is the only scheme-stable ink, and it is white |
+
+`text-on-media` is not a general-purpose "light text": reach for it only when the
+surface is genuinely outside the theme (a photo, a video thumbnail, a scrim, a
+hex prop). A _deliberate_ dark panel is `bg-fill-ink` + `text-on-fill-ink` — if it
+gets `text-on-media` it will be unreadable once the theme is dark, because the
+panel will have inverted and the ink will not.
 
 **Adding a token** (ruling R8): a new Tier-1 token needs (a) a named role that no
 current token expresses, (b) the call sites it serves, and (c) a deletion in the

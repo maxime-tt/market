@@ -184,8 +184,6 @@ button {
 	--neo-purple: #ff3eb5;
 	--secondary-black: #131313;
 	--tertiary-black: #1d1d1d;
-	--neo-blue: #18b9fe;
-	--neo-gray: #f8f8f8;
 
 	/* Custom radius values */
 	--radius-sm: 2rem;
@@ -247,6 +245,14 @@ button {
 
 	--focus-ring: var(--brand-pink);
 	--focus-attention: oklch(0.885 0.164 92.6);
+
+	/* Text/icon over content the theme does not control: imagery (hero bands,
+	   carousels, product cards, the image viewer), the scrim of an overlay, and
+	   any caller-supplied surface (progress-bar). Scheme-stable by necessity —
+	   the pixels behind the text do not invert with the theme, so the ink
+	   cannot. R5's rule holds too: this is a role, never `--brand-pink`.
+	   Added under R8, paid for by deleting the dead `--neo-blue`/`--neo-gray`. */
+	--on-media: oklch(1 0 0);
 
 	--radius-pill: 2rem;
 
@@ -334,6 +340,7 @@ button {
 
 	--focus-ring: var(--brand-pink);
 	--focus-attention: oklch(0.885 0.164 92.6);
+	--on-media: oklch(1 0 0);
 
 	--radius-pill: 2rem;
 	--tilt: 0;
@@ -370,6 +377,7 @@ button {
 	--color-border-strong: var(--border-strong);
 	--color-focus-ring: var(--focus-ring);
 	--color-focus-attention: var(--focus-attention);
+	--color-on-media: var(--on-media);
 	--radius-pill: 2rem;
 	--color-secondary: var(--secondary);
 	--color-secondary-foreground: var(--secondary-foreground);
@@ -460,8 +468,6 @@ button {
 	--font-theylive: var(--font-theylive);
 
 	/* Additional color utilities for custom colors */
-	--color-neo-blue: var(--neo-blue);
-	--color-neo-gray: var(--neo-gray);
 	--color-off-black: var(--off-black);
 
 	--animate-accordion-down: accordion-down 0.2s ease-out;

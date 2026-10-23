@@ -8,12 +8,15 @@
  *   `#444444`) applied through inline styles and the `hexToRgb` glow helper.
  *   The auction countdown drives them per-urgency, so no Tier-1 role token can
  *   express the prop without hard-coding an app-specific ramp into the theme.
- * - `text-white` / `text-tertiary-black` on the label overlay are
- *   text-over-media choices: the correct ink depends on the caller-supplied
- *   bar colour at runtime (see `textOnDark`), which a static token cannot
- *   encode. There is no Tier-1 text-over-media token; adding one is the known
- *   gap that blocks T6.4 (token addition per ruling R8, with a deletion in the
- *   same commit).
+ * - The label ink follows the same rule: `textOnDark` picks between white and a
+ *   dark ink according to the caller's bar colour at runtime. The white leg is
+ *   now `text-on-media` (the scheme-stable "over content the theme does not
+ *   control" role). The dark leg still has **no** Tier-1 home — Tier 1 has no
+ *   scheme-stable dark ink, and `--text-high` inverts, so it would be unreadable
+ *   in dark mode. That half stays `text-tertiary-black` (Tier-2) until a second
+ *   scheme-stable ink lands; it is recorded here rather than silently guessed.
+ * - `text-shadow-[…rgb(0_0_0/1.0)]` is the same class of device (a legibility
+ *   shadow over an uncontrolled surface) and has no Tier-1 home either.
  *
  * Everything else already follows the contract: `className` merges through
  * `cn()` from `../utils/cn`, no other raw palette classes.
@@ -158,7 +161,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 						className={cn(
 							'font-semibold max-w-full truncate text-sm whitespace-nowrap overflow-visible',
 							textOnDark && `text-shadow-[0_0px_6px_rgb(0_0_0/1.0)]`,
-							textOnDark ? `text-white` : 'text-tertiary-black',
+							textOnDark ? `text-on-media` : 'text-tertiary-black',
 						)}
 					>
 						{label}

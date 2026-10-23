@@ -117,7 +117,7 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 								>
 									<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800 flex items-center justify-center">
 										{isVideoUrl(image.url) ? (
-											<Play className="h-6 w-6 text-white" />
+											<Play className="h-6 w-6 text-on-media" />
 										) : (
 											<img className="h-full w-full object-cover" src={image.url} alt={`${title} thumbnail ${index + 1}`} />
 										)}

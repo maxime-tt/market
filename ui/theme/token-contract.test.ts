@@ -48,7 +48,19 @@ const TIER_1_COLOUR = [
 /** Tier-1 names that are not colours, so they are not expected to have a `--color-*` utility. */
 const TIER_1_NON_COLOUR = ['radius-pill', 'tilt'] as const
 
-const TIER_1 = [...TIER_0, ...TIER_1_COLOUR, ...TIER_1_NON_COLOUR]
+/** The T6.0 baseline group. Pinned at 18 names by the budget test below. */
+const TIER_1_GROUP_A = [...TIER_0, ...TIER_1_COLOUR, ...TIER_1_NON_COLOUR] as const
+
+/**
+ * Tier-1 colours added AFTER T6.0. R8 requires a new token to be paid for by a
+ * deletion in the same commit, so this list is the ledger of that trade:
+ * `--on-media` was added when the dead `--neo-blue` / `--neo-gray` declarations
+ * were deleted (both had zero consumers, primitives and widget book included).
+ * They follow the same registration + reachability contract as Group A.
+ */
+const TIER_1_POST_T6_0_COLOUR = ['on-media'] as const
+
+const TIER_1 = [...TIER_1_GROUP_A, ...TIER_1_POST_T6_0_COLOUR]
 
 /** Names that belong to the Tier-2 compatibility tier and must keep their legacy meaning. */
 const TIER_2 = [
@@ -80,8 +92,6 @@ const TIER_2 = [
 	'light-gray',
 	'off-black',
 	'neo-purple',
-	'neo-blue',
-	'neo-gray',
 	'secondary-black',
 	'tertiary-black',
 ] as const
@@ -177,7 +187,7 @@ describe('mode agreement between the legacy and theme scopes', () => {
 })
 
 describe('scheme-stable identity (R1/R5)', () => {
-	for (const token of ['brand-pink', 'fill-accent', 'focus-ring'] as const) {
+	for (const token of ['brand-pink', 'fill-accent', 'focus-ring', 'on-media'] as const) {
 		test(`--${token} is identical in light and dark`, () => {
 			expect(darkLegacy.get(token)).toBe(lightLegacy.get(token))
 			expect(darkTheme.get(token)).toBe(lightTheme.get(token))
@@ -193,7 +203,7 @@ describe('scheme-stable identity (R1/R5)', () => {
 })
 
 describe('every Tier-1 colour token is reachable as a utility', () => {
-	for (const token of TIER_1_COLOUR) {
+	for (const token of [...TIER_1_COLOUR, ...TIER_1_POST_T6_0_COLOUR]) {
 		test(`--color-${token}`, () => {
 			expect(globalsCss).toContain(`--color-${token}: var(--${token});`)
 		})
@@ -255,7 +265,19 @@ describe('the R8 token budget is enforced, not an honour system', () => {
 	})
 
 	test('Group A (declared by T6.0) is 18 names', () => {
-		expect(TIER_1.length).toBe(18)
+		expect(TIER_1_GROUP_A.length).toBe(18)
+	})
+
+	test('R8: the deletions that paid for the post-T6.0 additions are real', () => {
+		// A new Tier-1 name has to be bought with a deletion in the same commit.
+		// `on-media` was bought with the dead neo-blue/neo-gray pair.
+		expect(TIER_1_POST_T6_0_COLOUR).toEqual(['on-media'])
+		for (const declarations of Object.values(SCOPES)) {
+			expect(declarations.has('neo-blue')).toBe(false)
+			expect(declarations.has('neo-gray')).toBe(false)
+		}
+		expect((TIER_2 as readonly string[]).includes('neo-blue')).toBe(false)
+		expect((TIER_2 as readonly string[]).includes('neo-gray')).toBe(false)
 	})
 })
 
