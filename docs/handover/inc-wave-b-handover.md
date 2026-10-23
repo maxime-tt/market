@@ -238,3 +238,99 @@ All unmerged at the time of writing, all sharing ancestry around `a93c5f2d`:
 - `wave-0/io-seam-and-ci-guard`, `feat/applesauce-wave-a1b-flip` on both remotes — ADR-0002's stack.
 
 None of these were merged during this work, so nothing here assumes their contents.
+
+## 11. Module map — the remainder in the units the work is done in
+
+File counts are a rough measure. The method's unit is a **module**: a directory plus a
+`<module>.md`, extracted in one commit that deletes its `src/` original. Measured at `e45659d9`
+(the 169 production files `platform/` reaches), the queue groups like this.
+
+Each entry: files · platform importers · total dependents (all four trees) · knot status.
+"Platform imports" lists what actually crosses the boundary — the contract.
+
+**Module-scale candidates**
+
+1. **The read layer — `src/queries/`** — 22 files · 43 platform importers · 188 dependents
+   - job: read relay data into the typed query options and view types the routes render.
+   - contract: `auctionKeys`, `auctionQueryOptions`, `collectionByIdQueryOptions`,
+     `OrderWithRelatedEvents`, `PaymentDetail`, `RichPaymentDetail`, `UserNwcWallet`, …
+   - knot: **1 member**, `queries/v4v.tsx` (in the cart 4-cycle). Everything else is clean.
+   - verdict: `extract` after cutting `v4v` — the largest single win in the queue.
+2. **The app stores — `src/lib/stores/`** — 13 files · 40 platform importers · 209 dependents
+   - job: hold the app's session, relay, cart, wallet, config and UI state, with their actions.
+   - contract: `authStore`/`authActions`, `cartStore`/`cartActions`, `configStore`/`configActions`,
+     `cashuStore`, `blacklistStore`, `Wallet`, `PendingToken`, `RichShippingInfo`, …
+   - knots: **4 members** — `auth.ts` (73 dependents, 24 platform), `cart.ts`, `walletOps.ts`,
+     `product.ts`.
+   - verdict: `extract` the clean members; `knot` for the four, which is what the paid-for-raise
+     work in §6 is for.
+3. **The publish layer — `src/publish/`** — 13 files · 15 platform importers · 44 dependents
+   - job: build, sign and publish the app's events.
+   - contract: `publishPaymentReceipt`, `publishOrderWorkflowWithDependencies`,
+     `addToFeaturedAuctions`/`Collections`/`Products`/`Users`, `addToBlacklist*`, `ShippingFormData`, …
+   - knot: **1 member** — `publish/auctions.tsx` (in the wallet/money 11-cycle).
+   - verdict: `extract`; `auctions.tsx` waits on the wallet cluster.
+4. **Helpers — `src/lib/utils/`** — 11 files · 12 platform importers · 38 dependents
+   - job: pure helpers — coordinates, sorting/filters, PII scanning, invoice sets.
+   - contract: `getCoordsFromATag`/`getATagFromCoords`, `filterBlacklistedPubkeys`,
+     `defaultAuctionFilters`, `PIIScanResult`, `OrderInvoiceSet`, …
+   - knot: **1 member** — `productFormStorage.ts` (the `stores/product` 2-cycle).
+   - verdict: `extract` after that one cut.
+5. **`src/hooks/`** — 10 files · 7 platform importers · 15 dependents — **0 knots**
+   - job: app-level React hooks that sync external state into the stores.
+   - contract: `useAuctionWinMonitor`, `useBlacklistSync`, `useBreakpoint`, `useNip05Sync`,
+     `useNotificationMonitor`, `usePIIMonitor`, `useServiceWorker`, `useV4VManager`, `useVanitySync`,
+     `useEntityPermissions`.
+   - verdict: `extract` — clean, small, and the easiest of the ten.
+6. **Event parsers — `src/lib/schemas/`** — 5 files · 8 platform importers · 29 dependents — **0 knots**
+   - job: the single definition of a valid item per event kind, applied before anything renders.
+   - contract: `parseAuctionEvent`, `parseBidEvent`, `parsePathReleaseEvent`, `parseSettlementEvent`,
+     `parseValidatorVerdictEvent`, `AppSettingsSchema`.
+   - verdict: `extract` — but note the destination question: `AGENTS.md` ties these to the
+     repository's validation doctrine ("every event kind the app renders must have a parser under
+     `src/lib/schemas/`"), and no `sdk/` tree currently holds a schema level. This one needs a
+     placement decision, not just a move.
+7. **`src/lib/nostr/`** — 4 files · 10 platform importers · 49 dependents — **0 knots**
+   - contract: `NDKEvent`/`NDKFilter`/`NDKSigner`/`NostrFilter` re-exports, `applesauceIo`,
+     `getApplesauceRelayPool`, `naddrFromAddress`, `sign`.
+   - verdict: **not this lane's** — this is ADR-0002's seam (§7, item 2). Listed for completeness.
+8. **The auction domain — `src/lib/auction/` + `src/lib/auction*.ts`** — 5 files · 2 platform
+   importers · 22 dependents
+   - job: auction-specific reads and helpers beyond the SDK's auction module.
+   - contract: `findBidderRecord`, `getAuctionBidderStatus`, `AuctionBidderStatusKind`,
+     `PrivateAuctionClaimPayload`, `useDleqKeysetPolling`, `useNut7Polling`.
+   - knot: **1 member** — `auction/bidderRecords.ts` (wallet/money 11).
+   - verdict: `extract`; destination is `sdk/commerce/auctions`, which already exists.
+9. **The UI components — `src/components/**`** — 74 files · 42 platform importers · 101 dependents —
+   **0 knots\*\*
+   - job: render the marketplace — auction views, order views, dialogs, forms, badges, cards.
+   - contract: component + prop types, e.g. `AuctionCard`, `AuctionCountdown`, `AvatarUser`,
+     `UserCard` (25 dependents), `ProductCard`, `TestListingNotice`, …
+   - verdict: `extract`, and the destination is **`ui/`**, not `sdk/`. This is the largest block by
+     file count and the least blocked: zero cycle members, 42 of its 74 files have a single platform
+     consumer.
+
+**Single-file leaf contracts worth their own commit** (high fan-in, no wrapper):
+
+- `src/lib/utils.ts` — 5 platform importers · **47 dependents** — `cn`, `isValidHexKey`,
+  `isValidNip05`, `isValidNpub`, `truncateText`. Highest fan-in leaf in the tree.
+- `src/lib/constants.ts` — 7 platform importers · 30 dependents — `CURRENCIES`,
+  `PRODUCT_CATEGORIES`, `SHIPPING_TEMPLATES`, `ZAP_RELAYS`, `COUNTRIES_ISO`,
+  `PAYMENT_DETAILS_METHOD`, `PaymentDetailsMethod`. Not a shim: it re-exports four symbols from
+  `@sdk/core/geo` but declares the rest itself.
+- `src/lib/instance-config.ts` — 5 platform importers · 9 dependents.
+- `src/lib/appSettings.ts` — 3 · 6. `src/lib/ogTags.ts` — 3 · 4.
+- Then one-file singletons: `src/lib/queryClient.ts`, `src/lib/router-utils.ts`,
+  `src/lib/zapPurchase.ts`, `src/config/*`.
+
+**The knots, in full.** Of the 169, only **8 files** sit in a cycle: `stores/auth.ts`,
+`stores/cart.ts`, `stores/product.ts`, `stores/walletOps.ts`, `utils/productFormStorage.ts`,
+`auction/bidderRecords.ts`, `publish/auctions.tsx`, `queries/v4v.tsx`. Seven more cyclic files are
+_not_ in the queue at all (`lib/cart-persistence.ts`, `lib/sdkAdapters.ts`, `stores/cashu.ts`,
+`wallet/auctionFunds.ts`, `wallet/cashuWalletSource.ts`, `wallet/storage.ts`, `queries/cart.tsx`).
+So cycle-breaking is a **15-file** problem, not a 169-file one — and it is what frees the four store
+contracts with the most dependents.
+
+_One measurement note:_ an earlier run in this session reported 9 cyclic files in the queue against
+the 8 above; the two runs built their edge sets slightly differently. Treat it as 8–9 and re-measure
+with `method/checks/audit.py` before quoting it.
