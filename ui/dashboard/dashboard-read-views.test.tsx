@@ -42,7 +42,7 @@ describe('dashboard SDK views', () => {
 		)
 
 		expect(trigger).toContain('Blue Mug')
-		expect(trigger).toContain('text-green-600')
+		expect(trigger).toContain('text-success')
 		expect(details).toContain('A detailed mug description')
 		expect(details).toContain('12 SATS')
 		expect(details).toContain('3 in stock')

@@ -64,9 +64,9 @@ export function SettingsAccessDenied({ header, message }: { header: SettingsPage
 			<Card>
 				<CardContent className="p-6">
 					<div className="text-center">
-						<Icon className="mx-auto mb-4 h-16 w-16 text-gray-400" />
+						<Icon className="mx-auto mb-4 h-16 w-16 text-text-mid" />
 						<h3 className="mb-2 text-lg font-medium">Access Denied</h3>
-						<p className="text-gray-600">{message}</p>
+						<p className="text-text-high">{message}</p>
 					</div>
 				</CardContent>
 			</Card>
@@ -173,7 +173,7 @@ export function AddTeamMemberCard({ role, search }: { role: 'admin' | 'editor'; 
 					<Label>Search for User</Label>
 					{search}
 				</div>
-				<div className="text-xs text-gray-500">
+				<div className="text-xs text-text-mid">
 					{isAdmin
 						? 'Note: New administrators will have full access to manage the marketplace settings and content.'
 						: 'Note: New editors will have limited access to manage content but cannot modify administrative settings.'}
@@ -191,10 +191,10 @@ export function TeamPermissionsCard({ isOwner }: { isOwner: boolean }) {
 			</CardHeader>
 			<CardContent className="space-y-3">
 				<div className="flex items-center gap-3">
-					{isOwner ? <ShieldCheck className="h-5 w-5 text-green-600" /> : <Shield className="h-5 w-5 text-blue-600" />}
+					{isOwner ? <ShieldCheck className="h-5 w-5 text-success" /> : <Shield className="h-5 w-5 text-info" />}
 					<div>
 						<div className="font-medium">{isOwner ? 'Owner' : 'Administrator'}</div>
-						<div className="text-sm text-gray-600">
+						<div className="text-sm text-text-high">
 							{isOwner
 								? 'You have full control over the marketplace and can manage all administrators.'
 								: 'You can manage marketplace settings and content but cannot add/remove administrators.'}

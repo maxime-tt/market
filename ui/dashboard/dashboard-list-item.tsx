@@ -30,7 +30,7 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 
 		if (!isCollapsible) {
 			return (
-				<div ref={ref} className={cn('p-4 border rounded-md bg-white', className)} {...props}>
+				<div ref={ref} className={cn('p-4 border rounded-md bg-surface-raised', className)} {...props}>
 					{children}
 				</div>
 			)

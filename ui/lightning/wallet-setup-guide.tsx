@@ -41,13 +41,13 @@ export function WalletSetupGuide() {
 
 	return (
 		<div className="space-y-6">
-			<Card className="border-blue-200 bg-blue-50">
+			<Card className="border-info-border bg-info-muted">
 				<CardHeader>
 					<div className="flex items-center gap-3">
-						<WalletIcon className="w-8 h-8 text-blue-600" />
+						<WalletIcon className="w-8 h-8 text-info" />
 						<div>
-							<CardTitle className="text-blue-900">Get Started with Bitcoin Payments</CardTitle>
-							<CardDescription className="text-blue-700">
+							<CardTitle className="text-info-foreground">Get Started with Bitcoin Payments</CardTitle>
+							<CardDescription className="text-info-foreground">
 								To receive payments, you'll need a Bitcoin wallet. Choose one of these recommended options to get started.
 							</CardDescription>
 						</div>
@@ -64,7 +64,7 @@ export function WalletSetupGuide() {
 									<CardTitle className="text-lg">{wallet.name}</CardTitle>
 									<p className="text-xs text-muted-foreground mt-1">{wallet.type}</p>
 								</div>
-								<ZapIcon className="w-5 h-5 text-orange-500" />
+								<ZapIcon className="w-5 h-5 text-warning" />
 							</div>
 							<CardDescription className="mt-2">{wallet.description}</CardDescription>
 						</CardHeader>
@@ -74,7 +74,7 @@ export function WalletSetupGuide() {
 								<ul className="text-sm space-y-1">
 									{wallet.features.map((feature, index) => (
 										<li key={index} className="flex items-start gap-2">
-											<span className="text-green-600 mt-0.5">✓</span>
+											<span className="text-success mt-0.5">✓</span>
 											<span className="text-muted-foreground">{feature}</span>
 										</li>
 									))}

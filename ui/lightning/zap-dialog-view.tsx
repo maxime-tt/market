@@ -169,8 +169,8 @@ export function ZapDialogView({
 										className="w-full"
 										placeholder="Enter amount in sats"
 									/>
-									{!isValidAmount && amount !== '' && <span className="text-red-500 text-sm">Please enter a valid amount</span>}
-									{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
+									{!isValidAmount && amount !== '' && <span className="text-error text-sm">Please enter a valid amount</span>}
+									{amount === '' && <span className="text-error text-sm">Amount is required</span>}
 								</div>
 
 								<div className="flex justify-between items-center gap-4">

@@ -29,26 +29,26 @@ export function DashboardCollectionDetails({
 	const headerImage = getCollectionImages(collection)[0]?.[1]
 
 	return (
-		<div className="border-t bg-gray-50 p-4">
+		<div className="border-t bg-surface-sunken p-4">
 			<div className="space-y-3">
 				{headerImage && (
-					<div className="h-32 w-full overflow-hidden rounded-md bg-gray-200">
+					<div className="h-32 w-full overflow-hidden rounded-md bg-surface-hover">
 						{renderImage?.(headerImage) ?? <UiImage src={headerImage} alt="Collection header" className="h-full w-full object-cover" />}
 					</div>
 				)}
 				{summary && (
 					<div>
-						<p className="mb-1 text-sm text-gray-600">Summary:</p>
+						<p className="mb-1 text-sm text-text-high">Summary:</p>
 						<p className="text-sm">{summary}</p>
 					</div>
 				)}
 				{description && (
 					<div>
-						<p className="mb-1 text-sm text-gray-600">Description:</p>
+						<p className="mb-1 text-sm text-text-high">Description:</p>
 						<p className="text-sm">{description}</p>
 					</div>
 				)}
-				<div className="text-sm text-gray-600">
+				<div className="text-sm text-text-high">
 					Products: <span className="font-medium">{productCount}</span>
 				</div>
 			</div>
