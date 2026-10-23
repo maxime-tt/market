@@ -26,7 +26,7 @@ describe('ErrorState', () => {
 		expect(markup).toContain('Upload failed')
 		expect(markup).toContain('The relay refused the event')
 		expect(markup).toContain('Retry now')
-		expect(markup).toContain('text-destructive')
+		expect(markup).toContain('text-error')
 	})
 
 	test('retry button invokes onRetry', () => {

@@ -69,12 +69,12 @@ describe('EntityListItem', () => {
 		expect(markup).not.toContain('icon-delete')
 	})
 
-	test('a destructive action applies text-destructive to the icon', () => {
+	test('a destructive action applies text-error to the icon', () => {
 		const actions: EntityListItemAction[] = [
 			{ key: 'delete', label: 'Delete product', icon: <span data-testid="icon-delete" />, onClick: () => {}, destructive: true },
 		]
 		const markup = renderMarkup({ ...baseProps, actions })
-		expect(markup).toContain('text-destructive')
+		expect(markup).toContain('text-error')
 		expect(markup).toContain('icon-delete')
 	})
 

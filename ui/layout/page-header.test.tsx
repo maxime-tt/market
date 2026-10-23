@@ -10,7 +10,7 @@ import { MobilePageHeader, PAGE_HEADER_CLASS, PageHeader } from './page-header'
 
 describe('PAGE_HEADER_CLASS', () => {
 	test('carries the band utilities the 21 dashboard routes declared by hand', () => {
-		for (const utility of ['sticky', 'top-0', 'z-10', 'hidden', 'border-b', 'bg-background', 'lg:flex']) {
+		for (const utility of ['sticky', 'top-0', 'z-10', 'hidden', 'border-b', 'bg-bg', 'lg:flex']) {
 			expect(PAGE_HEADER_CLASS).toContain(utility)
 		}
 	})

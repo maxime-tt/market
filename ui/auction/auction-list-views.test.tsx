@@ -97,7 +97,7 @@ describe('AuctionListItemView', () => {
 		expect(markup).toContain('5 Comments')
 		expect(markup).toContain('0 Messages')
 		expect(markup).toContain('2 New')
-		expect(markup).toContain('text-primary')
+		expect(markup).toContain('text-fill-accent')
 	})
 
 	test('disables "Mark as seen" until there is new activity', () => {

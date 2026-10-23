@@ -18,7 +18,7 @@ describe('AuctionActivityRow', () => {
 	test('renders the new-items highlight only when positive', () => {
 		const markup = renderToStaticMarkup(<AuctionActivityRow header="Comments" unit="Comment" count={5} newCount={2} />)
 		expect(markup).toContain('2 New')
-		expect(markup).toContain('text-primary')
+		expect(markup).toContain('text-fill-accent')
 	})
 
 	test('merges host className', () => {

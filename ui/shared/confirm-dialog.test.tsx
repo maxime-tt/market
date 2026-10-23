@@ -49,8 +49,8 @@ describe('ConfirmDialog', () => {
 		const destructive = findElement(ConfirmDialog({ ...baseProps, destructive: true }), (element) => element.type === AlertDialogAction)
 		const plain = findElement(ConfirmDialog({ ...baseProps }), (element) => element.type === AlertDialogAction)
 
-		expect(String((destructive?.props as { className?: string }).className)).toContain('bg-destructive')
-		expect(String((plain?.props as { className?: string }).className)).not.toContain('bg-destructive')
+		expect(String((destructive?.props as { className?: string }).className)).toContain('bg-error')
+		expect(String((plain?.props as { className?: string }).className)).not.toContain('bg-error')
 	})
 
 	test('opts into a glass surface', () => {

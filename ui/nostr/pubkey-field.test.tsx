@@ -18,7 +18,7 @@ describe('PubkeyField', () => {
 	test('links the npub to njump', () => {
 		const markup = renderToStaticMarkup(<PubkeyField label="App Public Key" npub={NPUB} hex={HEX} />)
 		expect(markup).toContain(`href="https://njump.me/${NPUB}"`)
-		expect(markup).toContain('text-primary')
+		expect(markup).toContain('text-fill-accent')
 	})
 
 	test('gives each form its own copy control', () => {

@@ -29,8 +29,8 @@ describe('VerifiedBadge', () => {
 		const html = render({ state: 'verified', nip05: '_@domain.com' })
 		expect(html).toContain('data-state="verified"')
 		expect(html).toContain('aria-label="NIP-05 verified"')
-		expect(html).toContain('fill-secondary')
-		expect(html).not.toContain('fill-destructive')
+		expect(html).toMatch(/\bfill-accent\b/)
+		expect(html).not.toContain('fill-error')
 	})
 
 	test('renders the elided address next to the badge', () => {
@@ -52,8 +52,8 @@ describe('VerifiedBadge', () => {
 		const html = render({ state: 'invalid', nip05: 'alice@domain.com' })
 		expect(html).toContain('data-state="invalid"')
 		expect(html).toContain('aria-label="NIP-05 not verified"')
-		expect(html).toContain('fill-destructive')
-		expect(html).not.toContain('fill-secondary')
+		expect(html).toContain('fill-error')
+		expect(html).not.toMatch(/(?<!text-)fill-accent(?![a-z])/)
 	})
 
 	test('showAddress=false hides the address even when nip05 is present', () => {

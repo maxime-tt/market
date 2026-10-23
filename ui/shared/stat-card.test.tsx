@@ -17,7 +17,7 @@ describe('StatCard', () => {
 			'<p class="text-2xl font-medium text-success">1</p>',
 		)
 		expect(renderToStaticMarkup(<StatCard label="Down" value="1" trend="down" />)).toContain(
-			'<p class="text-2xl font-medium text-destructive">1</p>',
+			'<p class="text-2xl font-medium text-error">1</p>',
 		)
 		expect(renderToStaticMarkup(<StatCard label="Flat" value="1" trend="flat" />)).toContain(
 			'<p class="text-2xl font-medium text-text-mid">1</p>',
