@@ -50,7 +50,7 @@ export function LoadingState({
 			role="status"
 			aria-label={label}
 			data-slot="loading-state"
-			className={cn('flex items-center justify-center gap-2 text-muted-foreground', compact ? 'py-4' : 'py-8', className)}
+			className={cn('flex items-center justify-center gap-2 text-text-mid', compact ? 'py-4' : 'py-8', className)}
 			{...props}
 		>
 			<Spinner />

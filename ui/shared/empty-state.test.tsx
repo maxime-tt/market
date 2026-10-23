@@ -8,7 +8,7 @@ describe('EmptyState', () => {
 		expect(markup).toContain('data-slot="empty-state"')
 		expect(markup).toContain('No items')
 		expect(markup).toContain('Try another filter')
-		expect(markup).toContain('text-sm text-muted-foreground')
+		expect(markup).toContain('text-sm text-text-mid')
 	})
 
 	test('renders an action only when provided', () => {

@@ -26,7 +26,7 @@ export interface StatCardProps extends HTMLAttributes<HTMLDivElement> {
 const TREND_CLASS: Record<StatCardTrend, string> = {
 	up: 'text-success',
 	down: 'text-destructive',
-	flat: 'text-muted-foreground',
+	flat: 'text-text-mid',
 }
 
 /** Compact card showing one metric. */
@@ -47,17 +47,17 @@ export function StatCard({
 			ref={ref}
 			data-slot="stat-card"
 			className={cn(
-				'flex flex-col gap-1 rounded-xl border bg-card p-4 text-card-foreground shadow-sm',
+				'flex flex-col gap-1 rounded-xl border bg-surface-raised p-4 text-text-high shadow-sm',
 				surface === 'glass' && 'glass',
 				corners === 'handmade' && 'rounded-hand',
 				className,
 			)}
 			{...props}
 		>
-			{eyebrow && <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">{eyebrow}</p>}
-			<p className="text-sm text-muted-foreground">{label}</p>
+			{eyebrow && <p className="text-[11px] font-semibold tracking-[0.18em] text-text-mid uppercase">{eyebrow}</p>}
+			<p className="text-sm text-text-mid">{label}</p>
 			<p className={cn('text-2xl font-medium', trend && TREND_CLASS[trend])}>{value}</p>
-			{helper && <p className="text-xs text-muted-foreground">{helper}</p>}
+			{helper && <p className="text-xs text-text-mid">{helper}</p>}
 		</div>
 	)
 }

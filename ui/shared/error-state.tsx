@@ -43,7 +43,7 @@ export function ErrorState({
 		>
 			<div className="space-y-1">
 				<p className="font-medium text-destructive">{title}</p>
-				{message && <p className="text-sm text-muted-foreground">{message}</p>}
+				{message && <p className="text-sm text-text-mid">{message}</p>}
 			</div>
 			{(onRetry || action) && (
 				<div className="flex flex-wrap items-center justify-center gap-2">

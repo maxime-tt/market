@@ -24,10 +24,10 @@ export function EmptyState({ icon, title, description, action, compact = false, 
 			className={cn('flex flex-col items-center justify-center text-center', compact ? 'gap-2 py-6' : 'gap-3 py-12', className)}
 			{...props}
 		>
-			{icon && <div className={cn('text-muted-foreground', compact ? '[&_svg]:size-6' : '[&_svg]:size-10')}>{icon}</div>}
+			{icon && <div className={cn('text-text-mid', compact ? '[&_svg]:size-6' : '[&_svg]:size-10')}>{icon}</div>}
 			<div className="space-y-1">
 				<p className={cn('font-medium', compact ? 'text-sm' : 'text-base')}>{title}</p>
-				{description && <p className="text-sm text-muted-foreground">{description}</p>}
+				{description && <p className="text-sm text-text-mid">{description}</p>}
 			</div>
 			{action && <div className="pt-1">{action}</div>}
 		</div>

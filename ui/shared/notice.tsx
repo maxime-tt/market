@@ -46,7 +46,7 @@ export function Notice({ tone = 'info', title, action, onDismiss, compact = fals
 					type="button"
 					onClick={onDismiss}
 					aria-label="Dismiss"
-					className="shrink-0 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					className="shrink-0 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
 				>
 					<X className="size-4" />
 				</button>

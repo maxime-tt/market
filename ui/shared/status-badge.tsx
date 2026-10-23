@@ -16,7 +16,7 @@ export interface StatusBadgeProps {
 }
 
 const TONE_CLASS: Record<StatusTone, string> = {
-	neutral: 'bg-muted text-muted-foreground border-border',
+	neutral: 'bg-surface-sunken text-text-mid border-border-default',
 	info: 'bg-info-muted text-info-muted-foreground border-info-border',
 	warning: 'bg-warning-muted text-warning-muted-foreground border-warning-border',
 	error: 'bg-error-muted text-error-muted-foreground border-error-border',

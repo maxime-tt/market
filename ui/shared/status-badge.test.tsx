@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { StatusBadge, type StatusTone } from './status-badge'
 
 const TONE_CLASS: Record<StatusTone, string> = {
-	neutral: 'bg-muted',
+	neutral: 'bg-surface-sunken',
 	info: 'bg-info-muted',
 	warning: 'bg-warning-muted',
 	error: 'bg-error-muted',
@@ -16,8 +16,8 @@ describe('StatusBadge', () => {
 		const markup = renderToStaticMarkup(createElement(StatusBadge, { status: 'draft' }))
 		expect(markup).toContain('data-slot="status-badge"')
 		expect(markup).toContain('data-tone="neutral"')
-		expect(markup).toContain('bg-muted')
-		expect(markup).toContain('text-muted-foreground')
+		expect(markup).toContain('bg-surface-sunken')
+		expect(markup).toContain('text-text-mid')
 		expect(markup).toContain('draft')
 	})
 

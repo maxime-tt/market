@@ -8,7 +8,7 @@ describe('CopyableField', () => {
 		expect(markup).toContain('data-slot="copyable-field"')
 		expect(markup).toContain('App Relay')
 		expect(markup).toContain('wss://relay.example')
-		expect(markup).toContain('bg-muted/50')
+		expect(markup).toContain('bg-surface-sunken/50')
 	})
 
 	test('renders a copy control named after the field', () => {

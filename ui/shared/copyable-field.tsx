@@ -24,10 +24,14 @@ export interface CopyableFieldProps {
  */
 export function CopyableField({ label, value, icon, onCopyError, className, ref }: CopyableFieldProps) {
 	return (
-		<div ref={ref} data-slot="copyable-field" className={cn('flex items-start gap-3 rounded-md border bg-muted/50 p-3', className)}>
-			{icon && <span className="flex-shrink-0 text-muted-foreground [&_svg]:size-5">{icon}</span>}
+		<div
+			ref={ref}
+			data-slot="copyable-field"
+			className={cn('flex items-start gap-3 rounded-md border bg-surface-sunken/50 p-3', className)}
+		>
+			{icon && <span className="flex-shrink-0 text-text-mid [&_svg]:size-5">{icon}</span>}
 			<div className="min-w-0 flex-1">
-				<p className="text-sm font-medium text-muted-foreground">{label}</p>
+				<p className="text-sm font-medium text-text-mid">{label}</p>
 				<p className="font-mono text-sm break-all">{value}</p>
 			</div>
 			<CopyButton
