@@ -26,8 +26,8 @@ export interface PubkeyFieldProps {
  * button with a 12px icon exactly), so the route no longer carries a second
  * clipboard implementation.
  *
- * Declared styling change: the njump link was raw `text-blue-600`, now the
- * semantic `text-primary` per the `ui/` token rule.
+ * Declared styling change: the njump link was a raw blue utility, now the
+ * semantic `text-fill-accent` per the `ui/` token rule.
  */
 export function PubkeyField({ label, npub, hex, icon, onCopyError, className, ref }: PubkeyFieldProps) {
 	// `truncateMiddle` guards on `head + tail + separator` rather than a bare

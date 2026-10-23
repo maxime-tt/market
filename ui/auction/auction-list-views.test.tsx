@@ -29,7 +29,7 @@ describe('AuctionTopBidBox', () => {
 	test('switches label, tone and border treatment in the settlement phase', () => {
 		const markup = renderToStaticMarkup(<AuctionTopBidBox topBidSats={100} isSettlementPhase />)
 		expect(markup).toContain('Winning bid')
-		expect(markup).toContain('border-emerald-300')
+		expect(markup).toContain('border-success-border')
 		expect(markup).not.toContain('Current top bid')
 	})
 

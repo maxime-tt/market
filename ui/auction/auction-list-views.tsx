@@ -23,6 +23,11 @@ import { AuctionActivityRow } from './auction-overview-views'
  *
  * Declared visible changes: none. Markup, class strings and copy are identical
  * to the route's inline versions; the only difference is the prop surface.
+ *
+ * Declared styling change (T6.2): raw-palette classes were migrated to the
+ * Tier-1 role vocabulary — greys to surface/text/border roles, red/rose to
+ * `error`, amber to `warning`, sky to `info`, emerald to `success`. The state
+ * families use the Tailwind-500 base shade, so a family hue may shift slightly.
  */
 
 /** Relative "time ago" label for the top bid's creation time. */
@@ -109,11 +114,11 @@ export function AuctionTopBidBox({
 				ref={ref}
 				data-slot="auction-top-bid-box"
 				className={cn(
-					'flex h-full min-h-32 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-4',
+					'flex h-full min-h-32 items-center justify-center rounded-xl border border-dashed border-border-default bg-surface-sunken px-5 py-4',
 					className,
 				)}
 			>
-				<p className="text-center text-sm text-zinc-500">No bids yet. Winning bid will appear here.</p>
+				<p className="text-center text-sm text-text-mid">No bids yet. Winning bid will appear here.</p>
 			</div>
 		)
 	}
@@ -124,7 +129,7 @@ export function AuctionTopBidBox({
 			data-slot="auction-top-bid-box"
 			className={cn(
 				'h-full min-h-32 rounded-xl border-2 px-4 py-4',
-				isSettlementPhase ? 'border-emerald-300 bg-emerald-100' : 'border-zinc-300 bg-zinc-100',
+				isSettlementPhase ? 'border-success-border bg-success-muted' : 'border-border-default bg-surface-sunken',
 				className,
 			)}
 		>
@@ -132,13 +137,13 @@ export function AuctionTopBidBox({
 				<div
 					className={cn(
 						'flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]',
-						isSettlementPhase ? 'text-emerald-800' : 'text-zinc-700',
+						isSettlementPhase ? 'text-success-foreground' : 'text-text-high',
 					)}
 				>
 					<span>Top bid:</span>
 					<span>{formatTimeAgo(topBidCreatedAt)}</span>
 				</div>
-				<p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">{topBidSats.toLocaleString()} sats</p>
+				<p className="mt-1 text-2xl font-semibold tracking-tight text-text-high">{topBidSats.toLocaleString()} sats</p>
 			</div>
 			<div className="mt-2 flex items-center justify-between gap-2">
 				<StatusBadge
@@ -153,29 +158,29 @@ export function AuctionTopBidBox({
 				</div>
 			</div>
 			{showReleasePathDetails && (
-				<Accordion type="single" collapsible className="mt-3 rounded-xl border border-zinc-200 bg-white px-4">
+				<Accordion type="single" collapsible className="mt-3 rounded-xl border border-border-default bg-surface-raised px-4">
 					<AccordionItem value={releaseDetailsItemValue} className="border-none">
-						<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">Settlement details</AccordionTrigger>
+						<AccordionTrigger className="py-4 text-sm font-semibold text-text-high hover:no-underline">Settlement details</AccordionTrigger>
 						<AccordionContent className="space-y-3 pb-4">
 							{showWaitingForReleasePath && (
-								<div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+								<div className="rounded-lg border border-warning-border bg-warning-muted px-3 py-2 text-sm text-warning-foreground">
 									<div className="font-medium">Waiting for release path</div>
 									<div className="mt-1">Bidder must publish the release path before settlement can be published.</div>
 								</div>
 							)}
 							{showReleasePathReceived && (
-								<div className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+								<div className="rounded-lg border border-info-border bg-info-muted px-3 py-2 text-sm text-info-foreground">
 									<div className="font-medium">Release path received</div>
 									<div className="mt-1">{formatTimeLeft(releasePathSecondsLeft)} to publish settlement</div>
 								</div>
 							)}
 							{showSettlementGrieved && (
-								<div className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+								<div className="rounded-lg border border-error-border bg-error-muted px-3 py-2 text-sm text-error-foreground">
 									Bid was not settled. It was grieved after release path.
 								</div>
 							)}
 							{showSettlementGrievedNoRelease && (
-								<div className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+								<div className="rounded-lg border border-error-border bg-error-muted px-3 py-2 text-sm text-error-foreground">
 									Bid was not settled. It was grieved because release path was not published.
 								</div>
 							)}
@@ -184,7 +189,7 @@ export function AuctionTopBidBox({
 									type="button"
 									variant="outline"
 									disabled
-									className="w-full justify-start gap-2 border-sky-300 bg-sky-50 text-sky-900 hover:bg-sky-50"
+									className="w-full justify-start gap-2 border-info-border bg-info-muted text-info-foreground hover:bg-info-muted"
 								>
 									<Hourglass className="h-4 w-4" aria-hidden="true" />
 									Waiting for bidder shipping method
@@ -254,16 +259,16 @@ export function AuctionListItemView({
 	const counts = activity ?? { bids: 0, newBids: 0, comments: 0, newComments: 0, liveChat: 0, newChat: 0 }
 
 	return (
-		<div ref={ref} data-slot="auction-list-item" className={cn('rounded-lg border border-zinc-200 bg-bg p-6 shadow-md', className)}>
+		<div ref={ref} data-slot="auction-list-item" className={cn('rounded-lg border border-border-default bg-bg p-6 shadow-md', className)}>
 			<div className="flex flex-col gap-6 lg:flex-row">
 				<div className="flex shrink-0 items-center gap-3 lg:flex-col lg:items-center">
 					{thumbnailUrl ? (
-						<div className="overflow-hidden rounded-xl border border-white/60 bg-zinc-100 p-1 shadow-sm ring-1 ring-zinc-200/70">
+						<div className="overflow-hidden rounded-xl border border-border-default bg-surface-sunken p-1 shadow-sm ring-1 ring-border-default">
 							<Media src={thumbnailUrl} alt="" className="h-24 w-24 shrink-0 object-cover lg:h-32 lg:w-32" />
 						</div>
 					) : (
-						<div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 shadow-sm ring-1 ring-zinc-200/70 lg:h-32 lg:w-32">
-							<Gavel className="h-8 w-8 text-zinc-400" />
+						<div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-dashed border-border-default bg-surface-sunken shadow-sm ring-1 ring-border-default lg:h-32 lg:w-32">
+							<Gavel className="h-8 w-8 text-text-mid" />
 						</div>
 					)}
 					{openAuctionAction}
@@ -291,7 +296,7 @@ export function AuctionListItemView({
 						<div className="min-w-0 flex-1">{countdown}</div>
 						<AuctionStatusBadge status={status} />
 					</div>
-					<div className="w-full space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+					<div className="w-full space-y-3 rounded-xl border border-border-default bg-surface-sunken px-5 py-5">
 						<div className="flex items-center justify-between gap-3">
 							<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-mid">Activity</p>
 							<Button
@@ -300,7 +305,7 @@ export function AuctionListItemView({
 								size="sm"
 								onClick={onMarkActivitySeen}
 								disabled={!hasNewActivity}
-								className="h-7 rounded-md border border-zinc-300 bg-white px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-mid hover:bg-zinc-100 hover:text-text-high"
+								className="h-7 rounded-md border border-border-default bg-surface-raised px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-mid hover:bg-surface-hover hover:text-text-high"
 							>
 								<CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
 								Mark as seen

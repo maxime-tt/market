@@ -22,8 +22,9 @@ export interface ButtonProps extends ComponentProps<typeof ButtonPrimitive> {
  *
  * It is the primitive plus one behaviour — a pending state — which was
  * previously hand-rolled in four different ways across the routes
- * (`border-2 border-white`, `border-2 border-destructive`,
- * `border-4 border-primary`, and a bare `Loader2 … animate-spin`). ADR-0007 §1d
+ * (a `border-2` ring with a white border, the same with a destructive-token
+ * border, a `border-4` ring with a primary-token border, and a bare
+ * `Loader2 … animate-spin`). ADR-0007 §1d
  * names `ui/wrappers/` as the layer routes consume primitives through, so this
  * is also what lets a route drop its `@ui/primitives/button` import.
  *
