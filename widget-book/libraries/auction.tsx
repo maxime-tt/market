@@ -1,3 +1,7 @@
+import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
+import { AuctionListItemView, AuctionTopBidBox } from '@ui/auction/auction-list-views'
+import { BidStatusBanner, BidStatusPill, getBidStatusCopy, type BidStatusDisplayInput } from '@ui/auction/bid-status-views'
+import { AuctionShippingDetailRow, AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import {
 	AuctionDetailCard,
@@ -27,6 +31,86 @@ function SamplePartyIdentity() {
 			</span>
 			<span className="text-sm font-medium text-foreground">satoshi</span>
 		</span>
+	)
+}
+
+/** Inline SVG data URI so the list-item thumbnail renders without any network. */
+const svgImage = (fill: string) =>
+	`data:image/svg+xml,${encodeURIComponent(
+		`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="${fill}"/><circle cx="100" cy="100" r="55" fill="rgba(255,255,255,0.7)"/></svg>`,
+	)}`
+
+const AUCTION_THUMBNAIL = svgImage('#10b981')
+
+/** Fixed offsets from load time; the labels stay stable for the length of a test run. */
+const AUCTION_CREATED_AT = Math.floor(Date.now() / 1000) - 3 * 86_400
+const TOP_BID_CREATED_AT = Math.floor(Date.now() / 1000) - 5 * 60
+
+/** Full literal `BidStatusDisplayInput` so each demo only overrides its state. */
+function bidInput(status: BidGroupStatus, overrides: Partial<BidStatusDisplayInput> = {}): BidStatusDisplayInput {
+	return {
+		status,
+		reclaimableCount: 2,
+		waitingForReclaim: false,
+		hasTrackedTokens: true,
+		latestLocktime: 1_760_000_000,
+		reclaimCountdownLabel: 'Reclaim opens in 4m 10s',
+		...overrides,
+	}
+}
+
+/** Full dashboard list row: thumbnail, top-bid panel, countdown and fresh activity. */
+function AuctionListItemDemo() {
+	return (
+		<div className="max-w-5xl">
+			<AuctionListItemView
+				title="Handmade mug auction"
+				summary="One-of-a-kind stoneware mug"
+				createdAt={AUCTION_CREATED_AT}
+				thumbnailUrl={AUCTION_THUMBNAIL}
+				status="Live"
+				openAuctionAction={
+					<button type="button" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
+						View auction
+					</button>
+				}
+				topBidBox={
+					<AuctionTopBidBox
+						topBidSats={15000}
+						topBidCreatedAt={TOP_BID_CREATED_AT}
+						bidderName="satoshi"
+						bidderIdentity={<SamplePartyIdentity />}
+					/>
+				}
+				countdown={
+					<span className="text-sm font-medium text-text-high" data-slot="demo-countdown">
+						2d 4h left
+					</span>
+				}
+				activity={{ bids: 4, newBids: 2, comments: 1, newComments: 0, liveChat: 0, newChat: 0 }}
+				hasNewActivity
+				onMarkActivitySeen={() => {}}
+			/>
+		</div>
+	)
+}
+
+/** The drained-down state: no thumbnail, no top bid, no countdown, nothing unseen. */
+function AuctionListItemSeenDemo() {
+	return (
+		<div className="max-w-5xl">
+			<AuctionListItemView
+				title="Frosted vase auction"
+				summary="Cut-glass vase, reserve met"
+				createdAt={AUCTION_CREATED_AT}
+				thumbnailUrl={null}
+				status="Ended"
+				topBidBox={<AuctionTopBidBox topBidSats={null} />}
+				activity={{ bids: 3, newBids: 0, comments: 0, newComments: 0, liveChat: 2, newChat: 0 }}
+				hasNewActivity={false}
+				onMarkActivitySeen={() => {}}
+			/>
+		</div>
 	)
 }
 
@@ -96,6 +180,137 @@ export const auction: WidgetLibrary = {
 					<AuctionTechnicalRow label="Schema" value="N/A" />
 					<AuctionTechnicalRow label="Trusted mints" value={'mint.one\nmint.two'} stacked />
 				</div>
+			),
+		},
+		{
+			// T3.0 debt: the dashboard auctions list lifts this row out of the route.
+			name: 'AuctionListItemView',
+			render: () => <AuctionListItemDemo />,
+		},
+		{
+			name: 'AuctionListItemViewSeen',
+			render: () => <AuctionListItemSeenDemo />,
+		},
+		{
+			// T3.0 debt: the top-bid panel of the same card.
+			name: 'AuctionTopBidBox',
+			render: () => (
+				<div className="max-w-sm">
+					<AuctionTopBidBox
+						topBidSats={15000}
+						topBidCreatedAt={TOP_BID_CREATED_AT}
+						bidderName="satoshi"
+						bidderIdentity={<SamplePartyIdentity />}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'AuctionTopBidBoxEmpty',
+			render: () => (
+				<div className="max-w-sm">
+					<AuctionTopBidBox topBidSats={null} />
+				</div>
+			),
+		},
+		{
+			// Settlement phase: the success frame plus the settlement-details accordion.
+			name: 'AuctionTopBidBoxSettlement',
+			render: () => (
+				<div className="max-w-sm">
+					<AuctionTopBidBox
+						topBidSats={15000}
+						topBidCreatedAt={TOP_BID_CREATED_AT}
+						bidderName="satoshi"
+						bidderIdentity={<SamplePartyIdentity />}
+						isSettlementPhase
+						showReleasePathDetails
+						showWaitingForReleasePath
+						showReleasePathReceived
+						releasePathSecondsLeft={2 * 86_400 + 3 * 3_600}
+						showSettlementGrievedNoRelease
+						showWaitingForShippingMethod
+						releaseDetailsItemValue="demo-release-details"
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'BidStatusPill',
+			render: () => (
+				<div className="flex flex-wrap gap-2">
+					<BidStatusPill copy={getBidStatusCopy(bidInput('winning'))} />
+					<BidStatusPill copy={getBidStatusCopy(bidInput('reclaim_available', { reclaimableCount: 1 }))} />
+					<BidStatusPill copy={getBidStatusCopy(bidInput('locked'))} />
+					<BidStatusPill copy={getBidStatusCopy(bidInput('outbid'))} />
+					<BidStatusPill copy={getBidStatusCopy(bidInput('cancelled'))} />
+				</div>
+			),
+		},
+		{
+			name: 'BidStatusBanner',
+			render: () => (
+				<div className="max-w-md space-y-3">
+					<BidStatusBanner copy={getBidStatusCopy(bidInput('winning'))} />
+					<BidStatusBanner copy={getBidStatusCopy(bidInput('reclaim_available', { reclaimableCount: 1 }))} />
+					<BidStatusBanner copy={getBidStatusCopy(bidInput('outbid'))} />
+				</div>
+			),
+		},
+		{
+			name: 'AuctionShippingDetailRow',
+			render: () => (
+				// Rows with an empty value render nothing, so only two rows appear.
+				<dl className="grid max-w-sm gap-3">
+					<AuctionShippingDetailRow label="Base price" value="500 sats" />
+					<AuctionShippingDetailRow label="Service" value="International Priority" />
+					<AuctionShippingDetailRow label="Carrier" />
+				</dl>
+			),
+		},
+		{
+			name: 'AuctionShippingOptionCard',
+			render: () => (
+				<ul className="max-w-md space-y-4">
+					<AuctionShippingOptionCard
+						status="valid"
+						title="International Priority"
+						description="Door-to-door courier with tracking"
+						priceLabel="1,200 sats"
+						basePriceLabel="1,000 sats"
+						extraCost="200 sats"
+						service="Courier"
+						carrier="DHL"
+						destination="Worldwide"
+						duration="3–5 days"
+					/>
+				</ul>
+			),
+		},
+		{
+			// The three degenerate branches of the same card, stacked.
+			name: 'AuctionShippingOptionCardStates',
+			render: () => (
+				<ul className="max-w-md space-y-4">
+					<AuctionShippingOptionCard status="invalid" title="Ignored" priceLabel="" description="Event 30402:abc123 could not be parsed." />
+					<AuctionShippingOptionCard status="valid" isLoading title="Loading" priceLabel="" />
+					<AuctionShippingOptionCard status="valid" isUnavailable title="Unavailable" priceLabel="" />
+				</ul>
+			),
+		},
+		{
+			name: 'AuctionShippingOptionCardPartial',
+			render: () => (
+				<ul className="max-w-md">
+					<AuctionShippingOptionCard
+						status="valid"
+						title="Standard Post"
+						priceLabel="500 sats"
+						basePriceLabel="500 sats"
+						carrier="Royal Mail"
+						hasPartialShippingInfo
+					/>
+				</ul>
 			),
 		},
 	],

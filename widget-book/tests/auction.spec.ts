@@ -15,9 +15,139 @@ test('renders the auction library', async ({ page }) => {
 	await expect(page.getByTestId('widget-book-selection')).toHaveText('auction')
 	await expect(page.getByTestId('library-auction')).toBeVisible()
 
-	for (const widget of ['AuctionStatusBadge', 'AuctionSettlementBadge', 'AuctionDetailCard', 'AuctionPartyCard', 'AuctionTechnicalRow']) {
+	for (const widget of [
+		'AuctionStatusBadge',
+		'AuctionSettlementBadge',
+		'AuctionDetailCard',
+		'AuctionPartyCard',
+		'AuctionTechnicalRow',
+		'AuctionListItemView',
+		'AuctionListItemViewSeen',
+		'AuctionTopBidBox',
+		'AuctionTopBidBoxEmpty',
+		'AuctionTopBidBoxSettlement',
+		'BidStatusPill',
+		'BidStatusBanner',
+		'AuctionShippingDetailRow',
+		'AuctionShippingOptionCard',
+		'AuctionShippingOptionCardStates',
+		'AuctionShippingOptionCardPartial',
+	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
+})
+
+test('renders the dashboard auction list row with its host-owned slots', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const item = page.getByTestId('widget-AuctionListItemView')
+	await expect(item.locator('[data-slot="auction-list-item"]')).toHaveCount(1)
+	await expect(item).toContainText('Handmade mug auction')
+	await expect(item).toContainText('One-of-a-kind stoneware mug')
+	await expect(item).toContainText('Created:')
+	// The host-owned action, countdown and composed top-bid panel all slot in.
+	await expect(item.getByRole('button', { name: 'View auction' })).toBeVisible()
+	await expect(item.locator('[data-slot="demo-countdown"]')).toContainText('2d 4h left')
+	await expect(item).toContainText('15,000 sats')
+	await expect(item).toContainText('satoshi')
+	// Fresh activity: the seen control is enabled and the new counts highlight.
+	await expect(item.getByRole('button', { name: 'Mark as seen' })).toBeEnabled()
+	await expect(item).toContainText('2 New')
+})
+
+test('renders the drained-down list row with disabled seen control and empty top bid', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const item = page.getByTestId('widget-AuctionListItemViewSeen')
+	await expect(item).toContainText('Frosted vase auction')
+	// No thumbnail: the gavel placeholder shows instead.
+	await expect(item.locator('svg.lucide-gavel')).toHaveCount(1)
+	await expect(item).toContainText('No bids yet. Winning bid will appear here.')
+	await expect(item.getByRole('button', { name: 'Mark as seen' })).toBeDisabled()
+})
+
+test('renders the top-bid panel in its current, empty and settlement states', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const current = page.getByTestId('widget-AuctionTopBidBox')
+	await expect(current.locator('[data-slot="auction-top-bid-box"]')).toHaveCount(1)
+	await expect(current).toContainText('15,000 sats')
+	await expect(current).toContainText('5 mins ago')
+	await expect(current).toContainText('Current top bid')
+
+	const empty = page.getByTestId('widget-AuctionTopBidBoxEmpty')
+	await expect(empty).toContainText('No bids yet. Winning bid will appear here.')
+
+	// Settlement phase turns the frame success-toned and hides the bid behind the accordion.
+	const settlement = page.getByTestId('widget-AuctionTopBidBoxSettlement')
+	const frame = settlement.locator('[data-slot="auction-top-bid-box"]')
+	await expect(frame).toHaveClass(/border-success-border bg-success-muted/)
+	await expect(settlement).toContainText('Winning bid')
+	await expect(settlement).toContainText('Settlement details')
+	await expect(settlement).not.toContainText('Waiting for release path')
+
+	await settlement.getByRole('button', { name: 'Settlement details' }).click()
+	await expect(settlement).toContainText('Waiting for release path')
+	await expect(settlement).toContainText('2 days to publish settlement')
+	await expect(settlement).toContainText('Bid was not settled. It was grieved because release path was not published.')
+	await expect(settlement.getByRole('button', { name: 'Waiting for bidder shipping method' })).toBeDisabled()
+})
+
+test('derives the bid status pills and banners from the status copy', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const pills = page.getByTestId('widget-BidStatusPill')
+	await expect(pills.locator('[data-slot="status-badge"]')).toHaveCount(5)
+	await expect(pills).toContainText('Winning bid')
+	await expect(pills).toContainText('Reclaim available')
+	await expect(pills).toContainText('Locked')
+	await expect(pills).toContainText('Outbid')
+	await expect(pills).toContainText('Auction cancelled')
+	await expect(pills.locator('[data-tone="success"]')).toHaveCount(1)
+	await expect(pills.locator('[data-tone="warning"]')).toHaveCount(1)
+	await expect(pills.locator('[data-tone="info"]')).toHaveCount(1)
+	await expect(pills.locator('[data-tone="neutral"]')).toHaveCount(1)
+	await expect(pills.locator('[data-tone="error"]')).toHaveCount(1)
+
+	const banners = page.getByTestId('widget-BidStatusBanner')
+	await expect(banners.locator('[data-slot="notice"]')).toHaveCount(3)
+	await expect(banners).toContainText('This bid won the auction. Submit your shipping address from the auction page.')
+	await expect(banners).toContainText('1 locked bid part is past locktime and can be reclaimed now.')
+	// Neutral copy renders through the info notice tone.
+	await expect(banners.locator('[data-tone="info"]')).toHaveCount(1)
+})
+
+test('renders the shipping detail rows and skips empty values', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const rows = page.getByTestId('widget-AuctionShippingDetailRow')
+	await expect(rows.locator('dt')).toHaveCount(2)
+	await expect(rows).toContainText('Base price')
+	await expect(rows).toContainText('International Priority')
+	await expect(rows).not.toContainText('Carrier')
+})
+
+test('renders the shipping option card and its degenerate branches', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const card = page.getByTestId('widget-AuctionShippingOptionCard')
+	await expect(card).toContainText('International Priority')
+	await expect(card).toContainText('Door-to-door courier with tracking')
+	await expect(card).toContainText('1,200 sats')
+	await expect(card).toContainText('Base price')
+	await expect(card).toContainText('1,000 sats')
+	await expect(card).toContainText('Auction extra cost')
+	await expect(card).toContainText('200 sats')
+
+	const states = page.getByTestId('widget-AuctionShippingOptionCardStates')
+	await expect(states.locator('li')).toHaveCount(3)
+	await expect(states).toContainText('Invalid shipping reference')
+	await expect(states).toContainText('Event 30402:abc123 could not be parsed.')
+	await expect(states).toContainText('Loading shipping details...')
+	await expect(states).toContainText('Shipping option unavailable')
+
+	const partial = page.getByTestId('widget-AuctionShippingOptionCardPartial')
+	await expect(partial).toContainText('Some shipping details are missing or malformed.')
 })
 
 test('maps auction lifecycle status to semantic tones', async ({ page }) => {

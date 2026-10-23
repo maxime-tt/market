@@ -11,6 +11,15 @@ import { StatusBadge } from '@ui/shared/status-badge'
 import { CopyButton } from '@ui/shared/copy-button'
 import { CopyableField } from '@ui/shared/copyable-field'
 import { TruncatedText } from '@ui/shared/truncated-text'
+import { Media } from '@ui/shared/media'
+import { ImageCarousel } from '@ui/shared/image-carousel'
+import { ImageViewerModal } from '@ui/shared/image-viewer-modal'
+import { ItemGrid } from '@ui/shared/item-grid'
+import { ConfettiBurst } from '@ui/shared/confetti-burst'
+import { PriceDisplayView } from '@ui/shared/price-display'
+import { CityCombobox } from '@ui/shared/city-combobox'
+import { CountryCombobox } from '@ui/shared/country-combobox'
+import { PhoneInput } from '@ui/shared/phone-input'
 import { PackageIcon, PencilIcon, ServerIcon, StoreIcon, TrashIcon } from 'lucide-react'
 
 import type { WidgetLibrary } from '../libraries'
@@ -39,6 +48,75 @@ function ConfirmDialogDemo({ destructive = false }: { destructive?: boolean }) {
 				destructive={destructive}
 				onConfirm={() => setOpen(false)}
 			/>
+		</div>
+	)
+}
+
+/** Inline SVG data URI so media entries render without any network. */
+const svgImage = (fill: string) =>
+	`data:image/svg+xml,${encodeURIComponent(
+		`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="${fill}"/><circle cx="200" cy="200" r="110" fill="rgba(255,255,255,0.7)"/></svg>`,
+	)}`
+
+const SAMPLE_IMAGE_GREEN = svgImage('#10b981')
+const SAMPLE_IMAGE_AMBER = svgImage('#f59e0b')
+const SAMPLE_IMAGE_BLUE = svgImage('#3b82f6')
+
+/**
+ * Image viewer demo. Kept closed at rest for the same reason as the confirm
+ * dialog: a mounted open modal hides the whole catalogue from the
+ * accessibility tree. The viewer drives its own index state.
+ */
+function ImageViewerModalDemo() {
+	const [open, setOpen] = useState(false)
+	const [index, setIndex] = useState(0)
+
+	return (
+		<div className="min-h-20 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+			<button type="button" className="rounded-md border px-3 py-1.5 text-sm" onClick={() => setOpen(true)}>
+				Open image viewer
+			</button>
+			<ImageViewerModal
+				isOpen={open}
+				onClose={() => setOpen(false)}
+				images={[
+					{ url: SAMPLE_IMAGE_GREEN, title: 'Handmade mug' },
+					{ url: SAMPLE_IMAGE_AMBER, title: 'Handmade vase' },
+				]}
+				currentIndex={index}
+				onIndexChange={setIndex}
+			/>
+		</div>
+	)
+}
+
+/** The comboboxes and phone input are controlled: the demo holds the value. */
+function CityComboboxDemo() {
+	const [city, setCity] = useState('')
+
+	return (
+		<div className="w-72">
+			<CityCombobox value={city} onChange={setCity} selectedCountry="United States" placeholder="e.g. San Francisco" />
+		</div>
+	)
+}
+
+function CountryComboboxDemo() {
+	const [country, setCountry] = useState('')
+
+	return (
+		<div className="w-72">
+			<CountryCombobox value={country} onChange={setCountry} placeholder="e.g. United Kingdom" />
+		</div>
+	)
+}
+
+function PhoneInputDemo() {
+	const [phone, setPhone] = useState('')
+
+	return (
+		<div className="w-72">
+			<PhoneInput value={phone} onChange={setPhone} selectedCountry="Germany" placeholder="7751892718" />
 		</div>
 	)
 }
@@ -267,6 +345,108 @@ export const shared: WidgetLibrary = {
 					<TruncatedText text="short" />
 				</div>
 			),
+		},
+		{
+			name: 'Media',
+			render: () => (
+				<div className="h-48 w-full overflow-hidden rounded-md border">
+					<Media src={SAMPLE_IMAGE_GREEN} alt="Handmade mug" className="h-full w-full object-cover" />
+				</div>
+			),
+		},
+		{
+			// Unroutable local port: the image errors instantly, no network needed.
+			name: 'MediaFallback',
+			render: () => (
+				<div className="h-48 w-full overflow-hidden rounded-md border">
+					<Media src="http://127.0.0.1:9/missing.jpg" alt="Missing media" className="h-full w-full object-cover" />
+				</div>
+			),
+		},
+		{
+			name: 'ImageCarousel',
+			render: () => (
+				<div className="mx-auto w-full max-w-sm">
+					<ImageCarousel
+						title="Handmade mug"
+						images={[{ url: SAMPLE_IMAGE_GREEN }, { url: SAMPLE_IMAGE_AMBER }, { url: SAMPLE_IMAGE_BLUE }]}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'ImageCarouselEmpty',
+			render: () => (
+				<div className="h-48 w-full">
+					<ImageCarousel title="Unpublished product" images={[]} />
+				</div>
+			),
+		},
+		{
+			name: 'ImageViewerModal',
+			render: () => <ImageViewerModalDemo />,
+		},
+		{
+			name: 'ItemGrid',
+			render: () => (
+				<ItemGrid title="Products" cols={2} smCols={2} lgCols={3} gap={4}>
+					{['Handmade mug', 'Wool scarf', 'Ceramic bowl'].map((label) => (
+						<div key={label} className="rounded-md border p-4 text-sm">
+							{label}
+						</div>
+					))}
+				</ItemGrid>
+			),
+		},
+		{
+			name: 'ConfettiBurst',
+			render: () => (
+				<div className="space-y-2 text-sm text-muted-foreground">
+					<p className="font-medium text-foreground">Viewport confetti via portal</p>
+					<p>Bursts launch from the bottom edge; suppressed under prefers-reduced-motion.</p>
+					<ConfettiBurst />
+				</div>
+			),
+		},
+		{
+			name: 'PriceDisplayView',
+			render: () => (
+				<div className="w-64">
+					<PriceDisplayView
+						priceValue={120000}
+						originalCurrency="SATS"
+						selectedCurrency="USD"
+						price={{ isBitcoinCurrency: true, satsValue: 120000, fiatValue: { value: 135.12, currency: 'USD' } }}
+						isLoading={false}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'PriceDisplayViewLoading',
+			render: () => (
+				<div className="w-64">
+					<PriceDisplayView
+						priceValue={0}
+						originalCurrency="EUR"
+						selectedCurrency="USD"
+						price={{ isBitcoinCurrency: false, satsValue: null, fiatValue: null }}
+						isLoading
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'CityCombobox',
+			render: () => <CityComboboxDemo />,
+		},
+		{
+			name: 'CountryCombobox',
+			render: () => <CountryComboboxDemo />,
+		},
+		{
+			name: 'PhoneInput',
+			render: () => <PhoneInputDemo />,
 		},
 	],
 }

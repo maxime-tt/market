@@ -100,3 +100,150 @@ test('renders the copy button and truncated text atoms', async ({ page }) => {
 	await expect(truncated).toContainText('…')
 	await expect(truncated).toContainText('short')
 })
+
+test('renders the drained shared components', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	for (const widget of [
+		'Media',
+		'MediaFallback',
+		'ImageCarousel',
+		'ImageCarouselEmpty',
+		'ImageViewerModal',
+		'ItemGrid',
+		'ConfettiBurst',
+		'PriceDisplayView',
+		'PriceDisplayViewLoading',
+		'CityCombobox',
+		'CountryCombobox',
+		'PhoneInput',
+	]) {
+		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
+	}
+})
+
+test('renders Media with an inline image and the fallback tile', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const loaded = page.getByTestId('widget-Media')
+	const img = loaded.locator('img[alt="Handmade mug"]')
+	await expect(img).toBeVisible()
+	await expect(img).toHaveAttribute('src', /data:image\/svg\+xml/)
+
+	// The errored image collapses to the centered fallback tile.
+	const fallback = page.getByTestId('widget-MediaFallback')
+	await expect(fallback.getByRole('img', { name: 'Missing media' })).toHaveClass(/bg-fill-ink text-on-fill-ink/)
+	await expect(fallback.locator('img')).toHaveCount(0)
+})
+
+test('renders the image carousel previews and the empty state', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const carousel = page.getByTestId('widget-ImageCarousel')
+	await expect(carousel.locator('img[alt="Handmade mug - Image 1"]').first()).toBeVisible()
+	// Full-size buttons carry an "in full size" suffix, previews do not.
+	for (const index of [1, 2, 3]) {
+		await expect(carousel.getByRole('button', { name: `View Handmade mug - Image ${index}`, exact: true })).toBeVisible()
+	}
+	await expect(carousel.getByRole('button', { name: 'View Handmade mug - Image 1 in full size' })).toBeVisible()
+
+	const empty = page.getByTestId('widget-ImageCarouselEmpty')
+	await expect(empty.locator('.bg-fill-ink')).toHaveCount(1)
+})
+
+test('opens the image viewer modal from a trigger', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const widget = page.getByTestId('widget-ImageViewerModal')
+	await widget.getByRole('button', { name: 'Open image viewer' }).click()
+
+	const dialog = page.getByRole('dialog')
+	await expect(dialog).toBeVisible()
+	await expect(dialog).toContainText('1 of 2')
+	await expect(dialog).toContainText('100%')
+
+	await dialog.getByRole('button', { name: 'Zoom in' }).click()
+	await expect(dialog).toContainText('125%')
+
+	// Escape instead of the Close button: the toolbar close and the dialog
+	// primitive's built-in close both resolve to the name "Close".
+	await page.keyboard.press('Escape')
+	await expect(dialog).toHaveCount(0)
+	await expect(widget.getByRole('button', { name: 'Open image viewer' })).toBeVisible()
+})
+
+test('renders the item grid with its columns and title', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const grid = page.getByTestId('widget-ItemGrid')
+	await expect(grid.getByRole('heading', { name: 'Products' })).toBeVisible()
+	await expect(grid.locator('.grid.grid-cols-2.lg\\:grid-cols-3.gap-4')).toHaveCount(1)
+	await expect(grid.locator('.grid > div')).toHaveCount(3)
+})
+
+test('mounts the confetti burst canvas through the portal', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	// The canvas renders into document.body via createPortal, not inside the card.
+	await expect(page.locator('body > canvas[aria-hidden="true"]')).toHaveCount(1)
+	await expect(page.getByTestId('widget-ConfettiBurst')).toContainText('Viewport confetti via portal')
+})
+
+test('renders the price display states', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const loaded = page.getByTestId('widget-PriceDisplayView')
+	await expect(loaded).toContainText('120,000 sats')
+	await expect(loaded).toContainText('135.12 USD')
+
+	const loading = page.getByTestId('widget-PriceDisplayViewLoading')
+	await expect(loading.locator('.animate-pulse')).toHaveCount(2)
+})
+
+test('filters and selects a city for the chosen country', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const widget = page.getByTestId('widget-CityCombobox')
+	const input = widget.getByPlaceholder('e.g. San Francisco')
+	await input.fill('San')
+
+	const list = widget.locator('[data-city-item]')
+	await expect(list.filter({ hasText: 'San Francisco' })).toBeVisible()
+	await list.filter({ hasText: 'San Francisco' }).click()
+
+	await expect(input).toHaveValue('San Francisco')
+	await expect(list).toHaveCount(0)
+})
+
+test('selects a country from the full list', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const widget = page.getByTestId('widget-CountryCombobox')
+	await widget.getByRole('button', { name: 'Toggle country list' }).click()
+
+	const item = widget.locator('[data-country-item]').filter({ has: page.getByText('Germany', { exact: true }) })
+	await expect(item).toBeVisible()
+	await item.click()
+
+	await expect(widget.getByPlaceholder('e.g. United Kingdom')).toHaveValue('Germany')
+})
+
+test('combines the dial code with the phone number', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const widget = page.getByTestId('widget-PhoneInput')
+
+	// `selectedCountry="Germany"` auto-selects the dial code while empty.
+	const trigger = widget.getByRole('button')
+	await expect(trigger).toContainText('+49')
+
+	const input = widget.locator('input[type="tel"]')
+	await input.fill('15123456789')
+	await expect(input).toHaveValue('15123456789')
+
+	await trigger.click()
+	const france = widget.locator('[data-country-item]').filter({ has: page.getByText('France', { exact: true }) })
+	await expect(france).toBeVisible()
+	await france.click()
+	await expect(trigger).toContainText('+33')
+})
