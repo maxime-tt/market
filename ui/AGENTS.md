@@ -82,9 +82,11 @@ New components go in the narrowest directory that fits. Domain-agnostic
 building blocks belong in `shared/`; Nostr-specific presentational components
 in `nostr/`; page-section compositions in the matching feature directory.
 
-`ui/components/` is **transitional**: it is the pre-contract pool (77 files)
-and drains into the taxonomy above slice by slice. New and migrated components
-must not be added there.
+`ui/components/` is **transitional** and is now drained: it holds only
+`auction-editor/`, whose monolithic `AuctionEditorTabs` (200 raw-palette
+expressions in one file) is deliberately deferred to T6.3's host/view split —
+migrating it in place would mean migrating it twice. Everything else now lives
+in the taxonomy above. New and migrated components must not be added there.
 
 ## Import convention
 
@@ -275,6 +277,21 @@ surface is genuinely outside the theme (a photo, a video thumbnail, a scrim, a
 hex prop). A _deliberate_ dark panel is `bg-fill-ink` + `text-on-fill-ink` — if it
 gets `text-on-media` it will be unreadable once the theme is dark, because the
 panel will have inverted and the ink will not.
+
+**Surfaces the theme deliberately does not own, as of T6.2.** The migration
+found three roles with no Tier-1 name, and left the raw utility in place rather
+than invent one (R8). They are recorded here so the next author does not have to
+rediscover them, and so the T6.4 guard can whitelist them with their reason:
+
+| the surface                       | raw utility still used                                                   | why it has no role                                                                                                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a **scrim / overlay** over media  | `bg-black/40`, `/50`, `/60`, `/95`, `from-black/80`, `hover:bg-white/20` | an overlay is not a fill of the layout; no scrim role was ruled                                                                                                     |
+| a **scheme-stable black** surface | `bg-black` as an image letterbox                                         | it must **not** invert — a letterbox that lightens with the theme breaks the frame against the image — and Tier 1 has no scheme-stable dark (`--text-high` inverts) |
+| a **scheme-stable white** surface | `bg-white` under a QR code                                               | it must stay white to remain scannable; `bg-surface-raised` follows the theme into dark                                                                             |
+
+A fourth, non-token case: an alpha hairline or ring over a **caller-supplied**
+surface (a background class passed in as a prop, a className handed to a caller's
+render prop) is not the theme's to colour; those stay raw as well.
 
 **Adding a token** (ruling R8): a new Tier-1 token needs (a) a named role that no
 current token expresses, (b) the call sites it serves, and (c) a deletion in the
