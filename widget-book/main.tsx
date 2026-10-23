@@ -116,7 +116,7 @@ function WidgetBook({ selection }: { selection: string }) {
 				{selected.map((library) => (
 					<section key={library.name} className="mb-12" data-testid={`library-${library.name}`}>
 						<h2 className="mb-4 font-header text-lg font-semibold">{library.name}</h2>
-						<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+						<div className="grid grid-cols-1 gap-[calc(var(--gap)*1.5rem)] md:grid-cols-2">
 							{library.entries.map((entry) => (
 								<article key={entry.name} className="rounded-lg border bg-card p-4">
 									<h3 className="mb-3 text-sm font-medium">{entry.name}</h3>
