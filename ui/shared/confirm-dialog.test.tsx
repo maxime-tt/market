@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import { Children, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogDescription, AlertDialogTitle } from '../primitives/alert-dialog'
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogTitle,
+} from '../primitives/alert-dialog'
 import { ConfirmDialog, type ConfirmDialogProps } from './confirm-dialog'
 
 function findElement(node: ReactNode, predicate: (element: ReactElement) => boolean): ReactElement | undefined {
@@ -44,6 +51,11 @@ describe('ConfirmDialog', () => {
 
 		expect(String((destructive?.props as { className?: string }).className)).toContain('bg-destructive')
 		expect(String((plain?.props as { className?: string }).className)).not.toContain('bg-destructive')
+	})
+
+	test('opts into a glass surface', () => {
+		const content = findElement(ConfirmDialog({ ...baseProps, surface: 'glass' }), (element) => element.type === AlertDialogContent)
+		expect(String((content?.props as { className?: string }).className)).toContain('glass')
 	})
 
 	test('invokes onConfirm from the action button', () => {

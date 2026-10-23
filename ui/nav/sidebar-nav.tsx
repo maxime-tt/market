@@ -8,9 +8,9 @@ import type { NavItemWithBadge, NavSectionView } from './model'
  * cannot drift apart.
  */
 export const SIDEBAR_NAV_LINK_CLASS = cn(
-	'block relative bg-white data-[status=active]:bg-secondary lg:bg-transparent',
-	'p-4 lg:px-6 lg:py-2 border border-black data-[status=active]:border-secondary lg:border-0',
-	'rounded lg:rounded-none font-bold data-[status=active]:text-white hover:text-pink-500 transition-colors',
+	'block relative bg-card data-[status=active]:bg-secondary lg:bg-transparent',
+	'p-[calc(var(--gap)*1rem)] lg:px-[calc(var(--gap)*1.5rem)] lg:py-[calc(var(--gap)*0.5rem)] border border-foreground data-[status=active]:border-secondary lg:border-0',
+	'rounded lg:rounded-none font-bold data-[status=active]:text-secondary-foreground hover:text-primary transition-colors',
 )
 
 /** Arguments handed to the host's link renderer. */
@@ -48,7 +48,7 @@ function NavItemContent({ item }: { item: NavItemWithBadge }) {
 		<span className="flex justify-between items-center">
 			<span>{`${item.emoji} ${item.title}`}</span>
 			{item.badgeCount > 0 && (
-				<span className="inline-flex justify-center items-center bg-pink-500 ml-2 px-2 rounded-full min-w-[1.5rem] h-6 font-bold text-white text-xs">
+				<span className="inline-flex justify-center items-center bg-primary ml-2 px-2 rounded-full min-w-[1.5rem] h-6 font-bold text-primary-foreground text-xs">
 					{item.badgeCount > BADGE_MAX ? `${BADGE_MAX}+` : item.badgeCount}
 				</span>
 			)}
@@ -66,8 +66,8 @@ export function SidebarNav({ sections, renderLink, onNavigate, className }: Side
 		<div className={cn('lg:space-y-2', className)} data-slot="sidebar-nav">
 			{sections.map((section) => (
 				<div key={section.title}>
-					<h3 className="bg-tertiary-black mb-0 px-4 py-2 font-heading text-white lg:mb-2">{section.title}</h3>
-					<nav className="space-y-2 p-4 text-xl lg:p-0 lg:text-base">
+					<h3 className="bg-foreground mb-0 px-4 py-2 font-header text-background lg:mb-2">{section.title}</h3>
+					<nav className="space-y-2 p-[calc(var(--gap)*1rem)] text-xl lg:p-0 lg:text-base">
 						{section.items.map((item) =>
 							renderLink({
 								item,

@@ -110,6 +110,16 @@ describe('EntityListItem', () => {
 		expect(handled).toBe(1)
 	})
 
+	test('opts into glass and hand-made surfaces', () => {
+		const glass = findElement(EntityListItem({ ...baseProps, surface: 'glass' }), (element) => element.type === DashboardListItem)
+		const handmade = findElement(EntityListItem({ ...baseProps, corners: 'handmade' }), (element) => element.type === DashboardListItem)
+		const plain = findElement(EntityListItem(baseProps), (element) => element.type === DashboardListItem)
+
+		expect(String((glass?.props as { className?: string }).className)).toContain('glass')
+		expect(String((handmade?.props as { className?: string }).className)).toContain('rounded-hand')
+		expect(String((plain?.props as { className?: string }).className)).not.toContain('rounded-hand')
+	})
+
 	test('passes no action row when actions are empty or undefined', () => {
 		const none = findElement(EntityListItem(baseProps), (element) => element.type === DashboardListItem)
 		const empty = findElement(EntityListItem({ ...baseProps, actions: [] }), (element) => element.type === DashboardListItem)

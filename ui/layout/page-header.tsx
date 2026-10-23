@@ -9,13 +9,18 @@ import { cn } from '../utils/cn'
  * remaining raw usage can adopt the same band without re-typing it, and so the
  * two renderers below cannot drift apart.
  */
-export const PAGE_HEADER_CLASS = cn('sticky top-0 z-10 hidden items-center justify-between border-b bg-white px-4 py-4 lg:flex lg:px-6')
+export const PAGE_HEADER_CLASS = cn(
+	'sticky top-0 z-10 hidden items-center justify-between border-b bg-background',
+	'px-[calc(var(--gap)*1rem)] py-[calc(var(--gap)*1rem)] lg:flex lg:px-[calc(var(--gap)*1.5rem)]',
+)
 
 export interface PageHeaderProps {
 	/** Header content; typically a title block, optionally with actions at the end. */
 	children: ReactNode
 	/** Extra utilities appended to the band, e.g. a gap between title and actions. */
 	className?: string
+	/** Blends the band with the content behind it when a theme enables glass. */
+	glass?: boolean
 	ref?: Ref<HTMLDivElement>
 }
 
@@ -24,9 +29,9 @@ export interface PageHeaderProps {
  * a bespoke title block pass one in, while fixed-shape headers such as
  * `SettingsPageHeader` compose this component instead of re-declaring the band.
  */
-export function PageHeader({ children, className, ref }: PageHeaderProps) {
+export function PageHeader({ children, className, glass = false, ref }: PageHeaderProps) {
 	return (
-		<div ref={ref} data-slot="page-header" className={cn(PAGE_HEADER_CLASS, className)}>
+		<div ref={ref} data-slot="page-header" className={cn(PAGE_HEADER_CLASS, glass && 'glass', className)}>
 			{children}
 		</div>
 	)

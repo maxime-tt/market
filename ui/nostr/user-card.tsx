@@ -129,7 +129,7 @@ export function UserCardView({
 
 	// min-w-0 lets the name and npub truncate.
 	const content = (
-		<div className={cn('flex flex-row items-center min-w-0 font-sans font-normal tracking-normal text-nowrap', classGapHorizontal[size])}>
+		<div className={cn('flex flex-row items-center min-w-0 font-body font-normal tracking-normal text-nowrap', classGapHorizontal[size])}>
 			{renderAvatar(cn(classSizeAvatar[size], 'min-w-0', className))}
 			<div className={cn('flex flex-col min-w-0', classGapVertical[size], className)}>
 				<div className={cn('flex items-center gap-1 min-w-0 overflow-hidden', className)}>
@@ -145,7 +145,7 @@ export function UserCardView({
 
 				{showSubtitle &&
 					(showNip05AsSubtitle ? (
-						<p className={cn(classSizeNIP05[size], 'text-gray-400 truncate', className)}>{nip05}</p>
+						<p className={cn(classSizeNIP05[size], 'text-muted-foreground truncate', className)}>{nip05}</p>
 					) : (
 						showNpubAsSubtitle &&
 						npub &&
@@ -153,7 +153,7 @@ export function UserCardView({
 							<NpubDisplay
 								npub={npub}
 								{...NPUB_CARD_FORMAT}
-								className={cn('text-xs font-medium text-gray-400 truncate', classNpub, className)}
+								className={cn('text-xs font-medium text-muted-foreground truncate', classNpub, className)}
 							/>,
 						)
 					))}

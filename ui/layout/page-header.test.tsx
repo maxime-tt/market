@@ -10,7 +10,7 @@ import { MobilePageHeader, PAGE_HEADER_CLASS, PageHeader } from './page-header'
 
 describe('PAGE_HEADER_CLASS', () => {
 	test('carries the band utilities the 21 dashboard routes declared by hand', () => {
-		for (const utility of ['sticky', 'top-0', 'z-10', 'hidden', 'border-b', 'bg-white', 'lg:flex']) {
+		for (const utility of ['sticky', 'top-0', 'z-10', 'hidden', 'border-b', 'bg-background', 'lg:flex']) {
 			expect(PAGE_HEADER_CLASS).toContain(utility)
 		}
 	})
@@ -28,6 +28,11 @@ describe('PageHeader', () => {
 		const markup = renderToStaticMarkup(createElement(PageHeader, { className: 'gap-4', children: 'x' }))
 		expect(markup).toContain('gap-4')
 		expect(markup).toContain('sticky')
+	})
+
+	test('opts into a glass band', () => {
+		const markup = renderToStaticMarkup(createElement(PageHeader, { glass: true, children: 'x' }))
+		expect(markup).toContain('glass')
 	})
 
 	test('is hidden until lg, so compact viewports use MobilePageHeader instead', () => {

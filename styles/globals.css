@@ -194,6 +194,30 @@ button {
 	--radius-md: 4px;
 	--radius-lg: 8px;
 	--radius-xl: 24px;
+
+	/* Themed shadow scale (ADR-0007 §1a-bis). Tailwind's `shadow-*` utilities
+	   resolve through these value tokens, so a theme can retune shadows without
+	   editing generated `ui/primitives`. Scale/tint mirror the Theme Studio
+	   controls. Defaults reproduce Tailwind's stock shadows. */
+	--shadow-scale: 1;
+	--shadow-tint: 0 0 0;
+	--shadow-xs-value: 0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) 0 rgb(var(--shadow-tint) / 0.05);
+	--shadow-sm-value:
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 3px) 0 rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * -1px) rgb(var(--shadow-tint) / 0.1);
+	--shadow-md-value:
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 6px) calc(var(--shadow-scale) * -1px) rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * -2px) rgb(var(--shadow-tint) / 0.1);
+	--shadow-lg-value:
+		0 calc(var(--shadow-scale) * 10px) calc(var(--shadow-scale) * 15px) calc(var(--shadow-scale) * -3px) rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 6px) calc(var(--shadow-scale) * -4px) rgb(var(--shadow-tint) / 0.1);
+
+	/* Expanded theme dimensions. Defaults are visual no-ops so adopting the
+	   utilities does not change the current rendering. */
+	--glass: 0;
+	--grain: 0;
+	--gap: 1;
+	--handmade: 0;
 }
 
 .dark {
@@ -300,6 +324,12 @@ button {
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-lg: var(--radius);
 	--radius-xl: calc(var(--radius) + 4px);
+
+	/* Themed shadow scale — value indirection (see :root for the rationale). */
+	--shadow-xs: var(--shadow-xs-value);
+	--shadow-sm: var(--shadow-sm-value);
+	--shadow-md: var(--shadow-md-value);
+	--shadow-lg: var(--shadow-lg-value);
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

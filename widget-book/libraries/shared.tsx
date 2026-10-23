@@ -97,6 +97,24 @@ export const shared: WidgetLibrary = {
 			),
 		},
 		{
+			name: 'StatCardGlass',
+			render: () => (
+				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					<StatCard label="Revenue" value="128,400 sats" helper="Frosted surface" trend="up" surface="glass" />
+					<StatCard label="Refunds" value="4,200 sats" helper="Frosted surface" trend="down" surface="glass" />
+				</div>
+			),
+		},
+		{
+			name: 'StatCardHandmade',
+			render: () => (
+				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					<StatCard eyebrow="Hand-cut" label="Revenue" value="128,400 sats" helper="Irregular corners" trend="up" corners="handmade" />
+					<StatCard eyebrow="Hand-cut" label="Refunds" value="4,200 sats" helper="Irregular corners" trend="down" corners="handmade" />
+				</div>
+			),
+		},
+		{
 			name: 'DetailField',
 			render: () => (
 				<div className="w-72 space-y-2">
@@ -164,6 +182,29 @@ export const shared: WidgetLibrary = {
 						]}
 					>
 						<p className="text-sm text-muted-foreground">Deleting…</p>
+					</EntityListItem>
+				</div>
+			),
+		},
+		{
+			name: 'EntityListItemGlass',
+			render: () => (
+				<div className="w-full">
+					<EntityListItem
+						isOpen
+						onOpenChange={() => {}}
+						surface="glass"
+						corners="handmade"
+						trigger={
+							<div>
+								<p className="font-semibold">Frosted vase</p>
+								<p className="text-sm text-muted-foreground">18,000 sats · Hand-cut</p>
+							</div>
+						}
+						icon={<PackageIcon className="h-5 w-5" />}
+						actions={[{ key: 'edit', label: 'Edit product', icon: <PencilIcon className="h-4 w-4" />, onClick: () => {} }]}
+					>
+						<p className="text-sm text-muted-foreground">Frosted item with hand-cut corners.</p>
 					</EntityListItem>
 				</div>
 			),

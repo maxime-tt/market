@@ -134,6 +134,22 @@
 	--radius-lg: 8px;
 	--radius-xl: 24px;
 
+	/* ── Themed shadow scale (mirrored from :root) ──────────────────────
+	   Mirrored rather than inherited: custom properties resolve `var()` at the
+	   element where they are declared, so a wrapper-level `--shadow-scale`
+	   override would not recompute an inherited `--shadow-*-value`. Declaring
+	   them in the scope makes per-theme shadow retuning work. */
+	--shadow-xs-value: 0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) 0 rgb(var(--shadow-tint) / 0.05);
+	--shadow-sm-value:
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 3px) 0 rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * -1px) rgb(var(--shadow-tint) / 0.1);
+	--shadow-md-value:
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 6px) calc(var(--shadow-scale) * -1px) rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * -2px) rgb(var(--shadow-tint) / 0.1);
+	--shadow-lg-value:
+		0 calc(var(--shadow-scale) * 10px) calc(var(--shadow-scale) * 15px) calc(var(--shadow-scale) * -3px) rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 6px) calc(var(--shadow-scale) * -4px) rgb(var(--shadow-tint) / 0.1);
+
 	/* ── Chart tokens ─────────────────────────────────────────────────── */
 	--chart-1: oklch(0.527 0.193 262.2);
 	--chart-2: oklch(0.696 0.134 165.4);
@@ -263,4 +279,50 @@
 	.theme-new {
 		font-family: var(--font-body);
 	}
+}
+
+/* ── Expanded theme utilities (ADR-0007 §1a-bis) ─────────────────────
+   Opt-in only. With the token defaults (--glass: 0, --grain: 0,
+   --handmade: 0) these rules are visual no-ops, so adopting a utility does
+   not change the current rendering. */
+
+/* Glass — from solid surface to frosted see-through, tinted by the surface. */
+.theme-new .glass {
+	background: color-mix(in srgb, var(--card) calc(100% - var(--glass) * 78%), transparent);
+	-webkit-backdrop-filter: blur(calc(var(--glass) * 18px)) saturate(calc(100% + var(--glass) * 60%));
+	backdrop-filter: blur(calc(var(--glass) * 18px)) saturate(calc(100% + var(--glass) * 60%));
+	border-color: color-mix(in srgb, var(--foreground) calc(6% + var(--glass) * 8%), transparent);
+}
+
+/* Grain — one page-level texture overlay, never per component. The compound
+   `.theme-new.grain` selector covers the wrapper itself, which carries both
+   classes; the descendant selector covers a nested grain container. */
+.theme-new.grain,
+.theme-new .grain {
+	position: relative;
+	isolation: isolate;
+}
+
+.theme-new.grain::after,
+.theme-new .grain::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 50;
+	pointer-events: none;
+	opacity: calc(var(--grain) * 0.55);
+	mix-blend-mode: soft-light;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .4 0 0 0 1.1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Hand-made corners — gently irregular, driven by --handmade (0–1). */
+.theme-new .rounded-hand {
+	border-radius: calc(var(--radius) + var(--handmade) * 9px) calc(var(--radius) + var(--handmade) * 2px)
+		calc(var(--radius) + var(--handmade) * 11px) calc(var(--radius) + var(--handmade) * 3px) / calc(var(--radius) + var(--handmade) * 3px)
+		calc(var(--radius) + var(--handmade) * 10px) calc(var(--radius) + var(--handmade) * 2px) calc(var(--radius) + var(--handmade) * 8px);
+}
+
+/* Hand-made tilt — set --tilt on the element (−1…1) to opt in. */
+.theme-new .tilt {
+	transform: rotate(calc(var(--handmade) * var(--tilt, 0) * 1deg));
 }

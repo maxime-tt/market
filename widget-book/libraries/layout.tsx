@@ -26,6 +26,17 @@ export const layout: WidgetLibrary = {
 			),
 		},
 		{
+			name: 'PageHeaderGlass',
+			render: () => (
+				<PageHeader glass>
+					<div>
+						<h1 className="text-2xl font-bold">Products</h1>
+						<p className="text-sm text-muted-foreground">Frosted band; visible when the theme enables glass.</p>
+					</div>
+				</PageHeader>
+			),
+		},
+		{
 			name: 'MobilePageHeader',
 			render: () => (
 				<MobilePageHeader>

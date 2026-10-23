@@ -2,6 +2,7 @@ import type { HTMLAttributes, MouseEvent, ReactNode, Ref } from 'react'
 import { DashboardListItem } from '../components/DashboardListItem'
 import { TooltipButton } from '../components/TooltipButton'
 import { Spinner } from '../primitives/spinner'
+import { cn } from '../utils/cn'
 
 export interface EntityListItemAction {
 	key: string
@@ -16,6 +17,9 @@ export interface EntityListItemAction {
 	disabled?: boolean
 }
 
+export type EntityListItemSurface = 'solid' | 'glass'
+export type EntityListItemCorners = 'default' | 'handmade'
+
 export interface EntityListItemProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
 	isOpen: boolean
 	onOpenChange: (open: boolean) => void
@@ -24,6 +28,10 @@ export interface EntityListItemProps extends Omit<HTMLAttributes<HTMLDivElement>
 	isDeleting?: boolean
 	icon?: ReactNode | false
 	useCloseIcon?: boolean
+	/** `glass` blends the item with the surface behind it when the theme enables glass. */
+	surface?: EntityListItemSurface
+	/** `handmade` renders the gently irregular corner treatment. */
+	corners?: EntityListItemCorners
 	children: ReactNode
 	ref?: Ref<HTMLDivElement>
 }
@@ -42,6 +50,8 @@ export function EntityListItem({
 	isDeleting,
 	icon,
 	useCloseIcon,
+	surface = 'solid',
+	corners = 'default',
 	children,
 	className,
 	ref,
@@ -85,7 +95,7 @@ export function EntityListItem({
 			isDeleting={isDeleting}
 			icon={icon}
 			useCloseIcon={useCloseIcon}
-			className={className}
+			className={cn(surface === 'glass' && 'glass', corners === 'handmade' && 'rounded-hand', className)}
 			{...props}
 		>
 			{children}

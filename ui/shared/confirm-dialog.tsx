@@ -27,6 +27,8 @@ export interface ConfirmDialogProps {
 	/** Disables both actions and shows a spinner while the action is in flight. */
 	isPending?: boolean
 	onConfirm: () => void
+	/** `glass` blends the dialog with the surface behind it when the theme enables glass. */
+	surface?: 'solid' | 'glass'
 	className?: string
 }
 
@@ -48,6 +50,7 @@ export function ConfirmDialog({
 	destructive = false,
 	isPending = false,
 	onConfirm,
+	surface = 'solid',
 	className,
 }: ConfirmDialogProps) {
 	return (
@@ -58,7 +61,7 @@ export function ConfirmDialog({
 				onOpenChange(nextOpen)
 			}}
 		>
-			<AlertDialogContent className={cn(className)}>
+			<AlertDialogContent className={cn(surface === 'glass' && 'glass', className)}>
 				<AlertDialogHeader>
 					<AlertDialogTitle>{title}</AlertDialogTitle>
 					{description && <AlertDialogDescription>{description}</AlertDialogDescription>}

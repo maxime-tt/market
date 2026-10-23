@@ -64,9 +64,9 @@ export function ProfileAvatarView({
 			)}
 			<AvatarPrimitive.Fallback
 				data-slot="avatar-fallback"
-				className="bg-neo-purple text-white flex size-full items-center justify-center rounded-full text-center"
+				className="bg-neo-purple text-background flex size-full items-center justify-center rounded-full text-center"
 			>
-				{showSpinner ? <Spinner className="h-1/2 w-1/2 text-white" /> : (name || 'N').charAt(0).toUpperCase()}
+				{showSpinner ? <Spinner className="h-1/2 w-1/2 text-background" /> : (name || 'N').charAt(0).toUpperCase()}
 			</AvatarPrimitive.Fallback>
 		</AvatarPrimitive.Root>
 	)

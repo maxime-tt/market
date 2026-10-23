@@ -36,4 +36,10 @@ describe('StatCard', () => {
 	test('merges host className', () => {
 		expect(renderToStaticMarkup(<StatCard label="Revenue" value="1" className="col-span-2" />)).toContain('col-span-2')
 	})
+
+	test('opts into glass and hand-made surfaces', () => {
+		expect(renderToStaticMarkup(<StatCard label="Revenue" value="1" surface="glass" />)).toContain('glass')
+		expect(renderToStaticMarkup(<StatCard label="Revenue" value="1" corners="handmade" />)).toContain('rounded-hand')
+		expect(renderToStaticMarkup(<StatCard label="Revenue" value="1" />)).not.toContain('rounded-hand')
+	})
 })

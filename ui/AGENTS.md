@@ -121,13 +121,35 @@ Classify every component before writing it:
 6. **Semantic tokens only** — `text-muted-foreground`, `bg-card`, `border`,
    `text-primary`; never raw hex, `rgb()`, `oklch()` literals, or
    `border-zinc-200` / `bg-white`. Fonts use `font-body` / `font-header`
-   (never `font-sans` / `font-heading`).
+   (never `font-sans` / `font-heading`). Shadows use the Tailwind scale
+   (`shadow-xs/sm/md/lg`), which resolves through the themed
+   `--shadow-*-value` tokens; never a raw `box-shadow` value.
 7. **Accessibility** — every control has an accessible name; disabled controls
    that need a reason use the shared disabled-with-tooltip pattern; dialogs
    keep focus trapping and `aria` wiring from the primitive.
 
 Purpose-specific feature views may relax 5–6 where a design requires it, but
 must document why in the file header.
+
+### Expanded theme dimensions (ADR-0007 §1a-bis)
+
+The stylesheet exposes six theme dimensions. Token defaults are visual no-ops,
+so a component can adopt a utility without changing the current rendering.
+
+| Dimension  | Token(s)                                              | Component usage                                                                              |
+| ---------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Colour     | `--background`, `--primary`, …                        | semantic utilities only                                                                      |
+| Typography | `--font-body`, `--font-header`                        | `font-body` / `font-header` where an override is needed; the base inherits from `.theme-new` |
+| Corners    | `--radius`, `--handmade`                              | `rounded-*`; opt into `.rounded-hand` for the irregular treatment                            |
+| Shadows    | `--shadow-scale`, `--shadow-tint`, `--shadow-*-value` | `shadow-xs/sm/md/lg` (never raw `box-shadow`)                                                |
+| Glass      | `--glass`                                             | `.glass` on surfaces that float (dialogs, popovers, nav, page header) — opt-in               |
+| Texture    | `--grain`                                             | `.grain` once on the app shell / harness wrapper, never per component                        |
+| Spacing    | `--gap`                                               | `calc(var(--gap)*…)` gaps and padding in layout components only                              |
+
+Surface-like components expose opt-in props rather than hard-coding the
+effects: `surface?: 'solid' | 'glass'` and `corners?: 'default' | 'handmade'`
+(see `shared/stat-card.tsx`, `shared/entity-list-item.tsx`,
+`shared/confirm-dialog.tsx`, `layout/page-header.tsx`).
 
 ## Shared state kit (single implementation per concern)
 
@@ -194,6 +216,13 @@ Nav is data, not router introspection:
 - It applies `.theme-new` plus optional dynamic token overrides, and mirrors
   those overrides onto the portal host so portalled dialogs resolve the same
   tokens.
+- The six dimension defaults live in `:root` (unwrapped legacy host) and
+  `.theme-new` (wrapped subtrees). The `--shadow-*-value` tokens are mirrored
+  into `.theme-new` so a wrapper-level `--shadow-scale` recomputes instead of
+  inheriting a value computed on `:root`.
+- `theme/tune.ts` defines the tune settings and their token mapping;
+  `theme/tune-panel.tsx` is the props-only control panel the widget book uses
+  today and the CMS will reuse.
 - Components use the scoped tokens directly; they never branch on theme or
   instance.
 
