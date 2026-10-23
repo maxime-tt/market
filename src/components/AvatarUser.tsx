@@ -1,5 +1,5 @@
 import { getNormalizedProfileDisplayName, getNormalizedProfilePicture, useProfile } from '@/queries/profiles'
-import { ProfileAvatarView, type ProfileAvatarViewProps } from '@ui/components/ProfileViews'
+import { ProfileAvatarView, type ProfileAvatarViewProps } from '@ui/nostr/identity'
 
 interface AvatarUserProps extends Omit<ProfileAvatarViewProps, 'name' | 'picture' | 'isLoading'> {
 	pubkey?: string

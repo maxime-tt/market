@@ -1,9 +1,11 @@
-import { AlertTriangle, Check, Clock, Copy, ExternalLink, RefreshCw, Timer } from 'lucide-react'
+import { AlertTriangle, Check, Clock, Copy, ExternalLink, Timer } from 'lucide-react'
 import { Badge } from '../../primitives/badge'
 import { Button } from '../../primitives/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../primitives/card'
 import { Progress } from '../../primitives/progress'
 import { QRCode } from '../../primitives/qr-code'
+import { Spinner } from '../../primitives/spinner'
+import { formatSats } from '../../utils/format'
 
 export type OnChainPaymentStatus = 'idle' | 'checking' | 'completed' | 'expired' | 'error'
 
@@ -28,8 +30,6 @@ export interface OnChainPaymentViewProps {
 	onManualCheck: () => void
 	onCancel: () => void
 }
-
-const formatSats = (sats: number): string => Math.round(sats).toLocaleString()
 
 function formatTime(seconds: number): string {
 	const minutes = Math.floor(seconds / 60)
@@ -84,7 +84,7 @@ export function OnChainPaymentView(props: OnChainPaymentViewProps) {
 
 				{status === 'checking' && (
 					<div className="flex items-center gap-2 text-blue-600">
-						<RefreshCw className="w-4 h-4 animate-spin" />
+						<Spinner />
 						<span>Checking payment...</span>
 					</div>
 				)}
@@ -165,7 +165,7 @@ export function OnChainPaymentView(props: OnChainPaymentViewProps) {
 								Copy Bitcoin URI
 							</Button>
 							<Button onClick={props.onManualCheck} className="w-full" disabled={props.isManualChecking}>
-								{props.isManualChecking ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+								{props.isManualChecking ? <Spinner className="mr-2" /> : <Check className="w-4 h-4 mr-2" />}
 								{props.isManualChecking ? 'Checking...' : "I've Paid - Check Status"}
 							</Button>
 							<Button onClick={props.onCancel} variant="ghost" className="w-full">

@@ -1,4 +1,5 @@
 import { ProfilePage } from '@/components/pages/ProfilePage'
+import { LoadingState } from '@ui/shared/loading-state'
 import { vanityActions, vanityStore } from '@/lib/stores/vanity'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo } from 'react'
@@ -27,14 +28,7 @@ function VanityRouteComponent() {
 
 	// Loading state while store syncs
 	if (!isLoaded) {
-		return (
-			<div className="flex items-center justify-center min-h-screen">
-				<div className="text-center">
-					<div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-					<p className="text-muted-foreground">Loading...</p>
-				</div>
-			</div>
-		)
+		return <LoadingState className="min-h-screen" label="Loading…" />
 	}
 
 	// Vanity URL resolved - render profile page directly

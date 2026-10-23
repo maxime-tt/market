@@ -4,6 +4,7 @@ import { Button } from '../../primitives/button'
 import { Input } from '../../primitives/input'
 import { Label } from '../../primitives/label'
 import { Textarea } from '../../primitives/textarea'
+import { Notice } from '../../shared/notice'
 import { CityCombobox } from '../CityCombobox'
 import { CountryCombobox } from '../CountryCombobox'
 import { PhoneInput } from '../PhoneInput'
@@ -33,16 +34,6 @@ function FieldError({ error }: { error?: string }) {
 
 function RequiredMark({ show = true }: { show?: boolean }) {
 	return show ? <span className="text-red-500">*</span> : null
-}
-
-function Notice({ tone, children }: { tone: 'warning' | 'error'; children: ReactNode }) {
-	const className = tone === 'warning' ? 'bg-yellow-50 border-l-4 border-yellow-400 p-4' : 'bg-red-50 border-l-4 border-red-400 p-4'
-	const textClass = tone === 'warning' ? 'text-sm text-yellow-700' : 'text-sm text-red-700'
-	return (
-		<div className={className}>
-			<p className={textClass}>{children}</p>
-		</div>
-	)
 }
 
 export function ShippingAddressFormView({

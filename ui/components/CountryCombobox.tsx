@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { Input } from '../primitives/input'
+import { EmptyState } from '../shared/empty-state'
 import { cn } from '../utils/cn'
 import { COUNTRIES_ISO } from '@sdk/core/geo'
 import { ChevronDownIcon, CheckIcon } from 'lucide-react'
@@ -224,7 +225,7 @@ export function CountryCombobox({ value, onChange, onBlur, placeholder = 'e.g. U
 					)}
 				>
 					{filteredCountries.length === 0 ? (
-						<div className="px-3 py-2 text-sm text-muted-foreground">No countries found</div>
+						<EmptyState compact title="No countries found" className="px-3 text-muted-foreground" />
 					) : (
 						filteredCountries.map((country, index) => {
 							const isSelected = country === value

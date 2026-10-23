@@ -1,13 +1,14 @@
-import { Button } from '@ui/primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
+import { CopyableField } from '@ui/shared/copyable-field'
+import { PageHeader } from '@ui/layout/page-header'
+import { PubkeyField } from '@ui/nostr/pubkey-field'
 import { useConfigQuery } from '@/queries/config'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { Check, Copy, ExternalLink, Info, Mail, Server, Shield, User } from 'lucide-react'
+import { ExternalLink, Info, Mail, Server, Shield, User } from 'lucide-react'
 import { SiGithub } from '@icons-pack/react-simple-icons'
 import { nip19 } from 'nostr-tools'
-import { useState } from 'react'
 import { toast } from 'sonner'
 
 interface GitHubContributor {
@@ -21,97 +22,10 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/about')({
 	component: AboutComponent,
 })
 
-function CopyButton({ value, label }: { value: string; label: string }) {
-	const [copied, setCopied] = useState(false)
-
-	const handleCopy = async () => {
-		try {
-			await navigator.clipboard.writeText(value)
-			setCopied(true)
-			toast.success(`${label} copied to clipboard`)
-			setTimeout(() => setCopied(false), 2000)
-		} catch (error) {
-			toast.error('Failed to copy')
-		}
-	}
-
-	return (
-		<Button variant="ghost" size="icon" onClick={handleCopy} className="h-6 w-6 flex-shrink-0">
-			{copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-		</Button>
-	)
-}
-
-function PubkeyField({
-	label,
-	npub,
-	hex,
-	icon: Icon,
-}: {
-	label: string
-	npub: string
-	hex: string
-	icon: React.ComponentType<{ className?: string }>
-}) {
-	// Truncate for display
-	const displayNpub = npub.length > 40 ? `${npub.slice(0, 20)}...${npub.slice(-16)}` : npub
-	const displayHex = hex.length > 40 ? `${hex.slice(0, 20)}...${hex.slice(-16)}` : hex
-
-	return (
-		<div className="p-3 border rounded-md bg-muted/50 space-y-2">
-			<div className="flex items-center gap-2">
-				<Icon className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-				<span className="text-sm font-medium">{label}</span>
-			</div>
-			<div className="space-y-1 pl-7">
-				<div className="flex items-center gap-2">
-					<span className="text-xs text-muted-foreground w-10">npub</span>
-					<a
-						href={`https://njump.me/${npub}`}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="font-mono text-xs text-blue-600 hover:underline truncate flex-1"
-					>
-						{displayNpub}
-					</a>
-					<CopyButton value={npub} label="npub" />
-				</div>
-				<div className="flex items-center gap-2">
-					<span className="text-xs text-muted-foreground w-10">hex</span>
-					<span className="font-mono text-xs truncate flex-1">{displayHex}</span>
-					<CopyButton value={hex} label="hex" />
-				</div>
-			</div>
-		</div>
-	)
-}
-
-function CopyableField({ label, value, icon: Icon }: { label: string; value: string; icon: React.ComponentType<{ className?: string }> }) {
-	const [copied, setCopied] = useState(false)
-
-	const handleCopy = async () => {
-		try {
-			await navigator.clipboard.writeText(value)
-			setCopied(true)
-			toast.success('Copied to clipboard')
-			setTimeout(() => setCopied(false), 2000)
-		} catch (error) {
-			toast.error('Failed to copy')
-		}
-	}
-
-	return (
-		<div className="flex items-start gap-3 p-3 border rounded-md bg-muted/50">
-			<Icon className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-			<div className="flex-1 min-w-0">
-				<p className="text-sm font-medium text-muted-foreground">{label}</p>
-				<p className="font-mono text-sm break-all">{value}</p>
-			</div>
-			<Button variant="ghost" size="icon" onClick={handleCopy} className="flex-shrink-0 h-8 w-8">
-				{copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-			</Button>
-		</div>
-	)
+/** Surfaces a failed clipboard write from the shared copy controls. */
+function copyFailed(label: string, error: unknown) {
+	console.error(`Failed to copy ${label}:`, error)
+	toast.error(`Failed to copy ${label}`)
 }
 
 function getGitHubRepository(url?: string) {
@@ -166,7 +80,7 @@ function AboutComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<div className="flex items-center gap-3">
 					<Info className="w-6 h-6 text-muted-foreground" />
 					<div>
@@ -174,7 +88,7 @@ function AboutComponent() {
 						<p className="text-muted-foreground text-sm">App information and verification</p>
 					</div>
 				</div>
-			</div>
+			</PageHeader>
 			<div className="p-4 lg:p-8">
 				<div className="lg:hidden mb-6">
 					<div className="flex items-center gap-3">
@@ -202,7 +116,7 @@ function AboutComponent() {
 								</div>
 							</div>
 
-							{appRelay && <CopyableField label="App Relay" value={appRelay} icon={Server} />}
+							{appRelay && <CopyableField label="App Relay" value={appRelay} icon={<Server />} onCopyError={copyFailed} />}
 						</CardContent>
 					</Card>
 
@@ -218,7 +132,7 @@ function AboutComponent() {
 						<CardContent className="space-y-6">
 							{appNpub && appPubkey && (
 								<div className="space-y-2">
-									<PubkeyField label="App Public Key" npub={appNpub} hex={appPubkey} icon={Shield} />
+									<PubkeyField label="App Public Key" npub={appNpub} hex={appPubkey} icon={<Shield />} onCopyError={copyFailed} />
 									<p className="text-xs text-muted-foreground pl-3">
 										This is the Nostr identity of this marketplace instance. Administrators can trigger the app to sign events on their
 										behalf, including featured items, blacklists, vanity URLs, and app configuration. Events signed by this key are official
@@ -229,7 +143,7 @@ function AboutComponent() {
 
 							{ownerNpub && ownerPubkey && (
 								<div className="space-y-2">
-									<PubkeyField label="Owner Public Key" npub={ownerNpub} hex={ownerPubkey} icon={User} />
+									<PubkeyField label="Owner Public Key" npub={ownerNpub} hex={ownerPubkey} icon={<User />} onCopyError={copyFailed} />
 									<p className="text-xs text-muted-foreground pl-3">
 										The owner is the person who originally set up this marketplace instance. Only the owner can add or remove
 										administrators. The owner has full control over the marketplace configuration and team management.

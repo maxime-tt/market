@@ -1,13 +1,15 @@
-import { DashboardListItem } from '@ui/components/DashboardListItem'
 import { ProfileWalletCheck } from '@/components/ProfileWalletCheck'
-import { Button } from '@ui/primitives/button'
+import { ConfirmDialog } from '@ui/shared/confirm-dialog'
+import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
+import { Button } from '@ui/wrappers/button'
+import { LoadingState } from '@ui/shared/loading-state'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@ui/primitives/card'
 import { Checkbox } from '@ui/primitives/checkbox'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { Spinner } from '@ui/primitives/spinner'
 import { WalletSetupGuide } from '@ui/components/WalletSetupGuide'
+import { PageHeader } from '@ui/layout/page-header'
 import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@/lib/constants'
 import { useNDK } from '@/lib/stores/ndk'
 import { isValidNip05 } from '@/lib/utils'
@@ -276,6 +278,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	const [formState, setFormState] = useState<FormState>('idle')
 	const [validationMessage, setValidationMessage] = useState('')
 	const [showConfirmation, setShowConfirmation] = useState(false)
+	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 	const [tempValidatedValue, setTempValidatedValue] = useState('')
 	const [confirmationType, setConfirmationType] = useState<OnChainConfirmationType>('single_address')
 
@@ -674,10 +677,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 					{validationMessage && formState === 'idle' && <p className="text-red-500 text-sm">{validationMessage}</p>}
 
 					{formState !== 'idle' && (
-						<div className="flex items-center gap-2">
-							<Spinner />
-							<span className="text-sm">{formState === 'validating' ? 'Validating...' : 'Saving...'}</span>
-						</div>
+						<LoadingState compact className="justify-start py-0" label={formState === 'validating' ? 'Validating…' : 'Saving…'} />
 					)}
 
 					<div className="space-y-4">
@@ -708,7 +708,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 								<Button
 									type="button"
 									variant="destructive"
-									onClick={handleDelete}
+									onClick={() => setDeleteConfirmOpen(true)}
 									disabled={formState !== 'idle'}
 									data-testid="delete-payment-button"
 								>
@@ -716,14 +716,24 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 								</Button>
 							)}
 
-							<Button type="submit" disabled={formState !== 'idle'} data-testid="save-payment-button">
-								{formState === 'submitting' && <Spinner />}
+							<Button type="submit" disabled={formState !== 'idle'} pending={formState === 'submitting'} data-testid="save-payment-button">
 								{formState === 'validating' ? 'Validating...' : formState === 'submitting' ? 'Saving...' : isEditing ? 'Update' : 'Save'}
 							</Button>
 						</div>
 					</div>
 				</form>
 			)}
+
+			<ConfirmDialog
+				open={deleteConfirmOpen}
+				onOpenChange={setDeleteConfirmOpen}
+				title="Delete payment detail?"
+				description="This permanently removes this saved payment detail."
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={handleDelete}
+			/>
 		</div>
 	)
 }
@@ -738,6 +748,7 @@ interface PaymentDetailListItemProps {
 
 function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting, onSuccess }: PaymentDetailListItemProps) {
 	const deleteMutation = useDeletePaymentDetail()
+	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
 	const handleDelete = () => {
 		if (paymentDetail && paymentDetail.dTag) {
@@ -776,33 +787,41 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 		</div>
 	)
 
-	const actions = (
-		<Button
-			variant="ghost"
-			size="icon"
-			onClick={(e) => {
-				e.stopPropagation()
-				handleDelete()
-			}}
-			className="h-8 w-8 text-destructive hover:bg-destructive/10"
-			aria-label="Delete payment detail"
-			disabled={deleteMutation.isPending}
-		>
-			{deleteMutation.isPending ? <Spinner className="h-4 w-4" /> : <TrashIcon className="h-4 w-4" />}
-		</Button>
-	)
+	const actions: EntityListItemAction[] = [
+		{
+			key: 'delete',
+			label: 'Delete payment detail',
+			icon: <TrashIcon className="h-4 w-4" />,
+			onClick: () => setDeleteConfirmOpen(true),
+			destructive: true,
+			pending: deleteMutation.isPending,
+		},
+	]
 
 	return (
-		<DashboardListItem
-			isOpen={isOpen}
-			onOpenChange={onOpenChange}
-			triggerContent={triggerContent}
-			actions={actions}
-			isDeleting={deleteMutation.isPending}
-			icon={<PaymentMethodIcon method={paymentDetail.paymentMethod} />}
-		>
-			<PaymentDetailForm paymentDetail={paymentDetail} isOpen={isOpen} onOpenChange={onOpenChange} onSuccess={onSuccess} />
-		</DashboardListItem>
+		<>
+			<EntityListItem
+				isOpen={isOpen}
+				onOpenChange={onOpenChange}
+				trigger={triggerContent}
+				actions={actions}
+				isDeleting={deleteMutation.isPending}
+				icon={<PaymentMethodIcon method={paymentDetail.paymentMethod} />}
+			>
+				<PaymentDetailForm paymentDetail={paymentDetail} isOpen={isOpen} onOpenChange={onOpenChange} onSuccess={onSuccess} />
+			</EntityListItem>
+
+			<ConfirmDialog
+				open={deleteConfirmOpen}
+				onOpenChange={setDeleteConfirmOpen}
+				title="Delete payment detail?"
+				description="This permanently removes this saved payment detail."
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={handleDelete}
+			/>
+		</>
 	)
 }
 
@@ -843,7 +862,7 @@ function ReceivingPaymentsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Receiving Payments</h1>
 				{hasPaymentDetails && (
 					<Button
@@ -854,7 +873,7 @@ function ReceivingPaymentsComponent() {
 						Add Payment Method
 					</Button>
 				)}
-			</div>
+			</PageHeader>
 			<div className="space-y-4 p-4 lg:p-6">
 				{!hasPaymentDetails && openPaymentDetailId !== 'new' ? (
 					<>

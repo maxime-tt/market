@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
-import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCircle, Circle, Clock, Filter, Loader, Loader2, XCircle } from 'lucide-react'
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCircle, Circle, Clock, Filter, Loader, XCircle } from 'lucide-react'
 import { Card } from '../../primitives/card'
 import { Input } from '../../primitives/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../primitives/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../primitives/tooltip'
+import { EmptyState } from '../../shared/empty-state'
+import { LoadingState } from '../../shared/loading-state'
 
 export interface OrderListCell {
 	id: string
@@ -118,10 +120,7 @@ export function OrderListView({ heading, search, orderBy, statusFilter, isCompac
 
 			<div className="flex-1 overflow-y-auto pb-4">
 				{isLoading ? (
-					<div className="flex justify-center items-center h-full mt-8">
-						<Loader2 className="w-8 h-8 animate-spin text-primary" />
-						<p className="ml-2">Loading sales...</p>
-					</div>
+					<LoadingState label="Loading sales..." className="h-full mt-8" />
 				) : rows.length > 0 ? (
 					<div className="space-y-4 pt-4 px-4 xl:px-6">
 						{rows.map((row) => {
@@ -161,7 +160,7 @@ export function OrderListView({ heading, search, orderBy, statusFilter, isCompac
 					</div>
 				) : (
 					<div className="px-4 xl:px-6">
-						<Card className="rounded-md border p-6 text-center mt-4">{emptyMessage}</Card>
+						<EmptyState title={emptyMessage} className="mt-4 rounded-md border bg-card p-6" />
 					</div>
 				)}
 			</div>

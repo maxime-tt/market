@@ -1,3 +1,4 @@
+import { PageHeader } from '@ui/layout/page-header'
 import { RelayManager } from '@/components/ui/relay-manager'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
@@ -11,7 +12,7 @@ function NetworkComponent() {
 	useDashboardTitle('Network')
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<div className="flex items-center gap-3">
 					<Globe className="w-6 h-6 text-muted-foreground" />
 					<div>
@@ -19,7 +20,7 @@ function NetworkComponent() {
 						<p className="text-muted-foreground text-sm">Manage your Nostr relay connections</p>
 					</div>
 				</div>
-			</div>
+			</PageHeader>
 			<div className="p-4 lg:p-8">
 				<div className="lg:hidden mb-6">
 					<div className="flex items-center gap-3">

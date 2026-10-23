@@ -6,6 +6,7 @@ import { Input } from '../../primitives/input'
 import { Label } from '../../primitives/label'
 import { QRCode } from '../../primitives/qr-code'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../primitives/tooltip'
+import { Notice } from '../../shared/notice'
 
 export interface LightningPaymentViewProps {
 	className?: string
@@ -84,14 +85,11 @@ export function LightningPaymentView({
 
 					{!invoice && !isGeneratingInvoice && !isPaymentInProgress && (
 						<div className="space-y-4 py-4">
-							<div className="text-amber-600 text-center">
-								<p className="font-medium">Unable to generate Lightning invoice</p>
-								<p className="mt-1 text-gray-600 text-sm">
-									{skippable
-										? 'The recipient may not have Lightning configured. You can skip this payment and pay directly later.'
-										: 'The recipient may not have Lightning configured.'}
-								</p>
-							</div>
+							<Notice tone="warning" title="Unable to generate Lightning invoice">
+								{skippable
+									? 'The recipient may not have Lightning configured. You can skip this payment and pay directly later.'
+									: 'The recipient may not have Lightning configured.'}
+							</Notice>
 							{canSkip && (
 								<Button onClick={onSkip} variant="secondary" className="w-full">
 									Skip Payment (Pay Later)

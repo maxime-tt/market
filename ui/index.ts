@@ -40,7 +40,7 @@ export { NoPaymentRequestsCard } from './components/NoPaymentRequestsCard'
 export { IncompleteInvoicesBanner } from './components/IncompleteInvoicesBanner'
 export { PriceDisplayView, type PriceDisplayViewProps } from './components/PriceDisplayView'
 export { TimelineEventCard, type TimelineEventCardEvent, type TimelineEventCardProps } from './components/TimelineEventCard'
-export { UserCardView, type UserCardSize, type UserCardViewProps } from './components/UserCardView'
+export { UserCardView, type UserCardSize, type UserCardViewProps } from './nostr/user-card'
 export {
 	CommentButtonView,
 	ReactionButtonView,
@@ -82,13 +82,8 @@ export { PrivateKeyLoginView, type PrivateKeyLoginStep, type PrivateKeyLoginView
 export { OnChainPaymentView, type OnChainPaymentStatus, type OnChainPaymentViewProps } from './components/checkout/OnChainPaymentView'
 export { OrderFinalizeView, type OrderFinalizeViewProps } from './components/checkout/OrderFinalizeView'
 export { PaymentContentView, type PaymentContentViewProps } from './components/checkout/PaymentContentView'
-export {
-	formatPaymentMethodLabel,
-	getPaymentMethodByType,
-	PaymentMethodSelector,
-	type PaymentMethodOption,
-} from './components/checkout/PaymentMethodSelector'
 export { PaymentDialogView, WalletSelectorView, type WalletSelectorOption } from './components/checkout/PaymentViews'
+export { NwcWalletStatusView, type NwcWalletStatusViewProps } from './checkout/nwc-wallet-status-view'
 export {
 	ShippingAddressFormView,
 	type CheckoutFieldBinding,
@@ -121,7 +116,7 @@ export * from './components/CheckoutPaymentSummary'
 export * from './components/EditorFields'
 export * from './components/ShippingOptionsViews'
 export * from './components/OperatorSettingsViews'
-export * from './components/ProfileViews'
+export * from './nostr/identity'
 export * from './components/BidStatusViews'
 export * from './components/CountryCombobox'
 export * from './components/CityCombobox'
@@ -140,6 +135,62 @@ export * from './components/migration/MigrationFormView'
 export * from './components/orders/OrderActionsView'
 export * from './components/orders/OrderDetailLayout'
 export * from './components/orders/OrderDetailViews'
-export * from './components/orders/OrderInvoiceTracking'
 export * from './components/orders/OrderListView'
 export { cn } from './utils/cn'
+
+export { ThemeMigrationWrapper, applyThemeTokens, useThemeMigration, useThemePortal } from './theme/theme-migration-wrapper'
+export type { ThemeMigrationWrapperProps, ThemeTokens } from './theme/theme-migration-wrapper'
+
+export { EmptyState, type EmptyStateProps } from './shared/empty-state'
+export { ErrorState, type ErrorStateProps } from './shared/error-state'
+export { LoadingState, type LoadingStateProps, type LoadingStateVariant } from './shared/loading-state'
+export { StatCard, type StatCardProps, type StatCardTrend } from './shared/stat-card'
+export { DetailField, type DetailFieldProps } from './shared/detail-field'
+export { ConfirmDialog, type ConfirmDialogProps } from './shared/confirm-dialog'
+export { Notice, type NoticeProps, type NoticeTone } from './shared/notice'
+export { StatusBadge, type StatusBadgeProps, type StatusTone } from './shared/status-badge'
+export { EntityListItem, type EntityListItemAction, type EntityListItemProps } from './shared/entity-list-item'
+export { Button, buttonVariants } from './wrappers/button'
+export { CopyButton, type CopyButtonProps } from './shared/copy-button'
+export { TruncatedText, truncateMiddle, type TruncatedTextProps } from './shared/truncated-text'
+export {
+	useCopyToClipboard,
+	type CopyToClipboardAction,
+	type CopyToClipboardStatus,
+	type UseCopyToClipboardOptions,
+	type UseCopyToClipboardResult,
+} from './shared/use-copy-to-clipboard'
+export { formatSats } from './utils/format'
+export { MobilePageHeader, PAGE_HEADER_CLASS, PageHeader, type MobilePageHeaderProps, type PageHeaderProps } from './layout/page-header'
+export { BackButton, type BackButtonProps, type BackButtonVariant } from './nav/back-button'
+export { SIDEBAR_NAV_LINK_CLASS, SidebarNav, type NavLinkRenderArgs, type SidebarNavProps } from './nav/sidebar-nav'
+export {
+	DASHBOARD_BACK_RULES,
+	DASHBOARD_NAV,
+	findNavEmoji,
+	findNavItem,
+	isFullBleedRoute,
+	isNavItemActive,
+	navItemLabel,
+	resolveBackTarget,
+	resolveBadgeCount,
+	resolveNavView,
+	shouldShowSidebarOnMobile,
+	showsPageTitle,
+	type NavBackTarget,
+	type NavBadgeCounts,
+	type NavBadgeKey,
+	type NavItem,
+	type NavItemWithBadge,
+	type NavSection,
+	type NavSectionView,
+} from './nav/model'
+export { NpubDisplay, NPUB_HEAD, NPUB_TAIL, truncateNpub, type NpubDisplayProps, type TruncateNpubOptions } from './nostr/npub-display'
+export { VerifiedBadge, elideNip05Address, type Nip05VerificationState, type VerifiedBadgeProps } from './nostr/verified-badge'
+export {
+	FeaturedUserCardView,
+	FEATURED_USER_CARD_SLOTS,
+	type FeaturedUserCardProduct,
+	type FeaturedUserCardRenderLink,
+	type FeaturedUserCardViewProps,
+} from './nostr/featured-user-card'

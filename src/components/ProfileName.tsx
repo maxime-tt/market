@@ -1,6 +1,6 @@
 import { useProfileName } from '@/queries/profiles'
 import { formatPubkeyShort } from '@sdk/core/nostr/pubkeyDisplay'
-import { ProfileNameView } from '@ui/components/ProfileViews'
+import { ProfileNameView } from '@ui/nostr/identity'
 
 interface ProfileNameProps extends React.HTMLAttributes<HTMLSpanElement> {
 	pubkey: string

@@ -12,8 +12,18 @@ import { ProfileName } from '@/components/ProfileName'
 import { OrderActions } from '@/components/orders/OrderActions'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
 import { Badge } from '@ui/primitives/badge'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
+import {
+	AuctionDetailCard,
+	AuctionPartyCard,
+	AuctionSettlementBadge,
+	AuctionStatusBadge,
+	AuctionTechnicalRow,
+} from '@ui/auction/auction-detail-views'
+import { StatCard } from '@ui/shared/stat-card'
+import { StatusBadge } from '@ui/shared/status-badge'
+import { formatSatsWithUnit } from '@ui/utils/format'
 import { authStore } from '@/lib/stores/auth'
 import { getAuctionWindowValidBids } from '@sdk/commerce/auctions/settlement'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
@@ -73,7 +83,7 @@ import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, Copy, ExternalLink, Gavel, MapPin, Package, Shield, Trophy } from 'lucide-react'
+import { Clock, ExternalLink, Gavel, MapPin, Package, Shield, Trophy } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
@@ -81,19 +91,6 @@ import {
 	type LegacyAuctionClaimPublicDetails,
 	type PrivateAuctionClaimPayload,
 } from '@/lib/auctions/privateAuctionClaimMessage'
-
-const AUCTION_STATUS_STYLES: Record<string, string> = {
-	Live: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-	Scheduled: 'border-sky-200 bg-sky-50 text-sky-800',
-	Ended: 'border-zinc-200 bg-zinc-100 text-zinc-700',
-}
-
-const SETTLEMENT_STATUS_STYLES: Record<string, string> = {
-	settled: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-	reserve_not_met: 'border-amber-200 bg-amber-50 text-amber-800',
-	cancelled: 'border-rose-200 bg-rose-50 text-rose-800',
-	unknown: 'border-zinc-200 bg-zinc-100 text-zinc-700',
-}
 
 function formatAuctionStatus(startAt: number, endAt: number, now: number): string {
 	if (endAt > 0 && now >= endAt) return 'Ended'
@@ -106,38 +103,14 @@ function formatMaybeDate(timestamp: number): string {
 	return new Date(timestamp * 1000).toLocaleString()
 }
 
-function formatSats(value: number): string {
-	return `${value.toLocaleString()} sats`
-}
-
-async function copyText(label: string, value: string) {
-	try {
-		await navigator.clipboard.writeText(value)
-		toast.success(`${label} copied`)
-	} catch (error) {
-		console.error(`Failed to copy ${label.toLowerCase()}:`, error)
-		toast.error(`Failed to copy ${label.toLowerCase()}`)
-	}
-}
-
-function StatCard({ label, value, eyebrow }: { label: string; value: string; eyebrow?: string }) {
-	return (
-		<div className="rounded-xl border border-black/10 bg-white/85 p-4 shadow-sm">
-			{eyebrow && <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{eyebrow}</p>}
-			<p className="mt-1 text-sm text-zinc-500">{label}</p>
-			<p className="mt-2 text-lg font-semibold text-zinc-950">{value}</p>
-		</div>
-	)
-}
-
-function OverviewItem({ label, value, helper }: { label: string; value: React.ReactNode; helper?: string }) {
-	return (
-		<div className="rounded-xl border border-zinc-200 bg-white p-4">
-			<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
-			<div className="mt-2 text-sm font-medium text-zinc-950">{value}</div>
-			{helper && <p className="mt-1 text-xs text-zinc-500">{helper}</p>}
-		</div>
-	)
+/**
+ * Surfaces a failed copy from a technical row. The row renders the shared
+ * `CopyButton`, which reports failures through `onError` instead of swallowing
+ * them; this keeps the original label-aware toast.
+ */
+function handleCopyError(label: string, error: unknown) {
+	console.error(`Failed to copy ${label.toLowerCase()}:`, error)
+	toast.error(`Failed to copy ${label.toLowerCase()}`)
 }
 
 function formatPrivateClaimAddress(payload: PrivateAuctionClaimPayload): string {
@@ -177,55 +150,13 @@ function formatLegacyPublicClaimAddress(details: LegacyAuctionClaimPublicDetails
 	return details.address ?? ''
 }
 
-function PartyRow({ label, pubkey, helper }: { label: string; pubkey: string; helper?: string }) {
+/** Avatar + display name cluster for a party row; resolves the pubkey via the profile queries. */
+function partyIdentity(pubkey: string) {
 	return (
-		<div className="rounded-xl border border-zinc-200 bg-white p-4">
-			<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
-			<div className="mt-2 flex items-center gap-2">
-				<AvatarUser pubkey={pubkey} colored className="h-7 w-7" />
-				{pubkey ? (
-					<ProfileName pubkey={pubkey} className="text-sm font-medium text-zinc-950" />
-				) : (
-					<span className="text-sm font-medium text-zinc-950">N/A</span>
-				)}
-			</div>
-			{helper && <p className="mt-1 text-xs text-zinc-500">{helper}</p>}
-		</div>
-	)
-}
-
-function TechnicalRow({
-	label,
-	value,
-	copyValue,
-	stacked = false,
-}: {
-	label: string
-	value: string
-	copyValue?: string
-	stacked?: boolean
-}) {
-	return (
-		<div
-			className={`rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 ${stacked ? 'space-y-2' : 'flex items-start justify-between gap-3'}`}
-		>
-			<div className="min-w-0">
-				<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
-				<p className={`mt-1 text-sm font-medium text-zinc-950 ${stacked ? 'whitespace-pre-wrap break-words' : 'break-all'}`}>
-					{value || 'N/A'}
-				</p>
-			</div>
-			{copyValue && (
-				<Button
-					variant="ghost"
-					size="sm"
-					className="h-8 shrink-0 px-2 text-zinc-500 hover:text-zinc-950"
-					onClick={() => void copyText(label, copyValue)}
-				>
-					<Copy className="h-4 w-4" />
-				</Button>
-			)}
-		</div>
+		<>
+			<AvatarUser pubkey={pubkey} colored className="h-7 w-7" />
+			<ProfileName pubkey={pubkey} className="text-sm font-medium text-foreground" />
+		</>
 	)
 }
 
@@ -650,9 +581,7 @@ function DashboardAuctionDetailRoute() {
 							</div>
 						)}
 						<div className="absolute bottom-0 left-0 right-0 flex flex-wrap gap-2 p-4">
-							<Badge className={AUCTION_STATUS_STYLES[status]} variant="outline">
-								{status}
-							</Badge>
+							<AuctionStatusBadge status={status} />
 							<Badge className="border-white/20 bg-white/10 text-white" variant="outline">
 								{bidCount} {bidCount === 1 ? 'bid' : 'bids'}
 							</Badge>
@@ -697,23 +626,25 @@ function DashboardAuctionDetailRoute() {
 						<InvalidAuctionNotice event={toRawEvent(auction)} itemLabel="Auction" />
 
 						<div className="grid gap-3 sm:grid-cols-2">
-							<StatCard label="Current price" value={formatSats(currentPrice)} eyebrow="Live pulse" />
-							<StatCard label="Reserve" value={formatSats(reserve)} eyebrow={reserveMet ? 'Ready to settle' : 'Threshold'} />
-							<StatCard label="Opening bid" value={formatSats(startingBid)} />
+							<StatCard label="Current price" value={formatSatsWithUnit(currentPrice)} eyebrow="Live pulse" />
+							<StatCard label="Reserve" value={formatSatsWithUnit(reserve)} eyebrow={reserveMet ? 'Ready to settle' : 'Threshold'} />
+							<StatCard label="Opening bid" value={formatSatsWithUnit(startingBid)} />
 							<AuctionCountdown auction={auction} />
 						</div>
 
 						<div className="grid gap-3 md:grid-cols-2">
-							<OverviewItem label="Auction type" value={auctionType} helper="Primary format shown to buyers." />
-							<OverviewItem label="Currency" value={currency} helper="Display currency for bidding." />
-							<OverviewItem label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise between bids." />
-							<OverviewItem label="Schedule" value={`${formatMaybeDate(startAt)} to ${formatMaybeDate(biddingCutoffAt)}`} />
+							<AuctionDetailCard label="Auction type" value={auctionType} helper="Primary format shown to buyers." />
+							<AuctionDetailCard label="Currency" value={currency} helper="Display currency for bidding." />
+							<AuctionDetailCard label="Bid increment" value={formatSatsWithUnit(bidIncrement)} helper="Minimum raise between bids." />
+							<AuctionDetailCard label="Schedule" value={`${formatMaybeDate(startAt)} to ${formatMaybeDate(biddingCutoffAt)}`} />
 						</div>
 
 						{/* Parties — pubkeys resolved via AvatarUser for both perspectives */}
 						<div className="grid gap-3 md:grid-cols-2">
-							<PartyRow label="Seller" pubkey={auction.pubkey} helper={isOwner ? 'You' : undefined} />
-							{isSettled && settlementWinner && <PartyRow label="Winner" pubkey={settlementWinner} helper={isWinner ? 'You' : undefined} />}
+							<AuctionPartyCard label="Seller" identity={partyIdentity(auction.pubkey)} helper={isOwner ? 'You' : undefined} />
+							{isSettled && settlementWinner && (
+								<AuctionPartyCard label="Winner" identity={partyIdentity(settlementWinner)} helper={isWinner ? 'You' : undefined} />
+							)}
 						</div>
 					</div>
 				</div>
@@ -743,7 +674,7 @@ function DashboardAuctionDetailRoute() {
 											<p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Leading bid</p>
 											<div className="mt-2 flex flex-wrap items-end justify-between gap-3">
 												<div>
-													<p className="text-2xl font-bold text-emerald-950">{formatSats(getBidAmount(topBid))}</p>
+													<p className="text-2xl font-bold text-emerald-950">{formatSatsWithUnit(getBidAmount(topBid))}</p>
 													<div className="mt-1 flex items-center gap-2 text-sm text-emerald-800">
 														<AvatarUser pubkey={topBid.pubkey} colored className="h-5 w-5" />
 														<span>
@@ -751,9 +682,7 @@ function DashboardAuctionDetailRoute() {
 														</span>
 													</div>
 												</div>
-												<Badge className="border-emerald-200 bg-white text-emerald-800" variant="outline">
-													Highest offer
-												</Badge>
+												<StatusBadge status="Highest offer" tone="success" />
 											</div>
 										</div>
 									)}
@@ -771,24 +700,18 @@ function DashboardAuctionDetailRoute() {
 												<div key={bidEvent.id} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
 													<div className="flex flex-wrap items-start justify-between gap-3">
 														<div className="space-y-1">
-															<p className="text-xl font-semibold text-zinc-950">{formatSats(amount)}</p>
+															<p className="text-xl font-semibold text-zinc-950">{formatSatsWithUnit(amount)}</p>
 															<div className="flex items-center gap-2 text-sm text-zinc-500">
 																<AvatarUser pubkey={bidEvent.pubkey} colored className="h-5 w-5" />
 																<span className="break-all">{isOwnBid ? 'You' : isTop ? 'Currently leading' : 'Bidder'}</span>
 															</div>
 														</div>
-														<div className="flex flex-wrap gap-2">
-															{isTop && (
-																<Badge className="border-emerald-200 bg-emerald-50 text-emerald-800" variant="outline">
-																	Top bid
-																</Badge>
-															)}
-														</div>
+														<div className="flex flex-wrap gap-2">{isTop && <StatusBadge status="Top bid" tone="success" />}</div>
 													</div>
 
 													<div className="mt-4 grid gap-3 sm:grid-cols-2">
-														<OverviewItem label="Recorded at" value={createdAt} />
-														<OverviewItem label="Reserve check" value={amount >= reserve ? 'Meets reserve' : 'Below reserve'} />
+														<AuctionDetailCard label="Recorded at" value={createdAt} />
+														<AuctionDetailCard label="Reserve check" value={amount >= reserve ? 'Meets reserve' : 'Below reserve'} />
 													</div>
 
 													<Accordion type="single" collapsible className="mt-4 rounded-xl border border-zinc-200 px-4">
@@ -797,18 +720,29 @@ function DashboardAuctionDetailRoute() {
 																Technical bid data
 															</AccordionTrigger>
 															<AccordionContent className="space-y-3 pb-4">
-																<TechnicalRow label="Bidder pubkey" value={bidEvent.pubkey} copyValue={bidEvent.pubkey} />
-																<TechnicalRow
+																<AuctionTechnicalRow
+																	label="Bidder pubkey"
+																	value={bidEvent.pubkey}
+																	copyValue={bidEvent.pubkey}
+																	onCopyError={handleCopyError}
+																/>
+																<AuctionTechnicalRow
 																	label="Mint"
 																	value={getBidMint(bidEvent) || 'N/A'}
 																	copyValue={getBidMint(bidEvent) || undefined}
+																	onCopyError={handleCopyError}
 																/>
-																<TechnicalRow label="Key scheme" value={keyScheme} />
-																<TechnicalRow
+																<AuctionTechnicalRow label="Key scheme" value={keyScheme} />
+																<AuctionTechnicalRow
 																	label="Locktime"
 																	value={locktime ? new Date(parseInt(locktime, 10) * 1000).toLocaleString() : 'N/A'}
 																/>
-																<TechnicalRow label="Bid event ID" value={bidEvent.id} copyValue={bidEvent.id} />
+																<AuctionTechnicalRow
+																	label="Bid event ID"
+																	value={bidEvent.id}
+																	copyValue={bidEvent.id}
+																	onCopyError={handleCopyError}
+																/>
 															</AccordionContent>
 														</AccordionItem>
 													</Accordion>
@@ -832,18 +766,22 @@ function DashboardAuctionDetailRoute() {
 								<CardDescription>Seller-facing operational state. Public viewers see only the bid feed above.</CardDescription>
 							</CardHeader>
 							<CardContent className="grid gap-3 md:grid-cols-2">
-								<OverviewItem label="Status" value={status} helper={ended ? 'Bidding has closed.' : 'Auction is still collecting bids.'} />
-								<OverviewItem
+								<AuctionDetailCard
+									label="Status"
+									value={status}
+									helper={ended ? 'Bidding has closed.' : 'Auction is still collecting bids.'}
+								/>
+								<AuctionDetailCard
 									label="Bid activity"
 									value={`${bidCount} ${bidCount === 1 ? 'bid' : 'bids'}`}
-									helper={topBid ? `Highest bid is ${formatSats(getBidAmount(topBid))}.` : 'No bids placed yet.'}
+									helper={topBid ? `Highest bid is ${formatSatsWithUnit(getBidAmount(topBid))}.` : 'No bids placed yet.'}
 								/>
-								<OverviewItem
+								<AuctionDetailCard
 									label="Reserve position"
 									value={reserveLabel}
 									helper={reserveMet ? 'Eligible for winner settlement.' : 'Auction cannot settle to winner yet.'}
 								/>
-								<OverviewItem
+								<AuctionDetailCard
 									label="Settlement lock"
 									value={settlementLocked ? 'Published' : 'Open'}
 									helper={settlementLocked ? 'A settlement record already exists.' : 'You can still publish a settlement.'}
@@ -873,22 +811,11 @@ function DashboardAuctionDetailRoute() {
 							<div className="rounded-2xl border border-zinc-200 bg-white p-4">
 								<div className="flex flex-wrap items-center justify-between gap-2">
 									<p className="text-sm font-medium text-zinc-600">Current state</p>
-									<Badge
-										className={
-											latestSettlement
-												? SETTLEMENT_STATUS_STYLES[latestSettlementStatus]
-												: ended
-													? 'border-amber-200 bg-amber-50 text-amber-800'
-													: 'border-sky-200 bg-sky-50 text-sky-800'
-										}
-										variant="outline"
-									>
-										{latestSettlement ? latestSettlementStatus.replace(/_/g, ' ') : ended ? 'Ready to settle' : 'Awaiting close'}
-									</Badge>
+									<AuctionSettlementBadge state={latestSettlement ? latestSettlementStatus : ended ? 'ready' : 'awaiting'} />
 								</div>
 								<div className="mt-4 space-y-3">
-									<OverviewItem label="Reserve status" value={reserveLabel} />
-									<OverviewItem
+									<AuctionDetailCard label="Reserve status" value={reserveLabel} />
+									<AuctionDetailCard
 										label="Latest settlement"
 										value={
 											latestSettlement
@@ -900,7 +827,7 @@ function DashboardAuctionDetailRoute() {
 										helper={
 											latestSettlement
 												? getAuctionSettlementFinalAmount(latestSettlement) > 0
-													? `Final amount: ${formatSats(getAuctionSettlementFinalAmount(latestSettlement))}`
+													? `Final amount: ${formatSatsWithUnit(getAuctionSettlementFinalAmount(latestSettlement))}`
 													: 'No final amount recorded.'
 												: ended
 													? 'Settlement can be published now.'
@@ -944,7 +871,7 @@ function DashboardAuctionDetailRoute() {
 										<>
 											<div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
 												<p className="text-sm font-semibold text-sky-950">
-													You won this auction with {getBidAmount(myTopBidEvent!).toLocaleString()} sats.
+													You won this auction with {formatSatsWithUnit(getBidAmount(myTopBidEvent!))}.
 												</p>
 												<p className="mt-1 text-xs leading-relaxed text-sky-900">
 													Publishing your kind-1025 reveals the derivation path so the seller can derive their child privkey and redeem the
@@ -992,8 +919,8 @@ function DashboardAuctionDetailRoute() {
 											<p className="text-[11px] leading-relaxed text-zinc-500">
 												{topBid && reserveMet
 													? hasPathReleaseForTopBid
-														? `Winner published their path release — clicking settle will redeem ${getBidAmount(topBid).toLocaleString()} sats and publish kind-1024.`
-														: `Top bid: ${getBidAmount(topBid).toLocaleString()} sats. Waiting for the winning bidder to publish a kind-1025 path release.`
+														? `Winner published their path release — clicking settle will redeem ${formatSatsWithUnit(getBidAmount(topBid))} and publish kind-1024.`
+														: `Top bid: ${formatSatsWithUnit(getBidAmount(topBid))}. Waiting for the winning bidder to publish a kind-1025 path release.`
 													: topBid
 														? 'Top bid is below the reserve — settlement will record reserve_not_met.'
 														: 'No valid bids — settlement will record reserve_not_met.'}
@@ -1019,8 +946,8 @@ function DashboardAuctionDetailRoute() {
 										<MapPin className="h-4 w-4" /> Shipping address required
 									</p>
 									<p className="text-xs leading-relaxed text-amber-800">
-										You won this auction at {formatSats(getAuctionSettlementFinalAmount(latestSettlement))}. Submit your shipping address so
-										the seller can ship the item to you.
+										You won this auction at {formatSatsWithUnit(getAuctionSettlementFinalAmount(latestSettlement))}. Submit your shipping
+										address so the seller can ship the item to you.
 									</p>
 									<Button onClick={() => setIsClaimDialogOpen(true)} className="w-full sm:w-auto">
 										Submit Shipping Address
@@ -1049,16 +976,23 @@ function DashboardAuctionDetailRoute() {
 								<AccordionItem value="settlement-config">
 									<AccordionTrigger className="text-sm font-semibold hover:no-underline">Advanced settlement wiring</AccordionTrigger>
 									<AccordionContent className="space-y-3">
-										<TechnicalRow
+										<AuctionTechnicalRow
 											label="Auditor"
 											value={getAuctionPathIssuer(auction) || 'N/A'}
 											copyValue={getAuctionPathIssuer(auction) || undefined}
+											onCopyError={handleCopyError}
 										/>
-										<TechnicalRow label="Settlement policy" value={getAuctionSettlementPolicy(auction) || 'N/A'} />
-										<TechnicalRow label="Lock key derivation" value={getAuctionKeyScheme(auction)} />
-										{p2pkXpub && <TechnicalRow label="P2PK xpub" value={p2pkXpub} copyValue={p2pkXpub} />}
-										<TechnicalRow label="Schema" value={getAuctionSchema(auction) || 'N/A'} />
-										<TechnicalRow label="Trusted mints" value={trustedMints.length > 0 ? trustedMints.join('\n') : 'N/A'} stacked={true} />
+										<AuctionTechnicalRow label="Settlement policy" value={getAuctionSettlementPolicy(auction) || 'N/A'} />
+										<AuctionTechnicalRow label="Lock key derivation" value={getAuctionKeyScheme(auction)} />
+										{p2pkXpub && (
+											<AuctionTechnicalRow label="P2PK xpub" value={p2pkXpub} copyValue={p2pkXpub} onCopyError={handleCopyError} />
+										)}
+										<AuctionTechnicalRow label="Schema" value={getAuctionSchema(auction) || 'N/A'} />
+										<AuctionTechnicalRow
+											label="Trusted mints"
+											value={trustedMints.length > 0 ? trustedMints.join('\n') : 'N/A'}
+											stacked={true}
+										/>
 									</AccordionContent>
 								</AccordionItem>
 
@@ -1067,18 +1001,26 @@ function DashboardAuctionDetailRoute() {
 									<AccordionContent className="space-y-3">
 										{latestSettlement ? (
 											<>
-												<TechnicalRow label="Settlement status" value={getAuctionSettlementStatus(latestSettlement).replace(/_/g, ' ')} />
-												<TechnicalRow
+												<AuctionTechnicalRow
+													label="Settlement status"
+													value={getAuctionSettlementStatus(latestSettlement).replace(/_/g, ' ')}
+												/>
+												<AuctionTechnicalRow
 													label="Winner pubkey"
 													value={getAuctionSettlementWinner(latestSettlement) || 'N/A'}
 													copyValue={getAuctionSettlementWinner(latestSettlement) || undefined}
+													onCopyError={handleCopyError}
 												/>
-												<TechnicalRow
+												<AuctionTechnicalRow
 													label="Winning bid event"
 													value={getAuctionSettlementWinningBid(latestSettlement) || 'N/A'}
 													copyValue={getAuctionSettlementWinningBid(latestSettlement) || undefined}
+													onCopyError={handleCopyError}
 												/>
-												<TechnicalRow label="Final amount" value={formatSats(getAuctionSettlementFinalAmount(latestSettlement))} />
+												<AuctionTechnicalRow
+													label="Final amount"
+													value={formatSatsWithUnit(getAuctionSettlementFinalAmount(latestSettlement))}
+												/>
 											</>
 										) : (
 											<p className="text-sm text-zinc-500">No settlement has been published yet.</p>
@@ -1089,19 +1031,30 @@ function DashboardAuctionDetailRoute() {
 								<AccordionItem value="auction-metadata">
 									<AccordionTrigger className="text-sm font-semibold hover:no-underline">Auction event metadata</AccordionTrigger>
 									<AccordionContent className="space-y-3">
-										<TechnicalRow label="Auction event ID" value={auction.id} copyValue={auction.id} />
-										<TechnicalRow
+										<AuctionTechnicalRow label="Auction event ID" value={auction.id} copyValue={auction.id} onCopyError={handleCopyError} />
+										<AuctionTechnicalRow
 											label="Auction coordinate"
 											value={auctionCoordinates || 'N/A'}
 											copyValue={auctionCoordinates || undefined}
+											onCopyError={handleCopyError}
 										/>
-										<TechnicalRow label="d tag" value={getAuctionId(auction) || 'N/A'} copyValue={getAuctionId(auction) || undefined} />
-										<TechnicalRow label="Seller pubkey" value={auction.pubkey} copyValue={auction.pubkey} />
-										<TechnicalRow
+										<AuctionTechnicalRow
+											label="d tag"
+											value={getAuctionId(auction) || 'N/A'}
+											copyValue={getAuctionId(auction) || undefined}
+											onCopyError={handleCopyError}
+										/>
+										<AuctionTechnicalRow
+											label="Seller pubkey"
+											value={auction.pubkey}
+											copyValue={auction.pubkey}
+											onCopyError={handleCopyError}
+										/>
+										<AuctionTechnicalRow
 											label="Max end at"
 											value={getAuctionMaxEndAt(auction) ? formatMaybeDate(getAuctionMaxEndAt(auction)) : 'N/A'}
 										/>
-										<TechnicalRow
+										<AuctionTechnicalRow
 											label="Created at"
 											value={auction.created_at ? new Date(auction.created_at * 1000).toLocaleString() : 'N/A'}
 										/>
@@ -1128,11 +1081,11 @@ function DashboardAuctionDetailRoute() {
 							<CardContent className="space-y-4">
 								<div className="rounded-2xl border border-zinc-200 bg-white p-4">
 									<div className="grid gap-3 sm:grid-cols-2">
-										<PartyRow label="Seller" pubkey={auction.pubkey} helper={isOwner ? 'You' : undefined} />
-										<PartyRow label="Winner" pubkey={settlementWinner} helper={isWinner ? 'You' : undefined} />
+										<AuctionPartyCard label="Seller" identity={partyIdentity(auction.pubkey)} helper={isOwner ? 'You' : undefined} />
+										<AuctionPartyCard label="Winner" identity={partyIdentity(settlementWinner)} helper={isWinner ? 'You' : undefined} />
 									</div>
 									<div className="mt-3">
-										<OverviewItem label="Final amount" value={formatSats(getAuctionSettlementFinalAmount(latestSettlement))} />
+										<AuctionDetailCard label="Final amount" value={formatSatsWithUnit(getAuctionSettlementFinalAmount(latestSettlement))} />
 									</div>
 								</div>
 
@@ -1168,11 +1121,11 @@ function DashboardAuctionDetailRoute() {
 														</div>
 
 														<div className="grid gap-3 sm:grid-cols-2">
-															{privateClaimPayload.email && <OverviewItem label="Contact email" value={privateClaimPayload.email} />}
-															{privateClaimPayload.phone && <OverviewItem label="Contact phone" value={privateClaimPayload.phone} />}
+															{privateClaimPayload.email && <AuctionDetailCard label="Contact email" value={privateClaimPayload.email} />}
+															{privateClaimPayload.phone && <AuctionDetailCard label="Contact phone" value={privateClaimPayload.phone} />}
 														</div>
 
-														{privateClaimPayload.notes && <OverviewItem label="Message to seller" value={privateClaimPayload.notes} />}
+														{privateClaimPayload.notes && <AuctionDetailCard label="Message to seller" value={privateClaimPayload.notes} />}
 													</div>
 												)}
 
@@ -1194,7 +1147,7 @@ function DashboardAuctionDetailRoute() {
 														)}
 
 														{legacyPublicClaimDetails.email && (
-															<OverviewItem
+															<AuctionDetailCard
 																label="Legacy public contact email"
 																value={legacyPublicClaimDetails.email}
 																helper="Shown only to the seller for old immutable auction claims."

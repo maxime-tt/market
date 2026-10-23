@@ -1,7 +1,8 @@
 import { CollectionDisplayComponent } from '@/components/CollectionDisplayComponent'
 import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
 import { UserDisplayComponent } from '@/components/UserDisplayComponent'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
+import { EmptyState } from '@ui/shared/empty-state'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import {
 	SettingsAccessDenied,
@@ -290,10 +291,7 @@ function BlacklistsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{formattedBlacklist.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<UserMinus className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No users are currently blacklisted</p>
-									</div>
+									<EmptyState icon={<UserMinus />} title="No users are currently blacklisted" />
 								) : (
 									<div className="space-y-3">
 										{formattedBlacklist.map((user, index) => (
@@ -329,13 +327,12 @@ function BlacklistsComponent() {
 											placeholder="npub1... or hex pubkey"
 											className="flex-1"
 										/>
-										<Button onClick={handleAddUser} disabled={isAddingUser || addToBlacklistMutation.isPending || !newUserInput.trim()}>
-											{isAddingUser || addToBlacklistMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<UserMinus className="w-4 h-4" />
-											)}
-											Add
+										<Button
+											onClick={handleAddUser}
+											pending={isAddingUser || addToBlacklistMutation.isPending}
+											disabled={isAddingUser || addToBlacklistMutation.isPending || !newUserInput.trim()}
+										>
+											{!(isAddingUser || addToBlacklistMutation.isPending) && <UserMinus className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
@@ -355,10 +352,7 @@ function BlacklistsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{blacklistedProducts.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No products are currently blacklisted</p>
-									</div>
+									<EmptyState icon={<Package />} title="No products are currently blacklisted" />
 								) : (
 									<div className="space-y-3">
 										{blacklistedProducts.map((productCoords, index) => (
@@ -396,14 +390,10 @@ function BlacklistsComponent() {
 										/>
 										<Button
 											onClick={handleAddProduct}
+											pending={isAddingProduct || addProductMutation.isPending}
 											disabled={isAddingProduct || addProductMutation.isPending || !newProductInput.trim()}
 										>
-											{isAddingProduct || addProductMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<Package className="w-4 h-4" />
-											)}
-											Add
+											{!(isAddingProduct || addProductMutation.isPending) && <Package className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
@@ -423,10 +413,7 @@ function BlacklistsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{blacklistedCollections.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<FolderOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No collections are currently blacklisted</p>
-									</div>
+									<EmptyState icon={<FolderOpen />} title="No collections are currently blacklisted" />
 								) : (
 									<div className="space-y-3">
 										{blacklistedCollections.map((collectionCoords, index) => (
@@ -464,14 +451,10 @@ function BlacklistsComponent() {
 										/>
 										<Button
 											onClick={handleAddCollection}
+											pending={isAddingCollection || addCollectionMutation.isPending}
 											disabled={isAddingCollection || addCollectionMutation.isPending || !newCollectionInput.trim()}
 										>
-											{isAddingCollection || addCollectionMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<FolderOpen className="w-4 h-4" />
-											)}
-											Add
+											{!(isAddingCollection || addCollectionMutation.isPending) && <FolderOpen className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>

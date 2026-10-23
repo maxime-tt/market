@@ -1,7 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react'
 import { ndkActions } from '@/lib/stores/ndk'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
+import { CopyButton } from '@ui/shared/copy-button'
+import { AlertCircle, CheckCircle2, Clock, ExternalLink, Zap, RefreshCw } from 'lucide-react'
+import { LoadingState } from '@ui/shared/loading-state'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { toast } from 'sonner'
@@ -10,16 +13,22 @@ import { useConfigQuery } from '@/queries/config'
 import { useVanitySettings, getVanityForPubkey, getExpiredVanityForPubkey } from '@/queries/vanity'
 import { vanityActions } from '@/lib/stores/vanity'
 import { VANITY_PRICING } from '@platform/server/VanityManager'
-import { AlertCircle, CheckCircle2, Clock, ExternalLink, Copy, Zap, RefreshCw } from 'lucide-react'
 import { Badge } from '@ui/primitives/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { LightningPaymentProcessor } from '@/components/lightning/LightningPaymentProcessor'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
+import { PageHeader } from '@ui/layout/page-header'
 import { purchaseVanityForPubkey } from '@/lib/zapPurchase'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/vanity-url')({
 	component: VanityUrlComponent,
 })
+
+/** Surfaces a failed clipboard write from the shared copy control. */
+function handleCopyError(error: unknown) {
+	console.error('Failed to copy to clipboard:', error)
+	toast.error('Failed to copy to clipboard')
+}
 
 function VanityUrlComponent() {
 	useDashboardTitle('Vanity URL')
@@ -147,14 +156,6 @@ function VanityUrlComponent() {
 		}
 	}
 
-	// Copy vanity URL to clipboard
-	const copyVanityUrl = () => {
-		if (!currentVanity) return
-		const url = `${window.location.origin}/${currentVanity.vanityName}`
-		navigator.clipboard.writeText(url)
-		toast.success('Vanity URL copied to clipboard!')
-	}
-
 	// Payment state
 	const [paymentState, setPaymentState] = useState<{
 		isOpen: boolean
@@ -208,15 +209,13 @@ function VanityUrlComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Vanity URL</h1>
-			</div>
+			</PageHeader>
 
 			<div className="space-y-6 p-4 lg:p-8">
 				{isLoading ? (
-					<div className="flex items-center justify-center p-8">
-						<div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-					</div>
+					<LoadingState className="p-8" label="Loading…" />
 				) : (
 					<>
 						{/* Current Vanity URL Status */}
@@ -234,9 +233,13 @@ function VanityUrlComponent() {
 										<code className="text-lg font-mono flex-1">
 											{window.location.origin}/{currentVanity.vanityName}
 										</code>
-										<Button variant="ghost" size="icon" onClick={copyVanityUrl}>
-											<Copy className="h-4 w-4" />
-										</Button>
+										<CopyButton
+											value={`${window.location.origin}/${currentVanity.vanityName}`}
+											ariaLabel="Copy vanity URL"
+											variant="ghost"
+											size="icon"
+											onError={handleCopyError}
+										/>
 										<Button variant="ghost" size="icon" asChild>
 											<a href={`/${currentVanity.vanityName}`} target="_blank" rel="noopener noreferrer">
 												<ExternalLink className="h-4 w-4" />

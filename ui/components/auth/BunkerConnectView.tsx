@@ -1,10 +1,12 @@
 import { useCallback, useState } from 'react'
-import { ExternalLink, Loader2, QrCode } from 'lucide-react'
+import { ExternalLink, QrCode } from 'lucide-react'
 import { Scanner } from '@yudiel/react-qr-scanner'
 import { Button } from '../../primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../primitives/dialog'
 import { Input } from '../../primitives/input'
 import { Label } from '../../primitives/label'
+import { Spinner } from '../../primitives/spinner'
+import { Notice } from '../../shared/notice'
 
 export interface BunkerConnectViewProps {
 	bunkerUrl: string
@@ -86,7 +88,11 @@ export function BunkerConnectView({
 						<QrCode className="h-4 w-4" />
 					</Button>
 				</div>
-				{error && <p className="text-sm text-red-500">{error}</p>}
+				{error && (
+					<Notice tone="error" compact>
+						{error}
+					</Notice>
+				)}
 				{authUrl && (
 					<div className="rounded-md border bg-muted/50 p-3 text-sm space-y-2" data-testid="bunker-auth-challenge">
 						<p className="text-muted-foreground">Your signer needs browser approval before this connection can finish.</p>
@@ -104,7 +110,7 @@ export function BunkerConnectView({
 			<Button onClick={onConnect} disabled={isConnecting || !bunkerUrl.trim()} className="w-full" data-testid="connect-bunker-button">
 				{isConnecting ? (
 					<>
-						<Loader2 className="h-4 w-4 animate-spin mr-2" />
+						<Spinner className="mr-2" />
 						Connecting...
 					</>
 				) : (
@@ -130,12 +136,17 @@ export function BunkerConnectView({
 
 					<div className="mt-4 mb-4">
 						{scanError ? (
-							<div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg">
+							<Notice
+								tone="error"
+								className="mb-4"
+								action={
+									<Button onClick={() => setScanError(null)} variant="outline" size="sm">
+										Try Again
+									</Button>
+								}
+							>
 								{scanError}
-								<Button onClick={() => setScanError(null)} variant="outline" size="sm" className="ml-2">
-									Try Again
-								</Button>
-							</div>
+							</Notice>
 						) : (
 							<div className="relative w-full aspect-square overflow-hidden rounded-lg">
 								<Scanner onScan={handleScan} onError={handleScanError} constraints={{ facingMode: 'environment' }} />

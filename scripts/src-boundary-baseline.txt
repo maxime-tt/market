@@ -4,6 +4,21 @@
 # and the trees replacing it is frozen here: counts may fall, never rise.
 # Measured at a93c5f2d (PR #1420 head + strip of SDK tooling).
 #
+# Re-measured 2026-10-23 at the union merge of wt/1420-ui into unite/1420-all.
+#   platform -> src production: 406/64 -> 405/68. Imports FELL by one; files
+#     rose by four. The four are created by the root split (bb7785b3), which
+#     lifted __root.tsx's providers, monitors, overlays and redirect guards into
+#     platform/web/app/. That wiring still reaches into src/ for the module it
+#     wires, so lifting it out of a src/ tree converts same-tree, uncounted
+#     imports into counted cross-tree ones. Retires with the module map (wave-B
+#     handover, module map section).
+#   src -> ui production: 239/120 -> 241/118 - the draining direction: src/
+#     being repointed onto its destination.
+#
+# NOTE: the UI line was developed WITHOUT this guard - it entered after the PR
+# head, in the integration increments - so its edges are measured here for the
+# first time.
+#
 # One line per direction and per file kind so a failure names both the
 # direction that grew and whether production or test code grew it:
 #
@@ -15,7 +30,7 @@
 #
 # When a change lowers a count, lower that line in the same commit.
 
-platform -> src production 406 64
+platform -> src production 405 68
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -27,8 +42,8 @@ sdk -> src test 0 0
 src -> platform production 28 23
 src -> platform test 22 11
 
-src -> ui production 239 120
+src -> ui production 241 118
 src -> ui test 0 0
 
-src -> sdk production 161 118
+src -> sdk production 160 117
 src -> sdk test 8 7

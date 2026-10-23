@@ -4,6 +4,9 @@ import { Badge } from '../primitives/badge'
 import { Button } from '../primitives/button'
 import { Input } from '../primitives/input'
 import { UiLink } from '../provider/UiProvider'
+import { EmptyState } from '../shared/empty-state'
+import { ErrorState } from '../shared/error-state'
+import { LoadingState } from '../shared/loading-state'
 
 const BACK_TO_PRODUCTS = '/products'
 
@@ -16,36 +19,26 @@ function BackToProductsLink() {
 }
 
 export function ProductLoadingState() {
-	return (
-		<div className="flex h-[50vh] flex-col items-center justify-center gap-3 px-4 text-center">
-			<div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-			<p className="text-muted-foreground">Loading product…</p>
-		</div>
-	)
+	return <LoadingState label="Loading product…" className="h-[50vh] px-4" />
 }
 
 export function ProductLoadErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
 	return (
 		<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
-			<h1 className="text-2xl font-bold">Still loading product</h1>
-			<p className="text-gray-600">{message}</p>
-			<div className="flex flex-wrap items-center justify-center gap-2">
-				<Button variant="secondary" onClick={onRetry}>
-					Retry
-				</Button>
-				<BackToProductsLink />
-			</div>
+			<ErrorState title="Still loading product" message={message} onRetry={onRetry} retryLabel="Retry" />
+			<BackToProductsLink />
 		</div>
 	)
 }
 
 export function ProductNotFoundState() {
 	return (
-		<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
-			<h1 className="text-2xl font-bold">Product Not Found</h1>
-			<p className="text-gray-600">The product you're looking for doesn't exist (or hasn't propagated to relays yet).</p>
-			<BackToProductsLink />
-		</div>
+		<EmptyState
+			title="Product Not Found"
+			description="The product you're looking for doesn't exist (or hasn't propagated to relays yet)."
+			action={<BackToProductsLink />}
+			className="h-[50vh]"
+		/>
 	)
 }
 

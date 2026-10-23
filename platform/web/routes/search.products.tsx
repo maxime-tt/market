@@ -3,6 +3,8 @@ import { useProductSearch } from '@/queries/products'
 import { ProductCard } from '@/components/ProductCard'
 import { useEffect, useState, useMemo } from 'react'
 import { Input } from '@ui/primitives/input'
+import { EmptyState } from '@ui/shared/empty-state'
+import { LoadingState } from '@ui/shared/loading-state'
 import { RadioGroup, RadioGroupItem } from '@ui/primitives/radio-group'
 import { Label } from '@ui/primitives/label'
 import { filterAndSortProductSearchResults } from '@sdk/commerce/discovery'
@@ -127,9 +129,9 @@ function SearchProductsPage() {
 				</div>
 			</div>
 			{isFetching && results.length === 0 ? (
-				<div className="py-12 text-center text-muted-foreground">Searching...</div>
+				<LoadingState label="Searching…" />
 			) : results.length === 0 ? (
-				<div className="py-12 text-center">No products found.</div>
+				<EmptyState title="No products found." />
 			) : (
 				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 					{results.map((event) => (

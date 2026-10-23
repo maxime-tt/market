@@ -1,11 +1,12 @@
 import { AuctionCard } from '@/components/AuctionCard'
 import { Media } from '@ui/components/Media'
+import { LoadingState } from '@ui/shared/loading-state'
 import { AuctionFilters } from '@/components/AuctionFilters'
 import { ShowTestListingsToggle } from '@/components/ShowTestListingsToggle'
 import { AuctionSectionGrid } from '@/components/nostr/AuctionSectionGrid'
 import { ItemGrid } from '@ui/components/ItemGrid'
 import { Badge } from '@ui/primitives/badge'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { uiStore } from '@/lib/stores/ui'
@@ -30,27 +31,9 @@ import type { NostrEventLike } from '@sdk/core'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Loader2 } from 'lucide-react'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
-
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-      .${className} {
-        background-image: url(${imageUrl}) !important;
-      }
-    `
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
 
 function useFeaturedAuctionEvents(featuredAuctions: string[] | undefined) {
 	const queries = (featuredAuctions || []).map((auctionCoords) => {
@@ -192,11 +175,6 @@ function AuctionsRoute() {
 	const backgroundImageUrl = !isHomepageSlide && currentImages.length > 0 ? currentImages[0][1] : ''
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
 
-	const heroClassName = currentAuctionId ? `hero-bg-auctions-${currentAuctionId.replace(/[^a-zA-Z0-9]/g, '')}` : 'hero-bg-auctions-default'
-	const marketHeroClassName = 'hero-bg-market-auctions'
-	useHeroBackground(backgroundImageUrl, heroClassName)
-	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
-
 	const handleDotClick = (index: number) => {
 		setCurrentSlideIndex(index)
 	}
@@ -296,7 +274,8 @@ function AuctionsRoute() {
 		<div>
 			{isHomepageSlide ? (
 				<div
-					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}
+					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					style={heroBackgroundStyle(marketBackgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
@@ -309,7 +288,8 @@ function AuctionsRoute() {
 				</div>
 			) : (
 				<div
-					className={`relative hero-container-carousel ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-gray-700'}`}
+					className={`relative hero-container-carousel ${backgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					style={heroBackgroundStyle(backgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
@@ -389,10 +369,7 @@ function AuctionsRoute() {
 						</Button>
 					</div>
 				) : auctionsQuery.isLoading && auctions.length === 0 ? (
-					<div className="flex flex-col items-center justify-center py-16 min-h-[40vh]">
-						<Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
-						<p className="text-sm text-gray-500">Loading auctions...</p>
-					</div>
+					<LoadingState className="min-h-[40vh] py-16" label="Loading auctions…" />
 				) : filteredAndSortedAuctions.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-16 text-center gap-2 min-h-[40vh]">
 						<h2 className="text-xl font-semibold">No auctions found</h2>

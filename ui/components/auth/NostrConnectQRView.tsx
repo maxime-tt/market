@@ -1,8 +1,11 @@
-import { CopyIcon, Loader2 } from 'lucide-react'
+import { CopyIcon } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Button } from '../../primitives/button'
 import { Input } from '../../primitives/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../primitives/select'
+import { Spinner } from '../../primitives/spinner'
+import { LoadingState } from '../../shared/loading-state'
+import { Notice } from '../../shared/notice'
 
 export const CUSTOM_RELAY_OPTION = 'custom'
 
@@ -21,15 +24,6 @@ export interface NostrConnectQRViewProps {
 	onCopyConnectionUrl: (url: string) => void
 }
 
-function Spinner({ label }: { label: string }) {
-	return (
-		<div className="flex flex-col items-center gap-2 py-8">
-			<Loader2 className="h-8 w-8 animate-spin" />
-			<p className="text-sm text-muted-foreground">{label}</p>
-		</div>
-	)
-}
-
 export function NostrConnectQRView({
 	relays,
 	selectedRelay,
@@ -46,7 +40,9 @@ export function NostrConnectQRView({
 	return (
 		<div className="flex flex-col items-center gap-4 py-4 w-full max-w-full overflow-hidden">
 			{hasError && (
-				<div className="bg-destructive/10 text-destructive rounded p-2 mb-2 text-sm w-full">Connection failed. Please try again.</div>
+				<Notice tone="error" compact className="mb-2 w-full">
+					Connection failed. Please try again.
+				</Notice>
 			)}
 
 			<div className="w-full space-y-2">
@@ -70,7 +66,7 @@ export function NostrConnectQRView({
 			</div>
 
 			{isGenerating ? (
-				<Spinner label="Generating connection..." />
+				<LoadingState label="Generating connection..." />
 			) : isConnected ? (
 				<div className="flex flex-col items-center gap-2 py-8">
 					<div className="text-green-500 mb-2">
@@ -113,7 +109,7 @@ export function NostrConnectQRView({
 					<div className="flex w-full items-center justify-center">
 						{isListening && (
 							<div className="flex items-center gap-2">
-								<Loader2 className="h-4 w-4 animate-spin" />
+								<Spinner />
 								<span className="text-sm">Waiting for approval...</span>
 							</div>
 						)}
@@ -127,7 +123,7 @@ export function NostrConnectQRView({
 					</div>
 				</>
 			) : (
-				<Spinner label="Initializing connection..." />
+				<LoadingState label="Initializing connection..." />
 			)}
 		</div>
 	)

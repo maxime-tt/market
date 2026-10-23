@@ -1,4 +1,4 @@
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Checkbox } from '@ui/primitives/checkbox'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@ui/primitives/input'

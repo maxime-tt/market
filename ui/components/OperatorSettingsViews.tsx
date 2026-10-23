@@ -1,8 +1,11 @@
 import { Edit, Shield, ShieldCheck, UserPlus } from 'lucide-react'
 import type { ComponentType, ReactNode, SVGProps } from 'react'
+import { PageHeader } from '../layout/page-header'
 import { Button } from '../primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../primitives/card'
 import { Label } from '../primitives/label'
+import { EmptyState } from '../shared/empty-state'
+import { LoadingState } from '../shared/loading-state'
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>
 
@@ -24,12 +27,15 @@ function SettingsHeading({ icon: Icon, title, description }: SettingsPageHeaderP
 	)
 }
 
-/** Sticky desktop page header used across operator settings pages. */
+/**
+ * Sticky desktop page header used across operator settings pages. Composes the
+ * shared band so this header and the raw route headers cannot drift apart.
+ */
 export function SettingsPageHeader(props: SettingsPageHeaderProps) {
 	return (
-		<div className="sticky top-0 z-10 hidden items-center justify-between border-b bg-white px-4 py-4 lg:flex lg:px-6">
+		<PageHeader>
 			<SettingsHeading {...props} />
-		</div>
+		</PageHeader>
 	)
 }
 
@@ -44,13 +50,7 @@ export function SettingsMobileHeader(props: SettingsPageHeaderProps) {
 export function SettingsLoadingSkeleton() {
 	return (
 		<div className="space-y-6 p-6">
-			<div className="animate-pulse">
-				<div className="mb-4 h-8 w-1/4 rounded bg-gray-200"></div>
-				<div className="space-y-3">
-					<div className="h-4 w-1/2 rounded bg-gray-200"></div>
-					<div className="h-4 w-1/3 rounded bg-gray-200"></div>
-				</div>
-			</div>
+			<LoadingState variant="skeleton" rows={3} />
 		</div>
 	)
 }
@@ -144,10 +144,7 @@ export function TeamRoleSection({ role, members }: TeamRoleSectionProps) {
 			</CardHeader>
 			<CardContent className="space-y-4">
 				{members.length === 0 ? (
-					<div className="py-8 text-center text-gray-500">
-						<EmptyIcon className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-						<p>{copy.empty}</p>
-					</div>
+					<EmptyState icon={<EmptyIcon />} title={copy.empty} />
 				) : (
 					<div className="space-y-3">
 						{members.map((member) => (

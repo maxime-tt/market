@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ArrowLeft, Loader2, PlusIcon, X } from 'lucide-react'
+import { ArrowLeft, PlusIcon, X } from 'lucide-react'
 import type { Nip15ProductData } from '@sdk/commerce/products/nip15Migration'
 import { Button } from '../../primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../primitives/card'
@@ -7,6 +7,8 @@ import { Input } from '../../primitives/input'
 import { Label } from '../../primitives/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../primitives/select'
 import { Textarea } from '../../primitives/textarea'
+import { EmptyState } from '../../shared/empty-state'
+import { LoadingState } from '../../shared/loading-state'
 import { Media } from '../Media'
 
 export interface MigrationFormData {
@@ -72,12 +74,7 @@ function RequiredLabel({ htmlFor, children }: { htmlFor?: string; children: Reac
 }
 
 function LoadingRow({ label }: { label: string }) {
-	return (
-		<div className="flex items-center gap-2 text-gray-500">
-			<Loader2 className="w-4 h-4 animate-spin" />
-			<span>{label}</span>
-		</div>
-	)
+	return <LoadingState label={label} compact className="justify-start py-0" />
 }
 
 function describeCountries(countries: string[] | undefined): string {
@@ -380,7 +377,7 @@ export function MigrationFormView({
 							{isLoadingShipping ? (
 								<LoadingRow label="Loading shipping options..." />
 							) : shippingOptions.length === 0 ? (
-								<p className="text-sm text-gray-500">No shipping options configured. You can add them in Dashboard → Shipping Options</p>
+								<EmptyState compact title="No shipping options configured. You can add them in Dashboard → Shipping Options" />
 							) : (
 								<div className="space-y-2">
 									{formData.shippings.length > 0 && (
@@ -468,7 +465,7 @@ export function MigrationFormView({
 							{isLoadingCollections ? (
 								<LoadingRow label="Loading collections..." />
 							) : collections.length === 0 ? (
-								<p className="text-sm text-gray-500">No collections found. You can create collections in Dashboard → Collections</p>
+								<EmptyState compact title="No collections found. You can create collections in Dashboard → Collections" />
 							) : (
 								<Select
 									value={formData.selectedCollection || 'none'}

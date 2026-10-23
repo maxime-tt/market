@@ -1,3 +1,4 @@
+import { PageHeader } from '@ui/layout/page-header'
 import { V4VManager } from '@/components/v4v/V4VManager'
 import { salesV4VConfig, salesV4VLabels } from '@sdk/commerce/v4v/labels'
 import { salesV4VManagerProps } from '@/lib/v4v/sales-props'
@@ -38,9 +39,9 @@ function CircularEconomyComponent() {
 	if (isLoading) {
 		return (
 			<div>
-				<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+				<PageHeader>
 					<h1 className="text-2xl font-bold">Circular Economy</h1>
-				</div>
+				</PageHeader>
 				<div className="space-y-6 p-4 lg:p-6">
 					<p>Loading V4V settings...</p>
 				</div>
@@ -50,9 +51,9 @@ function CircularEconomyComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Circular Economy</h1>
-			</div>
+			</PageHeader>
 			<div className="space-y-6 p-4 lg:p-6">
 				<V4VManager {...salesV4VManagerProps(sales)} labels={salesV4VLabels} config={salesV4VConfig} />
 			</div>

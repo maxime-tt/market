@@ -32,7 +32,7 @@ describe('bid status copy', () => {
 
 	test('pill and banner render the label and tone', () => {
 		const copy = getBidStatusCopy({ ...base, status: 'locked', waitingForReclaim: true })
-		expect(renderToStaticMarkup(<BidStatusPill copy={copy} />)).toContain('border-blue-200')
+		expect(renderToStaticMarkup(<BidStatusPill copy={copy} />)).toContain('data-tone="info"')
 		expect(renderToStaticMarkup(<BidStatusBanner copy={copy} />)).toContain('Reclaim opens in 5m')
 	})
 })

@@ -1,5 +1,6 @@
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
+import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@/lib/stores/auth'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
@@ -56,7 +57,7 @@ function MigrationToolComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<div className="flex items-center gap-3">
 					<ArrowRightLeft className="w-8 h-8 text-muted-foreground" />
 					<div>
@@ -64,7 +65,7 @@ function MigrationToolComponent() {
 						<p className="text-muted-foreground text-sm">If you have NIP-15 listings (legacy format), you can to update them here.</p>
 					</div>
 				</div>
-			</div>
+			</PageHeader>
 			<div className="space-y-4 p-4 lg:p-6">
 				{isLoadingNip15 ? (
 					<div className="p-6 text-center text-gray-500">Loading products...</div>

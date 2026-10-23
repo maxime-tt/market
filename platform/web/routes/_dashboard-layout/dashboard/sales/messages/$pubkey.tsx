@@ -1,7 +1,8 @@
 import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
 import { MessageInput } from '@/components/messages/MessageInput'
 import { PrivateOrderDetailsCard } from '@/components/orders/PrivateOrderDetailsCard'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
+import { LoadingState } from '@ui/shared/loading-state'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { isValidHexKey, isValidNpub } from '@/lib/utils'
@@ -14,7 +15,6 @@ import { useProfileName } from '@/queries/profiles'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Loader2 } from 'lucide-react'
 import { decode } from 'nostr-tools/nip19'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -102,12 +102,7 @@ function ConversationDetailComponent() {
 		<div className="flex flex-col h-full">
 			{/* Messages Area */}
 			<div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-				{isLoading && (
-					<div className="flex justify-center items-center h-full">
-						<Loader2 className="w-8 h-8 animate-spin text-primary" />
-						<p className="ml-2">Loading messages...</p>
-					</div>
-				)}
+				{isLoading && <LoadingState className="h-full" label="Loading messages…" />}
 				{error && (
 					<div className="text-center text-destructive">
 						<p>Error loading messages: {error.message}</p>

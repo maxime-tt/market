@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Badge } from '@ui/primitives/badge'
 import { productFormActions } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useMemo } from 'react'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
+import { useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { FeaturedSections } from '@/components/FeaturedSections'
 import { InfiniteProductList } from '@/components/InfiniteProductList'
@@ -16,25 +17,6 @@ import { productsQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
 import { SelectableBadge } from '@ui/components/SelectableBadge'
-
-// Hook to inject dynamic CSS for background image
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-      .${className} {
-        background-image: url(${imageUrl}) !important;
-      }
-    `
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
 
 const homeSearchSchema = z.object({
 	tag: z.string().optional(),
@@ -88,8 +70,6 @@ function Index() {
 
 	// Use the market image for homepage background
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
-	const marketHeroClassName = 'hero-bg-market'
-	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
 
 	const handleStartSelling = () => {
 		if (isAuthenticated) {
@@ -102,7 +82,10 @@ function Index() {
 	return (
 		<div>
 			{/* Hero Section */}
-			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}>
+			<div
+				className={`relative hero-container ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+				style={heroBackgroundStyle(marketBackgroundImageUrl)}
+			>
 				<div className="hero-overlays">
 					<div className="z-10 absolute inset-0 bg-radial-overlay opacity-40" />
 					<div className="z-10 absolute inset-0 bg-dots-overlay opacity-20" />

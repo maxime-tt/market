@@ -2,11 +2,17 @@ import { AuctionCard } from '@/components/AuctionCard'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
-import { Badge } from '@ui/primitives/badge'
+import { AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
+import { StatusBadge } from '@ui/shared/status-badge'
+import { LoadingState } from '@ui/shared/loading-state'
+import { formatSatsWithUnit } from '@ui/utils/format'
+import { DetailField } from '@ui/shared/detail-field'
+import { EmptyState } from '@ui/shared/empty-state'
+import { truncateMiddle } from '@ui/shared/truncated-text'
 import { ImageCarousel } from '@ui/components/ImageCarousel'
 import { ImageViewerModal } from '@ui/components/ImageViewerModal'
 import { ItemGrid } from '@ui/components/ItemGrid'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Input } from '@ui/primitives/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/primitives/tooltip'
@@ -69,12 +75,13 @@ import { useQueries } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Check, Gavel, Landmark, Radio, Trophy, Truck, UserRound } from 'lucide-react'
+import { ArrowLeft, Check, Gavel, Landmark, Radio } from 'lucide-react'
 import { InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
 import { TestListingNotice } from '@/components/TestListingNotice'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionBidder } from '@/components/AuctionBidder'
@@ -94,56 +101,9 @@ import { formatAuctionEndTimeLabel } from '@sdk/commerce/auctions/countdownLabel
 import AuctionTimelineChart from '@/components/AuctionTimelineChart'
 import { AuctionBidsContainer } from '@/components/AuctionBidsContainer'
 
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-      .${className} {
-        background-image: url(${imageUrl}) !important;
-      }
-    `
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
-
-function formatSats(value: number): string {
-	return `${value.toLocaleString()} sats`
-}
-
 function formatMaybeDate(timestamp: number): string {
 	if (!timestamp) return 'N/A'
 	return new Date(timestamp * 1000).toLocaleString()
-}
-
-function shortenHex(value: string, left: number = 10, right: number = 8): string {
-	if (!value) return 'N/A'
-	if (value.length <= left + right + 1) return value
-	return `${value.slice(0, left)}...${value.slice(-right)}`
-}
-
-function ShopperStat({ label, value, helper }: { label: string; value: string; helper?: string }) {
-	return (
-		<div className="rounded-xl border border-zinc-200 bg-background px-4 py-4 shadow-sm">
-			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-			<p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
-			{helper && <p className="mt-2 text-sm leading-6 text-muted-foreground">{helper}</p>}
-		</div>
-	)
-}
-
-function ShopperInfoRow({ label, value }: { label: string; value: ReactNode }) {
-	return (
-		<div className="flex items-start justify-between gap-4 border-b border-zinc-200/80 py-3 last:border-b-0">
-			<span className="text-sm font-medium text-muted-foreground">{label}</span>
-			<span className="text-sm font-semibold text-right text-foreground">{value}</span>
-		</div>
-	)
 }
 
 type ShippingInfo = NonNullable<ReturnType<typeof getShippingInfo>>
@@ -170,15 +130,6 @@ type AuctionParticipantSummary = {
 	latestBidEventId: string
 	isCurrentLeader: boolean
 	isSettlementWinner: boolean
-}
-
-function AuctionEmptyState({ title, description }: { title: string; description?: string }) {
-	return (
-		<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6">
-			<p className="text-sm font-medium text-zinc-900">{title}</p>
-			{description && <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>}
-		</div>
-	)
 }
 
 function getShippingTagValues(event: ShippingTagSource | null, tagName: string): string[] {
@@ -252,84 +203,6 @@ function formatShippingPickup(event: ShippingTagSource | null): string | null {
 	return getShippingTagValue(event, 'pickup-address') || null
 }
 
-function ShippingDetailRow({ label, value }: { label: string; value?: ReactNode }) {
-	if (value === null || value === undefined || value === '') return null
-
-	return (
-		<div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
-			<dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</dt>
-			<dd className="mt-1 break-words text-sm font-medium text-zinc-900">{value}</dd>
-		</div>
-	)
-}
-
-function AuctionShippingOptionCard({ option, auctionCurrency }: { option: AuctionShippingOptionDisplay; auctionCurrency: string }) {
-	if (option.status === 'invalid') {
-		return (
-			<li className="rounded-xl border border-zinc-200 bg-background px-5 py-5 shadow-sm">
-				<h3 className="text-sm font-semibold text-foreground">Invalid shipping reference</h3>
-				{option.info?.description && <p className="mt-2 break-all text-xs text-muted-foreground">{option.info?.description}</p>}
-			</li>
-		)
-	}
-
-	if (option.isLoading) {
-		return (
-			<li className="rounded-xl border border-zinc-200 bg-background px-5 py-5 shadow-sm">
-				<p className="text-sm text-muted-foreground">Loading shipping details...</p>
-			</li>
-		)
-	}
-
-	if (!option.event && !option.info) {
-		return (
-			<li className="rounded-xl border border-zinc-200 bg-background px-5 py-5 shadow-sm">
-				<h3 className="text-sm font-semibold text-foreground">Shipping option unavailable</h3>
-			</li>
-		)
-	}
-
-	const title = option.info?.title || getShippingTagValue(option.event, 'title') || 'Untitled shipping option'
-	const shippingCurrency = getShippingCurrency(option.info, option.event, auctionCurrency)
-	const extraCost = formatShippingExtraCost(option.extraCost, shippingCurrency)
-	const service = option.info?.service || getShippingTagValue(option.event, 'service')
-	const carrier = option.info?.carrier || getShippingTagValue(option.event, 'carrier')
-	const location = option.info?.location || getShippingTagValue(option.event, 'location')
-	const pickup = formatShippingPickup(option.event)
-	const hasPartialShippingInfo = !!option.event && !option.info
-
-	return (
-		<li className="rounded-xl border border-zinc-200 bg-background px-5 py-5 shadow-sm">
-			<div className="flex flex-wrap items-start justify-between gap-3">
-				<div>
-					<h3 className="text-base font-semibold text-foreground">{title}</h3>
-					{option.info?.description && <p className="mt-2 break-all text-xs text-muted-foreground">{option.info?.description}</p>}
-				</div>
-				<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
-					{formatShippingPrice(option.info, option.event, auctionCurrency)}
-				</Badge>
-			</div>
-
-			{hasPartialShippingInfo && (
-				<div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm leading-6 text-zinc-600">
-					Some shipping details are missing or malformed.
-				</div>
-			)}
-
-			<dl className="mt-4 grid gap-3 sm:grid-cols-2">
-				<ShippingDetailRow label="Base price" value={formatShippingPrice(option.info, option.event, auctionCurrency)} />
-				<ShippingDetailRow label="Service" value={service} />
-				<ShippingDetailRow label="Carrier" value={carrier} />
-				<ShippingDetailRow label="Destination" value={formatShippingDestination(option.info, option.event)} />
-				<ShippingDetailRow label="Duration" value={formatShippingDuration(option.info, option.event)} />
-				<ShippingDetailRow label="Location" value={location} />
-				<ShippingDetailRow label="Pickup" value={pickup} />
-				<ShippingDetailRow label="Auction extra cost" value={extraCost} />
-			</dl>
-		</li>
-	)
-}
-
 const detailBidderStatusClassName = (status: AuctionBidderStatusKind): string => {
 	switch (status) {
 		case 'winning':
@@ -338,6 +211,27 @@ const detailBidderStatusClassName = (status: AuctionBidderStatusKind): string =>
 		case 'outbid':
 		case 'was_outbid':
 			return 'border-amber-300 bg-amber-100 text-amber-950'
+	}
+}
+
+/** Resolves one shipping option into the props `AuctionShippingOptionCard` takes. */
+function shippingOptionCardProps(option: AuctionShippingOptionDisplay, auctionCurrency: string) {
+	return {
+		status: option.status,
+		isLoading: option.isLoading,
+		isUnavailable: !option.event && !option.info,
+		title: option.info?.title || getShippingTagValue(option.event, 'title') || 'Untitled shipping option',
+		description: option.info?.description ?? null,
+		priceLabel: formatShippingPrice(option.info, option.event, auctionCurrency),
+		basePriceLabel: formatShippingPrice(option.info, option.event, auctionCurrency),
+		extraCost: formatShippingExtraCost(option.extraCost, getShippingCurrency(option.info, option.event, auctionCurrency)),
+		service: option.info?.service || getShippingTagValue(option.event, 'service'),
+		carrier: option.info?.carrier || getShippingTagValue(option.event, 'carrier'),
+		location: option.info?.location || getShippingTagValue(option.event, 'location'),
+		pickup: formatShippingPickup(option.event),
+		destination: formatShippingDestination(option.info, option.event),
+		duration: formatShippingDuration(option.info, option.event),
+		hasPartialShippingInfo: !!option.event && !option.info,
 	}
 }
 
@@ -380,8 +274,6 @@ function AuctionDetailRoute() {
 	}))
 
 	const backgroundImageUrl = formattedImages[0]?.url || ''
-	const heroClassName = `hero-bg-auction-detail-${auctionId.replace(/[^a-zA-Z0-9]/g, '')}`
-	useHeroBackground(backgroundImageUrl, heroClassName)
 
 	const startAt = getAuctionStartAt(auction)
 	const startingBid = getAuctionStartingBid(auction)
@@ -726,12 +618,7 @@ function AuctionDetailRoute() {
 	}
 
 	if (!auction && (auctionQuery.isLoading || auctionQuery.isFetching)) {
-		return (
-			<div className="flex h-[50vh] flex-col items-center justify-center gap-3 px-4 text-center">
-				<div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-				<p className="text-muted-foreground">Loading auction...</p>
-			</div>
-		)
+		return <LoadingState className="h-[50vh] px-4" label="Loading auction…" />
 	}
 
 	if (!auction && auctionQuery.isError) {
@@ -778,7 +665,10 @@ function AuctionDetailRoute() {
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="relative z-10">
-				<div className={`relative dark hero-container-product ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
+				<div
+					className={`relative dark hero-container-product ${backgroundImageUrl ? 'bg-hero-image' : 'bg-black'}`}
+					style={heroBackgroundStyle(backgroundImageUrl)}
+				>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay" />
 						<div className="absolute inset-0 opacity-30 bg-dots-overlay" />
@@ -838,7 +728,7 @@ function AuctionDetailRoute() {
 											<TooltipContent side="top">
 												<p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 mb-1">Validator</p>
 												{oracleName && <p className="font-semibold">{oracleName}</p>}
-												<p className="text-xs opacity-70 font-mono break-all">{shortenHex(pathIssuerPubkey, 10, 8)}</p>
+												<p className="text-xs opacity-70 font-mono break-all">{truncateMiddle(pathIssuerPubkey, 10, 8, '...')}</p>
 											</TooltipContent>
 										</Tooltip>
 									)}
@@ -869,7 +759,7 @@ function AuctionDetailRoute() {
 							<div className="grid grid-cols-2 gap-3 text-sm">
 								<div className="bg-black/35 border border-white/20 rounded p-2">
 									<div className="text-white/70 text-xs">{ended ? 'Final price' : 'Current price'}</div>
-									<div className="font-semibold">{currentPrice.toLocaleString()} sats</div>
+									<div className="font-semibold">{formatSatsWithUnit(currentPrice)}</div>
 								</div>
 								<div className="bg-black/35 border border-white/20 rounded p-2">
 									<div className="text-white/70 text-xs">Bids</div>
@@ -997,7 +887,9 @@ function AuctionDetailRoute() {
 									<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">{description}</p>
 								) : (
 									<div className="mt-4">
-										<AuctionEmptyState
+										<EmptyState
+											compact
+											className="items-start rounded-xl border border-dashed border-border bg-muted/50 px-4 py-5 text-left"
 											title="No description provided."
 											description="The seller has not added a full description for this auction."
 										/>
@@ -1019,7 +911,11 @@ function AuctionDetailRoute() {
 										</dl>
 									) : (
 										<div className="mt-4">
-											<AuctionEmptyState title="No specifications listed." />
+											<EmptyState
+												compact
+												className="items-start rounded-xl border border-dashed border-border bg-muted/50 px-4 py-5 text-left"
+												title="No specifications listed."
+											/>
 										</div>
 									)}
 								</section>
@@ -1054,11 +950,13 @@ function AuctionDetailRoute() {
 							{resolvedShippingOptions.length > 0 ? (
 								<ul className="space-y-4">
 									{resolvedShippingOptions.map((option, index) => (
-										<AuctionShippingOptionCard key={`${option.shippingRef}-${index}`} option={option} auctionCurrency={currency} />
+										<AuctionShippingOptionCard key={`${option.shippingRef}-${index}`} {...shippingOptionCardProps(option, currency)} />
 									))}
 								</ul>
 							) : (
-								<AuctionEmptyState
+								<EmptyState
+									compact
+									className="items-start rounded-xl border border-dashed border-border bg-muted/50 px-4 py-5 text-left"
 									title="No shipping options listed."
 									description="The seller has not attached any shipping options to this auction."
 								/>
@@ -1076,9 +974,7 @@ function AuctionDetailRoute() {
 									<h2 className="text-xl font-semibold text-foreground">Participants</h2>
 									<p className="mt-1 text-sm text-muted-foreground">Read-only identities visible from this auction and its visible bids.</p>
 								</div>
-								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
-									{bidderSummaries.length} visible {bidderSummaries.length === 1 ? 'bidder' : 'bidders'}
-								</Badge>
+								<StatusBadge status={`${bidderSummaries.length} visible ${bidderSummaries.length === 1 ? 'bidder' : 'bidders'}`} />
 							</div>
 
 							<div className="grid gap-4 lg:grid-cols-2">
@@ -1096,11 +992,19 @@ function AuctionDetailRoute() {
 											<div className="flex flex-wrap items-center gap-3">
 												<UserCard pubkey={topBidOverall.pubkey} />
 											</div>
-											<ShopperInfoRow label="Highest visible bid" value={formatSats(getBidAmount(topBidOverall))} />
+											<DetailField
+												className="border-b border-border py-3 last:border-b-0"
+												label="Highest visible bid"
+												value={formatSatsWithUnit(getBidAmount(topBidOverall))}
+											/>
 										</div>
 									) : (
 										<div className="mt-4">
-											<AuctionEmptyState title="No visible bidders yet" />
+											<EmptyState
+												compact
+												className="items-start rounded-xl border border-dashed border-border bg-muted/50 px-4 py-5 text-left"
+												title="No visible bidders yet"
+											/>
 										</div>
 									)}
 								</section>
@@ -1114,7 +1018,11 @@ function AuctionDetailRoute() {
 									</div>
 									{settlementFinalAmount > 0 && (
 										<div className="mt-4">
-											<ShopperInfoRow label="Final amount" value={formatSats(settlementFinalAmount)} />
+											<DetailField
+												className="border-b border-border py-3 last:border-b-0"
+												label="Final amount"
+												value={formatSatsWithUnit(settlementFinalAmount)}
+											/>
 										</div>
 									)}
 								</section>
@@ -1127,7 +1035,11 @@ function AuctionDetailRoute() {
 								</div>
 
 								{bidderSummaries.length === 0 ? (
-									<AuctionEmptyState title="No visible bidders yet" />
+									<EmptyState
+										compact
+										className="items-start rounded-xl border border-dashed border-border bg-muted/50 px-4 py-5 text-left"
+										title="No visible bidders yet"
+									/>
 								) : (
 									<div className="grid gap-4 lg:grid-cols-2">
 										{bidderSummaries.map((summary) => (
@@ -1137,23 +1049,27 @@ function AuctionDetailRoute() {
 														<UserCard pubkey={summary.pubkey} />
 													</div>
 													<div className="flex flex-wrap justify-end gap-2">
-														{summary.isCurrentLeader && (
-															<Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
-																Current leading bidder
-															</Badge>
-														)}
-														{summary.isSettlementWinner && (
-															<Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
-																Settlement winner
-															</Badge>
-														)}
+														{summary.isCurrentLeader && <StatusBadge status="Current leading bidder" tone="success" />}
+														{summary.isSettlementWinner && <StatusBadge status="Settlement winner" tone="success" />}
 													</div>
 												</div>
 
 												<div className="mt-4 space-y-1">
-													<ShopperInfoRow label="Highest visible bid" value={formatSats(summary.highestVisibleBidAmount)} />
-													<ShopperInfoRow label="Visible bids" value={String(summary.visibleBidCount)} />
-													<ShopperInfoRow label="Latest visible bid" value={formatMaybeDate(summary.latestVisibleBidTimestamp)} />
+													<DetailField
+														className="border-b border-border py-3 last:border-b-0"
+														label="Highest visible bid"
+														value={formatSatsWithUnit(summary.highestVisibleBidAmount)}
+													/>
+													<DetailField
+														className="border-b border-border py-3 last:border-b-0"
+														label="Visible bids"
+														value={String(summary.visibleBidCount)}
+													/>
+													<DetailField
+														className="border-b border-border py-3 last:border-b-0"
+														label="Latest visible bid"
+														value={formatMaybeDate(summary.latestVisibleBidTimestamp)}
+													/>
 												</div>
 											</div>
 										))}

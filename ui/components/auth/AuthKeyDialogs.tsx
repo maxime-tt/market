@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Loader2, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { Button } from '../../primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../primitives/dialog'
 import { Input } from '../../primitives/input'
 import { Label } from '../../primitives/label'
+import { Spinner } from '../../primitives/spinner'
 
 export interface DecryptPasswordDialogViewProps {
 	open: boolean
@@ -73,7 +74,7 @@ export function DecryptPasswordDialogView({ open, onDecrypt, onLogout }: Decrypt
 					</div>
 
 					<Button onClick={handleSubmit} disabled={isLoading || isLoggingOut} className="w-full" data-testid="decrypt-login-button">
-						{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Decrypt & Login'}
+						{isLoading ? <Spinner /> : 'Decrypt & Login'}
 					</Button>
 
 					<div className="relative flex items-center py-2">
@@ -89,7 +90,7 @@ export function DecryptPasswordDialogView({ open, onDecrypt, onLogout }: Decrypt
 						className="w-full text-destructive hover:text-destructive"
 						data-testid="logout-clear-key-button"
 					>
-						{isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <LogOut className="h-4 w-4 mr-2" />}
+						{isLoggingOut ? <Spinner className="mr-2" /> : <LogOut className="h-4 w-4 mr-2" />}
 						Remove Stored Key & Logout
 					</Button>
 

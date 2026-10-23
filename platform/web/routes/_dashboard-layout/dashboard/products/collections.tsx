@@ -1,5 +1,7 @@
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Media } from '@ui/components/Media'
+import { ConfirmDialog } from '@ui/shared/confirm-dialog'
+import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { authStore } from '@/lib/stores/auth'
@@ -13,9 +15,9 @@ import { useStore } from '@tanstack/react-store'
 import { useState, useMemo } from 'react'
 import { ChevronDown, PlusIcon, StoreIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
-import { DashboardListItem } from '@ui/components/DashboardListItem'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { DashboardCollectionDetails, DashboardCollectionTrigger } from '@ui/components/DashboardCollectionListItem'
+import { PageHeader } from '@ui/layout/page-header'
 
 function CollectionListItem({
 	collection,
@@ -34,43 +36,28 @@ function CollectionListItem({
 }) {
 	const triggerContent = <DashboardCollectionTrigger collection={collection} />
 
-	const actions = (
-		<>
-			<Button
-				variant="ghost"
-				size="sm"
-				onClick={(e) => {
-					e.stopPropagation()
-					onEdit()
-				}}
-				aria-label={`Edit ${getCollectionTitle(collection)}`}
-			>
-				<span className="i-edit w-5 h-5" />
-			</Button>
-			<Button
-				variant="ghost"
-				size="sm"
-				onClick={(e) => {
-					e.stopPropagation()
-					onDelete()
-				}}
-				aria-label={`Delete ${getCollectionTitle(collection)}`}
-				disabled={isDeleting}
-			>
-				{isDeleting ? (
-					<div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" />
-				) : (
-					<Trash className="w-4 h-4 text-destructive" />
-				)}
-			</Button>
-		</>
-	)
+	const actions: EntityListItemAction[] = [
+		{
+			key: 'edit',
+			label: `Edit ${getCollectionTitle(collection)}`,
+			icon: <span className="i-edit w-5 h-5" />,
+			onClick: () => onEdit(),
+		},
+		{
+			key: 'delete',
+			label: `Delete ${getCollectionTitle(collection)}`,
+			icon: <Trash className="w-4 h-4 text-destructive" />,
+			onClick: () => onDelete(),
+			destructive: true,
+			pending: isDeleting,
+		},
+	]
 
 	return (
-		<DashboardListItem
+		<EntityListItem
 			isOpen={isExpanded}
 			onOpenChange={onToggleExpanded}
-			triggerContent={triggerContent}
+			trigger={triggerContent}
 			actions={actions}
 			isDeleting={isDeleting}
 			icon={<StoreIcon className="h-5 w-5 text-black" />}
@@ -79,7 +66,7 @@ function CollectionListItem({
 				collection={collection}
 				renderImage={(url) => <Media src={url} alt="Collection header" className="w-full h-full object-cover" />}
 			/>
-		</DashboardListItem>
+		</EntityListItem>
 	)
 }
 
@@ -93,6 +80,7 @@ function CollectionsComponent() {
 	const matchRoute = useMatchRoute()
 	const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
 	const [orderBy, setOrderBy] = useState<string>('newest')
+	const [pendingDeleteCollection, setPendingDeleteCollection] = useState<NDKEvent | null>(null)
 	useDashboardTitle('Collections')
 
 	// Auto-animate for smooth list transitions
@@ -156,13 +144,8 @@ function CollectionsComponent() {
 		setExpandedCollection(expandedCollection === collectionId ? null : collectionId)
 	}
 
-	const handleDeleteCollectionClick = async (collection: any) => {
-		if (confirm(`Are you sure you want to delete "${getCollectionTitle(collection)}"?`)) {
-			const collectionDTag = getCollectionId(collection)
-			if (collectionDTag) {
-				deleteMutation.mutate(collectionDTag)
-			}
-		}
+	const handleDeleteCollectionClick = (collection: NDKEvent) => {
+		setPendingDeleteCollection(collection)
 	}
 
 	if (!isAuthenticated || !user) {
@@ -180,7 +163,7 @@ function CollectionsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Collections</h1>
 				<div className="flex items-center gap-4">
 					<Select value={orderBy} onValueChange={setOrderBy}>
@@ -203,7 +186,7 @@ function CollectionsComponent() {
 						Create A Collection
 					</Button>
 				</div>
-			</div>
+			</PageHeader>
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden space-y-4">
 					<Select value={orderBy} onValueChange={setOrderBy}>
@@ -266,6 +249,28 @@ function CollectionsComponent() {
 					)}
 				</div>
 			</div>
+
+			<ConfirmDialog
+				open={pendingDeleteCollection !== null}
+				onOpenChange={(open) => {
+					if (!open && !deleteMutation.isPending) setPendingDeleteCollection(null)
+				}}
+				title="Delete collection?"
+				description={
+					pendingDeleteCollection ? `Are you sure you want to delete "${getCollectionTitle(pendingDeleteCollection)}"?` : undefined
+				}
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={() => {
+					if (pendingDeleteCollection) {
+						const collectionDTag = getCollectionId(pendingDeleteCollection)
+						if (collectionDTag) {
+							deleteMutation.mutate(collectionDTag)
+						}
+					}
+				}}
+			/>
 		</div>
 	)
 }

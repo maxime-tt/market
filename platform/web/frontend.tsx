@@ -8,6 +8,9 @@ import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from '@/lib/router-utils'
 import { bootApp, bootStore } from '@platform/web/boot'
 import { WebUiProvider } from '@platform/web/WebUiProvider'
+import { AppMonitors } from '@platform/web/app/AppMonitors'
+import { AppOverlays } from '@platform/web/app/AppOverlays'
+import { AppProviders } from '@platform/web/app/AppProviders'
 import { syncEventStoresToQueryClient } from '@platform/web/eventStoreQuerySync'
 import { UpdateAvailableDialog } from '@/components/UpdateAvailableDialog'
 import { useServiceWorker } from '@/hooks/useServiceWorker'
@@ -88,7 +91,11 @@ function App() {
 		<StrictMode>
 			<QueryClientProvider client={queryClient}>
 				<WebUiProvider>
-					<RouterProvider router={router} />
+					<AppProviders>
+						<AppMonitors />
+						<RouterProvider router={router} />
+						<AppOverlays />
+					</AppProviders>
 				</WebUiProvider>
 				<UpdateAvailableDialog open={showUpdateDialog} onDismiss={dismissUpdate} />
 			</QueryClientProvider>

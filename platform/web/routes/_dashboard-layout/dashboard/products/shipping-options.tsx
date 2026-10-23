@@ -1,10 +1,9 @@
 import { Badge } from '@ui/primitives/badge'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { Spinner } from '@ui/primitives/spinner'
 import { Textarea } from '@ui/primitives/textarea'
 import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
 import { validateShippingForm } from '@sdk/commerce/shipping'
@@ -35,13 +34,14 @@ import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute } from '@tanstack/react-router'
 
-import { DashboardListItem } from '@ui/components/DashboardListItem'
+import { EntityListItem } from '@ui/shared/entity-list-item'
 import {
 	ShippingOptionsEmptyState,
 	ShippingOptionsLoading,
 	ShippingOptionsMobileToolbar,
 	ShippingOptionsToolbar,
 } from '@ui/components/ShippingOptionsViews'
+import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { Checkbox } from '@ui/primitives/checkbox'
 import { AlertCircleIcon, ChevronLeftIcon, DownloadIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -74,6 +74,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	const { getUser } = useNDK()
 	const [user, setUser] = useState<any>(null)
 	const [isSubmitting, setIsSubmitting] = useState(false)
+	const [confirmOpen, setConfirmOpen] = useState(false)
 	const [isOptionalDetailsOpen, setIsOptionalDetailsOpen] = useState(false)
 	const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 	const [isWorldwide, setIsWorldwide] = useState(() => {
@@ -292,14 +293,11 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		</div>
 	)
 
-	const triggerActions = null
-
 	return (
-		<DashboardListItem
+		<EntityListItem
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
-			triggerContent={triggerContent}
-			actions={triggerActions}
+			trigger={triggerContent}
 			icon={<ServiceIcon service={formData.service} />}
 			data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
 			className="w-full max-w-full overflow-hidden"
@@ -1098,19 +1096,29 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 						</Button>
 
 						{isEditing && (
-							<Button type="button" variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
+							<Button type="button" variant="destructive" onClick={() => setConfirmOpen(true)} disabled={isSubmitting}>
 								<TrashIcon className="w-4 h-4" />
 							</Button>
 						)}
 
-						<Button type="submit" disabled={isSubmitting} data-testid="shipping-submit-button">
-							{isSubmitting && <Spinner />}
+						<Button type="submit" pending={isSubmitting} data-testid="shipping-submit-button">
 							{isEditing ? 'Update Shipping' : 'Publish Shipping'}
 						</Button>
 					</div>
 				</form>
 			</div>
-		</DashboardListItem>
+
+			<ConfirmDialog
+				open={confirmOpen}
+				onOpenChange={setConfirmOpen}
+				title="Delete shipping option?"
+				description={shippingOption ? `Are you sure you want to delete "${getShippingTitle(shippingOption)}"?` : undefined}
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={handleDelete}
+			/>
+		</EntityListItem>
 	)
 }
 

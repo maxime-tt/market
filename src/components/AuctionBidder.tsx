@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
 import { Separator } from '@ui/primitives/separator'
 import { Label } from '@ui/primitives/label'
-import { DetailField } from '@ui/primitives/DetailField'
+import { DetailField } from '@ui/shared/detail-field'
 import { Alert, AlertDescription } from '@ui/primitives/alert'
 import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
 import { usePublishAuctionBidMutation, useRepublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'

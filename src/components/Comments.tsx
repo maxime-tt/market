@@ -9,6 +9,7 @@ import { usePublishCommentMutation } from '@/publish/comments'
 import { authStore, useAuth } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { Fragment, useState } from 'react'
+import { truncateNpub } from '@ui/nostr/npub-display'
 import { Button } from '@ui/primitives/button'
 import { Textarea } from '@ui/primitives/textarea'
 import { CircleX, MessageSquare, Reply, X } from 'lucide-react'
@@ -68,7 +69,7 @@ function CommentItem({ comment, onPressReply }: CommentItemProps) {
 	const textUserParentAuthor =
 		profileUserParent?.name ??
 		profileUserParent?.displayName ??
-		(npubUserParentAuthor ? npubUserParentAuthor.slice(0, 9) + '..' + npubUserParentAuthor.slice(-6) : '')
+		(npubUserParentAuthor ? truncateNpub(npubUserParentAuthor, { head: 9, tail: 6, separator: '..' }) : '')
 
 	return (
 		<div className="relative border-b border-gray-200 py-2 my-4 last:border-b-0">
@@ -144,7 +145,7 @@ function AddCommentForm({ targetEvent, parentComment, onCancel, entityLabel = 'p
 	const textUserReplyingTo =
 		profileUserReplyingTo?.displayName ??
 		profileUserReplyingTo?.name ??
-		(npubUserReplyingTo ? npubUserReplyingTo.slice(0, 9) + '..' + npubUserReplyingTo.slice(-6) : '')
+		(npubUserReplyingTo ? truncateNpub(npubUserReplyingTo, { head: 9, tail: 6, separator: '..' }) : '')
 
 	const handleSubmit = async () => {
 		if (!content.trim()) return

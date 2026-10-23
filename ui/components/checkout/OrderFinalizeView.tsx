@@ -6,6 +6,7 @@ import {
 	type PaymentInvoiceData,
 } from '@sdk/commerce/checkout'
 import { Button } from '../../primitives/button'
+import { formatSats } from '../../utils/format'
 
 export interface OrderFinalizeViewProps {
 	shippingData: CheckoutFormData | null
@@ -19,7 +20,6 @@ export interface OrderFinalizeViewProps {
 	onPrint: () => void
 }
 
-const formatSats = (sats: number): string => Math.round(sats).toLocaleString()
 const plural = (count: number) => (count !== 1 ? 's' : '')
 
 export function OrderFinalizeView({

@@ -60,6 +60,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Truck } from 'lucide-react'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import {
 	useEffect,
 	useMemo,
@@ -76,25 +77,6 @@ import SocialInteractions from '@/components/social/SocialInteractions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { scrollToElementWithOffset } from '@/lib/utils/ui'
 import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@sdk/commerce/products'
-
-// Hook to inject dynamic CSS
-function useHeroBackground(imageUrl: string, className: string) {
-	useEffect(() => {
-		if (!imageUrl) return
-
-		const style = document.createElement('style')
-		style.textContent = `
-			.${className} {
-				background-image: url(${imageUrl}) !important;
-			}
-		`
-		document.head.appendChild(style)
-
-		return () => {
-			document.head.removeChild(style)
-		}
-	}, [imageUrl, className])
-}
 
 // Hook to inject Open Graph and Twitter Card meta tags for social sharing
 interface MetaTagsConfig {
@@ -505,17 +487,16 @@ function RouteComponent() {
 	const backgroundImageUrl = formattedImages[0]?.url || ''
 
 	// Check if this is an NSFW product and user hasn't enabled viewing.
-	// Must be computed before useHeroBackground/useDocumentMeta (both hooks run
-	// before the gate early-return for React hook-order stability) so a gated
+	// Must be computed before useDocumentMeta (which runs before the gate
+	// early-return for React hook-order stability) so a gated
 	// NSFW product never leaks its title, description, or first image into
 	// <head> (og:*, twitter:*, document.title, hero background CSS) before the
 	// content gate renders.
 	const productIsNSFW = isNSFWProduct(product)
 	const nsfwGated = productIsNSFW && !showNSFWContent
 
-	// Use the hook to inject dynamic CSS for the background image
-	const heroClassName = `hero-bg-${productId.replace(/[^a-zA-Z0-9]/g, '')}`
-	useHeroBackground(nsfwGated ? '' : backgroundImageUrl, heroClassName)
+	// A gated NSFW product must not leak its first image into the band either.
+	const heroImageUrl = nsfwGated ? '' : backgroundImageUrl
 
 	// Build product URL and meta description for social sharing
 	const productUrl = typeof window !== 'undefined' ? `${window.location.origin}/products/${productId}` : `/products/${productId}`
@@ -665,7 +646,10 @@ function RouteComponent() {
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="z-10 relative">
-				<div className={`relative hero-container-product ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
+				<div
+					className={`relative hero-container-product ${backgroundImageUrl ? 'bg-hero-image' : 'bg-black'}`}
+					style={heroBackgroundStyle(heroImageUrl)}
+				>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay" />
 						<div className="absolute inset-0 bg-dots-overlay opacity-30" />

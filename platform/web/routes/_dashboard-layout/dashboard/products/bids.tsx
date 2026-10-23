@@ -1,11 +1,16 @@
 import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { AvatarUser } from '@/components/AvatarUser'
 import { ProfileName } from '@/components/ProfileName'
-import { DashboardListItem } from '@ui/components/DashboardListItem'
+import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
+import { CheckCircle, Eye, MapPin, RotateCcw, Trophy } from 'lucide-react'
+import { LoadingState } from '@ui/shared/loading-state'
+import { EmptyState } from '@ui/shared/empty-state'
+import { ErrorState } from '@ui/shared/error-state'
 import { BidStatusBanner, BidStatusPill, getBidStatusCopy } from '@ui/components/BidStatusViews'
 import { resolveBidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import { Badge } from '@ui/primitives/badge'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
+import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { cashuStore, walletOps, formatReclaimWaitSeconds, getAuctionReclaimReadyAt, type PendingToken } from '@/lib/stores/walletOps'
@@ -30,9 +35,8 @@ import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useQueries } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { CheckCircle, Clock, Eye, Loader2, MapPin, RotateCcw, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -100,6 +104,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/bids
 function BidsOverviewComponent() {
 	useDashboardTitle('Bids')
 
+	const navigate = useNavigate()
 	const { user, isAuthenticated } = useStore(authStore)
 	const { pendingTokens } = useStore(cashuStore)
 	const [expandedBidGroup, setExpandedBidGroup] = useState<string | null>(null)
@@ -273,22 +278,35 @@ function BidsOverviewComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between gap-4">
+			<PageHeader className="gap-4">
 				<div>
 					<h1 className="text-2xl font-bold">Bids</h1>
 					<p className="text-sm text-muted-foreground">Bids stay locked until settlement or until reclaim opens at the bid locktime.</p>
 				</div>
-				<Button variant="outline" size="sm" className="gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
-					{isRefreshingBids ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+				<Button
+					variant="outline"
+					size="sm"
+					className="gap-2"
+					onClick={handleRefreshBidStatuses}
+					disabled={isRefreshingBids}
+					pending={isRefreshingBids}
+				>
+					{!isRefreshingBids && <RotateCcw className="w-4 h-4" />}
 					Refresh wallet state
 				</Button>
-			</div>
+			</PageHeader>
 
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden space-y-3">
 					<p className="text-sm text-muted-foreground">Bids stay locked until settlement or until reclaim opens at the bid locktime.</p>
-					<Button variant="outline" className="w-full gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
-						{isRefreshingBids ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+					<Button
+						variant="outline"
+						className="w-full gap-2"
+						onClick={handleRefreshBidStatuses}
+						disabled={isRefreshingBids}
+						pending={isRefreshingBids}
+					>
+						{!isRefreshingBids && <RotateCcw className="w-4 h-4" />}
 						Refresh wallet state
 					</Button>
 				</div>
@@ -305,32 +323,31 @@ function BidsOverviewComponent() {
 							they may be needed to recover funds or diagnose a failed bid. Do not clear browser storage, local wallet data, or local
 							auction bid records while locked bid funds may still be recoverable.
 						</p>
-						<Button variant="outline" size="sm" className="mt-2 gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
-							{isRefreshingBids ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+						<Button
+							variant="outline"
+							size="sm"
+							className="mt-2 gap-2"
+							onClick={handleRefreshBidStatuses}
+							disabled={isRefreshingBids}
+							pending={isRefreshingBids}
+						>
+							{!isRefreshingBids && <RotateCcw className="w-3.5 h-3.5" />}
 							Refresh wallet state
 						</Button>
 					</div>
 				)}
 
-				{isLoading && (
-					<div className="text-center py-8 text-gray-500">
-						<Clock className="animate-spin h-6 w-6 mx-auto mb-2" />
-						Loading bids...
-					</div>
-				)}
+				{isLoading && <LoadingState label="Loading bids…" />}
 
-				{error && (
-					<div className="text-center py-8 text-red-500">
-						Failed to load your bids: {error instanceof Error ? error.message : 'Unknown error'}
-					</div>
-				)}
+				{error && <ErrorState title="Failed to load your bids" message={error instanceof Error ? error.message : 'Unknown error'} />}
 
 				{!isLoading && !error && bidGroups.length === 0 && (
-					<div className="text-center py-10 border rounded-lg bg-white">
-						<Trophy className="h-10 w-10 mx-auto mb-3 text-gray-400" />
-						<h3 className="text-lg font-medium mb-1">No bids yet</h3>
-						<p className="text-muted-foreground">Bid on an auction and it will show up here with refund and reclaim status.</p>
-					</div>
+					<EmptyState
+						className="rounded-lg border bg-card"
+						icon={<Trophy />}
+						title="No bids yet"
+						description="Bid on an auction and it will show up here with refund and reclaim status."
+					/>
 				)}
 
 				{!isLoading && !error && bidGroups.length > 0 && (
@@ -361,14 +378,30 @@ function BidsOverviewComponent() {
 							// chronological order. The "headline" bid amount lives on the
 							// most recent part; earlier parts are the rebid chain.
 							const bidParts = [...group.bids].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+							const actions: EntityListItemAction[] = [
+								{
+									key: 'open',
+									label: `Open auction route for ${getAuctionTitle(auction) || 'auction'}`,
+									icon: <Eye className="w-4 h-4" />,
+									onClick: () => navigate({ to: '/dashboard/products/auctions/$auctionId', params: { auctionId: group.auctionEventId } }),
+								},
+								{
+									key: 'reclaim',
+									label: `Reclaim bid for ${getAuctionTitle(auction) || 'auction'}`,
+									icon: <RotateCcw className="w-4 h-4" />,
+									onClick: () => void handleReclaimBidGroup(group, state.reclaimable),
+									disabled: state.reclaimable.length === 0,
+									pending: reclaimingGroup === group.key,
+								},
+							]
 
 							return (
 								<li key={group.key}>
-									<DashboardListItem
+									<EntityListItem
 										isOpen={expandedBidGroup === group.key}
 										onOpenChange={() => setExpandedBidGroup((prev) => (prev === group.key ? null : group.key))}
 										icon={false}
-										triggerContent={
+										trigger={
 											<div className="flex items-center gap-3">
 												<div className="min-w-0 flex-1">
 													<p className="font-semibold truncate">
@@ -405,32 +438,7 @@ function BidsOverviewComponent() {
 												</div>
 											</div>
 										}
-										actions={
-											<>
-												<Link
-													to="/dashboard/products/auctions/$auctionId"
-													params={{ auctionId: group.auctionEventId }}
-													onClick={(e) => e.stopPropagation()}
-													aria-label={`Open auction route for ${getAuctionTitle(auction) || 'auction'}`}
-												>
-													<Button variant="ghost" size="sm">
-														<Eye className="w-4 h-4" />
-													</Button>
-												</Link>
-												<Button
-													variant="ghost"
-													size="sm"
-													onClick={(e) => {
-														e.stopPropagation()
-														void handleReclaimBidGroup(group, state.reclaimable)
-													}}
-													disabled={state.reclaimable.length === 0 || reclaimingGroup === group.key}
-													aria-label={`Reclaim bid for ${getAuctionTitle(auction) || 'auction'}`}
-												>
-													{reclaimingGroup === group.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-												</Button>
-											</>
-										}
+										actions={actions}
 									>
 										<div className="space-y-4 p-4 bg-gray-50 border-t">
 											{/* Status banner with countdown if applicable */}
@@ -515,17 +523,14 @@ function BidsOverviewComponent() {
 													className="gap-2"
 													onClick={() => void handleReclaimBidGroup(group, state.reclaimable)}
 													disabled={state.reclaimable.length === 0 || reclaimingGroup === group.key}
+													pending={reclaimingGroup === group.key}
 												>
-													{reclaimingGroup === group.key ? (
-														<Loader2 className="w-3.5 h-3.5 animate-spin" />
-													) : (
-														<RotateCcw className="w-3.5 h-3.5" />
-													)}
+													{reclaimingGroup !== group.key && <RotateCcw className="w-3.5 h-3.5" />}
 													Reclaim eligible parts
 												</Button>
 											</div>
 										</div>
-									</DashboardListItem>
+									</EntityListItem>
 								</li>
 							)
 						})}

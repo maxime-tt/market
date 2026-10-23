@@ -3,10 +3,16 @@ import { Media } from '@ui/components/Media'
 import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
-import { Badge } from '@ui/primitives/badge'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
+import { AuctionStatusBadge } from '@ui/auction/auction-detail-views'
+import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
+import { EmptyState } from '@ui/shared/empty-state'
+import { ErrorState } from '@ui/shared/error-state'
+import { LoadingState } from '@ui/shared/loading-state'
+import { StatusBadge } from '@ui/shared/status-badge'
+import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions, notificationStore } from '@/lib/stores/notifications'
 import { uiActions } from '@/lib/stores/ui'
@@ -41,7 +47,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useSelector } from '@tanstack/react-store'
-import { CheckCheck, Clock, ExternalLink, Gavel, Hourglass, Loader2 } from 'lucide-react'
+import { CheckCheck, ExternalLink, Gavel, Hourglass } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { auctionSortOptionValues, getAuctionSortOptionTitle, useFilteredAuctions, type AuctionSortOption } from '@/lib/utils/auctions'
 
@@ -142,27 +148,6 @@ const resolveLatestCanonicalSettlementForAuction = (
 	return [...matching].sort(compareEventRecencyDescending)[0] ?? null
 }
 
-const STATUS_BADGE_STYLES: Record<AuctionStatus, string> = {
-	Scheduled: 'border-sky-400 text-sky-700 bg-sky-50',
-	Live: 'border-emerald-400 text-emerald-700 bg-emerald-50',
-	Settlement: 'border-sky-400 text-sky-700 bg-sky-50',
-	Ended: 'border-zinc-300 text-zinc-500 bg-zinc-50',
-}
-
-function ActivityRow({ header, unit, count, newCount }: { header: string; unit: string; count: number; newCount: number }) {
-	return (
-		<div className="space-y-0.5">
-			<p className="text-xs text-muted-foreground">{header}</p>
-			<p className="text-sm">
-				<span className="font-semibold">
-					{count} {count === 1 ? unit : `${unit}s`}
-				</span>
-				{newCount > 0 && <span className="ml-2 text-pink-600 font-semibold">{newCount} New</span>}
-			</p>
-		</div>
-	)
-}
-
 function TopBidBox({
 	auction,
 	bids,
@@ -227,14 +212,11 @@ function TopBidBox({
 				<p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">{getBidAmount(topBid).toLocaleString()} sats</p>
 			</div>
 			<div className="mt-2 flex items-center justify-between gap-2">
-				<Badge
-					className={cn(
-						'bg-white hover:bg-white',
-						isSettlementPhase ? 'border-emerald-300 text-emerald-800' : 'border-zinc-300 text-zinc-700',
-					)}
-				>
-					{isSettlementPhase ? 'Winning bid' : 'Current top bid'}
-				</Badge>
+				<StatusBadge
+					status={isSettlementPhase ? 'Winning bid' : 'Current top bid'}
+					tone={isSettlementPhase ? 'success' : 'neutral'}
+					className="bg-card"
+				/>
 
 				<div className="flex items-center gap-2">
 					<Link to="/profile/$profileId" params={{ profileId: topBid.pubkey }}>
@@ -447,16 +429,10 @@ function AuctionListItem({
 						<Button
 							className="mt-auto w-full bg-neutral-800 text-white hover:bg-neutral-700 disabled:border disabled:border-zinc-300 disabled:bg-zinc-200 disabled:text-zinc-500"
 							onClick={onPublishSettlement}
-							disabled={!canPublishSettlementNow || isSettling}
+							disabled={!canPublishSettlementNow}
+							pending={isSettling}
 						>
-							{isSettling ? (
-								<>
-									<Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
-									Publishing…
-								</>
-							) : (
-								'Publish Settlement'
-							)}
+							{isSettling ? 'Publishing…' : 'Publish Settlement'}
 						</Button>
 					)}
 
@@ -484,14 +460,7 @@ function AuctionListItem({
 						<div className="min-w-0 flex-1">
 							<AuctionCountdown auction={auction} bids={bids} />
 						</div>
-						<span
-							className={cn(
-								'inline-flex w-fit whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium',
-								STATUS_BADGE_STYLES[badgeStatus],
-							)}
-						>
-							{badgeStatus}
-						</span>
+						<AuctionStatusBadge status={badgeStatus} />
 					</div>
 					<div className="w-full space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
 						<div className="flex items-center justify-between gap-3">
@@ -508,9 +477,9 @@ function AuctionListItem({
 								Mark as seen
 							</Button>
 						</div>
-						<ActivityRow header="Bids" unit="Bid" count={bidsCount} newCount={newBidsCount} />
-						<ActivityRow header="Comments" unit="Comment" count={comments.length} newCount={newCommentsCount} />
-						<ActivityRow header="Live Chat" unit="Message" count={chatMessages.length} newCount={newChatCount} />
+						<AuctionActivityRow header="Bids" unit="Bid" count={bidsCount} newCount={newBidsCount} />
+						<AuctionActivityRow header="Comments" unit="Comment" count={comments.length} newCount={newCommentsCount} />
+						<AuctionActivityRow header="Live Chat" unit="Message" count={chatMessages.length} newCount={newChatCount} />
 					</div>
 				</div>
 			</div>
@@ -583,11 +552,7 @@ function AuctionsOverviewComponent() {
 	}
 
 	if (!isAuthenticated || !user) {
-		return (
-			<div className="p-6 text-center">
-				<p>Please log in to manage your auctions.</p>
-			</div>
-		)
+		return <EmptyState className="p-6" title="Please log in to manage your auctions." />
 	}
 
 	if (isOnChildRoute) {
@@ -596,7 +561,7 @@ function AuctionsOverviewComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<PageHeader>
 				<h1 className="text-2xl font-bold">Auctions</h1>
 				<div className="flex items-center gap-4">
 					<Select value={sort} onValueChange={(value) => setSort(value as AuctionSortOption)}>
@@ -625,7 +590,7 @@ function AuctionsOverviewComponent() {
 						Add An Auction
 					</Button>
 				</div>
-			</div>
+			</PageHeader>
 
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden space-y-4">
@@ -651,28 +616,22 @@ function AuctionsOverviewComponent() {
 				</div>
 
 				<div>
-					{isLoading && (
-						<div className="text-center py-8 text-gray-500">
-							<Clock className="animate-spin h-6 w-6 mx-auto mb-2" />
-							Loading auctions...
-						</div>
-					)}
+					{isLoading && <LoadingState label="Loading auctions…" />}
 
-					{error && (
-						<div className="text-center py-8 text-red-500">
-							Failed to load your auctions: {error instanceof Error ? error.message : 'Unknown error'}
-						</div>
-					)}
+					{error && <ErrorState title="Failed to load your auctions" message={error instanceof Error ? error.message : 'Unknown error'} />}
 
 					{!isLoading && !error && sortedAuctions.length === 0 && (
-						<div className="text-center py-12 border rounded-lg">
-							<Gavel className="h-10 w-10 mx-auto mb-3 text-gray-400" />
-							<h3 className="text-lg font-medium mb-1">No auctions yet</h3>
-							<p className="text-muted-foreground mb-4">Click the "Add An Auction" button to create your first one.</p>
-							<Button onClick={handleCreateAuction} className="bg-neutral-800 hover:bg-neutral-700 text-white">
-								Add An Auction
-							</Button>
-						</div>
+						<EmptyState
+							className="rounded-lg border"
+							icon={<Gavel />}
+							title="No auctions yet"
+							description={'Click the "Add An Auction" button to create your first one.'}
+							action={
+								<Button onClick={handleCreateAuction} className="bg-neutral-800 text-white hover:bg-neutral-700">
+									Add An Auction
+								</Button>
+							}
+						/>
 					)}
 
 					{!isLoading && !error && sortedAuctions.length > 0 && (

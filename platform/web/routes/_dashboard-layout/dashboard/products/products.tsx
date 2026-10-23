@@ -1,8 +1,9 @@
 import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
 import { publishShareProductNote } from '@/publish/shareNotes'
 import { Media } from '@ui/components/Media'
-import { DashboardListItem } from '@ui/components/DashboardListItem'
-import { Button } from '@ui/primitives/button'
+import { ConfirmDialog } from '@ui/shared/confirm-dialog'
+import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
+import { Button } from '@ui/wrappers/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
@@ -17,7 +18,6 @@ import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tans
 import { useStore } from '@tanstack/react-store'
 import { Trash } from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
-import { TooltipButton } from '@ui/components/TooltipButton'
 import { DashboardProductDetails, DashboardProductTrigger } from '@ui/components/DashboardProductListItem'
 
 function ProductListItem({
@@ -45,57 +45,34 @@ function ProductListItem({
 		/>
 	)
 
-	const actions = (
-		<>
-			<TooltipButton
-				variant="ghost"
-				size="sm"
-				tooltip="Edit"
-				onClick={(e) => {
-					e.stopPropagation()
-					onEdit()
-				}}
-				aria-label={`Edit ${getProductTitle(product)}`}
-			>
-				<span className="w-5 h-5 i-edit" />
-			</TooltipButton>
-			<TooltipButton
-				variant="ghost"
-				size="sm"
-				tooltip="Share"
-				onClick={(e) => {
-					e.stopPropagation()
-					onShare()
-				}}
-				aria-label={`Share ${getProductTitle(product)}`}
-			>
-				<span className="w-4 h-4 i-sharing" />
-			</TooltipButton>
-			<TooltipButton
-				variant="ghost"
-				size="sm"
-				tooltip="Delete"
-				onClick={(e) => {
-					e.stopPropagation()
-					onDelete()
-				}}
-				aria-label={`Delete ${getProductTitle(product)}`}
-				disabled={isDeleting}
-			>
-				{isDeleting ? (
-					<div className="border-2 border-destructive border-t-transparent rounded-full w-4 h-4 animate-spin" />
-				) : (
-					<Trash className="w-4 h-4 text-destructive" />
-				)}
-			</TooltipButton>
-		</>
-	)
+	const actions: EntityListItemAction[] = [
+		{
+			key: 'edit',
+			label: `Edit ${getProductTitle(product)}`,
+			icon: <span className="w-5 h-5 i-edit" />,
+			onClick: () => onEdit(),
+		},
+		{
+			key: 'share',
+			label: `Share ${getProductTitle(product)}`,
+			icon: <span className="w-4 h-4 i-sharing" />,
+			onClick: () => onShare(),
+		},
+		{
+			key: 'delete',
+			label: `Delete ${getProductTitle(product)}`,
+			icon: <Trash className="w-4 h-4 text-destructive" />,
+			onClick: () => onDelete(),
+			destructive: true,
+			pending: isDeleting,
+		},
+	]
 
 	return (
-		<DashboardListItem
+		<EntityListItem
 			isOpen={isExpanded}
 			onOpenChange={onToggleExpanded}
-			triggerContent={triggerContent}
+			trigger={triggerContent}
 			actions={actions}
 			isDeleting={isDeleting}
 			icon={false}
@@ -113,7 +90,7 @@ function ProductListItem({
 					</Link>
 				)}
 			/>
-		</DashboardListItem>
+		</EntityListItem>
 	)
 }
 
@@ -129,6 +106,7 @@ function ProductsOverviewComponent() {
 	const [orderBy, setOrderBy] = useState<string>('newest')
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 	const [productToShare, setProductToShare] = useState<NDKEvent | null>(null)
+	const [pendingDeleteProduct, setPendingDeleteProduct] = useState<NDKEvent | null>(null)
 	useDashboardTitle('Products')
 
 	useEffect(() => {
@@ -218,13 +196,8 @@ function ProductsOverviewComponent() {
 		setShareDialogOpen(true)
 	}
 
-	const handleDeleteProductClick = async (product: NDKEvent) => {
-		if (confirm(`Are you sure you want to delete "${getProductTitle(product)}"?`)) {
-			const productDTag = getProductId(product)
-			if (productDTag) {
-				deleteMutation.mutate(productDTag)
-			}
-		}
+	const handleDeleteProductClick = (product: NDKEvent) => {
+		setPendingDeleteProduct(product)
 	}
 
 	if (!isAuthenticated || !user) {
@@ -338,6 +311,26 @@ function ProductsOverviewComponent() {
 					onPost={publishShareProductNote}
 				/>
 			)}
+
+			<ConfirmDialog
+				open={pendingDeleteProduct !== null}
+				onOpenChange={(open) => {
+					if (!open && !deleteMutation.isPending) setPendingDeleteProduct(null)
+				}}
+				title="Delete product?"
+				description={pendingDeleteProduct ? `Are you sure you want to delete "${getProductTitle(pendingDeleteProduct)}"?` : undefined}
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={() => {
+					if (pendingDeleteProduct) {
+						const productDTag = getProductId(pendingDeleteProduct)
+						if (productDTag) {
+							deleteMutation.mutate(productDTag)
+						}
+					}
+				}}
+			/>
 		</div>
 	)
 }

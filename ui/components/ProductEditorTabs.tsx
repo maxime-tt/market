@@ -1,12 +1,14 @@
 import { useState, type ReactNode } from 'react'
 import type { ProductShippingOption } from '@sdk/commerce/products'
-import { AlertTriangle, ArrowRightLeft, DownloadIcon, Loader2, PackageIcon, PlusIcon, TruckIcon, X } from 'lucide-react'
+import { AlertTriangle, ArrowRightLeft, DownloadIcon, PackageIcon, PlusIcon, TruckIcon, X } from 'lucide-react'
 import { Button } from '../primitives/button'
 import { Checkbox } from '../primitives/checkbox'
 import { Input } from '../primitives/input'
 import { Label } from '../primitives/label'
 import { RadioGroup, RadioGroupItem } from '../primitives/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../primitives/select'
+import { Spinner } from '../primitives/spinner'
+import { LoadingState } from '../shared/loading-state'
 
 export type BitcoinUnit = 'SATS' | 'BTC'
 export type CurrencyMode = 'sats' | 'fiat'
@@ -437,7 +439,7 @@ function PickupAddressForm(
 				<Button type="button" onClick={props.onPickupSubmit} disabled={props.isCreating} className="flex-1">
 					{props.isCreating ? (
 						<>
-							<Loader2 className="w-4 h-4 animate-spin mr-2" />
+							<Spinner className="mr-2" />
 							Creating...
 						</>
 					) : (
@@ -518,10 +520,7 @@ export function ProductShippingView(props: ProductShippingViewProps) {
 			<div className="space-y-4">
 				<h3 className="font-medium">Available Shipping Options</h3>
 				{props.isLoading ? (
-					<div className="flex items-center justify-center p-8">
-						<Loader2 className="w-6 h-6 animate-spin" />
-						<span className="ml-2">Loading shipping options...</span>
-					</div>
+					<LoadingState label="Loading shipping options..." className="py-8" />
 				) : available.length === 0 ? (
 					<div className="space-y-4">
 						<div className="text-center p-4 text-gray-500">
@@ -548,7 +547,7 @@ export function ProductShippingView(props: ProductShippingViewProps) {
 											<div className="text-sm text-gray-500">{template.description}</div>
 										</div>
 										{props.isCreating ? (
-											<Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+											<Spinner className="size-5 text-muted-foreground" />
 										) : (
 											<PlusIcon className="w-5 h-5 text-gray-400" />
 										)}

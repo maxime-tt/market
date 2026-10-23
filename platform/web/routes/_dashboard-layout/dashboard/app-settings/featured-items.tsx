@@ -1,7 +1,8 @@
 import { AuctionDisplayComponent } from '@/components/AuctionDisplayComponent'
 import { CollectionDisplayComponent } from '@/components/CollectionDisplayComponent'
 import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
-import { Button } from '@ui/primitives/button'
+import { Button } from '@ui/wrappers/button'
+import { EmptyState } from '@ui/shared/empty-state'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import {
 	SettingsAccessDenied,
@@ -649,10 +650,7 @@ function FeaturedItemsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{!featuredProducts?.featuredProducts || featuredProducts.featuredProducts.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No featured products yet</p>
-									</div>
+									<EmptyState icon={<Package />} title="No featured products yet" />
 								) : (
 									<div className="space-y-3">
 										{featuredProducts.featuredProducts.map((productCoords, index) => (
@@ -696,14 +694,10 @@ function FeaturedItemsComponent() {
 										/>
 										<Button
 											onClick={handleAddProduct}
+											pending={isAddingProduct || addProductMutation.isPending}
 											disabled={isAddingProduct || addProductMutation.isPending || !newProductInput.trim()}
 										>
-											{isAddingProduct || addProductMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<Plus className="w-4 h-4" />
-											)}
-											Add
+											{!(isAddingProduct || addProductMutation.isPending) && <Plus className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
@@ -729,10 +723,7 @@ function FeaturedItemsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{!featuredCollections?.featuredCollections || featuredCollections.featuredCollections.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<FolderOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No featured collections yet</p>
-									</div>
+									<EmptyState icon={<FolderOpen />} title="No featured collections yet" />
 								) : (
 									<div className="space-y-3">
 										{featuredCollections.featuredCollections.map((collectionCoords, index) => (
@@ -776,14 +767,10 @@ function FeaturedItemsComponent() {
 										/>
 										<Button
 											onClick={handleAddCollection}
+											pending={isAddingCollection || addCollectionMutation.isPending}
 											disabled={isAddingCollection || addCollectionMutation.isPending || !newCollectionInput.trim()}
 										>
-											{isAddingCollection || addCollectionMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<Plus className="w-4 h-4" />
-											)}
-											Add
+											{!(isAddingCollection || addCollectionMutation.isPending) && <Plus className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
@@ -808,10 +795,7 @@ function FeaturedItemsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{!featuredAuctions?.featuredAuctions || featuredAuctions.featuredAuctions.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<Gavel className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No featured auctions yet</p>
-									</div>
+									<EmptyState icon={<Gavel />} title="No featured auctions yet" />
 								) : (
 									<div className="space-y-3">
 										{featuredAuctions.featuredAuctions.map((auctionCoords, index) => (
@@ -854,14 +838,10 @@ function FeaturedItemsComponent() {
 										/>
 										<Button
 											onClick={handleAddAuction}
+											pending={isAddingAuction || addAuctionMutation.isPending}
 											disabled={isAddingAuction || addAuctionMutation.isPending || !newAuctionInput.trim()}
 										>
-											{isAddingAuction || addAuctionMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<Plus className="w-4 h-4" />
-											)}
-											Add
+											{!(isAddingAuction || addAuctionMutation.isPending) && <Plus className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
@@ -887,10 +867,7 @@ function FeaturedItemsComponent() {
 							</CardHeader>
 							<CardContent className="space-y-4">
 								{!featuredUsers?.featuredUsers || featuredUsers.featuredUsers.length === 0 ? (
-									<div className="text-center py-8 text-gray-500">
-										<Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-										<p>No featured users yet</p>
-									</div>
+									<EmptyState icon={<Users />} title="No featured users yet" />
 								) : (
 									<div className="space-y-3">
 										{featuredUsers.featuredUsers.map((userPubkey, index) => (
@@ -932,13 +909,12 @@ function FeaturedItemsComponent() {
 											placeholder="npub1... or hex pubkey"
 											className="flex-1"
 										/>
-										<Button onClick={handleAddUser} disabled={isAddingUser || addUserMutation.isPending || !newUserInput.trim()}>
-											{isAddingUser || addUserMutation.isPending ? (
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-											) : (
-												<Plus className="w-4 h-4" />
-											)}
-											Add
+										<Button
+											onClick={handleAddUser}
+											pending={isAddingUser || addUserMutation.isPending}
+											disabled={isAddingUser || addUserMutation.isPending || !newUserInput.trim()}
+										>
+											{!(isAddingUser || addUserMutation.isPending) && <Plus className="w-4 h-4" />}Add
 										</Button>
 									</div>
 								</div>
