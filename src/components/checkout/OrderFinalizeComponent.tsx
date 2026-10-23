@@ -6,7 +6,7 @@ import { useStore } from '@tanstack/react-store'
 import { useEffect, useState } from 'react'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import type { CheckoutFormData } from './ShippingAddressForm'
-import { OrderFinalizeView } from '@ui/components/checkout/OrderFinalizeView'
+import { OrderFinalizeView } from '@ui/checkout/order-finalize-view'
 
 interface OrderFinalizeComponentProps {
 	shippingData: CheckoutFormData | null

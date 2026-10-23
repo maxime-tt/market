@@ -1,8 +1,8 @@
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import { fetchProductByATag, productKeys } from '@/queries/products'
 import { useQuery } from '@tanstack/react-query'
-import { ProductDisplayView } from '@ui/components/ProductDisplayView'
+import { ProductDisplayView } from '@ui/products/product-display-view'
 
 interface ProductDisplayComponentProps {
 	productCoords: string

@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { ShareNoteInput } from '@sdk/commerce/messaging'
-import { ShareProductDialogView } from '@ui/components/ShareProductDialogView'
+import { ShareProductDialogView } from '@ui/dialogs/share-product-dialog-view'
 
 interface ShareProductDialogProps {
 	open: boolean

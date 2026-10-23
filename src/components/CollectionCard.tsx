@@ -1,9 +1,9 @@
 import { uiActions } from '@/lib/stores/ui'
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link, useLocation } from '@tanstack/react-router'
 import { UserCard } from './UserCard'
-import { CollectionCardView } from '@ui/components/CollectionCardView'
+import { CollectionCardView } from '@ui/products/collection-card-view'
 
 export function CollectionCard({ collection, className }: { collection: NDKEvent } & React.HTMLAttributes<HTMLDivElement>) {
 	const location = useLocation()

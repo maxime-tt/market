@@ -24,7 +24,7 @@ import {
 	ProductShippingView,
 	ProductSpecsView,
 	type PickupAddressDraft,
-} from '@ui/components/ProductEditorTabs'
+} from '@ui/products/product-editor-tabs'
 
 export function DetailTab() {
 	const {

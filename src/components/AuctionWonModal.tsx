@@ -16,9 +16,9 @@ import {
 	AlertDialogTitle,
 } from '@ui/primitives/alert-dialog'
 import { Button } from '@ui/primitives/button'
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { UserCard } from '@/components/UserCard'
-import { ConfettiBurst } from '@ui/components/ConfettiBurst'
+import { ConfettiBurst } from '@ui/shared/confetti-burst'
 import { auctionWonActions, auctionWonStore } from '@/lib/stores/auctionWon'
 import { authStore } from '@/lib/stores/auth'
 import { settleAuctionAsWinner } from '@/publish/auctions'

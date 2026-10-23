@@ -34,9 +34,9 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { OrderActions } from './OrderActions'
 import { PrivateOrderDetailsCard } from './PrivateOrderDetailsCard'
-import { TimelineEventCard } from '@ui/components/TimelineEventCard'
+import { TimelineEventCard } from '@ui/orders/timeline-event-card'
 import { copyToClipboard } from '@/lib/utils'
-import { OrderBuyerContactCard, OrderDetailHeader, OrderShippingCard, PrivateAuctionClaimCard } from '@ui/components/OrderDetailSections'
+import { OrderBuyerContactCard, OrderDetailHeader, OrderShippingCard, PrivateAuctionClaimCard } from '@ui/orders/order-detail-sections'
 
 // Imported helpers and components
 import { getOrderId, getOrderItems, getSellerPubkey, getShippingRef, getTotalAmount } from './orderDetailHelpers'

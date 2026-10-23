@@ -3,8 +3,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Textarea } from '@ui/primitives/textarea'
-import { CountryCombobox, isValidCountry } from '@ui/components/CountryCombobox'
-import { CityCombobox } from '@ui/components/CityCombobox'
+import { CountryCombobox, isValidCountry } from '@ui/shared/country-combobox'
+import { CityCombobox } from '@ui/shared/city-combobox'
 import { usePublishAuctionClaimOrderMutation, type AuctionClaimFormData } from '@/publish/auctions'
 import { useState } from 'react'
 

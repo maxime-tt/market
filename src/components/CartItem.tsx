@@ -1,5 +1,5 @@
 import { Button } from '@ui/primitives/button'
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { Input } from '@ui/primitives/input'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'

@@ -1,5 +1,5 @@
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { Input } from '@ui/primitives/input'
 import { Button } from '@ui/primitives/button'
 import { TestListingNotice } from '@/components/TestListingNotice'

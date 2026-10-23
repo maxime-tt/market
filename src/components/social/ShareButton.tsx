@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { ShareProductDialog } from '../dialogs/ShareProductDialog'
 import { publishShareProductNote } from '@/publish/shareNotes'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { ButtonProps } from '@ui/components/ButtonProps'
-import { ShareButtonView } from '@ui/components/SocialButtons'
+import type { ButtonProps } from '@ui/wrappers/button-props'
+import { ShareButtonView } from '@ui/community/social-buttons'
 
 interface ShareButtonProps extends ButtonProps {
 	event: NDKEvent

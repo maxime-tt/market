@@ -2,7 +2,7 @@ import { uiStore } from '@/lib/stores/ui'
 import { useBtcExchangeRates, useCurrencyConversion } from '@/queries/external'
 import { useStore } from '@tanstack/react-store'
 import { isBitcoinCurrency, resolvePriceDisplay } from '@sdk/commerce/products/priceDisplay'
-import { PriceDisplayView } from '@ui/components/PriceDisplayView'
+import { PriceDisplayView } from '@ui/shared/price-display'
 
 interface PriceDisplayProps {
 	priceValue: number

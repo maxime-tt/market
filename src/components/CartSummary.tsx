@@ -3,7 +3,7 @@ import { cartActions, cartStore } from '@/lib/stores/cart'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo } from 'react'
-import { CartSellerCard, CartShippingReminder, CartTotals, CartTotalsDetails, type CartSellerTotals } from '@ui/components/CartViews'
+import { CartSellerCard, CartShippingReminder, CartTotals, CartTotalsDetails, type CartSellerTotals } from '@ui/checkout/cart-views'
 import { UserCard } from './UserCard'
 
 const EMPTY_SELLER_TOTALS: CartSellerTotals = {

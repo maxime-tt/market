@@ -1,5 +1,5 @@
 import { useAuth, authActions } from '@/lib/stores/auth'
-import { DecryptPasswordDialogView } from '@ui/components/auth/AuthKeyDialogs'
+import { DecryptPasswordDialogView } from '@ui/auth/auth-key-dialogs'
 
 export function DecryptPasswordDialog() {
 	const { needsDecryptionPassword } = useAuth()

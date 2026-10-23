@@ -2,7 +2,7 @@ import { authActions, NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY } from '@/lib/stores/auth
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { useEffect, useState } from 'react'
-import { PrivateKeyLoginView, type PrivateKeyLoginStep } from '@ui/components/auth/PrivateKeyLoginView'
+import { PrivateKeyLoginView, type PrivateKeyLoginStep } from '@ui/auth/private-key-login-view'
 
 interface PrivateKeyLoginProps {
 	onError?: (error: string) => void

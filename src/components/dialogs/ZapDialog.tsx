@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { parseZapAmount, ZapDialogView, type ZapRecipientSupport } from '@ui/components/ZapDialogView'
+import { parseZapAmount, ZapDialogView, type ZapRecipientSupport } from '@ui/lightning/zap-dialog-view'
 
 interface ZapDialogProps {
 	isOpen: boolean

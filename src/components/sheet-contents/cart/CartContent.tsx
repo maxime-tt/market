@@ -6,8 +6,8 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo } from 'react'
-import { EmptyCartScreen } from '@ui/components/EmptyCartScreen'
-import { CartFooter, CartLineShipping, CartSellerCard, CartShippingReminder, type CartSellerTotals } from '@ui/components/CartViews'
+import { EmptyCartScreen } from '@ui/checkout/empty-cart-screen'
+import { CartFooter, CartLineShipping, CartSellerCard, CartShippingReminder, type CartSellerTotals } from '@ui/checkout/cart-views'
 import { UserCard } from '@/components/UserCard'
 
 const EMPTY_SELLER_TOTALS: CartSellerTotals = {

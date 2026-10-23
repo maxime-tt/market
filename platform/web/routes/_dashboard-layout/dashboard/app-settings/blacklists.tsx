@@ -9,7 +9,7 @@ import {
 	SettingsLoadingSkeleton,
 	SettingsMobileHeader,
 	SettingsPageHeader,
-} from '@ui/components/OperatorSettingsViews'
+} from '@ui/settings/operator-settings-views'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'

@@ -1,5 +1,5 @@
 import { AuctionCountdown } from '@/components/AuctionCountdown'
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { Button } from '@ui/primitives/button'
 import { Card } from '@ui/primitives/card'
 import { getCoordsFromATag } from '@/lib/utils/coords'

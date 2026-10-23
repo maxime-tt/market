@@ -1,6 +1,6 @@
 import { CollectionCard } from '@/components/CollectionCard'
 import { FeaturedUserCard } from '@/components/FeaturedUserCard'
-import { ItemGrid } from '@ui/components/ItemGrid'
+import { ItemGrid } from '@ui/shared/item-grid'
 import { ProductCard } from '@/components/ProductCard'
 import { AuctionCard } from '@/components/AuctionCard'
 import { Button } from '@ui/primitives/button'

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { ItemGrid } from '@ui/components/ItemGrid'
+import { ItemGrid } from '@ui/shared/item-grid'
 import { Button } from '@ui/wrappers/button'
 import { CollectionSkeletons, MerchantSkeletons } from '@ui/community/community-skeletons'
 import { ErrorState } from '@ui/shared/error-state'

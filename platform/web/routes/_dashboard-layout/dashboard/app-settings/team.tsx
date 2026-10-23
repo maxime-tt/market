@@ -10,7 +10,7 @@ import {
 	TeamPermissionsCard,
 	TeamRoleSection,
 	type RoleAction,
-} from '@ui/components/OperatorSettingsViews'
+} from '@ui/settings/operator-settings-views'
 import {
 	useAddAdminMutation,
 	useAddEditorMutation,

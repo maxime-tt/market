@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../primitives/textarea'
 import { EmptyState } from '../shared/empty-state'
 import { LoadingState } from '../shared/loading-state'
-import { Media } from '../components/Media'
+import { Media } from '../shared/media'
 
 export interface MigrationFormData {
 	name: string

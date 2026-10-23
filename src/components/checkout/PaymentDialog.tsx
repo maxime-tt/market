@@ -1,5 +1,5 @@
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
-import { PaymentDialogView } from '@ui/components/checkout/PaymentViews'
+import { PaymentDialogView } from '@ui/checkout/payment-views'
 import { PaymentContent } from './PaymentContent'
 
 interface PaymentDialogProps {

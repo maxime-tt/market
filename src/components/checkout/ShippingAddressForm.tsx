@@ -10,8 +10,8 @@ import { useStore } from '@tanstack/react-store'
 import { useField } from '@tanstack/react-form'
 import { getShippingEvent, getShippingPickupAddressString, getShippingService, getShippingTitle } from '@/queries/shipping'
 import { useEffect, useState } from 'react'
-import { isValidCountry } from '@ui/components/CountryCombobox'
-import { ShippingAddressFormView, type CheckoutFieldBinding } from '@ui/components/checkout/ShippingAddressFormView'
+import { isValidCountry } from '@ui/shared/country-combobox'
+import { ShippingAddressFormView, type CheckoutFieldBinding } from '@ui/checkout/shipping-address-form-view'
 
 export type { CheckoutFormData } from '@sdk/commerce/checkout'
 

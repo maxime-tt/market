@@ -1,7 +1,7 @@
 import { Check, Copy } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type { Ref } from 'react'
-import type { ButtonProps } from '../components/ButtonProps'
+import type { ButtonProps } from '../wrappers/button-props'
 import { Button } from '../primitives/button'
 import { cn } from '../utils/cn'
 import { useCopyToClipboard } from './use-copy-to-clipboard'

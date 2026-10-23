@@ -1,6 +1,6 @@
 import type { HTMLAttributes, MouseEvent, ReactNode, Ref } from 'react'
-import { DashboardListItem } from '../components/DashboardListItem'
-import { TooltipButton } from '../components/TooltipButton'
+import { DashboardListItem } from '../dashboard/dashboard-list-item'
+import { TooltipButton } from '../wrappers/tooltip-button'
 import { Spinner } from '../primitives/spinner'
 import { cn } from '../utils/cn'
 

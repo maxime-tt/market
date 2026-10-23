@@ -10,7 +10,7 @@ import { useProductsByPubkey } from '@/queries/products'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { DashboardOverviewStats } from '@ui/components/DashboardOverviewStats'
+import { DashboardOverviewStats } from '@ui/dashboard/dashboard-overview-stats'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/')({
 	component: DashboardInnerComponent,

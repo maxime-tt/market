@@ -6,7 +6,7 @@ import { publishMigratedProduct, type MigrationProgress } from '@/publish/migrat
 import { migrationKeys } from '@/queries/queryKeyFactory'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useCollectionsByPubkey } from '@/queries/collections'
-import { MigrationProgressDialog, type MigrationStep, type RelayStatus } from '@ui/components/MigrationProgressDialog'
+import { MigrationProgressDialog, type MigrationStep, type RelayStatus } from '@ui/migration/migration-progress-dialog'
 import { MigrationFormView, type MigrationFormData, type MigrationShippingOption } from '@ui/migration/migration-form-view'
 import { parseNip15Product } from '@sdk/commerce/products/nip15Migration'
 import type { RichShippingInfo } from '@/lib/stores/cart'

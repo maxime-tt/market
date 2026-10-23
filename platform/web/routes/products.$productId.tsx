@@ -1,7 +1,7 @@
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
-import { ImageCarousel } from '@ui/components/ImageCarousel'
-import { ImageViewerModal } from '@ui/components/ImageViewerModal'
-import { ItemGrid } from '@ui/components/ItemGrid'
+import { ImageCarousel } from '@ui/shared/image-carousel'
+import { ImageViewerModal } from '@ui/shared/image-viewer-modal'
+import { ItemGrid } from '@ui/shared/item-grid'
 import { PriceDisplay } from '@/components/PriceDisplay'
 import { ProductCard } from '@/components/ProductCard'
 import { Comments } from '@/components/Comments'
@@ -13,7 +13,7 @@ import {
 	ProductLoadingState,
 	ProductNotFoundState,
 	ProductPurchasePanel,
-} from '@ui/components/ProductPageViews'
+} from '@ui/products/product-page-views'
 import { UserCard } from '@/components/UserCard'
 import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'

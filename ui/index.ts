@@ -1,45 +1,45 @@
 export { Badge, badgeVariants } from './primitives/badge'
 export type { SelectableBadgeProps } from './wrappers/selectable-badge'
 export { SelectableBadge } from './wrappers/selectable-badge'
-export { ProductSearchResults } from './components/ProductSearchResults'
-export type { ProductSearchResultEvent, ProductSearchResultsProps } from './components/ProductSearchResults'
-export { ProductCardView } from './components/ProductCardView'
-export type { ProductCardViewEvent, ProductCardViewProps } from './components/ProductCardView'
-export { CollectionCardView } from './components/CollectionCardView'
-export type { CollectionCardViewProps } from './components/CollectionCardView'
-export { ProductDisplayView } from './components/ProductDisplayView'
-export type { ProductDisplayViewProps } from './components/ProductDisplayView'
-export { CollectionDisplayView } from './components/CollectionDisplayView'
-export type { CollectionDisplayViewProps } from './components/CollectionDisplayView'
-export { ProductSelectionList } from './components/ProductSelectionList'
-export type { ProductSelectionItem, ProductSelectionListProps } from './components/ProductSelectionList'
-export { CollectionSelectField } from './components/CollectionSelectField'
-export type { CollectionSelectFieldProps } from './components/CollectionSelectField'
-export { DashboardProductTrigger, DashboardProductDetails } from './components/DashboardProductListItem'
-export { DashboardCollectionTrigger, DashboardCollectionDetails } from './components/DashboardCollectionListItem'
-export { DashboardOverviewStats } from './components/DashboardOverviewStats'
-export type { DashboardOverviewOrder, DashboardOverviewStatsProps } from './components/DashboardOverviewStats'
-export { OrderAmountText, OrderDateText, OrderReferenceBadge } from './components/OrderListCells'
-export { ItemGrid } from './components/ItemGrid'
+export { ProductSearchResults } from './products/product-search-results'
+export type { ProductSearchResultEvent, ProductSearchResultsProps } from './products/product-search-results'
+export { ProductCardView } from './products/product-card-view'
+export type { ProductCardViewEvent, ProductCardViewProps } from './products/product-card-view'
+export { CollectionCardView } from './products/collection-card-view'
+export type { CollectionCardViewProps } from './products/collection-card-view'
+export { ProductDisplayView } from './products/product-display-view'
+export type { ProductDisplayViewProps } from './products/product-display-view'
+export { CollectionDisplayView } from './products/collection-display-view'
+export type { CollectionDisplayViewProps } from './products/collection-display-view'
+export { ProductSelectionList } from './products/product-selection-list'
+export type { ProductSelectionItem, ProductSelectionListProps } from './products/product-selection-list'
+export { CollectionSelectField } from './wrappers/collection-select-field'
+export type { CollectionSelectFieldProps } from './wrappers/collection-select-field'
+export { DashboardProductTrigger, DashboardProductDetails } from './dashboard/dashboard-product-list-item'
+export { DashboardCollectionTrigger, DashboardCollectionDetails } from './dashboard/dashboard-collection-list-item'
+export { DashboardOverviewStats } from './dashboard/dashboard-overview-stats'
+export type { DashboardOverviewOrder, DashboardOverviewStatsProps } from './dashboard/dashboard-overview-stats'
+export { OrderAmountText, OrderDateText, OrderReferenceBadge } from './orders/order-list-cells'
+export { ItemGrid } from './shared/item-grid'
 export { Pattern } from './shared/pattern'
 export { default as ProgressBar } from './shared/progress-bar'
-export { ConfettiBurst } from './components/ConfettiBurst'
-export { PaymentProgressBar } from './components/PaymentProgressBar'
-export { PickupAddressDisplay } from './components/PickupAddressDisplay'
-export { ShippingInfoDisplay } from './components/ShippingInfoDisplay'
-export { V4VRecipientsCard } from './components/V4VRecipientsCard'
-export { EmptyCartScreen } from './components/EmptyCartScreen'
-export { CollectionWelcomeScreen } from './components/CollectionWelcomeScreen'
-export { TooltipButton, type TooltipButtonProps } from './components/TooltipButton'
-export type { ButtonProps, ButtonVariant } from './components/ButtonProps'
+export { ConfettiBurst } from './shared/confetti-burst'
+export { PaymentProgressBar } from './checkout/payment-progress-bar'
+export { PickupAddressDisplay } from './orders/pickup-address-display'
+export { ShippingInfoDisplay } from './orders/shipping-info-display'
+export { V4VRecipientsCard } from './lightning/v4v-recipients-card'
+export { EmptyCartScreen } from './checkout/empty-cart-screen'
+export { CollectionWelcomeScreen } from './products/collection-welcome-screen'
+export { TooltipButton, type TooltipButtonProps } from './wrappers/tooltip-button'
+export type { ButtonProps, ButtonVariant } from './wrappers/button-props'
 export { InfoTooltip } from './shared/info-tooltip'
-export { TooltipToggleGroupItem, type TooltipToggleGroupItemProps } from './components/TooltipToggleGroupItem'
-export { CheckoutProgress } from './components/CheckoutProgress'
-export { WalletSetupGuide } from './components/WalletSetupGuide'
-export { NoPaymentRequestsCard } from './components/NoPaymentRequestsCard'
-export { IncompleteInvoicesBanner } from './components/IncompleteInvoicesBanner'
-export { PriceDisplayView, type PriceDisplayViewProps } from './components/PriceDisplayView'
-export { TimelineEventCard, type TimelineEventCardEvent, type TimelineEventCardProps } from './components/TimelineEventCard'
+export { TooltipToggleGroupItem, type TooltipToggleGroupItemProps } from './wrappers/tooltip-toggle-group-item'
+export { CheckoutProgress } from './checkout/checkout-progress'
+export { WalletSetupGuide } from './lightning/wallet-setup-guide'
+export { NoPaymentRequestsCard } from './checkout/no-payment-requests-card'
+export { IncompleteInvoicesBanner } from './lightning/incomplete-invoices-banner'
+export { PriceDisplayView, type PriceDisplayViewProps } from './shared/price-display'
+export { TimelineEventCard, type TimelineEventCardEvent, type TimelineEventCardProps } from './orders/timeline-event-card'
 export { UserCardView, type UserCardSize, type UserCardViewProps } from './nostr/user-card'
 export {
 	CommentButtonView,
@@ -50,17 +50,17 @@ export {
 	type ReactionButtonViewProps,
 	type ShareButtonViewProps,
 	type ZapButtonViewProps,
-} from './components/SocialButtons'
-export { ReactionsListView, ZapsListView, type ReactionGroup, type ZapListItem } from './components/SocialLists'
-export { ShareProductDialogView, type ShareProductDialogViewProps } from './components/ShareProductDialogView'
-export { parseZapAmount, ZapDialogView, type ZapDialogViewProps, type ZapRecipientSupport } from './components/ZapDialogView'
+} from './community/social-buttons'
+export { ReactionsListView, ZapsListView, type ReactionGroup, type ZapListItem } from './community/social-lists'
+export { ShareProductDialogView, type ShareProductDialogViewProps } from './dialogs/share-product-dialog-view'
+export { parseZapAmount, ZapDialogView, type ZapDialogViewProps, type ZapRecipientSupport } from './lightning/zap-dialog-view'
 export {
 	ProductCategoryView,
 	ProductImagesView,
 	ProductPricingView,
 	ProductShippingView,
 	ProductSpecsView,
-} from './components/ProductEditorTabs'
+} from './products/product-editor-tabs'
 export {
 	AuctionShippingView,
 	AuctionTabContent,
@@ -74,26 +74,26 @@ export {
 	MigratePrivateKeyDialogView,
 	type DecryptPasswordDialogViewProps,
 	type MigratePrivateKeyDialogViewProps,
-} from './components/auth/AuthKeyDialogs'
-export { BunkerConnectView, type BunkerConnectViewProps } from './components/auth/BunkerConnectView'
-export { LoginDialogView, type LoginDialogViewProps } from './components/auth/LoginDialogView'
-export { CUSTOM_RELAY_OPTION, NostrConnectQRView, type NostrConnectQRViewProps } from './components/auth/NostrConnectQRView'
-export { PrivateKeyLoginView, type PrivateKeyLoginStep, type PrivateKeyLoginViewProps } from './components/auth/PrivateKeyLoginView'
-export { OnChainPaymentView, type OnChainPaymentStatus, type OnChainPaymentViewProps } from './components/checkout/OnChainPaymentView'
-export { OrderFinalizeView, type OrderFinalizeViewProps } from './components/checkout/OrderFinalizeView'
-export { PaymentContentView, type PaymentContentViewProps } from './components/checkout/PaymentContentView'
-export { PaymentDialogView, WalletSelectorView, type WalletSelectorOption } from './components/checkout/PaymentViews'
+} from './auth/auth-key-dialogs'
+export { BunkerConnectView, type BunkerConnectViewProps } from './auth/bunker-connect-view'
+export { LoginDialogView, type LoginDialogViewProps } from './auth/login-dialog-view'
+export { CUSTOM_RELAY_OPTION, NostrConnectQRView, type NostrConnectQRViewProps } from './auth/nostr-connect-qr-view'
+export { PrivateKeyLoginView, type PrivateKeyLoginStep, type PrivateKeyLoginViewProps } from './auth/private-key-login-view'
+export { OnChainPaymentView, type OnChainPaymentStatus, type OnChainPaymentViewProps } from './checkout/on-chain-payment-view'
+export { OrderFinalizeView, type OrderFinalizeViewProps } from './checkout/order-finalize-view'
+export { PaymentContentView, type PaymentContentViewProps } from './checkout/payment-content-view'
+export { PaymentDialogView, WalletSelectorView, type WalletSelectorOption } from './checkout/payment-views'
 export { NwcWalletStatusView, type NwcWalletStatusViewProps } from './checkout/nwc-wallet-status-view'
 export {
 	ShippingAddressFormView,
 	type CheckoutFieldBinding,
 	type ShippingAddressFormViewProps,
-} from './components/checkout/ShippingAddressFormView'
-export { Media, type MediaProps } from './components/Media'
-export { ImageCarousel } from './components/ImageCarousel'
-export { ImageViewerModal } from './components/ImageViewerModal'
-export { DashboardListItem } from './components/DashboardListItem'
-export { MigrationProgressDialog, type MigrationStep, type RelayStatus } from './components/MigrationProgressDialog'
+} from './checkout/shipping-address-form-view'
+export { Media, type MediaProps } from './shared/media'
+export { ImageCarousel } from './shared/image-carousel'
+export { ImageViewerModal } from './shared/image-viewer-modal'
+export { DashboardListItem } from './dashboard/dashboard-list-item'
+export { MigrationProgressDialog, type MigrationStep, type RelayStatus } from './migration/migration-progress-dialog'
 export { getMediaExtension, getMediaType, isVideoUrl } from './utils/media'
 export {
 	formatPrivateAuctionClaimAddress,
@@ -101,7 +101,7 @@ export {
 	OrderDetailHeader,
 	OrderShippingCard,
 	PrivateAuctionClaimCard,
-} from './components/OrderDetailSections'
+} from './orders/order-detail-sections'
 export type {
 	OrderDetailHeaderProps,
 	OrderFulfillmentMode,
@@ -109,19 +109,19 @@ export type {
 	OrderStatusDisplay,
 	PrivateAuctionClaimCardProps,
 	PrivateAuctionClaimDetails,
-} from './components/OrderDetailSections'
-export * from './components/ProductPageViews'
-export * from './components/CartViews'
-export * from './components/CheckoutPaymentSummary'
-export * from './components/EditorFields'
-export * from './components/ShippingOptionsViews'
-export * from './components/OperatorSettingsViews'
+} from './orders/order-detail-sections'
+export * from './products/product-page-views'
+export * from './checkout/cart-views'
+export * from './checkout/checkout-payment-summary'
+export * from './wrappers/editor-fields'
+export * from './orders/shipping-options-views'
+export * from './settings/operator-settings-views'
 export * from './nostr/identity'
-export * from './components/BidStatusViews'
-export * from './components/CountryCombobox'
-export * from './components/CityCombobox'
-export * from './components/PhoneInput'
-export * from './components/ProductFilters'
+export * from './auction/bid-status-views'
+export * from './shared/country-combobox'
+export * from './shared/city-combobox'
+export * from './shared/phone-input'
+export * from './products/product-filters'
 export * from './dashboard/test-label-views'
 export { UI_THEME_TOKENS, UiImage, UiLink, UiProvider, themeToStyle, useUiComponents } from './provider/UiProvider'
 export type { UiComponents, UiImageProps, UiLinkProps, UiProviderProps, UiTheme, UiThemeToken } from './provider/UiProvider'

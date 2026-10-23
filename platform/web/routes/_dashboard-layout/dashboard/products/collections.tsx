@@ -1,5 +1,5 @@
 import { Button } from '@ui/wrappers/button'
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
@@ -16,7 +16,7 @@ import { useState, useMemo } from 'react'
 import { ChevronDown, PlusIcon, StoreIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import { DashboardCollectionDetails, DashboardCollectionTrigger } from '@ui/components/DashboardCollectionListItem'
+import { DashboardCollectionDetails, DashboardCollectionTrigger } from '@ui/dashboard/dashboard-collection-list-item'
 import { PageHeader } from '@ui/layout/page-header'
 
 function CollectionListItem({

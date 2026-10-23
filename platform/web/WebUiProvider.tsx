@@ -1,4 +1,4 @@
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { Link } from '@tanstack/react-router'
 import { UiProvider, type UiComponents, type UiImageProps, type UiLinkProps } from '@ui/provider/UiProvider'
 import type { ReactNode } from 'react'

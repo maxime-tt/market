@@ -1,6 +1,6 @@
 import { CheckCheck, Gavel, Hourglass } from 'lucide-react'
 import type { ReactNode, Ref } from 'react'
-import { Media } from '../components/Media'
+import { Media } from '../shared/media'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../primitives/accordion'
 import { StatusBadge } from '../shared/status-badge'
 import { cn } from '../utils/cn'

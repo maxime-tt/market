@@ -4,8 +4,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { useProductSearch, productQueryOptions } from '@/queries/products'
 import { useQueryClient } from '@tanstack/react-query'
 import { UserCard } from './UserCard'
-import { ProductSearchResults } from '@ui/components/ProductSearchResults'
-import { Media } from '@ui/components/Media'
+import { ProductSearchResults } from '@ui/products/product-search-results'
+import { Media } from '@ui/shared/media'
 
 const DEBOUNCE_MS = 500
 

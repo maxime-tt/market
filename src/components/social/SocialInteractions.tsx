@@ -10,7 +10,7 @@ import type { Reaction } from '@/queries/reactions'
 import { ReactionsList } from './ReactionsList'
 import { ZapsList } from './ZapsList'
 import { Reply } from 'lucide-react'
-import type { ButtonVariant } from '@ui/components/ButtonProps'
+import type { ButtonVariant } from '@ui/wrappers/button-props'
 
 interface SocialInteractionsProps extends React.ComponentProps<'div'> {
 	event: NDKEvent

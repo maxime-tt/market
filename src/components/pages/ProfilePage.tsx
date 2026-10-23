@@ -1,7 +1,7 @@
 import { PickupLocationDialog } from '@/components/dialogs/PickupLocationDialog'
 import { ShareProfileDialog } from '@/components/dialogs/ShareProfileDialog'
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
-import { ItemGrid } from '@ui/components/ItemGrid'
+import { ItemGrid } from '@ui/shared/item-grid'
 import { Nip05Badge } from '@/components/Nip05Badge'
 import { ProductCard } from '@/components/ProductCard'
 import { ProfileName } from '@/components/ProfileName'
@@ -30,7 +30,7 @@ import { Edit, MapPin, MessageCircle, Minus, Plus, RotateCcw, Share2, Timer } fr
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { UserCard } from '../UserCard'
-import { TooltipButton } from '@ui/components/TooltipButton'
+import { TooltipButton } from '@ui/wrappers/tooltip-button'
 
 interface ProfilePageProps {
 	profileId: string

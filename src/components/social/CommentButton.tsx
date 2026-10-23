@@ -5,8 +5,8 @@ import { useStore } from '@tanstack/react-store'
 import { useState, type MouseEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { authStore } from '@/lib/stores/auth'
-import type { ButtonProps } from '@ui/components/ButtonProps'
-import { CommentButtonView } from '@ui/components/SocialButtons'
+import type { ButtonProps } from '@ui/wrappers/button-props'
+import { CommentButtonView } from '@ui/community/social-buttons'
 import { Button } from '@ui/primitives/button'
 
 interface CommentButtonProps extends ButtonProps {

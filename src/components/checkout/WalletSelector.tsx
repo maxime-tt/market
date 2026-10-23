@@ -1,6 +1,6 @@
 import { PAYMENT_DETAILS_METHOD } from '@/lib/constants'
 import type { PaymentDetail } from '@/queries/payment'
-import { WalletSelectorView } from '@ui/components/checkout/PaymentViews'
+import { WalletSelectorView } from '@ui/checkout/payment-views'
 
 export interface WalletOption extends PaymentDetail {
 	displayName: string

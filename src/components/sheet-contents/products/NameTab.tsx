@@ -1,12 +1,12 @@
 import { Label } from '@ui/primitives/label'
-import { EditorTextField } from '@ui/components/EditorFields'
+import { EditorTextField } from '@ui/wrappers/editor-fields'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
 import { useCollectionsByPubkey } from '@/queries/collections'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
-import { CollectionSelectField } from '@ui/components/CollectionSelectField'
+import { CollectionSelectField } from '@ui/wrappers/collection-select-field'
 
 export function NameTab() {
 	const { productType, name, summary, description, selectedCollection } = useStore(productFormStore)

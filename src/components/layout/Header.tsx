@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils'
 import { useProfile } from '@/queries/profiles'
 import { BugReportModal } from '../BugReportModal'
 import { ConnectionStatusPill } from '../ConnectionStatusPill'
-import { TooltipButton } from '@ui/components/TooltipButton'
+import { TooltipButton } from '@ui/wrappers/tooltip-button'
 
 const LoginButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
 	return (

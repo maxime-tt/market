@@ -3,7 +3,7 @@ import { collectionFormStore, DEFAULT_COLLECTION_FORM_STATE } from '@/lib/stores
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useState } from 'react'
 import { CollectionFormContent } from './CollectionFormContent'
-import { CollectionWelcomeScreen } from '@ui/components/CollectionWelcomeScreen'
+import { CollectionWelcomeScreen } from '@ui/products/collection-welcome-screen'
 
 export function NewCollectionContent({
 	title,
@@ -73,5 +73,5 @@ export function NewCollectionContent({
 // Export all components for reuse
 export { InfoTab } from './InfoTab'
 export { ProductsTab } from './ProductsTab'
-export { CollectionWelcomeScreen } from '@ui/components/CollectionWelcomeScreen'
+export { CollectionWelcomeScreen } from '@ui/products/collection-welcome-screen'
 export { CollectionFormContent } from './CollectionFormContent'

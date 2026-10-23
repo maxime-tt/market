@@ -1,5 +1,5 @@
 import { useAuth, authActions } from '@/lib/stores/auth'
-import { MigratePrivateKeyDialogView } from '@ui/components/auth/AuthKeyDialogs'
+import { MigratePrivateKeyDialogView } from '@ui/auth/auth-key-dialogs'
 
 export function MigratePrivateKeyDialog() {
 	const { needsMigration } = useAuth()

@@ -1,5 +1,5 @@
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
-import { ItemGrid } from '@ui/components/ItemGrid'
+import { ItemGrid } from '@ui/shared/item-grid'
 import { Nip05Badge } from '@/components/Nip05Badge'
 import { ProductCard } from '@/components/ProductCard'
 import { Button } from '@ui/wrappers/button'
@@ -31,7 +31,7 @@ import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Edit, MessageCircle, Share2 } from 'lucide-react'
 import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { toast } from 'sonner'
-import { TooltipButton } from '@ui/components/TooltipButton'
+import { TooltipButton } from '@ui/wrappers/tooltip-button'
 
 declare module '@tanstack/react-router' {
 	interface FileRoutesByPath {

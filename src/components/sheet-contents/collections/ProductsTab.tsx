@@ -1,11 +1,11 @@
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormStore, collectionFormActions } from '@/lib/stores/collection'
 import { useProductsByPubkey } from '@/queries/products'
 import { getProductCoordinates, getProductId, getProductTitle, getProductImages } from '@sdk/commerce/discovery'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
-import { ProductSelectionList } from '@ui/components/ProductSelectionList'
+import { ProductSelectionList } from '@ui/products/product-selection-list'
 
 export function ProductsTab() {
 	const { selectedProducts, availableProducts } = useStore(collectionFormStore)

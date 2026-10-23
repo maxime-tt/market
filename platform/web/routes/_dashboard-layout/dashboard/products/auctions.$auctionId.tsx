@@ -1,5 +1,5 @@
 import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
 import { TestListingNotice } from '@/components/TestListingNotice'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'

@@ -40,7 +40,7 @@ import {
 	ShippingOptionsLoading,
 	ShippingOptionsMobileToolbar,
 	ShippingOptionsToolbar,
-} from '@ui/components/ShippingOptionsViews'
+} from '@ui/orders/shipping-options-views'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { Checkbox } from '@ui/primitives/checkbox'
 import { AlertCircleIcon, ChevronLeftIcon, DownloadIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ProductDisplayView } from '../components/ProductDisplayView'
+import { ProductDisplayView } from '../products/product-display-view'
 import { UiImage, UiLink, UiProvider, themeToStyle } from './UiProvider'
 
 const image = { src: 'https://images.example/a.jpg', alt: 'A' }

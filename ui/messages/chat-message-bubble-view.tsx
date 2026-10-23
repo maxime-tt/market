@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Media } from '../components/Media'
+import { Media } from '../shared/media'
 import { UiLink } from '../provider/UiProvider'
 import { format } from 'date-fns'
 import { ShoppingCartIcon, CreditCardIcon, PackageCheckIcon, ClipboardListIcon, ReceiptIcon, PackageIcon } from 'lucide-react'

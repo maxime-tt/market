@@ -1,6 +1,6 @@
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Label } from '@ui/primitives/label'
-import { EditorTextField } from '@ui/components/EditorFields'
+import { EditorTextField } from '@ui/wrappers/editor-fields'
 import { collectionFormStore, collectionFormActions } from '@/lib/stores/collection'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'

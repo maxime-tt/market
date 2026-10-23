@@ -2,7 +2,7 @@ import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@ui/pri
 import { cartStore } from '@/lib/stores/cart'
 import { useStore } from '@tanstack/react-store'
 import { CartContent } from './CartContent'
-import { EmptyCartScreen } from '@ui/components/EmptyCartScreen'
+import { EmptyCartScreen } from '@ui/checkout/empty-cart-screen'
 
 const cartSheetContentClassName =
 	'flex h-dvh max-h-dvh w-[100vw] flex-col gap-0 overflow-hidden p-0 sm:w-[85vw] sm:max-w-none md:w-[55vw] xl:w-[35vw]'
@@ -38,4 +38,4 @@ export default function CartSheetContent({
 
 // Export the content components as well for reuse
 export { CartContent } from './CartContent'
-export { EmptyCartScreen } from '@ui/components/EmptyCartScreen'
+export { EmptyCartScreen } from '@ui/checkout/empty-cart-screen'

@@ -1,5 +1,5 @@
 import { cartActions, useCart } from '@/lib/stores/cart'
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { uiActions } from '@/lib/stores/ui'
 import { productQueryOptions } from '@/queries/products'
 import { getProductStock, getProductVisibility, isProductInStock } from '@sdk/commerce/discovery'
@@ -13,7 +13,7 @@ import { ZapButton } from './social/ZapButton'
 import { cn } from '@/lib/utils'
 import { getItemTestLabelCoordinate } from '@/lib/utils/testLabelFilters'
 import { TestListingNotice } from './TestListingNotice'
-import { ProductCardView } from '@ui/components/ProductCardView'
+import { ProductCardView } from '@ui/products/product-card-view'
 
 export interface ProductCardProps extends React.HTMLAttributes<HTMLDivElement> {
 	product: NDKEvent

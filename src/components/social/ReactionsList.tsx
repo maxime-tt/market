@@ -2,7 +2,7 @@ import { groupReactionsByContent, useEventReactions, type Reaction } from '@/que
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useAuth } from '@/lib/stores/auth'
 import { usePublishDeletionMutation, usePublishReactionMutation } from '@/publish/reactions'
-import { ReactionsListView } from '@ui/components/SocialLists'
+import { ReactionsListView } from '@ui/community/social-lists'
 
 interface ReactionsListProps {
 	event: NDKEvent

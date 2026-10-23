@@ -1,8 +1,8 @@
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { useQuery } from '@tanstack/react-query'
 import { collectionQueryOptions } from '@/queries/collections'
 import { getCoordsFromATag } from '@/lib/utils/coords'
-import { CollectionDisplayView } from '@ui/components/CollectionDisplayView'
+import { CollectionDisplayView } from '@ui/products/collection-display-view'
 
 interface CollectionDisplayComponentProps {
 	collectionCoords: string

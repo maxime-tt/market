@@ -1,6 +1,6 @@
 import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
 import { publishShareProductNote } from '@/publish/shareNotes'
-import { Media } from '@ui/components/Media'
+import { Media } from '@ui/shared/media'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
 import { Button } from '@ui/wrappers/button'
@@ -18,7 +18,7 @@ import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tans
 import { useStore } from '@tanstack/react-store'
 import { Trash } from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
-import { DashboardProductDetails, DashboardProductTrigger } from '@ui/components/DashboardProductListItem'
+import { DashboardProductDetails, DashboardProductTrigger } from '@ui/dashboard/dashboard-product-list-item'
 
 function ProductListItem({
 	product,

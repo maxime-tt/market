@@ -2,8 +2,8 @@ import { ZapDialog } from '../dialogs/ZapDialog'
 import { useZapCapability } from '@/queries/profiles'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { useState } from 'react'
-import type { ButtonProps } from '@ui/components/ButtonProps'
-import { ZapButtonView } from '@ui/components/SocialButtons'
+import type { ButtonProps } from '@ui/wrappers/button-props'
+import { ZapButtonView } from '@ui/community/social-buttons'
 
 interface ZapButtonProps extends ButtonProps {
 	event: NDKEvent | NDKUser

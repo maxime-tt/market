@@ -3,8 +3,8 @@ import { usePublishDeletionMutation, usePublishReactionMutation } from '@/publis
 import { useEventReactions } from '@/queries/reactions'
 import { useAuth } from '@/lib/stores/auth'
 import { toast } from 'sonner'
-import type { ButtonProps } from '@ui/components/ButtonProps'
-import { ReactionButtonView } from '@ui/components/SocialButtons'
+import type { ButtonProps } from '@ui/wrappers/button-props'
+import { ReactionButtonView } from '@ui/community/social-buttons'
 
 interface ReactionButtonProps extends ButtonProps {
 	event: NDKEvent

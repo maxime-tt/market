@@ -1,7 +1,7 @@
 import { useSimpleInfiniteScroll } from '@/hooks/useSimpleInfiniteScroll'
 import { useScrollRestoration } from '@/hooks/useScrollRestoration'
 import { ProductCard } from '@/components/ProductCard'
-import { ItemGrid } from '@ui/components/ItemGrid'
+import { ItemGrid } from '@ui/shared/item-grid'
 import { Button } from '@ui/primitives/button'
 import { uiStore } from '@/lib/stores/ui'
 import { filterNSFWProducts } from '@/queries/products'
@@ -10,7 +10,7 @@ import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import type { ReactNode } from 'react'
-import type { SortOption } from '@ui/components/ProductFilters'
+import type { SortOption } from '@ui/products/product-filters'
 
 interface InfiniteProductListProps {
 	/** Title to display above the product grid */

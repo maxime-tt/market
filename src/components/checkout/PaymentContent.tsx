@@ -8,7 +8,7 @@ import { WalletSelector } from '@/components/checkout/WalletSelector'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
-import { PaymentContentView } from '@ui/components/checkout/PaymentContentView'
+import { PaymentContentView } from '@ui/checkout/payment-content-view'
 
 export interface PaymentContentRef {
 	payAllWithNwc: () => Promise<void>

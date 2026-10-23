@@ -3,7 +3,7 @@ import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getOrderRecipientPubkey, getOrderReference } from '@sdk/commerce/orders'
 import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
-import { OrderAmountText, OrderDateText, OrderReferenceBadge } from '@ui/components/OrderListCells'
+import { OrderAmountText, OrderDateText, OrderReferenceBadge } from '@ui/orders/order-list-cells'
 import { OrderActions } from './OrderActions'
 import { UserCard } from '../UserCard'
 

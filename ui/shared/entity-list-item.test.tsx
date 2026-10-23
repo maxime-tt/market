@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { Children, createElement, isValidElement, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { DashboardListItem } from '../components/DashboardListItem'
-import { TooltipButton } from '../components/TooltipButton'
+import { DashboardListItem } from '../dashboard/dashboard-list-item'
+import { TooltipButton } from '../wrappers/tooltip-button'
 import { TooltipProvider } from '../primitives/tooltip'
 import { EntityListItem, type EntityListItemAction, type EntityListItemProps } from './entity-list-item'
 

@@ -2,7 +2,7 @@ import { authActions } from '@/lib/stores/auth'
 import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { BunkerConnectView } from '@ui/components/auth/BunkerConnectView'
+import { BunkerConnectView } from '@ui/auth/bunker-connect-view'
 
 interface BunkerConnectProps {
 	onError?: (error: string) => void

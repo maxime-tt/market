@@ -5,7 +5,7 @@ import { PrivateKeyLogin } from './PrivateKeyLogin'
 import { BunkerConnect } from './BunkerConnect'
 import { hasAcceptedTerms } from '@/components/dialogs/TermsConditionsDialog'
 import { uiActions } from '@/lib/stores/ui'
-import { LoginDialogView } from '@ui/components/auth/LoginDialogView'
+import { LoginDialogView } from '@ui/auth/login-dialog-view'
 
 interface LoginDialogProps {
 	open: boolean

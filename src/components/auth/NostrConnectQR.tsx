@@ -4,7 +4,7 @@ import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { CUSTOM_RELAY_OPTION, NostrConnectQRView } from '@ui/components/auth/NostrConnectQRView'
+import { CUSTOM_RELAY_OPTION, NostrConnectQRView } from '@ui/auth/nostr-connect-qr-view'
 
 interface NostrConnectQRProps {
 	onError?: (error: string) => void
