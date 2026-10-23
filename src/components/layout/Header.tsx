@@ -121,9 +121,7 @@ interface DashboardButtonProps {
 	totalNotifications?: number
 }
 
-const DashboardButton = forwardRef<HTMLButtonElement, DashboardButtonProps>((props, ref) => {
-	const totalNotifications = props.totalNotifications ?? 0
-
+const DashboardButton = forwardRef<HTMLButtonElement, DashboardButtonProps>(({ totalNotifications = 0, ...props }, ref) => {
 	return (
 		<Link to="/dashboard" data-testid="dashboard-link" className="relative">
 			<TooltipButton

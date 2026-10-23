@@ -11,9 +11,38 @@ export interface ProfileAvatarViewProps extends ComponentProps<typeof AvatarPrim
 	name?: string | null
 	picture?: string | null
 	isLoading?: boolean
+	/**
+	 * Accepted for compatibility with existing call sites, NOT implemented.
+	 *
+	 * Seven call sites pass these (`src/components/AuctionVerdictPanel.tsx` ×2,
+	 * `platform/web/routes/.../products/auctions.tsx`, `.../products/bids.tsx`,
+	 * `.../products/auctions.$auctionId.tsx` ×3) and they are not
+	 * `AvatarUser` props, so they used to reach the DOM as
+	 * `colored="true"` / `deterministicFallbackText` and raise React
+	 * unknown-prop warnings (found by a headless pass, 2026-10-22; the same
+	 * PR-introduced tsc error class was already noted at
+	 * `src/components/AuctionBidProgressDialog.tsx:391`).
+	 *
+	 * They are destructured out below instead of forwarded. The fallback stays
+	 * `bg-neo-purple` + the display-name initial, which is what renders today —
+	 * `getColorFromNpub` in `src/lib/utils.ts` looks like the dropped
+	 * implementation of `colored`, and restoring either behaviour is a visual
+	 * change that needs a ruling.
+	 */
+	colored?: boolean
+	deterministicFallbackText?: boolean
 }
 
-export function ProfileAvatarView({ name, picture, isLoading = false, className, ...props }: ProfileAvatarViewProps) {
+export function ProfileAvatarView({
+	name,
+	picture,
+	isLoading = false,
+	className,
+	// Accepted for compatibility only — see ProfileAvatarViewProps.
+	colored: _colored,
+	deterministicFallbackText: _deterministicFallbackText,
+	...props
+}: ProfileAvatarViewProps) {
 	const [imageState, setImageState] = useState<{ src: string; status: ImageLoadingStatus }>({ src: '', status: 'idle' })
 	const imageStatus = picture ? (imageState.src === picture ? imageState.status : 'loading') : 'idle'
 	const showSpinner = isLoading || imageStatus === 'loading'
