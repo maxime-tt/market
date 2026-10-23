@@ -101,7 +101,7 @@ export function ReactionButtonView({
 				onMouseEnter={openPicker}
 				onMouseLeave={scheduleClose}
 				style={{ width: 'auto' }}
-				className="flex flex-wrap gap-0 bg-primary/60 p-2 border-tertiary-hover/60 rounded-xl"
+				className="flex flex-wrap gap-0 bg-fill-accent/60 p-2 border-tertiary-hover/60 rounded-xl"
 			>
 				{emojis.map((emoji) => (
 					<button

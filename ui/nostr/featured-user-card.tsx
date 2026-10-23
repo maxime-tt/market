@@ -82,7 +82,7 @@ export function FeaturedUserCardView({
 							className: 'block',
 							children: (
 								<>
-									<h3 className="truncate font-semibold text-foreground/90 transition-colors hover:text-primary">{displayName}</h3>
+									<h3 className="truncate font-semibold text-foreground/90 transition-colors hover:text-fill-accent">{displayName}</h3>
 									{about && <p className="mt-1 line-clamp-2 text-sm text-foreground/80">{about}</p>}
 									<p className="mt-1 text-xs text-foreground/70">{productCount} products</p>
 								</>

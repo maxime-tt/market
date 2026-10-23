@@ -97,19 +97,19 @@ export function WalletSetupGuide() {
 				</CardHeader>
 				<CardContent className="space-y-3 text-sm text-muted-foreground">
 					<div className="flex gap-3">
-						<span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+						<span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-fill-accent text-on-fill-accent text-xs font-bold">
 							1
 						</span>
 						<p>Choose a wallet and create your account following their setup instructions</p>
 					</div>
 					<div className="flex gap-3">
-						<span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+						<span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-fill-accent text-on-fill-accent text-xs font-bold">
 							2
 						</span>
 						<p>Copy your Lightning address (looks like: yourname@wallet.com) or Bitcoin address</p>
 					</div>
 					<div className="flex gap-3">
-						<span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+						<span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-fill-accent text-on-fill-accent text-xs font-bold">
 							3
 						</span>
 						<p>Return here and click "Add Payment Method" to paste your payment details</p>

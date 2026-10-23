@@ -50,7 +50,7 @@ export function PubkeyField({ label, npub, hex, icon, onCopyError, className, re
 						href={`https://njump.me/${npub}`}
 						target="_blank"
 						rel="noopener noreferrer"
-						className="flex-1 truncate font-mono text-xs text-primary hover:underline"
+						className="flex-1 truncate font-mono text-xs text-fill-accent hover:underline"
 					>
 						{displayNpub}
 					</a>

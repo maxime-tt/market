@@ -37,7 +37,7 @@ export function AuctionActivityRow({ header, unit, count, newCount, className, r
 				<span className="font-semibold">
 					{count} {count === 1 ? unit : `${unit}s`}
 				</span>
-				{newCount > 0 && <span className="ml-2 font-semibold text-primary">{newCount} New</span>}
+				{newCount > 0 && <span className="ml-2 font-semibold text-fill-accent">{newCount} New</span>}
 			</p>
 		</div>
 	)

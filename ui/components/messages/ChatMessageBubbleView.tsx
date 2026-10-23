@@ -173,7 +173,7 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 						<ul className="space-y-1">
 							{options.map((opt: any, idx: number) => (
 								<li key={idx} className="flex items-start gap-2 text-xs text-foreground">
-									<span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary flex-shrink-0 font-medium">
+									<span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-fill-accent/10 text-fill-accent flex-shrink-0 font-medium">
 										{idx + 1}
 									</span>
 									<span className="leading-tight pt-0.5">{opt.label}</span>

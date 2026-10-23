@@ -23,7 +23,7 @@ const classNameTab = cn(
 	'flex-1 px-1 sm:px-2 py-2 text-sm sm:text-base font-medium rounded-none',
 	// Remove the default tab shadow.
 	'shadow-none!',
-	'border-x-0 border-t-0 border-b border-primary',
+	'border-x-0 border-t-0 border-b border-fill-accent',
 	'text-black hover:text-secondary',
 	'data-[state=active]:border-secondary',
 	'data-[state=active]:text-secondary',

@@ -12,8 +12,8 @@ export interface SelectableBadgeProps extends BadgeProps {
 export const SelectableBadge = React.forwardRef<HTMLSpanElement, SelectableBadgeProps>(
 	({ isSelected = false, className, ...props }, ref) => {
 		const selectionClasses = isSelected
-			? 'bg-primary border-primary-border-hover text-primary-foreground-hover active:bg-primary-border-hover'
-			: 'bg-primary border-primary hover:border-primary-border-hover text-primary-foreground-hover active:bg-primary-border-hover'
+			? 'bg-fill-accent border-primary-border-hover text-on-fill-accent active:bg-primary-border-hover'
+			: 'bg-fill-accent border-primary hover:border-primary-border-hover text-on-fill-accent active:bg-primary-border-hover'
 
 		return <Badge ref={ref} data-selected={isSelected} className={cn(selectionClasses, 'py-1.5 px-3 my-1', className)} {...props} />
 	},

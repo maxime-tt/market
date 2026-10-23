@@ -244,7 +244,7 @@ export function CountryCombobox({ value, onChange, onBlur, placeholder = 'e.g. U
 									onMouseEnter={() => setHighlightedIndex(index)}
 								>
 									<span className="flex-1">{country}</span>
-									{isSelected && <CheckIcon className="size-4 ml-2 text-primary" />}
+									{isSelected && <CheckIcon className="size-4 ml-2 text-fill-accent" />}
 								</div>
 							)
 						})

@@ -110,7 +110,7 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 								<button
 									className={cn(
 										'relative w-full p-1 transition-all flex-shrink-0',
-										index === currentIndex ? 'ring-2 ring-secondary' : 'hover:ring-1 hover:ring-primary/50',
+										index === currentIndex ? 'ring-2 ring-secondary' : 'hover:ring-1 hover:ring-focus-ring/50',
 									)}
 									onClick={() => handlePreviewClick(index)}
 									aria-label={`View ${title} - Image ${index + 1}`}
@@ -122,7 +122,7 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 											<img className="h-full w-full object-cover" src={image.url} alt={`${title} thumbnail ${index + 1}`} />
 										)}
 									</div>
-									{index === currentIndex && <div className="absolute bottom-1 right-1 w-2 h-2 bg-primary rounded-full" />}
+									{index === currentIndex && <div className="absolute bottom-1 right-1 w-2 h-2 bg-fill-accent rounded-full" />}
 								</button>
 							</CarouselItem>
 						))}

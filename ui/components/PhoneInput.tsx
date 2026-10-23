@@ -282,7 +282,7 @@ export function PhoneInput({ value, onChange, onBlur, placeholder = '7751892718'
 								>
 									<span className="w-16 font-mono text-muted-foreground">{country.dialCode}</span>
 									<span className="flex-1">{country.name}</span>
-									{isSelected && <CheckIcon className="size-4 ml-2 text-primary" />}
+									{isSelected && <CheckIcon className="size-4 ml-2 text-fill-accent" />}
 								</div>
 							)
 						})

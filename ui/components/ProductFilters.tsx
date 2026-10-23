@@ -68,7 +68,7 @@ export function ProductFilters({ filters, onFiltersChange, className }: ProductF
 						<Filter className="w-4 h-4" />
 						<span>Filter & Sort</span>
 						{hasActiveFilters && (
-							<span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+							<span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-fill-accent text-[10px] font-medium text-on-fill-accent">
 								{(filters.showOutOfStock ? 1 : 0) +
 									(filters.hidePreorder ? 1 : 0) +
 									(filters.sort !== 'newest' ? 1 : 0) +

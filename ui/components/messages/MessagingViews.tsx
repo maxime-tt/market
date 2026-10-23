@@ -37,7 +37,7 @@ export function MessageInputView({ onSendMessage, isSending, isLoggedIn }: Messa
 						}
 					}}
 					placeholder={isLoggedIn ? 'Type your message...' : 'Log in to send messages'}
-					className="w-full flex-grow resize-none p-2 pr-12 border rounded-lg focus:ring-2 focus:ring-primary"
+					className="w-full flex-grow resize-none p-2 pr-12 border rounded-lg focus:ring-2 focus:ring-focus-ring"
 					rows={1}
 					disabled={isSending || !isLoggedIn}
 				/>

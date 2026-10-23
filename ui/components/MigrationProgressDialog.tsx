@@ -30,7 +30,7 @@ function StepIcon({ status }: { status: MigrationStep['status'] }) {
 		case 'pending':
 			return <Circle className="w-5 h-5 text-muted-foreground" />
 		case 'active':
-			return <Spinner className="size-5 text-primary" />
+			return <Spinner className="size-5 text-fill-accent" />
 		case 'complete':
 			return <CheckCircle2 className="w-5 h-5 text-green-600" />
 		case 'error':

@@ -10,7 +10,7 @@ import type { NavItemWithBadge, NavSectionView } from './model'
 export const SIDEBAR_NAV_LINK_CLASS = cn(
 	'block relative bg-surface-raised data-[status=active]:bg-secondary lg:bg-transparent',
 	'p-[calc(var(--gap)*1rem)] lg:px-[calc(var(--gap)*1.5rem)] lg:py-[calc(var(--gap)*0.5rem)] border border-foreground data-[status=active]:border-secondary lg:border-0',
-	'rounded lg:rounded-none font-bold data-[status=active]:text-secondary-foreground hover:text-primary transition-colors',
+	'rounded lg:rounded-none font-bold data-[status=active]:text-secondary-foreground hover:text-fill-accent transition-colors',
 )
 
 /** Arguments handed to the host's link renderer. */
@@ -48,7 +48,7 @@ function NavItemContent({ item }: { item: NavItemWithBadge }) {
 		<span className="flex justify-between items-center">
 			<span>{`${item.emoji} ${item.title}`}</span>
 			{item.badgeCount > 0 && (
-				<span className="inline-flex justify-center items-center bg-primary ml-2 px-2 rounded-full min-w-[1.5rem] h-6 font-bold text-primary-foreground text-xs">
+				<span className="inline-flex justify-center items-center bg-fill-accent ml-2 px-2 rounded-full min-w-[1.5rem] h-6 font-bold text-on-fill-accent text-xs">
 					{item.badgeCount > BADGE_MAX ? `${BADGE_MAX}+` : item.badgeCount}
 				</span>
 			)}
