@@ -226,6 +226,59 @@ Nav is data, not router introspection:
 - Components use the scoped tokens directly; they never branch on theme or
   instance.
 
+## Tokens — which one to use
+
+The palette is three tiers, decided in
+`runs/union-1420/TOKEN-ARCHITECTURE-DECISION.md` (the authoritative contract;
+`runs/union-1420/proposal-1-decision-architecture.md` is its evidence and is
+**superseded on every name**). Enforced by `theme/token-contract.test.ts`.
+
+| tier             | what                                                                                                                                                                                                | rule                                                                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0 — Identity** | `--brand-pink`                                                                                                                                                                                      | **Never used by a component** (ruling R5). It is the brand constant; components use the role.                                                                                             |
+| **1 — Roles**    | `--bg`, `--surface-{raised,sunken,hover}`, `--fill-{accent,ink,ink-hover}`, `--on-fill-{accent,ink}`, `--text-{high,mid}`, `--border-{default,strong}`, `--focus-{ring,attention}`, `--radius-pill` | **This is the API.** New and migrated components use these.                                                                                                                               |
+| **2 — Compat**   | `--primary`, `--secondary`, `--background`, `--card`, `--sidebar-*`, `--chart-*`, `--neo-*`, …                                                                                                      | Frozen legacy names so generated `primitives/**` keep resolving. **No design authority** — never use in new code, never hand-edit. It is permanent (ruling R9), not a migration leftover. |
+
+The five rules that follow from it:
+
+1. **Roles, not colours.** `bg-fill-accent` / `text-on-fill-accent`, never
+   `bg-brand-pink` and never a raw literal. A colour is only ever a role.
+2. **A fill always ships with its label.** `--fill-*` pairs with `--on-fill-*`;
+   the state families pair `--info` with `--info-foreground`. Never use a fill
+   token as text.
+3. **Scheme-stable vs inverting.** `--brand-pink`, `--fill-accent` and
+   `--focus-ring` are the _same value in light and dark_ — they carry identity.
+   `--bg`, `--fill-ink`, `--text-*`, `--surface-*` **must** differ between modes —
+   they carry a role. A token that switches _meaning_ between modes (legacy
+   `--primary`: ink in light, pink in dark) is the defect this architecture
+   exists to remove. **If you need a colour that survives a mode switch, it needs
+   its own scheme-stable token — never borrow an inverting one.**
+4. **`--secondary` means nothing.** It is pink in light and grey in dark today.
+   Do not reason about it or adopt it; migrate pink intent to `--fill-accent`
+   per call site (ruling R3).
+5. **Two focus colours, deliberately** (ruling R4): `--focus-ring` (brand pink,
+   the ring the primitives use) and `--focus-attention` (the legacy yellow
+   `#ffd53d`, an accessibility signal). Do not collapse them.
+
+**Adding a token** (ruling R8): a new Tier-1 token needs (a) a named role that no
+current token expresses, (b) the call sites it serves, and (c) a deletion in the
+same commit. Budget: **≤ 50 Tier-1 names**, enforced by the contract test. When a
+new role seems needed, the answer is usually that the call site wants an existing
+role (`--surface-hover`, `--text-mid`) — check before adding.
+
+### Two mistakes this cost us (do not repeat them)
+
+- **Never conclude what a token _is_ from one scope.** The D5 handover claimed
+  `.theme-new --primary` was the brand pink by comparing legacy **light**
+  `:root` against legacy **dark**; the value it quoted was `.dark --primary`. A
+  token has four values during the migration (`:root`, `.dark`, `.theme-new`,
+  `.dark .theme-new`) and they can disagree. Grep all four before believing one.
+- **An `@font-face` declaration is not a base-font application.** Reading
+  `font-family: 'reglisse'` inside a `@font-face` block as "the app's base font"
+  produced a wrong conclusion in the same review. The base font comes from
+  Tailwind's `--default-font-family: --font-sans` chain; reglisse is applied only
+  by the `font-heading`/`font-header` utilities.
+
 ## Tests
 
 - Every new atom/molecule gets a `*.test.tsx` beside it (Bun test) covering
