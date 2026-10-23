@@ -55,7 +55,7 @@ export function Media({
 			<div
 				role="img"
 				aria-label={alt}
-				className={cn('flex h-full w-full items-center justify-center bg-zinc-800 text-zinc-500', fallbackClassName)}
+				className={cn('flex h-full w-full items-center justify-center bg-fill-ink text-on-fill-ink', fallbackClassName)}
 			>
 				<ImageOff className="h-8 w-8" />
 			</div>

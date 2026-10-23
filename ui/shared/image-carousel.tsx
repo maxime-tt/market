@@ -50,9 +50,9 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 
 	if (!images || images.length === 0) {
 		return (
-			<div className={cn('relative h-full w-full bg-zinc-900', className)}>
+			<div className={cn('relative h-full w-full bg-fill-ink', className)}>
 				<div className="flex h-full w-full items-center justify-center">
-					<ImageOff className="h-12 w-12 text-zinc-500" />
+					<ImageOff className="h-12 w-12 text-on-fill-ink" />
 				</div>
 			</div>
 		)
@@ -115,7 +115,7 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 									onClick={() => handlePreviewClick(index)}
 									aria-label={`View ${title} - Image ${index + 1}`}
 								>
-									<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800 flex items-center justify-center">
+									<div className="aspect-square w-full overflow-hidden relative bg-black border border-border-strong flex items-center justify-center">
 										{isVideoUrl(image.url) ? (
 											<Play className="h-6 w-6 text-on-media" />
 										) : (

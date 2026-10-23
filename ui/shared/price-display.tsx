@@ -35,8 +35,8 @@ export function PriceDisplayView({
 	if (isLoading) {
 		return (
 			<div className={`flex flex-col gap-1 ${className}`}>
-				<div className="animate-pulse bg-gray-200 h-4 w-16 rounded"></div>
-				<div className="animate-pulse bg-gray-200 h-3 w-12 rounded"></div>
+				<div className="animate-pulse bg-surface-hover h-4 w-16 rounded"></div>
+				<div className="animate-pulse bg-surface-hover h-3 w-12 rounded"></div>
 			</div>
 		)
 	}
@@ -45,15 +45,15 @@ export function PriceDisplayView({
 		<div className={`flex flex-col gap-1 ${className}`}>
 			{showRootCurrency && (
 				<div className="flex items-center gap-2 mb-1">
-					<span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Listed in {originalCurrency}</span>
-					<div className="h-1 w-1 bg-gray-400 rounded-full"></div>
-					<span className="text-xs text-gray-400">{price.isBitcoinCurrency ? 'Bitcoin' : `Fiat currency: ${selectedCurrency}`}</span>
+					<span className="text-xs font-medium text-text-mid uppercase tracking-wide">Listed in {originalCurrency}</span>
+					<div className="h-1 w-1 bg-surface-hover rounded-full"></div>
+					<span className="text-xs text-text-mid">{price.isBitcoinCurrency ? 'Bitcoin' : `Fiat currency: ${selectedCurrency}`}</span>
 				</div>
 			)}
 
 			{showSatsPrice && price.satsValue && <p className="text-md font-bold">{Math.round(price.satsValue).toLocaleString()} sats</p>}
 
-			{showOriginalPrice && <p className="text-sm text-gray-400">{formatSecondaryPrice(priceValue, originalCurrency, price)}</p>}
+			{showOriginalPrice && <p className="text-sm text-text-mid">{formatSecondaryPrice(priceValue, originalCurrency, price)}</p>}
 		</div>
 	)
 }
