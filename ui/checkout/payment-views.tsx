@@ -19,7 +19,7 @@ export interface WalletSelectorViewProps {
 export function WalletSelectorView({ wallets, selectedWalletId, onSelect, className = '', sellerName }: WalletSelectorViewProps) {
 	return (
 		<div className={`space-y-2 ${className}`}>
-			<label className="text-sm font-medium text-gray-700">{sellerName ? `${sellerName}'s Wallet` : 'Payment Wallet'}</label>
+			<label className="text-sm font-medium text-text-high">{sellerName ? `${sellerName}'s Wallet` : 'Payment Wallet'}</label>
 			<Select onValueChange={onSelect} value={selectedWalletId || undefined}>
 				<SelectTrigger className="w-full">
 					<SelectValue placeholder="Select payment wallet" />

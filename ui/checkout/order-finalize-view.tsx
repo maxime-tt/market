@@ -52,22 +52,22 @@ export function OrderFinalizeView({
 			{isPostPayment && (
 				<div className="space-y-3">
 					{allInvoicesPaid ? (
-						<div className="bg-green-50 border border-green-200 rounded-lg p-4">
+						<div className="bg-success-muted border border-success-border rounded-lg p-4">
 							<div className="flex items-center gap-2">
-								<Check className="w-5 h-5 text-green-600" />
-								<span className="font-medium text-green-800">All payments completed successfully!</span>
+								<Check className="w-5 h-5 text-success" />
+								<span className="font-medium text-success-foreground">All payments completed successfully!</span>
 							</div>
-							<p className="text-sm text-green-700 mt-1">
+							<p className="text-sm text-success-foreground mt-1">
 								Your orders have been sent to the merchants and you should receive confirmation shortly.
 							</p>
 						</div>
 					) : allInvoicesCompleted ? (
-						<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+						<div className="bg-info-muted border border-info-border rounded-lg p-4">
 							<div className="flex items-center gap-2">
-								<Check className="w-5 h-5 text-blue-600" />
-								<span className="font-medium text-blue-800">Checkout completed!</span>
+								<Check className="w-5 h-5 text-info" />
+								<span className="font-medium text-info-foreground">Checkout completed!</span>
 							</div>
-							<p className="text-sm text-blue-700 mt-1">
+							<p className="text-sm text-info-foreground mt-1">
 								{skippedInvoices.length > 0 && (
 									<>
 										You have {skippedInvoices.length} payment{plural(skippedInvoices.length)} to complete later. You can find{' '}
@@ -77,9 +77,9 @@ export function OrderFinalizeView({
 							</p>
 						</div>
 					) : (
-						<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-							<p className="text-yellow-800 font-medium">Payment Status:</p>
-							<ul className="text-sm text-yellow-700 mt-1 space-y-1">
+						<div className="bg-warning-muted border border-warning-border rounded-lg p-4">
+							<p className="text-warning-foreground font-medium">Payment Status:</p>
+							<ul className="text-sm text-warning-foreground mt-1 space-y-1">
 								{paidInvoices.length > 0 && (
 									<li>
 										✓ {paidInvoices.length} payment{plural(paidInvoices.length)} completed
@@ -107,16 +107,16 @@ export function OrderFinalizeView({
 			)}
 
 			{isAllPickup ? (
-				<div className="bg-green-50 p-4 rounded-lg border border-green-200">
+				<div className="bg-success-muted p-4 rounded-lg border border-success-border">
 					<div className="flex items-center gap-2 mb-3">
-						<MapPin className="h-5 w-5 text-green-600" />
-						<h3 className="font-medium text-green-800">Pickup Locations</h3>
+						<MapPin className="h-5 w-5 text-success" />
+						<h3 className="font-medium text-success-foreground">Pickup Locations</h3>
 					</div>
 					<div className="space-y-3">
 						{pickupAddresses.map((pickup, index) => (
-							<div key={index} className="bg-white p-3 rounded border border-green-100">
-								<div className="text-sm font-medium text-green-700 mb-1">Seller: {pickup.sellerName}</div>
-								<div className="text-sm text-gray-700">
+							<div key={index} className="bg-surface-raised p-3 rounded border border-success-border">
+								<div className="text-sm font-medium text-success-foreground mb-1">Seller: {pickup.sellerName}</div>
+								<div className="text-sm text-text-high">
 									<strong>Pickup Address:</strong> {pickup.address}
 								</div>
 							</div>
@@ -144,10 +144,10 @@ export function OrderFinalizeView({
 				</div>
 			) : (
 				shippingData && (
-					<div className="bg-gray-50 rounded-lg p-4">
-						<h3 className="font-medium text-gray-900 mb-3">Shipping Address</h3>
-						<div className="text-sm text-gray-600 space-y-1">
-							<p className="font-medium text-gray-900">{shippingData.name}</p>
+					<div className="bg-surface-sunken rounded-lg p-4">
+						<h3 className="font-medium text-text-high mb-3">Shipping Address</h3>
+						<div className="text-sm text-text-high space-y-1">
+							<p className="font-medium text-text-high">{shippingData.name}</p>
 							{shippingData.email && (
 								<p>
 									{hasDigitalDelivery ? 'Digital delivery contact' : 'Email'}: {shippingData.email}
@@ -160,8 +160,8 @@ export function OrderFinalizeView({
 							<p>{shippingData.country}</p>
 							{shippingData.phone && <p>Phone: {shippingData.phone}</p>}
 							{shippingData.additionalInformation && (
-								<div className="mt-2 pt-2 border-t border-gray-200">
-									<p className="text-xs text-gray-500">Delivery Notes:</p>
+								<div className="mt-2 pt-2 border-t border-border-default">
+									<p className="text-xs text-text-mid">Delivery Notes:</p>
 									<p className="text-sm">{shippingData.additionalInformation}</p>
 								</div>
 							)}
@@ -170,11 +170,11 @@ export function OrderFinalizeView({
 				)
 			)}
 
-			<div className="bg-gray-50 rounded-lg p-4">
-				<h3 className="font-medium text-gray-900 mb-3">Order Total</h3>
+			<div className="bg-surface-sunken rounded-lg p-4">
+				<h3 className="font-medium text-text-high mb-3">Order Total</h3>
 				<div className="space-y-2">
 					<div className="flex justify-between text-sm">
-						<span className="text-gray-600">Subtotal:</span>
+						<span className="text-text-high">Subtotal:</span>
 						<span className="font-medium">{formatSats(totalInSats)} sats</span>
 					</div>
 					<div className="border-t pt-2 mt-3">
@@ -187,21 +187,21 @@ export function OrderFinalizeView({
 			</div>
 
 			{invoices.length > 0 && (
-				<div className="bg-gray-50 rounded-lg p-4">
-					<h3 className="font-medium text-gray-900 mb-3">Payment Breakdown</h3>
+				<div className="bg-surface-sunken rounded-lg p-4">
+					<h3 className="font-medium text-text-high mb-3">Payment Breakdown</h3>
 					<div className="space-y-2">
 						{invoices.map((invoice) => (
 							<div key={invoice.id} className="flex justify-between items-center">
 								<div className="flex items-center gap-2">
 									<span className="text-sm">{invoice.recipientName}</span>
-									{invoice.status === 'paid' && <Check className="w-4 h-4 text-green-600" />}
-									{invoice.status === 'skipped' && <SkipForward className="w-4 h-4 text-orange-600" />}
-									{invoice.status === 'pending' && <span className="w-4 h-4 rounded-full bg-yellow-400 animate-pulse"></span>}
-									{invoice.status === 'expired' && <span className="w-4 h-4 rounded-full bg-red-400"></span>}
+									{invoice.status === 'paid' && <Check className="w-4 h-4 text-success" />}
+									{invoice.status === 'skipped' && <SkipForward className="w-4 h-4 text-warning" />}
+									{invoice.status === 'pending' && <span className="w-4 h-4 rounded-full bg-warning animate-pulse"></span>}
+									{invoice.status === 'expired' && <span className="w-4 h-4 rounded-full bg-error"></span>}
 								</div>
 								<div className="text-right">
 									<span className="text-sm font-medium">{formatSats(invoice.amount)} sats</span>
-									{isPostPayment && <div className="text-xs text-gray-500 capitalize">{invoice.status}</div>}
+									{isPostPayment && <div className="text-xs text-text-mid capitalize">{invoice.status}</div>}
 								</div>
 							</div>
 						))}
@@ -210,9 +210,9 @@ export function OrderFinalizeView({
 			)}
 
 			{isPostPayment && allInvoicesCompleted && (
-				<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-					<h4 className="font-medium text-blue-900 mb-2">What's Next?</h4>
-					<ul className="text-sm text-blue-800 space-y-1">
+				<div className="bg-info-muted border border-info-border rounded-lg p-4">
+					<h4 className="font-medium text-info-foreground mb-2">What's Next?</h4>
+					<ul className="text-sm text-info-foreground space-y-1">
 						{paidInvoices.length > 0 && <li>• Merchants will be notified of your payment</li>}
 						{paidInvoices.length > 0 && <li>• You'll receive order confirmations via Nostr messages</li>}
 						{paidInvoices.length > 0 && <li>• Tracking information will be shared when items ship</li>}
@@ -223,8 +223,8 @@ export function OrderFinalizeView({
 			)}
 
 			{merchantInvoices.length > 0 && (
-				<div className="bg-gray-50 rounded-lg p-4">
-					<h3 className="font-medium text-gray-900 mb-3">Need to contact the seller?</h3>
+				<div className="bg-surface-sunken rounded-lg p-4">
+					<h3 className="font-medium text-text-high mb-3">Need to contact the seller?</h3>
 					<div className="space-y-2">
 						{merchantInvoices.map((invoice) => (
 							<Button
@@ -238,7 +238,7 @@ export function OrderFinalizeView({
 							</Button>
 						))}
 					</div>
-					<p className="text-xs text-gray-500 mt-2">Chat directly with sellers about your order, shipping, or any questions</p>
+					<p className="text-xs text-text-mid mt-2">Chat directly with sellers about your order, shipping, or any questions</p>
 				</div>
 			)}
 

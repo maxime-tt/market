@@ -8,10 +8,10 @@ export function CartShippingReminder({ count, context = 'cart' }: { count: numbe
 	if (count <= 0) return null
 	const items = `${count} ${count === 1 ? 'item' : 'items'}`
 	return (
-		<div className="mb-4 border-l-4 border-yellow-400 bg-yellow-50 p-4">
+		<div className="mb-4 border-l-4 border-warning-border bg-warning-muted p-4">
 			<div className="flex">
 				<div className="ml-3">
-					<p className="text-sm text-yellow-700">
+					<p className="text-sm text-warning-foreground">
 						{context === 'checkout' ? `Please select shipping for ${items} before checkout.` : `Select shipping at checkout for ${items}.`}
 					</p>
 				</div>
@@ -60,12 +60,12 @@ export interface CartSellerCardProps {
 /** Per-seller cart group with totals and the merchant/community payment split. */
 export function CartSellerCard({ seller, items, totals }: CartSellerCardProps) {
 	return (
-		<div className="rounded-lg border bg-white p-4 shadow-md">
+		<div className="rounded-lg border bg-surface-raised p-4 shadow-md">
 			<div className="mb-3">{seller}</div>
 
 			<ul className="space-y-4">
 				{items.map((item, index) => (
-					<li key={item.key} className={`rounded-lg p-3 ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
+					<li key={item.key} className={`rounded-lg p-3 ${index % 2 === 0 ? 'bg-surface-sunken' : 'bg-surface-raised'}`}>
 						{item.content}
 					</li>
 				))}
@@ -92,8 +92,8 @@ export function CartSellerCard({ seller, items, totals }: CartSellerCardProps) {
 
 			<div className="mt-3">
 				<p className="text-sm font-semibold">Payment Breakdown</p>
-				<div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-gray-800">
-					<div className="h-full bg-blue-500" style={{ width: `${totals.shares.sellerPercentage}%` }} />
+				<div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-fill-ink">
+					<div className="h-full bg-info" style={{ width: `${totals.shares.sellerPercentage}%` }} />
 				</div>
 				<div className="mt-1 flex justify-between">
 					<p className="text-sm">Merchant: </p>
@@ -152,13 +152,16 @@ export function CartTotalsDetails({
 
 	return (
 		<>
-			<button className="flex w-full items-center justify-between rounded-lg border bg-gray-50 p-2" onClick={() => setExpanded(!expanded)}>
+			<button
+				className="flex w-full items-center justify-between rounded-lg border bg-surface-sunken p-2"
+				onClick={() => setExpanded(!expanded)}
+			>
 				<span className="text-sm">View Details</span>
 				<ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
 			</button>
 
 			{expanded && (
-				<div className="space-y-2 rounded-lg bg-gray-50 p-2">
+				<div className="space-y-2 rounded-lg bg-surface-sunken p-2">
 					{Object.entries(totalByCurrency).map(([currency, amount]) => (
 						<div key={`total-${currency}`} className="flex justify-between">
 							<p className="text-sm">Products ({currency}):</p>
@@ -209,7 +212,7 @@ export function CartFooter({ totalSats, shippingSats, canCheckout, onClear, onCh
 			<div className="mt-4 flex gap-3">
 				<Button
 					variant="outline"
-					className="flex-1 border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600"
+					className="flex-1 border-error-border text-error hover:bg-error-muted hover:text-error"
 					onClick={onClear}
 					disabled={!canCheckout}
 				>

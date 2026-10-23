@@ -13,8 +13,8 @@ export function PaymentProgressBar({ paidCount, totalCount, progressPercent }: P
 					{paidCount}/{totalCount} Complete
 				</span>
 			</div>
-			<div className="w-full bg-gray-200 rounded-full h-2">
-				<div className="bg-green-600 h-2 rounded-full transition-all duration-300" style={{ width: `${progressPercent}%` }} />
+			<div className="w-full bg-surface-hover rounded-full h-2">
+				<div className="bg-success h-2 rounded-full transition-all duration-300" style={{ width: `${progressPercent}%` }} />
 			</div>
 		</div>
 	)

@@ -29,11 +29,11 @@ export interface ShippingAddressFormViewProps {
 }
 
 function FieldError({ error }: { error?: string }) {
-	return error ? <p className="text-xs text-red-500 mt-1">{error}</p> : null
+	return error ? <p className="text-xs text-error mt-1">{error}</p> : null
 }
 
 function RequiredMark({ show = true }: { show?: boolean }) {
-	return show ? <span className="text-red-500">*</span> : null
+	return show ? <span className="text-error">*</span> : null
 }
 
 export function ShippingAddressFormView({
@@ -109,7 +109,7 @@ export function ShippingAddressFormView({
 								required={needsDigitalDeliveryContact}
 							/>
 							{hasDigitalDelivery && (
-								<div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+								<div className="mt-2 rounded-md border border-warning-border bg-warning-muted p-3 text-xs text-warning-foreground">
 									<p className="font-medium">Digital delivery contact</p>
 									<p className="mt-1">The seller will use this contact to deliver your digital item after payment settles.</p>
 									<p className="mt-1">
@@ -136,19 +136,19 @@ export function ShippingAddressFormView({
 					</div>
 
 					{isAllPickup && (
-						<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-							<h3 className="text-sm font-medium text-blue-800 mb-2">Pickup Order</h3>
-							<p className="text-sm text-blue-700 mb-3">All items in your order are for pickup. No shipping address is required.</p>
+						<div className="bg-info-muted border border-info-border rounded-lg p-4">
+							<h3 className="text-sm font-medium text-info-foreground mb-2">Pickup Order</h3>
+							<p className="text-sm text-info-foreground mb-3">All items in your order are for pickup. No shipping address is required.</p>
 
 							{pickupAddresses.length > 0 && (
 								<div className="space-y-2">
-									<h4 className="text-xs font-medium text-blue-800 uppercase tracking-wide">
+									<h4 className="text-xs font-medium text-info-foreground uppercase tracking-wide">
 										Pickup Location{pickupAddresses.length > 1 ? 's' : ''}:
 									</h4>
 									{pickupAddresses.map((pickup, index) => (
-										<div key={index} className="bg-white rounded-md p-3 border border-blue-100">
-											<div className="text-sm font-medium text-gray-900">{pickup.title}</div>
-											<div className="text-sm text-gray-600 mt-1">{pickup.address}</div>
+										<div key={index} className="bg-surface-raised rounded-md p-3 border border-info-border">
+											<div className="text-sm font-medium text-text-high">{pickup.title}</div>
+											<div className="text-sm text-text-high mt-1">{pickup.address}</div>
 										</div>
 									))}
 								</div>
@@ -243,7 +243,7 @@ export function ShippingAddressFormView({
 							onBlur={fields.additionalInformation.onBlur}
 							rows={3}
 						/>
-						<p className="text-xs text-gray-500 mt-1">Any special delivery instructions or notes for the seller</p>
+						<p className="text-xs text-text-mid mt-1">Any special delivery instructions or notes for the seller</p>
 					</div>
 
 					{!hasAllShippingMethods && <Notice tone="warning">Please select shipping options for all items in your cart.</Notice>}
@@ -258,7 +258,7 @@ export function ShippingAddressFormView({
 					)}
 				</form>
 			</div>
-			<div className="flex-shrink-0 bg-white border-t pt-4">
+			<div className="flex-shrink-0 bg-bg border-t pt-4">
 				<Button
 					form="shipping-form"
 					type="submit"

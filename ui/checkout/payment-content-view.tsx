@@ -59,7 +59,7 @@ export function PaymentContentView({
 						<Button variant="ghost" size="sm" onClick={() => onNavigate(activeIndex - 1)} disabled={activeIndex === 0}>
 							<ChevronLeft className="w-4 h-4" />
 						</Button>
-						<span className="text-sm text-gray-500">
+						<span className="text-sm text-text-mid">
 							{activeIndex + 1} / {invoiceCount}
 						</span>
 						<Button variant="ghost" size="sm" onClick={() => onNavigate(activeIndex + 1)} disabled={!hasNext}>
@@ -71,8 +71,8 @@ export function PaymentContentView({
 
 			{isCurrentCompleted ? (
 				<div className="text-center py-8">
-					<div className="text-green-600 font-medium mb-2">{completedLabel(current.status)}</div>
-					<p className="text-sm text-gray-600 mb-4">
+					<div className="text-success font-medium mb-2">{completedLabel(current.status)}</div>
+					<p className="text-sm text-text-high mb-4">
 						{current.recipientName} - {current.amount} sats
 					</p>
 					{hasNext && (

@@ -16,11 +16,11 @@ export function NoPaymentRequestsCard({ isBuyer }: NoPaymentRequestsCardProps) {
 			</CardHeader>
 			<CardContent>
 				<div className="text-center py-8">
-					<Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-					<p className="text-lg font-medium text-gray-900 mb-2">
+					<Clock className="w-12 h-12 text-text-mid mx-auto mb-4" />
+					<p className="text-lg font-medium text-text-high mb-2">
 						{isBuyer ? 'Waiting for Payment Requests' : 'No Payment Requests Created'}
 					</p>
-					<p className="text-gray-600">
+					<p className="text-text-high">
 						{isBuyer
 							? 'The seller has not yet created payment requests for this order.'
 							: 'Payment requests have not been created for this order yet.'}

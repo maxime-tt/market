@@ -20,7 +20,7 @@ export function CheckoutProgress({
 	showBackButton = true,
 }: CheckoutProgressProps) {
 	return (
-		<div className="sticky top-0 z-50 bg-white flex flex-row items-center gap-3 px-4 py-3 lg:gap-4 lg:p-4">
+		<div className="sticky top-0 z-50 bg-bg flex flex-row items-center gap-3 px-4 py-3 lg:gap-4 lg:p-4">
 			{showBackButton && (
 				<Button variant="ghost" onClick={onBackClick} className="flex-shrink-0 h-8 px-2 lg:h-10 lg:px-3" aria-label="Go back in checkout">
 					<ChevronLeft className="h-4 w-4" />
@@ -28,7 +28,7 @@ export function CheckoutProgress({
 				</Button>
 			)}
 			<div className="flex-1 min-w-0">
-				<div className="flex items-center justify-between text-xs lg:text-sm text-gray-600 mb-1 lg:mb-2">
+				<div className="flex items-center justify-between text-xs lg:text-sm text-text-high mb-1 lg:mb-2">
 					<span className="font-medium">
 						{currentStepNumber}/{totalSteps}
 					</span>
