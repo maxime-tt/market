@@ -6,7 +6,7 @@ import { getOrderManagementActions, getOrderRecipientPubkey } from '@sdk/commerc
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { OrderActionsView } from '@ui/components/orders/OrderActionsView'
+import { OrderActionsView } from '@ui/orders/order-actions-view'
 import { StockUpdateDialog } from './StockUpdateDialog'
 
 interface OrderActionsProps {

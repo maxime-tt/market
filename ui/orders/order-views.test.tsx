@@ -2,9 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { InvoiceWithSource } from '@sdk/commerce/orders/orderDetail'
-import { OrderActionsView } from './OrderActionsView'
-import { DeliveryAddressView, InvoiceCardView, OrderCardView, PrivateOrderDetailsView } from './OrderDetailViews'
-import { OrderListView } from './OrderListView'
+import { OrderActionsView } from './order-actions-view'
+import { DeliveryAddressView, InvoiceCardView, OrderCardView, PrivateOrderDetailsView } from './order-detail-views'
+import { OrderListView } from './order-list-view'
 
 const noop = () => {}
 

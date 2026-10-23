@@ -1,5 +1,5 @@
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { OrderCardView } from '@ui/components/orders/OrderDetailViews'
+import { OrderCardView } from '@ui/orders/order-detail-views'
 
 interface OrderCardProps {
 	orderData: OrderWithRelatedEvents

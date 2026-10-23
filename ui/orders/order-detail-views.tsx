@@ -2,25 +2,25 @@ import { CheckCircle, Copy, CreditCard, LockKeyhole, Package, RefreshCw, Truck, 
 import { format } from 'date-fns'
 import type { PaymentInvoiceData } from '@sdk/commerce/checkout'
 import { parseOrderAddress, type InvoiceWithSource, type PrivateOrderDetailRow } from '@sdk/commerce/orders/orderDetail'
-import { Badge } from '../../primitives/badge'
-import { Button } from '../../primitives/button'
-import { Card, CardContent, CardHeader, CardTitle } from '../../primitives/card'
-import { UiLink } from '../../provider/UiProvider'
-import { StatusBadge } from '../../shared/status-badge'
-import { cn } from '../../utils/cn'
+import { Badge } from '../primitives/badge'
+import { Button } from '../primitives/button'
+import { Card, CardContent, CardHeader, CardTitle } from '../primitives/card'
+import { UiLink } from '../provider/UiProvider'
+import { StatusBadge } from '../shared/status-badge'
+import { cn } from '../utils/cn'
 
 export function getInvoiceStatusColor(status: string): string {
 	switch (status) {
 		case 'paid':
-			return 'bg-green-100 text-green-800 border-green-300'
+			return 'bg-success-muted text-success-foreground border-success-border'
 		case 'pending':
-			return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+			return 'bg-warning-muted text-warning-foreground border-warning-border'
 		case 'processing':
-			return 'bg-blue-100 text-blue-800 border-blue-300'
+			return 'bg-info-muted text-info-foreground border-info-border'
 		case 'expired':
-			return 'bg-red-100 text-red-800 border-red-300'
+			return 'bg-error-muted text-error-foreground border-error-border'
 		default:
-			return 'bg-gray-100 text-gray-800 border-gray-300'
+			return 'bg-surface-sunken text-text-high border-border-default'
 	}
 }
 
@@ -28,23 +28,23 @@ export function PaymentSummaryView({ enrichedInvoices }: { enrichedInvoices: rea
 	return (
 		<div className="sm:mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
 			<div className="flex items-center gap-2">
-				<CreditCard className="w-4 h-4 text-green-600" />
+				<CreditCard className="w-4 h-4 text-success" />
 				<div>
-					<p className="text-gray-500">Merchant</p>
+					<p className="text-text-mid">Merchant</p>
 					<p className="font-semibold">{enrichedInvoices.filter((inv) => inv.description === 'Merchant Payment').length} invoice</p>
 				</div>
 			</div>
 			<div className="flex items-center gap-2">
 				<Users className="w-4 h-4 text-info" />
 				<div>
-					<p className="text-gray-500">V4V Recipients</p>
+					<p className="text-text-mid">V4V Recipients</p>
 					<p className="font-semibold">{enrichedInvoices.filter((inv) => inv.description === 'V4V Community Payment').length} invoices</p>
 				</div>
 			</div>
 			<div className="flex items-center gap-2">
-				<Package className="w-4 h-4 text-blue-600" />
+				<Package className="w-4 h-4 text-info" />
 				<div>
-					<p className="text-gray-500">Total Amount</p>
+					<p className="text-text-mid">Total Amount</p>
 					<p className="font-semibold">{enrichedInvoices.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()} sats</p>
 				</div>
 			</div>
@@ -108,8 +108,8 @@ function AddressField({ label, value, emphasis }: { label: string; value?: strin
 	if (!value) return null
 	return (
 		<div>
-			<p className="text-xs font-medium text-green-700 uppercase tracking-wide">{label}</p>
-			<p className={emphasis ? 'text-green-900 font-medium' : 'text-green-900'}>{value}</p>
+			<p className="text-xs font-medium text-success-foreground uppercase tracking-wide">{label}</p>
+			<p className={emphasis ? 'text-success-foreground font-medium' : 'text-success-foreground'}>{value}</p>
 		</div>
 	)
 }
@@ -118,19 +118,19 @@ export function DeliveryAddressView({ shippingAddress }: { shippingAddress: stri
 	const parsedAddress = parseOrderAddress(shippingAddress)
 
 	return (
-		<div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+		<div className="mt-4 p-4 bg-success-muted border border-success-border rounded-lg">
 			<div className="flex items-start gap-3">
-				<Truck className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+				<Truck className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
 				<div className="flex-1 min-w-0">
-					<p className="font-semibold text-green-900 mb-3">Delivery Address</p>
+					<p className="font-semibold text-success-foreground mb-3">Delivery Address</p>
 					{parsedAddress ? (
 						<div className="space-y-2">
 							<AddressField label="Name" value={parsedAddress.name} emphasis />
 							{parsedAddress.street && (
 								<div>
-									<p className="text-xs font-medium text-green-700 uppercase tracking-wide">Street Address</p>
-									<p className="text-green-900">{parsedAddress.street}</p>
-									{parsedAddress.street2 && <p className="text-green-900">{parsedAddress.street2}</p>}
+									<p className="text-xs font-medium text-success-foreground uppercase tracking-wide">Street Address</p>
+									<p className="text-success-foreground">{parsedAddress.street}</p>
+									{parsedAddress.street2 && <p className="text-success-foreground">{parsedAddress.street2}</p>}
 								</div>
 							)}
 							<div className="grid grid-cols-2 gap-3">
@@ -143,7 +143,7 @@ export function DeliveryAddressView({ shippingAddress }: { shippingAddress: stri
 							</div>
 						</div>
 					) : (
-						<div className="text-green-800 space-y-0.5">
+						<div className="text-success-foreground space-y-0.5">
 							{shippingAddress.split('\n').map((line, index) => (
 								<p key={index} className="leading-relaxed">
 									{line.trim()}
@@ -198,30 +198,30 @@ export function InvoiceCardView({
 	const preimage = invoice.preimage || invoiceToUse.preimage
 
 	return (
-		<Card className={cn('p-4', isPaid ? 'bg-green-50' : 'bg-card')}>
+		<Card className={cn('p-4', isPaid ? 'bg-success-muted' : 'bg-card')}>
 			<div className="flex items-center justify-between gap-3">
 				<div className="flex items-center gap-3 min-w-0">
 					{totalInvoices > 1 && (
 						<div
 							className={cn(
 								'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold',
-								isPaid ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-600',
+								isPaid ? 'bg-success-muted text-success-foreground' : 'bg-surface-hover text-text-high',
 							)}
 						>
 							{index + 1}
 						</div>
 					)}
 					{isPaid ? (
-						<CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+						<CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
 					) : (
-						<CreditCard className="w-5 h-5 text-gray-400 flex-shrink-0" />
+						<CreditCard className="w-5 h-5 text-text-mid flex-shrink-0" />
 					)}
 					<div className="min-w-0">
 						<h4 className="font-medium truncate">{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}</h4>
 						<p className="text-sm text-muted-foreground">
 							{invoice.amount.toLocaleString()} sats
 							{invoiceToUse.expiresAt && (
-								<span className={cn('ml-2', isExpired ? 'text-red-500' : 'text-gray-400')}>
+								<span className={cn('ml-2', isExpired ? 'text-error' : 'text-text-mid')}>
 									· {isExpired ? 'Expired' : 'Expires'} {formatExpiryDisplay(invoiceToUse.expiresAt)}
 								</span>
 							)}
@@ -265,13 +265,13 @@ export function InvoiceCardView({
 						)}
 					</div>
 
-					{isExpired && hasBolt11 && <p className="text-xs text-amber-600">Invoice expired. Generate a new one to continue payment.</p>}
+					{isExpired && hasBolt11 && <p className="text-xs text-warning">Invoice expired. Generate a new one to continue payment.</p>}
 				</div>
 			)}
 
 			{isPaid && (
-				<div className="mt-3 pt-3 border-t border-green-200 space-y-2">
-					<div className="flex items-center gap-2 text-sm text-green-700">
+				<div className="mt-3 pt-3 border-t border-success-border space-y-2">
+					<div className="flex items-center gap-2 text-sm text-success-foreground">
 						<CheckCircle className="w-4 h-4" />
 						<span>Payment completed</span>
 					</div>
@@ -280,7 +280,7 @@ export function InvoiceCardView({
 							<Button
 								variant="ghost"
 								size="sm"
-								className="text-gray-600 hover:text-gray-900 h-auto py-1"
+								className="text-text-high hover:text-text-high h-auto py-1"
 								onClick={() => onCopy(invoiceToUse.bolt11 || '')}
 							>
 								<Copy className="w-3 h-3 mr-1" />
@@ -288,7 +288,12 @@ export function InvoiceCardView({
 							</Button>
 						)}
 						{preimage && (
-							<Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 h-auto py-1" onClick={() => onCopy(preimage)}>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="text-text-high hover:text-text-high h-auto py-1"
+								onClick={() => onCopy(preimage)}
+							>
 								<Copy className="w-3 h-3 mr-1" />
 								Copy preimage
 							</Button>
@@ -311,14 +316,14 @@ export interface PrivateOrderDetailsViewProps {
 export function PrivateOrderDetailsView({ rows, orderId, compact = false, className }: PrivateOrderDetailsViewProps) {
 	if (rows === null) {
 		return (
-			<Card className={cn('border-amber-200 bg-amber-50', className)}>
+			<Card className={cn('border-warning-border bg-warning-muted', className)}>
 				<CardHeader className={cn(compact ? 'p-3 pb-2' : 'p-4 pb-2')}>
 					<div className="flex items-center gap-2">
-						<LockKeyhole className="h-4 w-4 text-amber-700" />
+						<LockKeyhole className="h-4 w-4 text-warning-foreground" />
 						<CardTitle className={compact ? 'text-sm' : 'text-base'}>Private delivery details</CardTitle>
 					</div>
 				</CardHeader>
-				<CardContent className={cn('text-sm text-amber-900', compact ? 'p-3 pt-0' : 'p-4 pt-0')}>
+				<CardContent className={cn('text-sm text-warning-foreground', compact ? 'p-3 pt-0' : 'p-4 pt-0')}>
 					Encrypted delivery details are unavailable. Connect the seller signer that received this order.
 				</CardContent>
 			</Card>
@@ -328,13 +333,13 @@ export function PrivateOrderDetailsView({ rows, orderId, compact = false, classN
 	if (rows.length === 0) return null
 
 	return (
-		<Card className={cn('border-emerald-200 bg-emerald-50', className)}>
+		<Card className={cn('border-success-border bg-success-muted', className)}>
 			<CardHeader className={cn(compact ? 'p-3 pb-2' : 'p-4 pb-2')}>
 				<div className="flex items-center gap-2">
-					<LockKeyhole className="h-4 w-4 text-emerald-700" />
+					<LockKeyhole className="h-4 w-4 text-success-foreground" />
 					<div>
 						<CardTitle className={compact ? 'text-sm' : 'text-base'}>Private encrypted seller delivery details</CardTitle>
-						{compact && <p className="text-xs text-emerald-800">Order {orderId ? `${orderId.substring(0, 8)}...` : 'details'}</p>}
+						{compact && <p className="text-xs text-success-foreground">Order {orderId ? `${orderId.substring(0, 8)}...` : 'details'}</p>}
 					</div>
 				</div>
 			</CardHeader>
@@ -342,8 +347,8 @@ export function PrivateOrderDetailsView({ rows, orderId, compact = false, classN
 				<dl className={cn('grid gap-3', compact ? 'text-sm' : 'sm:grid-cols-2')}>
 					{rows.map((row) => (
 						<div key={row.label} className={row.label === 'Address' || row.label === 'Order notes' ? 'sm:col-span-2' : undefined}>
-							<dt className="text-xs font-medium uppercase tracking-wide text-emerald-900">{row.label}</dt>
-							<dd className="mt-1 whitespace-pre-line break-words text-sm text-emerald-950">{row.value}</dd>
+							<dt className="text-xs font-medium uppercase tracking-wide text-success-foreground">{row.label}</dt>
+							<dd className="mt-1 whitespace-pre-line break-words text-sm text-success-foreground">{row.value}</dd>
 						</div>
 					))}
 				</dl>
@@ -367,7 +372,9 @@ export function OrderCardView({ href, orderEventId, isBuyer, status, createdAt }
 			className="flex justify-between items-center hover:bg-accent p-4 border rounded-lg overflow-hidden transition-colors"
 		>
 			<div className="flex items-center gap-4 min-w-0">
-				<div className="flex justify-center items-center bg-pink-400 rounded-full w-12 h-12 text-2xl shrink-0">{isBuyer ? '🛍️' : '💰'}</div>
+				<div className="flex justify-center items-center bg-fill-accent rounded-full w-12 h-12 text-2xl shrink-0">
+					{isBuyer ? '🛍️' : '💰'}
+				</div>
 				<div className="min-w-0">
 					<div className="font-medium truncate">
 						{isBuyer ? 'Purchase' : 'Sale'} #{orderEventId.slice(0, 8)}

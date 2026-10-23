@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
 import { CreditCard } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '../../primitives/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../primitives/card'
 
 export function OrderNotFoundView() {
 	return (
 		<div className="text-center py-8">
-			<h2 className="text-xl font-semibold text-gray-900">Order not found</h2>
-			<p className="text-gray-600 mt-2">The requested order could not be found.</p>
+			<h2 className="text-xl font-semibold text-text-high">Order not found</h2>
+			<p className="text-text-high mt-2">The requested order could not be found.</p>
 		</div>
 	)
 }
@@ -16,7 +16,7 @@ export function OrderMissingView() {
 		<div className="container mx-auto px-4 py-8">
 			<Card>
 				<CardContent className="p-8 text-center">
-					<p className="text-gray-500">Order not found</p>
+					<p className="text-text-mid">Order not found</p>
 				</CardContent>
 			</Card>
 		</div>
@@ -50,8 +50,8 @@ export function OrderProductsCardView({ items }: OrderProductsCardViewProps) {
 					{items.map((item) => (
 						<div key={item.id} className="p-4 border rounded-lg">
 							{item.product}
-							<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-								<span className="text-sm text-gray-500">Quantity</span>
+							<div className="mt-3 pt-3 border-t border-border-default flex items-center justify-between">
+								<span className="text-sm text-text-mid">Quantity</span>
 								<span className="text-lg font-semibold">{item.quantity}</span>
 							</div>
 						</div>
@@ -82,7 +82,7 @@ export function OrderPaymentDetailsCardView({
 	return (
 		<Card>
 			<CardHeader className="p-0">
-				<div className="bg-gray-50 p-4 rounded-t-xl">
+				<div className="bg-surface-sunken p-4 rounded-t-xl">
 					<div className="flex items-start gap-2">
 						<CreditCard className="w-5 h-5" />
 						<div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
@@ -90,7 +90,7 @@ export function OrderPaymentDetailsCardView({
 							<span className="text-muted-foreground">({totalInvoices} invoices)</span>
 						</div>
 					</div>
-					<div className="my-3 border-b border-gray-300 sm:hidden" />
+					<div className="my-3 border-b border-border-default sm:hidden" />
 					{summary}
 				</div>
 			</CardHeader>

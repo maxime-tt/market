@@ -1,6 +1,6 @@
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getPrivateOrderDetailsRows } from '@sdk/commerce/orders/orderDetail'
-import { PrivateOrderDetailsView } from '@ui/components/orders/OrderDetailViews'
+import { PrivateOrderDetailsView } from '@ui/orders/order-detail-views'
 import { getOrderId, getSellerPubkey } from './orderDetailHelpers'
 
 export { getPrivateOrderDetailsRows } from '@sdk/commerce/orders/orderDetail'

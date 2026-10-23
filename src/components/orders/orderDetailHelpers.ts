@@ -23,4 +23,4 @@ export const makeInvoiceKey = (invoice: PaymentInvoiceData) => {
 }
 
 export { extractPaymentMethods, isPaymentCompleted, parseOrderAddress as parseAddress } from '@sdk/commerce/orders/orderDetail'
-export { getInvoiceStatusColor as getStatusColor } from '@ui/components/orders/OrderDetailViews'
+export { getInvoiceStatusColor as getStatusColor } from '@ui/orders/order-detail-views'

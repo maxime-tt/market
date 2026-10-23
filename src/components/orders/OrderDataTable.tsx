@@ -5,7 +5,7 @@ import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tan
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { OrderListView } from '@ui/components/orders/OrderListView'
+import { OrderListView } from '@ui/orders/order-list-view'
 
 const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
 	const item = (row.getValue(columnId) as string) || ''

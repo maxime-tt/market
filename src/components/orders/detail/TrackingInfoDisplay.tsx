@@ -1,5 +1,5 @@
 import { copyToClipboard } from '@/lib/utils'
-import { TrackingInfoView } from '@ui/components/orders/OrderDetailViews'
+import { TrackingInfoView } from '@ui/orders/order-detail-views'
 
 interface TrackingInfoDisplayProps {
 	trackingNumber?: string

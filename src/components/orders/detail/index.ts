@@ -1,5 +1,5 @@
 // Order detail display components
-export { DeliveryAddressView as DeliveryAddressDisplay, PaymentSummaryView as PaymentSummary } from '@ui/components/orders/OrderDetailViews'
+export { DeliveryAddressView as DeliveryAddressDisplay, PaymentSummaryView as PaymentSummary } from '@ui/orders/order-detail-views'
 export { IncompleteInvoicesBanner } from '@ui/components/IncompleteInvoicesBanner'
 export { InvoiceCard } from './InvoiceCard'
 export { NoPaymentRequestsCard } from '@ui/components/NoPaymentRequestsCard'

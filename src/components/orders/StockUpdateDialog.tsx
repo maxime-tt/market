@@ -1,5 +1,5 @@
 import { fetchProductByATag, fetchProduct, getProductId, getProductStock, isNSFWProduct } from '@/queries/products'
-import { StockUpdateDialogView } from '@ui/components/orders/OrderActionsView'
+import { StockUpdateDialogView } from '@ui/orders/order-actions-view'
 import { useUpdateProductMutation, type ProductFormData } from '@/publish/products'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { useEffect, useState } from 'react'

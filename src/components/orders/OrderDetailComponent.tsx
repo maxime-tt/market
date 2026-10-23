@@ -8,7 +8,7 @@ import {
 	OrderPaymentDetailsCardView,
 	OrderProductsCardView,
 	OrderTimelineView,
-} from '@ui/components/orders/OrderDetailLayout'
+} from '@ui/orders/order-detail-layout'
 import { getAuctionClaimPublicMarkerFields } from '@/lib/auctions/privateAuctionClaimMessage'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'

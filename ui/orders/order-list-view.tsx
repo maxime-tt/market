@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCircle, Circle, Clock, Filter, Loader, XCircle } from 'lucide-react'
-import { Card } from '../../primitives/card'
-import { Input } from '../../primitives/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../primitives/select'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../primitives/tooltip'
-import { EmptyState } from '../../shared/empty-state'
-import { LoadingState } from '../../shared/loading-state'
+import { Card } from '../primitives/card'
+import { Input } from '../primitives/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../primitives/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
+import { EmptyState } from '../shared/empty-state'
+import { LoadingState } from '../shared/loading-state'
 
 export interface OrderListCell {
 	id: string
@@ -101,7 +101,7 @@ function OptionSelect({
 export function OrderListView({ heading, search, orderBy, statusFilter, isCompact, isLoading, rows, emptyMessage }: OrderListViewProps) {
 	return (
 		<div className="flex h-full flex-col">
-			<div className="sticky top-[12.75rem] lg:top-0 z-20 bg-white border-b py-4 px-4 xl:px-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-sm">
+			<div className="sticky top-[12.75rem] lg:top-0 z-20 bg-surface-raised border-b py-4 px-4 xl:px-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-sm">
 				{heading && <div className="hidden lg:block flex-1">{heading}</div>}
 
 				<div className="flex flex-row justify-end items-center gap-2 sm:gap-4 w-full lg:w-auto">
@@ -142,7 +142,7 @@ export function OrderListView({ heading, search, orderBy, statusFilter, isCompac
 										<div className="space-y-3">
 											{others.map((cell) => (
 												<div key={cell.id} className="flex justify-between items-start">
-													<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">{cell.label}:</span>
+													<span className="text-sm font-medium text-text-high capitalize min-w-0 flex-shrink-0 mr-3">{cell.label}:</span>
 													<div className="text-sm text-right min-w-0 flex-1">{cell.content}</div>
 												</div>
 											))}

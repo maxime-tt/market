@@ -1,6 +1,6 @@
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { copyToClipboard } from '@/lib/utils'
-import { InvoiceCardView } from '@ui/components/orders/OrderDetailViews'
+import { InvoiceCardView } from '@ui/orders/order-detail-views'
 import type { InvoiceWithSource } from '../useOrderInvoices'
 
 interface InvoiceCardProps {

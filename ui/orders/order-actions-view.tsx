@@ -2,12 +2,12 @@ import { useState, type ReactNode } from 'react'
 import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
 import type { OrderManagementActions } from '@sdk/commerce/orders'
 import { ORDER_STATUS } from '@sdk/commerce/messaging'
-import { Button } from '../../primitives/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../primitives/dialog'
-import { Input } from '../../primitives/input'
-import { Label } from '../../primitives/label'
-import { Textarea } from '../../primitives/textarea'
-import { cn } from '../../utils/cn'
+import { Button } from '../primitives/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../primitives/dialog'
+import { Input } from '../primitives/input'
+import { Label } from '../primitives/label'
+import { Textarea } from '../primitives/textarea'
+import { cn } from '../utils/cn'
 
 export interface OrderActionsViewProps {
 	/** Visible-action hints from the SDK; not an authorization check. */
@@ -82,17 +82,17 @@ export function OrderActionsView({
 				<div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
 					{status === ORDER_STATUS.COMPLETED ? (
 						<>
-							<CheckCircle className="w-4 h-4 text-green-600" />
+							<CheckCircle className="w-4 h-4 text-success" />
 							<span>Order completed</span>
 						</>
 					) : status === ORDER_STATUS.CANCELLED ? (
 						<>
-							<Ban className="w-4 h-4 text-red-600" />
+							<Ban className="w-4 h-4 text-error" />
 							<span>Order cancelled</span>
 						</>
 					) : (
 						<>
-							<Clock className="w-4 h-4 text-yellow-600" />
+							<Clock className="w-4 h-4 text-warning" />
 							<span>Awaiting action from other party</span>
 						</>
 					)}
@@ -106,7 +106,7 @@ export function OrderActionsView({
 						<DialogDescription>Please verify that you have received payment before confirming this order.</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-2 py-4">
-						<p className="text-sm text-gray-600">
+						<p className="text-sm text-text-high">
 							By clicking confirm, you acknowledge the funds have been received and you will now process the order.
 						</p>
 					</div>
