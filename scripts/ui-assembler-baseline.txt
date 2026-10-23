@@ -13,7 +13,7 @@ platform/web/routes/checkout.tsx|inline-component|1
 platform/web/routes/collection.$collectionId.tsx|inline-component|1
 platform/web/routes/community.index.tsx|inline-component|1
 platform/web/routes/_dashboard-layout/dashboard/about.tsx|primitive-import|1
-platform/web/routes/_dashboard-layout/dashboard/about.tsx|inline-component|4
+platform/web/routes/_dashboard-layout/dashboard/about.tsx|inline-component|1
 platform/web/routes/_dashboard-layout/dashboard/account/making-payments.tsx|primitive-import|5
 platform/web/routes/_dashboard-layout/dashboard/account/making-payments.tsx|inline-component|4
 platform/web/routes/_dashboard-layout/dashboard/account/network.tsx|inline-component|1

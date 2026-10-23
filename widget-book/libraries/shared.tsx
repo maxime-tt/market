@@ -9,8 +9,9 @@ import { EntityListItem } from '@ui/shared/entity-list-item'
 import { Notice } from '@ui/shared/notice'
 import { StatusBadge } from '@ui/shared/status-badge'
 import { CopyButton } from '@ui/shared/copy-button'
+import { CopyableField } from '@ui/shared/copyable-field'
 import { TruncatedText } from '@ui/shared/truncated-text'
-import { PackageIcon, PencilIcon, StoreIcon, TrashIcon } from 'lucide-react'
+import { PackageIcon, PencilIcon, ServerIcon, StoreIcon, TrashIcon } from 'lucide-react'
 
 import type { WidgetLibrary } from '../libraries'
 
@@ -208,6 +209,14 @@ export const shared: WidgetLibrary = {
 		{
 			name: 'CopyButtonIconOnly',
 			render: () => <CopyButton value="nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq" />,
+		},
+		{
+			name: 'CopyableField',
+			render: () => (
+				<div className="w-96">
+					<CopyableField label="App Relay" value="wss://relay.plebeian.market" icon={<ServerIcon />} />
+				</div>
+			),
 		},
 		{
 			name: 'TruncatedText',

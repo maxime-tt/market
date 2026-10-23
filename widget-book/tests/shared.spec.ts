@@ -20,6 +20,7 @@ test('renders the shared state atoms', async ({ page }) => {
 		'EntityListItemPending',
 		'Notice',
 		'StatusBadge',
+		'CopyableField',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
@@ -72,6 +73,16 @@ test('renders the entity list item molecule', async ({ page }) => {
 	const deleteButton = pending.getByRole('button', { name: 'Delete collection' })
 	await expect(deleteButton).toBeDisabled()
 	await expect(deleteButton.getByRole('status', { name: 'Loading' })).toBeVisible()
+})
+
+test('renders the copyable field row', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const field = page.getByTestId('widget-CopyableField')
+	await expect(field.locator('[data-slot="copyable-field"]')).toHaveCount(1)
+	await expect(field).toContainText('App Relay')
+	await expect(field).toContainText('wss://relay.plebeian.market')
+	await expect(field.getByRole('button', { name: 'Copy App Relay' })).toBeVisible()
 })
 
 test('renders the copy button and truncated text atoms', async ({ page }) => {

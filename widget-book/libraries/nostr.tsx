@@ -1,6 +1,8 @@
 import { FeaturedUserCardView, type FeaturedUserCardRenderLink } from '@ui/nostr/featured-user-card'
 import { NpubDisplay } from '@ui/nostr/npub-display'
 import { VerifiedBadge } from '@ui/nostr/verified-badge'
+import { PubkeyField } from '@ui/nostr/pubkey-field'
+import { ShieldIcon } from 'lucide-react'
 import type { WidgetLibrary } from '../libraries'
 
 /**
@@ -12,6 +14,7 @@ import type { WidgetLibrary } from '../libraries'
  */
 
 const SAMPLE_NPUB = 'npub1plebeianmarket0000000000000000000000000000000000000000000000'
+const SAMPLE_HEX = '86a82cab18b293f53cbaaae8cdcbee3f7ec427fdf9f9c933db77800bb5ef38a0'
 
 /**
  * The catalogue cannot use the app router (libraries may only import `ui/` and
@@ -80,6 +83,14 @@ export const nostr: WidgetLibrary = {
 					productCount={0}
 					renderLink={plainLink}
 				/>
+			),
+		},
+		{
+			name: 'PubkeyField',
+			render: () => (
+				<div className="w-96">
+					<PubkeyField label="App Public Key" npub={SAMPLE_NPUB} hex={SAMPLE_HEX} icon={<ShieldIcon />} />
+				</div>
 			),
 		},
 		{

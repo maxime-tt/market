@@ -18,6 +18,7 @@ test('renders the nostr library', async ({ page }) => {
 		'VerifiedBadgeInvalid',
 		'VerifiedBadgeLoading',
 		'VerifiedBadgeAddressHidden',
+		'PubkeyField',
 		'FeaturedUserCard',
 		'FeaturedUserCardNoProducts',
 		'FeaturedUserCardLoading',
@@ -43,6 +44,17 @@ test('renders the featured user card states', async ({ page }) => {
 	// While loading, the strip shows pulse placeholders and no tile links.
 	const loading = page.getByTestId('widget-FeaturedUserCardLoading')
 	await expect(loading.locator('a[href^="/product/"]')).toHaveCount(0)
+})
+
+test('renders both key forms with their own copy controls', async ({ page }) => {
+	await page.goto('/?library=nostr')
+
+	const field = page.getByTestId('widget-PubkeyField')
+	await expect(field.locator('[data-slot="pubkey-field"]')).toHaveCount(1)
+	await expect(field).toContainText('App Public Key')
+	await expect(field.getByRole('link')).toHaveAttribute('href', /^https:\/\/njump\.me\/npub1plebeianmarket/)
+	await expect(field.getByRole('button', { name: 'Copy npub' })).toBeVisible()
+	await expect(field.getByRole('button', { name: 'Copy hex' })).toBeVisible()
 })
 
 test('truncates the npub and keeps the full value available', async ({ page }) => {
