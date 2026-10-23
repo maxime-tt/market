@@ -160,7 +160,7 @@ describe('BackButton', () => {
 
 	test('uses semantic text tokens rather than the legacy raw grey classes', () => {
 		const markup = renderToStaticMarkup(createElement(BackButton, { label: 'Back', onClick: () => {} }))
-		expect(markup).toContain('text-muted-foreground')
+		expect(markup).toContain('text-text-mid')
 		expect(markup).not.toContain('text-gray-600')
 		expect(markup).not.toContain('text-gray-800')
 	})

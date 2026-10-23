@@ -38,14 +38,14 @@ export function PubkeyField({ label, npub, hex, icon, onCopyError, className, re
 	const copyError = (which: string) => (onCopyError ? (error: unknown) => onCopyError(which, error) : undefined)
 
 	return (
-		<div ref={ref} data-slot="pubkey-field" className={cn('space-y-2 rounded-md border bg-muted/50 p-3', className)}>
+		<div ref={ref} data-slot="pubkey-field" className={cn('space-y-2 rounded-md border bg-surface-sunken/50 p-3', className)}>
 			<div className="flex items-center gap-2">
-				{icon && <span className="flex-shrink-0 text-muted-foreground [&_svg]:size-5">{icon}</span>}
+				{icon && <span className="flex-shrink-0 text-text-mid [&_svg]:size-5">{icon}</span>}
 				<span className="text-sm font-medium">{label}</span>
 			</div>
 			<div className="space-y-1 pl-7">
 				<div className="flex items-center gap-2">
-					<span className="w-10 text-xs text-muted-foreground">npub</span>
+					<span className="w-10 text-xs text-text-mid">npub</span>
 					<a
 						href={`https://njump.me/${npub}`}
 						target="_blank"
@@ -64,7 +64,7 @@ export function PubkeyField({ label, npub, hex, icon, onCopyError, className, re
 					/>
 				</div>
 				<div className="flex items-center gap-2">
-					<span className="w-10 text-xs text-muted-foreground">hex</span>
+					<span className="w-10 text-xs text-text-mid">hex</span>
 					<span className="flex-1 truncate font-mono text-xs">{displayHex}</span>
 					<CopyButton
 						value={hex}

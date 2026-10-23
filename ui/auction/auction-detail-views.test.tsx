@@ -65,7 +65,7 @@ describe('AuctionDetailCard', () => {
 	test('renders label, value and helper on a bordered card', () => {
 		const markup = renderToStaticMarkup(<AuctionDetailCard label="Auction type" value="English" helper="Primary format" />)
 		expect(markup).toContain('data-slot="auction-detail-card"')
-		expect(markup).toContain('border-border')
+		expect(markup).toContain('border-border-default')
 		expect(markup).toContain('Auction type')
 		expect(markup).toContain('English')
 		expect(markup).toContain('Primary format')
@@ -95,7 +95,7 @@ describe('AuctionPartyCard', () => {
 
 	test('omits the helper when not supplied', () => {
 		const markup = renderToStaticMarkup(<AuctionPartyCard label="Winner" identity={<span>satoshi</span>} />)
-		expect(markup).not.toContain('mt-1 text-xs text-muted-foreground')
+		expect(markup).not.toContain('mt-1 text-xs text-text-mid')
 	})
 })
 

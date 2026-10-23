@@ -32,7 +32,7 @@ export interface AuctionActivityRowProps {
 export function AuctionActivityRow({ header, unit, count, newCount, className, ref }: AuctionActivityRowProps) {
 	return (
 		<div ref={ref} data-slot="auction-activity-row" className={cn('space-y-0.5', className)}>
-			<p className="text-xs text-muted-foreground">{header}</p>
+			<p className="text-xs text-text-mid">{header}</p>
 			<p className="text-sm">
 				<span className="font-semibold">
 					{count} {count === 1 ? unit : `${unit}s`}

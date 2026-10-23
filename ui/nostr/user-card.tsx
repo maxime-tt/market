@@ -145,7 +145,7 @@ export function UserCardView({
 
 				{showSubtitle &&
 					(showNip05AsSubtitle ? (
-						<p className={cn(classSizeNIP05[size], 'text-muted-foreground truncate', className)}>{nip05}</p>
+						<p className={cn(classSizeNIP05[size], 'text-text-mid truncate', className)}>{nip05}</p>
 					) : (
 						showNpubAsSubtitle &&
 						npub &&
@@ -153,7 +153,7 @@ export function UserCardView({
 							<NpubDisplay
 								npub={npub}
 								{...NPUB_CARD_FORMAT}
-								className={cn('text-xs font-medium text-muted-foreground truncate', classNpub, className)}
+								className={cn('text-xs font-medium text-text-mid truncate', classNpub, className)}
 							/>,
 						)
 					))}

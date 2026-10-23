@@ -56,7 +56,7 @@ export function VerifiedBadge({ state, nip05, showAddress = true, className, ref
 					)}
 				</span>
 			)}
-			{address && <span className="text-muted-foreground">{address}</span>}
+			{address && <span className="text-text-mid">{address}</span>}
 		</div>
 	)
 }

@@ -64,7 +64,7 @@ describe('VerifiedBadge', () => {
 	test('omits the address when nip05 is null', () => {
 		const html = render({ state: 'verified', nip05: null })
 		expect(html).toContain('data-state="verified"')
-		expect(html).not.toContain('text-muted-foreground')
+		expect(html).not.toContain('text-text-mid')
 	})
 
 	test('keeps its own classes when the consumer passes className', () => {

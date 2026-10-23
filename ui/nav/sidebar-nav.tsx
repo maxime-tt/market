@@ -8,7 +8,7 @@ import type { NavItemWithBadge, NavSectionView } from './model'
  * cannot drift apart.
  */
 export const SIDEBAR_NAV_LINK_CLASS = cn(
-	'block relative bg-card data-[status=active]:bg-secondary lg:bg-transparent',
+	'block relative bg-surface-raised data-[status=active]:bg-secondary lg:bg-transparent',
 	'p-[calc(var(--gap)*1rem)] lg:px-[calc(var(--gap)*1.5rem)] lg:py-[calc(var(--gap)*0.5rem)] border border-foreground data-[status=active]:border-secondary lg:border-0',
 	'rounded lg:rounded-none font-bold data-[status=active]:text-secondary-foreground hover:text-primary transition-colors',
 )

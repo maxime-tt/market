@@ -144,7 +144,7 @@ export function AuctionTopBidBox({
 				<StatusBadge
 					status={isSettlementPhase ? 'Winning bid' : 'Current top bid'}
 					tone={isSettlementPhase ? 'success' : 'neutral'}
-					className="bg-card"
+					className="bg-surface-raised"
 				/>
 
 				<div className="flex items-center gap-2">
@@ -273,8 +273,8 @@ export function AuctionListItemView({
 				<div className="flex min-w-0 flex-1 flex-col gap-4 lg:max-w-[28rem]">
 					<div className="min-w-0">
 						<h3 className="text-lg font-semibold text-foreground truncate">{title}</h3>
-						<p className="text-sm text-muted-foreground truncate">{summary}</p>
-						<p className="mt-1 text-xs text-muted-foreground">Created: {formatMaybeDate(createdAt)}</p>
+						<p className="text-sm text-text-mid truncate">{summary}</p>
+						<p className="mt-1 text-xs text-text-mid">Created: {formatMaybeDate(createdAt)}</p>
 					</div>
 
 					{topBidBox}
@@ -293,14 +293,14 @@ export function AuctionListItemView({
 					</div>
 					<div className="w-full space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
 						<div className="flex items-center justify-between gap-3">
-							<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Activity</p>
+							<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-mid">Activity</p>
 							<Button
 								type="button"
 								variant="ghost"
 								size="sm"
 								onClick={onMarkActivitySeen}
 								disabled={!hasNewActivity}
-								className="h-7 rounded-md border border-zinc-300 bg-white px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground hover:bg-zinc-100 hover:text-foreground"
+								className="h-7 rounded-md border border-zinc-300 bg-white px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-mid hover:bg-zinc-100 hover:text-foreground"
 							>
 								<CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
 								Mark as seen

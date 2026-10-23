@@ -103,7 +103,11 @@ export interface AuctionDetailCardProps {
 /** Bordered card holding one stacked label/value/helper field. */
 export function AuctionDetailCard({ label, value, helper, className, ref }: AuctionDetailCardProps) {
 	return (
-		<div ref={ref} data-slot="auction-detail-card" className={cn('rounded-xl border border-border bg-card p-4', className)}>
+		<div
+			ref={ref}
+			data-slot="auction-detail-card"
+			className={cn('rounded-xl border border-border-default bg-surface-raised p-4', className)}
+		>
 			<DetailField
 				label={label}
 				value={value}
@@ -127,10 +131,14 @@ export interface AuctionPartyCardProps {
 /** Bordered card showing one auction party (seller, winner) by identity. */
 export function AuctionPartyCard({ label, identity, helper, className, ref }: AuctionPartyCardProps) {
 	return (
-		<div ref={ref} data-slot="auction-party-card" className={cn('rounded-xl border border-border bg-card p-4', className)}>
-			<p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+		<div
+			ref={ref}
+			data-slot="auction-party-card"
+			className={cn('rounded-xl border border-border-default bg-surface-raised p-4', className)}
+		>
+			<p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-mid">{label}</p>
 			<div className="mt-2 flex items-center gap-2">{identity}</div>
-			{helper && <p className="mt-1 text-xs text-muted-foreground">{helper}</p>}
+			{helper && <p className="mt-1 text-xs text-text-mid">{helper}</p>}
 		</div>
 	)
 }
@@ -155,13 +163,13 @@ export function AuctionTechnicalRow({ label, value, copyValue, stacked = false, 
 			ref={ref}
 			data-slot="auction-technical-row"
 			className={cn(
-				'rounded-xl border border-border bg-muted/40 p-3',
+				'rounded-xl border border-border-default bg-surface-sunken/40 p-3',
 				stacked ? 'space-y-2' : 'flex items-start justify-between gap-3',
 				className,
 			)}
 		>
 			<div className="min-w-0">
-				<p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+				<p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-mid">{label}</p>
 				<p className={cn('mt-1 text-sm font-medium text-foreground', stacked ? 'break-words whitespace-pre-wrap' : 'break-all')}>
 					{value || 'N/A'}
 				</p>
@@ -172,7 +180,7 @@ export function AuctionTechnicalRow({ label, value, copyValue, stacked = false, 
 					ariaLabel={`Copy ${label}`}
 					variant="ghost"
 					size="sm"
-					className="h-8 shrink-0 px-2 text-muted-foreground hover:text-foreground"
+					className="h-8 shrink-0 px-2 text-text-mid hover:text-foreground"
 					onError={onCopyError ? (error) => onCopyError(label, error) : undefined}
 				/>
 			)}
