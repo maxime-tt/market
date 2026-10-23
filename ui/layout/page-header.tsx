@@ -10,7 +10,7 @@ import { cn } from '../utils/cn'
  * two renderers below cannot drift apart.
  */
 export const PAGE_HEADER_CLASS = cn(
-	'sticky top-0 z-10 hidden items-center justify-between border-b bg-background',
+	'sticky top-0 z-10 hidden items-center justify-between border-b bg-bg',
 	'px-[calc(var(--gap)*1rem)] py-[calc(var(--gap)*1rem)] lg:flex lg:px-[calc(var(--gap)*1.5rem)]',
 )
 

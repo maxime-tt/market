@@ -254,7 +254,7 @@ export function AuctionListItemView({
 	const counts = activity ?? { bids: 0, newBids: 0, comments: 0, newComments: 0, liveChat: 0, newChat: 0 }
 
 	return (
-		<div ref={ref} data-slot="auction-list-item" className={cn('rounded-lg border border-zinc-200 bg-background p-6 shadow-md', className)}>
+		<div ref={ref} data-slot="auction-list-item" className={cn('rounded-lg border border-zinc-200 bg-bg p-6 shadow-md', className)}>
 			<div className="flex flex-col gap-6 lg:flex-row">
 				<div className="flex shrink-0 items-center gap-3 lg:flex-col lg:items-center">
 					{thumbnailUrl ? (
@@ -272,7 +272,7 @@ export function AuctionListItemView({
 
 				<div className="flex min-w-0 flex-1 flex-col gap-4 lg:max-w-[28rem]">
 					<div className="min-w-0">
-						<h3 className="text-lg font-semibold text-foreground truncate">{title}</h3>
+						<h3 className="text-lg font-semibold text-text-high truncate">{title}</h3>
 						<p className="text-sm text-text-mid truncate">{summary}</p>
 						<p className="mt-1 text-xs text-text-mid">Created: {formatMaybeDate(createdAt)}</p>
 					</div>
@@ -300,7 +300,7 @@ export function AuctionListItemView({
 								size="sm"
 								onClick={onMarkActivitySeen}
 								disabled={!hasNewActivity}
-								className="h-7 rounded-md border border-zinc-300 bg-white px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-mid hover:bg-zinc-100 hover:text-foreground"
+								className="h-7 rounded-md border border-zinc-300 bg-white px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-mid hover:bg-zinc-100 hover:text-text-high"
 							>
 								<CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
 								Mark as seen

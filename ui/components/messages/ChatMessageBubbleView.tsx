@@ -157,14 +157,14 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 			)}
 
 			<div className="p-4 space-y-2">
-				{hasTitle && <h3 className="font-semibold text-sm text-foreground line-clamp-2">{title}</h3>}
-				{!hasTitle && alt && <h3 className="font-semibold text-sm text-foreground line-clamp-2">{alt}</h3>}
+				{hasTitle && <h3 className="font-semibold text-sm text-text-high line-clamp-2">{title}</h3>}
+				{!hasTitle && alt && <h3 className="font-semibold text-sm text-text-high line-clamp-2">{alt}</h3>}
 
 				{summary && <p className="text-xs text-muted-foreground font-medium">{summary}</p>}
 				{!summary && description && <p className="text-xs text-muted-foreground font-medium">{description}</p>}
 
 				{hasContent && !summary && (
-					<div className="text-xs text-foreground line-clamp-4 whitespace-pre-wrap leading-relaxed">{cleanContent}</div>
+					<div className="text-xs text-text-high line-clamp-4 whitespace-pre-wrap leading-relaxed">{cleanContent}</div>
 				)}
 
 				{hasOptions && (
@@ -172,7 +172,7 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 						<span className="text-xs font-medium text-muted-foreground">Options:</span>
 						<ul className="space-y-1">
 							{options.map((opt: any, idx: number) => (
-								<li key={idx} className="flex items-start gap-2 text-xs text-foreground">
+								<li key={idx} className="flex items-start gap-2 text-xs text-text-high">
 									<span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-fill-accent/10 text-fill-accent flex-shrink-0 font-medium">
 										{idx + 1}
 									</span>

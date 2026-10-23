@@ -24,7 +24,7 @@ export function MessageInputView({ onSendMessage, isSending, isLoggedIn }: Messa
 	}
 
 	return (
-		<div className="flex-wrap items-center gap-2 p-4 border-t bg-background sticky bottom-0">
+		<div className="flex-wrap items-center gap-2 p-4 border-t bg-bg sticky bottom-0">
 			<div className="relative w-full">
 				<Textarea
 					value={message}
@@ -99,7 +99,7 @@ export function ConversationListItemView({
 							{!isMobile && dateElement}
 						</div>
 						<div className="pr-12">
-							<p className={`text-sm break-words ${unseenCount > 0 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+							<p className={`text-sm break-words ${unseenCount > 0 ? 'font-semibold text-text-high' : 'text-muted-foreground'}`}>
 								{lastMessageSnippet}
 							</p>
 						</div>
@@ -144,7 +144,7 @@ export function ConversationViewLayout({
 				<div ref={endRef} />
 			</div>
 
-			{input && <div className="flex-shrink-0 border-t bg-background">{input}</div>}
+			{input && <div className="flex-shrink-0 border-t bg-bg">{input}</div>}
 		</div>
 	)
 }

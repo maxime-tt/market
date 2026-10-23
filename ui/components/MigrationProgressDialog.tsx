@@ -63,7 +63,7 @@ export function MigrationProgressDialog({ open, steps, relayStatuses, error, onR
 			<DialogPrimitive.Portal>
 				<DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
 				<DialogPrimitive.Content
-					className="bg-background fixed top-[50%] left-[50%] z-50 w-full max-w-md translate-x-[-50%] translate-y-[-50%] rounded-lg border p-6 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+					className="bg-bg fixed top-[50%] left-[50%] z-50 w-full max-w-md translate-x-[-50%] translate-y-[-50%] rounded-lg border p-6 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
 					onPointerDownOutside={(e) => e.preventDefault()}
 					onEscapeKeyDown={(e) => e.preventDefault()}
 				>
@@ -92,7 +92,7 @@ export function MigrationProgressDialog({ open, steps, relayStatuses, error, onR
 											className={cn(
 												'text-sm',
 												step.status === 'pending' && 'text-muted-foreground',
-												step.status === 'active' && 'text-foreground font-medium',
+												step.status === 'active' && 'text-text-high font-medium',
 												step.status === 'complete' && 'text-muted-foreground',
 												step.status === 'error' && 'text-error',
 											)}

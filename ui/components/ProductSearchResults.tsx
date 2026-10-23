@@ -52,7 +52,7 @@ export function ProductSearchResults<TProduct extends ProductSearchResultEvent =
 									type="button"
 									aria-label={`Open ${title}`}
 									onClick={() => onSelect(product)}
-									className="flex w-full items-center gap-3 rounded p-2 text-left hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									className="flex w-full items-center gap-3 rounded p-2 text-left hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
 								>
 									{imageUrl ? (
 										(renderImage?.(imageUrl, title) ?? <UiImage src={imageUrl} alt="" className="size-8 shrink-0 rounded object-cover" />)

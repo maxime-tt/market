@@ -74,7 +74,7 @@ export function CollectionDisplayView({
 						onClick={onMoveUp}
 						disabled={!canMoveUp || isReordering}
 						aria-label={`Move collection ${index + 1} up`}
-						className="flex size-8 items-center justify-center rounded-md border bg-background text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+						className="flex size-8 items-center justify-center rounded-md border bg-bg text-text-high hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
 					>
 						<ChevronUp className="size-4" aria-hidden="true" />
 					</button>
@@ -85,7 +85,7 @@ export function CollectionDisplayView({
 						onClick={onMoveDown}
 						disabled={!canMoveDown || isReordering}
 						aria-label={`Move collection ${index + 1} down`}
-						className="flex size-8 items-center justify-center rounded-md border bg-background text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+						className="flex size-8 items-center justify-center rounded-md border bg-bg text-text-high hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
 					>
 						<ChevronDown className="size-4" aria-hidden="true" />
 					</button>

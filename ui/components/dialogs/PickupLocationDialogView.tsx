@@ -140,7 +140,7 @@ export function PickupLocationDialogView({
 						<div className="text-sm space-y-2 max-h-[120px] overflow-y-auto">
 							{locations.map((location, index) => (
 								<div key={index} className="p-2 bg-zinc-50 rounded-md">
-									<p className="font-medium text-foreground">{location.name}</p>
+									<p className="font-medium text-text-high">{location.name}</p>
 									<p className="text-muted-foreground text-xs">{location.address}</p>
 								</div>
 							))}
@@ -149,7 +149,7 @@ export function PickupLocationDialogView({
 
 					{!hasMultipleLocations && locations[0] && (
 						<div className="text-sm text-muted-foreground">
-							<p className="font-medium text-foreground mb-1">{locations[0].name}</p>
+							<p className="font-medium text-text-high mb-1">{locations[0].name}</p>
 							<p>{locations[0].address}</p>
 						</div>
 					)}

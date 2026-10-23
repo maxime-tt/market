@@ -170,7 +170,7 @@ export function AuctionTechnicalRow({ label, value, copyValue, stacked = false, 
 		>
 			<div className="min-w-0">
 				<p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-mid">{label}</p>
-				<p className={cn('mt-1 text-sm font-medium text-foreground', stacked ? 'break-words whitespace-pre-wrap' : 'break-all')}>
+				<p className={cn('mt-1 text-sm font-medium text-text-high', stacked ? 'break-words whitespace-pre-wrap' : 'break-all')}>
 					{value || 'N/A'}
 				</p>
 			</div>
@@ -180,7 +180,7 @@ export function AuctionTechnicalRow({ label, value, copyValue, stacked = false, 
 					ariaLabel={`Copy ${label}`}
 					variant="ghost"
 					size="sm"
-					className="h-8 shrink-0 px-2 text-text-mid hover:text-foreground"
+					className="h-8 shrink-0 px-2 text-text-mid hover:text-text-high"
 					onError={onCopyError ? (error) => onCopyError(label, error) : undefined}
 				/>
 			)}

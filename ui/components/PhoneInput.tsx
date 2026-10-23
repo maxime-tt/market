@@ -209,7 +209,7 @@ export function PhoneInput({ value, onChange, onBlur, placeholder = '7751892718'
 					<button
 						type="button"
 						onClick={toggleDropdown}
-						className="flex h-10 items-center gap-1 rounded-l-md border border-r-0 border-input bg-background px-3 text-sm hover:bg-accent/50 transition-colors"
+						className="flex h-10 items-center gap-1 rounded-l-md border border-r-0 border-border-strong bg-bg px-3 text-sm hover:bg-accent/50 transition-colors"
 					>
 						<span className="min-w-[3.5rem] text-left">{selectedDialCode || '+?'}</span>
 						<ChevronDownIcon className="size-4 opacity-50" />

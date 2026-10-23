@@ -18,7 +18,7 @@ export interface BackButtonProps {
 	ref?: Ref<HTMLButtonElement>
 }
 
-const INLINE_CLASS = cn('flex items-center gap-2 text-text-mid hover:text-foreground transition-colors cursor-pointer')
+const INLINE_CLASS = cn('flex items-center gap-2 text-text-mid hover:text-text-high transition-colors cursor-pointer')
 const ICON_CLASS = cn(
 	'absolute top-1/2 left-2 z-20 flex h-12 w-12 -translate-y-1/2 cursor-pointer items-center justify-center',
 	'text-fill-accent focus:outline-none sm:left-3 md:left-4',

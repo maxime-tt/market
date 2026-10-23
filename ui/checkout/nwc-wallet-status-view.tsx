@@ -29,7 +29,7 @@ export function NwcWalletStatusView({ connected, connectedWalletCount, settingsL
 	return (
 		<div ref={ref} data-slot="nwc-wallet-status" className={cn('rounded-lg border bg-muted/40 p-3', className)}>
 			<div className="flex items-center justify-between text-sm">
-				<span className="font-medium text-foreground">Wallet Status:</span>
+				<span className="font-medium text-text-high">Wallet Status:</span>
 				<div className="flex items-center gap-2">
 					{connected ? (
 						<>

@@ -24,7 +24,7 @@ export function CollectionSelectField({
 		<select
 			value={value}
 			onChange={(event) => onValueChange(event.target.value)}
-			className={cn('h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground', className)}
+			className={cn('h-10 w-full rounded-md border border-border-strong bg-bg px-3 text-sm text-text-high', className)}
 			{...props}
 		>
 			<option value={emptyValue}>{emptyLabel}</option>

@@ -7,7 +7,7 @@ import { Badge } from '../primitives/badge'
  * Both components were inline in `platform/web/routes/auctions.$auctionId.tsx`;
  * the route is an assembler and must not define components. The markup is
  * unchanged apart from colour classes, which were raw `zinc`/`white` values and
- * are now semantic tokens (`border-border`, `bg-muted/50`, `text-foreground`,
+ * are now semantic tokens (`border-border`, `bg-muted/50`, `text-text-high`,
  * `text-muted-foreground`).
  */
 
@@ -19,7 +19,7 @@ export function AuctionShippingDetailRow({ label, value }: { label: string; valu
 		// A `div` wrapping `dt`/`dd` is valid HTML inside a `dl`.
 		<div className="rounded-lg border border-border bg-muted/50 px-3 py-3">
 			<dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</dt>
-			<dd className="mt-1 break-words text-sm font-medium text-foreground">{value}</dd>
+			<dd className="mt-1 break-words text-sm font-medium text-text-high">{value}</dd>
 		</div>
 	)
 }
@@ -68,8 +68,8 @@ export function AuctionShippingOptionCard({
 }: AuctionShippingOptionCardProps) {
 	if (status === 'invalid') {
 		return (
-			<li className="rounded-xl border border-border bg-background px-5 py-5 shadow-sm">
-				<h3 className="text-sm font-semibold text-foreground">Invalid shipping reference</h3>
+			<li className="rounded-xl border border-border bg-bg px-5 py-5 shadow-sm">
+				<h3 className="text-sm font-semibold text-text-high">Invalid shipping reference</h3>
 				{description && <p className="mt-2 break-all text-xs text-muted-foreground">{description}</p>}
 			</li>
 		)
@@ -77,7 +77,7 @@ export function AuctionShippingOptionCard({
 
 	if (isLoading) {
 		return (
-			<li className="rounded-xl border border-border bg-background px-5 py-5 shadow-sm">
+			<li className="rounded-xl border border-border bg-bg px-5 py-5 shadow-sm">
 				<p className="text-sm text-muted-foreground">Loading shipping details...</p>
 			</li>
 		)
@@ -85,17 +85,17 @@ export function AuctionShippingOptionCard({
 
 	if (isUnavailable) {
 		return (
-			<li className="rounded-xl border border-border bg-background px-5 py-5 shadow-sm">
-				<h3 className="text-sm font-semibold text-foreground">Shipping option unavailable</h3>
+			<li className="rounded-xl border border-border bg-bg px-5 py-5 shadow-sm">
+				<h3 className="text-sm font-semibold text-text-high">Shipping option unavailable</h3>
 			</li>
 		)
 	}
 
 	return (
-		<li className="rounded-xl border border-border bg-background px-5 py-5 shadow-sm">
+		<li className="rounded-xl border border-border bg-bg px-5 py-5 shadow-sm">
 			<div className="flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<h3 className="text-base font-semibold text-foreground">{title}</h3>
+					<h3 className="text-base font-semibold text-text-high">{title}</h3>
 					{description && <p className="mt-2 break-all text-xs text-muted-foreground">{description}</p>}
 				</div>
 				<Badge variant="outline" className="border-border bg-muted/50 text-muted-foreground">

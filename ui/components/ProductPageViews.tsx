@@ -125,7 +125,7 @@ export function ProductPurchasePanel({
 							<div className="flex flex-shrink-0 items-center gap-2">
 								<Button
 									variant="outline"
-									className="text-foreground"
+									className="text-text-high"
 									size="icon"
 									onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
 									disabled={quantity <= 1}
@@ -147,7 +147,7 @@ export function ProductPurchasePanel({
 								/>
 								<Button
 									variant="outline"
-									className="text-foreground"
+									className="text-text-high"
 									size="icon"
 									onClick={() => onQuantityChange(Math.min(stock || quantity + 1, quantity + 1))}
 									disabled={quantity >= (stock || quantity)}

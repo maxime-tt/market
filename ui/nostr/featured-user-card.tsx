@@ -63,7 +63,7 @@ export function FeaturedUserCardView({
 		<Card
 			ref={ref}
 			data-slot="featured-user-card"
-			className={cn('hover:shadow-lg h-50 bg-background overflow-hidden py-0 transition-shadow', className)}
+			className={cn('hover:shadow-lg h-50 bg-bg overflow-hidden py-0 transition-shadow', className)}
 		>
 			<div className="flex h-full">
 				{/* Avatar on the left */}
@@ -82,9 +82,9 @@ export function FeaturedUserCardView({
 							className: 'block',
 							children: (
 								<>
-									<h3 className="truncate font-semibold text-foreground/90 transition-colors hover:text-fill-accent">{displayName}</h3>
-									{about && <p className="mt-1 line-clamp-2 text-sm text-foreground/80">{about}</p>}
-									<p className="mt-1 text-xs text-foreground/70">{productCount} products</p>
+									<h3 className="truncate font-semibold text-text-high/90 transition-colors hover:text-fill-accent">{displayName}</h3>
+									{about && <p className="mt-1 line-clamp-2 text-sm text-text-high/80">{about}</p>}
+									<p className="mt-1 text-xs text-text-high/70">{productCount} products</p>
 								</>
 							),
 						})}
@@ -95,7 +95,7 @@ export function FeaturedUserCardView({
 						{isLoadingProducts ? (
 							<div className="flex flex-row gap-1">
 								{Array.from({ length: FEATURED_USER_CARD_SLOTS }).map((_, index) => (
-									<div key={index} className="h-12 w-12 animate-pulse rounded bg-background/80" />
+									<div key={index} className="h-12 w-12 animate-pulse rounded bg-bg/80" />
 								))}
 							</div>
 						) : (
@@ -104,8 +104,8 @@ export function FeaturedUserCardView({
 									const product = products[index]
 									if (!product) {
 										return (
-											<div key={index} className="flex h-12 w-12 items-center justify-center rounded bg-background/90">
-												<span className="text-xs text-foreground/70">•</span>
+											<div key={index} className="flex h-12 w-12 items-center justify-center rounded bg-bg/90">
+												<span className="text-xs text-text-high/70">•</span>
 											</div>
 										)
 									}

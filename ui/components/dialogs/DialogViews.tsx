@@ -31,7 +31,7 @@ export function NSFWConfirmationDialogView({ open, onConfirm, onCancel }: NSFWCo
 						<li>Weapons and related items</li>
 						<li>Other age-restricted content</li>
 					</ul>
-					<p className="font-medium text-foreground">
+					<p className="font-medium text-text-high">
 						By enabling this setting, you confirm that you are of legal age in your jurisdiction to view such content.
 					</p>
 				</div>
