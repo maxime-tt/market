@@ -1,7 +1,16 @@
+import { useState } from 'react'
 import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
+import type {
+	AuctionAntiSnipeWindowMinutesPreset,
+	AuctionMinBidCurvePeakPreset,
+	AuctionMinBidCurveShape,
+	AuctionSettlementGracePreset,
+} from '@sdk/commerce/auctions/auctionForm'
 import { AuctionListItemView, AuctionTopBidBox } from '@ui/auction/auction-list-views'
 import { AuctionTimelinePreview } from '@ui/auction/auction-timeline-preview'
+import { AntiSnipeCurveSettings } from '@ui/auction/anti-snipe-curve-settings'
 import { BidLadderPreview } from '@ui/auction/bid-ladder-preview'
+import { SettlementGraceSettings } from '@ui/auction/settlement-grace-settings'
 import { BidStatusBanner, BidStatusPill, getBidStatusCopy, type BidStatusDisplayInput } from '@ui/auction/bid-status-views'
 import { AuctionShippingDetailRow, AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
@@ -112,6 +121,44 @@ function AuctionListItemSeenDemo() {
 				hasNewActivity={false}
 				onMarkActivitySeen={() => {}}
 			/>
+		</div>
+	)
+}
+
+/** Local state mirrors the host's anti-snipe slice so the spec can click the
+ * switch/window/shape/peak controls and observe the `onFormPatch` wiring. */
+function AntiSnipeCurveSettingsDemo() {
+	const [slice, setSlice] = useState<{
+		antiSnipeWindowMinutes: AuctionAntiSnipeWindowMinutesPreset
+		minBidCurveShape: AuctionMinBidCurveShape
+		minBidCurvePeakMultiplier: AuctionMinBidCurvePeakPreset
+	}>({ antiSnipeWindowMinutes: 0, minBidCurveShape: 'none', minBidCurvePeakMultiplier: 2 })
+	return (
+		<div className="max-w-md">
+			<AntiSnipeCurveSettings
+				antiSnipeWindowMinutes={slice.antiSnipeWindowMinutes}
+				minBidCurveShape={slice.minBidCurveShape}
+				minBidCurvePeakMultiplier={slice.minBidCurvePeakMultiplier}
+				onFormPatch={(patch) => setSlice((prev) => ({ ...prev, ...patch }))}
+				startAtSeconds={1_760_000_000}
+				endAtSeconds={1_760_086_400}
+				maxEndAtSeconds={1_760_090_000}
+				settlementGraceSeconds={86_400}
+				startingBid={1000}
+				bidIncrement={50}
+				reserve={2500}
+			/>
+		</div>
+	)
+}
+
+/** The settlement-grace card with its own `value` state, so the spec can click a
+ * preset and observe the active choice move through `onValueChange`. */
+function SettlementGraceSettingsDemo() {
+	const [value, setValue] = useState<AuctionSettlementGracePreset>('1h')
+	return (
+		<div className="max-w-md">
+			<SettlementGraceSettings value={value} onValueChange={setValue} />
 		</div>
 	)
 }
@@ -392,6 +439,67 @@ export const auction: WidgetLibrary = {
 					/>
 				</div>
 			),
+		},
+		{
+			// The anti-snipe policy card with a window, a curve and its timeline (T6.3 S4).
+			name: 'AntiSnipeCurveSettings',
+			render: () => (
+				<div className="max-w-md">
+					<AntiSnipeCurveSettings
+						antiSnipeWindowMinutes={15}
+						minBidCurveShape="linear"
+						minBidCurvePeakMultiplier={5}
+						onFormPatch={() => {}}
+						startAtSeconds={1_760_000_000}
+						endAtSeconds={1_760_086_400}
+						maxEndAtSeconds={1_760_090_000}
+						settlementGraceSeconds={86_400}
+						startingBid={1000}
+						bidIncrement={50}
+						reserve={2500}
+					/>
+				</div>
+			),
+		},
+		{
+			// The same card with no window: the curve controls are gated and the timeline is flat.
+			name: 'AntiSnipeCurveSettingsOff',
+			render: () => (
+				<div className="max-w-md">
+					<AntiSnipeCurveSettings
+						antiSnipeWindowMinutes={0}
+						minBidCurveShape="none"
+						minBidCurvePeakMultiplier={2}
+						onFormPatch={() => {}}
+						startAtSeconds={1_760_000_000}
+						endAtSeconds={1_760_086_400}
+						maxEndAtSeconds={1_760_086_400}
+						settlementGraceSeconds={86_400}
+						startingBid={1000}
+						bidIncrement={50}
+						reserve={0}
+					/>
+				</div>
+			),
+		},
+		{
+			// Interactive: click the controls to prove the `onFormPatch` wiring.
+			name: 'AntiSnipeCurveSettingsInteractive',
+			render: () => <AntiSnipeCurveSettingsDemo />,
+		},
+		{
+			// The settlement-grace picker with 1 hour selected (T6.3 S4).
+			name: 'SettlementGraceSettings',
+			render: () => (
+				<div className="max-w-md">
+					<SettlementGraceSettings value="1h" onValueChange={() => {}} />
+				</div>
+			),
+		},
+		{
+			// Interactive: click a preset to prove the `onValueChange` wiring.
+			name: 'SettlementGraceSettingsInteractive',
+			render: () => <SettlementGraceSettingsDemo />,
 		},
 	],
 }

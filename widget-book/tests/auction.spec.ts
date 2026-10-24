@@ -37,6 +37,11 @@ test('renders the auction library', async ({ page }) => {
 		'AuctionTimelinePreview',
 		'AuctionTimelinePreviewFlat',
 		'AuctionTimelinePreviewWaiting',
+		'AntiSnipeCurveSettings',
+		'AntiSnipeCurveSettingsOff',
+		'AntiSnipeCurveSettingsInteractive',
+		'SettlementGraceSettings',
+		'SettlementGraceSettingsInteractive',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
@@ -268,4 +273,46 @@ test('prompts for an end time instead of charting the timeline', async ({ page }
 	await expect(waiting).toContainText('Pick an end time to preview the bidding timeline.')
 	await expect(waiting.locator('svg')).toHaveCount(0)
 	await expect(waiting).not.toContainText('Bidding timeline')
+})
+
+test('renders the anti-snipe policy card and gates the curve on a window', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const off = page.getByTestId('widget-AntiSnipeCurveSettingsOff')
+	await expect(off).toContainText('Anti-snipe')
+	await expect(off.getByRole('switch')).toHaveAttribute('data-state', 'unchecked')
+	await expect(off).toContainText('Pick a window above to enable the curve.')
+	// Both the shape buttons (3) and the multiplier buttons (3) are gated on a window.
+	await expect(off.locator('button:disabled')).toHaveCount(6)
+
+	// The interactive demo proves the `onFormPatch` wiring: switching on enables
+	// every control and the peak footnote, then the window/shape chips move.
+	const live = page.getByTestId('widget-AntiSnipeCurveSettingsInteractive')
+	await expect(live.locator('button:disabled')).toHaveCount(6)
+	await live.getByRole('switch').click()
+	await expect(live.getByRole('switch')).toHaveAttribute('data-state', 'checked')
+	await expect(live.locator('button:disabled')).toHaveCount(0)
+	await expect(live).toContainText('Floor at auction end will be 2× the floor when the anti-snipe ramp begins.')
+
+	await live.getByRole('button', { name: '15 min' }).click()
+	await expect(live.getByRole('button', { name: '15 min' })).toHaveClass(/border-emerald-500/)
+	await live.getByRole('button', { name: 'Exponential' }).click()
+	await expect(live.getByRole('button', { name: 'Exponential' })).toHaveClass(/border-emerald-500/)
+	await expect(live.getByRole('button', { name: 'Linear' })).not.toHaveClass(/border-emerald-500/)
+})
+
+test('renders the settlement-grace picker and moves the active choice', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const card = page.getByTestId('widget-SettlementGraceSettings')
+	await expect(card).toContainText('Settlement grace')
+	await expect(card.getByRole('button')).toHaveCount(3)
+	await expect(card.getByRole('button', { name: '1 hour' })).toHaveClass(/border-emerald-500/)
+
+	// The interactive demo proves the `onValueChange` wiring: the active chip moves.
+	const live = page.getByTestId('widget-SettlementGraceSettingsInteractive')
+	await expect(live.getByRole('button', { name: '1 hour' })).toHaveClass(/border-emerald-500/)
+	await live.getByRole('button', { name: '3 hours' }).click()
+	await expect(live.getByRole('button', { name: '3 hours' })).toHaveClass(/border-emerald-500/)
+	await expect(live.getByRole('button', { name: '1 hour' })).not.toHaveClass(/border-emerald-500/)
 })
