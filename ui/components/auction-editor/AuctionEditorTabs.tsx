@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { Fragment, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { CalendarIcon, ChevronDown, Plus, X } from 'lucide-react'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@sdk/commerce/auctions'
 import {
@@ -11,7 +11,7 @@ import {
 	type AuctionMinBidCurveShape,
 	type AuctionSettlementGracePreset,
 } from '@sdk/commerce/auctions/auctionForm'
-import { getAuctionPublishValidationIssues, type AuctionPublishValidationField } from '@sdk/commerce/auctions/auctionPublishValidation'
+import { getAuctionPublishValidationIssues } from '@sdk/commerce/auctions/auctionPublishValidation'
 import { Button } from '../../primitives/button'
 import { Calendar } from '../../primitives/calendar'
 import { Checkbox } from '../../primitives/checkbox'
@@ -24,26 +24,35 @@ import { Slider } from '../../primitives/slider'
 import { Switch } from '../../primitives/switch'
 import { InfoTooltip } from '../../shared/info-tooltip'
 import { UiLink } from '../../provider/UiProvider'
+import { DURATION_PRESETS, DURATION_PRESETS_SHORTCUT } from '../../auction/duration-presets'
+import { pad2, parseDatetimeLocalSeconds, toDatetimeLocal } from '../../utils/datetime'
+import { formatAbsolute, formatAbsoluteCompact, formatDuration } from '../../utils/duration'
+import {
+	describeShipping,
+	type AuctionImage,
+	type AuctionShippingOptionSummary,
+	type AuctionShippingViewProps,
+	type EndMode,
+	type RenderAuctionImageUploader,
+	type StartMode,
+	type TabProps,
+	type ValidationMessages,
+} from '../../auction/model'
 
-export type AuctionImage = { imageUrl: string; imageOrder: number }
-export type AuctionValidationMessages = Partial<Record<AuctionPublishValidationField, string>>
-type ValidationMessages = AuctionValidationMessages
-
-/** Host-supplied uploader; `index` is -1 for the empty "add image" slot. */
-export type RenderAuctionImageUploader = (props: {
-	src: string | null
-	index: number
-	imagesLength: number
-	onSave: (result: { url: string; index: number }) => void
-	onDelete: (index: number) => void
-	onPromote?: (index: number) => void
-	onDemote?: (index: number) => void
-}) => ReactNode
-
-export type TabProps = {
-	formData: AuctionFormData
-	setFormData: Dispatch<SetStateAction<AuctionFormData>>
-}
+// T6.3 slice S1 moved the pure helpers and the shared types above into
+// `ui/utils/*` and `ui/auction/*`. Re-export the module's previous public
+// surface so no existing importer breaks during the transition.
+export { parseDatetimeLocalSeconds, toDatetimeLocal } from '../../utils/datetime'
+export type {
+	AuctionImage,
+	AuctionShippingOptionSummary,
+	AuctionShippingViewProps,
+	AuctionValidationMessages,
+	EndMode,
+	RenderAuctionImageUploader,
+	StartMode,
+	TabProps,
+} from '../../auction/model'
 
 export function NameTab({ formData, setFormData }: TabProps) {
 	return (
@@ -98,97 +107,6 @@ export function NameTab({ formData, setFormData }: TabProps) {
 			</div>
 		</div>
 	)
-}
-
-export type StartMode = 'immediate' | 'scheduled'
-export type EndMode = 'duration' | 'absolute'
-
-type AuctionDurationPreset = { label: string; seconds: number }
-
-const DURATION_PRESETS: AuctionDurationPreset[] = [
-	{ label: '1m', seconds: 1 * 60 },
-	{ label: '2m', seconds: 2 * 60 },
-	{ label: '3m', seconds: 3 * 60 },
-	{ label: '4m', seconds: 4 * 60 },
-	{ label: '5m', seconds: 5 * 60 },
-	{ label: '10m', seconds: 10 * 60 },
-	{ label: '15m', seconds: 15 * 60 },
-	{ label: '30m', seconds: 30 * 60 },
-	{ label: '45m', seconds: 45 * 60 },
-	{ label: '1h', seconds: 3600 },
-	{ label: '2h', seconds: 2 * 3600 },
-	{ label: '3h', seconds: 3 * 3600 },
-	{ label: '4h', seconds: 4 * 3600 },
-	{ label: '5h', seconds: 5 * 3600 },
-	{ label: '6h', seconds: 6 * 3600 },
-	{ label: '7h', seconds: 7 * 3600 },
-	{ label: '8h', seconds: 8 * 3600 },
-	{ label: '9h', seconds: 9 * 3600 },
-	{ label: '10h', seconds: 10 * 3600 },
-	{ label: '12h', seconds: 12 * 3600 },
-	{ label: '14h', seconds: 14 * 3600 },
-	{ label: '16h', seconds: 16 * 3600 },
-	{ label: '18h', seconds: 18 * 3600 },
-	{ label: '20h', seconds: 20 * 3600 },
-	{ label: '22h', seconds: 22 * 3600 },
-	{ label: '1d', seconds: 86400 },
-	{ label: '2d', seconds: 2 * 86400 },
-	{ label: '3d', seconds: 3 * 86400 },
-	{ label: '4d', seconds: 4 * 86400 },
-	{ label: '5d', seconds: 5 * 86400 },
-	{ label: '6d', seconds: 6 * 86400 },
-	{ label: '7d', seconds: 7 * 86400 },
-	{ label: '8d', seconds: 8 * 86400 },
-	{ label: '9d', seconds: 9 * 86400 },
-	{ label: '10d', seconds: 10 * 86400 },
-	{ label: '11d', seconds: 11 * 86400 },
-	{ label: '12d', seconds: 12 * 86400 },
-	{ label: '13d', seconds: 13 * 86400 },
-	{ label: '14d', seconds: 14 * 86400 },
-	{ label: '15d', seconds: 15 * 86400 },
-	{ label: '20d', seconds: 20 * 86400 },
-	{ label: '25d', seconds: 25 * 86400 },
-	{ label: '30d', seconds: 30 * 86400 },
-]
-
-const DURATION_PRESETS_SHORTCUT: AuctionDurationPreset[] = [
-	DURATION_PRESETS[9], // 1 Hour
-	DURATION_PRESETS[19], // 12 Hours
-	DURATION_PRESETS[25], // 1 Day
-	DURATION_PRESETS[31], // 7 Days
-	DURATION_PRESETS[38], // 14 Days
-	DURATION_PRESETS[42], // 30 Days
-]
-
-function pad2(n: number): string {
-	return n.toString().padStart(2, '0')
-}
-
-export function toDatetimeLocal(date: Date): string {
-	return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
-}
-
-export function parseDatetimeLocalSeconds(value: string): number | null {
-	if (!value) return null
-	const ts = new Date(value).getTime()
-	return Number.isNaN(ts) ? null : Math.floor(ts / 1000)
-}
-
-function formatDuration(totalSeconds: number): string {
-	if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return '0 minutes'
-	const days = Math.floor(totalSeconds / 86400)
-	const hours = Math.floor((totalSeconds % 86400) / 3600)
-	const minutes = Math.floor((totalSeconds % 3600) / 60)
-	const parts: string[] = []
-	if (days > 0) parts.push(`${days} day${days === 1 ? '' : 's'}`)
-	if (hours > 0) parts.push(`${hours} hour${hours === 1 ? '' : 's'}`)
-	if (days === 0 && minutes > 0) parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`)
-	return parts.length > 0 ? parts.join(' ') : '< 1 minute'
-}
-
-function formatAbsolute(tsSeconds: number): string {
-	if (!tsSeconds) return '—'
-	return new Date(tsSeconds * 1000).toLocaleString()
 }
 
 function DateTimePicker({
@@ -536,25 +454,6 @@ function AuctionTimelinePreview({
 			<p className="mt-2 text-[10px] italic text-zinc-400">Times shown on the chart are symbolic — segments aren't to scale.</p>
 		</div>
 	)
-}
-
-/**
- * Compact absolute-time formatter for the inline tick labels. Returns
- * `HH:MM` when the checkpoint is on the seller's current day,
- * `MM/DD HH:MM` otherwise. The full locale-aware formatting still lives
- * on `formatAbsolute()` for any hover / copy contexts that need it.
- */
-function formatAbsoluteCompact(tsSeconds: number): string {
-	if (!tsSeconds) return ''
-	const d = new Date(tsSeconds * 1000)
-	const hh = String(d.getHours()).padStart(2, '0')
-	const mm = String(d.getMinutes()).padStart(2, '0')
-	const today = new Date()
-	const sameDay = d.toDateString() === today.toDateString()
-	if (sameDay) return `${hh}:${mm}`
-	const month = String(d.getMonth() + 1).padStart(2, '0')
-	const day = String(d.getDate()).padStart(2, '0')
-	return `${month}/${day} ${hh}:${mm}`
 }
 
 /**
@@ -1370,31 +1269,6 @@ export function ImagesTab({
 			</div>
 		</div>
 	)
-}
-
-export type AuctionShippingOptionSummary = {
-	id: string
-	name: string
-	price: string
-	currency: string
-	service: string
-	carrier: string | undefined
-}
-
-export interface AuctionShippingViewProps {
-	attached: readonly { shippingRef: string; extraCost: string; option: AuctionShippingOptionSummary | null }[]
-	unselected: readonly AuctionShippingOptionSummary[]
-	hasUser: boolean
-	isLoading: boolean
-	hasAnyOptions: boolean
-	extraCostErrors: Record<number, string>
-	onAdd: (option: AuctionShippingOptionSummary) => void
-	onRemove: (index: number) => void
-	onExtraCostChange: (index: number, extraCost: string) => void
-}
-
-function describeShipping(option: AuctionShippingOptionSummary): string {
-	return `${option.service ? ` · ${option.service}` : ''}${option.carrier ? ` · ${option.carrier}` : ''}`
 }
 
 export function AuctionShippingView({
