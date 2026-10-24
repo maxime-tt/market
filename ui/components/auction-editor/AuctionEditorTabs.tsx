@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
-import { CalendarIcon, ChevronDown, Plus, X } from 'lucide-react'
+import { ChevronDown, Plus, X } from 'lucide-react'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@sdk/commerce/auctions'
 import {
 	AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES,
@@ -13,19 +13,18 @@ import {
 } from '@sdk/commerce/auctions/auctionForm'
 import { getAuctionPublishValidationIssues } from '@sdk/commerce/auctions/auctionPublishValidation'
 import { Button } from '../../primitives/button'
-import { Calendar } from '../../primitives/calendar'
 import { Checkbox } from '../../primitives/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../primitives/collapsible'
 import { Input } from '../../primitives/input'
 import { Label } from '../../primitives/label'
-import { Popover, PopoverContent, PopoverTrigger } from '../../primitives/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../primitives/select'
 import { Slider } from '../../primitives/slider'
 import { Switch } from '../../primitives/switch'
+import { DateTimePicker } from '../../shared/datetime-picker'
 import { InfoTooltip } from '../../shared/info-tooltip'
 import { UiLink } from '../../provider/UiProvider'
 import { DURATION_PRESETS, DURATION_PRESETS_SHORTCUT } from '../../auction/duration-presets'
-import { pad2, parseDatetimeLocalSeconds, toDatetimeLocal } from '../../utils/datetime'
+import { parseDatetimeLocalSeconds, toDatetimeLocal } from '../../utils/datetime'
 import { formatAbsolute, formatAbsoluteCompact, formatDuration } from '../../utils/duration'
 import {
 	describeShipping,
@@ -106,62 +105,6 @@ export function NameTab({ formData, setFormData }: TabProps) {
 				</div>
 			</div>
 		</div>
-	)
-}
-
-function DateTimePicker({
-	value,
-	onChange,
-	placeholder = 'Pick a date & time',
-}: {
-	value: string
-	onChange: (next: string) => void
-	placeholder?: string
-}) {
-	const [open, setOpen] = useState(false)
-	const seconds = parseDatetimeLocalSeconds(value)
-	const date = seconds ? new Date(seconds * 1000) : undefined
-	const timeValue = date ? `${pad2(date.getHours())}:${pad2(date.getMinutes())}` : '12:00'
-
-	const handleDateSelect = (next: Date | undefined) => {
-		if (!next) return
-		const merged = new Date(next)
-		if (date) {
-			merged.setHours(date.getHours(), date.getMinutes(), 0, 0)
-		} else {
-			merged.setHours(12, 0, 0, 0)
-		}
-		onChange(toDatetimeLocal(merged))
-	}
-
-	const handleTimeChange = (time: string) => {
-		const [hStr, mStr] = time.split(':')
-		const h = parseInt(hStr ?? '', 10)
-		const m = parseInt(mStr ?? '', 10)
-		if (Number.isNaN(h) || Number.isNaN(m)) return
-		const base = date ? new Date(date) : new Date()
-		base.setHours(h, m, 0, 0)
-		onChange(toDatetimeLocal(base))
-	}
-
-	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
-				<Button type="button" variant="outline" className="w-full justify-start gap-2 font-normal">
-					<CalendarIcon className="h-4 w-4 text-zinc-500 shrink-0" />
-					<span className={date ? 'text-zinc-900' : 'text-zinc-500'}>{date ? date.toLocaleString() : placeholder}</span>
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent className="w-auto p-0" align="start">
-				<Calendar mode="single" selected={date} onSelect={handleDateSelect} captionLayout="dropdown" />
-				<div className="border-t p-3 space-y-2">
-					<Label htmlFor="datetime-picker-time" className="text-xs text-zinc-600">
-						Time
-					</Label>
-					<Input id="datetime-picker-time" type="time" value={timeValue} onChange={(e) => handleTimeChange(e.target.value)} />
-				</div>
-			</PopoverContent>
-		</Popover>
 	)
 }
 

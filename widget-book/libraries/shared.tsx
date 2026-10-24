@@ -20,6 +20,7 @@ import { PriceDisplayView } from '@ui/shared/price-display'
 import { CityCombobox } from '@ui/shared/city-combobox'
 import { CountryCombobox } from '@ui/shared/country-combobox'
 import { PhoneInput } from '@ui/shared/phone-input'
+import { DateTimePicker } from '@ui/shared/datetime-picker'
 import { PackageIcon, PencilIcon, ServerIcon, StoreIcon, TrashIcon } from 'lucide-react'
 
 import type { WidgetLibrary } from '../libraries'
@@ -117,6 +118,17 @@ function PhoneInputDemo() {
 	return (
 		<div className="w-72">
 			<PhoneInput value={phone} onChange={setPhone} selectedCountry="Germany" placeholder="7751892718" />
+		</div>
+	)
+}
+
+/** Date-time picker demo: holds the `datetime-local` string the caller would own. */
+function DateTimePickerDemo({ initial = '' }: { initial?: string }) {
+	const [value, setValue] = useState(initial)
+
+	return (
+		<div className="w-72">
+			<DateTimePicker value={value} onChange={setValue} placeholder="Pick a start date & time" />
 		</div>
 	)
 }
@@ -447,6 +459,14 @@ export const shared: WidgetLibrary = {
 		{
 			name: 'PhoneInput',
 			render: () => <PhoneInputDemo />,
+		},
+		{
+			name: 'DateTimePicker',
+			render: () => <DateTimePickerDemo />,
+		},
+		{
+			name: 'DateTimePickerSelected',
+			render: () => <DateTimePickerDemo initial="2026-10-24T15:30" />,
 		},
 	],
 }

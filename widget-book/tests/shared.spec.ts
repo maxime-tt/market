@@ -247,3 +247,28 @@ test('combines the dial code with the phone number', async ({ page }) => {
 	await france.click()
 	await expect(trigger).toContainText('+33')
 })
+
+test('opens the date-time picker and reads the derived time', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const trigger = page.getByTestId('widget-DateTimePicker').getByRole('button')
+	await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+	await expect(trigger).toContainText('Pick a start date & time')
+
+	// Empty value defaults the time half to midday; the popover is closed at rest.
+	await trigger.click()
+	await expect(page.locator('input[type="time"]')).toHaveValue('12:00')
+	await page.keyboard.press('Escape')
+	await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('shows the selected instant and its time half', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const trigger = page.getByTestId('widget-DateTimePickerSelected').getByRole('button')
+	await expect(trigger).not.toContainText('Pick a start date & time')
+
+	await trigger.click()
+	await expect(page.locator('input[type="time"]')).toHaveValue('15:30')
+	await page.keyboard.press('Escape')
+})
