@@ -1,4 +1,4 @@
-import { OrderCard } from '@/components/orders/OrderCard'
+import { OrderCardView } from '@ui/orders/order-detail-views'
 import { Button } from '@ui/wrappers/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { Skeleton } from '@ui/primitives/skeleton'
@@ -165,9 +165,20 @@ function DashboardInnerComponent() {
 						<EmptyState compact title="No orders yet" />
 					) : (
 						<div className="space-y-4">
-							{recentOrders.map((orderData) => (
-								<OrderCard key={orderData.order.id} orderData={orderData} userPubkey={userPubkey} />
-							))}
+							{recentOrders.map((orderData) => {
+								// Buyer authored the order; the seller is the `p` recipient.
+								const status = orderData.latestStatus?.tags.find((t) => t[0] === 'status')?.[1] || 'pending'
+								return (
+									<OrderCardView
+										key={orderData.order.id}
+										href={`/dashboard/orders/${orderData.order.id}`}
+										orderEventId={orderData.order.id}
+										isBuyer={orderData.order.pubkey === userPubkey}
+										status={status}
+										createdAt={orderData.order.created_at}
+									/>
+								)
+							})}
 							<Link to="/dashboard/sales/sales">
 								<Button variant="ghost" className="w-full">
 									View All Orders →

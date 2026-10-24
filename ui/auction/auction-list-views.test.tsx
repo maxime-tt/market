@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AuctionListItemView, AuctionTopBidBox } from './auction-list-views'
+import { AuctionFiltersView, AuctionListItemView, AuctionTopBidBox } from './auction-list-views'
 
 describe('AuctionTopBidBox', () => {
 	test('renders the empty state when there is no top bid', () => {
@@ -105,5 +105,34 @@ describe('AuctionListItemView', () => {
 		expect(idle).toContain('disabled')
 		const busy = renderToStaticMarkup(<AuctionListItemView title="t" summary="s" status="Live" hasNewActivity />)
 		expect(busy).toContain('Mark as seen')
+	})
+})
+
+describe('AuctionFiltersView', () => {
+	const sortOptions = [
+		{ value: 'newest', title: 'Newest' },
+		{ value: 'oldest', title: 'Oldest' },
+	]
+	const baseProps = {
+		appliedFilterCount: 0,
+		hideEnded: true,
+		sort: 'newest',
+		sortOptions,
+		onToggleHideEnded: () => {},
+		onSortChange: () => {},
+		onReset: () => {},
+	}
+
+	test('renders the trigger at defaults with no count badge', () => {
+		const markup = renderToStaticMarkup(<AuctionFiltersView {...baseProps} />)
+		expect(markup).toContain('Sort')
+		expect(markup).toContain('type="button"')
+	})
+
+	test('shows the applied-filter count when filters are active', () => {
+		const idle = renderToStaticMarkup(<AuctionFiltersView {...baseProps} />)
+		expect(idle).not.toContain('rounded-full bg-primary')
+		const active = renderToStaticMarkup(<AuctionFiltersView {...baseProps} appliedFilterCount={2} />)
+		expect(active).toContain('>2</span>')
 	})
 })

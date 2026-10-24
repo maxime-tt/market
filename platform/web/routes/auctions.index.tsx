@@ -1,7 +1,7 @@
 import { AuctionCard } from '@/components/AuctionCard'
 import { Media } from '@ui/shared/media'
 import { LoadingState } from '@ui/shared/loading-state'
-import { AuctionFilters } from '@/components/AuctionFilters'
+import { AuctionFiltersView } from '@ui/auction/auction-list-views'
 import { ShowTestListingsToggle } from '@/components/ShowTestListingsToggle'
 import { AuctionSectionGrid } from '@/components/nostr/AuctionSectionGrid'
 import { ItemGrid } from '@ui/shared/item-grid'
@@ -11,7 +11,15 @@ import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { uiStore } from '@/lib/stores/ui'
 import { uiActions } from '@/lib/stores/ui'
-import { defaultAuctionFilters, useFilteredAuctions, type AuctionFilterState } from '@/lib/utils/auctions'
+import {
+	auctionSortOptionValues,
+	calculateAppliedFilterCount,
+	defaultAuctionFilters,
+	getAuctionSortOptionTitle,
+	useFilteredAuctions,
+	type AuctionFilterState,
+	type AuctionSortOption,
+} from '@/lib/utils/auctions'
 import {
 	auctionByATagQueryOptions,
 	auctionsQueryOptions,
@@ -68,6 +76,11 @@ function AuctionsRoute() {
 	const { user: currentUser } = useStore(authStore)
 	const { showNSFWContent } = useStore(uiStore)
 	const [filters, setFilters] = useState<AuctionFilterState>(defaultAuctionFilters)
+
+	// Host-resolved filter/sort vocabulary for the pure filters view.
+	const auctionSortOptions = auctionSortOptionValues.map((value) => ({ value, title: getAuctionSortOptionTitle(value) }))
+	const hideEndedAuctions = filters.hideEnded ?? defaultAuctionFilters.hideEnded
+	const auctionSort = filters.sort ?? defaultAuctionFilters.sort
 
 	const auctionsQuery = useQuery({
 		...auctionsQueryOptions(500),
@@ -338,7 +351,15 @@ function AuctionsRoute() {
 					    test-labeled auctions the feed gates out. */}
 					<div className="flex items-center gap-3">
 						<ShowTestListingsToggle />
-						<AuctionFilters filters={filters} onFiltersChange={setFilters} />
+						<AuctionFiltersView
+							appliedFilterCount={calculateAppliedFilterCount(filters)}
+							hideEnded={hideEndedAuctions}
+							sort={auctionSort}
+							sortOptions={auctionSortOptions}
+							onToggleHideEnded={() => setFilters({ ...filters, hideEnded: !hideEndedAuctions })}
+							onSortChange={(value) => setFilters({ ...filters, sort: value as AuctionSortOption })}
+							onReset={() => setFilters(defaultAuctionFilters)}
+						/>
 					</div>
 				</div>
 			</div>

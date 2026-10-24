@@ -1,7 +1,11 @@
-import { CheckCheck, Gavel, Hourglass } from 'lucide-react'
+import { CheckCheck, Filter, Gavel, Hourglass, SortAsc } from 'lucide-react'
 import type { ReactNode, Ref } from 'react'
 import { Media } from '../shared/media'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../primitives/accordion'
+import { Checkbox } from '../primitives/checkbox'
+import { Label } from '../primitives/label'
+import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../primitives/select'
 import { StatusBadge } from '../shared/status-badge'
 import { cn } from '../utils/cn'
 import { Button } from '../wrappers/button'
@@ -317,6 +321,101 @@ export function AuctionListItemView({
 					</div>
 				</div>
 			</div>
+		</div>
+	)
+}
+
+/**
+ * Auction **filter / sort** presentation, lifted out of the legacy host
+ * `AuctionFilters` component (now retired) and assembled by
+ * `platform/web/routes/auctions.index.tsx`.
+ *
+ * The host resolves the filter state and the sort vocabulary (its own
+ * `@/lib/utils/auctions` helpers) and passes them down; the view is a pure
+ * function of props. Declared visible changes: none — markup, class strings and
+ * copy are identical to the legacy host component; only the prop surface moved.
+ */
+export interface AuctionFiltersViewProps {
+	/** Count of non-default filters currently applied (drives the badge + reset). */
+	appliedFilterCount: number
+	/** Resolved "hide ended auctions" state (mirrors the legacy `?? default` value). */
+	hideEnded?: boolean
+	/** Resolved sort option value (mirrors the legacy `?? default` value). */
+	sort?: string
+	/** Host-resolved sort vocabulary so the view stays copy-free. */
+	sortOptions: readonly { value: string; title: string }[]
+	onToggleHideEnded: () => void
+	onSortChange: (value: string) => void
+	onReset: () => void
+	className?: string
+}
+
+export function AuctionFiltersView({
+	appliedFilterCount,
+	hideEnded,
+	sort,
+	sortOptions,
+	onToggleHideEnded,
+	onSortChange,
+	onReset,
+	className,
+}: AuctionFiltersViewProps) {
+	return (
+		<div className={cn(className)}>
+			<Popover>
+				<PopoverTrigger asChild>
+					<Button variant="outline" size="sm" className="gap-2">
+						<Filter className="w-4 h-4" />
+						<span>Filter &amp; Sort</span>
+						{appliedFilterCount > 0 && (
+							<span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+								{appliedFilterCount}
+							</span>
+						)}
+					</Button>
+				</PopoverTrigger>
+				<PopoverContent className="w-72" align="end">
+					<div className="space-y-4">
+						<div className="font-medium text-sm">Filters</div>
+
+						<div className="space-y-3">
+							<div className="flex items-center space-x-2">
+								<Checkbox id="hideEndedAuctions" checked={hideEnded} onCheckedChange={onToggleHideEnded} />
+								<Label htmlFor="hideEndedAuctions" className="text-sm font-normal cursor-pointer">
+									Hide ended auctions
+								</Label>
+							</div>
+						</div>
+
+						<div className="border-t pt-4">
+							<div className="font-medium text-sm mb-2 flex items-center gap-2">
+								<SortAsc className="w-4 h-4" />
+								Sort by
+							</div>
+							<Select value={sort} onValueChange={onSortChange}>
+								<SelectTrigger className="w-full">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{sortOptions.map((option) => (
+										<SelectItem key={option.value} value={option.value}>
+											{option.title}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+
+						{appliedFilterCount > 0 && (
+							<div className="border-t pt-4">
+								<Button variant="ghost" size="sm" onClick={onReset} className="w-full">
+									Reset filters
+								</Button>
+							</div>
+						)}
+					</div>
+				</PopoverContent>
+			</Popover>
 		</div>
 	)
 }

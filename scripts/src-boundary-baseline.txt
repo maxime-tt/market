@@ -50,7 +50,17 @@
 # moving wiring out of a route converts uncounted platform -> src edges into
 # counted src -> * ones.
 
-platform -> src production 388 68
+# 2026-10-24 (route-retarget off @/components, pure-presentation rows): two
+#   routes stopped importing a legacy host component whose only job was to
+#   compute plain props for an existing (or newly extracted) pure ui view:
+#     * dashboard/index.tsx  -> OrderCardView (ui/orders/order-detail-views)
+#     * auctions.index.tsx   -> AuctionFiltersView (ui/auction/auction-list-views)
+#   Both host components deleted (route-only importers). INBOUND row falls
+#   388/68 -> 386/68. The OUTBOUND src -> ui row is re-measured, not ratcheted:
+#   deleting the two src components removes the ui/ edges they carried
+#   (243/119 -> 241/117).
+
+platform -> src production 386 68
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -62,7 +72,7 @@ sdk -> src test 0 0
 src -> platform production 28 23
 src -> platform test 22 11
 
-src -> ui production 243 119
+src -> ui production 241 117
 src -> ui test 0 0
 
 src -> sdk production 165 120

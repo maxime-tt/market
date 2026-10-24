@@ -8,7 +8,7 @@ import type {
 	AuctionSettlementGracePreset,
 } from '@sdk/commerce/auctions/auctionForm'
 import { AuctionCategoryTab, AuctionImagesTab, AuctionNameTab, AuctionSpecTab } from '@ui/auction/auction-editor-tabs'
-import { AuctionListItemView, AuctionTopBidBox } from '@ui/auction/auction-list-views'
+import { AuctionFiltersView, AuctionListItemView, AuctionTopBidBox } from '@ui/auction/auction-list-views'
 import { AuctionShippingView } from '@ui/auction/auction-shipping-view'
 import { AuctionTabView } from '@ui/auction/auction-tab-view'
 import type { AuctionShippingOptionSummary } from '@ui/auction/model'
@@ -333,6 +333,25 @@ export const auction: WidgetLibrary = {
 		{
 			name: 'AuctionListItemViewSeen',
 			render: () => <AuctionListItemSeenDemo />,
+		},
+		{
+			// T6.x: the auctions-index filter/sort control, lifted out of the
+			// legacy host so the route assembles it from host-resolved props.
+			name: 'AuctionFiltersView',
+			render: () => (
+				<AuctionFiltersView
+					appliedFilterCount={2}
+					hideEnded
+					sort="newest"
+					sortOptions={[
+						{ value: 'newest', title: 'Newest' },
+						{ value: 'oldest', title: 'Oldest' },
+					]}
+					onToggleHideEnded={() => {}}
+					onSortChange={() => {}}
+					onReset={() => {}}
+				/>
+			),
 		},
 		{
 			// T3.0 debt: the top-bid panel of the same card.
