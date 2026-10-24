@@ -22,22 +22,18 @@ import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { AuctionCategoryTab, AuctionImagesTab, AuctionNameTab, AuctionSpecTab } from '@ui/auction/auction-editor-tabs'
+import { AuctionShippingView } from '@ui/auction/auction-shipping-view'
+import { AuctionTabView } from '@ui/auction/auction-tab-view'
 import {
-	AuctionShippingView,
-	AuctionTabContent,
-	CategoryTab,
-	ImagesTab,
-	NameTab,
-	parseDatetimeLocalSeconds,
-	SpecTab,
-	toDatetimeLocal,
 	type AuctionImage,
 	type AuctionShippingOptionSummary,
 	type AuctionValidationMessages as ValidationMessages,
 	type EndMode,
 	type StartMode,
 	type TabProps,
-} from '@ui/components/auction-editor/AuctionEditorTabs'
+} from '@ui/auction/model'
+import { parseDatetimeLocalSeconds, toDatetimeLocal } from '@ui/utils/datetime'
 
 type AuctionTab = 'name' | 'auction' | 'category' | 'spec' | 'images' | 'shipping'
 
@@ -481,10 +477,10 @@ export function AuctionFormContent() {
 
 					<div className="flex-1 overflow-y-auto min-h-0 pr-1">
 						<TabsContent value="name" className="mt-4">
-							<NameTab formData={formData} setFormData={setFormData} />
+							<AuctionNameTab formData={formData} setFormData={setFormData} />
 						</TabsContent>
 						<TabsContent value="auction" className="mt-4">
-							<AuctionTabContent
+							<AuctionTabView
 								formData={formData}
 								setFormData={setFormData}
 								availableMints={availableMints}
@@ -500,7 +496,7 @@ export function AuctionFormContent() {
 							/>
 						</TabsContent>
 						<TabsContent value="category" className="mt-4">
-							<CategoryTab
+							<AuctionCategoryTab
 								formData={formData}
 								setFormData={setFormData}
 								subCategoryInput={subCategoryInput}
@@ -509,10 +505,10 @@ export function AuctionFormContent() {
 							/>
 						</TabsContent>
 						<TabsContent value="spec" className="mt-4">
-							<SpecTab formData={formData} setFormData={setFormData} />
+							<AuctionSpecTab formData={formData} setFormData={setFormData} />
 						</TabsContent>
 						<TabsContent value="images" className="mt-4">
-							<ImagesTab
+							<AuctionImagesTab
 								images={images}
 								setImages={setImages}
 								error={validationMessages.imageUrls}

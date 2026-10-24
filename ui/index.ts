@@ -61,14 +61,9 @@ export {
 	ProductShippingView,
 	ProductSpecsView,
 } from './products/product-editor-tabs'
-export {
-	AuctionShippingView,
-	AuctionTabContent,
-	CategoryTab as AuctionCategoryTab,
-	ImagesTab as AuctionImagesTab,
-	NameTab as AuctionNameTab,
-	SpecTab as AuctionSpecTab,
-} from './components/auction-editor/AuctionEditorTabs'
+export { AuctionCategoryTab, AuctionImagesTab, AuctionNameTab, AuctionSpecTab } from './auction/auction-editor-tabs'
+export { AuctionShippingView } from './auction/auction-shipping-view'
+export { AuctionTabView } from './auction/auction-tab-view'
 export {
 	DecryptPasswordDialogView,
 	MigratePrivateKeyDialogView,
