@@ -716,10 +716,13 @@ export const auction: WidgetLibrary = {
 			),
 		},
 		{
-			// The four degenerate Available branches, stacked.
-			name: 'AuctionShippingViewStates',
+			// S5b: the degenerate Available branches as four reachable states.
+			// Each renders the shared state kit: not-connected -> EmptyState,
+			// loading -> LoadingState, no-options -> EmptyState with the link in
+			// its action slot, all-attached -> Notice.
+			name: 'AuctionShippingViewNotConnected',
 			render: () => (
-				<div className="grid max-w-md gap-4">
+				<div className="max-w-md">
 					<AuctionShippingView
 						attached={[]}
 						unselected={[]}
@@ -731,6 +734,13 @@ export const auction: WidgetLibrary = {
 						onRemove={() => {}}
 						onExtraCostChange={() => {}}
 					/>
+				</div>
+			),
+		},
+		{
+			name: 'AuctionShippingViewLoading',
+			render: () => (
+				<div className="max-w-md">
 					<AuctionShippingView
 						attached={[]}
 						unselected={[]}
@@ -742,6 +752,13 @@ export const auction: WidgetLibrary = {
 						onRemove={() => {}}
 						onExtraCostChange={() => {}}
 					/>
+				</div>
+			),
+		},
+		{
+			name: 'AuctionShippingViewNoOptions',
+			render: () => (
+				<div className="max-w-md">
 					<AuctionShippingView
 						attached={[]}
 						unselected={[]}
@@ -753,6 +770,13 @@ export const auction: WidgetLibrary = {
 						onRemove={() => {}}
 						onExtraCostChange={() => {}}
 					/>
+				</div>
+			),
+		},
+		{
+			name: 'AuctionShippingViewAllAttached',
+			render: () => (
+				<div className="max-w-md">
 					<AuctionShippingView
 						attached={[]}
 						unselected={[]}

@@ -4,6 +4,9 @@ import { Button } from '../primitives/button'
 import { Input } from '../primitives/input'
 import { Label } from '../primitives/label'
 import { UiLink } from '../provider/UiProvider'
+import { EmptyState } from '../shared/empty-state'
+import { LoadingState } from '../shared/loading-state'
+import { Notice } from '../shared/notice'
 import { cn } from '../utils/cn'
 import { describeShipping, type AuctionShippingViewProps } from './model'
 
@@ -16,10 +19,13 @@ import { describeShipping, type AuctionShippingViewProps } from './model'
  * T6.3 slice S5a: lifted verbatim out of
  * `ui/components/auction-editor/AuctionEditorTabs.tsx` and given the
  * `className`/`ref` contract from `ui/AGENTS.md`. Props are the existing
- * `AuctionShippingViewProps` verbatim, plus `className`/`ref`. Markup, copy and
- * class strings are unchanged. Adopting the shared `empty-state`/`loading-state`
- * kit for the degenerate branches is slice S5b, a *declared* change, and is
- * deliberately not done here.
+ * `AuctionShippingViewProps` verbatim, plus `className`/`ref`.
+ *
+ * T6.3 slice S5b adopts the shared state kit for the four degenerate `Available`
+ * branches: `EmptyState` for the no-wallet and no-options states, `LoadingState`
+ * for the in-flight state, and `Notice` for the all-attached state. Copy is
+ * unchanged; only the wrapper markup and its classes change (a declared visible
+ * change).
  */
 export function AuctionShippingView({
 	attached,
@@ -89,19 +95,27 @@ export function AuctionShippingView({
 			<div className="space-y-3">
 				<h3 className="text-sm font-semibold">Available</h3>
 				{!hasUser ? (
-					<p className="text-sm text-zinc-500">Connect your wallet to load your shipping options.</p>
+					<EmptyState compact title="Connect your wallet to load your shipping options." />
 				) : isLoading ? (
-					<p className="text-sm text-zinc-500">Loading shipping options...</p>
+					<LoadingState label="Loading shipping options..." compact className="justify-start py-0" />
 				) : !hasAnyOptions ? (
-					<div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-600">
-						You don&apos;t have any shipping options yet. Create some from the{' '}
-						<UiLink href="/dashboard/products/shipping-options" className="text-fill-accent underline">
-							shipping options
-						</UiLink>{' '}
-						page, then come back here.
-					</div>
+					<EmptyState
+						compact
+						title="You don't have any shipping options yet. "
+						description="Create some from the "
+						action={
+							<span className="text-sm text-text-mid">
+								<UiLink href="/dashboard/products/shipping-options" className="text-fill-accent underline">
+									shipping options
+								</UiLink>{' '}
+								page, then come back here.
+							</span>
+						}
+					/>
 				) : unselected.length === 0 ? (
-					<p className="text-sm text-zinc-500">All of your shipping options are already attached.</p>
+					<Notice tone="info" compact>
+						All of your shipping options are already attached.
+					</Notice>
 				) : (
 					<div className="space-y-2">
 						{unselected.map((option) => (

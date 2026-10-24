@@ -9,9 +9,9 @@ import { AuctionShippingView } from './auction-shipping-view'
  * degenerate `Available` branches, so this suite covers them explicitly, plus
  * the attached/available rows and their extra-cost errors.
  *
- * Adopting the shared `empty-state`/`loading-state` kit for these branches is
- * slice S5b (a declared visible change); S5a keeps the hand-rolled markup, so
- * this suite pins that markup's copy.
+ * T6.3 slice S5b adopted the shared `empty-state`/`loading-state`/`notice` kit
+ * for those branches (a declared visible change), so the suite now also pins
+ * the `data-slot` the adopted component renders. Copy is unchanged.
  *
  * Palette strings are guard-counted in `*.test.*` files, so the suite pins
  * structure and copy only.
@@ -66,11 +66,17 @@ describe('AuctionShippingView', () => {
 	test('prompts to connect a wallet has no user', () => {
 		const markup = renderToStaticMarkup(createElement(AuctionShippingView, { ...base, hasUser: false }))
 		expect(markup).toContain('Connect your wallet to load your shipping options.')
+		// S5b: the branch is an `EmptyState` now.
+		expect(markup).toContain('data-slot="empty-state"')
 	})
 
 	test('shows the loading branch', () => {
 		const markup = renderToStaticMarkup(createElement(AuctionShippingView, { ...base, isLoading: true }))
 		expect(markup).toContain('Loading shipping options...')
+		// S5b: the branch is a `LoadingState` with an accessible status label.
+		expect(markup).toContain('data-slot="loading-state"')
+		expect(markup).toContain('role="status"')
+		expect(markup).toContain('aria-label="Loading shipping options..."')
 	})
 
 	test('shows the no-options branch with the shipping-options link', () => {
@@ -78,11 +84,20 @@ describe('AuctionShippingView', () => {
 		expect(markup).toContain('any shipping options yet')
 		expect(markup).toContain('href="/dashboard/products/shipping-options"')
 		expect(markup).toContain('shipping options')
+		// S5b: the branch is an `EmptyState`, and the `UiLink` is its action.
+		expect(markup).toContain('data-slot="empty-state"')
+		// The sentence survives byte-for-byte once the tags are stripped: the
+		// title/description/action split must not drop a boundary space.
+		const text = markup.replace(/<[^>]*>/g, '').replace(/&#x27;/g, "'")
+		expect(text).toContain("You don't have any shipping options yet. Create some from the shipping options page, then come back here.")
 	})
 
 	test('shows the all-attached branch when nothing is left to add', () => {
 		const markup = renderToStaticMarkup(createElement(AuctionShippingView, { ...base, hasAnyOptions: true, unselected: [] }))
 		expect(markup).toContain('All of your shipping options are already attached.')
+		// S5b: the branch is a `Notice` (info tone).
+		expect(markup).toContain('data-slot="notice"')
+		expect(markup).toContain('data-tone="info"')
 	})
 
 	test('merges a host className without dropping or reordering its own', () => {

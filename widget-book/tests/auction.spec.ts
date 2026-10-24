@@ -51,7 +51,10 @@ test('renders the auction library', async ({ page }) => {
 		'AuctionTabViewScheduled',
 		'AuctionTabViewAdvanced',
 		'AuctionShippingView',
-		'AuctionShippingViewStates',
+		'AuctionShippingViewNotConnected',
+		'AuctionShippingViewLoading',
+		'AuctionShippingViewNoOptions',
+		'AuctionShippingViewAllAttached',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
@@ -124,11 +127,22 @@ test('renders the shipping panel and its degenerate branches', async ({ page }) 
 	await expect(view).toContainText('Enter a whole number')
 	await expect(view).toContainText('10 USD · standard · DHL')
 
-	const states = page.getByTestId('widget-AuctionShippingViewStates')
-	await expect(states).toContainText('Connect your wallet to load your shipping options.')
-	await expect(states).toContainText('Loading shipping options...')
-	await expect(states).toContainText('any shipping options yet')
-	await expect(states).toContainText('All of your shipping options are already attached.')
+	const notConnected = page.getByTestId('widget-AuctionShippingViewNotConnected')
+	await expect(notConnected).toContainText('Connect your wallet to load your shipping options.')
+	await expect(notConnected.locator('[data-slot="empty-state"]')).toHaveCount(1)
+
+	const loading = page.getByTestId('widget-AuctionShippingViewLoading')
+	await expect(loading).toContainText('Loading shipping options...')
+	await expect(loading.locator('[data-slot="loading-state"]')).toHaveCount(1)
+
+	const noOptions = page.getByTestId('widget-AuctionShippingViewNoOptions')
+	await expect(noOptions).toContainText('any shipping options yet')
+	await expect(noOptions.locator('[data-slot="empty-state"]')).toHaveCount(1)
+	await expect(noOptions.locator('a[href="/dashboard/products/shipping-options"]')).toHaveCount(1)
+
+	const allAttached = page.getByTestId('widget-AuctionShippingViewAllAttached')
+	await expect(allAttached).toContainText('All of your shipping options are already attached.')
+	await expect(allAttached.locator('[data-slot="notice"]')).toHaveCount(1)
 })
 
 test('renders the dashboard auction list row with its host-owned slots', async ({ page }) => {
