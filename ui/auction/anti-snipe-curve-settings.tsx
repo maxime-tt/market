@@ -87,12 +87,12 @@ export function AntiSnipeCurveSettings({
 	const curveDisabled = windowDisabled || minBidCurveShape === 'none'
 
 	return (
-		<div ref={ref} className={cn('grid w-full gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-4', className)}>
+		<div ref={ref} className={cn('grid w-full gap-3 rounded-lg border border-border-default bg-surface-raised px-4 py-4', className)}>
 			<div>
 				<div className="flex items-center gap-3">
-					<Label className="text-zinc-950">Anti-snipe</Label>
+					<Label className="text-text-high">Anti-snipe</Label>
 					<div className="flex items-center gap-3">
-						<span className={`text-xs ${!antiSnipeEnabled ? 'text-zinc-900' : 'text-zinc-500'}`}>Off</span>
+						<span className={`text-xs ${!antiSnipeEnabled ? 'text-text-high' : 'text-text-mid'}`}>Off</span>
 						<Switch
 							id="auction-anti-snipe-enabled"
 							checked={antiSnipeEnabled}
@@ -108,14 +108,14 @@ export function AntiSnipeCurveSettings({
 								)
 							}
 						/>
-						<span className={`text-xs ${antiSnipeEnabled ? 'text-zinc-900' : 'text-zinc-500'}`}>On</span>
+						<span className={`text-xs ${antiSnipeEnabled ? 'text-text-high' : 'text-text-mid'}`}>On</span>
 					</div>
 				</div>
 			</div>
 
 			<div className="grid gap-1.5">
-				<Label className="text-xs uppercase tracking-wide text-zinc-500">Anti-snipe protection window</Label>
-				<p className="text-xs text-zinc-500">
+				<Label className="text-xs uppercase tracking-wide text-text-mid">Anti-snipe protection window</Label>
+				<p className="text-xs text-text-mid">
 					Adds extra minutes to the end of the auction, where the minimum bid increment rises to make sniping more expensive
 				</p>
 				<div className="flex flex-wrap gap-2">
@@ -132,8 +132,8 @@ export function AntiSnipeCurveSettings({
 								}
 								className={`rounded-md border px-3 py-1.5 text-xs ${
 									isActive
-										? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-										: 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400'
+										? 'border-success bg-success-muted text-success-foreground'
+										: 'border-border-default bg-surface-raised text-text-high hover:border-border-strong'
 								}`}
 							>
 								{minutes === 0 ? 'No window' : `${minutes} min`}
@@ -144,8 +144,8 @@ export function AntiSnipeCurveSettings({
 			</div>
 
 			<div className="grid gap-1.5">
-				<Label className={`text-xs uppercase tracking-wide ${windowDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>Bid curve</Label>
-				<p className={`text-xs ${windowDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>The shape of the bid curve</p>
+				<Label className={`text-xs uppercase tracking-wide ${windowDisabled ? 'text-text-mid' : 'text-text-mid'}`}>Bid curve</Label>
+				<p className={`text-xs ${windowDisabled ? 'text-text-mid' : 'text-text-mid'}`}>The shape of the bid curve</p>
 				<div className="flex flex-wrap gap-2">
 					{shapeOptions.map((option) => {
 						const isActive = minBidCurveShape === option.value
@@ -157,22 +157,22 @@ export function AntiSnipeCurveSettings({
 								onClick={() => onFormPatch({ minBidCurveShape: option.value })}
 								className={`flex flex-col items-start rounded-md border px-3 py-1.5 text-left text-xs disabled:cursor-not-allowed disabled:opacity-40 ${
 									isActive && !windowDisabled
-										? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-										: 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 disabled:hover:border-zinc-200'
+										? 'border-success bg-success-muted text-success-foreground'
+										: 'border-border-default bg-surface-raised text-text-high hover:border-border-strong disabled:hover:border-border-default'
 								}`}
 							>
 								<span className="font-semibold">{option.label}</span>
-								<span className="text-[10px] text-zinc-500">{option.sub}</span>
+								<span className="text-[10px] text-text-mid">{option.sub}</span>
 							</button>
 						)
 					})}
 				</div>
-				{windowDisabled && <p className="text-[11px] text-amber-700">Pick a window above to enable the curve.</p>}
+				{windowDisabled && <p className="text-[11px] text-warning-foreground">Pick a window above to enable the curve.</p>}
 			</div>
 
 			<div className="grid gap-1.5">
-				<Label className={`text-xs uppercase tracking-wide ${curveDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>Multiplier</Label>
-				<p className={`text-xs ${curveDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>
+				<Label className={`text-xs uppercase tracking-wide ${curveDisabled ? 'text-text-mid' : 'text-text-mid'}`}>Multiplier</Label>
+				<p className={`text-xs ${curveDisabled ? 'text-text-mid' : 'text-text-mid'}`}>
 					How much the bidding floor raises relative to the last bid
 				</p>
 				<div className="flex flex-wrap gap-2">
@@ -186,8 +186,8 @@ export function AntiSnipeCurveSettings({
 								onClick={() => onFormPatch({ minBidCurvePeakMultiplier: peak })}
 								className={`rounded-md border px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40 ${
 									isActive && !curveDisabled
-										? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-										: 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 disabled:hover:border-zinc-200'
+										? 'border-success bg-success-muted text-success-foreground'
+										: 'border-border-default bg-surface-raised text-text-high hover:border-border-strong disabled:hover:border-border-default'
 								}`}
 							>
 								{peak}×
@@ -196,7 +196,7 @@ export function AntiSnipeCurveSettings({
 					})}
 				</div>
 				{!curveDisabled && (
-					<p className="text-[11px] text-zinc-500">
+					<p className="text-[11px] text-text-mid">
 						Floor at auction end will be {minBidCurvePeakMultiplier}× the floor when the anti-snipe ramp begins.
 					</p>
 				)}

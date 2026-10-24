@@ -32,10 +32,10 @@ export function SettlementGraceSettings({ value, onValueChange, className, ref }
 	]
 
 	return (
-		<div ref={ref} className={cn('grid w-full gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-4', className)}>
+		<div ref={ref} className={cn('grid w-full gap-3 rounded-lg border border-border-default bg-surface-raised px-4 py-4', className)}>
 			<div>
-				<Label className="text-zinc-950">Settlement grace</Label>
-				<p className="mt-1 text-xs text-zinc-500">
+				<Label className="text-text-high">Settlement grace</Label>
+				<p className="mt-1 text-xs text-text-mid">
 					How long after the auction end you have to publish the settlement before losing bidders can reclaim their funds. Bids carry the
 					same locktime regardless of how many bids land.
 				</p>
@@ -50,12 +50,12 @@ export function SettlementGraceSettings({ value, onValueChange, className, ref }
 							onClick={() => onValueChange(option.value)}
 							className={`flex flex-col items-start rounded-md border px-3 py-1.5 text-left text-xs ${
 								isActive
-									? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-									: 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400'
+									? 'border-success bg-success-muted text-success-foreground'
+									: 'border-border-default bg-surface-raised text-text-high hover:border-border-strong'
 							}`}
 						>
 							<span className="font-semibold">{option.label}</span>
-							<span className="text-[10px] text-zinc-500">{option.sub}</span>
+							<span className="text-[10px] text-text-mid">{option.sub}</span>
 						</button>
 					)
 				})}

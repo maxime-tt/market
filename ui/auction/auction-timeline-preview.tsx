@@ -63,7 +63,10 @@ export function AuctionTimelinePreview({
 		return (
 			<div
 				ref={ref}
-				className={cn('mt-3 rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-[11px] text-zinc-500', className)}
+				className={cn(
+					'mt-3 rounded-md border border-dashed border-border-default bg-surface-sunken px-3 py-2 text-[11px] text-text-mid',
+					className,
+				)}
 			>
 				Pick an end time to preview the bidding timeline.
 			</div>
@@ -155,12 +158,12 @@ export function AuctionTimelinePreview({
 	]
 
 	return (
-		<div ref={ref} className={cn('mt-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-3', className)}>
+		<div ref={ref} className={cn('mt-3 rounded-md border border-border-default bg-surface-sunken px-3 py-3', className)}>
 			<div className="flex items-baseline justify-between gap-2">
-				<p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Bidding timeline</p>
-				<p className="text-[10px] text-zinc-500">
-					Preview top bid <span className="font-mono text-zinc-700">{previewTopBid.toLocaleString()} sats</span>{' '}
-					<span className="text-zinc-400">({hasReserve ? 'from reserve' : 'no reserve, using starting bid'})</span>
+				<p className="text-[11px] font-semibold uppercase tracking-wide text-text-mid">Bidding timeline</p>
+				<p className="text-[10px] text-text-mid">
+					Preview top bid <span className="font-mono text-text-high">{previewTopBid.toLocaleString()} sats</span>{' '}
+					<span className="text-text-mid">({hasReserve ? 'from reserve' : 'no reserve, using starting bid'})</span>
 				</p>
 			</div>
 
@@ -175,7 +178,7 @@ export function AuctionTimelinePreview({
 							<span className="font-semibold leading-tight" style={{ color: tick.color }}>
 								{tick.label}
 							</span>
-							<span className="font-mono text-[8px] text-zinc-500 leading-tight">{tick.sub}</span>
+							<span className="font-mono text-[8px] text-text-mid leading-tight">{tick.sub}</span>
 						</div>
 					)
 				})}
@@ -217,24 +220,26 @@ export function AuctionTimelinePreview({
 				/>
 			</svg>
 
-			<div className="mt-2 flex flex-wrap items-baseline justify-between gap-2 text-[11px] text-zinc-600">
+			<div className="mt-2 flex flex-wrap items-baseline justify-between gap-2 text-[11px] text-text-mid">
 				<p>
-					Floor when <span className="font-semibold text-zinc-900">{hasWindow ? 'anti-snipe ramp begins' : 'auction ends'}</span>:{' '}
+					Floor when <span className="font-semibold text-text-high">{hasWindow ? 'anti-snipe ramp begins' : 'auction ends'}</span>:{' '}
 					<span className="font-semibold">{baseline.toLocaleString()} sats</span>
 				</p>
 				<p>
-					Floor at <span className="font-semibold text-zinc-900">auction end</span>:{' '}
-					<span className={`font-semibold ${showCurve ? 'text-emerald-700' : 'text-zinc-700'}`}>{peakFloor.toLocaleString()} sats</span>{' '}
+					Floor at <span className="font-semibold text-text-high">auction end</span>:{' '}
+					<span className={`font-semibold ${showCurve ? 'text-success-foreground' : 'text-text-high'}`}>
+						{peakFloor.toLocaleString()} sats
+					</span>{' '}
 					{showCurve ? (
-						<span className="text-zinc-400">
+						<span className="text-text-mid">
 							({curvePeakMultiplier}×, {curveShape})
 						</span>
 					) : (
-						<span className="text-zinc-400">(no curve)</span>
+						<span className="text-text-mid">(no curve)</span>
 					)}
 				</p>
 			</div>
-			<p className="mt-2 text-[10px] italic text-zinc-400">Times shown on the chart are symbolic — segments aren't to scale.</p>
+			<p className="mt-2 text-[10px] italic text-text-mid">Times shown on the chart are symbolic — segments aren't to scale.</p>
 		</div>
 	)
 }

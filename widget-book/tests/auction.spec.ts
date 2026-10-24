@@ -393,10 +393,10 @@ test('renders the anti-snipe policy card and gates the curve on a window', async
 	await expect(live).toContainText('Floor at auction end will be 2× the floor when the anti-snipe ramp begins.')
 
 	await live.getByRole('button', { name: '15 min' }).click()
-	await expect(live.getByRole('button', { name: '15 min' })).toHaveClass(/border-emerald-500/)
+	await expect(live.getByRole('button', { name: '15 min' })).toHaveClass(/border-success/)
 	await live.getByRole('button', { name: 'Exponential' }).click()
-	await expect(live.getByRole('button', { name: 'Exponential' })).toHaveClass(/border-emerald-500/)
-	await expect(live.getByRole('button', { name: 'Linear' })).not.toHaveClass(/border-emerald-500/)
+	await expect(live.getByRole('button', { name: 'Exponential' })).toHaveClass(/border-success/)
+	await expect(live.getByRole('button', { name: 'Linear' })).not.toHaveClass(/border-success/)
 })
 
 test('renders the settlement-grace picker and moves the active choice', async ({ page }) => {
@@ -405,12 +405,12 @@ test('renders the settlement-grace picker and moves the active choice', async ({
 	const card = page.getByTestId('widget-SettlementGraceSettings')
 	await expect(card).toContainText('Settlement grace')
 	await expect(card.getByRole('button')).toHaveCount(3)
-	await expect(card.getByRole('button', { name: '1 hour' })).toHaveClass(/border-emerald-500/)
+	await expect(card.getByRole('button', { name: '1 hour' })).toHaveClass(/border-success/)
 
 	// The interactive demo proves the `onValueChange` wiring: the active chip moves.
 	const live = page.getByTestId('widget-SettlementGraceSettingsInteractive')
-	await expect(live.getByRole('button', { name: '1 hour' })).toHaveClass(/border-emerald-500/)
+	await expect(live.getByRole('button', { name: '1 hour' })).toHaveClass(/border-success/)
 	await live.getByRole('button', { name: '3 hours' }).click()
-	await expect(live.getByRole('button', { name: '3 hours' })).toHaveClass(/border-emerald-500/)
-	await expect(live.getByRole('button', { name: '1 hour' })).not.toHaveClass(/border-emerald-500/)
+	await expect(live.getByRole('button', { name: '3 hours' })).toHaveClass(/border-success/)
+	await expect(live.getByRole('button', { name: '1 hour' })).not.toHaveClass(/border-success/)
 })

@@ -44,20 +44,20 @@ export function AuctionShippingView({
 		<div ref={ref} className={cn('flex flex-col gap-6', className)}>
 			<div className="space-y-1">
 				<Label className="text-base font-medium">Shipping Options</Label>
-				<p className="text-sm text-zinc-600">Attach the shipping options buyers can choose from after winning this auction.</p>
+				<p className="text-sm text-text-mid">Attach the shipping options buyers can choose from after winning this auction.</p>
 			</div>
 
 			{attached.length > 0 && (
 				<div className="space-y-3">
 					<h3 className="text-sm font-semibold">Attached</h3>
 					{attached.map(({ shippingRef, extraCost, option }, index) => (
-						<div key={`${shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white p-3">
+						<div key={`${shippingRef}-${index}`} className="rounded-lg border border-border-default bg-surface-raised p-3">
 							<div className="flex items-start justify-between gap-3">
 								<div className="min-w-0 flex-1">
-									<p className="font-medium text-zinc-900 truncate">{option?.name ?? 'Unknown shipping option'}</p>
-									<p className="text-xs text-zinc-500 break-all">{shippingRef}</p>
+									<p className="font-medium text-text-high truncate">{option?.name ?? 'Unknown shipping option'}</p>
+									<p className="text-xs text-text-mid break-all">{shippingRef}</p>
 									{option && (
-										<p className="text-xs text-zinc-600 mt-1">
+										<p className="text-xs text-text-mid mt-1">
 											Base: {option.price} {option.currency}
 											{describeShipping(option)}
 										</p>
@@ -68,13 +68,13 @@ export function AuctionShippingView({
 									variant="outline"
 									size="sm"
 									onClick={() => onRemove(index)}
-									className="text-red-600 hover:text-red-700"
+									className="text-error hover:text-error-foreground"
 								>
 									<X className="w-4 h-4" />
 								</Button>
 							</div>
 							<div className="mt-3 grid gap-1.5">
-								<Label htmlFor={`auction-shipping-extra-${index}`} className="text-xs text-zinc-600">
+								<Label htmlFor={`auction-shipping-extra-${index}`} className="text-xs text-text-mid">
 									Extra cost (sats, optional)
 								</Label>
 								<Input
@@ -85,7 +85,7 @@ export function AuctionShippingView({
 									value={extraCost}
 									onChange={(e) => onExtraCostChange(index, e.target.value)}
 								/>
-								{extraCostErrors[index] && <p className="text-xs text-red-600">{extraCostErrors[index]}</p>}
+								{extraCostErrors[index] && <p className="text-xs text-error">{extraCostErrors[index]}</p>}
 							</div>
 						</div>
 					))}
@@ -123,16 +123,16 @@ export function AuctionShippingView({
 								key={option.id}
 								type="button"
 								onClick={() => onAdd(option)}
-								className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white p-3 text-left hover:border-border-default"
+								className="flex w-full items-center justify-between gap-3 rounded-lg border border-border-default bg-surface-raised p-3 text-left hover:border-border-default"
 							>
 								<div className="min-w-0 flex-1">
-									<p className="font-medium text-zinc-900 truncate">{option.name}</p>
-									<p className="text-xs text-zinc-600">
+									<p className="font-medium text-text-high truncate">{option.name}</p>
+									<p className="text-xs text-text-mid">
 										{option.price} {option.currency}
 										{describeShipping(option)}
 									</p>
 								</div>
-								<Plus className="w-4 h-4 text-zinc-500" />
+								<Plus className="w-4 h-4 text-text-mid" />
 							</button>
 						))}
 					</div>

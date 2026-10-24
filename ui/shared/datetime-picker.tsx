@@ -56,14 +56,14 @@ export function DateTimePicker({
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<Button type="button" variant="outline" className="w-full justify-start gap-2 font-normal">
-					<CalendarIcon className="h-4 w-4 text-zinc-500 shrink-0" />
-					<span className={date ? 'text-zinc-900' : 'text-zinc-500'}>{date ? date.toLocaleString() : placeholder}</span>
+					<CalendarIcon className="h-4 w-4 text-text-mid shrink-0" />
+					<span className={date ? 'text-text-high' : 'text-text-mid'}>{date ? date.toLocaleString() : placeholder}</span>
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-0" align="start">
 				<Calendar mode="single" selected={date} onSelect={handleDateSelect} captionLayout="dropdown" />
 				<div className="border-t p-3 space-y-2">
-					<Label htmlFor="datetime-picker-time" className="text-xs text-zinc-600">
+					<Label htmlFor="datetime-picker-time" className="text-xs text-text-mid">
 						Time
 					</Label>
 					<Input id="datetime-picker-time" type="time" value={timeValue} onChange={(e) => handleTimeChange(e.target.value)} />

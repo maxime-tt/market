@@ -156,21 +156,21 @@ export function AuctionTabView({
 			    is embedded inside the anti-snipe card so its visual
 			    feedback sits next to the inputs that drive it. */}
 
-			<div className="grid w-full gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-4">
+			<div className="grid w-full gap-2 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
 				<div className="flex items-center justify-between gap-2">
 					<Label>Start Time</Label>
-					<div className="inline-flex rounded-md border border-zinc-200 bg-zinc-50 p-0.5 text-xs">
+					<div className="inline-flex rounded-md border border-border-default bg-surface-sunken p-0.5 text-xs">
 						<button
 							type="button"
 							onClick={handleStartImmediate}
-							className={`px-3 py-1 rounded ${startMode === 'immediate' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'}`}
+							className={`px-3 py-1 rounded ${startMode === 'immediate' ? 'bg-surface-raised text-text-high shadow-sm' : 'text-text-mid hover:text-text-high'}`}
 						>
 							Immediate
 						</button>
 						<button
 							type="button"
 							onClick={handleStartScheduled}
-							className={`px-3 py-1 rounded ${startMode === 'scheduled' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'}`}
+							className={`px-3 py-1 rounded ${startMode === 'scheduled' ? 'bg-surface-raised text-text-high shadow-sm' : 'text-text-mid hover:text-text-high'}`}
 						>
 							Schedule
 						</button>
@@ -178,7 +178,7 @@ export function AuctionTabView({
 				</div>
 
 				{startMode === 'immediate' ? (
-					<p className="text-xs text-zinc-500">The auction goes live the moment you publish.</p>
+					<p className="text-xs text-text-mid">The auction goes live the moment you publish.</p>
 				) : (
 					<DateTimePicker
 						value={formData.startAt ?? ''}
@@ -188,23 +188,23 @@ export function AuctionTabView({
 				)}
 			</div>
 
-			<div className="grid w-full gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-4">
+			<div className="grid w-full gap-3 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
 				<div className="flex items-center justify-between gap-2">
 					<Label>
-						<span className="after:content-['*'] after:ml-0.5 after:text-red-500">End Time</span>
+						<span className="after:content-['*'] after:ml-0.5 after:text-error">End Time</span>
 					</Label>
-					<div className="inline-flex rounded-md border border-zinc-200 bg-zinc-50 p-0.5 text-xs">
+					<div className="inline-flex rounded-md border border-border-default bg-surface-sunken p-0.5 text-xs">
 						<button
 							type="button"
 							onClick={handleEndAsDuration}
-							className={`px-3 py-1 rounded ${endMode === 'duration' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'}`}
+							className={`px-3 py-1 rounded ${endMode === 'duration' ? 'bg-surface-raised text-text-high shadow-sm' : 'text-text-mid hover:text-text-high'}`}
 						>
 							Duration
 						</button>
 						<button
 							type="button"
 							onClick={handleEndAsAbsolute}
-							className={`px-3 py-1 rounded ${endMode === 'absolute' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'}`}
+							className={`px-3 py-1 rounded ${endMode === 'absolute' ? 'bg-surface-raised text-text-high shadow-sm' : 'text-text-mid hover:text-text-high'}`}
 						>
 							End date
 						</button>
@@ -227,8 +227,8 @@ export function AuctionTabView({
 										}}
 										className={`rounded-full px-3 py-1 text-xs font-semibold border ${
 											isActive
-												? 'border-border-default bg-surface-raised text-white'
-												: 'border-zinc-300 bg-white text-zinc-700 hover:border-border-default'
+												? 'border-border-default bg-surface-raised text-text-high'
+												: 'border-border-default bg-surface-raised text-text-high hover:border-border-default'
 										}`}
 									>
 										{preset.label}
@@ -253,21 +253,21 @@ export function AuctionTabView({
 								}}
 								className="w-full accent-secondary"
 							/>
-							<div className="flex items-center justify-between text-[10px] text-zinc-500">
+							<div className="flex items-center justify-between text-[10px] text-text-mid">
 								<span>1m</span>
 								<span>30d</span>
 							</div>
 						</div>
 
-						<div className="rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+						<div className="rounded-md bg-surface-sunken px-3 py-2 text-xs text-text-high">
 							<p>
-								<span className="font-semibold text-zinc-900">Runs for:</span> {formatDuration(durationSeconds)}
+								<span className="font-semibold text-text-high">Runs for:</span> {formatDuration(durationSeconds)}
 							</p>
 							<p className="mt-0.5">
-								<span className="font-semibold text-zinc-900">Ends:</span> {formatAbsolute(virtualEndSeconds)}
+								<span className="font-semibold text-text-high">Ends:</span> {formatAbsolute(virtualEndSeconds)}
 							</p>
 						</div>
-						{endTimeError && <p className="text-xs text-red-600">{endTimeError}</p>}
+						{endTimeError && <p className="text-xs text-error">{endTimeError}</p>}
 					</div>
 				) : (
 					<div className="space-y-2">
@@ -277,18 +277,18 @@ export function AuctionTabView({
 							placeholder="Pick an end date & time"
 						/>
 						{virtualEndSeconds > 0 && (
-							<p className="text-xs text-zinc-500">Runs for approximately {formatDuration(virtualDurationSeconds)}.</p>
+							<p className="text-xs text-text-mid">Runs for approximately {formatDuration(virtualDurationSeconds)}.</p>
 						)}
-						{endTimeError && <p className="text-xs text-red-600">{endTimeError}</p>}
+						{endTimeError && <p className="text-xs text-error">{endTimeError}</p>}
 					</div>
 				)}
 			</div>
 
-			<div className="grid w-full gap-1.5 rounded-lg border border-zinc-200 bg-white px-4 py-4">
+			<div className="grid w-full gap-1.5 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
 				<Label htmlFor="auction-starting-bid">
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Starting Bid (sats)</span>
+					<span className="after:content-['*'] after:ml-0.5 after:text-error">Starting Bid (sats)</span>
 				</Label>
-				<p className="text-xs text-zinc-500">Amount bidders must meet or exceed to place the first bid.</p>
+				<p className="text-xs text-text-mid">Amount bidders must meet or exceed to place the first bid.</p>
 				<Input
 					id="auction-starting-bid"
 					type="number"
@@ -297,23 +297,23 @@ export function AuctionTabView({
 					value={formData.startingBid}
 					onChange={(e) => setFormData((prev) => ({ ...prev, startingBid: e.target.value }))}
 				/>
-				{validationMessages.startingBid && <p className="text-xs text-red-600">{validationMessages.startingBid}</p>}
+				{validationMessages.startingBid && <p className="text-xs text-error">{validationMessages.startingBid}</p>}
 			</div>
 
 			<div>
 				<Collapsible open={openSection === 'advanced'} onOpenChange={toggle('advanced')}>
-					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-border-default bg-surface-raised px-4 py-3 text-sm font-medium text-text-high hover:bg-surface-sunken">
 						Advanced
-						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'advanced' ? 'rotate-180' : ''}`} />
+						<ChevronDown className={`w-4 h-4 text-text-high transition-transform ${openSection === 'advanced' ? 'rotate-180' : ''}`} />
 					</CollapsibleTrigger>
 					<CollapsibleContent>
 						<div className="mt-2 space-y-2">
-							<div className="grid w-full gap-4 rounded-lg border border-zinc-200 bg-white px-4 py-4">
+							<div className="grid w-full gap-4 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
 								<div className="grid w-full gap-1.5">
 									<Label htmlFor="auction-bid-increment">
-										<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Bid Increment (sats)</span>
+										<span className="after:content-['*'] after:ml-0.5 after:text-error">Bid Increment (sats)</span>
 									</Label>
-									<p className="text-xs text-zinc-500">Minimum amount each new bid must exceed the previous by.</p>
+									<p className="text-xs text-text-mid">Minimum amount each new bid must exceed the previous by.</p>
 									<Input
 										id="auction-bid-increment"
 										type="number"
@@ -323,7 +323,7 @@ export function AuctionTabView({
 										onFocus={(e) => e.target.select()}
 										onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value.replace(/^0+(\d)/, '$1') }))}
 									/>
-									{validationMessages.bidIncrement && <p className="text-xs text-red-600">{validationMessages.bidIncrement}</p>}
+									{validationMessages.bidIncrement && <p className="text-xs text-error">{validationMessages.bidIncrement}</p>}
 								</div>
 
 								<div className="space-y-3">
@@ -341,7 +341,7 @@ export function AuctionTabView({
 											onFocus={(e) => e.target.select()}
 											onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
 										/>
-										{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
+										{validationMessages.reserve && <p className="text-xs text-error">{validationMessages.reserve}</p>}
 									</div>
 								</div>
 
@@ -364,20 +364,20 @@ export function AuctionTabView({
 								value={formData.settlementGracePreset}
 								onValueChange={(next) => setFormData((prev) => ({ ...prev, settlementGracePreset: next }))}
 							/>
-							<div className="grid w-full gap-1.5 rounded-lg border border-zinc-200 bg-white px-4 py-4">
-								<Label className="text-zinc-950">Trusted Mints</Label>
-								<p className="text-xs text-zinc-500">
+							<div className="grid w-full gap-1.5 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
+								<Label className="text-text-high">Trusted Mints</Label>
+								<p className="text-xs text-text-mid">
 									Bids will be rejected unless the token is minted by one of these mints. At least one is required.
 								</p>
-								{validationMessages.trustedMints && <p className="text-xs text-red-600">{validationMessages.trustedMints}</p>}
+								{validationMessages.trustedMints && <p className="text-xs text-error">{validationMessages.trustedMints}</p>}
 
 								<div className="space-y-2 mt-1">
 									{selectedMints.map((mint) => (
 										<div
 											key={mint}
-											className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2"
+											className="flex items-center justify-between gap-2 rounded-lg border border-border-default bg-surface-sunken px-3 py-2"
 										>
-											<span className="truncate text-sm text-zinc-900" title={mint}>
+											<span className="truncate text-sm text-text-high" title={mint}>
 												{mint}
 											</span>
 											<Button
@@ -386,7 +386,7 @@ export function AuctionTabView({
 												size="sm"
 												onClick={() => removeMint(mint)}
 												disabled={!canRemoveMint}
-												className="text-red-600 hover:text-red-700 disabled:opacity-40"
+												className="text-error hover:text-error-foreground disabled:opacity-40"
 												title={canRemoveMint ? 'Remove mint' : 'At least one mint is required'}
 											>
 												<X className="w-4 h-4" />
@@ -397,18 +397,18 @@ export function AuctionTabView({
 
 								{unselectedMints.length > 0 && (
 									<div className="space-y-2 mt-3">
-										<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Add a mint</p>
+										<p className="text-xs font-semibold uppercase tracking-wide text-text-mid">Add a mint</p>
 										{unselectedMints.map((mint) => (
 											<button
 												key={mint}
 												type="button"
 												onClick={() => addMint(mint)}
-												className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left text-sm text-zinc-700 hover:border-border-default"
+												className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-border-default bg-surface-sunken px-3 py-2 text-left text-sm text-text-high hover:border-border-default"
 											>
 												<span className="truncate" title={mint}>
 													{mint}
 												</span>
-												<Plus className="w-4 h-4 text-zinc-500 shrink-0" />
+												<Plus className="w-4 h-4 text-text-mid shrink-0" />
 											</button>
 										))}
 									</div>

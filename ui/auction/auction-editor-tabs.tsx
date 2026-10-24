@@ -28,7 +28,7 @@ export function AuctionNameTab({ formData, setFormData, className, ref }: TabPro
 		<div ref={ref} className={cn('flex flex-col gap-4', className)}>
 			<div className="grid w-full gap-1.5">
 				<Label htmlFor="auction-title">
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Title</span>
+					<span className="after:content-['*'] after:ml-0.5 after:text-error">Title</span>
 				</Label>
 				<Input
 					id="auction-title"
@@ -50,7 +50,7 @@ export function AuctionNameTab({ formData, setFormData, className, ref }: TabPro
 
 			<div className="grid w-full gap-1.5">
 				<Label htmlFor="auction-description">
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Description</span>
+					<span className="after:content-['*'] after:ml-0.5 after:text-error">Description</span>
 				</Label>
 				<textarea
 					id="auction-description"
@@ -61,7 +61,7 @@ export function AuctionNameTab({ formData, setFormData, className, ref }: TabPro
 				/>
 			</div>
 
-			<div className="flex items-start space-x-3 p-3 border rounded-lg bg-amber-50/50 border-amber-200">
+			<div className="flex items-start space-x-3 p-3 border rounded-lg bg-warning-muted/50 border-warning-border">
 				<Checkbox
 					id="auction-nsfw-content"
 					checked={formData.isNSFW}
@@ -150,7 +150,7 @@ export function AuctionSpecTab({ formData, setFormData, className, ref }: TabPro
 		<div ref={ref} className={cn('flex flex-col gap-4', className)}>
 			<div className="space-y-1">
 				<Label className="text-base font-medium">Item Specifications</Label>
-				<p className="text-sm text-zinc-600">
+				<p className="text-sm text-text-mid">
 					Key/value pairs describing the item (e.g. brand, model, condition). Shown on the auction detail page.
 				</p>
 			</div>
@@ -170,7 +170,13 @@ export function AuctionSpecTab({ formData, setFormData, className, ref }: TabPro
 							onChange={(e) => updateSpec(index, 'value', e.target.value)}
 							className="flex-1"
 						/>
-						<Button type="button" variant="outline" size="sm" onClick={() => removeSpec(index)} className="text-red-600 hover:text-red-700">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => removeSpec(index)}
+							className="text-error hover:text-error-foreground"
+						>
 							<X className="w-4 h-4" />
 						</Button>
 					</div>
@@ -244,13 +250,13 @@ export function AuctionImagesTab({
 
 	return (
 		<div ref={ref} className={cn('space-y-4', className)}>
-			<p className="text-gray-600">We recommend using square images of 1600x1600 and under 2mb.</p>
+			<p className="text-text-mid">We recommend using square images of 1600x1600 and under 2mb.</p>
 
 			<div className="flex flex-col gap-4">
 				<Label>
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Image Upload</span>
+					<span className="after:content-['*'] after:ml-0.5 after:text-error">Image Upload</span>
 					<span className="sr-only">required</span>
-					{error && <span className="text-sm text-red-500 ml-2">({error})</span>}
+					{error && <span className="text-sm text-error ml-2">({error})</span>}
 				</Label>
 
 				{images.map((image, i) => (
