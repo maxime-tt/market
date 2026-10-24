@@ -14,7 +14,7 @@ export function IncompleteInvoicesBanner({ count, onRefresh }: IncompleteInvoice
 			title={
 				<span className="flex items-center gap-2">
 					<AlertTriangle className="w-6 h-6 sm:w-5 sm:h-5" />
-					{count} invoice{count !== 1 ? 's' : ''} require payment
+					{count} invoice{count !== 1 ? 's' : ''} {count !== 1 ? 'require' : 'requires'} payment
 				</span>
 			}
 			action={

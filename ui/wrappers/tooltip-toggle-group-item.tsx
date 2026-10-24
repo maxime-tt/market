@@ -13,11 +13,6 @@ interface TooltipToggleGroupItemProps extends ToggleGroupItemProps {
 	tooltip?: string
 }
 
-interface TooltipToggleGroupItemProps extends ToggleGroupItemProps {
-	/** Tooltip text shown when the item is available */
-	tooltip?: string
-}
-
 const TooltipToggleGroupItem = React.forwardRef<HTMLButtonElement, TooltipToggleGroupItemProps>(
 	({ tooltip, disabled, children, ...props }, ref) => {
 		const hasTooltip = Boolean(tooltip)

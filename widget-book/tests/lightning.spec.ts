@@ -74,9 +74,8 @@ test('pluralises the incomplete invoices banner', async ({ page }) => {
 	await expect(banner.getByRole('button', { name: 'Refresh All' })).toBeVisible()
 
 	const single = page.getByTestId('widget-IncompleteInvoicesBannerSingle')
-	// Pins the component as written: the noun is singular but the verb is not
-	// pluralised in reverse — "1 invoice require payment" (defect, not fixed here).
-	await expect(single).toContainText('1 invoice require payment')
+	// The noun and verb both agree with the count: "1 invoice requires payment".
+	await expect(single).toContainText('1 invoice requires payment')
 	await expect(single).not.toContainText('invoices require')
 })
 

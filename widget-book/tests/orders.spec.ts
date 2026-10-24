@@ -104,8 +104,8 @@ test('renders the order detail header status band', async ({ page }) => {
 	await page.goto('/?library=orders')
 
 	const header = page.getByTestId('widget-OrderDetailHeader')
-	// The header prints the raw sat count without locale grouping.
-	await expect(header).toContainText('25000 sats')
+	// The header groups the sat count, matching OrderAmountText and OrderCardView.
+	await expect(header).toContainText('25,000 sats')
 	await expect(header).toContainText('Pending')
 	await expect(header).toContainText('Awaiting payment confirmation from the seller.')
 	// The host-supplied header tone is a plain class string.

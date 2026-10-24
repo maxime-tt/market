@@ -59,7 +59,7 @@ export function OrderDetailHeader({ title, subText, totalSats, createdAt, status
 
 					<div className="border-t border-white/20 pt-4">
 						<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-							<DetailField label="Amount:" value={`${totalSats} sats`} valueClassName="font-bold text-text-high" />
+							<DetailField label="Amount:" value={`${totalSats.toLocaleString()} sats`} valueClassName="font-bold text-text-high" />
 							<DetailField
 								label="Date:"
 								value={createdAt ? format(new Date(createdAt * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}

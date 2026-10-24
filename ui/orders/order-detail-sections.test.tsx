@@ -14,7 +14,7 @@ describe('order detail sections', () => {
 				actions={<button>Cancel</button>}
 			/>,
 		)
-		expect(markup).toContain('2100 sats')
+		expect(markup).toContain('2,100 sats')
 		expect(markup).toContain('N/A')
 		expect(markup).toContain('confirmed')
 		expect(markup).toContain('Seller confirmed')

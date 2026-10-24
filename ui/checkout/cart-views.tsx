@@ -96,14 +96,14 @@ export function CartSellerCard({ seller, items, totals }: CartSellerCardProps) {
 					<div className="h-full bg-info" style={{ width: `${totals.shares.sellerPercentage}%` }} />
 				</div>
 				<div className="mt-1 flex justify-between">
-					<p className="text-sm">Merchant: </p>
+					<p className="text-sm">Merchant:</p>
 					<p className="text-sm">
 						{formatSats(totals.shares.sellerAmount)} sat ({totals.shares.sellerPercentage.toFixed(2)}%)
 					</p>
 				</div>
 				{totals.shares.communityAmount > 0 && (
 					<div className="flex justify-between">
-						<p className="text-sm">Community Share: </p>
+						<p className="text-sm">Community Share:</p>
 						<p className="text-sm">
 							{formatSats(totals.shares.communityAmount)} sat ({(100 - totals.shares.sellerPercentage).toFixed(2)}%)
 						</p>
@@ -171,7 +171,7 @@ export function CartTotalsDetails({
 
 					{Object.entries(shippingByCurrency).map(([currency, amount]) => (
 						<div key={`shipping-${currency}`} className="flex justify-between">
-							<p className="text-sm">Products ({currency}):</p>
+							<p className="text-sm">Shipping ({currency}):</p>
 							<p className="text-sm">{amount.toFixed(2)}</p>
 						</div>
 					))}
