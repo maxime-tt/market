@@ -52,7 +52,7 @@ export function OrderDetailHeader({ title, subText, totalSats, createdAt, status
 								<h2 className="max-w-[300px] truncate font-semibold text-text-high" title={title}>
 									{title}
 								</h2>
-								{subText && <p className="mt-0.5 text-xs text-text-high">{subText}</p>}
+								{subText && <p className="mt-0.5 text-xs text-text-mid">{subText}</p>}
 							</div>
 						</div>
 					</div>
@@ -139,7 +139,7 @@ export function PrivateAuctionClaimCard({ isLoading, claim, unavailableMessage }
 				<CardTitle>Private Auction Claim Details</CardTitle>
 			</CardHeader>
 			<CardContent>
-				{isLoading && <p className="text-sm text-text-high">Loading private auction claim details...</p>}
+				{isLoading && <p className="text-sm text-text-mid">Loading private auction claim details...</p>}
 
 				{!isLoading && claim && (
 					<div className="space-y-4">
@@ -170,7 +170,7 @@ export function PrivateAuctionClaimCard({ isLoading, claim, unavailableMessage }
 					</div>
 				)}
 
-				{!isLoading && !claim && <p className="text-sm text-text-high">{unavailableMessage}</p>}
+				{!isLoading && !claim && <p className="text-sm text-text-mid">{unavailableMessage}</p>}
 			</CardContent>
 		</Card>
 	)

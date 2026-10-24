@@ -6,7 +6,7 @@ export function OrderNotFoundView() {
 	return (
 		<div className="text-center py-8">
 			<h2 className="text-xl font-semibold text-text-high">Order not found</h2>
-			<p className="text-text-high mt-2">The requested order could not be found.</p>
+			<p className="text-text-mid mt-2">The requested order could not be found.</p>
 		</div>
 	)
 }

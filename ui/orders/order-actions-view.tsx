@@ -106,7 +106,7 @@ export function OrderActionsView({
 						<DialogDescription>Please verify that you have received payment before confirming this order.</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-2 py-4">
-						<p className="text-sm text-text-high">
+						<p className="text-sm text-text-mid">
 							By clicking confirm, you acknowledge the funds have been received and you will now process the order.
 						</p>
 					</div>

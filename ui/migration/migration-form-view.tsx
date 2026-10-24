@@ -382,7 +382,7 @@ export function MigrationFormView({
 								<div className="space-y-2">
 									{formData.shippings.length > 0 && (
 										<div className="space-y-2 mb-3">
-											<Label className="text-sm text-text-high">Selected:</Label>
+											<Label className="text-sm text-text-mid">Selected:</Label>
 											{formData.shippings.map((shipping, index) => (
 												<div key={index} className="flex items-center gap-2 p-2 bg-surface-sunken rounded border">
 													<div className="flex-1">

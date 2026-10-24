@@ -205,7 +205,7 @@ export function InvoiceCardView({
 						<div
 							className={cn(
 								'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold',
-								isPaid ? 'bg-success-muted text-success-foreground' : 'bg-surface-hover text-text-high',
+								isPaid ? 'bg-success-muted text-success-foreground' : 'bg-surface-hover text-text-mid',
 							)}
 						>
 							{index + 1}

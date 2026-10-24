@@ -38,17 +38,17 @@ export function DashboardCollectionDetails({
 				)}
 				{summary && (
 					<div>
-						<p className="mb-1 text-sm text-text-high">Summary:</p>
+						<p className="mb-1 text-sm text-text-mid">Summary:</p>
 						<p className="text-sm">{summary}</p>
 					</div>
 				)}
 				{description && (
 					<div>
-						<p className="mb-1 text-sm text-text-high">Description:</p>
+						<p className="mb-1 text-sm text-text-mid">Description:</p>
 						<p className="text-sm">{description}</p>
 					</div>
 				)}
-				<div className="text-sm text-text-high">
+				<div className="text-sm text-text-mid">
 					Products: <span className="font-medium">{productCount}</span>
 				</div>
 			</div>

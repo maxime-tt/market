@@ -64,7 +64,7 @@ export function DashboardProductDetails({
 				</div>
 			)}
 			<div>
-				<p className="mb-1 text-sm text-text-high">Description:</p>
+				<p className="mb-1 text-sm text-text-mid">Description:</p>
 				<p className="text-sm">{description}</p>
 			</div>
 			<div className="flex justify-between">

@@ -128,7 +128,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex, onC
 	}
 
 	const indexBadge = (
-		<div className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-hover text-xs font-bold text-text-high">
+		<div className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-hover text-xs font-bold text-text-mid">
 			{timelineIndex}
 		</div>
 	)

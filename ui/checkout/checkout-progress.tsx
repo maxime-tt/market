@@ -28,7 +28,7 @@ export function CheckoutProgress({
 				</Button>
 			)}
 			<div className="flex-1 min-w-0">
-				<div className="flex items-center justify-between text-xs lg:text-sm text-text-high mb-1 lg:mb-2">
+				<div className="flex items-center justify-between text-xs lg:text-sm text-text-mid mb-1 lg:mb-2">
 					<span className="font-medium">
 						{currentStepNumber}/{totalSteps}
 					</span>

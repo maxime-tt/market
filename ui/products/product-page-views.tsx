@@ -47,7 +47,7 @@ export function AdultContentGate({ onEnable }: { onEnable: () => void }) {
 		<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
 			<AlertTriangle className="h-16 w-16 text-warning" />
 			<h1 className="text-2xl font-bold">Adult Content</h1>
-			<p className="max-w-md text-text-high">
+			<p className="max-w-md text-text-mid">
 				This product contains adult or sensitive content. To view it, you need to enable adult content viewing in your settings.
 			</p>
 			<div className="flex gap-3">

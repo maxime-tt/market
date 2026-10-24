@@ -148,7 +148,7 @@ export function ShippingAddressFormView({
 									{pickupAddresses.map((pickup, index) => (
 										<div key={index} className="bg-surface-raised rounded-md p-3 border border-info-border">
 											<div className="text-sm font-medium text-text-high">{pickup.title}</div>
-											<div className="text-sm text-text-high mt-1">{pickup.address}</div>
+											<div className="text-sm text-text-mid mt-1">{pickup.address}</div>
 										</div>
 									))}
 								</div>

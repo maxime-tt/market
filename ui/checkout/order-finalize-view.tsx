@@ -147,7 +147,7 @@ export function OrderFinalizeView({
 					<div className="bg-surface-sunken rounded-lg p-4">
 						<h3 className="font-medium text-text-high mb-3">Shipping Address</h3>
 						<div className="text-sm text-text-high space-y-1">
-							<p className="font-medium text-text-high">{shippingData.name}</p>
+							<p className="font-medium text-text-mid">{shippingData.name}</p>
 							{shippingData.email && (
 								<p>
 									{hasDigitalDelivery ? 'Digital delivery contact' : 'Email'}: {shippingData.email}
@@ -174,7 +174,7 @@ export function OrderFinalizeView({
 				<h3 className="font-medium text-text-high mb-3">Order Total</h3>
 				<div className="space-y-2">
 					<div className="flex justify-between text-sm">
-						<span className="text-text-high">Subtotal:</span>
+						<span className="text-text-mid">Subtotal:</span>
 						<span className="font-medium">{formatSats(totalInSats)} sats</span>
 					</div>
 					<div className="border-t pt-2 mt-3">

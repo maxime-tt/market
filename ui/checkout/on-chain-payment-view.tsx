@@ -116,8 +116,8 @@ export function OnChainPaymentView(props: OnChainPaymentViewProps) {
 						<div className="bg-info-muted p-3 rounded">
 							<div className="text-center">
 								<div className="font-bold text-lg">{formatSats(amountSats)} sats</div>
-								<div className="text-sm text-text-high">{amountBtc.toFixed(8)} BTC</div>
-								{props.label && <div className="text-sm text-text-high mt-1">{props.label}</div>}
+								<div className="text-sm text-text-mid">{amountBtc.toFixed(8)} BTC</div>
+								{props.label && <div className="text-sm text-text-mid mt-1">{props.label}</div>}
 							</div>
 						</div>
 					</div>

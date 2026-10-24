@@ -20,7 +20,7 @@ export function NoPaymentRequestsCard({ isBuyer }: NoPaymentRequestsCardProps) {
 					<p className="text-lg font-medium text-text-high mb-2">
 						{isBuyer ? 'Waiting for Payment Requests' : 'No Payment Requests Created'}
 					</p>
-					<p className="text-text-high">
+					<p className="text-text-mid">
 						{isBuyer
 							? 'The seller has not yet created payment requests for this order.'
 							: 'Payment requests have not been created for this order yet.'}

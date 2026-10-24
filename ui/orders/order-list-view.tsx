@@ -142,7 +142,7 @@ export function OrderListView({ heading, search, orderBy, statusFilter, isCompac
 										<div className="space-y-3">
 											{others.map((cell) => (
 												<div key={cell.id} className="flex justify-between items-start">
-													<span className="text-sm font-medium text-text-high capitalize min-w-0 flex-shrink-0 mr-3">{cell.label}:</span>
+													<span className="text-sm font-medium text-text-mid capitalize min-w-0 flex-shrink-0 mr-3">{cell.label}:</span>
 													<div className="text-sm text-right min-w-0 flex-1">{cell.content}</div>
 												</div>
 											))}

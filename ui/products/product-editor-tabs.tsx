@@ -283,7 +283,7 @@ export function ProductCategoryView({
 
 			{mainCategory && (
 				<>
-					<p className="text-text-high">Pick a sub category that better represents the nature of your product</p>
+					<p className="text-text-mid">Pick a sub category that better represents the nature of your product</p>
 
 					<div className="space-y-2">
 						{/* The first field is always shown so a seller can type straight into it. */}
@@ -323,7 +323,7 @@ export function ProductCategoryView({
 export function ProductImagesView({ hasImages, children }: { hasImages: boolean; children: ReactNode }) {
 	return (
 		<div className="space-y-4 overflow-visible" data-testid="product-images-tab-panel">
-			<p className="text-text-high">We recommend using square images of 1600x1600 and under 2mb.</p>
+			<p className="text-text-mid">We recommend using square images of 1600x1600 and under 2mb.</p>
 			<div className="flex flex-col gap-4">
 				<Label>
 					<span className="after:content-['*'] after:ml-0.5 after:text-error">Image Upload</span>
@@ -463,7 +463,7 @@ export function ProductShippingView(props: ProductShippingViewProps) {
 					<span className="sr-only">required</span>
 					{!props.hasValidShipping && <span className="text-sm text-error ml-2">(At least one shipping option required)</span>}
 				</Label>
-				<p className="text-text-high">Select shipping options that will be available for this product</p>
+				<p className="text-text-mid">Select shipping options that will be available for this product</p>
 			</div>
 
 			{selected.length > 0 && (
@@ -593,7 +593,7 @@ export function ProductSpecsView({ specs, onSpecChange, onAddSpec, onRemoveSpec 
 		<div className="space-y-6">
 			<div className="space-y-2">
 				<Label className="text-base font-medium">Product Specifications</Label>
-				<p className="text-text-high">Add detailed specifications for your product</p>
+				<p className="text-text-mid">Add detailed specifications for your product</p>
 			</div>
 
 			<div className="space-y-4">
