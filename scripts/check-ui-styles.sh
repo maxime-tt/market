@@ -134,9 +134,11 @@
 #      comparison with `[: … : integer expression expected` noise and exit 0).
 #   4. --ratchet NEVER lowers an enforcement-assertion row (a weakened suite is a
 #      regression, not a ratchet opportunity): it keeps the committed value, says
-#      so, and exits non-zero. It drops a stale row (file gone) instead of writing
-#      `|0`, and it refuses to run at all — and never creates or truncates the
-#      file — when the baseline is missing.
+#      so, and exits non-zero. It drops a stale row (file gone) AND a debt row
+#      whose tree-derived count reached ZERO — instead of writing `|0`, which the
+#      baseline header's own rule ("drop a row at zero") forbids; that drop is
+#      exactly what --update performs, so the modes agree. And it refuses to run at
+#      all — and never creates or truncates the file — when the baseline is missing.
 #   5. An unknown argument prints usage on stderr and exits 2 (it used to run a
 #      full check silently). A brand-new file whose only raw hits are assertion
 #      lines is NOT debt: it is reported as `NEW ASSERTION` and does not fail.
@@ -159,10 +161,14 @@
 #      explicit revision range) and diffs each commit's baseline against its
 #      parent's, deriving counts from that commit's OWN tree. It FAILS on a debt
 #      row that rose, an enforcement-assertion row that fell, a tag that changed, a
-#      row removed while its file still exists at that commit, and a row added
-#      whose count does not match the tree; a row added that EQUALS the tree-derived
-#      count is legitimate (what --update writes), and the commit that first
-#      introduces the baseline is informational. This is the ONLY mechanism that
+#      row removed while its file still exists at that commit AND that commit's own
+#      tree still derives debt for it, and a row added whose count does not match
+#      the tree. A row removed at ZERO (that commit's tree derives 0 — which is what a
+#      commit that migrates and drops in one step looks like) is the legitimate drop
+#      that --ratchet and --update both perform, and is informational
+#      — as is a row removed because its file is gone. A row added that EQUALS the
+#      tree-derived count is legitimate (what --update writes), and the commit that
+#      first introduces the baseline is informational. This is the ONLY mechanism that
 #      can see a committed edit, so it belongs in the gate battery.
 #   8. The tamper check's "row ADDED" branch CARVES OUT the legitimate case: a new
 #      row for a file the committed baseline has never seen is fine EXACTLY when it
@@ -558,12 +564,34 @@ run_audit() { # <range-or-empty>
 				fi
 			fi
 		done
-		# A row removed while its file still exists at this commit.
+		# A row removed while its file still exists at this commit. This is a
+		# violation ONLY when the row still HAD debt at its parent: a row that
+		# was removed at zero (its parent-commit derived count was already 0) is
+		# the legitimate "drop a row at zero" that --ratchet and --update both
+		# perform, so it is informational, not a violation. A row removed while
+		# it still carried debt is the real thing this audit must catch.
 		for path in "${!P_COUNT[@]}"; do
 			[ -n "${C_COUNT[$path]:-}" ] && continue
-			if git -C "$ROOT" cat-file -e "$c:$path" 2>/dev/null; then
-				printf 'AUDIT VIOLATION  %s %s (%s %s) — the row was REMOVED while the file still exists at this commit\n' "$short" "$path" "${P_RULE[$path]}" "${P_COUNT[$path]}"
+			prule="${P_RULE[$path]}"
+			# The file is gone at this commit: dropping the row is the correct,
+			# forced consequence, not a tampering. Informational.
+			if ! git -C "$ROOT" cat-file -e "$c:$path" 2>/dev/null; then
+				printf -- '--audit: %s %s — informational: row removed and the file is gone at this commit; legitimate\n' "$short" "$path"
+				continue
+			fi
+			# The row existed at the parent AND the file still exists here. Whether
+			# the removal is tampering is decided by THIS commit's tree, not the
+			# parent's: a commit that migrates and drops in one step leaves a parent
+			# that still derived debt, yet the removal is exactly the sanctioned
+			# "drop a row at zero" — the child tree derives 0, so there is nothing
+			# left for the row to record. Only a removal while THIS tree still
+			# derives debt is the thing the audit must catch.
+			cderived="$(count_at_commit "$c" "$path" "$prule")"
+			if [ "$cderived" -gt 0 ] 2>/dev/null; then
+				printf 'AUDIT VIOLATION  %s %s (%s %s) — the row was REMOVED while the file still exists at this commit and the tree at this commit still derives %s occurrence(s); a row with debt cannot be dropped\n' "$short" "$path" "$prule" "${P_COUNT[$path]}" "$cderived"
 				v=$((v + 1))
+			else
+				printf -- '--audit: %s %s — informational: row REMOVED at zero (the tree at this commit derives %s); legitimate under the drop-at-zero rule\n' "$short" "$path" "$cderived"
 			fi
 		done
 		# A row added whose count must equal what THIS commit's tree derives.
@@ -592,14 +620,16 @@ Usage: scripts/check-ui-styles.sh [--update [--force] | --ratchet | --audit [<ra
   (no argument)   check the tree against scripts/ui-styles-baseline.txt
   --update        rewrite the baseline from the tree (refuses to raise an existing row)
   --update --force  rewrite the baseline, allowing rows to rise
-  --ratchet       lower every improved debt row; drop stale rows; never lower an
+  --ratchet       lower every improved debt row; drop a stale row (file gone) and a
+                  debt row whose derived count reached zero; never lower an
                   enforcement-assertion row; ATOMIC — the baseline is replaced only
                   when the run is clean, else it is left byte-untouched (exit 1)
   --audit [<range>]  audit the baseline's OWN committed history. With no range,
                   every commit that touched scripts/ui-styles-baseline.txt. Fails
                   (exit 1) if a committed edit raised a debt row, lowered an
-                  enforcement-assertion row, changed a tag, removed a row whose file
-                  still exists, or added a row that does not match that commit's tree.
+                  enforcement-assertion row, changed a tag, removed a row whose own
+                  commit tree still derives debt (a removal at zero is legitimate), or
+                  added a row that does not match that commit's tree.
   -h, --help      show this help
 
 An unknown argument is an error (exit 2). A symlink under ui/ is a hard error.
@@ -686,6 +716,15 @@ case "${1:-}" in
 					continue
 				fi
 				cur="$(raw_count "$f")"
+				if [ "$cur" -eq 0 ]; then
+					# A debt row whose tree-derived count reached ZERO is DELETED,
+					# not zeroed: writing "|0" records a row the header's own rule
+					# ("drop a row at zero") says must be dropped, and it would
+					# then linger as a fiction until --update deleted it. This is
+					# the same drop --update performs, so the modes now agree.
+					echo "check-ui-styles: --ratchet dropping zero row $path ($rule $base) — the tree derives 0; a debt row at zero is deleted, not zeroed" >&2
+					continue
+				fi
 				if [ "$cur" -lt "$base" ]; then
 					printf '%s|%s|%s\n' "$path" "$rule" "$cur"
 				else
