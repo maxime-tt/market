@@ -1,5 +1,7 @@
 import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import { AuctionListItemView, AuctionTopBidBox } from '@ui/auction/auction-list-views'
+import { AuctionTimelinePreview } from '@ui/auction/auction-timeline-preview'
+import { BidLadderPreview } from '@ui/auction/bid-ladder-preview'
 import { BidStatusBanner, BidStatusPill, getBidStatusCopy, type BidStatusDisplayInput } from '@ui/auction/bid-status-views'
 import { AuctionShippingDetailRow, AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
@@ -311,6 +313,84 @@ export const auction: WidgetLibrary = {
 						hasPartialShippingInfo
 					/>
 				</ul>
+			),
+		},
+		{
+			// The bid-ladder preview: sats-only price progression (T6.3 S3).
+			name: 'BidLadderPreview',
+			render: () => (
+				<div className="max-w-md">
+					<BidLadderPreview startingBid={1000} bidIncrement={50} reserve={2500} />
+				</div>
+			),
+		},
+		{
+			// Same preview with the reserve below the starting bid: the "no reserve" column.
+			name: 'BidLadderPreviewNoReserve',
+			render: () => (
+				<div className="max-w-md">
+					<BidLadderPreview startingBid={1000} bidIncrement={50} reserve={0} />
+				</div>
+			),
+		},
+		{
+			// The time-axis preview with an anti-snipe window and a curve (T6.3 S3).
+			name: 'AuctionTimelinePreview',
+			render: () => (
+				<div className="max-w-md">
+					<AuctionTimelinePreview
+						startingBid={1000}
+						bidIncrement={50}
+						reserve={2500}
+						curveShape="linear"
+						curvePeakMultiplier={2}
+						startAtSeconds={1_760_000_000}
+						endAtSeconds={1_760_086_400}
+						maxEndAtSeconds={1_760_090_000}
+						settlementGraceSeconds={86_400}
+						showCurve
+					/>
+				</div>
+			),
+		},
+		{
+			// No anti-snipe window: the flat auction, no curve phase.
+			name: 'AuctionTimelinePreviewFlat',
+			render: () => (
+				<div className="max-w-md">
+					<AuctionTimelinePreview
+						startingBid={1000}
+						bidIncrement={50}
+						reserve={0}
+						curveShape="none"
+						curvePeakMultiplier={1}
+						startAtSeconds={1_760_000_000}
+						endAtSeconds={1_760_086_400}
+						maxEndAtSeconds={1_760_086_400}
+						settlementGraceSeconds={86_400}
+						showCurve={false}
+					/>
+				</div>
+			),
+		},
+		{
+			// The early return: no end time picked yet, so the preview prompts instead of charting.
+			name: 'AuctionTimelinePreviewWaiting',
+			render: () => (
+				<div className="max-w-md">
+					<AuctionTimelinePreview
+						startingBid={1000}
+						bidIncrement={50}
+						reserve={0}
+						curveShape="none"
+						curvePeakMultiplier={1}
+						startAtSeconds={1_760_000_000}
+						endAtSeconds={0}
+						maxEndAtSeconds={0}
+						settlementGraceSeconds={86_400}
+						showCurve={false}
+					/>
+				</div>
 			),
 		},
 	],

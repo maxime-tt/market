@@ -32,6 +32,11 @@ test('renders the auction library', async ({ page }) => {
 		'AuctionShippingOptionCard',
 		'AuctionShippingOptionCardStates',
 		'AuctionShippingOptionCardPartial',
+		'BidLadderPreview',
+		'BidLadderPreviewNoReserve',
+		'AuctionTimelinePreview',
+		'AuctionTimelinePreviewFlat',
+		'AuctionTimelinePreviewWaiting',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
@@ -214,4 +219,53 @@ test('renders the technical row with a copy control only when copyable', async (
 
 	await row.locator('[data-slot="copy-button"]').click()
 	await expect(row.locator('[data-slot="copy-button"]')).toHaveAttribute('data-copied', 'true')
+})
+
+test('renders the bid-ladder preview in its reserve and no-reserve states', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const reserved = page.getByTestId('widget-BidLadderPreview')
+	await expect(reserved).toContainText('Bid ladder preview')
+	await expect(reserved).toContainText('1,000 sats')
+	await expect(reserved).toContainText('+50')
+	await expect(reserved).toContainText('2,500 sats')
+	await expect(reserved).toContainText('Reserve')
+	// 30 increments to the reserve, capped at the 24-tick ladder.
+	await expect(reserved.locator('[class*="w-px"]')).toHaveCount(24)
+	await expect(reserved).toContainText('30 bids of 50 sats needed to clear the reserve.')
+
+	const plain = page.getByTestId('widget-BidLadderPreviewNoReserve')
+	await expect(plain).toContainText('No reserve')
+	await expect(plain).toContainText('Highest bid wins')
+	await expect(plain.locator('[class*="w-px"]')).toHaveCount(0)
+})
+
+test('renders the timeline preview with the anti-snipe ramp and the flat fallback', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const ramped = page.getByTestId('widget-AuctionTimelinePreview')
+	await expect(ramped).toContainText('Bidding timeline')
+	await expect(ramped).toContainText('ramp begins')
+	await expect(ramped).toContainText('locktime')
+	await expect(ramped).toContainText('Preview top bid')
+	await expect(ramped).toContainText('(from reserve)')
+	await expect(ramped).toContainText('(2×, linear)')
+	await expect(ramped).toContainText("segments aren't to scale")
+	await expect(ramped.locator('svg')).toHaveCount(1)
+	await expect(ramped.locator('svg path')).toHaveCount(1)
+
+	const flat = page.getByTestId('widget-AuctionTimelinePreviewFlat')
+	await expect(flat).toContainText('(no reserve, using starting bid)')
+	await expect(flat).toContainText('(no curve)')
+	await expect(flat).not.toContainText('ramp begins')
+	await expect(flat.locator('svg path')).toHaveCount(0)
+})
+
+test('prompts for an end time instead of charting the timeline', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const waiting = page.getByTestId('widget-AuctionTimelinePreviewWaiting')
+	await expect(waiting).toContainText('Pick an end time to preview the bidding timeline.')
+	await expect(waiting.locator('svg')).toHaveCount(0)
+	await expect(waiting).not.toContainText('Bidding timeline')
 })

@@ -9,9 +9,11 @@
 # header of scripts/check-ui-styles.sh and ui/AGENTS.md § Tokens.
 # ui/primitives/** is excluded (generated; ADR-0007 §1a).
 # Re-seed with: scripts/check-ui-styles.sh --update
+ui/auction/auction-timeline-preview.tsx|ratchet-pending-t63|18
+ui/auction/bid-ladder-preview.tsx|ratchet-pending-t63|23
 ui/auth/nostr-connect-qr-view.tsx|parked-scheme-white|1
 ui/community/social-lists.tsx|parked-caller-surface|1
-ui/components/auction-editor/AuctionEditorTabs.tsx|ratchet-pending-t63|196
+ui/components/auction-editor/AuctionEditorTabs.tsx|ratchet-pending-t63|155
 ui/migration/migration-progress-dialog.tsx|parked-scrim|1
 ui/nav/nav-renderers.test.tsx|enforcement-assertion|2
 ui/orders/order-detail-sections.tsx|parked-caller-surface|1
