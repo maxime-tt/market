@@ -2,11 +2,16 @@ import { useState } from 'react'
 import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import type {
 	AuctionAntiSnipeWindowMinutesPreset,
+	AuctionFormData,
 	AuctionMinBidCurvePeakPreset,
 	AuctionMinBidCurveShape,
 	AuctionSettlementGracePreset,
 } from '@sdk/commerce/auctions/auctionForm'
+import { AuctionCategoryTab, AuctionImagesTab, AuctionNameTab, AuctionSpecTab } from '@ui/auction/auction-editor-tabs'
 import { AuctionListItemView, AuctionTopBidBox } from '@ui/auction/auction-list-views'
+import { AuctionShippingView } from '@ui/auction/auction-shipping-view'
+import { AuctionTabView } from '@ui/auction/auction-tab-view'
+import type { AuctionShippingOptionSummary } from '@ui/auction/model'
 import { AuctionTimelinePreview } from '@ui/auction/auction-timeline-preview'
 import { AntiSnipeCurveSettings } from '@ui/auction/anti-snipe-curve-settings'
 import { BidLadderPreview } from '@ui/auction/bid-ladder-preview'
@@ -159,6 +164,95 @@ function SettlementGraceSettingsDemo() {
 	return (
 		<div className="max-w-md">
 			<SettlementGraceSettings value={value} onValueChange={setValue} />
+		</div>
+	)
+}
+
+/** A full literal `AuctionFormData` for the editor-tab demos (T6.3 S5a). */
+const AUCTION_FORM_DATA: AuctionFormData = {
+	title: 'Handmade mug',
+	summary: 'One-of-a-kind stoneware mug',
+	description: 'Wheel-thrown, food-safe glaze.',
+	startingBid: '1000',
+	bidIncrement: '50',
+	reserve: '2500',
+	startAt: '',
+	endAt: '',
+	antiSnipeWindowMinutes: 0,
+	minBidCurveShape: 'none',
+	minBidCurvePeakMultiplier: 2,
+	settlementGracePreset: '1h',
+	mainCategory: 'Collectibles',
+	categories: [],
+	imageUrls: [],
+	specs: [
+		{ key: 'Brand', value: 'Leica' },
+		{ key: 'Condition', value: 'Mint' },
+	],
+	shippings: [],
+	trustedMints: ['https://mint.one'],
+	isNSFW: false,
+	enableLiveChat: true,
+	auditorPubkey: '',
+}
+
+/** The flattened option shape the host hands the shipping view. */
+const SHIPPING_OPTION: AuctionShippingOptionSummary = {
+	id: '30406:me:std',
+	name: 'Standard Post',
+	price: '10',
+	currency: 'USD',
+	service: 'standard',
+	carrier: 'DHL',
+}
+
+/** Host-owned uploader stand-in: each slot renders its own delete control. */
+function renderUploaderDemo({ src, index, onDelete }: { src: string | null; index: number; onDelete: (index: number) => void }) {
+	return (
+		<div className="flex items-center justify-between rounded-md border p-2 text-sm" data-slot="uploader-slot">
+			<span>{src ?? 'Add an image'}</span>
+			<button type="button" onClick={() => onDelete(index)}>
+				Delete
+			</button>
+		</div>
+	)
+}
+
+/** Interactive images tab: deleting a slot proves the `onDelete` wiring. */
+function AuctionImagesTabDemo() {
+	const [images, setImages] = useState([
+		{ imageUrl: 'https://img.example/1.png', imageOrder: 0 },
+		{ imageUrl: 'https://img.example/2.png', imageOrder: 1 },
+	])
+	return (
+		<div className="max-w-md">
+			<AuctionImagesTab images={images} setImages={setImages} renderUploader={renderUploaderDemo} />
+		</div>
+	)
+}
+
+/** The mechanics tab with local form state so the spec can open Advanced. */
+function AuctionTabViewDemo() {
+	const [formData, setFormData] = useState<AuctionFormData>(AUCTION_FORM_DATA)
+	const [startMode, setStartMode] = useState<'immediate' | 'scheduled'>('immediate')
+	const [endMode, setEndMode] = useState<'duration' | 'absolute'>('duration')
+	const [durationSeconds, setDurationSeconds] = useState(86_400)
+	return (
+		<div className="max-w-md">
+			<AuctionTabView
+				formData={formData}
+				setFormData={setFormData}
+				availableMints={['https://mint.one', 'https://mint.two']}
+				startMode={startMode}
+				setStartMode={setStartMode}
+				endMode={endMode}
+				setEndMode={setEndMode}
+				durationSeconds={durationSeconds}
+				setDurationSeconds={setDurationSeconds}
+				validationMessages={{}}
+				userRemovedMints={new Set<string>()}
+				onUserRemovedMintsChange={() => {}}
+			/>
 		</div>
 	)
 }
@@ -500,6 +594,178 @@ export const auction: WidgetLibrary = {
 			// Interactive: click a preset to prove the `onValueChange` wiring.
 			name: 'SettlementGraceSettingsInteractive',
 			render: () => <SettlementGraceSettingsDemo />,
+		},
+		{
+			// The four simple editor tabs, as one cluster file (T6.3 S5a).
+			name: 'AuctionNameTab',
+			render: () => (
+				<div className="max-w-md">
+					<AuctionNameTab formData={AUCTION_FORM_DATA} setFormData={() => {}} />
+				</div>
+			),
+		},
+		{
+			name: 'AuctionCategoryTab',
+			render: () => (
+				<div className="max-w-md">
+					<AuctionCategoryTab
+						formData={AUCTION_FORM_DATA}
+						setFormData={() => {}}
+						subCategoryInput="Cameras, Optics"
+						setSubCategoryInput={() => {}}
+						mainCategories={['Collectibles', 'Art', 'Bitcoin']}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'AuctionSpecTab',
+			render: () => (
+				<div className="max-w-md">
+					<AuctionSpecTab formData={AUCTION_FORM_DATA} setFormData={() => {}} />
+				</div>
+			),
+		},
+		{
+			name: 'AuctionImagesTab',
+			render: () => (
+				<div className="max-w-md">
+					<AuctionImagesTab
+						images={[{ imageUrl: 'https://img.example/1.png', imageOrder: 0 }]}
+						setImages={() => {}}
+						renderUploader={renderUploaderDemo}
+					/>
+				</div>
+			),
+		},
+		{
+			// Interactive: delete a slot to prove the `onDelete` wiring.
+			name: 'AuctionImagesTabInteractive',
+			render: () => <AuctionImagesTabDemo />,
+		},
+		{
+			// The mechanics tab: start/end timing, starting bid, Advanced (T6.3 S5a).
+			name: 'AuctionTabView',
+			render: () => (
+				<div className="max-w-md">
+					<AuctionTabView
+						formData={AUCTION_FORM_DATA}
+						setFormData={() => {}}
+						availableMints={['https://mint.one', 'https://mint.two']}
+						startMode="immediate"
+						setStartMode={() => {}}
+						endMode="duration"
+						setEndMode={() => {}}
+						durationSeconds={86_400}
+						setDurationSeconds={() => {}}
+						validationMessages={{}}
+						userRemovedMints={new Set<string>()}
+						onUserRemovedMintsChange={() => {}}
+					/>
+				</div>
+			),
+		},
+		{
+			// The same tab with the date pickers selected instead of the duration slider.
+			name: 'AuctionTabViewScheduled',
+			render: () => (
+				<div className="max-w-md">
+					<AuctionTabView
+						formData={AUCTION_FORM_DATA}
+						setFormData={() => {}}
+						availableMints={[]}
+						startMode="scheduled"
+						setStartMode={() => {}}
+						endMode="absolute"
+						setEndMode={() => {}}
+						durationSeconds={3600}
+						setDurationSeconds={() => {}}
+						validationMessages={{}}
+						userRemovedMints={new Set<string>()}
+						onUserRemovedMintsChange={() => {}}
+					/>
+				</div>
+			),
+		},
+		{
+			// Interactive: open Advanced to prove the collapsible composition of the
+			// bid-increment/reserve inputs, the curve card and the mints list.
+			name: 'AuctionTabViewAdvanced',
+			render: () => <AuctionTabViewDemo />,
+		},
+		{
+			// The shipping panel with attached and available options (T6.3 S5a).
+			name: 'AuctionShippingView',
+			render: () => (
+				<div className="max-w-md">
+					<AuctionShippingView
+						attached={[
+							{ shippingRef: '30406:me:std', extraCost: '5', option: SHIPPING_OPTION },
+							{ shippingRef: '30406:me:gone', extraCost: '', option: null },
+						]}
+						unselected={[SHIPPING_OPTION]}
+						hasUser
+						isLoading={false}
+						hasAnyOptions
+						extraCostErrors={{ 0: 'Enter a whole number' }}
+						onAdd={() => {}}
+						onRemove={() => {}}
+						onExtraCostChange={() => {}}
+					/>
+				</div>
+			),
+		},
+		{
+			// The four degenerate Available branches, stacked.
+			name: 'AuctionShippingViewStates',
+			render: () => (
+				<div className="grid max-w-md gap-4">
+					<AuctionShippingView
+						attached={[]}
+						unselected={[]}
+						hasUser={false}
+						isLoading={false}
+						hasAnyOptions
+						extraCostErrors={{}}
+						onAdd={() => {}}
+						onRemove={() => {}}
+						onExtraCostChange={() => {}}
+					/>
+					<AuctionShippingView
+						attached={[]}
+						unselected={[]}
+						hasUser
+						isLoading
+						hasAnyOptions
+						extraCostErrors={{}}
+						onAdd={() => {}}
+						onRemove={() => {}}
+						onExtraCostChange={() => {}}
+					/>
+					<AuctionShippingView
+						attached={[]}
+						unselected={[]}
+						hasUser
+						isLoading={false}
+						hasAnyOptions={false}
+						extraCostErrors={{}}
+						onAdd={() => {}}
+						onRemove={() => {}}
+						onExtraCostChange={() => {}}
+					/>
+					<AuctionShippingView
+						attached={[]}
+						unselected={[]}
+						hasUser
+						isLoading={false}
+						hasAnyOptions
+						extraCostErrors={{}}
+						onAdd={() => {}}
+						onRemove={() => {}}
+						onExtraCostChange={() => {}}
+					/>
+				</div>
+			),
 		},
 	],
 }

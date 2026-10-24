@@ -42,9 +42,93 @@ test('renders the auction library', async ({ page }) => {
 		'AntiSnipeCurveSettingsInteractive',
 		'SettlementGraceSettings',
 		'SettlementGraceSettingsInteractive',
+		'AuctionNameTab',
+		'AuctionCategoryTab',
+		'AuctionSpecTab',
+		'AuctionImagesTab',
+		'AuctionImagesTabInteractive',
+		'AuctionTabView',
+		'AuctionTabViewScheduled',
+		'AuctionTabViewAdvanced',
+		'AuctionShippingView',
+		'AuctionShippingViewStates',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
+})
+
+test('renders the four simple editor tabs', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const name = page.getByTestId('widget-AuctionNameTab')
+	await expect(name.locator('#auction-title')).toHaveValue('Handmade mug')
+	await expect(name.locator('#auction-summary')).toHaveValue('One-of-a-kind stoneware mug')
+	await expect(name.locator('#auction-description')).toHaveValue('Wheel-thrown, food-safe glaze.')
+	await expect(name).toContainText('This auction contains adult/sensitive content')
+
+	const category = page.getByTestId('widget-AuctionCategoryTab')
+	await expect(category).toContainText('Main Category')
+	await expect(category.locator('textarea')).toHaveValue('Cameras, Optics')
+
+	const spec = page.getByTestId('widget-AuctionSpecTab')
+	await expect(spec).toContainText('Item Specifications')
+	await expect(spec.getByRole('button', { name: 'Add Specification' })).toBeVisible()
+
+	// The images tab hands every slot to the host renderer.
+	const images = page.getByTestId('widget-AuctionImagesTab')
+	await expect(images.locator('[data-slot="uploader-slot"]')).toHaveCount(2)
+})
+
+test('removes an image slot through the host renderer callback', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const live = page.getByTestId('widget-AuctionImagesTabInteractive')
+	await expect(live.locator('[data-slot="uploader-slot"]')).toHaveCount(3)
+	await live.locator('[data-slot="uploader-slot"] button', { hasText: 'Delete' }).first().click()
+	await expect(live.locator('[data-slot="uploader-slot"]')).toHaveCount(2)
+})
+
+test('renders the mechanics tab, and Advanced reveals the deferred controls', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const view = page.getByTestId('widget-AuctionTabView')
+	await expect(view).toContainText('Start Time')
+	await expect(view).toContainText('Immediate')
+	await expect(view).toContainText('The auction goes live the moment you publish.')
+	await expect(view).toContainText('Starting Bid (sats)')
+	// Advanced is collapsed at rest.
+	await expect(view).not.toContainText('Reserve (sats)')
+
+	const scheduled = page.getByTestId('widget-AuctionTabViewScheduled')
+	await expect(scheduled).toContainText('Pick a start date')
+	await expect(scheduled).toContainText('Pick an end date')
+
+	// The interactive demo opens Advanced and composes the S3/S4 cards.
+	const live = page.getByTestId('widget-AuctionTabViewAdvanced')
+	await live.getByRole('button', { name: 'Advanced' }).click()
+	await expect(live).toContainText('Bid Increment (sats)')
+	await expect(live).toContainText('Reserve (sats)')
+	await expect(live).toContainText('Bid ladder preview')
+	await expect(live).toContainText('Anti-snipe')
+	await expect(live).toContainText('Settlement grace')
+	await expect(live).toContainText('Trusted Mints')
+})
+
+test('renders the shipping panel and its degenerate branches', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const view = page.getByTestId('widget-AuctionShippingView')
+	await expect(view).toContainText('Attached')
+	await expect(view).toContainText('Standard Post')
+	await expect(view).toContainText('Unknown shipping option')
+	await expect(view).toContainText('Enter a whole number')
+	await expect(view).toContainText('10 USD · standard · DHL')
+
+	const states = page.getByTestId('widget-AuctionShippingViewStates')
+	await expect(states).toContainText('Connect your wallet to load your shipping options.')
+	await expect(states).toContainText('Loading shipping options...')
+	await expect(states).toContainText('any shipping options yet')
+	await expect(states).toContainText('All of your shipping options are already attached.')
 })
 
 test('renders the dashboard auction list row with its host-owned slots', async ({ page }) => {
