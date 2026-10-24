@@ -122,23 +122,13 @@ button {
 	/* secondary */
 	--secondary: #ff3eb5;
 	--secondary-foreground: #312222;
-	--secondary-foreground-hover: #ff3eb5;
-	--secondary-border: #ff3eb5;
-	--secondary-border-hover: #ff3eb5;
 	/* tertiary */
 	--tertiary: #ffffff;
 	--tertiary-hover: #606060;
-	--tertiary-foreground: #1d1d1d;
-	--tertiary-foreground-hover: #fafafa;
-	--tertiary-border: #1d1d1d;
-	--tertiary-border-hover: #1d1d1d;
 	/* focus */
 	--focus: #ffd53d;
-	--focus-hover: #0a0a0a;
 	--focus-foreground: #0a0a0a;
 	--focus-foreground-hover: #f4cb34;
-	--focus-border: #ffd53e;
-	--focus-border-hover: #ffd53e;
 	/* muted */
 	--muted: #f3f1f4;
 	--muted-foreground: #666666;
@@ -147,7 +137,6 @@ button {
 	--accent-foreground: #262626;
 	/* destructive */
 	--destructive: #bf4040;
-	--destructive-foreground: #1d1d1d;
 
 	/* UX-state tokens (ADR-0007 §1a) — mirrored from .theme-new so components
 	   that use them render correctly before a subtree is migrated. Values must
@@ -178,18 +167,16 @@ button {
 	--ring: #ff3eb5;
 	--radius: 0.25rem;
 
+	/* Font roles (F4) — declared at :root so `font-body` / `font-header`
+	   resolve outside `.theme-new`; values mirror styles/globals-new.css. */
+	--font-body: 'IBM Plex Mono', monospace;
+	--font-header: 'reglisse', sans-serif;
+
 	/* Additional custom colors */
 	--light-gray: #ebebeb;
 	--off-black: #0a0a0a;
-	--neo-purple: #ff3eb5;
 	--secondary-black: #131313;
 	--tertiary-black: #1d1d1d;
-
-	/* Custom radius values */
-	--radius-sm: 2rem;
-	--radius-md: 4px;
-	--radius-lg: 8px;
-	--radius-xl: 24px;
 
 	/* Themed shadow scale (ADR-0007 §1a-bis). Tailwind's `shadow-*` utilities
 	   resolve through these value tokens, so a theme can retune shadows without
@@ -277,7 +264,6 @@ button {
 	--accent: hsl(240 3.7% 15.9%);
 	--accent-foreground: hsl(0 0% 98%);
 	--destructive: hsl(0 62.8% 30.6%);
-	--destructive-foreground: hsl(0 0% 98%);
 
 	/* UX-state tokens — dark mode; mirrored from .dark .theme-new. */
 	--info: oklch(0.714 0.143 254.6);
@@ -303,6 +289,11 @@ button {
 	--border: hsl(240 3.7% 15.9%);
 	--input: hsl(240 3.7% 15.9%);
 	--ring: hsl(240 4.9% 83.9%);
+
+	/* Font roles (F4) — scheme-stable; mirrors the :root declaration. */
+	--font-body: 'IBM Plex Mono', monospace;
+	--font-header: 'reglisse', sans-serif;
+
 	--chart-1: hsl(220 70% 50%);
 	--chart-2: hsl(160 60% 45%);
 	--chart-3: hsl(30 80% 55%);
@@ -381,27 +372,16 @@ button {
 	--radius-pill: 2rem;
 	--color-secondary: var(--secondary);
 	--color-secondary-foreground: var(--secondary-foreground);
-	--color-secondary-foreground-hover: var(--secondary-foreground-hover);
-	--color-secondary-border: var(--secondary-border);
-	--color-secondary-border-hover: var(--secondary-border-hover);
 	--color-tertiary: var(--tertiary);
 	--color-tertiary-hover: var(--tertiary-hover);
-	--color-tertiary-foreground: var(--tertiary-foreground);
-	--color-tertiary-foreground-hover: var(--tertiary-foreground-hover);
-	--color-tertiary-border: var(--tertiary-border);
-	--color-tertiary-border-hover: var(--tertiary-border-hover);
 	--color-focus: var(--focus);
-	--color-focus-hover: var(--focus-hover);
 	--color-focus-foreground: var(--focus-foreground);
 	--color-focus-foreground-hover: var(--focus-foreground-hover);
-	--color-focus-border: var(--focus-border);
-	--color-focus-border-hover: var(--focus-border-hover);
 	--color-muted: var(--muted);
 	--color-muted-foreground: var(--muted-foreground);
 	--color-accent: var(--accent);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-destructive: var(--destructive);
-	--color-destructive-foreground: var(--destructive-foreground);
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
@@ -429,7 +409,6 @@ button {
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar: var(--sidebar-background);
 	--color-light-gray: var(--light-gray);
-	--color-neo-purple: var(--neo-purple);
 
 	/* New utilities for the scoped .theme-new token system (ADR-0007 §1a). */
 	/* These map to the same var() names that .theme-new overrides —    */
@@ -764,7 +743,7 @@ button {
 	button[role='radio'][aria-checked='true'][data-variant='outline'] {
 		/* Example: Override background and text color when selected */
 		border-width: 0.1rem !important;
-		background-color: color-mix(var(--neo-purple) 10%, transparent 90%);
-		border-color: var(--neo-purple) !important;
+		background-color: color-mix(var(--fill-accent) 10%, transparent 90%);
+		border-color: var(--fill-accent) !important;
 	}
 }

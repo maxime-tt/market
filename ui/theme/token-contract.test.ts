@@ -80,7 +80,6 @@ const TIER_2 = [
 	'accent',
 	'accent-foreground',
 	'destructive',
-	'destructive-foreground',
 	'border',
 	'input',
 	'ring',
@@ -91,7 +90,6 @@ const TIER_2 = [
 	'success',
 	'light-gray',
 	'off-black',
-	'neo-purple',
 	'secondary-black',
 	'tertiary-black',
 ] as const

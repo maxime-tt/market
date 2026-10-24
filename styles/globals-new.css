@@ -50,25 +50,15 @@
 	/* ── Secondary ────────────────────────────────────────────────────── */
 	--secondary: oklch(0.688 0.249 348);
 	--secondary-foreground: oklch(0.145 0 0);
-	--secondary-foreground-hover: oklch(0.688 0.249 348);
-	--secondary-border: oklch(0.688 0.249 348);
-	--secondary-border-hover: oklch(0.688 0.249 348);
 
 	/* ── Tertiary ─────────────────────────────────────────────────────── */
 	--tertiary: oklch(1 0 0);
 	--tertiary-hover: oklch(0.489 0 0);
-	--tertiary-foreground: oklch(0.231 0 0);
-	--tertiary-foreground-hover: oklch(0.985 0 0);
-	--tertiary-border: oklch(0.231 0 0);
-	--tertiary-border-hover: oklch(0.231 0 0);
 
 	/* ── Focus ────────────────────────────────────────────────────────── */
 	--focus: oklch(0.885 0.164 92.6);
-	--focus-hover: oklch(0.145 0 0);
 	--focus-foreground: oklch(0.145 0 0);
 	--focus-foreground-hover: oklch(0.854 0.162 92.6);
-	--focus-border: oklch(0.885 0.164 92.5);
-	--focus-border-hover: oklch(0.885 0.164 92.5);
 
 	/* ── Muted ────────────────────────────────────────────────────────── */
 	--muted: oklch(0.961 0.005 314.8);
@@ -80,7 +70,6 @@
 
 	/* ── Destructive ──────────────────────────────────────────────────── */
 	--destructive: oklch(0.552 0.163 24.2);
-	--destructive-foreground: oklch(0.231 0 0);
 
 	/* ── Border / Input / Ring ────────────────────────────────────────── */
 	--border: oklch(0.851 0.025 340.4);
@@ -120,15 +109,8 @@
 	/* ── Additional custom colors ─────────────────────────────────────── */
 	--light-gray: oklch(0.94 0 0);
 	--off-black: oklch(0.145 0 0);
-	--neo-purple: oklch(0.688 0.249 348);
 	--secondary-black: oklch(0.187 0 0);
 	--tertiary-black: oklch(0.231 0 0);
-
-	/* ── Custom radius values ─────────────────────────────────────────── */
-	--radius-sm: 2rem;
-	--radius-md: 4px;
-	--radius-lg: 8px;
-	--radius-xl: 24px;
 
 	/* ── Themed shadow scale (mirrored from :root) ──────────────────────
 	   Mirrored rather than inherited: custom properties resolve `var()` at the
@@ -215,23 +197,13 @@
 
 	--secondary: oklch(0.274 0.006 286);
 	--secondary-foreground: oklch(0.982 0 0);
-	--secondary-foreground-hover: oklch(0.982 0 0);
-	--secondary-border: oklch(0.274 0.006 286);
-	--secondary-border-hover: oklch(0.274 0.006 286);
 
 	--tertiary: oklch(0.274 0.006 286);
 	--tertiary-hover: oklch(0.274 0.006 286);
-	--tertiary-foreground: oklch(0.982 0 0);
-	--tertiary-foreground-hover: oklch(0.982 0 0);
-	--tertiary-border: oklch(0.274 0.006 286);
-	--tertiary-border-hover: oklch(0.274 0.006 286);
 
 	--focus: oklch(0.868 0.006 286.3);
-	--focus-hover: oklch(0.868 0.006 286.3);
 	--focus-foreground: oklch(0.982 0 0);
 	--focus-foreground-hover: oklch(0.982 0 0);
-	--focus-border: oklch(0.868 0.006 286.3);
-	--focus-border-hover: oklch(0.868 0.006 286.3);
 
 	--muted: oklch(0.274 0.006 286);
 	--muted-foreground: oklch(0.712 0.012 286.1);
@@ -240,7 +212,6 @@
 	--accent-foreground: oklch(0.982 0 0);
 
 	--destructive: oklch(0.396 0.133 25.7);
-	--destructive-foreground: oklch(0.982 0 0);
 
 	--border: oklch(0.274 0.006 286);
 	--input: oklch(0.274 0.006 286);
@@ -274,7 +245,6 @@
 	/* Custom colors — dark mode */
 	--light-gray: oklch(0.274 0.006 286);
 	--off-black: oklch(0.135 0.005 285.8);
-	--neo-purple: oklch(0.688 0.249 348);
 	--secondary-black: oklch(0.187 0 0);
 	--tertiary-black: oklch(0.231 0 0);
 
