@@ -26,6 +26,8 @@
 		"widget-book:dev": "bun --hot widget-book/server.ts",
 		"widget-book:test": "playwright test --config=widget-book/playwright.config.ts",
 		"check:ui-assembler": "bash scripts/check-ui-assembler.sh",
+		"check:ui-styles": "bash scripts/check-ui-styles.sh",
+		"check:ui-styles:audit": "bash scripts/check-ui-styles.sh --audit",
 		"test:e2e": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts",
 		"test:e2e:self-hosted": "E2E_SELF_HOSTED_INSTANCE=true NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts",
 		"test:e2e:headed": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts --headed",

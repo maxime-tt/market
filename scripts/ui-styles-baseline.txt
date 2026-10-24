@@ -1,0 +1,22 @@
+# UI raw-palette baseline — T6.4 ratcheting guard (scripts/check-ui-styles.sh).
+# Format: <path>|<rule>|<count>.  Rules: raw-palette, raw-palette-test,
+#   ratchet-pending-t63, parked-scrim, parked-scheme-black,
+#   parked-scheme-white, parked-caller-surface, enforcement-assertion.
+# The guard FAILS if a debt row RISES, and fails if an enforcement-assertion
+# row FALLS (deleting a test that proves the legacy class is gone is a regression).
+# Lower debt rows when a migration removes occurrences; drop a row at zero.
+# parked-* rows are MISSING-ROLE cases, not renames — see the reasons in the
+# header of scripts/check-ui-styles.sh and ui/AGENTS.md § Tokens.
+# ui/primitives/** is excluded (generated; ADR-0007 §1a).
+# Re-seed with: scripts/check-ui-styles.sh --update
+ui/auth/nostr-connect-qr-view.tsx|parked-scheme-white|1
+ui/community/social-lists.tsx|parked-caller-surface|1
+ui/components/auction-editor/AuctionEditorTabs.tsx|ratchet-pending-t63|200
+ui/migration/migration-progress-dialog.tsx|parked-scrim|1
+ui/nav/nav-renderers.test.tsx|enforcement-assertion|2
+ui/orders/order-detail-sections.tsx|parked-caller-surface|1
+ui/products/product-search-results.tsx|parked-caller-surface|4
+ui/settings/operator-settings-views.test.tsx|raw-palette-test|1
+ui/shared/image-carousel.tsx|parked-scheme-black|2
+ui/shared/image-viewer-modal.tsx|parked-scrim|16
+ui/shared/info-tooltip.test.tsx|enforcement-assertion|1
