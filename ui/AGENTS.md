@@ -133,6 +133,43 @@ Classify every component before writing it:
 Purpose-specific feature views may relax 5–6 where a design requires it, but
 must document why in the file header.
 
+### Cluster files — one file may hold several related views
+
+A **cluster file** is one module that exports several closely related presentational views of a single
+concept, rather than one component per file.
+
+**This is the convention.** When a monolith is decomposed (ADR-0007 §2a _Extract_), the extract lands as
+cluster files named `<domain>-views.tsx` / `<domain>-sections.tsx` / `<domain>-tabs.tsx` — not as one file
+per exported component. Precedent, all shipped in T6.2:
+
+- `ui/products/product-editor-tabs.tsx` — five view exports (`ProductPricingView`, `ProductCategoryView`,
+  `ProductImagesView`, `ProductShippingView`, `ProductSpecsView`);
+- `ui/checkout/payment-views.tsx`;
+- `ui/orders/order-detail-sections.tsx`.
+
+The pre-migration shape of the same idea is `ui/components/CartViews.tsx` — six exported views in one file
+(`CartShippingReminder`, `CartLineShipping`, `CartSellerCard`, `CartTotals`, `CartTotalsDetails`,
+`CartFooter`).
+
+**Sharing a file changes no obligation.** Every exported component of a cluster still owes:
+
+- its **own widget-book entry** — entries are per component (232 entries over 132 components in 18
+  libraries at `2ed28c94`);
+- its **own unit test** — a cluster may carry a single `*.test.tsx` covering its views (the
+  `ProductEditorTabs.test.tsx` precedent), but each view must be covered.
+
+The **Playwright spec file stays per library** — `widget-book/tests/<library>.spec.ts`; a cluster does not
+get one spec file per view.
+
+**When to split a cluster into separate files.** Split when any one of these holds:
+
+1. the views **stop sharing props/helpers** — they no longer take the same slice shape or the same local
+   helpers;
+2. the file **stops fitting one screen in a reviewer's head**;
+3. a view becomes **reusable by a second feature**.
+
+Absent one of those, keep the cluster.
+
 ### Expanded theme dimensions (ADR-0007 §1a-bis)
 
 The stylesheet exposes six theme dimensions. Token defaults are visual no-ops,
@@ -299,6 +336,59 @@ same commit. Budget: **≤ 50 Tier-1 names**, enforced by the contract test. Whe
 new role seems needed, the answer is usually that the call site wants an existing
 role (`--surface-hover`, `--text-mid`) — check before adding.
 
+### The raw-palette guard (`scripts/check-ui-styles.sh`)
+
+A ratcheting guard keeps raw palette monotonic — it can only fall. It scans two
+colour-literal **families** under `ui/` (minus generated `primitives/**`):
+
+- the **named hue** family — `bg-gray-500`, `border-zinc-200`, `fill-black`,
+  `bg-white/20`, … (a utility followed by a Tailwind hue);
+- the **arbitrary-value** family (added in v3) — the same utilities with a
+  bracketed colour literal: `bg-[#1c1c1c]`, `text-[rgb(0,0,0)]`,
+  `border-[oklch(0.5_0_0)]`, `shadow-[color:var(--brand-pink)]`. A
+  `var(--brand-…)` inside a bracket is debt too (ruling R5 — a component never
+  consumes the brand identity directly).
+
+It does **not** flag a role reference (`bg-[var(--text-high)]` _is_ the API, not
+raw palette), nor a non-colour arbitrary value (`w-[3px]`, `grid-cols-[1fr_2fr]`,
+a box-shadow's geometry `shadow-[0_1px_2px_rgba(0,0,0,0.2)]`).
+
+**File scope (v3):** `*.ts *.tsx *.js *.jsx *.mjs *.cjs *.mts *.cts *.css` under
+`ui/`. `.md`/`.mdx` are deliberately **not** scanned: the files that _document_
+this rule quote forbidden spellings on purpose, so scanning markdown would count
+the documentation of the rule as a violation of it. This exclusion is a decision,
+not an oversight (owner, 2026-10-24): the document that states the rule must stay
+free to quote the spellings it forbids.
+
+The counts live in `scripts/ui-styles-baseline.txt` and are re-derived with
+`scripts/check-ui-styles.sh --update`. Widening the scope invalidates previously
+quoted totals — re-seed (`--update --force`), commit, then record the new numbers.
+
+**Guard modes** (`scripts/check-ui-styles.sh`):
+
+- `check` (no argument) — compare the tree against the baseline. The baseline itself is
+  defended against an **uncommitted** edit (working vs `HEAD:scripts/ui-styles-baseline.txt`):
+  a debt row raised, or an `enforcement-assertion` row lowered, fails the run.
+- `--update` — re-derive the baseline from the tree; it **refuses** to raise an existing row
+  without `--force`, and accepts a brand-new row only when it equals what the tree implies.
+- `--ratchet` — lower every improved debt row; **atomic** (builds the new baseline in a temp
+  file and replaces the real one only on a clean run — an assertion regression leaves the file
+  byte-untouched and exits 1).
+- `--audit [<range>]` — audit the baseline's **committed** history (see below).
+- `-h` / `--help`; an unknown argument exits 2.
+
+**A symlink under `ui/**`is a hard error.**`check`, `--update`and`--ratchet`refuse a symlink
+whose name matches a scanned extension, and **any** symlinked directory under`ui/`, naming the
+link and its resolved target. A link would otherwise be silently skipped (an escape hatch — raw
+palette hides behind it) or, worse, followed outside `ui/`. Replace it with a real file.
+
+**`--audit` is the only thing that can see a _committed_ baseline edit.** The `check` defence
+compares the working baseline to `HEAD`, so a baseline that _landed_ with a debt row inflated, or a
+row re-tagged to `enforcement-assertion`, or a row deleted, passes `check` forever. `--audit` walks
+every commit that touched `scripts/ui-styles-baseline.txt` (or an explicit revision range) and fails
+on a debt rise, an assertion fall, a tag change, a removed row whose file still exists, or an added
+row that does not match that commit's own tree. Run **`check` and `--audit`** in CI.
+
 ### Two mistakes this cost us (do not repeat them)
 
 - **Never conclude what a token _is_ from one scope.** The D5 handover claimed
@@ -316,8 +406,10 @@ role (`--surface-hover`, `--text-mid`) — check before adding.
 
 - Every new atom/molecule gets a `*.test.tsx` beside it (Bun test) covering
   variants, disabled reasons, and empty/error/loading states.
-- Every component gets a widget-book Playwright spec under
-  `widget-book/<library>/<Component>.spec.ts`.
+  In a cluster file, one `*.test.tsx` may cover all the cluster's views — but every exported
+  view must be exercised.
+- Every component gets a widget-book entry in `widget-book/libraries/<library>.tsx`; the
+  Playwright spec is one file per library under `widget-book/tests/<library>.spec.ts`.
 - A component that cannot render in the widget book (because it needs
   `platform/` or `src/`) is not a `ui/` component — move the wiring out.
 

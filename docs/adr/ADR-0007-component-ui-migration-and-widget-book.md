@@ -11,6 +11,11 @@ host. See §1b (structure and layer roles), §1d (import convention), §1e
 (widget book as a sibling client), and §1a-bis (dynamic theme configuration).
 Where this amendment and the original text disagree, this amendment wins.
 
+**Clarification 2026-10-24.** §2a's `Extract` "individual files" means _out of the monolith /
+not in-line_, never one component per file; cluster files are permitted and precedented, with
+per-component widget-book entries and per-library spec files unchanged. See `ui/AGENTS.md`
+§ Cluster files.
+
 ## Date
 
 2026-08-05
@@ -208,11 +213,21 @@ A modular test harness (`widget-book/`) will be established to serve as a unifie
 
 **2a. Migration Model: Foundation + Opportunistic Slices**
 
+> **Clarification added 2026-10-24 (owner ruling).** The `Extract` strategy's "individual files"
+> has always meant _out of the monolith / not in-line_ (the contrast at line 211: "as individual
+> files **and defined in-line**"). It never meant one component per file. Cluster files — one
+> module holding several closely related presentational views of one concept — are permitted and
+> precedented (`ui/products/product-editor-tabs.tsx`, `ui/checkout/payment-views.tsx`,
+> `ui/orders/order-detail-sections.tsx`). Per-component obligations are unchanged: each exported
+> component owes its own widget-book entry and its own unit test, and the widget-book Playwright
+> spec stays one file per library. This clarification is not a new revision; it records the reading
+> the code has always followed. See `ui/AGENTS.md` § Cluster files.
+
 Slice defines a set of UI components (as individual files and defined in-line) which migrate according to the **Classification System**:
 
 - **Keep:** Components already compliant or trivially fixable. Migrate styles to tokens, enforce API contracts.
 - **Modify:** Valuable but non-compliant. Refactor to implement contracts, migrate styles, and fix structure.
-- **Extract:** Components containing trapped sub-components. Decompose into individual files in appropriate directories, then apply Keep/Modify rules to each piece.
+- **Extract:** Components containing trapped sub-components. Decompose into individual files in appropriate directories, then apply Keep/Modify rules to each piece. **"Individual files" means _out of the monolith / not in-line_ — the contrast stated at §2a line 211 — never one component per file.** Several closely related presentational views of one concept may share a cluster file (e.g. `ui/products/product-editor-tabs.tsx`, `ui/checkout/payment-views.tsx`, `ui/orders/order-detail-sections.tsx`). Every exported component of a cluster still owes its own widget-book entry and its own unit test; the Playwright spec file is per library. See `ui/AGENTS.md` § Cluster files.
 - **Replace:** Redundant or superseded components. Swap all consumers to the compliant replacement, then delete the original.
 
 For example, an inline component used in `routes/` such as `renderHomepageHero()` might be marked as **Extract** while a card redefinition in another might be marked as **Replace** (with `components/ui/card.tsx`). Each migration PR should include the extent of UI created or modified and how the updated UI fits into the classification system.
