@@ -70,7 +70,9 @@ GLOBS=(
 	"$ROOT"/src/lib/auction/*.ts
 	"$ROOT"/src/lib/auctions/*.ts
 	"$ROOT"/src/lib/utils/auction*.ts
-	"$ROOT"/src/lib/stores/auction*.ts
+	# `src/lib/stores/auction*.ts` was retired here: its only member, `auctionWon.ts`, was deleted when the
+	# auction-win flow moved onto the notification mechanism (see the C1/C2 increments), so the family matches
+	# nothing and the coverage check fails by design. Re-add a stores family if an auction store reappears.
 	"$ROOT"/src/hooks/useAuction*.ts
 	"$ROOT"/src/lib/schemas/auction/*.ts
 	"$ROOT"/platform/server/auction-validator/*.ts
