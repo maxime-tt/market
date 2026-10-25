@@ -46,9 +46,17 @@ export function removeAuctionWinsForAuction(notifications: AppNotifications, auc
 }
 
 /**
- * Keep only the given bidder's auction wins — the old `retainForBidder` (`auctionWon.ts:39`). The old store's
- * queue held wins only, so "keep only this bidder" is also "drop every non-win"; the predicate reproduces that.
+ * Keep the given bidder's auction wins, and every notification that is not an auction win — the generalised
+ * `retainForBidder` (`auctionWon.ts:39`).
+ *
+ * The old store's queue held auction wins and nothing else, so "keep only this bidder" implied "drop every
+ * non-win". The queue is now shared with every other notification type, so that implication is wrong: this
+ * removes one bidder's wins and one bidder's alone, and leaves every other notification untouched. With a
+ * wins-only queue — the case today — the behaviour is identical to the old action.
  */
 export function retainAuctionWinsForBidder(notifications: AppNotifications, bidderPubkey: string): void {
-	notifications.queue.retain((notification) => auctionWonPayloadOf(notification)?.bidderPubkey === bidderPubkey)
+	notifications.queue.remove((notification) => {
+		const win = auctionWonPayloadOf(notification)
+		return win !== null && win.bidderPubkey !== bidderPubkey
+	})
 }

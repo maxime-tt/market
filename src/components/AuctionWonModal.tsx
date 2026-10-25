@@ -50,7 +50,9 @@ export function AuctionWonModal() {
 	const { active: activeNotifications } = useAppNotifications()
 	const { isAuthenticated, user } = useStore(authStore)
 	const location = useLocation()
-	const active = auctionWonPayloadOf(activeNotifications[0])
+	// The queue is shared, so the pending win is the first auction-won notification, not necessarily the head:
+	// a notification of another type at the head must not hide it. With a wins-only queue this is the head.
+	const active = activeNotifications.map(auctionWonPayloadOf).find((payload) => payload !== null) ?? null
 	const isActiveBidder = !!(isAuthenticated && user?.pubkey && active?.bidderPubkey === user.pubkey)
 	const queryClient = useQueryClient()
 	const [isSettling, setIsSettling] = useState(false)
@@ -140,7 +142,8 @@ export function AuctionWonModal() {
 
 	const handleSettle = async () => {
 		if (!isAuthenticated || !user?.pubkey || active.bidderPubkey !== user.pubkey) {
-			appNotifications.queue.clear()
+			// Auction wins only — the queue is shared, so a blanket clear would drop other notifications too.
+			appNotifications.queue.remove((notification) => auctionWonPayloadOf(notification) !== null)
 			toast.error('Your account changed. Reopen the auction before settling.')
 			return
 		}

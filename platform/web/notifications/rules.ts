@@ -154,10 +154,11 @@ export const auctionThreadCommentRule: AppNotificationRule = {
  * New NIP-22 thread comment on a seller's product.
  * Replaces `notificationActions.incrementUnseenProductComments()` — `useNotificationMonitor.ts:901`.
  *
- * NOTE (deliberate refinement, flag in the rewire): today `unseenProductComments` is a single global counter
- * while its last-seen mark is per-product. The ledger couples a count and a last-seen under one scope, so this
- * rule scopes the count per product — the finer, and more faithful-to-the-last-seen, reading. The rewire must
- * decide whether the badge keeps summing across products.
+ * RULED 2026-10-25 (owner): the count goes **per product**, matching the per-product last-seen mark it is
+ * paired with. Today the two disagree — `unseenProductComments` is a single global counter while its last-seen
+ * mark is per product — and the ruling makes them consistent at the finer grain. This IS a deliberate behaviour
+ * change: a badge that used to show one global number now shows the current product's number. Read it with
+ * `unseenProductCommentsFor(appNotifications, productKey)`; do NOT sum with `totalUnseen()`.
  */
 export const productCommentRule: AppNotificationRule = {
 	id: 'product-comment',
