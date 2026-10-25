@@ -8,5 +8,6 @@
 export * from './types'
 export * from './modalPolicy'
 export * from './rules'
+export * from './auctionWin'
 export * from './instance'
 export * from './binding'

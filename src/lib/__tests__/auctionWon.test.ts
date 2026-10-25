@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import {
 	hasFinalSettlementForAuctionWin,
 	getValidatedAuctionBids,
@@ -6,7 +6,7 @@ import {
 	selectValidatedAuctionWinner,
 	shouldUseNonBlockingAuctionWinPrompt,
 } from '@/lib/auction/winNotification'
-import { auctionWonActions, auctionWonStore, type AuctionWonPayload } from '@/lib/stores/auctionWon'
+import type { AuctionWonPayload } from '@platform/web/notifications'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
@@ -221,80 +221,6 @@ const makeReleasedBid = (params: {
 	}
 	return { bid, release }
 }
-
-beforeEach(() => {
-	auctionWonStore.setState(() => ({ queue: [] }))
-})
-
-describe('auction win queue', () => {
-	test('queues multiple wins in FIFO order and ignores duplicate auctions', () => {
-		const secondWin: AuctionWonPayload = {
-			bidderPubkey: WINNER_PUBKEY,
-			auctionRootEventId: OTHER_AUCTION_ROOT_ID,
-			bidEventId: '3'.repeat(64),
-			bidAmount: 7000,
-		}
-
-		auctionWonActions.enqueue(win)
-		auctionWonActions.enqueue(secondWin)
-		auctionWonActions.enqueue({ ...win, bidAmount: 9000 })
-
-		expect(auctionWonStore.state.queue).toEqual([win, secondWin])
-	})
-
-	test('dismisses only the active win so the next queued win can be verified', () => {
-		const secondWin: AuctionWonPayload = {
-			bidderPubkey: WINNER_PUBKEY,
-			auctionRootEventId: OTHER_AUCTION_ROOT_ID,
-			bidEventId: '3'.repeat(64),
-			bidAmount: 7000,
-		}
-		auctionWonActions.enqueue(win)
-		auctionWonActions.enqueue(secondWin)
-
-		auctionWonActions.dismissActive()
-
-		expect(auctionWonStore.state.queue).toEqual([secondWin])
-	})
-
-	test('removes a superseded auction win without affecting other auctions', () => {
-		const secondWin: AuctionWonPayload = {
-			bidderPubkey: WINNER_PUBKEY,
-			auctionRootEventId: OTHER_AUCTION_ROOT_ID,
-			bidEventId: '3'.repeat(64),
-			bidAmount: 7000,
-		}
-		auctionWonActions.enqueue(win)
-		auctionWonActions.enqueue(secondWin)
-
-		auctionWonActions.removeForAuction(AUCTION_ROOT_ID)
-
-		expect(auctionWonStore.state.queue).toEqual([secondWin])
-	})
-
-	test('retains only wins owned by the authenticated bidder', () => {
-		const otherBidderWin: AuctionWonPayload = {
-			bidderPubkey: OTHER_BIDDER_PUBKEY,
-			auctionRootEventId: AUCTION_ROOT_ID,
-			bidEventId: '3'.repeat(64),
-			bidAmount: 7000,
-		}
-		auctionWonActions.enqueue(win)
-		auctionWonActions.enqueue(otherBidderWin)
-
-		auctionWonActions.retainForBidder(OTHER_BIDDER_PUBKEY)
-
-		expect(auctionWonStore.state.queue).toEqual([otherBidderWin])
-	})
-
-	test('clears every queued win on logout', () => {
-		auctionWonActions.enqueue(win)
-
-		auctionWonActions.clear()
-
-		expect(auctionWonStore.state.queue).toEqual([])
-	})
-})
 
 describe('auction win settlement verification', () => {
 	test('marks the queued auction resolved when its seller published a final settlement', () => {

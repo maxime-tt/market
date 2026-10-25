@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
-import { auctionWonActions } from '@/lib/stores/auctionWon'
+import { appNotifications, enqueueAuctionWin, removeAuctionWinsForAuction, retainAuctionWinsForBidder } from '@platform/web/notifications'
 import {
 	getValidatedAuctionBids,
 	hasFinalSettlementForAuctionWin,
@@ -48,8 +48,8 @@ export function useAuctionWinMonitor() {
 	useEffect(() => {
 		terminalRootEventIds.current = new Set()
 		announcedBidIdsByRoot.current = new Map()
-		if (isAuthenticated && pubkey) auctionWonActions.retainForBidder(pubkey)
-		else auctionWonActions.clear()
+		if (isAuthenticated && pubkey) retainAuctionWinsForBidder(appNotifications, pubkey)
+		else appNotifications.queue.clear()
 	}, [isAuthenticated, pubkey])
 
 	useEffect(() => {
@@ -78,7 +78,7 @@ export function useAuctionWinMonitor() {
 					if (!auction) {
 						terminalRootEventIds.current.add(rootEventId)
 						announcedBidIdsByRoot.current.delete(rootEventId)
-						auctionWonActions.removeForAuction(rootEventId)
+						removeAuctionWinsForAuction(appNotifications, rootEventId)
 						continue
 					}
 
@@ -90,7 +90,7 @@ export function useAuctionWinMonitor() {
 					if (settlementDeadlineAt <= now) {
 						terminalRootEventIds.current.add(rootEventId)
 						announcedBidIdsByRoot.current.delete(rootEventId)
-						auctionWonActions.removeForAuction(rootEventId)
+						removeAuctionWinsForAuction(appNotifications, rootEventId)
 						continue
 					}
 
@@ -107,7 +107,7 @@ export function useAuctionWinMonitor() {
 					if (hasFinalSettlementForAuctionWin({ auctionRootEventId: rootEventId }, auction, parsedAuction.coordinate, settlementEvents)) {
 						terminalRootEventIds.current.add(rootEventId)
 						announcedBidIdsByRoot.current.delete(rootEventId)
-						auctionWonActions.removeForAuction(rootEventId)
+						removeAuctionWinsForAuction(appNotifications, rootEventId)
 						continue
 					}
 					const parsedBids = bidEvents
@@ -142,14 +142,14 @@ export function useAuctionWinMonitor() {
 					if (!canonicalWinner) {
 						if (previouslyAnnouncedBidId) {
 							announcedBidIdsByRoot.current.delete(rootEventId)
-							auctionWonActions.removeForAuction(rootEventId)
+							removeAuctionWinsForAuction(appNotifications, rootEventId)
 						}
 						continue
 					}
 					if (canonicalWinner.bidderPubkey !== pubkey) {
 						if (previouslyAnnouncedBidId) {
 							announcedBidIdsByRoot.current.delete(rootEventId)
-							auctionWonActions.removeForAuction(rootEventId)
+							removeAuctionWinsForAuction(appNotifications, rootEventId)
 						}
 						continue
 					}
@@ -157,7 +157,7 @@ export function useAuctionWinMonitor() {
 					const reserveMet = canonicalWinner.amount >= parsedAuction.reserve
 					if (!reserveMet) {
 						announcedBidIdsByRoot.current.delete(rootEventId)
-						auctionWonActions.removeForAuction(rootEventId)
+						removeAuctionWinsForAuction(appNotifications, rootEventId)
 						continue
 					}
 					const win = {
@@ -168,15 +168,15 @@ export function useAuctionWinMonitor() {
 					}
 					if (await hasValidatedPathReleaseForAuctionWin(win, parsedAuction, validatedBids, parsedPathReleases, now)) {
 						announcedBidIdsByRoot.current.set(rootEventId, canonicalWinner.id)
-						auctionWonActions.removeForAuction(rootEventId)
+						removeAuctionWinsForAuction(appNotifications, rootEventId)
 						continue
 					}
 					if (previouslyAnnouncedBidId === canonicalWinner.id) continue
 					if (previouslyAnnouncedBidId && previouslyAnnouncedBidId !== canonicalWinner.id) {
-						auctionWonActions.removeForAuction(rootEventId)
+						removeAuctionWinsForAuction(appNotifications, rootEventId)
 					}
 					if (cancelled || !authStore.state.isAuthenticated || authStore.state.user?.pubkey !== pubkey) return
-					auctionWonActions.enqueue(win)
+					enqueueAuctionWin(appNotifications, win, Math.floor(Date.now() / 1000))
 					announcedBidIdsByRoot.current.set(rootEventId, canonicalWinner.id)
 				}
 			} catch (error) {

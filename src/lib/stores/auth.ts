@@ -6,7 +6,7 @@ import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
 import { uiActions } from './ui'
-import { auctionWonActions } from './auctionWon'
+import { appNotifications } from '@platform/web/notifications'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
@@ -333,7 +333,7 @@ export const authActions = {
 	},
 
 	logout: () => {
-		auctionWonActions.clear()
+		appNotifications.queue.clear()
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
 		ndkActions.removeSigner()

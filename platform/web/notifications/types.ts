@@ -4,7 +4,7 @@
  * The core (`sdk/core/notifications`) names no domain: `TType` is an open string and `TPayload` is the host's
  * own shape. This module is the host's answer. It declares the app's notification types, the payload each one
  * carries, the opaque ledger scopes those payloads count under, and how each type is presented. Everything
- * here is derived from the behaviour of `src/lib/stores/notifications.ts` and `src/lib/stores/auctionWon.ts`
+ * here is derived from the behaviour of `src/lib/stores/notifications.ts` and the auction-win store (`auctionWon.ts`, since deleted)
  * (see the module's own header note in `instance.ts` for the mapping), never invented.
  */
 import type { Notification } from '@sdk/core'

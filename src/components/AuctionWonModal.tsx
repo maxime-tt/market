@@ -19,7 +19,7 @@ import { Button } from '@ui/primitives/button'
 import { Media } from '@ui/shared/media'
 import { UserCard } from '@/components/UserCard'
 import { ConfettiBurst } from '@ui/shared/confetti-burst'
-import { auctionWonActions, auctionWonStore } from '@/lib/stores/auctionWon'
+import { appNotifications, auctionWonPayloadOf, useAppNotifications } from '@platform/web/notifications'
 import { authStore } from '@/lib/stores/auth'
 import { settleAuctionAsWinner } from '@/publish/auctions'
 import { useAuctionCountdown } from '@/components/AuctionCountdown'
@@ -47,10 +47,10 @@ import { formatSats } from '@/lib/wallet/display'
 const SETTLEMENT_CLOSE_DELAY_MS = 1500
 
 export function AuctionWonModal() {
-	const { queue } = useStore(auctionWonStore)
+	const { active: activeNotifications } = useAppNotifications()
 	const { isAuthenticated, user } = useStore(authStore)
 	const location = useLocation()
-	const active = queue[0] ?? null
+	const active = auctionWonPayloadOf(activeNotifications[0])
 	const isActiveBidder = !!(isAuthenticated && user?.pubkey && active?.bidderPubkey === user.pubkey)
 	const queryClient = useQueryClient()
 	const [isSettling, setIsSettling] = useState(false)
@@ -117,7 +117,7 @@ export function AuctionWonModal() {
 
 	useEffect(() => {
 		if (active && !isClosingAfterSettlement && (hasSettlementExpired || hasFinalSettlement || hasReleasedPath || isNoLongerWinner)) {
-			auctionWonActions.dismissActive()
+			appNotifications.queue.dismissActive()
 		}
 	}, [active, hasFinalSettlement, hasReleasedPath, hasSettlementExpired, isClosingAfterSettlement, isNoLongerWinner])
 
@@ -135,12 +135,12 @@ export function AuctionWonModal() {
 
 	const handleLeaveSettlement = () => {
 		setIsLeaveConfirmOpen(false)
-		auctionWonActions.dismissActive()
+		appNotifications.queue.dismissActive()
 	}
 
 	const handleSettle = async () => {
 		if (!isAuthenticated || !user?.pubkey || active.bidderPubkey !== user.pubkey) {
-			auctionWonActions.clear()
+			appNotifications.queue.clear()
 			toast.error('Your account changed. Reopen the auction before settling.')
 			return
 		}
@@ -158,7 +158,7 @@ export function AuctionWonModal() {
 				latestSettlementExpired ||
 				latestSettlementExists
 			) {
-				auctionWonActions.dismissActive()
+				appNotifications.queue.dismissActive()
 				toast.error('This auction is no longer available for settlement.')
 				return
 			}
@@ -174,7 +174,7 @@ export function AuctionWonModal() {
 				new Promise((resolve) => setTimeout(resolve, SETTLEMENT_CLOSE_DELAY_MS)),
 			])
 			toast.success('Path release published — seller can now redeem')
-			auctionWonActions.dismissActive()
+			appNotifications.queue.dismissActive()
 		} catch (err) {
 			toast.error(`Failed to settle auction: ${err instanceof Error ? err.message : String(err)}`)
 			setIsClosingAfterSettlement(false)
