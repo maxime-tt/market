@@ -1,207 +1,46 @@
+/**
+ * src/lib/stores/vanity.ts — the shim: `src/`'s view of the SDK vanity module, plus a temporary adapter.
+ *
+ * The vanity state and actions moved to `@sdk/config/vanity` (rebuilt on `sdk/core/state`). Every existing
+ * call site keeps importing `@/lib/stores/vanity` unchanged:
+ *
+ *   - `vanityActions.*` and `VanityEntry` — re-exported by the `export *` below from the SDK module.
+ *   - `useVanity` — the non-reactive accessor; kept here, now reading the SDK state store.
+ *   - `vanityStore` — a `@tanstack/store` `Store`, read by `useStore(vanityStore, selector)` in
+ *     `platform/web/routes/$vanityName.tsx:15-16`. That consumer wants a store-shaped object (`.state`,
+ *     `.subscribe`), which the SDK primitive deliberately is not, so this file bridges the two: the `Store`
+ *     is kept in step by the SDK store's `subscribe`. This adapter is TEMPORARY and is deleted when the route
+ *     is rewired to the real reactive binding (`platform/web/config/vanityBinding.ts`, `useVanityState`); no
+ *     consumer is rewired in this increment.
+ *
+ * Owner ruling (2026-10-25): nostr-derived state should be REACTIVE. The reactive binding therefore lives in
+ * the platform layer next to the state it renders, not in this shim; consumers migrate to it lazily.
+ */
+export * from '@sdk/config/vanity'
+
 import { Store } from '@tanstack/store'
+import { vanityActions, vanityState } from '@sdk/config/vanity'
+import type { VanityState } from '@sdk/config/vanity'
 
-export interface VanityEntry {
-	vanityName: string
-	pubkey: string
-	validUntil: number // Unix timestamp
-}
+/**
+ * TEMPORARY (deleted when the `useStore` call site is rewired): a `@tanstack/store` view of the SDK vanity
+ * state.
+ *
+ * `useStore` needs a source with a stable `state` and a `subscribe`; the SDK primitive exposes `get`/
+ * `subscribe` instead. A `Store` bridges them: it starts at the current state and the SDK store pushes each
+ * change into it.
+ */
+export const vanityStore = new Store<VanityState>(vanityState.get())
+vanityState.subscribe((state) => vanityStore.setState(() => state))
 
-export interface VanityState {
-	// Raw vanity data - map of vanityName -> entry
-	entries: Map<string, VanityEntry>
-
-	// Reverse lookup - pubkey -> vanityName
-	pubkeyToVanity: Map<string, string>
-
-	// Metadata
-	lastUpdated: number
-	isLoaded: boolean
-}
-
-const initialState: VanityState = {
-	entries: new Map(),
-	pubkeyToVanity: new Map(),
-	lastUpdated: 0,
-	isLoaded: false,
-}
-
-export const vanityStore = new Store<VanityState>(initialState)
-
-// Reserved names that cannot be registered (should match server)
-const RESERVED_NAMES = new Set([
-	'admin',
-	'api',
-	'dashboard',
-	'products',
-	'product',
-	'profile',
-	'checkout',
-	'setup',
-	'community',
-	'posts',
-	'post',
-	'nostr',
-	'search',
-	'collection',
-	'collections',
-	'settings',
-	'support',
-	'help',
-	'about',
-	'terms',
-	'privacy',
-	'login',
-	'logout',
-	'register',
-	'signup',
-	'signin',
-	'account',
-	'user',
-	'users',
-	'app',
-	'static',
-	'assets',
-	'images',
-	'public',
-	'favicon',
-	'robots',
-	'sitemap',
-])
-
-export const vanityActions = {
-	/**
-	 * Update the vanity store with new data
-	 */
-	setVanity: (entries: VanityEntry[], lastUpdated?: number) => {
-		const now = Math.floor(Date.now() / 1000)
-		const entriesMap = new Map<string, VanityEntry>()
-		const pubkeyToVanity = new Map<string, string>()
-
-		for (const entry of entries) {
-			// Skip expired entries
-			if (entry.validUntil < now) {
-				continue
-			}
-
-			const normalizedName = entry.vanityName.toLowerCase()
-			entriesMap.set(normalizedName, entry)
-			pubkeyToVanity.set(entry.pubkey, normalizedName)
-		}
-
-		vanityStore.setState((state) => ({
-			...state,
-			entries: entriesMap,
-			pubkeyToVanity,
-			lastUpdated: lastUpdated || Date.now(),
-			isLoaded: true,
-		}))
-	},
-
-	/**
-	 * Clear all vanity data
-	 */
-	clearVanity: () => {
-		vanityStore.setState((state) => ({
-			...state,
-			...initialState,
-		}))
-	},
-
-	/**
-	 * Resolve a vanity name to a pubkey
-	 */
-	resolveVanity: (vanityName: string): VanityEntry | null => {
-		const { entries } = vanityStore.state
-		const entry = entries.get(vanityName.toLowerCase())
-
-		if (!entry) return null
-
-		// Check if expired
-		if (entry.validUntil < Math.floor(Date.now() / 1000)) {
-			return null
-		}
-
-		return entry
-	},
-
-	/**
-	 * Check if a vanity name is available
-	 */
-	isVanityAvailable: (vanityName: string): boolean => {
-		const normalized = vanityName.toLowerCase()
-
-		// Check reserved names
-		if (RESERVED_NAMES.has(normalized)) return false
-
-		// Check format validity
-		if (!vanityActions.isValidVanityName(normalized)) return false
-
-		const { entries } = vanityStore.state
-		const entry = entries.get(normalized)
-
-		if (!entry) return true
-
-		// Available if expired
-		return entry.validUntil < Math.floor(Date.now() / 1000)
-	},
-
-	/**
-	 * Validate vanity name format
-	 */
-	isValidVanityName: (name: string): boolean => {
-		// Allow alphanumeric, hyphens, underscores, 3-30 characters
-		const regex = /^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/
-		return regex.test(name.toLowerCase())
-	},
-
-	/**
-	 * Check if a name is reserved
-	 */
-	isReservedName: (vanityName: string): boolean => {
-		return RESERVED_NAMES.has(vanityName.toLowerCase())
-	},
-
-	/**
-	 * Get vanity URL for a pubkey
-	 */
-	getVanityForPubkey: (pubkey: string): VanityEntry | null => {
-		const { pubkeyToVanity, entries } = vanityStore.state
-		const vanityName = pubkeyToVanity.get(pubkey)
-
-		if (!vanityName) return null
-
-		return vanityActions.resolveVanity(vanityName)
-	},
-
-	/**
-	 * Get all active vanity entries
-	 */
-	getAllVanityEntries: (): VanityEntry[] => {
-		const { entries } = vanityStore.state
-		const now = Math.floor(Date.now() / 1000)
-
-		return Array.from(entries.values()).filter((entry) => entry.validUntil > now)
-	},
-
-	/**
-	 * Check if vanity store is loaded
-	 */
-	isVanityLoaded: (): boolean => {
-		return vanityStore.state.isLoaded
-	},
-
-	/**
-	 * Get last update timestamp
-	 */
-	getLastUpdated: (): number => {
-		return vanityStore.state.lastUpdated
-	},
-}
-
-// React hook for consuming the store
+/**
+ * Non-reactive accessor: the current vanity state merged with the actions. Kept for the call sites that read
+ * it imperatively; a component that must re-render on a vanity change uses the reactive binding in the
+ * platform layer instead.
+ */
 export const useVanity = () => {
 	return {
-		...vanityStore.state,
+		...vanityState.get(),
 		...vanityActions,
 	}
 }

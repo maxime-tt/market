@@ -1,218 +1,49 @@
+/**
+ * src/lib/stores/testLabels.ts — the shim: `src/`'s view of the SDK test-label module, plus a temporary
+ * adapter.
+ *
+ * The test-label state and actions moved to `@sdk/config/test-labels` (rebuilt on `sdk/core/state`). Every
+ * existing call site keeps importing `@/lib/stores/testLabels` unchanged:
+ *
+ *   - `testLabelActions.*` and `TestLabelInfo` — re-exported by the `export *` below from the SDK module.
+ *   - `useTestLabelStore` — the non-reactive accessor; kept here, now reading the SDK state store.
+ *   - `testLabelStore` — a `@tanstack/store` `Store`, read by `useStore(testLabelStore, selector)` in
+ *     `src/components/ShowTestListingsToggle.tsx:16`, `src/hooks/useStreamingProducts.ts:57` and
+ *     `src/queries/testLabels.tsx:395-397`. Those consumers want a store-shaped object (`.state`,
+ *     `.subscribe`), which the SDK primitive deliberately is not, so this file bridges the two: the `Store`
+ *     is kept in step by the SDK store's `subscribe`. This adapter is TEMPORARY and is deleted when those
+ *     call sites are rewired to the real reactive binding
+ *     (`platform/web/config/testLabelsBinding.ts`, `useTestLabelState`); no consumer is rewired in this
+ *     increment.
+ *
+ * Owner ruling (2026-10-25): nostr-derived state should be REACTIVE. The reactive binding therefore lives in
+ * the platform layer next to the state it renders, not in this shim; consumers migrate to it lazily.
+ */
+export * from '@sdk/config/test-labels'
+
 import { Store } from '@tanstack/store'
+import { testLabelActions, testLabelState } from '@sdk/config/test-labels'
+import type { TestLabelState } from '@sdk/config/test-labels'
 
 /**
- * Metadata for an active test label on one item coordinate.
+ * TEMPORARY (deleted when the `useStore` call sites are rewired): a `@tanstack/store` view of the SDK
+ * test-label state.
+ *
+ * `useStore` needs a source with a stable `state` and a `subscribe`; the SDK primitive exposes `get`/
+ * `subscribe` instead. A `Store` bridges them: it starts at the current state and the SDK store pushes each
+ * change into it.
  */
-export interface TestLabelInfo {
-	/** id of the kind-1985 label event (needed to reference in the NIP-09 deletion) */
-	eventId: string
-	/** pubkey of the authorized labeler who applied the label */
-	labelerPubkey: string
-}
+export const testLabelStore = new Store<TestLabelState>(testLabelState.get())
+testLabelState.subscribe((state) => testLabelStore.setState(() => state))
 
-export interface TestLabelState {
-	// Coordinates ("kind:pubkey:identifier") carrying an active test label
-	testLabelCoordinates: Set<string>
-
-	// coordinate -> id of the active label event (referenced by the NIP-09 deletion)
-	labelEventIds: Map<string, string>
-
-	// coordinate -> pubkey of the labeler who applied the active label
-	labelerPubkeys: Map<string, string>
-
-	// Whether the user opted to reveal test-labeled items in browsing surfaces
-	showTestListings: boolean
-
-	// Metadata
-	lastUpdated: number
-	isLoaded: boolean
-}
-
-const initialState: TestLabelState = {
-	testLabelCoordinates: new Set<string>(),
-	labelEventIds: new Map<string, string>(),
-	labelerPubkeys: new Map<string, string>(),
-	showTestListings: false,
-	lastUpdated: 0,
-	isLoaded: false,
-}
-
-export const testLabelStore = new Store<TestLabelState>(initialState)
-
-export const testLabelActions = {
-	/**
-	 * Mark a coordinate as test-labeled.
-	 * @param coordinate "kind:pubkey:identifier" of the labeled item
-	 * @param eventId id of the active kind-1985 label event
-	 * @param labelerPubkey pubkey of the labeler who applied the label
-	 */
-	setLabel: (coordinate: string, eventId: string, labelerPubkey?: string) => {
-		if (!coordinate) return
-
-		testLabelStore.setState((state) => {
-			const testLabelCoordinates = new Set(state.testLabelCoordinates)
-			const labelEventIds = new Map(state.labelEventIds)
-			const labelerPubkeys = new Map(state.labelerPubkeys)
-
-			testLabelCoordinates.add(coordinate)
-			if (eventId) labelEventIds.set(coordinate, eventId)
-			if (labelerPubkey) labelerPubkeys.set(coordinate, labelerPubkey)
-
-			return {
-				...state,
-				testLabelCoordinates,
-				labelEventIds,
-				labelerPubkeys,
-				lastUpdated: Date.now(),
-			}
-		})
-	},
-
-	/**
-	 * Remove the test label from a coordinate (deletion seen or optimistic un-label).
-	 */
-	removeLabel: (coordinate: string) => {
-		if (!coordinate) return
-
-		testLabelStore.setState((state) => {
-			if (!state.testLabelCoordinates.has(coordinate)) return state
-
-			const testLabelCoordinates = new Set(state.testLabelCoordinates)
-			const labelEventIds = new Map(state.labelEventIds)
-			const labelerPubkeys = new Map(state.labelerPubkeys)
-
-			testLabelCoordinates.delete(coordinate)
-			labelEventIds.delete(coordinate)
-			labelerPubkeys.delete(coordinate)
-
-			return {
-				...state,
-				testLabelCoordinates,
-				labelEventIds,
-				labelerPubkeys,
-				lastUpdated: Date.now(),
-			}
-		})
-	},
-
-	/**
-	 * Reconcile the store with freshly fetched label truth for a batch of
-	 * coordinates. Coordinates present in `labels` are marked labeled; every
-	 * other coordinate in `fetchedCoordinates` is treated as un-labeled.
-	 * Coordinates outside `fetchedCoordinates` are left untouched.
-	 */
-	applyFetchedLabels: (labels: Map<string, TestLabelInfo>, fetchedCoordinates: string[]) => {
-		const uniqueCoordinates = Array.from(new Set(fetchedCoordinates.filter(Boolean)))
-		if (uniqueCoordinates.length === 0) return
-
-		testLabelStore.setState((state) => {
-			const testLabelCoordinates = new Set(state.testLabelCoordinates)
-			const labelEventIds = new Map(state.labelEventIds)
-			const labelerPubkeys = new Map(state.labelerPubkeys)
-
-			for (const coordinate of uniqueCoordinates) {
-				const label = labels.get(coordinate)
-				if (label) {
-					testLabelCoordinates.add(coordinate)
-					if (label.eventId) labelEventIds.set(coordinate, label.eventId)
-					if (label.labelerPubkey) labelerPubkeys.set(coordinate, label.labelerPubkey)
-				} else {
-					testLabelCoordinates.delete(coordinate)
-					labelEventIds.delete(coordinate)
-					labelerPubkeys.delete(coordinate)
-				}
-			}
-
-			return {
-				...state,
-				testLabelCoordinates,
-				labelEventIds,
-				labelerPubkeys,
-				lastUpdated: Date.now(),
-				isLoaded: true,
-			}
-		})
-	},
-
-	/**
-	 * Check if a coordinate carries an active test label
-	 */
-	isTestLabeled: (coordinate: string): boolean => {
-		if (!coordinate) return false
-		return testLabelStore.state.testLabelCoordinates.has(coordinate)
-	},
-
-	/**
-	 * Get the id of the active label event for a coordinate
-	 * (referenced by the NIP-09 deletion when un-labeling)
-	 */
-	getLabelEventId: (coordinate: string): string | undefined => {
-		return testLabelStore.state.labelEventIds.get(coordinate)
-	},
-
-	/**
-	 * Get the pubkey of the labeler who applied the active label
-	 */
-	getLabelerPubkey: (coordinate: string): string | undefined => {
-		return testLabelStore.state.labelerPubkeys.get(coordinate)
-	},
-
-	/**
-	 * Get all test-labeled coordinates
-	 */
-	getTestLabeledCoordinates: (): string[] => {
-		return Array.from(testLabelStore.state.testLabelCoordinates)
-	},
-
-	/**
-	 * Check if labels have been loaded (at least one label check completed)
-	 */
-	areLabelsLoaded: (): boolean => {
-		return testLabelStore.state.isLoaded
-	},
-
-	/**
-	 * Get last update timestamp
-	 */
-	getLastUpdated: (): number => {
-		return testLabelStore.state.lastUpdated
-	},
-
-	/**
-	 * Set whether test-labeled items are revealed in browsing surfaces.
-	 */
-	setShowTestListings: (show: boolean) => {
-		testLabelStore.setState((state) => ({
-			...state,
-			showTestListings: show,
-		}))
-	},
-
-	/**
-	 * Toggle whether test-labeled items are revealed in browsing surfaces.
-	 */
-	toggleShowTestListings: () => {
-		testLabelStore.setState((state) => ({
-			...state,
-			showTestListings: !state.showTestListings,
-		}))
-	},
-
-	/**
-	 * Clear all label data (reset to initial state)
-	 */
-	clearLabels: () => {
-		testLabelStore.setState((state) => ({
-			...state,
-			...initialState,
-		}))
-	},
-}
-
-// React hook for consuming the store
+/**
+ * Non-reactive accessor: the current test-label state merged with the actions. Kept for the call sites that
+ * read it imperatively; a component that must re-render on a label change uses the reactive binding in the
+ * platform layer instead.
+ */
 export const useTestLabelStore = () => {
 	return {
-		...testLabelStore.state,
+		...testLabelState.get(),
 		...testLabelActions,
 	}
 }
