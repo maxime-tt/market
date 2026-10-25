@@ -129,6 +129,35 @@ describe('createNotifications — the passive ledger', () => {
 		n.ledger.markSeen('conv:2', 1)
 		expect([...n.ledger.scopes()].sort()).toEqual(['conv:1', 'conv:2'])
 	})
+
+	test('reconcile OVERWRITES the counts rather than accumulating them', () => {
+		const n = createNotifications<NoticeType, NoticePayload>()
+		n.ledger.increment('conv:1')
+		n.ledger.increment('conv:1')
+		n.ledger.increment('conv:2')
+
+		n.ledger.reconcile({ 'conv:1': 5 })
+		expect(n.ledger.unseenCount('conv:1')).toBe(5)
+		// a scope absent from the reconcile map drops to zero — the overwrite, not a merge
+		expect(n.ledger.unseenCount('conv:2')).toBe(0)
+		expect(n.ledger.totalUnseen()).toBe(5)
+
+		// re-running the same reconciliation leaves the same counts (idempotent), unlike increment
+		n.ledger.reconcile({ 'conv:1': 5 })
+		expect(n.ledger.unseenCount('conv:1')).toBe(5)
+	})
+
+	test('reconcile leaves last-seen marks untouched and notifies subscribers', () => {
+		const n = createNotifications<NoticeType, NoticePayload>({ now: () => 9000 })
+		n.ledger.markSeen('conv:1')
+		let emitted = 0
+		n.subscribe(() => emitted++)
+
+		n.ledger.reconcile({ 'conv:1': 2 })
+		expect(n.ledger.unseenCount('conv:1')).toBe(2)
+		expect(n.ledger.lastSeen('conv:1')).toBe(9000)
+		expect(emitted).toBe(1)
+	})
 })
 
 describe('createNotifications — subscription', () => {

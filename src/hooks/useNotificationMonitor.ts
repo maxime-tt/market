@@ -4,7 +4,7 @@ import { authStore } from '@/lib/stores/auth'
 import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auctionSettlement'
 import { ndkActions } from '@/lib/stores/ndk'
 import { notificationActions, notificationStore } from '@/lib/stores/notifications'
-import { appNotifications, applyAppNotificationEvent } from '@platform/web/notifications'
+import { appNotifications, reconcileAppNotificationCounts } from '@platform/web/notifications'
 import type { AppNotificationEvent } from '@platform/web/notifications'
 import { produceAppNotification, reconcileLegacyNotificationCounts } from '@/lib/notificationProducers'
 import {
@@ -728,9 +728,10 @@ export const useNotificationMonitor = () => {
 					0,
 				)
 
-				// Feed the mechanism the same events the legacy counters describe: one derived notification per
-				// counted event, applied to the new ledger. This is the derivation form of the `recalculateFromEvents`
-				// payload handed to the legacy store below.
+				// Feed the mechanism the same events the legacy counters describe. This is the derivation form of
+				// `recalculateFromEvents` and, like it, an OVERWRITE rather than an accumulation — so re-running
+				// the initial sync (on account change) resets the derived counts exactly as it resets the legacy
+				// ones, instead of doubling them.
 				const nowForBulk = nowSeconds()
 				const bulkEvents: AppNotificationEvent[] = []
 				for (const event of newOrders) bulkEvents.push({ kind: 'order', createdAt: event.created_at || nowForBulk })
@@ -775,7 +776,7 @@ export const useNotificationMonitor = () => {
 				}
 				for (const event of newHigherBidEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
 				for (const event of newSettlementEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
-				for (const event of bulkEvents) applyAppNotificationEvent(appNotifications, event)
+				reconcileAppNotificationCounts(appNotifications, bulkEvents)
 
 				// Update legacy store with initial counts (kept verbatim until C2 rewires the consumers).
 				reconcileLegacyNotificationCounts({

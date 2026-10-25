@@ -149,6 +149,13 @@ export function createNotifications<TType extends string = string, TPayload = un
 			counts.set(scope, (counts.get(scope) ?? 0) + by)
 			changed()
 		},
+		reconcile(next) {
+			counts.clear()
+			for (const [scope, count] of Object.entries(next)) {
+				if (count > 0) counts.set(scope, count)
+			}
+			changed()
+		},
 		markSeen(scope, at) {
 			counts.set(scope, 0)
 			lastSeenByScope.set(scope, at ?? clock())

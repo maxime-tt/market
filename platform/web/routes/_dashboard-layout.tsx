@@ -22,7 +22,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { uiStore, uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
-import { notificationStore } from '@/lib/stores/notifications'
+import { appNotificationsBinding, appUnseenCounts } from '@platform/web/notifications'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
@@ -67,6 +67,7 @@ function DashboardLayout() {
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle, dashboardHeaderAction } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
+	const ledgerCounts = useStore(appNotificationsBinding.store, (snapshot) => snapshot.ledger.counts)
 	const {
 		unseenOrders,
 		unseenMessages,
@@ -78,7 +79,7 @@ function DashboardLayout() {
 		unseenAuctionLive: unseenScheduledAuctionsNowLive,
 		unseenAuctionSettlementBegins,
 		unseenBidUpdates,
-	} = useStore(notificationStore)
+	} = appUnseenCounts(ledgerCounts)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 	// Admin checking

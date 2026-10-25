@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/pr
 import { Nip60Wallet } from '@/feature/wallet/components/Nip60Wallet'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { authActions, authStore } from '@/lib/stores/auth'
-import { notificationStore } from '@/lib/stores/notifications'
+import { appNotificationsBinding, appUnseenCounts } from '@platform/web/notifications'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useConfigQuery } from '@/queries/config'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
@@ -199,6 +199,7 @@ export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating, user } = useStore(authStore)
 	const { mobileMenuOpen } = useStore(uiStore)
+	const ledgerCounts = useStore(appNotificationsBinding.store, (snapshot) => snapshot.ledger.counts)
 	const {
 		unseenOrders,
 		unseenMessages,
@@ -210,7 +211,7 @@ export function Header() {
 		unseenAuctionLive: unseenScheduledAuctionsNowLive,
 		unseenAuctionSettlementBegins,
 		unseenBidUpdates,
-	} = useStore(notificationStore)
+	} = appUnseenCounts(ledgerCounts)
 	const location = useLocation()
 	const [scrollY, setScrollY] = useState(0)
 	const breakpoint = useBreakpoint()

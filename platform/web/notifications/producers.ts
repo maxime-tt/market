@@ -40,3 +40,21 @@ export function applyAppNotificationEvent(notifications: AppNotifications, event
 	for (const notification of derived) applyAppNotification(notifications, notification)
 	return derived
 }
+
+/**
+ * Bulk reconciliation, the derivation route: derive every event and OVERWRITE the ledger with the tally of the
+ * scopes those derivations carry. This is the mechanism's counterpart to the legacy `recalculateFromEvents` —
+ * an overwrite of the counted set, not an accumulation — so a re-sync (the monitor re-runs its initial fetch
+ * whenever the account changes) resets the counters instead of doubling them. The active auction-win goes to
+ * the queue, never the ledger, so it is excluded from the tally exactly as `applyAppNotification` excludes it.
+ */
+export function reconcileAppNotificationCounts(notifications: AppNotifications, events: readonly AppNotificationEvent[]): void {
+	const tally: Record<string, number> = {}
+	for (const event of events) {
+		for (const notification of deriveAppNotifications(event)) {
+			if (notification.type === 'auction-won') continue
+			tally[notification.scope] = (tally[notification.scope] ?? 0) + 1
+		}
+	}
+	notifications.ledger.reconcile(tally)
+}

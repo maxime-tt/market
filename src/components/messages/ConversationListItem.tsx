@@ -1,5 +1,5 @@
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { notificationStore } from '@/lib/stores/notifications'
+import { appNotificationsBinding, unseenMessagesFor } from '@platform/web/notifications'
 import { useRouterState } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ConversationListItemView } from '@ui/messages/messaging-views'
@@ -21,7 +21,7 @@ interface ConversationListItemProps {
 export function ConversationListItem({ conversation }: ConversationListItemProps) {
 	const { pubkey, lastMessageAt, lastMessageSnippet } = conversation
 	const breakpoint = useBreakpoint()
-	const { unseenByConversation } = useStore(notificationStore)
+	const ledgerCounts = useStore(appNotificationsBinding.store, (snapshot) => snapshot.ledger.counts)
 	const href = `/dashboard/sales/messages/${pubkey}`
 	const isActive = useRouterState({ select: (state) => state.location.pathname === href })
 
@@ -31,7 +31,7 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 			userCard={<UserCard pubkey={pubkey} size="sm" onPress="none" />}
 			lastMessageAt={lastMessageAt}
 			lastMessageSnippet={lastMessageSnippet}
-			unseenCount={unseenByConversation[pubkey] || 0}
+			unseenCount={unseenMessagesFor(ledgerCounts, pubkey)}
 			isMobile={breakpoint === 'sm'}
 			isActive={isActive}
 		/>

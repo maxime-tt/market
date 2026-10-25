@@ -104,6 +104,14 @@ export interface NotificationQueue<TType extends string = string, TPayload = unk
 export interface PassiveLedger {
 	/** Raise a scope's unseen count; `by` defaults to 1 and a non-positive `by` is ignored. */
 	increment(scope: string, by?: number): void
+	/**
+	 * Overwrite every scope's unseen count with `counts`: the map becomes exactly the entries given (a scope
+	 * absent from `counts` drops to zero, a scope present is set to its value, never summed onto). Last-seen
+	 * marks are untouched. This is the overwrite a bulk reconciliation needs — re-running it over the same
+	 * fetched set leaves the same counts, whereas `increment` would accumulate — so a host that re-synced on
+	 * every account change does not double what the user sees.
+	 */
+	reconcile(counts: Readonly<Record<string, number>>): void
 	/** Zero a scope's unseen count and stamp its last-seen; `at` defaults to the injected clock. */
 	markSeen(scope: string, at?: number): void
 	/** Zero every scope's count and advance the global last-seen floor; `at` defaults to the injected clock. */
