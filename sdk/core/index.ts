@@ -32,6 +32,12 @@ export * from './profile'
 export * from './relays'
 export * from './nip89'
 export type { KeyValueStoragePort } from './ports/storage'
+// read-mark is a standalone port: the read-state persistence seam of the notification cutover, the only state
+// it keeps being the per-stream read marks. Its vocabulary (ReadMarkPort, ReadMarkError, the two factories)
+// collides with nothing else exported here, so like the storage and wallet ports beside it it is registered
+// flat rather than namespaced.
+export { createMemoryReadMarkPort, createStorageReadMarkPort, ReadMarkError } from './ports/read-mark'
+export type { ReadMarkPort, ReadMarkPortOptions } from './ports/read-mark'
 export type { WalletPort, WalletRecoveryPort } from './ports/wallet'
 export { createWorkflowError, SdkError, ValidationError, WorkflowError } from './errors'
 export type { SdkErrorCode, WorkflowErrorStatus } from './errors'
