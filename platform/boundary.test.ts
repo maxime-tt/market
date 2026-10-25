@@ -16,6 +16,13 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 
 // Legacy src/ host modules allowed to depend on Platform while they are migrated; do not grow this list
 // except for publish adapters that now delegate to SDK workflows via the Platform publish context.
+//
+// The entries below marked "store drain" are the notification chapters' migration-time edges (increments
+// C1/C2). They are the same class this list already describes — legacy src/ host modules that depend on
+// Platform while they are migrated — and three of them were already violations before those increments ran.
+// Each is removed when its owner leaves src/ (E1 deletes the shims; D3 retires the legacy components), so
+// treat them as a migration ledger, not a permanent grant. Decision recorded in
+// companions/STORE-DRAIN-CHAPTER-PLAN.md ("src -> platform during the drain").
 const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/index.tsx',
 	'src/lib/boot.ts',
@@ -40,6 +47,14 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/nip89.ts',
 	'src/publish/migration.tsx',
 	'src/publish/curationContext.ts',
+	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
+	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
+	'src/hooks/useAuctionWinMonitor.ts', // pre-existing; owner leaves src/ in D3
+	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
+	'src/hooks/useNotificationMonitor.ts', // C1; rewritten onto the rules, retired in C3/C4
+	'src/lib/notificationProducers.ts', // C1; temporary bridge, deleted in C3
+	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
+	'src/components/messages/ConversationListItem.tsx', // C2; reads the derived counts, retired in D3
 ])
 
 async function listSourceFiles(directory: string): Promise<string[]> {

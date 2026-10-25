@@ -8,9 +8,11 @@
  * modal → queue). See `platform/web/notifications/producers.ts`.
  *
  * WHY THE LEGACY WRITE IS STILL HERE. C1 rewires the *producers*; it does not rewire the *consumers* (that is C2)
- * and it does not delete the legacy store (that is C3). Until C2 repoints the consumers — `AcknowledgementHost`,
- * `Header.tsx:213`, `_dashboard-layout.tsx:81`, `ConversationListItem.tsx:24`, `AuctionListItemHost.tsx:97`,
- * `useNotificationMonitor.ts:268` — the legacy store is still what the user actually sees. So each derived
+ * and it does not delete the legacy store (that is C3). Until C2 repoints the consumers — `Header.tsx:203-230`,
+ * `_dashboard-layout.tsx:70-81`, `ConversationListItem.tsx:24`, `AuctionListItemHost.tsx:97`, and the mark
+ * reads in `useNotificationMonitor.ts` — the legacy store is still what the user actually sees. (C2 has since
+ * repointed the first three; the last two are read-state and belong to C4. This header previously named an
+ * `AcknowledgementHost` that does not exist in the tree — an error, corrected.) So each derived
  * notification is ALSO mirrored into the legacy counters with the identical `notificationActions.incrementUnseenX`
  * call the producer made before, and the initial bulk reconciliation keeps using the legacy overwrite
  * (`recalculateFromEvents`) verbatim. The legacy behaviour is therefore byte-identical; the new mechanism receives
