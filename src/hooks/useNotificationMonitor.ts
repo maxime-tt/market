@@ -4,6 +4,9 @@ import { authStore } from '@/lib/stores/auth'
 import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auctionSettlement'
 import { ndkActions } from '@/lib/stores/ndk'
 import { notificationActions, notificationStore } from '@/lib/stores/notifications'
+import { appNotifications, applyAppNotificationEvent } from '@platform/web/notifications'
+import type { AppNotificationEvent } from '@platform/web/notifications'
+import { produceAppNotification, reconcileLegacyNotificationCounts } from '@/lib/notificationProducers'
 import {
 	PRODUCT_KIND,
 	getSellerProductNotificationScope,
@@ -40,6 +43,9 @@ const AUCTION_FILTER_CHUNK_SIZE = 80
 const IGNORED_AUCTION_BID_STATUSES = new Set(['cancelled', 'canceled', 'rejected', 'failed', 'expired', 'refunded', 'reclaimed', 'claimed'])
 
 const uniqueStrings = (values: string[]): string[] => Array.from(new Set(values.filter(Boolean)))
+
+/** The monitor's clock, in whole seconds — the unit the notification instance is configured with. */
+const nowSeconds = (): number => Math.floor(Date.now() / 1000)
 
 const chunkValues = (values: string[], size: number): string[][] => {
 	const chunks: string[][] = []
@@ -396,7 +402,7 @@ export const useNotificationMonitor = () => {
 			if (startAt > notificationActions.getLastSeenAuctionLive(auctionKey)) {
 				scheduleAt(startAt, scheduledAuctionLiveKeys, () => {
 					console.log('[NotificationMonitor] Seller auction went live:', auction.id)
-					notificationActions.incrementUnseenAuctionLive(auctionKey)
+					produceAppNotification({ kind: 'auction-live', auctionKey, createdAt: nowSeconds() })
 				})
 			}
 
@@ -404,7 +410,7 @@ export const useNotificationMonitor = () => {
 			if (biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey)) {
 				scheduleAt(biddingCutoffAt, scheduledAuctionSettlementKeys, () => {
 					console.log('[NotificationMonitor] Seller auction entered settlement:', auction.id)
-					notificationActions.incrementUnseenAuctionSettlementBegins(auctionKey)
+					produceAppNotification({ kind: 'auction-settlement', auctionKey, createdAt: nowSeconds() })
 				})
 			}
 		}
@@ -722,8 +728,57 @@ export const useNotificationMonitor = () => {
 					0,
 				)
 
-				// Update store with initial counts
-				notificationActions.recalculateFromEvents({
+				// Feed the mechanism the same events the legacy counters describe: one derived notification per
+				// counted event, applied to the new ledger. This is the derivation form of the `recalculateFromEvents`
+				// payload handed to the legacy store below.
+				const nowForBulk = nowSeconds()
+				const bulkEvents: AppNotificationEvent[] = []
+				for (const event of newOrders) bulkEvents.push({ kind: 'order', createdAt: event.created_at || nowForBulk })
+				for (const event of messageEvents) {
+					const senderPubkey = event.pubkey
+					if (senderPubkey !== user.pubkey && isNewMessage(event, senderPubkey)) {
+						bulkEvents.push({ kind: 'message', pubkey: senderPubkey, createdAt: event.created_at || nowForBulk })
+					}
+				}
+				for (const event of newPurchaseUpdates) bulkEvents.push({ kind: 'order-update', createdAt: event.created_at || nowForBulk })
+				for (const event of newSellerBidEvents) {
+					const auctionKey = resolveScopedKeyFromLookups([getEventAuctionRootId(event), getEventAuctionCoordinate(event)].filter(Boolean), [
+						sellerAuctionKeyByRootEventId,
+						sellerAuctionKeyByCoordinate,
+					])
+					if (auctionKey)
+						bulkEvents.push({ kind: 'auction-bid', auctionKey, bidEventId: event.id, createdAt: event.created_at || nowForBulk })
+				}
+				for (const event of newSellerLiveChatEvents) {
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A']), [sellerAuctionKeyByLiveActivityCoordinate])
+					if (auctionKey) bulkEvents.push({ kind: 'auction-comment', auctionKey, createdAt: event.created_at || nowForBulk })
+				}
+				for (const event of newSellerAuctionCommentEvents) {
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByRootEventId,
+					])
+					if (auctionKey) bulkEvents.push({ kind: 'auction-thread-comment', auctionKey, createdAt: event.created_at || nowForBulk })
+				}
+				for (const event of newSellerProductCommentEvents) {
+					const productKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerProductKeyByCoordinate,
+						sellerProductKeyByEventId,
+					])
+					if (productKey) bulkEvents.push({ kind: 'product-comment', productKey, createdAt: event.created_at || nowForBulk })
+				}
+				for (const auctionKey of Object.keys(unseenAuctionLiveCountsByAuction)) {
+					bulkEvents.push({ kind: 'auction-live', auctionKey, createdAt: nowForBulk })
+				}
+				for (const auctionKey of Object.keys(unseenAuctionSettlementBeginsCountsByAuction)) {
+					bulkEvents.push({ kind: 'auction-settlement', auctionKey, createdAt: nowForBulk })
+				}
+				for (const event of newHigherBidEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
+				for (const event of newSettlementEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
+				for (const event of bulkEvents) applyAppNotificationEvent(appNotifications, event)
+
+				// Update legacy store with initial counts (kept verbatim until C2 rewires the consumers).
+				reconcileLegacyNotificationCounts({
 					orderCount: newOrders.length,
 					messageCount: totalUnseenMessages,
 					purchaseCount: newPurchaseUpdates.length,
@@ -773,7 +828,7 @@ export const useNotificationMonitor = () => {
 						return
 
 					console.log('[NotificationMonitor] New auction bid received:', event.id)
-					notificationActions.incrementUnseenAuctionBids(auctionKey)
+					produceAppNotification({ kind: 'auction-bid', auctionKey, bidEventId: event.id, createdAt: event.created_at || nowSeconds() })
 				}
 
 				const handleWatchedBidEvent = (event: NDKEvent) => {
@@ -785,7 +840,7 @@ export const useNotificationMonitor = () => {
 					if (highestOwnBidAmount <= 0 || getBidAmount(event) <= highestOwnBidAmount) return
 
 					console.log('[NotificationMonitor] New higher bid on watched auction:', event.id)
-					notificationActions.incrementUnseenBidUpdates()
+					produceAppNotification({ kind: 'bid-update', createdAt: event.created_at || nowSeconds() })
 				}
 
 				const handleSellerLiveChatEvent = (event: NDKEvent) => {
@@ -796,7 +851,7 @@ export const useNotificationMonitor = () => {
 					if (event.pubkey === user.pubkey || !auctionKey || !isNewAuctionComment(event, auctionKey)) return
 
 					console.log('[NotificationMonitor] New live chat comment on seller auction:', event.id)
-					notificationActions.incrementUnseenAuctionComments(auctionKey)
+					produceAppNotification({ kind: 'auction-comment', auctionKey, createdAt: event.created_at || nowSeconds() })
 				}
 
 				const subscribeSellerLiveActivityCoordinate = (liveActivityCoordinate: string) => {
@@ -884,7 +939,7 @@ export const useNotificationMonitor = () => {
 					if (event.pubkey === user.pubkey || !auctionKey || !isNewAuctionEventComment(event, auctionKey)) return
 
 					console.log('[NotificationMonitor] New thread comment on seller auction:', event.id)
-					notificationActions.incrementUnseenAuctionEventComments(auctionKey)
+					produceAppNotification({ kind: 'auction-thread-comment', auctionKey, createdAt: event.created_at || nowSeconds() })
 				}
 
 				const handleSellerProductCommentEvent = (event: NDKEvent) => {
@@ -898,7 +953,7 @@ export const useNotificationMonitor = () => {
 					if (event.pubkey === user.pubkey || !productKey || !isNewProductComment(event, productKey)) return
 
 					console.log('[NotificationMonitor] New thread comment on seller product:', event.id)
-					notificationActions.incrementUnseenProductComments()
+					produceAppNotification({ kind: 'product-comment', productKey, createdAt: event.created_at || nowSeconds() })
 				}
 
 				const subscribeSellerProductScope = (tagName: ProductScopeTag, value: string) => {
@@ -950,7 +1005,7 @@ export const useNotificationMonitor = () => {
 					if (event.pubkey === user.pubkey || !isNewBidUpdate(event)) return
 
 					console.log('[NotificationMonitor] New settlement on watched auction:', event.id)
-					notificationActions.incrementUnseenBidUpdates()
+					produceAppNotification({ kind: 'bid-update', createdAt: event.created_at || nowSeconds() })
 				}
 
 				const handleOwnAuctionEvent = (event: NDKEvent) => {
@@ -1092,7 +1147,7 @@ export const useNotificationMonitor = () => {
 				// Only increment if it's newer than last seen
 				if (isNewOrder(event)) {
 					console.log('[NotificationMonitor] New order received:', event.id)
-					notificationActions.incrementUnseenOrders()
+					produceAppNotification({ kind: 'order', createdAt: event.created_at || nowSeconds() })
 				}
 			}
 		})
@@ -1116,7 +1171,7 @@ export const useNotificationMonitor = () => {
 			// Don't count messages we sent
 			if (senderPubkey !== user.pubkey && isNewMessage(event, senderPubkey)) {
 				console.log('[NotificationMonitor] New message received from:', senderPubkey)
-				notificationActions.incrementUnseenForConversation(senderPubkey)
+				produceAppNotification({ kind: 'message', pubkey: senderPubkey, createdAt: event.created_at || nowSeconds() })
 			}
 		})
 
@@ -1149,7 +1204,7 @@ export const useNotificationMonitor = () => {
 					case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
 						if (isNewPurchaseUpdate(event)) {
 							console.log('[NotificationMonitor] Purchase update received:', typeTag[1], event.id)
-							notificationActions.incrementUnseenPurchases()
+							produceAppNotification({ kind: 'order-update', createdAt: event.created_at || nowSeconds() })
 						}
 						break
 					case ORDER_MESSAGE_TYPE.ORDER_CREATION:

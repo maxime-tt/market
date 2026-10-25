@@ -11,6 +11,7 @@
 export * from './types'
 export * from './modalPolicy'
 export * from './rules'
+export * from './producers'
 export * from './auctionWin'
 export * from './reads'
 export * from './instance'
