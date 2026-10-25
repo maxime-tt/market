@@ -10,8 +10,12 @@
  * `sdk/core/profile` (`Nip05Entry`) by the barrel's `export *` chains. Two `export *` chains reaching one
  * name make TypeScript silently drop it, so a consumer importing it from `@sdk` would break confusingly. A
  * consumer takes these by explicit path — `@sdk/config/vanity` — which is how `blacklist` is already used.
+ *
+ * `constants` is not a state module: it is the app's shared data and types (relay lists, currencies,
+ * categories), moved here from `src/lib/constants.ts`. A consumer takes it by explicit path too.
  */
 export * from './blacklist'
+export * from './constants'
 export * from './nip05'
 export * from './test-labels'
 export * from './vanity'
