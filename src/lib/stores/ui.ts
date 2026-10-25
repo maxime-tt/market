@@ -1,394 +1,55 @@
+/**
+ * src/lib/stores/ui.ts — the shim: `src/`'s view of the SDK ui module, plus a temporary adapter.
+ *
+ * The UI state and actions moved to `@sdk/config/ui` (rebuilt on `sdk/core/state`). Every existing call site
+ * keeps importing `@/lib/stores/ui` unchanged:
+ *
+ *   - `uiActions.*` — plain functions. The `export *` below re-exports them from the SDK module.
+ *   - `useUI` — the non-reactive accessor; re-exported from the SDK module.
+ *   - `uiStore` — a `@tanstack/store` `Store`. This adapter IS needed, and unlike the blacklist shim it is
+ *     bidirectional. Two consumers force the legacy shape:
+ *       - `useStore(uiStore)` and `uiStore.state` — 15 components read the store reactively
+ *         (`platform/web/routes/_dashboard-layout.tsx:68`, `src/components/DialogRegistry.tsx:12`, …) and
+ *         `uiStore.state.selectedCurrency` is read imperatively (`src/lib/stores/product.ts:144`,
+ *         `platform/.../shipping-options.tsx:96`); the SDK primitive exposes `get`/`subscribe`, not `state`.
+ *       - `uiStore.setState(...)` — several consumers WRITE the store directly
+ *         (`src/components/DialogRegistry.tsx:34`, `src/components/SheetRegistry.tsx:36`,
+ *         `src/components/wallet/QRScannerDialog.tsx:41`, `platform/.../making-payments.tsx:664`,
+ *         `src/lib/stores/product-session.test.ts:31`). A one-way mirror (the blacklist pattern) would drop
+ *         those writes on the floor, so this adapter routes a direct `setState` into the SDK store, which then
+ *         mirrors back — the SDK `uiState` stays the single source of truth for both the tanstack store and
+ *         `uiActions`.
+ *
+ * This adapter is TEMPORARY: it is deleted when these consumers are rewired to a reactive binding. It may
+ * become a `platform/web/config/uiBinding.ts` if a cross-tree reactive surface is wanted; today none is, and
+ * the owner's ruling is that app state (this is not nostr-derived) does not automatically get one.
+ */
+export * from '@sdk/config/ui'
+
 import { Store } from '@tanstack/store'
-import { CURRENCIES } from '@/lib/constants'
+import { uiState } from '@sdk/config/ui'
+import type { UIState } from '@sdk/config/ui'
 
-// Define types for different UI elements
-export type DrawerType = 'cart' | 'createProduct' | 'createAuction' | 'createCollection' | 'conversation'
-export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup' | 'terms' | 'nsfw-confirmation'
-export type ToastType = 'success' | 'error' | 'warning' | 'info'
-export type SupportedCurrency = (typeof CURRENCIES)[number]
+/**
+ * The `@tanstack/store` view of the SDK UI state. It starts at the current state and the SDK store pushes every
+ * change into it, so `useStore(uiStore)` and `uiStore.state` render the live value.
+ */
+export const uiStore = new Store<UIState>(uiState.get())
 
-// Toast notification structure
-export interface Toast {
-	id: string
-	type: ToastType
-	message: string
-	duration?: number
-}
+/** The raw prototype updater, captured before the write-through override below installs on the instance. */
+const setLocal = uiStore.setState.bind(uiStore)
 
-// Navigation state type
-export type NavigationState = {
-	productSourcePath: string | null
-	originalResultsPath: string | null // Track the first/original results page
-}
+// SDK -> tanstack: mirror every SDK change into the reactive store.
+uiState.subscribe((next) => setLocal(() => next))
 
-// Dashboard header action structure
-export interface DashboardHeaderAction {
-	label: string
-	onClick: () => void
-}
-
-// UI State interface
-export interface UIState {
-	drawers: Record<DrawerType, boolean>
-	dialogs: Record<DialogType, boolean>
-	toasts: Toast[]
-	activeElement?: string
-	dialogCallbacks?: Partial<Record<DialogType, any>>
-	dashboardTitle: string
-	dashboardHeaderAction: DashboardHeaderAction | null
-	mobileMenuOpen: boolean
-	navigation: NavigationState
-	selectedCurrency: SupportedCurrency
-	conversationPubkey: string | null // Track which conversation to open
-	showNSFWContent: boolean // Whether to show NSFW/adult content
-}
-
-const getSelectedCurrency = (): SupportedCurrency => {
-	const saved = typeof window !== 'undefined' ? localStorage.getItem('selectedCurrency') : null
-	return saved && CURRENCIES.includes(saved as SupportedCurrency) ? (saved as SupportedCurrency) : 'USD'
-}
-
-const getShowNSFWContent = (): boolean => {
-	if (typeof window === 'undefined') return false
-	return localStorage.getItem('showNSFWContent') === 'true'
-}
-
-// Initial state
-const initialState: UIState = {
-	drawers: {
-		cart: false,
-		createProduct: false,
-		createAuction: false,
-		createCollection: false,
-		conversation: false,
-	},
-	conversationPubkey: null,
-	dialogs: {
-		login: false,
-		signup: false,
-		checkout: false,
-		'product-details': false,
-		'scan-qr': false,
-		'v4v-setup': false,
-		terms: false,
-		'nsfw-confirmation': false,
-	},
-	toasts: [],
-	dialogCallbacks: {},
-	dashboardTitle: 'DASHBOARD',
-	dashboardHeaderAction: null,
-	mobileMenuOpen: false,
-	navigation: {
-		productSourcePath: null,
-		originalResultsPath: null,
-	},
-	selectedCurrency: getSelectedCurrency(),
-	showNSFWContent: getShowNSFWContent(),
-}
-
-// Create the store
-export const uiStore = new Store<UIState>(initialState)
-
-// UI Actions
-export const uiActions = {
-	// Drawer actions
-	openDrawer: (drawer: DrawerType) => {
-		uiStore.setState((state) => ({
-			...state,
-			drawers: {
-				...state.drawers,
-				[drawer]: true,
-			},
-			activeElement: `drawer-${drawer}`,
-		}))
-	},
-
-	closeDrawer: (drawer: DrawerType) => {
-		uiStore.setState((state) => ({
-			...state,
-			drawers: {
-				...state.drawers,
-				[drawer]: false,
-			},
-			activeElement: state.activeElement === `drawer-${drawer}` ? undefined : state.activeElement,
-		}))
-	},
-
-	toggleDrawer: (drawer: DrawerType) => {
-		uiStore.setState((state) => ({
-			...state,
-			drawers: {
-				...state.drawers,
-				[drawer]: !state.drawers[drawer],
-			},
-			activeElement: state.drawers[drawer] ? undefined : `drawer-${drawer}`,
-		}))
-	},
-
-	// Dialog actions
-	openDialog: (dialog: DialogType, callback?: any) => {
-		uiStore.setState((state) => ({
-			...state,
-			dialogs: {
-				...state.dialogs,
-				[dialog]: true,
-			},
-			dialogCallbacks: {
-				...state.dialogCallbacks,
-				[dialog]: callback,
-			},
-			activeElement: `dialog-${dialog}`,
-		}))
-	},
-
-	closeDialog: (dialog: DialogType) => {
-		uiStore.setState((state) => {
-			const newCallbacks = { ...state.dialogCallbacks }
-			delete newCallbacks[dialog]
-
-			return {
-				...state,
-				dialogs: {
-					...state.dialogs,
-					[dialog]: false,
-				},
-				dialogCallbacks: newCallbacks,
-				activeElement: state.activeElement === `dialog-${dialog}` ? undefined : state.activeElement,
-			}
-		})
-	},
-
-	toggleDialog: (dialog: DialogType) => {
-		uiStore.setState((state) => ({
-			...state,
-			dialogs: {
-				...state.dialogs,
-				[dialog]: !state.dialogs[dialog],
-			},
-			activeElement: state.dialogs[dialog] ? undefined : `dialog-${dialog}`,
-		}))
-	},
-
-	// Close all drawers and dialogs
-	closeAll: () => {
-		uiStore.setState((state) => {
-			const drawersClosed = Object.keys(state.drawers).reduce(
-				(acc, key) => {
-					acc[key as DrawerType] = false
-					return acc
-				},
-				{} as Record<DrawerType, boolean>,
-			)
-
-			const dialogsClosed = Object.keys(state.dialogs).reduce(
-				(acc, key) => {
-					acc[key as DialogType] = false
-					return acc
-				},
-				{} as Record<DialogType, boolean>,
-			)
-
-			return {
-				...state,
-				drawers: drawersClosed,
-				dialogs: dialogsClosed,
-				activeElement: undefined,
-			}
-		})
-	},
-
-	// Toast actions
-	addToast: (toast: Omit<Toast, 'id'>) => {
-		const id = Math.random().toString(36).substring(2, 9)
-
-		uiStore.setState((state) => ({
-			...state,
-			toasts: [...state.toasts, { ...toast, id }],
-		}))
-
-		// Auto-remove toast after duration (default: 5000ms)
-		const duration = toast.duration || 5000
-		setTimeout(() => {
-			uiActions.removeToast(id)
-		}, duration)
-
-		return id
-	},
-
-	removeToast: (id: string) => {
-		uiStore.setState((state) => ({
-			...state,
-			toasts: state.toasts.filter((toast) => toast.id !== id),
-		}))
-	},
-
-	clearToasts: () => {
-		uiStore.setState((state) => ({
-			...state,
-			toasts: [],
-		}))
-	},
-
-	// Mobile menu actions
-	openMobileMenu: () => {
-		uiStore.setState((state) => ({
-			...state,
-			mobileMenuOpen: true,
-			activeElement: 'mobile-menu',
-		}))
-	},
-
-	closeMobileMenu: () => {
-		uiStore.setState((state) => ({
-			...state,
-			mobileMenuOpen: false,
-			activeElement: state.activeElement === 'mobile-menu' ? undefined : state.activeElement,
-		}))
-	},
-
-	toggleMobileMenu: () => {
-		uiStore.setState((state) => ({
-			...state,
-			mobileMenuOpen: !state.mobileMenuOpen,
-			activeElement: state.mobileMenuOpen ? undefined : 'mobile-menu',
-		}))
-	},
-
-	// Dashboard title action
-	setDashboardTitle: (title: string) => {
-		uiStore.setState((state) => ({
-			...state,
-			dashboardTitle: title,
-		}))
-	},
-
-	// Dashboard header action
-	setDashboardHeaderAction: (action: DashboardHeaderAction | null) => {
-		uiStore.setState((state) => ({
-			...state,
-			dashboardHeaderAction: action,
-		}))
-	},
-
-	clearDashboardHeaderAction: () => {
-		uiStore.setState((state) => ({
-			...state,
-			dashboardHeaderAction: null,
-		}))
-	},
-
-	// Navigation actions
-	setProductSourcePath: (path: string | null) => {
-		uiStore.setState((state) => ({
-			...state,
-			navigation: {
-				...state.navigation,
-				productSourcePath: path,
-				// Only set originalResultsPath if it's not already set and we're setting a new path
-				originalResultsPath: state.navigation.originalResultsPath || path,
-			},
-		}))
-	},
-
-	setCollectionSourcePath: (path: string | null) => {
-		uiStore.setState((state) => ({
-			...state,
-			navigation: {
-				...state.navigation,
-				collectionSourcePath: path,
-				// Only set originalResultsPath if it's not already set and we're setting a new path
-				originalResultsPath: state.navigation.originalResultsPath || path,
-			},
-		}))
-	},
-
-	clearProductNavigation: () => {
-		uiStore.setState((state) => ({
-			...state,
-			navigation: {
-				productSourcePath: null,
-				originalResultsPath: null,
-			},
-		}))
-	},
-
-	// Currency actions
-	setCurrency: (currency: SupportedCurrency) => {
-		if (typeof window !== 'undefined') {
-			localStorage.setItem('selectedCurrency', currency)
-		}
-
-		uiStore.setState((state) => ({
-			...state,
-			selectedCurrency: currency,
-		}))
-	},
-
-	// Conversation actions
-	openConversation: (pubkey: string) => {
-		uiStore.setState((state) => ({
-			...state,
-			conversationPubkey: pubkey,
-			drawers: {
-				...state.drawers,
-				conversation: true,
-			},
-			activeElement: 'drawer-conversation',
-		}))
-	},
-
-	closeConversation: () => {
-		uiStore.setState((state) => ({
-			...state,
-			conversationPubkey: null,
-			drawers: {
-				...state.drawers,
-				conversation: false,
-			},
-			activeElement: state.activeElement === 'drawer-conversation' ? undefined : state.activeElement,
-		}))
-	},
-
-	// NSFW content actions
-	enableNSFWContent: () => {
-		if (typeof window !== 'undefined') {
-			localStorage.setItem('showNSFWContent', 'true')
-		}
-		uiStore.setState((state) => ({
-			...state,
-			showNSFWContent: true,
-			dialogs: {
-				...state.dialogs,
-				'nsfw-confirmation': false,
-			},
-		}))
-	},
-
-	disableNSFWContent: () => {
-		if (typeof window !== 'undefined') {
-			localStorage.setItem('showNSFWContent', 'false')
-		}
-		uiStore.setState((state) => ({
-			...state,
-			showNSFWContent: false,
-		}))
-	},
-
-	openNSFWConfirmation: () => {
-		uiStore.setState((state) => ({
-			...state,
-			dialogs: {
-				...state.dialogs,
-				'nsfw-confirmation': true,
-			},
-		}))
-	},
-}
-
-// React hook for consuming the store
-export const useUI = () => {
-	return {
-		...uiStore.state,
-		...uiActions,
-	}
-}
+/**
+ * tanstack -> SDK: a consumer that calls `uiStore.setState` writes through to the single source of truth. The
+ * SDK store then mirrors the new value back via the subscription above (or, for a referentially-equal result,
+ * is left as-is and the local store is pinned to it explicitly).
+ */
+uiStore.setState = ((updater: (prev: UIState) => UIState) => {
+	const prev = uiState.get()
+	const next = updater(prev)
+	uiState.set(next)
+	if (Object.is(next, prev)) setLocal(() => next)
+}) as typeof uiStore.setState
