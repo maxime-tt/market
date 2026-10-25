@@ -16,7 +16,9 @@
  */
 export * from './blacklist'
 export * from './constants'
+export * from './instance-config'
 export * from './nip05'
+export * from './schemas/app'
 export * from './test-labels'
 export * from './ui'
 export * from './vanity'

@@ -1,51 +1,13 @@
-import { z } from 'zod'
-
-export const WebUrlSchema = z
-	.string()
-	.url()
-	.refine((value) => ['http:', 'https:'].includes(new URL(value).protocol), 'Must use HTTP or HTTPS')
-export const RelayUrlSchema = z
-	.string()
-	.url()
-	.refine((value) => ['ws:', 'wss:'].includes(new URL(value).protocol), 'Must use WS or WSS')
-
-export const SocialLinksSchema = z.object({
-	twitter: WebUrlSchema.optional(),
-	newsletter: WebUrlSchema.optional(),
-	telegram: WebUrlSchema.optional(),
-	github: WebUrlSchema.optional(),
-	nostr: WebUrlSchema.optional(),
-})
-
-export const AppSettingsSchema = z.object({
-	name: z.string(),
-	displayName: z.string(),
-	picture: z.string().url(),
-	banner: z.string().url(),
-	ownerPk: z.string(),
-	allowRegister: z.boolean(),
-	defaultCurrency: z.string(),
-	contactEmail: z
-		.string()
-		.optional()
-		.transform((val) => val || undefined),
-	blossom_server: z.string().url().optional(),
-	nip96_server: z.string().url().optional(),
-	showNostrLink: z.boolean().optional().default(false),
-	handlerId: z.string().min(1).optional(),
-	siteUrl: WebUrlSchema.optional(),
-	publicRelays: z.array(RelayUrlSchema).optional(),
-	trustedMints: z.array(WebUrlSchema).optional(),
-	bugRelay: RelayUrlSchema.optional(),
-	termsUrl: WebUrlSchema.optional(),
-	socialLinks: SocialLinksSchema.optional(),
-	supportContact: z.string().min(1).optional(),
-})
-
-export const ExtendedSettingsSchema = z.object({
-	extended_field: z.string().optional(),
-})
-
-export type AppSettings = z.infer<typeof AppSettingsSchema>
-export type SocialLinks = z.infer<typeof SocialLinksSchema>
-export type ExtendedSettings = z.infer<typeof ExtendedSettingsSchema>
+/**
+ * src/lib/schemas/app.ts — the shim: `src/`'s view of the SDK app-settings schema module.
+ *
+ * The app-settings zod schemas (`AppSettingsSchema`, `SocialLinksSchema`, `ExtendedSettingsSchema` and the
+ * shared URL schemas, plus their inferred types) moved to `@sdk/config/schemas/app` as part of the app-config
+ * substrate move (increment B1e). Every existing call site keeps importing `@/lib/schemas/app` unchanged: the
+ * module is pure zod schemas and types, so a plain `export *` re-exports the whole surface and no adapter is
+ * needed — every consumer imports named values and types, never a store or a callable object.
+ *
+ * `instance-config`, now also in the SDK, resolves `./schemas/app` by relative path, so both the schema module
+ * and this shim point at the same single definition.
+ */
+export * from '@sdk/config/schemas/app'
