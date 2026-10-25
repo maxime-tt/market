@@ -13,6 +13,10 @@
  *
  * `constants` is not a state module: it is the app's shared data and types (relay lists, currencies,
  * categories), moved here from `src/lib/constants.ts`. A consumer takes it by explicit path too.
+ *
+ * `wallet` is the most recent state module: the NWC wallet state and actions, rebuilt on `sdk/core/state`
+ * and repointed from `src/lib/stores/wallet.ts`. It carries no name that collides in the `@sdk` barrel, so a
+ * consumer may take it by explicit path (`@sdk/config/wallet`).
  */
 export * from './blacklist'
 export * from './constants'
@@ -22,3 +26,4 @@ export * from './schemas/app'
 export * from './test-labels'
 export * from './ui'
 export * from './vanity'
+export * from './wallet'
