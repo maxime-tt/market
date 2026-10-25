@@ -21,6 +21,9 @@ export * as cashuWrapper from './cashu-wrapper'
 export * as nwcWrapper from './nwc-wrapper'
 export * as bolt11Wrapper from './bolt11-wrapper'
 export * as capability from './capability'
+// notifications is flat, like event-store: its vocabulary (Notification, NotificationRule, the queue and the
+// ledger) collides with nothing already exported here, and the app composes the mechanism directly.
+export * from './notifications'
 export * from './event-store'
 export * from './profile'
 export * from './relays'
