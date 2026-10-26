@@ -1,16 +1,10 @@
 /**
- * legacyStorage.ts — the user-data keys the retired relay-wallet store wrote, kept in one place
- * so the migration that drains them can name them without the destination module ever naming the
- * retired store.
+ * src/lib/wallet/legacyStorage.ts — the shim: `src/`'s view of the SDK legacy user-data keys module.
  *
- * The store module (`@/lib/stores/cashu`) is pinned by a test to contain no reference to the
- * retired store's name; the value below is the historical on-disk key and must not change, so it
- * lives here and the store reads it through the constant.
+ * The retired relay-wallet store's user-data keys (`LEGACY_PENDING_TOKENS_KEY`) moved to
+ * `@sdk/commerce/payments/wallet/legacyStorage` as part of the `src/lib/wallet/` drain (increment
+ * B4b, stage 1). Every existing call site keeps importing `@/lib/wallet/legacyStorage` (and the
+ * `@/lib/wallet` barrel re-exports it) unchanged: the module is a single constant, so a plain
+ * `export *` re-exports the whole surface and no adapter is needed.
  */
-
-/**
- * The pending-token list the retired store wrote. Read exactly once, by the merge in
- * `@/lib/stores/cashu`, so a device that already had a wallet keeps the tokens the old key holds
- * (each one is a locked bid leg or an unclaimed send) after the key itself is retired.
- */
-export const LEGACY_PENDING_TOKENS_KEY = 'nip60_pending_tokens'
+export * from '@sdk/commerce/payments/wallet/legacyStorage'
