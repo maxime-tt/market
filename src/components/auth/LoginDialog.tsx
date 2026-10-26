@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { NostrConnectQR } from './NostrConnectQR'
 import { PrivateKeyLogin } from './PrivateKeyLogin'
 import { BunkerConnect } from './BunkerConnect'
-import { hasAcceptedTerms } from '@/components/dialogs/TermsConditionsDialog'
+import { hasAcceptedTerms } from '@/lib/terms'
 import { uiActions } from '@/lib/stores/ui'
 import { LoginDialogView } from '@ui/auth/login-dialog-view'
 
