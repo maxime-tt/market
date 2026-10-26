@@ -1,5 +1,5 @@
-import { ndkActions, getWriteRelaySet, getWriteRelays } from '@/lib/stores/ndk'
-import { NDKEvent, type NDKSigner } from '@/lib/nostr/ndk-events'
+import { ndkActions, getWriteRelaySet, getWriteRelays, fetchLatestAppEvent } from '@/lib/stores/ndk'
+import { NDKEvent, type NDKSigner, type NDKFilter } from '@/lib/nostr/ndk-events'
 import type { EventPublishContext } from '@sdk/core/ports/eventPublish'
 
 export type NdkClient = NonNullable<ConstructorParameters<typeof NDKEvent>[0]>
@@ -14,11 +14,11 @@ export type NdkClient = NonNullable<ConstructorParameters<typeof NDKEvent>[0]>
 export const getAppNdk = () => ndkActions.getNDK()
 export const getAppSigner = () => ndkActions.getSigner()
 export const publishAppEvent = (event: NDKEvent) => ndkActions.publishEvent(event)
-export { getWriteRelaySet, getWriteRelays }
+export { fetchLatestAppEvent, getWriteRelaySet, getWriteRelays }
 
 /** Re-exported so Platform bindings can use the event type without a `platform -> src` edge. */
 export { NDKEvent }
-export type { NDKSigner }
+export type { NDKFilter, NDKSigner }
 
 /** Re-exported so publish bindings can route app-settings submissions through this bridge without a `platform -> src` edge. */
 export { submitAppSettings as submitAppSettingsEvent } from '@/lib/appSettings'

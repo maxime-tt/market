@@ -47,6 +47,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/nip89.ts',
 	'src/publish/migration.tsx',
 	'src/publish/curationContext.ts',
+	'src/publish/featured.tsx', // store drain D2 slice 11; shim deleted in E1
 	'src/publish/auctionWorkflowAdapters.ts', // store drain D2 slice 6; shim deleted in E1
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
 	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
