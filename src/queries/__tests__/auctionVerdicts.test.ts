@@ -59,6 +59,11 @@ mock.module('@/lib/stores/ndk', () => ({
 		getNDK: () => ({}),
 		fetchEventsWithTimeout: mock(async () => new Set<never>()),
 	},
+	// Required by `@platform/web/ndkReadContext`, which the test-label binding now imports
+	// statically (store drain D1, slice 3b).
+	getAppRelaySet: () => undefined,
+	getBugRelay: () => null,
+	getMainRelay: () => null,
 }))
 
 const { fetchAuctionVerdicts } = await import('@/queries/auctions')

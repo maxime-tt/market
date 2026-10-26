@@ -65,6 +65,9 @@ mock.module('@/lib/stores/ndk', () => ({
 		fetchEventsWithTimeout: async () => [] as NostrEventLike[],
 	},
 	getAppRelaySet: () => undefined,
+	// Required by `@platform/web/ndkReadContext`, which the test-label binding now imports
+	// statically (store drain D1, slice 3b).
+	getBugRelay: () => null,
 }))
 
 let applesauceIo: (typeof import('@/lib/nostr/io-applesauce'))['applesauceIo']

@@ -36,6 +36,11 @@ mock.module('@/lib/stores/ndk', () => ({
 			return relayEvents
 		}),
 	},
+	// Required by `@platform/web/ndkReadContext`, which the test-label binding now imports
+	// statically (store drain D1, slice 3b).
+	getAppRelaySet: () => undefined,
+	getBugRelay: () => null,
+	getMainRelay: () => null,
 }))
 
 const { fetchLiveActivity } = await import('@/queries/liveChat')

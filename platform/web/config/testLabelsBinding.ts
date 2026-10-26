@@ -20,11 +20,9 @@
 import { Store, useStore } from '@tanstack/react-store'
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { createMemoryEventStore, type EventReadContext } from '@sdk/core/event-store'
-import type { NDKEvent, NDKFilter } from '@/lib/nostr/ndk-events'
-import { configActions } from '@/lib/stores/config'
-import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@/lib/utils/testLabelFilters'
-import type { NostrEventLike } from '@/lib/nostr/eventLike'
+import { createAppRelayReadContext, isAppRelayReady, readAuthorizedLabelers, type NDKEvent } from '@platform/web/ndkReadContext'
+import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@sdk/config/testLabelFilters'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { testLabelState, type TestLabelInfo } from '@sdk/config/test-labels'
 import type { TestLabelState } from '@sdk/config/test-labels'
 import {
@@ -78,9 +76,10 @@ export function useTestLabelState(): TestLabelState {
 //
 // Separate concern from the state bridge above: `useTestLabels` reads the active NIP-32 `test`
 // labels from the relays and reconciles the SDK store. The read and its module caches are
-// framework-free (`sdk/config/testLabelRead.ts`); this binding owns the react-query hooks, the
-// authorized-labeler settings loader, and the relay port (a dynamic `@/lib/stores/ndk` import,
-// exactly as the pre-drain file did), so no part of the read imports NDK. The query keys are
+// framework-free (`sdk/config/testLabelRead.ts`); this binding owns the react-query hooks, while the
+// relay port and the authorized-labeler settings loader resolve from `platform/web/ndkReadContext.ts`
+// (the file that owns the `@/lib/stores/ndk` and `@/queries/app-settings` edges), exactly as the
+// sibling `blacklistBinding.ts` does. The binding itself holds NO `@/` edge. The query keys are
 // literal-identical to the pre-drain values.
 
 export {
@@ -97,68 +96,22 @@ export type { TestLabelInfo }
 /** How long a fetched label result stays fresh (mirrors the SDK module cache TTL). */
 const TEST_LABEL_CACHE_TTL_MS = 15_000
 
-/**
- * Read the authorized-labeler set = the app's EDITORS union its ADMINS (ADR-0009).
- *
- * Editors are the day-to-day curation role and admins are curated content authorities, so both may
- * mark / unmark test listings. The settings read is the still-`src`-owned app-settings query, so it
- * stays a dynamic import here (the mock seams in the label/auction tests hook it): the read must not
- * pull `@/queries/app-settings` into the sdk read model.
- *
- * Returns null when neither settings set could be read (relay/config not ready) — callers must treat
- * that as "cannot determine authorization" and fail open (no labels applied, store not marked
- * loaded).
- */
-const readAuthorizedLabelers = async (): Promise<string[] | null> => {
-	try {
-		const { fetchAdminSettings, fetchEditorSettings } = await import('@/queries/app-settings')
-		const appPubkey = configActions.getAppPublicKey()
-		const [adminSettings, editorSettings] = await Promise.all([fetchAdminSettings(appPubkey), fetchEditorSettings(appPubkey)])
-		// Both reads unavailable → authorization is undeterminable, not empty.
-		if (!adminSettings && !editorSettings) return null
-		return Array.from(new Set([...(adminSettings?.admins ?? []), ...(editorSettings?.editors ?? [])]))
-	} catch (error) {
-		console.warn('Failed to fetch authorized labelers (admin/editor settings):', error)
-		return null
-	}
-}
-
 /** The authorized labelers, through the SDK read model's TTL cache. */
 export const getAuthorizedLabelerPubkeys = async (): Promise<string[] | null> => resolveAuthorizedLabelers(readAuthorizedLabelers)
-
-/** The test-label read never consults a store, but `EventReadContext` carries one. */
-const testLabelEventStore = createMemoryEventStore<NDKEvent>()
 
 /**
  * Build the relay port for the test-label read, pinned to the app's main relay.
  *
- * `@/lib/stores/ndk` is imported dynamically here, exactly as the pre-drain
- * `src/queries/testLabels.tsx` did: the read must not require the relay store to be loaded (or a
- * test's mock of it to export every symbol) until it actually fetches, and the host's relay policy
- * stays on the host side.
+ * The port and the readiness gate resolve from `platform/web/ndkReadContext.ts` (the file that owns
+ * the `@/lib/stores/ndk` edge), exactly as the sibling `blacklistBinding.ts` does: the host's relay
+ * policy and its readiness stay on the host side, the framework-free read model imports no NDK, and
+ * the binding adds no counted `platform -> src` edge.
  */
-const createTestLabelReadDeps = async (timeoutMs = 8000): Promise<TestLabelReadDeps<NDKEvent>> => {
-	const { ndkActions, getAppRelaySet } = await import('@/lib/stores/ndk')
-
-	const context: EventReadContext<NDKEvent> = {
-		store: testLabelEventStore,
-		fetch: async (filters) => {
-			const ndk = ndkActions.getNDK()
-			if (!ndk) return []
-
-			const relaySet = getAppRelaySet()
-			const ndkFilters = filters as NDKFilter[]
-			return Array.from(
-				await ndkActions.fetchEventsWithTimeout(ndkFilters.length === 1 ? ndkFilters[0] : ndkFilters, {
-					timeoutMs,
-					relaySet,
-				}),
-			)
-		},
-	}
-
-	return { context, readAuthorizedLabelers, isReady: () => !!ndkActions.getNDK() }
-}
+const createTestLabelReadDeps = (timeoutMs = 8000): TestLabelReadDeps<NDKEvent> => ({
+	context: createAppRelayReadContext(timeoutMs),
+	readAuthorizedLabelers,
+	isReady: isAppRelayReady,
+})
 
 /**
  * Fetch the active test labels for a set of item coordinates, populating the SDK store and the
@@ -167,7 +120,7 @@ const createTestLabelReadDeps = async (timeoutMs = 8000): Promise<TestLabelReadD
  * @returns Map of coordinate → label metadata for coordinates with an ACTIVE label
  */
 export const fetchTestLabels = async (coordinates: string[]): Promise<Map<string, TestLabelInfo>> =>
-	fetchTestLabelsWorkflow(await createTestLabelReadDeps(), coordinates)
+	fetchTestLabelsWorkflow(createTestLabelReadDeps(), coordinates)
 
 /**
  * Fetch labels for all item coordinates in an event list, then filter out test-labeled items. This

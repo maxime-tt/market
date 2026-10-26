@@ -1,100 +1,15 @@
-import type { NostrEventLike } from '@/lib/nostr/eventLike'
-import { TEST_LABEL_AUCTION_KIND, TEST_LABEL_PRODUCT_KIND } from '@/lib/constants/testLabels'
-import { testLabelActions } from '@/lib/stores/testLabels'
-import { getATagFromCoords } from './coords'
-
 /**
- * ADR-0009 — Test-listing curation filters.
+ * Shim — the framework-free test-label curation filters moved to
+ * `sdk/config/testLabelFilters.ts` (store drain D1, slice 3b).
  *
- * Synchronous store reads mirroring `blacklistFilters.ts`. The relay fetch
- * that populates the store happens first, via `fetchTestLabels` /
- * `excludeTestLabeledEvents` (see src/queries/testLabels.tsx).
- */
-
-/**
- * Item coordinate ("kind:pubkey:identifier") of a product/auction event,
- * or null for events that cannot carry a test label.
- */
-export const getItemTestLabelCoordinate = (event: NostrEventLike): string | null => {
-	if (event.kind !== TEST_LABEL_PRODUCT_KIND && event.kind !== TEST_LABEL_AUCTION_KIND) return null
-	const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
-	if (!dTag) return null
-	return getATagFromCoords({ kind: event.kind, pubkey: event.pubkey, identifier: dTag })
-}
-
-/**
- * Collect the unique item coordinates referenced by an array of events.
- * Used to batch the label fetch for a page of items before filtering.
- */
-export const collectTestLabelCoordinates = (events: NostrEventLike[]): string[] => {
-	const coordinates = new Set<string>()
-	for (const event of events) {
-		const coordinate = getItemTestLabelCoordinate(event)
-		if (coordinate) coordinates.add(coordinate)
-	}
-	return Array.from(coordinates)
-}
-
-/**
- * Filter out test-labeled items from an array of events.
+ * The filters are synchronous reads over the SDK test-label state, so they can live in `sdk/` and
+ * be consumed by the Platform binding without a counted `platform -> src` edge. Every named export
+ * is unchanged (`getItemTestLabelCoordinate`, `collectTestLabelCoordinates`,
+ * `filterTestLabeledEvents`, `isProductTestLabeled`, `isAuctionTestLabeled`,
+ * `isItemEventTestLabeled`, `filterTestLabeledCoordinates`, `useTestLabelFilters`), so no call site
+ * breaks. Deleted in E1 together with the rest of the `src/` shims.
  *
- * Must be called AFTER filterBlacklistedEvents and filterDeleted* (ADR-0009:
- * the label check runs alongside the existing delete and blacklist checks,
- * before queries return data).
- *
- * Synchronous store read — if labels have not been loaded yet the filter
- * fails open and returns all events.
+ * The authoritative doc for the design lives on the SDK module:
+ * docs/adr/ADR-0009-test-listing-labels-via-nip-32.md.
  */
-export const filterTestLabeledEvents = <T extends NostrEventLike>(events: T[]): T[] => {
-	if (!testLabelActions.areLabelsLoaded()) {
-		return events // Return all if labels not loaded yet
-	}
-
-	return events.filter((event) => !isItemEventTestLabeled(event))
-}
-
-/**
- * Check if any item event (product or auction) carries an active test label
- */
-export const isItemEventTestLabeled = (event: NostrEventLike): boolean => {
-	const coordinate = getItemTestLabelCoordinate(event)
-	if (!coordinate) return false
-	return testLabelActions.isTestLabeled(coordinate)
-}
-
-/**
- * Check if a product event carries an active test label
- */
-export const isProductTestLabeled = (event: NostrEventLike): boolean => {
-	if (event.kind !== TEST_LABEL_PRODUCT_KIND) return false
-	return isItemEventTestLabeled(event)
-}
-
-/**
- * Check if an auction event carries an active test label
- */
-export const isAuctionTestLabeled = (event: NostrEventLike): boolean => {
-	if (event.kind !== TEST_LABEL_AUCTION_KIND) return false
-	return isItemEventTestLabeled(event)
-}
-
-/**
- * Filter item coordinates, dropping test-labeled ones
- */
-export const filterTestLabeledCoordinates = (coordinates: string[]): string[] => {
-	return coordinates.filter((coordinate) => !testLabelActions.isTestLabeled(coordinate))
-}
-
-/**
- * React hook that returns filter functions with reactive updates
- * Use this in components that need to react to test-label changes
- */
-export const useTestLabelFilters = () => {
-	return {
-		filterEvents: filterTestLabeledEvents,
-		isProductTestLabeled,
-		isAuctionTestLabeled,
-		isItemTestLabeled: isItemEventTestLabeled,
-		filterCoordinates: filterTestLabeledCoordinates,
-	}
-}
+export * from '@sdk/config/testLabelFilters'

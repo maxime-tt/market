@@ -68,6 +68,11 @@ mock.module('@/lib/stores/ndk', () => ({
 		initialize: () => null,
 	},
 	getWriteRelays: () => [],
+	// Required by `@platform/web/ndkReadContext`, which the test-label binding now imports
+	// statically (store drain D1, slice 3b).
+	getAppRelaySet: () => undefined,
+	getBugRelay: () => null,
+	getMainRelay: () => null,
 }))
 
 // Capture React warnings/errors that signal a hooks order violation.

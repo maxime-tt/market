@@ -107,6 +107,9 @@ mock.module('@/lib/stores/ndk', () => ({
 	// `fetchTestLabels` reads this once authorization is determinable; without
 	// it the label read would throw instead of reaching `labelReadPortMock`.
 	getAppRelaySet: () => undefined,
+	// Required by `@platform/web/ndkReadContext`, which the test-label binding now imports
+	// statically (store drain D1, slice 3b).
+	getBugRelay: () => null,
 }))
 
 /**

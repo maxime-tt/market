@@ -1,6 +1,10 @@
 import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions } from '@/lib/stores/ndk'
 import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
+import { configActions } from '@sdk/config/app-config'
 import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
+
+/** Re-exported so Platform bindings can type their read context without a `platform -> src` edge. */
+export type { NDKEvent, NDKFilter }
 
 // The browser host is one market instance, so module scope is the instance boundary for its store.
 const ndkEventStore = createMemoryEventStore<NDKEvent>()
@@ -27,6 +31,41 @@ export function createNdkReadContext(timeoutMs = 8000): EventReadContext<NDKEven
  */
 export function getAppRelayUrl(): string | undefined {
 	return getMainRelay()
+}
+
+/**
+ * Whether the host's NDK client is ready. Lives here so the config bindings can gate a read that
+ * must fail open before the relay client exists, without importing `src/` themselves.
+ */
+export function isAppRelayReady(): boolean {
+	return !!ndkActions.getNDK()
+}
+
+/**
+ * The app's admin ∪ editor pubkeys (ADR-0009) — the authorized test-labeler set, read through the
+ * still-`src`-owned app-settings query.
+ *
+ * Editors are the day-to-day curation role and admins are curated content authorities, so both may
+ * mark / unmark test listings. The settings read stays a DYNAMIC import so the framework-free SDK
+ * read model never pulls `@/queries/app-settings` in, and so the label/auction suites' mock seam for
+ * that path still intercepts.
+ *
+ * Returns null when neither settings set could be read (relay/config not ready) — callers must treat
+ * that as "cannot determine authorization" and fail open (no labels applied, store not marked
+ * loaded).
+ */
+export const readAuthorizedLabelers = async (): Promise<string[] | null> => {
+	try {
+		const { fetchAdminSettings, fetchEditorSettings } = await import('@/queries/app-settings')
+		const appPubkey = configActions.getAppPublicKey()
+		const [adminSettings, editorSettings] = await Promise.all([fetchAdminSettings(appPubkey), fetchEditorSettings(appPubkey)])
+		// Both reads unavailable → authorization is undeterminable, not empty.
+		if (!adminSettings && !editorSettings) return null
+		return Array.from(new Set([...(adminSettings?.admins ?? []), ...(editorSettings?.editors ?? [])]))
+	} catch (error) {
+		console.warn('Failed to fetch authorized labelers (admin/editor settings):', error)
+		return null
+	}
 }
 
 /**

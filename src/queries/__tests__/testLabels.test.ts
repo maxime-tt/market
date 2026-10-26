@@ -443,6 +443,10 @@ describe('fetchTestLabels chunk scheduling', () => {
 		mock.module('@/lib/stores/ndk', () => ({
 			ndkActions: { getNDK: () => ({}), fetchEventsWithTimeout },
 			getAppRelaySet: () => undefined,
+			// Required by `@platform/web/ndkReadContext`, which the test-label binding now imports
+			// statically (store drain D1, slice 3b).
+			getBugRelay: () => null,
+			getMainRelay: () => null,
 		}))
 
 		const result = await fetchTestLabels(coordinates)
