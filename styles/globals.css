@@ -1,5 +1,12 @@
 @import 'tailwindcss';
 
+/* Tailwind v4 auto-scans the whole project for utility candidates. `scripts/` holds shell
+   guards and tools whose *documentation comments* quote Tailwind syntax as examples (e.g.
+   scripts/check-ui-styles.sh explains that `bg-[url(/x.png)]` is not raw-palette debt) — the
+   scan promotes those examples to real utilities and the bundler then tries to resolve the
+   quoted asset, which 500s the dev server. Scripts render nothing: exclude the tree. */
+@source not '../scripts';
+
 @source '../ui';
 
 @plugin "tailwindcss-animate";
