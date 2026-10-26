@@ -4,3 +4,12 @@ export * from './depositQuote'
 export * from './devWallet'
 export * from './legacyStorage'
 export * from './nip60WalletEvent'
+// Stage 2 of the `src/lib/wallet/` drain (B4b): the walletKeys dependency chain plus the auction
+// host and the NIP-61 nutzap family.
+export * from './walletKeys'
+export * from './walletKeyStore'
+export * from './walletKeyMigration'
+export * from './nip60WalletEventSource'
+export * from './walletEventReader'
+export * from './auctionHost'
+export * from './nutzap'
