@@ -26,7 +26,7 @@ import { findBidderRecord } from '@/lib/auction/bidderRecords'
 import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
 import { toRawEvent } from '@sdk/core'
 import { useQueryClient } from '@tanstack/react-query'
-import { auctionKeys } from '@/queries/queryKeyFactory'
+import { auctionKeys } from '@sdk/core/query/queryKeyFactory'
 import {
 	auctionQueryOptions,
 	auctionsByPubkeyQueryOptions,

@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { auctionKeys, collectionKeys, paymentDetailsKeys, productKeys, shippingKeys } from '@/queries/queryKeyFactory'
+import { auctionKeys, collectionKeys, paymentDetailsKeys, productKeys, shippingKeys } from '@sdk/core/query/queryKeyFactory'
 import { DELETION_REQUEST_KIND, readDeletionTargets, type EventStorePort } from '@sdk/core/event-store'
 import type { NostrEventLike } from '@sdk/core'
 import { getRawEventStore } from './applesauceReadContext'

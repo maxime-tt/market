@@ -4,7 +4,7 @@ import { configActions } from '@/lib/stores/config'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { authActions } from '@/lib/stores/auth'
 import { walletActions } from '@/lib/stores/wallet'
-import { configKeys } from '@/queries/queryKeyFactory'
+import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import type { PublicAppConfig } from '@/lib/instance-config'
 import { parsePublicConfigEnvelope } from '@sdk/core/publicConfig'
 

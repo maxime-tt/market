@@ -36,7 +36,7 @@ import { fetchCollection, fetchCollectionByEventId, getCollectionId } from '@/qu
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedAuctions, useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@/queries/featured'
 import { fetchProduct, getProductId } from '@/queries/products'
-import { configKeys } from '@/queries/queryKeyFactory'
+import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { npubToHex } from '@platform/web/routes/setup'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
