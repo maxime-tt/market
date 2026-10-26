@@ -3,10 +3,9 @@ import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
 import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auctionSettlement'
 import { ndkActions } from '@/lib/stores/ndk'
-import { notificationStore } from '@/lib/stores/notifications'
 import { appNotifications, readMarks, reconcileAppNotificationCounts } from '@platform/web/notifications'
 import type { AppNotificationEvent } from '@platform/web/notifications'
-import { produceAppNotification, reconcileLegacyNotificationCounts } from '@/lib/notificationProducers'
+import { produceAppNotification } from '@/lib/notificationProducers'
 import {
 	PRODUCT_KIND,
 	getSellerProductNotificationScope,
@@ -271,13 +270,13 @@ const fetchAddressableCommentEvents = async ({
  */
 export const useNotificationMonitor = () => {
 	const { user } = useStore(authStore)
-	const { isInitialized } = useStore(notificationStore)
 	const subscriptionsRef = useRef<NDKSubscription[]>([])
 	const isMonitoringRef = useRef(false)
 
 	useEffect(() => {
-		// Only run if user is authenticated and store is initialized
-		if (!user?.pubkey || !isInitialized || isMonitoringRef.current) {
+		// Only run once an authenticated user is present. The legacy `isInitialized` gate went with the store
+		// (C3): read state seeds synchronously at module load, so there is nothing to wait for but `user`.
+		if (!user?.pubkey || isMonitoringRef.current) {
 			return
 		}
 
@@ -725,10 +724,9 @@ export const useNotificationMonitor = () => {
 					0,
 				)
 
-				// Feed the mechanism the same events the legacy counters describe. This is the derivation form of
-				// `recalculateFromEvents` and, like it, an OVERWRITE rather than an accumulation — so re-running
-				// the initial sync (on account change) resets the derived counts exactly as it resets the legacy
-				// ones, instead of doubling them.
+				// Feed the mechanism the events this pass counted. `reconcileAppNotificationCounts` is an
+				// OVERWRITE rather than an accumulation — so re-running the initial sync (on account change)
+				// resets the derived counts instead of doubling them.
 				const nowForBulk = nowSeconds()
 				const bulkEvents: AppNotificationEvent[] = []
 				for (const event of newOrders) bulkEvents.push({ kind: 'order', createdAt: event.created_at || nowForBulk })
@@ -774,26 +772,6 @@ export const useNotificationMonitor = () => {
 				for (const event of newHigherBidEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
 				for (const event of newSettlementEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
 				reconcileAppNotificationCounts(appNotifications, bulkEvents)
-
-				// Update legacy store with initial counts (kept verbatim until C2 rewires the consumers).
-				reconcileLegacyNotificationCounts({
-					orderCount: newOrders.length,
-					messageCount: totalUnseenMessages,
-					purchaseCount: newPurchaseUpdates.length,
-					conversationCounts,
-					auctionBidCount: newSellerBidEvents.length,
-					auctionBidCountsByAuction: newSellerBidCountsByAuction,
-					auctionCommentCount: newSellerLiveChatEvents.length,
-					auctionCommentCountsByAuction: newSellerLiveChatCountsByAuction,
-					auctionEventCommentCount: newSellerAuctionCommentEvents.length,
-					auctionEventCommentCountsByAuction: newSellerAuctionCommentCountsByAuction,
-					productCommentCount: newSellerProductCommentEvents.length,
-					auctionLiveCount: unseenAuctionLiveCount,
-					auctionLiveCountsByAuction: unseenAuctionLiveCountsByAuction,
-					auctionSettlementBeginsCount: unseenAuctionSettlementBeginsCount,
-					auctionSettlementBeginsCountsByAuction: unseenAuctionSettlementBeginsCountsByAuction,
-					bidUpdateCount: newHigherBidEvents.length + newSettlementEvents.length,
-				})
 
 				console.log('[NotificationMonitor] Initial counts:', {
 					orders: newOrders.length,
@@ -1227,5 +1205,5 @@ export const useNotificationMonitor = () => {
 			subscriptionsRef.current = []
 			isMonitoringRef.current = false
 		}
-	}, [user?.pubkey, isInitialized])
+	}, [user?.pubkey])
 }

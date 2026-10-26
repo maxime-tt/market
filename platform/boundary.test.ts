@@ -51,8 +51,8 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
 	'src/hooks/useAuctionWinMonitor.ts', // pre-existing; owner leaves src/ in D3
 	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
-	'src/hooks/useNotificationMonitor.ts', // C1; rewritten onto the rules, retired in C3/C4
-	'src/lib/notificationProducers.ts', // C1; temporary bridge, deleted in C3
+	'src/hooks/useNotificationMonitor.ts', // C1; rewritten onto the rules, reads C4's ledger; retired in D3
+	'src/lib/notificationProducers.ts', // C1; the src-side rule seam + C4 read-state re-export route; retired in D3
 	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
 	'src/components/messages/ConversationListItem.tsx', // C2; reads the derived counts, retired in D3
 ])
