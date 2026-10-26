@@ -10,7 +10,9 @@ import {
 	createFeaturedProductsEvent,
 	createFeaturedUsersEvent,
 } from '@/publish/featured'
-import { hexToBytes } from '@noble/hashes/utils.js'
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
+import { secp256k1 } from '@noble/curves/secp256k1.js'
+import * as nip44 from 'nostr-tools/nip44'
 import { NDKPrivateKeySigner, NDKEvent } from '@nostr-dev-kit/ndk'
 import { getPublicKey } from 'nostr-tools/pure'
 import { faker } from '@faker-js/faker'
@@ -109,7 +111,7 @@ async function ensureAuctionWalletForSeller(signer: NDKPrivateKeySigner, pubkey:
 	ndk.signer = signer
 
 	try {
-		const walletEvent = Array.from(
+		let walletEvent = Array.from(
 			await ndkActions.fetchEventsWithTimeout(
 				{
 					kinds: [17375],
@@ -121,10 +123,34 @@ async function ensureAuctionWalletForSeller(signer: NDKPrivateKeySigner, pubkey:
 		).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0]
 
 		if (!walletEvent) {
-			// The NIP-60 cut stopped creating relay wallet events: the wallet lives locally now, so
-			// a seller without one is seeded without an auction xpub rather than by writing an
-			// event nothing reads any more.
-			throw new Error(`No NIP-60 wallet event for ${pubkey}; the seed no longer creates them`)
+			// No relay wallet event yet. The pair is *local* material under the NIP-60 cut
+			// (`sdk/commerce/payments/wallet/walletKeys.ts` derives every auction address from it),
+			// and the kind-17375 event is now the one-way migration SOURCE that
+			// `walletKeyMigration` reads once, on the owner's first wallet use. A fresh in-memory
+			// dev relay has none, so the seed mints a pair and publishes it -- without it every
+			// seeded auction carries no `p2pk_xpub` and the bid loop below skips it, leaving the
+			// stack with auctions that cannot be bid on.
+			const walletPrivkey = bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(32)))
+			const walletP2pk = bytesToHex(secp256k1.getPublicKey(hexToBytes(walletPrivkey), true))
+			const content = JSON.stringify([
+				['privkey', walletPrivkey],
+				...mints.map((mint) => ['mint', mint]),
+				...(RELAY_URL ? [['relay', RELAY_URL]] : []),
+			])
+			const conversationKey = nip44.v2.utils.getConversationKey(hexToBytes(signer.privateKey), pubkey)
+			const event = new NDKEvent(ndk)
+			event.kind = 17375 as unknown as typeof event.kind
+			event.content = nip44.v2.encrypt(content, conversationKey)
+			event.tags = []
+			await event.sign(signer)
+			const published = await event.publish()
+			if (published.size === 0) {
+				throw new Error(`Failed to publish the NIP-60 wallet event for ${pubkey}`)
+			}
+			walletEvent = event
+		}
+		if (!walletEvent) {
+			throw new Error(`No NIP-60 wallet event for ${pubkey}`)
 		}
 
 		// Read the pair the way the app now does: open the event, parse its pair-list, and name the
