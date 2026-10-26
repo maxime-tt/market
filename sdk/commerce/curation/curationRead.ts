@@ -185,6 +185,21 @@ export async function readBlacklistSettingsWorkflow<E extends NostrEventLike>(
 	return parseBlacklistSettings(latestEvent ?? null)
 }
 
+/**
+ * Discovery read: the newest event for a featured list (kind 30405 / 30003 / 30409 / 30000,
+ * `d=featured_*`) from the app's own relay. Takes the host's `EventReadContext`; the binding pins it
+ * to the instance's main relay. Exactly one fetch and no deletion lookup: this is the `fetchLatestAppEvent`
+ * contract the pre-drain reader had (it sorted the set and took the newest; a missing list is null).
+ */
+export async function readFeaturedWorkflow<E extends NostrEventLike>(
+	context: EventReadContext<E>,
+	list: FeaturedListKey,
+	appPubkey: string,
+): Promise<E | null> {
+	const events = await context.fetch([buildCurationListFilter(list, appPubkey)])
+	return [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0] ?? null
+}
+
 export function getFormattedAdmins(adminSettings: AdminSettings<unknown> | null | undefined) {
 	if (!adminSettings) return []
 	return adminSettings.admins.map((pubkey, index) => ({ pubkey, isOwner: pubkey === adminSettings.owner, index }))

@@ -3,6 +3,11 @@ import { getATagFromCoords } from './coords'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
 
+// The coordinate/pubkey filters moved to the blacklist state module (`@sdk/config/blacklist`) in the
+// store drain D1 slice 4; `src/` keeps every existing export through this re-export.
+import { filterBlacklistedProductCoords, filterBlacklistedCollectionCoords, filterBlacklistedPubkeys } from '@sdk/config/blacklist'
+export { filterBlacklistedProductCoords, filterBlacklistedCollectionCoords, filterBlacklistedPubkeys }
+
 /**
  * Filter out blacklisted items from an array of events
  */
@@ -89,27 +94,6 @@ export const isCollectionEventBlacklisted = (event: NDKEvent): boolean => {
 	}
 
 	return false
-}
-
-/**
- * Filter products by coordinates
- */
-export const filterBlacklistedProductCoords = (productCoords: string[]): string[] => {
-	return productCoords.filter((coords) => !blacklistActions.isProductBlacklisted(coords))
-}
-
-/**
- * Filter collections by coordinates
- */
-export const filterBlacklistedCollectionCoords = (collectionCoords: string[]): string[] => {
-	return collectionCoords.filter((coords) => !blacklistActions.isCollectionBlacklisted(coords))
-}
-
-/**
- * Filter user pubkeys
- */
-export const filterBlacklistedPubkeys = (pubkeys: string[]): string[] => {
-	return pubkeys.filter((pubkey) => !blacklistActions.isPubkeyBlacklisted(pubkey))
 }
 
 /**

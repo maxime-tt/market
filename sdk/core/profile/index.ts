@@ -13,9 +13,20 @@ export {
 	parseNostrAuthor,
 	pickLatestEvent,
 	readAuthorWorkflow,
+	readProfileWorkflow,
 	summarizeZapMethods,
 } from './profileRead'
-export type { NostrAuthor, ProfileDisplayFields, ProfileFilter, ProfileMetadataEvent, ZapCapabilityInfo, ZapMethod } from './profileRead'
+export type {
+	NostrAuthor,
+	ProfileDisplayFields,
+	ProfileFilter,
+	ProfileMetadataEvent,
+	ProfileReadPort,
+	ZapCapabilityInfo,
+	ZapMethod,
+} from './profileRead'
+export { getProfileIdentifierValidationError, validateProfileIdentifier } from './profileValidation'
+export type { ProfileIdentifierType, ProfileIdentifierValidationResult } from './profileValidation'
 export {
 	buildNip05RegistryFilter,
 	getExpiredNip05ForPubkey,

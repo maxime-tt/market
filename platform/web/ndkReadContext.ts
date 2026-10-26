@@ -13,6 +13,13 @@ export function getNdkEventStore(): EventStorePort<NDKEvent> {
 	return ndkEventStore
 }
 
+/**
+ * The app-relay pinning used by the reads of app-owned lists, re-exported so a Platform binding (the
+ * featured-list subscription) can pin a live subscription to it without importing `src/` itself. The
+ * `@/lib/stores/ndk` edge already lives in this file.
+ */
+export { getAppRelaySet }
+
 /** Platform adapter: SDK read workflows fetch through the host's NDK relay policy and merge into the shared store. */
 export function createNdkReadContext(timeoutMs = 8000): EventReadContext<NDKEvent> {
 	return {

@@ -187,3 +187,24 @@ export const blacklistActions = {
 		return blacklistState.get().lastUpdated
 	},
 }
+
+/**
+ * Coordinate/pubkey filters over the blacklist state (store drain D1, slice 4).
+ *
+ * These three lived in `src/lib/utils/blacklistFilters.ts` and read `blacklistActions` through the
+ * `src/` store shim; they are the pure projection of the blacklist state onto the featured lists, so
+ * they belong next to the state. `src/lib/utils/blacklistFilters.ts` re-exports them, and the featured
+ * Platform binding imports them from here directly (keeping its inbound `platform -> src` import count
+ * at zero).
+ */
+export const filterBlacklistedProductCoords = (productCoords: string[]): string[] => {
+	return productCoords.filter((coords) => !blacklistActions.isProductBlacklisted(coords))
+}
+
+export const filterBlacklistedCollectionCoords = (collectionCoords: string[]): string[] => {
+	return collectionCoords.filter((coords) => !blacklistActions.isCollectionBlacklisted(coords))
+}
+
+export const filterBlacklistedPubkeys = (pubkeys: string[]): string[] => {
+	return pubkeys.filter((pubkey) => !blacklistActions.isPubkeyBlacklisted(pubkey))
+}

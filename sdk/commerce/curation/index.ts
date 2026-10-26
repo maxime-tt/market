@@ -40,6 +40,7 @@ export {
 	parseFeaturedUsers,
 	readBlacklistSettingsWorkflow,
 	readFeaturedCoordinates,
+	readFeaturedWorkflow,
 } from './curationRead'
 export type {
 	AdminSettings,

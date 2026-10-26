@@ -1,6 +1,7 @@
 import { readThroughStore, type EventReadContext } from '../event-store/read'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { PROFILE_METADATA_KIND } from './profilePublish'
+import { validateProfileIdentifier } from './profileValidation'
 
 // A type alias (not interface) so it stays assignable to relay-client filters with `#${string}` index signatures.
 export type ProfileFilter = {
@@ -107,6 +108,44 @@ export function summarizeZapMethods(methods: Iterable<string>): ZapCapabilityInf
 /** Exactly 64 hex characters — the same rule as the legacy `isValidHexKey` (`HEX_KEYS_REGEX`). */
 export function isValidProfilePubkey(pubkey: string): boolean {
 	return /^(?:[0-9a-fA-F]{64})$/.test(pubkey)
+}
+
+/**
+ * The host's profile endpoints, expressed without a concrete user/profile type: the SDK read stays
+ * generic so a Platform binding can keep `NDKUser`/`NDKUserProfile`, and a test can stub a plain object.
+ */
+export interface ProfileReadPort<User, Profile> {
+	fetchUser(identifier: string): Promise<User | null>
+	fetchProfile(user: User): Promise<Profile | null>
+}
+
+/**
+ * Profile read: the identifier is validated before any I/O (a malformed value would otherwise reach a
+ * `{ kinds: [0], authors: [...] }` filter); the fetch is raced against a timeout so a hung relay becomes
+ * an error the caller can retry (and, with `keepPreviousData`, does not clobber the loaded profile).
+ *
+ * Important asymmetry, mirrored from the pre-drain reader: a genuine absence (`fetchProfile()` resolving
+ * to null) is a successful `{ profile: null, user }`, while a rejection from `fetchUser`/`fetchProfile`
+ * or the timeout propagates as an error. The port takes the timeout as a parameter so a host can tune it.
+ */
+export async function readProfileWorkflow<User, Profile>(
+	port: ProfileReadPort<User, Profile>,
+	identifier: string,
+	timeoutMs = 8000,
+): Promise<{ profile: Profile | null; user: User | null }> {
+	if (!validateProfileIdentifier(identifier).isValid) {
+		return { profile: null, user: null }
+	}
+
+	return await Promise.race([
+		(async () => {
+			const user = await port.fetchUser(identifier)
+			if (!user) return { profile: null, user: null }
+			const profile = await port.fetchProfile(user)
+			return { profile, user }
+		})(),
+		new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Profile fetch timed out')), timeoutMs)),
+	])
 }
 
 /**

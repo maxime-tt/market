@@ -5,7 +5,10 @@ const originalError = console.error
 console.warn = () => {}
 console.error = () => {}
 
-mock.module('@/lib/ctxcn-client', () => ({
+// The client moved to the SDK (store drain D1 slice 4); the binding imports
+// `@sdk/commerce/payments/ctxcnClient`, so the mock must name that module — a `src/` shim is a
+// different module from the SDK file it re-exports from. This mock exists to stop the real relay pool.
+mock.module('@sdk/commerce/payments/ctxcnClient', () => ({
 	PlebianCurrencyClient: class {
 		constructor() {
 			throw new Error('mocked: no real relay connections in tests')
