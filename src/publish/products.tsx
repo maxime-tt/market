@@ -6,6 +6,7 @@ import {
 	publishProductListingWorkflow,
 	type SellerProductListingInput,
 	type SellerProductPublishValidationIssue,
+	productPublishIssueMessage,
 } from '@sdk/commerce/products'
 import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
 import { getNdkEventStore } from '@platform/web/ndkReadContext'
@@ -16,25 +17,7 @@ import { toast } from 'sonner'
 import { createClientTag } from './nip89'
 
 export type ProductFormData = SellerProductListingInput
-
-export function productPublishIssueMessage(issue: SellerProductPublishValidationIssue): string {
-	switch (issue) {
-		case 'product-name-required':
-			return 'Product name is required'
-		case 'product-description-required':
-			return 'Product description is required'
-		case 'product-price-invalid':
-			return 'Valid product price is required'
-		case 'product-quantity-invalid':
-			return 'Valid product quantity is required'
-		case 'product-image-required':
-			return 'At least one product image is required'
-		case 'product-main-category-required':
-			return 'Main category is required'
-		case 'product-shipping-required':
-			return 'At least one shipping option is required'
-	}
-}
+export { productPublishIssueMessage }
 
 /**
  * Creates a new product event (kind 30402)
