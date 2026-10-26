@@ -26,8 +26,14 @@ export {
 	updateCartProductQuantity,
 } from './cartOperations'
 export type { BuyerCartTotals, CartDisplayTotals, CartProductEntry, CartProductTotalsInput, CartQuantityAction } from './cartOperations'
-export { buildCartSnapshotFilter, CART_SNAPSHOT_FETCH_LIMIT, parseCartSnapshotEvent } from './cartRead'
-export type { CartSnapshotFilter } from './cartRead'
+export {
+	buildCartSnapshotFilter,
+	CART_SNAPSHOT_FETCH_LIMIT,
+	chooseNewerCartSnapshotEvent,
+	parseCartSnapshotEvent,
+	readLatestCartSnapshotWorkflow,
+} from './cartRead'
+export type { CartSnapshotEventLike, CartSnapshotFilter, CartSnapshotReadPort } from './cartRead'
 export {
 	buildCartSnapshotEventData,
 	CART_PERSISTENCE_D_TAG,

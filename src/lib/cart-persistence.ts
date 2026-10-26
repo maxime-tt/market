@@ -1,16 +1,15 @@
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { NormalizedCart } from '@/lib/stores/cart'
-import { isExpectedCartSnapshot } from '@/lib/schemas/cartPersistence'
 import {
 	createCartIntent,
 	normalizePersistedCart,
 	normalizeShippingForRestore,
-	parseCartPersistenceContent,
 	type BuyerCartProductInput,
 	type LiveProductRecord,
 	type LiveShippingRecord,
 	type PersistedCartContent,
 } from '@sdk/commerce/cart/cartIntent'
+import { chooseNewerCartSnapshotEvent } from '@sdk/commerce/cart/cartRead'
 
 export { normalizePersistedCart, normalizeShippingForRestore }
 
@@ -20,12 +19,6 @@ type ApplicationLiveShippingRecord = LiveShippingRecord
 export interface RehydratedCart {
 	cart: NormalizedCart
 	updatedAt: number
-}
-
-function compareStrings(a: string, b: string): number {
-	if (a < b) return -1
-	if (a > b) return 1
-	return 0
 }
 
 /** App-state adapter: converts the UI/store cart shape into an SDK cart intent. */
@@ -39,22 +32,13 @@ export function serializeCartIntent(cart: NormalizedCart): PersistedCartContent 
 	return createCartIntent(products)
 }
 
-/** Nostr event selection is kept in the application adapter, outside the SDK. */
+/**
+ * Nostr event selection now lives framework-free in `@sdk/commerce/cart/cartRead`
+ * (`chooseNewerCartSnapshotEvent`, store drain D1 slice 5); this adapter keeps the NDKEvent-shaped
+ * signature its callers use.
+ */
 export function chooseNewerCartSnapshot(events: Array<Pick<NDKEvent, 'kind' | 'tags' | 'content' | 'created_at' | 'id'>>): NDKEvent | null {
-	const validEvents = events.filter((event): event is NDKEvent => {
-		if (!isExpectedCartSnapshot(event)) return false
-		return parseCartPersistenceContent(event.content) !== null
-	})
-
-	if (validEvents.length === 0) return null
-
-	validEvents.sort((a, b) => {
-		const byCreatedAt = (b.created_at || 0) - (a.created_at || 0)
-		if (byCreatedAt !== 0) return byCreatedAt
-		return compareStrings(b.id || '', a.id || '')
-	})
-
-	return validEvents[0] ?? null
+	return chooseNewerCartSnapshotEvent(events) as unknown as NDKEvent | null
 }
 
 /** Converts normalized SDK cart intent into the existing app store model. */

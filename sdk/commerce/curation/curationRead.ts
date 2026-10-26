@@ -186,18 +186,64 @@ export async function readBlacklistSettingsWorkflow<E extends NostrEventLike>(
 }
 
 /**
+ * The newest event for any curation list from the app's own relay. Takes the host's `EventReadContext`;
+ * the binding pins it to the instance's main relay. Exactly one fetch and no deletion lookup: this is the
+ * `fetchLatestAppEvent` contract the pre-drain readers had (they sorted the set and took the newest).
+ */
+async function readNewestCurationListEvent<E extends NostrEventLike>(
+	context: EventReadContext<E>,
+	list: CurationListKey,
+	appPubkey: string,
+): Promise<E | null> {
+	const events = await context.fetch([buildCurationListFilter(list, appPubkey)])
+	return [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0] ?? null
+}
+
+/**
  * Discovery read: the newest event for a featured list (kind 30405 / 30003 / 30409 / 30000,
- * `d=featured_*`) from the app's own relay. Takes the host's `EventReadContext`; the binding pins it
- * to the instance's main relay. Exactly one fetch and no deletion lookup: this is the `fetchLatestAppEvent`
- * contract the pre-drain reader had (it sorted the set and took the newest; a missing list is null).
+ * `d=featured_*`) from the app's own relay. A missing list is null.
  */
 export async function readFeaturedWorkflow<E extends NostrEventLike>(
 	context: EventReadContext<E>,
 	list: FeaturedListKey,
 	appPubkey: string,
 ): Promise<E | null> {
-	const events = await context.fetch([buildCurationListFilter(list, appPubkey)])
-	return [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0] ?? null
+	return await readNewestCurationListEvent(context, list, appPubkey)
+}
+
+/**
+ * Admin-settings read (kind 30000, `d=admins`) over the host's `EventReadContext`. A missing app pubkey
+ * is an error (as the pre-drain reader); no published list is null, matching `fetchLatestAppEvent`.
+ */
+export async function readAdminSettingsWorkflow<E extends NostrEventLike>(
+	context: EventReadContext<E>,
+	appPubkey?: string,
+): Promise<AdminSettings<E> | null> {
+	if (!appPubkey) throw new Error('App pubkey is required')
+
+	const latestEvent = await readNewestCurationListEvent(context, 'admins', appPubkey)
+	if (!latestEvent) {
+		console.log(`No admin settings found for app pubkey: ${appPubkey}`)
+		return null
+	}
+
+	return parseAdminSettings(latestEvent, appPubkey)
+}
+
+/**
+ * Editor-settings read (kind 30000, `d=editors`) over the host's `EventReadContext`. No published list
+ * is the empty settings record (the pre-drain reader parsed a null event).
+ */
+export async function readEditorSettingsWorkflow<E extends NostrEventLike>(
+	context: EventReadContext<E>,
+	appPubkey?: string,
+): Promise<EditorSettings<E>> {
+	if (!appPubkey) throw new Error('App pubkey is required')
+
+	const latestEvent = await readNewestCurationListEvent(context, 'editors', appPubkey)
+	if (!latestEvent) console.log(`No editor settings found for app pubkey: ${appPubkey}`)
+
+	return parseEditorSettings(latestEvent)
 }
 
 export function getFormattedAdmins(adminSettings: AdminSettings<unknown> | null | undefined) {

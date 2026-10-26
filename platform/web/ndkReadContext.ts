@@ -41,6 +41,14 @@ export function getAppRelayUrl(): string | undefined {
 }
 
 /**
+ * Add explicit relays through the same action the migration read used before the drain (the store
+ * mirror is updated too). Lives here so the migration binding adds no `platform -> src` edge.
+ */
+export function addAppExplicitRelays(relayUrls: string[]): string[] {
+	return ndkActions.addExplicitRelay(relayUrls)
+}
+
+/**
  * Whether the host's NDK client is ready. Lives here so the config bindings can gate a read that
  * must fail open before the relay client exists, without importing `src/` themselves.
  */

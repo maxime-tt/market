@@ -131,6 +131,75 @@ export function resolveParsedV4VState(shareCount: number): V4VConfigurationState
 	return shareCount > 0 ? 'configured-nonzero' : 'unknown'
 }
 
+/**
+ * Host-supplied V4V read dependencies (store drain D1, slice 5): the share fetch and a per-recipient
+ * display-name resolver. The resolver may reject; the workflow catches it and falls back to `''`,
+ * exactly as the pre-drain loop did.
+ */
+export interface V4VConfigurationReadPort<E extends { content: string; created_at?: number } = { content: string; created_at?: number }> {
+	fetchShares(filter: V4VShareFilter): Promise<Iterable<E>>
+	resolveDisplayName(pubkey: string): Promise<string>
+}
+
+/** A parsed share plus the host-resolved display name; structurally the app's `V4VDTO`. */
+export interface V4VShareDTO extends V4VShareEntry {
+	name: string
+}
+
+export interface V4VConfigurationResult {
+	shares: V4VShareDTO[]
+	state: V4VConfigurationState
+}
+
+async function resolveShareDTOs<E extends { content: string }>(event: E, port: V4VConfigurationReadPort<E>): Promise<V4VShareDTO[]> {
+	return await Promise.all(
+		parseV4VShareEntries(event.content).map(async (entry) => {
+			let name = ''
+			try {
+				name = await port.resolveDisplayName(entry.pubkey)
+			} catch (error) {
+				console.warn('Error fetching profile for V4V share:', error)
+			}
+			return { id: entry.id, pubkey: entry.pubkey, name, percentage: entry.percentage }
+		}),
+	)
+}
+
+/**
+ * Discovery read: the newest V4V share event for `pubkey` over the host's relay port, then the parsed
+ * recipients with host-resolved names. Every failure is fail-soft to `{ shares: [], state: 'unknown' }`;
+ * an empty pubkey is unknown, and no event is `never-configured`.
+ */
+export async function readV4VConfigurationWorkflow<E extends { content: string; created_at?: number }>(
+	port: V4VConfigurationReadPort<E>,
+	pubkey: string,
+): Promise<V4VConfigurationResult> {
+	try {
+		if (!pubkey || pubkey.trim() === '') {
+			console.warn('fetchV4VConfiguration: Empty pubkey provided')
+			return { shares: [], state: 'unknown' }
+		}
+
+		const events = Array.from(await port.fetchShares(buildV4VSharesFilter(pubkey)))
+		if (events.length === 0) {
+			return { shares: [], state: 'never-configured' }
+		}
+
+		const mostRecentEvent = pickMostRecentV4VEvent(events)
+		const state = resolveV4VConfigurationState(mostRecentEvent)
+
+		if (!mostRecentEvent || state === 'never-configured' || state === 'configured-zero' || state === 'unknown') {
+			return { shares: [], state }
+		}
+
+		const shares = await resolveShareDTOs(mostRecentEvent, port)
+		return { shares, state: resolveParsedV4VState(shares.length) }
+	} catch (error) {
+		console.error('Error fetching V4V configuration:', error)
+		return { shares: [], state: 'unknown' }
+	}
+}
+
 export function collectV4VMerchantPubkeys(events: Iterable<{ pubkey?: string }>): string[] {
 	const pubkeySet = new Set<string>()
 	for (const event of events) {

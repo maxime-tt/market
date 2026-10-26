@@ -38,7 +38,9 @@ export {
 	parseFeaturedCollections,
 	parseFeaturedProducts,
 	parseFeaturedUsers,
+	readAdminSettingsWorkflow,
 	readBlacklistSettingsWorkflow,
+	readEditorSettingsWorkflow,
 	readFeaturedCoordinates,
 	readFeaturedWorkflow,
 } from './curationRead'

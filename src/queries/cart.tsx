@@ -1,30 +1,10 @@
-import { chooseNewerCartSnapshot } from '@/lib/cart-persistence'
-import { ndkActions } from '@/lib/stores/ndk'
-import type { PersistedCartContent } from '@/lib/schemas/cartPersistence'
-import { cartKeys } from '@/queries/queryKeyFactory'
-import { buildCartSnapshotFilter, parseCartSnapshotEvent } from '@sdk/commerce/cart/cartRead'
-import { queryOptions } from '@tanstack/react-query'
-
-export { cartKeys }
-
-export async function fetchLatestCartSnapshot(userPubkey: string): Promise<PersistedCartContent | null> {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-	if (!userPubkey) return null
-
-	const events = await ndkActions.fetchEventsWithTimeout(buildCartSnapshotFilter(userPubkey))
-
-	const latestEvent = chooseNewerCartSnapshot(Array.from(events))
-	if (!latestEvent) return null
-
-	return parseCartSnapshotEvent(latestEvent)
-}
-
-export const cartSnapshotQueryOptions = (userPubkey: string) =>
-	queryOptions({
-		queryKey: cartKeys.byPubkey(userPubkey),
-		queryFn: () => fetchLatestCartSnapshot(userPubkey),
-		enabled: !!userPubkey,
-		staleTime: 60 * 1000,
-		gcTime: 5 * 60 * 1000,
-	})
+/**
+ * Shim — the cart-snapshot read binding moved to `platform/web/cart/cartQuery.ts`
+ * (store drain D1, slice 5).
+ *
+ * The framework-free read (`readLatestCartSnapshotWorkflow`) and the snapshot selection live in
+ * `@sdk/commerce/cart/cartRead`; the React binding keeps the query options and resolves its relay port
+ * from `platform/web/ndkReadContext.ts`. The store's `fetchLatestCartSnapshot` keeps the same
+ * `cartKeys.byPubkey` target. Vacated path kept as a re-export so no call site breaks; deleted in E1.
+ */
+export * from '@platform/web/cart/cartQuery'
