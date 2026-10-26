@@ -1,33 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import { configKeys } from './queryKeyFactory'
-import type { PublicAppConfig } from '@/lib/instance-config'
-import { configActions } from '@/lib/stores/config'
-import { parsePublicConfigEnvelope } from '@sdk/core/publicConfig'
-
-let cachedConfig: PublicAppConfig | null = null
-
-const fetchConfig = async (): Promise<PublicAppConfig> => {
-	const response = await fetch('/api/config')
-	if (!response.ok) {
-		throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
-	}
-	const parsed = parsePublicConfigEnvelope<PublicAppConfig>(await response.json())
-	if (!parsed.ok) throw new Error(`Invalid /api/config response: ${parsed.error.message}`)
-	const config = parsed.value
-	console.log('Fetched config:', config)
-	cachedConfig = config
-	configActions.setConfig(config)
-	return config
-}
-
-export const getConfig = () => cachedConfig
-
-export const useConfigQuery = () => {
-	return useQuery({
-		queryKey: configKeys.all,
-		queryFn: fetchConfig,
-		staleTime: cachedConfig?.needsSetup ? 0 : Infinity,
-		retry: 3,
-		refetchOnWindowFocus: cachedConfig?.needsSetup ? true : false,
-	})
-}
+/**
+ * Shim — the public app-config read binding moved to `platform/web/config/publicConfigQuery.ts`
+ * (store drain D1, slice 1).
+ *
+ * The framework-free envelope validation stays in `sdk/core/publicConfig`
+ * (`parsePublicConfigEnvelope`); the `/api/config` fetch, the `getConfig` memory and the
+ * `useConfigQuery` hook live in the Platform config feature. The binding import is the only
+ * `src -> platform` edge this shim owns; it imports no `@/lib/stores/ndk`. Vacated path kept
+ * as a re-export so no call site breaks; deleted in E1.
+ */
+export * from '@platform/web/config/publicConfigQuery'

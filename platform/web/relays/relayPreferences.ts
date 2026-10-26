@@ -1,12 +1,16 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createNdkPublishContext, getAppNdk, getAppSigner } from '@platform/web/ndkPublishContext'
+import { createNdkReadContext } from '@platform/web/ndkReadContext'
 import {
 	DEFAULT_RELAY_PREFERENCES,
 	publishRelayPreferencesWorkflow,
+	readRelayPreferencesWorkflow,
+	relayPreferencesKeys,
 	RELAY_PREFERENCES_D_TAG,
 	type RelayPreferencesSettings,
 } from '@sdk/core/relays'
 
-export { DEFAULT_RELAY_PREFERENCES }
+export { DEFAULT_RELAY_PREFERENCES, relayPreferencesKeys }
 export type { RelayPreferencesSettings }
 
 /**
@@ -35,4 +39,62 @@ export async function publishRelayPreferences(preferences: RelayPreferencesSetti
  */
 export function getRelayPreferencesDTag(): string {
 	return RELAY_PREFERENCES_D_TAG
+}
+
+/**
+ * Fetches user's relay preferences (kind 30078 with d-tag) through the app read
+ * context. The framework-free read model (`readRelayPreferencesWorkflow`,
+ * `sdk/core/relays`) takes the port as a parameter; the port comes from
+ * `platform/web/ndkReadContext.ts`, so no part of the read imports the SDK NDK store.
+ *
+ * @param userPubkey The pubkey of the user to fetch preferences for
+ * @returns RelayPreferencesSettings or null if not found
+ */
+export async function fetchRelayPreferences(userPubkey: string): Promise<RelayPreferencesSettings | null> {
+	return readRelayPreferencesWorkflow(createNdkReadContext(), userPubkey)
+}
+
+/**
+ * Hook to fetch user's relay preferences from Nostr
+ * Returns default preferences if none are saved
+ */
+export function useRelayPreferences(pubkey: string | undefined) {
+	return useQuery({
+		queryKey: relayPreferencesKeys.user(pubkey ?? ''),
+		queryFn: async () => {
+			const prefs = await fetchRelayPreferences(pubkey!)
+			return prefs ?? DEFAULT_RELAY_PREFERENCES
+		},
+		enabled: !!pubkey,
+		staleTime: 5 * 60 * 1000, // 5 minutes
+		gcTime: 10 * 60 * 1000, // 10 minutes
+	})
+}
+
+/**
+ * Publishes the user's relay preferences and invalidates its read. The NDK client used
+ * for invalidation comes from the Platform publish bridge, not the SDK store.
+ */
+export function usePublishRelayPreferences() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		mutationFn: (preferences: RelayPreferencesSettings) => publishRelayPreferences(preferences),
+		onSuccess: async () => {
+			// Get user pubkey to invalidate their preferences
+			const ndk = getAppNdk()
+			if (ndk?.signer) {
+				try {
+					const user = await ndk.signer.user()
+					if (user?.pubkey) {
+						queryClient.invalidateQueries({ queryKey: relayPreferencesKeys.user(user.pubkey) })
+					}
+				} catch (e) {
+					console.error('Failed to invalidate relay preferences query:', e)
+				}
+			}
+			// Also invalidate all preferences queries
+			queryClient.invalidateQueries({ queryKey: relayPreferencesKeys.all })
+		},
+	})
 }

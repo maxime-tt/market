@@ -17,5 +17,9 @@ export {
 	parseRelayListEvents,
 	parseRelayPreferencesContent,
 	pickMostRecentTimestampedEvent,
+	readRelayListWorkflow,
+	readRelayPreferencesWorkflow,
+	relayListKeys,
+	relayPreferencesKeys,
 } from './relayListRead'
 export type { RelayListFilter } from './relayListRead'
