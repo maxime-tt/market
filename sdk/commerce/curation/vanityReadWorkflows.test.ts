@@ -1,0 +1,104 @@
+import { describe, expect, test } from 'bun:test'
+import type { EventFilter } from '../../core/event-store/filter'
+import { matchesFilter } from '../../core/event-store/filter'
+import { createMemoryEventStore } from '../../core/event-store/memoryEventStore'
+import type { EventReadContext } from '../../core/event-store/read'
+import type { NostrEventLike } from '../../core/nostr/eventLike'
+import { readVanitySettingsWorkflow } from './vanityRead'
+
+const APP = 'a'.repeat(64)
+const D_TAG = 'vanity-urls'
+
+const registry = (overrides: Partial<NostrEventLike>): NostrEventLike => ({
+	id: 'registry',
+	pubkey: APP,
+	kind: 30000,
+	created_at: 100,
+	content: '',
+	tags: [['d', D_TAG]],
+	...overrides,
+})
+
+/** Fake relay: answers every filter from a fixed event list and records the requests. */
+function createContext(relayEvents: NostrEventLike[]): EventReadContext & { requests: EventFilter[][] } {
+	const requests: EventFilter[][] = []
+	return {
+		requests,
+		store: createMemoryEventStore(),
+		fetch: async (filters) => {
+			requests.push([...filters])
+			return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
+		},
+	}
+}
+
+describe('readVanitySettingsWorkflow', () => {
+	test('returns the parsed registry entries', async () => {
+		const context = createContext([
+			registry({
+				tags: [
+					['d', D_TAG],
+					['vanity', 'Shop', 'b'.repeat(64), '999'],
+				],
+			}),
+		])
+
+		const settings = await readVanitySettingsWorkflow(context, APP)
+
+		expect(settings?.entries).toEqual([{ vanityName: 'shop', pubkey: 'b'.repeat(64), validUntil: 999 }])
+		expect(settings?.lastUpdated).toBe(100)
+		expect(settings?.event?.id).toBe('registry')
+	})
+
+	test('an addressable registry: the newest version wins', async () => {
+		const context = createContext([
+			registry({
+				id: 'old',
+				created_at: 100,
+				tags: [
+					['d', D_TAG],
+					['vanity', 'old', 'b'.repeat(64), '1'],
+				],
+			}),
+			registry({
+				id: 'new',
+				created_at: 200,
+				tags: [
+					['d', D_TAG],
+					['vanity', 'new', 'c'.repeat(64), '1'],
+				],
+			}),
+		])
+
+		expect((await readVanitySettingsWorkflow(context, APP))?.entries.map((entry) => entry.vanityName)).toEqual(['new'])
+	})
+
+	test('a NIP-09 coordinate deletion hides the registry', async () => {
+		const context = createContext([
+			registry({ id: 'registry' }),
+			registry({ id: 'deletion', kind: 5, created_at: 300, tags: [['a', `30000:${APP}:${D_TAG}`]] }),
+		])
+
+		expect(await readVanitySettingsWorkflow(context, APP)).toEqual({ entries: [], lastUpdated: 0, event: null })
+	})
+
+	test('asks for the app+d-tag filter, then the coordinate deletions', async () => {
+		const context = createContext([registry({ id: 'r1' })])
+
+		await readVanitySettingsWorkflow(context, APP)
+
+		expect(context.requests[0]).toEqual([{ kinds: [30000], authors: [APP], '#d': [D_TAG], limit: 1 }])
+		expect(context.requests[1]).toEqual([{ kinds: [5], authors: [APP], '#a': [`30000:${APP}:${D_TAG}`] }])
+	})
+
+	test('rejects a missing app pubkey before any relay I/O', async () => {
+		const context = createContext([registry({})])
+
+		await expect(readVanitySettingsWorkflow(context, undefined)).rejects.toThrow('App pubkey is required')
+		expect(context.requests).toEqual([])
+	})
+
+	test('no registry yields the empty settings record', async () => {
+		expect(await readVanitySettingsWorkflow(createContext([]), APP)).toEqual({ entries: [], lastUpdated: 0, event: null })
+	})
+})
