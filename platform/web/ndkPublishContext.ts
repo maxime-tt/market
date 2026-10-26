@@ -5,6 +5,17 @@ import type { EventPublishContext } from '@sdk/core/ports/eventPublish'
 export type NdkClient = NonNullable<ConstructorParameters<typeof NDKEvent>[0]>
 
 /**
+ * The app-singleton accessors, re-homed here so host feature bindings under
+ * `platform/web/<feature>/` can resolve the NDK client, the signer and the
+ * publish action without importing `src/lib/stores/ndk` — the gated
+ * `platform -> src` boundary. The `ndkActions` edge itself already lives in this
+ * file, so routing bindings through these adds no cross-tree import.
+ */
+export const getAppNdk = () => ndkActions.getNDK()
+export const getAppSigner = () => ndkActions.getSigner()
+export const publishAppEvent = (event: NDKEvent) => ndkActions.publishEvent(event)
+
+/**
  * Platform adapter: binds the web host's NDK client and signer to the SDK's
  * explicit publish context. SDK workflows never read the NDK singleton.
  */

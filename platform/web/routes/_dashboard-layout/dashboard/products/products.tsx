@@ -1,5 +1,5 @@
 import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
-import { publishShareProductNote } from '@/publish/shareNotes'
+import { publishShareProductNote } from '@platform/web/messaging/shareNotes'
 import { Media } from '@ui/shared/media'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
