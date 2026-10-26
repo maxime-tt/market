@@ -1,9 +1,10 @@
-import type { PersistedCartContent } from '@/lib/schemas/cartPersistence'
-import type { NDKSigner } from '@/lib/nostr/ndk-events'
-import { createNdkPublishContext, type NdkClient as NDK } from '@platform/web/ndkPublishContext'
-import { publishCartSnapshotWorkflow } from '@sdk/commerce/cart'
-
-export async function publishCartSnapshot(snapshot: PersistedCartContent, signer: NDKSigner, ndk: NDK): Promise<string> {
-	const event = await publishCartSnapshotWorkflow(await createNdkPublishContext(ndk, signer), snapshot)
-	return event.id
-}
+/**
+ * Shim — the cart snapshot publish binding moved to `platform/web/cart/publishCartSnapshot.ts`
+ * (store drain D2, slice 5).
+ *
+ * The binding resolves the app NDK/signer through the Platform publish bridge
+ * (`@platform/web/ndkPublishContext`) and publishes the SDK cart-snapshot workflow, so a
+ * Platform host module can consume it without a counted `platform -> src` edge. Vacated path
+ * kept as a re-export so no call site breaks; deleted in E1.
+ */
+export * from '@platform/web/cart/publishCartSnapshot'
