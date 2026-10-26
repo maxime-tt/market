@@ -1,3 +1,5 @@
+import { readThroughStore, type EventReadContext } from '../event-store/read'
+import type { NostrEventLike } from '../nostr/eventLike'
 import { pickLatestEvent, type ProfileFilter } from './profileRead'
 
 export const NIP05_REGISTRY = { kind: 30000, dTag: 'nip05-names' } as const
@@ -73,4 +75,19 @@ export function getExpiredNip05ForPubkey(
 ): Nip05Entry[] {
 	if (!nip05Settings || !nip05Settings.entries || !pubkey) return []
 	return nip05Settings.entries.filter((e) => e.pubkey === pubkey && e.validUntil <= now)
+}
+
+/**
+ * Discovery read: the app's NIP-05 registry (kind 30000, `d=nip05-names`), merged through the
+ * host's `EventReadContext` so superseded and author-deleted versions never surface. Throws when
+ * no app pubkey is supplied; no published registry yields an empty settings record.
+ */
+export async function readNip05SettingsWorkflow<E extends NostrEventLike>(
+	context: EventReadContext<E>,
+	appPubkey?: string,
+): Promise<Nip05Settings<E> | null> {
+	if (!appPubkey) throw new Error('App pubkey is required')
+
+	const events = await readThroughStore(context, [buildNip05RegistryFilter(appPubkey, 1)])
+	return parseNip05Settings(events)
 }

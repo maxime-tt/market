@@ -18,8 +18,22 @@
  * lazily.
  */
 import { Store, useStore } from '@tanstack/react-store'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import { getAppNdk, type NDKEvent } from '@platform/web/ndkPublishContext'
 import { vanityState } from '@sdk/config/vanity'
 import type { VanityState } from '@sdk/config/vanity'
+import {
+	buildVanityRegistryFilter,
+	getExpiredVanityForPubkey,
+	getVanityForPubkey,
+	isVanityAvailable,
+	readVanitySettingsWorkflow,
+	resolveVanity,
+	type VanitySettings as SdkVanitySettings,
+} from '@sdk/commerce/curation'
+import { configKeys } from '@sdk/core/query/queryKeyFactory'
 
 /** A live, reactive view of the vanity state. */
 export interface VanityBinding {
@@ -52,4 +66,63 @@ export const vanityBinding: VanityBinding = createVanityBinding()
 /** Read the vanity state reactively. The hook a rewired component uses. */
 export function useVanityState(): VanityState {
 	return useStore(vanityBinding.store)
+}
+
+// --- the vanity relay read (store drain D1, slice 2) ---------------------------------------------
+//
+// Separate concern from the state bridge above: `useVanitySettings` reads the app's kind-30000
+// `d=vanity-urls` registry from the relays. The read logic is framework-free
+// (`readVanitySettingsWorkflow`, `sdk/commerce/curation`); this binding owns the react-query hook,
+// the live invalidation subscription, and resolves the port from
+// `platform/web/ndkReadContext.ts`, so no part of the read imports `@/lib/stores/ndk`. The query
+// key is literal-identical to the pre-drain value.
+
+export { getExpiredVanityForPubkey, getVanityForPubkey, isVanityAvailable, resolveVanity }
+export type { VanityEntry } from '@sdk/commerce/curation'
+
+export type VanitySettings = SdkVanitySettings<NDKEvent>
+
+/**
+ * Fetches vanity registry (kind 30000 with d=vanity-urls) for the app
+ */
+export const fetchVanitySettings = async (appPubkey?: string): Promise<VanitySettings | null> =>
+	readVanitySettingsWorkflow(createNdkReadContext(), appPubkey)
+
+/**
+ * Hook to fetch vanity settings for the app
+ */
+export const useVanitySettings = (appPubkey?: string) => {
+	const queryClient = useQueryClient()
+	const ndk = getAppNdk()
+
+	// Set up a live subscription to monitor vanity changes
+	useEffect(() => {
+		if (!appPubkey || !ndk) return
+
+		const vanityFilter = buildVanityRegistryFilter(appPubkey)
+
+		const subscription = ndk.subscribe(vanityFilter, {
+			closeOnEose: false,
+		})
+
+		// Event handler for vanity updates
+		subscription.on('event', () => {
+			queryClient.invalidateQueries({ queryKey: configKeys.vanity(appPubkey) })
+		})
+
+		// Clean up subscription when unmounting
+		return () => {
+			subscription.stop()
+		}
+	}, [appPubkey, ndk, queryClient])
+
+	return useQuery({
+		queryKey: configKeys.vanity(appPubkey || ''),
+		queryFn: () => fetchVanitySettings(appPubkey),
+		enabled: !!appPubkey,
+		staleTime: 30000,
+		refetchOnMount: true,
+		refetchOnWindowFocus: true,
+		refetchOnReconnect: true,
+	})
 }

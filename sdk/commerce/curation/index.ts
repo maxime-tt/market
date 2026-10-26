@@ -60,6 +60,7 @@ export {
 	isVanityAvailable,
 	parseVanitySettings,
 	readVanityEntries,
+	readVanitySettingsWorkflow,
 	resolveVanity,
 	VANITY_REGISTRY,
 } from './vanityRead'

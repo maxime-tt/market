@@ -52,6 +52,13 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/queries/relay-list.tsx', // store drain D1 slice 1; shim deleted in E1
 	'src/queries/relay-preferences.tsx', // store drain D1 slice 1; shim deleted in E1
 	'src/queries/config.tsx', // store drain D1 slice 1; shim deleted in E1
+	'src/queries/authors.tsx', // store drain D1 slice 2; shim deleted in E1
+	'src/queries/posts.tsx', // store drain D1 slice 2; shim deleted in E1
+	'src/queries/bugReports.tsx', // store drain D1 slice 2; shim deleted in E1
+	'src/queries/nip05.tsx', // store drain D1 slice 2; shim deleted in E1
+	'src/queries/vanity.tsx', // store drain D1 slice 2; shim deleted in E1
+	'src/queries/reactions.tsx', // store drain D1 slice 2; shim deleted in E1
+	'src/queries/comments.tsx', // store drain D1 slice 2; shim deleted in E1
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
 	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
 	'src/hooks/useAuctionWinMonitor.ts', // pre-existing; owner leaves src/ in D3

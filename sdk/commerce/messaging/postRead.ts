@@ -1,3 +1,4 @@
+import { readThroughStore, type EventReadContext } from '../../core/event-store/read'
 import type { NostrEventLike } from '../../core/nostr/eventLike'
 
 export const TEXT_NOTE_KIND = 1
@@ -36,4 +37,25 @@ export function parsePost(event: NostrEventLike): NostrPost {
 /** Newest first; sorts in place. */
 export function sortPostsNewestFirst(posts: NostrPost[]): NostrPost[] {
 	return posts.sort((a, b) => b.createdAt - a.createdAt)
+}
+
+/**
+ * Discovery read: the most recent kind-1 text notes, merged through the host's `EventReadContext`
+ * so author-deleted notes never surface.
+ */
+export async function readRecentPostsWorkflow<E extends NostrEventLike>(context: EventReadContext<E>): Promise<NostrPost[]> {
+	const events = await readThroughStore(context, [buildRecentPostsFilter()])
+	return sortPostsNewestFirst(events.map(parsePost))
+}
+
+/** Single-note read by id; a missing note (or one its author deleted) is an error. */
+export async function readPostWorkflow<E extends NostrEventLike>(context: EventReadContext<E>, id: string): Promise<NostrPost> {
+	const events = await readThroughStore(context, [buildPostByIdFilter(id)])
+	const event = events[0]
+
+	if (!event) {
+		throw new Error('Post not found')
+	}
+
+	return parsePost(event)
 }

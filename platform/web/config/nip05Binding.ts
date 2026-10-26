@@ -18,8 +18,21 @@
  * `src/lib/stores/nip05.ts` — so consumers migrate to `useNip05State` lazily.
  */
 import { Store, useStore } from '@tanstack/react-store'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import { getAppNdk, type NDKEvent } from '@platform/web/ndkPublishContext'
 import { nip05State } from '@sdk/config/nip05'
 import type { Nip05State } from '@sdk/config/nip05'
+import {
+	buildNip05RegistryFilter,
+	getExpiredNip05ForPubkey,
+	getNip05ForPubkey,
+	isNip05Available,
+	readNip05SettingsWorkflow,
+	type Nip05Settings as SdkNip05Settings,
+} from '@sdk/core/profile'
+import { configKeys } from '@sdk/core/query/queryKeyFactory'
 
 /** A live, reactive view of the NIP-05 state. */
 export interface Nip05Binding {
@@ -52,4 +65,61 @@ export const nip05Binding: Nip05Binding = createNip05Binding()
 /** Read the NIP-05 state reactively. The hook a rewired component uses. */
 export function useNip05State(): Nip05State {
 	return useStore(nip05Binding.store)
+}
+
+// --- the NIP-05 relay read (store drain D1, slice 2) ---------------------------------------------
+//
+// Separate concern from the state bridge above: `useNip05Settings` reads the app's kind-30000
+// `d=nip05-names` registry from the relays. The read logic is framework-free
+// (`readNip05SettingsWorkflow`, `sdk/core/profile`); this binding owns the react-query hook, the
+// live invalidation subscription, and resolves the port from `platform/web/ndkReadContext.ts`,
+// so no part of the read imports `@/lib/stores/ndk`. The query key is literal-identical to the
+// pre-drain value.
+
+export { getExpiredNip05ForPubkey, getNip05ForPubkey, isNip05Available }
+export type { Nip05Entry } from '@sdk/core/profile'
+
+export type Nip05Settings = SdkNip05Settings<NDKEvent>
+
+/**
+ * Fetches NIP-05 registry (kind 30000 with d=nip05-names) for the app
+ */
+export const fetchNip05Settings = async (appPubkey?: string): Promise<Nip05Settings | null> =>
+	readNip05SettingsWorkflow(createNdkReadContext(), appPubkey)
+
+/**
+ * Hook to fetch NIP-05 settings for the app
+ */
+export const useNip05Settings = (appPubkey?: string) => {
+	const queryClient = useQueryClient()
+	const ndk = getAppNdk()
+
+	// Set up a live subscription to monitor nip05 changes
+	useEffect(() => {
+		if (!appPubkey || !ndk) return
+
+		const nip05Filter = buildNip05RegistryFilter(appPubkey)
+
+		const subscription = ndk.subscribe(nip05Filter, {
+			closeOnEose: false,
+		})
+
+		subscription.on('event', () => {
+			queryClient.invalidateQueries({ queryKey: configKeys.nip05(appPubkey) })
+		})
+
+		return () => {
+			subscription.stop()
+		}
+	}, [appPubkey, ndk, queryClient])
+
+	return useQuery({
+		queryKey: configKeys.nip05(appPubkey || ''),
+		queryFn: () => fetchNip05Settings(appPubkey),
+		enabled: !!appPubkey,
+		staleTime: 30000,
+		refetchOnMount: true,
+		refetchOnWindowFocus: true,
+		refetchOnReconnect: true,
+	})
 }

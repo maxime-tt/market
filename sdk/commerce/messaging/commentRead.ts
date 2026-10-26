@@ -1,4 +1,5 @@
 import { isAddressableKind } from 'nostr-tools/kinds'
+import type { EventReadContext } from '../../core/event-store/read'
 import { getEventAddress, type NostrEventLike } from '../../core/nostr/eventLike'
 import { COMMENT_KIND } from './commentEvents'
 
@@ -156,4 +157,24 @@ export function buildCommentThreads<E>(comments: CommentRecord<E>[]): CommentThr
 	commentThreads.forEach((thread) => sortCommentThreadByDate(thread))
 
 	return commentThreads
+}
+
+/**
+ * Discovery read: the NIP-22 comments on a target, assembled from the three host fetches
+ * (target scope, replies, and the broad fallback scan for addressable targets). The host's
+ * `EventReadContext` carries the relay policy and the 8 s fetch budget.
+ */
+export async function readProductCommentsWorkflow<E extends NostrEventLike>(
+	context: EventReadContext<E>,
+	target: E,
+): Promise<CommentRecord<E>[]> {
+	const { filters, replyFilters, fallbackFilters } = buildCommentFilters(target)
+
+	const [events, replies, fallbackEvents] = await Promise.all([
+		context.fetch(filters),
+		context.fetch(replyFilters),
+		fallbackFilters ? context.fetch(fallbackFilters) : Promise.resolve([] as E[]),
+	])
+
+	return mergeCommentEvents(target, events, replies, fallbackEvents)
 }

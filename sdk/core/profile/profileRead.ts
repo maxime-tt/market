@@ -1,3 +1,5 @@
+import { readThroughStore, type EventReadContext } from '../event-store/read'
+import type { NostrEventLike } from '../nostr/eventLike'
 import { PROFILE_METADATA_KIND } from './profilePublish'
 
 // A type alias (not interface) so it stays assignable to relay-client filters with `#${string}` index signatures.
@@ -100,4 +102,27 @@ export function summarizeZapMethods(methods: Iterable<string>): ZapCapabilityInf
 		hasLightning: list.includes('nip57'),
 		hasCashu: list.includes('nip61'),
 	}
+}
+
+/** Exactly 64 hex characters — the same rule as the legacy `isValidHexKey` (`HEX_KEYS_REGEX`). */
+export function isValidProfilePubkey(pubkey: string): boolean {
+	return /^(?:[0-9a-fA-F]{64})$/.test(pubkey)
+}
+
+/**
+ * Discovery read: the newest kind-0 profile metadata for `pubkey`, merged through the host's
+ * `EventReadContext` so superseded and author-deleted versions never surface. A malformed pubkey
+ * is rejected before any relay I/O; no metadata is an error, matching the historical reader.
+ */
+export async function readAuthorWorkflow<E extends NostrEventLike>(context: EventReadContext<E>, pubkey: string): Promise<NostrAuthor> {
+	if (!isValidProfilePubkey(pubkey)) throw new Error('Author pubkey is required')
+
+	const events = await readThroughStore(context, [buildProfileMetadataFilter(pubkey)])
+	const latestEvent = pickLatestEvent(events)
+
+	if (!latestEvent) {
+		throw new Error('Author not found')
+	}
+
+	return parseNostrAuthor(latestEvent)
 }

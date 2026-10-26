@@ -1,3 +1,5 @@
+import { readThroughStore, type EventReadContext } from '../../core/event-store/read'
+import type { NostrEventLike } from '../../core/nostr/eventLike'
 import type { CurationFilter, CurationListEvent } from './curationRead'
 
 export const VANITY_REGISTRY = { kind: 30000, dTag: 'vanity-urls' } as const
@@ -78,4 +80,23 @@ export function getExpiredVanityForPubkey(
 ): VanityEntry[] {
 	if (!vanitySettings || !vanitySettings.entries || !pubkey) return []
 	return vanitySettings.entries.filter((e) => e.pubkey === pubkey && e.validUntil <= now)
+}
+
+/**
+ * Discovery read: the app's vanity registry (kind 30000, `d=vanity-urls`), merged through the
+ * host's `EventReadContext` so superseded and author-deleted versions never surface. Throws when
+ * no app pubkey is supplied; no published registry yields an empty settings record.
+ */
+export async function readVanitySettingsWorkflow<E extends NostrEventLike>(
+	context: EventReadContext<E>,
+	appPubkey?: string,
+): Promise<VanitySettings<E> | null> {
+	if (!appPubkey) throw new Error('App pubkey is required')
+
+	const events = await readThroughStore(context, [buildVanityRegistryFilter(appPubkey, 1)])
+	const eventArray = Array.from(events)
+
+	if (eventArray.length === 0) console.log(`No vanity registry found for app pubkey: ${appPubkey}`)
+
+	return parseVanitySettings(eventArray)
 }

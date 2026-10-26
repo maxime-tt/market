@@ -1,4 +1,5 @@
 import { isAddressableKind } from 'nostr-tools/kinds'
+import type { EventReadContext } from '../../core/event-store/read'
 import { getEventAddress, type NostrEventLike } from '../../core/nostr/eventLike'
 import { REACTION_KIND } from './reactionEvents'
 
@@ -135,4 +136,26 @@ export function removeDeletedReactions<R extends { id: string }>(reactions: R[],
 /** Newest first; sorts in place like the original fetch path. */
 export function sortReactionsNewestFirst<R extends { createdAt: number }>(reactions: R[]): R[] {
 	return reactions.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1))
+}
+
+/**
+ * Discovery read: NIP-25 reactions on a target, latest per author/target/raw emoji, minus the ones
+ * their author deleted (NIP-09).
+ *
+ * Deliberately two plain fetches through the host's `EventReadContext` rather than
+ * `readThroughStore`: the historical reader de-duplicates to the latest reaction *first* and only
+ * then drops the deleted ids, so a deleted newest reaction must not resurrect an older one. A
+ * store-backed read removes the deletion before the de-duplication and would change that answer.
+ */
+export async function readEventReactionsWorkflow<E extends NostrEventLike>(
+	context: EventReadContext<E>,
+	targetEvent: E,
+): Promise<ReactionRecord<E>[]> {
+	const events = await context.fetch([buildReactionFilter(targetEvent)])
+	const reactions = events.map((event) => parseReaction(event, targetEvent))
+
+	const reactionsUnique = filterForLatestReactionsOnly(reactions)
+	const deletionEvents = await context.fetch([buildReactionDeletionFilter(reactionsUnique.map((reaction) => reaction.id))])
+
+	return sortReactionsNewestFirst(removeDeletedReactions(reactionsUnique, collectDeletedEventIds(deletionEvents)))
 }

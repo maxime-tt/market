@@ -7,10 +7,12 @@ export {
 	getNormalizedProfileNip05,
 	getNormalizedProfilePicture,
 	isNpubIdentifier,
+	isValidProfilePubkey,
 	normalizeOptionalPubkey,
 	normalizeOptionalString,
 	parseNostrAuthor,
 	pickLatestEvent,
+	readAuthorWorkflow,
 	summarizeZapMethods,
 } from './profileRead'
 export type { NostrAuthor, ProfileDisplayFields, ProfileFilter, ProfileMetadataEvent, ZapCapabilityInfo, ZapMethod } from './profileRead'
@@ -22,5 +24,6 @@ export {
 	NIP05_REGISTRY,
 	parseNip05Settings,
 	readNip05Entries,
+	readNip05SettingsWorkflow,
 } from './nip05'
 export type { Nip05Entry, Nip05RegistryEvent, Nip05Settings } from './nip05'
