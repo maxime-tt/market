@@ -6,7 +6,7 @@ import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-lis
 import { Button } from '@ui/wrappers/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { authStore } from '@/lib/stores/auth'
-import { notificationActions } from '@/lib/stores/notifications'
+import { readMarks } from '@platform/web/notifications'
 import { productFormActions } from '@/lib/stores/product'
 import { useDeleteProductMutation } from '@/publish/products'
 import { getProductId, getProductTitle, productQueryOptions, productsByPubkeyQueryOptions } from '@/queries/products'
@@ -111,7 +111,7 @@ function ProductsOverviewComponent() {
 
 	useEffect(() => {
 		if (isAuthenticated) {
-			notificationActions.markProductCommentsSeen()
+			readMarks.markProductCommentsSeen()
 		}
 	}, [isAuthenticated])
 

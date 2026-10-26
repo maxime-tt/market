@@ -4,7 +4,7 @@ import { PrivateOrderDetailsCard } from '@/components/orders/PrivateOrderDetails
 import { Button } from '@ui/wrappers/button'
 import { LoadingState } from '@ui/shared/loading-state'
 import { authStore } from '@/lib/stores/auth'
-import { notificationActions } from '@/lib/stores/notifications'
+import { readMarks } from '@platform/web/notifications'
 import { isValidHexKey, isValidNpub } from '@/lib/utils'
 import { sendChatMessage, useConversationMessages } from '@/queries/messages'
 import { useOrdersBySeller } from '@/queries/orders'
@@ -64,7 +64,7 @@ function ConversationDetailComponent() {
 
 	// Mark this conversation as seen when viewing it
 	useEffect(() => {
-		notificationActions.markConversationSeen(otherUserPubkey)
+		readMarks.markConversationSeen(otherUserPubkey)
 	}, [otherUserPubkey])
 
 	const sendMessageMutation = useMutation({

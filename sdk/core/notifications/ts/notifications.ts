@@ -161,6 +161,12 @@ export function createNotifications<TType extends string = string, TPayload = un
 			lastSeenByScope.set(scope, at ?? clock())
 			changed()
 		},
+		hydrateMark(scope, at) {
+			// Rehydration only: never touch the count. Monotonic so replaying an older stored mark cannot un-read.
+			if (at <= (lastSeenByScope.get(scope) ?? 0)) return
+			lastSeenByScope.set(scope, at)
+			changed()
+		},
 		markAllSeen(at) {
 			const stamp = at ?? clock()
 			counts.clear()

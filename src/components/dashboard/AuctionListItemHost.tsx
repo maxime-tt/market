@@ -1,5 +1,5 @@
 import { ExternalLink, Hourglass } from 'lucide-react'
-import { useSelector } from '@tanstack/react-store'
+import { useStore } from '@tanstack/react-store'
 import { Link } from '@tanstack/react-router'
 import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'
 import { getOrderReference } from '@sdk/commerce/orders'
@@ -7,7 +7,7 @@ import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
-import { notificationActions, notificationStore } from '@/lib/stores/notifications'
+import { appNotificationsBinding, notificationScopes, readMarkFamilies, readMarks, scopedLastSeenOf } from '@/lib/notificationProducers'
 import {
 	getAuctionBiddingCutoffAt,
 	getAuctionBidCountFromBids,
@@ -81,30 +81,26 @@ export function AuctionListItemHost({
 		getAuctionRootEventId(auction) || (getAuctionId(auction) ? `30408:${auction.pubkey}:${getAuctionId(auction)}` : auction.id)
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const now = Math.floor(Date.now() / 1000)
-	const {
-		lastSeenTimestamps: {
-			auctionBids: lastSeenAuctionBidsGlobal,
-			auctionBidsByAuction,
-			auctionComments: lastSeenAuctionCommentsGlobal,
-			auctionCommentsByAuction,
-			auctionEventComments: lastSeenAuctionEventCommentsGlobal,
-			auctionEventCommentsByAuction,
-			auctionLive: lastSeenAuctionLiveGlobal,
-			auctionLiveByAuction,
-			auctionSettlementBegins: lastSeenAuctionSettlementBeginsGlobal,
-			auctionSettlementBeginsByAuction,
-		},
-	} = useSelector(notificationStore)
-	const lastSeenAuctionBids = Math.max(lastSeenAuctionBidsGlobal, auctionBidsByAuction[auctionNotificationKey] || 0)
-	const lastSeenAuctionComments = Math.max(lastSeenAuctionCommentsGlobal, auctionCommentsByAuction[auctionNotificationKey] || 0)
-	const lastSeenAuctionEventComments = Math.max(
-		lastSeenAuctionEventCommentsGlobal,
-		auctionEventCommentsByAuction[auctionNotificationKey] || 0,
+	// Read-state lives on the notification mechanism's ledger (store drain C4), not the legacy store. The
+	// selector keeps the component reactive to a mark being set elsewhere; `scopedLastSeenOf` reproduces the
+	// legacy `max(familyGlobal, subjectMark)` exactly.
+	const ledger = useStore(appNotificationsBinding.store, (snapshot) => snapshot.ledger)
+	const lastSeenAuctionBids = scopedLastSeenOf(ledger, readMarkFamilies.auctionBids, notificationScopes.auctionBids(auctionNotificationKey))
+	const lastSeenAuctionComments = scopedLastSeenOf(
+		ledger,
+		readMarkFamilies.auctionComments,
+		notificationScopes.auctionComments(auctionNotificationKey),
 	)
-	const lastSeenAuctionLive = Math.max(lastSeenAuctionLiveGlobal, auctionLiveByAuction[auctionNotificationKey] || 0)
-	const lastSeenAuctionSettlementBegins = Math.max(
-		lastSeenAuctionSettlementBeginsGlobal,
-		auctionSettlementBeginsByAuction[auctionNotificationKey] || 0,
+	const lastSeenAuctionEventComments = scopedLastSeenOf(
+		ledger,
+		readMarkFamilies.auctionThreadComments,
+		notificationScopes.auctionThreadComments(auctionNotificationKey),
+	)
+	const lastSeenAuctionLive = scopedLastSeenOf(ledger, readMarkFamilies.auctionLive, notificationScopes.auctionLive(auctionNotificationKey))
+	const lastSeenAuctionSettlementBegins = scopedLastSeenOf(
+		ledger,
+		readMarkFamilies.auctionSettlement,
+		notificationScopes.auctionSettlement(auctionNotificationKey),
 	)
 
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
@@ -145,11 +141,13 @@ export function AuctionListItemHost({
 	const hasNewActivity = newBidsCount + newCommentsCount + newChatCount > 0 || hasNewLiveStatus || hasNewSettlementStatus
 
 	const handleMarkActivitySeen = () => {
-		notificationActions.markAuctionBidsSeen(auctionNotificationKey)
-		notificationActions.markAuctionCommentsSeen(auctionNotificationKey)
-		notificationActions.markAuctionEventCommentsSeen(auctionNotificationKey)
-		notificationActions.markAuctionLiveSeen(auctionNotificationKey)
-		notificationActions.markAuctionSettlementBeginsSeen(auctionNotificationKey)
+		// The same five scopes the legacy action marked, now through the read-mark layer so the badge this row
+		// renders and the mark this row writes share one store (the C4 point).
+		readMarks.markAuctionBidsSeen(auctionNotificationKey)
+		readMarks.markAuctionCommentsSeen(auctionNotificationKey)
+		readMarks.markAuctionEventCommentsSeen(auctionNotificationKey)
+		readMarks.markAuctionLiveSeen(auctionNotificationKey)
+		readMarks.markAuctionSettlementBeginsSeen(auctionNotificationKey)
 	}
 
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)

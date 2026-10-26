@@ -1,7 +1,6 @@
 import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
 import { MessageInput } from '@/components/messages/MessageInput'
 import { authStore } from '@/lib/stores/auth'
-import { notificationActions } from '@/lib/stores/notifications'
 import { sendChatMessage, useConversationMessages } from '@/queries/messages'
 import { messageKeys } from '@/queries/queryKeyFactory'
 import { useProfileName } from '@/queries/profiles'
@@ -10,6 +9,7 @@ import { useStore } from '@tanstack/react-store'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ConversationViewLayout } from '@ui/messages/messaging-views'
+import { readMarks } from '@/lib/notificationProducers'
 
 interface ConversationViewProps {
 	/** The pubkey of the other user in the conversation */
@@ -51,7 +51,7 @@ export function ConversationView({ otherUserPubkey, onTitleChange }: Conversatio
 
 	// Mark this conversation as seen when viewing it
 	useEffect(() => {
-		notificationActions.markConversationSeen(otherUserPubkey)
+		readMarks.markConversationSeen(otherUserPubkey)
 	}, [otherUserPubkey])
 
 	const sendMessageMutation = useMutation({

@@ -26,6 +26,21 @@ import { appNotifications, applyAppNotificationEvent } from '@platform/web/notif
 import type { AppNotificationEvent } from '@platform/web/notifications'
 import { notificationActions } from './stores/notifications'
 
+// --- TEMPORARY read-state shim (store drain C4) ----------------------------------------------------
+// `AuctionListItemHost` and `ConversationView` read/write read marks through this bridge rather than
+// importing `@platform/web/notifications` directly. This file is already an allowlisted src -> platform
+// edge, so the C4 cutover adds no new edge to `platform/boundary.test.ts`'s ledger; the components reach
+// the read-mark layer without expanding the migration ledger. The shim, the store and this bridge are all
+// removed together in C3, at which point the consumers import the platform layer directly.
+export {
+	appNotificationsBinding,
+	lastSeenOf,
+	notificationScopes,
+	readMarkFamilies,
+	readMarks,
+	scopedLastSeenOf,
+} from '@platform/web/notifications'
+
 /** The shape `recalculateFromEvents` accepts — the legacy initial-sync payload. */
 export type LegacyRecalculation = Parameters<(typeof notificationActions)['recalculateFromEvents']>[0]
 

@@ -114,6 +114,15 @@ export interface PassiveLedger {
 	reconcile(counts: Readonly<Record<string, number>>): void
 	/** Zero a scope's unseen count and stamp its last-seen; `at` defaults to the injected clock. */
 	markSeen(scope: string, at?: number): void
+	/**
+	 * Stamp a scope's last-seen WITHOUT touching its unseen count, for rehydrating persisted read marks.
+	 *
+	 * `markSeen` is the user action: it clears the badge and moves the mark together. Rehydration is not a
+	 * user action — replaying a stored mark must not clear a count the user has not actually read, so the
+	 * two are separate operations. Monotonic: an `at` at or below the current mark is ignored, so replaying
+	 * an older stored mark cannot un-read. Emits like any other ledger change.
+	 */
+	hydrateMark(scope: string, at: number): void
 	/** Zero every scope's count and advance the global last-seen floor; `at` defaults to the injected clock. */
 	markAllSeen(at?: number): void
 	/** A scope's unseen count. */

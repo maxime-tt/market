@@ -12,7 +12,7 @@ import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/wrappers/button'
 import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@/lib/stores/auth'
-import { notificationActions } from '@/lib/stores/notifications'
+import { readMarks } from '@platform/web/notifications'
 import { cashuStore, walletOps, formatReclaimWaitSeconds, getAuctionReclaimReadyAt, type PendingToken } from '@/lib/stores/walletOps'
 import { getMintHostname } from '@/lib/wallet'
 import {
@@ -123,7 +123,7 @@ function BidsOverviewComponent() {
 
 	useEffect(() => {
 		if (isAuthenticated && user?.pubkey) {
-			notificationActions.markBidUpdatesSeen()
+			readMarks.markBidUpdatesSeen()
 		}
 	}, [isAuthenticated, user?.pubkey])
 

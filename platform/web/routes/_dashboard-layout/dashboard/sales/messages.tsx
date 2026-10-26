@@ -1,6 +1,6 @@
 import { ConversationListItem, type ConversationItemData } from '@/components/messages/ConversationListItem'
 import { authStore } from '@/lib/stores/auth'
-import { notificationActions } from '@/lib/stores/notifications'
+import { readMarks } from '@platform/web/notifications'
 import { useConversationsList } from '@/queries/messages'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { LoadingState } from '@ui/shared/loading-state'
@@ -19,7 +19,7 @@ function MessagesListComponent() {
 
 	// Mark all messages as seen when the messages list is viewed
 	useEffect(() => {
-		notificationActions.markMessagesSeen()
+		readMarks.markMessagesSeen()
 	}, [])
 
 	return (

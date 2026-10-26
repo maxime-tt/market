@@ -3,8 +3,8 @@ import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
 import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auctionSettlement'
 import { ndkActions } from '@/lib/stores/ndk'
-import { notificationActions, notificationStore } from '@/lib/stores/notifications'
-import { appNotifications, reconcileAppNotificationCounts } from '@platform/web/notifications'
+import { notificationStore } from '@/lib/stores/notifications'
+import { appNotifications, readMarks, reconcileAppNotificationCounts } from '@platform/web/notifications'
 import type { AppNotificationEvent } from '@platform/web/notifications'
 import { produceAppNotification, reconcileLegacyNotificationCounts } from '@/lib/notificationProducers'
 import {
@@ -309,42 +309,42 @@ export const useNotificationMonitor = () => {
 
 		// Helper to check if an event is newer than last seen
 		const isNewOrder = (event: NDKEvent): boolean => {
-			const lastSeen = notificationActions.getLastSeenOrders()
+			const lastSeen = readMarks.getLastSeenOrders()
 			return (event.created_at || 0) > lastSeen
 		}
 
 		const isNewMessage = (event: NDKEvent, pubkey: string): boolean => {
-			const lastSeen = notificationActions.getLastSeenForConversation(pubkey)
+			const lastSeen = readMarks.getLastSeenForConversation(pubkey)
 			return (event.created_at || 0) > lastSeen
 		}
 
 		const isNewPurchaseUpdate = (event: NDKEvent): boolean => {
-			const lastSeen = notificationActions.getLastSeenPurchases()
+			const lastSeen = readMarks.getLastSeenPurchases()
 			return (event.created_at || 0) > lastSeen
 		}
 
 		const isNewAuctionBid = (event: NDKEvent, auctionKey?: string): boolean => {
-			const lastSeen = notificationActions.getLastSeenAuctionBids(auctionKey)
+			const lastSeen = readMarks.getLastSeenAuctionBids(auctionKey)
 			return (event.created_at || 0) > lastSeen
 		}
 
 		const isNewBidUpdate = (event: NDKEvent): boolean => {
-			const lastSeen = notificationActions.getLastSeenBidUpdates()
+			const lastSeen = readMarks.getLastSeenBidUpdates()
 			return (event.created_at || 0) > lastSeen
 		}
 
 		const isNewAuctionComment = (event: NDKEvent, auctionKey?: string): boolean => {
-			const lastSeen = notificationActions.getLastSeenAuctionComments(auctionKey)
+			const lastSeen = readMarks.getLastSeenAuctionComments(auctionKey)
 			return (event.created_at || 0) > lastSeen
 		}
 
 		const isNewAuctionEventComment = (event: NDKEvent, auctionKey?: string): boolean => {
-			const lastSeen = notificationActions.getLastSeenAuctionEventComments(auctionKey)
+			const lastSeen = readMarks.getLastSeenAuctionEventComments(auctionKey)
 			return (event.created_at || 0) > lastSeen
 		}
 
 		const isNewProductComment = (event: NDKEvent, productKey?: string): boolean => {
-			const lastSeen = notificationActions.getLastSeenProductComments(productKey)
+			const lastSeen = readMarks.getLastSeenProductComments(productKey)
 			return (event.created_at || 0) > lastSeen
 		}
 
@@ -399,7 +399,7 @@ export const useNotificationMonitor = () => {
 			}
 
 			const startAt = getAuctionStartAt(auction)
-			if (startAt > notificationActions.getLastSeenAuctionLive(auctionKey)) {
+			if (startAt > readMarks.getLastSeenAuctionLive(auctionKey)) {
 				scheduleAt(startAt, scheduledAuctionLiveKeys, () => {
 					console.log('[NotificationMonitor] Seller auction went live:', auction.id)
 					produceAppNotification({ kind: 'auction-live', auctionKey, createdAt: nowSeconds() })
@@ -407,7 +407,7 @@ export const useNotificationMonitor = () => {
 			}
 
 			const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
-			if (biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey)) {
+			if (biddingCutoffAt > readMarks.getLastSeenAuctionSettlementBegins(auctionKey)) {
 				scheduleAt(biddingCutoffAt, scheduledAuctionSettlementKeys, () => {
 					console.log('[NotificationMonitor] Seller auction entered settlement:', auction.id)
 					produceAppNotification({ kind: 'auction-settlement', auctionKey, createdAt: nowSeconds() })
@@ -527,7 +527,7 @@ export const useNotificationMonitor = () => {
 					kind: AUCTION_BID_KIND,
 					auctionRootEventIds: sellerAuctionRootEventIds,
 					auctionCoordinates: sellerAuctionCoordinates,
-					since: notificationActions.getLastSeenAuctionBids() + 1,
+					since: readMarks.getLastSeenAuctionBids() + 1,
 				})
 				const sellerLiveActivityEvents = await fetchTaggedAuctionEvents({
 					kind: LIVE_ACTIVITY_KIND_NDK,
@@ -552,18 +552,18 @@ export const useNotificationMonitor = () => {
 					kind: LIVE_CHAT_KIND_NDK,
 					auctionRootEventIds: [],
 					auctionCoordinates: sellerLiveActivityCoords,
-					since: notificationActions.getLastSeenAuctionComments() + 1,
+					since: readMarks.getLastSeenAuctionComments() + 1,
 				})
 				const [sellerAuctionCommentEvents, sellerProductCommentEvents] = await Promise.all([
 					fetchAddressableCommentEvents({
 						targetEventIds: sellerAuctionRootEventIds,
 						targetCoordinates: sellerAuctionCoordinates,
-						since: notificationActions.getLastSeenAuctionEventComments() + 1,
+						since: readMarks.getLastSeenAuctionEventComments() + 1,
 					}),
 					fetchAddressableCommentEvents({
 						targetEventIds: sellerProductEventIds,
 						targetCoordinates: sellerProductCoordinates,
-						since: notificationActions.getLastSeenProductComments() + 1,
+						since: readMarks.getLastSeenProductComments() + 1,
 					}),
 				])
 
@@ -623,7 +623,7 @@ export const useNotificationMonitor = () => {
 					if (!auctionKey) return counts
 
 					const startAt = getAuctionStartAt(auction)
-					if (startAt > notificationActions.getLastSeenAuctionLive(auctionKey) && startAt <= initializationStartedAt) {
+					if (startAt > readMarks.getLastSeenAuctionLive(auctionKey) && startAt <= initializationStartedAt) {
 						counts[auctionKey] = 1
 					}
 					return counts
@@ -634,10 +634,7 @@ export const useNotificationMonitor = () => {
 					if (!auctionKey) return counts
 
 					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
-					if (
-						biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey) &&
-						biddingCutoffAt <= initializationStartedAt
-					) {
+					if (biddingCutoffAt > readMarks.getLastSeenAuctionSettlementBegins(auctionKey) && biddingCutoffAt <= initializationStartedAt) {
 						counts[auctionKey] = 1
 					}
 					return counts
@@ -666,13 +663,13 @@ export const useNotificationMonitor = () => {
 					kind: AUCTION_BID_KIND,
 					auctionRootEventIds: watchedAuctionRootEventIds,
 					auctionCoordinates: watchedAuctionCoordinates,
-					since: notificationActions.getLastSeenBidUpdates() + 1,
+					since: readMarks.getLastSeenBidUpdates() + 1,
 				})
 				const watchedSettlementEvents = await fetchTaggedAuctionEvents({
 					kind: AUCTION_SETTLEMENT_KIND,
 					auctionRootEventIds: watchedAuctionRootEventIds,
 					auctionCoordinates: watchedAuctionCoordinates,
-					since: notificationActions.getLastSeenBidUpdates() + 1,
+					since: readMarks.getLastSeenBidUpdates() + 1,
 				})
 
 				const newHigherBidEvents = watchedBidEvents.filter((event) => {
@@ -705,7 +702,7 @@ export const useNotificationMonitor = () => {
 					if (
 						startAt > initializationStartedAt &&
 						startAt <= initializationCompletedAt &&
-						startAt > notificationActions.getLastSeenAuctionLive(auctionKey)
+						startAt > readMarks.getLastSeenAuctionLive(auctionKey)
 					) {
 						if (!unseenAuctionLiveCountsByAuction[auctionKey]) reconciledAuctionLiveCount++
 						unseenAuctionLiveCountsByAuction[auctionKey] = 1
@@ -715,7 +712,7 @@ export const useNotificationMonitor = () => {
 					if (
 						biddingCutoffAt > initializationStartedAt &&
 						biddingCutoffAt <= initializationCompletedAt &&
-						biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey)
+						biddingCutoffAt > readMarks.getLastSeenAuctionSettlementBegins(auctionKey)
 					) {
 						if (!unseenAuctionSettlementBeginsCountsByAuction[auctionKey]) reconciledAuctionSettlementBeginsCount++
 						unseenAuctionSettlementBeginsCountsByAuction[auctionKey] = 1
@@ -990,7 +987,7 @@ export const useNotificationMonitor = () => {
 					void fetchAddressableCommentEvents({
 						targetEventIds: eventId ? [eventId] : [],
 						targetCoordinates: coordinate ? [coordinate] : [],
-						since: notificationActions.getLastSeenProductComments(productKey) + 1,
+						since: readMarks.getLastSeenProductComments(productKey) + 1,
 					})
 						.then((events) => {
 							events.forEach(handleSellerProductCommentEvent)
