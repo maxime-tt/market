@@ -13,3 +13,8 @@ export * from './nip60WalletEventSource'
 export * from './walletEventReader'
 export * from './auctionHost'
 export * from './nutzap'
+// Increment B4d: the wallet-chain moves into the SDK.
+export * from './storage'
+export * from './walletKeyStorage'
+export * from './auctionFunds'
+export * from './cashuWalletSource'
