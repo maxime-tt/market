@@ -59,10 +59,13 @@ const resetLocalStorage = (): void => {
 }
 
 // =============================================================================
-// authStore stub — the storage helpers scope keys by the auth user's pubkey
+// The signed-in identity is now an explicit parameter to the storage helpers; each test
+// passes the pubkey it means (authStore is kept set for any auth-derived path, but the
+// scoped reads below no longer consult it).
 // =============================================================================
 
 const FAKE_USER_PUBKEY = 'f'.repeat(64)
+const OTHER_USER_PUBKEY = 'e'.repeat(64)
 
 const setAuthUser = (): void => {
 	// authStore is a TanStack Store; setState merges by default.
@@ -140,8 +143,8 @@ beforeEach(() => {
 describe('bidderRecords storage', () => {
 	test('upsert + load roundtrip', () => {
 		const record = buildRecord()
-		upsertBidderRecord(record)
-		const loaded = loadBidderRecords()
+		upsertBidderRecord(record, FAKE_USER_PUBKEY)
+		const loaded = loadBidderRecords(FAKE_USER_PUBKEY)
 		expect(loaded).toHaveLength(1)
 		expect(loaded[0].bidEventId).toBe(record.bidEventId)
 		expect(loaded[0].childPubkey).toBe(record.childPubkey)
@@ -151,31 +154,31 @@ describe('bidderRecords storage', () => {
 	test('findBidderRecord returns the matching record', () => {
 		const record = buildRecord({ bidEventId: 'a'.repeat(64) })
 		const other = buildRecord({ bidEventId: 'b'.repeat(64) })
-		upsertBidderRecord(record)
-		upsertBidderRecord(other)
-		expect(findBidderRecord('a'.repeat(64))?.bidEventId).toBe('a'.repeat(64))
-		expect(findBidderRecord('z'.repeat(64))).toBeUndefined()
+		upsertBidderRecord(record, FAKE_USER_PUBKEY)
+		upsertBidderRecord(other, FAKE_USER_PUBKEY)
+		expect(findBidderRecord('a'.repeat(64), FAKE_USER_PUBKEY)?.bidEventId).toBe('a'.repeat(64))
+		expect(findBidderRecord('z'.repeat(64), FAKE_USER_PUBKEY)).toBeUndefined()
 	})
 
 	test('upsert overwrites by bidEventId', () => {
 		const v1 = buildRecord({ amount: 1_000 })
-		upsertBidderRecord(v1)
+		upsertBidderRecord(v1, FAKE_USER_PUBKEY)
 		const v2 = { ...v1, amount: 2_500 }
-		upsertBidderRecord(v2)
-		expect(loadBidderRecords()).toHaveLength(1)
-		expect(findBidderRecord(v1.bidEventId)?.amount).toBe(2_500)
+		upsertBidderRecord(v2, FAKE_USER_PUBKEY)
+		expect(loadBidderRecords(FAKE_USER_PUBKEY)).toHaveLength(1)
+		expect(findBidderRecord(v1.bidEventId, FAKE_USER_PUBKEY)?.amount).toBe(2_500)
 	})
 
 	test('updateBidderRecordStatus flips status', () => {
 		const record = buildRecord()
-		upsertBidderRecord(record)
-		const updated = updateBidderRecordStatus(record.bidEventId, 'settled')
+		upsertBidderRecord(record, FAKE_USER_PUBKEY)
+		const updated = updateBidderRecordStatus(record.bidEventId, 'settled', FAKE_USER_PUBKEY)
 		expect(updated?.status).toBe('settled')
-		expect(findBidderRecord(record.bidEventId)?.status).toBe('settled')
+		expect(findBidderRecord(record.bidEventId, FAKE_USER_PUBKEY)?.status).toBe('settled')
 	})
 
 	test('updateBidderRecordStatus returns null when record missing', () => {
-		const updated = updateBidderRecordStatus('z'.repeat(64), 'settled')
+		const updated = updateBidderRecordStatus('z'.repeat(64), 'settled', FAKE_USER_PUBKEY)
 		expect(updated).toBeNull()
 	})
 
@@ -183,22 +186,22 @@ describe('bidderRecords storage', () => {
 		const a = buildRecord({ bidEventId: 'a'.repeat(64), auctionRootEventId: '1'.repeat(64) })
 		const b = buildRecord({ bidEventId: 'b'.repeat(64), auctionRootEventId: '1'.repeat(64) })
 		const c = buildRecord({ bidEventId: 'c'.repeat(64), auctionRootEventId: '2'.repeat(64) })
-		upsertBidderRecord(a)
-		upsertBidderRecord(b)
-		upsertBidderRecord(c)
-		const matches = findBidderRecordsForAuction('1'.repeat(64))
+		upsertBidderRecord(a, FAKE_USER_PUBKEY)
+		upsertBidderRecord(b, FAKE_USER_PUBKEY)
+		upsertBidderRecord(c, FAKE_USER_PUBKEY)
+		const matches = findBidderRecordsForAuction('1'.repeat(64), FAKE_USER_PUBKEY)
 		expect(matches.map((r) => r.bidEventId).sort()).toEqual(['a'.repeat(64), 'b'.repeat(64)])
 	})
 
 	test('removeBidderRecord deletes by bidEventId', () => {
 		const a = buildRecord({ bidEventId: 'a'.repeat(64) })
 		const b = buildRecord({ bidEventId: 'b'.repeat(64) })
-		upsertBidderRecord(a)
-		upsertBidderRecord(b)
-		removeBidderRecord('a'.repeat(64))
-		expect(loadBidderRecords()).toHaveLength(1)
-		expect(findBidderRecord('a'.repeat(64))).toBeUndefined()
-		expect(findBidderRecord('b'.repeat(64))).toBeDefined()
+		upsertBidderRecord(a, FAKE_USER_PUBKEY)
+		upsertBidderRecord(b, FAKE_USER_PUBKEY)
+		removeBidderRecord('a'.repeat(64), FAKE_USER_PUBKEY)
+		expect(loadBidderRecords(FAKE_USER_PUBKEY)).toHaveLength(1)
+		expect(findBidderRecord('a'.repeat(64), FAKE_USER_PUBKEY)).toBeUndefined()
+		expect(findBidderRecord('b'.repeat(64), FAKE_USER_PUBKEY)).toBeDefined()
 	})
 
 	test('no records when no user is signed in — the STRICT upsert fails closed instead of silently skipping', () => {
@@ -209,15 +212,15 @@ describe('bidderRecords storage', () => {
 		// persist the refund private key — silently skipping would let a
 		// locked leg publish with no recoverable refund key. The write now
 		// throws so the publish pipeline aborts (fail closed).
-		expect(() => upsertBidderRecord(record)).toThrow('no authenticated user scope')
-		expect(loadBidderRecords()).toEqual([])
+		expect(() => upsertBidderRecord(record, null)).toThrow('no authenticated user scope')
+		expect(loadBidderRecords(null)).toEqual([])
 		// Restore for subsequent tests.
 		setAuthUser()
 	})
 
 	test('records are scoped per-user — different user sees nothing', () => {
-		upsertBidderRecord(buildRecord())
-		expect(loadBidderRecords()).toHaveLength(1)
+		upsertBidderRecord(buildRecord(), FAKE_USER_PUBKEY)
+		expect(loadBidderRecords(FAKE_USER_PUBKEY)).toHaveLength(1)
 
 		// Switch users.
 		authStore.setState((s) => ({
@@ -225,11 +228,11 @@ describe('bidderRecords storage', () => {
 			user: { pubkey: 'e'.repeat(64) } as unknown as NonNullable<typeof s.user>,
 			isAuthenticated: true,
 		}))
-		expect(loadBidderRecords()).toEqual([])
+		expect(loadBidderRecords(OTHER_USER_PUBKEY)).toEqual([])
 
 		// Switch back.
 		setAuthUser()
-		expect(loadBidderRecords()).toHaveLength(1)
+		expect(loadBidderRecords(FAKE_USER_PUBKEY)).toHaveLength(1)
 	})
 })
 

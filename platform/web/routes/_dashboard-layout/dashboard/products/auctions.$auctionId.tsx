@@ -479,7 +479,10 @@ function DashboardAuctionDetailRoute() {
 		if (!myTopBidEvent) return false
 		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)
 	}, [pathReleases, myTopBidEvent])
-	const myBidderRecord = useMemo(() => (myTopBidEvent ? findBidderRecord(myTopBidEvent.id) : null), [myTopBidEvent])
+	const myBidderRecord = useMemo(
+		() => (myTopBidEvent ? findBidderRecord(myTopBidEvent.id, user?.pubkey ?? null) : null),
+		[myTopBidEvent, user?.pubkey],
+	)
 	const canBidderReleaseNow = !!(isMyBidTop && ended && !myAlreadyReleased && !settlementWindowExpired && myTopBidEvent && myBidderRecord)
 
 	const releaseQueryClient = useQueryClient()

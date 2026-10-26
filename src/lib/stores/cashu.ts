@@ -182,8 +182,11 @@ function generateId(): string {
  * deliberately removed must stay removed.
  */
 const loadPendingTokens = (): PendingToken[] => {
-	const current = loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [])
-	const legacy = loadUserData<PendingToken[]>(LEGACY_PENDING_TOKENS_KEY, [])
+	// The signed-in identity, read once here (the store is the assembly) and passed as a
+	// parameter into the scoped storage rather than resolved inside it.
+	const pubkey = authStore.state.user?.pubkey ?? null
+	const current = loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [], pubkey)
+	const legacy = loadUserData<PendingToken[]>(LEGACY_PENDING_TOKENS_KEY, [], pubkey)
 	if (!legacy.length) return current
 
 	const byId = new Map<string, PendingToken>()
@@ -191,13 +194,14 @@ const loadPendingTokens = (): PendingToken[] => {
 	for (const token of current) byId.set(token.id, token)
 	const merged = Array.from(byId.values())
 
-	saveUserData(PENDING_TOKENS_KEY, merged)
-	removeUserData(LEGACY_PENDING_TOKENS_KEY)
+	saveUserData(PENDING_TOKENS_KEY, merged, pubkey)
+	removeUserData(LEGACY_PENDING_TOKENS_KEY, pubkey)
 	console.log('[cashu] Merged pending tokens from the retired storage key:', legacy.length)
 	return merged
 }
 
-const savePendingTokens = (tokens: PendingToken[], options?: SaveUserDataOptions): void => saveUserData(PENDING_TOKENS_KEY, tokens, options)
+const savePendingTokens = (tokens: PendingToken[], options?: SaveUserDataOptions): void =>
+	saveUserData(PENDING_TOKENS_KEY, tokens, authStore.state.user?.pubkey ?? null, options)
 
 /**
  * Get or generate a seed for the wallet.

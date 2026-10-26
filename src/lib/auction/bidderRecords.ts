@@ -109,10 +109,11 @@ export interface BidderBidRecord {
 
 // ---------- CRUD --------------------------------------------------------
 
-export const loadBidderRecords = (): BidderBidRecord[] => loadUserData<BidderBidRecord[]>(BIDDER_RECORDS_KEY, [])
+export const loadBidderRecords = (pubkey: string | null): BidderBidRecord[] =>
+	loadUserData<BidderBidRecord[]>(BIDDER_RECORDS_KEY, [], pubkey)
 
-export const saveBidderRecords = (records: BidderBidRecord[], options?: SaveUserDataOptions): void =>
-	saveUserData(BIDDER_RECORDS_KEY, records, options)
+export const saveBidderRecords = (records: BidderBidRecord[], pubkey: string | null, options?: SaveUserDataOptions): void =>
+	saveUserData(BIDDER_RECORDS_KEY, records, pubkey, options)
 
 /**
  * Insert or overwrite by `bidEventId`.
@@ -127,19 +128,19 @@ export const saveBidderRecords = (records: BidderBidRecord[], options?: SaveUser
  * record. Other record writes (status updates, removals) keep the
  * historical swallow-by-default behavior.
  */
-export const upsertBidderRecord = (record: BidderBidRecord): void => {
-	const records = loadBidderRecords()
+export const upsertBidderRecord = (record: BidderBidRecord, pubkey: string | null): void => {
+	const records = loadBidderRecords(pubkey)
 	const existing = records.findIndex((r) => r.bidEventId === record.bidEventId)
 	if (existing >= 0) {
 		records[existing] = record
 	} else {
 		records.push(record)
 	}
-	saveBidderRecords(records, { strict: true })
+	saveBidderRecords(records, pubkey, { strict: true })
 }
 
-export const findBidderRecord = (bidEventId: string): BidderBidRecord | undefined => {
-	return loadBidderRecords().find((r) => r.bidEventId === bidEventId)
+export const findBidderRecord = (bidEventId: string, pubkey: string | null): BidderBidRecord | undefined => {
+	return loadBidderRecords(pubkey).find((r) => r.bidEventId === bidEventId)
 }
 
 /**
@@ -154,14 +155,14 @@ export const findBidderRecord = (bidEventId: string): BidderBidRecord | undefine
  * callers may pass them with different casing depending on whether
  * they came from a tag or the wallet store.
  */
-export const findBidderRecordByRefundPubkey = (refundPubkey: string): BidderBidRecord | undefined => {
+export const findBidderRecordByRefundPubkey = (refundPubkey: string, pubkey: string | null): BidderBidRecord | undefined => {
 	const needle = refundPubkey.trim().toLowerCase()
 	if (!needle) return undefined
-	return loadBidderRecords().find((r) => r.refundPubkey.toLowerCase() === needle)
+	return loadBidderRecords(pubkey).find((r) => r.refundPubkey.toLowerCase() === needle)
 }
 
-export const findBidderRecordsForAuction = (auctionRootEventId: string): BidderBidRecord[] => {
-	return loadBidderRecords().filter((r) => r.auctionRootEventId === auctionRootEventId)
+export const findBidderRecordsForAuction = (auctionRootEventId: string, pubkey: string | null): BidderBidRecord[] => {
+	return loadBidderRecords(pubkey).filter((r) => r.auctionRootEventId === auctionRootEventId)
 }
 
 /**
@@ -170,8 +171,8 @@ export const findBidderRecordsForAuction = (auctionRootEventId: string): BidderB
  * rebid via the `prev_bid` tag and lock only the delta. Returns `null`
  * when the user hasn't bid here yet.
  */
-export const findLatestBidderRecordForAuction = (auctionRootEventId: string): BidderBidRecord | null => {
-	const records = findBidderRecordsForAuction(auctionRootEventId)
+export const findLatestBidderRecordForAuction = (auctionRootEventId: string, pubkey: string | null): BidderBidRecord | null => {
+	const records = findBidderRecordsForAuction(auctionRootEventId, pubkey)
 	if (records.length === 0) return null
 	return records.reduce((best, r) => (r.amount > best.amount ? r : best), records[0])
 }
@@ -184,8 +185,8 @@ export const findLatestBidderRecordForAuction = (auctionRootEventId: string): Bi
  * check the final array length against expectations before assuming
  * the chain is complete.
  */
-export const walkBidderRecordChain = (latestBidEventId: string): BidderBidRecord[] => {
-	const allRecords = loadBidderRecords()
+export const walkBidderRecordChain = (latestBidEventId: string, pubkey: string | null): BidderBidRecord[] => {
+	const allRecords = loadBidderRecords(pubkey)
 	const byId = new Map(allRecords.map((r) => [r.bidEventId, r]))
 	const chain: BidderBidRecord[] = []
 	let cursor: string | null = latestBidEventId
@@ -201,19 +202,19 @@ export const walkBidderRecordChain = (latestBidEventId: string): BidderBidRecord
 	return chain
 }
 
-export const updateBidderRecordStatus = (bidEventId: string, status: BidderRecordStatus): BidderBidRecord | null => {
-	const records = loadBidderRecords()
+export const updateBidderRecordStatus = (bidEventId: string, status: BidderRecordStatus, pubkey: string | null): BidderBidRecord | null => {
+	const records = loadBidderRecords(pubkey)
 	const idx = records.findIndex((r) => r.bidEventId === bidEventId)
 	if (idx < 0) return null
 	const updated = { ...records[idx], status }
 	records[idx] = updated
-	saveBidderRecords(records)
+	saveBidderRecords(records, pubkey)
 	return updated
 }
 
-export const removeBidderRecord = (bidEventId: string): void => {
-	const records = loadBidderRecords().filter((r) => r.bidEventId !== bidEventId)
-	saveBidderRecords(records)
+export const removeBidderRecord = (bidEventId: string, pubkey: string | null): void => {
+	const records = loadBidderRecords(pubkey).filter((r) => r.bidEventId !== bidEventId)
+	saveBidderRecords(records, pubkey)
 }
 
 // ---------- #1235 round-3 B1: pre-lock recovery records -------------------
@@ -276,10 +277,10 @@ export interface AuctionBidPreLockRecoveryRecord {
 /** Pre-lock recovery records, keyed by refund pubkey. */
 type PreLockRecoveryRecordMap = Record<string, AuctionBidPreLockRecoveryRecord>
 
-export const loadPreLockRecoveryRecords = (): PreLockRecoveryRecordMap =>
-	loadUserData<PreLockRecoveryRecordMap>(PRE_LOCK_RECOVERY_RECORDS_KEY, {})
+export const loadPreLockRecoveryRecords = (pubkey: string | null): PreLockRecoveryRecordMap =>
+	loadUserData<PreLockRecoveryRecordMap>(PRE_LOCK_RECOVERY_RECORDS_KEY, {}, pubkey)
 
-const persistPreLockRecoveryRecordMap = (map: PreLockRecoveryRecordMap): void => {
+const persistPreLockRecoveryRecordMap = (map: PreLockRecoveryRecordMap, pubkey: string | null): void => {
 	// #1235 round-3 fix 4 (felixfelix #5) — FAIL CLOSED at the bound, never
 	// evict. The old oldest-first eviction silently deleted the refund key of
 	// a still-pending leg the moment a 26th record arrived. Each recovery
@@ -297,7 +298,7 @@ const persistPreLockRecoveryRecordMap = (map: PreLockRecoveryRecordMap): void =>
 				"Each record is the only durable copy of a pending leg's refund key. Nothing was locked; re-submitting the bid once the store has room is safe.",
 		)
 	}
-	saveUserData(PRE_LOCK_RECOVERY_RECORDS_KEY, map, { strict: true })
+	saveUserData(PRE_LOCK_RECOVERY_RECORDS_KEY, map, pubkey, { strict: true })
 }
 
 /**
@@ -310,14 +311,14 @@ const persistPreLockRecoveryRecordMap = (map: PreLockRecoveryRecordMap): void =>
  * treat the record as NOT durably present and must NOT proceed to the mint
  * call that could consume the recovery material.
  */
-export const persistPreLockRecoveryRecord = (record: AuctionBidPreLockRecoveryRecord): void => {
-	const map = { ...loadPreLockRecoveryRecords() }
+export const persistPreLockRecoveryRecord = (record: AuctionBidPreLockRecoveryRecord, pubkey: string | null): void => {
+	const map = { ...loadPreLockRecoveryRecords(pubkey) }
 	// Map keys are normalized to lowercase hex so the case-insensitive lookup
 	// in findPreLockRecoveryRecordByRefundPubkey always hits.
 	map[record.refundPubkey.trim().toLowerCase()] = record
-	persistPreLockRecoveryRecordMap(map)
+	persistPreLockRecoveryRecordMap(map, pubkey)
 
-	const readBack = loadPreLockRecoveryRecords()[record.refundPubkey]
+	const readBack = loadPreLockRecoveryRecords(pubkey)[record.refundPubkey]
 	if (!readBack || JSON.stringify(readBack) !== JSON.stringify(record)) {
 		throw new Error(
 			`Failed to confirm the pre-lock recovery record write for refund pubkey ${record.refundPubkey} ` +
@@ -326,19 +327,22 @@ export const persistPreLockRecoveryRecord = (record: AuctionBidPreLockRecoveryRe
 	}
 }
 
-export const removePreLockRecoveryRecord = (refundPubkey: string): void => {
-	const map = { ...loadPreLockRecoveryRecords() }
+export const removePreLockRecoveryRecord = (refundPubkey: string, pubkey: string | null): void => {
+	const map = { ...loadPreLockRecoveryRecords(pubkey) }
 	if (!(refundPubkey in map)) return
 	delete map[refundPubkey]
 	// Removal is best-effort (the default swallow semantics): a failed removal
 	// leaves a stale recovery record behind — harmless for money safety (it is
 	// superseded by the full bidder record or by a provably-pre-mint failure)
 	// and still a valid refund authority if it ever gets used.
-	saveUserData(PRE_LOCK_RECOVERY_RECORDS_KEY, map)
+	saveUserData(PRE_LOCK_RECOVERY_RECORDS_KEY, map, pubkey)
 }
 
-export const findPreLockRecoveryRecordByRefundPubkey = (refundPubkey: string): AuctionBidPreLockRecoveryRecord | undefined => {
+export const findPreLockRecoveryRecordByRefundPubkey = (
+	refundPubkey: string,
+	pubkey: string | null,
+): AuctionBidPreLockRecoveryRecord | undefined => {
 	const needle = refundPubkey.trim().toLowerCase()
 	if (!needle) return undefined
-	return loadPreLockRecoveryRecords()[needle]
+	return loadPreLockRecoveryRecords(pubkey)[needle]
 }

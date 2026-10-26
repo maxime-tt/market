@@ -86,7 +86,7 @@ const seedRecoveryRecords = (count: number): AuctionBidPreLockRecoveryRecord[] =
 			createdAt: 1_000 + index,
 			id: `record-${index}`,
 		})
-		persistPreLockRecoveryRecord(record)
+		persistPreLockRecoveryRecord(record, FAKE_USER_PUBKEY)
 		seeded.push(record)
 	}
 	return seeded
@@ -102,17 +102,17 @@ beforeEach(() => {
 describe('persistPreLockRecoveryRecord fails closed at the 25-entry bound (#1235 round-3 fix 4)', () => {
 	test('a NEW key past the bound throws; the 25 originals stay intact, none evicted, the 26th absent', () => {
 		const seeded = seedRecoveryRecords(25)
-		expect(Object.keys(loadPreLockRecoveryRecords())).toHaveLength(25)
+		expect(Object.keys(loadPreLockRecoveryRecords(FAKE_USER_PUBKEY))).toHaveLength(25)
 
 		const twentySixth = baseRecoveryRecord({ refundPubkey: refundPubkeyFor(99), createdAt: 2_000, id: 'record-26' })
 
 		// Fail closed BEFORE saveUserData — a clear error, never a silent eviction.
-		expect(() => persistPreLockRecoveryRecord(twentySixth)).toThrow(
+		expect(() => persistPreLockRecoveryRecord(twentySixth, FAKE_USER_PUBKEY)).toThrow(
 			'Pre-lock recovery record store is full (25 entries) — refusing to persist a NEW recovery record instead of evicting an existing one.',
 		)
 
 		// The 25 originals are INTACT — none was evicted to make room.
-		const after = loadPreLockRecoveryRecords()
+		const after = loadPreLockRecoveryRecords(FAKE_USER_PUBKEY)
 		expect(Object.keys(after)).toHaveLength(25)
 		for (const record of seeded) {
 			const stored = after[record.refundPubkey]
@@ -138,9 +138,9 @@ describe('persistPreLockRecoveryRecord fails closed at the 25-entry bound (#1235
 			legLockAmount: 2_500,
 			cumulativeAmount: 2_500,
 		})
-		expect(() => persistPreLockRecoveryRecord(superseding)).not.toThrow()
+		expect(() => persistPreLockRecoveryRecord(superseding, FAKE_USER_PUBKEY)).not.toThrow()
 
-		const after = loadPreLockRecoveryRecords()
+		const after = loadPreLockRecoveryRecords(FAKE_USER_PUBKEY)
 		expect(Object.keys(after)).toHaveLength(25)
 		expect(after[supersededKey].id).toBe('record-12-refreshed')
 		expect(after[supersededKey].createdAt).toBe(9_000)
@@ -151,9 +151,9 @@ describe('persistPreLockRecoveryRecord fails closed at the 25-entry bound (#1235
 		const seeded = seedRecoveryRecords(24)
 
 		const twentyFifth = baseRecoveryRecord({ refundPubkey: refundPubkeyFor(99), createdAt: 2_000, id: 'record-25' })
-		expect(() => persistPreLockRecoveryRecord(twentyFifth)).not.toThrow()
+		expect(() => persistPreLockRecoveryRecord(twentyFifth, FAKE_USER_PUBKEY)).not.toThrow()
 
-		const after = loadPreLockRecoveryRecords()
+		const after = loadPreLockRecoveryRecords(FAKE_USER_PUBKEY)
 		expect(Object.keys(after)).toHaveLength(25)
 		expect(after[twentyFifth.refundPubkey].id).toBe('record-25')
 		expect(after[seeded[0].refundPubkey].id).toBe('record-0')

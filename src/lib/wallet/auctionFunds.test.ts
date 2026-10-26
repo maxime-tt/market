@@ -137,6 +137,7 @@ const makeHost = (params: {
 		refresh: async () => {
 			refreshCalls += 1
 		},
+		getCurrentPubkey: () => USER,
 		...params.overrides,
 	}
 
@@ -185,27 +186,30 @@ describe('reclaimToken', () => {
 
 	test("prefers the bidder record's refund key over the wallet's", async () => {
 		const refundPubkey = AUCTION_CONTEXT().refundPubkey
-		upsertBidderRecord({
-			bidEventId: '2'.repeat(64),
-			auctionRootEventId: '1'.repeat(64),
-			auctionCoordinate: `30408:${'a'.repeat(64)}:x`,
-			sellerPubkey: 'a'.repeat(64),
-			p2pkXpub: 'xpub',
-			derivationPath: "m/30408'/0'/0'/0/0",
-			childPubkey: '02' + 'c'.repeat(62),
-			refundPubkey,
-			refundPrivateKey: BIDDER_REFUND_KEY,
-			mintUrl: MINT,
-			amount: 21,
-			legLockedAmount: 21,
-			prevBidEventId: null,
-			locktime: NOW - 100,
-			proofs: [],
-			lockSecrets: [],
-			proofYs: [],
-			createdAt: 0,
-			status: 'live',
-		})
+		upsertBidderRecord(
+			{
+				bidEventId: '2'.repeat(64),
+				auctionRootEventId: '1'.repeat(64),
+				auctionCoordinate: `30408:${'a'.repeat(64)}:x`,
+				sellerPubkey: 'a'.repeat(64),
+				p2pkXpub: 'xpub',
+				derivationPath: "m/30408'/0'/0'/0/0",
+				childPubkey: '02' + 'c'.repeat(62),
+				refundPubkey,
+				refundPrivateKey: BIDDER_REFUND_KEY,
+				mintUrl: MINT,
+				amount: 21,
+				legLockedAmount: 21,
+				prevBidEventId: null,
+				locktime: NOW - 100,
+				proofs: [],
+				lockSecrets: [],
+				proofYs: [],
+				createdAt: 0,
+				status: 'live',
+			},
+			USER,
+		)
 		const { host, mintCalls } = makeHost({ tokens: [pendingToken()], walletPrivkey: WALLET_REFUND_KEY })
 
 		await createAuctionReclaim(host).reclaimToken('p1')
@@ -215,23 +219,26 @@ describe('reclaimToken', () => {
 
 	test('prefers the pre-lock recovery record over the wallet key when there is no bidder record', async () => {
 		const refundPubkey = AUCTION_CONTEXT().refundPubkey
-		persistPreLockRecoveryRecord({
-			id: 'r1',
-			createdAt: 0,
-			auctionEventId: '1'.repeat(64),
-			auctionCoordinates: `30408:${'a'.repeat(64)}:x`,
-			sellerPubkey: 'a'.repeat(64),
-			p2pkXpub: 'xpub',
-			derivationPath: "m/30408'/0'/0'/0/0",
-			childPubkey: '02' + 'c'.repeat(62),
-			refundPubkey,
-			refundPrivateKey: RECOVERY_REFUND_KEY,
-			mintUrl: MINT,
-			legLockAmount: 21,
-			cumulativeAmount: 21,
-			locktime: NOW - 100,
-			prevBidEventId: null,
-		})
+		persistPreLockRecoveryRecord(
+			{
+				id: 'r1',
+				createdAt: 0,
+				auctionEventId: '1'.repeat(64),
+				auctionCoordinates: `30408:${'a'.repeat(64)}:x`,
+				sellerPubkey: 'a'.repeat(64),
+				p2pkXpub: 'xpub',
+				derivationPath: "m/30408'/0'/0'/0/0",
+				childPubkey: '02' + 'c'.repeat(62),
+				refundPubkey,
+				refundPrivateKey: RECOVERY_REFUND_KEY,
+				mintUrl: MINT,
+				legLockAmount: 21,
+				cumulativeAmount: 21,
+				locktime: NOW - 100,
+				prevBidEventId: null,
+			},
+			USER,
+		)
 		const { host, mintCalls } = makeHost({ tokens: [pendingToken()], walletPrivkey: WALLET_REFUND_KEY })
 
 		await createAuctionReclaim(host).reclaimToken('p1')

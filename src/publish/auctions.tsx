@@ -29,6 +29,7 @@ import { buildDleqProofs, fetchDleqKeysetsForBidsDetailed } from '@/lib/cashu/dl
 import { buildBidEventTags } from '@/lib/auction/tagBuilders'
 import { createPrivateAuctionClaimMessageForActiveSigner } from '@/lib/auctions/privateAuctionClaimMessage'
 import { createUserScopedKeyValueStoragePort } from '@/lib/sdkAdapters'
+import { getCurrentPubkey } from '@/lib/stores/auth'
 import {
 	findLatestBidderRecordForAuction,
 	updateBidderRecordStatus,
@@ -468,7 +469,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 	// bidder (replacement chain)`. AUCTIONS.md §8 — seller "derives
 	// every child privkey in the winner's chain, swaps each leg at the
 	// mint" with a uniform locktime across legs.
-	const prevLeg = findLatestBidderRecordForAuction(formData.auctionEventId)
+	const prevLeg = findLatestBidderRecordForAuction(formData.auctionEventId, getCurrentPubkey())
 	const bidPlan = planAuctionBid({
 		auction: parsedAuction,
 		bidderPubkey,
@@ -524,7 +525,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 		prepareLock: async () => ({ intent: lockIntent, preLockRecovery: preLockRecoveryRecord }),
 		persistPreLockRecovery: async (record) => {
 			try {
-				persistPreLockRecoveryRecord(record)
+				persistPreLockRecoveryRecord(record, getCurrentPubkey())
 			} catch (error) {
 				throw new AuctionBidPreLockRecordWriteFailedError(refundPubkey, error)
 			}
@@ -558,7 +559,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 				return { status: 'not_locked' as const, error: error instanceof Error ? error.message : String(error), cause: error }
 			}
 		},
-		removePreLockRecovery: (record) => removePreLockRecoveryRecord(record.refundPubkey),
+		removePreLockRecovery: (record) => removePreLockRecoveryRecord(record.refundPubkey, getCurrentPubkey()),
 		createPublication: async ({ plan, intent, funding }) => {
 			const proofs = funding.proofs
 			if (!proofs.length) throw new Error('Lock result contained no proofs')
@@ -593,27 +594,30 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 		},
 		persistFundedPublication: async ({ event, recovery }) => {
 			const { intent, funding, proofs, lockSecrets, proofYs } = recovery
-			upsertBidderRecord({
-				bidEventId: event.id,
-				auctionRootEventId: formData.auctionEventId,
-				auctionCoordinate: formData.auctionCoordinates,
-				sellerPubkey: formData.sellerPubkey,
-				p2pkXpub: formData.p2pkXpub,
-				derivationPath: intent.derivationPath,
-				childPubkey: intent.childPubkey,
-				refundPubkey: intent.refundPubkey,
-				refundPrivateKey: intent.refundPrivateKey,
-				mintUrl: funding.mintUrl,
-				amount: bidPlan.amount,
-				legLockedAmount: funding.amount,
-				prevBidEventId: bidPlan.previousBidId ?? null,
-				locktime: bidPlan.locktime,
-				proofs,
-				lockSecrets,
-				proofYs,
-				createdAt: intent.createdAt,
-				status: 'live',
-			})
+			upsertBidderRecord(
+				{
+					bidEventId: event.id,
+					auctionRootEventId: formData.auctionEventId,
+					auctionCoordinate: formData.auctionCoordinates,
+					sellerPubkey: formData.sellerPubkey,
+					p2pkXpub: formData.p2pkXpub,
+					derivationPath: intent.derivationPath,
+					childPubkey: intent.childPubkey,
+					refundPubkey: intent.refundPubkey,
+					refundPrivateKey: intent.refundPrivateKey,
+					mintUrl: funding.mintUrl,
+					amount: bidPlan.amount,
+					legLockedAmount: funding.amount,
+					prevBidEventId: bidPlan.previousBidId ?? null,
+					locktime: bidPlan.locktime,
+					proofs,
+					lockSecrets,
+					proofYs,
+					createdAt: intent.createdAt,
+					status: 'live',
+				},
+				getCurrentPubkey(),
+			)
 			const updatedPendingToken = walletOps.updatePendingTokenContext(funding.tokenId, {
 				kind: 'auction_bid',
 				auctionEventId: formData.auctionEventId,
@@ -860,7 +864,7 @@ export class AuctionBidLockOutcomeUncertainError extends Error {
 const AUCTION_BID_REPUBLISH_CACHE_KEY = 'auction_bid_republish_events_v1'
 const AUCTION_BID_REPUBLISH_CACHE_MAX_ENTRIES = 25
 const AUCTION_BID_REPUBLISH_STORAGE_KEY_PREFIX = 'auction-bid-republish-v1:'
-const userScopedSdkStorage = createUserScopedKeyValueStoragePort()
+const userScopedSdkStorage = createUserScopedKeyValueStoragePort(getCurrentPubkey)
 
 /** Serialized kind-1023 payload persisted for idempotent retry. */
 type SerializedAuctionBidEventPayload = NostrEvent
@@ -916,7 +920,7 @@ const auctionBidRetryStoragePort: KeyValueStoragePort = {
 }
 
 const loadAuctionBidRepublishCache = (): AuctionBidRepublishCache => {
-	const persisted = loadUserData<AuctionBidRepublishCache>(AUCTION_BID_REPUBLISH_CACHE_KEY, {})
+	const persisted = loadUserData<AuctionBidRepublishCache>(AUCTION_BID_REPUBLISH_CACHE_KEY, {}, getCurrentPubkey())
 	const cache: AuctionBidRepublishCache = {}
 	for (const [bidEventId, entry] of Object.entries(persisted ?? {})) {
 		if (entry?.bidEventId === bidEventId && entry.payload) cache[bidEventId] = entry
@@ -941,7 +945,7 @@ const persistAuctionBidRepublishCache = (cache: AuctionBidRepublishCache): void 
 	}
 	for (const key of Object.keys(auctionBidRepublishMemoryCache)) delete auctionBidRepublishMemoryCache[key]
 	Object.assign(auctionBidRepublishMemoryCache, cache)
-	saveUserData(AUCTION_BID_REPUBLISH_CACHE_KEY, cache)
+	saveUserData(AUCTION_BID_REPUBLISH_CACHE_KEY, cache, getCurrentPubkey())
 }
 
 const cacheAuctionBidEventForRepublish = async (bidEvent: NostrEvent): Promise<void> => {
@@ -1109,7 +1113,7 @@ export const publishBidderPathRelease = async (input: PublishBidderPathReleaseIn
 	// record. For a rebid chain, oldest→newest, every leg the bidder
 	// locked. Each leg has its own derivation_path + cashu_token; the
 	// seller redeems them all on settle.
-	const chain = walkBidderRecordChain(input.bidEventId)
+	const chain = walkBidderRecordChain(input.bidEventId, getCurrentPubkey())
 	if (chain.length === 0) {
 		throw new Error(
 			`No local bidder record for bid ${input.bidEventId}. The bidder client must hold the derivation path to settle; lost record = unsettleable.`,
@@ -1315,7 +1319,7 @@ export const publishBidderPathRelease = async (input: PublishBidderPathReleaseIn
 			sign: signNostrEvent,
 			publish: publishRequired,
 			markReleased: (bidEventId) => {
-				if (!updateBidderRecordStatus(bidEventId, 'settled')) {
+				if (!updateBidderRecordStatus(bidEventId, 'settled', getCurrentPubkey())) {
 					throw new Error(`Published path release for bid ${bidEventId}, but its local bidder record was not found`)
 				}
 			},

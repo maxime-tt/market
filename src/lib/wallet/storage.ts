@@ -1,17 +1,20 @@
-import { getCurrentPubkey } from '@/lib/stores/auth'
+/**
+ * User-scoped localStorage for the wallet's records.
+ *
+ * The signed-in identity is an explicit **parameter** here, never read ambiently
+ * (the owner's ruling: a resolved pubkey is passed as a parameter to a read,
+ * gated where the app reads the signer rather than derived by the read itself).
+ * A caller that is a host or component reads the signer once and passes the
+ * resolved pubkey in; a caller with no user passes `null`.
+ */
 
 /**
  * Get a user-scoped storage key.
- *
- * Identity comes from {@link getCurrentPubkey} — the auth store's exposure of the
- * signer's resolved pubkey — or from an explicit `pubkey` an assembly passes in
- * (the owner's ruling: a resolved pubkey is a parameter to a read, gated where
- * the app reads the signer rather than derived ambiently by the read itself).
  * @param prefix The base key prefix
  * @param pubkey The resolved user pubkey, or null to scope to no user
  * @returns The full storage key, or null if user not authenticated
  */
-function getUserScopedKey(prefix: string, pubkey: string | null = getCurrentPubkey()): string | null {
+function getUserScopedKey(prefix: string, pubkey: string | null): string | null {
 	if (!pubkey) return null
 	return `${prefix}_${pubkey.slice(0, 8)}`
 }
@@ -20,8 +23,9 @@ function getUserScopedKey(prefix: string, pubkey: string | null = getCurrentPubk
  * Load JSON data from user-scoped localStorage.
  * @param prefix The base key prefix
  * @param defaultValue Default value if not found or parse fails
+ * @param pubkey The resolved user pubkey, or null when there is no user
  */
-export function loadUserData<T>(prefix: string, defaultValue: T, pubkey?: string | null): T {
+export function loadUserData<T>(prefix: string, defaultValue: T, pubkey: string | null): T {
 	try {
 		const key = getUserScopedKey(prefix, pubkey)
 		if (!key) return defaultValue
@@ -56,11 +60,12 @@ export interface SaveUserDataOptions {
  * Save JSON data to user-scoped localStorage.
  * @param prefix The base key prefix
  * @param data The data to save
+ * @param pubkey The resolved user pubkey, or null when there is no user
  * @param options Pass `{ strict: true }` for fail-closed writes — see
  *   {@link SaveUserDataOptions.strict}. Default (strict: false) preserves
  *   the historical behavior: storage failures are logged and swallowed.
  */
-export function saveUserData<T>(prefix: string, data: T, options?: SaveUserDataOptions, pubkey?: string | null): void {
+export function saveUserData<T>(prefix: string, data: T, pubkey: string | null, options?: SaveUserDataOptions): void {
 	try {
 		const key = getUserScopedKey(prefix, pubkey)
 		if (!key) {
@@ -82,8 +87,9 @@ export function saveUserData<T>(prefix: string, data: T, options?: SaveUserDataO
 /**
  * Remove user-scoped data from localStorage.
  * @param prefix The base key prefix
+ * @param pubkey The resolved user pubkey, or null when there is no user
  */
-export function removeUserData(prefix: string, pubkey?: string | null): void {
+export function removeUserData(prefix: string, pubkey: string | null): void {
 	try {
 		const key = getUserScopedKey(prefix, pubkey)
 		if (!key) return

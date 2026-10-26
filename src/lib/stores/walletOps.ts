@@ -61,6 +61,7 @@ import { KeyChain, Mint, Wallet, type MintKeys, type MintKeyset, type Proof } fr
 import { NDKEvent, NDKNutzap, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { ndkActions, ndkStore } from './ndk'
 import { cashuActions, cashuStore } from './cashu'
+import { getCurrentPubkey } from './auth'
 
 // The wallet state this surface reads and writes lives here. Re-exported so a `platform/` or
 // `sdk/` consumer reaches the store and the rails through ONE src/ import — the source-boundary
@@ -208,7 +209,10 @@ const getAuctionWalletKeyStore = (): WalletKeyStore => {
 	// Built lazily, not at module scope: the wallet barrel and this store are in an import
 	// cycle (via `./ndk` and the auth store), so an eager call here can touch
 	// `createAppWalletKeyStore` before that module has initialised.
-	auctionWalletKeyStoreInstance ??= createAppWalletKeyStore({ getSigner: auctionWalletKeySigner })
+	auctionWalletKeyStoreInstance ??= createAppWalletKeyStore({
+		getSigner: auctionWalletKeySigner,
+		getPubkey: getCurrentPubkey,
+	})
 	return auctionWalletKeyStoreInstance
 }
 
@@ -321,6 +325,7 @@ const getAuctionReclaim = (): AuctionReclaim => {
 		getPendingTokens: () => cashuStore.state.pendingTokens,
 		setPendingTokens: (tokens) => cashuActions.setPendingTokens(tokens),
 		refresh: () => walletOps.refresh(),
+		getCurrentPubkey: () => getCurrentPubkey(),
 	})
 	return auctionReclaimInstance
 }

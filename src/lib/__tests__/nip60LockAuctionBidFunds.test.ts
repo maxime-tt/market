@@ -284,7 +284,11 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 		// THE ORDERING INVARIANT: the pending-token record IS durably on disk
 		// despite the assert failure — the leg is reclaim-eligible after the
 		// refund timelock instead of silently stranded.
-		const persisted = loadUserData<Array<{ amount?: number; mintUrl?: string; status?: string }>>('cashu_pending_tokens', [])
+		const persisted = loadUserData<Array<{ amount?: number; mintUrl?: string; status?: string }>>(
+			'cashu_pending_tokens',
+			[],
+			FAKE_USER_PUBKEY,
+		)
 		expect(persisted).toHaveLength(1)
 		expect(persisted[0].amount).toBe(500)
 		expect(persisted[0].mintUrl).toBe(TEST_MINT)
@@ -303,7 +307,7 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 		expect(result.refundPubkey).toBe(REFUND_PUBKEY)
 		expect(result.proofs).toHaveLength(1)
 		// The pending-token record was durably persisted (strict write).
-		const persisted = loadUserData<Array<{ amount?: number }>>('cashu_pending_tokens', [])
+		const persisted = loadUserData<Array<{ amount?: number }>>('cashu_pending_tokens', [], FAKE_USER_PUBKEY)
 		expect(persisted).toHaveLength(1)
 		expect(persisted[0].amount).toBe(500)
 	})

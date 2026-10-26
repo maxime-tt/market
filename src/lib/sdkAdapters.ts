@@ -5,9 +5,9 @@ import { loadUserData, removeUserData, saveUserData } from '@/lib/wallet/storage
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 
 type UserStorageBindings = {
-	load<T>(key: string, fallback: T): T
-	save<T>(key: string, value: T, options?: { strict?: boolean }): void
-	remove(key: string): void
+	load<T>(key: string, fallback: T, pubkey: string | null): T
+	save<T>(key: string, value: T, pubkey: string | null, options?: { strict?: boolean }): void
+	remove(key: string, pubkey: string | null): void
 }
 
 const defaultUserStorageBindings: UserStorageBindings = {
@@ -35,14 +35,21 @@ export function createNostrRelayPort(
 /**
  * Adapt user-scoped app storage to the SDK string port. Values are namespaced
  * and wrapped so SDK keys cannot collide with existing application records.
+ *
+ * The identity is a **parameter**: `getPubkey` is supplied by the assembly (the
+ * app reads the signer), and resolved per operation so a switch is picked up
+ * without rebuilding the port.
  */
-export function createUserScopedKeyValueStoragePort(bindings: UserStorageBindings = defaultUserStorageBindings): KeyValueStoragePort {
+export function createUserScopedKeyValueStoragePort(
+	getPubkey: () => string | null,
+	bindings: UserStorageBindings = defaultUserStorageBindings,
+): KeyValueStoragePort {
 	const scopedKey = (key: string) => `sdk_core_v1_${key}`
 	const missing = {}
 
 	return {
 		get: async (key) => {
-			const stored = bindings.load<unknown>(scopedKey(key), missing)
+			const stored = bindings.load<unknown>(scopedKey(key), missing, getPubkey())
 			if (stored === missing) return null
 			if (!isRecord(stored) || stored.schemaVersion !== 'sdk-storage-v1' || typeof stored.value !== 'string') {
 				throw new Error(`Stored SDK value for ${key} is malformed`)
@@ -50,10 +57,10 @@ export function createUserScopedKeyValueStoragePort(bindings: UserStorageBinding
 			return stored.value
 		},
 		set: async (key, value) => {
-			bindings.save(scopedKey(key), { schemaVersion: 'sdk-storage-v1', value }, { strict: true })
+			bindings.save(scopedKey(key), { schemaVersion: 'sdk-storage-v1', value }, getPubkey(), { strict: true })
 		},
 		remove: async (key) => {
-			bindings.remove(scopedKey(key))
+			bindings.remove(scopedKey(key), getPubkey())
 		},
 	}
 }

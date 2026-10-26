@@ -11,6 +11,13 @@
  * recoverable refund key while the bid publish pipeline continued.
  *
  * User-scoped localStorage; polyfilled as in `bidderChainRecords.test.ts`.
+ *
+ * B4c: the signed-in pubkey is now an explicit parameter to the storage helpers
+ * (`storage.ts` no longer reads the auth store). So this test passes the pubkey
+ * at every call — `FAKE_USER_PUBKEY` for the signed-in cases and `null` where
+ * `clearAuthUser()` used to signal "no user scope" (the two now coincide by
+ * construction). `setAuthUser`/`clearAuthUser` stay for any auth-derived path,
+ * but the scoped reads below no longer consult the auth store.
  */
 
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -96,17 +103,17 @@ describe('saveUserData strict option (#1235 follow-up 3)', () => {
 		}
 		try {
 			// Must NOT throw — every other caller depends on the swallow.
-			expect(() => saveUserData('some_noncritical_key_v1', { a: 1 })).not.toThrow()
+			expect(() => saveUserData('some_noncritical_key_v1', { a: 1 }, FAKE_USER_PUBKEY)).not.toThrow()
 		} finally {
 			localStorage.setItem = originalSetItem
 		}
 	})
 
 	test('DEFAULT behavior unchanged: a missing user scope silently skips the write', () => {
-		clearAuthUser()
-		expect(() => saveUserData('some_noncritical_key_v1', { a: 1 })).not.toThrow()
+		// No user: the pubkey is passed as null (the explicit form of "no user scope").
+		expect(() => saveUserData('some_noncritical_key_v1', { a: 1 }, null)).not.toThrow()
 		// The write never happened — load returns the default.
-		expect(loadUserData('some_noncritical_key_v1', null)).toBeNull()
+		expect(loadUserData('some_noncritical_key_v1', null, null)).toBeNull()
 	})
 
 	test('strict: a storage failure RETHROWS (fail closed)', () => {
@@ -115,22 +122,22 @@ describe('saveUserData strict option (#1235 follow-up 3)', () => {
 			throw new Error('QuotaExceededError: setItem failed')
 		}
 		try {
-			expect(() => saveUserData('critical_key_v1', { a: 1 }, { strict: true })).toThrow('QuotaExceededError')
+			expect(() => saveUserData('critical_key_v1', { a: 1 }, FAKE_USER_PUBKEY, { strict: true })).toThrow('QuotaExceededError')
 		} finally {
 			localStorage.setItem = originalSetItem
 		}
 	})
 
 	test('strict: a missing user scope THROWS — the record would not be persisted', () => {
-		clearAuthUser()
+		// No user: the pubkey is passed as null, the fail-closed no-scope case.
 		// Silently skipping a strict write would be a silent fund-loss hazard:
 		// the caller believes the recovery record is durable when it is not.
-		expect(() => saveUserData('critical_key_v1', { a: 1 }, { strict: true })).toThrow('no authenticated user scope')
+		expect(() => saveUserData('critical_key_v1', { a: 1 }, null, { strict: true })).toThrow('no authenticated user scope')
 	})
 
 	test('strict: a successful write behaves like the default path', () => {
-		expect(() => saveUserData('critical_key_v1', { a: 1 }, { strict: true })).not.toThrow()
-		expect(loadUserData('critical_key_v1', { a: 0 })).toEqual({ a: 1 })
+		expect(() => saveUserData('critical_key_v1', { a: 1 }, FAKE_USER_PUBKEY, { strict: true })).not.toThrow()
+		expect(loadUserData('critical_key_v1', { a: 0 }, FAKE_USER_PUBKEY)).toEqual({ a: 1 })
 	})
 })
 
@@ -144,17 +151,17 @@ describe('upsertBidderRecord strict persistence (#1235 follow-up 3)', () => {
 		try {
 			// Pre-follow-up behavior: the write was swallowed and the caller
 			// believed the refund key was durably persisted. It must throw.
-			expect(() => upsertBidderRecord(baseRecord('00' + '0'.repeat(62)))).toThrow('QuotaExceededError')
+			expect(() => upsertBidderRecord(baseRecord('00' + '0'.repeat(62)), FAKE_USER_PUBKEY)).toThrow('QuotaExceededError')
 		} finally {
 			localStorage.setItem = originalSetItem
 		}
 		// And nothing was persisted.
-		expect(loadBidderRecords()).toEqual([])
+		expect(loadBidderRecords(FAKE_USER_PUBKEY)).toEqual([])
 	})
 
 	test('a successful upsert still persists the record durably', () => {
-		upsertBidderRecord(baseRecord('11' + '1'.repeat(62)))
-		const records = loadBidderRecords()
+		upsertBidderRecord(baseRecord('11' + '1'.repeat(62)), FAKE_USER_PUBKEY)
+		const records = loadBidderRecords(FAKE_USER_PUBKEY)
 		expect(records).toHaveLength(1)
 		expect(records[0].refundPrivateKey).toBe('a'.repeat(64))
 		expect(records[0].status).toBe('live')
@@ -162,9 +169,9 @@ describe('upsertBidderRecord strict persistence (#1235 follow-up 3)', () => {
 
 	test('upsert overwrites by bidEventId without duplicating', () => {
 		const bidEventId = '22' + '2'.repeat(62)
-		upsertBidderRecord(baseRecord(bidEventId))
-		upsertBidderRecord({ ...baseRecord(bidEventId), status: 'refunded' })
-		const records = loadBidderRecords()
+		upsertBidderRecord(baseRecord(bidEventId), FAKE_USER_PUBKEY)
+		upsertBidderRecord({ ...baseRecord(bidEventId), status: 'refunded' }, FAKE_USER_PUBKEY)
+		const records = loadBidderRecords(FAKE_USER_PUBKEY)
 		expect(records).toHaveLength(1)
 		expect(records[0].status).toBe('refunded')
 	})

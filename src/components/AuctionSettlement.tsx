@@ -106,7 +106,10 @@ export function AuctionSettlement({
 		}, myBids[0])
 	}, [bids, currentUserPubkey])
 
-	const myBidderRecord = useMemo(() => (myTopBidEvent ? findBidderRecord(myTopBidEvent.id) : null), [myTopBidEvent])
+	const myBidderRecord = useMemo(
+		() => (myTopBidEvent ? findBidderRecord(myTopBidEvent.id, currentUserPubkey ?? null) : null),
+		[myTopBidEvent, currentUserPubkey],
+	)
 
 	// Optimistic path release — ADR-0004 Decision 4
 	const optimisticReleaseRef = useRef<ParsedPathReleaseEvent | null>(null)

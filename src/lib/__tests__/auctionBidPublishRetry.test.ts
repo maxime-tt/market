@@ -322,7 +322,7 @@ describe('publishAuctionBid durable recovery state (#1235 Blocking 1)', () => {
 
 		// The bidder record — the only durable copy of the refund private key
 		// and the full locked proofs — was written BEFORE the publish attempt.
-		const record = findBidderRecord(failure.bidEventId) as BidderBidRecord | undefined
+		const record = findBidderRecord(failure.bidEventId, FAKE_USER_PUBKEY) as BidderBidRecord | undefined
 		expect(record).toBeDefined()
 		expect(record?.refundPrivateKey).toHaveLength(64)
 		expect(record?.proofs.length).toBeGreaterThan(0)
@@ -388,7 +388,7 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 		expect(retryPayload.kind).toBe(1023)
 
 		// The recovery record still exists (unchanged) for the rebroadcast leg.
-		const record = findBidderRecord(bidEventId)
+		const record = findBidderRecord(bidEventId, FAKE_USER_PUBKEY)
 		expect(record?.bidEventId).toBe(bidEventId)
 	})
 
@@ -397,7 +397,7 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 		const failure = await publishAndExpectBroadcastFailure(700, signFailingSigner)
 		const bidEventId = failure.bidEventId
 		expect(publishedPayloads).toHaveLength(0) // never reached the relay
-		expect(findBidderRecord(bidEventId)).toBeDefined()
+		expect(findBidderRecord(bidEventId, FAKE_USER_PUBKEY)).toBeDefined()
 
 		// Retry with a working signer: re-sign the cached (unsigned) event —
 		// the event id is unaffected by the signature, and the mint is not
@@ -485,7 +485,7 @@ describe('republishAuctionBid retry identity binding (#1235 round-3 B2)', () => 
 		const failure = await publishAndExpectBroadcastFailure(700, signFailingSigner)
 		const bidEventId = failure.bidEventId
 		expect(publishedPayloads).toHaveLength(0) // never reached the relay
-		expect(findBidderRecord(bidEventId)).toBeDefined()
+		expect(findBidderRecord(bidEventId, FAKE_USER_PUBKEY)).toBeDefined()
 
 		// Account switch A → B, then retry the republish with B's signer.
 		const signerB = new NDKPrivateKeySigner('5'.repeat(64))
@@ -646,7 +646,7 @@ describe('publishAuctionBid post-lock error model (#1235 follow-up 3)', () => {
 		expect(publishEventMock).not.toHaveBeenCalled()
 		// The unsigned event was finalized + cached pre-sign → the leg is
 		// rebroadcast-retryable with the SAME id and no second mint lock.
-		expect(findBidderRecord(failure.bidEventId)).toBeDefined()
+		expect(findBidderRecord(failure.bidEventId, FAKE_USER_PUBKEY)).toBeDefined()
 		const retriedId = await republishWithSigner(failure.bidEventId)
 		expect(retriedId).toBe(failure.bidEventId)
 		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
@@ -755,8 +755,8 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 			// Nothing was broadcast, and no residue exists: no bidder record,
 			// no pre-lock record (the write failed, the read-back guards it).
 			expect(publishEventMock).not.toHaveBeenCalled()
-			expect(loadBidderRecords()).toHaveLength(0)
-			expect(Object.keys(loadPreLockRecoveryRecords())).toHaveLength(0)
+			expect(loadBidderRecords(FAKE_USER_PUBKEY)).toHaveLength(0)
+			expect(Object.keys(loadPreLockRecoveryRecords(FAKE_USER_PUBKEY))).toHaveLength(0)
 		} finally {
 			localStorage.setItem = originalSetItem
 		}
@@ -796,7 +796,7 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 
 		// The pre-lock record SURVIVES the uncertain outcome — it is the
 		// refund authority for this leg (reclaim after the refund timelock).
-		const record = findPreLockRecoveryRecordByRefundPubkey(uncertain.refundPubkey)
+		const record = findPreLockRecoveryRecordByRefundPubkey(uncertain.refundPubkey, FAKE_USER_PUBKEY)
 		expect(record).toBeDefined()
 		expect(record?.id).toBe(uncertain.recoveryRecordId)
 		expect(record?.refundPrivateKey).toHaveLength(64)
@@ -821,7 +821,7 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 
 		// The pre-lock record was removed — no residue for a leg that never
 		// reached the mint.
-		expect(Object.keys(loadPreLockRecoveryRecords())).toHaveLength(0)
+		expect(Object.keys(loadPreLockRecoveryRecords(FAKE_USER_PUBKEY))).toHaveLength(0)
 		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
 		expect(publishEventMock).not.toHaveBeenCalled()
 	})
@@ -830,8 +830,8 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 		const bidEventId = await publishWithSigner(900)
 		expect(bidEventId).toHaveLength(64)
 		// The full bidder record exists and the pre-lock record is gone.
-		expect(findBidderRecord(bidEventId)).toBeDefined()
-		expect(Object.keys(loadPreLockRecoveryRecords())).toHaveLength(0)
+		expect(findBidderRecord(bidEventId, FAKE_USER_PUBKEY)).toBeDefined()
+		expect(Object.keys(loadPreLockRecoveryRecords(FAKE_USER_PUBKEY))).toHaveLength(0)
 	})
 })
 

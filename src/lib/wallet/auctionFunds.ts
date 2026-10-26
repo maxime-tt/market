@@ -245,6 +245,11 @@ export interface AuctionReclaimHost {
 	setPendingTokens(tokens: PendingToken[]): void
 	/** Reconcile wallet state after a successful reclaim. */
 	refresh(): Promise<void>
+	/**
+	 * The signed-in pubkey the bidder records are scoped under, resolved by the assembly
+	 * at call time (`null` when there is no user). The read is a parameter, never ambient.
+	 */
+	getCurrentPubkey(): string | null
 }
 
 export interface AuctionReclaim {
@@ -302,8 +307,9 @@ export const createAuctionReclaim = (host: AuctionReclaimHost): AuctionReclaim =
 		//      missing but the user happens to also hold the privkey in their wallet.
 		//   4. None → stop. Without the privkey the timelock refund branch can't be signed;
 		//      falling through would just spam the mint with "witness missing" 4xx responses.
-		const bidderRecord = auctionContext ? findBidderRecordByRefundPubkey(auctionContext.refundPubkey) : null
-		const preLockRecoveryRecord = auctionContext ? findPreLockRecoveryRecordByRefundPubkey(auctionContext.refundPubkey) : null
+		const pubkey = host.getCurrentPubkey()
+		const bidderRecord = auctionContext ? findBidderRecordByRefundPubkey(auctionContext.refundPubkey, pubkey) : null
+		const preLockRecoveryRecord = auctionContext ? findPreLockRecoveryRecordByRefundPubkey(auctionContext.refundPubkey, pubkey) : null
 		const refundPrivkey =
 			bidderRecord?.refundPrivateKey ??
 			(auctionContext ? (preLockRecoveryRecord?.refundPrivateKey ?? host.getWalletPrivkey(auctionContext.refundPubkey)) : null)
@@ -379,7 +385,7 @@ export const createAuctionReclaim = (host: AuctionReclaimHost): AuctionReclaim =
 			// The record held the refund authority while the leg was in limbo; a successful
 			// reclaim makes it obsolete.
 			if (preLockRecoveryRecord) {
-				removePreLockRecoveryRecord(preLockRecoveryRecord.refundPubkey)
+				removePreLockRecoveryRecord(preLockRecoveryRecord.refundPubkey, pubkey)
 			}
 
 			await host.refresh()

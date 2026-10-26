@@ -109,8 +109,8 @@ beforeEach(() => {
 describe('path release pipeline: bidder record → publish → parse → validate', () => {
 	test('walkBidderRecordChain finds the record and returns it', () => {
 		const record = buildRecord()
-		upsertBidderRecord(record)
-		const chain = walkBidderRecordChain(BID_EVENT_ID)
+		upsertBidderRecord(record, FAKE_USER_PUBKEY)
+		const chain = walkBidderRecordChain(BID_EVENT_ID, FAKE_USER_PUBKEY)
 		expect(chain.length).toBe(1)
 		expect(chain[0].bidEventId).toBe(BID_EVENT_ID)
 		expect(chain[0].auctionCoordinate).toBe(AUCTION_COORDINATE)
@@ -309,10 +309,10 @@ describe('path release pipeline: bidder record → publish → parse → validat
 		// This is the integration test that catches any drift between
 		// what the publisher writes and what the query/descriptor read.
 		const record = buildRecord()
-		upsertBidderRecord(record)
+		upsertBidderRecord(record, FAKE_USER_PUBKEY)
 
 		// 1. Walk the chain (same as publishBidderPathRelease does)
-		const chain = walkBidderRecordChain(BID_EVENT_ID)
+		const chain = walkBidderRecordChain(BID_EVENT_ID, FAKE_USER_PUBKEY)
 		expect(chain.length).toBe(1)
 
 		// 2. Build tags (same as publishBidderPathRelease does)

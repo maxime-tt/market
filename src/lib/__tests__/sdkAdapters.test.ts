@@ -49,16 +49,16 @@ describe('SDK host adapters', () => {
 
 	test('user-scoped storage adapter namespaces values and uses strict writes', async () => {
 		const values = new Map<string, string>()
-		const storage = createUserScopedKeyValueStoragePort({
-			load: <Value>(key: string, fallback: Value): Value => {
+		const storage = createUserScopedKeyValueStoragePort(() => 'f'.repeat(64), {
+			load: <Value>(key: string, fallback: Value, _pubkey: string | null): Value => {
 				const raw = values.get(key)
 				return raw === undefined ? fallback : (JSON.parse(raw) as Value)
 			},
-			save: (key, value, options) => {
+			save: (key, value, _pubkey, options) => {
 				if (options?.strict !== true) throw new Error('SDK storage write must be strict')
 				values.set(key, JSON.stringify(value))
 			},
-			remove: (key) => {
+			remove: (key, _pubkey) => {
 				values.delete(key)
 			},
 		})

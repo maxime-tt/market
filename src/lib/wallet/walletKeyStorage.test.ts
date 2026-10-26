@@ -7,9 +7,13 @@ import { describe, expect, test } from 'bun:test'
 
 import { createAppWalletKeyStorage, createAppWalletKeyStore } from './walletKeyStorage'
 
+// B4c: the pubkey is now an explicit parameter. `NO_USER` is the logged-out accessor —
+// the storage scopes to no user, which is the fail-closed case these tests exercise.
+const NO_USER = (): string | null => null
+
 describe('createAppWalletKeyStorage', () => {
 	test('save is fail-closed: with no authenticated user scope it throws instead of skipping', () => {
-		const storage = createAppWalletKeyStorage()
+		const storage = createAppWalletKeyStorage(NO_USER)
 		// `saveUserData(..., { strict: true })` refuses when there is no scope to write under.
 		// If this ever stops throwing, the binding has lost the fail-closed option and a lost
 		// keypair would look like a successful save.
@@ -17,12 +21,12 @@ describe('createAppWalletKeyStorage', () => {
 	})
 
 	test('load answers the caller fallback rather than throwing when nothing is stored', () => {
-		const storage = createAppWalletKeyStorage()
+		const storage = createAppWalletKeyStorage(NO_USER)
 		expect(storage.load('wallet_key_material:absent', 'fallback')).toBe('fallback')
 	})
 
 	test('remove on an absent key is not an error', () => {
-		const storage = createAppWalletKeyStorage()
+		const storage = createAppWalletKeyStorage(NO_USER)
 		expect(() => storage.remove('wallet_key_material:absent')).not.toThrow()
 	})
 })

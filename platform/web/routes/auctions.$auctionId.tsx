@@ -574,9 +574,9 @@ function AuctionDetailRoute() {
 				ended &&
 				!myAlreadyReleased &&
 				myTopBidEvent &&
-				findBidderRecord(myTopBidEvent.id)
+				findBidderRecord(myTopBidEvent.id, activeUserPubkey ?? null)
 			)
-		: !!(isMyBidTop && ended && !myAlreadyReleased && myTopBidEvent && findBidderRecord(myTopBidEvent.id))
+		: !!(isMyBidTop && ended && !myAlreadyReleased && myTopBidEvent && findBidderRecord(myTopBidEvent.id, activeUserPubkey ?? null))
 	const [isReleasing, setIsReleasing] = useState(false)
 
 	const handleReleasePath = async () => {
