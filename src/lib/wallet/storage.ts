@@ -1,12 +1,17 @@
-import { authStore } from '@/lib/stores/auth'
+import { getCurrentPubkey } from '@/lib/stores/auth'
 
 /**
  * Get a user-scoped storage key.
+ *
+ * Identity comes from {@link getCurrentPubkey} — the auth store's exposure of the
+ * signer's resolved pubkey — or from an explicit `pubkey` an assembly passes in
+ * (the owner's ruling: a resolved pubkey is a parameter to a read, gated where
+ * the app reads the signer rather than derived ambiently by the read itself).
  * @param prefix The base key prefix
+ * @param pubkey The resolved user pubkey, or null to scope to no user
  * @returns The full storage key, or null if user not authenticated
  */
-function getUserScopedKey(prefix: string): string | null {
-	const pubkey = authStore.state.user?.pubkey
+function getUserScopedKey(prefix: string, pubkey: string | null = getCurrentPubkey()): string | null {
 	if (!pubkey) return null
 	return `${prefix}_${pubkey.slice(0, 8)}`
 }
@@ -16,9 +21,9 @@ function getUserScopedKey(prefix: string): string | null {
  * @param prefix The base key prefix
  * @param defaultValue Default value if not found or parse fails
  */
-export function loadUserData<T>(prefix: string, defaultValue: T): T {
+export function loadUserData<T>(prefix: string, defaultValue: T, pubkey?: string | null): T {
 	try {
-		const key = getUserScopedKey(prefix)
+		const key = getUserScopedKey(prefix, pubkey)
 		if (!key) return defaultValue
 
 		const stored = localStorage.getItem(key)
@@ -55,9 +60,9 @@ export interface SaveUserDataOptions {
  *   {@link SaveUserDataOptions.strict}. Default (strict: false) preserves
  *   the historical behavior: storage failures are logged and swallowed.
  */
-export function saveUserData<T>(prefix: string, data: T, options?: SaveUserDataOptions): void {
+export function saveUserData<T>(prefix: string, data: T, options?: SaveUserDataOptions, pubkey?: string | null): void {
 	try {
-		const key = getUserScopedKey(prefix)
+		const key = getUserScopedKey(prefix, pubkey)
 		if (!key) {
 			// A strict write with no user scope is NOT persisted — failing
 			// closed beats silently skipping an unrecoverable record.
@@ -78,9 +83,9 @@ export function saveUserData<T>(prefix: string, data: T, options?: SaveUserDataO
  * Remove user-scoped data from localStorage.
  * @param prefix The base key prefix
  */
-export function removeUserData(prefix: string): void {
+export function removeUserData(prefix: string, pubkey?: string | null): void {
 	try {
-		const key = getUserScopedKey(prefix)
+		const key = getUserScopedKey(prefix, pubkey)
 		if (!key) return
 
 		localStorage.removeItem(key)

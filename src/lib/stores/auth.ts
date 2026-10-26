@@ -1,4 +1,3 @@
-import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
 import { walletOps } from './walletOps'
@@ -8,8 +7,11 @@ import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/lib/terms'
 import { uiActions } from './ui'
 import { appNotifications } from '@platform/web/notifications'
 import { getPublicKey, nip19 } from 'nostr-tools'
-import { decrypt, encrypt } from 'nostr-tools/nip49'
+import { encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
+import { createWebSignerSession } from '@platform/web/sdkSigner'
+import { ndkSignerFromCapability } from '@/lib/nostr/ndk-signer-adapter'
+import type { SignerSession } from '@sdk/core/signer'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
@@ -17,8 +19,19 @@ export const NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY = 'nostr_local_encrypted_signer_ke
 export const NOSTR_AUTO_LOGIN = 'nostr_auto_login'
 export const NOSTR_USER_PUBKEY = 'nostr_user_pubkey'
 
+/**
+ * The authenticated user, as this store exposes it. It is intentionally a bare
+ * identity record — the pubkey and nothing else — because the current user now
+ * belongs to the SDK signer session (`@sdk/core/signer`), not to this store.
+ * Consumers only ever read `user?.pubkey`; anything richer is a *read* the
+ * signer performs, not state this store holds.
+ */
+interface AuthUser {
+	pubkey: string
+}
+
 interface AuthState {
-	user: NDKUser | null
+	user: AuthUser | null
 	isAuthenticated: boolean
 	needsDecryptionPassword: boolean
 	isAuthenticating: boolean
@@ -39,13 +52,90 @@ const initialState: AuthState = {
 
 export const authStore = new Store<AuthState>(initialState)
 
+// ---------------------------------------------------------------------------
+// The SDK signer session: who the user is now belongs to the signer.
+// ---------------------------------------------------------------------------
+//
+// #815e0d / store-drain B3 part 2. This store used to build its own NDK signers
+// (`NDKNip07Signer`, `NDKNip46Signer`, `NDKPrivateKeySigner`) and hold their
+// `NDKUser` as the authenticated identity. That machinery now lives behind the
+// SDK signer session (`createWebSignerSession`, `@platform/web/sdkSigner`),
+// whose five lanes are one-to-one with this store's login methods:
+//
+//   extension  <- loginWithExtension          (NIP-07)
+//   nsec       <- loginWithPrivateKey         (private key)
+//   ncryptsec  <- decryptAndLogin             (NIP-49)
+//   bunker     <- loginWithNip46              (NIP-46 bunker://)
+//   nostrconnect                              (NIP-46 nostrconnect://, driven
+//                                              from `NostrConnectQR.tsx`)
+//
+// The session is created **lazily** so importing this module does not construct
+// a relay pool: a unit test that only reads `authStore` never touches the host
+// ports. `observeSession` fires immediately with a snapshot and on every
+// transition, and that subscription is how an identity transition (login /
+// logout / switch) reaches `authStore` — identity-scoped consumers re-read or
+// lose their scope rather than silently sharing the previous user's records.
+//
+// The session's settings allow-list NIP-04 and NIP-44 so the capability it
+// hands out still offers the encryption the rest of the app signs and encrypts
+// with (NIP-17 orders and messages).
+let signerSession: SignerSession | undefined
+
+const getSignerSession = (): SignerSession => {
+	if (!signerSession) {
+		const session = createWebSignerSession({
+			capabilities: ['nip04', 'nip44'],
+			encryption: { nip04: true, nip44: true },
+		})
+		session.observeSession((snapshot) => {
+			authStore.setState((state) => ({
+				...state,
+				user: snapshot.pubkey ? { pubkey: snapshot.pubkey } : null,
+				isAuthenticated: snapshot.state === 'active',
+			}))
+		})
+		signerSession = session
+	}
+	return signerSession
+}
+
+/**
+ * The current user's pubkey, or `null`. This is the **parameter** identity-scoped
+ * consumers take: an assembly reads it here (or subscribes below) and passes the
+ * resolved value into a pure read, rather than a pure read reaching for ambient
+ * store state.
+ */
+export function getCurrentPubkey(): string | null {
+	return authStore.state.user?.pubkey ?? null
+}
+
+/**
+ * The **identity subscription**: fires immediately with the current pubkey and
+ * again on every identity transition — login, logout or a switch to another
+ * user. An assembly that holds identity-scoped data (storage, caches, wallet
+ * keys) subscribes once and re-runs its assembly when the pubkey changes, so it
+ * never silently keeps the previous user's scope.
+ */
+export function subscribeToAuthIdentity(listener: (identity: { pubkey: string | null }) => void): () => void {
+	let last = getCurrentPubkey()
+	listener({ pubkey: last })
+	const subscription = authStore.subscribe(() => {
+		const next = getCurrentPubkey()
+		if (next !== last) {
+			last = next
+			listener({ pubkey: next })
+		}
+	})
+	return () => subscription.unsubscribe()
+}
+
 /**
  * Bootstrap the NIP-60 Cashu wallet after a successful sign-in.
  *
  * This was the third step of `ndkActions.runSignerOnboarding` until the ndk
  * store stopped importing the wallet: `src/lib/stores/ndk.ts` is the highest
- * fan-in contract in the tree (96 dependents) and its edge to `./walletOps`
- * was the hub of the 36-file import cycle blocking the src/ retirement. The
+ * fan-in contract in the tree (96 dependents) and its edge to `./walletOps` was
+ * the hub of the 36-file import cycle blocking the src/ retirement. The
  * semantics are unchanged — fire and forget, a failure is logged and never
  * blocks login, and it runs alongside the relay-list and NWC steps.
  */
@@ -57,6 +147,46 @@ const bootstrapCashuWalletInBackground = (): void => {
 			console.error('[auth] walletOps.initialize failed:', e)
 		}
 	})()
+}
+
+/**
+ * Adopt the signer the session just attached: hand NDK a signer to sign with,
+ * kick off the post-signer onboarding pipeline and the wallet bootstrap, and
+ * reconcile the cart for the freshly resolved identity. Returns the resolved
+ * pubkey.
+ *
+ * The SDK capability is bridged onto NDK's `NDKSigner` interface by
+ * `ndkSignerFromCapability` — the ndk store is not drained (owner ruling), so
+ * this is the one seam that keeps its library-typed consumers compiling. The
+ * capability remains the single source of signing; the adapter only delegates.
+ */
+const adoptActiveSigner = async (wasLoggedOut: boolean): Promise<string> => {
+	const capability = getSignerSession().currentSigner()
+	const ndkSigner = ndkSignerFromCapability(capability)
+	ndkActions.setSigner(ndkSigner)
+	// Kick off the post-signer onboarding pipeline (relay list, NWC select)
+	// in the background — login can resolve before these finish so the user
+	// isn't gated on a slow relay-list fetch.
+	void ndkActions.runSignerOnboarding(ndkSigner)
+	bootstrapCashuWalletInBackground()
+
+	const pubkey = await capability.getPublicKey()
+	const ndk = ndkActions.getNDK()
+	void cartActions.reconcileRemoteCartForUser(pubkey, ndkSigner, ndk, wasLoggedOut)
+	return pubkey
+}
+
+/**
+ * Start a lane on a fresh session. A session holds at most one capability, so a
+ * second login without a logout ends the previous one first (idempotent from
+ * any state) rather than refusing with `SessionAttachedError` the way a raw
+ * `startSession` would.
+ */
+const startFreshSession = async (input: Parameters<SignerSession['startSession']>[0]): Promise<string | undefined> => {
+	const session = getSignerSession()
+	await session.endSession()
+	const snapshot = await session.startSession(input)
+	return snapshot.pubkey
 }
 
 export const authActions = {
@@ -85,7 +215,7 @@ export const authActions = {
 			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
 
 			if (privateKeySigner && bunkerUrl) {
-				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner))
+				await authActions.loginWithNip46(bunkerUrl, { privateKey: privateKeySigner })
 				authActions.checkAndShowTermsDialog()
 				return
 			}
@@ -117,19 +247,14 @@ export const authActions = {
 				throw new Error('No encrypted key found')
 			}
 
-			// Extract the ncryptsec part (format: "pubkey:ncryptsec...")
+			// The record is "pubkey:ncryptsec..."; the SDK's ncryptsec lane takes
+			// the ncryptsec and the passphrase and unlocks the identity itself —
+			// this store no longer derives the key locally.
 			const [, encryptedKey] = encryptedPrivateKey.split(':')
 
-			// Use nostr-tools decrypt function
-			const decryptedBytes = decrypt(encryptedKey, password)
-
-			// Convert Uint8Array to hex string
-			const privateKeyHex = Array.from(decryptedBytes)
-				.map((byte) => byte.toString(16).padStart(2, '0'))
-				.join('')
-
-			// Login with the decrypted key
-			await authActions.loginWithPrivateKey(privateKeyHex)
+			const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+			await startFreshSession({ lane: 'ncryptsec', ncryptsec: encryptedKey, password })
+			await adoptActiveSigner(wasLoggedOut)
 			authStore.setState((state) => ({ ...state, needsDecryptionPassword: false }))
 			authActions.checkAndShowTermsDialog()
 		} catch (error) {
@@ -177,27 +302,16 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKPrivateKeySigner(privateKey)
-			await signer.blockUntilReady()
-			ndkActions.setSigner(signer)
-			// Kick off the post-signer onboarding pipeline (relay list,
-			// NWC select, NIP-60 wallet bootstrap) in the background —
-			// login can resolve before these finish so the user isn't
-			// gated on a slow relay-list fetch. The wallet step runs from
-			// here, not inside `./ndk`, so the ndk store does not import
-			// the wallet (see `bootstrapCashuWalletInBackground`).
-			void ndkActions.runSignerOnboarding(signer)
-			bootstrapCashuWalletInBackground()
+			const pubkey = await startFreshSession({ lane: 'nsec', key: privateKey })
+			if (!pubkey) throw new Error('The private key lane did not resolve an identity')
+			await adoptActiveSigner(wasLoggedOut)
 
-			const user = await signer.user()
-
+			const user: AuthUser = { pubkey }
 			authStore.setState((state) => ({
 				...state,
 				user,
 				isAuthenticated: true,
 			}))
-
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {
@@ -235,35 +349,24 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKNip07Signer()
-			await signer.blockUntilReady()
-			ndkActions.setSigner(signer)
-			// Kick off the post-signer onboarding pipeline (relay list,
-			// NWC select, NIP-60 wallet bootstrap) in the background —
-			// login can resolve before these finish so the user isn't
-			// gated on a slow relay-list fetch. The wallet step runs from
-			// here, not inside `./ndk`, so the ndk store does not import
-			// the wallet (see `bootstrapCashuWalletInBackground`).
-			void ndkActions.runSignerOnboarding(signer)
-			bootstrapCashuWalletInBackground()
+			const pubkey = await startFreshSession({ lane: 'extension' })
 
-			const user = await signer.user()
-
-			if (!user || !user.pubkey) {
+			if (!pubkey) {
 				throw new Error('Failed to authenticate with Nostr extension. Please make sure your extension is unlocked and try again.')
 			}
 
 			// Store user pubkey and enable auto-login for persistence
-			localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
+			localStorage.setItem(NOSTR_USER_PUBKEY, pubkey)
 			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
 
+			await adoptActiveSigner(wasLoggedOut)
+
+			const user: AuthUser = { pubkey }
 			authStore.setState((state) => ({
 				...state,
 				user,
 				isAuthenticated: true,
 			}))
-
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {
@@ -277,7 +380,7 @@ export const authActions = {
 		}
 	},
 
-	loginWithNip46: async (bunkerUrl: string, localSigner: NDKPrivateKeySigner, options?: Nip46LoginOptions) => {
+	loginWithNip46: async (bunkerUrl: string, localSigner: { privateKey?: string }, options?: Nip46LoginOptions) => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
@@ -285,40 +388,30 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
-
-			if (options?.onAuthUrl) {
-				signer.on('authUrl', (url) => {
-					if (typeof url === 'string' && url.length > 0) {
-						options.onAuthUrl?.(url)
-					}
-				})
-			}
-
-			await signer.blockUntilReady()
-			ndkActions.setSigner(signer)
-			// Kick off the post-signer onboarding pipeline (relay list,
-			// NWC select, NIP-60 wallet bootstrap) in the background —
-			// login can resolve before these finish so the user isn't
-			// gated on a slow relay-list fetch. The wallet step runs from
-			// here, not inside `./ndk`, so the ndk store does not import
-			// the wallet (see `bootstrapCashuWalletInBackground`).
-			void ndkActions.runSignerOnboarding(signer)
-			bootstrapCashuWalletInBackground()
-			const user = await signer.user()
+			const pubkey = await startFreshSession({
+				lane: 'bunker',
+				bunkerUrl,
+				clientKeyHex: localSigner.privateKey,
+				onAuthUrl: options?.onAuthUrl
+					? async (url: string) => {
+							options.onAuthUrl?.(url)
+						}
+					: undefined,
+			})
+			if (!pubkey) throw new Error('The bunker lane did not resolve an identity')
 
 			// Wait until user is logged in successfully before saving the bunkerURL/private key.
-
 			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
 			localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
 
+			await adoptActiveSigner(wasLoggedOut)
+
+			const user: AuthUser = { pubkey }
 			authStore.setState((state) => ({
 				...state,
 				user,
 				isAuthenticated: true,
 			}))
-
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {
@@ -336,6 +429,9 @@ export const authActions = {
 		appNotifications.queue.clear()
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
+		// End the signer session so the identity it holds is released and every
+		// identity-scoped subscriber sees the transition to no user.
+		if (signerSession) void signerSession.endSession()
 		ndkActions.removeSigner()
 		// Tear down per-user state: NWC selection through the ndk store,
 		// the NIP-60 wallet here. Mirrors the sign-in side, where both are
