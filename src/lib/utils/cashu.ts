@@ -1,20 +1,9 @@
-import type { Secret, SecretData } from '@cashu/crypto/modules/common'
-import { parseSecret } from '@cashu/crypto/modules/common/NUT11'
-
-interface P2PKSecretData extends SecretData {
-	tags?: Array<Array<string>>
-}
-
-function isP2PKSecret(parsed: Secret): parsed is ['P2PK', P2PKSecretData] {
-	return Array.isArray(parsed) && parsed[0] === 'P2PK' && parsed[1] != null
-}
-
-export function getP2PKLocktime(secret: Uint8Array | string): number {
-	const parsed = parseSecret(secret instanceof Uint8Array ? new TextDecoder().decode(secret) : secret)
-	if (!isP2PKSecret(parsed)) {
-		throw new Error('Invalid P2PK secret: must start with "P2PK"')
-	}
-	const tags = parsed[1].tags
-	const locktimeTag = tags?.find((t) => t[0] === 'locktime')
-	return locktimeTag && locktimeTag.length > 1 ? parseInt(locktimeTag[1], 10) : Infinity
-}
+/**
+ * src/lib/utils/cashu.ts — the shim: `src/`'s view of the SDK cashu module.
+ *
+ * the P2PK-secret locktime reader (`getP2PKLocktime`) moved to
+ * `@sdk/commerce/payments/cashu/p2pkLocktime` as part of the `src/lib/wallet/` drain (increment B4b,
+ * stage 3). Every existing call site keeps importing `@/lib/utils/cashu` unchanged: a plain
+ * `export *` re-exports the whole surface and no adapter is needed.
+ */
+export * from '@sdk/commerce/payments/cashu/p2pkLocktime'
