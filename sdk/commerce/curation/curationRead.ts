@@ -1,3 +1,5 @@
+import { readThroughStore, type EventReadContext } from '../../core/event-store/read'
+import type { NostrEventLike } from '../../core/nostr/eventLike'
 import { CURATION_LISTS, MUTE_LIST_KIND, readCurationListItems, type CurationListKey } from './curationLists'
 
 // A type alias (not interface) so it stays assignable to relay-client filters with `#${string}` index signatures.
@@ -161,6 +163,26 @@ export function isEditor(editorSettings: EditorSettings<unknown> | null | undefi
 export function isBlacklisted(blacklistSettings: BlacklistSettings<unknown> | null | undefined, pubkey: string): boolean {
 	if (!blacklistSettings || !pubkey) return false
 	return blacklistSettings.blacklistedPubkeys.includes(pubkey)
+}
+
+/**
+ * Discovery read: the app's kind-10000 mute/blacklist list, merged through the host's
+ * `EventReadContext` so superseded and author-deleted versions never surface. A missing app pubkey
+ * is an error; no published list yields the empty settings record (the pre-drain reader behaved the
+ * same: it parsed a null event).
+ */
+export async function readBlacklistSettingsWorkflow<E extends NostrEventLike>(
+	context: EventReadContext<E>,
+	appPubkey?: string,
+): Promise<BlacklistSettings<E>> {
+	if (!appPubkey) throw new Error('App pubkey is required')
+
+	const events = await readThroughStore(context, [buildBlacklistFilter(appPubkey)])
+	const latestEvent = [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+
+	if (!latestEvent) console.log(`No blacklist settings found for app pubkey: ${appPubkey}`)
+
+	return parseBlacklistSettings(latestEvent ?? null)
 }
 
 export function getFormattedAdmins(adminSettings: AdminSettings<unknown> | null | undefined) {

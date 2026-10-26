@@ -1,4 +1,4 @@
-import { getBugRelay, ndkActions } from '@/lib/stores/ndk'
+import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions } from '@/lib/stores/ndk'
 import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 
@@ -16,6 +16,40 @@ export function createNdkReadContext(timeoutMs = 8000): EventReadContext<NDKEven
 		fetch: async (filters) => {
 			const ndkFilters = filters as NDKFilter[]
 			return Array.from(await ndkActions.fetchEventsWithTimeout(ndkFilters.length === 1 ? ndkFilters[0] : ndkFilters, { timeoutMs }))
+		},
+	}
+}
+
+/**
+ * The app's main relay URL, or undefined while the host config is still loading. Lives here (the
+ * file that already owns the `@/lib/stores/ndk` edge) so the config bindings can pin their live
+ * subscriptions without importing `src/` themselves.
+ */
+export function getAppRelayUrl(): string | undefined {
+	return getMainRelay()
+}
+
+/**
+ * Platform adapter for app-settings reads (blacklist, NIP-05/vanity registries, test labels):
+ * fetches are pinned to the instance's main relay (`getAppRelaySet`), so a stale copy on a
+ * user-added relay cannot race the canonical answer. When the relay client is not ready the fetch
+ * answers empty rather than reaching the network, mirroring the pre-drain readers.
+ */
+export function createAppRelayReadContext(timeoutMs = 8000): EventReadContext<NDKEvent> {
+	return {
+		store: ndkEventStore,
+		fetch: async (filters) => {
+			const ndk = ndkActions.getNDK()
+			if (!ndk) return []
+
+			const relaySet = getAppRelaySet()
+			const ndkFilters = filters as NDKFilter[]
+			return Array.from(
+				await ndkActions.fetchEventsWithTimeout(ndkFilters.length === 1 ? ndkFilters[0] : ndkFilters, {
+					timeoutMs,
+					relaySet,
+				}),
+			)
 		},
 	}
 }

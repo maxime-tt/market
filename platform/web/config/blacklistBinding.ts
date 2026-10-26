@@ -18,6 +18,18 @@
  * consumers migrate to `useBlacklistState` lazily.
  */
 import { Store, useStore } from '@tanstack/react-store'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { createAppRelayReadContext, getAppRelayUrl } from '@platform/web/ndkReadContext'
+import { getAppNdk, type NDKEvent } from '@platform/web/ndkPublishContext'
+import {
+	buildBlacklistFilter,
+	getFormattedBlacklist,
+	isBlacklisted,
+	readBlacklistSettingsWorkflow,
+	type BlacklistSettings as SdkBlacklistSettings,
+} from '@sdk/commerce/curation'
+import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import { blacklistState } from '@sdk/config/blacklist'
 import type { BlacklistState } from '@sdk/config/blacklist'
 
@@ -52,4 +64,77 @@ export const blacklistBinding: BlacklistBinding = createBlacklistBinding()
 /** Read the blacklist state reactively. The hook a rewired component uses. */
 export function useBlacklistState(): BlacklistState {
 	return useStore(blacklistBinding.store)
+}
+
+// --- the blacklist relay read (store drain D1, slice 3) ------------------------------------------
+//
+// Separate concern from the state bridge above: `useBlacklistSettings` reads the app's kind-10000
+// mute list from the relays. The read logic is framework-free (`readBlacklistSettingsWorkflow`,
+// `sdk/commerce/curation`); this binding owns the react-query hook, the live invalidation
+// subscription, and resolves the port from `platform/web/ndkReadContext.ts` (pinned to the app's
+// main relay), so no part of the read imports `@/lib/stores/ndk` directly. The query key is
+// literal-identical to the pre-drain value and to the writers' invalidation target.
+
+export { getFormattedBlacklist, isBlacklisted }
+export type BlacklistSettings = SdkBlacklistSettings<NDKEvent>
+
+/**
+ * Fetches blacklist settings (kind 10000) for the app
+ */
+export const fetchBlacklistSettings = async (appPubkey?: string): Promise<BlacklistSettings | null> =>
+	readBlacklistSettingsWorkflow(createAppRelayReadContext(), appPubkey)
+
+/**
+ * Hook to fetch blacklist settings for the app
+ */
+export const useBlacklistSettings = (appPubkey?: string) => {
+	const queryClient = useQueryClient()
+	const ndk = getAppNdk()
+	const mainRelay = getAppRelayUrl()
+
+	// Set up a live subscription to monitor blacklist changes
+	useEffect(() => {
+		if (!appPubkey || !ndk || !mainRelay) return
+
+		const blacklistFilter = buildBlacklistFilter(appPubkey)
+
+		let latestEventTime = 0
+		let receivedEose = false
+
+		const subscription = ndk.subscribe(blacklistFilter, {
+			closeOnEose: false, // Keep subscription open
+			relayUrls: [mainRelay],
+			exclusiveRelay: true, // Reject stale copies from other relays in the pool
+		})
+
+		// Event handler for blacklist updates - only react to newer events after EOSE
+		subscription.on('event', (newEvent) => {
+			const eventTime = newEvent.created_at ?? 0
+			if (receivedEose && eventTime > latestEventTime) {
+				queryClient.invalidateQueries({ queryKey: configKeys.blacklist(appPubkey) })
+			}
+			if (eventTime > latestEventTime) {
+				latestEventTime = eventTime
+			}
+		})
+
+		subscription.on('eose', () => {
+			receivedEose = true
+		})
+
+		// Clean up subscription when unmounting
+		return () => {
+			subscription.stop()
+		}
+	}, [appPubkey, ndk, mainRelay, queryClient])
+
+	return useQuery({
+		queryKey: configKeys.blacklist(appPubkey || ''),
+		queryFn: () => fetchBlacklistSettings(appPubkey),
+		enabled: !!appPubkey,
+		staleTime: 30000, // Consider data stale after 30 seconds
+		refetchOnMount: true,
+		refetchOnWindowFocus: true,
+		refetchOnReconnect: true,
+	})
 }

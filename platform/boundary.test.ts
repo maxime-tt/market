@@ -59,6 +59,8 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/queries/vanity.tsx', // store drain D1 slice 2; shim deleted in E1
 	'src/queries/reactions.tsx', // store drain D1 slice 2; shim deleted in E1
 	'src/queries/comments.tsx', // store drain D1 slice 2; shim deleted in E1
+	'src/queries/blacklist.tsx', // store drain D1 slice 3; shim deleted in E1
+	'src/queries/testLabels.tsx', // store drain D1 slice 3; shim deleted in E1
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
 	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
 	'src/hooks/useAuctionWinMonitor.ts', // pre-existing; owner leaves src/ in D3
