@@ -20,6 +20,9 @@ export { getWriteRelaySet, getWriteRelays }
 export { NDKEvent }
 export type { NDKSigner }
 
+/** Re-exported so publish bindings can route app-settings submissions through this bridge without a `platform -> src` edge. */
+export { submitAppSettings as submitAppSettingsEvent } from '@/lib/appSettings'
+
 /**
  * Platform adapter: binds the web host's NDK client and signer to the SDK's
  * explicit publish context. SDK workflows never read the NDK singleton.
