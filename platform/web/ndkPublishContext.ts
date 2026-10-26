@@ -16,8 +16,9 @@ export const getAppSigner = () => ndkActions.getSigner()
 export const publishAppEvent = (event: NDKEvent) => ndkActions.publishEvent(event)
 export { getWriteRelaySet, getWriteRelays }
 
-/** Re-exported so Platform bindings can type their publish callbacks without a `platform -> src` edge. */
-export type { NDKEvent, NDKSigner }
+/** Re-exported so Platform bindings can use the event type without a `platform -> src` edge. */
+export { NDKEvent }
+export type { NDKSigner }
 
 /**
  * Platform adapter: binds the web host's NDK client and signer to the SDK's
