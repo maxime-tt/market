@@ -14,7 +14,7 @@ import { AppOverlays } from '@platform/web/app/AppOverlays'
 import { AppProviders } from '@platform/web/app/AppProviders'
 import { syncEventStoresToQueryClient } from '@platform/web/eventStoreQuerySync'
 import { UpdateAvailableDialog } from '@/components/UpdateAvailableDialog'
-import { useServiceWorker } from '@/hooks/useServiceWorker'
+import { useServiceWorker } from '@platform/web/app/useServiceWorker'
 
 if (process.env.NODE_ENV !== 'development') {
 	console.log = () => {}
