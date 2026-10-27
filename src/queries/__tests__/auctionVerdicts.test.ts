@@ -36,7 +36,7 @@ mock.module('@/lib/stores/blacklist', () => ({
 // Never mock 'nostr-tools' itself: bun applies mock.module process-wide for the
 // whole test run, which would replace the real verifyEvent for every other test
 // file in the suite (liveChat.test.ts mocks this same seam for the same reason).
-mock.module('@/lib/nostr/event-signature', () => ({
+mock.module('@sdk/core/nostr/eventSignature', () => ({
 	verifyNostrEventSignature: mock((event: NostrEvent) => {
 		if (verifyEventResult) return verifyEventResult(event)
 		// Default: accept events that carry a signature, reject unsigned ones.

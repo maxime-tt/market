@@ -18,6 +18,13 @@ import { createMemoryEventStore, type EventReadContext, type EventStorePort } fr
 export { applesauceIo, fetchNdkEventSet, mergeNdkEventSetsById, rehydrateVerifiedNdkEvent }
 export type { NDKEvent, NDKFilter, NDKSigner, NostrFilter }
 
+/**
+ * Re-exported so the auction read binding can keep the live-subscription hook
+ * without adding a new `platform -> src` edge: this file already owns the
+ * applesauce seam the hook subscribes through (D1 slice 8).
+ */
+export { useSubscriptionEvents } from '@/lib/nostr/useSubscriptionEvents'
+
 // Raw-event reads (the applesauce seam used by auctions) get their own store; NDKEvent reads use ndkReadContext.
 const rawEventStore = createMemoryEventStore<NostrEventLike>()
 

@@ -1,0 +1,282 @@
+/**
+ * Zod schema + parser for kind-30408 auction listing events under
+ * `cashu_p2pk_bidder_path_v1`. See AUCTIONS.md §4.1.
+ *
+ * Two layers:
+ *
+ * 1. {@link AuctionEventSchema} — a Zod object validating the
+ *    extracted-tag intermediate form. Useful when you already have
+ *    a structured intermediate (e.g. when you're constructing rather
+ *    than parsing).
+ *
+ * 2. {@link parseAuctionEvent} — takes a raw event, runs the tag
+ *    extraction, and returns a `ParsedAuctionEvent` or a structured
+ *    Zod error. This is what callers will use 99% of the time.
+ *
+ * The parser is intentionally tolerant of the optional / display tags
+ * (summary, images, specs, etc.) — they don't affect protocol safety
+ * and a stale/legacy event with unusual auxiliary data should still
+ * be readable. It is strict on the safety-critical tags (lock policy,
+ * key scheme, auditors, timing invariants).
+ */
+
+import { z } from 'zod'
+import {
+	AUCTION_KEY_SCHEME,
+	AUCTION_KIND,
+	AUCTION_SETTLEMENT_POLICY,
+	AUCTION_TYPE_ENGLISH,
+	DEFAULT_AUDITOR_QUORUM,
+	DEFAULT_MAX_SKEW_SECONDS,
+	FALLBACK_DELAY_DENOMINATOR,
+	FALLBACK_DELAY_NUMERATOR,
+} from '@sdk/commerce/auctions/constants'
+import type { MinBidCurve, MinBidCurveShape, ParsedAuctionEvent } from '@sdk/commerce/auctions/events'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { addressableCoordinate, nostrEventIdHex, nostrPubkeyHex, nonNegativeInt, positiveInt, positiveUnixSeconds } from './common'
+import { readIntegerTag, readMultiTag, readSingleTag } from './tagAccess'
+
+// ----------------------------------------------------------------------------
+// Min-bid-curve parser — extracted for testability
+// ----------------------------------------------------------------------------
+
+const MIN_BID_CURVE_MIN_PEAK = 1
+const MIN_BID_CURVE_MAX_PEAK = 100
+
+/**
+ * Timing tags that MUST be present on a kind-30408 event (AUCTIONS.md §4.1,
+ * "Required tags"). Presence is checked here; the value ranges are the
+ * schema's job — and since the zero-timing ruling, the range is *also* gating:
+ * a timing tag may not be `0` (see `positiveUnixSeconds`).
+ */
+const REQUIRED_TIMING_TAGS = ['start_at', 'end_at'] as const
+
+const parseMinBidCurve = (raw: string | undefined): MinBidCurve => {
+	if (!raw) return { shape: 'none', peakMultiplier: 1, raw: '' }
+	const [shape, peakRaw] = raw.split(':')
+	const shapeNarrowed: MinBidCurveShape = shape === 'linear' || shape === 'exponential' ? shape : 'none'
+	if (shapeNarrowed === 'none') return { shape: 'none', peakMultiplier: 1, raw }
+	const peakParsed = Number.parseFloat(peakRaw ?? '')
+	const peak = !Number.isFinite(peakParsed)
+		? MIN_BID_CURVE_MIN_PEAK
+		: Math.min(MIN_BID_CURVE_MAX_PEAK, Math.max(MIN_BID_CURVE_MIN_PEAK, peakParsed))
+	return { shape: shapeNarrowed, peakMultiplier: peak, raw }
+}
+
+// ----------------------------------------------------------------------------
+// Intermediate Zod schema
+// ----------------------------------------------------------------------------
+
+/**
+ * Structured intermediate the parser produces from `event.tags` before
+ * handing off to Zod. Exposing it as a schema lets tests build fixtures
+ * by hand and lets future code (e.g. wallet form validators) reuse the
+ * same shape constraints without constructing a full event object.
+ */
+export const AuctionEventSchema = z
+	.object({
+		dTag: z.string().min(1, 'auction `d` tag is required'),
+		sellerPubkey: nostrPubkeyHex,
+		coordinate: addressableCoordinate,
+		rootEventId: nostrEventIdHex,
+		title: z.string().min(1, 'auction title required'),
+		summary: z.string().optional(),
+		content: z.string().default(''),
+		auctionType: z.literal(AUCTION_TYPE_ENGLISH, { message: `auction_type must equal "${AUCTION_TYPE_ENGLISH}"` }),
+		startAt: positiveUnixSeconds,
+		endAt: positiveUnixSeconds,
+		maxEndAt: positiveUnixSeconds,
+		settlementGrace: positiveInt,
+		currency: z.literal('SAT', { message: 'currency must be SAT' }),
+		reserve: nonNegativeInt,
+		startingBid: nonNegativeInt,
+		bidIncrement: positiveInt,
+		minBidCurve: z.custom<MinBidCurve>(),
+		settlementPolicy: z.literal(AUCTION_SETTLEMENT_POLICY, {
+			message: `settlement_policy must equal "${AUCTION_SETTLEMENT_POLICY}"`,
+		}),
+		keyScheme: z.literal(AUCTION_KEY_SCHEME, { message: `key_scheme must equal "${AUCTION_KEY_SCHEME}"` }),
+		mints: z.array(z.string().url()).min(1, 'at least one mint required'),
+		p2pkXpub: z.string().min(1, 'p2pk_xpub required'),
+		auditors: z.array(nostrPubkeyHex).min(1, 'at least one auditor required'),
+		auditorQuorum: positiveInt,
+		maxSkewSec: positiveInt,
+		fallbackDelaySec: nonNegativeInt,
+		vadiumRatioBps: nonNegativeInt,
+		schema: z.string().default('auction_v1'),
+	})
+	.refine((value) => value.endAt >= value.startAt, { message: 'end_at must be ≥ start_at', path: ['endAt'] })
+	.refine((value) => value.maxEndAt >= value.endAt, { message: 'max_end_at must be ≥ end_at', path: ['maxEndAt'] })
+	.refine((value) => value.auditorQuorum <= value.auditors.length, {
+		message: 'auditor_quorum cannot exceed the number of listed auditors',
+		path: ['auditorQuorum'],
+	})
+
+export type AuctionEventInput = z.infer<typeof AuctionEventSchema>
+
+// ----------------------------------------------------------------------------
+// Raw event → ParsedAuctionEvent
+// ----------------------------------------------------------------------------
+
+/**
+ * Structured (non-Zod) parse failure. `tag` names the protocol tag the failure
+ * is about when it is tag-scoped, so a caller can render a precise reason
+ * (the malformed-event notice does exactly that) without re-deriving it from
+ * the message string.
+ */
+export type ParseAuctionEventError = { message: string; code: string; tag?: string }
+
+/**
+ * Discriminated result. We don't throw because validators / clients
+ * often iterate over many events and want to skip individual bad ones
+ * without try/catch.
+ */
+export type ParseAuctionEventResult = { ok: true; value: ParsedAuctionEvent } | { ok: false; error: z.ZodError | ParseAuctionEventError }
+
+/**
+ * Parse a raw kind-30408 event into a {@link ParsedAuctionEvent}.
+ *
+ * Failure modes:
+ *   - Wrong kind on the event → `wrong_kind`
+ *   - Missing REQUIRED tag (`d`, `title`, `mint`, `auditors`, `p2pk_xpub`,
+ *     `starting_bid`, `start_at`, `end_at`) → `missing_required_tag` with the
+ *     offending tag named in `error.tag`, or a ZodError with field path
+ *   - Tag value fails format / range constraint → ZodError
+ */
+export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResult => {
+	if (event.kind !== AUCTION_KIND) {
+		return { ok: false, error: { code: 'wrong_kind', message: `expected kind ${AUCTION_KIND}, got ${event.kind}` } }
+	}
+
+	const dTag = readSingleTag(event, 'd') ?? ''
+	const sellerPubkey = event.pubkey
+	const coordinate = dTag ? `${AUCTION_KIND}:${sellerPubkey}:${dTag}` : ''
+	const rootEventId = readSingleTag(event, 'auction_root_event_id') ?? event.id
+
+	const auctionType = readSingleTag(event, 'auction_type') ?? ''
+	const currency = readSingleTag(event, 'currency') ?? ''
+	const settlementPolicy = readSingleTag(event, 'settlement_policy') ?? ''
+	const keyScheme = readSingleTag(event, 'key_scheme') ?? ''
+
+	const settlementGrace = readIntegerTag(event, 'settlement_grace') ?? 0
+	const reserve = readIntegerTag(event, 'reserve') ?? 0
+
+	// `start_at` and `end_at` are REQUIRED tags (AUCTIONS.md §4.1, "Required
+	// tags"). The old `?? 0` fallback silently turned tag omission into the unix
+	// epoch, and that is exactly what made a malformed event win the feed: a
+	// missing close time reads as `0`, `0` is not "ended", and `0` beats every
+	// real `end_at` in the "Ending Soon" comparison — so the card sat at slot #1
+	// with "No end date". Same class as the `starting_bid` fallback below
+	// (#1315): omission is now a structured failure, not a plausible-looking
+	// default.
+	//
+	// Presence *and* range are gating. Presence is checked here, because a
+	// missing tag has no field to fail in; the range is the schema's
+	// `positiveUnixSeconds` on all three timing fields, so a *present* `0` —
+	// `start_at = 0` + `end_at = 0`, the one zero-cutoff shape the old
+	// `end_at >= start_at` invariant could not refuse — is now refused as well
+	// (maintainer ruling, 2026-09-19: "gate completely on invalid event
+	// format"). A timing value of `0` is the epoch, which no auction has ever
+	// legitimately started or closed at; treating it as an absent value is what
+	// the format always meant. `max_end_at` keeps its `?? endAt` derivation —
+	// §6.0 defines `max_end_at = end_at` for the no-anti-snipe-window form, so
+	// that default is the spec's own value rather than a guess, and the derived
+	// value is positive whenever `end_at` is.
+	for (const timingTag of REQUIRED_TIMING_TAGS) {
+		if (readSingleTag(event, timingTag) === undefined) {
+			return {
+				ok: false,
+				error: {
+					code: 'missing_required_tag',
+					tag: timingTag,
+					message: `auction is missing the required \`${timingTag}\` tag (AUCTIONS.md §4.1)`,
+				},
+			}
+		}
+	}
+	const startAt = readIntegerTag(event, 'start_at') ?? Number.NaN
+	const endAt = readIntegerTag(event, 'end_at') ?? Number.NaN
+	const maxEndAt = readIntegerTag(event, 'max_end_at') ?? endAt
+
+	// `starting_bid` is REQUIRED (AUCTIONS.md §3, ADR-0012 Phase 1). It is the
+	// auction's absolute bid floor and the only amount-based check a validator
+	// makes, so it may not be inferred. The old `?? 0` fallback silently turned
+	// tag omission into a floor of `max(0, AUCTION_MIN_BID_SATS)` = 10 sats —
+	// the spec/implementation contradiction tracked as #1315. Omission is now a
+	// hard, structured parse failure: a loud error is strictly better than a
+	// silently wrong floor.
+	//
+	// Presence and well-formedness are checked separately on purpose. An absent
+	// tag is `missing_required_tag`; a present-but-unparseable value falls
+	// through as NaN and is rejected by the schema's `nonNegativeInt`, which
+	// keeps the two failures distinguishable for the caller. `starting_bid` may
+	// legitimately be `0` — there is no protocol-fixed minimum sat value, so
+	// the seller's declared floor is authoritative (ADR-0012 Phase 1).
+	if (readSingleTag(event, 'starting_bid') === undefined) {
+		return {
+			ok: false,
+			error: {
+				code: 'missing_required_tag',
+				tag: 'starting_bid',
+				message: 'auction is missing the required `starting_bid` tag (AUCTIONS.md §3)',
+			},
+		}
+	}
+	const startingBid = readIntegerTag(event, 'starting_bid') ?? Number.NaN
+	const bidIncrement = readIntegerTag(event, 'bid_increment') ?? 0
+
+	const minBidCurve = parseMinBidCurve(readSingleTag(event, 'min_bid_curve'))
+
+	const mints = readMultiTag(event, 'mint')
+	const auditors = readMultiTag(event, 'auditors')
+	const auditorQuorum = readIntegerTag(event, 'auditor_quorum') ?? DEFAULT_AUDITOR_QUORUM
+	const maxSkewSec = readIntegerTag(event, 'max_skew_sec') ?? DEFAULT_MAX_SKEW_SECONDS
+	const fallbackDelaySec =
+		readIntegerTag(event, 'fallback_delay_sec') ?? Math.floor((settlementGrace * FALLBACK_DELAY_NUMERATOR) / FALLBACK_DELAY_DENOMINATOR)
+	const vadiumRatioBps = readIntegerTag(event, 'vadium_ratio_bps') ?? 10_000
+
+	const title = readSingleTag(event, 'title') ?? ''
+	const summary = readSingleTag(event, 'summary')
+	const p2pkXpub = readSingleTag(event, 'p2pk_xpub') ?? ''
+	const schema = readSingleTag(event, 'schema') ?? 'auction_v1'
+
+	const parsed = AuctionEventSchema.safeParse({
+		dTag,
+		sellerPubkey,
+		coordinate,
+		rootEventId,
+		title,
+		summary,
+		content: event.content ?? '',
+		auctionType,
+		startAt,
+		endAt,
+		maxEndAt,
+		settlementGrace,
+		currency,
+		reserve,
+		startingBid,
+		bidIncrement,
+		minBidCurve,
+		settlementPolicy,
+		keyScheme,
+		mints,
+		p2pkXpub,
+		auditors,
+		auditorQuorum,
+		maxSkewSec,
+		fallbackDelaySec,
+		vadiumRatioBps,
+		schema,
+	})
+
+	if (!parsed.success) return { ok: false, error: parsed.error }
+
+	return {
+		ok: true,
+		value: {
+			rawEvent: event,
+			...parsed.data,
+		} as ParsedAuctionEvent,
+	}
+}

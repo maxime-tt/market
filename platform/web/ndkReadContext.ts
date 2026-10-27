@@ -8,6 +8,18 @@ import { createMemoryEventStore, type EventReadContext, type EventStorePort } fr
 export type { NDKEvent, NDKFilter }
 
 /**
+ * The private-auction-claim helpers, re-exported so the auction read binding keeps the
+ * signer-bound claim lookup without adding a new `platform -> src` edge: this file already owns
+ * the `@/lib/stores/ndk` edge the decrypt path reads its active signer from (D1 slice 8).
+ */
+export {
+	decryptPrivateAuctionClaimMessageForActiveSigner,
+	getAuctionClaimPublicMarkerFields,
+	privateAuctionClaimMatchesPublicMarker,
+	type PrivateAuctionClaimMessage,
+} from '@/lib/auctions/privateAuctionClaimMessage'
+
+/**
  * Re-exported so Platform bindings (the messaging reads) can read the current
  * user without adding a new `platform -> src` edge: this file already owns the
  * `@/lib/stores/ndk` edge.
