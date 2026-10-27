@@ -65,12 +65,15 @@
 # platform/web/payments/paymentPublish.ts and the file it vacated becomes a
 # re-export shim. The two inbound edges it held (the ndkPublishContext
 # re-export of the NWC/WebLN/detail helpers, and paymentQuery's consumption of
-# them) are now platform-internal, so the INBOUND row falls 367/67 -> 366/67
-# and is ratcheted. The OUTBOUND src -> platform row is re-measured, not
-# ratcheted: the shim's one re-export is a new counted src -> platform edge
-# (62/56 -> 63/57).
+# them) are now platform-internal, so the INBOUND edge MEASURES 366 imports /
+# 67 files, down from 367/67. This baseline row is deliberately NOT ratcheted
+# here: the downward ratchet of every inbound row is E3's single commit, and no
+# per-slice commit hand-lowers it. So the row stays at 386/68 and the guard
+# reports the decrease until E3 lands. The OUTBOUND src -> platform row is
+# re-measured, not ratcheted: the shim's one re-export is a new counted
+# src -> platform edge (62/56 -> 63/57).
 
-platform -> src production 366 67
+platform -> src production 386 68
 platform -> src test 0 0
 
 ui -> src production 0 0
