@@ -26,7 +26,7 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/index.tsx',
 	'src/lib/boot.ts',
-	'src/publish/shipping.tsx',
+	'src/publish/shipping.tsx', // store drain D2 slice 17; shim deleted in E1
 	'src/publish/products.tsx',
 	'src/publish/collections.tsx',
 	'src/publish/orders.tsx',
@@ -53,6 +53,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/curationContext.ts',
 	'src/publish/featured.tsx', // store drain D2 slice 11; shim deleted in E1
 	'src/publish/payment.tsx', // store drain D2 slice 14; shim deleted in E1
+	'src/publish/app-settings.tsx', // store drain D2 slice 18; shim deleted in E1
 	'src/publish/auctionWorkflowAdapters.ts', // store drain D2 slice 6; shim deleted in E1
 	'src/publish/blacklist.tsx', // store drain D2 slice 16; shim deleted in E1
 	'src/queries/relay-list.tsx', // store drain D1 slice 1; shim deleted in E1
