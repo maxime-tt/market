@@ -86,6 +86,8 @@ GLOBS=(
 	# fails this guard instead of shrinking the scanned set.
 	"$ROOT"/sdk/commerce/auctions/*.ts
 	"$ROOT"/platform/web/auctions/*.ts
+	# D1 slice-8 schema destination: the auction and bid event schemas the reader validates with.
+	"$ROOT"/sdk/commerce/auctions/schemas/*.ts
 )
 
 shopt -s nullglob
