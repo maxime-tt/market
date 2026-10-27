@@ -50,6 +50,8 @@ export {
 // imports (`@platform/web/auctions/auctionPublish`, or the `src/publish/auctions` shim) keeps every
 // export the file it replaced had.
 export * from './auctionPublishRelease'
+export * from './auctionPublishBid'
+export * from './auctionPublishSettlement'
 
 /**
  * Resolve the auditor pubkey(s) to bake into a new auction's
