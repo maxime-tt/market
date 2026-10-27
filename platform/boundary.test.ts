@@ -35,6 +35,10 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/queries/collections.tsx',
 	'src/queries/auctions.tsx',
 	'src/queries/payment.tsx',
+	'src/queries/orders.tsx', // store drain D1 slice 7; shim deleted in E1
+	'src/queries/messages.tsx', // store drain D1 slice 7; shim deleted in E1
+	'src/queries/liveChat.tsx', // store drain D1 slice 7; shim deleted in E1
+	'src/queries/zaps.tsx', // store drain D1 slice 7; shim deleted in E1
 	'src/publish/comments.tsx',
 	'src/publish/liveChat.tsx',
 	'src/publish/reactions.tsx',

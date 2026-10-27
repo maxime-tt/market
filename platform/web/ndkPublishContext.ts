@@ -13,6 +13,9 @@ export type NdkClient = NonNullable<ConstructorParameters<typeof NDKEvent>[0]>
  */
 export const getAppNdk = () => ndkActions.getNDK()
 export const getAppSigner = () => ndkActions.getSigner()
+export const setAppSigner = (signer: NDKSigner | undefined) => ndkActions.setSigner(signer)
+export const runSignerOnboarding = (signer: NDKSigner) => ndkActions.runSignerOnboarding(signer)
+export const removeAppSigner = () => ndkActions.removeSigner()
 export const publishAppEvent = (event: NDKEvent) => ndkActions.publishEvent(event)
 export { fetchLatestAppEvent, getWriteRelaySet, getWriteRelays }
 
@@ -22,6 +25,26 @@ export type { NDKFilter, NDKSigner }
 
 /** Re-exported so publish bindings can route app-settings submissions through this bridge without a `platform -> src` edge. */
 export { submitAppSettings as submitAppSettingsEvent } from '@/lib/appSettings'
+
+/**
+ * Re-exported so the order bindings can adapt the host's NDK signer into the
+ * SDK's `EncryptingSigner` port without adding a new `platform -> src` edge:
+ * this file already owns a `@/lib` edge.
+ */
+export { toEncryptingSigner } from '@/lib/nostr/ndkEncryptingSigner'
+
+/**
+ * Re-exported so the payment binding can consume the Lightning payment publish
+ * helpers without adding a new `platform -> src` edge: this file already owns a
+ * `@/lib` edge.
+ */
+export {
+	payInvoiceWithNwc,
+	payInvoiceWithWebln,
+	publishPaymentDetail,
+	type PublishPaymentDetailParams,
+	type PayWithNwcParams,
+} from '@/publish/payment'
 
 /**
  * Platform adapter: binds the web host's NDK client and signer to the SDK's

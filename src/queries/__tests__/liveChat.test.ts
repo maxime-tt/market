@@ -11,12 +11,14 @@ let fetchedFilters: Record<string, unknown>[] = []
 let relayEvents: Set<Record<string, unknown>> = new Set()
 let verifyEventResult: ((event: Record<string, unknown>) => boolean) | null = null
 
-// Mock only the signature-verification seam that liveChat.tsx uses, so we can
+// Mock only the signature-verification seam that liveChatQuery uses, so we can
 // control which events pass/fail signature verification without needing real
 // cryptographic signatures. Never mock 'nostr-tools' itself: bun applies
 // mock.module process-wide for the whole test run, which would replace the
-// real verifyEvent for every other test file in the suite.
-mock.module('@/lib/nostr/event-signature', () => ({
+// real verifyEvent for every other test file in the suite. The seam itself
+// left `src/` with the query (store drain D1, slice 7), so the mock targets the
+// SDK module the moved query imports.
+mock.module('@sdk/core/nostr/eventSignature', () => ({
 	verifyNostrEventSignature: mock((event: Record<string, unknown>) => {
 		if (verifyEventResult) return verifyEventResult(event)
 		// Default: accept events that have a 'sig' field, reject those without
@@ -29,8 +31,17 @@ mock.module('@/lib/stores/ndk', () => ({
 		state: { ndk: null, explicitRelayUrls: [], writeRelayUrls: [], health: 'unknown', connectedRelayCount: 0 },
 	},
 	getWriteRelays: () => [],
+	getWriteRelaySet: () => undefined,
 	ndkActions: {
-		getNDK: () => ({}),
+		// The moved query reads through `@platform/web/ndkReadContext`'s
+		// `fetchEventsByFilter`, which calls `ndk.fetchEvents(filter)` (store
+		// drain D1, slice 7).
+		getNDK: () => ({
+			fetchEvents: mock(async (filter: Record<string, unknown>) => {
+				fetchedFilters = [filter]
+				return relayEvents
+			}),
+		}),
 		fetchEventsWithTimeout: mock(async (filters: Record<string, unknown>[]) => {
 			fetchedFilters = Array.isArray(filters) ? filters : [filters]
 			return relayEvents
@@ -41,6 +52,9 @@ mock.module('@/lib/stores/ndk', () => ({
 	getAppRelaySet: () => undefined,
 	getBugRelay: () => null,
 	getMainRelay: () => null,
+	// Required by `@platform/web/ndkPublishContext`, which the moved query now
+	// imports statically (store drain D1, slice 7).
+	fetchLatestAppEvent: () => null,
 }))
 
 const { fetchLiveActivity } = await import('@/queries/liveChat')

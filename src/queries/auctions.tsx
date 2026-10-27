@@ -36,6 +36,7 @@ import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { excludeTestLabeledEvents } from '@/queries/testLabels'
 import { createApplesauceReadContext, getRawEventStore } from '@platform/web/applesauceReadContext'
 import { excludeDeleted } from '@sdk/core/event-store'
+import { getAuctionId } from '@sdk/commerce/auctions/auctionId'
 import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 import type { MintKeys } from '@cashu/cashu-ts'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
@@ -749,7 +750,7 @@ export const auctionVerdictsQueryOptions = (
 		refetchInterval: 5000,
 	})
 
-export const getAuctionId = (event: NostrEventLike | null): string => event?.tags.find((t) => t[0] === 'd')?.[1] || ''
+export { getAuctionId } from '@sdk/commerce/auctions/auctionId'
 export const getAuctionRootEventId = (event: NostrEventLike | null): string => (event ? getAuctionRootEventIdValue(event) : '')
 
 export const getAuctionTitle = (event: NostrEventLike | null): string =>

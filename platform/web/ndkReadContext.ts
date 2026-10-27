@@ -1,10 +1,18 @@
 import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
+import { authStore } from '@/lib/stores/auth'
 import { configActions } from '@sdk/config/app-config'
 import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 
 /** Re-exported so Platform bindings can type their read context without a `platform -> src` edge. */
 export type { NDKEvent, NDKFilter }
+
+/**
+ * Re-exported so Platform bindings (the messaging reads) can read the current
+ * user without adding a new `platform -> src` edge: this file already owns the
+ * `@/lib/stores/ndk` edge.
+ */
+export { authStore }
 
 // The browser host is one market instance, so module scope is the instance boundary for its store.
 const ndkEventStore = createMemoryEventStore<NDKEvent>()
