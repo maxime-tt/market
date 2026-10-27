@@ -9,7 +9,7 @@ import {
 	publishPaymentDetail,
 	type PublishPaymentDetailParams,
 	type PayWithNwcParams,
-} from '@platform/web/ndkPublishContext'
+} from '@platform/web/payments/paymentPublish'
 import { LightningAddress, type Invoice, type NostrProvider } from '@getalby/lightning-tools'
 import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'

@@ -59,8 +59,18 @@
 #   388/68 -> 386/68. The OUTBOUND src -> ui row is re-measured, not ratcheted:
 #   deleting the two src components removes the ui/ edges they carried
 #   (243/119 -> 241/117).
+#
+# 2026-10-27 (D2 slice 14, the payment publish binding): the payment publish
+# binding leaves src/publish/payment.tsx for
+# platform/web/payments/paymentPublish.ts and the file it vacated becomes a
+# re-export shim. The two inbound edges it held (the ndkPublishContext
+# re-export of the NWC/WebLN/detail helpers, and paymentQuery's consumption of
+# them) are now platform-internal, so the INBOUND row falls 367/67 -> 366/67
+# and is ratcheted. The OUTBOUND src -> platform row is re-measured, not
+# ratcheted: the shim's one re-export is a new counted src -> platform edge
+# (62/56 -> 63/57).
 
-platform -> src production 386 68
+platform -> src production 366 67
 platform -> src test 0 0
 
 ui -> src production 0 0

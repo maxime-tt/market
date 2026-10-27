@@ -1,7 +1,10 @@
-import { Invoice } from '@getalby/lightning-tools'
+import { validatePreimage } from '@sdk/commerce/payments/preimage'
 import { walletActions } from '@/lib/stores/wallet'
 import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import type { WalletPaymentMethod } from '@/lib/payments/proof'
+
+/** Re-exported so the helper's home is the SDK while existing callers keep this path. */
+export { validatePreimage }
 
 // WebLN types
 declare global {
@@ -10,19 +13,6 @@ declare global {
 			enable(): Promise<void>
 			sendPayment(paymentRequest: string): Promise<{ preimage?: string }>
 		}
-	}
-}
-
-/**
- * Validate a preimage against an invoice's payment hash
- * Returns true if SHA256(preimage) === payment_hash
- */
-export function validatePreimage(bolt11: string, preimage: string): boolean {
-	try {
-		const invoice = new Invoice({ pr: bolt11 })
-		return invoice.validatePreimage(preimage)
-	} catch {
-		return false
 	}
 }
 

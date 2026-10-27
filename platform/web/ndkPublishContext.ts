@@ -34,19 +34,6 @@ export { submitAppSettings as submitAppSettingsEvent } from '@/lib/appSettings'
 export { toEncryptingSigner } from '@/lib/nostr/ndkEncryptingSigner'
 
 /**
- * Re-exported so the payment binding can consume the Lightning payment publish
- * helpers without adding a new `platform -> src` edge: this file already owns a
- * `@/lib` edge.
- */
-export {
-	payInvoiceWithNwc,
-	payInvoiceWithWebln,
-	publishPaymentDetail,
-	type PublishPaymentDetailParams,
-	type PayWithNwcParams,
-} from '@/publish/payment'
-
-/**
  * Platform adapter: binds the web host's NDK client and signer to the SDK's
  * explicit publish context. SDK workflows never read the NDK singleton.
  */

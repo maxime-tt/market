@@ -52,6 +52,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/migration.tsx',
 	'src/publish/curationContext.ts',
 	'src/publish/featured.tsx', // store drain D2 slice 11; shim deleted in E1
+	'src/publish/payment.tsx', // store drain D2 slice 14; shim deleted in E1
 	'src/publish/auctionWorkflowAdapters.ts', // store drain D2 slice 6; shim deleted in E1
 	'src/queries/relay-list.tsx', // store drain D1 slice 1; shim deleted in E1
 	'src/queries/relay-preferences.tsx', // store drain D1 slice 1; shim deleted in E1
