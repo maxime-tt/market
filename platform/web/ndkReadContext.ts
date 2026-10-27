@@ -83,6 +83,27 @@ export async function fetchEventByNaddr(naddr: string): Promise<NDKEvent | null>
 }
 
 /**
+ * Fetch an event by its event ID. The raw NDK handle stays here so the binding needs no
+ * `src/` edge.
+ */
+export async function fetchEventById(id: string): Promise<NDKEvent | null> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	return await ndk.fetchEvent(id)
+}
+
+/**
+ * Fetch events by a filter. The raw NDK handle stays here so the binding needs no
+ * `src/` edge.
+ */
+export async function fetchEventsByFilter(filter: NDKFilter): Promise<NDKEvent[]> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	const events = await ndk.fetchEvents(filter)
+	return Array.from(events)
+}
+
+/**
  * The app's admin ∪ editor pubkeys (ADR-0009) — the authorized test-labeler set, read through the
  * still-`src`-owned app-settings query.
  *
