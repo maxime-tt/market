@@ -5,7 +5,7 @@ import type { NDKEvent, NDKSigner } from '@/lib/nostr/ndk-events'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createNdkPublishContext, type NdkClient as NDK } from '@platform/web/ndkPublishContext'
-import { getNdkEventStore } from '@platform/web/ndkReadContext'
+import { getNdkEventStore } from '@platform/web/readContext'
 import {
 	deleteShippingOptionWorkflow,
 	publishShippingOptionWorkflow,

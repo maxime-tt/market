@@ -20,7 +20,7 @@
 import { Store, useStore } from '@tanstack/react-store'
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { createAppRelayReadContext, isAppRelayReady, readAuthorizedLabelers, type NDKEvent } from '@platform/web/ndkReadContext'
+import { createAppRelayReadContext, isAppRelayReady, readAuthorizedLabelers, type NDKEvent } from '@platform/web/readContext'
 import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@sdk/config/testLabelFilters'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { testLabelState, type TestLabelInfo } from '@sdk/config/test-labels'
@@ -77,7 +77,7 @@ export function useTestLabelState(): TestLabelState {
 // Separate concern from the state bridge above: `useTestLabels` reads the active NIP-32 `test`
 // labels from the relays and reconciles the SDK store. The read and its module caches are
 // framework-free (`sdk/config/testLabelRead.ts`); this binding owns the react-query hooks, while the
-// relay port and the authorized-labeler settings loader resolve from `platform/web/ndkReadContext.ts`
+// relay port and the authorized-labeler settings loader resolve from `platform/web/readContext.ts`
 // (the file that owns the `@/lib/stores/ndk` and `@/queries/app-settings` edges), exactly as the
 // sibling `blacklistBinding.ts` does. The binding itself holds NO `@/` edge. The query keys are
 // literal-identical to the pre-drain values.
@@ -102,7 +102,7 @@ export const getAuthorizedLabelerPubkeys = async (): Promise<string[] | null> =>
 /**
  * Build the relay port for the test-label read, pinned to the app's main relay.
  *
- * The port and the readiness gate resolve from `platform/web/ndkReadContext.ts` (the file that owns
+ * The port and the readiness gate resolve from `platform/web/readContext.ts` (the file that owns
  * the `@/lib/stores/ndk` edge), exactly as the sibling `blacklistBinding.ts` does: the host's relay
  * policy and its readiness stay on the host side, the framework-free read model imports no NDK, and
  * the binding adds no counted `platform -> src` edge.

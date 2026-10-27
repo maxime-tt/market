@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import { createNdkReadContext } from '@platform/web/readContext'
 import { isValidProfilePubkey, readAuthorWorkflow, type NostrAuthor } from '@sdk/core/profile'
 import { authorKeys } from '@sdk/core/query/queryKeyFactory'
 
@@ -8,7 +8,7 @@ import { authorKeys } from '@sdk/core/query/queryKeyFactory'
  * (store drain D1, slice 2).
  *
  * The read logic is framework-free (`readAuthorWorkflow`, `sdk/core/profile`); this file owns the
- * react-query options and resolves the port from `platform/web/ndkReadContext.ts`, so no part of
+ * react-query options and resolves the port from `platform/web/readContext.ts`, so no part of
  * the read imports `@/lib/stores/ndk`. The query key is literal-identical to the pre-drain value.
  */
 

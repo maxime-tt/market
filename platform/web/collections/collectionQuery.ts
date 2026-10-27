@@ -21,7 +21,7 @@ import {
 	getCollectionTitle as getCollectionTitleFromSdk,
 	readCollectionsWorkflow,
 } from '@sdk/commerce/collections'
-import { createNdkReadContext, fetchEventsByFilter, fetchEventById, fetchEventByNaddr } from '@platform/web/ndkReadContext'
+import { createNdkReadContext, fetchEventsByFilter, fetchEventById, fetchEventByNaddr } from '@platform/web/readContext'
 
 // --- DATA FETCHING FUNCTIONS ---
 /**

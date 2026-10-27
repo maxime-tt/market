@@ -17,7 +17,7 @@ import { orderKeys, shippingKeys } from '@sdk/core/query/queryKeyFactory'
 import { publishShippingStatusUpdateWorkflow } from '@sdk/commerce/orders'
 import { readShippingOptionsWorkflow } from '@sdk/commerce/shipping'
 import { createNdkPublishContext, getAppNdk, getAppSigner } from '@platform/web/ndkPublishContext'
-import { createNdkReadContext, getNdkEventStore, fetchEventById, fetchEventByNaddr } from '@platform/web/ndkReadContext'
+import { createNdkReadContext, getNdkEventStore, fetchEventById, fetchEventByNaddr } from '@platform/web/readContext'
 
 // Re-export shippingKeys for use in other files
 export { shippingKeys }

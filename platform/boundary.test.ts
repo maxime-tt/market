@@ -109,6 +109,25 @@ async function collectImports(root: string) {
 	return results
 }
 
+/** The private read adapters, and the composition root that is allowed to name them. */
+const READ_ADAPTER_MODULES = new Set(['platform/web/ndkReadContext.ts', 'platform/web/applesauceReadContext.ts'])
+const READ_CONTEXT_FACADE = 'platform/web/readContext.ts'
+const SOURCE_EXTENSION_LIST = ['.ts', '.tsx', '.mts', '.cts']
+
+/** Repo-relative path of the read adapter a specifier resolves to, or undefined when it names neither. */
+const resolvesToReadAdapter = (file: string, specifier: string): string | undefined => {
+	const target = specifier.startsWith('@platform/')
+		? resolve(REPO_ROOT, 'platform', specifier.slice('@platform/'.length))
+		: specifier.startsWith('.')
+			? resolve(file, '..', specifier)
+			: undefined
+	if (!target) return undefined
+	const base = repoPath(target)
+	const hasSourceExtension = SOURCE_EXTENSION_LIST.some((extension) => base.endsWith(extension))
+	const candidates = hasSourceExtension ? [base] : SOURCE_EXTENSION_LIST.map((extension) => `${base}${extension}`)
+	return candidates.find((candidate) => READ_ADAPTER_MODULES.has(candidate))
+}
+
 const repoPath = (file: string) => relative(REPO_ROOT, file).split(sep).join('/')
 
 describe('Platform dependency boundary', () => {
@@ -141,6 +160,14 @@ describe('Platform dependency boundary', () => {
 		const violations = (await collectImports(join(REPO_ROOT, 'src')))
 			.filter(({ file, specifier }) => specifier.startsWith('@platform/') && !SRC_TO_PLATFORM_ALLOWLIST.has(repoPath(file)))
 			.map(({ file, specifier }) => `${repoPath(file)} imports ${specifier}`)
+		expect(violations).toEqual([])
+	})
+
+	test('web feature bindings reach the read adapters only through readContext.ts', async () => {
+		const violations = (await collectImports(join(PLATFORM_ROOT, 'web')))
+			.filter(({ file }) => repoPath(file) !== READ_CONTEXT_FACADE)
+			.filter(({ file, specifier }) => resolvesToReadAdapter(file, specifier) !== undefined)
+			.map(({ file, specifier }) => `${repoPath(file)} imports the private read adapter ${specifier}`)
 		expect(violations).toEqual([])
 	})
 })

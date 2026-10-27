@@ -1,6 +1,6 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import type { NDKEvent } from '@platform/web/ndkPublishContext'
-import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import { createNdkReadContext } from '@platform/web/readContext'
 import {
 	buildCommentThreads,
 	getCommentTargetKey,
@@ -15,7 +15,7 @@ import { commentKeys } from '@sdk/core/query/queryKeyFactory'
  * (store drain D1, slice 2).
  *
  * The read logic is framework-free (`readProductCommentsWorkflow`, `sdk/commerce/messaging`); this
- * file owns the react-query binding and resolves its port from `platform/web/ndkReadContext.ts`,
+ * file owns the react-query binding and resolves its port from `platform/web/readContext.ts`,
  * so no part of the read imports `@/lib/stores/ndk`. The query key is literal-identical to the
  * pre-drain value (and to the publish side's invalidation target in `src/publish/comments.tsx`).
  */

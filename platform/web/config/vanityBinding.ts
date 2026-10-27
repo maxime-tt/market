@@ -20,7 +20,7 @@
 import { Store, useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import { createNdkReadContext } from '@platform/web/readContext'
 import { getAppNdk, type NDKEvent } from '@platform/web/ndkPublishContext'
 import { vanityState } from '@sdk/config/vanity'
 import type { VanityState } from '@sdk/config/vanity'
@@ -74,7 +74,7 @@ export function useVanityState(): VanityState {
 // `d=vanity-urls` registry from the relays. The read logic is framework-free
 // (`readVanitySettingsWorkflow`, `sdk/commerce/curation`); this binding owns the react-query hook,
 // the live invalidation subscription, and resolves the port from
-// `platform/web/ndkReadContext.ts`, so no part of the read imports `@/lib/stores/ndk`. The query
+// `platform/web/readContext.ts`, so no part of the read imports `@/lib/stores/ndk`. The query
 // key is literal-identical to the pre-drain value.
 
 export { getExpiredVanityForPubkey, getVanityForPubkey, isVanityAvailable, resolveVanity }

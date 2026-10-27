@@ -2,8 +2,8 @@ import type { QueryClient } from '@tanstack/react-query'
 import { auctionKeys, collectionKeys, paymentDetailsKeys, productKeys, shippingKeys } from '@sdk/core/query/queryKeyFactory'
 import { DELETION_REQUEST_KIND, readDeletionTargets, type EventStorePort } from '@sdk/core/event-store'
 import type { NostrEventLike } from '@sdk/core'
-import { getRawEventStore } from './applesauceReadContext'
-import { getNdkEventStore } from './ndkReadContext'
+import { getRawEventStore } from '@platform/web/readContext'
+import { getNdkEventStore } from '@platform/web/readContext'
 
 const QUERY_ROOTS_BY_KIND: Record<number, readonly unknown[]> = {
 	30402: productKeys.all,

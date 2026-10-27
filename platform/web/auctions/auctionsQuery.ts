@@ -13,7 +13,7 @@
  *
  * Sanctioned deviation (D1 slice 8): the private-auction-claim read stays here. It needs the raw
  * active signer and a 6 s timeout the `EventReadContext` port cannot express, so the four
- * src-owned claim helpers are re-exported through `@platform/web/ndkReadContext` (which already
+ * src-owned claim helpers are re-exported through `@platform/web/readContext` (which already
  * owns the `@/lib` NDK edge) instead of adding a new src-importing platform file.
  */
 import { queryOptions, useQuery } from '@tanstack/react-query'
@@ -24,14 +24,14 @@ import {
 	getRawEventStore,
 	useSubscriptionEvents,
 	type NostrFilter,
-} from '@platform/web/applesauceReadContext'
+} from '@platform/web/readContext'
 import { excludeTestLabeledEvents } from '@platform/web/config/testLabelsBinding'
 import {
 	decryptPrivateAuctionClaimMessageForActiveSigner,
 	getAuctionClaimPublicMarkerFields,
 	privateAuctionClaimMatchesPublicMarker,
 	type PrivateAuctionClaimMessage,
-} from '@platform/web/ndkReadContext'
+} from '@platform/web/readContext'
 import {
 	buildAuctionBidFilters,
 	collapseAuctionVersions,

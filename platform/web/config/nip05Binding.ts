@@ -20,7 +20,7 @@
 import { Store, useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import { createNdkReadContext } from '@platform/web/readContext'
 import { getAppNdk, type NDKEvent } from '@platform/web/ndkPublishContext'
 import { nip05State } from '@sdk/config/nip05'
 import type { Nip05State } from '@sdk/config/nip05'
@@ -72,7 +72,7 @@ export function useNip05State(): Nip05State {
 // Separate concern from the state bridge above: `useNip05Settings` reads the app's kind-30000
 // `d=nip05-names` registry from the relays. The read logic is framework-free
 // (`readNip05SettingsWorkflow`, `sdk/core/profile`); this binding owns the react-query hook, the
-// live invalidation subscription, and resolves the port from `platform/web/ndkReadContext.ts`,
+// live invalidation subscription, and resolves the port from `platform/web/readContext.ts`,
 // so no part of the read imports `@/lib/stores/ndk`. The query key is literal-identical to the
 // pre-drain value.
 

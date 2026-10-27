@@ -31,7 +31,6 @@ import { createStateStore } from '../core/state'
 import type { StateStore } from '../core/state'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
-import { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { NWCClient } from '@getalby/sdk/nwc'
 
 // Wallet interface
@@ -110,7 +109,14 @@ export interface NwcClient {
 }
 
 const nwcClientCache = new Map<string, Promise<NwcClient>>()
-let cachedSigner: NDKSigner | undefined
+/**
+ * Opaque identity token for the NWC client cache: the signer is never handed to `NWCClient`, only
+ * compared by reference so a signer swap invalidates the cached clients. Typed locally so sdk/
+ * carries no relay-client type.
+ */
+type WalletSignerRef = object
+
+let cachedSigner: WalletSignerRef | undefined
 
 const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
 	const timeoutPromise = new Promise<never>((_, reject) => {
@@ -421,7 +427,7 @@ export const walletActions = {
 	 * Returns a cached NWC client for a given NWC URI and signer.
 	 * Cache is cleared automatically when signer instance changes.
 	 */
-	getOrCreateNwcClient: async (nwcUri: string, signer: NDKSigner, timeoutMs: number = 10000): Promise<NwcClient | null> => {
+	getOrCreateNwcClient: async (nwcUri: string, signer: WalletSignerRef, timeoutMs: number = 10000): Promise<NwcClient | null> => {
 		if (!nwcUri) return null
 		if (!signer) return null
 
@@ -484,7 +490,7 @@ export const walletActions = {
 	payInvoiceWithNwc: async (
 		nwcUri: string,
 		invoice: string,
-		signer: NDKSigner,
+		signer: WalletSignerRef,
 		options?: { timeoutMs?: number },
 	): Promise<{ preimage?: string; feesPaidMsats?: number }> => {
 		if (!signer) {

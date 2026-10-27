@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createNdkPublishContext, getAppNdk, getAppSigner } from '@platform/web/ndkPublishContext'
-import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import { createNdkReadContext } from '@platform/web/readContext'
 import { parseRelayListTags, publishRelayListWorkflow, readRelayListWorkflow, relayListKeys, type RelayPreference } from '@sdk/core/relays'
 
 export type { RelayPreference }
@@ -34,7 +34,7 @@ export const parseRelayTags = parseRelayListTags
 /**
  * Reads the user's relay list through the app read context. The read model itself
  * is framework-free (`readRelayListWorkflow`, `sdk/core/relays`); this hook owns the
- * react-query binding and resolves the port from `platform/web/ndkReadContext.ts`,
+ * react-query binding and resolves the port from `platform/web/readContext.ts`,
  * so no part of the read imports `@/lib/stores/ndk`.
  */
 export function useUserRelayList(pubkey: string | undefined) {

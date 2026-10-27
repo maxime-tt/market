@@ -6,7 +6,7 @@
  * `readRelayListUrls`, `resolveMigrationRelays`, `collectMigratedOriginalIds`) already live in
  * `@sdk/commerce/products/nip15MigrationRead`; this file keeps the host relay orchestration and the
  * react-query options. It resolves the NDK client from `@platform/web/ndkPublishContext` and the app
- * relay + relay additions from `@platform/web/ndkReadContext` (the files that own the
+ * relay + relay additions from `@platform/web/readContext` (the files that own the
  * `@/lib/stores/ndk` edge), so it adds no counted `platform -> src` import. `migrationKeys` is
  * literal-identical to the pre-drain key. The sibling `platform/web/migration.tsx` is the D2 publish
  * binding and is untouched. The vacated `src/queries/migration.tsx` path is an `export *` shim over
@@ -22,7 +22,7 @@ import {
 } from '@sdk/commerce/products/nip15MigrationRead'
 import { buildRelayListFilter } from '@sdk/core/relays/relayListRead'
 import { migrationKeys } from '@sdk/core/query/queryKeyFactory'
-import { addAppExplicitRelays, getAppRelayUrl, type NDKEvent } from '@platform/web/ndkReadContext'
+import { addAppExplicitRelays, getAppRelayUrl, type NDKEvent } from '@platform/web/readContext'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
 
 export { migrationKeys }

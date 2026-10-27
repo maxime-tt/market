@@ -8,7 +8,7 @@ import {
 } from '@platform/web/ndkPublishContext'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { collectionsKeys } from '@sdk/core/query/queryKeyFactory'
-import { getNdkEventStore } from '@platform/web/ndkReadContext'
+import { getNdkEventStore } from '@platform/web/readContext'
 import { toast } from 'sonner'
 import {
 	buildCollectionEventData,

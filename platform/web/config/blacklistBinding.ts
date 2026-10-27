@@ -20,7 +20,7 @@
 import { Store, useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { createAppRelayReadContext, getAppRelayUrl } from '@platform/web/ndkReadContext'
+import { createAppRelayReadContext, getAppRelayUrl } from '@platform/web/readContext'
 import { getAppNdk, type NDKEvent } from '@platform/web/ndkPublishContext'
 import {
 	buildBlacklistFilter,
@@ -71,7 +71,7 @@ export function useBlacklistState(): BlacklistState {
 // Separate concern from the state bridge above: `useBlacklistSettings` reads the app's kind-10000
 // mute list from the relays. The read logic is framework-free (`readBlacklistSettingsWorkflow`,
 // `sdk/commerce/curation`); this binding owns the react-query hook, the live invalidation
-// subscription, and resolves the port from `platform/web/ndkReadContext.ts` (pinned to the app's
+// subscription, and resolves the port from `platform/web/readContext.ts` (pinned to the app's
 // main relay), so no part of the read imports `@/lib/stores/ndk` directly. The query key is
 // literal-identical to the pre-drain value and to the writers' invalidation target.
 

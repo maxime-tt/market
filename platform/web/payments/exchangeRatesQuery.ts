@@ -8,7 +8,7 @@
  * (`PlebianCurrencyClient`, `nostr-tools` + `SimplePool`) moved to
  * `sdk/commerce/payments/ctxcnClient.ts` in the same slice; `src/lib/ctxcn-client.ts` is a shim over it.
  * Config constants come from `@sdk/config/constants`; the app-relay URL from
- * `@platform/web/ndkReadContext`, so this binding has no `platform -> src` import. Query keys are
+ * `@platform/web/readContext`, so this binding has no `platform -> src` import. Query keys are
  * literal-identical to the pre-drain values.
  */
 import { queryOptions, useQuery } from '@tanstack/react-query'
@@ -26,7 +26,7 @@ import {
 	type BtcExchangeRatesPort,
 } from '@sdk/commerce/payments/exchangeRates'
 import { currencyKeys } from '@sdk/core/query/queryKeyFactory'
-import { getAppRelayUrl } from '@platform/web/ndkReadContext'
+import { getAppRelayUrl } from '@platform/web/readContext'
 
 export type SupportedCurrency = (typeof CURRENCIES)[number]
 

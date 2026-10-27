@@ -5,7 +5,7 @@
  * The framework-free read (`readLatestCartSnapshotWorkflow`, the newest valid kind-30078 snapshot)
  * lives in `@sdk/commerce/cart/cartRead`; the snapshot selection moved there from
  * `src/lib/cart-persistence.ts`, which now re-exports it. This file keeps the react-query options and
- * resolves its relay port from `@platform/web/ndkReadContext.ts` (the file that owns the
+ * resolves its relay port from `@platform/web/readContext.ts` (the file that owns the
  * `@/lib/stores/ndk` edge) instead of `@/lib/stores/ndk`, so it adds no counted `platform -> src`
  * import. `cartKeys.byPubkey` is literal-identical to the pre-drain key, so the store's
  * `fetchLatestCartSnapshot` consumer and any invalidator keep the same target. The vacated
@@ -15,7 +15,7 @@ import type { PersistedCartContent } from '@sdk/commerce/cart/cartIntent'
 import { readLatestCartSnapshotWorkflow, type CartSnapshotFilter, type CartSnapshotReadPort } from '@sdk/commerce/cart/cartRead'
 import { cartKeys } from '@sdk/core/query/queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
-import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import { createNdkReadContext } from '@platform/web/readContext'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
 
 export { cartKeys }

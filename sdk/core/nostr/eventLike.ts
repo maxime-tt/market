@@ -19,6 +19,12 @@ export const toRawEvent = (event: NostrEventLike): NostrEventLike => {
 	return event
 }
 
+/**
+ * Alias of `toRawEvent` that says what the caller is doing: normalizing a relay-client event
+ * (e.g. an `NDKEvent` wrapper) down to the protocol shape the port contract speaks.
+ */
+export const toNostrEventLike = toRawEvent
+
 export const getEventAddress = (event: NostrEventLike): string => {
 	const identifier = event.tags.find((tag) => tag[0] === 'd')?.[1] ?? ''
 	return `${event.kind}:${event.pubkey}:${identifier}`

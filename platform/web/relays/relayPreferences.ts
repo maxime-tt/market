@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createNdkPublishContext, getAppNdk, getAppSigner } from '@platform/web/ndkPublishContext'
-import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import { createNdkReadContext } from '@platform/web/readContext'
 import {
 	DEFAULT_RELAY_PREFERENCES,
 	publishRelayPreferencesWorkflow,
@@ -45,7 +45,7 @@ export function getRelayPreferencesDTag(): string {
  * Fetches user's relay preferences (kind 30078 with d-tag) through the app read
  * context. The framework-free read model (`readRelayPreferencesWorkflow`,
  * `sdk/core/relays`) takes the port as a parameter; the port comes from
- * `platform/web/ndkReadContext.ts`, so no part of the read imports the SDK NDK store.
+ * `platform/web/readContext.ts`, so no part of the read imports the SDK NDK store.
  *
  * @param userPubkey The pubkey of the user to fetch preferences for
  * @returns RelayPreferencesSettings or null if not found

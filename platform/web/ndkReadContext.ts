@@ -1,3 +1,11 @@
+/**
+ * PRIVATE ADAPTER — do not import from a feature binding.
+ *
+ * This module is the host's NDK read adapter and owns the `platform -> src` edge to the relay
+ * client. Feature bindings import `@platform/web/readContext` instead, which re-exports the
+ * accessors they need and chooses the adapter by configuration (D1 seam `d1-neutral-seam`).
+ * Direction is one-way: `readContext.ts -> this adapter`, never the reverse.
+ */
 import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { authStore } from '@/lib/stores/auth'

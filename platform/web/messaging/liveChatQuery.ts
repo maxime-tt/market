@@ -1,5 +1,5 @@
 import { getAppNdk } from '@platform/web/ndkPublishContext'
-import { fetchEventsByFilter } from '@platform/web/ndkReadContext'
+import { fetchEventsByFilter } from '@platform/web/readContext'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { verifyNostrEventSignature } from '@sdk/core/nostr/eventSignature'
 import { queryOptions, useQuery } from '@tanstack/react-query'

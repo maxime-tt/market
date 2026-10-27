@@ -30,7 +30,7 @@ import {
 	connectAppRelays,
 	fetchEventByNaddr,
 	addAppExplicitRelays,
-} from '@platform/web/ndkReadContext'
+} from '@platform/web/readContext'
 import {
 	excludeDeletedProducts,
 	isProductInStock as isProductInStockFromSdk,

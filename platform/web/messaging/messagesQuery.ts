@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { getAppNdk, publishAppEvent } from '@platform/web/ndkPublishContext'
-import { authStore } from '@platform/web/ndkReadContext'
+import { authStore } from '@platform/web/readContext'
 import { createBuyerChatTemplate } from '@sdk/commerce/orders'
 import { useStore } from '@tanstack/react-store'
 import { NDKEvent, type NDKUser, type NDKFilter } from '@nostr-dev-kit/ndk'

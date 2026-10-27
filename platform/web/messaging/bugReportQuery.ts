@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { NDKEvent } from '@platform/web/ndkPublishContext'
-import { createBugRelayReadContext } from '@platform/web/ndkReadContext'
+import { createBugRelayReadContext } from '@platform/web/readContext'
 import { bugReportKeys, readBugReportsWorkflow, type BugReport as SdkBugReport } from '@sdk/commerce/messaging'
 
 /**
@@ -9,7 +9,7 @@ import { bugReportKeys, readBugReportsWorkflow, type BugReport as SdkBugReport }
  *
  * The read logic is framework-free (`readBugReportsWorkflow`, `sdk/commerce/messaging`); this file
  * owns the react-query options and resolves its port from `createBugRelayReadContext()` in
- * `platform/web/ndkReadContext.ts`, which pins the fetches to the instance's bug relay (ADR-018),
+ * `platform/web/readContext.ts`, which pins the fetches to the instance's bug relay (ADR-018),
  * so no part of the read imports `@/lib/stores/ndk`. The query keys are literal-identical to the
  * pre-drain values.
  */

@@ -1,7 +1,7 @@
 import { PAYMENT_DETAILS_METHOD, ZAP_RELAYS, type PaymentDetailsMethod } from '@sdk/config/constants'
 import { appConfigBinding } from '@platform/web/config/appConfigBinding'
 import { getAppNdk, getAppSigner, publishAppEvent } from '@platform/web/ndkPublishContext'
-import { createNdkReadContext, fetchEventsByFilter } from '@platform/web/ndkReadContext'
+import { createNdkReadContext, fetchEventsByFilter } from '@platform/web/readContext'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import {
 	payInvoiceWithNwc,
@@ -17,7 +17,7 @@ import { nip04, nip19 } from 'nostr-tools'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { paymentDetailsKeys, walletDetailsKeys } from '@sdk/core/query/queryKeyFactory'
-import { getNdkEventStore } from '@platform/web/ndkReadContext'
+import { getNdkEventStore } from '@platform/web/readContext'
 import { readPaymentDetailEventsWorkflow } from '@sdk/commerce/payments'
 
 /**

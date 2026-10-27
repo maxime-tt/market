@@ -4,7 +4,7 @@
  *
  * The framework-free reads (`readAdminSettingsWorkflow` / `readEditorSettingsWorkflow`) and the parsers
  * live in `@sdk/commerce/curation`. This file owns the react-query hooks and the live admin/editor list
- * subscriptions, and resolves its NDK client + app relay from `@platform/web/ndkReadContext.ts` (the file
+ * subscriptions, and resolves its NDK client + app relay from `@platform/web/readContext.ts` (the file
  * that already owns the `@/lib/stores/ndk` edge) instead of `@/lib/stores/ndk`, so it adds no counted
  * `platform -> src` import. The query keys are literal-identical to the pre-drain values. The vacated
  * `src/queries/app-settings.tsx` path is an `export *` shim over this file until E1.
@@ -25,7 +25,7 @@ import {
 	type EditorSettings as SdkEditorSettings,
 } from '@sdk/commerce/curation'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
-import { createAppRelayReadContext, getAppRelayUrl, type NDKEvent } from '@platform/web/ndkReadContext'
+import { createAppRelayReadContext, getAppRelayUrl, type NDKEvent } from '@platform/web/readContext'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
 
 export { getFormattedAdmins, getFormattedEditors, getUserRoleForPubkey, isAdmin, isEditor, isOwner }

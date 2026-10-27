@@ -19,9 +19,9 @@ import {
 	type NDKFilter,
 	type NDKSigner,
 	type NostrFilter,
-} from '@platform/web/applesauceReadContext'
+} from '@platform/web/readContext'
 import { getAppNdk, getAppSigner, toEncryptingSigner } from '@platform/web/ndkPublishContext'
-import { createNdkReadContext, fetchEventsByFilter } from '@platform/web/ndkReadContext'
+import { createNdkReadContext, fetchEventsByFilter } from '@platform/web/readContext'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import type { EncryptingSigner } from '@sdk/core/ports/encryptingSigner'
 import { useQuery, useQueryClient } from '@tanstack/react-query'

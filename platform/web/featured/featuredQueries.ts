@@ -22,7 +22,7 @@ import {
 	type FeaturedListKey,
 } from '@sdk/commerce/curation'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
-import { createAppRelayReadContext, getAppRelaySet } from '@platform/web/ndkReadContext'
+import { createAppRelayReadContext, getAppRelaySet } from '@platform/web/readContext'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
 
 // The featured data shapes live in `sdk/commerce/curation`; re-exported under the names the pre-drain

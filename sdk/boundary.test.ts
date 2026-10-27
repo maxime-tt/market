@@ -7,6 +7,9 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts'])
 const TEST_FILE = /(?:\.test|\.spec)\.(?:ts|tsx|mts|cts)$/
 const IMPORT_SPECIFIER = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*(?:\(\s*)?['"]([^'"]+)['"]/g
 const FORBIDDEN_MODULES = /^(?:react|react-dom|@tanstack\/|@\/|@ui\/|@platform\/)/
+// sdk/ is framework- and client-free: a relay-client package import here would put a concrete
+// transport type back into the read/publish contracts (D1 seam `d1-neutral-seam`).
+const FORBIDDEN_PACKAGES = /^@nostr-dev-kit\//
 
 async function listSourceFiles(directory: string): Promise<string[]> {
 	const entries = await readdir(directory, { withFileTypes: true })
@@ -41,6 +44,23 @@ describe('SDK dependency boundary', () => {
 					if (rel === '..' || rel.startsWith(`..${sep}`)) {
 						violations.push(`${relative(SDK_ROOT, file)} escapes sdk/: ${specifier}`)
 					}
+				}
+			}
+		}
+
+		expect(violations).toEqual([])
+	})
+
+	test('production SDK modules do not import relay-client packages', async () => {
+		const files = await listSourceFiles(SDK_ROOT)
+		const violations: string[] = []
+
+		for (const file of files) {
+			const source = await readFile(file, 'utf8')
+			for (const match of source.matchAll(IMPORT_SPECIFIER)) {
+				const specifier = match[1] ?? match[2]
+				if (specifier && FORBIDDEN_PACKAGES.test(specifier)) {
+					violations.push(`${relative(SDK_ROOT, file)} imports ${specifier}`)
 				}
 			}
 		}

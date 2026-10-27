@@ -1,9 +1,8 @@
-import type { NDKKind } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
 import { geohash, iso3166Country, iso3166Region, iso4217Currency, iso8601Duration } from './common'
 
 // Define shipping kind
-export const SHIPPING_KIND = 30406 as NDKKind
+export const SHIPPING_KIND = 30406
 
 // ===============================
 // Shipping Option (Kind: 30406)

@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import { createNdkReadContext } from '@platform/web/readContext'
 import { readPostWorkflow, readRecentPostsWorkflow, type NostrPost } from '@sdk/commerce/messaging'
 import { postKeys } from '@sdk/core/query/queryKeyFactory'
 
@@ -9,7 +9,7 @@ import { postKeys } from '@sdk/core/query/queryKeyFactory'
  *
  * The read logic is framework-free (`readRecentPostsWorkflow` / `readPostWorkflow`,
  * `sdk/commerce/messaging`); this file owns the react-query options and resolves the port from
- * `platform/web/ndkReadContext.ts`, so no part of the read imports `@/lib/stores/ndk`. The query
+ * `platform/web/readContext.ts`, so no part of the read imports `@/lib/stores/ndk`. The query
  * keys are literal-identical to the pre-drain values.
  */
 

@@ -15,7 +15,7 @@ import {
 	type SellerProductPublishValidationIssue,
 	productPublishIssueMessage,
 } from '@sdk/commerce/products'
-import { getNdkEventStore } from '@platform/web/ndkReadContext'
+import { getNdkEventStore } from '@platform/web/readContext'
 import { productKeys } from '@sdk/core/query/queryKeyFactory'
 import type { NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
