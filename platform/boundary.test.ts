@@ -26,7 +26,7 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/index.tsx',
 	'src/lib/boot.ts',
-	'src/publish/shipping.tsx',
+	'src/publish/shipping.tsx', // store drain D2 slice 17; shim deleted in E1
 	'src/publish/products.tsx',
 	'src/publish/collections.tsx',
 	'src/publish/orders.tsx',
