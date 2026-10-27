@@ -66,11 +66,11 @@ export * from '@sdk/commerce/auctions/auctionRead'
 
 /**
  * The kind-1025 path-release and kind-1024 settlement parsers, re-exported so the auction publish
- * bindings re-validate with the exact schemas the read path uses without opening a new
- * `platform -> src` edge. The schema module has no SDK home yet (D1 moved the auction, bid and
- * validator-verdict schemas only); this clause moves with it when it does.
+ * bindings re-validate with the exact schemas the read path uses. They live in the SDK now (D2
+ * slice 23 moved the module out of `src/lib/schemas`), so this clause opens no `platform -> src`
+ * edge.
  */
-export { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
+export { parsePathReleaseEvent, parseSettlementEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
 
 type EventFetcher = (filter: EventFilter | EventFilter[]) => Promise<NostrEventLike[]>
 

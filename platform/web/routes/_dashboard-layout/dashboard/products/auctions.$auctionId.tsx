@@ -36,7 +36,7 @@ import { isStructurallyValidSettledSettlement } from '@sdk/commerce/auctions/eve
 import { toRawEvent } from '@sdk/core'
 import { useNut7Polling } from '@/lib/auction/useNut7Polling'
 import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
-import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
+import { parseSettlementEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
 import { computeValidatedBids } from '@sdk/commerce/auctions/bidValidation'
 import { auctionKeys } from '@sdk/core/query/queryKeyFactory'
 import { useQueryClient } from '@tanstack/react-query'

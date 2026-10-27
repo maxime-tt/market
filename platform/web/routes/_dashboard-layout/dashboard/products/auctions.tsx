@@ -18,7 +18,7 @@ import {
 } from '@/queries/auctions'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
-import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
+import { parseSettlementEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-router'
