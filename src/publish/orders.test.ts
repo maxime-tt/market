@@ -138,7 +138,7 @@ class TestNDKEvent {
 	}
 }
 
-mock.module('@/queries/shipping', () => ({
+mock.module('@platform/web/shipping/shippingQuery', () => ({
 	getShippingEvent: mock(async (shippingRef: string) => {
 		if (!(shippingRef in shippingServices)) return null
 		const service = shippingServices[shippingRef]
@@ -147,7 +147,7 @@ mock.module('@/queries/shipping', () => ({
 	getShippingService: (event: { tags: string[][] }) => event.tags.find((tag) => tag[0] === 'service'),
 }))
 
-mock.module('@/queries/profiles', () => ({
+mock.module('@platform/web/profiles/profileQuery', () => ({
 	fetchProfileByIdentifier: mock(async () => ({
 		profile: {
 			lud16: 'seller@example.com',

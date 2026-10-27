@@ -229,7 +229,7 @@ mock.module('@/lib/stores/ndk', () => ({
 	},
 }))
 
-mock.module('@/queries/auctions', () => ({
+mock.module('@platform/web/auctions/auctionsQuery', () => ({
 	fetchAuction: mock(async () => auctionEventFixture),
 }))
 

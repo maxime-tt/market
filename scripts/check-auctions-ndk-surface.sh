@@ -80,6 +80,12 @@ GLOBS=(
 	"$ROOT"/src/components/sheet-contents/auctions/*.tsx
 	"$ROOT"/src/components/sheet-contents/NewAuction*.tsx
 	"$ROOT"/platform/web/routes/_dashboard-layout/dashboard/products/auctions*.tsx
+	# D1 slice-8 destinations: the framework-free auction reader and the React
+	# binding the `src/queries/auctions.tsx` shim re-exports. Both families must
+	# keep matching at least one file (the coverage rule above), so a future move
+	# fails this guard instead of shrinking the scanned set.
+	"$ROOT"/sdk/commerce/auctions/*.ts
+	"$ROOT"/platform/web/auctions/*.ts
 )
 
 shopt -s nullglob

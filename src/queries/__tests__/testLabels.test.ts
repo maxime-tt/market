@@ -431,7 +431,7 @@ describe('fetchTestLabels chunk scheduling', () => {
 		// module-mock registry persists for the whole `test:unit` invocation, so
 		// keep this mock in the last test file of the suite (testLabels.test.ts
 		// sorts last among the unit files).
-		mock.module('@/queries/app-settings', () => ({
+		mock.module('@platform/web/app-settings/appSettingsQuery', () => ({
 			// The resolver reads BOTH lists (ADR-0009: editors UNION admins). A
 			// mock missing fetchEditorSettings makes that read throw, the whole
 			// authorization resolve to null, and the fetch this test measures
@@ -561,7 +561,7 @@ describe('getAuthorizedLabelerPubkeys (editors UNION admins)', () => {
 	})
 
 	test('unions the editor and admin lists, de-duplicated', async () => {
-		mock.module('@/queries/app-settings', () => ({
+		mock.module('@platform/web/app-settings/appSettingsQuery', () => ({
 			fetchAdminSettings: async () => ({ admins: [ADMIN_PUBKEY, OTHER_ADMIN_PUBKEY] }),
 			fetchEditorSettings: async () => ({ editors: [OTHER_ADMIN_PUBKEY, EDITOR_PUBKEY] }),
 		}))
@@ -577,7 +577,7 @@ describe('getAuthorizedLabelerPubkeys (editors UNION admins)', () => {
 	})
 
 	test('uses whichever list is readable when the other is unavailable', async () => {
-		mock.module('@/queries/app-settings', () => ({
+		mock.module('@platform/web/app-settings/appSettingsQuery', () => ({
 			fetchAdminSettings: async () => null,
 			fetchEditorSettings: async () => ({ editors: [EDITOR_PUBKEY] }),
 		}))

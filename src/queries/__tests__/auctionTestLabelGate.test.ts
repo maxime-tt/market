@@ -85,7 +85,7 @@ let adminSettingsAnswer: { admins: string[] } | null = null
  */
 const labelReadPortMock = mock(async (_filter: unknown, _options?: unknown) => [] as NostrEventLike[])
 
-mock.module('@/queries/app-settings', () => ({
+mock.module('@platform/web/app-settings/appSettingsQuery', () => ({
 	fetchAdminSettings: async () => adminSettingsAnswer,
 	fetchEditorSettings: async () => null,
 }))

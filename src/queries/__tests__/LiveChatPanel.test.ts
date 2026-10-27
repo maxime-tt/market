@@ -35,7 +35,7 @@ function baseUsePublishLiveChatMessageMutation() {
 // fetchLiveActivity and break liveChat.test.ts when Bun runs both files together.
 const realLiveChat = await import('@/queries/liveChat')
 
-mock.module('@/queries/liveChat', () => ({
+mock.module('@platform/web/messaging/liveChatQuery', () => ({
 	fetchLiveActivity: realLiveChat.fetchLiveActivity,
 	fetchLiveChatMessages: realLiveChat.fetchLiveChatMessages,
 	useLiveActivity: () => baseUseLiveActivity(),
