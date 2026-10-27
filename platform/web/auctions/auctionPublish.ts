@@ -46,6 +46,11 @@ export {
 	type AuctionSpecEntry,
 } from '@sdk/commerce/auctions/auctionForm'
 
+// The money paths live in one module per publish step; re-exported here so the module a consumer
+// imports (`@platform/web/auctions/auctionPublish`, or the `src/publish/auctions` shim) keeps every
+// export the file it replaced had.
+export * from './auctionPublishRelease'
+
 /**
  * Resolve the auditor pubkey(s) to bake into a new auction's
  * `auditors` tag(s). Selection priority:
