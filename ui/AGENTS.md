@@ -82,11 +82,10 @@ New components go in the narrowest directory that fits. Domain-agnostic
 building blocks belong in `shared/`; Nostr-specific presentational components
 in `nostr/`; page-section compositions in the matching feature directory.
 
-`ui/components/` is **transitional** and is now drained: it holds only
-`auction-editor/`, whose monolithic `AuctionEditorTabs` (200 raw-palette
-expressions in one file) is deliberately deferred to T6.3's host/view split —
-migrating it in place would mean migrating it twice. Everything else now lives
-in the taxonomy above. New and migrated components must not be added there.
+`ui/components/` is gone and must not receive new components. Its flat pool has
+been drained; `auction-editor/` is the only survivor and is deliberately
+deferred to T6.3's host/view split — migrating it in place would mean migrating
+it twice. New and migrated components belong in the taxonomy above.
 
 ## Import convention
 
@@ -272,11 +271,11 @@ The palette is three tiers, decided in
 `runs/union-1420/proposal-1-decision-architecture.md` is its evidence and is
 **superseded on every name**). Enforced by `theme/token-contract.test.ts`.
 
-| tier             | what                                                                                                                                                                                                              | rule                                                                                                                                                                                      |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0 — Identity** | `--brand-pink`                                                                                                                                                                                                    | **Never used by a component** (ruling R5). It is the brand constant; components use the role.                                                                                             |
-| **1 — Roles**    | `--bg`, `--surface-{raised,sunken,hover}`, `--fill-{accent,ink,ink-hover}`, `--on-fill-{accent,ink}`, `--on-media`, `--text-{high,mid}`, `--border-{default,strong}`, `--focus-{ring,attention}`, `--radius-pill` | **This is the API.** New and migrated components use these.                                                                                                                               |
-| **2 — Compat**   | `--primary`, `--secondary`, `--background`, `--card`, `--sidebar-*`, `--chart-*`, `--neo-*`, …                                                                                                                    | Frozen legacy names so generated `primitives/**` keep resolving. **No design authority** — never use in new code, never hand-edit. It is permanent (ruling R9), not a migration leftover. |
+| tier             | what                                                                                                                                                                                                              | rule                                                                                                                                                                                       |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **0 — Identity** | `--brand-pink`                                                                                                                                                                                                    | **Never used by a component** (ruling R14). It is the brand constant; components use the role.                                                                                             |
+| **1 — Roles**    | `--bg`, `--surface-{raised,sunken,hover}`, `--fill-{accent,ink,ink-hover}`, `--on-fill-{accent,ink}`, `--on-media`, `--text-{high,mid}`, `--border-{default,strong}`, `--focus-{ring,attention}`, `--radius-pill` | **This is the API.** New and migrated components use these.                                                                                                                                |
+| **2 — Compat**   | `--primary`, `--secondary`, `--background`, `--card`, `--sidebar-*`, `--chart-*`, `--neo-*`, …                                                                                                                    | Frozen legacy names so generated `primitives/**` keep resolving. **No design authority** — never use in new code, never hand-edit. It is permanent (ruling R15), not a migration leftover. |
 
 The five rules that follow from it:
 
@@ -295,8 +294,8 @@ The five rules that follow from it:
    its own scheme-stable token — never borrow an inverting one.**
 4. **`--secondary` means nothing.** It is pink in light and grey in dark today.
    Do not reason about it or adopt it; migrate pink intent to `--fill-accent`
-   per call site (ruling R3).
-5. **Two focus colours, deliberately** (ruling R4): `--focus-ring` (brand pink,
+   per call site (ruling R16).
+5. **Two focus colours, deliberately** (ruling R17): `--focus-ring` (brand pink,
    the ring the primitives use) and `--focus-attention` (the legacy yellow
    `#ffd53d`, an accessibility signal). Do not collapse them.
 
@@ -317,7 +316,7 @@ panel will have inverted and the ink will not.
 
 **Surfaces the theme deliberately does not own, as of T6.2.** The migration
 found three roles with no Tier-1 name, and left the raw utility in place rather
-than invent one (R8). They are recorded here so the next author does not have to
+than invent one (R18). They are recorded here so the next author does not have to
 rediscover them, and so the T6.4 guard can whitelist them with their reason:
 
 | the surface                       | raw utility still used                                                   | why it has no role                                                                                                                                                  |
@@ -330,7 +329,7 @@ A fourth, non-token case: an alpha hairline or ring over a **caller-supplied**
 surface (a background class passed in as a prop, a className handed to a caller's
 render prop) is not the theme's to colour; those stay raw as well.
 
-**Adding a token** (ruling R8): a new Tier-1 token needs (a) a named role that no
+**Adding a token** (ruling R18): a new Tier-1 token needs (a) a named role that no
 current token expresses, (b) the call sites it serves, and (c) a deletion in the
 same commit. Budget: **≤ 50 Tier-1 names**, enforced by the contract test. When a
 new role seems needed, the answer is usually that the call site wants an existing
@@ -346,7 +345,7 @@ colour-literal **families** under `ui/` (minus generated `primitives/**`):
 - the **arbitrary-value** family (added in v3) — the same utilities with a
   bracketed colour literal: `bg-[#1c1c1c]`, `text-[rgb(0,0,0)]`,
   `border-[oklch(0.5_0_0)]`, `shadow-[color:var(--brand-pink)]`. A
-  `var(--brand-…)` inside a bracket is debt too (ruling R5 — a component never
+  `var(--brand-…)` inside a bracket is debt too (ruling R14 — a component never
   consumes the brand identity directly).
 
 It does **not** flag a role reference (`bg-[var(--text-high)]` _is_ the API, not

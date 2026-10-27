@@ -138,7 +138,7 @@ ui/
   <feature>/       ← Feature view modules (checkout, orders, wallet, dashboard, …)
 ...More component subdirectories can be added per-feature or per specification ruleset.
 
-platform/web/      ← ASSEMBLER ONLY
+platform/web/      ← HOST / BINDING LAYER
   routes/          ← TanStack file-based routes; compose ui/ components with data
   app/             ← providers, monitors, overlays, bootstrap wiring (no components)
 
@@ -149,10 +149,15 @@ src/               ← LEGACY HOST (pre-ADR-0021); not a migration target
 
 - **`ui/` owns every component.** All new and migrated presentational
   components live under `ui/`. This tree is the standardized component set.
-- **`platform/web/` is an assembler.** Routes and `platform/web/app/` may
-  compose `ui/` components, supply data via props, and wire providers and
-  overlays. They must NOT define components, layout, navigation, or
-  presentation markup. A route that needs new UI adds it to `ui/` instead.
+- **`platform/web/` is the host/binding layer.** Routes and `platform/web/app/`
+  may compose `ui/` components, supply data via props, and wire providers and
+  overlays. After D1/D2 this layer deliberately holds React-bound logic
+  (`auctionsQuery.ts`, 500+ L; `productPublish.ts`); thin
+  `platform/web/<feature>/*Host.tsx` modules own one behaviour each and carry
+  one behaviour test. It still must NOT define presentational components,
+  layout, or navigation markup. A route that needs new UI adds it to `ui/`
+  instead. The earlier contract/BRIEF phrase "relatively simple assembly" is
+  deleted; host/binding is a deliberate, tested layer.
 - **`src/` is the legacy host.** It is retained for compatibility during the
   ADR-0021 split and is progressively retired; it is never the destination for
   migrated UI.
@@ -252,6 +257,8 @@ In order to keep the work of each PR over time, every migrated or created compon
 
 1. **Standardization:** It must adhere to the API contracts and prop standards defined in its parent subdirectory's AGENTS.md and the root `src/components/AGENTS.md`.
 2. **Test Coverage:** It must have corresponding test coverage in the automated widget book harness, verifying its different behaviors, variants, and appearances.
+
+**Relaxation (2026-10-27, D3/D4 contract rev 2.3).** The widget-book/test obligation applies only to components that remain in the `ui/` tree. A retired legacy component in a fused per-cluster commit owes no new widget-book entry or test; a cluster file owes one test file plus N widget entries (one per exported component); a deletion owes nothing new; a promotion owes both.
 
 **Note:** PR 1 (foundation) contains no migrated components, so the §2c
 compliance gate does not apply. Coverage begins with the first migration PR
