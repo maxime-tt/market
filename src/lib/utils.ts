@@ -3,9 +3,11 @@ import { twMerge } from 'tailwind-merge'
 import { ndkActions } from './stores/ndk'
 import type { NDKUser } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
-import { HEX_KEYS_REGEX } from './constants'
-import { EMAIL_REGEX } from './constants'
-import { decode, npubEncode } from 'nostr-tools/nip19'
+import { isValidHexKey, isValidNpub, isValidNip05 } from '@sdk/core/utils/utils'
+
+export * from '@sdk/core/utils/utils'
+
+import { decode } from 'nostr-tools/nip19'
 
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs))
@@ -39,31 +41,6 @@ export function getColorFromNpub(npub: string): string {
 		return 'hsl(0, 0%, 50%)' // Fallback gray
 	} catch {
 		return 'hsl(0, 0%, 50%)' // Fallback gray
-	}
-}
-
-export function isValidNip05(input: string): boolean {
-	return EMAIL_REGEX.test(input)
-}
-
-export function isValidHexKey(input: string): boolean {
-	return HEX_KEYS_REGEX.test(input)
-}
-
-/**
- * Encodes a hex pubkey to npub, returning null if the input is not a valid
- * 64-char hex key. Prevents nip19.npubEncode from throwing during render.
- */
-export function safeNpubEncode(pubkey: string): string | null {
-	return isValidHexKey(pubkey) ? npubEncode(pubkey) : null
-}
-
-export function isValidNpub(input: string): boolean {
-	try {
-		const { type, data } = decode(input)
-		return type === 'npub' && typeof data === 'string' && isValidHexKey(data)
-	} catch {
-		return false
 	}
 }
 

@@ -98,8 +98,10 @@ const realFetch = globalThis.fetch
 /** Catalogue returned for the by-author read the seller expansion performs. */
 let sellerCatalogue: NDKEvent[] = []
 let byAuthorFilters: NDKFilter[] = []
+let directSearchHits: NDKEvent[] = [DIRECT_HIT]
 
 const stubNdk = (directHits?: NDKEvent[]) => {
+	directSearchHits = directHits ?? [DIRECT_HIT]
 	;(ndkActions as { getNDK: () => unknown }).getNDK = () => makeStubNdk(directHits)
 }
 
@@ -127,6 +129,14 @@ beforeEach(() => {
 		if (filter.kinds?.includes(30402) && filter.authors?.length) {
 			byAuthorFilters.push(filter)
 			return sellerCatalogue
+		}
+		// Search queries (kind 30402 with a search term) return the direct hits.
+		if (filter.kinds?.includes(30402) && (filter as { search?: string }).search) {
+			return directSearchHits
+		}
+		// Profile search (kind 0) returns the matching seller profile.
+		if (filter.kinds?.includes(0) && (filter as { search?: string }).search) {
+			return [makeProfile(SELLER_PUBKEY)]
 		}
 		return []
 	}) as unknown as typeof ndkActions.fetchEventsWithTimeout

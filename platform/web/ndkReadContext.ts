@@ -1,4 +1,4 @@
-import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions } from '@/lib/stores/ndk'
+import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { configActions } from '@sdk/config/app-config'
 import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
@@ -54,6 +54,32 @@ export function addAppExplicitRelays(relayUrls: string[]): string[] {
  */
 export function isAppRelayReady(): boolean {
 	return !!ndkActions.getNDK()
+}
+
+/**
+ * Connect the app's relays with a timeout. Lives here so the product/collection bindings can
+ * trigger a connection without importing `src/` themselves.
+ */
+export function connectAppRelays(timeoutMs = 10000): void {
+	void ndkActions.connect(timeoutMs)
+}
+
+/**
+ * The configured explicit relay URLs from the NDK store. Lives here so the NIP-50 discovery
+ * binding can read them without importing `src/` themselves.
+ */
+export function getConfiguredRelayUrls(): string[] {
+	return ndkStore.state.explicitRelayUrls
+}
+
+/**
+ * Fetch an event by its NIP-19 naddr. The raw NDK handle stays here so the binding needs no
+ * `src/` edge.
+ */
+export async function fetchEventByNaddr(naddr: string): Promise<NDKEvent | null> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	return await ndk.fetchEvent(naddr)
 }
 
 /**
