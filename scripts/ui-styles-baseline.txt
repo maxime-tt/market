@@ -9,6 +9,39 @@
 # header of scripts/check-ui-styles.sh and ui/AGENTS.md § Tokens.
 # ui/primitives/** is excluded (generated; ADR-0007 §1a).
 # Re-seed with: scripts/check-ui-styles.sh --update
+platform/web/routes/_dashboard-layout.tsx|raw-palette|11
+platform/web/routes/_dashboard-layout/dashboard/about.tsx|raw-palette|2
+platform/web/routes/_dashboard-layout/dashboard/account/making-payments.tsx|raw-palette|15
+platform/web/routes/_dashboard-layout/dashboard/account/nostr-address.tsx|raw-palette|12
+platform/web/routes/_dashboard-layout/dashboard/account/preferences.tsx|raw-palette|3
+platform/web/routes/_dashboard-layout/dashboard/account/profile.tsx|raw-palette|8
+platform/web/routes/_dashboard-layout/dashboard/account/receiving-payments.tsx|raw-palette|31
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx|raw-palette|12
+platform/web/routes/_dashboard-layout/dashboard/app-settings/app-miscelleneous.tsx|raw-palette|14
+platform/web/routes/_dashboard-layout/dashboard/app-settings/blacklists.tsx|raw-palette|6
+platform/web/routes/_dashboard-layout/dashboard/app-settings/featured-items.tsx|raw-palette|11
+platform/web/routes/_dashboard-layout/dashboard/app-settings/team.tsx|raw-palette|5
+platform/web/routes/_dashboard-layout/dashboard/orders/$orderId.tsx|raw-palette|2
+platform/web/routes/_dashboard-layout/dashboard/products/auctions.$auctionId.tsx|raw-palette|101
+platform/web/routes/_dashboard-layout/dashboard/products/auctions.tsx|raw-palette|10
+platform/web/routes/_dashboard-layout/dashboard/products/bids.tsx|raw-palette|23
+platform/web/routes/_dashboard-layout/dashboard/products/collections.tsx|raw-palette|12
+platform/web/routes/_dashboard-layout/dashboard/products/collections/$collectionId.tsx|raw-palette|1
+platform/web/routes/_dashboard-layout/dashboard/products/migration-tool.tsx|raw-palette|4
+platform/web/routes/_dashboard-layout/dashboard/products/products.tsx|raw-palette|14
+platform/web/routes/_dashboard-layout/dashboard/products/products/$productId.tsx|raw-palette|1
+platform/web/routes/_dashboard-layout/dashboard/products/shipping-options.tsx|raw-palette|18
+platform/web/routes/_dashboard-layout/dashboard/sales/messages.tsx|raw-palette|1
+platform/web/routes/auctions.$auctionId.tsx|raw-palette|61
+platform/web/routes/auctions.index.tsx|raw-palette|11
+platform/web/routes/collection.$collectionId.tsx|raw-palette|6
+platform/web/routes/community.index.tsx|raw-palette|12
+platform/web/routes/index.tsx|raw-palette|2
+platform/web/routes/posts.$postId.tsx|raw-palette|1
+platform/web/routes/products.$productId.tsx|raw-palette|29
+platform/web/routes/products.index.tsx|raw-palette|11
+platform/web/routes/search.products.tsx|raw-palette|1
+platform/web/routes/setup.tsx|raw-palette|8
 ui/auth/nostr-connect-qr-view.tsx|parked-scheme-white|1
 ui/community/social-lists.tsx|parked-caller-surface|1
 ui/migration/migration-progress-dialog.tsx|parked-scrim|1

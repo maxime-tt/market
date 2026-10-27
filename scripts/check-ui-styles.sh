@@ -192,11 +192,20 @@ export LC_ALL=C
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UI_DIR="$ROOT/ui"
+# P0b (2026-10-27, D3/D4 contract rev 2.3 V11): the guard's scan scope was
+# widened from `ui/` only to also cover the route tree, so raw palette in
+# `platform/web/routes/**` is counted. Both trees share one baseline; every row
+# is still keyed by its repo-relative path.
+ROUTES_DIR="$ROOT/platform/web/routes"
 # Normalise: strip any trailing slash so a future edit cannot turn the exclusion
 # pattern into "…/primitives//*", which matches nothing (F-14).
 PRIMITIVES_DIR="${UI_DIR%/}/primitives"
 PRIMITIVES_DIR="${PRIMITIVES_DIR%/}"
 BASELINE="$ROOT/scripts/ui-styles-baseline.txt"
+
+# The scanned roots. `ui/primitives/**` stays excluded (generated); the route
+# tree has no generated subtree. Add a root here, not in each function.
+SCAN_DIRS=("$UI_DIR" "$ROUTES_DIR")
 
 # The canonical pattern has TWO families: (A) the named hue family — unchanged
 # from v1/v2 so the recorded hue counts stay reproducible — and (B) the v3
@@ -211,11 +220,15 @@ KNOWN_RULES='raw-palette raw-palette-test ratchet-pending-t63 parked-scrim parke
 # minus the generated primitives. `.md`/`.mdx` are deliberately NOT here (see the
 # header, EXCLUSIONS / FILE SCOPE, and RESEED-NOTES.md).
 scan_files() {
-	find "$UI_DIR" -type f \( \
-		-name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \
-		-o -name '*.mjs' -o -name '*.cjs' -o -name '*.mts' -o -name '*.cts' \
-		-o -name '*.css' \
-		\) -not -path "$PRIMITIVES_DIR/*" | sort
+	local d
+	for d in "${SCAN_DIRS[@]}"; do
+		[ -d "$d" ] || continue
+		find "$d" -type f \( \
+			-name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \
+			-o -name '*.mjs' -o -name '*.cjs' -o -name '*.mts' -o -name '*.cts' \
+			-o -name '*.css' \
+			\) -not -path "$PRIMITIVES_DIR/*"
+	done | sort
 }
 
 # Raw-palette occurrences INSIDE a `not.toContain(...)` call — an enforcement
@@ -271,21 +284,23 @@ name_matches_scan() {
 # (0 = clean). Called by check, --update and --ratchet alike.
 symlink_check() {
 	symfail=0
-	[ -d "$UI_DIR" ] || return 0
-	local link name target
-	while IFS= read -r link; do
-		[ -n "$link" ] || continue
-		name="$(basename "$link")"
-		target="$(readlink -f "$link" 2>/dev/null || true)"
-		[ -n "$target" ] || target='(broken symlink)'
-		if [ -d "$link" ]; then
-			printf 'SYMLINK  %s -> %s — a SYMLINKED DIRECTORY under ui/ is a hard error: the scan would either skip everything below it (an escape hatch) or follow it outside ui/ (the boundary rule forbids that); replace it with a real directory\n' "$(rel "$link")" "$target"
-			symfail=1
-		elif name_matches_scan "$name"; then
-			printf 'SYMLINK  %s -> %s — a symlinked source file is a hard error: silently skipping it is an escape hatch, and following it could leave ui/ (the boundary rule forbids that); replace it with a real file\n' "$(rel "$link")" "$target"
-			symfail=1
-		fi
-	done < <(find "$UI_DIR" -type l 2>/dev/null | sort)
+	local d link name target
+	for d in "${SCAN_DIRS[@]}"; do
+		[ -d "$d" ] || continue
+		while IFS= read -r link; do
+			[ -n "$link" ] || continue
+			name="$(basename "$link")"
+			target="$(readlink -f "$link" 2>/dev/null || true)"
+			[ -n "$target" ] || target='(broken symlink)'
+			if [ -d "$link" ]; then
+				printf 'SYMLINK  %s -> %s — a SYMLINKED DIRECTORY under a scanned tree is a hard error: the scan would either skip everything below it (an escape hatch) or follow it outside the scanned tree (the boundary rule forbids that); replace it with a real directory\n' "$(rel "$link")" "$target"
+				symfail=1
+			elif name_matches_scan "$name"; then
+				printf 'SYMLINK  %s -> %s — a symlinked source file is a hard error: silently skipping it is an escape hatch, and following it could leave the scanned tree; replace it with a real file\n' "$(rel "$link")" "$target"
+				symfail=1
+			fi
+		done < <(find "$d" -type l 2>/dev/null | sort)
+	done
 	return 0
 }
 
