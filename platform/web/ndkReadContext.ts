@@ -8,7 +8,7 @@
  */
 import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
-import { authStore } from '@/lib/stores/auth'
+import { authStore, getCurrentPubkey } from '@/lib/stores/auth'
 import { configActions } from '@sdk/config/app-config'
 import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 
@@ -18,9 +18,12 @@ export type { NDKEvent, NDKFilter }
 /**
  * The private-auction-claim helpers, re-exported so the auction read binding keeps the
  * signer-bound claim lookup without adding a new `platform -> src` edge: this file already owns
- * the `@/lib/stores/ndk` edge the decrypt path reads its active signer from (D1 slice 8).
+ * the `@/lib/stores/ndk` edge the decrypt path reads its active signer from (D1 slice 8). The
+ * create side is here for the same reason: the auction claim publish binding builds the gift wrap
+ * from the same active signer, so it re-uses this clause instead of opening an edge of its own.
  */
 export {
+	createPrivateAuctionClaimMessageForActiveSigner,
 	decryptPrivateAuctionClaimMessageForActiveSigner,
 	getAuctionClaimPublicMarkerFields,
 	privateAuctionClaimMatchesPublicMarker,
@@ -32,7 +35,7 @@ export {
  * user without adding a new `platform -> src` edge: this file already owns the
  * `@/lib/stores/ndk` edge.
  */
-export { authStore }
+export { authStore, getCurrentPubkey }
 
 // The browser host is one market instance, so module scope is the instance boundary for its store.
 const ndkEventStore = createMemoryEventStore<NDKEvent>()

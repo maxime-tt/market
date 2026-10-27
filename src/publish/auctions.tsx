@@ -1,8 +1,6 @@
-import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_SETTLEMENT_POLICY, getAuctionTagValue } from '@/lib/auctionSettlement'
-import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
+import { AUCTION_BID_KIND, getAuctionTagValue } from '@/lib/auctionSettlement'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
-import { configStore } from '@/lib/stores/config'
-import { walletOps, type AuctionP2pkKeyScheme, AuctionBidLockMutationPossibleError } from '@/lib/stores/walletOps'
+import { walletOps, AuctionBidLockMutationPossibleError } from '@/lib/stores/walletOps'
 import type { KeyValueStoragePort } from '@sdk/core'
 import {
 	buildPathReleaseTags,
@@ -11,13 +9,8 @@ import {
 	planAuctionBid,
 	retryAuctionBidPublishFromStorage,
 } from '@sdk/commerce/auctions'
-import {
-	runAuctionListingAppAdapter,
-	runAuctionPathReleaseAppAdapter,
-	runAuctionSettlementAppAdapter,
-	runAuctionWinnerClaimAppAdapter,
-} from './auctionWorkflowAdapters'
-import { fetchAuction, getBidAmount, getBidStatus, recordAuctionDeletion } from '@/queries/auctions'
+import { runAuctionPathReleaseAppAdapter, runAuctionSettlementAppAdapter } from './auctionWorkflowAdapters'
+import { fetchAuction, getBidAmount, getBidStatus } from '@/queries/auctions'
 import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { toRawEvent, type NostrEventLike } from '@/lib/nostr/eventLike'
@@ -27,7 +20,6 @@ import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { buildDleqProofs, fetchDleqKeysetsForBidsDetailed } from '@/lib/cashu/dleq'
 import { buildBidEventTags } from '@/lib/auction/tagBuilders'
-import { createPrivateAuctionClaimMessageForActiveSigner } from '@/lib/auctions/privateAuctionClaimMessage'
 import { createUserScopedKeyValueStoragePort } from '@/lib/sdkAdapters'
 import { getCurrentPubkey } from '@/lib/stores/auth'
 import {
@@ -47,32 +39,24 @@ import {
 	type PathReleaseReason,
 	type Nut7ProofState,
 } from '@/lib/auction/constants'
-import { assertAuctionMintsSupportDleq } from '@/lib/auction/validation'
 import { preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk'
 import { getEncodedToken, getDecodedToken, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from '@noble/secp256k1'
-import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
-import { getUser, publish as publishNostrEvent, sign as signNostrEvent } from '@/lib/nostr/io'
-import type { EventTemplate, NostrEvent, PublishOptions } from '@/lib/nostr/io'
+import { auctionKeys } from '@/queries/queryKeyFactory'
+import { getUser, sign as signNostrEvent } from '@/lib/nostr/io'
+import type { NostrEvent } from '@/lib/nostr/io'
 import { getEventHash } from 'nostr-tools'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
+import { publishRequired, tagBidError } from '@platform/web/auctions/auctionPublishIo'
 
-import { AUCTION_SETTLEMENT_GRACE_PRESETS, type AuctionFormData } from '@sdk/commerce/auctions/auctionForm'
-
-export {
-	AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES,
-	AUCTION_MIN_BID_CURVE_PEAK_PRESETS,
-	AUCTION_SETTLEMENT_GRACE_PRESETS,
-	type AuctionAntiSnipeWindowMinutesPreset,
-	type AuctionFormData,
-	type AuctionMinBidCurvePeakPreset,
-	type AuctionMinBidCurveShape,
-	type AuctionSettlementGracePreset,
-	type AuctionSpecEntry,
-} from '@sdk/commerce/auctions/auctionForm'
+// Store drain D2 slice 20 — the auction listing, deletion and claim publish paths now live in
+// `@platform/web/auctions/auctionPublish` (with their relay publish helpers in
+// `@platform/web/auctions/auctionPublishIo`). Re-exported so every existing
+// `@/publish/auctions` consumer keeps the same module surface.
+export * from '@platform/web/auctions/auctionPublish'
 
 export interface AuctionBidFormData {
 	auctionEventId: string
@@ -140,227 +124,6 @@ export interface AuctionSettlementFormData {
 	 * `blocked` case (a validated reserve-meeting winner already exists).
 	 */
 	dleqEvidenceOverride?: boolean
-}
-
-const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
-
-/**
- * Resolve the auditor pubkey(s) to bake into a new auction's
- * `auditors` tag(s). Selection priority:
- *
- *   1. The seller's explicit choice from the form (`formData.auditorPubkey`).
- *      Validated as 32-byte hex.
- *   2. The app's configured default (`configStore.config.cvmServerPubkey`).
- *
- * Throws when neither is available — without an auditor the auction
- * has no validator emitting kind-30440 verdicts, which means clients
- * have nothing to filter or aggregate against.
- */
-const getAuctionAuditorsOrThrow = (formAuditorPubkey?: string): string[] => {
-	// Single auditor today; kind-30408 supports a list (multiple
-	// `auditors` tags). Phase 7 (reputation UI) is expected to grow this
-	// into a multi-select. Falls back to the app's configured validator
-	// pubkey when the form field is empty, so dev/seed flows that don't
-	// choose an auditor explicitly still get one.
-	const explicit = formAuditorPubkey?.trim()
-	if (explicit) {
-		if (!HEX_PUBKEY_RE.test(explicit)) {
-			throw new Error('Selected auditor pubkey is not a 32-byte hex Nostr pubkey.')
-		}
-		return [explicit]
-	}
-	const fallback = configStore.state.config.cvmServerPubkey?.trim()
-	if (!fallback) {
-		throw new Error('No auditor pubkey selected and no default auditor available. Wait for app config to load and try again.')
-	}
-	return [fallback]
-}
-
-/**
- * Wrap an error thrown from a specific step of the bid flow with a tag that
- * names the step. Makes the eventual toast unambiguous about whether the
- * rate limit / failure came from the mint, the issuer, or the relay.
- */
-const tagBidError = (step: string, cause: unknown): Error => {
-	const detail = cause instanceof Error ? cause.message : String(cause)
-	const tagged = new Error(`[${step}] ${detail}`)
-	if (cause instanceof Error && cause.stack) {
-		tagged.stack = cause.stack
-	}
-	return tagged
-}
-
-export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: string): Promise<EventTemplate> => {
-	const validated = validateAuctionPublishInput(formData, { minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
-
-	const id = auctionId || `auction_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-	const startingBid = String(validated.startingBid)
-	const bidIncrement = String(validated.bidIncrement)
-	// Defensive `?? 0` even though `validated.reserve` is now non-optional.
-	// `String(undefined)` produced `"undefined"` on the wire for auction
-	// `1618640c…0881` on staging (kind-30408 tag). Belt-and-braces.
-	const reserve = String(validated.reserve ?? 0)
-	// AUCTIONS.md §6.0 — the three timestamps:
-	//   end_at      → nominal close. Floor stays flat in [start_at, end_at].
-	//   max_end_at  → hard bidding cutoff. Equals end_at + window_seconds
-	//                 where window_seconds is the seller-chosen anti-snipe
-	//                 window (or 0 → max_end_at = end_at, no curve).
-	//   locktime    → max_end_at + settlement_grace, mint-enforced refund opens.
-	//
-	// `min_bid_curve` defines the floor ramp in `(end_at, max_end_at]`.
-	// AUCTIONS.md §6.1 — replaces the legacy `extension_rule:anti_sniping:*`
-	// scheme. Floor is monotonic over time; bidder UI displays the floor
-	// at `client_now`, server enforces with a 5 s grace.
-	const minBidCurveTagValue =
-		formData.minBidCurveShape === 'none' ? 'none:1.0' : `${formData.minBidCurveShape}:${formData.minBidCurvePeakMultiplier}.0`
-	const settlementGraceSeconds = AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]
-	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
-	// Validators auctions trust. One pubkey per `auditors` tag; the form
-	// gives the seller a single field today and falls back to the app's
-	// configured default. Phase 7 (reputation UI) will grow this into a
-	// multi-select.
-	const auditorsList = getAuctionAuditorsOrThrow(formData.auditorPubkey)
-	const p2pkXpub = await walletOps.getAuctionP2pkXpub()
-
-	const imageTags: string[][] = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)])
-	const categoryTags: string[][] = []
-	if (formData.mainCategory) {
-		categoryTags.push(['t', formData.mainCategory])
-	}
-	for (const category of formData.categories) {
-		if (category && category.trim()) {
-			categoryTags.push(['t', category.trim()])
-		}
-	}
-
-	const specTags: string[][] = (formData.specs ?? [])
-		.filter((spec) => spec && spec.key.trim() && spec.value.trim())
-		.map((spec) => ['spec', spec.key.trim(), spec.value.trim()])
-
-	const shippingTags: string[][] = validated.shippings.map((ship) =>
-		ship.extraCost ? ['shipping_option', ship.shippingRef, ship.extraCost] : ['shipping_option', ship.shippingRef],
-	)
-
-	const tags: string[][] = [
-		['d', id],
-		['title', validated.title],
-		...(validated.summary ? [['summary', validated.summary]] : []),
-		['auction_type', 'english'],
-		['start_at', String(validated.startAt)],
-		['end_at', String(validated.endAt)],
-		['currency', 'SAT'],
-		['price', startingBid, 'SAT'],
-		['starting_bid', startingBid, 'SAT'],
-		['bid_increment', bidIncrement],
-		['reserve', reserve],
-		...validated.trustedMints.map((mint) => ['mint', mint]),
-		// Bidder-held-path scheme: list one or more validator pubkeys whose
-		// kind-30440 verdicts compliant clients consult to gate bid validity
-		// for THIS auction. See AUCTIONS.md §4.1.
-		...auditorsList.map((auditor) => ['auditors', auditor]),
-		// Explicit values for the per-auction validator parameters.
-		// Defaults match `DEFAULT_AUDITOR_QUORUM` / `DEFAULT_MAX_SKEW_SECONDS`
-		// in src/lib/auction/constants.ts — emitting them explicitly
-		// makes the auction round-trip cleanly through compliant
-		// validators that strictly check tag presence.
-		['auditor_quorum', String(auditorsList.length)],
-		['max_skew_sec', '120'],
-		['max_end_at', String(validated.maxEndAt)],
-		['settlement_grace', String(settlementGraceSeconds)],
-		['min_bid_curve', minBidCurveTagValue],
-		['key_scheme', keyScheme],
-		['p2pk_xpub', p2pkXpub],
-		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
-		['schema', 'auction_v1'],
-		...imageTags,
-		...categoryTags,
-		...specTags,
-		...shippingTags,
-		...(formData.isNSFW ? [['content-warning', 'nsfw']] : []),
-		...(formData.enableLiveChat ? [['live_chat', 'enabled']] : []),
-	]
-
-	return {
-		kind: 30408,
-		content: validated.description,
-		tags,
-		created_at: Math.floor(Date.now() / 1000),
-	}
-}
-
-export const publishAuction = async (formData: AuctionFormData, auctionId?: string): Promise<string> => {
-	const validated = validateAuctionPublishInput(formData, { minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
-	const outcome = await runAuctionListingAppAdapter({
-		prepareTemplate: () => createAuctionEvent(formData, auctionId),
-		mints: validated.trustedMints,
-		ports: {
-			assertMintsSupported: assertAuctionMintsSupportDleq,
-			sign: signNostrEvent,
-			publish: publishRequired,
-		},
-	})
-	if (outcome.status === 'published') return outcome.eventId
-	throw new Error(`Auction listing ${outcome.status} during ${outcome.status === 'failed' ? outcome.phase : 'publish'}: ${outcome.error}`)
-}
-
-export const usePublishAuctionMutation = () => {
-	const queryClient = useQueryClient()
-
-	return useMutation({
-		mutationFn: async (formData: AuctionFormData) => publishAuction(formData),
-		onSuccess: async () => {
-			const user = await getUser()
-			const userPubkey = user?.pubkey || ''
-			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
-			if (userPubkey) {
-				await queryClient.invalidateQueries({ queryKey: auctionKeys.byPubkey(userPubkey) })
-			}
-			toast.success('Auction published successfully')
-		},
-		onError: (error) => {
-			console.error('Failed to publish auction:', error)
-			toast.error(`Failed to publish auction: ${error instanceof Error ? error.message : String(error)}`)
-		},
-	})
-}
-
-export const deleteAuction = async (auctionDTag: string): Promise<boolean> => {
-	const user = await getUser()
-	if (!user?.pubkey) throw new Error('No active user')
-
-	const template: EventTemplate = {
-		kind: 5,
-		content: 'Auction deleted',
-		tags: [['a', `30408:${user.pubkey}:${auctionDTag}`]],
-		created_at: Math.floor(Date.now() / 1000),
-	}
-
-	const event = await signNostrEvent(template)
-	await publishRequired(event)
-	recordAuctionDeletion(event)
-	return true
-}
-
-export const useDeleteAuctionMutation = () => {
-	const queryClient = useQueryClient()
-
-	return useMutation({
-		mutationFn: async (auctionDTag: string) => deleteAuction(auctionDTag),
-		onSuccess: async (_success, auctionDTag) => {
-			const user = await getUser()
-			const userPubkey = user?.pubkey || ''
-
-			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
-			if (userPubkey) {
-				await queryClient.invalidateQueries({ queryKey: auctionKeys.byPubkey(userPubkey) })
-			}
-			toast.success('Auction deleted successfully')
-		},
-		onError: (error) => {
-			console.error('Failed to delete auction:', error)
-			toast.error(`Failed to delete auction: ${error instanceof Error ? error.message : String(error)}`)
-		},
-	})
 }
 
 const DEFAULT_BID_MINT = 'https://nofees.testnut.cashu.space'
@@ -2065,182 +1828,4 @@ export const usePublishAuctionSettlementMutation = () => {
 	})
 	overrideRef.current = mutation.mutate
 	return mutation
-}
-
-// ---------------------------------------------------------------------------
-// Auction Claim Order — winner submits shipping address after settlement
-// ---------------------------------------------------------------------------
-
-export interface AuctionClaimFormData {
-	auctionEventId: string
-	auctionCoordinates: string
-	settlementEventId: string
-	sellerPubkey: string
-	finalAmount: number
-	shippingAddress: {
-		name: string
-		firstLineOfAddress: string
-		city: string
-		zipPostcode: string
-		country: string
-		additionalInformation?: string
-	}
-	email?: string
-	phone?: string
-	notes?: string
-}
-
-/**
- * Creates a Kind 16 order event that references the won auction.
- * This is identical to a normal order creation but uses an `a` tag
- * pointing at the auction coordinate and an `e` tag pointing at the
- * settlement event instead of product `item` tags.
- */
-export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): Promise<string> => {
-	const buyerPubkey = await resolveAuctionClaimBuyerPubkey()
-	const orderId = uuidv4()
-	const createdAt = Math.floor(Date.now() / 1000)
-	const claimFields = {
-		orderId,
-		auctionCoordinates: formData.auctionCoordinates,
-		auctionEventId: formData.auctionEventId,
-		settlementEventId: formData.settlementEventId,
-		buyerPubkey,
-		sellerPubkey: formData.sellerPubkey,
-		totalAmountSats: formData.finalAmount,
-		shippingAddress: formData.shippingAddress,
-		email: formData.email,
-		phone: formData.phone,
-		notes: formData.notes,
-	}
-
-	const outcome = await runAuctionWinnerClaimAppAdapter({
-		claim: {
-			orderId,
-			auctionCoordinate: claimFields.auctionCoordinates,
-			auctionEventId: claimFields.auctionEventId,
-			settlementEventId: claimFields.settlementEventId,
-			buyerPubkey: claimFields.buyerPubkey,
-			sellerPubkey: claimFields.sellerPubkey,
-			finalAmount: claimFields.totalAmountSats,
-			shippingAddress: claimFields.shippingAddress,
-			email: claimFields.email,
-			phone: claimFields.phone,
-			notes: claimFields.notes,
-			createdAt,
-		},
-		ports: {
-			createPrivateDelivery: async (payload) =>
-				createPrivateAuctionClaimMessageForActiveSigner({
-					orderId: payload.orderId,
-					auctionCoordinates: payload.auctionCoordinate,
-					auctionEventId: payload.auctionEventId,
-					settlementEventId: payload.settlementEventId,
-					buyerPubkey: payload.buyerPubkey,
-					sellerPubkey: payload.sellerPubkey,
-					totalAmountSats: payload.finalAmount,
-					shippingAddress: payload.shippingAddress,
-					email: payload.email,
-					phone: payload.phone,
-					notes: payload.notes,
-					createdAt,
-				}),
-			publishPrivateDelivery: async (privateClaim) => ({
-				eventId: privateClaim.giftWrap.id,
-				acceptedRelays: await publishRequiredPrivateGiftWrap(privateClaim.giftWrap),
-			}),
-			signMarker: signNostrEvent,
-			publishMarker: publishAuctionClaimMarkerToPrivateRelays,
-		},
-	})
-	if (outcome.status === 'published') return outcome.markerEventId
-	if (outcome.status === 'failed') {
-		throw new Error(`Auction claim failed during ${outcome.phase}: ${outcome.error}`)
-	}
-	throw new Error(
-		`Auction claim is partial during ${outcome.phase}; encrypted delivery ${outcome.privateDeliveryEventId} was published to ` +
-			`${outcome.acceptedRelays.length} relay(s), but its public marker was not confirmed: ${outcome.error}`,
-	)
-}
-
-/**
- * Publish through the seam and fail closed on zero relay ACKs.
- *
- * `io.ts` documents an empty `publishedRelays` as "no relay accepted it, which
- * callers must treat as a publish failure". That is enforced for free by the
- * NDK bridge (it throws `NDKPublishError` below `requiredRelayCount = 1`), but
- * the applesauce adapter RESOLVES with the ACK-filtered set
- * (`io-applesauce.ts`), so an unchecked call reports a zero-ACK publish as a
- * success. This wrapper makes the contract adapter-independent (review
- * 2026-09-18, item 4). `publishRequiredPrivateGiftWrap` /
- * `publishAuctionClaimMarkerToPrivateRelays` keep their own checks because they
- * need the accepted relay URLs.
- */
-async function publishRequired(event: NostrEvent, options?: PublishOptions): Promise<void> {
-	const result = await publishNostrEvent(event, options)
-	if (result.publishedRelays.size === 0) {
-		throw new Error(`No relay accepted the event (kind ${event.kind}, id ${event.id}) — treating as a publish failure`)
-	}
-}
-
-async function publishRequiredPrivateGiftWrap(event: NostrEvent): Promise<string[]> {
-	const result = await publishNostrEvent(event)
-	if (result.publishedRelays.size === 0) {
-		throw new Error('Encrypted auction claim details could not be published')
-	}
-	return Array.from(result.publishedRelays)
-}
-
-async function publishAuctionClaimMarkerToPrivateRelays(event: NostrEvent, privateRelayUrls: string[]): Promise<void> {
-	const result = await publishNostrEvent(event, { relayUrls: privateRelayUrls })
-	if (result.publishedRelays.size === 0) {
-		throw new Error('Auction claim marker could not be published to the private claim relays')
-	}
-}
-
-/**
- * Resolve the buyer identity written into the public claim marker.
- *
- * The base implementation compared `ndk.activeUser?.pubkey` against the active
- * signer's pubkey and threw "Active user does not match active signer."; the
- * seam exposes identity only through `getUser()`, which is itself
- * signer-derived (`@/lib/stores/ndk` `getUser()` → the active signer's user).
- * The two values therefore cannot diverge through the seam today, so the
- * comparison is vacuous here rather than removed. The identity property that
- * actually matters — the pubkey written into the public marker is the identity
- * that encrypted the private claim — holds because
- * `privateAuctionClaimMessage.ts` produces the gift wrap from the same active
- * signer. The #1252 signer migration re-points `getUser()`; if it ever makes
- * identity independent of the signer, that migration MUST re-establish the
- * cross-account assertion (review 2026-09-18, item 5).
- */
-async function resolveAuctionClaimBuyerPubkey(): Promise<string> {
-	const user = await getUser()
-	const signerPubkey = user?.pubkey ?? ''
-	if (!HEX_PUBKEY_RE.test(signerPubkey)) throw new Error('Active signer pubkey is not a 32-byte hex Nostr pubkey.')
-
-	return signerPubkey
-}
-
-export const usePublishAuctionClaimOrderMutation = () => {
-	const queryClient = useQueryClient()
-
-	return useMutation({
-		mutationFn: publishAuctionClaimOrder,
-		onSuccess: async (_orderId, variables) => {
-			await queryClient.invalidateQueries({ queryKey: auctionKeys.settlements(variables.auctionEventId) })
-			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
-			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
-			const user = await getUser()
-			if (user?.pubkey) {
-				await queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(user.pubkey) })
-				await queryClient.invalidateQueries({ queryKey: orderKeys.byPubkey(user.pubkey) })
-			}
-			toast.success('Shipping details submitted — the seller has been notified')
-		},
-		onError: (error) => {
-			console.error('Failed to submit auction claim:', error)
-			toast.error(`Failed to submit claim: ${error instanceof Error ? error.message : String(error)}`)
-		},
-	})
 }

@@ -34,6 +34,26 @@ export { submitAppSettings as submitAppSettingsEvent } from '@/lib/appSettings'
 export { toEncryptingSigner } from '@/lib/nostr/ndkEncryptingSigner'
 
 /**
+ * The auction publish bindings sign, publish and identify through the active
+ * first-party I/O seam (`src/lib/nostr/io.ts`), never through `applesauceIo`:
+ * `io.ts` is the seam that honours `setNostrIo` and the host's signer, and the
+ * auction suites drive it by swapping the store's active signer. Re-exported
+ * here so those bindings add no new `platform -> src` edge — this file already
+ * owns the `@/lib` edges a publish binding needs.
+ */
+export { getUser, publish as publishNostrEvent, sign as signNostrEvent } from '@/lib/nostr/io'
+export type { EventTemplate, NostrEvent, PublishOptions } from '@/lib/nostr/io'
+
+/**
+ * Re-exported for the auction publish bindings, which lock and reclaim bid legs
+ * through the wallet store and open the user-scoped republish cache over the SDK
+ * storage port. Both live in `src/` today; routing them through this file keeps
+ * the auction bindings free of `@/` specifiers while the wallet store drains.
+ */
+export { walletOps, AuctionBidLockMutationPossibleError, type AuctionP2pkKeyScheme } from '@/lib/stores/walletOps'
+export { createUserScopedKeyValueStoragePort } from '@/lib/sdkAdapters'
+
+/**
  * Platform adapter: binds the web host's NDK client and signer to the SDK's
  * explicit publish context. SDK workflows never read the NDK singleton.
  */

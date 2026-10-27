@@ -30,6 +30,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/products.tsx',
 	'src/publish/collections.tsx',
 	'src/publish/orders.tsx', // store drain D2 slice 19; shim deleted in E1
+	'src/publish/auctions.tsx', // store drain D2 slice 20; shim deleted in E1
 	'src/queries/shipping.tsx',
 	'src/queries/products.tsx',
 	'src/queries/collections.tsx',
