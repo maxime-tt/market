@@ -7,6 +7,7 @@ import { createQueryClient } from '@/lib/queryClient'
 import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from '@/lib/router-utils'
 import { bootApp, bootStore } from '@platform/web/boot'
+import { ThemeMigrationWrapper } from '@ui/theme/theme-migration-wrapper'
 import { WebUiProvider } from '@platform/web/WebUiProvider'
 import { AppMonitors } from '@platform/web/app/AppMonitors'
 import { AppOverlays } from '@platform/web/app/AppOverlays'
@@ -91,13 +92,18 @@ function App() {
 		<StrictMode>
 			<QueryClientProvider client={queryClient}>
 				<WebUiProvider>
-					<AppProviders>
-						<AppMonitors />
-						<RouterProvider router={router} />
-						<AppOverlays />
-					</AppProviders>
+					{/* P0b (D3/D4 contract rev 2.3 V11): mount the theme scope ONCE at the
+					    app shell so every route and overlay resolves the `.theme-new`
+					    tokens. `contents` keeps the wrapper out of the layout box tree. */}
+					<ThemeMigrationWrapper className="contents">
+						<AppProviders>
+							<AppMonitors />
+							<RouterProvider router={router} />
+							<AppOverlays />
+						</AppProviders>
+						<UpdateAvailableDialog open={showUpdateDialog} onDismiss={dismissUpdate} />
+					</ThemeMigrationWrapper>
 				</WebUiProvider>
-				<UpdateAvailableDialog open={showUpdateDialog} onDismiss={dismissUpdate} />
 			</QueryClientProvider>
 		</StrictMode>
 	)
