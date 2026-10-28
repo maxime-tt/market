@@ -1,4 +1,4 @@
-import { AuctionCountdown } from '@/components/AuctionCountdown'
+import { AuctionCountdown } from '@platform/web/auctions/AuctionCountdownHost'
 import { AvatarUser } from '@/components/AvatarUser'
 import { ProfileName } from '@/components/ProfileName'
 import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'

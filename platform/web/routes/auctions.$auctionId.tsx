@@ -1,5 +1,5 @@
 import { AuctionCard } from '@/components/AuctionCard'
-import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
+import { AuctionCountdown, useAuctionCountdown } from '@platform/web/auctions/AuctionCountdownHost'
 import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
 import { AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
