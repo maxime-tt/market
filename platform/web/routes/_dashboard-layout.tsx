@@ -12,7 +12,7 @@ import {
 	type NavBackTarget,
 	type NavBadgeCounts,
 } from '@ui/nav/model'
-import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { cn } from '@/lib/utils'
 import { useAmIAdmin } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'

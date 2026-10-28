@@ -14,7 +14,7 @@ import { useUpdateProfileMutation } from '@platform/web/profiles/profilePublish'
 import { useQuery } from '@tanstack/react-query'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
-import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profile')({
 	component: ProfileComponent,
