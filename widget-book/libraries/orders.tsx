@@ -65,7 +65,7 @@ const pendingInvoice: InvoiceWithSource = {
 	description: 'Merchant Payment',
 	recipientName: 'Satoshi Nakamoto',
 	status: 'pending',
-	expiresAt: 1793000000,
+	expiresAt: Math.floor(Date.now() / 1000) + 3600,
 	createdAt: 1792000000,
 	recipientPubkey: 'd943e96d0c7828b0e0c2b2d1f0a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c782',
 	type: 'merchant',
