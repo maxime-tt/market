@@ -50,7 +50,7 @@ export function Footer({ displayName, termsUrl, supportContact, socialLinks, cla
 				<div className="text-right flex justify-between items-center gap-6">
 					{socialLinks?.nostr && (
 						<a
-							className="border-none hover:bg-secondary p-1 inline-flex justify-center items-center"
+							className="border-none hover:bg-fill-ink-hover p-1 inline-flex justify-center items-center"
 							href={socialLinks.nostr}
 							target="_blank"
 							rel="noopener noreferrer"
@@ -61,7 +61,7 @@ export function Footer({ displayName, termsUrl, supportContact, socialLinks, cla
 					{socialLinks?.twitter && (
 						<a
 							href={socialLinks.twitter}
-							className="border-none hover:bg-secondary p-1 inline-flex justify-center items-center"
+							className="border-none hover:bg-fill-ink-hover p-1 inline-flex justify-center items-center"
 							target="_blank"
 							rel="noopener noreferrer"
 						>
@@ -70,7 +70,7 @@ export function Footer({ displayName, termsUrl, supportContact, socialLinks, cla
 					)}
 					{socialLinks?.newsletter && (
 						<a
-							className="border-none hover:bg-secondary p-1 inline-flex justify-center items-center"
+							className="border-none hover:bg-fill-ink-hover p-1 inline-flex justify-center items-center"
 							href={socialLinks.newsletter}
 							target="_blank"
 							rel="noopener noreferrer"
@@ -80,7 +80,7 @@ export function Footer({ displayName, termsUrl, supportContact, socialLinks, cla
 					)}
 					{socialLinks?.telegram && (
 						<a
-							className="border-none hover:bg-secondary p-1 inline-flex justify-center items-center"
+							className="border-none hover:bg-fill-ink-hover p-1 inline-flex justify-center items-center"
 							href={socialLinks.telegram}
 							target="_blank"
 							rel="noopener noreferrer"
@@ -90,7 +90,7 @@ export function Footer({ displayName, termsUrl, supportContact, socialLinks, cla
 					)}
 					{socialLinks?.github && (
 						<a
-							className="border-none hover:bg-secondary p-1 inline-flex justify-center items-center"
+							className="border-none hover:bg-fill-ink-hover p-1 inline-flex justify-center items-center"
 							href={socialLinks.github}
 							target="_blank"
 							rel="noopener noreferrer"
