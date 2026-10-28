@@ -22,6 +22,7 @@ async function stageRepo(baseline: number, ndkFiles: number): Promise<string> {
 	await mkdir(join(root, 'scripts'))
 	await mkdir(join(root, 'src'))
 	await mkdir(join(root, 'contextvm')) // exists in the real repo; keeps grep's paths valid
+	await mkdir(join(root, 'sdk')) // in scope since wave 7 (F3); keeps the paths valid
 
 	const scriptSrc = join(import.meta.dir, '..', '..', '..', 'scripts', 'check-ndk-footprint.sh')
 	await copyFile(scriptSrc, join(root, 'scripts', 'check-ndk-footprint.sh'))
@@ -87,6 +88,7 @@ describe('NDK footprint guard (scripts/check-ndk-footprint.sh)', () => {
 		await mkdir(join(root, 'scripts'))
 		await mkdir(join(root, 'src'))
 		await mkdir(join(root, 'contextvm'))
+		await mkdir(join(root, 'sdk'))
 		await copyFile(
 			join(import.meta.dir, '..', '..', '..', 'scripts', 'check-ndk-footprint.sh'),
 			join(root, 'scripts', 'check-ndk-footprint.sh'),

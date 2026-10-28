@@ -17,6 +17,13 @@
 # set AUCTIONS_GUARD_REQUIRE_COVERAGE=0 for their throwaway repos; the real repo
 # always runs strict.
 #
+# Retarget (wave 7, D1/D4): the auction surface no longer lives under
+# `src/publish/auctions.tsx` / `src/queries/auctions.tsx` — those are one-line
+# re-export shims over `platform/web/auctions/`. The pinned entries now name the
+# seams that own that surface (the sdk publish/read modules plus the two
+# platform bindings), while the shims and every `src/` auction file still in the
+# tree keep dedicated glob families so no coverage was dropped.
+#
 # Out of scope (named, not silently ignored): the wallet stores under
 # `src/lib/stores/` — `walletOps.ts` reads the active signer and the NDK bridge,
 # and `cashu.ts` is imported by every wallet consumer — carry NDK-surface hits of
@@ -53,10 +60,14 @@ ALLOWLIST=(
 )
 
 # Pinned production files that MUST exist. A missing pinned path means the guard
-# is blind: fail (when coverage is enforced) rather than count a ghost.
+# is blind: fail (when coverage is enforced) rather than count a ghost. The two
+# `src/` shim pins moved here to their successors: the sdk publish workflow and
+# read model, plus the platform publish/read bindings that replaced the shims.
 PINNED=(
-	"$ROOT/src/publish/auctions.tsx"
-	"$ROOT/src/queries/auctions.tsx"
+	"$ROOT/sdk/commerce/auctions/workflows.ts"
+	"$ROOT/sdk/commerce/auctions/auctionRead.ts"
+	"$ROOT/platform/web/auctions/auctionPublish.ts"
+	"$ROOT/platform/web/auctions/auctionsQuery.ts"
 	"$ROOT/platform/web/routes/_dashboard-layout/dashboard/products/bids.tsx"
 )
 
@@ -65,6 +76,12 @@ PINNED=(
 # library directories, hooks, schemas, and the server-side validator.
 GLOBS=(
 	"$ROOT"/platform/web/routes/auctions.*.tsx
+	# The `src/publish` and `src/queries` auction shims are still in the tree, so
+	# they keep coverage as single-file families now that their PINNED entries
+	# moved to the sdk/platform seams above. Delete a family only when its file
+	# is actually deleted.
+	"$ROOT"/src/publish/auctions.tsx
+	"$ROOT"/src/queries/auctions.tsx
 	"$ROOT"/src/components/Auction*.tsx
 	"$ROOT"/src/lib/auction*.ts
 	"$ROOT"/src/lib/auction/*.ts
@@ -88,6 +105,11 @@ GLOBS=(
 	"$ROOT"/platform/web/auctions/*.ts
 	# D1 slice-8 schema destination: the auction and bid event schemas the reader validates with.
 	"$ROOT"/sdk/commerce/auctions/schemas/*.ts
+	# Settlement family: the P2PK/settlement descriptor money path in the sdk, and
+	# the sdk auction wallet bindings (funds/host) that hold the auction's cashu
+	# surface. Both are part of the money path this guard keeps off raw NDK.
+	"$ROOT"/sdk/commerce/auctions/settlement*.ts
+	"$ROOT"/sdk/commerce/payments/wallet/auction*.ts
 )
 
 shopt -s nullglob

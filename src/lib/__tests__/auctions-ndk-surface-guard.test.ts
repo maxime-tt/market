@@ -74,7 +74,8 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		const r = runGuard(root, true)
 		expect(r.exitCode).toBe(1)
 		expect(r.stdout).toContain('coverage check failed')
-		expect(r.stdout).toContain('src/publish/auctions.tsx')
+		// The pinned entries name the sdk/platform seams that own the surface now.
+		expect(r.stdout).toContain('sdk/commerce/auctions/workflows.ts')
 	})
 
 	test('reads a newly created file under src/lib/auction/ (set completeness)', async () => {
@@ -92,6 +93,14 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		// The real directory must be scanned via a glob, not `src/lib/auction*.ts`.
 		expect(source).toContain('src/lib/auction/*.ts')
 		expect(source).toContain('AUCTIONS_GUARD_REQUIRE_COVERAGE')
+		// Wave 7 retarget: the surface is pinned in the sdk/platform seams and the
+		// `src/` shims that are still in the tree keep their own glob families.
+		expect(source).toContain('sdk/commerce/auctions/workflows.ts')
+		expect(source).toContain('sdk/commerce/auctions/auctionRead.ts')
+		expect(source).toContain('platform/web/auctions/auctionPublish.ts')
+		expect(source).toContain('platform/web/auctions/auctionsQuery.ts')
+		expect(source).toContain('src/publish/auctions.tsx')
+		expect(source).toContain('src/queries/auctions.tsx')
 		// The out-of-scope files are named, not silently ignored: the wallet store
 		// directory, and the sanctioned first-party NDK wrapper.
 		expect(source).toContain('src/lib/stores/')
