@@ -1,4 +1,5 @@
 import { CollectionSkeletons, MerchantSkeletons } from '@ui/community/community-skeletons'
+import { PostView } from '@ui/community/post-view'
 import { CommentButtonView, ReactionButtonView, ShareButtonView, ZapButtonView } from '@ui/community/social-buttons'
 import { ReactionsListView, ZapsListView, type ReactionGroup, type ZapListItem } from '@ui/community/social-lists'
 import type { WidgetLibrary } from '../libraries'
@@ -15,6 +16,14 @@ import type { WidgetLibrary } from '../libraries'
  * props and the book passes plain nodes (same pattern as `auction.tsx`'s
  * `SamplePartyIdentity`).
  */
+
+/** One text-note row for the `PostView` entry; the author is host-resolved, so it is a literal here. */
+const samplePost = {
+	id: 'ab12c34d56e78f90a1b2c3d4e5f60718293a4b5c782d943e96d0c7828b0e0c2b',
+	author: 'cd34e56f7890a1b2c3d4e5f60718293a4b5c782d943e96d0c7828b0e0c2b2d1f0',
+	content: 'Just listed a pair of hand-thrown mugs — shipping worldwide.',
+	createdAt: 1_700_000_000,
+}
 
 /** Stand-in for the host's `<AvatarUser>` resolution; sizing comes from the list. */
 function SampleAvatar(pubkey: string, className: string) {
@@ -124,6 +133,17 @@ export const community: WidgetLibrary = {
 		{
 			name: 'ZapsListView',
 			render: () => <ZapsListView zaps={sampleZaps} renderAvatar={SampleAvatar} />,
+		},
+		{
+			name: 'PostView',
+			render: () => (
+				<PostView
+					post={samplePost}
+					author={{ name: 'Alice', picture: 'https://images.example/alice.jpg' }}
+					isLoadingAuthor={false}
+					permalinkHref={`/posts/${samplePost.id}`}
+				/>
+			),
 		},
 	],
 }
