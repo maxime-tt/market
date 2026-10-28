@@ -80,6 +80,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/schemas/cartPersistence.ts', // Wave D cart drain S0; shim deleted in E1b
 	'src/lib/stores/cashu.ts', // Wave D walletOps drain S0; shim deleted in E1b
 	'src/lib/stores/ui.ts', // Wave E adapter drain W-E3.5; shim deleted in E1b
+	'src/lib/stores/config.ts', // Wave E adapter drain W-E3.6; shim deleted in E1b
 	'src/lib/stores/walletOps.ts', // Wave D walletOps drain S2; shim deleted in E1b
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
 	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3

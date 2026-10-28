@@ -1,6 +1,6 @@
 import { Store } from '@tanstack/store'
 import type { QueryClient } from '@tanstack/react-query'
-import { configActions } from '@/lib/stores/config'
+import { configActions } from '@platform/web/config/appConfigStore'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { authActions } from '@/lib/stores/auth'
 import { walletActions } from '@/lib/stores/wallet'

@@ -1,4 +1,4 @@
-import { configStore } from '@/lib/stores/config'
+import { configStore } from '@platform/web/config/appConfigStore'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
 
