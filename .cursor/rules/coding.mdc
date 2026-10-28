@@ -53,7 +53,7 @@ Forms (TanStack Form)
 
 Routing (TanStack Router)
 - Use TanStack Router with type-safe route definitions.
-- Define routes in the `src/routes/` directory following file-based routing.
+- Define routes in the `platform/web/routes/` directory following file-based routing.
 - Use route loaders for data dependencies.
 - Implement proper loading and error states for routes.
 - Use search params and path params with proper TypeScript typing.
@@ -68,7 +68,7 @@ Nostr Integration
 
 UI & Styling (Radix UI + Tailwind CSS)
 - Use Radix UI components as the foundation for all interactive elements.
-- Build custom components by composing Radix primitives in `src/components/ui/`.
+- Build custom components by composing Radix primitives in `ui/primitives/`.
 - Use Tailwind CSS for all styling with the custom design system.
 - Implement responsive design using Tailwind's responsive utilities.
 - Use CSS variables defined in `styles/globals.css` for theming.
@@ -77,8 +77,8 @@ UI & Styling (Radix UI + Tailwind CSS)
 - Follow the established color palette (primary, secondary, tertiary, focus).
 
 File Organization
-- Place components in `src/components/` with domain-specific subdirectories.
-- Keep UI primitives in `src/components/ui/`.
+- Place components in `ui/` with domain-specific subdirectories; `platform/web/` only composes them.
+- Keep UI primitives in `ui/primitives/`.
 - Store business logic in `src/lib/` with clear separation of concerns.
 - Use `src/queries/` for all data fetching logic.
 - Place TypeScript types and schemas in `src/lib/schemas/`.

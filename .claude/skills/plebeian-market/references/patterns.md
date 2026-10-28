@@ -137,7 +137,7 @@ export function useOrdersBackgroundSync() {
 
 ### 1. File-Based Routes
 
-Create routes as files in `/src/routes/`:
+Create routes as files in `/platform/web/routes/`:
 
 ```typescript
 // routes/products.$productId.tsx

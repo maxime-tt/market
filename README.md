@@ -118,7 +118,7 @@ export const postsQueryOptions = queryOptions({
 
 This project uses TanStack Router for file-based routing with built-in prefetching capabilities:
 
-- File-based routing: Routes are defined in the `src/routes` directory
+- File-based routing: Routes are defined in the `platform/web/routes` directory
 - Dynamic routes: Parameters in file names (e.g., `posts.$postId.tsx`)
 - Automatic route tree generation
 

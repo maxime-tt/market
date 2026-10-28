@@ -341,7 +341,7 @@ function ThemeToggle() {
 
 ## Component Library Reference
 
-All UI components are in `src/components/ui/`:
+All UI components are in `ui/`:
 
 - `Button` - Primary action component
 - `Card` - Content container
