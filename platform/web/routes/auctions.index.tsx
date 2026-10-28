@@ -9,8 +9,8 @@ import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/wrappers/button'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
-import { uiStore } from '@/lib/stores/ui'
-import { uiActions } from '@/lib/stores/ui'
+import { uiStore } from '@platform/web/app/uiStore'
+import { uiActions } from '@platform/web/app/uiStore'
 import {
 	auctionSortOptionValues,
 	calculateAppliedFilterCount,

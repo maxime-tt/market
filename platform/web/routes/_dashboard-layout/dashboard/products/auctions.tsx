@@ -5,7 +5,7 @@ import { ErrorState } from '@ui/shared/error-state'
 import { LoadingState } from '@ui/shared/loading-state'
 import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@/lib/stores/auth'
-import { uiActions } from '@/lib/stores/ui'
+import { uiActions } from '@platform/web/app/uiStore'
 import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
 import { AuctionListItemHost } from '@/components/dashboard/AuctionListItemHost'
 import {

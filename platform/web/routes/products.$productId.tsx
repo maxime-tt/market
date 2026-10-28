@@ -22,7 +22,7 @@ import { DEFAULT_DOCUMENT_TITLE, buildOwnedMetaEmissions, removeOwnedOgMetaTags,
 import { authStore } from '@/lib/stores/auth'
 import { cartActions, useCart, type RichShippingInfo } from '@platform/web/cart/cartStore'
 import { ndkActions } from '@/lib/stores/ndk'
-import { uiActions, uiStore } from '@/lib/stores/ui'
+import { uiActions, uiStore } from '@platform/web/app/uiStore'
 import { addToBlacklistProducts, removeFromBlacklistProducts } from '@/publish/blacklist'
 import { addToFeaturedProducts, removeFromFeaturedProducts } from '@/publish/featured'
 import { useBlacklistSettings } from '@/queries/blacklist'
