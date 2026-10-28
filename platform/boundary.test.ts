@@ -76,6 +76,9 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/stores/collection.ts', // store drain; shim deleted in E1b
 	'src/lib/utils/productFormStorage.ts', // Wave C product drain S0; shim deleted in E1b
 	'src/lib/stores/product.ts', // Wave C product drain S1-S3; shim deleted in E1b
+	'src/lib/wallet/nwcWalletRead.ts', // Wave C ndk drain S2; shim deleted in E1b
+	'src/lib/nostr/relayListRead.ts', // Wave C ndk drain S2; shim deleted in E1b
+	'src/lib/stores/ndk.ts', // Wave C ndk drain S2; reads the moved NDK adapters directly, edge retired in E1b
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
 	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
 	'src/hooks/useAuctionWinMonitor.ts', // pre-existing; owner leaves src/ in D3

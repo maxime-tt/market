@@ -6,7 +6,7 @@
  * the react-query hooks and resolves the ports from the platform context. `walletActions` supplies the
  * cached NIP-47 client (`getOrCreateNwcClient(nwcUri, signer)`), and `getAppNdk` supplies the relay fetch
  * and signer — so this binding has no `platform -> src` import and the ndk store's own helper
- * (`src/lib/wallet/nwcWalletRead.ts`, now an adapter over the SDK reads) is untouched. Query keys are
+ * (`platform/web/wallet/nwcWalletRead.ts`, now an adapter over the SDK reads) is untouched. Query keys are
  * literal-identical to the pre-drain values.
  */
 import { useQuery } from '@tanstack/react-query'
