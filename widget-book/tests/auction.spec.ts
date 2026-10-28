@@ -57,6 +57,7 @@ test('renders the auction library', async ({ page }) => {
 		'AuctionShippingViewAllAttached',
 		'AuctionVerdictView',
 		'AuctionBidsView',
+		'AuctionTimelineChartView',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
@@ -181,6 +182,14 @@ test('renders the auction bids view and expands its technical accordion', async 
 	await expect(view.getByText('Bidder pubkey')).toBeVisible()
 	await expect(view).toContainText('Key scheme')
 	await expect(view).toContainText('hd_p2pk')
+})
+
+test('renders the auction timeline chart scatter surface', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const view = page.getByTestId('widget-AuctionTimelineChartView')
+	await expect(view.locator('[data-slot="auction-timeline-chart-view"]')).toHaveCount(1)
+	await expect(view.locator('.recharts-surface')).toBeVisible()
 })
 
 test('renders the dashboard auction list row with its host-owned slots', async ({ page }) => {

@@ -22,6 +22,7 @@ import { BidStatusBanner, BidStatusPill, getBidStatusCopy, type BidStatusDisplay
 import { AuctionShippingDetailRow, AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
 import { AuctionVerdictView } from '@ui/auction/auction-verdict-view'
 import { AuctionBidsView } from '@ui/auction/auction-bids-view'
+import { AuctionTimelineChartView } from '@ui/auction/auction-timeline-chart-view'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import {
 	AuctionDetailCard,
@@ -329,6 +330,57 @@ function AuctionBidsViewDemo() {
 						],
 					}),
 				]}
+				renderUserCard={(pubkey) => <SampleBidderCard pubkey={pubkey} />}
+			/>
+		</div>
+	)
+}
+
+const TIMELINE_AUCTION_START = 1_760_000_000
+const TIMELINE_AUCTION_END = TIMELINE_AUCTION_START + 86_400
+const TIMELINE_AUCTION_MAX_END = TIMELINE_AUCTION_END + 1_800
+
+/** Fixed-timestamp auction + bid set so the timeline chart is stable. */
+const TIMELINE_AUCTION: NostrEventLike = {
+	id: 'auction-timeline',
+	pubkey: BIDS_VIEW_TOP_PUBKEY,
+	kind: 30408,
+	created_at: TIMELINE_AUCTION_START - 3_600,
+	content: '',
+	tags: [
+		['start_at', String(TIMELINE_AUCTION_START)],
+		['end_at', String(TIMELINE_AUCTION_END)],
+		['max_end_at', String(TIMELINE_AUCTION_MAX_END)],
+		['settlement_grace', '3600'],
+		['starting_bid', '10000'],
+		['reserve', '20000'],
+	],
+}
+
+const TIMELINE_BIDS: NostrEventLike[] = [
+	auctionBidFixture({
+		id: 'timeline-1',
+		pubkey: BIDS_VIEW_TOP_PUBKEY,
+		created_at: TIMELINE_AUCTION_START + 3_600,
+		tags: [['amount', '12000']],
+	}),
+	auctionBidFixture({
+		id: 'timeline-2',
+		pubkey: BIDS_VIEW_OTHER_PUBKEY,
+		created_at: TIMELINE_AUCTION_START + 7_200,
+		tags: [['amount', '18000']],
+	}),
+	auctionBidFixture({ id: 'timeline-3', pubkey: 'f'.repeat(64), created_at: TIMELINE_AUCTION_START + 10_800, tags: [['amount', '22000']] }),
+]
+
+/** S5b: the bid timeline chart — lollipop bids over time with the reserve and
+ * settlement reference lines and a plain host-injected identity slot. */
+function AuctionTimelineChartViewDemo() {
+	return (
+		<div className="max-w-2xl">
+			<AuctionTimelineChartView
+				bids={TIMELINE_BIDS}
+				auction={TIMELINE_AUCTION}
 				renderUserCard={(pubkey) => <SampleBidderCard pubkey={pubkey} />}
 			/>
 		</div>
@@ -862,6 +914,13 @@ export const auction: WidgetLibrary = {
 			// technical accordion and a plain host-injected bidder slot.
 			name: 'AuctionBidsView',
 			render: () => <AuctionBidsViewDemo />,
+		},
+		{
+			// S5b: the bid timeline scatter chart — lollipop bids over time, the
+			// reserve/starting-bid reference lines, the anti-snipe and settlement
+			// windows, and a plain host-injected identity slot.
+			name: 'AuctionTimelineChartView',
+			render: () => <AuctionTimelineChartViewDemo />,
 		},
 		{
 			// S5b: the degenerate Available branches as four reachable states.
