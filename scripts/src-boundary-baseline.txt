@@ -89,7 +89,16 @@
 # With these rows the guard reports OK and no inbound row prints (decreased):
 # baseline now equals measurement.
 
-platform -> src production 328 67
+# 2026-10-28 (E3, second pass — store drain + E1a): the collection form store
+#   left `src/lib/stores/collection.ts` for
+#   `platform/web/collections/collectionFormStore.ts`, so its three platform
+#   route consumers stopped importing `@/lib/stores/collection`: the INBOUND row
+#   falls 328/68 -> 325/67 and is ratcheted. E1a deleted 16 grep-verified
+#   zero-importer `src/` files, which moves the OUTBOUND rows again
+#   (src -> platform 65/59 -> 61/56, src -> sdk 172/126 -> 166/120); those are
+#   RE-MEASURED, not ratcheted. No INBOUND row rose.
+
+platform -> src production 325 67
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -98,11 +107,11 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 65 59
+src -> platform production 61 56
 src -> platform test 23 12
 
 src -> ui production 226 107
 src -> ui test 0 0
 
-src -> sdk production 172 126
+src -> sdk production 166 120
 src -> sdk test 11 10
