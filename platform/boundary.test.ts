@@ -25,7 +25,6 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 // companions/STORE-DRAIN-CHAPTER-PLAN.md ("src -> platform during the drain").
 const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/index.tsx',
-	'src/lib/boot.ts',
 	'src/publish/shipping.tsx', // store drain D2 slice 17; shim deleted in E1
 	'src/publish/products.tsx',
 	'src/publish/collections.tsx',
@@ -44,14 +43,11 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/liveChat.tsx',
 	'src/publish/reactions.tsx',
 	'src/publish/shareNotes.ts',
-	'src/publish/profiles.tsx',
 	'src/publish/relay-list.tsx',
-	'src/publish/relay-preferences.tsx',
 	'src/publish/cart.tsx',
 	'src/publish/wallet.tsx',
 	'src/publish/nip89.ts',
 	'src/publish/migration.tsx',
-	'src/publish/curationContext.ts',
 	'src/publish/featured.tsx', // store drain D2 slice 11; shim deleted in E1
 	'src/publish/payment.tsx', // store drain D2 slice 14; shim deleted in E1
 	'src/publish/app-settings.tsx', // store drain D2 slice 18; shim deleted in E1
