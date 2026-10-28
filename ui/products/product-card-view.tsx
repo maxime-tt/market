@@ -94,9 +94,9 @@ export function ProductCardView({
 							</span>
 						))}
 					{visibility === 'pre-order' ? (
-						<div className="rounded-full bg-info-muted px-4 py-1 text-xs font-medium text-info-foreground">Pre-order</div>
+						<div className="rounded-full bg-info-muted px-4 py-1 text-xs font-medium text-info-muted-foreground">Pre-order</div>
 					) : isOutOfStock ? (
-						<div className="rounded-full bg-error-muted px-4 py-1 text-xs font-medium text-error-foreground">Out of stock</div>
+						<div className="rounded-full bg-error-muted px-4 py-1 text-xs font-medium text-error-muted-foreground">Out of stock</div>
 					) : stockQuantity !== undefined ? (
 						<div className="rounded-full bg-[var(--light-gray)] px-4 py-1 text-xs font-medium">{stockQuantity} in stock</div>
 					) : null}

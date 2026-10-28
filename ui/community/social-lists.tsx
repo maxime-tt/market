@@ -77,7 +77,7 @@ export function ReactionsListView({ groups, onToggle, asChildren = false }: Reac
 				'rounded-full py-1 px-2 ' +
 				(group.isOwn
 					? 'bg-fill-accent hover:bg-fill-accent/80 text-on-fill-accent hover:text-on-fill-accent'
-					: 'bg-info-muted text-info-foreground hover:bg-fill-accent/10 hover:text-info-foreground')
+					: 'bg-info-muted text-info-muted-foreground hover:bg-fill-accent/10 hover:text-info-muted-foreground')
 			}
 			onClick={() => onToggle(group.emoji)}
 		>

@@ -132,7 +132,7 @@ export function AntiSnipeCurveSettings({
 								}
 								className={`rounded-md border px-3 py-1.5 text-xs ${
 									isActive
-										? 'border-success bg-success-muted text-success-foreground'
+										? 'border-success bg-success-muted text-success-muted-foreground'
 										: 'border-border-default bg-surface-raised text-text-high hover:border-border-strong'
 								}`}
 							>
@@ -157,7 +157,7 @@ export function AntiSnipeCurveSettings({
 								onClick={() => onFormPatch({ minBidCurveShape: option.value })}
 								className={`flex flex-col items-start rounded-md border px-3 py-1.5 text-left text-xs disabled:cursor-not-allowed disabled:opacity-40 ${
 									isActive && !windowDisabled
-										? 'border-success bg-success-muted text-success-foreground'
+										? 'border-success bg-success-muted text-success-muted-foreground'
 										: 'border-border-default bg-surface-raised text-text-high hover:border-border-strong disabled:hover:border-border-default'
 								}`}
 							>
@@ -186,7 +186,7 @@ export function AntiSnipeCurveSettings({
 								onClick={() => onFormPatch({ minBidCurvePeakMultiplier: peak })}
 								className={`rounded-md border px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40 ${
 									isActive && !curveDisabled
-										? 'border-success bg-success-muted text-success-foreground'
+										? 'border-success bg-success-muted text-success-muted-foreground'
 										: 'border-border-default bg-surface-raised text-text-high hover:border-border-strong disabled:hover:border-border-default'
 								}`}
 							>

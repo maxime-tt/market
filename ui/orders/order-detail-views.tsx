@@ -12,13 +12,13 @@ import { cn } from '../utils/cn'
 export function getInvoiceStatusColor(status: string): string {
 	switch (status) {
 		case 'paid':
-			return 'bg-success-muted text-success-foreground border-success-border'
+			return 'bg-success-muted text-success-muted-foreground border-success-border'
 		case 'pending':
-			return 'bg-warning-muted text-warning-foreground border-warning-border'
+			return 'bg-warning-muted text-warning-muted-foreground border-warning-border'
 		case 'processing':
-			return 'bg-info-muted text-info-foreground border-info-border'
+			return 'bg-info-muted text-info-muted-foreground border-info-border'
 		case 'expired':
-			return 'bg-error-muted text-error-foreground border-error-border'
+			return 'bg-error-muted text-error-muted-foreground border-error-border'
 		default:
 			return 'bg-surface-sunken text-text-high border-border-default'
 	}
@@ -78,7 +78,7 @@ export function TrackingInfoView({ trackingNumber, carrier, shippingStatus, onCo
 								<Button
 									variant="ghost"
 									size="sm"
-									className="h-8 px-2 text-info-foreground hover:bg-info-muted flex-shrink-0"
+									className="h-8 px-2 text-info-muted-foreground hover:bg-info-muted flex-shrink-0"
 									onClick={() => onCopy(trackingNumber)}
 								>
 									<Copy className="h-4 w-4" />
@@ -205,7 +205,7 @@ export function InvoiceCardView({
 						<div
 							className={cn(
 								'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold',
-								isPaid ? 'bg-success-muted text-success-foreground' : 'bg-surface-hover text-text-mid',
+								isPaid ? 'bg-success-muted text-success-muted-foreground' : 'bg-surface-hover text-text-mid',
 							)}
 						>
 							{index + 1}

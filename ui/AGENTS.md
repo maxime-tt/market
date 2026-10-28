@@ -283,7 +283,13 @@ The five rules that follow from it:
    `bg-brand-pink` and never a raw literal. A colour is only ever a role.
 2. **A fill always ships with its label.** `--fill-*` pairs with `--on-fill-*`;
    the state families pair `--info` with `--info-foreground`. Never use a fill
-   token as text.
+   token as text. **A `-muted` fill pairs with `-muted-foreground`, never with
+   `-foreground`.** `text-{tone}-foreground` is the label for the SOLID `bg-{tone}`
+   fill; the pale `bg-{tone}-muted` fill's label is `text-{tone}-muted-foreground`
+   (both are declared for light and dark). The two labels are the same value in
+   light mode and diverge in dark mode, so a mispairing is invisible in light and
+   renders dark-on-dark. Enforced by `ui/theme/tone-pairing.test.ts`; canonical
+   usage is `shared/status-badge.tsx` / `shared/notice.tsx`.
 3. **Scheme-stable vs inverting.** `--brand-pink`, `--fill-accent`,
    `--focus-ring` and `--on-media` are the _same value in light and dark_ — they
    carry identity.

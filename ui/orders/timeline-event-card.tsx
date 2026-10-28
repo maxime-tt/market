@@ -68,7 +68,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex, onC
 		}
 		if (amount > 0 && type === 'payment') {
 			extraInfo = (
-				<Badge variant="outline" className={`${badgeClass} border-success-border bg-success-muted text-success-foreground`}>
+				<Badge variant="outline" className={`${badgeClass} border-success-border bg-success-muted text-success-muted-foreground`}>
 					Paid: {amount.toLocaleString()} sats
 				</Badge>
 			)
@@ -89,7 +89,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex, onC
 									<Button
 										variant="ghost"
 										size="sm"
-										className="h-6 px-2 text-success-foreground hover:text-success-foreground hover:bg-success-muted"
+										className="h-6 px-2 text-success-muted-foreground hover:text-success-muted-foreground hover:bg-success-muted"
 										onClick={() => onCopyPreimage(preimage)}
 									>
 										<Copy className="h-3 w-3" />

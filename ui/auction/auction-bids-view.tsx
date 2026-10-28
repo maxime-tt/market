@@ -164,10 +164,14 @@ export function AuctionBidsView({
 						<div className="flex flex-col items-end gap-2">
 							<div className="flex items-center gap-2">
 								{topBidIsOwn && (
-									<Badge className="border-success-border bg-success-muted text-success-foreground hover:bg-success-muted">Your Bid</Badge>
+									<Badge className="border-success-border bg-success-muted text-success-muted-foreground hover:bg-success-muted">
+										Your Bid
+									</Badge>
 								)}
 								{!topBidIsOwn && hasOwnBids && (
-									<Badge className="border-warning-border bg-warning-muted text-warning-foreground hover:bg-warning-muted">Outbid</Badge>
+									<Badge className="border-warning-border bg-warning-muted text-warning-muted-foreground hover:bg-warning-muted">
+										Outbid
+									</Badge>
 								)}
 							</div>
 						</div>
@@ -180,7 +184,7 @@ export function AuctionBidsView({
 			)}
 
 			{showOutbidNotice && (
-				<div className="rounded-lg border border-warning-border bg-warning-muted px-3 py-2 text-sm font-medium text-warning-foreground">
+				<div className="rounded-lg border border-warning-border bg-warning-muted px-3 py-2 text-sm font-medium text-warning-muted-foreground">
 					Your previous bid of {formatSats(myHighestBidAmount)} sats was outbid. Bid again to try win the auction.
 				</div>
 			)}
@@ -222,8 +226,8 @@ export function AuctionBidsView({
 													className={cn(
 														'border-border-default',
 														classification === 'invalid'
-															? 'bg-error-muted text-error-foreground hover:bg-error-muted'
-															: 'bg-warning-muted text-warning-foreground hover:bg-warning-muted',
+															? 'bg-error-muted text-error-muted-foreground hover:bg-error-muted'
+															: 'bg-warning-muted text-warning-muted-foreground hover:bg-warning-muted',
 													)}
 												>
 													{classification === 'invalid' ? 'Rejected' : 'Pending'}

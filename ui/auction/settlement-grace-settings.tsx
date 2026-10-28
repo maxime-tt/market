@@ -50,7 +50,7 @@ export function SettlementGraceSettings({ value, onValueChange, className, ref }
 							onClick={() => onValueChange(option.value)}
 							className={`flex flex-col items-start rounded-md border px-3 py-1.5 text-left text-xs ${
 								isActive
-									? 'border-success bg-success-muted text-success-foreground'
+									? 'border-success bg-success-muted text-success-muted-foreground'
 									: 'border-border-default bg-surface-raised text-text-high hover:border-border-strong'
 							}`}
 						>

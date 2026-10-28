@@ -167,24 +167,24 @@ export function AuctionTopBidBox({
 						<AccordionTrigger className="py-4 text-sm font-semibold text-text-high hover:no-underline">Settlement details</AccordionTrigger>
 						<AccordionContent className="space-y-3 pb-4">
 							{showWaitingForReleasePath && (
-								<div className="rounded-lg border border-warning-border bg-warning-muted px-3 py-2 text-sm text-warning-foreground">
+								<div className="rounded-lg border border-warning-border bg-warning-muted px-3 py-2 text-sm text-warning-muted-foreground">
 									<div className="font-medium">Waiting for release path</div>
 									<div className="mt-1">Bidder must publish the release path before settlement can be published.</div>
 								</div>
 							)}
 							{showReleasePathReceived && (
-								<div className="rounded-lg border border-info-border bg-info-muted px-3 py-2 text-sm text-info-foreground">
+								<div className="rounded-lg border border-info-border bg-info-muted px-3 py-2 text-sm text-info-muted-foreground">
 									<div className="font-medium">Release path received</div>
 									<div className="mt-1">{formatTimeLeft(releasePathSecondsLeft)} to publish settlement</div>
 								</div>
 							)}
 							{showSettlementGrieved && (
-								<div className="rounded-lg border border-error-border bg-error-muted px-3 py-2 text-sm text-error-foreground">
+								<div className="rounded-lg border border-error-border bg-error-muted px-3 py-2 text-sm text-error-muted-foreground">
 									Bid was not settled. It was grieved after release path.
 								</div>
 							)}
 							{showSettlementGrievedNoRelease && (
-								<div className="rounded-lg border border-error-border bg-error-muted px-3 py-2 text-sm text-error-foreground">
+								<div className="rounded-lg border border-error-border bg-error-muted px-3 py-2 text-sm text-error-muted-foreground">
 									Bid was not settled. It was grieved because release path was not published.
 								</div>
 							)}
@@ -193,7 +193,7 @@ export function AuctionTopBidBox({
 									type="button"
 									variant="outline"
 									disabled
-									className="w-full justify-start gap-2 border-info-border bg-info-muted text-info-foreground hover:bg-info-muted"
+									className="w-full justify-start gap-2 border-info-border bg-info-muted text-info-muted-foreground hover:bg-info-muted"
 								>
 									<Hourglass className="h-4 w-4" aria-hidden="true" />
 									Waiting for bidder shipping method

@@ -29,11 +29,12 @@ export interface AuctionVerdictViewProps {
 }
 
 const claimToneClass = (claim: string): string => {
-	if (claim.startsWith('settled')) return 'border-success-border bg-success-muted text-success-foreground'
-	if (claim === 'valid_bid_placed' || claim === 'won_pending_settlement') return 'border-info-border bg-info-muted text-info-foreground'
+	if (claim.startsWith('settled')) return 'border-success-border bg-success-muted text-success-muted-foreground'
+	if (claim === 'valid_bid_placed' || claim === 'won_pending_settlement')
+		return 'border-info-border bg-info-muted text-info-muted-foreground'
 	if (claim === 'lost_pending_refund') return 'border-border-default bg-surface-sunken text-text-high'
 	if (claim === 'griefed' || claim === 'griefed_pending_fallback' || claim === 'fraudulent_bid' || claim === 'bid_invalid')
-		return 'border-error-border bg-error-muted text-error-foreground'
+		return 'border-error-border bg-error-muted text-error-muted-foreground'
 	return 'border-border-default bg-card text-text-high'
 }
 
