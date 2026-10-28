@@ -38,6 +38,14 @@ export interface AuthMachine {
 	logout(): void
 	userHasProducts(): Promise<boolean>
 	migrateToEncryptedKey(password: string): Promise<void>
+	/**
+	 * The host hydration seam. The machine is normally the only writer, but the app's
+	 * `@tanstack/store` bridge must stay bidirectional: twelve test files call
+	 * `authStore.setState(...)` directly to force an identity, and `src/lib/stores/auth.ts`
+	 * routes those writes here (the same pattern as `src/lib/stores/ui.ts`). Not for
+	 * production flow control — the actions above are the transitions.
+	 */
+	setState(updater: (current: AuthState) => AuthState): void
 }
 
 /**
@@ -349,6 +357,8 @@ export function createAuthMachine(deps: {
 				setState((state) => ({ ...state, isAuthenticating: false }))
 			}
 		},
+
+		setState: (updater) => setState(updater),
 	}
 
 	return auth
