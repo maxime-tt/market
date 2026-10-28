@@ -1,5 +1,5 @@
 import { CollectionFormContent } from '@/components/sheet-contents/NewCollectionContent'
-import { collectionFormActions } from '@/lib/stores/collection'
+import { collectionFormActions } from '@platform/web/collections/collectionFormStore'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect } from 'react'
