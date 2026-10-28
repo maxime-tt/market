@@ -18,6 +18,9 @@ const entryNames = [
 	'AddTeamMemberCard',
 	'TeamPermissionsCard',
 	'TeamPermissionsCardAdministrator',
+	'ProfileWalletCheckLoading',
+	'ProfileWalletCheckLud16',
+	'ProfileWalletCheckNoLud16',
 ]
 
 test('renders the settings library', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { ProfileWalletCheck } from '@/components/ProfileWalletCheck'
+import { ProfileWalletCheckHost } from '@platform/web/account/ProfileWalletCheckHost'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'
 import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
 import { Button } from '@ui/wrappers/button'
@@ -877,7 +877,7 @@ function ReceivingPaymentsComponent() {
 			<div className="space-y-4 p-4 lg:p-6">
 				{!hasPaymentDetails && openPaymentDetailId !== 'new' ? (
 					<>
-						<ProfileWalletCheck />
+						<ProfileWalletCheckHost />
 						<WalletSetupGuide />
 						<div className="flex justify-center pt-4">
 							<Button
@@ -891,7 +891,7 @@ function ReceivingPaymentsComponent() {
 					</>
 				) : (
 					<>
-						<ProfileWalletCheck />
+						<ProfileWalletCheckHost />
 
 						<div className="lg:hidden">
 							<Button
