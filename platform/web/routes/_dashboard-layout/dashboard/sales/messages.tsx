@@ -1,4 +1,4 @@
-import { ConversationListItem, type ConversationItemData } from '@/components/messages/ConversationListItem'
+import { type ConversationItemData, ConversationListItemHost } from '@platform/web/messages/ConversationListItemHost'
 import { authStore } from '@/lib/stores/auth'
 import { readMarks } from '@platform/web/notifications'
 import { useConversationsList } from '@/queries/messages'
@@ -42,7 +42,7 @@ function MessagesListComponent() {
 					<ul className="flex flex-col gap-4">
 						{conversations.map((convo: ConversationItemData) => (
 							<li key={convo.pubkey}>
-								<ConversationListItem conversation={convo} />
+								<ConversationListItemHost conversation={convo} />
 							</li>
 						))}
 					</ul>
