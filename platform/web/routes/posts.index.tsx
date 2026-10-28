@@ -1,7 +1,7 @@
 import { postsQueryOptions } from '@/queries/posts'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { PostView } from '@/components/PostView'
+import { PostViewHost as PostView } from '@platform/web/messaging/PostViewHost'
 
 export const Route = createFileRoute('/posts/')({
 	loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(postsQueryOptions),

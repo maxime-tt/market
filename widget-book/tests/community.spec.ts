@@ -22,6 +22,7 @@ test('renders the community library', async ({ page }) => {
 		'ZapButtonViewDisabled',
 		'ReactionsListView',
 		'ZapsListView',
+		'PostView',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
