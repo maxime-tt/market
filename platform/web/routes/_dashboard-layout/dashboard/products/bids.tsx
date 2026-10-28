@@ -1,6 +1,6 @@
 import { AuctionCountdown } from '@platform/web/auctions/AuctionCountdownHost'
 import { AvatarUser } from '@/components/AvatarUser'
-import { ProfileName } from '@/components/ProfileName'
+import { ProfileNameHost as ProfileName } from '@platform/web/profiles/ProfileNameHost'
 import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
 import { CheckCircle, Eye, MapPin, RotateCcw, Trophy } from 'lucide-react'
 import { LoadingState } from '@ui/shared/loading-state'
