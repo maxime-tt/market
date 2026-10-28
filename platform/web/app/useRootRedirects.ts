@@ -1,4 +1,4 @@
-import { configStore } from '@/lib/stores/config'
+import { configStore } from '@platform/web/config/appConfigStore'
 import { useAmIAdmin } from '@/queries/app-settings'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
