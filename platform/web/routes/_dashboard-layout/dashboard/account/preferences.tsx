@@ -1,7 +1,7 @@
 import { Switch } from '@ui/primitives/switch'
 import { Label } from '@ui/primitives/label'
 import { PageHeader } from '@ui/layout/page-header'
-import { uiActions, uiStore } from '@/lib/stores/ui'
+import { uiActions, uiStore } from '@platform/web/app/uiStore'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useStore } from '@tanstack/react-store'
 import { createFileRoute } from '@tanstack/react-router'

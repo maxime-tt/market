@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@ui/primitives/textarea'
 import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
 import { validateShippingForm } from '@sdk/commerce/shipping'
-import { uiStore } from '@/lib/stores/ui'
+import { uiStore } from '@platform/web/app/uiStore'
 import { useNDK } from '@/lib/stores/ndk'
 import {
 	useDeleteShippingOptionMutation,

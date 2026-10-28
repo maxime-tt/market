@@ -20,7 +20,7 @@ import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auct
 import { getUniqueAuctionShippingRefs } from '@sdk/commerce/auctions/shippingRefs'
 import { authStore } from '@/lib/stores/auth'
 import { applesauceIo } from '@/lib/nostr/io'
-import { uiStore } from '@/lib/stores/ui'
+import { uiStore } from '@platform/web/app/uiStore'
 import { settleAuctionAsWinner, usePublishAuctionBidMutation } from '@/publish/auctions'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
 import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
