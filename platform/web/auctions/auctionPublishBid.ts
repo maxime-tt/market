@@ -33,14 +33,8 @@ import {
 	type AuctionBidPreLockRecoveryRecord,
 } from '@sdk/commerce/auctions/bidderRecords'
 import { loadUserData, saveUserData } from '@sdk/commerce/payments/wallet/storage'
-import {
-	AuctionBidLockMutationPossibleError,
-	createUserScopedKeyValueStoragePort,
-	getUser,
-	signNostrEvent,
-	walletOps,
-	type NostrEvent,
-} from '@platform/web/ndkPublishContext'
+import { createUserScopedKeyValueStoragePort, getUser, signNostrEvent, type NostrEvent } from '@platform/web/ndkPublishContext'
+import { AuctionBidLockMutationPossibleError, walletOps } from '@platform/web/wallet/walletOps'
 import { getCurrentPubkey } from '@platform/web/readContext'
 import { auctionKeys } from '@sdk/core/query/queryKeyFactory'
 import type { KeyValueStoragePort } from '@sdk/core'

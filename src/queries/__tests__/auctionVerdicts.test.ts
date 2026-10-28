@@ -46,6 +46,8 @@ mock.module('@sdk/core/nostr/eventSignature', () => ({
 
 mock.module('@/lib/stores/ndk', () => ({
 	getWriteRelays: () => [],
+	getWriteRelaySet: () => undefined,
+	fetchLatestAppEvent: async () => null,
 	ndkStore: {
 		state: {
 			ndk: null,

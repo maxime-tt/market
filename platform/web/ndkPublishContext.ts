@@ -24,8 +24,7 @@ export const publishAppEvent = (event: NDKEvent) => ndkActions.publishEvent(even
  * `@/lib/stores/ndk` edge, so this adds no counted cross-tree import. Delegates verbatim to
  * `ndkActions.fetchEventsWithTimeout` (src/lib/stores/ndk.ts:355).
  */
-export const fetchEventsWithTimeout: typeof ndkActions.fetchEventsWithTimeout = (...args) =>
-	ndkActions.fetchEventsWithTimeout(...args)
+export const fetchEventsWithTimeout: typeof ndkActions.fetchEventsWithTimeout = (...args) => ndkActions.fetchEventsWithTimeout(...args)
 
 export { fetchLatestAppEvent, getWriteRelaySet, getWriteRelays }
 
@@ -55,12 +54,11 @@ export { getUser, publish as publishNostrEvent, sign as signNostrEvent } from '@
 export type { EventTemplate, NostrEvent, PublishOptions } from '@/lib/nostr/io'
 
 /**
- * Re-exported for the auction publish bindings, which lock and reclaim bid legs
- * through the wallet store and open the user-scoped republish cache over the SDK
- * storage port. Both live in `src/` today; routing them through this file keeps
- * the auction bindings free of `@/` specifiers while the wallet store drains.
+ * Re-exported for the auction publish bindings, which open the user-scoped
+ * republish cache over the SDK storage port. It lives in `src/` today, so
+ * routing it through this file keeps those bindings free of `@/` specifiers
+ * while the republish cache drains.
  */
-export { walletOps, AuctionBidLockMutationPossibleError, type AuctionP2pkKeyScheme } from '@/lib/stores/walletOps'
 export { createUserScopedKeyValueStoragePort } from '@/lib/sdkAdapters'
 
 /**

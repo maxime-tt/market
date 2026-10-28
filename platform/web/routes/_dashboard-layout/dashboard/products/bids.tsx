@@ -13,7 +13,13 @@ import { Button } from '@ui/wrappers/button'
 import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@/lib/stores/auth'
 import { readMarks } from '@platform/web/notifications'
-import { cashuStore, walletOps, formatReclaimWaitSeconds, getAuctionReclaimReadyAt, type PendingToken } from '@/lib/stores/walletOps'
+import {
+	cashuStore,
+	walletOps,
+	formatReclaimWaitSeconds,
+	getAuctionReclaimReadyAt,
+	type PendingToken,
+} from '@platform/web/wallet/walletOps'
 import { getMintHostname } from '@/lib/wallet'
 import {
 	auctionClaimOrdersQueryOptions,
