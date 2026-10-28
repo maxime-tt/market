@@ -14,14 +14,18 @@ export interface ProfileAvatarViewProps extends ComponentProps<typeof AvatarPrim
 	/**
 	 * Accepted for compatibility with existing call sites, NOT implemented.
 	 *
-	 * Seven call sites pass these (`src/components/AuctionVerdictPanel.tsx` ×2,
-	 * `platform/web/routes/.../products/auctions.tsx`, `.../products/bids.tsx`,
-	 * `.../products/auctions.$auctionId.tsx` ×3) and they are not
+	 * Five call sites still pass `colored` —
+	 * `src/components/dashboard/AuctionListItemHost.tsx` (which also passes
+	 * `deterministicFallbackText`), `platform/web/routes/.../products/bids.tsx`,
+	 * and `.../products/auctions.$auctionId.tsx` ×3 — and they are not
 	 * `AvatarUser` props, so they used to reach the DOM as
 	 * `colored="true"` / `deterministicFallbackText` and raise React
 	 * unknown-prop warnings (found by a headless pass, 2026-10-22; the same
 	 * PR-introduced tsc error class was already noted at
-	 * `src/components/AuctionBidProgressDialog.tsx:391`).
+	 * `src/components/AuctionBidProgressDialog.tsx:391`). The list was recounted
+	 * on 2026-10-28 by grepping `colored` outside this file: the legacy
+	 * `src/components/AuctionVerdictPanel.tsx` (×2) and
+	 * `.../products/auctions.tsx` call sites are gone, so seven became five.
 	 *
 	 * They are destructured out below instead of forwarded. The fallback stays
 	 * `bg-fill-accent` (legacy `bg-neo-purple`, which is the brand pink under a
