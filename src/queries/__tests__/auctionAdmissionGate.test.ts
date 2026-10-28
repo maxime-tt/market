@@ -55,6 +55,7 @@ mock.module('@/lib/stores/blacklist', () => ({
 
 mock.module('@/lib/stores/ndk', () => ({
 	getWriteRelays: () => [],
+	getWriteRelaySet: () => undefined,
 	getMainRelay: () => null,
 	fetchLatestAppEvent: async () => null,
 	ndkStore: {

@@ -14,7 +14,7 @@
 import { AUCTION_SETTLEMENT_POLICY } from '@sdk/commerce/auctions/settlement'
 import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@sdk/commerce/auctions/auctionPublishValidation'
 import { configStore } from '@sdk/config/app-config'
-import { walletOps, type AuctionP2pkKeyScheme } from '@platform/web/ndkPublishContext'
+import { walletOps, type AuctionP2pkKeyScheme } from '@platform/web/wallet/walletOps'
 import { getUser, signNostrEvent, type EventTemplate } from '@platform/web/ndkPublishContext'
 import { runAuctionListingAppAdapter, runAuctionWinnerClaimAppAdapter } from '@platform/web/auctions/auctionWorkflowAdapters'
 import { createPrivateAuctionClaimMessageForActiveSigner } from '@platform/web/readContext'
