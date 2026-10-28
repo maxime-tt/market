@@ -1,9 +1,9 @@
 import { uiActions } from '@sdk/config/ui'
 import { Media } from '@ui/shared/media'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link, useLocation } from '@tanstack/react-router'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { CollectionCardView } from '@ui/products/collection-card-view'
+import type { CollectionReadEvent } from '@sdk/commerce/collections'
 
 /**
  * Host for `@ui/products/collection-card-view`: records the source path for the
@@ -12,7 +12,7 @@ import { CollectionCardView } from '@ui/products/collection-card-view'
  * `src/components/CollectionCard.tsx`; the legacy component stays alive for its
  * remaining `src/` consumers.
  */
-export function CollectionCardHost({ collection, className }: { collection: NDKEvent } & React.HTMLAttributes<HTMLDivElement>) {
+export function CollectionCardHost({ collection, className }: { collection: CollectionReadEvent } & React.HTMLAttributes<HTMLDivElement>) {
 	const location = useLocation()
 
 	const handleCollectionClick = () => {
