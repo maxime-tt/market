@@ -19,6 +19,8 @@ const entryNames = [
 	'TestLabelDialogView',
 	'TestLabelDialogViewUnmark',
 	'TestListingsToggleView',
+	'TestListingNoticeView',
+	'TestListingNoticeViewIcon',
 ]
 
 test('renders the dashboard library', async ({ page }) => {
@@ -149,4 +151,17 @@ test('opens the unmark confirmation from the trigger', async ({ page }) => {
 
 	await dialog.getByRole('button', { name: 'Cancel' }).click()
 	await expect(page.getByRole('alertdialog')).toHaveCount(0)
+})
+
+test('opens the test-listing explainer with the curator contact', async ({ page }) => {
+	await page.goto('/?library=dashboard')
+
+	const widget = page.getByTestId('widget-TestListingNoticeView')
+	await widget.getByTestId('test-listing-notice').click()
+
+	await expect(page.getByTestId('test-listing-notice-dialog')).toBeVisible()
+	await expect(page.getByTestId('test-listing-notice-contact')).toContainText('npub1abcdefgh')
+
+	await page.getByTestId('test-listing-notice-close').click()
+	await expect(page.getByTestId('test-listing-notice-dialog')).toBeHidden()
 })

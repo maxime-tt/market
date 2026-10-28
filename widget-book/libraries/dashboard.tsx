@@ -2,7 +2,13 @@ import { useState } from 'react'
 import { DashboardCollectionDetails, DashboardCollectionTrigger } from '@ui/dashboard/dashboard-collection-list-item'
 import { DashboardOverviewStats } from '@ui/dashboard/dashboard-overview-stats'
 import { DashboardProductDetails, DashboardProductTrigger } from '@ui/dashboard/dashboard-product-list-item'
-import { TestLabelButtonView, TestLabelDialogView, TestListingsToggleView, type TestLabelDialogMode } from '@ui/dashboard/test-label-views'
+import {
+	TestLabelButtonView,
+	TestLabelDialogView,
+	TestListingNoticeView,
+	TestListingsToggleView,
+	type TestLabelDialogMode,
+} from '@ui/dashboard/test-label-views'
 import type { WidgetLibrary } from '../libraries'
 
 /**
@@ -203,6 +209,24 @@ export const dashboard: WidgetLibrary = {
 		{
 			name: 'TestListingsToggleView',
 			render: () => <TestListingsToggleViewDemo />,
+		},
+		{
+			name: 'TestListingNoticeView',
+			render: () => (
+				<TestListingNoticeView
+					itemLabel="Product"
+					curatorNpubShort="npub1abcdefgh…wxyz12"
+					renderCuratorLink={({ label }) => (
+						<a href="#curator" title="curator" className="font-medium text-primary underline">
+							{label}
+						</a>
+					)}
+				/>
+			),
+		},
+		{
+			name: 'TestListingNoticeViewIcon',
+			render: () => <TestListingNoticeView variant="icon" itemLabel="Auction" curatorNpubShort={null} />,
 		},
 	],
 }

@@ -1,7 +1,7 @@
 import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { Media } from '@ui/shared/media'
 import { InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
-import { TestListingNotice } from '@/components/TestListingNotice'
+import { TestListingNoticeHost as TestListingNotice } from '@platform/web/config/testListingNoticeHost'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'
 import { getItemTestLabelCoordinate } from '@sdk/config/testLabelFilters'

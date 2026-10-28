@@ -1,6 +1,6 @@
 import { ProductFormContent } from '@/components/sheet-contents/NewProductContent'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
-import { TestListingNotice } from '@/components/TestListingNotice'
+import { TestListingNoticeHost as TestListingNotice } from '@platform/web/config/testListingNoticeHost'
 import { getATagFromCoords } from '@/lib/utils/coords'
 import { Card, CardContent } from '@ui/primitives/card'
 import { Skeleton } from '@ui/primitives/skeleton'
