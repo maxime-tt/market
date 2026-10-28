@@ -55,6 +55,7 @@ test('renders the auction library', async ({ page }) => {
 		'AuctionShippingViewLoading',
 		'AuctionShippingViewNoOptions',
 		'AuctionShippingViewAllAttached',
+		'AuctionVerdictView',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
@@ -143,6 +144,23 @@ test('renders the shipping panel and its degenerate branches', async ({ page }) 
 	const allAttached = page.getByTestId('widget-AuctionShippingViewAllAttached')
 	await expect(allAttached).toContainText('All of your shipping options are already attached.')
 	await expect(allAttached.locator('[data-slot="notice"]')).toHaveCount(1)
+})
+
+test('renders the validator verdict panel with claim tones and injected avatars', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const view = page.getByTestId('widget-AuctionVerdictView')
+	await expect(view.locator('[data-slot="auction-verdict-view"]')).toHaveCount(1)
+	await expect(view).toContainText('Validator verdicts')
+	await expect(view).toContainText('4 total')
+	// The claim copy renders verbatim, one row per verdict.
+	await expect(view).toContainText('settled_promptly')
+	await expect(view).toContainText('valid_bid_placed')
+	await expect(view).toContainText('fraudulent_bid')
+	await expect(view).toContainText('griefed')
+	// The host-owned identity slot: validator + bidder avatar per row.
+	await expect(view.locator('[data-slot="verdict-avatar"]')).toHaveCount(8)
+	await expect(view.locator('[data-slot="verdict-avatar"][data-pubkey^="bbbb"]')).toHaveCount(2)
 })
 
 test('renders the dashboard auction list row with its host-owned slots', async ({ page }) => {

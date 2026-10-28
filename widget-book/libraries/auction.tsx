@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
 import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import type {
 	AuctionAntiSnipeWindowMinutesPreset,
@@ -18,6 +19,7 @@ import { BidLadderPreview } from '@ui/auction/bid-ladder-preview'
 import { SettlementGraceSettings } from '@ui/auction/settlement-grace-settings'
 import { BidStatusBanner, BidStatusPill, getBidStatusCopy, type BidStatusDisplayInput } from '@ui/auction/bid-status-views'
 import { AuctionShippingDetailRow, AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
+import { AuctionVerdictView } from '@ui/auction/auction-verdict-view'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import {
 	AuctionDetailCard,
@@ -214,6 +216,63 @@ function renderUploaderDemo({ src, index, onDelete }: { src: string | null; inde
 			<button type="button" onClick={() => onDelete(index)}>
 				Delete
 			</button>
+		</div>
+	)
+}
+
+/** Host stand-in for `AvatarHost`: the book shows a plain deterministic chip. */
+function SampleVerdictAvatar({ pubkey }: { pubkey: string }) {
+	return (
+		<span
+			data-slot="verdict-avatar"
+			data-pubkey={pubkey}
+			className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-secondary-foreground"
+		>
+			{pubkey.slice(0, 1).toUpperCase()}
+		</span>
+	)
+}
+
+const VERDICT_VALIDATOR_PUBKEY = 'a'.repeat(64)
+const VERDICT_BIDDER_PUBKEY = 'b'.repeat(64)
+const VERDICT_OTHER_BIDDER_PUBKEY = 'c'.repeat(64)
+const VERDICT_OBSERVED_AT = 1_760_000_000
+
+/** One literal kind-30440 verdict row; overrides carry the per-claim differences. */
+function verdictFixture(
+	id: string,
+	claim: ParsedValidatorVerdictEvent['claim'],
+	overrides: Partial<ParsedValidatorVerdictEvent> = {},
+): ParsedValidatorVerdictEvent {
+	return {
+		rawEvent: { id, pubkey: VERDICT_VALIDATOR_PUBKEY, kind: 30440, created_at: VERDICT_OBSERVED_AT, content: '', tags: [] },
+		id,
+		validatorPubkey: VERDICT_VALIDATOR_PUBKEY,
+		createdAt: VERDICT_OBSERVED_AT,
+		dTag: `${VERDICT_BIDDER_PUBKEY}:root-event:bid-event`,
+		bidderPubkey: VERDICT_BIDDER_PUBKEY,
+		auctionRootEventId: 'root-event',
+		auctionCoordinate: '30402:root-event:handmade-mug',
+		bidEventId: 'bid-event',
+		claim,
+		observedAt: VERDICT_OBSERVED_AT,
+		...overrides,
+	}
+}
+
+/** Every claim tone the panel maps: settled, valid, fraudulent and griefed. */
+function AuctionVerdictViewDemo() {
+	return (
+		<div className="max-w-md">
+			<AuctionVerdictView
+				verdicts={[
+					verdictFixture('v-settled', 'settled_promptly', { nut7State: 'spent' }),
+					verdictFixture('v-valid', 'valid_bid_placed', { nut7State: 'unspent' }),
+					verdictFixture('v-fraud', 'fraudulent_bid', { bidderPubkey: VERDICT_OTHER_BIDDER_PUBKEY, reason: 'proof_double_spent' }),
+					verdictFixture('v-griefed', 'griefed', { bidderPubkey: VERDICT_OTHER_BIDDER_PUBKEY, reason: 'no_release' }),
+				]}
+				renderAvatar={(pubkey) => <SampleVerdictAvatar pubkey={pubkey} />}
+			/>
 		</div>
 	)
 }
@@ -733,6 +792,12 @@ export const auction: WidgetLibrary = {
 					/>
 				</div>
 			),
+		},
+		{
+			// S4b: the kind-30440 verdict list with its claim-tone mapping and
+			// host-injected avatars.
+			name: 'AuctionVerdictView',
+			render: () => <AuctionVerdictViewDemo />,
 		},
 		{
 			// S5b: the degenerate Available branches as four reachable states.

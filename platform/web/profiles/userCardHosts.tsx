@@ -73,6 +73,33 @@ export function Nip05BadgeHost({ pubkey, className = '', showAddress = true }: N
 	)
 }
 
+interface AvatarHostProps {
+	pubkey?: string
+	className?: string
+}
+
+/**
+ * Host for the presentational avatar. It resolves the profile and renders the
+ * bare `ProfileAvatarView`, reproducing the retiring
+ * `src/components/AvatarUser.tsx` read (D4 S4b). The legacy `colored` /
+ * `deterministicFallbackText` props were never `AvatarUser` props and are
+ * destructured out by `ProfileAvatarView` anyway, so the rendered avatar is
+ * unchanged.
+ */
+export function AvatarHost({ pubkey, className }: AvatarHostProps) {
+	const { data: profileData, isLoading } = useProfile(pubkey)
+	const { profile } = profileData ?? {}
+
+	return (
+		<ProfileAvatarView
+			name={getNormalizedProfileDisplayName(profile)}
+			picture={getNormalizedProfilePicture(profile)}
+			isLoading={isLoading}
+			className={className}
+		/>
+	)
+}
+
 interface UserCardHostProps {
 	pubkey?: string
 	className?: string
