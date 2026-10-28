@@ -21,6 +21,7 @@ import { CityCombobox } from '@ui/shared/city-combobox'
 import { CountryCombobox } from '@ui/shared/country-combobox'
 import { PhoneInput } from '@ui/shared/phone-input'
 import { DateTimePicker } from '@ui/shared/datetime-picker'
+import { UpdateAvailableDialog } from '@ui/shared/update-available-dialog'
 import { PackageIcon, PencilIcon, ServerIcon, StoreIcon, TrashIcon } from 'lucide-react'
 
 import type { WidgetLibrary } from '../libraries'
@@ -118,6 +119,23 @@ function PhoneInputDemo() {
 	return (
 		<div className="w-72">
 			<PhoneInput value={phone} onChange={setPhone} selectedCountry="Germany" placeholder="7751892718" />
+		</div>
+	)
+}
+
+/**
+ * Update notice demo. Kept closed at rest so the catalogue stays visible, and the
+ * reload action only closes the notice: the harness must never reload the page.
+ */
+function UpdateAvailableDialogDemo() {
+	const [open, setOpen] = useState(false)
+
+	return (
+		<div className="min-h-20 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+			<button type="button" className="rounded-md border px-3 py-1.5 text-sm" onClick={() => setOpen(true)}>
+				Show update notice
+			</button>
+			<UpdateAvailableDialog open={open} onDismiss={() => setOpen(false)} onReload={() => setOpen(false)} />
 		</div>
 	)
 }
@@ -467,6 +485,10 @@ export const shared: WidgetLibrary = {
 		{
 			name: 'DateTimePickerSelected',
 			render: () => <DateTimePickerDemo initial="2026-10-24T15:30" />,
+		},
+		{
+			name: 'UpdateAvailableDialog',
+			render: () => <UpdateAvailableDialogDemo />,
 		},
 	],
 }

@@ -13,7 +13,7 @@ import { AppMonitors } from '@platform/web/app/AppMonitors'
 import { AppOverlays } from '@platform/web/app/AppOverlays'
 import { AppProviders } from '@platform/web/app/AppProviders'
 import { syncEventStoresToQueryClient } from '@platform/web/eventStoreQuerySync'
-import { UpdateAvailableDialog } from '@/components/UpdateAvailableDialog'
+import { UpdateAvailableDialog } from '@ui/shared/update-available-dialog'
 import { useServiceWorker } from '@platform/web/app/useServiceWorker'
 
 if (process.env.NODE_ENV !== 'development') {
@@ -65,6 +65,10 @@ function App() {
 	const { status, error } = useStore(bootStore)
 	const { showUpdateDialog, dismissUpdate } = useServiceWorker()
 
+	const handleReload = () => {
+		window.location.reload()
+	}
+
 	useEffect(() => {
 		// bootApp is idempotent — safe under StrictMode double-mount.
 		bootApp(queryClient).catch(() => {
@@ -101,7 +105,7 @@ function App() {
 							<RouterProvider router={router} />
 							<AppOverlays />
 						</AppProviders>
-						<UpdateAvailableDialog open={showUpdateDialog} onDismiss={dismissUpdate} />
+						<UpdateAvailableDialog open={showUpdateDialog} onDismiss={dismissUpdate} onReload={handleReload} />
 					</ThemeMigrationWrapper>
 				</WebUiProvider>
 			</QueryClientProvider>

@@ -272,3 +272,16 @@ test('shows the selected instant and its time half', async ({ page }) => {
 	await expect(page.locator('input[type="time"]')).toHaveValue('15:30')
 	await page.keyboard.press('Escape')
 })
+
+test('opens the update notice and dismisses it', async ({ page }) => {
+	await page.goto('/?library=shared')
+
+	const widget = page.getByTestId('widget-UpdateAvailableDialog')
+	await widget.getByRole('button', { name: 'Show update notice' }).click()
+
+	await expect(page.getByText('Update Available')).toBeVisible()
+	await expect(widget.getByRole('button', { name: 'Reload' })).toBeVisible()
+
+	await widget.getByRole('button', { name: 'Later' }).click()
+	await expect(page.getByText('Update Available')).toHaveCount(0)
+})

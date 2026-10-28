@@ -1,20 +1,33 @@
 import { RefreshCw, X } from 'lucide-react'
 import { Button } from '@ui/primitives/button'
+import { cn } from '../utils/cn'
 
-interface UpdateAvailableDialogProps {
+export interface UpdateAvailableDialogProps {
+	/** Whether the notice is shown at all. */
 	open: boolean
+	/** Hides the notice without reloading. */
 	onDismiss: () => void
+	/** Reloads the app onto the new service-worker assets. */
+	onReload: () => void
+	className?: string
 }
 
-export function UpdateAvailableDialog({ open, onDismiss }: UpdateAvailableDialogProps) {
-	const handleReload = () => {
-		window.location.reload()
-	}
-
+/**
+ * Fixed bottom-right service-worker update notice with a Reload action.
+ *
+ * Lifted out of `src/components/UpdateAvailableDialog.tsx` (D4 shared, fused
+ * slice). The legacy host called `window.location.reload()` itself; the reload
+ * side effect now belongs to the `platform/web` app shell, so this view is
+ * props-only.
+ */
+export function UpdateAvailableDialog({ open, onDismiss, onReload, className }: UpdateAvailableDialogProps) {
 	if (!open) return null
 
 	return (
-		<div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+		<div
+			data-slot="update-available-dialog"
+			className={cn('fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300', className)}
+		>
 			<div className="bg-background border rounded-lg shadow-lg p-4 max-w-sm">
 				<div className="flex items-start gap-3">
 					<div className="flex-shrink-0 mt-0.5">
@@ -27,7 +40,7 @@ export function UpdateAvailableDialog({ open, onDismiss }: UpdateAvailableDialog
 							<Button size="sm" variant="outline" onClick={onDismiss}>
 								Later
 							</Button>
-							<Button size="sm" onClick={handleReload}>
+							<Button size="sm" onClick={onReload}>
 								<RefreshCw className="size-3 mr-1.5" />
 								Reload
 							</Button>
