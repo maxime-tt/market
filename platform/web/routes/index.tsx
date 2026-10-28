@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Button } from '@ui/wrappers/button'
 import { Badge } from '@ui/primitives/badge'
-import { productFormActions } from '@/lib/stores/product'
+import { productFormActions } from '@platform/web/products/productFormStore'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
