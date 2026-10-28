@@ -73,7 +73,23 @@
 # re-measured, not ratcheted: the shim's one re-export is a new counted
 # src -> platform edge (62/56 -> 63/57).
 
-platform -> src production 386 68
+# 2026-10-28 (E3, the single ratchet): this is E3's one inbound ratchet, applied
+# after slices I.1 (auth/ndk store split) and I.2 (CollectionCard host adoption)
+# landed between the D2 slice-14 note above and now. Every INBOUND row is set to
+# its measured value and may only fall from here; no per-slice commit hand-lowers
+# an inbound row (the D2 slice-14 note left platform -> src at 386/68 on purpose).
+# Measured at 71f6fb79 by `bash scripts/check-src-boundary.sh`:
+#   inbound  platform -> src production  386/68 -> 328/67
+#   inbound  platform -> src test, ui -> src (prod/test), sdk -> src (prod/test)
+#            all remain 0/0
+#   outbound re-measured (not ratcheted): src -> platform production 28/23 ->
+#            65/59, src -> platform test 22/11 -> 23/12, src -> ui production
+#            241/117 -> 226/107, src -> sdk production 165/120 -> 172/126,
+#            src -> sdk test 9/8 -> 11/10.
+# With these rows the guard reports OK and no inbound row prints (decreased):
+# baseline now equals measurement.
+
+platform -> src production 328 67
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -82,11 +98,11 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 28 23
-src -> platform test 22 11
+src -> platform production 65 59
+src -> platform test 23 12
 
-src -> ui production 241 117
+src -> ui production 226 107
 src -> ui test 0 0
 
-src -> sdk production 165 120
-src -> sdk test 9 8
+src -> sdk production 172 126
+src -> sdk test 11 10
