@@ -17,6 +17,16 @@ export const setAppSigner = (signer: NDKSigner | undefined) => ndkActions.setSig
 export const runSignerOnboarding = (signer: NDKSigner) => ndkActions.runSignerOnboarding(signer)
 export const removeAppSigner = () => ndkActions.removeSigner()
 export const publishAppEvent = (event: NDKEvent) => ndkActions.publishEvent(event)
+
+/**
+ * The NDK read with a caller-chosen timeout, re-homed here so platform bindings (the wallet action
+ * surface) can reach it without a `platform -> src` edge. `ndkPublishContext` already owns the
+ * `@/lib/stores/ndk` edge, so this adds no counted cross-tree import. Delegates verbatim to
+ * `ndkActions.fetchEventsWithTimeout` (src/lib/stores/ndk.ts:355).
+ */
+export const fetchEventsWithTimeout: typeof ndkActions.fetchEventsWithTimeout = (...args) =>
+	ndkActions.fetchEventsWithTimeout(...args)
+
 export { fetchLatestAppEvent, getWriteRelaySet, getWriteRelays }
 
 /** Re-exported so Platform bindings can use the event type without a `platform -> src` edge. */
