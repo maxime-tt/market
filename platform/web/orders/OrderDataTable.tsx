@@ -1,13 +1,20 @@
+/**
+ * platform/web/orders/OrderDataTable.tsx — host/binding for the order table.
+ *
+ * Moved out of `src/components` (D4 S6a). It owns the react-table state
+ * (sorting, column filters, global filter), the fuzzy rank function, navigation
+ * and the breakpoint; the presentation stays in `@ui/orders/order-list-view`.
+ */
 import React from 'react'
-import { useBreakpoint } from '@/hooks/useBreakpoint'
-import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { useBreakpoint } from '@platform/web/app/useBreakpoint'
+import type { OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
 import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tanstack/react-table'
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { OrderListView } from '@ui/orders/order-list-view'
 
-const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
+export const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
 	const item = (row.getValue(columnId) as string) || ''
 	const lowerCaseValue = value.toLowerCase()
 

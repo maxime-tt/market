@@ -1,4 +1,4 @@
-import { OrderDataTable } from '@/components/orders/OrderDataTable'
+import { OrderDataTable } from '@platform/web/orders/OrderDataTable'
 import { salesColumns } from '@/components/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { ndkActions } from '@/lib/stores/ndk'
