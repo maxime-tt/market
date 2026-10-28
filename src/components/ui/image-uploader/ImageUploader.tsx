@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { getMediaType } from '@ui/utils/media'
 import { uploadFileToBlossom, BLOSSOM_SERVERS } from '@/lib/blossom'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { compressImage, isCompressibleImage, formatFileSize, getCompressionStats } from '@/lib/image-compression'
+import { compressImage, isCompressibleImage, formatFileSize, getCompressionStats } from '@sdk/core/media/imageCompression'
 
 const COMPRESSED_IMAGE_EXTENSIONS: Record<string, string> = {
   'image/jpeg': '.jpg',

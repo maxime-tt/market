@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
-import { compressImage, isCompressibleImage, formatFileSize, getFileSizeMB, getCompressionStats } from '@/lib/image-compression'
+import { compressImage, isCompressibleImage, formatFileSize, getFileSizeMB, getCompressionStats } from './imageCompression'
 
 /**
  * Unit tests for image compression utility
@@ -20,7 +20,7 @@ describe('image-compression utilities', () => {
 			})
 
 			try {
-				const module = await import(`@/lib/image-compression?import-safety-${Date.now()}`)
+				const module = await import(`./imageCompression?import-safety-${Date.now()}`)
 				expect(module).toBeDefined()
 				expect(documentAccesses).toBe(0)
 			} finally {
