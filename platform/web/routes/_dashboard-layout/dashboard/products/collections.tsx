@@ -5,7 +5,7 @@ import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-lis
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { authStore } from '@/lib/stores/auth'
-import { collectionFormActions } from '@/lib/stores/collection'
+import { collectionFormActions } from '@platform/web/collections/collectionFormStore'
 
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import { useDeleteCollectionMutation } from '@/publish/collections'

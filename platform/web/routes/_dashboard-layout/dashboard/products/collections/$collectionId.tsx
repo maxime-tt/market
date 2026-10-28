@@ -1,6 +1,6 @@
 import { CollectionFormContent } from '@/components/sheet-contents/collections/CollectionFormContent'
 import { authStore } from '@/lib/stores/auth'
-import { collectionFormActions } from '@/lib/stores/collection'
+import { collectionFormActions } from '@platform/web/collections/collectionFormStore'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
