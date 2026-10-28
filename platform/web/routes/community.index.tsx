@@ -18,9 +18,9 @@ import {
 	getCollectionTitle,
 	getCollectionId,
 } from '@/queries/collections'
-import { CollectionCard } from '@/components/CollectionCard'
+import { CollectionCardHost as CollectionCard } from '@platform/web/collections/CollectionCardHost'
 import { useV4VMerchants } from '@/queries/v4v'
-import { FeaturedUserCard } from '@/components/FeaturedUserCard'
+import { FeaturedUserCardHost as FeaturedUserCard } from '@platform/web/featured/FeaturedUserCardHost'
 import { blacklistStore } from '@/lib/stores/blacklist'
 import { filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 import { useConfigQuery } from '@/queries/config'
