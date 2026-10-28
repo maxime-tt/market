@@ -416,6 +416,9 @@ Browser → Caddy (port 80)
 | `dist/`      | Pre-built static files (served by Caddy)      |
 | `src/`       | Server code for the main app (run by Bun/PM2) |
 | `contextvm/` | ContextVM server code (run by Bun/PM2)        |
+| `sdk/`       | Shared SDK                                    |
+| `ui/`        | Presentational kit                            |
+| `platform/`  | Server + host/binding layer                   |
 | `.env`       | Environment configuration                     |
 
 ### Directory Structure on VPS
