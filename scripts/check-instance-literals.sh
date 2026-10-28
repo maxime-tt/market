@@ -26,7 +26,10 @@ for token in "${TOKENS[@]}"; do
 		if [[ "$count" -gt 0 ]]; then
 			printf '%s|%s|%s\n' "$file" "$token" "$count"
 		fi
-	done < <(find "$ROOT/src" "$ROOT/platform" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.html' \) -print | sed "s#^$ROOT/##" | sort)
+	# `sdk/` is in scope: the framework-free layer owns instance defaults and
+	# protocol identifiers too, so leaving it unscanned made the guard blind to
+	# the layer that now holds most of them.
+	done < <(find "$ROOT/src" "$ROOT/platform" "$ROOT/sdk" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.html' \) -print | sed "s#^$ROOT/##" | sort)
 done | sort > "$CURRENT"
 
 CURRENT_TOTAL="$(awk -F'|' '{sum += $3} END {print sum + 0}' "$CURRENT")"

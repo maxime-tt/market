@@ -2,8 +2,11 @@
 # NDK footprint guard for the NDK -> applesauce migration.
 # (see docs/ndk-to-applesauce-migration-plan.md)
 #
-# Fails if the number of source files importing @nostr-dev-kit has INCREASED
-# beyond the committed baseline. This prevents new NDK usage from sneaking in
+# Fails if the number of source files mentioning @nostr-dev-kit has INCREASED
+# beyond the committed baseline (the scan covers src/, platform/, contextvm/ and
+# sdk/; the literal matches comments and import statements alike, so a mention
+# in prose counts — that is the conservative direction). This prevents new NDK
+# usage from sneaking in
 # while the migration is underway — new relay I/O must route through the
 # library-agnostic seam at src/lib/nostr/io.ts instead.
 #
@@ -15,7 +18,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE_FILE="$ROOT/scripts/ndk-baseline.txt"
 BASELINE="$(head -n1 "$BASELINE_FILE" | tr -dc '0-9')"
 
-matches="$(grep -rl "@nostr-dev-kit" --include="*.ts" --include="*.tsx" "$ROOT/src" "$ROOT/platform" "$ROOT/contextvm" 2>/dev/null || true)"
+# `sdk/` is in scope: it is the framework-free layer the NDK -> applesauce
+# migration lands in first, so a scope that stops at src/platform/contextvm
+# cannot see the new home of the surface it is guarding.
+matches="$(grep -rl "@nostr-dev-kit" --include="*.ts" --include="*.tsx" "$ROOT/src" "$ROOT/platform" "$ROOT/contextvm" "$ROOT/sdk" 2>/dev/null || true)"
 if [ -z "$matches" ]; then
 	CURRENT="0"
 else
