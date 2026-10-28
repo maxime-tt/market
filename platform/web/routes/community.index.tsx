@@ -21,7 +21,7 @@ import {
 import { CollectionCardHost as CollectionCard } from '@platform/web/collections/CollectionCardHost'
 import { useV4VMerchants } from '@/queries/v4v'
 import { FeaturedUserCardHost as FeaturedUserCard } from '@platform/web/featured/FeaturedUserCardHost'
-import { blacklistStore } from '@/lib/stores/blacklist'
+import { blacklistStore } from '@platform/web/config/blacklistStore'
 import { filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedCollections } from '@/queries/featured'
