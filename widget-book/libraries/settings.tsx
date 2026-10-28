@@ -9,6 +9,7 @@ import {
 	TeamPermissionsCard,
 	TeamRoleSection,
 } from '@ui/settings/operator-settings-views'
+import { ProfileWalletCheckView } from '@ui/settings/profile-wallet-check-view'
 import type { WidgetLibrary } from '../libraries'
 
 /**
@@ -131,6 +132,30 @@ export const settings: WidgetLibrary = {
 			render: () => (
 				<div className="max-w-sm">
 					<TeamPermissionsCard isOwner={false} />
+				</div>
+			),
+		},
+		{
+			name: 'ProfileWalletCheckLoading',
+			render: () => (
+				<div className="max-w-xl">
+					<ProfileWalletCheckView isLoading hasLud16={false} lud16={null} instanceName="Marketplace" />
+				</div>
+			),
+		},
+		{
+			name: 'ProfileWalletCheckLud16',
+			render: () => (
+				<div className="max-w-xl">
+					<ProfileWalletCheckView isLoading={false} hasLud16 lud16="satoshi@getalby.com" instanceName="Marketplace" />
+				</div>
+			),
+		},
+		{
+			name: 'ProfileWalletCheckNoLud16',
+			render: () => (
+				<div className="max-w-xl">
+					<ProfileWalletCheckView isLoading={false} hasLud16={false} lud16={null} instanceName="Marketplace" />
 				</div>
 			),
 		},
