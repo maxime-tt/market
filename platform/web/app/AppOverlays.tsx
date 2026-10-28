@@ -1,5 +1,4 @@
-import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
-import { MigratePrivateKeyDialog } from '@/components/auth/MigratePrivateKeyDialog'
+import { AuthKeyDialogsHost } from '@platform/web/auth/AuthKeyDialogsHost'
 import { PIIExposureModal } from '@/components/pii/PIIExposureModal'
 import { DialogRegistry } from '@/components/DialogRegistry'
 import { SheetRegistry } from '@/components/SheetRegistry'
@@ -29,8 +28,7 @@ export function AppOverlays() {
 			{showPIIModal && scanResult && (
 				<PIIExposureModal isOpen={showPIIModal} onClose={() => setShowPIIModal(false)} scanResult={scanResult} />
 			)}
-			<MigratePrivateKeyDialog />
-			<DecryptPasswordDialog />
+			<AuthKeyDialogsHost />
 			<SheetRegistry />
 			<DialogRegistry />
 			<Toaster />
