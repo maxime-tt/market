@@ -1,6 +1,5 @@
 import { AuctionDisplayComponent } from '@/components/AuctionDisplayComponent'
-import { CollectionDisplayComponent } from '@/components/CollectionDisplayComponent'
-import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
+import { CollectionDisplayHost, ProductDisplayHost } from '@platform/web/app-settings/entityDisplayHosts'
 import { Button } from '@ui/wrappers/button'
 import { EmptyState } from '@ui/shared/empty-state'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
@@ -654,7 +653,7 @@ function FeaturedItemsComponent() {
 								) : (
 									<div className="space-y-3">
 										{featuredProducts.featuredProducts.map((productCoords, index) => (
-											<ProductDisplayComponent
+											<ProductDisplayHost
 												key={productCoords}
 												productCoords={productCoords}
 												index={index}
@@ -727,7 +726,7 @@ function FeaturedItemsComponent() {
 								) : (
 									<div className="space-y-3">
 										{featuredCollections.featuredCollections.map((collectionCoords, index) => (
-											<CollectionDisplayComponent
+											<CollectionDisplayHost
 												key={collectionCoords}
 												collectionCoords={collectionCoords}
 												index={index}
