@@ -11,6 +11,7 @@ import {
 	AlertDialogTitle,
 } from '../primitives/alert-dialog'
 import { Button } from '../primitives/button'
+import { Checkbox } from '../primitives/checkbox'
 import { Label } from '../primitives/label'
 import { Textarea } from '../primitives/textarea'
 
@@ -39,6 +40,28 @@ export function TestLabelButtonView({ isLabeled, itemLabel, kindSlug, className,
 			<FlaskConical className="h-3.5 w-3.5" />
 			{isLabeled ? 'Unmark' : 'Mark'} as Test {itemLabel}
 		</Button>
+	)
+}
+
+export interface TestListingsToggleViewProps {
+	checked: boolean
+	onCheckedChange: (checked: boolean) => void
+	className?: string
+	label?: string
+}
+
+/**
+ * Browsing-surface toggle (ADR-0009 rev 3): reveals test-labeled items in feeds.
+ * Pure props view: the host owns the platform binding and the query invalidation.
+ */
+export function TestListingsToggleView({ checked, onCheckedChange, className, label = 'Show test listings' }: TestListingsToggleViewProps) {
+	return (
+		<div className={'flex items-center space-x-2' + (className ? ' ' + className : '')}>
+			<Checkbox id="show-test-listings" checked={checked} onCheckedChange={(value) => onCheckedChange(Boolean(value))} />
+			<Label htmlFor="show-test-listings" className="text-sm font-normal cursor-pointer">
+				{label}
+			</Label>
+		</div>
 	)
 }
 

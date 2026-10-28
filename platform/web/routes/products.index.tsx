@@ -25,7 +25,7 @@ import {
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
 import { SelectableBadge } from '@ui/wrappers/selectable-badge'
-import { ShowTestListingsToggle } from '@/components/ShowTestListingsToggle'
+import { ShowTestListingsToggleHost } from '@platform/web/config/testListingsToggleHost'
 
 // Hook to fetch featured product events using useQueries
 function useFeaturedProductEvents(featuredProducts: string[] | undefined) {
@@ -331,7 +331,7 @@ function ProductsRoute() {
 						</div>
 					</div>
 					<div className="flex items-center gap-3">
-						<ShowTestListingsToggle />
+						<ShowTestListingsToggleHost />
 						<ProductFilters filters={filters} onFiltersChange={setFilters} />
 					</div>
 				</div>

@@ -2,7 +2,7 @@ import { AuctionCard } from '@/components/AuctionCard'
 import { Media } from '@ui/shared/media'
 import { LoadingState } from '@ui/shared/loading-state'
 import { AuctionFiltersView } from '@ui/auction/auction-list-views'
-import { ShowTestListingsToggle } from '@/components/ShowTestListingsToggle'
+import { ShowTestListingsToggleHost } from '@platform/web/config/testListingsToggleHost'
 import { AuctionSectionGrid } from '@/components/nostr/AuctionSectionGrid'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { Badge } from '@ui/primitives/badge'
@@ -350,7 +350,7 @@ function AuctionsRoute() {
 					{/* ADR-0009: browsable by everyone, defaults to hidden — reveals the
 					    test-labeled auctions the feed gates out. */}
 					<div className="flex items-center gap-3">
-						<ShowTestListingsToggle />
+						<ShowTestListingsToggleHost />
 						<AuctionFiltersView
 							appliedFilterCount={calculateAppliedFilterCount(filters)}
 							hideEnded={hideEndedAuctions}

@@ -8,8 +8,8 @@
  *   - `testLabelActions.*` and `TestLabelInfo` — re-exported by the `export *` below from the SDK module.
  *   - `useTestLabelStore` — the non-reactive accessor; kept here, now reading the SDK state store.
  *   - `testLabelStore` — a `@tanstack/store` `Store`, read by `useStore(testLabelStore, selector)` in
- *     `src/components/ShowTestListingsToggle.tsx:16`, `src/hooks/useStreamingProducts.ts:57` and
- *     `src/queries/testLabels.tsx:395-397`. Those consumers want a store-shaped object (`.state`,
+ *     `src/hooks/useStreamingProducts.ts:57` and `src/queries/testLabels.tsx:395-397`. Those consumers want
+ *     a store-shaped object (`.state`,
  *     `.subscribe`), which the SDK primitive deliberately is not, so this file bridges the two: the `Store`
  *     is kept in step by the SDK store's `subscribe`. This adapter is TEMPORARY and is deleted when those
  *     call sites are rewired to the real reactive binding

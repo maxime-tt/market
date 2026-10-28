@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { DashboardCollectionDetails, DashboardCollectionTrigger } from '@ui/dashboard/dashboard-collection-list-item'
 import { DashboardOverviewStats } from '@ui/dashboard/dashboard-overview-stats'
 import { DashboardProductDetails, DashboardProductTrigger } from '@ui/dashboard/dashboard-product-list-item'
-import { TestLabelButtonView, TestLabelDialogView, type TestLabelDialogMode } from '@ui/dashboard/test-label-views'
+import { TestLabelButtonView, TestLabelDialogView, TestListingsToggleView, type TestLabelDialogMode } from '@ui/dashboard/test-label-views'
 import type { WidgetLibrary } from '../libraries'
 
 /**
@@ -94,6 +94,11 @@ function TestLabelDialogDemo({ mode }: { mode: TestLabelDialogMode }) {
 			/>
 		</div>
 	)
+}
+
+function TestListingsToggleViewDemo() {
+	const [checked, setChecked] = useState(false)
+	return <TestListingsToggleView checked={checked} onCheckedChange={setChecked} />
 }
 
 export const dashboard: WidgetLibrary = {
@@ -194,6 +199,10 @@ export const dashboard: WidgetLibrary = {
 		{
 			name: 'TestLabelDialogViewUnmark',
 			render: () => <TestLabelDialogDemo mode="unmark" />,
+		},
+		{
+			name: 'TestListingsToggleView',
+			render: () => <TestListingsToggleViewDemo />,
 		},
 	],
 }

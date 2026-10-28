@@ -18,6 +18,7 @@ const entryNames = [
 	'TestLabelButtonViewLabeled',
 	'TestLabelDialogView',
 	'TestLabelDialogViewUnmark',
+	'TestListingsToggleView',
 ]
 
 test('renders the dashboard library', async ({ page }) => {
@@ -123,6 +124,17 @@ test('opens the mark dialog from the trigger and edits the appeal message', asyn
 
 	await dialog.getByRole('button', { name: 'Cancel' }).click()
 	await expect(page.getByRole('alertdialog')).toHaveCount(0)
+})
+
+test('toggles the test-listings checkbox in the widget book', async ({ page }) => {
+	await page.goto('/?library=dashboard')
+
+	const toggle = page.getByTestId('widget-TestListingsToggleView')
+	await expect(toggle).toBeVisible()
+	await expect(toggle).toContainText('Show test listings')
+
+	await toggle.getByRole('checkbox').click()
+	await expect(toggle.getByRole('checkbox')).toBeChecked()
 })
 
 test('opens the unmark confirmation from the trigger', async ({ page }) => {
