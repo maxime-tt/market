@@ -56,6 +56,7 @@ test('renders the auction library', async ({ page }) => {
 		'AuctionShippingViewNoOptions',
 		'AuctionShippingViewAllAttached',
 		'AuctionVerdictView',
+		'AuctionBidsView',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
@@ -161,6 +162,25 @@ test('renders the validator verdict panel with claim tones and injected avatars'
 	// The host-owned identity slot: validator + bidder avatar per row.
 	await expect(view.locator('[data-slot="verdict-avatar"]')).toHaveCount(8)
 	await expect(view.locator('[data-slot="verdict-avatar"][data-pubkey^="bbbb"]')).toHaveCount(2)
+})
+
+test('renders the auction bids view and expands its technical accordion', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const view = page.getByTestId('widget-AuctionBidsView')
+	await expect(view.locator('[data-slot="auction-bids-view"]')).toHaveCount(1)
+	await expect(view).toContainText('Highest visible bid')
+	await expect(view).toContainText('15,000 sats')
+	await expect(view).toContainText('Mint: mint.example.com')
+	await expect(view.locator('[data-slot="bidder-card"]')).not.toHaveCount(0)
+
+	// Collapsed: the technical row is not mounted until the trigger is clicked.
+	await expect(view.getByText('hd_p2pk')).toHaveCount(0)
+	await view.getByRole('button', { name: 'Bid event details' }).first().click()
+
+	await expect(view.getByText('Bidder pubkey')).toBeVisible()
+	await expect(view).toContainText('Key scheme')
+	await expect(view).toContainText('hd_p2pk')
 })
 
 test('renders the dashboard auction list row with its host-owned slots', async ({ page }) => {

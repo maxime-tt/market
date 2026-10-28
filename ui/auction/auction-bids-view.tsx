@@ -1,61 +1,54 @@
-// src/components/auction/LatestBidsContainer.tsx
-import { getBidAmount, getBidMint, useStreamingAuctionBids } from '@/queries/auctions'
-import type { NostrEventLike } from '@/lib/nostr/eventLike'
-import { cn } from '@/lib/utils'
+import { getBidAmount, getBidMint } from '@sdk/commerce/auctions/auctionRead'
+import type { ValidatedBidSet } from '@sdk/commerce/auctions/bidValidation'
+import { getBidClassification, getValidatedTopAmount, getValidatedTopBidderPubkey } from '@sdk/commerce/auctions/validatedBidView'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { formatSats, getMintHostname } from '@sdk/commerce/payments/display'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
-import { formatSats, getMintHostname } from '@/lib/wallet'
 import { Badge } from '@ui/primitives/badge'
-import type { ReactNode } from 'react'
-import { UserCard } from './UserCard'
 import { Check, Landmark } from 'lucide-react'
-import type { ValidatedBidSet } from '@/lib/auction/bidValidation'
-import {
-	getValidatedTopAmount,
-	getValidatedTopBidderPubkey,
-	getValidatedBidderState,
-	getBidClassification,
-} from '@/lib/auction/validatedBidView'
+import type { ReactNode } from 'react'
+import { cn } from '../utils/cn'
+/** Props-only auction bid list (D4 S5a). Reproduces the retiring
+ * `src/components/AuctionBidsContainer.tsx` structure, copy and accordion
+ * behaviour; the stream read stays in the platform host and the bidder identity
+ * arrives via `renderUserCard`. Raw palette migrated to Tier-1 roles (R18).
+ * `isLoading` marks the region busy; the legacy had no loading chrome.
+ */
+export interface AuctionBidsViewProps {
+	bids: NostrEventLike[]
+	validatedBidSet?: ValidatedBidSet | null
+	currentUserPubkey?: string
+	isEnded?: boolean
+	isLoading?: boolean
+	renderUserCard: (pubkey: string, size: 'md' | 'sm') => ReactNode
+	className?: string
+}
 
 function TechnicalDataRow({ label, value }: { label: string; value: ReactNode }) {
 	return (
-		<div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
-			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
-			<div className="mt-1 break-all text-sm font-medium text-zinc-900">{value}</div>
+		<div className="rounded-lg border border-border-default bg-surface-sunken px-3 py-3">
+			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-mid">{label}</p>
+			<div className="mt-1 break-all text-sm font-medium text-text-high">{value}</div>
 		</div>
 	)
-}
-
-interface Props {
-	auctionRootEventId: string
-	auctionCoordinates: string
-	currentUserPubkey?: string
-	isEnded?: boolean
-	className?: string
-	/**
-	 * Optional validated bid set. When present, the highest-bid badge,
-	 * outbid notice, and bid-list classifications are derived from the
-	 * validated set's canonicalWinner and classification instead of raw
-	 * bid chain computation.
-	 */
-	validatedBidSet?: ValidatedBidSet | null
 }
 
 type BidTone = 'blue' | 'orange' | 'green' | 'pink' | 'white'
 
 const toneContainerClassName: Record<BidTone, string> = {
-	blue: 'border-sky-200 bg-sky-50',
-	orange: 'border-amber-300 bg-amber-100',
-	green: 'border-emerald-300 bg-emerald-100',
-	pink: 'border-pink-400 bg-pink-50',
-	white: 'border-zinc-200 bg-zinc-50/70',
+	blue: 'border-info-border bg-info-muted',
+	orange: 'border-warning-border bg-warning-muted',
+	green: 'border-success-border bg-success-muted',
+	pink: 'border-fill-accent bg-fill-accent/10',
+	white: 'border-border-default bg-surface-sunken',
 }
 
 const toneLabelClassName: Record<BidTone, string> = {
-	blue: 'text-sky-700',
-	orange: 'text-amber-800',
-	green: 'text-emerald-800',
-	pink: 'text-pink-600',
-	white: 'text-zinc-500',
+	blue: 'text-info-foreground',
+	orange: 'text-warning-foreground',
+	green: 'text-success-foreground',
+	pink: 'text-fill-accent',
+	white: 'text-text-mid',
 }
 
 function formatBidRecordedAt(bidEvent: NostrEventLike): string {
@@ -64,11 +57,11 @@ function formatBidRecordedAt(bidEvent: NostrEventLike): string {
 
 function BidMintRow({ mint }: { mint: string }) {
 	return (
-		<div className="flex flex-wrap items-center gap-2 text-sm text-zinc-700">
+		<div className="flex flex-wrap items-center gap-2 text-sm text-text-high">
 			<div className="relative flex h-6 cursor-default items-center px-2">
 				<Landmark className="size-4 text-primary" />
-				<span className="absolute -bottom-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-pink-500 text-[9px] font-bold leading-none text-white">
-					<Check className="h-2 w-2 text-white stroke-[3]" />
+				<span className="absolute -bottom-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-fill-accent text-[9px] font-bold leading-none text-on-fill-accent">
+					<Check className="h-2 w-2 text-on-fill-accent stroke-[3]" />
 				</span>
 			</div>
 			<p>Mint: {mint ? getMintHostname(mint) : 'N/A'}</p>
@@ -81,9 +74,9 @@ function BidEventDetails({ bidEvent }: { bidEvent: NostrEventLike }) {
 	const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
 
 	return (
-		<Accordion type="single" collapsible className="rounded-xl border border-zinc-200 bg-white px-4">
+		<Accordion type="single" collapsible className="rounded-xl border border-border-default bg-card px-4">
 			<AccordionItem value={`bid-${bidEvent.id}`} className="border-none">
-				<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">Bid event details</AccordionTrigger>
+				<AccordionTrigger className="py-4 text-sm font-semibold text-text-high hover:no-underline">Bid event details</AccordionTrigger>
 				<AccordionContent className="space-y-3 pb-4">
 					<TechnicalDataRow label="Bidder pubkey" value={bidEvent.pubkey} />
 					<TechnicalDataRow label="Mint" value={getBidMint(bidEvent) || 'N/A'} />
@@ -96,28 +89,20 @@ function BidEventDetails({ bidEvent }: { bidEvent: NostrEventLike }) {
 	)
 }
 
-export function AuctionBidsContainer({
-	auctionRootEventId,
-	auctionCoordinates,
+export function AuctionBidsView({
+	bids,
+	validatedBidSet,
 	currentUserPubkey,
 	isEnded,
+	isLoading = false,
+	renderUserCard,
 	className,
-	validatedBidSet,
-}: Props) {
-	const { bids } = useStreamingAuctionBids(auctionRootEventId, 500, auctionCoordinates)
-
+}: AuctionBidsViewProps) {
 	// Determine top bid — use the validated canonicalWinner when available,
 	// otherwise fall back to raw bid sort (legacy behaviour).
-	//
-	// Both branches yield a raw nostr event shape: `bids` comes from
-	// `useStreamingAuctionBids` (which returns `NostrEventLike[]`, not NDKEvent)
-	// and `canonicalWinner.rawEvent` is `NostrEventLike` too. Keep the local
-	// helpers on `NostrEventLike` rather than widening to NDKEvent — nothing
-	// here uses NDK-only members.
 	let topBid: NostrEventLike | null
 	let topBidPubkey: string | null
 	let topAmount: number
-
 	if (validatedBidSet) {
 		topBid = validatedBidSet.canonicalWinner?.rawEvent ?? null
 		topBidPubkey = getValidatedTopBidderPubkey(validatedBidSet)
@@ -157,11 +142,15 @@ export function AuctionBidsContainer({
 	const showOutbidNotice = !topBidIsOwn && hasOwnBids && !isEnded
 
 	return bids.length === 0 ? (
-		<div className={cn('rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-sm text-zinc-500', className)}>
+		<div
+			data-slot="auction-bids-view"
+			aria-busy={isLoading || undefined}
+			className={cn('rounded-xl border border-dashed border-border-default bg-surface-sunken px-5 py-6 text-sm text-text-mid', className)}
+		>
 			No bids yet. The latest bids will appear here once bidders lock funds.
 		</div>
 	) : (
-		<div className="space-y-4">
+		<div data-slot="auction-bids-view" aria-busy={isLoading || undefined} className="space-y-4">
 			{topBid && (
 				<div className={cn('flex flex-col gap-4 rounded-xl border-2 px-4 py-4 shadow-sm', toneContainerClassName[topBidTone])}>
 					<div className="flex flex-wrap items-start justify-between gap-3">
@@ -169,42 +158,44 @@ export function AuctionBidsContainer({
 							<p className={cn('text-[11px] font-semibold uppercase tracking-[0.18em]', toneLabelClassName[topBidTone])}>
 								Highest visible bid
 							</p>
-							<p className="mt-1 text-3xl font-semibold tracking-tight text-zinc-950">{formatSats(topAmount)} sats</p>
-							<p className="mt-1 text-sm text-zinc-600">Recorded {formatBidRecordedAt(topBid)}</p>
+							<p className="mt-1 text-3xl font-semibold tracking-tight text-text-high">{formatSats(topAmount)} sats</p>
+							<p className="mt-1 text-sm text-text-mid">Recorded {formatBidRecordedAt(topBid)}</p>
 						</div>
 						<div className="flex flex-col items-end gap-2">
 							<div className="flex items-center gap-2">
-								{topBidIsOwn && <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Your Bid</Badge>}
+								{topBidIsOwn && (
+									<Badge className="border-success-border bg-success-muted text-success-foreground hover:bg-success-muted">Your Bid</Badge>
+								)}
 								{!topBidIsOwn && hasOwnBids && (
-									<Badge className="border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-100">Outbid</Badge>
+									<Badge className="border-warning-border bg-warning-muted text-warning-foreground hover:bg-warning-muted">Outbid</Badge>
 								)}
 							</div>
 						</div>
 					</div>
 
-					<UserCard pubkey={topBidPubkey ?? ''} size="md" />
+					{renderUserCard(topBidPubkey ?? '', 'md')}
 					<BidMintRow mint={getBidMint(topBid)} />
 					<BidEventDetails bidEvent={topBid} />
 				</div>
 			)}
 
 			{showOutbidNotice && (
-				<div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+				<div className="rounded-lg border border-warning-border bg-warning-muted px-3 py-2 text-sm font-medium text-warning-foreground">
 					Your previous bid of {formatSats(myHighestBidAmount)} sats was outbid. Bid again to try win the auction.
 				</div>
 			)}
 
 			<div className="space-y-3">
 				<div className="flex items-center justify-between gap-3">
-					<h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-500">Latest bids</h3>
-					<p className="text-xs text-zinc-500">
+					<h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-text-mid">Latest bids</h3>
+					<p className="text-xs text-text-mid">
 						{latestBids.length} more bid{latestBids.length === 1 ? '' : 's'}
 					</p>
 				</div>
 
 				<div className={cn('max-h-[500px] space-y-3 overflow-y-auto pr-1', className)}>
 					{latestBids.length === 0 ? (
-						<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-4 text-sm text-zinc-500">
+						<div className="rounded-xl border border-dashed border-border-default bg-surface-sunken px-4 py-4 text-sm text-text-mid">
 							No other bids yet.
 						</div>
 					) : (
@@ -222,27 +213,29 @@ export function AuctionBidsContainer({
 								>
 									<div className="flex flex-wrap items-start justify-between gap-3">
 										<div>
-											<p className="text-xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(bidEvent))} sats</p>
-											<p className="mt-1 text-sm text-zinc-500">Recorded {formatBidRecordedAt(bidEvent)}</p>
+											<p className="text-xl font-semibold tracking-tight text-text-high">{formatSats(getBidAmount(bidEvent))} sats</p>
+											<p className="mt-1 text-sm text-text-mid">Recorded {formatBidRecordedAt(bidEvent)}</p>
 										</div>
 										<div className="flex items-center gap-2">
 											{classification && classification !== 'valid' && (
 												<Badge
 													className={cn(
-														'border-zinc-300',
+														'border-border-default',
 														classification === 'invalid'
-															? 'bg-red-100 text-red-700 hover:bg-red-100'
-															: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100',
+															? 'bg-error-muted text-error-foreground hover:bg-error-muted'
+															: 'bg-warning-muted text-warning-foreground hover:bg-warning-muted',
 													)}
 												>
 													{classification === 'invalid' ? 'Rejected' : 'Pending'}
 												</Badge>
 											)}
-											{isOwnBid && <Badge className="border-pink-400 bg-pink-100 text-pink-700 hover:bg-pink-100">Your Bid</Badge>}
+											{isOwnBid && (
+												<Badge className="border-fill-accent bg-fill-accent/10 text-fill-accent hover:bg-fill-accent/10">Your Bid</Badge>
+											)}
 										</div>
 									</div>
 
-									<UserCard pubkey={bidEvent.pubkey} size="sm" />
+									{renderUserCard(bidEvent.pubkey, 'sm')}
 									<BidMintRow mint={getBidMint(bidEvent)} />
 									<BidEventDetails bidEvent={bidEvent} />
 								</div>

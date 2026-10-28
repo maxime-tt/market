@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import type {
 	AuctionAntiSnipeWindowMinutesPreset,
@@ -20,6 +21,7 @@ import { SettlementGraceSettings } from '@ui/auction/settlement-grace-settings'
 import { BidStatusBanner, BidStatusPill, getBidStatusCopy, type BidStatusDisplayInput } from '@ui/auction/bid-status-views'
 import { AuctionShippingDetailRow, AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
 import { AuctionVerdictView } from '@ui/auction/auction-verdict-view'
+import { AuctionBidsView } from '@ui/auction/auction-bids-view'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import {
 	AuctionDetailCard,
@@ -272,6 +274,62 @@ function AuctionVerdictViewDemo() {
 					verdictFixture('v-griefed', 'griefed', { bidderPubkey: VERDICT_OTHER_BIDDER_PUBKEY, reason: 'no_release' }),
 				]}
 				renderAvatar={(pubkey) => <SampleVerdictAvatar pubkey={pubkey} />}
+			/>
+		</div>
+	)
+}
+
+/** Host stand-in for `UserCardHost` in the bids list: a plain deterministic node. */
+function SampleBidderCard({ pubkey }: { pubkey: string }) {
+	return (
+		<span data-slot="bidder-card" data-pubkey={pubkey} className="inline-flex items-center gap-2 text-sm text-text-high">
+			<span className="flex h-7 w-7 items-center justify-center rounded-full bg-fill-accent text-xs font-semibold text-on-fill-accent">
+				{pubkey.slice(0, 1).toUpperCase()}
+			</span>
+			{pubkey.slice(0, 8)}
+		</span>
+	)
+}
+
+const BIDS_VIEW_TOP_PUBKEY = 'd'.repeat(64)
+const BIDS_VIEW_OTHER_PUBKEY = 'e'.repeat(64)
+const BIDS_VIEW_CREATED_AT = 1_760_000_000
+
+/** One literal bid event; overrides carry the per-bid amount/mint/timestamp. */
+function auctionBidFixture(overrides: Partial<NostrEventLike>): NostrEventLike {
+	return {
+		id: 'bid-top',
+		pubkey: BIDS_VIEW_TOP_PUBKEY,
+		kind: 1024,
+		created_at: BIDS_VIEW_CREATED_AT,
+		content: '',
+		tags: [
+			['amount', '15000'],
+			['mint', 'https://mint.example.com'],
+		],
+		...overrides,
+	}
+}
+
+/** S5a: the bid list with a top bid and one latest bid, each behind its
+ * collapsed technical accordion. */
+function AuctionBidsViewDemo() {
+	return (
+		<div className="max-w-md">
+			<AuctionBidsView
+				bids={[
+					auctionBidFixture({}),
+					auctionBidFixture({
+						id: 'bid-other',
+						pubkey: BIDS_VIEW_OTHER_PUBKEY,
+						created_at: BIDS_VIEW_CREATED_AT - 60,
+						tags: [
+							['amount', '12000'],
+							['mint', 'https://mint.two'],
+						],
+					}),
+				]}
+				renderUserCard={(pubkey) => <SampleBidderCard pubkey={pubkey} />}
 			/>
 		</div>
 	)
@@ -798,6 +856,12 @@ export const auction: WidgetLibrary = {
 			// host-injected avatars.
 			name: 'AuctionVerdictView',
 			render: () => <AuctionVerdictViewDemo />,
+		},
+		{
+			// S5a: the streaming bid list (top bid + latest bid) with the collapsed
+			// technical accordion and a plain host-injected bidder slot.
+			name: 'AuctionBidsView',
+			render: () => <AuctionBidsViewDemo />,
 		},
 		{
 			// S5b: the degenerate Available branches as four reachable states.

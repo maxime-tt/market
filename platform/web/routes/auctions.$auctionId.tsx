@@ -99,7 +99,7 @@ import { parsePathReleaseEvent, parseSettlementEvent } from '@sdk/commerce/aucti
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '@sdk/commerce/auctions/events'
 import { formatAuctionEndTimeLabel } from '@sdk/commerce/auctions/countdownLabels'
 import AuctionTimelineChart from '@/components/AuctionTimelineChart'
-import { AuctionBidsContainer } from '@/components/AuctionBidsContainer'
+import { AuctionBidsContainerHost } from '@platform/web/auctions/AuctionBidsContainerHost'
 
 function formatMaybeDate(timestamp: number): string {
 	if (!timestamp) return 'N/A'
@@ -852,7 +852,7 @@ function AuctionDetailRoute() {
 							<div className="rounded-lg bg-background p-6 shadow-md">
 								<h2 className="text-xl font-semibold text-foreground mb-4">Latest Bids</h2>
 
-								<AuctionBidsContainer
+								<AuctionBidsContainerHost
 									auctionRootEventId={auctionRootEventId || auctionId}
 									auctionCoordinates={auctionCoordinates}
 									currentUserPubkey={activeUserPubkey}
