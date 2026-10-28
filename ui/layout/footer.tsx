@@ -1,21 +1,42 @@
-import { useConfigQuery } from '@/queries/config'
+import type { SocialLinks } from '@sdk/config/schemas/app'
+import type { Ref } from 'react'
+import { cn } from '../utils/cn'
 
-export function Footer() {
-	const { data: config } = useConfigQuery()
-	const supportContact = config?.supportContact || config?.contactEmail
-	const socialLinks = config?.socialLinks
+export interface FooterProps {
+	/** Instance display name; the host resolves the config fallback chain. */
+	displayName: string
+	termsUrl?: string
+	supportContact?: string
+	socialLinks?: SocialLinks
+	className?: string
+	ref?: Ref<HTMLElement>
+}
 
+/**
+ * The site footer band: the identity line, the FAQ/Terms/Support links and the
+ * social icon row.
+ *
+ * Lifted out of `src/components/layout/Footer.tsx` (D4 leaves, fused slice),
+ * which read the config query itself and resolved the display name, the contact
+ * address and the social links. The `platform/web` host now resolves that data
+ * and passes it down, so this view is props-only.
+ */
+export function Footer({ displayName, termsUrl, supportContact, socialLinks, className, ref }: FooterProps) {
 	return (
-		<footer className="sticky top-0 bg-black p-4 font-bold text-white lg:px-12 flex justify-center">
+		<footer
+			ref={ref}
+			data-slot="footer"
+			className={cn('sticky top-0 bg-fill-ink p-4 font-bold text-on-fill-ink lg:px-12 flex justify-center', className)}
+		>
 			<div className="container flex justify-between items-center flex-col gap-4 md:gap-0 md:flex-row">
 				<div className="flex gap-4 flex-col md:flex-row items-center">
-					<span>{config?.displayName || config?.name || 'Marketplace'}: Powered by Nostr.</span>
+					<span>{displayName}: Powered by Nostr.</span>
 					<div className="flex gap-4">
 						<a className="underline" href="/faqs">
 							FAQ
 						</a>
-						{config?.termsUrl && (
-							<a className="underline" href={config.termsUrl} target="_blank" rel="noopener noreferrer">
+						{termsUrl && (
+							<a className="underline" href={termsUrl} target="_blank" rel="noopener noreferrer">
 								Terms
 							</a>
 						)}

@@ -1,3 +1,4 @@
+import { Footer } from '@ui/layout/footer'
 import { MobilePageHeader, PageHeader } from '@ui/layout/page-header'
 import type { WidgetLibrary } from '../libraries'
 
@@ -42,6 +43,17 @@ export const layout: WidgetLibrary = {
 				<MobilePageHeader>
 					<h1 className="text-xl font-bold">Dashboard</h1>
 				</MobilePageHeader>
+			),
+		},
+		{
+			name: 'Footer',
+			render: () => (
+				<Footer
+					displayName="Plebeian Market"
+					termsUrl="https://example.com/terms"
+					supportContact="support@example.com"
+					socialLinks={{ nostr: 'https://example.com/nostr', twitter: 'https://example.com/twitter', github: 'https://example.com/github' }}
+				/>
 			),
 		},
 	],

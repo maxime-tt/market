@@ -29,3 +29,13 @@ test('keeps the desktop band sticky so it pins while the page scrolls', async ({
 	await expect(band).toHaveClass(/sticky/)
 	await expect(band).toHaveClass(/lg:flex/)
 })
+
+test('shows the footer identity line with its FAQ and Terms links', async ({ page }) => {
+	await page.goto('/?library=layout')
+
+	const footer = page.getByTestId('widget-Footer')
+	await expect(footer).toBeVisible()
+	await expect(footer).toContainText('Plebeian Market: Powered by Nostr.')
+	await expect(footer.getByRole('link', { name: 'FAQ' })).toBeVisible()
+	await expect(footer.getByRole('link', { name: 'Terms' })).toBeVisible()
+})

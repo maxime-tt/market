@@ -1,5 +1,5 @@
 import { AuctionWonModal } from '@/components/AuctionWonModal'
-import { Footer } from '@/components/layout/Footer'
+import { FooterHost } from '@platform/web/layout/FooterHost'
 import { Header } from '@/components/layout/Header'
 import { Pattern } from '@ui/shared/pattern'
 import { useDocumentIdentity } from '@platform/web/app/useDocumentIdentity'
@@ -44,7 +44,7 @@ function RootLayout() {
 				<Outlet />
 			</main>
 			<Pattern pattern="page" />
-			{!isDashboardPage && !isCheckoutPage && <Footer />}
+			{!isDashboardPage && !isCheckoutPage && <FooterHost />}
 
 			<AuctionWonModal />
 		</div>
