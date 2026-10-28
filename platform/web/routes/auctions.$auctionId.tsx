@@ -87,7 +87,7 @@ import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionBidder } from '@/components/AuctionBidder'
 import { LiveChatPanel } from '@/components/LiveChatPanel'
 import { UserCard } from '@/components/UserCard'
-import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
+import { AuctionVerdictPanelHost } from '@platform/web/auctions/AuctionVerdictPanelHost'
 import { useAuctionVerdicts } from '@/queries/auctions'
 import { parseValidatorVerdictEvent } from '@sdk/commerce/auctions/schemas/validatorEvents'
 import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
@@ -861,7 +861,7 @@ function AuctionDetailRoute() {
 									className="max-h-[500px]"
 								/>
 
-								{/* <AuctionVerdictPanel auctionRootEventId={auctionRootEventId || auctionId} auctionCoordinate={auctionCoordinates} /> */}
+								{/* <AuctionVerdictPanelHost auctionRootEventId={auctionRootEventId || auctionId} auctionCoordinate={auctionCoordinates} /> */}
 							</div>
 
 							{/* Live Chat Panel */}

@@ -6,7 +6,7 @@ import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'
 import { getItemTestLabelCoordinate } from '@sdk/config/testLabelFilters'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
-import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
+import { AuctionVerdictPanelHost } from '@platform/web/auctions/AuctionVerdictPanelHost'
 import { AvatarUser } from '@/components/AvatarUser'
 import { ProfileName } from '@/components/ProfileName'
 import { OrderActions } from '@/components/orders/OrderActions'
@@ -968,7 +968,7 @@ function DashboardAuctionDetailRoute() {
 								</div>
 							)}
 
-							<AuctionVerdictPanel
+							<AuctionVerdictPanelHost
 								auctionRootEventId={auctionRootEventId || auctionId}
 								auctionCoordinate={auctionCoordinates}
 								validatorPubkeys={auctionAuditorPubkeys}
