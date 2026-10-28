@@ -1,6 +1,6 @@
 import { ProfilePage } from '@/components/pages/ProfilePage'
 import { LoadingState } from '@ui/shared/loading-state'
-import { vanityActions, vanityStore } from '@/lib/stores/vanity'
+import { vanityActions, vanityStore } from '@platform/web/config/vanityStore'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo } from 'react'
 import { useStore } from '@tanstack/react-store'
