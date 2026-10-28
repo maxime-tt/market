@@ -14,6 +14,26 @@ import {
 import { v4VForUserQuery } from '@/queries/v4v'
 import { publishCartSnapshot } from '@/publish/cart'
 import type { PersistedCartContent } from '@/lib/schemas/cartPersistence'
+// The cart model type cluster moved to the platform cart model in Wave D S0; re-exported so the
+// existing consumer type surface is unchanged.
+import type {
+	CartProduct,
+	CartSeller,
+	InvoiceMessage,
+	NormalizedCart,
+	OrderMessage,
+	OrderStatus,
+	V4VDTO,
+} from '@platform/web/cart/cartModel'
+export type {
+	CartProduct,
+	CartSeller,
+	InvoiceMessage,
+	NormalizedCart,
+	OrderMessage,
+	OrderStatus,
+	V4VDTO,
+} from '@platform/web/cart/cartModel'
 import {
 	addCartProduct as addCartProductOperation,
 	aggregateBuyerCartTotals,
@@ -48,28 +68,6 @@ export interface ProductShipping {
 	cost: number
 }
 
-export interface InvoiceMessage {
-	id: string
-	amount: number
-	status?: string
-	[key: string]: any
-}
-
-export interface OrderMessage {
-	id: string
-	status: OrderStatus
-	[key: string]: any
-}
-
-export type OrderStatus = 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled'
-
-export interface V4VDTO {
-	id: string
-	name: string
-	pubkey: string
-	percentage: number
-}
-
 export interface RichShippingInfo {
 	id: string
 	name?: string
@@ -79,34 +77,6 @@ export interface RichShippingInfo {
 	service?: string
 	carrier?: string
 	[key: string]: any
-}
-
-export interface CartProduct {
-	id: string
-	amount: number
-	shippingMethodId: string | null
-	shippingMethodName: string | null
-	shippingCost: number
-	shippingCostCurrency: string | null
-	sellerPubkey: string
-}
-
-export interface CartSeller {
-	pubkey: string
-	productIds: string[]
-	currency: string
-	shippingMethodId: string | null
-	shippingMethodName: string | null
-	shippingCost: number
-	shippingCostCurrency: string | null
-	v4vShares: V4VDTO[]
-}
-
-export interface NormalizedCart {
-	sellers: Record<string, CartSeller>
-	products: Record<string, CartProduct>
-	orders: Record<string, OrderMessage>
-	invoices: Record<string, InvoiceMessage>
 }
 
 export interface CartTotals {

@@ -1,0 +1,98 @@
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NormalizedCart } from '@platform/web/cart/cartModel'
+import {
+	createCartIntent,
+	normalizePersistedCart,
+	normalizeShippingForRestore,
+	type BuyerCartProductInput,
+	type LiveProductRecord,
+	type LiveShippingRecord,
+	type PersistedCartContent,
+} from '@sdk/commerce/cart/cartIntent'
+import { chooseNewerCartSnapshotEvent } from '@sdk/commerce/cart/cartRead'
+
+export { normalizePersistedCart, normalizeShippingForRestore }
+
+type ApplicationLiveProductRecord = LiveProductRecord
+type ApplicationLiveShippingRecord = LiveShippingRecord
+
+export interface RehydratedCart {
+	cart: NormalizedCart
+	updatedAt: number
+}
+
+/** App-state adapter: converts the UI/store cart shape into an SDK cart intent. */
+export function serializeCartIntent(cart: NormalizedCart): PersistedCartContent {
+	const products: BuyerCartProductInput[] = Object.values(cart.products).map((product) => ({
+		id: product.id,
+		amount: product.amount,
+		shippingMethodId: product.shippingMethodId,
+		sellerPubkey: product.sellerPubkey,
+	}))
+	return createCartIntent(products)
+}
+
+/**
+ * Nostr event selection now lives framework-free in `@sdk/commerce/cart/cartRead`
+ * (`chooseNewerCartSnapshotEvent`, store drain D1 slice 5); this adapter keeps the NDKEvent-shaped
+ * signature its callers use.
+ */
+export function chooseNewerCartSnapshot(events: Array<Pick<NDKEvent, 'kind' | 'tags' | 'content' | 'created_at' | 'id'>>): NDKEvent | null {
+	return chooseNewerCartSnapshotEvent(events) as unknown as NDKEvent | null
+}
+
+/** Converts normalized SDK cart intent into the existing app store model. */
+export function rehydrateCartFromLiveData(
+	snapshot: PersistedCartContent,
+	liveProducts: Record<string, ApplicationLiveProductRecord>,
+	liveShipping: Record<string, ApplicationLiveShippingRecord>,
+): RehydratedCart {
+	const normalized = normalizePersistedCart(snapshot)
+	const items = normalizeShippingForRestore(normalized.items, liveProducts, liveShipping)
+	const cart: NormalizedCart = {
+		sellers: {},
+		products: {},
+		orders: {},
+		invoices: {},
+	}
+
+	for (const item of items) {
+		const product = liveProducts[item.productRef]
+		if (!product) continue
+
+		cart.products[product.productId] = {
+			id: product.productId,
+			amount: item.quantity,
+			shippingMethodId: item.shippingRef ?? null,
+			shippingMethodName: null,
+			shippingCost: 0,
+			shippingCostCurrency: null,
+			sellerPubkey: product.sellerPubkey,
+		}
+
+		if (!cart.sellers[product.sellerPubkey]) {
+			cart.sellers[product.sellerPubkey] = {
+				pubkey: product.sellerPubkey,
+				productIds: [],
+				currency: '',
+				shippingMethodId: null,
+				shippingMethodName: null,
+				shippingCost: 0,
+				shippingCostCurrency: null,
+				v4vShares: [],
+			}
+		}
+
+		cart.sellers[product.sellerPubkey].productIds.push(product.productId)
+	}
+
+	for (const seller of Object.values(cart.sellers)) {
+		const shippingRefs = seller.productIds
+			.map((productId) => cart.products[productId]?.shippingMethodId)
+			.filter((shippingRef): shippingRef is string => !!shippingRef)
+		const uniqueShippingRefs = Array.from(new Set(shippingRefs))
+		if (uniqueShippingRefs.length === 1) seller.shippingMethodId = uniqueShippingRefs[0]
+	}
+
+	return { cart, updatedAt: normalized.updatedAt }
+}
