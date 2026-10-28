@@ -71,6 +71,28 @@ PINNED=(
 	"$ROOT/platform/web/routes/_dashboard-layout/dashboard/products/bids.tsx"
 )
 
+# E0 obligation (recorded 2026-10-28): the coverage rule above is what enforces
+# the src/-slice deletion contract. A slice that deletes the LAST file of a
+# src/-only family MUST delete or re-point that family in the SAME commit,
+# because the coverage check hard-fails on any family that matches nothing while
+# REQUIRE_COVERAGE=1 (verified: deleting src/publish/auctions.tsx alone fails
+# with `missing: .../src/publish/auctions.tsx`, exit 1). Conversely, do NOT
+# delete a family while its file still exists -- that drops coverage without
+# dropping the surface and weakens the guard. The src/-only families pinned
+# below are, with the file count measured at 71f6fb79:
+#   src/publish/auctions.tsx                                     1
+#   src/queries/auctions.tsx                                     1
+#   src/components/Auction*.tsx                                  8
+#   src/lib/auction*.ts                                         12
+#   src/lib/auction/*.ts                                        14
+#   src/lib/auctions/*.ts                                        1 (#1252-gated claim)
+#   src/lib/utils/auction*.ts                                    2
+#   src/hooks/useAuction*.ts                                     2
+#   src/lib/schemas/auction/*.ts                                 7
+#   src/components/nostr/AuctionSectionGrid.tsx                  1
+#   src/components/sheet-contents/auctions/*.tsx                 2
+#   src/components/sheet-contents/NewAuction*.tsx                1
+#
 # Glob families that MUST each match at least one file. These are the
 # auction-owned production surfaces: public routes, components, the auction
 # library directories, hooks, schemas, and the server-side validator.
