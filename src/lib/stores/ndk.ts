@@ -1,5 +1,5 @@
 import { defaultRelaysUrls, type Stage } from '@/lib/constants'
-import { computeNdkConfig, resolveMainRelay } from '@/lib/relay-policy'
+import { computeNdkConfig, resolveMainRelay } from '@sdk/core/relay-policy'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/lib/wallet/nwcWalletRead'
 import { fetchUserRelayListWithPreferences } from '@/lib/nostr/relayListRead'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
