@@ -1,4 +1,4 @@
-import { UserDisplayComponent } from '@/components/UserDisplayComponent'
+import { UserDisplayHost } from '@platform/web/app-settings/entityDisplayHosts'
 import { ProfileSearch } from '@/components/v4v/ProfileSearch'
 import {
 	AddTeamMemberCard,
@@ -233,7 +233,7 @@ function TeamComponent() {
 			return {
 				key: member.pubkey,
 				content: (
-					<UserDisplayComponent
+					<UserDisplayHost
 						userPubkey={member.pubkey}
 						index={index}
 						customActions={actions.length > 0 ? <RoleActionButtons actions={actions} disabled={disabled} /> : undefined}

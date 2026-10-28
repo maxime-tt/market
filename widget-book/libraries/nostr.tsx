@@ -2,6 +2,7 @@ import { FeaturedUserCardView, type FeaturedUserCardRenderLink } from '@ui/nostr
 import { NpubDisplay } from '@ui/nostr/npub-display'
 import { VerifiedBadge } from '@ui/nostr/verified-badge'
 import { PubkeyField } from '@ui/nostr/pubkey-field'
+import { UserDisplayView } from '@ui/nostr/user-display-view'
 import { ShieldIcon } from 'lucide-react'
 import type { WidgetLibrary } from '../libraries'
 
@@ -103,6 +104,19 @@ export const nostr: WidgetLibrary = {
 					productCount={0}
 					isLoadingProducts
 					renderLink={plainLink}
+				/>
+			),
+		},
+		{
+			name: 'UserDisplayView',
+			render: () => (
+				<UserDisplayView
+					userCard={<div className="font-semibold">Mugsmith</div>}
+					onMoveUp={() => {}}
+					onMoveDown={() => {}}
+					onRemove={() => {}}
+					canMoveUp
+					canMoveDown
 				/>
 			),
 		},

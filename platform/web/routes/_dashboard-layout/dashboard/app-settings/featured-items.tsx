@@ -1,5 +1,5 @@
 import { AuctionDisplayComponent } from '@/components/AuctionDisplayComponent'
-import { CollectionDisplayHost, ProductDisplayHost } from '@platform/web/app-settings/entityDisplayHosts'
+import { CollectionDisplayHost, ProductDisplayHost, UserDisplayHost } from '@platform/web/app-settings/entityDisplayHosts'
 import { Button } from '@ui/wrappers/button'
 import { EmptyState } from '@ui/shared/empty-state'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
@@ -12,7 +12,6 @@ import {
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
-import { UserDisplayComponent } from '@/components/UserDisplayComponent'
 import { ndkActions } from '@/lib/stores/ndk'
 import { getATagFromCoords, getCoordsFromATag } from '@/lib/utils/coords'
 import {
@@ -870,7 +869,7 @@ function FeaturedItemsComponent() {
 								) : (
 									<div className="space-y-3">
 										{featuredUsers.featuredUsers.map((userPubkey, index) => (
-											<UserDisplayComponent
+											<UserDisplayHost
 												key={userPubkey}
 												userPubkey={userPubkey}
 												index={index}

@@ -1,5 +1,4 @@
-import { UserDisplayComponent } from '@/components/UserDisplayComponent'
-import { CollectionDisplayHost, ProductDisplayHost } from '@platform/web/app-settings/entityDisplayHosts'
+import { CollectionDisplayHost, ProductDisplayHost, UserDisplayHost } from '@platform/web/app-settings/entityDisplayHosts'
 import { Button } from '@ui/wrappers/button'
 import { EmptyState } from '@ui/shared/empty-state'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
@@ -294,7 +293,7 @@ function BlacklistsComponent() {
 								) : (
 									<div className="space-y-3">
 										{formattedBlacklist.map((user, index) => (
-											<UserDisplayComponent
+											<UserDisplayHost
 												key={user.pubkey}
 												userPubkey={user.pubkey}
 												index={index}

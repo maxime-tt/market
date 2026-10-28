@@ -22,6 +22,7 @@ test('renders the nostr library', async ({ page }) => {
 		'FeaturedUserCard',
 		'FeaturedUserCardNoProducts',
 		'FeaturedUserCardLoading',
+		'UserDisplayView',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
@@ -44,6 +45,17 @@ test('renders the featured user card states', async ({ page }) => {
 	// While loading, the strip shows pulse placeholders and no tile links.
 	const loading = page.getByTestId('widget-FeaturedUserCardLoading')
 	await expect(loading.locator('a[href^="/product/"]')).toHaveCount(0)
+})
+
+test('renders the app-settings user row with its action cluster', async ({ page }) => {
+	await page.goto('/?library=nostr')
+
+	const row = page.getByTestId('widget-UserDisplayView')
+	await expect(row.locator('[data-slot="user-display-view"]')).toHaveCount(1)
+	await expect(row).toContainText('Mugsmith')
+	// The legacy icon-only buttons carry no accessible name (no sr-only, no
+	// aria-label), so the honest assertion is the button count.
+	await expect(row.getByRole('button')).toHaveCount(3)
 })
 
 test('renders both key forms with their own copy controls', async ({ page }) => {

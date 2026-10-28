@@ -1,16 +1,14 @@
-import { Button } from '@ui/primitives/button'
-import { Card } from '@ui/primitives/card'
-import { AvatarUser } from '@/components/AvatarUser'
-import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
-import { profileQueryOptions } from '@/queries/profiles'
-import { nip19 } from 'nostr-tools'
-import type { ReactNode } from 'react'
-import { UserCard } from './UserCard'
+import type { ReactNode, Ref } from 'react'
+import { Button } from '../primitives/button'
+import { Card } from '../primitives/card'
+import { cn } from '../utils/cn'
 
-interface UserDisplayComponentProps {
-	userPubkey: string
-	index: number
+export interface UserDisplayViewProps {
+	/** The identity node for the row; the host supplies a wired user card. */
+	userCard: ReactNode
+	/** Replaces the built-in reorder/remove cluster when provided. */
+	customActions?: ReactNode
 	onMoveUp?: () => void
 	onMoveDown?: () => void
 	onRemove?: () => void
@@ -18,12 +16,20 @@ interface UserDisplayComponentProps {
 	canMoveDown?: boolean
 	isReordering?: boolean
 	isRemoving?: boolean
-	customActions?: ReactNode
+	className?: string
+	ref?: Ref<HTMLDivElement>
 }
 
-export function UserDisplayComponent({
-	userPubkey,
-	index,
+/**
+ * Presentational app-settings user row: a card wrapping an identity node and an
+ * action cluster. Extracted from the retiring
+ * `src/components/UserDisplayComponent.tsx`. The profile read the legacy file
+ * ran for nothing, the unused `index` prop and the `nip19` /
+ * `profileQueryOptions` imports all stay behind in the platform host.
+ */
+export function UserDisplayView({
+	userCard,
+	customActions,
 	onMoveUp,
 	onMoveDown,
 	onRemove,
@@ -31,21 +37,13 @@ export function UserDisplayComponent({
 	canMoveDown,
 	isReordering,
 	isRemoving,
-	customActions,
-}: UserDisplayComponentProps) {
-	// Convert pubkey to npub for profile query
-	const npub = nip19.npubEncode(userPubkey)
-
-	// Fetch user profile data
-	const { data: profile } = useQuery({
-		...profileQueryOptions(npub),
-		enabled: !!userPubkey,
-	})
-
+	className,
+	ref,
+}: UserDisplayViewProps) {
 	return (
-		<Card className="p-4">
+		<Card ref={ref} data-slot="user-display-view" className={cn('p-4', className)}>
 			<div className="flex items-center gap-4 justify-between">
-				<UserCard pubkey={userPubkey} size="md" subtitle="npub" onPress="none" />
+				{userCard}
 
 				{/* Action Buttons */}
 				{customActions ? (

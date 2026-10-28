@@ -2,9 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { getCoordsFromATag } from '@sdk/core/utils/coords'
 import { collectionQueryOptions } from '@platform/web/collections/collectionQuery'
 import { fetchProductByATag, productKeys } from '@platform/web/products/productQuery'
-import { Media } from '@ui/shared/media'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
+import { UserDisplayView } from '@ui/nostr/user-display-view'
 import { CollectionDisplayView } from '@ui/products/collection-display-view'
 import { ProductDisplayView } from '@ui/products/product-display-view'
+import { Media } from '@ui/shared/media'
+import type { ReactNode } from 'react'
 
 /**
  * Parses an a-tag coordinate string into its kind/pubkey/identifier parts.
@@ -63,6 +66,59 @@ export function CollectionDisplayHost({
 			isReordering={isReordering}
 			isRemoving={isRemoving}
 			renderImage={(url, title) => <Media src={url} alt={title} className="h-full w-full object-cover" />}
+		/>
+	)
+}
+
+interface UserDisplayComponentProps {
+	userPubkey: string
+	/**
+	 * Accepted for consumer compatibility. The retiring legacy leaf declared it
+	 * too (and never read it); the three app-settings routes still pass it.
+	 */
+	index: number
+	onMoveUp?: () => void
+	onMoveDown?: () => void
+	onRemove?: () => void
+	canMoveUp?: boolean
+	canMoveDown?: boolean
+	isReordering?: boolean
+	isRemoving?: boolean
+	customActions?: ReactNode
+}
+
+/**
+ * App-settings user row: wires the identity host and delegates rendering to the
+ * ui/ view, reproducing the retiring `src/components/UserDisplayComponent.tsx`.
+ *
+ * DECLARED DELTA: the legacy leaf also ran
+ * `useQuery(profileQueryOptions(nip19.npubEncode(userPubkey)))` and never read
+ * the result. That dead fetch is NOT reproduced here: it had no rendered
+ * effect, cost a profile read per row, and reproducing it would drag an
+ * `@/queries/profiles` edge back into this file.
+ */
+export function UserDisplayHost({
+	userPubkey,
+	onMoveUp,
+	onMoveDown,
+	onRemove,
+	canMoveUp,
+	canMoveDown,
+	isReordering,
+	isRemoving,
+	customActions,
+}: UserDisplayComponentProps) {
+	return (
+		<UserDisplayView
+			userCard={<UserCardHost pubkey={userPubkey} size="md" subtitle="npub" onPress="none" />}
+			customActions={customActions}
+			onMoveUp={onMoveUp}
+			onMoveDown={onMoveDown}
+			onRemove={onRemove}
+			canMoveUp={canMoveUp}
+			canMoveDown={canMoveDown}
+			isReordering={isReordering}
+			isRemoving={isRemoving}
 		/>
 	)
 }
