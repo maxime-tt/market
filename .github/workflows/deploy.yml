@@ -47,6 +47,11 @@ jobs:
           cp -r dist deploy-package/
           cp -r src deploy-package/
           cp -r contextvm deploy-package/
+          # `sdk/ ui/ platform/` are the post-split trees the server composes;
+          # omitting them breaks `@platform/server` resolution at runtime.
+          cp -r sdk deploy-package/
+          cp -r ui deploy-package/
+          cp -r platform deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
 
       - name: Upload artifact

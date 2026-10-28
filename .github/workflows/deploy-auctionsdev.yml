@@ -50,6 +50,12 @@ jobs:
           # this, the rollback log shows
           # `Script not found: /home/.../market-auctionsdev/contextvm/server.ts`.
           cp -r contextvm deploy-package/
+          # `sdk/ ui/ platform/` are the split trees the server composes
+          # (`src/index.tsx` -> `@platform/server`, `platform/` -> `@sdk/`/`@ui/`).
+          # Omitting them breaks `@platform/server` resolution on the VPS.
+          cp -r sdk deploy-package/
+          cp -r ui deploy-package/
+          cp -r platform deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
 
       - name: Upload artifact

@@ -190,6 +190,12 @@ cp -r "$PROJECT_DIR/dist" "$TEMP_DIR/"
 cp -r "$PROJECT_DIR/src" "$TEMP_DIR/"
 # contextvm/ - ContextVM server code (run by Bun/PM2)
 cp -r "$PROJECT_DIR/contextvm" "$TEMP_DIR/"
+# sdk/ - shared SDK (read models + nostr client types)
+cp -r "$PROJECT_DIR/sdk" "$TEMP_DIR/"
+# ui/ - presentational kit (@ui alias)
+cp -r "$PROJECT_DIR/ui" "$TEMP_DIR/"
+# platform/ - server + host/binding layer (`@platform/server` resolves here)
+cp -r "$PROJECT_DIR/platform" "$TEMP_DIR/"
 # Dependencies
 cp "$PROJECT_DIR/package.json" "$TEMP_DIR/"
 cp "$PROJECT_DIR/bun.lock" "$TEMP_DIR/"
