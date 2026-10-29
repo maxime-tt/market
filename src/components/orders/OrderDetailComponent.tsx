@@ -1,4 +1,4 @@
-import { ProductCard } from '@/components/ProductCard'
+import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
 import { PaymentDialog } from '@/components/checkout/PaymentDialog'
 import {
 	OrderBuyerCardView,

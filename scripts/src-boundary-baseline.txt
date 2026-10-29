@@ -119,6 +119,13 @@
 # src -> ui production stays 221/105. This is the single E3 ratchet for Wave F. With these rows
 # the guard reports OK and no INBOUND row prints `(decreased)`: baseline equals measurement.
 
+# 2026-10-29 (H-b kit 3, ProductCard): the product-card host left src/components/ProductCard.tsx for
+# platform/web/products/ProductCardHost.tsx. Its seven consumers re-pointed (three routes to the
+# platform-internal host; ProfilePage/InfiniteProductList/FeaturedSections/OrderDetailComponent to
+# the platform host under the measured drain, allowlist rows added and retired with their owners).
+# The kit-2 ProductCard allowlist row left with the file. src -> platform production re-measured
+# 78/73 -> 81/74; test unchanged.
+
 # 2026-10-29 (H-b kit 2, ZapButton): the zap button host left src/components/social/ZapButton.tsx
 # for platform/web/payments/ZapButtonHost.tsx. Its five consumers re-pointed (two routes to the
 # platform-internal host; ProfilePage/SocialInteractions/ProductCard to the platform host under the
@@ -142,7 +149,7 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 78 73
+src -> platform production 81 74
 src -> platform test 29 17
 
 src -> ui production 221 105

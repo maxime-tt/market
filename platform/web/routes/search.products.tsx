@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useProductSearch } from '@/queries/products'
-import { ProductCard } from '@/components/ProductCard'
+import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
 import { useEffect, useState, useMemo } from 'react'
 import { Input } from '@ui/primitives/input'
 import { EmptyState } from '@ui/shared/empty-state'
