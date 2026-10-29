@@ -1,11 +1,24 @@
-import { cashuActions, cashuStore } from '@/lib/stores/cashu'
+/**
+ * platform/web/auctions/useAuctionBidFunding.ts — the auction bid funding lifecycle hook (money-critical).
+ *
+ * Moved verbatim from `src/hooks/useAuctionBidFunding.ts` (Wave I, slice I-c-monitors, 2026-10-29).
+ * The only edits are this header and the import substitutions: every `@/…` specifier replaced by
+ * its verified platform home — the cashu wallet store adapter (`@platform/web/wallet/cashuStore`)
+ * and the auction publish composition root (`@platform/web/auctions/auctionPublish`), the same
+ * modules the deleted `@/lib/stores/cashu` and `@/publish/auctions` shims re-exported, so the resolved
+ * module graph is unchanged. `@sdk/commerce/auctions` was already the direct home of
+ * `planAuctionBidRecovery`; the `useAuctionBidFunding` export name is kept. The hook stays a pure
+ * lifecycle state machine over injected publish callbacks — no relay I/O or signing here
+ * (ADR-0002), so it adds nothing to the NDK surface this directory's guard tracks.
+ */
+import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
 import { planAuctionBidRecovery } from '@sdk/commerce/auctions'
 import {
 	AuctionBidLockedButUnpublishedError,
 	AuctionBidLockOutcomeUncertainError,
 	AuctionBidPublishFailedError,
 	type AuctionBidFormData,
-} from '@/publish/auctions'
+} from '@platform/web/auctions/auctionPublish'
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 

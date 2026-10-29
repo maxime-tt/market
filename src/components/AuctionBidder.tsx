@@ -56,7 +56,7 @@ import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl, getMintHostname } from '@/lib/wallet'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
-import { useAuctionBidFunding } from '@/hooks/useAuctionBidFunding'
+import { useAuctionBidFunding } from '@platform/web/auctions/useAuctionBidFunding'
 import { AuctionBidProgressDialog } from '@/components/AuctionBidProgressDialog'
 
 const AUCTION_RULES_ACK_VERSION = 'v1'

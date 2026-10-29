@@ -140,7 +140,10 @@ GLOBS=(
 	# `src/lib/stores/auction*.ts` was retired here: its only member, `auctionWon.ts`, was deleted when the
 	# auction-win flow moved onto the notification mechanism (see the C1/C2 increments), so the family matches
 	# nothing and the coverage check fails by design. Re-add a stores family if an auction store reappears.
-	"$ROOT"/src/hooks/useAuction*.ts
+	# `src/hooks/useAuction*.ts` was retired here (I-c-monitors, 2026-10-29): its last member,
+	# `useAuctionBidFunding.ts`, moved to `platform/web/auctions/useAuctionBidFunding.ts` (covered by the
+	# `platform/web/auctions/*.ts` family below), so the family matches nothing and the coverage check fails
+	# by design. Re-add a hooks family if an auction hook reappears under src/.
 	"$ROOT"/src/lib/schemas/auction/*.ts
 	"$ROOT"/platform/server/auction-validator/*.ts
 	"$ROOT"/src/components/nostr/AuctionSectionGrid.tsx
