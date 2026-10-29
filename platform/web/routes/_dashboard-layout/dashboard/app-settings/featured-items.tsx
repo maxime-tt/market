@@ -1,4 +1,4 @@
-import { AuctionDisplayComponent } from '@/components/AuctionDisplayComponent'
+import { AuctionDisplayComponent } from '@platform/web/auctions/AuctionDisplayHost'
 import { CollectionDisplayHost, ProductDisplayHost, UserDisplayHost } from '@platform/web/app-settings/entityDisplayHosts'
 import { Button } from '@ui/wrappers/button'
 import { EmptyState } from '@ui/shared/empty-state'
