@@ -1,3 +1,4 @@
+import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 
@@ -19,14 +20,15 @@ export async function deletePIIEvents(eventIds: string[], onProgress?: (deletedC
 		return { success: false, error: 'NDK not initialized' }
 	}
 
-	const signer = ndkActions.getSigner()
+	// A3.6: the signer is the active capability; the identity it answers (hex
+	// pubkey) replaces the NDK user object read.
+	const signer = getActiveSignerCapability()
 	if (!signer) {
 		return { success: false, error: 'No signer available' }
 	}
 
 	// Get current user pubkey
-	const user = await signer.user()
-	const currentUserPubkey = user?.pubkey
+	const currentUserPubkey = await signer.getPublicKey()
 	if (!currentUserPubkey) {
 		return { success: false, error: 'Unable to determine current user pubkey' }
 	}
@@ -72,8 +74,15 @@ export async function deletePIIEvents(eventIds: string[], onProgress?: (deletedC
 		// Add 'k' tags for kinds being deleted (16 for order events)
 		deletionEvent.tags.push(['k', '16'])
 
-		// Sign and publish the deletion event
-		await deletionEvent.sign(signer)
+		// Sign and publish the deletion event (A3.6: in place through the capability,
+		// the implicit event.sign()/instance-signer path it replaced).
+		const signedDeletion = await signer.signEvent({
+			kind: deletionEvent.kind,
+			content: deletionEvent.content,
+			created_at: deletionEvent.created_at ?? Math.floor(Date.now() / 1000),
+			tags: deletionEvent.tags as string[][],
+		})
+		Object.assign(deletionEvent, { id: signedDeletion.id, pubkey: signedDeletion.pubkey, sig: signedDeletion.sig })
 
 		// Publish to all connected relays
 		const publishedRelays = await ndkActions.publishEvent(deletionEvent)

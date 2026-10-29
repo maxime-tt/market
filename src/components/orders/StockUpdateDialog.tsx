@@ -4,6 +4,7 @@ import { useUpdateProductMutation, type ProductFormData } from '@/publish/produc
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import {
@@ -130,7 +131,7 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 	const handleUpdateStock = async () => {
 		setLoading(true)
 		try {
-			const signer = ndkActions.getSigner()
+			const signer = getActiveSignerCapability()
 			if (!signer) {
 				toast.error('No signer available')
 				return

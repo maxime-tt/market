@@ -1,3 +1,4 @@
+import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { cashuStore } from '@/lib/stores/cashu'
 import { createNip60WalletPort } from '@/lib/sdkAdapters'
@@ -343,8 +344,12 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		 * Handle NWC (Nostr Wallet Connect) payment
 		 * Uses the configured NWC wallet to pay the invoice
 		 */
+		// A3.6: the signer is the active capability (a cache-identity ref for the
+		// NWC client factory), not NDK's instance signer — read per render, exactly
+		// like the ndkState store read it replaces.
+		const signer = getActiveSignerCapability()
 		const handleNwcPayment = useCallback(async () => {
-			if (!effectiveNwcWalletUri || !ndkState.ndk?.signer) {
+			if (!effectiveNwcWalletUri || !signer) {
 				toast.error('NWC wallet not connected')
 				return
 			}
@@ -358,7 +363,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			walletPreimageRef.current = null
 
 			try {
-				const walletResult = await handleNWCPayment(invoice, effectiveNwcWalletUri, ndkState.ndk.signer, { acceptAck: true })
+				const walletResult = await handleNWCPayment(invoice, effectiveNwcWalletUri, signer, { acceptAck: true })
 				if (!walletResult.ok) {
 					throw new Error(walletResult.error || 'NWC payment failed')
 				}
@@ -406,7 +411,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			data.invoiceId,
 			effectiveNwcWalletUri,
 			invoice,
-			ndkState.ndk?.signer,
+			signer,
 			handlePaymentSuccess,
 			onPaymentFailed,
 			requireZapReceipt,

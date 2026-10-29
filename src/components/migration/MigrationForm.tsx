@@ -1,6 +1,6 @@
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
-import { authStore } from '@/lib/stores/auth'
+import { authStore, getActiveSignerCapability } from '@/lib/stores/auth'
 import { ndkActions, useNDK } from '@/lib/stores/ndk'
 import { publishMigratedProduct, type MigrationProgress } from '@/publish/migration'
 import { migrationKeys } from '@/queries/queryKeyFactory'
@@ -246,7 +246,7 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 		}
 
 		const ndk = ndkActions.getNDK()
-		const signer = ndkActions.getSigner()
+		const signer = getActiveSignerCapability()
 
 		if (!ndk) {
 			toast.error('NDK not initialized')

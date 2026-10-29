@@ -45,7 +45,7 @@ import { publishOrderStatusUpdateWorkflow } from '@sdk/commerce/orders'
  * A3.4: sign an NDKEvent in place through the **active signer capability** (the
  * auth session's `currentSigner()`), never NDK's instance signer. The in-place
  * mutation contract (`id`, `pubkey`, `sig` land on the event object) is the
- * adapter's own, so `ndkEvent.sign()`'s implicit `ndk.signer` path is retired.
+ * adapter's own, so NDK's implicit instance-signer sign() path is retired.
  */
 async function signNdkEventWithActiveCapability(event: NDKEvent): Promise<void> {
 	const capability = getActiveSignerCapability()
