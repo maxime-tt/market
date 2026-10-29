@@ -181,7 +181,7 @@ mock.module('@nostr-dev-kit/ndk', () => ({
 }))
 
 import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
-import { decryptPrivateOrderMessage } from '@/lib/orders/privateOrderMessage'
+import { decryptPrivateOrderMessage } from '@sdk/commerce/messaging/privateOrderMessage'
 import { createOrder, createOrderCreationEvent, publishOrderWithDependencies, publishOrderWorkflowWithDependencies } from '@/publish/orders'
 import { privateDetailsMatchPublicOrder } from '@/queries/orders'
 import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'

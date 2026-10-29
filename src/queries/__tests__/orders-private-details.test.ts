@@ -2,7 +2,7 @@ import { NDKEvent, NDKUser, type NDKEncryptionScheme, type NDKSigner } from '@no
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, getPublicKey, nip44 } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
-import { createEncryptedPrivateOrderMessage, type PrivateOrderDeliveryDetails } from '../../lib/orders/privateOrderMessage'
+import { createEncryptedPrivateOrderMessage, type PrivateOrderDeliveryDetails } from '@sdk/commerce/messaging/privateOrderMessage'
 import {
 	attachPrivateOrderDetailsToOrders,
 	decryptSellerPrivateOrderGiftWraps,
