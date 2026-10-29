@@ -1,6 +1,6 @@
-import { blacklistActions } from '@/lib/stores/blacklist'
-import { useBlacklistSettings } from '@/queries/blacklist'
-import { useConfigQuery } from '@/queries/config'
+import { blacklistActions } from '@platform/web/config/blacklistStore'
+import { useBlacklistSettings } from '@platform/web/config/blacklistBinding'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useEffect } from 'react'
 
 /**

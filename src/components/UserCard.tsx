@@ -6,7 +6,7 @@ import {
 	useProfile,
 } from '@/queries/profiles'
 import { AvatarUser } from './AvatarUser'
-import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { Nip05Badge } from './Nip05Badge'
 import { nip19 } from 'nostr-tools'
 import { isValidHexKey, isValidNpub } from '@/lib/utils'

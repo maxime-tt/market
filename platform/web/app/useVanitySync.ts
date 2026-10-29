@@ -1,6 +1,6 @@
-import { vanityActions } from '@/lib/stores/vanity'
-import { useVanitySettings } from '@/queries/vanity'
-import { useConfigQuery } from '@/queries/config'
+import { vanityActions } from '@platform/web/config/vanityStore'
+import { useVanitySettings } from '@platform/web/config/vanityBinding'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useEffect } from 'react'
 
 /**

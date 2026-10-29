@@ -1,6 +1,6 @@
-import { ndkActions } from '@/lib/stores/ndk'
-import { useUserRole } from '@/queries/app-settings'
-import { useConfigQuery } from '@/queries/config'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { useUserRole } from '@platform/web/app-settings/appSettingsQuery'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useMemo } from 'react'
 
 export interface EntityPermissions {

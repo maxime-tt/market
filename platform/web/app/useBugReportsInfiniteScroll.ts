@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { bugReportsQueryOptions, type BugReport } from '@/queries/bugReports'
+import { bugReportsQueryOptions, type BugReport } from '@platform/web/messaging/bugReportQuery'
 
 interface UseBugReportsInfiniteScrollOptions {
 	chunkSize?: number

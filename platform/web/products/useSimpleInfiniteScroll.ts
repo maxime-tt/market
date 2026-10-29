@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useStreamingProducts } from './useStreamingProducts'
-import { getProductTitle } from '@/queries/products'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { getProductTitle } from '@platform/web/products/productQuery'
+import type { NDKEvent } from '@platform/web/readContext'
 import type { SortOption } from '@ui/products/product-filters'
 
 interface UseSimpleInfiniteScrollOptions {
