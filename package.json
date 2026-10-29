@@ -51,7 +51,6 @@
 		"@icons-pack/react-simple-icons": "^13.13.0",
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@noble/hashes": "^2.2.0",
-		"@nostr-dev-kit/blossom": "^8.0.0",
 		"@nostr-dev-kit/ndk": "3.0.3",
 		"@nostr-dev-kit/wallet": "1.0.0",
 		"@nostr-dev-kit/wot": "^1.0.0",

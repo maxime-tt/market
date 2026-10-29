@@ -37,7 +37,7 @@ Three distinct kinds of identity are conflated in those literals:
 
 Only the first class should be frozen. The second and third are currently frozen
 anyway, mostly in `src/lib/constants.ts`, `src/publish/nip89.ts`,
-`src/lib/appSettings.ts`, `src/lib/blossom.ts`, and the branding surface
+`src/lib/appSettings.ts`, `sdk/core/media/blossomServers.ts`, and the branding surface
 (`src/index.html`, `public/manifest.json`, footer, dialogs).
 
 This produces four concrete problems.
@@ -179,7 +179,7 @@ Sequenced as four reviewable changes rather than one:
 2. Relay, identity, and namespace de-hardcoding. `src/lib/constants.ts`,
    `src/lib/relay-policy.ts`, `src/lib/appSettings.ts`, `src/publish/nip89.ts`,
    `src/lib/schemas/cartPersistence.ts`, `src/publish/relay-preferences.tsx`,
-   `src/lib/blossom.ts`, `src/lib/stores/nip60.ts`, `src/queries/products.tsx`,
+   `sdk/core/media/blossomServers.ts`, `src/lib/stores/nip60.ts`, `src/queries/products.tsx`,
    `src/queries/external.tsx`, `src/lib/utils/mempool.ts`, `src/routes/setup.tsx`,
    and the app settings dashboard route. Highest risk; carries the compatibility
    window.
