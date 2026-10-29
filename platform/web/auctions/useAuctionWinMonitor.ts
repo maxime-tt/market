@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from '@tanstack/react-store'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { appNotifications, enqueueAuctionWin, removeAuctionWinsForAuction, retainAuctionWinsForBidder } from '@platform/web/notifications'
 import {
 	getValidatedAuctionBids,
@@ -8,12 +8,12 @@ import {
 	hasValidatedPathReleaseForAuctionWin,
 } from '@sdk/commerce/auctions/winNotification'
 import { fetchBidNut7States } from '@sdk/commerce/auctions/nut7Polling'
-import { fetchDleqKeysetsForBidsDetailed } from '@/lib/cashu/dleq'
-import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
-import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
-import { parsePathReleaseEvent } from '@/lib/schemas/auction/settlementEvents'
-import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
-import { toRawEvent } from '@/lib/nostr/eventLike'
+import { fetchDleqKeysetsForBidsDetailed } from '@sdk/commerce/payments/cashu/dleq'
+import { parseAuctionEvent } from '@sdk/commerce/auctions/schemas/auctionEvent'
+import { parseBidEvent } from '@sdk/commerce/auctions/schemas/bidEvent'
+import { parsePathReleaseEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
+import { parseValidatorVerdictEvent } from '@sdk/commerce/auctions/schemas/validatorEvents'
+import { toRawEvent } from '@sdk/core/nostr/eventLike'
 import {
 	fetchAuction,
 	fetchAuctionWithRetry,
@@ -25,7 +25,7 @@ import {
 	getAuctionBiddingCutoffAt,
 	getAuctionSettlementGrace,
 	getBidAuctionEventId,
-} from '@/queries/auctions'
+} from '@platform/web/auctions/auctionsQuery'
 
 const POLL_INTERVAL_MS = 20000
 const BID_DISCOVERY_LIMIT = 500
@@ -112,15 +112,17 @@ export function useAuctionWinMonitor() {
 					}
 					const parsedBids = bidEvents
 						.map((bid) => parseBidEvent(toRawEvent(bid)))
-						.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => result.ok)
+						.filter((result): result is { ok: true; value: import('@sdk/commerce/auctions/events').ParsedBidEvent } => result.ok)
 						.map((result) => result.value)
 					const parsedVerdicts = verdictEvents
 						.map((verdict) => parseValidatorVerdictEvent(toRawEvent(verdict)))
-						.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => result.ok)
+						.filter(
+							(result): result is { ok: true; value: import('@sdk/commerce/auctions/events').ParsedValidatorVerdictEvent } => result.ok,
+						)
 						.map((result) => result.value)
 					const parsedPathReleases = pathReleaseEvents
 						.map((release) => parsePathReleaseEvent(toRawEvent(release)))
-						.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedPathReleaseEvent } => result.ok)
+						.filter((result): result is { ok: true; value: import('@sdk/commerce/auctions/events').ParsedPathReleaseEvent } => result.ok)
 						.map((result) => result.value)
 					const [nut7States, dleqAcq] = await Promise.all([
 						fetchBidNut7States(parsedBids, parsedAuction.mints),

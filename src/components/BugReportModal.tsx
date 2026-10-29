@@ -1,7 +1,7 @@
 import { BugReportItem } from '@/components/BugReportItem'
 import { Alert, AlertDescription } from '@ui/primitives/alert'
 import { Button } from '@ui/primitives/button'
-import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
+import { useBugReportsInfiniteScroll } from '@platform/web/app/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@platform/web/media/blossomUploadHost'
 import { getBugRelay, ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'

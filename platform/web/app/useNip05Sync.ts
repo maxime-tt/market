@@ -1,6 +1,6 @@
-import { nip05Actions } from '@/lib/stores/nip05'
-import { useNip05Settings } from '@/queries/nip05'
-import { useConfigQuery } from '@/queries/config'
+import { nip05Actions } from '@sdk/config/nip05'
+import { useNip05Settings } from '@platform/web/config/nip05Binding'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useEffect } from 'react'
 
 /**

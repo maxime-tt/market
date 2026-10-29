@@ -3,7 +3,7 @@
  *
  * The NIP-05 state and actions moved to `@sdk/config/nip05` (rebuilt on `sdk/core/state`). Every existing call
  * site keeps importing `@/lib/stores/nip05` unchanged: it only imports `nip05Actions`
- * (`src/hooks/useNip05Sync.ts:1`, `platform/web/routes/_dashboard-layout/dashboard/account/nostr-address.tsx:14`),
+ * (`platform/web/app/useNip05Sync.ts:1`, `platform/web/routes/_dashboard-layout/dashboard/account/nostr-address.tsx:14`),
  * which the `export *` below re-exports from the SDK module. The source module exported no React accessor and
  * no consumer reads a `Store`, so no temporary adapter is needed here.
  *

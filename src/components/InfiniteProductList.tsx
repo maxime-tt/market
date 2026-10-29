@@ -1,5 +1,5 @@
-import { useSimpleInfiniteScroll } from '@/hooks/useSimpleInfiniteScroll'
-import { useScrollRestoration } from '@/hooks/useScrollRestoration'
+import { useSimpleInfiniteScroll } from '@platform/web/products/useSimpleInfiniteScroll'
+import { useScrollRestoration } from '@platform/web/app/useScrollRestoration'
 import { ProductCard } from '@/components/ProductCard'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { Button } from '@ui/primitives/button'

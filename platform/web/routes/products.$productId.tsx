@@ -17,7 +17,7 @@ import {
 import { UserCard } from '@/components/UserCard'
 import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
-import { useEntityPermissions } from '@/hooks/useEntityPermissions'
+import { useEntityPermissions } from '@platform/web/permissions/useEntityPermissions'
 import { DEFAULT_DOCUMENT_TITLE, buildOwnedMetaEmissions, removeOwnedOgMetaTags, truncateForMeta } from '@/lib/ogTags'
 import { authStore } from '@platform/web/auth/authStore'
 import { cartActions, useCart, type RichShippingInfo } from '@platform/web/cart/cartStore'

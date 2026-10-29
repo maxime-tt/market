@@ -1,8 +1,8 @@
-import { useAuctionWinMonitor } from '@/hooks/useAuctionWinMonitor'
-import { useBlacklistSync } from '@/hooks/useBlacklistSync'
-import { useNip05Sync } from '@/hooks/useNip05Sync'
+import { useAuctionWinMonitor } from '@platform/web/auctions/useAuctionWinMonitor'
+import { useBlacklistSync } from '@platform/web/app/useBlacklistSync'
+import { useNip05Sync } from '@platform/web/app/useNip05Sync'
 import { useNotificationMonitor } from '@/hooks/useNotificationMonitor'
-import { useVanitySync } from '@/hooks/useVanitySync'
+import { useVanitySync } from '@platform/web/app/useVanitySync'
 
 /**
  * Host wiring: runs the app-wide sync and notification monitors. Renders nothing.

@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { ndkActions, ndkStore } from '@/lib/stores/ndk'
-import { testLabelStore } from '@/lib/stores/testLabels'
-import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
-import { isProductInStock } from '@/queries/products'
-import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@/lib/utils/testLabelFilters'
-import { fetchTestLabels } from '@/queries/testLabels'
-import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
+import { ndkActions, ndkStore } from '@platform/web/ndk/ndkStore'
+import { testLabelStore } from '@platform/web/config/testLabelsStore'
+import { filterBlacklistedEvents } from '@sdk/config/blacklist'
+import { isProductInStock } from '@platform/web/products/productQuery'
+import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@sdk/config/testLabelFilters'
+import { fetchTestLabels } from '@platform/web/config/testLabelsBinding'
+import type { NDKEvent, NDKFilter } from '@platform/web/readContext'
 import { useStore } from '@tanstack/react-store'
 
 interface UseStreamingProductsOptions {
@@ -58,7 +58,7 @@ export function useStreamingProducts({
 
 	// Track seen event IDs to prevent duplicates
 	const seenIds = useRef(new Set<string>())
-	const subscriptionRef = useRef<NDKSubscription | null>(null)
+	const subscriptionRef = useRef<{ stop: () => void } | null>(null)
 
 	// Buffer incoming events so test-label checks can be batched per flush
 	// window instead of issuing one relay query per event (ADR-0009).

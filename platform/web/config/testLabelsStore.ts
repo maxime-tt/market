@@ -7,7 +7,7 @@
  * `get`/`subscribe`, so this file bridges the two with a one-way mirror
  * (`testLabelState.subscribe`). Nothing writes this store directly, so no write-through is needed.
  *
- * The READ path (`useStore(testLabelStore, selector)` in `src/hooks/useStreamingProducts.ts`) and the
+ * The READ path (`useStore(testLabelStore, selector)` in `platform/web/products/useStreamingProducts.ts`) and the
  * non-reactive `useTestLabelStore()` accessor now resolve here. Moved out of
  * `src/lib/stores/testLabels.ts` in Wave E adapter drain W-E3.3; that file is the src/ shim. The
  * adapter is TEMPORARY: it is deleted when the `useStore` call site is rewired to the reactive binding

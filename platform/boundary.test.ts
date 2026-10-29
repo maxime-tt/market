@@ -87,7 +87,11 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/terms.ts', // Wave F W-E5a; shim deleted in E1b
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
 	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
-	'src/hooks/useAuctionWinMonitor.ts', // pre-existing; owner leaves src/ in D3
+	// --- I-c-hooks: src/ consumers re-pointed to the moved platform hooks (retire with these leaves in D3). ---
+	'src/components/UserCard.tsx', // I-c-hooks; useBreakpoint moved to platform/web/app
+	'src/components/EntityActionsMenu.tsx', // I-c-hooks; useEntityPermissions moved to platform/web/permissions
+	'src/components/InfiniteProductList.tsx', // I-c-hooks; useSimpleInfiniteScroll/useScrollRestoration moved to platform/web/products+app
+	'src/components/pages/ProfilePage.tsx', // I-c-hooks; useBreakpoint/useEntityPermissions moved to platform
 	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
 	'src/hooks/useNotificationMonitor.ts', // C1; rewritten onto the rules, reads C4's ledger; retired in D3
 	'src/lib/notificationProducers.ts', // C1; the src-side rule seam + C4 read-state re-export route; retired in D3
