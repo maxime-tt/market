@@ -79,19 +79,28 @@ PINNED=(
 # with `missing: .../src/publish/auctions.tsx`, exit 1). Conversely, do NOT
 # delete a family while its file still exists -- that drops coverage without
 # dropping the surface and weakens the guard. The src/-only families pinned
-# below are, with the file count measured at 71f6fb79:
+# below are, with the file count measured at 06cc831c (Wave G-b, lane L2; the
+# 71f6fb79 figures this block used to quote were 8 and 7 for the two families
+# that have since shrunk):
 #   src/publish/auctions.tsx                                     1
 #   src/queries/auctions.tsx                                     1
-#   src/components/Auction*.tsx                                  8
+#   src/components/Auction*.tsx                                  7
 #   src/lib/auction*.ts                                         12
 #   src/lib/auction/*.ts                                        14
 #   src/lib/auctions/*.ts                                        1 (#1252-gated claim)
 #   src/lib/utils/auction*.ts                                    2
 #   src/hooks/useAuction*.ts                                     2
-#   src/lib/schemas/auction/*.ts                                 7
+#   src/lib/schemas/auction/*.ts                                 5
 #   src/components/nostr/AuctionSectionGrid.tsx                  1
 #   src/components/sheet-contents/auctions/*.tsx                 2
 #   src/components/sheet-contents/NewAuction*.tsx                1
+#
+# Only FOUR of those families are also asserted by
+# src/lib/__tests__/auctions-ndk-surface-guard.test.ts, so only they force a
+# two-file (script + test) retirement: src/publish/auctions.tsx,
+# src/queries/auctions.tsx, src/lib/auction/*.ts, and the #1252 allowlist row
+# src/lib/auctions/privateAuctionClaimMessage.ts (the test's ALLOWLISTED_FILE
+# const plus its signer-shape assertion). The other eight need no test edit.
 #
 # Glob families that MUST each match at least one file. These are the
 # auction-owned production surfaces: public routes, components, the auction
