@@ -1,4 +1,4 @@
-import { ZapDialog } from '../dialogs/ZapDialog'
+import { ZapDialogHost as ZapDialog } from '@platform/web/payments/ZapDialogHost'
 import { useZapCapability } from '@/queries/profiles'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { useState } from 'react'

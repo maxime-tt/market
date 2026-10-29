@@ -92,6 +92,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/EntityActionsMenu.tsx', // I-c-hooks; useEntityPermissions moved to platform/web/permissions
 	'src/components/InfiniteProductList.tsx', // I-c-hooks; useSimpleInfiniteScroll/useScrollRestoration moved to platform/web/products+app
 	'src/components/pages/ProfilePage.tsx', // I-c-hooks; useBreakpoint/useEntityPermissions moved to platform
+	'src/components/social/ZapButton.tsx', // H-b kit 1: delegates the zap dialog to the platform ZapDialogHost; retires with ZapButton (next kit commit)
 	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
 	// --- store drain I-c (2026-10-29): the notification monitor and its src-side seam moved to
 	// platform/web/notifications/ and both files are deleted, so their rows went with them; the seam's
