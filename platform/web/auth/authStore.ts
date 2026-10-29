@@ -78,7 +78,7 @@ const ensureSignerSession = (): SignerSession => {
 	return session
 }
 
-const getSignerSession = (): SignerSession => signerSession ?? ensureSignerSession()
+export const getSignerSession = (): SignerSession => signerSession ?? ensureSignerSession()
 
 /** The machine's input shape and the SDK session's differ only in the bunker `onAuthUrl` return type. */
 const toSessionStartInput = (input: AuthSessionStartInput): SessionStartInput => {

@@ -3,7 +3,7 @@ import { Input } from '@ui/primitives/input'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getMediaType } from '@ui/utils/media'
-import { uploadFileToBlossom, BLOSSOM_SERVERS } from '@/lib/blossom'
+import { uploadFileToBlossom, BLOSSOM_SERVERS } from '@platform/web/media/blossomUploadHost'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { compressImage, isCompressibleImage, formatFileSize, getCompressionStats } from '@sdk/core/media/imageCompression'
 

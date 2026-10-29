@@ -15,7 +15,9 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 ])
 
 // Legacy src/ host modules allowed to depend on Platform while they are migrated; do not grow this list
-// except for publish adapters that now delegate to SDK workflows via the Platform publish context.
+// except for host modules that now delegate to SDK workflows through a Platform host — publish adapters
+// (the Platform publish context) and media hosts (the Wave G blossom upload host). Rows are a migration
+// ledger: each is removed when its owner leaves src/.
 //
 // The entries below marked "store drain" are the notification chapters' migration-time edges (increments
 // C1/C2). They are the same class this list already describes — legacy src/ host modules that depend on
@@ -95,6 +97,8 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/notificationProducers.ts', // C1; the src-side rule seam + C4 read-state re-export route; retired in D3
 	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
 	'src/components/messages/ConversationListItem.tsx', // C2; reads the derived counts, retired in D3
+	'src/components/ui/image-uploader/ImageUploader.tsx', // Wave G media host (G-a1.2); retires with the H-e8 image-uploader leaf cluster
+	'src/components/BugReportModal.tsx', // Wave G media host (G-a1.2); retires with the D3 layout/Header.tsx consumer chain
 ])
 
 async function listSourceFiles(directory: string): Promise<string[]> {
