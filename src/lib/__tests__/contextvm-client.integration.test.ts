@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { getPublicKey } from 'nostr-tools/pure'
-import { PlebianCurrencyClient } from '../ctxcn-client'
+import { PlebianCurrencyClient } from '@sdk/commerce/payments/ctxcnClient'
 import { getCurrencyServerRelays, PUBLIC_CVM_RELAYS } from '@/lib/constants'
 import { resolveCvmServerPubkey } from '@platform/server/runtime'
 

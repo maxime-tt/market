@@ -9,7 +9,7 @@ import {
 	isCartPersistenceEvent,
 	isExpectedCartSnapshot,
 	parseCartPersistenceContent,
-} from '@/lib/schemas/cartPersistence'
+} from '@platform/web/cart/cartPersistenceSchema'
 
 describe('cartPersistence schema helpers', () => {
 	test('valid snapshot parses', () => {

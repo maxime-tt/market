@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_PUBLIC_RELAYS, ZAP_RELAYS } from '@/lib/constants'
-import { computeNdkConfig } from '@/lib/relay-policy'
+import { computeNdkConfig } from '@sdk/core/relay-policy'
 
 /**
  * Regression coverage for the self-hosted instance-config PR: `/api/config`

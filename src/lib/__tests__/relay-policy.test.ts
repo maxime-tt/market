@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { computeNdkConfig, resolveExplicitRelays, resolveMainRelay, resolveZapRelays } from '@/lib/relay-policy'
+import { computeNdkConfig, resolveExplicitRelays, resolveMainRelay, resolveZapRelays } from '@sdk/core/relay-policy'
 import { DEFAULT_PUBLIC_RELAYS, ZAP_RELAYS } from '@/lib/constants'
 
 describe('resolveMainRelay', () => {

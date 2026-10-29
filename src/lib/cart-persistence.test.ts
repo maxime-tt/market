@@ -5,8 +5,8 @@ import {
 	normalizeShippingForRestore,
 	rehydrateCartFromLiveData,
 	serializeCartIntent,
-} from '@/lib/cart-persistence'
-import { CART_PERSISTENCE_D_TAG, CART_PERSISTENCE_KIND, type PersistedCartContent } from '@/lib/schemas/cartPersistence'
+} from '@platform/web/cart/cartPersistence'
+import { CART_PERSISTENCE_D_TAG, CART_PERSISTENCE_KIND, type PersistedCartContent } from '@platform/web/cart/cartPersistenceSchema'
 import type { NormalizedCart } from '@/lib/stores/cart'
 
 const sellerA = 'a'.repeat(64)

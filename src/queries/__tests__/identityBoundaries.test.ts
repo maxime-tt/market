@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { fetchUserPaymentDetails, fetchProductPaymentDetails } from '../payment'
-import { authorQueryOptions } from '../authors'
+import { authorQueryOptions } from '@platform/web/profiles/authorQuery'
 import { collectionsByPubkeyQueryOptions } from '../collections'
 import { shippingOptionsByPubkeyQueryOptions } from '../shipping'
 

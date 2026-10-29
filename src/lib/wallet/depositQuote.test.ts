@@ -6,7 +6,7 @@ import {
 	type DepositQuoteState,
 	createCocoDepositQuote,
 	getDepositConfirmationTimeoutMessage,
-} from './depositQuote'
+} from '@sdk/commerce/payments/wallet/depositQuote'
 
 const MINT = 'https://mint.example'
 const QUOTE_ID = 'quote-1'
