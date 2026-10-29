@@ -89,7 +89,17 @@ describe('NDK direction guard (scripts/check-ndk-direction.sh)', () => {
 		// M9: every platform NDK file is still undeclared at the seed.
 		expect(r.stdout).toContain('M9 platform-undeclared=48 (of 48 platform NDK files)')
 		expect(r.stdout).toContain('M10 ledger-target-failures=0')
-		expect(r.stdout).toContain('src=44+25')
+		// src/ is a RATCHET, so assert the invariant (current <= baseline), never an
+		// absolute count: any lane that deletes a src/ NDK file (e.g. A1's
+		// `src/lib/blossom.ts`, which took src production 44 -> 43) must leave this
+		// test green without editing it. Same for the `+N` test count.
+		const srcRow = r.stdout.match(/src\s+production\s+(\d+)\s+(\d+)\s+ratchet/)
+		expect(srcRow).not.toBeNull()
+		expect(Number(srcRow![1])).toBeLessThanOrEqual(Number(srcRow![2]))
+		const srcMetrics = r.stdout.match(/src=(\d+)\+(\d+)/)
+		expect(srcMetrics).not.toBeNull()
+		expect(Number(srcMetrics![1])).toBeLessThanOrEqual(Number(srcRow![2]))
+		expect(Number(srcMetrics![2])).toBe(25)
 		expect(r.stdout).toContain('complete=no')
 		expect(r.stdout).toContain('OK')
 	})
