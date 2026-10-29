@@ -1,0 +1,33 @@
+# NDK BRIDGE LEDGER — the declared `platform/` bridges to `sdk/` capabilities.
+#
+# Format:  <repo-path>|<owner>|<sdk-target>|<why-host>|<retire-at>
+#
+# A bridge is a platform host file that names the NDK transport in order to inject
+# an NDK-free sdk/ capability. The ledger is what turns "platform code that happens
+# to use NDK" into a DECLARED, owned, expiring seam. Every row is machine-checked by
+# scripts/check-ndk-direction.sh:
+#
+#   1. <repo-path> exists on disk (a stale row fails — R5);
+#   2. <repo-path> is under platform/ (a bridge lives in the host, never in sdk/ or src/);
+#   3. <sdk-target> is an existing FILE (with its extension, e.g.
+#      `sdk/core/media/blossomUpload.ts`) or DIRECTORY (e.g. `sdk/core/signer`) under
+#      sdk/. A row cannot precede its capability — a missing target is a hard fail,
+#      never backfilled;
+#   4. <sdk-target> itself carries zero @nostr-dev-kit import specifiers (a capability,
+#      not a transport — a dir target is scanned recursively);
+#   5. <repo-path> IMPORTS <sdk-target> (`@sdk/...` or a relative path that resolves to
+#      it) — this is the direction proof: the host injects the capability;
+#   6. <owner> is non-empty;
+#   7. <retire-at> names a wave/date — the `-` placeholder is rejected.
+#
+# SEEDED EMPTY (0 rows) at 06cc831c, deliberately. Metric M9 = 48: the 48 platform NDK
+# files carry no ledger row yet, and the guard RATCHETS THAT UNDECLARED COUNT (it does
+# not fail on it until `complete=yes` in ndk-direction-baseline.txt). The rows are added
+# declare-as-you-touch by the waves that own each bridge:
+#   - A1 (media)  -> platform/web/media/blossomUploadHost.ts  after sdk/core/media/ lands
+#   - A3 (auth)   -> platform/web/auth/ndkSignerAdapter.ts    targets sdk/core/signer/
+#   - server lane -> platform/server/** NDK I/O, its own owner-gated queue
+# Do NOT pre-declare a file whose sdk/ target does not exist yet; check 3 will fail.
+#
+# Example row (shape only — intentionally inert while the target does not exist):
+# platform/web/auth/ndkSignerAdapter.ts|A3|sdk/core/signer|NDK-typed consumers need an NDKSigner adapter|wave-H
