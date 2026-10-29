@@ -7,7 +7,7 @@ import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
-import { appNotificationsBinding, notificationScopes, readMarkFamilies, readMarks, scopedLastSeenOf } from '@/lib/notificationProducers'
+import { appNotificationsBinding, notificationScopes, readMarkFamilies, readMarks, scopedLastSeenOf } from '@platform/web/notifications'
 import {
 	getAuctionBiddingCutoffAt,
 	getAuctionBidCountFromBids,

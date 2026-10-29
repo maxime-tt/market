@@ -6,7 +6,7 @@ import {
 	registerSellerProductNotificationScope,
 	type ProductScopeTag,
 	type SellerProductScopeRegistry,
-} from '../productNotificationScopes'
+} from './productNotificationScopes'
 
 const createRegistry = (): SellerProductScopeRegistry => ({
 	productKeyByEventId: new Map(),

@@ -1,24 +1,37 @@
+/**
+ * platform/web/notifications/monitor.ts — the app's notification monitor (hook host).
+ *
+ * Moved verbatim from `src/hooks/useNotificationMonitor.ts` (store-drain C1 → I-c-notifications,
+ * 2026-10-29). The only edits are this header and the import substitutions: every `@/…` specifier
+ * replaced by its verified platform/sdk home — the auth composition root (`authStore`), the NDK
+ * connection store (`ndkActions`), the app-config store, the auction/order read capabilities —
+ * and the mechanism imports (`appNotifications`, `readMarks`, the producers, `AppNotificationEvent`)
+ * now relative to this directory. The `@nostr-dev-kit/ndk` type imports are unchanged: the monitor
+ * names its transport (subscribe/fetch through the NDK store), so it is a declared bridge in
+ * `scripts/ndk-bridge-ledger.txt` and retires with the client-side NDK removal (ADR-0002).
+ */
 import { useEffect, useRef } from 'react'
 import { useStore } from '@tanstack/react-store'
-import { authStore } from '@/lib/stores/auth'
-import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auctionSettlement'
-import { ndkActions } from '@/lib/stores/ndk'
-import { appNotifications, readMarks, reconcileAppNotificationCounts } from '@platform/web/notifications'
-import type { AppNotificationEvent } from '@platform/web/notifications'
-import { produceAppNotification } from '@/lib/notificationProducers'
+import { authStore } from '@platform/web/auth/authStore'
+import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@sdk/commerce/auctions/constants'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { appNotifications } from './instance'
+import { produceAppNotification, reconcileAppNotificationCounts } from './producers'
+import { readMarks } from './readMarks'
+import type { AppNotificationEvent } from './rules'
 import {
 	PRODUCT_KIND,
 	getSellerProductNotificationScope,
 	registerSellerProductNotificationScope,
 	type ProductNotificationScope,
 	type ProductScopeTag,
-} from '@/lib/productNotificationScopes'
-import { LIVE_ACTIVITY_KIND, LIVE_CHAT_KIND } from '@/lib/nip53'
-import { configStore } from '@/lib/stores/config'
-import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
+} from './productNotificationScopes'
+import { LIVE_ACTIVITY_KIND, LIVE_CHAT_KIND } from '@sdk/core/nostr/nip53'
+import { configStore } from '@platform/web/config/appConfigStore'
+import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/messaging/orderSchema'
+import { fetchAuctionBidsByBidder, fetchAuctionsByPubkey } from '@platform/web/auctions/auctionsQuery'
+import { fetchProductsByPubkey } from '@platform/web/products/productQuery'
 import {
-	fetchAuctionBidsByBidder,
-	fetchAuctionsByPubkey,
 	getAuctionBiddingCutoffAt,
 	getAuctionId,
 	getAuctionRootEventId,
@@ -26,8 +39,7 @@ import {
 	getBidAmount,
 	getBidAuctionCoordinates,
 	getBidAuctionEventId,
-} from '@/queries/auctions'
-import { fetchProductsByPubkey } from '@/queries/products'
+} from '@sdk/commerce/auctions/auctionRead'
 import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
 
 type NDKKind = NonNullable<NDKFilter['kinds']>[number]

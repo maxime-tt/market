@@ -9,7 +9,7 @@ import { useStore } from '@tanstack/react-store'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ConversationViewLayout } from '@ui/messages/messaging-views'
-import { readMarks } from '@/lib/notificationProducers'
+import { readMarks } from '@platform/web/notifications'
 
 interface ConversationViewProps {
 	/** The pubkey of the other user in the conversation */

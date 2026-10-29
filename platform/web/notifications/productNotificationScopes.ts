@@ -1,3 +1,10 @@
+/**
+ * platform/web/notifications/productNotificationScopes.ts — the seller-product notification scopes.
+ *
+ * Moved verbatim from `src/lib/productNotificationScopes.ts` (I-c-notifications, 2026-10-29): the module
+ * is framework-free (zero imports), so it could sit anywhere; it lives with the notifications mechanism
+ * because its only consumer is the monitor (`./monitor.ts`). No logic changed.
+ */
 export const PRODUCT_KIND = 30402
 
 export type ProductScopeTag = '#a' | '#A' | '#E'

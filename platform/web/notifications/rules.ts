@@ -61,7 +61,7 @@ function passive(
 
 /**
  * New order where the user is the seller.
- * Replaces `notificationActions.incrementUnseenOrders()` — `useNotificationMonitor.ts:1095`.
+ * Replaces `notificationActions.incrementUnseenOrders()` — `monitor.ts:1138`.
  */
 export const orderRule: AppNotificationRule = {
 	id: 'order',
@@ -71,7 +71,7 @@ export const orderRule: AppNotificationRule = {
 
 /**
  * New message in a conversation the user is party to.
- * Replaces `notificationActions.incrementUnseenForConversation(senderPubkey)` — `useNotificationMonitor.ts:1119`.
+ * Replaces `notificationActions.incrementUnseenForConversation(senderPubkey)` — `monitor.ts:1162`.
  */
 export const messageRule: AppNotificationRule = {
 	id: 'message',
@@ -83,7 +83,7 @@ export const messageRule: AppNotificationRule = {
 
 /**
  * Update to an order where the user is the buyer (payment request, status or shipping update).
- * Replaces `notificationActions.incrementUnseenPurchases()` — `useNotificationMonitor.ts:1152`.
+ * Replaces `notificationActions.incrementUnseenPurchases()` — `monitor.ts:1195`.
  */
 export const orderUpdateRule: AppNotificationRule = {
 	id: 'order-update',
@@ -95,7 +95,7 @@ export const orderUpdateRule: AppNotificationRule = {
 
 /**
  * New bid on a seller's auction.
- * Replaces `notificationActions.incrementUnseenAuctionBids(auctionKey)` — `useNotificationMonitor.ts:776`.
+ * Replaces `notificationActions.incrementUnseenAuctionBids(auctionKey)` — `monitor.ts:819`.
  */
 export const auctionBidRule: AppNotificationRule = {
 	id: 'auction-bid',
@@ -114,7 +114,7 @@ export const auctionBidRule: AppNotificationRule = {
 
 /**
  * New live-chat comment on a seller's auction.
- * Replaces `notificationActions.incrementUnseenAuctionComments(auctionKey)` — `useNotificationMonitor.ts:799`.
+ * Replaces `notificationActions.incrementUnseenAuctionComments(auctionKey)` — `monitor.ts:842`.
  */
 export const auctionCommentRule: AppNotificationRule = {
 	id: 'auction-comment',
@@ -133,7 +133,7 @@ export const auctionCommentRule: AppNotificationRule = {
 
 /**
  * New NIP-22 thread comment on a seller's auction.
- * Replaces `notificationActions.incrementUnseenAuctionEventComments(auctionKey)` — `useNotificationMonitor.ts:887`.
+ * Replaces `notificationActions.incrementUnseenAuctionEventComments(auctionKey)` — `monitor.ts:930`.
  */
 export const auctionThreadCommentRule: AppNotificationRule = {
 	id: 'auction-thread-comment',
@@ -152,7 +152,7 @@ export const auctionThreadCommentRule: AppNotificationRule = {
 
 /**
  * New NIP-22 thread comment on a seller's product.
- * Replaces `notificationActions.incrementUnseenProductComments()` — `useNotificationMonitor.ts:901`.
+ * Replaces `notificationActions.incrementUnseenProductComments()` — `monitor.ts:944`.
  *
  * RULED 2026-10-25 (owner): the count goes **per product**, matching the per-product last-seen mark it is
  * paired with. Today the two disagree — `unseenProductComments` is a single global counter while its last-seen
@@ -177,7 +177,7 @@ export const productCommentRule: AppNotificationRule = {
 
 /**
  * A scheduled seller auction that has just gone live.
- * Replaces `notificationActions.incrementUnseenAuctionLive(auctionKey)` — `useNotificationMonitor.ts:399`.
+ * Replaces `notificationActions.incrementUnseenAuctionLive(auctionKey)` — `monitor.ts:416`.
  */
 export const auctionLiveRule: AppNotificationRule = {
 	id: 'auction-live',
@@ -189,7 +189,7 @@ export const auctionLiveRule: AppNotificationRule = {
 
 /**
  * A scheduled seller auction that has just ended and entered settlement.
- * Replaces `notificationActions.incrementUnseenAuctionSettlementBegins(auctionKey)` — `useNotificationMonitor.ts:407`.
+ * Replaces `notificationActions.incrementUnseenAuctionSettlementBegins(auctionKey)` — `monitor.ts:424`.
  */
 export const auctionSettlementRule: AppNotificationRule = {
 	id: 'auction-settlement',
@@ -208,8 +208,8 @@ export const auctionSettlementRule: AppNotificationRule = {
 
 /**
  * A higher bid or a settlement on an auction the user has bid on.
- * Replaces `notificationActions.incrementUnseenBidUpdates()` — `useNotificationMonitor.ts:788` (higher bid) and
- * `useNotificationMonitor.ts:953` (settlement).
+ * Replaces `notificationActions.incrementUnseenBidUpdates()` — `monitor.ts:831` (higher bid) and
+ * `monitor.ts:996` (settlement).
  */
 export const bidUpdateRule: AppNotificationRule = {
 	id: 'bid-update',

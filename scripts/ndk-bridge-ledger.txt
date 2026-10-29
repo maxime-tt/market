@@ -31,3 +31,8 @@
 #
 # Example row (shape only — intentionally inert while the target does not exist):
 # platform/web/auth/ndkSignerAdapter.ts|A3|sdk/core/signer|NDK-typed consumers need an NDKSigner adapter|wave-H
+
+# --- declare-as-you-touch rows -----------------------------------------------
+# I-c-notifications (2026-10-29): the monitor moved from src/hooks/ and names the NDK transport
+# (subscribe/fetch through the platform NDK store), so it is declared the day it lands.
+platform/web/notifications/monitor.ts|I-c-notifications|sdk/commerce/auctions/auctionRead.ts|the notification monitor subscribes/fetches through the platform NDK store and injects the sdk auction-read getters (bid amounts, start/cutoff times, root ids) to scope relay events into notification keys|client-NDK-removal (ADR-0002; post-Wave-J)

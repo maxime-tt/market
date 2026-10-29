@@ -1,7 +1,7 @@
 import { useAuctionWinMonitor } from '@platform/web/auctions/useAuctionWinMonitor'
 import { useBlacklistSync } from '@platform/web/app/useBlacklistSync'
 import { useNip05Sync } from '@platform/web/app/useNip05Sync'
-import { useNotificationMonitor } from '@/hooks/useNotificationMonitor'
+import { useNotificationMonitor } from '@platform/web/notifications/monitor'
 import { useVanitySync } from '@platform/web/app/useVanitySync'
 
 /**
