@@ -23,6 +23,7 @@ test('renders the auction library', async ({ page }) => {
 		'AuctionTechnicalRow',
 		'AuctionListItemView',
 		'AuctionListItemViewSeen',
+		'AuctionDisplayView',
 		'AuctionTopBidBox',
 		'AuctionTopBidBoxEmpty',
 		'AuctionTopBidBoxSettlement',

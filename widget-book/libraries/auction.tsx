@@ -11,6 +11,7 @@ import type {
 } from '@sdk/commerce/auctions/auctionForm'
 import { AuctionCategoryTab, AuctionImagesTab, AuctionNameTab, AuctionSpecTab } from '@ui/auction/auction-editor-tabs'
 import { AuctionFiltersView, AuctionListItemView, AuctionTopBidBox } from '@ui/auction/auction-list-views'
+import { AuctionDisplayView } from '@ui/auction/auction-display-view'
 import { AuctionShippingView } from '@ui/auction/auction-shipping-view'
 import { AuctionTabView } from '@ui/auction/auction-tab-view'
 import type { AuctionShippingOptionSummary } from '@ui/auction/model'
@@ -111,6 +112,33 @@ function AuctionListItemDemo() {
 				activity={{ bids: 4, newBids: 2, comments: 1, newComments: 0, liveChat: 0, newChat: 0 }}
 				hasNewActivity
 				onMarkActivitySeen={() => {}}
+			/>
+		</div>
+	)
+}
+
+/** The app-settings featured-auction row: a static auction with a stubbed countdown slot. */
+function AuctionDisplayViewDemo() {
+	return (
+		<div className="max-w-2xl">
+			<AuctionDisplayView
+				title="Handmade mug auction"
+				summary="One-of-a-kind stoneware mug"
+				imageUrl={AUCTION_THUMBNAIL}
+				endAtLabel="1/1/2027, 12:00:00 PM"
+				coordsIdentifier="handmade-mug"
+				countdownSlot={
+					<span className="text-sm font-medium text-text-high" data-slot="demo-countdown">
+						2d 4h left
+					</span>
+				}
+				onMoveUp={() => {}}
+				onMoveDown={() => {}}
+				onRemove={() => {}}
+				canMoveUp
+				canMoveDown
+				isReordering={false}
+				isRemoving={false}
 			/>
 		</div>
 	)
@@ -521,6 +549,12 @@ export const auction: WidgetLibrary = {
 					onReset={() => {}}
 				/>
 			),
+		},
+		{
+			// W-E7.1: the app-settings featured-auction row, lifted out of the retired
+			// src/components/AuctionDisplayComponent.tsx leaf.
+			name: 'AuctionDisplayView',
+			render: () => <AuctionDisplayViewDemo />,
 		},
 		{
 			// T3.0 debt: the top-bid panel of the same card.
