@@ -7,7 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primiti
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { PageHeader } from '@ui/layout/page-header'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { uiStore } from '@platform/web/app/uiStore'
 import { parseNwcUri, useWallets, walletActions, type Wallet } from '@platform/web/config/walletStore'
 import { useNwcWalletBalanceQuery, useUserNwcWalletsQuery, type UserNwcWallet } from '@/queries/wallet'

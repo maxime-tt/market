@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { WalletSetupGuide } from '@ui/lightning/wallet-setup-guide'
 import { PageHeader } from '@ui/layout/page-header'
 import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@/lib/constants'
-import { useNDK } from '@/lib/stores/ndk'
+import { useNDK } from '@platform/web/ndk/ndkStore'
 import { isValidNip05 } from '@/lib/utils'
 import { deriveAddresses, isExtendedPublicKey, parsePaymentDetailsFromClipboard, paymentMethodLabels } from '@/lib/utils/paymentDetails'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'

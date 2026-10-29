@@ -1,7 +1,7 @@
 import { OrderDataTable } from '@platform/web/orders/OrderDataTable'
 import { salesColumns } from '@/components/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { readMarks } from '@platform/web/notifications'
 import { useOrdersBySeller } from '@/queries/orders'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'

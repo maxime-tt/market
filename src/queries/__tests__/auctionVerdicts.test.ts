@@ -44,7 +44,7 @@ mock.module('@sdk/core/nostr/eventSignature', () => ({
 	}),
 }))
 
-mock.module('@/lib/stores/ndk', () => ({
+const ndkStoreMock = () => ({
 	getWriteRelays: () => [],
 	getWriteRelaySet: () => undefined,
 	fetchLatestAppEvent: async () => null,
@@ -66,7 +66,9 @@ mock.module('@/lib/stores/ndk', () => ({
 	getAppRelaySet: () => undefined,
 	getBugRelay: () => null,
 	getMainRelay: () => null,
-}))
+})
+mock.module('@/lib/stores/ndk', ndkStoreMock)
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
 
 const { fetchAuctionVerdicts } = await import('@/queries/auctions')
 

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { type NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Button } from '@ui/wrappers/button'

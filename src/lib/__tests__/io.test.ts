@@ -63,11 +63,13 @@ const mockNdkActions = {
 }
 const mockGetWriteRelays = mock(() => mockNdkStore.state.writeRelayUrls)
 
-mock.module('@/lib/stores/ndk', () => ({
+const ndkStoreMock = () => ({
 	getWriteRelays: mockGetWriteRelays,
 	ndkActions: mockNdkActions,
 	ndkStore: mockNdkStore,
-}))
+})
+mock.module('@/lib/stores/ndk', ndkStoreMock)
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
 
 // Controllable RelayPool stub for the applesauce adapter. The adapter caches a
 // single pool instance (`let pool`), so the controllers below are module-level

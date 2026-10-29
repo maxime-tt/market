@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { Button } from '@ui/wrappers/button'
 import { CopyButton } from '@ui/shared/copy-button'
 import { AlertCircle, CheckCircle2, Clock, ExternalLink, Zap, RefreshCw } from 'lucide-react'

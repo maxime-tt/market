@@ -440,14 +440,16 @@ describe('fetchTestLabels chunk scheduling', () => {
 			fetchEditorSettings: async () => ({ editors: [] }),
 		}))
 		resetAuthorizedLabelersCache()
-		mock.module('@/lib/stores/ndk', () => ({
+		const ndkStoreMock = () => ({
 			ndkActions: { getNDK: () => ({}), fetchEventsWithTimeout },
 			getAppRelaySet: () => undefined,
 			// Required by `@platform/web/ndkReadContext`, which the test-label binding now imports
 			// statically (store drain D1, slice 3b).
 			getBugRelay: () => null,
 			getMainRelay: () => null,
-		}))
+		})
+		mock.module('@/lib/stores/ndk', ndkStoreMock)
+		mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
 
 		const result = await fetchTestLabels(coordinates)
 

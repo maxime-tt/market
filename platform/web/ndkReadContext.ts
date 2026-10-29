@@ -6,7 +6,7 @@
  * accessors they need and chooses the adapter by configuration (D1 seam `d1-neutral-seam`).
  * Direction is one-way: `readContext.ts -> this adapter`, never the reverse.
  */
-import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from '@/lib/stores/ndk'
+import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from '@platform/web/ndk/ndkStore'
 import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { authStore, getCurrentPubkey } from '@/lib/stores/auth'
 import { configActions } from '@sdk/config/app-config'

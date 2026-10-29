@@ -12,7 +12,7 @@ import {
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { getATagFromCoords, getCoordsFromATag } from '@/lib/utils/coords'
 import {
 	addToFeaturedCollections,
