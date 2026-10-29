@@ -378,3 +378,54 @@ Relationship to the wave roadmap: unchanged for `master`. The auctions line
 lands its own production set on the seam ahead of Wave C, which is the ordering
 the "Auctions coordination" section above already anticipates (auctions work
 lands first; Wave C stays at the top of the stack).
+
+## Amendment (2026-10-29): R3 — the legacy io seam is retired
+
+**Status:** Accepted amendment to the Decision above. Recorded by slice I-e
+(E4 docs) and executed by slice J-0.
+
+### Decision
+
+The legacy library-agnostic seam is **retired as a destination**. All Nostr
+relay I/O must run through the SDK seam `sdk/core/nostr-io` — applesauce-exclusive
+and **protected (adopt-only; do not edit)** — reached from the web host through
+`platform/web/sdkNostrIo.ts` (`createWebNostrIo()` / `createWebRelayPort()`).
+The four legacy seam modules
+`src/lib/nostr/{io,io-ndk,io-applesauce,io-types}.ts` and the
+`src/lib/nostr/useSubscriptionEvents.ts` consumer are deleted by slice J-0, and
+the `getNostrIo()` coupling in `src/lib/sdkAdapters.ts` is re-pointed off the
+legacy seam.
+
+This amendment **supersedes the earlier Wave-D-scoped reading** of this ADR that
+deleted only `src/lib/nostr/io-ndk.ts` and the NDK singleton. Retirement is
+broader than that: the whole `src/lib/nostr/io*` seam is the legacy artifact, and
+the destination is `sdk/core/nostr-io`, not a flipped-in-place `io.ts`.
+
+Direction rule (unchanged, guard-enforced in `sdk/boundary.test.ts`):
+`platform → sdk` is ALLOWED; `sdk → platform` is FORBIDDEN.
+
+### Measured current ≠ target at base `59f52b42` (2026-10-29)
+
+The decision above is the target; the following is the measured state at the
+frozen run base. It is cited so the gap is explicit and the J-0 exit is testable,
+not inferred.
+
+- `src/lib/nostr/io.ts:40` — `let active: NostrIo = ndkIo`: the legacy seam's
+  active adapter still defaults to the NDK bridge.
+- `src/lib/sdkAdapters.ts:2,3,21` — the SDK ports' `io` is fed from the legacy
+  seam via `getNostrIo()` (imported from `@/lib/nostr/io`), i.e. the SDK layer
+  still reads a `src/` module rather than the SDK seam.
+- `sdk/core/nostr-io` (protected) is imported in production by exactly one file:
+  `platform/web/sdkNostrIo.ts:4`. Nothing else consumes the SDK seam yet.
+
+### Execution (slice J-0)
+
+- Files owned by J-0: **DELETE**
+  `src/lib/nostr/{io,io-ndk,io-applesauce,io-types}.ts` and
+  `src/lib/nostr/useSubscriptionEvents.ts`; re-point the `getNostrIo()` coupling
+  in `src/lib/sdkAdapters.ts`; re-point the remaining non-test consumers to
+  `sdk/core/nostr-io` via `platform/web/sdkNostrIo.ts`.
+- A3.1's transitional `io-applesauce.sign` wiring is deleted here.
+- Entry: H-a A3 merged and the signer path live. Exit: zero non-test importers of
+  `@/lib/nostr/io*`; `sdk/boundary.test.ts` green. Δ: **M1 −6**; M2 falls.
+- `sdk/core/nostr-io` is protected — adopt, do not edit.

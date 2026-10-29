@@ -1,7 +1,7 @@
 # AGENTS.md — ui
 
-This directory follows the repository-level `AGENTS.md`, `src/AGENTS.md`, and
-ADR-0007 (as amended 2026-10-20), ADR-0021, and ADR-0006.
+This directory follows the repository-level `AGENTS.md`, ADR-0007 (as amended
+2026-10-20), ADR-0021, and ADR-0006.
 
 ## Context
 
@@ -51,13 +51,13 @@ declared here:
    the legacy copy. This is one spec realised twice across a trust boundary,
    not the same language maintained twice by choice. Do not merge; do not
    "fix" it by importing `@/lib/utils`.
-2. **`src/components/*` host → `ui/components/*View` split** — the legacy host
+2. **`src/components/*` host → `ui/<feature>/*View` split** — the legacy host
    wires stores/queries and passes props into the presentational view. Declared
    by ADR-0007 §1b/§2a (the legacy host is progressively retired). Not
    duplication.
 
 **Not declared, and therefore a finding to resolve rather than keep:**
-`ui/components/Media.tsx` vs `ui/provider/UiProvider.tsx` `UiImage` — one spec
+`ui/shared/media.tsx` vs `ui/provider/UiProvider.tsx` `UiImage` — one spec
 implemented twice inside the same module. Resolve by making `Media` consume the
 provider image seam.
 
@@ -82,10 +82,11 @@ New components go in the narrowest directory that fits. Domain-agnostic
 building blocks belong in `shared/`; Nostr-specific presentational components
 in `nostr/`; page-section compositions in the matching feature directory.
 
-`ui/components/` is gone and must not receive new components. Its flat pool has
-been drained; `auction-editor/` is the only survivor and is deliberately
-deferred to T6.3's host/view split — migrating it in place would mean migrating
-it twice. New and migrated components belong in the taxonomy above.
+The flat `ui/components/` pool has been drained and must not receive new
+components; new and migrated components belong in the taxonomy above.
+`ui/auction/auction-editor-tabs.tsx` is the one deliberately deferred survivor of
+that pool — it is parked for T6.3's host/view split because migrating it in
+place would mean migrating it twice.
 
 ## Import convention
 
@@ -146,7 +147,7 @@ per exported component. Precedent, all shipped in T6.2:
 - `ui/checkout/payment-views.tsx`;
 - `ui/orders/order-detail-sections.tsx`.
 
-The pre-migration shape of the same idea is `ui/components/CartViews.tsx` — six exported views in one file
+The pre-migration shape of the same idea is `ui/checkout/cart-views.tsx` — six exported views in one file
 (`CartShippingReminder`, `CartLineShipping`, `CartSellerCard`, `CartTotals`, `CartTotalsDetails`,
 `CartFooter`).
 
@@ -420,10 +421,11 @@ row that does not match that commit's own tree. Run **`check` and `--audit`** in
 
 ## Migration debt
 
-Components currently under `ui/components/` were written before this contract
-and are being migrated slice by slice (ADR-0007 §2a: Keep / Modify / Extract /
-Replace). Do not rewrite unrelated components while making a change; apply the
-contract to the component you touch and record the rest in the slice notes.
+Components migrated out of the retired `ui/components/` pool were written before
+this contract and are being drained slice by slice (ADR-0007 §2a: Keep / Modify /
+Extract / Replace). Do not rewrite unrelated components while making a change;
+apply the contract to the component you touch and record the rest in the slice
+notes.
 
 ## Method accounting (`method/`)
 

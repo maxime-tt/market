@@ -80,14 +80,20 @@ already exists.
   canonical public review context. Do not require beads sync, commits, pushes,
   or GitHub updates unless explicitly authorized.
 
-## NDK to Applesauce Wave 0
+## NDK to Applesauce (io seam retired)
 
-- New relay I/O should route through `src/lib/nostr/io.ts`.
+- All new Nostr relay I/O must route through the SDK seam `sdk/core/nostr-io`
+  (applesauce-exclusive, protected — adopt, do not edit) via the web host
+  `platform/web/sdkNostrIo.ts` (`createWebNostrIo()` / `createWebRelayPort()`).
+  See ADR-0002's 2026-10-29 amendment (R3).
+- The legacy seam (`src/lib/nostr/{io,io-ndk,io-applesauce,io-types}.ts`) is
+  retired; it is deleted, together with the `getNostrIo()` coupling in
+  `src/lib/sdkAdapters.ts`, by slice J-0. Do not add new importers of it and do
+  not route new relay I/O through it.
 - The NDK footprint guard tracks literal `@nostr-dev-kit` usage under `src/` and
   `contextvm/`.
-- NDK remains the default adapter in Wave 0.
-- Do not turn Wave 0 guidance into automatic push, merge, CI rerun, deployment,
-  or broad rewrite instructions.
+- Do not turn this guidance into automatic push, merge, CI rerun, deployment, or
+  broad rewrite instructions.
 
 ## Event Validation Before Surfacing
 
@@ -146,7 +152,7 @@ See ADR-0005 for the full decision and established mock patterns.
 - `e2e/utils/lightning-mock.ts` — mocks LNURL, WebLN, and zap receipts.
 - `e2e/utils/nip46-mock.ts` — mocks NIP-46 remote signer.
 - `e2e/helpers/lnurl-mock.ts` — intercepts LNURL discovery.
-- Narrow first-party seams (e.g. `src/lib/nostr/event-signature.ts`) — when a
+- Narrow first-party seams (e.g. `sdk/core/nostr/eventSignature.ts`) — when a
   unit test needs to control an outcome of third-party code (signature
   verification, encryption), route production code through a small first-party
   module and mock that seam. Never `mock.module()` the third-party package

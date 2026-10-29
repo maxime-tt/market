@@ -255,7 +255,7 @@ The expected outcome is a clean stylesheet containing only tokens and generic ut
 **2c. Compliance and Maintenance**
 In order to keep the work of each PR over time, every migrated or created component must satisfy the following conditions before being considered complete:
 
-1. **Standardization:** It must adhere to the API contracts and prop standards defined in its parent subdirectory's AGENTS.md and the root `src/components/AGENTS.md`.
+1. **Standardization:** It must adhere to the API contracts and prop standards defined in its parent subdirectory's AGENTS.md and the root `ui/AGENTS.md`.
 2. **Test Coverage:** It must have corresponding test coverage in the automated widget book harness, verifying its different behaviors, variants, and appearances.
 
 **Relaxation (2026-10-27, D3/D4 contract rev 2.3).** The widget-book/test obligation applies only to components that remain in the `ui/` tree. A retired legacy component in a fused per-cluster commit owes no new widget-book entry or test; a cluster file owes one test file plus N widget entries (one per exported component); a deletion owes nothing new; a promotion owes both.
@@ -317,7 +317,7 @@ The CMS theme system **overrides the standard token names** (`--primary`, `--car
 
 5. **Dark mode is preserved.** CMS theme files include `.dark` variants. The `applyLocalTheme` mechanism (or its evolved equivalent) applies both light and dark token sets, scoped to the wrapper element.
 
-The existing Puck branch's `src/lib/utils/theme.ts` and `public/themes/*.css` already implement this pattern correctly. The theme files use `oklch` (matching this ADR's color standard) and define the same token names. The `applyLocalTheme` function is the right mechanism — it may be simplified during integration, but the core approach (override standard tokens on a wrapper element) stays.
+This pattern is implemented in-tree by `ui/theme/theme-migration-wrapper.tsx`: `ThemeMigrationWrapper` accepts a `theme` token record and `applyThemeTokens` applies the same properties imperatively for runtime switching (the evolved equivalent of the earlier `applyLocalTheme`). The CMS/Puck branch carries the theme files as `public/themes/*.css` using `oklch` (matching this ADR's color standard) and the same token names. The core approach — override the standard token names on a wrapper element — stays.
 
 ## Consequences
 
