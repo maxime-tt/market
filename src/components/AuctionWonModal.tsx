@@ -28,7 +28,7 @@ import {
 	hasFinalSettlementForAuctionWin,
 	resolveAuctionWinFromEvents,
 	shouldUseNonBlockingAuctionWinPrompt,
-} from '@/lib/auction/winNotification'
+} from '@sdk/commerce/auctions/winNotification'
 import {
 	auctionQueryOptions,
 	auctionSettlementsQueryOptions,

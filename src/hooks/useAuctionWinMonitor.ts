@@ -6,8 +6,8 @@ import {
 	getValidatedAuctionBids,
 	hasFinalSettlementForAuctionWin,
 	hasValidatedPathReleaseForAuctionWin,
-} from '@/lib/auction/winNotification'
-import { fetchBidNut7States } from '@/lib/auction/useNut7Polling'
+} from '@sdk/commerce/auctions/winNotification'
+import { fetchBidNut7States } from '@sdk/commerce/auctions/nut7Polling'
 import { fetchDleqKeysetsForBidsDetailed } from '@/lib/cashu/dleq'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'

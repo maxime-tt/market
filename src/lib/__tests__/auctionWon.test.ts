@@ -5,7 +5,7 @@ import {
 	resolveAuctionWin,
 	selectValidatedAuctionWinner,
 	shouldUseNonBlockingAuctionWinPrompt,
-} from '@/lib/auction/winNotification'
+} from '@sdk/commerce/auctions/winNotification'
 import type { AuctionWonPayload } from '@platform/web/notifications'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
