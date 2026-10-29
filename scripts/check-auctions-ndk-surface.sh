@@ -53,6 +53,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Unit tests stage throwaway repos with a handful of files and set this to 0.
 REQUIRE_COVERAGE="${AUCTIONS_GUARD_REQUIRE_COVERAGE:-1}"
 
+# Surface-shrink floor (A4-S3). The coverage check above catches a family that
+# matches NOTHING, but a family can be thinned file-by-file and still pass. This
+# floor makes the scanned-set size itself a tripwire: `scanned N` may not fall
+# below MIN_SCANNED. Seeded from MEASUREMENT at unite/1420-all tip 06cc831c
+# (Wave G-b): `scanned 112 production file(s)`. A fused retirement commit that
+# legitimately shrinks the set MUST lower this number in the SAME commit (the
+# E0 fusion rule above) — never around it. Enforced only against the real repo
+# (REQUIRE_COVERAGE=1); staged throwaway repos opt out with the same switch.
+MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-112}"
+
 # #1252-gated allowlist — paths relative to the repo root.
 ALLOWLIST=(
 	# NIP-59 private-claim encrypt/decrypt needs the raw active signer (PR #1252).
@@ -191,7 +201,9 @@ hits=()
 scanned=0
 for file in "${FILES[@]}"; do
 	case "$file" in
-		*/__tests__/* | *.test.ts) continue ;;
+		# `.test.tsx` was a latent gap: a test component under a glob family (e.g.
+		# src/components/Auction*.tsx) was scanned as production and flagged.
+		*/__tests__/* | *.test.ts | *.test.tsx) continue ;;
 	esac
 	rel="${file#"$ROOT"/}"
 	if allowed "$rel"; then
@@ -205,7 +217,16 @@ for file in "${FILES[@]}"; do
 	fi
 done
 
-echo "Auctions NDK-surface guard: scanned $scanned production file(s); allowlisted ${#ALLOWLIST[@]} (#1252-gated); coverage strict=${REQUIRE_COVERAGE}"
+echo "Auctions NDK-surface guard: scanned $scanned production file(s) (floor $MIN_SCANNED); allowlisted ${#ALLOWLIST[@]} (#1252-gated); coverage strict=${REQUIRE_COVERAGE}"
+
+if [ "$REQUIRE_COVERAGE" = "1" ] && [ "$scanned" -lt "$MIN_SCANNED" ]; then
+	echo ""
+	echo "::error::Auctions NDK-surface guard scanned $scanned production file(s), below the MIN_SCANNED floor of $MIN_SCANNED."
+	echo "The production auction surface has shrunk and this gate is now blind to part of it."
+	echo "If the shrink is a real retirement, lower MIN_SCANNED in this script in the SAME commit"
+	echo "(scripts/check-auctions-ndk-surface.sh); if it is not, restore the missing file set."
+	exit 1
+fi
 
 if [ "${#hits[@]}" -gt 0 ]; then
 	echo ""
