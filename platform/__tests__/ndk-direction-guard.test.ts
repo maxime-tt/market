@@ -86,8 +86,15 @@ describe('NDK direction guard (scripts/check-ndk-direction.sh)', () => {
 		expect(r.exitCode).toBe(0)
 		// M8: no effective (un-allowlisted) sdk production mention.
 		expect(r.stdout).toContain('M8 sdk-production-effective=0 (raw 2)')
-		// M9: every platform NDK file is still undeclared at the seed.
-		expect(r.stdout).toContain('M9 platform-undeclared=48 (of 48 platform NDK files)')
+		// M9: the undeclared platform-bridge count is a RATCHET from the 48-file seed, like the src row
+		// below: declaring a bridge is sanctioned declare-as-you-touch (the ledger's own rule — I-c's
+		// `platform/web/notifications/monitor.ts` is the first declared row), and the TOTAL may rise with a
+		// declared bridge (red-team F1). Assert the invariant (undeclared <= seed, undeclared <= total),
+		// never the absolute — `complete=yes` is the end-state hard rail.
+		const m9 = r.stdout.match(/M9 platform-undeclared=(\d+) \(of (\d+) platform NDK files\)/)
+		expect(m9).not.toBeNull()
+		expect(Number(m9![1])).toBeLessThanOrEqual(48)
+		expect(Number(m9![1])).toBeLessThanOrEqual(Number(m9![2]))
 		expect(r.stdout).toContain('M10 ledger-target-failures=0')
 		// src/ is a RATCHET, so assert the invariant (current <= baseline), never an
 		// absolute count: any lane that deletes a src/ NDK file (e.g. A1's

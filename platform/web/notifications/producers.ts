@@ -3,16 +3,23 @@
  * the app's rules derive, and apply them to the shared instance.
  *
  * This is the one entry point every producer in the app calls. It replaces the imperative pushes into the legacy
- * store (`notificationActions.incrementUnseenX(...)`, `useNotificationMonitor.ts`) with a derivation: the event
+ * store (`notificationActions.incrementUnseenX(...)`, `monitor.ts`) with a derivation: the event
  * is fed to `deriveFromRules(appNotificationRules, event)` (the app's configuration) and each derived
  * notification is applied to the mechanism — a passive one to the ledger, the modal auction-win to the queue.
  *
  * It is domain-free of the legacy store (no `@/…`): the mechanism decides nothing about orders, auctions or
  * messages, and neither does this file — it only routes what the rules derived.
+ *
+ * I-c (2026-10-29): the src-side seam `src/lib/notificationProducers.ts` folded into this file. Its one
+ * export, `produceAppNotification`, moved here verbatim (the appNotifications instance import aside); the C4
+ * read-state surface it re-exported (`readMarks`, `appNotificationsBinding`, `notificationScopes`,
+ * `readMarkFamilies`, `scopedLastSeenOf`) was always this barrel's own exports, so its two `src/` consumers now
+ * read `@platform/web/notifications` directly and the seam file is deleted.
  */
 import { deriveFromRules } from '@sdk/core'
 import { appNotificationRules } from './rules'
 import type { AppNotificationEvent } from './rules'
+import { appNotifications } from './instance'
 import type { AppNotifications } from './instance'
 import type { AppNotification, AppNotificationPayload, AppNotificationType } from './types'
 
@@ -39,6 +46,14 @@ export function applyAppNotificationEvent(notifications: AppNotifications, event
 	const derived = deriveAppNotifications(event)
 	for (const notification of derived) applyAppNotification(notifications, notification)
 	return derived
+}
+
+/**
+ * Derive and apply — to the app's SHARED instance. The one-liner every producer in the host (the monitor)
+ * calls: the C1 src-side seam's entire behaviour, kept verbatim.
+ */
+export function produceAppNotification(event: AppNotificationEvent): void {
+	applyAppNotificationEvent(appNotifications, event)
 }
 
 /**

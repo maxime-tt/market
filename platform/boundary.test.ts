@@ -93,8 +93,11 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/InfiniteProductList.tsx', // I-c-hooks; useSimpleInfiniteScroll/useScrollRestoration moved to platform/web/products+app
 	'src/components/pages/ProfilePage.tsx', // I-c-hooks; useBreakpoint/useEntityPermissions moved to platform
 	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
-	'src/hooks/useNotificationMonitor.ts', // C1; rewritten onto the rules, reads C4's ledger; retired in D3
-	'src/lib/notificationProducers.ts', // C1; the src-side rule seam + C4 read-state re-export route; retired in D3
+	// --- store drain I-c (2026-10-29): the notification monitor and its src-side seam moved to
+	// platform/web/notifications/ and both files are deleted, so their rows went with them; the seam's
+	// two src/ consumers read the platform barrel directly until D3 retires them. ---
+	'src/components/dashboard/AuctionListItemHost.tsx', // I-c; reads the read marks + notification scopes; retired in D3
+	'src/components/messages/ConversationView.tsx', // I-c; reads the read marks; retired in D3
 	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
 	'src/components/messages/ConversationListItem.tsx', // C2; reads the derived counts, retired in D3
 	'src/components/ui/image-uploader/ImageUploader.tsx', // Wave G media host (G-a1.2); retires with the H-e8 image-uploader leaf cluster
