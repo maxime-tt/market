@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { fetchBidNut7States } from './useNut7Polling'
+import { fetchBidNut7States } from './nut7Polling'
 import type { ParsedBidEvent } from './events'
 
 describe('fetchBidNut7States projection boundary', () => {
