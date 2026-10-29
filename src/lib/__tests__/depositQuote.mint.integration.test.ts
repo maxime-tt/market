@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { MemoryRepositories, initializeCoco, type Manager } from '@cashu/coco-core'
 
-import { createCocoDepositQuote, toCocoDepositManager } from '../wallet/depositQuote'
+import { createCocoDepositQuote, toCocoDepositManager } from '@sdk/commerce/payments/wallet/depositQuote'
 
 /**
  * I4 — the deposit lifecycle against a real local mint.

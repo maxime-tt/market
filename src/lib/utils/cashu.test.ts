@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getP2PKLocktime } from './cashu'
+import { getP2PKLocktime } from '@sdk/commerce/payments/cashu/p2pkLocktime'
 
 describe('getP2PKLocktime', () => {
 	test('extracts locktime from valid P2PK secret string', () => {

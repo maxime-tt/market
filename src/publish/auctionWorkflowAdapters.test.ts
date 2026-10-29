@@ -5,7 +5,7 @@ import {
 	runAuctionPathReleaseAppAdapter,
 	runAuctionSettlementAppAdapter,
 	runAuctionWinnerClaimAppAdapter,
-} from './auctionWorkflowAdapters'
+} from '@platform/web/auctions/auctionWorkflowAdapters'
 
 const auction = {
 	rawEvent: {} as ParsedAuctionEvent['rawEvent'],

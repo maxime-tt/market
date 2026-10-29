@@ -52,12 +52,10 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/featured.tsx', // store drain D2 slice 11; shim deleted in E1
 	'src/publish/payment.tsx', // store drain D2 slice 14; shim deleted in E1
 	'src/publish/app-settings.tsx', // store drain D2 slice 18; shim deleted in E1
-	'src/publish/auctionWorkflowAdapters.ts', // store drain D2 slice 6; shim deleted in E1
 	'src/publish/blacklist.tsx', // store drain D2 slice 16; shim deleted in E1
 	'src/queries/relay-list.tsx', // store drain D1 slice 1; shim deleted in E1
 	'src/queries/relay-preferences.tsx', // store drain D1 slice 1; shim deleted in E1
 	'src/queries/config.tsx', // store drain D1 slice 1; shim deleted in E1
-	'src/queries/authors.tsx', // store drain D1 slice 2; shim deleted in E1
 	'src/queries/posts.tsx', // store drain D1 slice 2; shim deleted in E1
 	'src/queries/bugReports.tsx', // store drain D1 slice 2; shim deleted in E1
 	'src/queries/nip05.tsx', // store drain D1 slice 2; shim deleted in E1
@@ -78,8 +76,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/stores/product.ts', // Wave C product drain S1-S3; shim deleted in E1b
 	'src/lib/stores/ndk.ts', // Wave C ndk drain S2; reads the moved NDK adapters directly, edge retired in E1b
 	'src/lib/stores/cart.ts', // Wave D cart drain S0-S2; imports the moved cart model; shim deleted in E1b
-	'src/lib/cart-persistence.ts', // Wave D cart drain S0; shim deleted in E1b
-	'src/lib/schemas/cartPersistence.ts', // Wave D cart drain S0; shim deleted in E1b
 	'src/lib/stores/cashu.ts', // Wave D walletOps drain S0; shim deleted in E1b
 	'src/lib/stores/ui.ts', // Wave E adapter drain W-E3.5; shim deleted in E1b
 	'src/lib/stores/config.ts', // Wave E adapter drain W-E3.6; shim deleted in E1b
