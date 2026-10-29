@@ -5,7 +5,11 @@ import {
 	PAYMENT_RECEIPT_KIND,
 	ORDER_STATUS,
 } from '@sdk/commerce/messaging/orderSchema'
-import { createNdkPublishContext, getAppNdk, getAppSigner, publishAppEvent, toEncryptingSigner } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppEvent, type NostrEvent } from '@platform/web/ndkPublishContext'
+import { getCurrentPubkey } from '@platform/web/readContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { asEncryptingSigner } from '@sdk/core'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { orderKeys } from '@sdk/core/query/queryKeyFactory'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { NDKTag } from '@nostr-dev-kit/ndk'
@@ -36,6 +40,25 @@ import { fetchProfileByIdentifier } from '@platform/web/profiles/profileQuery'
 import { getShippingEvent, getShippingService } from '@platform/web/shipping/shippingQuery'
 import type { Event } from 'nostr-tools'
 import { publishOrderStatusUpdateWorkflow } from '@sdk/commerce/orders'
+
+/**
+ * A3.4: sign an NDKEvent in place through the **active signer capability** (the
+ * auth session's `currentSigner()`), never NDK's instance signer. The in-place
+ * mutation contract (`id`, `pubkey`, `sig` land on the event object) is the
+ * adapter's own, so `ndkEvent.sign()`'s implicit `ndk.signer` path is retired.
+ */
+async function signNdkEventWithActiveCapability(event: NDKEvent): Promise<void> {
+	const capability = getActiveSignerCapability()
+	if (!capability) throw new Error('No active user')
+	const signed = await capability.signEvent({
+		kind: event.kind,
+		content: event.content,
+		// NDK's own sign() stamps an unset created_at with now; mirror that.
+		created_at: event.created_at ?? Math.floor(Date.now() / 1000),
+		tags: event.tags as string[][],
+	})
+	Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
+}
 
 async function resolveDeliveryRequirementsForProducts(
 	products: Array<{ id: string; shippingMethodId?: string | null }>,
@@ -133,11 +156,8 @@ export const createOrder = async (params: OrderCreateParams): Promise<string> =>
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const signer = getAppSigner()
-	if (!signer) throw new Error('No active user')
-
-	const user = ndk.activeUser
-	if (!user) throw new Error('No active user')
+	const capability = getActiveSignerCapability()
+	if (!capability) throw new Error('No active user')
 
 	const currency = params.currency || 'USD'
 	const total = (params.price * params.quantity).toFixed(2)
@@ -166,7 +186,7 @@ export const createOrder = async (params: OrderCreateParams): Promise<string> =>
 	}
 
 	// Sign and publish the event
-	await event.sign(signer)
+	await signNdkEventWithActiveCapability(event)
 	await publishAppEvent(event)
 
 	return event.id
@@ -177,8 +197,7 @@ export const createOrder = async (params: OrderCreateParams): Promise<string> =>
  */
 export const useCreateOrderMutation = () => {
 	const queryClient = useQueryClient()
-	const ndk = getAppNdk()
-	const currentUserPubkey = ndk?.activeUser?.pubkey
+	const currentUserPubkey = getCurrentPubkey()
 
 	return useMutation({
 		mutationFn: createOrder,
@@ -213,14 +232,19 @@ export type OrderStatusUpdateParams = {
 /**
  * Updates the status of an order on the Nostr network
  */
-export const updateOrderStatus = async (params: OrderStatusUpdateParams): Promise<NDKEvent> => {
+export const updateOrderStatus = async (params: OrderStatusUpdateParams): Promise<NostrEvent> => {
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const signer = getAppSigner()
-	if (!signer) throw new Error('No active user')
+	const capability = getActiveSignerCapability()
+	if (!capability) throw new Error('No active user')
 
-	const context = await createNdkPublishContext(ndk, signer)
+	// A3.4: the publish context is built from the signer capability + the NDK
+	// publish binding (the raw signed event is wrapped into an NDKEvent for
+	// `ndkActions.publishEvent`); `createNdkPublishContext` is retired here.
+	const context = await createSignerPublishContext(capability, async (event) => {
+		await publishAppEvent(new NDKEvent(ndk, event))
+	})
 	return publishOrderStatusUpdateWorkflow(
 		{ ...context, now: getNextOrderUpdateCreatedAt, loadOrder: (id) => ndk.fetchEvent({ ids: [id] }) },
 		{ orderEventId: params.orderEventId, status: params.status, reason: params.reason, tracking: params.tracking },
@@ -232,8 +256,7 @@ export const updateOrderStatus = async (params: OrderStatusUpdateParams): Promis
  */
 export const useUpdateOrderStatusMutation = () => {
 	const queryClient = useQueryClient()
-	const ndk = getAppNdk()
-	const currentUserPubkey = ndk?.activeUser?.pubkey
+	const currentUserPubkey = getCurrentPubkey()
 
 	return useMutation({
 		mutationFn: updateOrderStatus,
@@ -284,8 +307,8 @@ export const createPaymentReceipt = async (params: PaymentReceiptParams): Promis
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const signer = getAppSigner()
-	if (!signer) throw new Error('No active user')
+	const capability = getActiveSignerCapability()
+	if (!capability) throw new Error('No active user')
 
 	const currency = params.currency || 'USD'
 
@@ -320,7 +343,7 @@ export const createPaymentReceipt = async (params: PaymentReceiptParams): Promis
 	]
 
 	// Sign and publish the event
-	await event.sign(signer)
+	await signNdkEventWithActiveCapability(event)
 	await publishAppEvent(event)
 
 	return event.id
@@ -331,8 +354,7 @@ export const createPaymentReceipt = async (params: PaymentReceiptParams): Promis
  */
 export const useCreatePaymentReceiptMutation = () => {
 	const queryClient = useQueryClient()
-	const ndk = getAppNdk()
-	const currentUserPubkey = ndk?.activeUser?.pubkey
+	const currentUserPubkey = getCurrentPubkey()
 
 	return useMutation({
 		mutationFn: createPaymentReceipt,
@@ -438,8 +460,8 @@ async function createOrderCreationEventWithOrderId(data: OrderCreationData, orde
 	event.content = template.content
 	event.tags = template.tags as NDKTag[]
 
-	// Sign the event
-	await event.sign()
+	// Sign the event (A3.4: through the active signer capability, not NDK's instance signer)
+	await signNdkEventWithActiveCapability(event)
 
 	return event
 }
@@ -471,8 +493,8 @@ export async function createPaymentRequestEvent(data: PaymentRequestData): Promi
 	event.content = template.content
 	event.tags = template.tags as NDKTag[]
 
-	// Sign the event
-	await event.sign()
+	// Sign the event (A3.4: through the active signer capability, not NDK's instance signer)
+	await signNdkEventWithActiveCapability(event)
 
 	return event
 }
@@ -500,8 +522,8 @@ export async function createStatusUpdateEvent(data: StatusUpdateData): Promise<N
 	event.content = template.content
 	event.tags = template.tags as NDKTag[]
 
-	// Sign the event
-	await event.sign()
+	// Sign the event (A3.4: through the active signer capability, not NDK's instance signer)
+	await signNdkEventWithActiveCapability(event)
 
 	return event
 }
@@ -532,8 +554,8 @@ export async function createPaymentReceiptEvent(data: PaymentReceiptData): Promi
 	event.content = template.content
 	event.tags = template.tags as NDKTag[]
 
-	// Sign the event
-	await event.sign()
+	// Sign the event (A3.4: through the active signer capability, not NDK's instance signer)
+	await signNdkEventWithActiveCapability(event)
 
 	return event
 }
@@ -560,8 +582,8 @@ export async function createGeneralCommunicationEvent(recipientPubkey: string, s
 	event.content = template.content
 	event.tags = template.tags as NDKTag[]
 
-	// Sign the event
-	await event.sign()
+	// Sign the event (A3.4: through the active signer capability, not NDK's instance signer)
+	await signNdkEventWithActiveCapability(event)
 
 	return event
 }
@@ -770,9 +792,7 @@ export async function publishOrderWorkflowWithDependencies(params: PublishOrderD
 	let paymentRequestFailures = 0
 
 	try {
-		const ndk = getAppNdk()
-		const currentUser = ndk?.activeUser
-		const buyerPubkey = currentUser?.pubkey
+		const buyerPubkey = getCurrentPubkey()
 
 		if (!buyerPubkey) {
 			throw new Error('No active user found for order creation')
@@ -857,10 +877,11 @@ export async function publishOrderWorkflowWithDependencies(params: PublishOrderD
 		}
 
 		const signerRequired = plans.some(({ requiresPrivateDelivery }) => requiresPrivateDelivery)
-		const ndkSigner = signerRequired ? getAppSigner() : undefined
-		// The SDK's NIP-59 gift-wrap takes an `EncryptingSigner`; a raw `NDKSigner`
-		// silently produces an unreadable wrap, so adapt at this boundary.
-		const signer = ndkSigner ? toEncryptingSigner(ndkSigner) : undefined
+		const signerCapability = signerRequired ? getActiveSignerCapability() : undefined
+		// The SDK's NIP-59 gift-wrap takes an `EncryptingSigner`; the capability
+		// interop port adapts at this boundary (A3.4 — the NDK-typed adapter is
+		// retired here).
+		const signer = signerCapability ? asEncryptingSigner(signerCapability) : undefined
 		if (signerRequired && !signer) {
 			throw new Error('Encrypted seller delivery could not be prepared')
 		}

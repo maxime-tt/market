@@ -36,11 +36,12 @@ export type { NDKFilter, NDKSigner }
 export { submitAppSettings as submitAppSettingsEvent } from '@/lib/appSettings'
 
 /**
- * Re-exported so the order bindings can adapt the host's NDK signer into the
- * SDK's `EncryptingSigner` port without adding a new `platform -> src` edge:
- * this file already owns a `@/lib` edge.
+ * Re-exported so the order bindings can adapt the auth session's signer capability
+ * onto the SDK's `EncryptingSigner` port. A3.4 flipped the bindings onto
+ * `asEncryptingSigner(getActiveSignerCapability())` (the `@sdk/core` interop
+ * port), so this NDK-typed re-export is retired — the underlying adapter
+ * `src/lib/nostr/ndkEncryptingSigner.ts` is deleted in the same slice.
  */
-export { toEncryptingSigner } from '@/lib/nostr/ndkEncryptingSigner'
 
 /**
  * The auction publish bindings sign, publish and identify through the active

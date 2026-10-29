@@ -106,7 +106,15 @@ describe('NDK direction guard (scripts/check-ndk-direction.sh)', () => {
 		const srcMetrics = r.stdout.match(/src=(\d+)\+(\d+)/)
 		expect(srcMetrics).not.toBeNull()
 		expect(Number(srcMetrics![1])).toBeLessThanOrEqual(Number(srcRow![2]))
-		expect(Number(srcMetrics![2])).toBe(25)
+		// The `+N` test count follows the same rule as the production row: A3.2
+		// deleted four NDK-mentioning src test files (nip17*.test.ts × 3 +
+		// privateOrderMessage.test.ts), taking src test 25 -> 21 (production
+		// 44-curve 38 the same way) — so assert the ratchet invariant against the
+		// row's own BASE, never an absolute count.
+		const srcTestRow = r.stdout.match(/src\s+test\s+(\d+)\s+(\d+)\s+ratchet/)
+		expect(srcTestRow).not.toBeNull()
+		expect(Number(srcTestRow![1])).toBeLessThanOrEqual(Number(srcTestRow![2]))
+		expect(Number(srcMetrics![2])).toBe(Number(srcTestRow![1]))
 		expect(r.stdout).toContain('complete=no')
 		expect(r.stdout).toContain('OK')
 	})

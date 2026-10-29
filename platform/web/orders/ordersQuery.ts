@@ -17,10 +17,12 @@ import {
 	rehydrateVerifiedNdkEvent,
 	type NDKEvent,
 	type NDKFilter,
-	type NDKSigner,
 	type NostrFilter,
 } from '@platform/web/readContext'
-import { getAppNdk, getAppSigner, toEncryptingSigner } from '@platform/web/ndkPublishContext'
+import { getAppNdk } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { asEncryptingSigner } from '@sdk/core'
+import type { SignerCapability } from '@sdk/core/signer'
 import { createNdkReadContext, fetchEventsByFilter } from '@platform/web/readContext'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import type { EncryptingSigner } from '@sdk/core/ports/encryptingSigner'
@@ -55,7 +57,7 @@ export type OrderWithRelatedEvents = {
 
 type FetchOrdersBySellerOptions = {
 	includePrivateOrderDetails?: boolean
-	signer?: NDKSigner | null
+	signer?: SignerCapability | null
 }
 
 type UseOrdersBySellerOptions = {
@@ -64,7 +66,7 @@ type UseOrdersBySellerOptions = {
 
 type FetchOrderByIdOptions = {
 	includePrivateOrderDetails?: boolean
-	signer?: NDKSigner | null
+	signer?: SignerCapability | null
 }
 
 type UseOrderByIdOptions = {
@@ -112,7 +114,7 @@ export const fetchSellerPrivateOrderGiftWraps = async (sellerPubkey: string): Pr
 export const decryptSellerPrivateOrderGiftWraps = async (params: {
 	giftWrapEvents: NDKEvent[]
 	sellerPubkey: string
-	signer?: NDKSigner | null
+	signer?: SignerCapability | null
 }): Promise<SellerPrivateOrderDetailsCandidate[]> => {
 	const { giftWrapEvents, sellerPubkey, signer } = params
 	if (!isHexPubkey(sellerPubkey)) return []
@@ -120,7 +122,9 @@ export const decryptSellerPrivateOrderGiftWraps = async (params: {
 
 	const signerPubkey = await getSignerPubkey(signer)
 	if (signerPubkey !== sellerPubkey) return []
-	const encryptingSigner = toEncryptingSigner(signer)
+	// A3.4: the capability is adapted onto the SDK's `EncryptingSigner` port
+	// (the NDK-typed adapter is retired here).
+	const encryptingSigner = asEncryptingSigner(signer)
 	if (!(await signerSupportsNip44(encryptingSigner, 'decrypt'))) return []
 
 	const decryptedCandidates: SellerPrivateOrderDetailsCandidate[] = []
@@ -809,7 +813,7 @@ export const fetchOrdersBySeller = async (
 		const decryptedDetails = await decryptSellerPrivateOrderGiftWraps({
 			giftWrapEvents,
 			sellerPubkey,
-			signer: options.signer ?? getAppSigner(),
+			signer: options.signer ?? getActiveSignerCapability(),
 		})
 		return attachPrivateOrderDetailsToOrders(publicOrders, decryptedDetails)
 	} catch {
@@ -830,7 +834,7 @@ export const useOrdersBySeller = (sellerPubkey: string, options: UseOrdersBySell
 				includePrivateOrderDetails
 					? {
 							includePrivateOrderDetails: true,
-							signer: getAppSigner(),
+							signer: getActiveSignerCapability(),
 						}
 					: undefined,
 			),
@@ -989,7 +993,7 @@ export const fetchOrderById = async (orderId: string, options: FetchOrderByIdOpt
 		const decryptedDetails = await decryptSellerPrivateOrderGiftWraps({
 			giftWrapEvents,
 			sellerPubkey: seller,
-			signer: options.signer ?? getAppSigner(),
+			signer: options.signer ?? getActiveSignerCapability(),
 		})
 		return attachPrivateOrderDetailsToOrders([publicOrder], decryptedDetails)[0] ?? publicOrder
 	} catch {
@@ -1042,7 +1046,7 @@ export const useOrderById = (orderId: string, options: UseOrderByIdOptions = {})
 				includePrivateOrderDetails
 					? {
 							includePrivateOrderDetails: true,
-							signer: getAppSigner(),
+							signer: getActiveSignerCapability(),
 						}
 					: undefined,
 			),
@@ -1104,10 +1108,9 @@ function comparePrivateOrderDetailsCandidates(a: SellerPrivateOrderDetailsCandid
 	return (b.event.id || '').localeCompare(a.event.id || '')
 }
 
-async function getSignerPubkey(signer: NDKSigner): Promise<string | null> {
+async function getSignerPubkey(capability: SignerCapability): Promise<string | null> {
 	try {
-		const user = await signer.user()
-		return user.pubkey
+		return await capability.getPublicKey()
 	} catch {
 		return null
 	}

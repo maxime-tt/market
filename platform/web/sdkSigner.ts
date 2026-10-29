@@ -1,4 +1,4 @@
-import { getApplesauceRelayPool } from '@/lib/nostr/io-applesauce'
+import { getApplesauceRelayPool, setSignerSource } from '@/lib/nostr/io-applesauce'
 import type { EventPublishContext, Signer } from '@sdk/core'
 import {
 	createSignerSession,
@@ -89,3 +89,12 @@ export async function createSignerPublishContext(
 		publish,
 	}
 }
+
+// A3.1: re-exported so `platform/web/boot.ts` — the composition root — can
+// register the io seam's injected signer source without adding a new
+// platform -> src import statement (the inbound M2 rail is frozen and this
+// file already owns exactly one `@/lib/nostr/io-applesauce` import). The
+// registration CALL stays in boot.ts (never here: importing the auth store
+// here would cycle authStore -> sdkSigner -> authStore). Transitional — dies
+// with the legacy io seam in J-0.
+export { setSignerSource }

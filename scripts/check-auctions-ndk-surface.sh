@@ -63,11 +63,14 @@ REQUIRE_COVERAGE="${AUCTIONS_GUARD_REQUIRE_COVERAGE:-1}"
 # (REQUIRE_COVERAGE=1); staged throwaway repos opt out with the same switch.
 MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-112}"
 
-# #1252-gated allowlist — paths relative to the repo root.
-ALLOWLIST=(
-	# NIP-59 private-claim encrypt/decrypt needs the raw active signer (PR #1252).
-	"src/lib/auctions/privateAuctionClaimMessage.ts"
-)
+# #1252-gated allowlist — paths relative to the repo root. EMPTY since A3.3
+# (2026-10-29): the one #1252-gated file, src/lib/auctions/
+# privateAuctionClaimMessage.ts, flipped onto the auth composition root's
+# signer capability accessor (`getActiveSignerCapability`) + `asEncryptingSigner`
+# and stopped touching the raw NDK signer entirely, so the guard now scans it
+# like every other auctions file. A file that genuinely needs the raw signer
+# again must re-open this list with a comment citing #1252.
+ALLOWLIST=()
 
 # Pinned production files that MUST exist. A missing pinned path means the guard
 # is blind: fail (when coverage is enforced) rather than count a ghost. The two
@@ -111,6 +114,12 @@ PINNED=(
 # src/queries/auctions.tsx, src/lib/auction/*.ts, and the #1252 allowlist row
 # src/lib/auctions/privateAuctionClaimMessage.ts (the test's ALLOWLISTED_FILE
 # const plus its signer-shape assertion). The other eight need no test edit.
+#
+# A3.3 (2026-10-29): the #1252 row is RETIRED — the claim file flipped onto
+# `getActiveSignerCapability()` + `asEncryptingSigner` and no longer touches
+# the raw NDK signer — so the guard now scans it and this script's allowlist is
+# empty. The guard-test assertions that pinned the allowlisted shape were
+# re-pointed in the same commit (E0 fusion).
 #
 # Glob families that MUST each match at least one file. These are the
 # auction-owned production surfaces: public routes, components, the auction

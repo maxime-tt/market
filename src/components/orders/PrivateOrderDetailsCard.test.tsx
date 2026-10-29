@@ -1,4 +1,4 @@
-import type { PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
+import type { PrivateOrderDeliveryDetails } from '@sdk/commerce/messaging/privateOrderMessage'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { describe, expect, test } from 'bun:test'

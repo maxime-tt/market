@@ -45,6 +45,8 @@ type TestSigner = {
 	encrypt: (recipient: TestNDKUser, plaintext: string, scheme?: 'nip04' | 'nip44') => Promise<string>
 	decrypt: (sender: TestNDKUser, ciphertext: string, scheme?: 'nip04' | 'nip44') => Promise<string>
 	sign: (event: UnsignedEvent & { pubkey: string }) => Promise<string>
+	/** A3.4 stash (mock repair, additive): the capability path reads the same options the NDK-typed path did. */
+	testOptions?: TestSignerOptions
 }
 
 function createKeyPair(): TestKeyPair {
@@ -83,6 +85,36 @@ function createSigner(privateKey: Uint8Array, options: TestSignerOptions = {}): 
 			if (options.signThrows) throw new Error('sign failed')
 			return finalizeEvent(event, privateKey).sig
 		},
+		testOptions: options,
+	}
+}
+
+/**
+ * A3.4 mock repair (additive): the order publish path reads the signer through
+ * `getActiveSignerCapability()` now, so the suite registers the capability view
+ * of the same `currentSigner` (same key, same option semantics: `supportsNip44:
+ * false` answers with no pair, `canEncrypt`/`canDecrypt`/`signThrows` throw the
+ * same messages, `pubkeyOverride` flows through `user()`).
+ */
+function capabilityFor(signer: TestSigner | undefined): SignerCapability | null {
+	if (!signer) return null
+	const nip44Enabled = signer.testOptions?.supportsNip44 !== false
+	return {
+		getPublicKey: async () => (await signer.user()).pubkey,
+		signEvent: async (template) => {
+			const pubkey = (await signer.user()).pubkey
+			const unsignedEvent = { ...template, pubkey }
+			const sig = await signer.sign(unsignedEvent)
+			return { ...unsignedEvent, id: getEventHash(unsignedEvent), sig }
+		},
+		nip44: nip44Enabled
+			? {
+					encrypt: async (peerPubkey: string, plaintext: string) =>
+						signer.encrypt(new TestNDKUser({ pubkey: peerPubkey }), plaintext, 'nip44'),
+					decrypt: async (peerPubkey: string, ciphertext: string) =>
+						signer.decrypt(new TestNDKUser({ pubkey: peerPubkey }), ciphertext, 'nip44'),
+				}
+			: undefined,
 	}
 }
 
@@ -180,8 +212,23 @@ mock.module('@nostr-dev-kit/ndk', () => ({
 	NDKEvent: TestNDKEvent,
 }))
 
+// A3.4 mock repair (additive, registration-only): the order publish path reads
+// the active signer + identity through the auth composition root now
+// (`getActiveSignerCapability` / `getCurrentPubkey`), so the suite registers
+// the capability + identity view of the same `currentSigner`/`currentBuyer` the
+// ndk store mock above already answers with — same keys, same option
+// semantics. Both specifiers are registered: the platform module is what the
+// production code resolves; the src shim keeps the pre-A3.4 resolution green.
+const authStoreMock = () => ({
+	getActiveSignerCapability: () => capabilityFor(currentSigner),
+	getCurrentPubkey: () => currentBuyer?.pubkey ?? null,
+})
+mock.module('@/lib/stores/auth', authStoreMock)
+mock.module('@platform/web/auth/authStore', authStoreMock)
+
 import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
-import { decryptPrivateOrderMessage } from '@/lib/orders/privateOrderMessage'
+import type { SignerCapability } from '@sdk/core/signer'
+import { decryptPrivateOrderMessage } from '@sdk/commerce/messaging/privateOrderMessage'
 import { createOrder, createOrderCreationEvent, publishOrderWithDependencies, publishOrderWorkflowWithDependencies } from '@/publish/orders'
 import { privateDetailsMatchPublicOrder } from '@/queries/orders'
 import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
