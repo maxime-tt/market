@@ -24,7 +24,9 @@ import type {
 	AuthSessionStartInput,
 	AuthState,
 } from '@sdk/core/auth'
-import type { SessionStartInput, SignerSession } from '@sdk/core/signer'
+import type { SessionStartInput, SignerSession, SignerCapability } from '@sdk/core/signer'
+import { NoActiveSessionError } from '@sdk/core/signer'
+import { asEncryptingSigner, type EncryptingSigner } from '@sdk/core'
 import { createWebSignerSession } from '@platform/web/sdkSigner'
 import { registerAuthMachine } from '@platform/web/auth/authBinding'
 import { appNotifications } from '@platform/web/notifications'
@@ -79,6 +81,27 @@ const ensureSignerSession = (): SignerSession => {
 }
 
 export const getSignerSession = (): SignerSession => signerSession ?? ensureSignerSession()
+
+/**
+ * The active signer capability, or null while logged out (A3.1). Auth-gated:
+ * the only swallowed refusal is the session's own "no active session" — every
+ * other error propagates. This is the one signer source the io seam and the
+ * publish families read; the NDK bridge stays a separate consumer until A3.7.
+ */
+export function getActiveSignerCapability(): SignerCapability | null {
+	try {
+		return getSignerSession().currentSigner()
+	} catch (error) {
+		if (error instanceof NoActiveSessionError) return null
+		throw error
+	}
+}
+
+/** The active capability expressed as the SDK's library-free `EncryptingSigner` port, or null while logged out. */
+export function getActiveEncryptingSigner(): EncryptingSigner | null {
+	const capability = getActiveSignerCapability()
+	return capability ? asEncryptingSigner(capability) : null
+}
 
 /** The machine's input shape and the SDK session's differ only in the bunker `onAuthUrl` return type. */
 const toSessionStartInput = (input: AuthSessionStartInput): SessionStartInput => {

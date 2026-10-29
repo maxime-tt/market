@@ -2,7 +2,8 @@ import { Store } from '@tanstack/store'
 import type { QueryClient } from '@tanstack/react-query'
 import { configActions } from '@platform/web/config/appConfigStore'
 import { ndkActions, ndkStore } from '@platform/web/ndk/ndkStore'
-import { authActions } from '@platform/web/auth/authStore'
+import { authActions, getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { setSignerSource } from '@platform/web/sdkSigner'
 import { walletActions } from '@platform/web/config/walletStore'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import type { PublicAppConfig } from '@/lib/instance-config'
@@ -41,6 +42,12 @@ export function bootApp(queryClient: QueryClient): Promise<void> {
 		bootStore.setState(() => ({ status: 'loading-config', error: null }))
 
 		try {
+			// A3.1: register the io seam's injected signer source FIRST — before any
+			// login restore or query can reach `applesauceIo.sign`/`getUser`. The
+			// source is a lazy resolver, so nothing signs until a session is active,
+			// and `getActiveSignerCapability` answers null while logged out.
+			setSignerSource(getActiveSignerCapability)
+
 			const config = await fetchConfig()
 
 			configActions.setConfig(config)

@@ -8,6 +8,7 @@ export { addressableCoordinate, buildAddressableDeletion, deleteAddressableEvent
 export type { UnsignedEventData } from './publishing'
 export type { EncryptingSigner, SignableRumorLike } from './ports/encryptingSigner'
 export { UnsupportedSignerOperationError } from './ports/encryptingSigner'
+export { asEncryptingSigner } from './ports/signerInterop'
 export type { NostrFilter, NostrRelayPort, RelayPublishResult } from './ports/nostrRelay'
 export { createPoolRelayPort } from './ports/poolRelayPort'
 // Standalone contract modules: namespaced, because their vocabularies (Event, NostrEvent, errors) overlap.

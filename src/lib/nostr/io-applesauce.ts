@@ -6,19 +6,50 @@
  * are mirrored from the NDK store for now (temporary coupling that goes away
  * when the NDK singleton is deleted in Wave D).
  *
- * `sign` is intentionally not wired here: it lands in Wave A3 once the
- * signer (NIP-07 / nsec) is migrated off NDK. Until then, callers that need
- * signing keep routing through the NDK bridge (NIP-46 stays there longest).
+ * `sign`/`getUser` are wired through an **injected signer source** (A3.1): the
+ * composition root (`platform/web/boot.ts`) registers a
+ * `() => SignerCapability | null` resolver at boot, and this module never
+ * statically imports the auth store — `authStore` → `walletOps` →
+ * `ndkPublishContext` → `@/lib/nostr/io` → `io-applesauce` is a real cycle, so
+ * the source arrives by registration instead. Unregistered access fails
+ * closed with a typed refusal rather than falling back to the NDK bridge.
  */
 import { RelayGroup, RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
+import type { SignerCapability } from '@sdk/core/signer'
 
 import { getWriteRelays, ndkStore } from '@/lib/stores/ndk'
 // The contract is imported from `./io-types`, not `./io`: `./io` imports this
 // adapter to re-export it, so importing back from it would be a cycle.
-import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, PublishResult, SubscribeOptions } from './io-types'
+import type { FetchOptions, NostrFilter, NostrIo, NostrUser, PublishOptions, PublishResult, SubscribeOptions } from './io-types'
 
 let pool: RelayPool | null = null
+
+// ---------------------------------------------------------------------------
+// The injected signer source (A3.1): registration API, never a static import.
+// ---------------------------------------------------------------------------
+
+/** Resolves the active signer capability, or null while logged out. */
+export type SignerSource = () => SignerCapability | null
+
+let signerSource: SignerSource | null = null
+
+/**
+ * Register the source of the active signer capability. Called once at
+ * composition (`platform/web/boot.ts`); passing null unregisters (tests).
+ */
+export function setSignerSource(source: SignerSource | null): void {
+	signerSource = source
+}
+
+function requireSignerSource(): SignerSource {
+	if (!signerSource) {
+		throw new Error(
+			'applesauceIo: no signer source registered — platform/web/boot.ts must call setSignerSource(getActiveSignerCapability) at composition',
+		)
+	}
+	return signerSource
+}
 
 function getPool(): RelayPool {
 	if (!pool) pool = new RelayPool()
@@ -200,13 +231,19 @@ export const applesauceIo: NostrIo = {
 		return { publishedRelays: new Set(responses.filter((response) => response.ok).map((response) => response.from)) }
 	},
 
-	async sign(_template: EventTemplate) {
-		throw new Error('applesauceIo.sign is not wired until Wave A3 (auth/signer migration)')
+	async sign(template: EventTemplate): Promise<NostrEvent> {
+		const capability = requireSignerSource()()
+		if (!capability) throw new Error('No signer available')
+		// The capability signs the whole template and returns the full signed
+		// event — exactly the raw event shape this port is defined over.
+		return (await capability.signEvent(template)) as NostrEvent
 	},
 
-	async getUser() {
-		// Delegated to the NDK bridge until the signer migrates off NDK (Wave A3).
-		const { ndkIo } = await import('./io-ndk')
-		return ndkIo.getUser()
+	async getUser(): Promise<NostrUser | null> {
+		const capability = requireSignerSource()()
+		// Logged out (or no active session) is null, matching the NDK bridge's
+		// `user?.pubkey ? { pubkey } : null` — not an error.
+		if (!capability) return null
+		return { pubkey: await capability.getPublicKey() }
 	},
 }

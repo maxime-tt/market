@@ -107,7 +107,7 @@ mock.module('applesauce-relay', () => ({
 	},
 }))
 
-import { applesauceIo } from '../nostr/io-applesauce'
+import { applesauceIo, setSignerSource } from '../nostr/io-applesauce'
 import { ndkIo } from '../nostr/io-ndk'
 import { type NostrIo, type PublishResult, fetchEvents, getNostrIo, getUser, publish, setNostrIo, sign, subscribe } from '../nostr/io'
 
@@ -320,6 +320,9 @@ describe('ndk bridge adapter (io-ndk)', () => {
 
 describe('applesauce adapter (io-applesauce)', () => {
 	afterEach(resetNdkState)
+	// A3.1: the injected signer source is registration state — unregister
+	// after every test so the not-registered refusal probes stay isolated.
+	afterEach(() => setSignerSource(null))
 
 	test('fetchEvents resolves [] when no relays are configured (short-circuit)', async () => {
 		mockNdkStore.state.explicitRelayUrls = []
@@ -482,15 +485,35 @@ describe('applesauce adapter (io-applesauce)', () => {
 		expect(result.publishedRelays).toEqual(new Set(['wss://override.example']))
 	})
 
-	test('sign throws the explicit Wave A3 not-wired error', async () => {
-		await expect(applesauceIo.sign({ kind: 1, content: 'c', tags: [], created_at: 1 })).rejects.toThrow(
-			'applesauceIo.sign is not wired until Wave A3',
-		)
+	test('sign rejects before boot registers a signer source (typed refusal, never a cycle)', async () => {
+		await expect(applesauceIo.sign({ kind: 1, content: 'c', tags: [], created_at: 1 })).rejects.toThrow('no signer source registered')
 	})
 
-	test('getUser delegates to the NDK bridge (signer not migrated yet)', async () => {
-		mockNdkActions.getUser.mockImplementation(async () => ({ pubkey: 'pk-delegated' }))
-		await expect(applesauceIo.getUser()).resolves.toEqual({ pubkey: 'pk-delegated' })
+	test('sign signs through the registered capability and returns the full raw event', async () => {
+		const signEvent = mock(async () => ({ ...stubRawEvent, id: 'evt-signed', sig: 'sig-raw' }))
+		setSignerSource(() => ({ getPublicKey: async () => 'pk-1', signEvent: signEvent as never }))
+
+		const template = { kind: 30408, content: 'claim', tags: [['t', 'x']], created_at: 1736000000 }
+		const signed = await applesauceIo.sign(template)
+
+		expect(signEvent).toHaveBeenCalledWith(template)
+		expect(signed).toEqual({ ...stubRawEvent, id: 'evt-signed', sig: 'sig-raw' })
+	})
+
+	test('sign throws the No signer available refusal when the source reports logged out', async () => {
+		setSignerSource(() => null)
+		await expect(applesauceIo.sign({ kind: 1, content: 'c', tags: [], created_at: 1 })).rejects.toThrow('No signer available')
+	})
+
+	test('getUser resolves null while logged out and the capability pubkey while active', async () => {
+		// Unregistered is a composition error (same typed refusal as sign).
+		await expect(applesauceIo.getUser()).rejects.toThrow('no signer source registered')
+
+		setSignerSource(() => null)
+		await expect(applesauceIo.getUser()).resolves.toBeNull()
+
+		setSignerSource(() => ({ getPublicKey: async () => 'pk-active', signEvent: async () => stubRawEvent as never }))
+		await expect(applesauceIo.getUser()).resolves.toEqual({ pubkey: 'pk-active' })
 	})
 
 	test('explicit relayUrls override wins; an empty override falls back to the store', async () => {
