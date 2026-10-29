@@ -109,7 +109,17 @@
 # 166/120 -> 132/108. With these rows the guard reports OK and no INBOUND row prints
 # `(decreased)`: the baseline equals the measurement.
 
-platform -> src production 277 65
+# 2026-10-29 (E3, Wave F pass — the single ratchet): every row set to the value MEASURED by
+# `bash scripts/check-src-boundary.sh` after Wave F. W-E5b moved the auth composition root out
+# of src/ and re-pointed 23 statements from `@/lib/stores/auth` to the platform home, so the
+# INBOUND `platform -> src` row is ratcheted 277/65 -> 254/65 and may only fall from here. The
+# OUTBOUND `src -> *` rows are RE-MEASURED, not ratcheted (the drain moves them as src/ reaches
+# platform/ and sdk/ directly): src -> platform production 73/68 -> 72/69, src -> platform test
+# 23/12 -> 24/13, src -> sdk production 132/108 -> 128/106, src -> sdk test 11/10 -> 10/9;
+# src -> ui production stays 221/105. This is the single E3 ratchet for Wave F. With these rows
+# the guard reports OK and no INBOUND row prints `(decreased)`: baseline equals measurement.
+
+platform -> src production 254 65
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -118,11 +128,11 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 73 68
-src -> platform test 23 12
+src -> platform production 72 69
+src -> platform test 24 13
 
 src -> ui production 221 105
 src -> ui test 0 0
 
-src -> sdk production 132 108
-src -> sdk test 11 10
+src -> sdk production 128 106
+src -> sdk test 10 9
