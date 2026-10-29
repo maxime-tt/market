@@ -3,7 +3,7 @@ import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import { createSignerFromKey } from '@sdk/core/signer'
 import { generateSecretKey } from 'nostr-tools/pure'
 import { bytesToHex } from 'nostr-tools/utils'
-import { ndkSignerFromCapability } from './ndk-signer-adapter'
+import { ndkSignerFromCapability } from './ndkSignerAdapter'
 
 /**
  * The adapter is the one seam that keeps NDK-typed consumers (ndk.ts, the NIP-17
