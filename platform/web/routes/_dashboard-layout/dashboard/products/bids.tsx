@@ -11,7 +11,7 @@ import { resolveBidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/wrappers/button'
 import { PageHeader } from '@ui/layout/page-header'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { readMarks } from '@platform/web/notifications'
 import {
 	cashuStore,

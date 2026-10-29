@@ -207,11 +207,22 @@ const publishEventMock = mock(async (event: NDKEvent) => {
 // from the store singleton. Tests drive the seam by swapping `currentSigner`.
 let currentSigner: NDKSigner = signer
 
+// Wave F W-E5b (rev-2.6 item-5): the auth composition root moved to
+// '@platform/web/auth/authStore' and now binds walletOps and the NDK actions through the
+// platform modules directly, so these src-path mocks alone no longer patch the modules the
+// publish flow actually loads (bun only patches a re-export shim's target once the shim is
+// loaded — and the moved store never loads it, so the src capture below returns the mock
+// instead of the real surface). Capture the REAL error class from the platform module BEFORE
+// any walletOps mock, keep it on every registration (keys added, none removed), and register
+// the same factories on the platform paths so the interception is explicit on both.
+const realPlatformWalletOps = await import('@platform/web/wallet/walletOps')
+
 mock.module('@/lib/stores/walletOps', () => ({
 	walletOps: {
 		lockAuctionBidFunds: lockAuctionBidFundsMock,
 		updatePendingTokenContext: updatePendingTokenContextMock,
 	},
+	AuctionBidLockMutationPossibleError: realPlatformWalletOps.AuctionBidLockMutationPossibleError,
 }))
 
 mock.module('@/lib/stores/ndk', () => ({
@@ -246,6 +257,31 @@ mock.module('@/lib/stores/walletOps', () => ({
 		updatePendingTokenContext: updatePendingTokenContextMock,
 	},
 	AuctionBidLockMutationPossibleError: realWalletOps.AuctionBidLockMutationPossibleError,
+}))
+
+// Wave F W-E5b (rev-2.6 item-5): the platform paths the moved composition root and the
+// publish bridge actually load — same factories, same keys.
+mock.module('@platform/web/wallet/walletOps', () => ({
+	walletOps: {
+		lockAuctionBidFunds: lockAuctionBidFundsMock,
+		updatePendingTokenContext: updatePendingTokenContextMock,
+	},
+	AuctionBidLockMutationPossibleError: realPlatformWalletOps.AuctionBidLockMutationPossibleError,
+}))
+
+mock.module('@platform/web/ndk/ndkStore', () => ({
+	ndkActions: {
+		publishEvent: publishEventMock,
+		getNDK: () => ndkInstance,
+		getSigner: () => currentSigner,
+		getUser: async () => {
+			const user = await currentSigner.user()
+			return user?.pubkey ? { pubkey: user.pubkey } : null
+		},
+	},
+	ndkStore: {
+		state: { ndk: ndkInstance },
+	},
 }))
 
 // Import the module under test AFTER the mocks are registered (same module
