@@ -1,7 +1,7 @@
 import { CollectionCard } from '@/components/CollectionCard'
 import { FeaturedUserCard } from '@/components/FeaturedUserCard'
 import { ItemGrid } from '@ui/shared/item-grid'
-import { ProductCard } from '@/components/ProductCard'
+import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
 import { AuctionCard } from '@/components/AuctionCard'
 import { Button } from '@ui/primitives/button'
 import { cn } from '@/lib/utils'

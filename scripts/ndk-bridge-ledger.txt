@@ -32,6 +32,10 @@
 # Example row (shape only — intentionally inert while the target does not exist):
 # platform/web/auth/ndkSignerAdapter.ts|A3|sdk/core/signer|NDK-typed consumers need an NDKSigner adapter|wave-H
 
+# H-b kit 1 (2026-10-29): the zap dialog host moved from src/components/dialogs/ZapDialog.tsx and names
+# the NDK transport (NDKEvent/NDKUser runtime checks + the NDK store), so it is declared the day it lands.
+platform/web/payments/ZapDialogHost.tsx|h-kit/H-b|sdk/core/query/queryKeyFactory.ts|the zap dialog host reads the NDK store and NDK-typed zap targets while wiring the sdk query-key factory for profile/zap-capability keys|client-NDK-removal (ADR-0002; post-Wave-J)
+
 # --- declare-as-you-touch rows -----------------------------------------------
 # I-c-notifications (2026-10-29): the monitor moved from src/hooks/ and names the NDK transport
 # (subscribe/fetch through the platform NDK store), so it is declared the day it lands.

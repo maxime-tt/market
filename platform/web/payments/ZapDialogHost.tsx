@@ -1,10 +1,19 @@
+/**
+ * Host/binding for the pure `@ui/lightning/zap-dialog-view` view. It is the
+ * retired `src/components/dialogs/ZapDialog.tsx` moved verbatim onto its
+ * platform/sdk homes (the NDK store, the cashu wallet + walletOps action
+ * surface, the profile/zap-capability queries and the SDK constants), wiring
+ * the LightningPaymentProcessor seam for the NIP-57 invoice step. The nutzap
+ * eligibility guard is extracted as `nutzapBlocker` so the failure reasons have
+ * one behaviour test.
+ */
 import { LightningPaymentProcessor, type LightningPaymentData, type PaymentResult } from '@/components/lightning/LightningPaymentProcessor'
-import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
-import { useNDK } from '@/lib/stores/ndk'
-import { cashuStore } from '@/lib/stores/cashu'
-import { walletOps } from '@/lib/stores/walletOps'
-import { fetchProfileByIdentifier } from '@/queries/profiles'
-import { profileKeys, zapKeys } from '@/queries/queryKeyFactory'
+import { DEFAULT_ZAP_AMOUNTS } from '@sdk/config/constants'
+import { useNDK } from '@platform/web/ndk/ndkStore'
+import { cashuStore } from '@platform/web/wallet/cashuStore'
+import { walletOps } from '@platform/web/wallet/walletOps'
+import { fetchProfileByIdentifier } from '@platform/web/profiles/profileQuery'
+import { profileKeys, zapKeys } from '@sdk/core/query/queryKeyFactory'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
@@ -12,7 +21,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { parseZapAmount, ZapDialogView, type ZapRecipientSupport } from '@ui/lightning/zap-dialog-view'
 
-interface ZapDialogProps {
+interface ZapDialogHostProps {
 	isOpen: boolean
 	onOpenChange: (open: boolean) => void
 	event: NDKEvent | NDKUser
@@ -25,7 +34,15 @@ const EMPTY_ZAP_SUPPORT: ZapRecipientSupport = {
 	hasNip61: false,
 }
 
-export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDialogProps) {
+/** Why a nutzap cannot be sent right now, or null when it can. Exported for the one behaviour test. */
+export const nutzapBlocker = (isValidAmount: boolean, hasCashuWallet: boolean, support: ZapRecipientSupport): string | null => {
+	if (!isValidAmount) return 'Please enter a valid zap amount'
+	if (!hasCashuWallet) return 'NIP-60 wallet is required for nutzaps'
+	if (!support.hasNip61) return 'This user does not accept nutzaps'
+	return null
+}
+
+export function ZapDialogHost({ isOpen, onOpenChange, event, onZapComplete }: ZapDialogHostProps) {
 	const [amount, setAmount] = useState<string>('21')
 	const [zapMessage, setZapMessage] = useState<string>('Zap from Plebeian')
 	const [isAnonymousZap, setIsAnonymousZap] = useState<boolean>(false)
@@ -124,16 +141,9 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	}, [])
 
 	const handleSendNutzap = useCallback(async () => {
-		if (!isValidAmount) {
-			toast.error('Please enter a valid zap amount')
-			return
-		}
-		if (!hasCashuWallet) {
-			toast.error('NIP-60 wallet is required for nutzaps')
-			return
-		}
-		if (!recipientZapSupport.hasNip61) {
-			toast.error('This user does not accept nutzaps')
+		const blocker = nutzapBlocker(isValidAmount, hasCashuWallet, recipientZapSupport)
+		if (blocker) {
+			toast.error(blocker)
 			return
 		}
 
@@ -155,7 +165,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 		} finally {
 			setIsSubmittingNutzap(false)
 		}
-	}, [isValidAmount, hasCashuWallet, recipientZapSupport.hasNip61, event, numericAmount, effectiveZapMessage, onZapComplete, onOpenChange])
+	}, [isValidAmount, hasCashuWallet, recipientZapSupport, event, numericAmount, effectiveZapMessage, onZapComplete, onOpenChange])
 
 	const resetState = () => {
 		setAmount('21')

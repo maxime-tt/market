@@ -100,6 +100,10 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/messages/ConversationView.tsx', // I-c; reads the read marks; retired in D3
 	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
 	'src/components/messages/ConversationListItem.tsx', // C2; reads the derived counts, retired in D3
+	'src/components/social/SocialInteractions.tsx', // H-b kit 2: zaps via the platform ZapButtonHost; retires with the B2 SocialInteractions kit
+	'src/components/InfiniteProductList.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with its H-c leaf slice
+	'src/components/FeaturedSections.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e/AuctionCard park
+	'src/components/orders/OrderDetailComponent.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e4 orders cluster
 	'src/components/ui/image-uploader/ImageUploader.tsx', // Wave G media host (G-a1.2); retires with the H-e8 image-uploader leaf cluster
 	'src/components/BugReportModal.tsx', // Wave G media host (G-a1.2); retires with the D3 layout/Header.tsx consumer chain
 ])

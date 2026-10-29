@@ -1,25 +1,50 @@
-import { cartActions, useCart } from '@/lib/stores/cart'
+/**
+ * Host/binding for the pure `@ui/products/product-card-view` view. It is the
+ * retired `src/components/ProductCard.tsx` moved verbatim onto its platform/sdk
+ * homes: the cart store and ui store, the product query cache seeding, the
+ * auth read, the test-label coordinate helper, and the platform
+ * PriceDisplay/TestListingNotice/ZapButton hosts. The router Link wrapper (the
+ * card is navigable) stays here because routing is app wiring, not
+ * presentation. The add-to-cart guard is extracted as `canAddToCart` so the
+ * stock/ownership rules have one behaviour test.
+ */
+import { cartActions, useCart } from '@platform/web/cart/cartStore'
 import { Media } from '@ui/shared/media'
-import { uiActions } from '@/lib/stores/ui'
-import { productQueryOptions } from '@/queries/products'
+import { uiActions } from '@platform/web/app/uiStore'
+import { productQueryOptions } from './productQuery'
 import { getProductStock, getProductVisibility, isProductInStock } from '@sdk/commerce/discovery'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
-import { PriceDisplay } from './PriceDisplay'
-import { useAuth } from '@/lib/stores/auth'
-import { ZapButton } from './social/ZapButton'
-import { cn } from '@/lib/utils'
-import { getItemTestLabelCoordinate } from '@/lib/utils/testLabelFilters'
-import { TestListingNotice } from './TestListingNotice'
+import { useState } from 'react'
+import { PriceDisplayHost } from './PriceDisplayHost'
+import { useAuth } from '@platform/web/auth/authStore'
+import { ZapButtonHost } from '@platform/web/payments/ZapButtonHost'
+import { cn } from '@ui/utils/cn'
+import { getItemTestLabelCoordinate } from '@sdk/config/testLabelFilters'
+import { TestListingNoticeHost } from '@platform/web/config/testListingNoticeHost'
+import type { NDKEvent } from '@platform/web/readContext'
 import { ProductCardView } from '@ui/products/product-card-view'
 
-export interface ProductCardProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface ProductCardHostProps extends React.HTMLAttributes<HTMLDivElement> {
 	product: NDKEvent
 }
 
-export function ProductCard({ product, className }: ProductCardProps) {
+/** The add-to-cart guard the legacy card owned. Exported for the one behaviour test. */
+export const canAddToCart = (state: {
+	isOwnProduct: boolean
+	visibility: string
+	isOutOfStock: boolean
+	stockQuantity: number | undefined
+	cartQuantity: number
+}): boolean => {
+	if (state.isOwnProduct || state.visibility === 'hidden' || state.isOutOfStock) return false // Don't allow adding own products, hidden products, or out of stock items
+
+	// Check if adding would exceed available stock
+	if (state.stockQuantity !== undefined && state.cartQuantity >= state.stockQuantity) return false
+	return true
+}
+
+export function ProductCardHost({ product, className }: ProductCardHostProps) {
 	const stockTag = getProductStock(product)
 	const parsedStockQuantity = stockTag ? Number.parseInt(stockTag[1], 10) : undefined
 	const stockQuantity = parsedStockQuantity !== undefined && Number.isFinite(parsedStockQuantity) ? parsedStockQuantity : undefined
@@ -44,10 +69,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
 	const cartQuantity = isInCart ? cart.cart.products[product.id]?.amount || 0 : 0
 
 	const handleAddToCart = async () => {
-		if (isOwnProduct || visibility === 'hidden' || isOutOfStock) return // Don't allow adding own products, hidden products, or out of stock items
-
-		// Check if adding would exceed available stock
-		if (stockQuantity !== undefined && cartQuantity >= stockQuantity) return
+		if (!canAddToCart({ isOwnProduct, visibility, isOutOfStock, stockQuantity, cartQuantity })) return
 
 		setIsAddingToCart(true)
 		try {
@@ -93,13 +115,15 @@ export function ProductCard({ product, className }: ProductCardProps) {
 						className="h-full w-full rounded-t-[calc(var(--radius)-1px)] object-cover transition-transform duration-200 hover:scale-105"
 					/>
 				)}
-				renderPrice={(priceTag) => <PriceDisplay priceValue={Number.parseFloat(priceTag[1])} originalCurrency={priceTag[2] || 'SATS'} />}
+				renderPrice={(priceTag) => (
+					<PriceDisplayHost priceValue={Number.parseFloat(priceTag[1])} originalCurrency={priceTag[2] || 'SATS'} />
+				)}
 				renderNotice={
 					testLabelCoordinate ? (
-						<TestListingNotice coordinate={testLabelCoordinate} variant="icon" className="absolute top-2 right-2" />
+						<TestListingNoticeHost coordinate={testLabelCoordinate} variant="icon" className="absolute top-2 right-2" />
 					) : null
 				}
-				renderSecondaryAction={<ZapButton event={product} />}
+				renderSecondaryAction={<ZapButtonHost event={product} />}
 			/>
 		</Link>
 	)

@@ -119,6 +119,27 @@
 # src -> ui production stays 221/105. This is the single E3 ratchet for Wave F. With these rows
 # the guard reports OK and no INBOUND row prints `(decreased)`: baseline equals measurement.
 
+# 2026-10-29 (H-b kit 3, ProductCard): the product-card host left src/components/ProductCard.tsx for
+# platform/web/products/ProductCardHost.tsx. Its seven consumers re-pointed (three routes to the
+# platform-internal host; ProfilePage/InfiniteProductList/FeaturedSections/OrderDetailComponent to
+# the platform host under the measured drain, allowlist rows added and retired with their owners).
+# The kit-2 ProductCard allowlist row left with the file. src -> platform production re-measured
+# 78/73 -> 81/74; test unchanged.
+
+# 2026-10-29 (H-b kit 2, ZapButton): the zap button host left src/components/social/ZapButton.tsx
+# for platform/web/payments/ZapButtonHost.tsx. Its five consumers re-pointed (two routes to the
+# platform-internal host; ProfilePage/SocialInteractions/ProductCard to the platform host under the
+# measured drain, allowlist rows added and retired with their owners). The kit-1 ZapButton allowlist
+# row left with the file. src -> platform production re-measured 75/71 -> 78/73; test unchanged.
+
+# 2026-10-29 (H-b kit 1, ZapDialog): the zap dialog host left
+# src/components/dialogs/ZapDialog.tsx for platform/web/payments/ZapDialogHost.tsx, so its one
+# src consumer (src/components/social/ZapButton.tsx) now imports the platform host directly:
+# src -> platform production re-measured 72/69 -> 75/71 (the file was already in the measured set
+# via the Wave-H drift; the row also absorbs the pre-existing drift, which the guard had been
+# reporting informationally). OUTBOUND rows are re-measured, never ratcheted; the INBOUND
+# platform -> src row stays as measured by E3 and is ratcheted only by E3.
+
 platform -> src production 254 65
 platform -> src test 0 0
 
@@ -128,8 +149,8 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 72 69
-src -> platform test 24 13
+src -> platform production 81 74
+src -> platform test 29 17
 
 src -> ui production 221 105
 src -> ui test 0 0

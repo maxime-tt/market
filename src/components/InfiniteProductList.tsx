@@ -1,6 +1,6 @@
 import { useSimpleInfiniteScroll } from '@platform/web/products/useSimpleInfiniteScroll'
 import { useScrollRestoration } from '@platform/web/app/useScrollRestoration'
-import { ProductCard } from '@/components/ProductCard'
+import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { Button } from '@ui/primitives/button'
 import { uiStore } from '@/lib/stores/ui'
