@@ -9,7 +9,8 @@ import type { EncryptingSigner, SignableRumorLike } from './encryptingSigner'
  * NIP-04/44/59/17 logic consumes.
  *
  * This is the capability-typed twin of the retired NDK adapter
- * (`src/lib/nostr/ndkEncryptingSigner.ts`): it holds zero cryptography and
+ * (`src/lib/nostr/ndkEncryptingSigner.ts`, deleted in A3.4): it holds zero
+ * cryptography and
  * delegates every operation, so an NIP-07 extension, a vaulted key or a
  * NIP-46 bunker all flow through unchanged. The NIP-44 pair is carried
  * **only when the capability exposes it** (I4): `supportsNip44` answers from

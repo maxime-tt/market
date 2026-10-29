@@ -2,12 +2,14 @@ import type NDK from '@nostr-dev-kit/ndk'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { walletActions } from '@sdk/config/wallet'
 import type { Wallet as UserNwcWallet } from '@sdk/config/wallet'
+import type { SignerCapability } from '@sdk/core/signer'
 import {
 	readNwcBalanceWorkflow,
 	readNwcWalletsWorkflow,
 	type NwcBalance,
 	type NwcBalancePort,
 	type NwcWalletEventLike,
+	type NwcWalletListFilter,
 	type NwcWalletListPort,
 } from '@sdk/commerce/payments/wallet/nwcWalletRead'
 
@@ -47,6 +49,56 @@ function createNdkWalletListPort(ndk: NDK): NwcWalletListPort<NwcWalletEventLike
  */
 export const fetchUserNwcWallets = async (ndk: NDK, userPubkey: string): Promise<UserNwcWallet[]> =>
 	readNwcWalletsWorkflow(createNdkWalletListPort(ndk), userPubkey)
+
+/**
+ * A3.4: the **capability-typed** wallet-list port. The signer reads come from an
+ * SDK signer capability (the auth session's `currentSigner()`, never the NDK
+ * instance's signer), the self-decrypt is NIP-44 over the capability's own
+ * pair, and the relay fetch is INJECTED — the `(ndk, …)` overloads above read
+ * it off the NDK instance, while the capability path's caller (A3.7's rebuilt
+ * onboarding) supplies the fetch. The fetch is a parameter (not an
+ * `@/lib/nostr/io` import) because this file sits inside the
+ * ndkStore → nwcWalletRead cycle: importing the io seam here would pull
+ * `@/lib/stores/ndk` (and so ndkStore) back in through it.
+ */
+export function createCapabilityWalletListPort(
+	capability: SignerCapability,
+	fetchEvents: (filter: NwcWalletListFilter) => Promise<Iterable<NwcWalletEventLike>>,
+): NwcWalletListPort<NwcWalletEventLike> {
+	return {
+		fetchEvents,
+		getSignerPubkey: () => capability.getPublicKey(),
+		decrypt: async (content) => {
+			const pair = capability.nip44
+			if (!pair) throw new Error('No NIP-44 capability available to decrypt the NWC wallet list')
+			// NIP-44 to the signer's own key: the wallet list event is encrypted by the user for themselves.
+			return pair.decrypt(await capability.getPublicKey(), content)
+		},
+	}
+}
+
+/**
+ * Capability-typed variant of {@link fetchUserNwcWallets}: the relay fetch is
+ * injected (see {@link createCapabilityWalletListPort}).
+ */
+export const fetchUserNwcWalletsWithCapability = async (
+	capability: SignerCapability,
+	userPubkey: string,
+	fetchEvents: (filter: NwcWalletListFilter) => Promise<Iterable<NwcWalletEventLike>>,
+): Promise<UserNwcWallet[]> => readNwcWalletsWorkflow(createCapabilityWalletListPort(capability, fetchEvents), userPubkey)
+
+/**
+ * Capability-typed variant of {@link fetchNwcWalletBalance}. The signer ref the
+ * NWC client factory takes is a cache-identity object only (`WalletSignerRef`):
+ * the client builds its own signer from the URI, so the capability object is a
+ * valid ref.
+ */
+export const fetchNwcWalletBalanceWithCapability = async (capability: SignerCapability, nwcUri: string): Promise<NwcBalance | null> => {
+	const port: NwcBalancePort = {
+		getNwcClient: (uri) => walletActions.getOrCreateNwcClient(uri, capability),
+	}
+	return readNwcBalanceWorkflow(port, nwcUri)
+}
 
 /**
  * Fetches the balance from an NWC wallet URI.

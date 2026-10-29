@@ -56,10 +56,11 @@ import {
 import { getMintHostname } from '@sdk/commerce/payments/display'
 import { auctionP2pkPubkeysMatch } from '@sdk/commerce/auctions/auctionP2pk'
 import { AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS } from '@sdk/commerce/auctions/constants'
-import { toEncryptingSigner } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { asEncryptingSigner } from '@sdk/core'
 import { KeyChain, Mint, Wallet, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { NDKEvent, NDKNutzap, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
-import { fetchEventsWithTimeout, getAppNdk, getAppSigner } from '@platform/web/ndkPublishContext'
+import { fetchEventsWithTimeout, getAppNdk } from '@platform/web/ndkPublishContext'
 import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
 import { getCurrentPubkey } from '@platform/web/readContext'
 
@@ -199,8 +200,9 @@ const getWalletPrivkey = (pubkey?: string): string | null => {
  * NIP-44 `encrypt`/`decrypt` through the same adapter the SDK uses.
  */
 const auctionWalletKeySigner = (): WalletKeySigner | null => {
-	const signer = getAppNdk()?.signer
-	return signer ? { nip44: toEncryptingSigner(signer) } : null
+	// A3.4: the signer comes from the auth session's capability, not the NDK instance's signer.
+	const capability = getActiveSignerCapability()
+	return capability ? { nip44: asEncryptingSigner(capability) } : null
 }
 
 /** The app's key store: the pair's durable, sealed home. The signer is read lazily per call. */
@@ -252,9 +254,10 @@ const walletEventRelay = (): WalletEventRelay => ({
  * reported (`no-matching-pair`), never guessed.
  */
 const createRelayBackedKeyMigrationSource = (): WalletKeyMigrationSource => {
-	const signer = getAppNdk()?.signer
-	const opener: WalletEventOpener = signer
-		? toEncryptingSigner(signer)
+	// A3.4: same switch as the sealer above — the capability answers, never the NDK instance's signer.
+	const capability = getActiveSignerCapability()
+	const opener: WalletEventOpener = capability
+		? asEncryptingSigner(capability)
 		: {
 				decrypt: async () => {
 					throw new Error('wallet event unreadable: no signer to open it')
@@ -280,11 +283,8 @@ const createRelayBackedKeyMigrationSource = (): WalletKeyMigrationSource => {
  * material it cannot trust.
  */
 const resolveAuctionKeyMaterial = async (): Promise<WalletKeyMaterial> => {
-	const ownerPubkey =
-		(await getAppNdk()
-			?.signer?.user()
-			.then((user) => user.pubkey)
-			.catch(() => '')) ?? ''
+	const ownerCapability = getActiveSignerCapability()
+	const ownerPubkey = ownerCapability ? await ownerCapability.getPublicKey().catch(() => '') : ''
 	if (!ownerPubkey) {
 		throw new Error('Current wallet does not expose the auction HD root private key')
 	}
@@ -866,9 +866,9 @@ export const walletOps = {
 			throw new Error('Cashu wallet not ready')
 		}
 
-		const signer = getAppSigner()
-		if (!signer) throw new Error('No signer available')
-		const bidder = await signer.user()
+		const capability = getActiveSignerCapability()
+		if (!capability) throw new Error('No signer available')
+		const bidderPubkey = await capability.getPublicKey()
 
 		// Find a live auction. We pull recent kind-30408 events and
 		// filter to ones that (a) we're not the seller of and (b) still
@@ -876,7 +876,7 @@ export const walletOps = {
 		const now = Math.floor(Date.now() / 1000)
 		const auctions = Array.from(await fetchEventsWithTimeout({ kinds: [AUCTION_KIND], limit: 100 }, { timeoutMs: 5000 }))
 		const candidates = auctions.filter((auction) => {
-			if (auction.pubkey === bidder.pubkey) return false
+			if (auction.pubkey === bidderPubkey) return false
 			const endAt = parseNonNegativeInt(getFirstTagValue(auction, 'end_at'), 0)
 			const maxEndAt = parseNonNegativeInt(getFirstTagValue(auction, 'max_end_at'), 0) || endAt
 			if (!endAt || maxEndAt <= now) return false

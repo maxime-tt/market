@@ -1,7 +1,8 @@
-import { NDKEvent, NDKUser, type NDKEncryptionScheme, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, getPublicKey, nip44 } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
+import type { SignerCapability } from '@sdk/core/signer'
 import { createEncryptedPrivateOrderMessage, type PrivateOrderDeliveryDetails } from '@sdk/commerce/messaging/privateOrderMessage'
 import {
 	attachPrivateOrderDetailsToOrders,
@@ -40,38 +41,30 @@ function keyPair(): KeyPair {
 	return { privateKey, pubkey: getPublicKey(privateKey) }
 }
 
-function signerFor(privateKey: Uint8Array, options: MockSignerOptions = {}): NDKSigner {
+function signerFor(privateKey: Uint8Array, options: MockSignerOptions = {}): SignerCapability {
+	// A3.4: the decrypt path's seam is the auth session's signer capability
+	// (`SignerCapability`), not an NDK-typed signer — same real crypto (nip44
+	// over the raw key, finalizeEvent signatures), same option semantics:
+	// `supportsNip44: false` answers with no `nip44` pair, `canDecrypt: false`
+	// refuses the decrypt, `onSign` counts `signEvent` calls.
 	const pubkey = getPublicKey(privateKey)
-	const user = new NDKUser({ pubkey })
 	return {
-		get pubkey() {
-			return pubkey
-		},
-		blockUntilReady: async () => user,
-		user: async () => user,
-		get userSync() {
-			return user
-		},
-		encryptionEnabled: async (scheme?: NDKEncryptionScheme) => {
-			if (options.supportsNip44 === false) return []
-			if (!scheme || scheme === 'nip44') return ['nip44']
-			return []
-		},
-		encrypt: async (recipient, value, scheme) => {
-			if (scheme !== 'nip44') throw new Error('NIP-44 required')
-			const conversationKey = nip44.v2.utils.getConversationKey(privateKey, recipient.pubkey)
-			return nip44.v2.encrypt(value, conversationKey)
-		},
-		decrypt: async (sender, value, scheme) => {
-			if (options.supportsNip44 === false || options.canDecrypt === false || scheme !== 'nip44') throw new Error('NIP-44 unavailable')
-			const conversationKey = nip44.v2.utils.getConversationKey(privateKey, sender.pubkey)
-			return nip44.v2.decrypt(value, conversationKey)
-		},
-		sign: async (event) => {
+		getPublicKey: async () => pubkey,
+		signEvent: async (template) => {
 			options.onSign?.()
-			return finalizeEvent(event as unknown as Parameters<typeof finalizeEvent>[0], privateKey).sig
+			return finalizeEvent(template as unknown as Parameters<typeof finalizeEvent>[0], privateKey)
 		},
-		toPayload: () => JSON.stringify({ type: 'mock' }),
+		nip44:
+			options.supportsNip44 === false
+				? undefined
+				: {
+						encrypt: async (peerPubkey, plaintext) =>
+							nip44.v2.encrypt(plaintext, nip44.v2.utils.getConversationKey(privateKey, peerPubkey)),
+						decrypt: async (peerPubkey, ciphertext) => {
+							if (options.canDecrypt === false) throw new Error('NIP-44 unavailable')
+							return nip44.v2.decrypt(ciphertext, nip44.v2.utils.getConversationKey(privateKey, peerPubkey))
+						},
+					},
 	}
 }
 
