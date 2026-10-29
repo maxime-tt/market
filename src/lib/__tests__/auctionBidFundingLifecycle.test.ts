@@ -11,7 +11,7 @@ import {
 	shouldPreservePendingBidSubmissionOnModalClose,
 	AUCTION_BID_FUNDING_RECLAIMABLE_STATES,
 	type AuctionBidFundingLifecycleState,
-} from '@/hooks/useAuctionBidFunding'
+} from '@platform/web/auctions/useAuctionBidFunding'
 
 describe('auction bid funding modal close lifecycle', () => {
 	test.each<AuctionBidFundingLifecycleState>(['payment_acknowledged', 'minting_started', 'ecash_minted', 'bid_publish_attempted'])(

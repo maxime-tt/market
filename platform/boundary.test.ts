@@ -106,6 +106,12 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/orders/OrderDetailComponent.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e4 orders cluster
 	'src/components/ui/image-uploader/ImageUploader.tsx', // Wave G media host (G-a1.2); retires with the H-e8 image-uploader leaf cluster
 	'src/components/BugReportModal.tsx', // Wave G media host (G-a1.2); retires with the D3 layout/Header.tsx consumer chain
+	// --- I-c-monitors (2026-10-29): useAuctionBidFunding moved to
+	// platform/web/auctions/useAuctionBidFunding.ts and the src/ original is deleted, so these
+	// src/ consumers read the platform hook directly until their own slices retire them. ---
+	'src/components/AuctionBidder.tsx', // I-c-monitors; retires in I-PARKED (the AuctionBidder host)
+	'src/components/AuctionBidProgressDialog.tsx', // I-c-monitors; retires in I-PARKED
+	'src/feature/wallet/components/DepositLightningModal.tsx', // I-c-monitors; retires in J-b (the wallet modals slice)
 ])
 
 async function listSourceFiles(directory: string): Promise<string[]> {

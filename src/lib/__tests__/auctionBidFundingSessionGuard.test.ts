@@ -41,7 +41,7 @@ import {
 	nextLockOutcomeUncertainOnSessionStart,
 	useAuctionBidFunding,
 	type UseAuctionBidFundingOptions,
-} from '@/hooks/useAuctionBidFunding'
+} from '@platform/web/auctions/useAuctionBidFunding'
 
 // =============================================================================
 // Minimal DOM shim — react-dom/client requires a DOM to render into.
