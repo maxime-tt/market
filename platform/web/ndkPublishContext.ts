@@ -1,4 +1,4 @@
-import { ndkActions, getWriteRelaySet, getWriteRelays, fetchLatestAppEvent } from '@/lib/stores/ndk'
+import { ndkActions, getWriteRelaySet, getWriteRelays, fetchLatestAppEvent } from '@platform/web/ndk/ndkStore'
 import { NDKEvent, type NDKSigner, type NDKFilter } from '@/lib/nostr/ndk-events'
 import type { EventPublishContext } from '@sdk/core/ports/eventPublish'
 

@@ -26,7 +26,7 @@ mock.module('@sdk/core/nostr/eventSignature', () => ({
 	}),
 }))
 
-mock.module('@/lib/stores/ndk', () => ({
+const ndkStoreMock = () => ({
 	ndkStore: {
 		state: { ndk: null, explicitRelayUrls: [], writeRelayUrls: [], health: 'unknown', connectedRelayCount: 0 },
 	},
@@ -55,7 +55,9 @@ mock.module('@/lib/stores/ndk', () => ({
 	// Required by `@platform/web/ndkPublishContext`, which the moved query now
 	// imports statically (store drain D1, slice 7).
 	fetchLatestAppEvent: () => null,
-}))
+})
+mock.module('@/lib/stores/ndk', ndkStoreMock)
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
 
 const { fetchLiveActivity } = await import('@/queries/liveChat')
 

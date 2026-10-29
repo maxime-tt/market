@@ -90,7 +90,7 @@ mock.module('@platform/web/app-settings/appSettingsQuery', () => ({
 	fetchEditorSettings: async () => null,
 }))
 
-mock.module('@/lib/stores/ndk', () => ({
+const ndkStoreMock = () => ({
 	getWriteRelays: () => [],
 	// The authorized-labeler settings read pulls these through
 	// `@/queries/app-settings`; returning nothing keeps it offline and lands on
@@ -110,7 +110,9 @@ mock.module('@/lib/stores/ndk', () => ({
 	// Required by `@platform/web/ndkReadContext`, which the test-label binding now imports
 	// statically (store drain D1, slice 3b).
 	getBugRelay: () => null,
-}))
+})
+mock.module('@/lib/stores/ndk', ndkStoreMock)
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
 
 /**
  * Loaded in `beforeAll`, not at module scope: the `mock.module` calls above

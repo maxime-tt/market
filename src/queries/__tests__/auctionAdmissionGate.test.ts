@@ -53,7 +53,7 @@ mock.module('@/lib/stores/blacklist', () => ({
 	},
 }))
 
-mock.module('@/lib/stores/ndk', () => ({
+const ndkStoreMock = () => ({
 	getWriteRelays: () => [],
 	getWriteRelaySet: () => undefined,
 	getMainRelay: () => null,
@@ -69,7 +69,9 @@ mock.module('@/lib/stores/ndk', () => ({
 	// Required by `@platform/web/ndkReadContext`, which the test-label binding now imports
 	// statically (store drain D1, slice 3b).
 	getBugRelay: () => null,
-}))
+})
+mock.module('@/lib/stores/ndk', ndkStoreMock)
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
 
 let applesauceIo: (typeof import('@/lib/nostr/io-applesauce'))['applesauceIo']
 let fetchAuction: (typeof import('@/queries/auctions'))['fetchAuction']
