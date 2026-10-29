@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@ui/primitives/separator'
 import { DEFAULT_INSTANCE_CONFIG } from '@/lib/instance-config'
 import { AppSettingsSchema } from '@/lib/schemas/app'
-import { authActions } from '@/lib/stores/auth'
+import { authActions } from '@platform/web/auth/authStore'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'

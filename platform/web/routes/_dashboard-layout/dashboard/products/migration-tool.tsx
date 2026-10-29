@@ -1,7 +1,7 @@
 import { Button } from '@ui/wrappers/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { PageHeader } from '@ui/layout/page-header'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'

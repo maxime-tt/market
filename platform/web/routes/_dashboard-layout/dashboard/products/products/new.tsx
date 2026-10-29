@@ -1,5 +1,5 @@
 import { ProductFormContent } from '@/components/sheet-contents/NewProductContent'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { productFormActions } from '@platform/web/products/productFormStore'
 import { resolveProductWorkflow, type V4VSetupState } from '@sdk/commerce/products'
 import { useV4VConfiguration } from '@/queries/v4v'

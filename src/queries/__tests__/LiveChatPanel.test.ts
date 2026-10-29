@@ -46,9 +46,11 @@ mock.module('@/publish/liveChat', () => ({
 	usePublishLiveChatMessageMutation: () => baseUsePublishLiveChatMessageMutation(),
 }))
 
-mock.module('@/lib/stores/auth', () => ({
+const authStoreMock = {
 	authStore: emptyAuthStore,
-}))
+}
+mock.module('@/lib/stores/auth', () => authStoreMock)
+mock.module('@platform/web/auth/authStore', () => authStoreMock) // Wave F W-E5b: consumers load the platform store
 
 // LiveChatPanel transitively imports @/lib/utils which imports from
 // @/lib/stores/ndk. Some Bun 1.3.x runners leak module mocks between test

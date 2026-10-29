@@ -24,7 +24,7 @@ import {
 import { StatCard } from '@ui/shared/stat-card'
 import { StatusBadge } from '@ui/shared/status-badge'
 import { formatSatsWithUnit } from '@ui/utils/format'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { getAuctionWindowValidBids } from '@sdk/commerce/auctions/settlement'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
 import { settleAuctionAsWinner, usePublishAuctionSettlementMutation } from '@/publish/auctions'

@@ -8,7 +8,7 @@ import { ItemGrid } from '@ui/shared/item-grid'
 import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/wrappers/button'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { uiStore } from '@platform/web/app/uiStore'
 import { uiActions } from '@platform/web/app/uiStore'
 import {

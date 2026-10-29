@@ -1,5 +1,5 @@
 import { CollectionFormContent } from '@/components/sheet-contents/collections/CollectionFormContent'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { collectionFormActions } from '@platform/web/collections/collectionFormStore'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
