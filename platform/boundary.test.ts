@@ -92,7 +92,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/EntityActionsMenu.tsx', // I-c-hooks; useEntityPermissions moved to platform/web/permissions
 	'src/components/InfiniteProductList.tsx', // I-c-hooks; useSimpleInfiniteScroll/useScrollRestoration moved to platform/web/products+app
 	'src/components/pages/ProfilePage.tsx', // I-c-hooks; useBreakpoint/useEntityPermissions moved to platform
-	'src/components/social/ZapButton.tsx', // H-b kit 1: delegates the zap dialog to the platform ZapDialogHost; retires with ZapButton (next kit commit)
 	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
 	// --- store drain I-c (2026-10-29): the notification monitor and its src-side seam moved to
 	// platform/web/notifications/ and both files are deleted, so their rows went with them; the seam's
@@ -101,6 +100,8 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/messages/ConversationView.tsx', // I-c; reads the read marks; retired in D3
 	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
 	'src/components/messages/ConversationListItem.tsx', // C2; reads the derived counts, retired in D3
+	'src/components/social/SocialInteractions.tsx', // H-b kit 2: zaps via the platform ZapButtonHost; retires with the B2 SocialInteractions kit
+	'src/components/ProductCard.tsx', // H-b kit 2: zaps via the platform ZapButtonHost; retires with ProductCard (next kit commit)
 	'src/components/ui/image-uploader/ImageUploader.tsx', // Wave G media host (G-a1.2); retires with the H-e8 image-uploader leaf cluster
 	'src/components/BugReportModal.tsx', // Wave G media host (G-a1.2); retires with the D3 layout/Header.tsx consumer chain
 ])

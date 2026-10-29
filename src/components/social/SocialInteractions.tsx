@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { ZapButton } from './ZapButton'
+import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost'
 import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
 import { ShareButton } from './ShareButton'
 import { ReactionButton } from './ReactionButton'

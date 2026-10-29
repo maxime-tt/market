@@ -15,7 +15,7 @@ import {
 	ProductPurchasePanel,
 } from '@ui/products/product-page-views'
 import { UserCard } from '@/components/UserCard'
-import { ZapButton } from '@/components/social/ZapButton'
+import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { useEntityPermissions } from '@platform/web/permissions/useEntityPermissions'
 import { DEFAULT_DOCUMENT_TITLE, buildOwnedMetaEmissions, removeOwnedOgMetaTags, truncateForMeta } from '@/lib/ogTags'
