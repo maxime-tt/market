@@ -98,7 +98,18 @@
 #   (src -> platform 65/59 -> 61/56, src -> sdk 172/126 -> 166/120); those are
 #   RE-MEASURED, not ratcheted. No INBOUND row rose.
 
-platform -> src production 325 67
+# 2026-10-29 (E3, Wave E pass — the single ratchet): every row set to the value MEASURED at
+# faaa6a82 by `bash scripts/check-src-boundary.sh`. Wave E landed the seven adapter drains
+# (vanity, blacklist, testLabels, nip05, ui, config, wallet), the NDK connection-store move
+# (W-E4), the four E1a importer-less shim deletions and the AuctionDisplayComponent leaf
+# retirement. The six INBOUND rows below are ratcheted and may only fall from here; the
+# OUTBOUND `src -> *` rows are RE-MEASURED (the drain moves them up as src/ now reaches
+# platform/ and sdk/ directly) and are never a failure. Inbound platform -> src production
+# 325/67 -> 277/65, and src -> ui production 226/107 -> 221/105, src -> sdk production
+# 166/120 -> 132/108. With these rows the guard reports OK and no INBOUND row prints
+# `(decreased)`: the baseline equals the measurement.
+
+platform -> src production 277 65
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -107,11 +118,11 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 61 56
+src -> platform production 73 68
 src -> platform test 23 12
 
-src -> ui production 226 107
+src -> ui production 221 105
 src -> ui test 0 0
 
-src -> sdk production 166 120
+src -> sdk production 132 108
 src -> sdk test 11 10
