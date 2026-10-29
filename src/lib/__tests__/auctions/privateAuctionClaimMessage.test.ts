@@ -1,6 +1,6 @@
-import { NDKUser, type NDKEncryptionScheme, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, getPublicKey, nip44 } from 'nostr-tools'
+import type { EncryptingSigner } from '@sdk/core'
 import {
 	buildAuctionClaimPublicMarkerTags,
 	buildPrivateAuctionClaimPayload,
@@ -68,29 +68,16 @@ function baseFields(overrides: Partial<AuctionClaimMessageFields> = {}): Auction
 	}
 }
 
-function signerFor(privateKey: Uint8Array): NDKSigner {
-	const pubkey = getPublicKey(privateKey)
-	const user = new NDKUser({ pubkey })
+function signerFor(privateKey: Uint8Array): EncryptingSigner {
+	// A3.3: the seam takes the SDK's `EncryptingSigner` port (plain pubkeys,
+	// raw-signature signing) — the NDK-typed stub this replaces carried the
+	// same real crypto (nip44 over the raw key, finalizeEvent signatures).
 	return {
-		get pubkey() {
-			return pubkey
-		},
-		blockUntilReady: async () => user,
-		user: async () => user,
-		get userSync() {
-			return user
-		},
-		encryptionEnabled: async (scheme?: NDKEncryptionScheme) => (!scheme || scheme === 'nip44' ? ['nip44'] : []),
-		encrypt: async (recipient, value, scheme) => {
-			if (scheme !== 'nip44') throw new Error('NIP-44 unavailable')
-			return encryptForRecipient(value, privateKey, recipient.pubkey)
-		},
-		decrypt: async (sender, value, scheme) => {
-			if (scheme !== 'nip44') throw new Error('NIP-44 unavailable')
-			return decryptFromSender(value, privateKey, sender.pubkey)
-		},
-		sign: async (event) => finalizeEvent(event as unknown as Parameters<typeof finalizeEvent>[0], privateKey).sig,
-		toPayload: () => JSON.stringify({ type: 'mock' }),
+		getPublicKey: async () => getPublicKey(privateKey),
+		signEvent: async (event) => finalizeEvent({ ...event }, privateKey).sig,
+		encrypt: async (recipientPubkey, plaintext) => encryptForRecipient(plaintext, privateKey, recipientPubkey),
+		decrypt: async (senderPubkey, ciphertext) => decryptFromSender(ciphertext, privateKey, senderPubkey),
+		supportsNip44: async () => true,
 	}
 }
 

@@ -107,23 +107,27 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		expect(source).toContain('src/lib/nostr/ndk-events.ts')
 	})
 
-	test('the guard source documents the #1252 allowlist', async () => {
+	test('the guard source retires the #1252 allowlist (A3.3)', async () => {
 		const source = await readFile(SCRIPT, 'utf8')
 		expect(source).toContain('1252')
-		expect(source).toContain(ALLOWLISTED_FILE)
+		// The per-file ALLOWLIST is empty since A3.3: the claim file flipped onto
+		// the signer capability accessor and no longer needs the raw NDK signer,
+		// so the guard scans it like every other auctions file.
+		expect(source).toContain('ALLOWLIST=()')
+		expect(source).not.toMatch(/^\t"src\//m)
 	})
 
-	test('the allowlisted private-claim file touches only the raw signer (keeps the allowlist honest)', async () => {
-		// The guard skips this file wholesale, so it could acquire any other NDK
-		// usage unnoticed. Pin the narrow surface the #1252 citation claims:
-		// `ndkActions.getSigner()` and a type-only NDKSigner import.
+	test('the retired #1252 private-claim file is NDK-surface-free (the guard scans it now)', async () => {
+		// The guard no longer skips this file, so an NDK mention it re-acquired
+		// would fail `exits 0 against the real repo`. Pin the retirement's shape:
+		// the signer comes from the auth composition root's capability accessor,
+		// adapted onto the SDK port — never the raw NDK signer.
 		const source = await readFile(join(ROOT, ALLOWLISTED_FILE), 'utf8')
-		const ndkActionsCalls = [...source.matchAll(/ndkActions\.([A-Za-z0-9_]+)/g)].map((m) => m[1])
-		expect(ndkActionsCalls.length).toBeGreaterThan(0)
-		expect([...new Set(ndkActionsCalls)]).toEqual(['getSigner'])
+		expect(source).toContain('getActiveSignerCapability')
+		expect(source).toContain('asEncryptingSigner')
+		expect(source).not.toContain('ndkActions')
 		expect(source).not.toContain('ndkStore')
-		// No value import of @nostr-dev-kit (a `import type { … }` is allowed).
-		expect(source).not.toMatch(/^import\s+(?!type\b)[^\n]*@nostr-dev-kit/m)
+		expect(source).not.toContain('@nostr-dev-kit')
 	})
 
 	test('exits 0 when the production file set has no NDK surface', async () => {
@@ -152,14 +156,26 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		expect(runGuard(store).exitCode).toBe(1)
 	})
 
-	test('exits 0 when NDK surface is confined to the #1252-allowlisted private-claim file', async () => {
-		const root = await stageRepo({
+	test('fails (exit 1) when the retired #1252 private-claim file imports @nostr-dev-kit', async () => {
+		// A3.3 removed the allowlist row: the claim file is scanned like every
+		// other auctions file, so a re-acquired NDK import must fail the guard —
+		// while a clean claim file passes with an empty allowlist.
+		const dirty = await stageRepo({
 			[ALLOWLISTED_FILE]: NDK_IMPORT,
 			'src/publish/auctions.tsx': "import { sign } from '@/lib/nostr/io'\n",
 		})
-		const r = runGuard(root)
-		expect(r.exitCode).toBe(0)
-		expect(r.stdout).toContain('allowlisted 1 (#1252-gated)')
+		const dirtyResult = runGuard(dirty)
+		expect(dirtyResult.exitCode).toBe(1)
+		expect(dirtyResult.stdout).toContain('::error::')
+		expect(dirtyResult.stdout).toContain(ALLOWLISTED_FILE)
+
+		const clean = await stageRepo({
+			[ALLOWLISTED_FILE]: "import { getActiveSignerCapability } from '@/lib/stores/auth'\n",
+			'src/publish/auctions.tsx': "import { sign } from '@/lib/nostr/io'\n",
+		})
+		const cleanResult = runGuard(clean)
+		expect(cleanResult.exitCode).toBe(0)
+		expect(cleanResult.stdout).toContain('allowlisted 0 (#1252-gated)')
 	})
 
 	test('ignores test files in the file set', async () => {
