@@ -1,6 +1,6 @@
 # AGENTS.md — platform/web/routes
 
-This directory follows the repository-level AGENTS.md and `src/AGENTS.md`.
+This directory follows the repository-level AGENTS.md.
 
 ## Context
 
