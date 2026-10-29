@@ -1,34 +1,14 @@
 /**
  * platform/web/auth/authStore.ts — the platform home of the auth composition root, moved verbatim
  * out of `src/lib/stores/auth.ts` in Wave F slice W-E5b. The only changes are the seven platform
- * substitutions; `src/lib/stores/auth.ts` is the re-export shim that the 36 `src/` importers and
+ * substitutions; `src/lib/stores/auth.ts` is the re-export shim the remaining `src/` importers and
  * the mocking suites still resolve. The `@tanstack/store` bridge stays **bidirectional** because
- * eleven test files call `authStore.setState(...)` directly; `registerAuthMachine` + `authBinding`
+ * ten test files call `authStore.setState(...)` directly; `registerAuthMachine` + `authBinding`
  * are unchanged.
- */
-/**
- * src/lib/stores/auth.ts — the adapter: `src/`'s view of the SDK auth state machine.
  *
- * The auth state, the transitions, the flags and the error strings moved to `@sdk/core/auth`
- * (I.1a). This module is the composition root for that machine: it supplies the browser storage,
- * the lazily-created signer session and every cross-store effect the legacy store performed inline
- * (`./ndk`, `./walletOps`, `./cart`, `@/queries/products`, `@/lib/terms`, `./ui`,
- * `@/lib/nostr/ndk-signer-adapter`, `@platform/web/notifications`).
- *
- * The public surface is unchanged for every existing call site:
- *
- *   - `authStore` — a `@tanstack/store` `Store<AuthState>`, mirrored from the machine. The bridge is
- *     BIDIRECTIONAL because twelve test files call `authStore.setState(...)` directly to force an
- *     identity; a write-through routes those into the machine, which then mirrors back (the same
- *     pattern as `src/lib/stores/ui.ts`).
- *   - `authActions` — the same method names, each delegating to the machine.
- *   - `useAuth`, `getCurrentPubkey`, `subscribeToAuthIdentity` — unchanged semantics.
- *
- * The signer session is still created LAZILY (first login action), so importing this module does not
- * construct a relay pool and a unit test that only reads `authStore` never touches the host ports.
- *
- * This file is in `platform/boundary.test.ts`'s `SRC_TO_PLATFORM_ALLOWLIST`, so its `@platform/...`
- * imports are already permitted; it is retired in E1b once the remaining `src/` consumers migrate.
+ * The signer session is still created LAZILY (first login action), so importing this module does
+ * not construct a relay pool, and a unit test that only reads `authStore` never touches the host
+ * ports.
  */
 import { Store } from '@tanstack/store'
 import { getPublicKey, nip19 } from 'nostr-tools'
