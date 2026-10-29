@@ -1,13 +1,7 @@
 import { productPublishIssueMessage, type SellerProductListingInput } from '@sdk/commerce/products'
-import {
-	createNdkPublishContext,
-	getWriteRelaySet,
-	getWriteRelays,
-	publishAppEvent,
-	type NdkClient,
-	type NDKEvent,
-	type NDKSigner,
-} from '@platform/web/ndkPublishContext'
+import { getWriteRelaySet, getWriteRelays, publishAppEvent, type NdkClient, NDKEvent } from '@platform/web/ndkPublishContext'
+import type { SignerCapability } from '@sdk/core/signer'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { publishMigratedProductWorkflow } from '@sdk/commerce/products'
 
 /**
@@ -42,7 +36,7 @@ const createProductId = () => `product_${Date.now()}_${Math.random().toString(36
 export const publishMigratedProduct = async (
 	formData: ProductFormData,
 	originalNip15EventId: string,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NdkClient,
 	onProgress?: (progress: MigrationProgress) => void,
 ): Promise<string> => {
@@ -62,7 +56,9 @@ export const publishMigratedProduct = async (
 		}
 	}
 
-	const context = await createNdkPublishContext(ndk, signer, publishWithRelayProgress)
+	// A3.5: the context is built from the signer capability; the relay-progress publish half still
+	// routes through the NDK publish binding (it needs the NDKEvent's relay:published events).
+	const context = await createSignerPublishContext(signer, (event) => publishWithRelayProgress(new NDKEvent(ndk, event)))
 	const outcome = await publishMigratedProductWorkflow(
 		{
 			...context,

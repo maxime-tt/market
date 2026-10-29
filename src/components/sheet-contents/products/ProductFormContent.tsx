@@ -1,5 +1,6 @@
 import { Button } from '@ui/primitives/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
+import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductFormTab } from '@/lib/stores/product'
 
@@ -160,7 +161,7 @@ export function ProductFormContent({
 			try {
 				setIsPublishing(true)
 				const ndk = ndkActions.getNDK()
-				const signer = ndkActions.getSigner()
+				const signer = getActiveSignerCapability()
 
 				if (!ndk) {
 					toast.error('NDK not initialized')

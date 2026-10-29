@@ -167,7 +167,9 @@ const adoptActiveSigner = async (wasLoggedOut: boolean): Promise<void> => {
 
 	const pubkey = await capability.getPublicKey()
 	const ndk = ndkActions.getNDK()
-	void cartActions.reconcileRemoteCartForUser(pubkey, ndkSigner, ndk, wasLoggedOut)
+	// A3.5(d): the cart reconcile takes the **capability** (it publishes through
+	// `createSignerPublishContext` now), never the NDK-typed signer.
+	void cartActions.reconcileRemoteCartForUser(pubkey, capability, ndk, wasLoggedOut)
 }
 
 const ports: AuthPorts = {

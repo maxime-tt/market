@@ -13,6 +13,7 @@ import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { getATagFromCoords, getCoordsFromATag } from '@/lib/utils/coords'
 import {
 	addToFeaturedCollections,
@@ -166,7 +167,7 @@ function FeaturedItemsComponent() {
 	// Mutation hooks
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
-	const signer = ndkActions.getSigner()
+	const signer = getActiveSignerCapability()
 
 	const addProductMutation = useMutation({
 		mutationFn: async ({ productCoords, appPubkey }: { productCoords: string; appPubkey?: string }) => {

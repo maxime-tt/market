@@ -50,14 +50,16 @@ import {
 	updateCartProductQuantity,
 	type CartQuantityAction,
 } from '@sdk/commerce/cart'
-import { getAppNdk, getAppSigner } from '@platform/web/ndkPublishContext'
+import { getAppNdk } from '@platform/web/ndkPublishContext'
 import {
 	findReusablePublishedShippingSelection,
 	normalizePublishedProductShippingTags,
 	resolvePublishedProductShippingOptions,
 	type ProductShippingSelection,
 } from '@sdk/commerce/products'
-import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { SignerCapability } from '@sdk/core/signer'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { QueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { Store } from '@tanstack/store'
@@ -285,8 +287,8 @@ const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
 type CartSyncDependencies = {
 	now: () => number
 	fetchLatestCartSnapshot: (userPubkey: string) => Promise<PersistedCartContent | null>
-	publishCartSnapshot: (snapshot: PersistedCartContent, signer: NDKSigner, ndk: NDK) => Promise<string>
-	getSigner: () => NDKSigner | undefined
+	publishCartSnapshot: (snapshot: PersistedCartContent, capability: SignerCapability, ndk: NDK) => Promise<string>
+	getSigner: () => SignerCapability | null
 	getNDK: () => NDK | null
 	getProductEvent: (id: string, sellerPubkey?: string) => Promise<NDKEvent | null>
 	getShippingEvent: (shippingReferenceId: string) => Promise<NDKEvent | null>
@@ -377,7 +379,7 @@ const defaultCartSyncDependencies: CartSyncDependencies = {
 	now: defaultNow,
 	fetchLatestCartSnapshot,
 	publishCartSnapshot,
-	getSigner: () => getAppSigner(),
+	getSigner: () => getActiveSignerCapability(),
 	getNDK: () => getAppNdk() as NDK | null,
 	getProductEvent: fetchProductEventFromQueries,
 	getShippingEvent: fetchShippingEventFromQueries,
@@ -514,8 +516,13 @@ export const cartActions = {
 		}
 	},
 
-	reconcileRemoteCartForUser: async (pubkey: string, signer?: NDKSigner, ndk?: NDK | null, wasLoggedOut: boolean = false) => {
-		if (!pubkey || !signer || !ndk) return
+	reconcileRemoteCartForUser: async (
+		pubkey: string,
+		capability?: SignerCapability | null,
+		ndk?: NDK | null,
+		wasLoggedOut: boolean = false,
+	) => {
+		if (!pubkey || !capability || !ndk) return
 
 		clearRemotePublishTimeout()
 		cartStore.setState((state) => ({

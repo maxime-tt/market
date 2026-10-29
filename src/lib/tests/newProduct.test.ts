@@ -1,6 +1,7 @@
 import { expect, test, describe, beforeEach, afterEach } from 'bun:test'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
+import { createSignerFromKey } from '@sdk/core/signer'
 import { devUser1 } from '@/lib/fixtures'
 import { productFormStore, productFormActions, DEFAULT_FORM_STATE } from '@/lib/stores/product'
 import { fetchProduct, getProductTitle, getProductDescription, getProductPrice, getProductImages } from '@/queries/products'
@@ -63,7 +64,8 @@ describe('Product Publishing', () => {
 		}))
 
 		// Publish the product
-		const publishResult = await productFormActions.publishProduct(signer, ndk!)
+		// A3.5: the publish form takes the signer capability now — built from the same dev key.
+		const publishResult = await productFormActions.publishProduct(createSignerFromKey(devUser1.sk), ndk!)
 		expect(typeof publishResult).toBe('string')
 
 		// Use the event ID from publishResult

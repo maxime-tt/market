@@ -1,11 +1,7 @@
-import {
-	createNdkPublishContext,
-	getAppNdk,
-	getAppSigner,
-	NDKEvent,
-	type NDKSigner,
-	type NdkClient as NDK,
-} from '@platform/web/ndkPublishContext'
+import { getAppNdk, NDKEvent, type NDKSigner, type NdkClient as NDK, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import type { SignerCapability } from '@sdk/core/signer'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import {
 	buildSellerProductEventData,
 	deleteProductListingWorkflow,
@@ -30,7 +26,7 @@ export { productPublishIssueMessage }
  */
 export const createProductEvent = (
 	formData: ProductFormData,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 	productId?: string, // Optional for updates
 	appPubkey?: string, // Optional app pubkey for client tag
@@ -52,14 +48,16 @@ export const createProductEvent = (
 /**
  * Publishes a new product
  */
-export const publishProduct = async (formData: ProductFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const publishProduct = async (formData: ProductFormData, signer: SignerCapability, ndk: NDK): Promise<string> => {
 	return publishProductForm(formData, signer, ndk)
 }
 
 const createProductId = () => `product_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
-async function publishProductForm(formData: ProductFormData, signer: NDKSigner, ndk: NDK, productDTag?: string): Promise<string> {
-	const context = await createNdkPublishContext(ndk, signer)
+async function publishProductForm(formData: ProductFormData, signer: SignerCapability, ndk: NDK, productDTag?: string): Promise<string> {
+	const context = await createSignerPublishContext(signer, async (event) => {
+		await publishAppNostrEvent(ndk, event)
+	})
 	const outcome = await publishProductListingWorkflow({ ...context, createProductId }, formData, productDTag)
 	if (!outcome.ok) throw new Error(productPublishIssueMessage(outcome.issue))
 	return outcome.event.id
@@ -71,7 +69,7 @@ async function publishProductForm(formData: ProductFormData, signer: NDKSigner, 
 export const updateProduct = async (
 	productDTag: string, // The 'd' tag value from the original product
 	formData: ProductFormData,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 ): Promise<string> => {
 	if (!productDTag) {
@@ -83,11 +81,18 @@ export const updateProduct = async (
 /**
  * Deletes a product by publishing a deletion event
  */
-export const deleteProduct = async (productDTag: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
+export const deleteProduct = async (productDTag: string, signer: SignerCapability, ndk: NDK): Promise<boolean> => {
 	try {
-		const deletion = await deleteProductListingWorkflow(await createNdkPublishContext(ndk, signer), productDTag)
+		const deletion = await deleteProductListingWorkflow(
+			await createSignerPublishContext(signer, async (event) => {
+				await publishAppNostrEvent(ndk, event)
+			}),
+			productDTag,
+		)
 		// Relays may keep serving the listing; the store applies the deletion to every later read.
-		getNdkEventStore().add(deletion)
+		// A3.5: the deletion is a raw signed event now; the NDK read store still
+		// holds NDKEvents, so the raw event is wrapped into one at this boundary.
+		getNdkEventStore().add(new NDKEvent(ndk, deletion))
 		return true
 	} catch (error) {
 		console.error('Error deleting product:', error)
@@ -101,7 +106,7 @@ export const deleteProduct = async (productDTag: string, signer: NDKSigner, ndk:
 export const usePublishProductMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (formData: ProductFormData) => {
@@ -115,9 +120,9 @@ export const usePublishProductMutation = () => {
 			// Get current user pubkey
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
+				const userPubkeyResolved = await signer.getPublicKey()
+				if (userPubkeyResolved) {
+					userPubkey = userPubkeyResolved
 				}
 			}
 
@@ -144,7 +149,7 @@ export const usePublishProductMutation = () => {
 export const useUpdateProductMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ productDTag, formData }: { productDTag: string; formData: ProductFormData }) => {
@@ -158,9 +163,9 @@ export const useUpdateProductMutation = () => {
 			// Get current user pubkey
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
+				const userPubkeyResolved = await signer.getPublicKey()
+				if (userPubkeyResolved) {
+					userPubkey = userPubkeyResolved
 				}
 			}
 
@@ -192,7 +197,7 @@ export const useUpdateProductMutation = () => {
 export const useDeleteProductMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (productDTag: string) => {
@@ -206,9 +211,9 @@ export const useDeleteProductMutation = () => {
 			// Get current user pubkey
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
+				const userPubkeyResolved = await signer.getPublicKey()
+				if (userPubkeyResolved) {
+					userPubkey = userPubkeyResolved
 				}
 			}
 

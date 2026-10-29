@@ -15,7 +15,10 @@
 import { naddrFromAddress } from '@sdk/core/nostr/naddr'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import { fetchAdminSettings, fetchEditorSettings } from '@platform/web/app-settings/appSettingsQuery'
-import { getAppNdk, getAppSigner, type NdkClient as NDK, type NDKSigner } from '@platform/web/ndkPublishContext'
+import { getAppNdk, type NdkClient as NDK, type NDKSigner, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import type { SignerCapability } from '@sdk/core/signer'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { createAppSettingsPublishContext, curationIssueMessage, resolveListOwner } from '@platform/web/curationContext'
 import {
 	CURATION_LISTS,
@@ -60,7 +63,7 @@ const ROLE_ISSUE_OVERRIDES: Partial<Record<RoleChange, Partial<Record<RoleChange
 	demoteEditorToUser: { 'not-editor': 'User is not currently an editor' },
 }
 
-async function publishRoleList(list: 'admins' | 'editors', items: string[], signer: NDKSigner, ndk: NDK): Promise<string> {
+async function publishRoleList(list: 'admins' | 'editors', items: string[], signer: SignerCapability, ndk: NDK): Promise<string> {
 	const outcome = await publishCurationListWorkflow(await createAppSettingsPublishContext(ndk, signer), list, items)
 	if (!outcome.ok) throw new Error(curationIssueMessage(outcome))
 	return outcome.event.id
@@ -83,7 +86,7 @@ async function applyRoleChange(
 	change: RoleChange,
 	state: RoleListsState,
 	userPubkey: string,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 ): Promise<{ adminEventId?: string; editorEventId?: string }> {
 	const plan = planRoleChange(change, state, userPubkey)
@@ -97,13 +100,13 @@ async function applyRoleChange(
 /**
  * Publishes an updated admin list through WebSocket interface
  */
-export const publishAdminList = (adminData: AdminListData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+export const publishAdminList = (adminData: AdminListData, signer: SignerCapability, ndk: NDK): Promise<string> =>
 	publishRoleList('admins', adminData.admins ?? [], signer, ndk)
 
 /**
  * Adds an admin to the existing admin list
  */
-export const addAdmin = async (newAdminPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
+export const addAdmin = async (newAdminPubkey: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> => {
 	const owner = await resolveListOwner(signer, appPubkey)
 	const state = { admins: await fetchRoleList(ndk, owner, 'admins'), editors: null }
 	return (await applyRoleChange('addAdmin', state, newAdminPubkey, signer, ndk)).adminEventId!
@@ -112,7 +115,7 @@ export const addAdmin = async (newAdminPubkey: string, signer: NDKSigner, ndk: N
 /**
  * Removes an admin from the existing admin list
  */
-export const removeAdmin = async (adminPubkeyToRemove: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
+export const removeAdmin = async (adminPubkeyToRemove: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> => {
 	const owner = await resolveListOwner(signer, appPubkey)
 	const state = { admins: await fetchRoleList(ndk, owner, 'admins'), editors: null }
 	return (await applyRoleChange('removeAdmin', state, adminPubkeyToRemove, signer, ndk)).adminEventId!
@@ -124,7 +127,7 @@ export const removeAdmin = async (adminPubkeyToRemove: string, signer: NDKSigner
 export const usePublishAdminListMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (adminData: AdminListData) => {
@@ -136,12 +139,10 @@ export const usePublishAdminListMutation = () => {
 
 		onSuccess: async (eventId) => {
 			// Get current user pubkey
+			// A3.5: the capability answers the identity (hex pubkey).
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
+				userPubkey = await signer.getPublicKey().catch(() => '')
 			}
 
 			// Invalidate relevant queries
@@ -167,7 +168,7 @@ export const usePublishAdminListMutation = () => {
 export const useAddAdminMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -201,7 +202,7 @@ export const useAddAdminMutation = () => {
 export const useRemoveAdminMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -232,13 +233,13 @@ export const useRemoveAdminMutation = () => {
 /**
  * Publishes an updated editor list through WebSocket interface
  */
-export const publishEditorList = (editorData: EditorListData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+export const publishEditorList = (editorData: EditorListData, signer: SignerCapability, ndk: NDK): Promise<string> =>
 	publishRoleList('editors', editorData.editors, signer, ndk)
 
 /**
  * Adds an editor to the existing editor list
  */
-export const addEditor = async (newEditorPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
+export const addEditor = async (newEditorPubkey: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> => {
 	const owner = await resolveListOwner(signer, appPubkey)
 	const state = { admins: null, editors: await fetchRoleList(ndk, owner, 'editors') }
 	return (await applyRoleChange('addEditor', state, newEditorPubkey, signer, ndk)).editorEventId!
@@ -247,7 +248,12 @@ export const addEditor = async (newEditorPubkey: string, signer: NDKSigner, ndk:
 /**
  * Removes an editor from the existing editor list; the editor list may become empty.
  */
-export const removeEditor = async (editorPubkeyToRemove: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
+export const removeEditor = async (
+	editorPubkeyToRemove: string,
+	signer: SignerCapability,
+	ndk: NDK,
+	appPubkey?: string,
+): Promise<string> => {
 	const owner = await resolveListOwner(signer, appPubkey)
 	const state = { admins: null, editors: await fetchRoleList(ndk, owner, 'editors') }
 	return (await applyRoleChange('removeEditor', state, editorPubkeyToRemove, signer, ndk)).editorEventId!
@@ -259,7 +265,7 @@ export const removeEditor = async (editorPubkeyToRemove: string, signer: NDKSign
 export const usePublishEditorListMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (editorData: EditorListData) => {
@@ -300,7 +306,7 @@ export const usePublishEditorListMutation = () => {
 export const useAddEditorMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -335,7 +341,7 @@ export const useAddEditorMutation = () => {
 export const useRemoveEditorMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -369,7 +375,7 @@ export const useRemoveEditorMutation = () => {
  */
 export const promoteEditorToAdmin = async (
 	userPubkey: string,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 	appPubkey?: string,
 ): Promise<{ adminEventId: string; editorEventId: string }> => {
@@ -383,7 +389,7 @@ export const promoteEditorToAdmin = async (
  */
 export const demoteAdminToEditor = async (
 	userPubkey: string,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 	appPubkey?: string,
 ): Promise<{ adminEventId: string; editorEventId: string }> => {
@@ -395,7 +401,7 @@ export const demoteAdminToEditor = async (
 /**
  * Promotes a regular user to editor (pessimistic update)
  */
-export const promoteUserToEditor = async (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
+export const promoteUserToEditor = async (userPubkey: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> => {
 	const state = await fetchRoleState(await resolveListOwner(signer, appPubkey))
 	return (await applyRoleChange('promoteUserToEditor', state, userPubkey, signer, ndk)).editorEventId!
 }
@@ -403,7 +409,7 @@ export const promoteUserToEditor = async (userPubkey: string, signer: NDKSigner,
 /**
  * Demotes an editor to regular user (pessimistic update)
  */
-export const demoteEditorToUser = async (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
+export const demoteEditorToUser = async (userPubkey: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> => {
 	const state = await fetchRoleState(await resolveListOwner(signer, appPubkey))
 	return (await applyRoleChange('demoteEditorToUser', state, userPubkey, signer, ndk)).editorEventId!
 }
@@ -413,7 +419,7 @@ export const demoteEditorToUser = async (userPubkey: string, signer: NDKSigner, 
  */
 export const removeUserFromAllRoles = async (
 	userPubkey: string,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 	appPubkey?: string,
 ): Promise<{ adminEventId?: string; editorEventId?: string }> => {
@@ -427,7 +433,7 @@ export const removeUserFromAllRoles = async (
 export const usePromoteEditorToAdminMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -461,7 +467,7 @@ export const usePromoteEditorToAdminMutation = () => {
 export const useDemoteAdminToEditorMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -495,7 +501,7 @@ export const useDemoteAdminToEditorMutation = () => {
 export const usePromoteUserToEditorMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -529,7 +535,7 @@ export const usePromoteUserToEditorMutation = () => {
 export const useDemoteEditorToUserMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -563,7 +569,7 @@ export const useDemoteEditorToUserMutation = () => {
 export const useRemoveUserFromAllRolesMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -575,12 +581,10 @@ export const useRemoveUserFromAllRolesMutation = () => {
 
 		onSuccess: async (_, { appPubkey }) => {
 			// Get current user pubkey
+			// A3.5: the capability answers the identity (hex pubkey).
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
+				userPubkey = await signer.getPublicKey().catch(() => '')
 			}
 
 			// Invalidate all role-related queries

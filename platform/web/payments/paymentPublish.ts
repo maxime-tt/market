@@ -11,7 +11,8 @@
  * No signature, mutation key or toast copy changed in the move.
  */
 import { appConfigBinding } from '@platform/web/config/appConfigBinding'
-import { getAppNdk, getAppSigner, publishAppEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { parseNwcUri } from '@sdk/config/wallet'
 import { type PaymentDetailsMethod } from '@sdk/config/constants'
 import { paymentDetailsKeys } from '@sdk/core/query/queryKeyFactory'
@@ -53,12 +54,13 @@ export const publishPaymentDetail = async (params: PublishPaymentDetailParams): 
 		const ndk = getAppNdk()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		const signer = getAppSigner()
+		const signer = getActiveSignerCapability()
 		if (!signer) throw new Error('No signer available to publish payment details')
 
-		// Get user
-		const user = await signer.user()
-		if (!user) throw new Error('User not available')
+		// A3.5: the capability answers the identity (hex pubkey); the NDK user it
+		// replaced was only read for its pubkey.
+		const userPubkey = await signer.getPublicKey()
+		if (!userPubkey) throw new Error('User not available')
 
 		// Get app pubkey
 		const appPubkey = params.appPubkey || appConfigBinding.store.state.config.appPublicKey
@@ -93,8 +95,15 @@ export const publishPaymentDetail = async (params: PublishPaymentDetailParams): 
 			})
 		}
 
-		// Sign and publish
-		await event.sign(signer)
+		// Sign and publish. A3.5: signed through the capability (in-place mutation
+		// contract: id/pubkey/sig land on the event), never an NDK-typed signer.
+		const signed = await signer.signEvent({
+			kind: event.kind,
+			content: event.content,
+			created_at: event.created_at ?? Math.floor(Date.now() / 1000),
+			tags: event.tags as string[][],
+		})
+		Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
 		await publishAppEvent(event)
 
 		return event.id
@@ -129,7 +138,7 @@ export const usePublishPaymentDetail = () => {
 export const usePublishPaymentDetailMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (params: PublishPaymentDetailParams) => {
@@ -149,14 +158,8 @@ export const usePublishPaymentDetailMutation = () => {
 		},
 
 		onSuccess: async (eventId, params) => {
-			// Get current user pubkey
-			let userPubkey = ''
-			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
-			}
+			// Get current user pubkey (A3.5: the capability answers the identity).
+			const userPubkey = signer ? await signer.getPublicKey().catch(() => '') : ''
 
 			// Invalidate relevant queries
 			if (userPubkey) {
@@ -356,12 +359,12 @@ export const publishPaymentReceipt = async (params: PublishPaymentReceiptParams)
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 	if (!signer) throw new Error('No signer available')
 
-	// Get current user
-	const user = await signer.user()
-	if (!user) throw new Error('No user available')
+	// Get current user (A3.5: the capability answers the identity).
+	const userPubkey = await signer.getPublicKey()
+	if (!userPubkey) throw new Error('No user available')
 
 	// Build the event through SDK rules, then sign and publish at the app boundary.
 	const event = new (await import('@nostr-dev-kit/ndk')).NDKEvent(ndk)
@@ -380,7 +383,14 @@ export const publishPaymentReceipt = async (params: PublishPaymentReceiptParams)
 	event.created_at = template.created_at
 
 	try {
-		await event.sign(signer)
+		// A3.5: signed through the capability (in-place mutation contract).
+		const signed = await signer.signEvent({
+			kind: event.kind,
+			content: event.content,
+			created_at: event.created_at ?? Math.floor(Date.now() / 1000),
+			tags: event.tags as string[][],
+		})
+		Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
 		await publishAppEvent(event)
 
 		console.log(`✅ Payment receipt published for order ${invoice.orderId}`)

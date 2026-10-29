@@ -23,25 +23,24 @@ import {
 } from '@sdk/commerce/payments/wallet/nwcWalletRead'
 import { walletKeys } from '@sdk/core/query/queryKeyFactory'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createCapabilityWalletListPort } from '@platform/web/wallet/nwcWalletRead'
 
 export type { NwcBalance }
 export type { Wallet as UserNwcWallet } from '@sdk/config/wallet'
 
-/** The host's relay fetch + NIP-44 self-decrypt for the wallet-list read. */
+/** The host's relay fetch + NIP-44 self-decrypt for the wallet-list read. A3.5: the signer reads come from the active signer capability (`createCapabilityWalletListPort`, `nwcWalletRead`), not NDK's instance signer. */
 function createWalletListPort(ndk: NonNullable<ReturnType<typeof getAppNdk>>): NwcWalletListPort<NwcWalletEventLike> {
-	return {
-		fetchEvents: async (filter) => Array.from(await ndk.fetchEvents(filter as unknown as NDKFilter)),
-		getSignerPubkey: async () => {
-			const signer = ndk.signer
-			if (!signer) return null
-			return (await signer.user()).pubkey
-		},
-		decrypt: async (content: string) => {
-			const signer = ndk.signer
-			if (!signer) throw new Error('No signer available')
-			return signer.decrypt(await signer.user(), content)
-		},
-	}
+	return createCapabilityWalletListPort(getActiveSignerCapabilityOrThrow(), async (filter) =>
+		Array.from(await ndk.fetchEvents(filter as unknown as NDKFilter)),
+	)
+}
+
+/** The active capability, refusing when no session is active (the host's read cannot answer without its own signer). */
+function getActiveSignerCapabilityOrThrow() {
+	const capability = getActiveSignerCapability()
+	if (!capability) throw new Error('No signer available')
+	return capability
 }
 
 /**
@@ -58,14 +57,16 @@ const fetchWalletsThroughStore = (userPubkey: string): Promise<UserNwcWallet[]> 
 }
 
 const fetchBalanceThroughStore = (nwcUri: string): Promise<NwcBalance | null> => {
-	const ndk = getAppNdk()
-	const signer = ndk?.signer
-	if (!ndk || !signer) {
-		console.error('Main NDK instance or signer not available for NWC balance fetch')
+	// A3.5: the NWC client factory's signer ref is a cache-identity object; the
+	// active capability is a valid ref, and the signer read no longer touches the
+	// NDK instance.
+	const capability = getActiveSignerCapability()
+	if (!capability) {
+		console.error('No signer capability available for NWC balance fetch')
 		return Promise.resolve(null)
 	}
 	const port: NwcBalancePort = {
-		getNwcClient: (uri) => walletActions.getOrCreateNwcClient(uri, signer),
+		getNwcClient: (uri) => walletActions.getOrCreateNwcClient(uri, capability),
 	}
 	return readNwcBalanceWorkflow(port, nwcUri)
 }

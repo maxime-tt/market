@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createNdkPublishContext, getAppNdk, getAppSigner } from '@platform/web/ndkPublishContext'
-import { createNdkReadContext } from '@platform/web/readContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
+import { createNdkReadContext, getCurrentPubkey } from '@platform/web/readContext'
 import { parseRelayListTags, publishRelayListWorkflow, readRelayListWorkflow, relayListKeys, type RelayPreference } from '@sdk/core/relays'
 
 export type { RelayPreference }
@@ -19,10 +21,15 @@ export async function publishRelayList(relays: RelayPreference[]): Promise<strin
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 	if (!signer) throw new Error('User signer not available')
 
-	const event = await publishRelayListWorkflow(await createNdkPublishContext(ndk, signer), relays)
+	const event = await publishRelayListWorkflow(
+		await createSignerPublishContext(signer, async (event) => {
+			await publishAppNostrEvent(ndk, event)
+		}),
+		relays,
+	)
 	return event.id
 }
 
@@ -58,13 +65,11 @@ export function usePublishRelayList() {
 		mutationFn: (relays: RelayPreference[]) => publishRelayList(relays),
 		onSuccess: async () => {
 			// Get user pubkey to invalidate their relay list
-			const ndk = getAppNdk()
-			if (ndk?.signer) {
+			// A3.5: the identity comes from the auth machine, not NDK's signer-derived activeUser.
+			const userPubkey = getCurrentPubkey()
+			if (userPubkey) {
 				try {
-					const user = await ndk.signer.user()
-					if (user?.pubkey) {
-						queryClient.invalidateQueries({ queryKey: relayListKeys.user(user.pubkey) })
-					}
+					queryClient.invalidateQueries({ queryKey: relayListKeys.user(userPubkey) })
 				} catch (e) {
 					console.error('Failed to invalidate relay list query:', e)
 				}

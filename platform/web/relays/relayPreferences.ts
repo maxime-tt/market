@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createNdkPublishContext, getAppNdk, getAppSigner } from '@platform/web/ndkPublishContext'
-import { createNdkReadContext } from '@platform/web/readContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
+import { createNdkReadContext, getCurrentPubkey } from '@platform/web/readContext'
 import {
 	DEFAULT_RELAY_PREFERENCES,
 	publishRelayPreferencesWorkflow,
@@ -26,10 +28,15 @@ export async function publishRelayPreferences(preferences: RelayPreferencesSetti
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 	if (!signer) throw new Error('User signer not available')
 
-	const event = await publishRelayPreferencesWorkflow(await createNdkPublishContext(ndk, signer), preferences)
+	const event = await publishRelayPreferencesWorkflow(
+		await createSignerPublishContext(signer, async (event) => {
+			await publishAppNostrEvent(ndk, event)
+		}),
+		preferences,
+	)
 	return event.id
 }
 
@@ -82,13 +89,11 @@ export function usePublishRelayPreferences() {
 		mutationFn: (preferences: RelayPreferencesSettings) => publishRelayPreferences(preferences),
 		onSuccess: async () => {
 			// Get user pubkey to invalidate their preferences
-			const ndk = getAppNdk()
-			if (ndk?.signer) {
+			// A3.5: the identity comes from the auth machine, not NDK's signer-derived activeUser.
+			const userPubkey = getCurrentPubkey()
+			if (userPubkey) {
 				try {
-					const user = await ndk.signer.user()
-					if (user?.pubkey) {
-						queryClient.invalidateQueries({ queryKey: relayPreferencesKeys.user(user.pubkey) })
-					}
+					queryClient.invalidateQueries({ queryKey: relayPreferencesKeys.user(userPubkey) })
 				} catch (e) {
 					console.error('Failed to invalidate relay preferences query:', e)
 				}

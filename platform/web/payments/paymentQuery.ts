@@ -1,6 +1,7 @@
 import { PAYMENT_DETAILS_METHOD, ZAP_RELAYS, type PaymentDetailsMethod } from '@sdk/config/constants'
 import { appConfigBinding } from '@platform/web/config/appConfigBinding'
-import { getAppNdk, getAppSigner, publishAppEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createNdkReadContext, fetchEventsByFilter } from '@platform/web/readContext'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import {
@@ -387,7 +388,7 @@ export const publishRichPaymentDetail = async (params: PublishRichPaymentDetailP
  */
 export const usePublishRichPaymentDetail = () => {
 	const queryClient = useQueryClient()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationKey: paymentDetailsKeys.publish(),
@@ -395,18 +396,9 @@ export const usePublishRichPaymentDetail = () => {
 		onSuccess: async (eventId, variables) => {
 			toast.success('Payment details saved successfully')
 
-			// Get current user pubkey to invalidate the correct query
-			let userPubkey = ''
-			if (signer) {
-				try {
-					const user = await signer.user()
-					if (user?.pubkey) {
-						userPubkey = user.pubkey
-					}
-				} catch (error) {
-					console.error('Failed to get user pubkey for cache invalidation:', error)
-				}
-			}
+			// Get current user pubkey to invalidate the correct query (A3.5: the
+			// capability answers the identity).
+			const userPubkey = signer ? await signer.getPublicKey().catch(() => '') : ''
 
 			// Invalidate relevant queries
 			if (userPubkey) {
@@ -478,20 +470,14 @@ export const updatePaymentDetail = async (params: UpdatePaymentDetailParams): Pr
 export const useUpdatePaymentDetail = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationKey: paymentDetailsKeys.updatePaymentDetail(),
 		mutationFn: updatePaymentDetail,
 		onSuccess: async (eventId, variables) => {
-			// Get current user pubkey
-			let userPubkey = ''
-			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
-			}
+			// Get current user pubkey (A3.5: the capability answers the identity).
+			const userPubkey = signer ? await signer.getPublicKey().catch(() => '') : ''
 
 			// Invalidate relevant queries
 			if (userPubkey) {
@@ -524,7 +510,7 @@ export const deletePaymentDetail = async (params: DeletePaymentDetailParams): Pr
 		const ndk = getAppNdk()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		const signer = getAppSigner()
+		const signer = getActiveSignerCapability()
 		if (!signer) throw new Error('No signer available')
 
 		// Create a deletion event (NIP-09)
@@ -534,7 +520,15 @@ export const deletePaymentDetail = async (params: DeletePaymentDetailParams): Pr
 		event.content = 'Deleted payment detail'
 		event.tags = [['a', `${NDKKind.AppSpecificData}:${params.userPubkey}:${params.dTag}`]]
 
-		await event.sign(signer)
+		// A3.5: signed through the capability (in-place mutation contract), never
+		// an NDK-typed signer.
+		const signed = await signer.signEvent({
+			kind: event.kind,
+			content: event.content,
+			created_at: event.created_at ?? Math.floor(Date.now() / 1000),
+			tags: event.tags as string[][],
+		})
+		Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
 		await publishAppEvent(event)
 
 		// Relays may keep serving the detail; the store applies the deletion to every later read.
@@ -598,19 +592,22 @@ export const fetchWalletDetail = async (userPubkey: string, paymentDetailId: str
 			(current.created_at || 0) > (latest.created_at || 0) ? current : latest,
 		)
 
-		// Decrypt and parse the content
-		const signer = getAppSigner()
+		// Decrypt and parse the content. A3.5: NIP-04 through the capability's own
+		// pair (the raw nostr-tools call this replaced passed the *pubkey* where
+		// a private key belongs — recorded as the latent defect the flip fixes);
+		// no pair (a NIP-07/NIP-46 signer without nip04) is the same fail-soft null.
+		const signer = getActiveSignerCapability()
 		if (!signer) return null
 
-		const user = await signer.user()
-		if (!user) return null
+		const nip04Pair = signer.nip04
+		if (!nip04Pair) return null
 
 		const appPubkey = appConfigBinding.store.state.config.appPublicKey
 		if (!appPubkey) return null
 
 		let content
 		try {
-			content = await nip04.decrypt(user.pubkey, appPubkey, mostRecentEvent.content)
+			content = await nip04Pair.decrypt(appPubkey, mostRecentEvent.content)
 			const parsedContent = JSON.parse(content)
 
 			return {
@@ -664,43 +661,29 @@ export interface GenerateInvoiceParams {
 	selectedPaymentDetailId?: string // Optional: Specific payment detail to use (bypasses resolution)
 }
 
-const createZapNostrProvider = async (ndkInstance: ReturnType<typeof getAppNdk>): Promise<NostrProvider | null> => {
-	if (!ndkInstance || !ndkInstance.signer) {
+const createZapNostrProvider = async (): Promise<NostrProvider | null> => {
+	// A3.5: the NIP-57 zap invoice signer is the active **signer capability**, not
+	// NDK's instance signer — the provider is library-free (`NostrProvider`), so the
+	// NDK event this path used to construct only to sign through NDK is retired here.
+	const signer = getActiveSignerCapability()
+	if (!signer) {
 		return null
 	}
 
-	const signer = ndkInstance.signer
-
-	const getPubkey = async () => {
-		try {
-			const user = await signer.user()
-			return user?.pubkey || signer.pubkey
-		} catch (error) {
-			console.warn('Failed to resolve signer pubkey for zap invoice:', error)
-			return signer.pubkey
-		}
-	}
-
 	const provider: NostrProvider = {
-		getPublicKey: getPubkey,
+		getPublicKey: () => signer.getPublicKey(),
 		signEvent: async (event) => {
-			const ndkEvent = new NDKEvent(ndkInstance)
-			ndkEvent.kind = event.kind
-			ndkEvent.content = event.content
-			ndkEvent.tags = event.tags
-			ndkEvent.created_at = event.created_at
-			ndkEvent.pubkey = event.pubkey || (await getPubkey())
-			if (event.id) {
-				ndkEvent.id = event.id
-			}
-
-			await ndkEvent.sign(signer)
-
+			const signed = await signer.signEvent({
+				kind: event.kind,
+				content: event.content,
+				created_at: event.created_at,
+				tags: event.tags,
+			})
 			return {
 				...event,
-				id: ndkEvent.id || event.id || '',
-				sig: ndkEvent.sig || event.sig || '',
-				pubkey: ndkEvent.pubkey || (await getPubkey()),
+				id: signed.id || event.id || '',
+				sig: signed.sig || event.sig || '',
+				pubkey: signed.pubkey || (await signer.getPublicKey()),
 			}
 		},
 	}
@@ -816,7 +799,7 @@ export const generateInvoice = async (params: GenerateInvoiceParams): Promise<Ge
 
 		if (zapSupported) {
 			try {
-				const nostrProvider = await createZapNostrProvider(ndk)
+				const nostrProvider = await createZapNostrProvider()
 				if (nostrProvider) {
 					console.log('⚡ Attempting zap invoice generation via LNURLp')
 					invoice = await ln.zapInvoice(

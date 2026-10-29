@@ -28,6 +28,7 @@ import {
 	type SellerProductFormTab,
 } from '@sdk/commerce/products'
 import { uiActions, uiState } from '@sdk/config/ui'
+import type { SignerCapability } from '@sdk/core/signer'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { Store } from '@tanstack/store'
@@ -427,7 +428,7 @@ export const productFormActions = {
 		}
 	},
 
-	continuePublishing: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
+	continuePublishing: async (signer: SignerCapability, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
 		const state = productFormStore.state
 
 		// Resolve the price/currency pair to publish from the form's
@@ -481,9 +482,8 @@ export const productFormActions = {
 
 			// Invalidate queries if queryClient is provided
 			if (queryClient) {
-				// Get current user pubkey for targeted invalidation
-				const user = await signer.user()
-				const userPubkey = user?.pubkey
+				// Get current user pubkey for targeted invalidation (A3.5: the capability answers).
+				const userPubkey = await signer.getPublicKey().catch(() => '')
 
 				// Invalidate relevant queries
 				await queryClient.invalidateQueries({ queryKey: productKeys.all })
@@ -502,7 +502,7 @@ export const productFormActions = {
 		}
 	},
 
-	publishProduct: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
+	publishProduct: async (signer: SignerCapability, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
 		// V4V check is now handled in the UI layer, so we can directly publish
 		return productFormActions.continuePublishing(signer, ndk, queryClient)
 	},

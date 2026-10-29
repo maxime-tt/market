@@ -2,7 +2,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { liveActivityKeys } from '@sdk/core/query/queryKeyFactory'
 import { publishLiveChatMessageWorkflow } from '@sdk/commerce/messaging'
-import { createNdkPublishContext, getAppNdk } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 
 /**
  * The live-chat message publish binding (store drain D2, slice 7).
@@ -22,7 +24,10 @@ interface PublishLiveChatMessageParams {
 export const publishLiveChatMessage = async ({ liveActivityCoord, content }: PublishLiveChatMessageParams) => {
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
-	if (!ndk.signer) throw new Error('No signer available')
+	// A3.5: the signer is the active capability; the context's publish half still
+	// routes through the NDK publish binding.
+	const signer = getActiveSignerCapability()
+	if (!signer) throw new Error('No signer available')
 
 	const connectedRelays = ndk.pool?.connectedRelays() || []
 	if (connectedRelays.length === 0) {
@@ -30,7 +35,9 @@ export const publishLiveChatMessage = async ({ liveActivityCoord, content }: Pub
 	}
 
 	const relayHint = connectedRelays[0]?.url ?? ''
-	const context = await createNdkPublishContext(ndk, ndk.signer)
+	const context = await createSignerPublishContext(signer, async (event) => {
+		await publishAppNostrEvent(ndk, event)
+	})
 	return publishLiveChatMessageWorkflow(context, { liveActivityCoord, content, relayHint })
 }
 

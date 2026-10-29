@@ -16,7 +16,9 @@ import {
 import { orderKeys, shippingKeys } from '@sdk/core/query/queryKeyFactory'
 import { publishShippingStatusUpdateWorkflow } from '@sdk/commerce/orders'
 import { readShippingOptionsWorkflow } from '@sdk/commerce/shipping'
-import { createNdkPublishContext, getAppNdk, getAppSigner } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { createNdkReadContext, getNdkEventStore, fetchEventById, fetchEventByNaddr } from '@platform/web/readContext'
 
 // Re-export shippingKeys for use in other files
@@ -165,10 +167,13 @@ export const updateShippingStatus = async (params: ShippingUpdateParams): Promis
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 	if (!signer) throw new Error('No active user')
 
-	const context = await createNdkPublishContext(ndk, signer)
+	// A3.5: the context's publish half still routes through the NDK publish binding.
+	const context = await createSignerPublishContext(signer, async (event) => {
+		await publishAppNostrEvent(ndk, event)
+	})
 	const event = await publishShippingStatusUpdateWorkflow(
 		{ ...context, loadOrder: (id) => ndk.fetchEvent({ ids: [id] }) },
 		{
