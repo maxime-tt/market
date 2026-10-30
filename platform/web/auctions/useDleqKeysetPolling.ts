@@ -1,6 +1,14 @@
+/**
+ * platform/web/auctions/useDleqKeysetPolling.ts — host for the DLEQ keyset polling hook.
+ *
+ * Moved verbatim out of `src/lib/auction/useDleqKeysetPolling.ts` (I-PARKED, wave 3 commit A):
+ * only the keyset-acquisition import is re-pointed, from the `../cashu/dleq` src shim to its
+ * `@sdk/commerce/payments/cashu/dleq` home (the shim was a one-line re-export of it), so this
+ * module holds no `platform -> src` edge. No runtime behaviour changes.
+ */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MintKeys } from '@cashu/cashu-ts'
-import { fetchDleqKeysetsForBidsDetailed, getMintKeyset, type DleqKeysetFetcher } from '../cashu/dleq'
+import { fetchDleqKeysetsForBidsDetailed, getMintKeyset, type DleqKeysetFetcher } from '@sdk/commerce/payments/cashu/dleq'
 import type { ParsedBidEvent } from '@sdk/commerce/auctions/events'
 
 const POLL_INTERVAL_MS = 300_000

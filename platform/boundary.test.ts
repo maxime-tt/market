@@ -79,6 +79,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/stores/testLabels.ts', // Wave E adapter drain W-E3.3; shim deleted in E1b
 	'src/lib/terms.ts', // Wave F W-E5a; shim deleted in E1b
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
+	'src/components/AuctionSettlement.tsx', // I-PARKED A: reads the platform DLEQ keyset polling hook; retires with the auction-family drains
 	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
 	// --- I-c-hooks: src/ consumers re-pointed to the moved platform hooks (retire with these leaves in D3). ---
 	'src/components/UserCard.tsx', // I-c-hooks; useBreakpoint moved to platform/web/app

@@ -31,7 +31,7 @@ import {
 	useAuctionVerdicts,
 } from '@/queries/auctions'
 import { computeValidatedBids } from '@sdk/commerce/auctions/bidValidation'
-import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
+import { useDleqKeysetPolling } from '@platform/web/auctions/useDleqKeysetPolling'
 import { parseAuctionEvent } from '@sdk/commerce/auctions/schemas/auctionEvent'
 import { inspectAuctionAdmission } from '@sdk/commerce/auctions/schemas/auctionAdmission'
 import { InvalidAuctionBidBlock } from '@/components/InvalidAuctionNotice'

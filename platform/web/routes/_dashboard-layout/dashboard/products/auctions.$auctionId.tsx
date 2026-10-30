@@ -35,7 +35,7 @@ import { parseValidatorVerdictEvent } from '@sdk/commerce/auctions/schemas/valid
 import { isStructurallyValidSettledSettlement } from '@sdk/commerce/auctions/events'
 import { toRawEvent } from '@sdk/core'
 import { useNut7Polling } from '@/lib/auction/useNut7Polling'
-import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
+import { useDleqKeysetPolling } from '@platform/web/auctions/useDleqKeysetPolling'
 import { parseSettlementEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
 import { computeValidatedBids } from '@sdk/commerce/auctions/bidValidation'
 import { auctionKeys } from '@sdk/core/query/queryKeyFactory'
