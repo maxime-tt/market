@@ -18,6 +18,7 @@ test('renders the products library', async ({ page }) => {
 		'ProductDisplayView',
 		'ProductDisplayViewLoading',
 		'ProductFilters',
+		'InfiniteProductListView',
 		'ProductSearchResults',
 		'ProductSearchResultsEmpty',
 		'ProductSelectionList',

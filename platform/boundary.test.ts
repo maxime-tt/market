@@ -90,7 +90,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	// --- I-c-hooks: src/ consumers re-pointed to the moved platform hooks (retire with these leaves in D3). ---
 	'src/components/UserCard.tsx', // I-c-hooks; useBreakpoint moved to platform/web/app
 	'src/components/EntityActionsMenu.tsx', // I-c-hooks; useEntityPermissions moved to platform/web/permissions
-	'src/components/InfiniteProductList.tsx', // I-c-hooks; useSimpleInfiniteScroll/useScrollRestoration moved to platform/web/products+app
 	'src/components/pages/ProfilePage.tsx', // I-c-hooks; useBreakpoint/useEntityPermissions moved to platform
 	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
 	// --- store drain I-c (2026-10-29): the notification monitor and its src-side seam moved to
@@ -101,7 +100,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
 	'src/components/messages/ConversationListItem.tsx', // C2; reads the derived counts, retired in D3
 	'src/components/social/SocialInteractions.tsx', // H-b kit 2: zaps via the platform ZapButtonHost; retires with the B2 SocialInteractions kit
-	'src/components/InfiniteProductList.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with its H-c leaf slice
 	'src/components/FeaturedSections.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e/AuctionCard park
 	'src/components/orders/OrderDetailComponent.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e4 orders cluster
 	'src/components/ui/image-uploader/ImageUploader.tsx', // Wave G media host (G-a1.2); retires with the H-e8 image-uploader leaf cluster

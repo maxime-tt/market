@@ -11,6 +11,7 @@ import { ProductCardView } from '@ui/products/product-card-view'
 import { ProductDisplayView } from '@ui/products/product-display-view'
 import { ProductFilters, defaultProductFilters } from '@ui/products/product-filters'
 import { ProductSearchResults } from '@ui/products/product-search-results'
+import { InfiniteProductListView } from '@ui/products/infinite-product-list-view'
 import { ProductSelectionList } from '@ui/products/product-selection-list'
 import { CollectionCardView } from '@ui/products/collection-card-view'
 import { CollectionDisplayView } from '@ui/products/collection-display-view'
@@ -469,6 +470,29 @@ export const products: WidgetLibrary = {
 						canEdit={false}
 						onAddToCart={() => {}}
 						onEdit={() => {}}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'InfiniteProductListView',
+			render: () => (
+				<div className="max-w-5xl">
+					<InfiniteProductListView
+						title="All Products"
+						products={[productEvent, { ...productEvent, id: 'wool-beanie' }]}
+						isLoading={false}
+						isError={false}
+						error={null}
+						hasMore={false}
+						totalProducts={2}
+						onLoadMore={() => {}}
+						renderProduct={(item) => (
+							<div className="rounded-md border bg-card p-4">
+								<p className="font-medium">{item.id}</p>
+								<p className="text-sm text-muted-foreground">Product card rendered by the host</p>
+							</div>
+						)}
 					/>
 				</div>
 			),
