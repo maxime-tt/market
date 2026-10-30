@@ -5,7 +5,7 @@
  * encryption and storage policy". The SDK therefore ships no concrete store; this module is the web
  * host's answer — a store that keeps string values verbatim in `globalThis.localStorage`, with no
  * namespacing, envelope or encryption of its own. Callers that need scoping, a schema wrapper or
- * ciphertext wrap this port (see `src/lib/sdkAdapters.ts` for the app's user-scoped variant).
+ * ciphertext wrap this port (see `platform/web/app/sdkAdapters.ts` for the app's user-scoped variant).
  *
  * Non-DOM behaviour (documented decision): a host with no `localStorage` — SSR, build-time, a worker
  * without storage, or a sandbox with the global removed — is treated as an EMPTY store, never an

@@ -63,7 +63,7 @@ import {
 /**
  * The imperative handle `PaymentContent` exposes to the checkout flow.
  *
- * Mirrors `@/components/checkout/PaymentContent`'s `PaymentContentRef` until that
+ * Mirrors `@platform/web/checkout/PaymentContent`'s `PaymentContentRef` until that
  * legacy component is migrated; the shapes are structurally identical, so the
  * route can pass this ref to the legacy component unchanged.
  */

@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ui/primitives
 import { Alert, AlertDescription } from '@ui/primitives/alert'
 import { ScrollArea } from '@ui/primitives/scroll-area'
 import type { PIIScanResult } from '@platform/web/account/piiScanner'
-import { deletePIIEvents, verifyDeletion } from '@/lib/utils/piiDeletion'
-import { useAuth } from '@/lib/stores/auth'
+import { deletePIIEvents, verifyDeletion } from '@platform/web/account/piiDeletion'
+import { useAuth } from '@platform/web/auth/authStore'
 
 export interface PIIExposureModalProps {
 	isOpen: boolean

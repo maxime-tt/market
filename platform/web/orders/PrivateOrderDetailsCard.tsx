@@ -1,4 +1,4 @@
-import type { OrderWithRelatedEvents } from '@/queries/orders'
+import type { OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
 import { getPrivateOrderDetailsRows } from '@sdk/commerce/orders/orderDetail'
 import { PrivateOrderDetailsView } from '@ui/orders/order-detail-views'
 import { getOrderId, getSellerPubkey } from './orderDetailHelpers'

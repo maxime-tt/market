@@ -232,7 +232,7 @@ const authStoreMock = () => ({
 mock.module('@/lib/stores/auth', authStoreMock)
 mock.module('@platform/web/auth/authStore', authStoreMock)
 
-import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
+import type { CheckoutFormData } from '@platform/web/checkout/ShippingAddressForm'
 import type { SignerCapability } from '@sdk/core/signer'
 import { decryptPrivateOrderMessage } from '@sdk/commerce/messaging/privateOrderMessage'
 import { createOrder, createOrderCreationEvent, publishOrderWithDependencies, publishOrderWorkflowWithDependencies } from '@/publish/orders'

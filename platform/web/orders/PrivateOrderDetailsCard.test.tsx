@@ -1,6 +1,6 @@
 import type { PrivateOrderDeliveryDetails } from '@sdk/commerce/messaging/privateOrderMessage'
-import type { OrderWithRelatedEvents } from '@/queries/orders'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
+import type { NDKEvent } from '@platform/web/readContext'
 import { describe, expect, test } from 'bun:test'
 import { canViewPrivateOrderDetails, getPrivateOrderDetailsRows } from './PrivateOrderDetailsCard'
 

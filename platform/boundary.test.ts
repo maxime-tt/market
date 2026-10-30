@@ -88,7 +88,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/sheet-contents/ConversationSheetContent.tsx', // batch 2 lane D; reads UserCardHost; retires when ConversationSheetContent leaves src/ (lane A)
 	'src/components/v4v/RecipientItem.tsx', // batch 2 lane D; reads UserCardHost; retires when RecipientItem leaves src/ (lane C)
 	'src/components/v4v/RecipientPreview.tsx', // batch 2 lane D; reads UserCardHost; retires when RecipientPreview leaves src/ (lane C)
-	'src/components/orders/orderColumns.tsx', // batch 2 lane D; reads UserCardHost; retires when orderColumns leaves src/ (lane B)
 	// --- I-c-hooks: src/ consumers re-pointed to the moved platform hooks (retire with these leaves in D3). ---
 	'src/components/pages/ProfilePage.tsx', // I-c-hooks; useBreakpoint/useEntityPermissions moved to platform
 	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
@@ -99,26 +98,23 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/messages/ConversationView.tsx', // I-c; reads the read marks; retired in D3
 	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
 	// --- H-b kit 4 (B2): the identity kit retires onto the D4 userCardHosts; each row retires with its owner. ---
-	'src/components/orders/OrderDetailComponent.tsx', // H-b kit 3 + batch 2 lane D: renders the platform ProductCardHost + UserCardHost; retires with the H-e4 orders cluster
 	// --- I-c-monitors (2026-10-29): useAuctionBidFunding moved to
 	// platform/web/auctions/useAuctionBidFunding.ts and the src/ original is deleted, so these
 	// src/ consumers read the platform hook directly until their own slices retire them. ---
 	// --- J-b (C2): the wallet modals left src/feature/wallet/, and the checkout flow host +
 	// invoice-storage helpers left src/; the one src/ consumer they left behind reads the platform
 	// home directly until its own slice retires it. ---
-	'src/components/orders/useOrderInvoices.ts', // J-b; reads platform/web/payments/invoiceStorage; retires with the orders cluster
 	// --- L-utils real-lib drain (2026-10-30): the real util/action modules left src/ for their Platform
 	// homes; each src/ consumer below is re-pointed at the moved module and retires with its own leaf slice. ---
 	'src/components/sheet-contents/products/tabs.tsx', // L-utils; MempoolService moved to platform/web/payments
-	'src/components/lightning/LightningPaymentProcessor.tsx', // L-utils; payment methods moved to platform/web/payments
 	'src/components/dialogs/V4VSetupDialog.tsx', // L-utils; V4V split math + props moved to platform/web/v4v
-	'src/components/pii/PIIExposureModal.tsx', // L-utils; PII scan/deletion moved to platform/web/account
 	'src/components/dashboard/TestLabelDialog.tsx', // L-utils; test-label actions moved to platform/web/curation
-	'src/hooks/usePIIMonitor.ts', // L-utils; PII scan moved to platform/web/account
 	'src/hooks/useV4VManager.ts', // L-utils; V4V split math moved to platform/web/v4v
 	'src/components/auth/NostrConnectQR.tsx', // L-utils; copyToClipboard moved to platform/web/utils
-	'src/components/orders/detail/InvoiceCard.tsx', // L-utils; copyToClipboard moved to platform/web/utils
-	'src/components/orders/detail/TrackingInfoDisplay.tsx', // L-utils; copyToClipboard moved to platform/web/utils
+	// --- batch 2 lane B (2026-10-30): orders/checkout/payments/wallet/account components left src/;
+	// the two src/ consumers below are re-pointed onto the moved modules and retire when they do. ---
+	'src/components/DialogRegistry.tsx', // batch 2 lane B; retires when DialogRegistry leaves src/ (lane A)
+	'src/publish/orders.test.ts', // batch 2 lane B; retires when the src/publish orders shim retires (E1)
 	'src/components/v4v/RecipientItem.tsx', // L-utils; color helpers moved to platform/web/utils
 ])
 

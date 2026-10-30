@@ -1,8 +1,8 @@
 import { AuthKeyDialogsHost } from '@platform/web/auth/AuthKeyDialogsHost'
-import { PIIExposureModal } from '@/components/pii/PIIExposureModal'
+import { PIIExposureModal } from '@platform/web/account/PIIExposureModal'
 import { DialogRegistry } from '@/components/DialogRegistry'
 import { SheetRegistry } from '@/components/SheetRegistry'
-import { usePIIMonitor } from '@/hooks/usePIIMonitor'
+import { usePIIMonitor } from '@platform/web/account/usePIIMonitor'
 import { Toaster } from 'sonner'
 import { useEffect, useState } from 'react'
 

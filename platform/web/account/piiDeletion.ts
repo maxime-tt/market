@@ -1,6 +1,6 @@
-import { getActiveSignerCapability } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { NDKEvent } from '@platform/web/ndkPublishContext'
 
 export interface DeletionResult {
 	success: boolean

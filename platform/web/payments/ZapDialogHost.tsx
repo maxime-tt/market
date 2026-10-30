@@ -7,7 +7,7 @@
  * eligibility guard is extracted as `nutzapBlocker` so the failure reasons have
  * one behaviour test.
  */
-import { LightningPaymentProcessor, type LightningPaymentData, type PaymentResult } from '@/components/lightning/LightningPaymentProcessor'
+import { LightningPaymentProcessor, type LightningPaymentData, type PaymentResult } from '@platform/web/payments/LightningPaymentProcessor'
 import { DEFAULT_ZAP_AMOUNTS } from '@sdk/config/constants'
 import { useNDK } from '@platform/web/ndk/ndkStore'
 import { cashuStore } from '@platform/web/wallet/cashuStore'

@@ -1,5 +1,5 @@
 import { OrderDataTable } from '@platform/web/orders/OrderDataTable'
-import { salesColumns } from '@/components/orders/orderColumns'
+import { salesColumns } from '@platform/web/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { readMarks } from '@platform/web/notifications'

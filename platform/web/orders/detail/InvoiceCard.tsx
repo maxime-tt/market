@@ -1,4 +1,4 @@
-import type { PaymentInvoiceData } from '@/lib/types/invoice'
+import type { PaymentInvoiceData } from '@sdk/commerce/checkout'
 import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { InvoiceCardView } from '@ui/orders/order-detail-views'
 import type { InvoiceWithSource } from '../useOrderInvoices'

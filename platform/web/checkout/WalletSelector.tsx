@@ -1,5 +1,5 @@
 import { PAYMENT_DETAILS_METHOD } from '@sdk/config/constants'
-import type { PaymentDetail } from '@/queries/payment'
+import type { PaymentDetail } from '@platform/web/payments/paymentQuery'
 import { WalletSelectorView } from '@ui/checkout/payment-views'
 
 export interface WalletOption extends PaymentDetail {

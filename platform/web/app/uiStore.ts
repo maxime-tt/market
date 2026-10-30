@@ -6,7 +6,7 @@
  * `useStore(uiStore)` and `uiStore.state` (e.g. `platform/web/routes/_dashboard-layout.tsx`,
  * `src/components/DialogRegistry.tsx`), while 5+ consumers WRITE it with `uiStore.setState(...)`
  * (`src/components/DialogRegistry.tsx`, `src/components/SheetRegistry.tsx`,
- * `src/components/wallet/QRScannerDialog.tsx`, `platform/web/routes/_dashboard-layout/dashboard/account/making-payments.tsx`,
+ * `platform/web/wallet/QRScannerDialog.tsx`, `platform/web/routes/_dashboard-layout/dashboard/account/making-payments.tsx`,
  * `src/lib/stores/product-session.test.ts`). The SDK primitive exposes `get`/`subscribe`, not `state`, so a
  * direct `setState` routes into the SDK store, which then mirrors back — the SDK `uiState` stays the single
  * source of truth for both the tanstack store and `uiActions`.

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { NostrEvent } from 'nostr-tools/pure'
-import { createNip60WalletPort, createNip60WalletRecoveryPort, createUserScopedKeyValueStoragePort } from '../sdkAdapters'
+import { createNip60WalletPort, createNip60WalletRecoveryPort, createUserScopedKeyValueStoragePort } from './sdkAdapters'
 
 describe('SDK host adapters', () => {
 	test('user-scoped storage adapter namespaces values and uses strict writes', async () => {

@@ -1,8 +1,10 @@
-import { NDKEvent, NDKRelaySet, type NDKFilter, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { verifyEvent, type Event } from 'nostr-tools'
 import type { Filter as NostrFilter, NostrEvent as RawNostrEvent } from 'nostr-tools'
 
-export { NDKEvent, NDKRelaySet }
+// NDKUser/NDKZapper: batch 2 lane B re-exports so the LightningPaymentProcessor
+// host reads the zap surface through this seam instead of importing the kit.
+export { NDKEvent, NDKRelaySet, NDKUser, NDKZapper }
 export type { NDKFilter, NDKSigner }
 
 type NdkEventContext = ConstructorParameters<typeof NDKEvent>[0]

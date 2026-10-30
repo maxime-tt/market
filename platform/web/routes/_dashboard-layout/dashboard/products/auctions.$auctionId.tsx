@@ -9,7 +9,7 @@ import { AuctionCountdown, useAuctionCountdown } from '@platform/web/auctions/Au
 import { AuctionVerdictPanelHost } from '@platform/web/auctions/AuctionVerdictPanelHost'
 import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
 import { ProfileNameHost as ProfileName } from '@platform/web/profiles/ProfileNameHost'
-import { OrderActions } from '@/components/orders/OrderActions'
+import { OrderActions } from '@platform/web/orders/OrderActions'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
 import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/wrappers/button'

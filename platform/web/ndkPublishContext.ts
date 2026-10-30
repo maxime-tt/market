@@ -1,5 +1,5 @@
 import { ndkActions, ndkStore, getWriteRelaySet, getWriteRelays, fetchLatestAppEvent } from '@platform/web/ndk/ndkStore'
-import { NDKEvent, NDKRelaySet, type NDKSigner, type NDKFilter } from '@/lib/nostr/ndk-events'
+import { NDKEvent, NDKRelaySet, NDKUser, NDKZapper, type NDKSigner, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { applesauceIo, type NostrUser, type PublishOptions, type PublishResult } from '@platform/web/applesauceIo'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { EventPublishContext } from '@sdk/core/ports/eventPublish'
@@ -42,7 +42,7 @@ export const fetchEventsWithTimeout: typeof ndkActions.fetchEventsWithTimeout = 
 export { fetchLatestAppEvent, getWriteRelaySet, getWriteRelays }
 
 /** Re-exported so Platform bindings can use the event type without a `platform -> src` edge. */
-export { NDKEvent }
+export { NDKEvent, NDKUser, NDKZapper }
 export type { NDKFilter, NDKSigner }
 
 /** Re-exported so publish bindings can route app-settings submissions through this bridge without a `platform -> src` edge. */
@@ -112,7 +112,7 @@ export type { EventTemplate, NostrEvent, PublishOptions, PublishResult }
  * routing it through this file keeps those bindings free of `@/` specifiers
  * while the republish cache drains.
  */
-export { createUserScopedKeyValueStoragePort } from '@/lib/sdkAdapters'
+export { createUserScopedKeyValueStoragePort } from '@platform/web/app/sdkAdapters'
 
 /**
  * Platform adapter: binds the web host's NDK client and signer to the SDK's

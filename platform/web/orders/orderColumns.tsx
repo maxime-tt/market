@@ -1,5 +1,5 @@
-import { ndkActions } from '@/lib/stores/ndk'
-import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import type { OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
 import { getOrderRecipientPubkey, getOrderReference } from '@sdk/commerce/orders'
 import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'

@@ -1,5 +1,5 @@
 import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
-import { PaymentDialog } from '@/components/checkout/PaymentDialog'
+import { PaymentDialog } from '@platform/web/checkout/PaymentDialog'
 import {
 	OrderBuyerCardView,
 	OrderDetailLayoutView,
@@ -9,12 +9,12 @@ import {
 	OrderProductsCardView,
 	OrderTimelineView,
 } from '@ui/orders/order-detail-layout'
-import { authStore } from '@/lib/stores/auth'
-import type { PaymentInvoiceData } from '@/lib/types/invoice'
+import { authStore } from '@platform/web/auth/authStore'
+import type { PaymentInvoiceData } from '@sdk/commerce/checkout'
 import { getCoordsFromATag } from '@sdk/core/utils/coords'
 import { getStatusMessaging, getStatusStyles } from '@platform/web/orders/orderUtils'
-import { useOrderClaimForSeller, type OrderWithRelatedEvents } from '@/queries/orders'
-import { getProductId, productSmartQueryOptions } from '@/queries/products'
+import { useOrderClaimForSeller, type OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
+import { getProductId, productSmartQueryOptions } from '@platform/web/products/productQuery'
 import {
 	getShippingInfo,
 	getShippingPickupAddressString,
@@ -22,9 +22,9 @@ import {
 	parseShippingReference,
 	shippingOptionByCoordinatesQueryOptions,
 	shippingOptionQueryOptions,
-} from '@/queries/shipping'
-import { fetchV4VShares } from '@/queries/v4v'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+} from '@platform/web/shipping/shippingQuery'
+import { fetchV4VShares } from '@platform/web/v4v/v4vQuery'
+import type { NDKEvent } from '@platform/web/readContext'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { MessageSquare, Package, Receipt, Truck, CreditCard } from 'lucide-react'

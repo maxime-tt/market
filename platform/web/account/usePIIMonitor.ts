@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { scanForPIIExposure } from '@platform/web/account/piiScanner'
 import type { PIIScanResult } from '@platform/web/account/piiScanner'
 

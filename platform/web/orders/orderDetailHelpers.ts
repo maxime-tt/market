@@ -1,5 +1,5 @@
-import type { PaymentInvoiceData } from '@/lib/types/invoice'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { PaymentInvoiceData } from '@sdk/commerce/checkout'
+import type { NDKEvent } from '@platform/web/readContext'
 import {
 	getOrderAmountSats,
 	getOrderItems as readOrderItems,

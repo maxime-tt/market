@@ -1,12 +1,12 @@
-import { fetchProductByATag, fetchProduct, getProductId, getProductStock, isNSFWProduct } from '@/queries/products'
+import { fetchProductByATag, fetchProduct, getProductId, getProductStock, isNSFWProduct } from '@platform/web/products/productQuery'
 import { StockUpdateDialogView } from '@ui/orders/order-actions-view'
-import { useUpdateProductMutation, type ProductFormData } from '@/publish/products'
-import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { useUpdateProductMutation, type ProductFormData } from '@platform/web/products/productPublish'
+import type { OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { getActiveSignerCapability } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import type { NDKEvent } from '@platform/web/readContext'
 import {
 	getProductTitle,
 	getProductDescription,
@@ -21,7 +21,7 @@ import {
 	getProductCategories,
 	getProductCollection,
 	getProductShippingOptions,
-} from '@/queries/products'
+} from '@platform/web/products/productQuery'
 
 interface ProductStockUpdate {
 	productRef: string // Format: 30402:pubkey:dtag

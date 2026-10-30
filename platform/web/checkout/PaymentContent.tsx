@@ -3,9 +3,9 @@ import {
 	type LightningPaymentData,
 	type LightningPaymentProcessorRef,
 	type PaymentResult,
-} from '@/components/lightning/LightningPaymentProcessor'
-import { WalletSelector } from '@/components/checkout/WalletSelector'
-import type { PaymentInvoiceData } from '@/lib/types/invoice'
+} from '@platform/web/payments/LightningPaymentProcessor'
+import { WalletSelector } from '@platform/web/checkout/WalletSelector'
+import type { PaymentInvoiceData } from '@sdk/commerce/checkout'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { PaymentContentView } from '@ui/checkout/payment-content-view'

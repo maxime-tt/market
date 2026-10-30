@@ -1,4 +1,4 @@
-import type { PaymentInvoiceData } from '@/lib/types/invoice'
+import type { PaymentInvoiceData } from '@sdk/commerce/checkout'
 import { PaymentDialogView } from '@ui/checkout/payment-views'
 import { PaymentContent } from './PaymentContent'
 

@@ -5,10 +5,15 @@ import {
 	type CheckoutFieldRules,
 	type CheckoutFormField,
 } from '@sdk/commerce/checkout'
-import { cartStore } from '@/lib/stores/cart'
+import { cartStore } from '@platform/web/cart/cartStore'
 import { useStore } from '@tanstack/react-store'
 import { useField } from '@tanstack/react-form'
-import { getShippingEvent, getShippingPickupAddressString, getShippingService, getShippingTitle } from '@/queries/shipping'
+import {
+	getShippingEvent,
+	getShippingPickupAddressString,
+	getShippingService,
+	getShippingTitle,
+} from '@platform/web/shipping/shippingQuery'
 import { useEffect, useState } from 'react'
 import { isValidCountry } from '@ui/shared/country-combobox'
 import { ShippingAddressFormView, type CheckoutFieldBinding } from '@ui/checkout/shipping-address-form-view'

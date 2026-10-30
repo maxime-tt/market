@@ -1,6 +1,6 @@
 import type { KeyValueStoragePort, WalletPort, WalletRecoveryPort } from '@sdk/core'
 import { loadUserData, removeUserData, saveUserData } from '@sdk/commerce/payments/wallet/storage'
-import { cashuActions, cashuStore } from '@/lib/stores/cashu'
+import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
 
 type UserStorageBindings = {
 	load<T>(key: string, fallback: T, pubkey: string | null): T
