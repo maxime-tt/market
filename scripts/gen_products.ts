@@ -1,5 +1,5 @@
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
-import type { ProductListingSchema } from '@/lib/schemas/productListing'
+import type { ProductListingSchema } from '@sdk/config/schemas/productListing'
 import { createClientTag } from '@/publish/nip89'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
