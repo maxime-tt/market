@@ -10,14 +10,19 @@ import {
 } from '@sdk/commerce/auctions/auctionPublishValidation'
 import { syncMintSelection } from '@sdk/commerce/auctions/mintSync'
 import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@sdk/config/constants'
-import { authStore } from '@/lib/stores/auth'
-import { configStore } from '@/lib/stores/config'
+import { authStore } from '@platform/web/auth/authStore'
+import { configStore } from '@platform/web/config/appConfigStore'
 import { isWalletDevModeEnabled, WALLET_DEV_TEST_MINTS } from '@sdk/commerce/payments/wallet/devWallet'
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@sdk/commerce/products'
-import { usePublishAuctionMutation, type AuctionFormData, type AuctionSpecEntry } from '@/publish/auctions'
+import { usePublishAuctionMutation, type AuctionFormData, type AuctionSpecEntry } from '@platform/web/auctions/auctionPublish'
 import { AUCTION_MIN_BID_LEG_SATS } from '@sdk/commerce/auctions/constants'
-import { createShippingReference, getShippingInfo, isShippingOptionDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
-import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
+import {
+	createShippingReference,
+	getShippingInfo,
+	isShippingOptionDeleted,
+	useShippingOptionsByPubkey,
+} from '@platform/web/shipping/shippingQuery'
+import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@platform/web/auctions/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Trash2 } from 'lucide-react'

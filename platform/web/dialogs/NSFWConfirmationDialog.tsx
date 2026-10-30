@@ -1,4 +1,4 @@
-import { uiActions, uiStore } from '@/lib/stores/ui'
+import { uiActions, uiStore } from '@platform/web/app/uiStore'
 import { useStore } from '@tanstack/react-store'
 import { NSFWConfirmationDialogView } from '@ui/dialogs/dialog-views'
 

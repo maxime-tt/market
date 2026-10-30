@@ -1,11 +1,11 @@
-import CartSheetContent from '@/components/sheet-contents/CartSheetContent'
-import { NewAuctionContent } from '@/components/sheet-contents/NewAuctionContent'
-import { NewProductContent } from '@/components/sheet-contents/NewProductContent'
-import { NewCollectionContent } from '@/components/sheet-contents/NewCollectionContent'
-import { ConversationSheetContent } from '@/components/sheet-contents/ConversationSheetContent'
+import CartSheetContent from '@platform/web/cart/CartSheetContent'
+import { NewAuctionContent } from '@platform/web/auctions/NewAuctionContent'
+import { NewProductContent } from '@platform/web/products/NewProductContent'
+import { NewCollectionContent } from '@platform/web/collections/NewCollectionContent'
+import { ConversationSheetContent } from '@platform/web/messages/ConversationSheetContent'
 import { Sheet } from '@ui/primitives/sheet'
 import { useStore } from '@tanstack/react-store'
-import { uiStore } from '@/lib/stores/ui'
+import { uiStore } from '@platform/web/app/uiStore'
 import { useMemo, useState, useEffect } from 'react'
 
 export function SheetRegistry() {

@@ -1,4 +1,4 @@
-import { CollectionFormContent } from '@/components/sheet-contents/NewCollectionContent'
+import { CollectionFormContent } from '@platform/web/collections/NewCollectionContent'
 import { collectionFormActions } from '@platform/web/collections/collectionFormStore'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'

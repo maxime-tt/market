@@ -1,5 +1,5 @@
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@ui/primitives/sheet'
-import { collectionFormStore, DEFAULT_COLLECTION_FORM_STATE } from '@/lib/stores/collection'
+import { collectionFormStore, DEFAULT_COLLECTION_FORM_STATE } from '@platform/web/collections/collectionFormStore'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useState } from 'react'
 import { CollectionFormContent } from './CollectionFormContent'

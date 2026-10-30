@@ -5,7 +5,7 @@ import {
 	hasAuctionFormDraft,
 	saveAuctionFormDraft,
 	type AuctionFormDraft,
-} from '@/lib/utils/auctionFormStorage'
+} from './auctionFormStorage'
 
 // ---------------------------------------------------------------------------
 // localStorage mock

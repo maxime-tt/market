@@ -1,4 +1,4 @@
-import { ProductFormContent } from '@/components/sheet-contents/NewProductContent'
+import { ProductFormContent } from '@platform/web/products/NewProductContent'
 import { TestLabelButton } from '@platform/web/curation/TestLabelButton'
 import { TestListingNoticeHost as TestListingNotice } from '@platform/web/config/testListingNoticeHost'
 import { getATagFromCoords } from '@sdk/core/utils/coords'

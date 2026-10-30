@@ -3,7 +3,7 @@ import { salesV4VConfig, salesV4VLabels, type V4VConfig, type V4VLabels } from '
 import { salesV4VManagerProps } from '@platform/web/v4v/sales-props'
 import { deriveInitialSharesFromStored } from '@platform/web/v4v/splits'
 import { useV4VManager } from '@platform/web/v4v/useV4VManager'
-import { useV4VShares } from '@/queries/v4v'
+import { useV4VShares } from '@platform/web/v4v/v4vQuery'
 import { useMemo } from 'react'
 import { V4VSetupDialogView } from '@ui/dialogs/dialog-views'
 

@@ -1,8 +1,8 @@
 import { Button } from '@ui/primitives/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
-import { getActiveSignerCapability } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
-import { productFormActions, productFormStore, type ProductFormTab } from '@/lib/stores/product'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { productFormActions, productFormStore, type ProductFormTab } from '@platform/web/products/productFormStore'
 
 // Expose store/actions to e2e tests for deterministic state control
 // Only in test environments to avoid leaking internals in production
@@ -10,8 +10,8 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'test') {
 	;(window as any).__productFormActions = productFormActions
 	;(window as any).__productFormStore = productFormStore
 }
-import { uiActions } from '@/lib/stores/ui'
-import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
+import { uiActions } from '@platform/web/app/uiStore'
+import { hasProductFormDraft } from '@platform/web/products/productFormStorage'
 import {
 	getAdjacentSellerProductTab,
 	getFirstBlockingSellerProductTab,

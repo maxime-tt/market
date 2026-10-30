@@ -1,5 +1,5 @@
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@ui/primitives/sheet'
-import { cartStore } from '@/lib/stores/cart'
+import { cartStore } from '@platform/web/cart/cartStore'
 import { useStore } from '@tanstack/react-store'
 import { CartContent } from './CartContent'
 import { EmptyCartScreen } from '@ui/checkout/empty-cart-screen'

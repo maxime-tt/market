@@ -1,4 +1,4 @@
-import { ProductFormContent } from '@/components/sheet-contents/NewProductContent'
+import { ProductFormContent } from '@platform/web/products/NewProductContent'
 import { authStore } from '@platform/web/auth/authStore'
 import { productFormActions } from '@platform/web/products/productFormStore'
 import { resolveProductWorkflow, type V4VSetupState } from '@sdk/commerce/products'

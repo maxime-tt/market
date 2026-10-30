@@ -1,7 +1,11 @@
 import { Button } from '@ui/primitives/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
-import { collectionFormActions, collectionFormStore } from '@/lib/stores/collection'
-import { usePublishCollectionMutation, useUpdateCollectionMutation, type CollectionFormData } from '@/publish/collections'
+import { collectionFormActions, collectionFormStore } from '@platform/web/collections/collectionFormStore'
+import {
+	usePublishCollectionMutation,
+	useUpdateCollectionMutation,
+	type CollectionFormData,
+} from '@platform/web/collections/collectionPublish'
 import { useForm } from '@tanstack/react-form'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'

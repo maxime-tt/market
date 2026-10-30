@@ -75,13 +75,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/stores/testLabels.ts', // Wave E adapter drain W-E3.3; shim deleted in E1b
 	'src/lib/terms.ts', // Wave F W-E5a; shim deleted in E1b
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
-	// --- batch 2 lane D (2026-10-30): the root singles left src/ for platform/web/<feature>/; each row
-	// below is a src/ consumer re-pointed onto a moved component and retires when the consumer itself
-	// leaves src/ (batch 2 lanes B/C/A). ---
-	'src/components/sheet-contents/collections/InfoTab.tsx', // batch 2 lane D; retires when collections/InfoTab leaves src/ (lane A)
-	'src/components/sheet-contents/auctions/AuctionFormContent.tsx', // batch 2 lane D; retires when auctions/AuctionFormContent leaves src/ (lane A)
-	'src/components/sheet-contents/cart/CartContent.tsx', // batch 2 lane D; reads the moved CartItem + UserCardHost; retires when CartContent leaves src/ (lane A)
-	'src/components/sheet-contents/ConversationSheetContent.tsx', // batch 2 lane D; reads UserCardHost + the moved ConversationView; retires when ConversationSheetContent leaves src/ (lane A)
 	// --- I-c-hooks: src/ consumers re-pointed to the moved platform hooks (retire with these leaves in D3). ---
 	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
 	// --- store drain I-c (2026-10-29): the notification monitor and its src-side seam moved to
@@ -94,13 +87,8 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	// --- J-b (C2): the wallet modals left src/feature/wallet/, and the checkout flow host +
 	// invoice-storage helpers left src/; the one src/ consumer they left behind reads the platform
 	// home directly until its own slice retires it. ---
-	// --- L-utils real-lib drain (2026-10-30): the real util/action modules left src/ for their Platform
-	// homes; each src/ consumer below is re-pointed at the moved module and retires with its own leaf slice. ---
-	'src/components/sheet-contents/products/tabs.tsx', // L-utils; MempoolService moved to platform/web/payments
-	'src/components/dialogs/V4VSetupDialog.tsx', // L-utils; V4V split math + props moved to platform/web/v4v
 	// --- batch 2 lane B (2026-10-30): orders/checkout/payments/wallet/account components left src/;
-	// the two src/ consumers below are re-pointed onto the moved modules and retire when they do. ---
-	'src/components/DialogRegistry.tsx', // batch 2 lane B; reads the moved LoginDialog too; retires when DialogRegistry leaves src/ (lane A)
+	// the src/ consumer below is re-pointed onto the moved module and retires when it does. ---
 	'src/publish/orders.test.ts', // batch 2 lane B; retires when the src/publish orders shim retires (E1)
 ])
 

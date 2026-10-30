@@ -1,13 +1,13 @@
-import { useConfigQuery } from '@/queries/config'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { TermsConditionsDialogView } from '@ui/dialogs/terms-conditions-dialog-view'
-import { acceptTerms } from '@/lib/terms'
+import { acceptTerms } from '@platform/web/app/terms'
 
 /**
  * The terms acceptance concern now lives in `src/lib/terms.ts` (store drain B3): `src/lib/stores/auth.ts`
  * needs `hasAcceptedTerms()`/`TERMS_ACCEPTED_KEY` and importing them from a `.tsx` made a store import a
  * component. They are re-exported here so existing importers of this module keep working unchanged.
  */
-export { TERMS_ACCEPTED_KEY, hasAcceptedTerms } from '@/lib/terms'
+export { TERMS_ACCEPTED_KEY, hasAcceptedTerms } from '@platform/web/app/terms'
 
 interface TermsConditionsDialogProps {
 	open: boolean

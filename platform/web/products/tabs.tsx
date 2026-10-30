@@ -1,9 +1,9 @@
 import { ImageUploader } from '@platform/web/media/ImageUploader'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import type { ProductShippingOption as RichShippingInfo } from '@sdk/commerce/products'
-import { getActiveSignerCapability } from '@/lib/stores/auth'
-import { useNDK } from '@/lib/stores/ndk'
-import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { useNDK } from '@platform/web/ndk/ndkStore'
+import { productFormActions, productFormStore, type ProductShippingForm } from '@platform/web/products/productFormStore'
 import {
 	attachShippingOptionByRef,
 	resolveProductShippingSelections,
@@ -11,9 +11,9 @@ import {
 	deriveSatsPriceFromFiat,
 } from '@sdk/commerce/products'
 import { MempoolService } from '@platform/web/payments/mempool'
-import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
-import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
-import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
+import { useBtcExchangeRates, type SupportedCurrency } from '@platform/web/payments/exchangeRatesQuery'
+import { usePublishShippingOptionMutation, type ShippingFormData } from '@platform/web/shipping/shippingPublish'
+import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@platform/web/shipping/shippingQuery'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { toast } from 'sonner'

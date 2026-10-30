@@ -1,12 +1,12 @@
 import { LoginDialog } from '@platform/web/auth/LoginDialog'
 import { QRScannerDialog } from '@platform/web/wallet/QRScannerDialog'
-import { V4VSetupDialog } from '@/components/dialogs/V4VSetupDialog'
-import { TermsConditionsDialog } from '@/components/dialogs/TermsConditionsDialog'
-import { NSFWConfirmationDialog } from '@/components/dialogs/NSFWConfirmationDialog'
-import { uiStore } from '@/lib/stores/ui'
+import { V4VSetupDialog } from '@platform/web/dialogs/V4VSetupDialog'
+import { TermsConditionsDialog } from '@platform/web/dialogs/TermsConditionsDialog'
+import { NSFWConfirmationDialog } from '@platform/web/dialogs/NSFWConfirmationDialog'
+import { uiStore } from '@platform/web/app/uiStore'
 import { useStore } from '@tanstack/react-store'
 import { useMemo } from 'react'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 
 export function DialogRegistry() {
 	const { dialogs, dialogCallbacks } = useStore(uiStore)

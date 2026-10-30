@@ -132,8 +132,8 @@ PINNED=(
 #   src/hooks/useAuction*.ts                                     2
 #   src/lib/schemas/auction/*.ts                                 5
 #   src/components/nostr/AuctionSectionGrid.tsx                  0 (family retired below, batch 2 lane C)
-#   src/components/sheet-contents/auctions/*.tsx                 2
-#   src/components/sheet-contents/NewAuction*.tsx                1
+#   src/components/sheet-contents/auctions/*.tsx                 0 (family retired below, batch 2 lane A)
+#   src/components/sheet-contents/NewAuction*.tsx                0 (family retired below, batch 2 lane A)
 #
 # B4/I-b (2026-10-30): the auction-domain re-export shims were retired en bloc —
 # 10 under src/lib/auction/, 10 src/lib/auction*.ts, 5 src/lib/schemas/auction/
@@ -219,8 +219,12 @@ GLOBS=(
 	# family was retired here — the component moved verbatim to
 	# `platform/web/auctions/AuctionSectionGrid.tsx`, joining the existing
 	# `platform/web/auctions/*.tsx` family (scanned-set size unchanged, MIN_SCANNED stays 87).
-	"$ROOT"/src/components/sheet-contents/auctions/*.tsx
-	"$ROOT"/src/components/sheet-contents/NewAuction*.tsx
+	# Batch 2 lane A (2026-10-30): the `src/components/sheet-contents/auctions/*.tsx` and
+	# `src/components/sheet-contents/NewAuction*.tsx` families were retired here — the last
+	# members (AuctionFormContent.tsx, auctions/index.tsx → NewAuctionContent.tsx, and the
+	# NewAuctionContent re-export shell) moved verbatim to `platform/web/auctions/`, joining
+	# the existing `platform/web/auctions/*.tsx` family (scanned-set size unchanged,
+	# MIN_SCANNED stays 87). Re-add a src family if an auction sheet-contents file reappears.
 	"$ROOT"/platform/web/routes/_dashboard-layout/dashboard/products/auctions*.tsx
 	# D1 slice-8 destinations: the framework-free auction reader and the React
 	# binding the `src/queries/auctions.tsx` shim re-exports. Both families must

@@ -1,5 +1,5 @@
 import { Button } from '@ui/primitives/button'
-import { useConfigQuery } from '@/queries/config'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 
 export function ProductWelcomeScreen({ onGetStarted }: { onGetStarted: () => void }) {
 	const { data: config } = useConfigQuery()

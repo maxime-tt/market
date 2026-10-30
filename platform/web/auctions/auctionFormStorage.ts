@@ -4,12 +4,12 @@ import type {
 	AuctionMinBidCurvePeakPreset,
 	AuctionMinBidCurveShape,
 	AuctionSettlementGracePreset,
-} from '@/publish/auctions'
+} from '@platform/web/auctions/auctionPublish'
 import {
 	AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES,
 	AUCTION_MIN_BID_CURVE_PEAK_PRESETS,
 	AUCTION_SETTLEMENT_GRACE_PRESETS,
-} from '@/publish/auctions'
+} from '@platform/web/auctions/auctionPublish'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
 type StartMode = 'immediate' | 'scheduled'
