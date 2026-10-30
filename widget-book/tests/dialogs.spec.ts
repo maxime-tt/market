@@ -17,6 +17,7 @@ test('renders the dialogs library', async ({ page }) => {
 		'NSFWConfirmationDialogView',
 		'ShareProfileDialogView',
 		'V4VSetupDialogView',
+		'PickupLocationDialog',
 		'PickupLocationDialogView',
 		'PickupLocationDialogViewError',
 		'ShareProductDialogView',

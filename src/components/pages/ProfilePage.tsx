@@ -1,4 +1,4 @@
-import { PickupLocationDialog } from '@/components/dialogs/PickupLocationDialog'
+import { PickupLocationDialog } from '@ui/dialogs/pickup-location-dialog'
 import { ShareProfileDialog } from '@/components/dialogs/ShareProfileDialog'
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ItemGrid } from '@ui/shared/item-grid'

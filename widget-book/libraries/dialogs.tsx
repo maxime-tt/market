@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { NSFWConfirmationDialogView, ShareProfileDialogView, V4VSetupDialogView } from '@ui/dialogs/dialog-views'
+import { PickupLocationDialog } from '@ui/dialogs/pickup-location-dialog'
 import { PickupLocationDialogView } from '@ui/dialogs/pickup-location-dialog-view'
 import { ShareProductDialogView } from '@ui/dialogs/share-product-dialog-view'
 import { TermsConditionsDialogView } from '@ui/dialogs/terms-conditions-dialog-view'
@@ -106,6 +107,19 @@ export const dialogs: WidgetLibrary = {
 								Preview cards and a save button would follow.
 							</p>
 						</V4VSetupDialogView>
+					)}
+				/>
+			),
+		},
+		{
+			// The wrapper geocodes its `locations` on open; an empty list renders
+			// the empty state and never issues a Nominatim request.
+			name: 'PickupLocationDialog',
+			render: () => (
+				<DialogDemo
+					triggerLabel="Open pickup location dialog"
+					render={(open, setOpen) => (
+						<PickupLocationDialog open={open} onOpenChange={setOpen} locations={[]} vendorName="Alice's Emporium" />
 					)}
 				/>
 			),
