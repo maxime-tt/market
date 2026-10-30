@@ -9,13 +9,11 @@ import {
 	OrderProductsCardView,
 	OrderTimelineView,
 } from '@ui/orders/order-detail-layout'
-import { getAuctionClaimPublicMarkerFields } from '@/lib/auctions/privateAuctionClaimMessage'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
-import { usePrivateAuctionClaimForOrder } from '@/queries/auctions'
-import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { useOrderClaimForSeller, type OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
 import {
 	getShippingInfo,
@@ -89,10 +87,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const isOrderSeller = sellerPubkey === user?.pubkey
 	const canViewLegacyBuyerContact = isBuyer
 	const canViewBuyerContact = isBuyer || isOrderSeller
-	const auctionClaimFields = getAuctionClaimPublicMarkerFields({ pubkey: orderEvent.pubkey, tags: orderEvent.tags })
-	const privateAuctionClaimQuery = usePrivateAuctionClaimForOrder(orderEvent, isOrderSeller && !!auctionClaimFields)
-	const privateAuctionClaimResult = privateAuctionClaimQuery.data
-	const privateAuctionClaimPayload = privateAuctionClaimResult?.status === 'found' ? privateAuctionClaimResult.claim.payload : null
+	const orderClaim = useOrderClaimForSeller(orderEvent, isOrderSeller)
+	const orderClaimResult = orderClaim?.subject === 'auction-claim' ? orderClaim.claimQuery.data : undefined
 
 	const totalAmount = getTotalAmount(orderEvent)
 
@@ -309,13 +305,13 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 			{canViewLegacyBuyerContact && deliveryContact && <OrderBuyerContactCard deliveryContact={deliveryContact} />}
 
-			{isOrderSeller && auctionClaimFields && (
+			{orderClaim?.subject === 'auction-claim' && (
 				<PrivateAuctionClaimCard
-					isLoading={privateAuctionClaimQuery.isLoading}
-					claim={privateAuctionClaimPayload}
+					isLoading={orderClaim.claimQuery.isLoading}
+					claim={orderClaimResult?.status === 'found' ? orderClaimResult.claim.payload : null}
 					unavailableMessage={privateAuctionClaimUnavailableMessage(
-						privateAuctionClaimResult?.status,
-						privateAuctionClaimResult?.status === 'unavailable' ? privateAuctionClaimResult.reason : undefined,
+						orderClaimResult?.status,
+						orderClaimResult?.status === 'unavailable' ? orderClaimResult.reason : undefined,
 					)}
 				/>
 			)}

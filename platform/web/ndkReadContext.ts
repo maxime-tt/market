@@ -8,7 +8,7 @@
  */
 import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from '@platform/web/ndk/ndkStore'
 import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
-import { authStore, getCurrentPubkey } from '@platform/web/auth/authStore'
+import { authStore, getCurrentPubkey, getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { configActions } from '@sdk/config/app-config'
 import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 
@@ -16,19 +16,47 @@ import { createMemoryEventStore, type EventReadContext, type EventStorePort } fr
 export type { NDKEvent, NDKFilter }
 
 /**
- * The private-auction-claim helpers, re-exported so the auction read binding keeps the
- * signer-bound claim lookup without adding a new `platform -> src` edge: this file already owns
- * the `@/lib/stores/ndk` edge the decrypt path reads its active signer from (D1 slice 8). The
- * create side is here for the same reason: the auction claim publish binding builds the gift wrap
- * from the same active signer, so it re-uses this clause instead of opening an edge of its own.
+ * The private-auction-claim host helpers (Wave I, slice I-a A2 S2, 2026-10-29). The pure half —
+ * payload/marker construction and parsing — lives in `@sdk/commerce/auctions/
+ * privateAuctionClaimMessage`; the two ambient-signer helpers moved here verbatim from the
+ * deleted `src/lib/auctions/privateAuctionClaimMessage.ts` because they are HOST code: NIP-59
+ * private-claim encrypt/decrypt needs the raw active signer (NIP-44 encryption + event
+ * signing), which is acquired from the auth composition root's signer capability accessor
+ * (`getActiveSignerCapability`) and adapted with `asEncryptingSigner` (the `@sdk/core` interop
+ * port) — never the raw NDK signer object (post-#1252; the guard's allowlist stays empty).
+ * This file is outside the auctions guard's scanned set by design: it already owns the host's
+ * NDK adapter edge, while the auctions surface stays NDK-free.
  */
-export {
-	createPrivateAuctionClaimMessageForActiveSigner,
-	decryptPrivateAuctionClaimMessageForActiveSigner,
+import { asEncryptingSigner } from '@sdk/core'
+import {
+	createPrivateAuctionClaimMessageWithSigner,
+	decryptPrivateAuctionClaimMessageWithSigner,
 	getAuctionClaimPublicMarkerFields,
 	privateAuctionClaimMatchesPublicMarker,
+	type CreatePrivateAuctionClaimMessageWithSignerParams,
+	type DecryptPrivateAuctionClaimMessageWithSignerParams,
+	type PrivateAuctionClaimGiftWrap,
 	type PrivateAuctionClaimMessage,
-} from '@/lib/auctions/privateAuctionClaimMessage'
+} from '@sdk/commerce/auctions/privateAuctionClaimMessage'
+
+export async function createPrivateAuctionClaimMessageForActiveSigner(
+	params: Omit<CreatePrivateAuctionClaimMessageWithSignerParams, 'signer'>,
+): Promise<PrivateAuctionClaimGiftWrap> {
+	const capability = getActiveSignerCapability()
+	if (!capability) throw new Error('No active signer available for the private auction claim')
+	return createPrivateAuctionClaimMessageWithSigner({ ...params, signer: asEncryptingSigner(capability) })
+}
+
+export async function decryptPrivateAuctionClaimMessageForActiveSigner(
+	params: Omit<DecryptPrivateAuctionClaimMessageWithSignerParams, 'signer'>,
+): Promise<PrivateAuctionClaimMessage> {
+	const capability = getActiveSignerCapability()
+	if (!capability) throw new Error('No active signer available for the private auction claim')
+	return decryptPrivateAuctionClaimMessageWithSigner({ ...params, signer: asEncryptingSigner(capability) })
+}
+
+export { getAuctionClaimPublicMarkerFields, privateAuctionClaimMatchesPublicMarker }
+export type { PrivateAuctionClaimMessage }
 
 /**
  * Re-exported so Platform bindings (the messaging reads) can read the current
