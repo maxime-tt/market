@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { Nip60WalletEventError, parseNip60WalletEventContent, selectWalletKeyPair } from './nip60WalletEvent'
+import { Nip60WalletEventError, parseNip60WalletEventContent, selectWalletKeyPair } from '@sdk/commerce/payments/wallet/nip60WalletEvent'
 
 /** privkey 1 and its compressed pubkey — a real pair. */
 const PRIV_ONE = '0000000000000000000000000000000000000000000000000000000000000001'

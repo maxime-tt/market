@@ -3,8 +3,8 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { createWalletEventReader, latestByCreatedAt } from './walletEventReader'
-import type { WalletEventOpener, WalletEventRelay } from './walletEventReader'
+import { createWalletEventReader, latestByCreatedAt } from '@sdk/commerce/payments/wallet/walletEventReader'
+import type { WalletEventOpener, WalletEventRelay } from '@sdk/commerce/payments/wallet/walletEventReader'
 
 const OWNER = 'a'.repeat(64)
 

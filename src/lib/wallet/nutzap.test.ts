@@ -23,7 +23,7 @@ import {
 	type NutzapSenderOptions,
 	type NutzapRefusalReason,
 	type NutzapSigner,
-} from './nutzap'
+} from '@sdk/commerce/payments/wallet/nutzap'
 
 // Test-only material: obviously-derived hex, never a real key.
 const X_ONLY = 'a'.repeat(64)

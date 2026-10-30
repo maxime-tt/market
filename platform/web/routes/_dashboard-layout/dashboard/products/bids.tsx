@@ -20,7 +20,7 @@ import {
 	getAuctionReclaimReadyAt,
 	type PendingToken,
 } from '@platform/web/wallet/walletOps'
-import { getMintHostname } from '@/lib/wallet'
+import { getMintHostname } from '@sdk/commerce/payments/display'
 import {
 	auctionClaimOrdersQueryOptions,
 	auctionQueryOptions,

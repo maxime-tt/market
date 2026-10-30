@@ -12,12 +12,12 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { WalletEventUnreadableError, createRelayWalletKeyMigrationSource } from './nip60WalletEventSource'
-import { createWalletEventReader } from './walletEventReader'
-import type { WalletEventOpener, WalletEventRelay } from './walletEventReader'
-import { migrateWalletKeyMaterial } from './walletKeyMigration'
-import { SealedWalletKeyStore } from './walletKeyStore'
-import type { WalletKeySealer, WalletKeyStorage } from './walletKeyStore'
+import { WalletEventUnreadableError, createRelayWalletKeyMigrationSource } from '@sdk/commerce/payments/wallet/nip60WalletEventSource'
+import { createWalletEventReader } from '@sdk/commerce/payments/wallet/walletEventReader'
+import type { WalletEventOpener, WalletEventRelay } from '@sdk/commerce/payments/wallet/walletEventReader'
+import { migrateWalletKeyMaterial } from '@sdk/commerce/payments/wallet/walletKeyMigration'
+import { SealedWalletKeyStore } from '@sdk/commerce/payments/wallet/walletKeyStore'
+import type { WalletKeySealer, WalletKeyStorage } from '@sdk/commerce/payments/wallet/walletKeyStore'
 
 const OWNER = 'a'.repeat(64)
 /** privkey 1 and its compressed pubkey — a real pair. */

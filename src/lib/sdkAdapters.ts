@@ -1,5 +1,5 @@
 import type { KeyValueStoragePort, WalletPort, WalletRecoveryPort } from '@sdk/core'
-import { loadUserData, removeUserData, saveUserData } from '@/lib/wallet/storage'
+import { loadUserData, removeUserData, saveUserData } from '@sdk/commerce/payments/wallet/storage'
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 
 type UserStorageBindings = {

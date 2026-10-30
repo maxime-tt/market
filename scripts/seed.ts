@@ -47,7 +47,7 @@ import { createUserProfileEvent, generateUserProfileData } from './gen_user'
 import { createV4VSharesEvent } from './gen_v4v'
 import { createUserNwcWallets } from './gen_wallets'
 import { getAuctionXpubFromWalletKeys } from '@sdk/commerce/auctions/hd'
-import { parseNip60WalletEventContent, selectWalletKeyPair } from '@/lib/wallet'
+import { parseNip60WalletEventContent, selectWalletKeyPair } from '@sdk/commerce/payments/wallet/nip60WalletEvent'
 import { resolveCvmServerPubkey } from '@platform/server/runtime'
 
 // Force local relay only mode to prevent connecting to public relays during seeding

@@ -23,7 +23,12 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Amount, OutputData, type MintKeyset, type P2PKOptions, type Proof, type Wallet } from '@cashu/cashu-ts'
 
-import { AuctionBidLockMutationPossibleError, createAuctionLock, createAuctionReceipt, loadAuctionMintKeysets } from './auctionFunds'
+import {
+	AuctionBidLockMutationPossibleError,
+	createAuctionLock,
+	createAuctionReceipt,
+	loadAuctionMintKeysets,
+} from '@sdk/commerce/payments/wallet/auctionFunds'
 import type {
 	AuctionFundsMintAccess,
 	AuctionFundsWallet,
@@ -31,8 +36,8 @@ import type {
 	AuctionLockWallet,
 	AuctionReceiveHost,
 	LockAuctionBidFundsParams,
-} from './auctionFunds'
-import type { PendingToken } from './types'
+} from '@sdk/commerce/payments/wallet/auctionFunds'
+import type { PendingToken } from '@sdk/commerce/payments/wallet/types'
 
 // ---------- localStorage polyfill (the inherited modules read it) ----------
 

@@ -22,7 +22,7 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { authStore } from '../stores/auth'
-import { loadUserData, saveUserData } from '../wallet/storage'
+import { loadUserData, saveUserData } from '@sdk/commerce/payments/wallet/storage'
 import { loadBidderRecords, upsertBidderRecord, type BidderBidRecord } from '@sdk/commerce/auctions/bidderRecords'
 
 // ---------- polyfill ----------

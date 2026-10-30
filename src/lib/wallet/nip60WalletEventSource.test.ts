@@ -6,9 +6,9 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { WalletEventUnreadableError, createRelayWalletKeyMigrationSource } from './nip60WalletEventSource'
-import type { WalletEventReader } from './nip60WalletEventSource'
-import { Nip60WalletEventError } from './nip60WalletEvent'
+import { WalletEventUnreadableError, createRelayWalletKeyMigrationSource } from '@sdk/commerce/payments/wallet/nip60WalletEventSource'
+import type { WalletEventReader } from '@sdk/commerce/payments/wallet/nip60WalletEventSource'
+import { Nip60WalletEventError } from '@sdk/commerce/payments/wallet/nip60WalletEvent'
 
 const OWNER = 'a'.repeat(64)
 const PRIV = '0000000000000000000000000000000000000000000000000000000000000001'

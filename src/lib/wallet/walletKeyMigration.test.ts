@@ -6,10 +6,10 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { migrateWalletKeyMaterial } from './walletKeyMigration'
-import type { WalletKeyMigrationSource } from './walletKeyMigration'
-import { SealedWalletKeyStore } from './walletKeyStore'
-import type { WalletKeySealer, WalletKeyStorage } from './walletKeyStore'
+import { migrateWalletKeyMaterial } from '@sdk/commerce/payments/wallet/walletKeyMigration'
+import type { WalletKeyMigrationSource } from '@sdk/commerce/payments/wallet/walletKeyMigration'
+import { SealedWalletKeyStore } from '@sdk/commerce/payments/wallet/walletKeyStore'
+import type { WalletKeySealer, WalletKeyStorage } from '@sdk/commerce/payments/wallet/walletKeyStore'
 
 const OWNER = 'a'.repeat(64)
 const OTHER = 'b'.repeat(64)
