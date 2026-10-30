@@ -107,6 +107,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	// --- H-b kit 4 (B2): the identity kit retires onto the D4 userCardHosts; each row retires with its owner. ---
 	'src/components/BugReportItem.tsx', // H-b kit 4: renders the platform AvatarHost; retires with the H-e6 layout/nav cluster
 	'src/components/social/ZapsList.tsx', // H-b kit 4: renders the platform AvatarHost; retires with the H-e3 social cluster
+	'src/components/LiveChatPanel.tsx', // H-b kit 5: renders the platform LiveChatMessageHost; retires with its H-c leaf slice
 	'src/components/ui/image-uploader/ImageUploader.tsx', // Wave G media host (G-a1.2); retires with the H-e8 image-uploader leaf cluster
 	'src/components/BugReportModal.tsx', // Wave G media host (G-a1.2); retires with the D3 layout/Header.tsx consumer chain
 	// --- I-c-monitors (2026-10-29): useAuctionBidFunding moved to

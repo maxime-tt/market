@@ -19,9 +19,20 @@ test('renders the messages library', async ({ page }) => {
 		'ConversationViewLayout',
 		'MessageInputView',
 		'MessageInputViewLoggedOut',
+		'LiveChatMessageView',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
+})
+
+test('renders the live-chat rows with author, time and body', async ({ page }) => {
+	await page.goto('/?library=messages')
+
+	const widget = page.getByTestId('widget-LiveChatMessageView')
+	await expect(widget).toContainText('satoshi')
+	await expect(widget).toContainText('gm frens, who is bidding?')
+	await expect(widget).toContainText('5m ago')
+	await expect(widget).toContainText('just now')
 })
 
 test('aligns the plain chat bubbles by sender', async ({ page }) => {
