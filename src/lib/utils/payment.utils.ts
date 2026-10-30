@@ -1,6 +1,6 @@
 import { validatePreimage } from '@sdk/commerce/payments/preimage'
 import { walletActions } from '@/lib/stores/wallet'
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
+import type { SignerCapability } from '@sdk/core/signer'
 import type { WalletPaymentMethod } from '@/lib/payments/proof'
 
 /** Re-exported so the helper's home is the SDK while existing callers keep this path. */
@@ -45,14 +45,14 @@ export interface WalletPayResult {
  * Handle NWC (Nostr Wallet Connect) payment
  * @param bolt11 The BOLT11 invoice to pay
  * @param nwcWalletUri The NWC wallet connection URI
- * @param signer The NDK signer for NWC operations
+ * @param signer The active signer capability (a cache-identity object for the NWC client factory)
  * @param options Additional options
  * @returns WalletPayResult with a validated preimage if available
  */
 export async function handleNWCPayment(
 	bolt11: string,
 	nwcWalletUri: string,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	options: { acceptAck?: boolean } = {},
 ): Promise<WalletPayResult> {
 	const method: WalletPaymentMethod = 'nwc'

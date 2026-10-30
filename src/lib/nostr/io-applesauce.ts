@@ -42,6 +42,11 @@ export function setSignerSource(source: SignerSource | null): void {
 	signerSource = source
 }
 
+/** The registered signer source, or null when no composition registered one yet. A3.7: io-ndk re-points its sign/getUser here. */
+export function getRegisteredSignerSource(): SignerSource | null {
+	return signerSource
+}
+
 function requireSignerSource(): SignerSource {
 	if (!signerSource) {
 		throw new Error(

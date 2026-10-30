@@ -9,9 +9,10 @@ import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
+import { getRegisteredSignerSource } from './io-applesauce'
 // The contract is imported from `./io-types`, not `./io`: `./io` imports this
 // adapter to register the default, so importing back from it would be a cycle.
-import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, PublishResult, SubscribeOptions } from './io-types'
+import type { FetchOptions, NostrFilter, NostrIo, NostrUser, PublishOptions, PublishResult, SubscribeOptions } from './io-types'
 
 /** Convert an NDKEvent into a raw nostr-tools event. */
 function toRaw(event: NDKEvent): NostrEvent {
@@ -57,18 +58,26 @@ export const ndkIo: NostrIo = {
 		return { publishedRelays: new Set(Array.from(published, (relay) => (relay as { url: string }).url)) }
 	},
 
-	async sign(template: EventTemplate) {
-		const ndk = ndkStore.state.ndk
-		if (!ndk) throw new Error('NDK not initialized')
-		const signer = ndkActions.getSigner()
-		if (!signer) throw new Error('No signer available')
-		const ndkEvent = new NDKEvent(ndk, template)
-		await ndkEvent.sign(signer)
-		return toRaw(ndkEvent)
+	async sign(template: EventTemplate): Promise<NostrEvent> {
+		// A3.7 (C2): the NDK bridge signs through the SAME injected signer source
+		// io-applesauce reads — the auth session's capability, never the ndk
+		// store's signer copy. Unregistered fails closed; logged-out is the same
+		// 'No signer available' refusal the NDK signer-less path threw.
+		const source = getRegisteredSignerSource()
+		if (!source) {
+			throw new Error('io-ndk: no signer source registered — platform/web/boot.ts must call setSignerSource at composition')
+		}
+		const capability = source()
+		if (!capability) throw new Error('No signer available')
+		return (await capability.signEvent(template)) as NostrEvent
 	},
 
-	async getUser() {
-		const user = await ndkActions.getUser()
-		return user?.pubkey ? { pubkey: user.pubkey } : null
+	async getUser(): Promise<NostrUser | null> {
+		const source = getRegisteredSignerSource()
+		if (!source) throw new Error('io-ndk: no signer source registered — platform/web/boot.ts must call setSignerSource at composition')
+		const capability = source()
+		// Logged out is a null user, matching the ndk store's null user.
+		if (!capability) return null
+		return { pubkey: await capability.getPublicKey() }
 	},
 }

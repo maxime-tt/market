@@ -8,6 +8,7 @@ import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { useEntityPermissions } from '@platform/web/permissions/useEntityPermissions'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { uiActions, uiStore } from '@platform/web/app/uiStore'
 import { truncateText } from '@/lib/utils'
 import { addToBlacklistCollections, removeFromBlacklistCollections } from '@/publish/blacklist'
@@ -107,7 +108,7 @@ function RouteComponent() {
 	// Handle blacklist toggle
 	const handleBlacklistToggle = async () => {
 		const ndk = ndkActions.getNDK()
-		const signer = ndk?.signer
+		const signer = getActiveSignerCapability()
 
 		if (!ndk || !signer) {
 			toast.error('Please connect your wallet to perform this action')
@@ -132,7 +133,7 @@ function RouteComponent() {
 	// Handle featured toggle
 	const handleFeaturedToggle = async () => {
 		const ndk = ndkActions.getNDK()
-		const signer = ndk?.signer
+		const signer = getActiveSignerCapability()
 
 		if (!ndk || !signer) {
 			toast.error('Please connect your wallet to perform this action')

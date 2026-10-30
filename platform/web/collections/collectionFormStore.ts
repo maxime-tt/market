@@ -7,6 +7,7 @@
  * framework-free SDK, so this module carries no `@/` specifier.
  */
 import { type CollectionFormData, publishCollection, updateCollection } from '@platform/web/collections/collectionPublish'
+import type { SignerCapability } from '@sdk/core/signer'
 import { type NDKSigner, type NdkClient as NDK } from '@platform/web/ndkPublishContext'
 import {
 	addProductToCollectionSelection,
@@ -140,7 +141,7 @@ export const collectionFormActions = {
 	/**
 	 * Publish or update collection
 	 */
-	publishCollection: async (signer: NDKSigner, ndk: NDK): Promise<string | null> => {
+	publishCollection: async (signer: SignerCapability, ndk: NDK): Promise<string | null> => {
 		const state = collectionFormStore.state
 
 		const formData: CollectionFormData = {

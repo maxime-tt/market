@@ -14,6 +14,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 import * as nip44 from 'nostr-tools/nip44'
 import { NDKPrivateKeySigner, NDKEvent } from '@nostr-dev-kit/ndk'
+import { createSignerFromKey } from '@sdk/core/signer'
 import { getPublicKey } from 'nostr-tools/pure'
 import { faker } from '@faker-js/faker'
 import { createCollectionEvent, createProductReference, generateCollectionData } from './gen_collections'
@@ -938,7 +939,13 @@ async function seedData() {
 		// Publish featured users
 		if (featuredUserPubkeys.length > 0) {
 			console.log(`Publishing ${featuredUserPubkeys.length} featured users...`)
-			const featuredUsersEvent = createFeaturedUsersEvent({ featuredUsers: featuredUserPubkeys }, appSigner, ndk)
+			// A3.5: the create* family takes the signer capability now; the same app key
+			// builds it (the event's own NDK sign below still uses the NDK signer).
+			const featuredUsersEvent = createFeaturedUsersEvent(
+				{ featuredUsers: featuredUserPubkeys },
+				createSignerFromKey(APP_PRIVATE_KEY!),
+				ndk,
+			)
 			await featuredUsersEvent.sign(appSigner)
 			await featuredUsersEvent.publish()
 		}
@@ -946,7 +953,11 @@ async function seedData() {
 		// Publish featured collections
 		if (featuredCollectionCoords.length > 0) {
 			console.log(`Publishing ${featuredCollectionCoords.length} featured collections...`)
-			const featuredCollectionsEvent = createFeaturedCollectionsEvent({ featuredCollections: featuredCollectionCoords }, appSigner, ndk)
+			const featuredCollectionsEvent = createFeaturedCollectionsEvent(
+				{ featuredCollections: featuredCollectionCoords },
+				createSignerFromKey(APP_PRIVATE_KEY!),
+				ndk,
+			)
 			await featuredCollectionsEvent.sign(appSigner)
 			await featuredCollectionsEvent.publish()
 		}
@@ -954,7 +965,11 @@ async function seedData() {
 		// Publish featured products
 		if (featuredProductCoords.length > 0) {
 			console.log(`Publishing ${featuredProductCoords.length} featured products...`)
-			const featuredProductsEvent = createFeaturedProductsEvent({ featuredProducts: featuredProductCoords }, appSigner, ndk)
+			const featuredProductsEvent = createFeaturedProductsEvent(
+				{ featuredProducts: featuredProductCoords },
+				createSignerFromKey(APP_PRIVATE_KEY!),
+				ndk,
+			)
 			await featuredProductsEvent.sign(appSigner)
 			await featuredProductsEvent.publish()
 		}
@@ -962,7 +977,11 @@ async function seedData() {
 		// Publish featured auctions
 		if (featuredAuctionCoords.length > 0) {
 			console.log(`Publishing ${featuredAuctionCoords.length} featured auctions...`)
-			const featuredAuctionsEvent = createFeaturedAuctionsEvent({ featuredAuctions: featuredAuctionCoords }, appSigner, ndk)
+			const featuredAuctionsEvent = createFeaturedAuctionsEvent(
+				{ featuredAuctions: featuredAuctionCoords },
+				createSignerFromKey(APP_PRIVATE_KEY!),
+				ndk,
+			)
 			await featuredAuctionsEvent.sign(appSigner)
 			await featuredAuctionsEvent.publish()
 		}

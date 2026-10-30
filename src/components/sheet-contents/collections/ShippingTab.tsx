@@ -2,18 +2,24 @@ import { Button } from '@ui/primitives/button'
 import { Input } from '@ui/primitives/input'
 import { Spinner } from '@ui/primitives/spinner'
 import { collectionFormActions } from '@/lib/stores/collection'
+import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { useNDK } from '@/lib/stores/ndk'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useStore } from '@tanstack/react-store'
 import { CheckIcon, PackageIcon, PlusIcon, TruckIcon } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { collectionFormStore, type CollectionShippingForm } from '@/lib/stores/collection'
 
 export function ShippingTab() {
 	const { shippings } = useStore(collectionFormStore)
-	const { getUser } = useNDK()
+	// A3.7: the identity read the retired ndk-store `getUser` answered — the
+	// active signer capability's own pubkey.
+	const getUser = useCallback(async () => {
+		const capability = getActiveSignerCapability()
+		return capability ? { pubkey: await capability.getPublicKey() } : null
+	}, [])
 	const [user, setUser] = useState<any>(null)
 
 	// Get user on mount

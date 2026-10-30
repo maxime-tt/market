@@ -4,13 +4,16 @@ import { toast } from 'sonner'
 import { getEventAddress } from '@sdk/core/nostr/eventLike'
 import { commentKeys } from '@sdk/core/query/queryKeyFactory'
 import { publishCommentWorkflow, type CommentRecord } from '@sdk/commerce/messaging'
-import { createNdkPublishContext, getAppNdk, getAppSigner, type NDKEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent, type NDKEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
+import type { NostrEvent } from 'nostr-tools'
 
 /**
  * The NIP-22 comment publish binding (store drain D2, slice 15).
  *
  * Moved from `src/publish/comments.tsx`. The binding resolves the app NDK and signer through the
- * Platform publish bridge (`getAppNdk`/`getAppSigner`) instead of importing `@/lib/stores/ndk`, and
+ * Platform publish bridge (`getAppNdk` + the A3.5 capability accessor) instead of importing `@/lib/stores/ndk`, and
  * takes its query keys and address helper from the SDK subpaths — so a Platform host module
  * consumes it without a counted `platform -> src` edge. A shim remains at the vacated src path for
  * existing call sites; deleted in E1.
@@ -28,10 +31,10 @@ interface PublishCommentParams {
  * Publishes a NIP-22 comment on a target event (Product, Comment, etc.)
  * Automatically handles both addressable (A/a tags) and regular (E/e tags) events.
  */
-export const publishComment = async ({ content, targetEvent, parentComment }: PublishCommentParams): Promise<NDKEvent> => {
+export const publishComment = async ({ content, targetEvent, parentComment }: PublishCommentParams): Promise<NostrEvent> => {
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 	if (!signer) throw new Error('No signer available')
 
 	const connectedRelays = ndk.pool?.connectedRelays() || []
@@ -40,8 +43,9 @@ export const publishComment = async ({ content, targetEvent, parentComment }: Pu
 	}
 
 	try {
-		const context = await createNdkPublishContext(ndk, signer, async (event) => {
-			const publishedRelays = await event.publish()
+		// A3.5: the context's publish half still routes through the NDK publish binding.
+		const context = await createSignerPublishContext(signer, async (event) => {
+			const publishedRelays = await publishAppNostrEvent(ndk, event)
 			if (publishedRelays.size === 0) throw new Error('Comment was not published to any relays.')
 		})
 		return await publishCommentWorkflow(context, {

@@ -20,14 +20,10 @@ import {
 } from '@sdk/commerce/shipping'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import {
-	createNdkPublishContext,
-	getAppNdk,
-	getAppSigner,
-	type NdkClient as NDK,
-	type NDKEvent,
-	type NDKSigner,
-} from '@platform/web/ndkPublishContext'
+import { getAppNdk, type NdkClient as NDK, NDKEvent, type NDKSigner, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import type { SignerCapability } from '@sdk/core/signer'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { getNdkEventStore } from '@platform/web/readContext'
 
 export type ShippingFormData = ShippingOptionFormInput
@@ -65,11 +61,13 @@ export const buildPublishedShippingOption = (eventId: string, pubkey: string, sh
 
 const createShippingId = () => `shipping_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
-async function publishShippingForm(formData: ShippingFormData, signer: NDKSigner, ndk: NDK, shippingDTag?: string) {
+async function publishShippingForm(formData: ShippingFormData, signer: SignerCapability, ndk: NDK, shippingDTag?: string) {
 	if (formData.service === 'pickup' && formData.price !== '0') {
 		console.warn('Pickup service price should be 0, adjusting automatically')
 	}
-	const context = await createNdkPublishContext(ndk, signer)
+	const context = await createSignerPublishContext(signer, async (event) => {
+		await publishAppNostrEvent(ndk, event)
+	})
 	const outcome = await publishShippingOptionWorkflow({ ...context, createShippingId }, formData, shippingDTag)
 	if (!outcome.ok) throw new Error(shippingPublishIssueMessage(outcome.issue))
 	return { outcome, authorPubkey: context.authorPubkey }
@@ -78,7 +76,11 @@ async function publishShippingForm(formData: ShippingFormData, signer: NDKSigner
 /**
  * Publishes a new shipping option
  */
-export const publishShippingOption = async (formData: ShippingFormData, signer: NDKSigner, ndk: NDK): Promise<PublishedShippingOption> => {
+export const publishShippingOption = async (
+	formData: ShippingFormData,
+	signer: SignerCapability,
+	ndk: NDK,
+): Promise<PublishedShippingOption> => {
 	const { outcome, authorPubkey } = await publishShippingForm(formData, signer, ndk)
 	return buildPublishedShippingOption(outcome.event.id, authorPubkey, outcome.shippingDTag)
 }
@@ -89,7 +91,7 @@ export const publishShippingOption = async (formData: ShippingFormData, signer: 
 export const updateShippingOption = async (
 	shippingDTag: string, // The 'd' tag value from the original shipping option
 	formData: ShippingFormData,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 ): Promise<string> => {
 	if (!shippingDTag) {
@@ -102,11 +104,18 @@ export const updateShippingOption = async (
 /**
  * Deletes a shipping option by publishing a deletion event
  */
-export const deleteShippingOption = async (shippingDTag: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
+export const deleteShippingOption = async (shippingDTag: string, signer: SignerCapability, ndk: NDK): Promise<boolean> => {
 	try {
-		const deletion = await deleteShippingOptionWorkflow(await createNdkPublishContext(ndk, signer), shippingDTag)
+		const deletion = await deleteShippingOptionWorkflow(
+			await createSignerPublishContext(signer, async (event) => {
+				await publishAppNostrEvent(ndk, event)
+			}),
+			shippingDTag,
+		)
 		// Relays may keep serving the option; the store applies the deletion to every later read.
-		getNdkEventStore().add(deletion)
+		// A3.5: the deletion is a raw signed event now; the NDK read store still
+		// holds NDKEvents, so the raw event is wrapped into one at this boundary.
+		getNdkEventStore().add(new NDKEvent(ndk, deletion))
 		return true
 	} catch (error) {
 		console.error('Error deleting shipping option:', error)
@@ -120,7 +129,7 @@ export const deleteShippingOption = async (shippingDTag: string, signer: NDKSign
 export const usePublishShippingOptionMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 	const currentUserPubkey = ndk?.activeUser?.pubkey
 
 	return useMutation({
@@ -152,7 +161,7 @@ export const usePublishShippingOptionMutation = () => {
 export const useUpdateShippingOptionMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 	const currentUserPubkey = ndk?.activeUser?.pubkey
 
 	return useMutation({
@@ -185,7 +194,7 @@ export const useUpdateShippingOptionMutation = () => {
 export const useDeleteShippingOptionMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 	const currentUserPubkey = ndk?.activeUser?.pubkey
 
 	return useMutation({

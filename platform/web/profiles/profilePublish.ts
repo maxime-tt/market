@@ -1,12 +1,15 @@
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEvent } from 'nostr-tools'
 import { profileKeys } from '@sdk/core/query/queryKeyFactory'
-import { createNdkPublishContext, getAppNdk, publishAppEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { mergeProfileField, publishProfileWorkflow, type ProfileMetadata } from '@sdk/core/profile'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { getCurrentPubkey } from '@platform/web/readContext'
 
-async function publishToAnyRelay(event: NDKEvent): Promise<void> {
-	const publishedRelays = await publishAppEvent(event)
+async function publishToAnyRelay(ndk: NonNullable<ReturnType<typeof getAppNdk>>, event: NostrEvent): Promise<void> {
+	const publishedRelays = await publishAppNostrEvent(ndk, event)
 	if (publishedRelays.size === 0) {
 		throw new Error('Profile was not published to any relays. Check your relay connections.')
 	}
@@ -22,7 +25,9 @@ export const updateProfile = async (profile: ProfileMetadata): Promise<void> => 
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	if (!ndk.signer) throw new Error('No signer available')
+	// A3.5: the signer comes from the auth session's capability, not NDK's instance signer.
+	const signer = getActiveSignerCapability()
+	if (!signer) throw new Error('No signer available')
 
 	if (!profile) throw new Error('Profile data is required')
 	const connectedRelays = ndk.pool?.connectedRelays() || []
@@ -31,7 +36,12 @@ export const updateProfile = async (profile: ProfileMetadata): Promise<void> => 
 	}
 
 	try {
-		await publishProfileWorkflow(await createNdkPublishContext(ndk, ndk.signer, publishToAnyRelay), profile)
+		await publishProfileWorkflow(
+			await createSignerPublishContext(signer, async (event) => {
+				await publishToAnyRelay(ndk, event)
+			}),
+			profile,
+		)
 	} catch (error) {
 		console.error('❌ Error during profile publish:', error)
 		console.error('Connected relays at time of error:', ndk.pool?.connectedRelays()?.map((r) => r.url) || [])
@@ -49,9 +59,8 @@ export const useUpdateProfileMutation = () => {
 	return useMutation({
 		mutationFn: updateProfile,
 		onSuccess: async () => {
-			// Get the pubkey of the active user
-			const ndk = getAppNdk()
-			const pubkey = ndk?.activeUser?.pubkey
+			// Get the pubkey of the active user (A3.5: from the auth machine, not NDK's signer-derived activeUser).
+			const pubkey = getCurrentPubkey()
 
 			if (pubkey) {
 				// Invalidate relevant queries to trigger refetching
@@ -79,23 +88,28 @@ export const useUpdateProfileFieldMutation = () => {
 
 	return useMutation({
 		mutationFn: async ({ field, value }: { field: string; value: string | undefined }) => {
-			const ndk = getAppNdk()
-			if (!ndk) throw new Error('NDK not initialized')
-			if (!ndk.signer) throw new Error('No signer available')
+			// A3.5: the signer comes from the auth session's capability; the merge
+			// base stays the NDK user cache exactly as before (kind 0 is replaceable,
+			// so the base is load-bearing — see the comment in the merge).
+			const signer = getActiveSignerCapability()
+			if (!signer) throw new Error('No signer available')
 
-			const user = ndk.activeUser
-			if (!user) throw new Error('No active user')
-
-			const updatedProfile = mergeProfileField(user.profile || {}, field, value)
-			await publishProfileWorkflow(await createNdkPublishContext(ndk, ndk.signer), updatedProfile)
-			user.profile = updatedProfile
+			const user = getAppNdk()?.activeUser
+			const updatedProfile = mergeProfileField(user?.profile || {}, field, value)
+			await publishProfileWorkflow(
+				await createSignerPublishContext(signer, async (event) => {
+					const ndk = getAppNdk()
+					if (!ndk) throw new Error('NDK not initialized')
+					await publishAppNostrEvent(ndk, event)
+				}),
+				updatedProfile,
+			)
 
 			return updatedProfile
 		},
 		onSuccess: async (updatedProfile, { field }) => {
-			// Get the pubkey of the active user
-			const ndk = getAppNdk()
-			const pubkey = ndk?.activeUser?.pubkey
+			// Get the pubkey of the active user (A3.5: from the auth machine, not NDK's signer-derived activeUser).
+			const pubkey = getCurrentPubkey()
 
 			if (pubkey) {
 				// Invalidate relevant queries

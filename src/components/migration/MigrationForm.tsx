@@ -1,6 +1,6 @@
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
-import { authStore } from '@/lib/stores/auth'
+import { authStore, getActiveSignerCapability } from '@/lib/stores/auth'
 import { ndkActions, useNDK } from '@/lib/stores/ndk'
 import { publishMigratedProduct, type MigrationProgress } from '@/publish/migration'
 import { migrationKeys } from '@/queries/queryKeyFactory'
@@ -36,7 +36,12 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 	const navigate = useNavigate()
 	const [isPublishing, setIsPublishing] = useState(false)
 	const { user } = useStore(authStore)
-	const { getUser } = useNDK()
+	// A3.7: the identity read the retired ndk-store `getUser` answered — the
+	// active signer capability's own pubkey.
+	const getUser = useCallback(async () => {
+		const capability = getActiveSignerCapability()
+		return capability ? { pubkey: await capability.getPublicKey() } : null
+	}, [])
 	const [ndkUser, setNdkUser] = useState<any>(null)
 
 	// Progress dialog state
@@ -246,7 +251,7 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 		}
 
 		const ndk = ndkActions.getNDK()
-		const signer = ndkActions.getSigner()
+		const signer = getActiveSignerCapability()
 
 		if (!ndk) {
 			toast.error('NDK not initialized')

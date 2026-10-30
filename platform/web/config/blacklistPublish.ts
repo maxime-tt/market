@@ -12,7 +12,10 @@
  *
  * No signature, mutation key or toast copy changed in the move.
  */
-import { getAppNdk, getAppSigner, type NDKSigner } from '@platform/web/ndkPublishContext'
+import { getAppNdk, type NDKSigner, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import type { SignerCapability } from '@sdk/core/signer'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import {
 	createAppSettingsPublishContext,
 	curationIssueMessage,
@@ -30,7 +33,7 @@ export type { BlacklistData }
 /**
  * Publishes an updated blacklist through WebSocket interface
  */
-export const publishBlacklist = async (blacklistData: BlacklistData, signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const publishBlacklist = async (blacklistData: BlacklistData, signer: SignerCapability, ndk: NDK): Promise<string> => {
 	const outcome = await publishBlacklistWorkflow(await createAppSettingsPublishContext(ndk, signer), blacklistData)
 	if (!outcome.ok) throw new Error(curationIssueMessage(outcome))
 	return outcome.event.id
@@ -42,7 +45,7 @@ async function changeBlacklist(
 	item: string,
 	change: 'add' | 'remove',
 	messages: { alreadyListed: string; notListed: string },
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 	appPubkey?: string,
 ): Promise<string> {
@@ -65,13 +68,13 @@ const COLLECTION_MESSAGES = { alreadyListed: 'Collection is already blacklisted'
 /**
  * Adds a user to the blacklist
  */
-export const addToBlacklist = (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+export const addToBlacklist = (userPubkey: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> =>
 	changeBlacklist('blacklistedPubkeys', userPubkey, 'add', USER_MESSAGES, signer, ndk, appPubkey)
 
 /**
  * Removes a user from the blacklist
  */
-export const removeFromBlacklist = (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+export const removeFromBlacklist = (userPubkey: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> =>
 	changeBlacklist('blacklistedPubkeys', userPubkey, 'remove', USER_MESSAGES, signer, ndk, appPubkey)
 
 /**
@@ -80,7 +83,7 @@ export const removeFromBlacklist = (userPubkey: string, signer: NDKSigner, ndk: 
 export const usePublishBlacklistMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (blacklistData: BlacklistData) => {
@@ -92,12 +95,10 @@ export const usePublishBlacklistMutation = () => {
 
 		onSuccess: async (eventId) => {
 			// Get current user pubkey
+			// A3.5: the capability answers the identity (hex pubkey).
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
+				userPubkey = await signer.getPublicKey().catch(() => '')
 			}
 
 			// Invalidate relevant queries
@@ -123,7 +124,7 @@ export const usePublishBlacklistMutation = () => {
 export const useAddToBlacklistMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -157,7 +158,7 @@ export const useAddToBlacklistMutation = () => {
 export const useRemoveFromBlacklistMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
@@ -188,27 +189,35 @@ export const useRemoveFromBlacklistMutation = () => {
 /**
  * Adds a product to the blacklist
  */
-export const addToBlacklistProducts = (productCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+export const addToBlacklistProducts = (productCoords: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> =>
 	changeBlacklist('blacklistedProducts', productCoords, 'add', PRODUCT_MESSAGES, signer, ndk, appPubkey)
 
 /**
  * Removes a product from the blacklist
  */
-export const removeFromBlacklistProducts = (productCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
-	changeBlacklist('blacklistedProducts', productCoords, 'remove', PRODUCT_MESSAGES, signer, ndk, appPubkey)
+export const removeFromBlacklistProducts = (
+	productCoords: string,
+	signer: SignerCapability,
+	ndk: NDK,
+	appPubkey?: string,
+): Promise<string> => changeBlacklist('blacklistedProducts', productCoords, 'remove', PRODUCT_MESSAGES, signer, ndk, appPubkey)
 
 /**
  * Adds a collection to the blacklist
  */
-export const addToBlacklistCollections = (collectionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
-	changeBlacklist('blacklistedCollections', collectionCoords, 'add', COLLECTION_MESSAGES, signer, ndk, appPubkey)
+export const addToBlacklistCollections = (
+	collectionCoords: string,
+	signer: SignerCapability,
+	ndk: NDK,
+	appPubkey?: string,
+): Promise<string> => changeBlacklist('blacklistedCollections', collectionCoords, 'add', COLLECTION_MESSAGES, signer, ndk, appPubkey)
 
 /**
  * Removes a collection from the blacklist
  */
 export const removeFromBlacklistCollections = (
 	collectionCoords: string,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 	appPubkey?: string,
 ): Promise<string> => changeBlacklist('blacklistedCollections', collectionCoords, 'remove', COLLECTION_MESSAGES, signer, ndk, appPubkey)
@@ -219,7 +228,7 @@ export const removeFromBlacklistCollections = (
 export const useAddToBlacklistProductsMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ productCoords, appPubkey }: { productCoords: string; appPubkey?: string }) => {
@@ -252,7 +261,7 @@ export const useAddToBlacklistProductsMutation = () => {
 export const useRemoveFromBlacklistProductsMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ productCoords, appPubkey }: { productCoords: string; appPubkey?: string }) => {
@@ -285,7 +294,7 @@ export const useRemoveFromBlacklistProductsMutation = () => {
 export const useAddToBlacklistCollectionsMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ collectionCoords, appPubkey }: { collectionCoords: string; appPubkey?: string }) => {
@@ -318,7 +327,7 @@ export const useAddToBlacklistCollectionsMutation = () => {
 export const useRemoveFromBlacklistCollectionsMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ collectionCoords, appPubkey }: { collectionCoords: string; appPubkey?: string }) => {

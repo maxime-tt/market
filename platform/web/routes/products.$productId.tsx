@@ -22,6 +22,7 @@ import { DEFAULT_DOCUMENT_TITLE, buildOwnedMetaEmissions, removeOwnedOgMetaTags,
 import { authStore } from '@platform/web/auth/authStore'
 import { cartActions, useCart, type RichShippingInfo } from '@platform/web/cart/cartStore'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { uiActions, uiStore } from '@platform/web/app/uiStore'
 import { addToBlacklistProducts, removeFromBlacklistProducts } from '@/publish/blacklist'
 import { addToFeaturedProducts, removeFromFeaturedProducts } from '@/publish/featured'
@@ -567,7 +568,7 @@ function RouteComponent() {
 	// Handle blacklist toggle
 	const handleBlacklistToggle = async () => {
 		const ndk = ndkActions.getNDK()
-		const signer = ndk?.signer
+		const signer = getActiveSignerCapability()
 
 		if (!ndk || !signer) {
 			toast.error('Please connect your wallet to perform this action')
@@ -592,7 +593,7 @@ function RouteComponent() {
 	// Handle featured toggle
 	const handleFeaturedToggle = async () => {
 		const ndk = ndkActions.getNDK()
-		const signer = ndk?.signer
+		const signer = getActiveSignerCapability()
 
 		if (!ndk || !signer) {
 			toast.error('Please connect your wallet to perform this action')

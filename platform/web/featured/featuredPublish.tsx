@@ -1,12 +1,15 @@
 import {
 	fetchLatestAppEvent,
 	getAppNdk,
-	getAppSigner,
 	NDKEvent,
 	type NDKFilter,
 	type NDKSigner,
 	type NdkClient as NDK,
+	publishAppNostrEvent,
 } from '@platform/web/ndkPublishContext'
+import type { SignerCapability } from '@sdk/core/signer'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { createAppSettingsPublishContext, curationIssueMessage, resolveListOwner } from '@platform/web/curationContext'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import {
@@ -70,44 +73,44 @@ function createFeaturedListEvent(ndk: NDK, list: FeaturedListKey, items: string[
 /**
  * Creates a Kind 30405 featured products event (Collection format)
  */
-export const createFeaturedProductsEvent = (data: FeaturedProductsData, _signer: NDKSigner, ndk: NDK): NDKEvent =>
+export const createFeaturedProductsEvent = (data: FeaturedProductsData, _signer: SignerCapability, ndk: NDK): NDKEvent =>
 	createFeaturedListEvent(ndk, 'featuredProducts', data.featuredProducts)
 
 /**
  * Creates a Kind 30003 featured collections event (NIP-51 list)
  */
-export const createFeaturedCollectionsEvent = (data: FeaturedCollectionsData, _signer: NDKSigner, ndk: NDK): NDKEvent =>
+export const createFeaturedCollectionsEvent = (data: FeaturedCollectionsData, _signer: SignerCapability, ndk: NDK): NDKEvent =>
 	createFeaturedListEvent(ndk, 'featuredCollections', data.featuredCollections)
 
 /**
  * Creates a Kind 30409 featured auctions event
  */
-export const createFeaturedAuctionsEvent = (data: FeaturedAuctionsData, _signer: NDKSigner, ndk: NDK): NDKEvent =>
+export const createFeaturedAuctionsEvent = (data: FeaturedAuctionsData, _signer: SignerCapability, ndk: NDK): NDKEvent =>
 	createFeaturedListEvent(ndk, 'featuredAuctions', data.featuredAuctions)
 
 /**
  * Creates a Kind 30000 featured users event (NIP-51 list)
  */
-export const createFeaturedUsersEvent = (data: FeaturedUsersData, _signer: NDKSigner, ndk: NDK): NDKEvent =>
+export const createFeaturedUsersEvent = (data: FeaturedUsersData, _signer: SignerCapability, ndk: NDK): NDKEvent =>
 	createFeaturedListEvent(ndk, 'featuredUsers', data.featuredUsers)
 
 /** Validates, signs, and submits a featured list through the app-settings WebSocket. */
-async function publishFeaturedList(list: FeaturedListKey, items: string[], signer: NDKSigner, ndk: NDK): Promise<string> {
+async function publishFeaturedList(list: FeaturedListKey, items: string[], signer: SignerCapability, ndk: NDK): Promise<string> {
 	const outcome = await publishCurationListWorkflow(await createAppSettingsPublishContext(ndk, signer), list, items)
 	if (!outcome.ok) throw new Error(curationIssueMessage(outcome, FEATURED_LABELS[list].invalidItem))
 	return outcome.event.id
 }
 
-export const publishFeaturedProducts = (data: FeaturedProductsData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+export const publishFeaturedProducts = (data: FeaturedProductsData, signer: SignerCapability, ndk: NDK): Promise<string> =>
 	publishFeaturedList('featuredProducts', data.featuredProducts, signer, ndk)
 
-export const publishFeaturedCollections = (data: FeaturedCollectionsData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+export const publishFeaturedCollections = (data: FeaturedCollectionsData, signer: SignerCapability, ndk: NDK): Promise<string> =>
 	publishFeaturedList('featuredCollections', data.featuredCollections, signer, ndk)
 
-export const publishFeaturedAuctions = (data: FeaturedAuctionsData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+export const publishFeaturedAuctions = (data: FeaturedAuctionsData, signer: SignerCapability, ndk: NDK): Promise<string> =>
 	publishFeaturedList('featuredAuctions', data.featuredAuctions, signer, ndk)
 
-export const publishFeaturedUsers = (data: FeaturedUsersData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+export const publishFeaturedUsers = (data: FeaturedUsersData, signer: SignerCapability, ndk: NDK): Promise<string> =>
 	publishFeaturedList('featuredUsers', data.featuredUsers, signer, ndk)
 
 async function fetchFeaturedItems(list: FeaturedListKey, owner: string, ndk: NDK): Promise<string[]> {
@@ -125,7 +128,7 @@ async function changeFeaturedList(
 	list: FeaturedListKey,
 	item: string,
 	change: 'add' | 'remove',
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 	appPubkey?: string,
 ): Promise<string> {
@@ -138,58 +141,74 @@ async function changeFeaturedList(
 /**
  * Adds an item to featured products with ordering
  */
-export const addToFeaturedProducts = (productCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+export const addToFeaturedProducts = (productCoords: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> =>
 	changeFeaturedList('featuredProducts', productCoords, 'add', signer, ndk, appPubkey)
 
 /**
  * Removes an item from featured products
  */
-export const removeFromFeaturedProducts = (productCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
-	changeFeaturedList('featuredProducts', productCoords, 'remove', signer, ndk, appPubkey)
+export const removeFromFeaturedProducts = (
+	productCoords: string,
+	signer: SignerCapability,
+	ndk: NDK,
+	appPubkey?: string,
+): Promise<string> => changeFeaturedList('featuredProducts', productCoords, 'remove', signer, ndk, appPubkey)
 
 /**
  * Reorders featured products
  */
-export const reorderFeaturedProducts = async (orderedProducts: string[], signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const reorderFeaturedProducts = async (orderedProducts: string[], signer: SignerCapability, ndk: NDK): Promise<string> => {
 	return publishFeaturedProducts({ featuredProducts: orderedProducts }, signer, ndk)
 }
 
 /**
  * Similar functions for collections
  */
-export const addToFeaturedCollections = (collectionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
-	changeFeaturedList('featuredCollections', collectionCoords, 'add', signer, ndk, appPubkey)
+export const addToFeaturedCollections = (
+	collectionCoords: string,
+	signer: SignerCapability,
+	ndk: NDK,
+	appPubkey?: string,
+): Promise<string> => changeFeaturedList('featuredCollections', collectionCoords, 'add', signer, ndk, appPubkey)
 
-export const removeFromFeaturedCollections = (collectionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
-	changeFeaturedList('featuredCollections', collectionCoords, 'remove', signer, ndk, appPubkey)
+export const removeFromFeaturedCollections = (
+	collectionCoords: string,
+	signer: SignerCapability,
+	ndk: NDK,
+	appPubkey?: string,
+): Promise<string> => changeFeaturedList('featuredCollections', collectionCoords, 'remove', signer, ndk, appPubkey)
 
-export const reorderFeaturedCollections = async (orderedCollections: string[], signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const reorderFeaturedCollections = async (orderedCollections: string[], signer: SignerCapability, ndk: NDK): Promise<string> => {
 	return publishFeaturedCollections({ featuredCollections: orderedCollections }, signer, ndk)
 }
 
 /**
  * Similar functions for auctions
  */
-export const addToFeaturedAuctions = (auctionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+export const addToFeaturedAuctions = (auctionCoords: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> =>
 	changeFeaturedList('featuredAuctions', auctionCoords, 'add', signer, ndk, appPubkey)
 
-export const removeFromFeaturedAuctions = (auctionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
-	changeFeaturedList('featuredAuctions', auctionCoords, 'remove', signer, ndk, appPubkey)
+export const removeFromFeaturedAuctions = (
+	auctionCoords: string,
+	signer: SignerCapability,
+	ndk: NDK,
+	appPubkey?: string,
+): Promise<string> => changeFeaturedList('featuredAuctions', auctionCoords, 'remove', signer, ndk, appPubkey)
 
-export const reorderFeaturedAuctions = async (orderedAuctions: string[], signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const reorderFeaturedAuctions = async (orderedAuctions: string[], signer: SignerCapability, ndk: NDK): Promise<string> => {
 	return publishFeaturedAuctions({ featuredAuctions: orderedAuctions }, signer, ndk)
 }
 
 /**
  * Similar functions for users
  */
-export const addToFeaturedUsers = (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+export const addToFeaturedUsers = (userPubkey: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> =>
 	changeFeaturedList('featuredUsers', userPubkey, 'add', signer, ndk, appPubkey)
 
-export const removeFromFeaturedUsers = (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+export const removeFromFeaturedUsers = (userPubkey: string, signer: SignerCapability, ndk: NDK, appPubkey?: string): Promise<string> =>
 	changeFeaturedList('featuredUsers', userPubkey, 'remove', signer, ndk, appPubkey)
 
-export const reorderFeaturedUsers = async (orderedUsers: string[], signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const reorderFeaturedUsers = async (orderedUsers: string[], signer: SignerCapability, ndk: NDK): Promise<string> => {
 	return publishFeaturedUsers({ featuredUsers: orderedUsers }, signer, ndk)
 }
 
@@ -199,7 +218,7 @@ export const reorderFeaturedUsers = async (orderedUsers: string[], signer: NDKSi
 export const usePublishFeaturedProductsMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (data: FeaturedProductsData) => {
@@ -211,12 +230,10 @@ export const usePublishFeaturedProductsMutation = () => {
 
 		onSuccess: async (eventId) => {
 			// Get current user pubkey
+			// A3.5: the capability answers the identity (hex pubkey).
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
+				userPubkey = await signer.getPublicKey().catch(() => '')
 			}
 
 			// Invalidate relevant queries
@@ -239,7 +256,7 @@ export const usePublishFeaturedProductsMutation = () => {
 export const usePublishFeaturedCollectionsMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (data: FeaturedCollectionsData) => {
@@ -250,12 +267,10 @@ export const usePublishFeaturedCollectionsMutation = () => {
 		},
 
 		onSuccess: async (eventId) => {
+			// A3.5: the capability answers the identity (hex pubkey).
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
+				userPubkey = await signer.getPublicKey().catch(() => '')
 			}
 
 			queryClient.invalidateQueries({ queryKey: configKeys.all })
@@ -277,7 +292,7 @@ export const usePublishFeaturedCollectionsMutation = () => {
 export const usePublishFeaturedAuctionsMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (data: FeaturedAuctionsData) => {
@@ -288,12 +303,10 @@ export const usePublishFeaturedAuctionsMutation = () => {
 		},
 
 		onSuccess: async (eventId) => {
+			// A3.5: the capability answers the identity (hex pubkey).
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
+				userPubkey = await signer.getPublicKey().catch(() => '')
 			}
 
 			queryClient.invalidateQueries({ queryKey: configKeys.all })
@@ -315,7 +328,7 @@ export const usePublishFeaturedAuctionsMutation = () => {
 export const usePublishFeaturedUsersMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (data: FeaturedUsersData) => {
@@ -326,12 +339,10 @@ export const usePublishFeaturedUsersMutation = () => {
 		},
 
 		onSuccess: async (eventId) => {
+			// A3.5: the capability answers the identity (hex pubkey).
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
+				userPubkey = await signer.getPublicKey().catch(() => '')
 			}
 
 			queryClient.invalidateQueries({ queryKey: configKeys.all })

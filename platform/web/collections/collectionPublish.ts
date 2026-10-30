@@ -1,11 +1,7 @@
-import {
-	createNdkPublishContext,
-	getAppNdk,
-	getAppSigner,
-	NDKEvent,
-	type NDKSigner,
-	type NdkClient as NDK,
-} from '@platform/web/ndkPublishContext'
+import { getAppNdk, NDKEvent, type NDKSigner, type NdkClient as NDK, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import type { SignerCapability } from '@sdk/core/signer'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { collectionsKeys } from '@sdk/core/query/queryKeyFactory'
 import { getNdkEventStore } from '@platform/web/readContext'
@@ -33,7 +29,7 @@ export interface CollectionFormData {
  */
 export const createCollectionEvent = (
 	formData: CollectionFormData,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 	collectionId?: string,
 	appPubkey?: string, // Optional app pubkey for client tag
@@ -71,9 +67,11 @@ const createCollectionId = () => crypto.randomUUID()
 /**
  * Publishes a new collection
  */
-export const publishCollection = async (formData: CollectionFormData, signer: NDKSigner, ndk: NDK): Promise<string | null> => {
+export const publishCollection = async (formData: CollectionFormData, signer: SignerCapability, ndk: NDK): Promise<string | null> => {
 	try {
-		const context = await createNdkPublishContext(ndk, signer)
+		const context = await createSignerPublishContext(signer, async (event) => {
+			await publishAppNostrEvent(ndk, event)
+		})
 		const outcome = await publishCollectionWorkflow({ ...context, createCollectionId }, toCollectionInput(formData))
 		return outcome.collectionId
 	} catch (error) {
@@ -88,11 +86,13 @@ export const publishCollection = async (formData: CollectionFormData, signer: ND
 export const updateCollection = async (
 	collectionId: string,
 	formData: CollectionFormData,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NDK,
 ): Promise<string | null> => {
 	try {
-		const context = await createNdkPublishContext(ndk, signer)
+		const context = await createSignerPublishContext(signer, async (event) => {
+			await publishAppNostrEvent(ndk, event)
+		})
 		await publishCollectionWorkflow({ ...context, createCollectionId }, toCollectionInput(formData), collectionId)
 		return collectionId
 	} catch (error) {
@@ -104,11 +104,18 @@ export const updateCollection = async (
 /**
  * Deletes a collection by publishing a deletion event
  */
-export const deleteCollection = async (collectionId: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
+export const deleteCollection = async (collectionId: string, signer: SignerCapability, ndk: NDK): Promise<boolean> => {
 	try {
-		const deletion = await deleteCollectionWorkflow(await createNdkPublishContext(ndk, signer), collectionId)
+		const deletion = await deleteCollectionWorkflow(
+			await createSignerPublishContext(signer, async (event) => {
+				await publishAppNostrEvent(ndk, event)
+			}),
+			collectionId,
+		)
 		// Relays may keep serving the collection; the store applies the deletion to every later read.
-		getNdkEventStore().add(deletion)
+		// A3.5: the deletion is a raw signed event now; the NDK read store still
+		// holds NDKEvents, so the raw event is wrapped into one at this boundary.
+		getNdkEventStore().add(new NDKEvent(ndk, deletion))
 		return true
 	} catch (error) {
 		console.error('Error deleting collection:', error)
@@ -122,7 +129,7 @@ export const deleteCollection = async (collectionId: string, signer: NDKSigner, 
 export const usePublishCollectionMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (formData: CollectionFormData) => {
@@ -136,9 +143,9 @@ export const usePublishCollectionMutation = () => {
 			// Get current user pubkey
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
+				const userPubkeyResolved = await signer.getPublicKey()
+				if (userPubkeyResolved) {
+					userPubkey = userPubkeyResolved
 				}
 			}
 
@@ -165,7 +172,7 @@ export const usePublishCollectionMutation = () => {
 export const useUpdateCollectionMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async ({ collectionId, formData }: { collectionId: string; formData: CollectionFormData }) => {
@@ -179,9 +186,9 @@ export const useUpdateCollectionMutation = () => {
 			// Get current user pubkey
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
+				const userPubkeyResolved = await signer.getPublicKey()
+				if (userPubkeyResolved) {
+					userPubkey = userPubkeyResolved
 				}
 			}
 
@@ -212,7 +219,7 @@ export const useUpdateCollectionMutation = () => {
 export const useDeleteCollectionMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 
 	return useMutation({
 		mutationFn: async (collectionId: string) => {
@@ -226,9 +233,9 @@ export const useDeleteCollectionMutation = () => {
 			// Get current user pubkey
 			let userPubkey = ''
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
+				const userPubkeyResolved = await signer.getPublicKey()
+				if (userPubkeyResolved) {
+					userPubkey = userPubkeyResolved
 				}
 			}
 

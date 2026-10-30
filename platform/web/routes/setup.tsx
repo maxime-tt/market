@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@ui/primitives/separator'
 import { DEFAULT_INSTANCE_CONFIG } from '@/lib/instance-config'
 import { AppSettingsSchema } from '@/lib/schemas/app'
-import { authActions } from '@platform/web/auth/authStore'
+import { authActions, getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
@@ -203,13 +203,15 @@ function SetupRoute() {
 			throw new Error('Set the owner public key before uploading an image')
 		}
 
-		let signer = ndkActions.getSigner()
+		// A3.6: the signer is the active capability (created by the login above),
+		// not NDK's instance signer.
+		let signer = getActiveSignerCapability()
 		if (!signer) {
 			await authActions.loginWithExtension()
-			signer = ndkActions.getSigner()
+			signer = getActiveSignerCapability()
 		}
 
-		const signerPubkey = (await signer?.user())?.pubkey
+		const signerPubkey = signer ? await signer.getPublicKey() : undefined
 		if (signerPubkey !== ownerPubkey) throw new Error('The connected Nostr signer must match the owner public key')
 	}
 

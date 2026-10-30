@@ -10,6 +10,7 @@ import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { useEntityPermissions } from '@platform/web/permissions/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText, checkImageLoadable, isValidHexKey } from '@/lib/utils'
+import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
@@ -166,17 +167,20 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		if (!profilePubkey) return
 
 		const ndk = ndkActions.getNDK()
-		if (!ndk?.signer) {
+		// A3.5: the signer is the active capability (the curation family takes
+		// it), not NDK's instance signer.
+		const signer = getActiveSignerCapability()
+		if (!ndk || !signer) {
 			toast.error('Please connect your wallet first')
 			return
 		}
 
 		try {
 			if (isBlacklisted) {
-				await removeFromBlacklist(profilePubkey, ndk.signer, ndk, appPubkey)
+				await removeFromBlacklist(profilePubkey, signer, ndk, appPubkey)
 				toast.success('User removed from blacklist')
 			} else {
-				await addToBlacklist(profilePubkey, ndk.signer, ndk, appPubkey)
+				await addToBlacklist(profilePubkey, signer, ndk, appPubkey)
 				toast.success('User added to blacklist')
 			}
 			// Invalidate blacklist query to refresh the UI
@@ -192,17 +196,19 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		if (!profilePubkey) return
 
 		const ndk = ndkActions.getNDK()
-		if (!ndk?.signer) {
+		// A3.5: same capability switch as the blacklist toggle above.
+		const signer = getActiveSignerCapability()
+		if (!ndk || !signer) {
 			toast.error('Please connect your wallet first')
 			return
 		}
 
 		try {
 			if (isFeatured) {
-				await removeFromFeaturedUsers(profilePubkey, ndk.signer, ndk, appPubkey)
+				await removeFromFeaturedUsers(profilePubkey, signer, ndk, appPubkey)
 				toast.success('User removed from featured')
 			} else {
-				await addToFeaturedUsers(profilePubkey, ndk.signer, ndk, appPubkey)
+				await addToFeaturedUsers(profilePubkey, signer, ndk, appPubkey)
 				toast.success('User added to featured')
 			}
 			// Invalidate featured query to refresh the UI

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
 import { Button } from '@ui/primitives/button'
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
+import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { useWallets, walletActions } from '@/lib/stores/wallet'
 import { classifyDepositTerminalErrorOutcome } from '@platform/web/auctions/useAuctionBidFunding'
@@ -290,7 +291,7 @@ export function DepositLightningModal({
 			return
 		}
 
-		const signer = ndkActions.getSigner()
+		const signer = getActiveSignerCapability()
 		if (!signer) {
 			toast.error('Connected wallet is not authorized')
 			return

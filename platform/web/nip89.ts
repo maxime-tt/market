@@ -1,7 +1,9 @@
 import { DEFAULT_INSTANCE_CONFIG } from '@sdk/config/instance-config'
 import { configStore } from '@sdk/config/app-config'
-import { createNdkPublishContext, type NdkClient } from '@platform/web/ndkPublishContext'
-import { NDKEvent, type NDKSigner } from '@platform/web/ndkPublishContext'
+import { type NdkClient, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { NDKEvent } from '@platform/web/ndkPublishContext'
+import type { SignerCapability } from '@sdk/core/signer'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import {
 	buildClientTag,
 	buildHandlerInfoEventData,
@@ -52,7 +54,7 @@ function resolveHandlerMetadata(handlerId?: string, relayUrl?: string, siteUrl?:
  * @param appSettings - Optional app settings to include in the content (for backward compatibility)
  */
 export const createHandlerInfoEvent = (
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NdkClient,
 	handlerId?: string,
 	appSettings?: Record<string, unknown>,
@@ -107,18 +109,23 @@ export const createHandlerInfoEventData = (
  * Publishes a handler information event
  */
 export const publishHandlerInfo = async (
-	signer: NDKSigner,
+	signer: SignerCapability,
 	ndk: NdkClient,
 	handlerId?: string,
 	appSettings?: Record<string, unknown>,
 ): Promise<string | null> => {
 	try {
 		const { effectiveHandlerId, effectiveSiteUrl } = resolveHandlerMetadata(handlerId)
-		const { handlerId: publishedHandlerId } = await publishHandlerInfoWorkflow(await createNdkPublishContext(ndk, signer), {
-			handlerId: effectiveHandlerId,
-			siteUrl: effectiveSiteUrl,
-			appSettings,
-		})
+		const { handlerId: publishedHandlerId } = await publishHandlerInfoWorkflow(
+			await createSignerPublishContext(signer, async (event) => {
+				await publishAppNostrEvent(ndk, event)
+			}),
+			{
+				handlerId: effectiveHandlerId,
+				siteUrl: effectiveSiteUrl,
+				appSettings,
+			},
+		)
 		return publishedHandlerId || null
 	} catch (error) {
 		console.error('Error publishing handler info:', error)

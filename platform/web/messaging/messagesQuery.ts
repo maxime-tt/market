@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { getAppNdk, publishAppEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { authStore } from '@platform/web/readContext'
 import { createBuyerChatTemplate } from '@sdk/commerce/orders'
 import { useStore } from '@tanstack/react-store'
@@ -216,15 +217,17 @@ export async function sendChatMessage(recipientPubkey: string, content: string, 
 	const currentUser = authStore.state?.user
 
 	if (!ndk || !currentUser) {
-		// Simplified check, main check is for ndk.signer below
 		console.error('NDK or current user not available for sending message')
 		toast.error('User not available. Please ensure you are logged in.')
 		return undefined
 	}
 
-	if (!ndk.signer) {
-		// Check for ndk.signer directly
-		console.error('NDK signer not available for sending message')
+	// A3.5: the signer is the active capability, not NDK's instance signer (the
+	// implicit `event.sign()` path it replaced) — the in-place mutation contract
+	// keeps id/pubkey/sig landing on the event.
+	const signer = getActiveSignerCapability()
+	if (!signer) {
+		console.error('No signer capability available for sending message')
 		toast.error('Signer not available. Please ensure you are logged in correctly.')
 		return undefined
 	}
@@ -233,7 +236,13 @@ export async function sendChatMessage(recipientPubkey: string, content: string, 
 	const event = new NDKEvent(ndk, template)
 
 	try {
-		await event.sign() // Attempt to use ndk.signer implicitly
+		const signed = await signer.signEvent({
+			kind: event.kind,
+			content: event.content,
+			created_at: event.created_at ?? Math.floor(Date.now() / 1000),
+			tags: event.tags as string[][],
+		})
+		Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
 		await publishAppEvent(event)
 		return event
 	} catch (error) {

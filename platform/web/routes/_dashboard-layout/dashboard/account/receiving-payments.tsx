@@ -12,6 +12,7 @@ import { WalletSetupGuide } from '@ui/lightning/wallet-setup-guide'
 import { PageHeader } from '@ui/layout/page-header'
 import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@/lib/constants'
 import { useNDK } from '@platform/web/ndk/ndkStore'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { isValidNip05 } from '@/lib/utils'
 import { deriveAddresses, isExtendedPublicKey, parsePaymentDetailsFromClipboard, paymentMethodLabels } from '@/lib/utils/paymentDetails'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
@@ -273,7 +274,12 @@ interface PaymentDetailFormProps {
 }
 
 function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: PaymentDetailFormProps) {
-	const { getUser } = useNDK()
+	// A3.7: the identity read the retired ndk-store `getUser` answered — the
+	// active signer capability's own pubkey.
+	const getUser = useCallback(async () => {
+		const capability = getActiveSignerCapability()
+		return capability ? { pubkey: await capability.getPublicKey() } : null
+	}, [])
 	const [user, setUser] = useState<any>(null)
 	const [formState, setFormState] = useState<FormState>('idle')
 	const [validationMessage, setValidationMessage] = useState('')
@@ -826,7 +832,12 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 }
 
 function ReceivingPaymentsComponent() {
-	const { getUser } = useNDK()
+	// A3.7: the identity read the retired ndk-store `getUser` answered — the
+	// active signer capability's own pubkey.
+	const getUser = useCallback(async () => {
+		const capability = getActiveSignerCapability()
+		return capability ? { pubkey: await capability.getPublicKey() } : null
+	}, [])
 	const [user, setUser] = useState<any>(null)
 	const [openPaymentDetailId, setOpenPaymentDetailId] = useState<string | null>(null)
 	const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentDetailsMethod | 'all'>('all')

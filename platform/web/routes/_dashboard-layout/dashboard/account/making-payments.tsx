@@ -8,6 +8,7 @@ import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { PageHeader } from '@ui/layout/page-header'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { uiStore } from '@platform/web/app/uiStore'
 import { parseNwcUri, useWallets, walletActions, type Wallet } from '@platform/web/config/walletStore'
 import { useNwcWalletBalanceQuery, useUserNwcWalletsQuery, type UserNwcWallet } from '@/queries/wallet'
@@ -36,7 +37,8 @@ function MakingPaymentsComponent() {
 
 	// NDK User for Nostr operations
 	const [userPubkey, setUserPubkey] = useState<string | undefined>(undefined)
-	const signer = ndkActions.getSigner()
+	// A3.6: the signer is the active capability (stable per session), not NDK's instance signer.
+	const signer = getActiveSignerCapability()
 
 	// TanStack Query for Nostr wallets - moved up to ensure consistent hook calls
 	const { data: nostrWallets, isLoading: nostrLoading, refetch: refetchNostrWallets } = useUserNwcWalletsQuery(userPubkey)
@@ -63,9 +65,9 @@ function MakingPaymentsComponent() {
 	useEffect(() => {
 		const getUserPubkey = async () => {
 			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					setUserPubkey(user.pubkey)
+				const pubkey = await signer.getPublicKey()
+				if (pubkey) {
+					setUserPubkey(pubkey)
 					// Initialize local store once user is available if not already done
 					if (!isInitialized) {
 						walletActions.initialize()

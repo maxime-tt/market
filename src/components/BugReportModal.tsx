@@ -3,6 +3,7 @@ import { Alert, AlertDescription } from '@ui/primitives/alert'
 import { Button } from '@ui/primitives/button'
 import { useBugReportsInfiniteScroll } from '@platform/web/app/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@platform/web/media/blossomUploadHost'
+import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { getBugRelay, ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
@@ -199,12 +200,13 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			}
 			console.log('Publishing bug report to the bug relay:', relayUrl)
 
-			// Check if we have a signer
-			if (!ndk.signer) {
+			// Check if we have a signer (A3.6: the active capability, not NDK's instance signer)
+			const signer = getActiveSignerCapability()
+			if (!signer) {
 				console.error('No signer available - user not authenticated')
 				return
 			}
-			console.log('Signer available:', !!ndk.signer)
+			console.log('Signer available:', !!signer)
 
 			// Ensure NDK is connected
 			try {
@@ -229,9 +231,16 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				tags: event.tags,
 			})
 
-			// Sign and publish the event
+			// Sign and publish the event (A3.6: in place through the capability —
+			// NDK's implicit instance-signer path it replaced)
 			console.log('Signing event...')
-			await event.sign()
+			const signed = await signer.signEvent({
+				kind: event.kind,
+				content: event.content,
+				created_at: event.created_at ?? Math.floor(Date.now() / 1000),
+				tags: event.tags as string[][],
+			})
+			Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
 			console.log('Event signed, ID:', event.id)
 
 			console.log('Publishing event to the bug relay only...')

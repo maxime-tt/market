@@ -1,4 +1,6 @@
-import { createNdkPublishContext, getAppNdk, getAppSigner, publishAppEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { publishNwcWalletListWorkflow } from '@sdk/commerce/payments'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -23,7 +25,7 @@ export const saveUserNwcWallets = async (params: SaveUserNwcWalletsParams): Prom
 		throw new Error('NDK not initialized. Cannot save wallets to Nostr.')
 	}
 
-	const signer = getAppSigner()
+	const signer = getActiveSignerCapability()
 	if (!signer) {
 		throw new Error('Signer not available for saving NWC wallets')
 	}
@@ -31,19 +33,26 @@ export const saveUserNwcWallets = async (params: SaveUserNwcWalletsParams): Prom
 		throw new Error('User pubkey is required for saving NWC wallets')
 	}
 
-	const user = await signer.user()
-	if (!user) {
+	// A3.5: the capability answers the identity (hex pubkey); the NDK user object it
+	// replaced was only read for its pubkey.
+	const userPubkey = await signer.getPublicKey()
+	if (!userPubkey) {
 		toast.error('User object not found via signer. Cannot save wallets to Nostr.')
 		throw new Error('User object not found via signer.')
 	}
 
+	const nip44Pair = signer.nip44
+	if (!nip44Pair) {
+		throw new Error('No NIP-44 capability available to encrypt the NWC wallet list')
+	}
+
 	// Ensure wallets are correctly structured for storage, marking them as stored on Nostr.
-	const context = await createNdkPublishContext(ndk, signer, async (event) => {
-		const publishedToRelays = await publishAppEvent(event)
+	const context = await createSignerPublishContext(signer, async (event) => {
+		const publishedToRelays = await publishAppNostrEvent(ndk, event)
 		if (publishedToRelays.size === 0) throw new Error('Failed to publish NWC wallet list event to any relay.')
 	})
 	const event = await publishNwcWalletListWorkflow(
-		{ ...context, encryptToSelf: (plaintext) => signer.encrypt(user, plaintext) },
+		{ ...context, encryptToSelf: (plaintext) => nip44Pair.encrypt(userPubkey, plaintext) },
 		params.wallets,
 	)
 

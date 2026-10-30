@@ -22,6 +22,7 @@ import { Amount, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from 'nostr-tools'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { authStore } from '../stores/auth'
+import { setSignerSource } from '../nostr/io-applesauce'
 import {
 	findBidderRecord,
 	findPreLockRecoveryRecordByRefundPubkey,
@@ -206,6 +207,23 @@ const publishEventMock = mock(async (event: NDKEvent) => {
 // whose default `ndkIo` adapter reads the active signer (and NDK instance)
 // from the store singleton. Tests drive the seam by swapping `currentSigner`.
 let currentSigner: NDKSigner = signer
+
+// A3.7 (C2, mock rule — additive): the io seam's NDK bridge signs + identifies
+// through the INJECTED signer source now (the ndk store's getSigner/getUser
+// copies it used to read are deleted), so register the capability view of the
+// same `currentSigner` the store mocks below still answer with. Registration
+// only; the store mocks stay untouched.
+setSignerSource(() => ({
+	getPublicKey: async () => {
+		const user = await currentSigner.user()
+		return user?.pubkey ?? ''
+	},
+	signEvent: async (template) => {
+		const ndkEvent = new NDKEvent(ndkInstance, template as never)
+		await ndkEvent.sign(currentSigner)
+		return ndkEvent.rawEvent() as never
+	},
+}))
 
 // Wave F W-E5b (rev-2.6 item-5): the auth composition root moved to
 // '@platform/web/auth/authStore' and now binds walletOps and the NDK actions through the

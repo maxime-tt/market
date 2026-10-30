@@ -1,6 +1,7 @@
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import type { ProductShippingOption as RichShippingInfo } from '@sdk/commerce/products'
+import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
 import {
@@ -14,7 +15,7 @@ import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
 	MAX_SUB_CATEGORIES,
@@ -308,7 +309,12 @@ const EMPTY_PICKUP_ADDRESS: PickupAddressDraft = { street: '', city: '', state: 
 
 export function ShippingTab() {
 	const { shippings } = useStore(productFormStore)
-	const { getUser } = useNDK()
+	// A3.7: the identity read the retired ndk-store `getUser` answered — the
+	// active signer capability's own pubkey.
+	const getUser = useCallback(async () => {
+		const capability = getActiveSignerCapability()
+		return capability ? { pubkey: await capability.getPublicKey() } : null
+	}, [])
 	const [user, setUser] = useState<any>(null)
 	const [isCreatingShipping, setIsCreatingShipping] = useState(false)
 	const [showPickupForm, setShowPickupForm] = useState(false)
