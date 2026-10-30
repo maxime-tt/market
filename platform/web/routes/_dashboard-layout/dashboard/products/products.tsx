@@ -1,4 +1,4 @@
-import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
+import { ShareProductDialogHost as ShareProductDialog } from '@platform/web/messaging/ShareProductDialogHost'
 import { publishShareProductNote } from '@platform/web/messaging/shareNotes'
 import { Media } from '@ui/shared/media'
 import { ConfirmDialog } from '@ui/shared/confirm-dialog'

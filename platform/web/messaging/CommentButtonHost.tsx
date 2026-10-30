@@ -1,24 +1,29 @@
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
-import { Textarea } from '@ui/primitives/textarea'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useStore } from '@tanstack/react-store'
-import { useState, type MouseEvent, type ReactNode } from 'react'
-import { toast } from 'sonner'
-import { authStore } from '@/lib/stores/auth'
-import type { ButtonProps } from '@ui/wrappers/button-props'
+import { useAuth } from '@platform/web/auth/authStore'
 import { CommentButtonView } from '@ui/community/social-buttons'
 import { Button } from '@ui/primitives/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
+import { Textarea } from '@ui/primitives/textarea'
+import { useState, type MouseEvent, type ReactNode } from 'react'
+import { toast } from 'sonner'
+import type { ButtonProps } from '@ui/wrappers/button-props'
+import type { NDKEvent } from '@platform/web/readContext'
 
-interface CommentButtonProps extends ButtonProps {
+interface CommentButtonHostProps extends ButtonProps {
 	event: NDKEvent
 	icon?: ReactNode
 	tooltip?: string
 }
 
-export function CommentButton({ event, onClick, ...props }: CommentButtonProps) {
+/**
+ * Host for the pure `@ui/community/social-buttons` comment button. Moved
+ * verbatim from the retiring `src/components/social/CommentButton.tsx`
+ * (H-b kit 6 social cluster) onto the platform auth store; the event type
+ * arrives through the read facade, so this host names no transport.
+ */
+export function CommentButtonHost({ event, onClick, ...props }: CommentButtonHostProps) {
 	const [dialogOpen, setDialogOpen] = useState(false)
 	const [isPosting, setIsPosting] = useState(false)
-	const { isAuthenticated } = useStore(authStore)
+	const { isAuthenticated } = useAuth()
 
 	const handlePress = (e: MouseEvent<HTMLButtonElement>) => {
 		if (onClick) {

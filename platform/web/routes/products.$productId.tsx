@@ -72,8 +72,7 @@ import {
 	type ReactPortal,
 } from 'react'
 import { toast } from 'sonner'
-import { ShareButton } from '@/components/social/ShareButton'
-import SocialInteractions from '@/components/social/SocialInteractions'
+import { SocialInteractionsHost as SocialInteractions } from '@platform/web/messaging/SocialInteractionsHost'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { scrollToElementWithOffset } from '@/lib/utils/ui'
 import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@sdk/commerce/products'

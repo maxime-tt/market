@@ -1,22 +1,25 @@
-import { authStore } from '@/lib/stores/auth'
-import { useStore } from '@tanstack/react-store'
+import { useAuth } from '@platform/web/auth/authStore'
+import { ShareProductDialogView } from '@ui/dialogs/share-product-dialog-view'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import type { ShareNoteInput } from '@sdk/commerce/messaging'
-import { ShareProductDialogView } from '@ui/dialogs/share-product-dialog-view'
 
-interface ShareProductDialogProps {
+interface ShareProductDialogHostProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
 	productId: string
 	pubkey: string
 	title: string
 	/** Signs and publishes the share note; wired by the caller to the publish layer. */
-	onPost: (input: ShareNoteInput) => Promise<unknown>
+	onPost: (input: { content: string; coordinate: string; url: string }) => Promise<unknown>
 }
 
-export function ShareProductDialog({ open, onOpenChange, productId, pubkey, title, onPost }: ShareProductDialogProps) {
-	const { isAuthenticated } = useStore(authStore)
+/**
+ * Host for the pure `@ui/dialogs/share-product-dialog-view`. Moved verbatim
+ * from the retiring `src/components/dialogs/ShareProductDialog.tsx` (H-b kit 6
+ * social cluster — the share button's dialog) onto the platform auth store.
+ */
+export function ShareProductDialogHost({ open, onOpenChange, productId, pubkey, title, onPost }: ShareProductDialogHostProps) {
+	const { isAuthenticated } = useAuth()
 	const [shareText, setShareText] = useState('')
 	const [isPosting, setIsPosting] = useState(false)
 	const [isCopied, setIsCopied] = useState(false)

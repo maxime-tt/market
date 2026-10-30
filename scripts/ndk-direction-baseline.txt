@@ -48,6 +48,6 @@ platform/web test 1 ratchet
 # commit; the fall also absorbs the merged lanes' un-lowered falls the guard had been reporting
 # informationally at the 6568249c base.
 platform/server production 14 bridge
-src production 28 ratchet
+src production 22 ratchet
 src test 18 ratchet
 contextvm production 0 zero

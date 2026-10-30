@@ -18,7 +18,7 @@ import { useProfile, useProfileName } from '@/queries/profiles'
 import { npubEncode } from 'nostr-tools/nip19'
 import { UserCard } from './UserCard'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import SocialInteractions from './social/SocialInteractions'
+import { SocialInteractionsHost as SocialInteractions } from '@platform/web/messaging/SocialInteractionsHost'
 import { toast } from 'sonner'
 
 interface CommentItemProps {

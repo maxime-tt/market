@@ -2,6 +2,7 @@ import { CollectionSkeletons, MerchantSkeletons } from '@ui/community/community-
 import { PostView } from '@ui/community/post-view'
 import { CommentButtonView, ReactionButtonView, ShareButtonView, ZapButtonView } from '@ui/community/social-buttons'
 import { ReactionsListView, ZapsListView, type ReactionGroup, type ZapListItem } from '@ui/community/social-lists'
+import { SocialInteractionsView } from '@ui/community/social-interactions-view'
 import type { WidgetLibrary } from '../libraries'
 
 /**
@@ -143,6 +144,32 @@ export const community: WidgetLibrary = {
 					isLoadingAuthor={false}
 					permalinkHref={`/posts/${samplePost.id}`}
 				/>
+			),
+		},
+		{
+			// The social action row layout (kit 6): buttons and lists arrive as
+			// host-built nodes, so the entry passes literal stand-ins.
+			name: 'SocialInteractionsView',
+			render: () => (
+				<div className="max-w-md">
+					<SocialInteractionsView
+						reactionButton={<ReactionButtonView latestEmoji="❤️" canPickEmoji onPress={() => {}} onSelectEmoji={() => {}} />}
+						zapButton={<ZapButtonView isCheckingCapability={false} canReceiveZaps isZapping={false} onPress={() => {}} />}
+						commentButton={<CommentButtonView onPress={() => {}} />}
+						shareButton={<ShareButtonView onPress={() => {}} />}
+						zapsList={<ZapsListView zaps={sampleZaps} renderAvatar={SampleAvatar} />}
+						reactionsList={
+							<ReactionsListView
+								groups={[
+									{ emoji: '❤️', count: 3, isOwn: true },
+									{ emoji: '🔥', count: 1, isOwn: false },
+								]}
+								onToggle={() => {}}
+							/>
+						}
+						combineZapsAndReactions
+					/>
+				</div>
 			),
 		},
 	],
