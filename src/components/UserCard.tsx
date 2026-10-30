@@ -5,9 +5,8 @@ import {
 	normalizeOptionalString,
 	useProfile,
 } from '@/queries/profiles'
-import { AvatarUser } from './AvatarUser'
+import { AvatarHost as AvatarUser, Nip05BadgeHost as Nip05Badge } from '@platform/web/profiles/userCardHosts'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
-import { Nip05Badge } from './Nip05Badge'
 import { nip19 } from 'nostr-tools'
 import { isValidHexKey, isValidNpub } from '@/lib/utils'
 import { UserCardView } from '@ui/nostr/user-card'

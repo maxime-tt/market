@@ -1,6 +1,5 @@
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ItemGrid } from '@ui/shared/item-grid'
-import { Nip05Badge } from '@/components/Nip05Badge'
 import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
 import { Button } from '@ui/wrappers/button'
 import { UserCard } from '@/components/UserCard'

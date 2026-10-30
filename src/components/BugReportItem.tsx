@@ -1,5 +1,5 @@
 import { Button } from '@ui/primitives/button'
-import { AvatarUser } from '@/components/AvatarUser'
+import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
 import { useNavigate } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import type { BugReport } from '@/queries/bugReports'

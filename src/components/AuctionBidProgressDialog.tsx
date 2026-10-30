@@ -31,7 +31,7 @@ import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvent
 import type { ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { computeVerdictQuorum, type VerdictQuorumResult } from '@/lib/auction/verdictQuorum'
 import type { AuctionBidFundingLifecycleState } from '@platform/web/auctions/useAuctionBidFunding'
-import { AvatarUser } from '@/components/AvatarUser'
+import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
 import { cn } from '@/lib/utils'
 
 interface AuctionBidProgressDialogProps {

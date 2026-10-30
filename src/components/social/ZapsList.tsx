@@ -1,7 +1,7 @@
 import { useZapsViaProvider } from '@/queries/zaps'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { ZapsListView } from '@ui/community/social-lists'
-import { AvatarUser } from '../AvatarUser'
+import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
 
 interface ZapsListProps {
 	event: NDKEvent
