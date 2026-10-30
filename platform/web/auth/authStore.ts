@@ -32,7 +32,10 @@ import { registerAuthMachine } from '@platform/web/auth/authBinding'
 import { appNotifications } from '@platform/web/notifications'
 import { fetchProductsByPubkey } from '@platform/web/products/productQuery'
 import { hasAcceptedTerms } from '@platform/web/app/terms'
-import { ndkSignerFromCapability } from '@platform/web/auth/ndkSignerAdapter'
+import { applesauceIo } from '@platform/web/readContext'
+import { buildRelayListFilter, parseRelayListEvents } from '@sdk/core/relays'
+import { walletActions, walletStore, type Wallet } from '@platform/web/config/walletStore'
+import { fetchNwcWalletBalanceWithCapability, fetchUserNwcWalletsWithCapability } from '@platform/web/wallet/nwcWalletRead'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { walletOps } from '@platform/web/wallet/walletOps'
 import { cartActions } from '@platform/web/cart/cartStore'
@@ -151,18 +154,94 @@ const bootstrapCashuWalletInBackground = (): void => {
 }
 
 /**
- * Adopt the signer the session just attached: hand NDK a signer to sign with, kick off the
- * post-signer onboarding pipeline and the wallet bootstrap, and reconcile the cart for the freshly
- * resolved identity. The capability remains the single source of signing; `ndkSignerFromCapability`
- * only delegates (the ndk store is not drained — owner ruling).
+ * The post-login onboarding pipeline (A3.7, C5): load the user's NIP-65 relay
+ * list (kind 10002) into the NDK client and select the highest-balance NWC
+ * wallet, in parallel — each leg handles its own failure, so login resolves
+ * without waiting on either. Mirrors the retired `ndkActions.runSignerOnboarding`
+ * pipeline (relay-list load + NWC select) over the signer capability.
+ */
+export const onboardActiveSigner = (capability: SignerCapability): Promise<void> =>
+	Promise.all([
+		loadUserRelayListIntoNdk(capability).catch((error) => console.error('[auth] relay-list onboarding failed:', error)),
+		selectAndSetInitialNwcWallet(capability).catch((error) => console.error('[auth] NWC wallet onboarding failed:', error)),
+	]).then(() => undefined)
+
+/** Load the user's kind-10002 relay list through the io seam and add each relay to the NDK client (the outbox model). */
+const loadUserRelayListIntoNdk = async (capability: SignerCapability): Promise<void> => {
+	const pubkey = await capability.getPublicKey()
+	const events = await applesauceIo.fetchEvents(buildRelayListFilter(pubkey))
+	const relayPrefs = parseRelayListEvents(events)
+	if (relayPrefs.length === 0) {
+		console.log('📡 No relay list found on Nostr for user')
+		return
+	}
+	console.log(`📡 Loading ${relayPrefs.length} relays from user's Nostr relay list`)
+	for (const relay of relayPrefs) {
+		ndkActions.addSingleRelay(relay.url)
+	}
+}
+
+/** Select the fresh session's highest-balance NWC wallet as the active wallet choice. */
+const selectAndSetInitialNwcWallet = async (capability: SignerCapability): Promise<void> => {
+	const userPubkey = await capability.getPublicKey()
+
+	walletStore.setState((state) => ({ ...state, isLoading: true }))
+	await walletActions.initialize()
+	try {
+		const nostrWallets = await fetchUserNwcWalletsWithCapability(capability, userPubkey, (filter) => applesauceIo.fetchEvents(filter))
+		if (nostrWallets && nostrWallets.length > 0) {
+			walletActions.setNostrWallets(nostrWallets as Wallet[])
+		}
+	} catch (error) {
+		console.error('Failed to fetch or merge Nostr NWC wallets during initial setup:', error)
+	}
+
+	const allWallets = walletActions.getWallets()
+	if (allWallets.length === 0) {
+		ndkActions.setActiveNwcWalletUri(null)
+		walletStore.setState((state) => ({ ...state, isLoading: false }))
+		return
+	}
+
+	// Balance probes over the capability NWC client factory (A3.4 ports); the
+	// highest balance wins, exactly as the retired ndk-store selection did.
+	let highestBalance = -1
+	let bestWallet: Wallet | null = null
+	const probed = await Promise.all(
+		allWallets
+			.filter((wallet) => wallet.nwcUri)
+			.map(async (wallet) => {
+				try {
+					const balanceInfo = await fetchNwcWalletBalanceWithCapability(capability, wallet.nwcUri)
+					return { ...wallet, balance: balanceInfo?.balance ?? -1 }
+				} catch (error) {
+					console.error(`Failed to fetch balance for wallet ${wallet.name} (ID: ${wallet.id}):`, error)
+					return { ...wallet, balance: -1 }
+				}
+			}),
+	)
+	for (const wallet of probed) {
+		if (wallet.balance > highestBalance) {
+			highestBalance = wallet.balance
+			bestWallet = wallet
+		}
+	}
+
+	ndkActions.setActiveNwcWalletUri(bestWallet?.nwcUri ?? null)
+	walletStore.setState((state) => ({ ...state, isLoading: false }))
+}
+
+/**
+ * Adopt the signer the session just attached: kick off the post-signer
+ * onboarding pipeline and the wallet bootstrap, and reconcile the cart for the
+ * freshly resolved identity. The capability remains the single source of
+ * signing (A3.7: the NDK bridge's signer copy is retired with the adapter).
  */
 const adoptActiveSigner = async (wasLoggedOut: boolean): Promise<void> => {
 	const capability = getSignerSession().currentSigner()
-	const ndkSigner = ndkSignerFromCapability(capability)
-	ndkActions.setSigner(ndkSigner)
 	// Kick off the post-signer onboarding pipeline (relay list, NWC select) in the background —
 	// login can resolve before these finish so the user isn't gated on a slow relay-list fetch.
-	void ndkActions.runSignerOnboarding(ndkSigner)
+	void onboardActiveSigner(capability)
 	bootstrapCashuWalletInBackground()
 
 	const pubkey = await capability.getPublicKey()
@@ -177,8 +256,10 @@ const ports: AuthPorts = {
 	clearNotifications: () => appNotifications.queue.clear(),
 	adoptActiveSigner,
 	teardownSignerAndWallet: () => {
-		ndkActions.removeSigner()
-		ndkActions.clearSignerOnboarding()
+		// A3.7: logout clears the store's own NWC wallet choice (the retired
+		// `clearSignerOnboarding`'s one job) — the NDK signer copy is gone with
+		// the adapter, so nothing else to tear down there.
+		ndkActions.setActiveNwcWalletUri(null)
 		void walletOps.reset()
 	},
 	clearCart: () => cartActions.clear({ publishRemote: false, reason: 'logout' }),

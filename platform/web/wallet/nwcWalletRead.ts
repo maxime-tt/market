@@ -1,5 +1,3 @@
-import type NDK from '@nostr-dev-kit/ndk'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { walletActions } from '@sdk/config/wallet'
 import type { Wallet as UserNwcWallet } from '@sdk/config/wallet'
 import type { SignerCapability } from '@sdk/core/signer'
@@ -14,52 +12,25 @@ import {
 } from '@sdk/commerce/payments/wallet/nwcWalletRead'
 
 /**
- * `src/lib/wallet/nwcWalletRead.ts` — the NDK adapter over the SDK NWC reads (store drain D1, slice 4).
+ * `src/lib/wallet/nwcWalletRead.ts` — the NWC reads (store drain D1, slice 4).
  *
- * The read logic moved to `sdk/commerce/payments/wallet/nwcWalletRead.ts`; this file keeps the original
- * `(ndk, pubkey)` signatures and hands the SDK workflow a port built from the NDK instance. It exists
- * because `src/lib/stores/ndk.ts` calls the pair during sign-in and that file must not change — the
- * ndk store reaches the read layer through this adapter, not through `src/queries/wallet` (which is now
- * a shim over the Platform binding).
+ * The read logic lives in `sdk/commerce/payments/wallet/nwcWalletRead.ts`; this binding
+ * answers it from the auth session's **signer capability** (the A3.4 `createCapabilityWalletListPort`
+ * below) since A3.7 deleted the ndk store's onboarding callers of the old `(ndk, pubkey)`
+ * overloads (runSignerOnboarding / selectAndSetInitialNwcWallet — the rebuilt onboarding
+ * lives in `platform/web/auth/authStore.ts`).
  *
- * `NwcBalance` is re-exported so the two former importers (`src/queries/wallet` before the move) keep
- * the same type source.
+ * `NwcBalance` is re-exported so the former importers keep the same type source.
  */
 export type { NwcBalance } from '@sdk/commerce/payments/wallet/nwcWalletRead'
-
-/** The NDK instance as the SDK wallet-list read port: relay fetch, signer pubkey, NIP-44 self-decrypt. */
-function createNdkWalletListPort(ndk: NDK): NwcWalletListPort<NwcWalletEventLike> {
-	return {
-		fetchEvents: async (filter) => Array.from(await ndk.fetchEvents(filter as unknown as NDKFilter)),
-		getSignerPubkey: async () => {
-			const signer = ndk.signer
-			if (!signer) return null
-			return (await signer.user()).pubkey
-		},
-		decrypt: async (content: string) => {
-			const signer = ndk.signer
-			if (!signer) throw new Error('No signer available')
-			return signer.decrypt(await signer.user(), content)
-		},
-	}
-}
-
-/**
- * Fetches the user's NWC wallet list from Nostr. This event is encrypted by the user for themselves.
- */
-export const fetchUserNwcWallets = async (ndk: NDK, userPubkey: string): Promise<UserNwcWallet[]> =>
-	readNwcWalletsWorkflow(createNdkWalletListPort(ndk), userPubkey)
 
 /**
  * A3.4: the **capability-typed** wallet-list port. The signer reads come from an
  * SDK signer capability (the auth session's `currentSigner()`, never the NDK
  * instance's signer), the self-decrypt is NIP-44 over the capability's own
- * pair, and the relay fetch is INJECTED — the `(ndk, …)` overloads above read
- * it off the NDK instance, while the capability path's caller (A3.7's rebuilt
- * onboarding) supplies the fetch. The fetch is a parameter (not an
- * `@/lib/nostr/io` import) because this file sits inside the
- * ndkStore → nwcWalletRead cycle: importing the io seam here would pull
- * `@/lib/stores/ndk` (and so ndkStore) back in through it.
+ * pair, and the relay fetch is INJECTED. The fetch is a parameter (not an
+ * `@/lib/nostr/io` import) because the callers supply the seam they read
+ * through — the app composition passes the io seam's fetch, tests their own.
  */
 export function createCapabilityWalletListPort(
 	capability: SignerCapability,
@@ -101,17 +72,7 @@ export const fetchNwcWalletBalanceWithCapability = async (capability: SignerCapa
 }
 
 /**
- * Fetches the balance from an NWC wallet URI.
- * This function uses the cached NWC client (@getalby/sdk).
+ * Fetches the balance from an NWC wallet URI via the host's cached client.
+ * A3.7: the capability-typed variant above answers; the `(ndk, uri)` overload is
+ * retired with the ndk store's onboarding that called it.
  */
-export const fetchNwcWalletBalance = async (ndk: NDK, nwcUri: string): Promise<NwcBalance | null> => {
-	if (!ndk.signer) {
-		console.error('Main NDK instance or signer not available for NWC balance fetch')
-		return null
-	}
-
-	const port: NwcBalancePort = {
-		getNwcClient: (uri) => walletActions.getOrCreateNwcClient(uri, ndk.signer!),
-	}
-	return readNwcBalanceWorkflow(port, nwcUri)
-}

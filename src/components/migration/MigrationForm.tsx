@@ -36,7 +36,12 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 	const navigate = useNavigate()
 	const [isPublishing, setIsPublishing] = useState(false)
 	const { user } = useStore(authStore)
-	const { getUser } = useNDK()
+	// A3.7: the identity read the retired ndk-store `getUser` answered — the
+	// active signer capability's own pubkey.
+	const getUser = useCallback(async () => {
+		const capability = getActiveSignerCapability()
+		return capability ? { pubkey: await capability.getPublicKey() } : null
+	}, [])
 	const [ndkUser, setNdkUser] = useState<any>(null)
 
 	// Progress dialog state

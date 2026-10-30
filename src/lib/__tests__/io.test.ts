@@ -194,6 +194,10 @@ describe('nostr io seam', () => {
 
 describe('ndk bridge adapter (io-ndk)', () => {
 	afterEach(resetNdkState)
+	// A3.7 (C2): the bridge's sign/getUser read the injected signer source —
+	// registration state — so unregister after every test like the applesauce
+	// describe below does.
+	afterEach(() => setSignerSource(null))
 
 	test('subscribe is a no-op when NDK is not initialized', () => {
 		mockNdkStore.state.ndk = null
@@ -299,22 +303,24 @@ describe('ndk bridge adapter (io-ndk)', () => {
 		expect(relaySet).toBeUndefined()
 	})
 
-	test('sign throws "NDK not initialized" without an NDK instance', async () => {
-		mockNdkStore.state.ndk = null
-		await expect(ndkIo.sign({ kind: 1, content: 'c', tags: [], created_at: 1 })).rejects.toThrow('NDK not initialized')
-	})
+	test('sign/getUser route through the injected signer source (A3.7, C2)', async () => {
+		// The NDK bridge signs and identifies through the SAME injected source the
+		// applesauce adapter reads — the auth session's capability, never the ndk
+		// store's signer copy (deleted with this slice).
+		await expect(ndkIo.sign({ kind: 1, content: 'c', tags: [], created_at: 1 })).rejects.toThrow('no signer source registered')
+		await expect(ndkIo.getUser()).rejects.toThrow('no signer source registered')
 
-	test('sign throws "No signer available" when NDK is present but no signer', async () => {
-		mockNdkStore.state.ndk = {} as never
+		setSignerSource(() => ({ getPublicKey: async () => 'pk-active', signEvent: async () => stubRawEvent as never }))
+		const signed = await ndkIo.sign({ kind: 1, content: 'c', tags: [], created_at: 1 })
+		expect(signed).toBe(stubRawEvent)
+		await expect(ndkIo.getUser()).resolves.toEqual({ pubkey: 'pk-active' })
+
+		setSignerSource(() => null)
 		await expect(ndkIo.sign({ kind: 1, content: 'c', tags: [], created_at: 1 })).rejects.toThrow('No signer available')
-	})
-
-	test('getUser maps a present user to { pubkey } and null otherwise', async () => {
-		mockNdkActions.getUser.mockImplementation(async () => ({ pubkey: 'pk-present' }))
-		await expect(ndkIo.getUser()).resolves.toEqual({ pubkey: 'pk-present' })
-
-		mockNdkActions.getUser.mockImplementation(async () => null)
+		// Logged out is a null user, matching the old ndk-store null user.
 		await expect(ndkIo.getUser()).resolves.toBeNull()
+
+		setSignerSource(null)
 	})
 })
 

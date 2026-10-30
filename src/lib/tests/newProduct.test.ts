@@ -47,8 +47,8 @@ describe('Product Publishing', () => {
 		const signer = new NDKPrivateKeySigner(devUser1.sk)
 		await signer.blockUntilReady()
 
-		// Set the signer in the NDK store
-		ndkActions.setSigner(signer)
+		// A3.7: the ndk store's signer copy is retired; this test publishes through
+		// the capability above and reads the relay's public events.
 
 		// Get the NDK instance
 		const ndk = ndkActions.getNDK()

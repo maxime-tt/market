@@ -9,6 +9,7 @@ import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
 import { validateShippingForm } from '@sdk/commerce/shipping'
 import { uiStore } from '@platform/web/app/uiStore'
 import { useNDK } from '@platform/web/ndk/ndkStore'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import {
 	useDeleteShippingOptionMutation,
 	usePublishShippingOptionMutation,
@@ -71,7 +72,12 @@ interface ShippingOptionFormProps {
 }
 
 function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }: ShippingOptionFormProps) {
-	const { getUser } = useNDK()
+	// A3.7: the identity read the retired ndk-store `getUser` answered — the
+	// active signer capability's own pubkey.
+	const getUser = useCallback(async () => {
+		const capability = getActiveSignerCapability()
+		return capability ? { pubkey: await capability.getPublicKey() } : null
+	}, [])
 	const [user, setUser] = useState<any>(null)
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [confirmOpen, setConfirmOpen] = useState(false)
@@ -1127,7 +1133,12 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/ship
 })
 
 function ShippingOptionsComponent() {
-	const { getUser } = useNDK()
+	// A3.7: the identity read the retired ndk-store `getUser` answered — the
+	// active signer capability's own pubkey.
+	const getUser = useCallback(async () => {
+		const capability = getActiveSignerCapability()
+		return capability ? { pubkey: await capability.getPublicKey() } : null
+	}, [])
 	const [user, setUser] = useState<any>(null)
 	const [openShippingOptionId, setOpenShippingOptionId] = useState<string | null>(null)
 	const [serviceFilter, setServiceFilter] = useState<string>('all')

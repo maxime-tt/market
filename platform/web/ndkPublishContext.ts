@@ -7,16 +7,18 @@ export type NdkClient = NonNullable<ConstructorParameters<typeof NDKEvent>[0]>
 
 /**
  * The app-singleton accessors, re-homed here so host feature bindings under
- * `platform/web/<feature>/` can resolve the NDK client, the signer and the
- * publish action without importing `src/lib/stores/ndk` — the gated
- * `platform -> src` boundary. The `ndkActions` edge itself already lives in this
- * file, so routing bindings through these adds no cross-tree import.
+ * `platform/web/<feature>/` can resolve the NDK client and the publish action
+ * without importing `src/lib/stores/ndk` — the gated `platform -> src`
+ * boundary. The `ndkActions` edge itself already lives in this file, so
+ * routing bindings through these adds no cross-tree import.
+ *
+ * A3.7: the signer accessors are RETIRED — `getAppSigner`/`setAppSigner`/
+ * `runSignerOnboarding`/`removeAppSigner` answered the ndk store's signer
+ * surface, which is deleted with this slice; every publish family builds
+ * its context from the auth session's capability
+ * (`createSignerPublishContext`) instead.
  */
 export const getAppNdk = () => ndkActions.getNDK()
-export const getAppSigner = () => ndkActions.getSigner()
-export const setAppSigner = (signer: NDKSigner | undefined) => ndkActions.setSigner(signer)
-export const runSignerOnboarding = (signer: NDKSigner) => ndkActions.runSignerOnboarding(signer)
-export const removeAppSigner = () => ndkActions.removeSigner()
 export const publishAppEvent = (event: NDKEvent) => ndkActions.publishEvent(event)
 
 /**
