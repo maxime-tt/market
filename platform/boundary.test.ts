@@ -27,6 +27,10 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 // companions/STORE-DRAIN-CHAPTER-PLAN.md ("src -> platform during the drain").
 const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/index.tsx',
+	// J-0: the retired io seam's last src consumers read the platform homes
+	// directly (the drain, transitional until their owners retire).
+	'src/components/AuctionCard.tsx', // I-PARKED component; reads the port via readContext
+	'src/lib/actions/testLabelActions.ts', // signs/publishes test labels via the publish bridge
 	'src/publish/shipping.tsx', // store drain D2 slice 17; shim deleted in E1
 	'src/publish/products.tsx',
 	'src/publish/collections.tsx',
