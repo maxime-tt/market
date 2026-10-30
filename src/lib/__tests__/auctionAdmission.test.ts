@@ -33,7 +33,7 @@ import {
 	inspectAuctionAdmission,
 	isAdmissibleAuctionEvent,
 	summarizeAuctionAdmissionIssues,
-} from '../schemas/auction/auctionAdmission'
+} from '@sdk/commerce/auctions/schemas/auctionAdmission'
 import type { NostrEventLike } from '../nostr/eventLike'
 
 const SELLER_PK = 'a'.repeat(64)

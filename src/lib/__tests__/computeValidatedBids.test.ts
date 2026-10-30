@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { computeValidatedBids, validateBidChainNut7PrePublish } from '../auction/bidValidation'
-import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
-import type { Nut7ProofState } from '../auction/constants'
+import { computeValidatedBids, validateBidChainNut7PrePublish } from '@sdk/commerce/auctions/bidValidation'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '@sdk/commerce/auctions/events'
+import type { Nut7ProofState } from '@sdk/commerce/auctions/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { makeDleqKeyset as makeFixtureKeyset, makeHonestDleqProof } from '@sdk/core/testing/dleqFixture'
 import { fetchDleqKeysetsForBidsDetailed, verifyBidDleqWithKeysets, type DleqKeysetFetcher } from '../cashu/dleq'
 import type { MintKeys } from '@cashu/cashu-ts'
-import { parseBidEvent } from '../schemas/auction/bidEvent'
+import { parseBidEvent } from '@sdk/commerce/auctions/schemas/bidEvent'
 import type { NostrEventLike } from '../nostr/eventLike'
 
 // =============================================================================

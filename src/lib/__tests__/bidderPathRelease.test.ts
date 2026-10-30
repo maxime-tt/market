@@ -18,7 +18,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Amount, type Proof } from '@cashu/cashu-ts'
 import { authStore } from '../stores/auth'
-import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
+import { deriveAuctionChildP2pkPubkeyFromXpub } from '@sdk/commerce/auctions/auctionP2pk'
 import {
 	findBidderRecord,
 	findBidderRecordsForAuction,
@@ -27,7 +27,7 @@ import {
 	upsertBidderRecord,
 	removeBidderRecord,
 	type BidderBidRecord,
-} from '../auction/bidderRecords'
+} from '@sdk/commerce/auctions/bidderRecords'
 
 // =============================================================================
 // localStorage polyfill — Bun's test runtime doesn't provide one.

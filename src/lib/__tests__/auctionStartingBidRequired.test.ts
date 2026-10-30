@@ -18,8 +18,8 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { parseAuctionEvent } from '../schemas/auction/auctionEvent'
-import { buildAuctionEventTags } from '../auction/tagBuilders'
+import { parseAuctionEvent } from '@sdk/commerce/auctions/schemas/auctionEvent'
+import { buildAuctionEventTags } from '@sdk/commerce/auctions/tagBuilders'
 import type { NostrEventLike } from '../nostr/eventLike'
 
 const SELLER_PK = 'a'.repeat(64)

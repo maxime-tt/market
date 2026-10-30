@@ -31,7 +31,7 @@ import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState } from 'react'
 import { AuctionBidder } from './AuctionBidder'
 import { cn } from '@/lib/utils'
-import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@sdk/commerce/auctions/constants'
 
 const bidderStatusClassName = (status: AuctionBidderStatusKind): string => {
 	switch (status) {

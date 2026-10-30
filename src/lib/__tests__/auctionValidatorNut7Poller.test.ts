@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, MinBidCurve } from '../auction/events'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, MinBidCurve } from '@sdk/commerce/auctions/events'
 import { NUT7_REACHABILITY_PROBE_Y } from '../cashu/nut7'
 import { POST_GRACE_BASE_BACKOFF_SEC, POST_GRACE_MAX_ATTEMPTS, createNut7Poller } from '@platform/server/auction-validator/nut7Poller'
 import {

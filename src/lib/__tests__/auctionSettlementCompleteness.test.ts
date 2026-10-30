@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { Amount, getEncodedToken, type Proof, type MintKeyset } from '@cashu/cashu-ts'
-import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../auction/events'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '@sdk/commerce/auctions/events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
-import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
-import { validateSettlementCompleteness } from '../auction/validation'
+import { deriveAuctionChildP2pkPubkeyFromXpub } from '@sdk/commerce/auctions/auctionP2pk'
+import { validateSettlementCompleteness } from '@sdk/commerce/auctions/validation'
 import type { NostrEventLike } from '../nostr/eventLike'
 
 const SELLER_PK = 'a'.repeat(64)

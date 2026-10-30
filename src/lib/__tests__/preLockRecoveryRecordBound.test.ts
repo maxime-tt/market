@@ -18,7 +18,11 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { authStore } from '../stores/auth'
-import { loadPreLockRecoveryRecords, persistPreLockRecoveryRecord, type AuctionBidPreLockRecoveryRecord } from '../auction/bidderRecords'
+import {
+	loadPreLockRecoveryRecords,
+	persistPreLockRecoveryRecord,
+	type AuctionBidPreLockRecoveryRecord,
+} from '@sdk/commerce/auctions/bidderRecords'
 
 // ---------- polyfill ----------
 

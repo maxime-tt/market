@@ -1,0 +1,26 @@
+=== GATE 1: bash scripts/check-src-boundary.sh ===
+Source-boundary footprint (cross-tree import statements, current / baseline):
+  platform/ -> src/       production  364 / 386  imports   67 / 68  files  (decreased)
+  platform/ -> src/       test          0 / 0    imports    0 / 0   files
+  ui/       -> src/       production    0 / 0    imports    0 / 0   files
+  ui/       -> src/       test          0 / 0    imports    0 / 0   files
+  sdk/      -> src/       production   10 / 0    imports   10 / 0   files  <== GREW
+  sdk/      -> src/       test          0 / 0    imports    0 / 0   files
+  src/      -> platform/  production   62 / 28   imports   56 / 23  files  (grew: drain, informational)
+  src/      -> platform/  test         23 / 22   imports   12 / 11  files  (grew: drain, informational)
+  src/      -> ui/        production  241 / 241  imports  117 / 117 files
+  src/      -> ui/        test          0 / 0    imports    0 / 0   files
+  src/      -> sdk/       production  173 / 165  imports  124 / 120 files  (grew: drain, informational)
+  src/      -> sdk/       test         11 / 9    imports   10 / 8   files  (grew: drain, informational)
+
+::error::Source boundary grew: sdk/ -> src/ production imports increased from 0 to 10 (+10).
+::error::Source boundary grew: sdk/ -> src/ production files increased from 0 to 10 (+10).
+
+Nothing outside src/ may depend on src/: those INBOUND edges are what keep
+src/ from being deleted, so they are frozen and may only fall. Move the
+import to the sdk/ui/platform seam it belongs to instead of adding a line to
+scripts/src-boundary-baseline.txt. If an edge is genuinely unavoidable, raise
+the baseline in a dedicated commit that explains why.
+
+(Outbound src/ -> sdk|ui|platform growth is the drain and does not fail this
+guard - see the header.)

@@ -324,7 +324,7 @@ export const getAuctionBidAcceptanceEndAt = (auctionEvent: NostrEventLike, bids:
 	return getAuctionBiddingCutoffAt(auctionEvent)
 }
 
-/** @deprecated Use computeValidatedBids from @/lib/auction/bidValidation instead. */
+/** @deprecated Use computeValidatedBids from @sdk/commerce/auctions/bidValidation instead. */
 export const getAuctionWindowValidBids = (auctionEvent: NostrEventLike, bids: NostrEventLike[]): NostrEventLike[] => {
 	const auctionRootEventId = getAuctionRootEventId(auctionEvent)
 	const startAt = getAuctionStartAt(auctionEvent)

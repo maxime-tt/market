@@ -9,8 +9,8 @@
  * tags, so we never emit `["foo", ""]`.
  *
  * The corresponding parse layer lives in
- * `src/lib/schemas/auction/*.ts` (Zod schemas converting raw events
- * back into the {@link "@/lib/auction/events"} parsed types).
+ * `@sdk/commerce/auctions/schemas/*.ts` (Zod schemas converting raw events
+ * back into the {@link "@sdk/commerce/auctions/events"} parsed types).
  */
 
 import {

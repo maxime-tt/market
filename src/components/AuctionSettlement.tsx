@@ -4,7 +4,7 @@ import { Button } from '@ui/primitives/button'
 import { Card } from '@ui/primitives/card'
 import { authStore } from '@/lib/stores/auth'
 import { cn } from '@/lib/utils'
-import { findBidderRecord } from '@/lib/auction/bidderRecords'
+import { findBidderRecord } from '@sdk/commerce/auctions/bidderRecords'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { auctionKeys } from '@/queries/queryKeyFactory'
@@ -15,7 +15,7 @@ import {
 	type SettlementCtaKind,
 	type SettlementDescriptor,
 	type SettlementIconKey,
-} from '@/lib/auction/settlementDescriptor'
+} from '@sdk/commerce/auctions/settlementDescriptor'
 import { useNut7Polling } from '@/lib/auction/useNut7Polling'
 import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
@@ -25,7 +25,7 @@ import type {
 	ParsedPathReleaseEvent,
 	ParsedSettlementEvent,
 	ParsedValidatorVerdictEvent,
-} from '@/lib/auction/events'
+} from '@sdk/commerce/auctions/events'
 import { Clock, CheckCircle, Ban, Truck, Gavel, Trophy, BadgeCheck, AlertTriangle } from 'lucide-react'
 import { AuctionClaimDialog } from './AuctionClaimDialog'
 import { useNavigate } from '@tanstack/react-router'

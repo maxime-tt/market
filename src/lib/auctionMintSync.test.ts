@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { syncMintSelection } from './auctionMintSync'
+import { syncMintSelection } from '@sdk/commerce/auctions/mintSync'
 
 const EMPTY = new Set<string>()
 

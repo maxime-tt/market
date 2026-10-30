@@ -7,15 +7,15 @@ import {
 	validateAuctionPublishInput,
 	type AuctionPublishValidationField,
 	type AuctionPublishValidationIssue,
-} from '@/lib/auctionPublishValidation'
-import { syncMintSelection } from '@/lib/auctionMintSync'
+} from '@sdk/commerce/auctions/auctionPublishValidation'
+import { syncMintSelection } from '@sdk/commerce/auctions/mintSync'
 import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { configStore } from '@/lib/stores/config'
 import { isWalletDevModeEnabled, WALLET_DEV_TEST_MINTS } from '@/lib/wallet'
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@sdk/commerce/products'
 import { usePublishAuctionMutation, type AuctionFormData, type AuctionSpecEntry } from '@/publish/auctions'
-import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
+import { AUCTION_MIN_BID_LEG_SATS } from '@sdk/commerce/auctions/constants'
 import { createShippingReference, getShippingInfo, isShippingOptionDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'

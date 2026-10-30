@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { formatAuctionCountdownDetailed, formatAuctionTimeLeft, getAuctionCountdownLabels } from '../auctionCountdownLabels'
+import { formatAuctionCountdownDetailed, formatAuctionTimeLeft, getAuctionCountdownLabels } from '@sdk/commerce/auctions/countdownLabels'
 
 describe('auction countdown labels', () => {
 	test('ended countdowns render an explicit label instead of a placeholder', () => {

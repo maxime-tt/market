@@ -29,7 +29,7 @@ import {
 	loadBidderRecords,
 	loadPreLockRecoveryRecords,
 	type BidderBidRecord,
-} from '../auction/bidderRecords'
+} from '@sdk/commerce/auctions/bidderRecords'
 
 // =============================================================================
 // localStorage polyfill — Bun's test runtime doesn't provide one.

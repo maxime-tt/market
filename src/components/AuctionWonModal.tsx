@@ -23,7 +23,7 @@ import { appNotifications, auctionWonPayloadOf, useAppNotifications } from '@pla
 import { authStore } from '@/lib/stores/auth'
 import { settleAuctionAsWinner } from '@/publish/auctions'
 import { useAuctionCountdown } from '@/components/AuctionCountdown'
-import { getAuctionCoordinate } from '@/lib/auctionSettlement'
+import { getAuctionCoordinate } from '@sdk/commerce/auctions/settlement'
 import {
 	hasFinalSettlementForAuctionWin,
 	resolveAuctionWinFromEvents,

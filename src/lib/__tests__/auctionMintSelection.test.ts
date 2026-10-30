@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveAuctionMintSelection, type MintSelectionInput } from '@/lib/auctionMintSelection'
+import { resolveAuctionMintSelection, type MintSelectionInput } from '@sdk/commerce/auctions/mintSelection'
 
 const MINT_A = 'https://mint-a.example.com'
 const MINT_B = 'https://mint-b.example.com'

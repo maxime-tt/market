@@ -46,7 +46,7 @@ import { createShippingEvent, generatePickupShippingData, generateShippingData }
 import { createUserProfileEvent, generateUserProfileData } from './gen_user'
 import { createV4VSharesEvent } from './gen_v4v'
 import { createUserNwcWallets } from './gen_wallets'
-import { getAuctionXpubFromWalletKeys } from '@/lib/auctionHd'
+import { getAuctionXpubFromWalletKeys } from '@sdk/commerce/auctions/hd'
 import { parseNip60WalletEventContent, selectWalletKeyPair } from '@/lib/wallet'
 import { resolveCvmServerPubkey } from '@platform/server/runtime'
 

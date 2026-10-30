@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools'
-import { VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
+import { VALIDATOR_VERDICT_KIND } from '@sdk/commerce/auctions/constants'
 import type { NostrEvent } from 'nostr-tools/pure'
 import type { Filter as NostrFilter } from 'nostr-tools'
 

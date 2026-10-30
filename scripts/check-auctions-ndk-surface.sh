@@ -57,11 +57,14 @@ REQUIRE_COVERAGE="${AUCTIONS_GUARD_REQUIRE_COVERAGE:-1}"
 # matches NOTHING, but a family can be thinned file-by-file and still pass. This
 # floor makes the scanned-set size itself a tripwire: `scanned N` may not fall
 # below MIN_SCANNED. Seeded from MEASUREMENT at unite/1420-all tip 06cc831c
-# (Wave G-b): `scanned 112 production file(s)`. A fused retirement commit that
-# legitimately shrinks the set MUST lower this number in the SAME commit (the
-# E0 fusion rule above) — never around it. Enforced only against the real repo
-# (REQUIRE_COVERAGE=1); staged throwaway repos opt out with the same switch.
-MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-112}"
+# (Wave G-b): `scanned 112 production file(s)`. Re-seeded to 90 by B4/I-b
+# (2026-10-30, the 25-shim auction fusion: `scanned 90 production file(s)` at the
+# fused tip) — the 25 retired shims were all in the scanned set. A fused
+# retirement commit that legitimately shrinks the set MUST lower this number in
+# the SAME commit (the E0 fusion rule above) — never around it. Enforced only
+# against the real repo (REQUIRE_COVERAGE=1); staged throwaway repos opt out
+# with the same switch.
+MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-90}"
 
 # #1252-gated allowlist — paths relative to the repo root. EMPTY since A3.3
 # (2026-10-29): the one #1252-gated file, src/lib/auctions/
@@ -113,6 +116,20 @@ PINNED=(
 #   src/components/sheet-contents/auctions/*.tsx                 2
 #   src/components/sheet-contents/NewAuction*.tsx                1
 #
+# B4/I-b (2026-10-30): the auction-domain re-export shims were retired en bloc —
+# 10 under src/lib/auction/, 10 src/lib/auction*.ts, 5 src/lib/schemas/auction/
+# — and every consumer was re-pointed at its `@sdk/commerce/auctions/**` target.
+# That emptied exactly ONE family, `src/lib/schemas/auction/*.ts`, which is
+# deleted here; MIN_SCANNED drops 112 -> 90 with it. The `src/lib/auction*.ts`
+# and `src/lib/auction/*.ts` families may NOT be deleted alongside it: their REAL
+# files survive (src/lib/auctionBidderStatus.ts, and the two polling hooks
+# src/lib/auction/use{DleqKeyset,Nut7}Polling.ts), so dropping those globs would
+# stop scanning live auction production files — the coverage loss the paragraph
+# above forbids. Counts after B4/I-b:
+#   src/lib/auction*.ts                                          2 (1 production + 1 test)
+#   src/lib/auction/*.ts                                         2
+#   src/lib/schemas/auction/*.ts                                0 (family deleted below)
+#
 # Only THREE of those families are also asserted by
 # src/lib/__tests__/auctions-ndk-surface-guard.test.ts, so only they force a
 # two-file (script + test) retirement: src/publish/auctions.tsx,
@@ -157,7 +174,12 @@ GLOBS=(
 	# `useAuctionBidFunding.ts`, moved to `platform/web/auctions/useAuctionBidFunding.ts` (covered by the
 	# `platform/web/auctions/*.ts` family below), so the family matches nothing and the coverage check fails
 	# by design. Re-add a hooks family if an auction hook reappears under src/.
-	"$ROOT"/src/lib/schemas/auction/*.ts
+	# `src/lib/schemas/auction/*.ts` was retired here (B4/I-b, 2026-10-30): all five
+	# members were one-line `export * from '@sdk/commerce/auctions/schemas/...'`
+	# shims and every consumer was re-pointed at the sdk home in the same fused
+	# commit (the sdk/commerce/auctions/schemas/*.ts family below covers them), so
+	# the family matches nothing and the coverage check fails by design. Re-add a
+	# schemas family if an auction schema module reappears under src/lib/schemas/.
 	"$ROOT"/platform/server/auction-validator/*.ts
 	"$ROOT"/src/components/nostr/AuctionSectionGrid.tsx
 	"$ROOT"/src/components/sheet-contents/auctions/*.tsx

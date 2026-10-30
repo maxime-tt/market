@@ -8,9 +8,9 @@ import {
 } from '@sdk/commerce/auctions/winNotification'
 import type { AuctionWonPayload } from '@platform/web/notifications'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
-import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
-import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
+import { deriveAuctionChildP2pkPubkeyFromXpub } from '@sdk/commerce/auctions/auctionP2pk'
 import { makeDleqKeyset, makeHonestDleqProof } from '@sdk/core/testing/dleqFixture'
 import { Amount, getEncodedToken, type MintKeys, type Proof } from '@cashu/cashu-ts'
 
