@@ -3,13 +3,13 @@ import { devUser1, devUser2, devUser3, devUser4, devUser5, WALLETED_USER_LUD16, 
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@sdk/commerce/messaging/orderSchema'
 import { SHIPPING_KIND } from '@sdk/config/schemas/shippingOption'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
 import {
 	createFeaturedAuctionsEvent,
 	createFeaturedCollectionsEvent,
 	createFeaturedProductsEvent,
 	createFeaturedUsersEvent,
-} from '@/publish/featured'
+} from '@platform/web/featured/featuredPublish'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 import * as nip44 from 'nostr-tools/nip44'

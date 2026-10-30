@@ -1,7 +1,7 @@
 import { CollectionFormContent } from '@platform/web/collections/CollectionFormContent'
 import { authStore } from '@platform/web/auth/authStore'
 import { collectionFormActions } from '@platform/web/collections/collectionFormStore'
-import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
+import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@platform/web/collections/collectionQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'

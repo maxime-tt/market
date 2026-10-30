@@ -7,8 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { authStore } from '@platform/web/auth/authStore'
 import { collectionFormActions } from '@platform/web/collections/collectionFormStore'
 
-import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
-import { useDeleteCollectionMutation } from '@/publish/collections'
+import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@platform/web/collections/collectionQuery'
+import { useDeleteCollectionMutation } from '@platform/web/collections/collectionPublish'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'

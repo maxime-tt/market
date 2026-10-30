@@ -1,5 +1,5 @@
 import { getPublicKey } from 'nostr-tools/pure'
-import { fetchAppSettings } from '@/lib/appSettings'
+import { fetchAppSettings } from './appSettings'
 import { resolveHandlerIdChain } from '@sdk/config/instance-config'
 import { getEventHandler } from './EventHandler'
 import {

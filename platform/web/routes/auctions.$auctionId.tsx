@@ -21,7 +21,7 @@ import { getUniqueAuctionShippingRefs } from '@sdk/commerce/auctions/shippingRef
 import { authStore } from '@platform/web/auth/authStore'
 import { applesauceIo } from '@platform/web/readContext'
 import { uiStore } from '@platform/web/app/uiStore'
-import { settleAuctionAsWinner, usePublishAuctionBidMutation } from '@/publish/auctions'
+import { settleAuctionAsWinner, usePublishAuctionBidMutation } from '@platform/web/auctions/auctionPublish'
 import { findBidderRecord } from '@sdk/commerce/auctions/bidderRecords'
 import { useDleqKeysetPolling } from '@platform/web/auctions/useDleqKeysetPolling'
 import { toRawEvent } from '@sdk/core'
@@ -68,9 +68,9 @@ import {
 	useAuctionPathReleases,
 	useAuctionSettlements,
 	getAuctionSettlementGrace,
-} from '@/queries/auctions'
-import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@/queries/shipping'
-import { useProfileName } from '@/queries/profiles'
+} from '@platform/web/auctions/auctionsQuery'
+import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@platform/web/shipping/shippingQuery'
+import { useProfileName } from '@platform/web/profiles/profileQuery'
 import { useQueries } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
@@ -88,7 +88,7 @@ import { AuctionBidderHost as AuctionBidder } from '@platform/web/auctions/Aucti
 import { LiveChatPanel } from '@platform/web/messaging/LiveChatPanel'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { AuctionVerdictPanelHost } from '@platform/web/auctions/AuctionVerdictPanelHost'
-import { useAuctionVerdicts } from '@/queries/auctions'
+import { useAuctionVerdicts } from '@platform/web/auctions/auctionsQuery'
 import { parseValidatorVerdictEvent } from '@sdk/commerce/auctions/schemas/validatorEvents'
 import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
 import { computeValidatedBids } from '@sdk/commerce/auctions/bidValidation'

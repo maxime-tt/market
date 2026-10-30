@@ -21,7 +21,7 @@ import {
 	useFilteredAuctions,
 	type AuctionFilterState,
 	type AuctionSortOption,
-} from '@/lib/utils/auctions'
+} from '@platform/web/auctions/auctionFiltering'
 import {
 	auctionByATagQueryOptions,
 	auctionsQueryOptions,
@@ -34,9 +34,9 @@ import {
 	useAuctionBidsByBidderStream,
 	useAuctionBidsForList,
 	useAuctionsByPubkeyStream,
-} from '@/queries/auctions'
-import { useConfigQuery } from '@/queries/config'
-import { useFeaturedAuctions } from '@/queries/featured'
+} from '@platform/web/auctions/auctionsQuery'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useFeaturedAuctions } from '@platform/web/featured/featuredQueries'
 import type { NostrEventLike } from '@sdk/core'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'

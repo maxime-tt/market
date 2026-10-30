@@ -6,9 +6,9 @@ import {
 	resolveInstanceConfig,
 	toMarketConfig,
 } from '@sdk/config/instance-config'
-import { APP_SETTINGS_D_TAG } from '@/lib/appSettings'
+import { APP_SETTINGS_D_TAG } from '@sdk/config/app-settings'
 import { AppSettingsSchema } from '@sdk/config/schemas/app'
-import { configActions, configStore } from '@/lib/stores/config'
+import { configActions, configStore } from '@platform/web/config/appConfigStore'
 import { createHandlerInfoEventData, createClientTag } from '@platform/web/nip89'
 
 const existingSettings = {

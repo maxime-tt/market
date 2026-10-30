@@ -1,4 +1,4 @@
-import { postsQueryOptions } from '@/queries/posts'
+import { postsQueryOptions } from '@platform/web/messaging/postQuery'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { PostViewHost as PostView } from '@platform/web/messaging/PostViewHost'

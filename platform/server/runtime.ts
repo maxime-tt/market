@@ -1,5 +1,5 @@
 import { getPublicKey } from 'nostr-tools/pure'
-import { fetchAppSettings } from '@/lib/appSettings'
+import { fetchAppSettings } from './appSettings'
 import { parseInstanceConfigEnvironment, resolveInstanceConfig, type InstanceConfig } from '@sdk/config/instance-config'
 import { hexToBytes } from 'nostr-tools/utils'
 

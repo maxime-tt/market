@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/p
 import { CopyableField } from '@ui/shared/copyable-field'
 import { PageHeader } from '@ui/layout/page-header'
 import { PubkeyField } from '@ui/nostr/pubkey-field'
-import { useConfigQuery } from '@/queries/config'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'

@@ -27,7 +27,7 @@ import { formatSatsWithUnit } from '@ui/utils/format'
 import { authStore } from '@platform/web/auth/authStore'
 import { getAuctionWindowValidBids } from '@sdk/commerce/auctions/settlement'
 import { findBidderRecord } from '@sdk/commerce/auctions/bidderRecords'
-import { settleAuctionAsWinner, usePublishAuctionSettlementMutation } from '@/publish/auctions'
+import { settleAuctionAsWinner, usePublishAuctionSettlementMutation } from '@platform/web/auctions/auctionPublish'
 // B4: Imports for settlement validation
 import { parseAuctionEvent } from '@sdk/commerce/auctions/schemas/auctionEvent'
 import { parseBidEvent } from '@sdk/commerce/auctions/schemas/bidEvent'
@@ -77,8 +77,8 @@ import {
 	useAuctionSettlements,
 	useAuctionVerdicts,
 	usePrivateAuctionClaimForOrder,
-} from '@/queries/auctions'
-import { type OrderWithRelatedEvents, useOrderById } from '@/queries/orders'
+} from '@platform/web/auctions/auctionsQuery'
+import { type OrderWithRelatedEvents, useOrderById } from '@platform/web/orders/ordersQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'

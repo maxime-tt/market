@@ -21,9 +21,9 @@ import {
 	productsQueryOptions,
 	useProductImages,
 	useProductTitle,
-} from '@/queries/products'
-import { useConfigQuery } from '@/queries/config'
-import { useFeaturedProducts } from '@/queries/featured'
+} from '@platform/web/products/productQuery'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useFeaturedProducts } from '@platform/web/featured/featuredQueries'
 import { SelectableBadge } from '@ui/wrappers/selectable-badge'
 import { ShowTestListingsToggleHost } from '@platform/web/config/testListingsToggleHost'
 

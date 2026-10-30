@@ -1,12 +1,6 @@
-import {
-	APP_SETTINGS_D_TAG,
-	APP_SETTINGS_KIND,
-	fetchAppSettings,
-	resolveFetchedAppSettings,
-	selectAuthoritativeAppSettingsEvent,
-	type AppSettingsEventLike,
-} from '../appSettings'
 import { describe, expect, test } from 'bun:test'
+import { APP_SETTINGS_D_TAG, APP_SETTINGS_KIND, type AppSettingsEventLike } from '@sdk/config/app-settings'
+import { fetchAppSettings, resolveFetchedAppSettings, selectAuthoritativeAppSettingsEvent } from './appSettings'
 
 const APP_PUBKEY = 'a'.repeat(64)
 const SPOOF_PUBKEY = 'b'.repeat(64)

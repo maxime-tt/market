@@ -12,7 +12,7 @@ import { Textarea } from '@ui/primitives/textarea'
 import { PageHeader } from '@ui/layout/page-header'
 import { useUpdateProfileMutation } from '@platform/web/profiles/profilePublish'
 import { useQuery } from '@tanstack/react-query'
-import { profileByIdentifierQueryOptions } from '@/queries/profiles'
+import { profileByIdentifierQueryOptions } from '@platform/web/profiles/profileQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 

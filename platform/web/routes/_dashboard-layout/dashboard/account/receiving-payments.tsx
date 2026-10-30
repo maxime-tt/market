@@ -20,7 +20,7 @@ import {
 	parsePaymentDetailsFromClipboard,
 	paymentMethodLabels,
 } from '@platform/web/payments/paymentDetails'
-import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
+import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@platform/web/collections/collectionQuery'
 import {
 	useDeletePaymentDetail,
 	usePublishRichPaymentDetail,
@@ -29,8 +29,8 @@ import {
 	useWalletDetail,
 	type PaymentScope,
 	type RichPaymentDetail,
-} from '@/queries/payment'
-import { getProductId, getProductTitle, useProductsByPubkey } from '@/queries/products'
+} from '@platform/web/payments/paymentQuery'
+import { getProductId, getProductTitle, useProductsByPubkey } from '@platform/web/products/productQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { format } from 'date-fns'

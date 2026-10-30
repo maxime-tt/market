@@ -1,5 +1,5 @@
 import { configStore } from '@platform/web/config/appConfigStore'
-import { useAmIAdmin } from '@/queries/app-settings'
+import { useAmIAdmin } from '@platform/web/app-settings/appSettingsQuery'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'

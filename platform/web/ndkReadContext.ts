@@ -177,7 +177,7 @@ export async function fetchEventsByFilter(filter: NDKFilter): Promise<NDKEvent[]
  */
 export const readAuthorizedLabelers = async (): Promise<string[] | null> => {
 	try {
-		const { fetchAdminSettings, fetchEditorSettings } = await import('@/queries/app-settings')
+		const { fetchAdminSettings, fetchEditorSettings } = await import('@platform/web/app-settings/appSettingsQuery')
 		const appPubkey = configActions.getAppPublicKey()
 		const [adminSettings, editorSettings] = await Promise.all([fetchAdminSettings(appPubkey), fetchEditorSettings(appPubkey)])
 		// Both reads unavailable → authorization is undeterminable, not empty.

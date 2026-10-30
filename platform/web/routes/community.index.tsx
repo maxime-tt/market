@@ -17,14 +17,14 @@ import {
 	useCollectionImages,
 	getCollectionTitle,
 	getCollectionId,
-} from '@/queries/collections'
+} from '@platform/web/collections/collectionQuery'
 import { CollectionCardHost as CollectionCard } from '@platform/web/collections/CollectionCardHost'
-import { useV4VMerchants } from '@/queries/v4v'
+import { useV4VMerchants } from '@platform/web/v4v/v4vQuery'
 import { FeaturedUserCardHost as FeaturedUserCard } from '@platform/web/featured/FeaturedUserCardHost'
 import { blacklistStore } from '@platform/web/config/blacklistStore'
 import { filterBlacklistedPubkeys } from '@sdk/config/blacklist'
-import { useConfigQuery } from '@/queries/config'
-import { useFeaturedCollections } from '@/queries/featured'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useFeaturedCollections } from '@platform/web/featured/featuredQueries'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 
 // Hook to fetch featured collection events using useQueries

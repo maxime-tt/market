@@ -21,7 +21,7 @@ import {
 	useRemoveAdminMutation,
 	useRemoveEditorMutation,
 	useRemoveUserFromAllRolesMutation,
-} from '@/publish/app-settings'
+} from '@platform/web/app-settings/appSettingsPublish'
 import {
 	getFormattedAdmins,
 	getFormattedEditors,
@@ -29,8 +29,8 @@ import {
 	useAdminSettings,
 	useEditorSettings,
 	useUserRole,
-} from '@/queries/app-settings'
-import { useConfigQuery } from '@/queries/config'
+} from '@platform/web/app-settings/appSettingsQuery'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { npubToHex } from '@platform/web/routes/setup'
 import { createFileRoute } from '@tanstack/react-router'

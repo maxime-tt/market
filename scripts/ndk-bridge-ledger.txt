@@ -59,3 +59,8 @@ platform/web/auth/NostrConnectQR.tsx|batch-2-lane-C|sdk/config/constants.ts|the 
 platform/web/migration/MigrationForm.tsx|batch-2-lane-C|sdk/commerce/products/nip15Migration.ts|the migration form names the NDK transport (NDKEvent typing, platform NDK store) and injects the sdk nip-15 product parser plus the shared query-key factory|client-NDK-removal (ADR-0002; post-Wave-J)
 platform/web/profiles/ProfilePage.tsx|batch-2-lane-C|sdk/core/profile/profileValidation.ts|the profile page names the NDK transport (NDKEvent typing, platform NDK store) and injects the sdk profile validation capability|client-NDK-removal (ADR-0002; post-Wave-J)
 platform/web/v4v/ProfileSearch.tsx|batch-2-lane-C|sdk/core/query/queryKeyFactory.ts|the v4v recipient search publishes through the platform NDK store and injects the sdk query-key factory for the profile keys|client-NDK-removal (ADR-0002; post-Wave-J)
+
+# --- b3-relocate (2026-10-30): the last real src/lib modules left src/; the two halves that name the
+# NDK transport landed under platform/ and are declared the day they land (declare-as-you-touch).
+platform/server/appSettings.ts|b3-relocate|sdk/config/app-settings.ts|the server-side app-settings fetcher builds a one-off NDK relay client and injects the sdk app-settings event contract (kind/d-tag/AppSettingsEventLike) plus the sdk app schema|client-NDK-removal (ADR-0002; post-Wave-J)
+platform/web/payments/zapPurchase.ts|b3-relocate|sdk/config/constants.ts|the zap purchase helper signs kind-9734 requests through the caller's NDK client and injects the sdk shared ZAP_RELAYS constant|client-NDK-removal (ADR-0002; post-Wave-J)

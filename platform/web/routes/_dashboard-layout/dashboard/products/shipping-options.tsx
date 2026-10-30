@@ -15,7 +15,7 @@ import {
 	usePublishShippingOptionMutation,
 	useUpdateShippingOptionMutation,
 	type ShippingFormData,
-} from '@/publish/shipping'
+} from '@platform/web/shipping/shippingPublish'
 import {
 	getShippingCarrier,
 	getShippingCountry,
@@ -30,7 +30,7 @@ import {
 	getShippingTitle,
 	getShippingWeightLimits,
 	useShippingOptionsByPubkey,
-} from '@/queries/shipping'
+} from '@platform/web/shipping/shippingQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute } from '@tanstack/react-router'

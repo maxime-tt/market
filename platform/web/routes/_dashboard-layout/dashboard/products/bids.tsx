@@ -36,7 +36,7 @@ import {
 	getBidMint,
 	getBidSellerPubkey,
 	useAuctionBidsByBidder,
-} from '@/queries/auctions'
+} from '@platform/web/auctions/auctionsQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@platform/web/ndk/ndkEvents'

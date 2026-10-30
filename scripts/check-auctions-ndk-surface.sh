@@ -200,7 +200,11 @@ GLOBS=(
 	# platform/web/ndkReadContext.ts (host adapter code, outside this guard's file set), so the
 	# family matches nothing and the coverage check fails by design. Re-add an auctions family
 	# if an auction module reappears under src/lib/auctions/.
-	"$ROOT"/src/lib/utils/auction*.ts
+	# `src/lib/utils/auction*.ts` was retired here (B3-1, 2026-10-30): its last member,
+	# src/lib/utils/auctions.ts, moved verbatim to platform/web/auctions/auctionFiltering.ts,
+	# covered by the `platform/web/auctions/*.ts` family below — the scanned-set size is flat
+	# (+1 moved file, -1 retired src file), so MIN_SCANNED stays 87. Re-add a utils family
+	# if an auction util reappears under src/lib/utils/.
 	# `src/lib/stores/auction*.ts` was retired here: its only member, `auctionWon.ts`, was deleted when the
 	# auction-win flow moved onto the notification mechanism (see the C1/C2 increments), so the family matches
 	# nothing and the coverage check fails by design. Re-add a stores family if an auction store reappears.

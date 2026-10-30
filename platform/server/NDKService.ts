@@ -1,5 +1,5 @@
 import NDK, { type NDKSubscription } from '@nostr-dev-kit/ndk'
-import { naddrFromAddress } from '@/lib/nostr/naddr'
+import { naddrFromAddress } from '@sdk/core/nostr/naddr'
 import type { AdminManager, EditorManager, BootstrapManager } from './types'
 
 export class NDKService {

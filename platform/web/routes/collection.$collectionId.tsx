@@ -10,20 +10,20 @@ import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { uiActions, uiStore } from '@platform/web/app/uiStore'
 import { truncateText } from '@platform/web/utils/text'
-import { addToBlacklistCollections, removeFromBlacklistCollections } from '@/publish/blacklist'
-import { addToFeaturedCollections, removeFromFeaturedCollections } from '@/publish/featured'
-import { useBlacklistSettings } from '@/queries/blacklist'
+import { addToBlacklistCollections, removeFromBlacklistCollections } from '@platform/web/config/blacklistPublish'
+import { addToFeaturedCollections, removeFromFeaturedCollections } from '@platform/web/featured/featuredPublish'
+import { useBlacklistSettings } from '@platform/web/config/blacklistBinding'
 import {
 	collectionByIdQueryOptions,
 	getCollectionCoordinates,
 	getCollectionImages,
 	getCollectionSummary,
 	getCollectionTitle,
-} from '@/queries/collections'
-import { useConfigQuery } from '@/queries/config'
-import { useFeaturedCollections } from '@/queries/featured'
-import { useProductsByCollection } from '@/queries/products'
-import { profileByIdentifierQueryOptions, useProfileName } from '@/queries/profiles'
+} from '@platform/web/collections/collectionQuery'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useFeaturedCollections } from '@platform/web/featured/featuredQueries'
+import { useProductsByCollection } from '@platform/web/products/productQuery'
+import { profileByIdentifierQueryOptions, useProfileName } from '@platform/web/profiles/profileQuery'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'

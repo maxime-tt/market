@@ -24,13 +24,13 @@ import { cartActions, useCart, type RichShippingInfo } from '@platform/web/cart/
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { uiActions, uiStore } from '@platform/web/app/uiStore'
-import { addToBlacklistProducts, removeFromBlacklistProducts } from '@/publish/blacklist'
-import { addToFeaturedProducts, removeFromFeaturedProducts } from '@/publish/featured'
-import { useBlacklistSettings } from '@/queries/blacklist'
-import { useConfigQuery } from '@/queries/config'
-import { useFeaturedProducts } from '@/queries/featured'
-import { useAmIAdmin } from '@/queries/app-settings'
-import { useTestLabelForCoordinate } from '@/queries/testLabels'
+import { addToBlacklistProducts, removeFromBlacklistProducts } from '@platform/web/config/blacklistPublish'
+import { addToFeaturedProducts, removeFromFeaturedProducts } from '@platform/web/featured/featuredPublish'
+import { useBlacklistSettings } from '@platform/web/config/blacklistBinding'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useFeaturedProducts } from '@platform/web/featured/featuredQueries'
+import { useAmIAdmin } from '@platform/web/app-settings/appSettingsQuery'
+import { useTestLabelForCoordinate } from '@platform/web/config/testLabelsBinding'
 import { TestLabelDialog } from '@platform/web/curation/TestLabelDialog'
 import { TestListingNoticeHost as TestListingNotice } from '@platform/web/config/testListingNoticeHost'
 import {
@@ -55,8 +55,8 @@ import {
 	productQueryOptions,
 	productsByPubkeyQueryOptions,
 	getProductLocation,
-} from '@/queries/products'
-import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
+} from '@platform/web/products/productQuery'
+import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@platform/web/shipping/shippingQuery'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'

@@ -28,13 +28,13 @@ import {
 	reorderFeaturedProducts,
 	reorderFeaturedAuctions,
 	reorderFeaturedUsers,
-} from '@/publish/featured'
-import { useUserRole } from '@/queries/app-settings'
-import { fetchAuction, getAuctionId } from '@/queries/auctions'
-import { fetchCollection, fetchCollectionByEventId, getCollectionId } from '@/queries/collections'
-import { useConfigQuery } from '@/queries/config'
-import { useFeaturedAuctions, useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@/queries/featured'
-import { fetchProduct, getProductId } from '@/queries/products'
+} from '@platform/web/featured/featuredPublish'
+import { useUserRole } from '@platform/web/app-settings/appSettingsQuery'
+import { fetchAuction, getAuctionId } from '@platform/web/auctions/auctionsQuery'
+import { fetchCollection, fetchCollectionByEventId, getCollectionId } from '@platform/web/collections/collectionQuery'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useFeaturedAuctions, useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@platform/web/featured/featuredQueries'
+import { fetchProduct, getProductId } from '@platform/web/products/productQuery'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { npubToHex } from '@platform/web/routes/setup'

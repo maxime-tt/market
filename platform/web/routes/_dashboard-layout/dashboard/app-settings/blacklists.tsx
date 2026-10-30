@@ -19,12 +19,12 @@ import {
 	useRemoveFromBlacklistCollectionsMutation,
 	useRemoveFromBlacklistMutation,
 	useRemoveFromBlacklistProductsMutation,
-} from '@/publish/blacklist'
-import { useUserRole } from '@/queries/app-settings'
-import { getFormattedBlacklist, useBlacklistSettings } from '@/queries/blacklist'
-import { fetchCollection, fetchCollectionByEventId, getCollectionId } from '@/queries/collections'
-import { useConfigQuery } from '@/queries/config'
-import { fetchProduct, getProductId } from '@/queries/products'
+} from '@platform/web/config/blacklistPublish'
+import { useUserRole } from '@platform/web/app-settings/appSettingsQuery'
+import { getFormattedBlacklist, useBlacklistSettings } from '@platform/web/config/blacklistBinding'
+import { fetchCollection, fetchCollectionByEventId, getCollectionId } from '@platform/web/collections/collectionQuery'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { fetchProduct, getProductId } from '@platform/web/products/productQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { npubToHex } from '@platform/web/routes/setup'
 import { createFileRoute } from '@tanstack/react-router'

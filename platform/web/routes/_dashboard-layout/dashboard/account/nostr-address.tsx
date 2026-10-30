@@ -9,8 +9,8 @@ import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { toast } from 'sonner'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
-import { useConfigQuery } from '@/queries/config'
-import { useNip05Settings, getNip05ForPubkey, getExpiredNip05ForPubkey } from '@/queries/nip05'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useNip05Settings, getNip05ForPubkey, getExpiredNip05ForPubkey } from '@platform/web/config/nip05Binding'
 import { nip05Actions } from '@sdk/config/nip05'
 import { NIP05_PRICING } from '@platform/server/Nip05Manager'
 import { Badge } from '@ui/primitives/badge'
@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/p
 import { LightningPaymentProcessor } from '@platform/web/payments/LightningPaymentProcessor'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
 import { PageHeader } from '@ui/layout/page-header'
-import { purchaseNip05ForPubkey } from '@/lib/zapPurchase'
+import { purchaseNip05ForPubkey } from '@platform/web/payments/zapPurchase'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/nostr-address')({
 	component: NostrAddressComponent,

@@ -6,7 +6,7 @@ import { LoadingState } from '@ui/shared/loading-state'
 import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@platform/web/auth/authStore'
 import { uiActions } from '@platform/web/app/uiStore'
-import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
+import { usePublishAuctionSettlementMutation } from '@platform/web/auctions/auctionPublish'
 import { AuctionListItemHost } from '@platform/web/dashboard/AuctionListItemHost'
 import {
 	auctionsByPubkeyQueryOptions,
@@ -15,7 +15,7 @@ import {
 	useAuctionBidsForList,
 	useAuctionPathReleasesForList,
 	useAuctionSettlementsForList,
-} from '@/queries/auctions'
+} from '@platform/web/auctions/auctionsQuery'
 import type { NDKEvent } from '@platform/web/ndk/ndkEvents'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { parseSettlementEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
@@ -25,7 +25,12 @@ import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-ro
 import { useSelector } from '@tanstack/react-store'
 import { ExternalLink, Gavel } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { auctionSortOptionValues, getAuctionSortOptionTitle, useFilteredAuctions, type AuctionSortOption } from '@/lib/utils/auctions'
+import {
+	auctionSortOptionValues,
+	getAuctionSortOptionTitle,
+	useFilteredAuctions,
+	type AuctionSortOption,
+} from '@platform/web/auctions/auctionFiltering'
 
 const getAuctionCoordinates = (auction: NDKEvent): string => {
 	const auctionDTag = getAuctionId(auction)

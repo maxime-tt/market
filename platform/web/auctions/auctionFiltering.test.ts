@@ -14,8 +14,8 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import type { NostrEventLike } from '../nostr/eventLike'
-import { compareAuctionsEndingSoon, getAuctionEndingSoonRank } from '../utils/auctions'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { compareAuctionsEndingSoon, getAuctionEndingSoonRank } from './auctionFiltering'
 
 const NOW = 1_700_000_000
 

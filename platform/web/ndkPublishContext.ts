@@ -46,7 +46,7 @@ export { NDKEvent, NDKUser, NDKZapper }
 export type { NDKFilter, NDKSigner }
 
 /** Re-exported so publish bindings can route app-settings submissions through this bridge without a `platform -> src` edge. */
-export { submitAppSettings as submitAppSettingsEvent } from '@/lib/appSettings'
+export { submitAppSettings as submitAppSettingsEvent } from '@platform/web/app-settings/appSettingsSubmit'
 
 /**
  * Re-exported so the order bindings can adapt the auth session's signer capability
