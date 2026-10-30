@@ -113,15 +113,17 @@ function isHooksOrderError(logs: string[]): boolean {
 
 describe('LiveChatPanel hooks order', () => {
 	test('renders with null status without triggering a hooks order warning', async () => {
+		const { LiveChatPanel } = await import('@platform/web/messaging/LiveChatPanel')
+
+		// The prop is still NDK-typed on the subject; reference it structurally
+		// so this test (under platform/) does not name the NDK package.
 		const auctionEvent = {
 			pubkey: 'a'.repeat(64),
 			tags: [
 				['d', 'auction:test'],
 				['starts', String(Math.floor(Date.now() / 1000) + 3600)],
 			],
-		} as import('@nostr-dev-kit/ndk').NDKEvent
-
-		const { LiveChatPanel } = await import('@platform/web/messaging/LiveChatPanel')
+		} as React.ComponentProps<typeof LiveChatPanel>['auctionEvent']
 
 		const logs = captureReactErrors(() => {
 			renderToString(React.createElement(LiveChatPanel, { auctionEvent }))

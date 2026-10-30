@@ -86,10 +86,12 @@ function liveActivityEvent(
 }
 
 function auctionEvent(pubkey: string = SELLER_PUBKEY, dTag: string = 'auction-1') {
+	// The subject parameter is still NDK-typed; reference it structurally so
+	// this test (under platform/) does not name the NDK package.
 	return {
 		pubkey,
 		tags: [['d', dTag]],
-	} as unknown as import('@nostr-dev-kit/ndk').NDKEvent
+	} as unknown as Parameters<typeof fetchLiveActivity>[0]
 }
 
 describe('liveChat queries', () => {

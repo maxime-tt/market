@@ -1,12 +1,13 @@
 import { describe, test, expect } from 'bun:test'
 import { buildAuctionBidFilters, mergeAndSortBids } from '@platform/web/auctions/auctionsQuery'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 const AUCTION_BID_KIND = 1023
 
-// Minimal NDKEvent stub — only the fields the hook logic reads.
-function makeBid(id: string, created_at: number, pubkey = 'pubkey1'): NDKEvent {
-	return { id, pubkey, created_at, tags: [], content: '', kind: AUCTION_BID_KIND } as unknown as NDKEvent
+// Minimal bid event stub — only the fields the hook logic reads. The subject
+// (mergeAndSortBids) is typed NostrEventLike, so no relay-client runtime is needed.
+function makeBid(id: string, created_at: number, pubkey = 'pubkey1'): NostrEventLike {
+	return { id, pubkey, created_at, tags: [], content: '', kind: AUCTION_BID_KIND } as unknown as NostrEventLike
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +92,7 @@ describe('mergeAndSortBids', () => {
 	})
 
 	test('treats missing created_at as 0 when sorting', () => {
-		const noTimestamp = { ...makeBid('b_old', 0), created_at: undefined } as unknown as NDKEvent
+		const noTimestamp = { ...makeBid('b_old', 0), created_at: undefined } as unknown as NostrEventLike
 		const withTimestamp = makeBid('b_new', 50)
 		const result = mergeAndSortBids([], [withTimestamp, noTimestamp])
 		expect(result[0].id).toBe('b_old')
@@ -102,6 +103,6 @@ describe('mergeAndSortBids', () => {
 		const existing = [makeBid('b1', 100)]
 		const frozen = Object.freeze([...existing])
 		// Should not throw even though frozen array cannot be mutated in-place
-		expect(() => mergeAndSortBids(frozen as NDKEvent[], [makeBid('b2', 200)])).not.toThrow()
+		expect(() => mergeAndSortBids(frozen as NostrEventLike[], [makeBid('b2', 200)])).not.toThrow()
 	})
 })
