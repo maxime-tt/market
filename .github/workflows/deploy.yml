@@ -84,7 +84,7 @@ jobs:
             apps: [
               {
                 name: 'market-staging',
-                script: 'src/index.tsx',
+                script: 'platform/web/app/entry.tsx',
                 interpreter: process.env.HOME + '/.bun/bin/bun',
                 cwd: '/home/deployer/market-staging',
                 instances: 1,

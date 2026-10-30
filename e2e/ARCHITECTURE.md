@@ -1325,7 +1325,7 @@ Playwright's `html` reporter produces no terminal output during the test run, ma
 
 ### NDK Outbox Model in Tests
 
-The NDK outbox model discovers and connects to additional relays beyond the explicit list, which would leak test data to public relays. The app disables outbox when `stage !== 'development'` (see `src/lib/stores/ndk.ts`). Since `NODE_ENV='test'` maps to the `'development'` stage via `determineStage()` in `src/index.tsx`, outbox is automatically disabled for test runs. The `LOCAL_RELAY_ONLY=true` env provides an additional safety layer.
+The NDK outbox model discovers and connects to additional relays beyond the explicit list, which would leak test data to public relays. The app disables outbox when `stage !== 'development'` (see `src/lib/stores/ndk.ts`). Since `NODE_ENV='test'` maps to the `'development'` stage via `determineStage()` in `platform/web/app/entry.tsx`, outbox is automatically disabled for test runs. The `LOCAL_RELAY_ONLY=true` env provides an additional safety layer.
 
 ---
 

@@ -171,4 +171,4 @@ These relays are used in addition to the main relay (unless `LOCAL_RELAY_ONLY=tr
 - **Stage Type & Constants**: [constants.ts](file:///Users/schlaus/workspace/market/src/lib/constants.ts)
 - **NDK Store & Relay Logic**: [ndk.ts](file:///Users/schlaus/workspace/market/src/lib/stores/ndk.ts)
 - **Config Store**: [config.ts](file:///Users/schlaus/workspace/market/src/lib/stores/config.ts)
-- **Server Config API**: [index.tsx](file:///Users/schlaus/workspace/market/src/index.tsx)
+- **Server Config API**: [index.tsx](file:///Users/schlaus/workspace/market/platform/web/app/entry.tsx)

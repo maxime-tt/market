@@ -24,7 +24,7 @@ export { NDKService } from './NDKService'
 export type { EventHandlerConfig, EventValidationResult, ProcessedEvent, AdminManager, EditorManager, BootstrapManager } from './types'
 
 // Server composition (Bun routes, websocket, startup) — split out of
-// `src/index.tsx` to keep the entrypoint thin. See `./buildServer.ts`.
+// the Bun entrypoint (`platform/web/app/entry.tsx`) to keep the entrypoint thin. See `./buildServer.ts`.
 export { buildServer, type BuildServerOptions } from './buildServer'
 export { initializeAppSettings, startEventHandlerInitialization } from './startup'
 export { determineStage } from './runtime'

@@ -97,7 +97,7 @@ function useDocumentMeta(config: MetaTagsConfig) {
 		const createdElements: HTMLElement[] = []
 
 		// Helper to apply a meta tag. Server-side og injection (see
-		// src/index.tsx + src/lib/ogTags.ts) already renders og:/twitter:
+		// platform/web/app/entry.tsx + sdk/commerce/products/ogTags.ts) already renders og:/twitter:
 		// tags into the initial HTML for product pages, so reuse those
 		// elements instead of appending duplicates. The product route owns
 		// every such element while mounted and removes them all on cleanup

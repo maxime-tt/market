@@ -186,7 +186,8 @@ trap "rm -rf $TEMP_DIR" EXIT
 
 # dist/ - pre-built static files (served by Caddy)
 cp -r "$PROJECT_DIR/dist" "$TEMP_DIR/"
-# src/ - server code for API (run by Bun/PM2)
+# src/ - test files for the boundary guard until batch 5; the API entrypoint
+# is platform/web/app/entry.tsx (run by Bun/PM2)
 cp -r "$PROJECT_DIR/src" "$TEMP_DIR/"
 # contextvm/ - ContextVM server code (run by Bun/PM2)
 cp -r "$PROJECT_DIR/contextvm" "$TEMP_DIR/"
@@ -207,7 +208,7 @@ module.exports = {
   apps: [
     {
       name: '$PM2_APP_NAME',
-      script: 'src/index.tsx',
+      script: 'platform/web/app/entry.tsx',
       interpreter: process.env.HOME + '/.bun/bin/bun',
       cwd: '$REMOTE_APP_DIR',
       instances: 1,

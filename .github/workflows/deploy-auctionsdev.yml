@@ -51,7 +51,7 @@ jobs:
           # `Script not found: /home/.../market-auctionsdev/contextvm/server.ts`.
           cp -r contextvm deploy-package/
           # `sdk/ ui/ platform/` are the split trees the server composes
-          # (`src/index.tsx` -> `@platform/server`, `platform/` -> `@sdk/`/`@ui/`).
+          # (`platform/web/app/entry.tsx` -> `@platform/server`, `platform/` -> `@sdk/`/`@ui/`).
           # Omitting them breaks `@platform/server` resolution on the VPS.
           cp -r sdk deploy-package/
           cp -r ui deploy-package/
@@ -88,7 +88,7 @@ jobs:
             apps: [
               {
                 name: 'market-auctionsdev',
-                script: 'src/index.tsx',
+                script: 'platform/web/app/entry.tsx',
                 interpreter: process.env.HOME + '/.bun/bin/bun',
                 cwd: '/home/deployer/market-auctionsdev',
                 instances: 1,

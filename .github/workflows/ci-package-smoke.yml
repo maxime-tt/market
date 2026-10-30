@@ -1,8 +1,8 @@
 name: Package Smoke
 
 # Proves the deployment package produced by the deploy/release workflows is
-# self-contained. The app was split into `sdk/ ui/ platform/ src/`, and both
-# `src/index.tsx` (-> `@platform/server`) and `contextvm/server.ts`
+# self-contained. The app was split into `sdk/ ui/ platform/`, and both
+# `platform/web/app/entry.tsx` (-> `@platform/server`) and `contextvm/server.ts`
 # (-> `../platform/server/auction-validator`) resolve into those trees, while
 # `platform/` itself resolves `@sdk/` and `@ui/`. A deploy that copies only
 # `dist/ src/ contextvm/` therefore dies on the VPS with
@@ -13,8 +13,8 @@ name: Package Smoke
 # entrypoints from the packaged tree reproduces exactly the deploy failure we
 # are preventing. It does not start the server.
 #
-# `--external='*.html'` on the app entrypoint is deliberate. `src/index.tsx`
-# imports the SPA shell (`src/index.html`), whose client graph is built by
+# `--external='*.html'` on the app entrypoint is deliberate. The entrypoint
+# (`platform/web/app/entry.tsx`) imports the SPA shell (`index.html`), whose client graph is built by
 # `bun run build.ts` with the browser target; bundling that client graph under
 # `--target=bun` fails for unrelated reasons (node-builtin imports inside
 # `debug` / `@getalby/lightning-tools`). Externalizing the html import keeps the
@@ -69,7 +69,7 @@ jobs:
         # Fails with `Could not resolve: "@platform/server"` when the package
         # omits the platform/ (or sdk/ ui/) trees.
         working-directory: /tmp/smoke-package
-        run: bun build src/index.tsx --target=bun --outdir /tmp/smoke-app --external='*.html'
+        run: bun build platform/web/app/entry.tsx --target=bun --outdir /tmp/smoke-app --external='*.html'
 
       - name: Resolve the packaged ContextVM entrypoint
         # Fails with `Could not resolve: "../platform/server/auction-validator"`

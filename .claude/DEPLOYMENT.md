@@ -177,7 +177,7 @@ Best for: Small deployments, testing
 
 5. **Start application**:
    ```bash
-   NODE_ENV=production bun src/index.tsx
+   NODE_ENV=production bun platform/web/app/entry.tsx
    ```
 
 ### Method 2: Automated Script
@@ -332,7 +332,7 @@ After=network.target
 Type=simple
 User=deploy
 WorkingDirectory=/home/deploy/market
-ExecStart=/home/deploy/.bun/bin/bun src/index.tsx
+ExecStart=/home/deploy/.bun/bin/bun platform/web/app/entry.tsx
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -442,7 +442,7 @@ sudo certbot --nginx -d market.example.com
 2. **Test build locally**:
 
    ```bash
-   NODE_ENV=production bun src/index.tsx
+   NODE_ENV=production bun platform/web/app/entry.tsx
    # Verify on localhost:3000
    # Ctrl+C to stop
    ```
