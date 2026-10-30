@@ -1,4 +1,5 @@
 import type NDK from '@nostr-dev-kit/ndk'
+import { NDKRelay, NDKRelayStatus } from '@nostr-dev-kit/ndk'
 import { buildRelayListFilter, parseRelayListEvents, type RelayPreference } from '@sdk/core/relays'
 
 /**
@@ -19,4 +20,32 @@ import { buildRelayListFilter, parseRelayListEvents, type RelayPreference } from
 export async function fetchUserRelayListWithPreferences(ndk: NDK, userPubkey: string): Promise<RelayPreference[]> {
 	const events = await ndk.fetchEvents(buildRelayListFilter(userPubkey))
 	return parseRelayListEvents(events)
+}
+
+/** Relay connectivity as the settings view reports it (plain strings, no NDK type leaks to `ui/`). */
+export type RelayConnectionStatus = 'connected' | 'connecting' | 'disconnected'
+
+/**
+ * Classify one pool relay's live connectivity for the relay-manager view. The
+ * retired `src/components/ui/relay-manager/RelayCard.tsx` derived the same
+ * three states from `relay.connectivity.status` before rendering (CONNECTED /
+ * CONNECTING / everything else as disconnected); the mapping lives here so the
+ * host that consumes it can stay NDK-import-free. A relay that throws while
+ * reporting (the original wrapped the same read) classifies as disconnected.
+ *
+ * @param relay A relay from `ndkActions.getRelays()` (an `NDKRelay`).
+ */
+export function relayConnectionStatus(relay: NDKRelay): RelayConnectionStatus {
+	try {
+		const status = relay.connectivity?.status
+		if (status === NDKRelayStatus.CONNECTED) {
+			return 'connected'
+		}
+		if (status === NDKRelayStatus.CONNECTING) {
+			return 'connecting'
+		}
+		return 'disconnected'
+	} catch {
+		return 'disconnected'
+	}
 }

@@ -9,7 +9,7 @@ import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { FeaturedSections } from '@/components/FeaturedSections'
-import { InfiniteProductList } from '@/components/InfiniteProductList'
+import { InfiniteProductListHost } from '@platform/web/products/InfiniteProductListHost'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { getProductCategories } from '@/queries/products'
 import { useQuery } from '@tanstack/react-query'
@@ -128,7 +128,14 @@ function Index() {
 
 			{/* Infinite Product List */}
 			<div className="px-8 py-4">
-				<InfiniteProductList title="All Products" scrollKey="homepage-products" chunkSize={20} threshold={1000} autoLoad={true} tag={tag} />
+				<InfiniteProductListHost
+					title="All Products"
+					scrollKey="homepage-products"
+					chunkSize={20}
+					threshold={1000}
+					autoLoad={true}
+					tag={tag}
+				/>
 			</div>
 		</div>
 	)

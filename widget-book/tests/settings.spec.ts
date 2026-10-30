@@ -21,6 +21,9 @@ const entryNames = [
 	'ProfileWalletCheckLoading',
 	'ProfileWalletCheckLud16',
 	'ProfileWalletCheckNoLud16',
+	'RelayCardView',
+	'RelayManagerView',
+	'RelayManagerViewSignedOut',
 ]
 
 test('renders the settings library', async ({ page }) => {

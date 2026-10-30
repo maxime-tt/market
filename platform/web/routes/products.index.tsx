@@ -1,4 +1,4 @@
-import { InfiniteProductList } from '@/components/InfiniteProductList'
+import { InfiniteProductListHost } from '@platform/web/products/InfiniteProductListHost'
 import { Media } from '@ui/shared/media'
 import { ProductFilters, defaultProductFilters, type ProductFilterState } from '@ui/products/product-filters'
 import { Badge } from '@ui/primitives/badge'
@@ -62,7 +62,7 @@ function ProductsRoute() {
 	const navigate = useNavigate()
 	const { tag } = Route.useSearch()
 	const [filters, setFilters] = useState<ProductFilterState>(defaultProductFilters)
-	// Use streaming via InfiniteProductList, but still need some products for featured slides
+	// Use streaming via InfiniteProductListHost, but still need some products for featured slides
 	// Fetch ALL products (without tag filter) to ensure tag bar remains consistent
 	const productsQuery = useQuery({
 		...productsQueryOptions(500),
@@ -339,7 +339,7 @@ function ProductsRoute() {
 
 			<div className="px-8 py-4">
 				{/* Single Infinite Product List with streaming */}
-				<InfiniteProductList
+				<InfiniteProductListHost
 					title="All Products"
 					scrollKey="products-page"
 					chunkSize={20}
