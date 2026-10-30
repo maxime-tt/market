@@ -17,6 +17,7 @@ import { orders } from './libraries/orders'
 import { products } from './libraries/products'
 import { settings } from './libraries/settings'
 import { shared } from './libraries/shared'
+import { wallet } from './libraries/wallet'
 import { wrappers } from './libraries/wrappers'
 
 export interface WidgetEntry {
@@ -57,6 +58,7 @@ export const libraries: WidgetLibrary[] = [
 	products,
 	settings,
 	shared,
+	wallet,
 	wrappers,
 ]
 

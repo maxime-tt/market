@@ -9,20 +9,18 @@ import {
 	isValidDigitalDeliveryContact,
 	resolveCheckoutDeliveryRequirements,
 	type CheckoutDeliveryRequirements,
+	type CheckoutFormData,
 	type PaymentInvoiceData,
 } from '@sdk/commerce/checkout'
 import type { SellerOrderPublishOutcome } from '@sdk/commerce/orders'
-import type { PaymentContentRef } from '@/components/checkout/PaymentContent'
-import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
-import { authStore } from '@/lib/stores/auth'
-import { cartActions, cartStore } from '@/lib/stores/cart'
-import { parseNwcUri, useWallets } from '@/lib/stores/wallet'
-import { persistInvoicesLocally, updatePersistedInvoiceLocally } from '@/lib/utils/invoiceStorage'
-import type { OrderInvoiceSet } from '@/lib/utils/orderUtils'
-import { publishOrderWorkflowWithDependencies } from '@/publish/orders'
-import { publishPaymentReceipt } from '@/publish/payment'
-import { getShippingEvent, getShippingService } from '@/queries/shipping'
-import { useGenerateInvoiceMutation, type PaymentDetail } from '@/queries/payment'
+import { authStore } from '@platform/web/auth/authStore'
+import { cartActions, cartStore } from '@platform/web/cart/cartStore'
+import { parseNwcUri, useWallets } from '@platform/web/config/walletStore'
+import { persistInvoicesLocally, updatePersistedInvoiceLocally } from '@platform/web/payments/invoiceStorage'
+import { publishOrderWorkflowWithDependencies } from '@platform/web/orders/orderPublish'
+import { publishPaymentReceipt } from '@platform/web/payments/paymentPublish'
+import { getShippingEvent, getShippingService } from '@platform/web/shipping/shippingQuery'
+import { useGenerateInvoiceMutation, type PaymentDetail } from '@platform/web/payments/paymentQuery'
 import {
 	type CheckoutStep,
 	applyInvoiceStatusChange,
@@ -62,6 +60,17 @@ import {
  * rule, both of which the tests in `checkoutFlow.test.ts` pin.
  */
 
+/**
+ * The imperative handle `PaymentContent` exposes to the checkout flow.
+ *
+ * Mirrors `@/components/checkout/PaymentContent`'s `PaymentContentRef` until that
+ * legacy component is migrated; the shapes are structurally identical, so the
+ * route can pass this ref to the legacy component unchanged.
+ */
+export interface CheckoutPaymentContentRef {
+	payAllWithNwc: () => Promise<void>
+}
+
 const EMPTY_DELIVERY_REQUIREMENTS: CheckoutDeliveryRequirements = resolveCheckoutDeliveryRequirements({
 	products: [],
 	servicesByShippingRef: {},
@@ -89,11 +98,10 @@ export function useCheckout() {
 	const [partialOrderOutcome, setPartialOrderOutcome] = useState<Extract<SellerOrderPublishOutcome, { status: 'partial' }> | null>(null)
 	/** Last payment failure, kept on screen instead of only flashing a toast. */
 	const [paymentFailure, setPaymentFailure] = useState<string | null>(null)
-	const [orderInvoiceSets, setOrderInvoiceSets] = useState<Record<string, OrderInvoiceSet>>({})
 	const [specOrderIds, setSpecOrderIds] = useState<string[]>([])
 
 	// Ref to control PaymentContent
-	const paymentContentRef = useRef<PaymentContentRef>(null)
+	const paymentContentRef = useRef<CheckoutPaymentContentRef>(null)
 
 	// Use auto-animate with error handling to prevent DOM manipulation errors
 	const [animationParent] = (() => {
@@ -115,7 +123,6 @@ export function useCheckout() {
 		setCurrentInvoiceIndex(0)
 		setInvoices([])
 		setShippingData(null)
-		setOrderInvoiceSets({})
 		setSpecOrderIds([])
 		setPartialOrderOutcome(null)
 	}, [cartKey])
@@ -283,7 +290,7 @@ export function useCheckout() {
 					const productIds = sellerProducts.map((p) => p.id)
 
 					try {
-						const { getAvailablePaymentOptions } = await import('@/queries/payment')
+						const { getAvailablePaymentOptions } = await import('@platform/web/payments/paymentQuery')
 						const options = await getAvailablePaymentOptions(productIds, sellerPubkey)
 						walletsBySeller[sellerPubkey] = options
 
@@ -517,7 +524,7 @@ export function useCheckout() {
 		if (invoice) {
 			try {
 				await publishPaymentReceipt({
-					invoice: { ...invoice, orderId: resolvedOrderId },
+					invoice: { ...invoice, orderId: resolvedOrderId, bolt11: invoice.bolt11 ?? undefined },
 					preimage,
 					bolt11: invoice.bolt11 || '',
 				})
