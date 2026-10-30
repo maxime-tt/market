@@ -343,11 +343,12 @@ function SampleValidatorAvatar({ pubkey }: { pubkey: string }) {
 const PROGRESS_VALIDATOR_PUBKEYS = ['f'.repeat(64)]
 
 /**
- * The bid progress dialog, always rendered OPEN with literal verdict booleans,
- * so the gallery and the spec assert the stage mapping, the verdict-bound
- * copy and the #1235 retry gating per lifecycle state.
+ * The bid progress dialog behind a trigger, with literal verdict booleans, so
+ * the spec opens one lifecycle state at a time and asserts the stage mapping,
+ * the verdict-bound copy and the #1235 retry gating.
  */
 function AuctionBidProgressDialogViewDemo({
+	trigger,
 	lifecycleState,
 	hasPositiveVerdict = false,
 	hasNegativeVerdict = false,
@@ -358,26 +359,66 @@ function AuctionBidProgressDialogViewDemo({
 	onRetryPublish,
 	lockOutcomeUncertain,
 }: {
+	trigger: string
 	lifecycleState: AuctionBidProgressDialogViewProps['lifecycleState']
 } & Partial<Omit<AuctionBidProgressDialogViewProps, 'lifecycleState'>>) {
 	return (
-		<div className="max-w-md">
-			<AuctionBidProgressDialogView
-				open
-				onClose={() => {}}
-				lifecycleState={lifecycleState}
-				hasPositiveVerdict={hasPositiveVerdict}
-				hasNegativeVerdict={hasNegativeVerdict}
-				hasNeutralVerdict={hasNeutralVerdict}
-				representativeVerdictClaim={representativeVerdictClaim}
-				validatorPubkeys={PROGRESS_VALIDATOR_PUBKEYS}
-				renderValidatorAvatar={(pubkey) => <SampleValidatorAvatar pubkey={pubkey} />}
-				bidAmount={bidAmount}
-				refundLocktime={refundLocktime}
-				onRetryPublish={onRetryPublish}
-				lockOutcomeUncertain={lockOutcomeUncertain}
-			/>
+		<ModalTrigger label={trigger}>
+			{(open, setOpen) => (
+				<AuctionBidProgressDialogView
+					open={open}
+					onClose={() => setOpen(false)}
+					lifecycleState={lifecycleState}
+					hasPositiveVerdict={hasPositiveVerdict}
+					hasNegativeVerdict={hasNegativeVerdict}
+					hasNeutralVerdict={hasNeutralVerdict}
+					representativeVerdictClaim={representativeVerdictClaim}
+					validatorPubkeys={PROGRESS_VALIDATOR_PUBKEYS}
+					renderValidatorAvatar={(pubkey) => <SampleValidatorAvatar pubkey={pubkey} />}
+					bidAmount={bidAmount}
+					refundLocktime={refundLocktime}
+					onRetryPublish={onRetryPublish}
+					lockOutcomeUncertain={lockOutcomeUncertain}
+				/>
+			)}
+		</ModalTrigger>
+	)
+}
+
+/**
+ * Trigger-driven dialog mount: a mounted-open Radix dialog hides the rest of the
+ * catalogue from the accessibility tree and blocks pointer events, so every dialog
+ * entry renders CLOSED behind its own trigger button and the spec opens/closes
+ * one dialog at a time (the wallet-library discipline, C2/J-b).
+ */
+function ModalTrigger({ label, children }: { label: string; children: (open: boolean, setOpen: (open: boolean) => void) => ReactNode }) {
+	const [open, setOpen] = useState(false)
+	return (
+		<div className="min-h-20 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+			<button type="button" className="rounded-md border px-3 py-1.5 text-sm" onClick={() => setOpen(true)}>
+				{label}
+			</button>
+			{children(open, setOpen)}
 		</div>
+	)
+}
+
+/** Host stand-in for the router link the card host injects (`Link to={`/auctions/${id}`}`). */
+const sampleCardRenderLink = (children: ReactNode, className?: string) => (
+	<a href="#auction" className={className} data-slot="card-link">
+		{children}
+	</a>
+)
+
+/** Host stand-in for the confirm dialog's seller card (`UserCardHost`). */
+function SampleSellerCard() {
+	return (
+		<span data-slot="seller-card" className="inline-flex items-center gap-2 text-sm text-text-high">
+			<span className="flex h-8 w-8 items-center justify-center rounded-full bg-fill-accent text-xs font-semibold text-on-fill-accent">
+				S
+			</span>
+			<span>satoshi</span>
+		</span>
 	)
 }
 
@@ -411,25 +452,6 @@ const bidderPanelProps = (overrides: Partial<AuctionBidderViewProps>): AuctionBi
 	onOpenRules: () => {},
 	...overrides,
 })
-
-/** Host stand-in for the router link the card host injects (`Link to={`/auctions/${id}`}`). */
-const sampleCardRenderLink = (children: ReactNode, className?: string) => (
-	<a href="#auction" className={className} data-slot="card-link">
-		{children}
-	</a>
-)
-
-/** Host stand-in for the confirm dialog's seller card (`UserCardHost`). */
-function SampleSellerCard() {
-	return (
-		<span data-slot="seller-card" className="inline-flex items-center gap-2 text-sm text-text-high">
-			<span className="flex h-8 w-8 items-center justify-center rounded-full bg-fill-accent text-xs font-semibold text-on-fill-accent">
-				S
-			</span>
-			<span>satoshi</span>
-		</span>
-	)
-}
 
 const BIDS_VIEW_TOP_PUBKEY = 'd'.repeat(64)
 const BIDS_VIEW_OTHER_PUBKEY = 'e'.repeat(64)
@@ -1069,16 +1091,19 @@ export const auction: WidgetLibrary = {
 		},
 		{
 			// I-PARKED commit B: the bid submission progress dialog — one entry per
-			// money-path lifecycle state the host can hand the view. Each renders
-			// the dialog OPEN so the gallery and the spec assert the stage mapping,
-			// the verdict-bound copy and the retry gating.
+			// money-path lifecycle state the host can hand the view. Each holds its own
+			// `open` state behind a trigger (a mounted-open Radix dialog hides the rest
+			// of the catalogue from the accessibility tree), so the spec opens one state
+			// at a time to assert the stage mapping, the verdict-bound copy and the
+			// retry gating.
 			name: 'BidProgressPlacing',
-			render: () => <AuctionBidProgressDialogViewDemo lifecycleState="payment_acknowledged" />,
+			render: () => <AuctionBidProgressDialogViewDemo trigger="Open placing-your-bid dialog" lifecycleState="payment_acknowledged" />,
 		},
 		{
 			name: 'BidProgressConfirmed',
 			render: () => (
 				<AuctionBidProgressDialogViewDemo
+					trigger="Open confirmed-bid dialog"
 					lifecycleState="bid_published"
 					hasPositiveVerdict
 					representativeVerdictClaim="valid_bid_placed"
@@ -1090,7 +1115,11 @@ export const auction: WidgetLibrary = {
 		{
 			name: 'BidProgressPublishFailedRetry',
 			render: () => (
-				<AuctionBidProgressDialogViewDemo lifecycleState="mint_succeeded_bid_publish_failed_reclaimable" onRetryPublish={() => {}} />
+				<AuctionBidProgressDialogViewDemo
+					trigger="Open publish-failed dialog"
+					lifecycleState="mint_succeeded_bid_publish_failed_reclaimable"
+					onRetryPublish={() => {}}
+				/>
 			),
 		},
 		{
@@ -1099,6 +1128,7 @@ export const auction: WidgetLibrary = {
 			name: 'BidProgressLockUncertain',
 			render: () => (
 				<AuctionBidProgressDialogViewDemo
+					trigger="Open lock-uncertain dialog"
 					lifecycleState="mint_succeeded_bid_publish_failed_reclaimable"
 					lockOutcomeUncertain
 					onRetryPublish={() => {}}
@@ -1108,7 +1138,12 @@ export const auction: WidgetLibrary = {
 		{
 			name: 'BidProgressRejected',
 			render: () => (
-				<AuctionBidProgressDialogViewDemo lifecycleState="bid_published" hasNegativeVerdict representativeVerdictClaim="fraudulent_bid" />
+				<AuctionBidProgressDialogViewDemo
+					trigger="Open rejected-bid dialog"
+					lifecycleState="bid_published"
+					hasNegativeVerdict
+					representativeVerdictClaim="fraudulent_bid"
+				/>
 			),
 		},
 		{
@@ -1133,47 +1168,59 @@ export const auction: WidgetLibrary = {
 		{
 			// Lower-bound gate: bidding has not opened yet (`now < start_at`).
 			name: 'BidderPanelNotStarted',
-			render: () => <AuctionBidderView {...bidderPanelProps({ notStarted: true, buttonText: 'Bidding not started' })} />,
+			render: () => (
+				<AuctionBidderView
+					{...bidderPanelProps({ notStarted: true, isDisabledInput: true, isDisabledBid: true, buttonText: 'Bidding not started' })}
+				/>
+			),
 		},
 		{
-			// The rules acknowledgement dialog, rendered OPEN.
+			// The rules acknowledgement dialog, trigger-driven.
 			name: 'BidderRulesDialog',
-			render: () => <AuctionRulesDialogView open onOpenChange={() => {}} publishPending={false} onConfirmRules={() => {}} />,
+			render: () => (
+				<ModalTrigger label="Open auction rules dialog">
+					{(open, setOpen) => (
+						<AuctionRulesDialogView open={open} onOpenChange={setOpen} publishPending={false} onConfirmRules={() => setOpen(false)} />
+					)}
+				</ModalTrigger>
+			),
 		},
 		{
 			// The confirm-bid dialog: mint options, the delta top-up and the
-			// refund locktime warning, rendered OPEN.
+			// refund locktime warning, trigger-driven.
 			name: 'BidderConfirmDialog',
 			render: () => (
-				<div className="max-w-2xl">
-					<AuctionConfirmBidDialogView
-						open
-						onOpenChange={() => {}}
-						publishPending={false}
-						auctionThumbnailUrl={AUCTION_THUMBNAIL}
-						auctionTitle={'Handmade mug'}
-						renderSellerCard={<SampleSellerCard />}
-						endsInLabel={'2d 3h'}
-						minBid={10_000}
-						bidStep={1_000}
-						inCurveWindow={false}
-						curveShape={'none'}
-						curvePeakMultiplier={2}
-						confirmBidAmountInput={'11000'}
-						onConfirmBidAmountChange={() => {}}
-						mintOptions={BIDDER_MINT_OPTIONS}
-						confirmBidMint={'https://mint.example'}
-						onConfirmBidMintChange={() => {}}
-						hasExistingBid={false}
-						confirmMintBalance={12_000}
-						previousBidAmount={5_000}
-						confirmDeltaAmount={6_000}
-						confirmTopUpNeeded={0}
-						refundLocktime={1_767_000_000}
-						onConfirm={() => {}}
-						confirmButtonDisabled={false}
-					/>
-				</div>
+				<ModalTrigger label="Open confirm-bid dialog">
+					{(open, setOpen) => (
+						<AuctionConfirmBidDialogView
+							open={open}
+							onOpenChange={setOpen}
+							publishPending={false}
+							auctionThumbnailUrl={AUCTION_THUMBNAIL}
+							auctionTitle={'Handmade mug'}
+							renderSellerCard={<SampleSellerCard />}
+							endsInLabel={'2d 3h'}
+							minBid={10_000}
+							bidStep={1_000}
+							inCurveWindow={false}
+							curveShape={'none'}
+							curvePeakMultiplier={2}
+							confirmBidAmountInput={'11000'}
+							onConfirmBidAmountChange={() => {}}
+							mintOptions={BIDDER_MINT_OPTIONS}
+							confirmBidMint={'https://mint.example'}
+							onConfirmBidMintChange={() => {}}
+							hasExistingBid={false}
+							confirmMintBalance={12_000}
+							previousBidAmount={5_000}
+							confirmDeltaAmount={6_000}
+							confirmTopUpNeeded={0}
+							refundLocktime={1_767_000_000}
+							onConfirm={() => {}}
+							confirmButtonDisabled={false}
+						/>
+					)}
+				</ModalTrigger>
 			),
 		},
 		{
@@ -1236,7 +1283,7 @@ export const auction: WidgetLibrary = {
 			// #1235 round-3 B3: the deposit closed with an unevidenced Lightning
 			// outcome — terminal, but NOT rendered as "Funding Failed".
 			name: 'BidProgressDepositUncertain',
-			render: () => <AuctionBidProgressDialogViewDemo lifecycleState="deposit_outcome_uncertain" />,
+			render: () => <AuctionBidProgressDialogViewDemo trigger="Open deposit-uncertain dialog" lifecycleState="deposit_outcome_uncertain" />,
 		},
 		{
 			// S5b: the degenerate Available branches as four reachable states.

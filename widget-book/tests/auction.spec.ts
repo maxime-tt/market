@@ -83,41 +83,63 @@ test('renders the auction library', async ({ page }) => {
 /**
  * I-PARKED commit B: the bid progress dialog is the money-path surface of the
  * bid-funding lifecycle, so the spec asserts the stage mapping and the #1235
- * gating, not just visibility.
+ * gating, not just visibility. Each dialog entry renders CLOSED behind its own
+ * trigger (an open Radix dialog hides the rest of the catalogue from the
+ * accessibility tree), so the spec opens one at a time and Escape-closes it
+ * before driving the next (the wallet-library discipline).
  */
+const openDialogFrom = async (page: import('@playwright/test').Page, widget: string, label: string) => {
+	const trigger = page.getByTestId(`widget-${widget}`).getByRole('button', { name: label, exact: true })
+	await trigger.click()
+	const dialog = page.getByRole('dialog')
+	await expect(dialog).toBeVisible()
+	return dialog
+}
+
+const closeDialog = async (page: import('@playwright/test').Page) => {
+	await page.keyboard.press('Escape')
+	await expect(page.getByRole('dialog')).toBeHidden()
+}
+
 test('renders the bid progress dialog money-path states', async ({ page }) => {
 	await page.goto('/?library=auction')
 
-	const placing = page.getByTestId('widget-BidProgressPlacing')
+	const placing = await openDialogFrom(page, 'BidProgressPlacing', 'Open placing-your-bid dialog')
 	await expect(placing).toContainText('Placing Your Bid')
 	await expect(placing).toContainText('Payment received — minting e-cash...')
 	await expect(placing).not.toContainText('Retry publish')
+	await closeDialog(page)
 
-	const confirmed = page.getByTestId('widget-BidProgressConfirmed')
+	const confirmed = await openDialogFrom(page, 'BidProgressConfirmed', 'Open confirmed-bid dialog')
 	await expect(confirmed).toContainText('Bid successfully placed!')
 	await expect(confirmed).toContainText('21,000 sats')
 	await expect(confirmed).toContainText('Refund available after:')
+	await closeDialog(page)
 
 	// The retry affordance renders ONLY for an evidenced publish failure.
-	const retryable = page.getByTestId('widget-BidProgressPublishFailedRetry')
+	const retryable = await openDialogFrom(page, 'BidProgressPublishFailedRetry', 'Open publish-failed dialog')
 	await expect(retryable).toContainText('Bid Publish Failed')
 	await expect(retryable).toContainText('Retry publish')
+	await closeDialog(page)
 
 	// #1235 round-3 fix 3: an uncertain lock outcome claims neither "funding
 	// completed" nor a retry — the hook refuses the retry outright.
-	const uncertain = page.getByTestId('widget-BidProgressLockUncertain')
+	const uncertain = await openDialogFrom(page, 'BidProgressLockUncertain', 'Open lock-uncertain dialog')
 	await expect(uncertain).toContainText('Bid lock outcome unconfirmed')
 	await expect(uncertain).not.toContainText('Retry publish')
+	await closeDialog(page)
 
-	const rejected = page.getByTestId('widget-BidProgressRejected')
+	const rejected = await openDialogFrom(page, 'BidProgressRejected', 'Open rejected-bid dialog')
 	await expect(rejected).toContainText('Bid Rejected')
 	await expect(rejected).toContainText('fraudulent_bid')
+	await closeDialog(page)
 
 	// #1235 round-3 B3: an unevidenced deposit outcome is terminal but must not
 	// render the "Funding Failed" copy.
-	const deposit = page.getByTestId('widget-BidProgressDepositUncertain')
+	const deposit = await openDialogFrom(page, 'BidProgressDepositUncertain', 'Open deposit-uncertain dialog')
 	await expect(deposit).toContainText('Payment outcome unconfirmed')
 	await expect(deposit).not.toContainText('Funding Failed')
+	await closeDialog(page)
 })
 
 /**
@@ -157,17 +179,19 @@ test('renders the bidder panel money-path gating states', async ({ page }) => {
 
 	// The confirm-bid dialog surfaces the auction identity, the mint options,
 	// the funding delta and the refund locktime.
-	const confirm = page.getByTestId('widget-BidderConfirmDialog')
+	const confirm = await openDialogFrom(page, 'BidderConfirmDialog', 'Open confirm-bid dialog')
 	await expect(confirm).toContainText('Confirm Bid')
 	await expect(confirm).toContainText('Handmade mug')
 	await expect(confirm).toContainText('Minimum allowed bid: 10,000 sats')
 	await expect(confirm).toContainText('To lock')
 	await expect(confirm).toContainText('6,000 sats')
 	await expect(confirm).toContainText('Your funds will be locked in this auction until')
+	await closeDialog(page)
 
-	const rules = page.getByTestId('widget-BidderRulesDialog')
+	const rules = await openDialogFrom(page, 'BidderRulesDialog', 'Open auction rules dialog')
 	await expect(rules).toContainText('Review auction rules before bidding')
 	await expect(rules).toContainText('I understand these rules')
+	await closeDialog(page)
 })
 
 /**
