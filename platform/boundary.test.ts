@@ -45,7 +45,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/liveChat.tsx',
 	'src/publish/reactions.tsx',
 	'src/publish/shareNotes.ts',
-	'src/publish/wallet.tsx',
 	'src/publish/migration.tsx',
 	'src/publish/featured.tsx', // store drain D2 slice 11; shim deleted in E1
 	'src/publish/payment.tsx', // store drain D2 slice 14; shim deleted in E1
