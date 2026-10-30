@@ -9,7 +9,7 @@ import { useEntityPermissions } from '@platform/web/permissions/useEntityPermiss
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { uiActions, uiStore } from '@platform/web/app/uiStore'
-import { truncateText } from '@/lib/utils'
+import { truncateText } from '@platform/web/utils/text'
 import { addToBlacklistCollections, removeFromBlacklistCollections } from '@/publish/blacklist'
 import { addToFeaturedCollections, removeFromFeaturedCollections } from '@/publish/featured'
 import { useBlacklistSettings } from '@/queries/blacklist'

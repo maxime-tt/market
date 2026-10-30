@@ -5,7 +5,7 @@ import { useBugReportsInfiniteScroll } from '@platform/web/app/useBugReportsInfi
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@platform/web/media/blossomUploadHost'
 import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { getBugRelay, ndkActions } from '@/lib/stores/ndk'
-import { cn } from '@/lib/utils'
+import { cn } from '@ui/utils/cn'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'

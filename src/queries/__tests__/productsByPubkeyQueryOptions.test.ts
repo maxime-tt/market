@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { fetchProductsByPubkey, productsByPubkeyQueryOptions } from '../products'
-import { safeNpubEncode } from '@/lib/utils'
+import { safeNpubEncode } from '@sdk/core/utils/utils'
 
 const VALID_PUBKEY = 'a'.repeat(64)
 

@@ -13,7 +13,7 @@ import { PageHeader } from '@ui/layout/page-header'
 import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@sdk/config/constants'
 import { useNDK } from '@platform/web/ndk/ndkStore'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
-import { isValidNip05 } from '@/lib/utils'
+import { isValidNip05 } from '@sdk/core/utils/utils'
 import {
 	deriveAddresses,
 	isExtendedPublicKey,

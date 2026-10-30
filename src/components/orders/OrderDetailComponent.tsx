@@ -33,7 +33,7 @@ import { toast } from 'sonner'
 import { OrderActions } from './OrderActions'
 import { PrivateOrderDetailsCard } from './PrivateOrderDetailsCard'
 import { TimelineEventCard } from '@ui/orders/timeline-event-card'
-import { copyToClipboard } from '@/lib/utils'
+import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { OrderBuyerContactCard, OrderDetailHeader, OrderShippingCard, PrivateAuctionClaimCard } from '@ui/orders/order-detail-sections'
 
 // Imported helpers and components

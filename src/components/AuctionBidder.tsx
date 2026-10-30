@@ -48,7 +48,7 @@ import { useMemo, useState, useEffect, useCallback, useRef, type ChangeEvent, ty
 import { useAuctionCountdown } from './AuctionCountdown'
 import { formatAuctionCountdownDetailed } from '@sdk/commerce/auctions/countdownLabels'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@ui/primitives/input-group'
-import { cn } from '@/lib/utils'
+import { cn } from '@ui/utils/cn'
 import { TooltipToggleGroupItem } from '@ui/wrappers/tooltip-toggle-group-item'
 import { useStore } from '@tanstack/react-store'
 import { cashuStore } from '@/lib/stores/cashu'

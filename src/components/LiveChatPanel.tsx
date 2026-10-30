@@ -10,7 +10,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
 import { Button } from '@ui/primitives/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@ui/utils/cn'
 
 interface LiveChatPanelProps {
 	auctionEvent: NDKEvent

@@ -6,7 +6,7 @@ import {
 	scaleSharesByTotal,
 	updateSharePercentage,
 } from '@platform/web/v4v/splits'
-import { getDistinctColorsForRecipients } from '@/lib/utils'
+import { getDistinctColorsForRecipients } from '@platform/web/utils/colors'
 import { useConfigQuery } from '@/queries/config'
 import { useZapCapabilityByNpub } from '@/queries/profiles'
 import { usePublishV4VShares } from '@/queries/v4v'

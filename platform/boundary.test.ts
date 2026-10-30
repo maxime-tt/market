@@ -118,6 +118,10 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/dashboard/TestLabelDialog.tsx', // L-utils; test-label actions moved to platform/web/curation
 	'src/hooks/usePIIMonitor.ts', // L-utils; PII scan moved to platform/web/account
 	'src/hooks/useV4VManager.ts', // L-utils; V4V split math moved to platform/web/v4v
+	'src/components/auth/NostrConnectQR.tsx', // L-utils; copyToClipboard moved to platform/web/utils
+	'src/components/orders/detail/InvoiceCard.tsx', // L-utils; copyToClipboard moved to platform/web/utils
+	'src/components/orders/detail/TrackingInfoDisplay.tsx', // L-utils; copyToClipboard moved to platform/web/utils
+	'src/components/v4v/RecipientItem.tsx', // L-utils; color helpers moved to platform/web/utils
 ])
 
 async function listSourceFiles(directory: string): Promise<string[]> {

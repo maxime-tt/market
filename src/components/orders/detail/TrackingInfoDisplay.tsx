@@ -1,4 +1,4 @@
-import { copyToClipboard } from '@/lib/utils'
+import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { TrackingInfoView } from '@ui/orders/order-detail-views'
 
 interface TrackingInfoDisplayProps {
