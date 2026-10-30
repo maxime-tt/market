@@ -44,7 +44,7 @@ if (!('localStorage' in globalThis)) {
 
 // The blacklist store is reached at module scope by `src/queries/auctions.tsx`;
 // this file is about admission, so it stays "not loaded" (fail open).
-mock.module('@/lib/stores/blacklist', () => ({
+mock.module('@platform/web/config/blacklistStore', () => ({
 	blacklistActions: {
 		isBlacklistLoaded: () => false,
 		isPubkeyBlacklisted: () => false,

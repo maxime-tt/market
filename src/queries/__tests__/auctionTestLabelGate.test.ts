@@ -56,7 +56,7 @@ if (!('localStorage' in globalThis)) {
 
 // `src/queries/auctions.tsx` reaches the blacklist store at module scope; the
 // gate tests are about labels, so the blacklist stays "not loaded" (fail open).
-mock.module('@/lib/stores/blacklist', () => ({
+mock.module('@platform/web/config/blacklistStore', () => ({
 	blacklistActions: {
 		isBlacklistLoaded: () => false,
 		isPubkeyBlacklisted: () => false,

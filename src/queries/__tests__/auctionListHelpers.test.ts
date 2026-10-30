@@ -18,7 +18,7 @@ if (!('localStorage' in globalThis)) {
 	})
 }
 
-mock.module('@/lib/stores/blacklist', () => ({
+mock.module('@platform/web/config/blacklistStore', () => ({
 	blacklistActions: {
 		isBlacklistLoaded: () => false,
 		isPubkeyBlacklisted: () => false,
