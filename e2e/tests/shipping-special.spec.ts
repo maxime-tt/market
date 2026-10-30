@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures'
 import { LightningMock } from '../utils/lightning-mock'
 import { payAllInvoicesWithWebLn } from '../utils/payment-waits'
 import { queryRelayEvents, filterByTag } from '../utils/relay-query'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { devUser1, devUser2 } from '../../scripts/fixtures'
 import type { Page } from '@playwright/test'
 
 test.use({ scenario: 'merchant' })

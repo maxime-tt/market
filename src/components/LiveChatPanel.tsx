@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { Send, MessageCircle, ChevronDown } from 'lucide-react'
 import { useLiveChatMessages, useLiveActivity } from '@/queries/liveChat'
 import { usePublishLiveChatMessageMutation } from '@/publish/liveChat'
-import { deriveLiveActivityStatus, type LiveActivityStatus } from '@/lib/nip53'
+import { deriveLiveActivityStatus, type LiveActivityStatus } from '@sdk/core/nostr/nip53'
 import { getAuctionId } from '@/queries/auctions'
 import { getAuctionStartAt, getAuctionBiddingCutoffAt } from '@sdk/commerce/auctions/settlement'
 import { LiveChatMessageHost as LiveChatMessageBubble } from '@platform/web/messaging/LiveChatMessageHost'
@@ -10,7 +10,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
 import { Button } from '@ui/primitives/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@ui/utils/cn'
 
 interface LiveChatPanelProps {
 	auctionEvent: NDKEvent

@@ -1,4 +1,4 @@
-import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
+import { CURRENCIES, PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import type { ProductListingSchema } from '@sdk/config/schemas/productListing'
 import { createClientTag } from '@platform/web/nip89'
 import { faker } from '@faker-js/faker'

@@ -37,7 +37,7 @@
  */
 import { Relay } from 'nostr-tools'
 import { verifyEvent } from 'nostr-tools/pure'
-import { buildOgProductMeta, type OgProductMeta, type OgTagSourceEvent } from '@/lib/ogTags'
+import { buildOgProductMeta, type OgProductMeta, type OgTagSourceEvent } from '@sdk/commerce/products/ogTags'
 
 /** Hard global deadline covering connect + REQ for the whole lookup. Crawlers won't wait much longer anyway. */
 const OG_FETCH_TIMEOUT_MS = 2_500

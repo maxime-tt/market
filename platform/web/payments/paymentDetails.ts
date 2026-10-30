@@ -2,8 +2,8 @@ import { HDKey } from '@scure/bip32'
 import { address as baddress, networks, payments } from 'bitcoinjs-lib'
 import * as bs58check from 'bs58check'
 
-import { isValidNip05 } from '../utils'
-import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '../constants'
+import { isValidNip05 } from '@sdk/core/utils/utils'
+import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@sdk/config/constants'
 
 export type PaymentDetailsResult = {
 	success: boolean

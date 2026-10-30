@@ -10,11 +10,16 @@ import { Label } from '@ui/primitives/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { WalletSetupGuide } from '@ui/lightning/wallet-setup-guide'
 import { PageHeader } from '@ui/layout/page-header'
-import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@/lib/constants'
+import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@sdk/config/constants'
 import { useNDK } from '@platform/web/ndk/ndkStore'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
-import { isValidNip05 } from '@/lib/utils'
-import { deriveAddresses, isExtendedPublicKey, parsePaymentDetailsFromClipboard, paymentMethodLabels } from '@/lib/utils/paymentDetails'
+import { isValidNip05 } from '@sdk/core/utils/utils'
+import {
+	deriveAddresses,
+	isExtendedPublicKey,
+	parsePaymentDetailsFromClipboard,
+	paymentMethodLabels,
+} from '@platform/web/payments/paymentDetails'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import {
 	useDeletePaymentDetail,

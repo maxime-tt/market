@@ -1,5 +1,5 @@
 import { useProductImages, useProductPrice, useProductTitle } from '@/queries/products'
-import { getCoordsFromATag } from '@/lib/utils/coords'
+import { getCoordsFromATag } from '@sdk/core/utils/coords'
 import { ChatMessageBubbleView, ChatOrderItemView, type ChatMessageEvent } from '@ui/messages/chat-message-bubble-view'
 
 function OrderItem({ itemTag }: { itemTag: string[] }) {

@@ -12,9 +12,9 @@ import {
 	setAppSettings,
 } from '../runtime'
 import { getEventHandler } from '../EventHandler'
-import type { PublicAppConfig } from '@/lib/instance-config'
+import type { PublicAppConfig } from '@sdk/config/instance-config'
 import { PUBLIC_CONFIG_SCHEMA_VERSION } from '@sdk/core/publicConfig'
-import { AppSettingsSchema } from '@/lib/schemas/app'
+import { AppSettingsSchema } from '@sdk/config/schemas/app'
 import type { BunRoutes } from './types'
 
 interface BootstrapSetupRequest {

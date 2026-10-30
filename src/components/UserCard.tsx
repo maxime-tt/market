@@ -8,7 +8,7 @@ import {
 import { AvatarHost as AvatarUser, Nip05BadgeHost as Nip05Badge } from '@platform/web/profiles/userCardHosts'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { nip19 } from 'nostr-tools'
-import { isValidHexKey, isValidNpub } from '@/lib/utils'
+import { isValidHexKey, isValidNpub } from '@sdk/core/utils/utils'
 import { UserCardView } from '@ui/nostr/user-card'
 
 export { getUserCardTitle, isKeyboardCopyActivationKey } from '@ui/nostr/user-card'

@@ -1,6 +1,6 @@
-import { publishTestLabel, publishTestLabelDeletion } from '@/lib/actions/testLabelActions'
+import { publishTestLabel, publishTestLabelDeletion } from '@platform/web/curation/testLabelActions'
 import { TEST_LABEL_PRODUCT_KIND } from '@/lib/constants/testLabels'
-import { getATagFromCoords } from '@/lib/utils/coords'
+import { getATagFromCoords } from '@sdk/core/utils/coords'
 import { invalidateTestLabelCaches, useTestLabelForCoordinate } from '@/queries/testLabels'
 import { useQueryClient } from '@tanstack/react-query'
 import { npubEncode } from 'nostr-tools/nip19'

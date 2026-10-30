@@ -2,8 +2,8 @@ import { test, expect } from '../fixtures'
 import { finalizeEvent } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
-import { buildLiveActivityDTag } from '../../src/lib/nip53'
+import { devUser1, devUser2 } from '../../scripts/fixtures'
+import { buildLiveActivityDTag } from '@sdk/core/nostr/nip53'
 import { TEST_CVM_PRIVATE_KEY } from '../test-config'
 
 test.use({ scenario: 'merchant' })

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { computeNdkConfig, resolveExplicitRelays, resolveMainRelay, resolveZapRelays } from '@sdk/core/relay-policy'
-import { DEFAULT_PUBLIC_RELAYS, ZAP_RELAYS } from '@/lib/constants'
+import { DEFAULT_PUBLIC_RELAYS, ZAP_RELAYS } from '@sdk/config/constants'
 
 describe('resolveMainRelay', () => {
 	test('uses appRelay when provided', () => {

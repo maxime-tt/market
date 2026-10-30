@@ -8,7 +8,7 @@ import {
 	removeRecipientFromShares,
 	scaleSharesByTotal,
 	updateSharePercentage,
-} from '@/lib/v4v/splits'
+} from '@platform/web/v4v/splits'
 
 const sum = (s: V4VDTO[]) => s.reduce((acc, x) => acc + x.percentage, 0)
 const share = (id: string, percentage: number, pubkey = `pk-${id}`): V4VDTO => ({

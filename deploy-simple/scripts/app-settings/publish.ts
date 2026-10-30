@@ -1,4 +1,4 @@
-import { AppSettingsSchema } from '../../../src/lib/schemas/app'
+import { AppSettingsSchema } from '@sdk/config/schemas/app'
 import { commonOptions, parsePrivateKey, parsePubkeyList, parseStage, readJsonFile, resolveStageTargets, usageAndExit } from './_shared'
 import { parseArgs } from 'node:util'
 import { getPublicKey } from 'nostr-tools/pure'

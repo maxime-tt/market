@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_PUBLIC_RELAYS, ZAP_RELAYS } from '@/lib/constants'
+import { DEFAULT_PUBLIC_RELAYS, ZAP_RELAYS } from '@sdk/config/constants'
 import { computeNdkConfig } from '@sdk/core/relay-policy'
 
 /**

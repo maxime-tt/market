@@ -1,7 +1,7 @@
 import type { NostrEvent } from '@nostr-dev-kit/ndk'
 import { getPublicKey } from 'nostr-tools'
 import type { EventValidationResult, AdminManager, EditorManager, BootstrapManager } from './types'
-import { bytesFromHex } from '@/lib/utils/keyConversion'
+import { bytesFromHex } from '@platform/server/util/bytes'
 
 export class EventValidator {
 	private appPrivateKey: string

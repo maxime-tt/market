@@ -1,5 +1,5 @@
 import { SHIPPING_KIND, type ShippingOptionSchema } from '@sdk/config/schemas/shippingOption'
-import { COUNTRIES_ISO } from '@/lib/constants'
+import { COUNTRIES_ISO } from '@sdk/config/constants'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import type { z } from 'zod'

@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures'
-import { devUser3 } from '../../src/lib/fixtures'
+import { devUser3 } from '../../scripts/fixtures'
 import { resetV4VForUser } from '../scenarios'
 
 test.use({ scenario: 'base' })

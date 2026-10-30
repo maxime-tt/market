@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { getPublicKey } from 'nostr-tools/pure'
 import { PlebianCurrencyClient } from '@sdk/commerce/payments/ctxcnClient'
-import { getCurrencyServerRelays, PUBLIC_CVM_RELAYS } from '@/lib/constants'
+import { getCurrencyServerRelays, PUBLIC_CVM_RELAYS } from '@sdk/config/constants'
 import { resolveCvmServerPubkey } from '@platform/server/runtime'
 
 const RELAY_URL = process.env.RELAY_URL || process.env.APP_RELAY_URL || 'ws://localhost:10547'

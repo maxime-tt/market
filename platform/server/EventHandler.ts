@@ -10,7 +10,7 @@ import { EventValidator } from './EventValidator'
 import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
 import NDK from '@nostr-dev-kit/ndk'
-import { ZAP_RELAYS } from '@/lib/constants'
+import { ZAP_RELAYS } from '@sdk/config/constants'
 import type { ZapPurchaseManager, ZapPurchaseEntry } from './ZapPurchaseManager'
 
 export class EventHandler {

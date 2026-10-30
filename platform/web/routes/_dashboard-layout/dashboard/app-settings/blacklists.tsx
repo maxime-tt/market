@@ -11,7 +11,7 @@ import {
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
-import { getATagFromCoords, getCoordsFromATag } from '@/lib/utils/coords'
+import { getATagFromCoords, getCoordsFromATag } from '@sdk/core/utils/coords'
 import {
 	useAddToBlacklistCollectionsMutation,
 	useAddToBlacklistMutation,

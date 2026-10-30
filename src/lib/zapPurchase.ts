@@ -1,6 +1,6 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import type NDK from '@nostr-dev-kit/ndk'
-import { ZAP_RELAYS } from '@/lib/constants'
+import { ZAP_RELAYS } from '@sdk/config/constants'
 
 // Builds a kind-9734 zap request with the correct tags,
 export interface ZapPurchaseInvoiceOptions {

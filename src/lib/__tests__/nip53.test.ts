@@ -13,7 +13,7 @@ import {
 	buildLiveActivityTags,
 	parseLiveActivity,
 	parseLiveChatMessage,
-} from '../nip53'
+} from '@sdk/core/nostr/nip53'
 
 const SELLER_PUBKEY = 'a'.repeat(64)
 const CVM_PUBKEY = 'b'.repeat(64)

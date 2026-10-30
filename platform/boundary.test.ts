@@ -30,7 +30,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	// J-0: the retired io seam's last src consumers read the platform homes
 	// directly (the drain, transitional until their owners retire).
 	'src/components/AuctionCard.tsx', // I-PARKED component; reads the port via readContext
-	'src/lib/actions/testLabelActions.ts', // signs/publishes test labels via the publish bridge
 	'src/publish/shipping.tsx', // store drain D2 slice 17; shim deleted in E1
 	'src/publish/products.tsx',
 	'src/publish/collections.tsx',
@@ -110,6 +109,19 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	// invoice-storage helpers left src/; the one src/ consumer they left behind reads the platform
 	// home directly until its own slice retires it. ---
 	'src/components/orders/useOrderInvoices.ts', // J-b; reads platform/web/payments/invoiceStorage; retires with the orders cluster
+	// --- L-utils real-lib drain (2026-10-30): the real util/action modules left src/ for their Platform
+	// homes; each src/ consumer below is re-pointed at the moved module and retires with its own leaf slice. ---
+	'src/components/sheet-contents/products/tabs.tsx', // L-utils; MempoolService moved to platform/web/payments
+	'src/components/lightning/LightningPaymentProcessor.tsx', // L-utils; payment methods moved to platform/web/payments
+	'src/components/dialogs/V4VSetupDialog.tsx', // L-utils; V4V split math + props moved to platform/web/v4v
+	'src/components/pii/PIIExposureModal.tsx', // L-utils; PII scan/deletion moved to platform/web/account
+	'src/components/dashboard/TestLabelDialog.tsx', // L-utils; test-label actions moved to platform/web/curation
+	'src/hooks/usePIIMonitor.ts', // L-utils; PII scan moved to platform/web/account
+	'src/hooks/useV4VManager.ts', // L-utils; V4V split math moved to platform/web/v4v
+	'src/components/auth/NostrConnectQR.tsx', // L-utils; copyToClipboard moved to platform/web/utils
+	'src/components/orders/detail/InvoiceCard.tsx', // L-utils; copyToClipboard moved to platform/web/utils
+	'src/components/orders/detail/TrackingInfoDisplay.tsx', // L-utils; copyToClipboard moved to platform/web/utils
+	'src/components/v4v/RecipientItem.tsx', // L-utils; color helpers moved to platform/web/utils
 ])
 
 async function listSourceFiles(directory: string): Promise<string[]> {

@@ -2,7 +2,7 @@ import { finalizeEvent, type EventTemplate, type VerifiedEvent } from 'nostr-too
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
-import { devUser1, devUser2, WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
+import { devUser1, devUser2, WALLETED_USER_LUD16 } from '../../scripts/fixtures'
 import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
 import { isAddressableKind } from 'nostr-tools/kinds'
 import { v4 as uuidv4 } from 'uuid'
@@ -656,7 +656,13 @@ export async function seedAuction(
 	return event
 }
 
-import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
+import {
+	ORDER_MESSAGE_TYPE,
+	ORDER_PROCESS_KIND,
+	ORDER_STATUS,
+	PAYMENT_RECEIPT_KIND,
+	SHIPPING_STATUS,
+} from '@sdk/commerce/messaging/orderSchema'
 
 export type OrderStage = 'pending-payment' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'completed'
 export type OrderType = 'product'

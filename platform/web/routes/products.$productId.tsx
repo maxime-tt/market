@@ -18,7 +18,7 @@ import { UserCard } from '@/components/UserCard'
 import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { useEntityPermissions } from '@platform/web/permissions/useEntityPermissions'
-import { DEFAULT_DOCUMENT_TITLE, buildOwnedMetaEmissions, removeOwnedOgMetaTags, truncateForMeta } from '@/lib/ogTags'
+import { DEFAULT_DOCUMENT_TITLE, buildOwnedMetaEmissions, removeOwnedOgMetaTags, truncateForMeta } from '@sdk/commerce/products/ogTags'
 import { authStore } from '@platform/web/auth/authStore'
 import { cartActions, useCart, type RichShippingInfo } from '@platform/web/cart/cartStore'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
@@ -75,7 +75,7 @@ import {
 import { toast } from 'sonner'
 import { SocialInteractionsHost as SocialInteractions } from '@platform/web/messaging/SocialInteractionsHost'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { scrollToElementWithOffset } from '@/lib/utils/ui'
+import { scrollToElementWithOffset } from '@platform/web/utils/scroll'
 import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@sdk/commerce/products'
 
 // Hook to inject Open Graph and Twitter Card meta tags for social sharing

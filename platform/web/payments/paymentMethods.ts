@@ -1,7 +1,7 @@
 import { validatePreimage } from '@sdk/commerce/payments/preimage'
-import { walletActions } from '@/lib/stores/wallet'
+import { walletActions } from '@platform/web/config/walletStore'
 import type { SignerCapability } from '@sdk/core/signer'
-import type { WalletPaymentMethod } from '@/lib/payments/proof'
+import type { WalletPaymentMethod } from '@sdk/commerce/payments/proof'
 
 /** Re-exported so the helper's home is the SDK while existing callers keep this path. */
 export { validatePreimage }

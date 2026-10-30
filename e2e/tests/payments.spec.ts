@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
 import { setupLnurlMock } from '../helpers/lnurl-mock'
 import { queryRelayEvents, filterByTag } from '../utils/relay-query'
-import { WALLETED_USER_LUD16, devUser1, devUser2 } from '../../src/lib/fixtures'
+import { WALLETED_USER_LUD16, devUser1, devUser2 } from '../../scripts/fixtures'
 
 test.use({ scenario: 'merchant' })
 

@@ -8,11 +8,11 @@ import {
 	LABEL_NAMESPACE,
 	LABEL_VALUE_TEST,
 	l_TAG,
-} from '@/lib/constants/testLabels'
+} from '@sdk/config/test-label-constants'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import { nostrPublishBridge } from '@platform/web/ndkPublishContext'
-import { testLabelActions } from '@/lib/stores/testLabels'
-import { invalidateTestLabelCache, setCachedTestLabel } from '@/queries/testLabels'
+import { testLabelActions } from '@platform/web/config/testLabelsStore'
+import { invalidateTestLabelCache, setCachedTestLabel } from '@platform/web/config/testLabelsBinding'
 
 /**
  * ADR-0009 — Publish test-label and un-label events.

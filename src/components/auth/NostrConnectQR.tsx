@@ -1,6 +1,6 @@
-import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
+import { DEFAULT_NIP46_RELAYS } from '@sdk/config/constants'
 import { authActions } from '@/lib/stores/auth'
-import { copyToClipboard } from '@/lib/utils'
+import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { useConfigQuery } from '@/queries/config'
 import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'

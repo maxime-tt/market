@@ -32,7 +32,7 @@ import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
 import { computeVerdictQuorum, type VerdictQuorumResult } from '@sdk/commerce/auctions/verdictQuorum'
 import type { AuctionBidFundingLifecycleState } from '@platform/web/auctions/useAuctionBidFunding'
 import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
-import { cn } from '@/lib/utils'
+import { cn } from '@ui/utils/cn'
 
 interface AuctionBidProgressDialogProps {
 	open: boolean

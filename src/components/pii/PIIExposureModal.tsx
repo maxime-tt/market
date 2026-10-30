@@ -3,7 +3,7 @@ import { Button } from '@ui/primitives/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
 import { Alert, AlertDescription } from '@ui/primitives/alert'
 import { ScrollArea } from '@ui/primitives/scroll-area'
-import type { PIIScanResult } from '@/lib/utils/piiScanner'
+import type { PIIScanResult } from '@platform/web/account/piiScanner'
 import { deletePIIEvents, verifyDeletion } from '@/lib/utils/piiDeletion'
 import { useAuth } from '@/lib/stores/auth'
 

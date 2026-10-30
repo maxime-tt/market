@@ -1,4 +1,4 @@
-import { PAYMENT_DETAILS_METHOD } from '@/lib/constants'
+import { PAYMENT_DETAILS_METHOD } from '@sdk/config/constants'
 import type { PaymentDetail } from '@/queries/payment'
 import { WalletSelectorView } from '@ui/checkout/payment-views'
 

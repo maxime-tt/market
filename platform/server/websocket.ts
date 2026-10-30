@@ -2,7 +2,7 @@ import { Relay } from 'nostr-tools'
 import { verifyEvent, type Event } from 'nostr-tools/pure'
 import type { ServerWebSocket } from 'bun'
 import { getEventHandler } from './EventHandler'
-import { AppSettingsSchema } from '@/lib/schemas/app'
+import { AppSettingsSchema } from '@sdk/config/schemas/app'
 import { isEventHandlerReady, RELAY_URL, setAppSettings } from './runtime'
 
 /**

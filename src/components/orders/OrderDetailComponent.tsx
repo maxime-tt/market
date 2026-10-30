@@ -11,8 +11,8 @@ import {
 } from '@ui/orders/order-detail-layout'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
-import { getCoordsFromATag } from '@/lib/utils/coords'
-import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
+import { getCoordsFromATag } from '@sdk/core/utils/coords'
+import { getStatusMessaging, getStatusStyles } from '@platform/web/orders/orderUtils'
 import { useOrderClaimForSeller, type OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
 import {
@@ -33,7 +33,7 @@ import { toast } from 'sonner'
 import { OrderActions } from './OrderActions'
 import { PrivateOrderDetailsCard } from './PrivateOrderDetailsCard'
 import { TimelineEventCard } from '@ui/orders/timeline-event-card'
-import { copyToClipboard } from '@/lib/utils'
+import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { OrderBuyerContactCard, OrderDetailHeader, OrderShippingCard, PrivateAuctionClaimCard } from '@ui/orders/order-detail-sections'
 
 // Imported helpers and components

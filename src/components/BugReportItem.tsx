@@ -1,7 +1,7 @@
 import { Button } from '@ui/primitives/button'
 import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
 import { useNavigate } from '@tanstack/react-router'
-import { cn } from '@/lib/utils'
+import { cn } from '@ui/utils/cn'
 import type { BugReport } from '@/queries/bugReports'
 import { useProfile } from '@/queries/profiles'
 

@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures'
 import { Relay } from 'nostr-tools/relay'
 import { useWebSocketImplementation } from 'nostr-tools/relay'
 import { RELAY_URL } from '../test-config'
-import { devUser1 } from '@/lib/fixtures'
+import { devUser1 } from '../../scripts/fixtures'
 import { seedAuction } from '../scenarios'
 import WebSocket from 'ws'
 

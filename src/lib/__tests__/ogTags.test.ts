@@ -15,7 +15,7 @@ import {
 	serveProductPageWithOg,
 	truncateForMeta,
 	type OgTagSourceEvent,
-} from '../ogTags'
+} from '@sdk/commerce/products/ogTags'
 
 /** Minimal kind 30402 fixture builder. */
 function productEvent(overrides: Partial<OgTagSourceEvent> & { tags?: string[][] } = {}): OgTagSourceEvent {

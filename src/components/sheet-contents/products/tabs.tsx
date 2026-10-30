@@ -1,5 +1,5 @@
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
-import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
+import { CURRENCIES, PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import type { ProductShippingOption as RichShippingInfo } from '@sdk/commerce/products'
 import { getActiveSignerCapability } from '@/lib/stores/auth'
 import { useNDK } from '@/lib/stores/ndk'
@@ -10,7 +10,7 @@ import {
 	applyFiatPriceEdit,
 	deriveSatsPriceFromFiat,
 } from '@sdk/commerce/products'
-import { MempoolService } from '@/lib/utils/mempool'
+import { MempoolService } from '@platform/web/payments/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'

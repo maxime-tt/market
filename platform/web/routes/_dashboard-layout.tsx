@@ -13,7 +13,7 @@ import {
 	type NavBadgeCounts,
 } from '@ui/nav/model'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
-import { cn } from '@/lib/utils'
+import { cn } from '@ui/utils/cn'
 import { useAmIAdmin } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
 import { fetchProfileByIdentifier } from '@/queries/profiles'

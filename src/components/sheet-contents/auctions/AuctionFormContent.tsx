@@ -9,7 +9,7 @@ import {
 	type AuctionPublishValidationIssue,
 } from '@sdk/commerce/auctions/auctionPublishValidation'
 import { syncMintSelection } from '@sdk/commerce/auctions/mintSync'
-import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@/lib/constants'
+import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import { authStore } from '@/lib/stores/auth'
 import { configStore } from '@/lib/stores/config'
 import { isWalletDevModeEnabled, WALLET_DEV_TEST_MINTS } from '@sdk/commerce/payments/wallet/devWallet'

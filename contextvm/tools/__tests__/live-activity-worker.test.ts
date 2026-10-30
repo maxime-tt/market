@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test'
 import { countParticipants, getIntervalMs, getLookbackDays, resetDedupMap, getDedupMap } from '../live-activity-worker'
-import { AUCTION_KIND, buildLiveActivityDTag } from '../../../src/lib/nip53'
+import { AUCTION_KIND, buildLiveActivityDTag } from '@sdk/core/nostr/nip53'
 
 const SELLER_A = 'a'.repeat(64)
 const SELLER_B = 'b'.repeat(64)

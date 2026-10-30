@@ -2,7 +2,7 @@ import { test as base, expect, type Browser, type Page } from '@playwright/test'
 import { RelayMonitor } from './relay-monitor'
 import { setupAuthContext, type TestUser } from './auth'
 import { ensureScenario, resetRemoteCartForUser, type ScenarioName } from '../scenarios'
-import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
+import { devUser1, devUser2, devUser3 } from '../../scripts/fixtures'
 import { BASE_URL } from '../test-config'
 
 type TestFixtures = {
