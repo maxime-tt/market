@@ -59,9 +59,55 @@ test('renders the auction library', async ({ page }) => {
 		'AuctionVerdictView',
 		'AuctionBidsView',
 		'AuctionTimelineChartView',
+		'BidProgressPlacing',
+		'BidProgressConfirmed',
+		'BidProgressPublishFailedRetry',
+		'BidProgressLockUncertain',
+		'BidProgressRejected',
+		'BidProgressDepositUncertain',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
+})
+
+/**
+ * I-PARKED commit B: the bid progress dialog is the money-path surface of the
+ * bid-funding lifecycle, so the spec asserts the stage mapping and the #1235
+ * gating, not just visibility.
+ */
+test('renders the bid progress dialog money-path states', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const placing = page.getByTestId('widget-BidProgressPlacing')
+	await expect(placing).toContainText('Placing Your Bid')
+	await expect(placing).toContainText('Payment received — minting e-cash...')
+	await expect(placing).not.toContainText('Retry publish')
+
+	const confirmed = page.getByTestId('widget-BidProgressConfirmed')
+	await expect(confirmed).toContainText('Bid successfully placed!')
+	await expect(confirmed).toContainText('21,000 sats')
+	await expect(confirmed).toContainText('Refund available after:')
+
+	// The retry affordance renders ONLY for an evidenced publish failure.
+	const retryable = page.getByTestId('widget-BidProgressPublishFailedRetry')
+	await expect(retryable).toContainText('Bid Publish Failed')
+	await expect(retryable).toContainText('Retry publish')
+
+	// #1235 round-3 fix 3: an uncertain lock outcome claims neither "funding
+	// completed" nor a retry — the hook refuses the retry outright.
+	const uncertain = page.getByTestId('widget-BidProgressLockUncertain')
+	await expect(uncertain).toContainText('Bid lock outcome unconfirmed')
+	await expect(uncertain).not.toContainText('Retry publish')
+
+	const rejected = page.getByTestId('widget-BidProgressRejected')
+	await expect(rejected).toContainText('Bid Rejected')
+	await expect(rejected).toContainText('fraudulent_bid')
+
+	// #1235 round-3 B3: an unevidenced deposit outcome is terminal but must not
+	// render the "Funding Failed" copy.
+	const deposit = page.getByTestId('widget-BidProgressDepositUncertain')
+	await expect(deposit).toContainText('Payment outcome unconfirmed')
+	await expect(deposit).not.toContainText('Funding Failed')
 })
 
 test('renders the four simple editor tabs', async ({ page }) => {

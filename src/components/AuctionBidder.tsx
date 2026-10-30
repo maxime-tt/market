@@ -57,7 +57,7 @@ import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl, getMintHostname } from '@/lib/wallet'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@sdk/commerce/auctions/mintSelection'
 import { useAuctionBidFunding } from '@platform/web/auctions/useAuctionBidFunding'
-import { AuctionBidProgressDialog } from '@/components/AuctionBidProgressDialog'
+import { AuctionBidProgressDialogHost as AuctionBidProgressDialog } from '@platform/web/auctions/AuctionBidProgressDialogHost'
 
 const AUCTION_RULES_ACK_VERSION = 'v1'
 

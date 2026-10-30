@@ -23,6 +23,7 @@ import { BidStatusBanner, BidStatusPill, getBidStatusCopy, type BidStatusDisplay
 import { AuctionShippingDetailRow, AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
 import { AuctionVerdictView } from '@ui/auction/auction-verdict-view'
 import { AuctionBidsView } from '@ui/auction/auction-bids-view'
+import { AuctionBidProgressDialogView, type AuctionBidProgressDialogViewProps } from '@ui/auction/auction-bid-progress-view'
 import { AuctionTimelineChartView } from '@ui/auction/auction-timeline-chart-view'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import {
@@ -317,6 +318,59 @@ function SampleBidderCard({ pubkey }: { pubkey: string }) {
 			</span>
 			{pubkey.slice(0, 8)}
 		</span>
+	)
+}
+
+/** Host stand-in for the progress dialog's validator avatar row: a plain deterministic node. */
+function SampleValidatorAvatar({ pubkey }: { pubkey: string }) {
+	return (
+		<span
+			data-slot="validator-avatar"
+			className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-fill-accent text-[10px] font-semibold text-on-fill-accent"
+		>
+			{pubkey.slice(0, 1).toUpperCase()}
+		</span>
+	)
+}
+
+const PROGRESS_VALIDATOR_PUBKEYS = ['f'.repeat(64)]
+
+/**
+ * The bid progress dialog, always rendered OPEN with literal verdict booleans,
+ * so the gallery and the spec assert the stage mapping, the verdict-bound
+ * copy and the #1235 retry gating per lifecycle state.
+ */
+function AuctionBidProgressDialogViewDemo({
+	lifecycleState,
+	hasPositiveVerdict = false,
+	hasNegativeVerdict = false,
+	hasNeutralVerdict = false,
+	representativeVerdictClaim,
+	bidAmount,
+	refundLocktime,
+	onRetryPublish,
+	lockOutcomeUncertain,
+}: {
+	lifecycleState: AuctionBidProgressDialogViewProps['lifecycleState']
+} & Partial<Omit<AuctionBidProgressDialogViewProps, 'lifecycleState'>>) {
+	return (
+		<div className="max-w-md">
+			<AuctionBidProgressDialogView
+				open
+				onClose={() => {}}
+				lifecycleState={lifecycleState}
+				hasPositiveVerdict={hasPositiveVerdict}
+				hasNegativeVerdict={hasNegativeVerdict}
+				hasNeutralVerdict={hasNeutralVerdict}
+				representativeVerdictClaim={representativeVerdictClaim}
+				validatorPubkeys={PROGRESS_VALIDATOR_PUBKEYS}
+				renderValidatorAvatar={(pubkey) => <SampleValidatorAvatar pubkey={pubkey} />}
+				bidAmount={bidAmount}
+				refundLocktime={refundLocktime}
+				onRetryPublish={onRetryPublish}
+				lockOutcomeUncertain={lockOutcomeUncertain}
+			/>
+		</div>
 	)
 }
 
@@ -955,6 +1009,56 @@ export const auction: WidgetLibrary = {
 			// windows, and a plain host-injected identity slot.
 			name: 'AuctionTimelineChartView',
 			render: () => <AuctionTimelineChartViewDemo />,
+		},
+		{
+			// I-PARKED commit B: the bid submission progress dialog — one entry per
+			// money-path lifecycle state the host can hand the view. Each renders
+			// the dialog OPEN so the gallery and the spec assert the stage mapping,
+			// the verdict-bound copy and the retry gating.
+			name: 'BidProgressPlacing',
+			render: () => <AuctionBidProgressDialogViewDemo lifecycleState="payment_acknowledged" />,
+		},
+		{
+			name: 'BidProgressConfirmed',
+			render: () => (
+				<AuctionBidProgressDialogViewDemo
+					lifecycleState="bid_published"
+					hasPositiveVerdict
+					representativeVerdictClaim="valid_bid_placed"
+					bidAmount={21000}
+					refundLocktime={1_767_000_000}
+				/>
+			),
+		},
+		{
+			name: 'BidProgressPublishFailedRetry',
+			render: () => (
+				<AuctionBidProgressDialogViewDemo lifecycleState="mint_succeeded_bid_publish_failed_reclaimable" onRetryPublish={() => {}} />
+			),
+		},
+		{
+			// #1235 round-3 fix 3: the uncertain-lock variant — same publish-failed
+			// lifecycle state, re-branded copy, and NO retry affordance.
+			name: 'BidProgressLockUncertain',
+			render: () => (
+				<AuctionBidProgressDialogViewDemo
+					lifecycleState="mint_succeeded_bid_publish_failed_reclaimable"
+					lockOutcomeUncertain
+					onRetryPublish={() => {}}
+				/>
+			),
+		},
+		{
+			name: 'BidProgressRejected',
+			render: () => (
+				<AuctionBidProgressDialogViewDemo lifecycleState="bid_published" hasNegativeVerdict representativeVerdictClaim="fraudulent_bid" />
+			),
+		},
+		{
+			// #1235 round-3 B3: the deposit closed with an unevidenced Lightning
+			// outcome — terminal, but NOT rendered as "Funding Failed".
+			name: 'BidProgressDepositUncertain',
+			render: () => <AuctionBidProgressDialogViewDemo lifecycleState="deposit_outcome_uncertain" />,
 		},
 		{
 			// S5b: the degenerate Available branches as four reachable states.

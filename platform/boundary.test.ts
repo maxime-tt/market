@@ -106,7 +106,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	// platform/web/auctions/useAuctionBidFunding.ts and the src/ original is deleted, so these
 	// src/ consumers read the platform hook directly until their own slices retire them. ---
 	'src/components/AuctionBidder.tsx', // I-c-monitors; retires in I-PARKED (the AuctionBidder host)
-	'src/components/AuctionBidProgressDialog.tsx', // I-c-monitors; retires in I-PARKED
 	// --- J-b (C2): the wallet modals left src/feature/wallet/, and the checkout flow host +
 	// invoice-storage helpers left src/; the one src/ consumer they left behind reads the platform
 	// home directly until its own slice retires it. ---
