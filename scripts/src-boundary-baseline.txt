@@ -174,7 +174,15 @@
 # src -> platform test 32/20 -> 43/26, src -> sdk production 102/91 -> 97/86, src -> sdk test 38/31 ->
 # 39/32, src -> ui production 185/87 (flat). Guard reports OK with no INBOUND `(decreased)`.
 
-platform -> src production 222 62
+# 2026-10-30 (E3, Checkpoint B4 + C2 — the next single ratchet): every row set to the value MEASURED by
+# `bash scripts/check-src-boundary.sh` at the merged tip a6239a1c. B4/I-b retired the 25 auction-family src
+# shims (their consumers re-pointed to @sdk/commerce/auctions/**) and C2/J-b retired src/feature/** plus the
+# L-payments invoiceStorage leaf, so the INBOUND `platform -> src` row is ratcheted 222/62 -> 212/61 and may
+# only fall. OUTBOUND re-measured: src -> platform production 80/68 -> 82/68, src -> ui production
+# 185/87 -> 173/82, src -> sdk production 97/86 -> 100/68, src -> sdk test 39/32 -> 170/73 (the test rows
+# grow as the auction/feature suites' mocks move onto the sdk homes — informational, never a gate). Guard
+# reports OK with no INBOUND `(decreased)`.
+platform -> src production 212 61
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -183,11 +191,11 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 80 68
+src -> platform production 82 68
 src -> platform test 43 26
 
-src -> ui production 185 87
+src -> ui production 173 82
 src -> ui test 0 0
 
-src -> sdk production 97 86
-src -> sdk test 39 32
+src -> sdk production 100 68
+src -> sdk test 170 73
