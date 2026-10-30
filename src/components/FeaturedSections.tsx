@@ -2,7 +2,9 @@ import { CollectionCardHost as CollectionCard } from '@platform/web/collections/
 import { FeaturedUserCardHost as FeaturedUserCard } from '@platform/web/featured/FeaturedUserCardHost'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
-import { AuctionCard } from '@/components/AuctionCard'
+import { AuctionCardHost as AuctionCard } from '@platform/web/auctions/AuctionCardHost'
+import { getAuctionBidderStatus } from '@/lib/auctionBidderStatus'
+import { InvalidAuctionBidBlock } from '@/components/InvalidAuctionNotice'
 import { Button } from '@ui/primitives/button'
 import { cn } from '@/lib/utils'
 import { collectionByATagQueryOptions } from '@/queries/collections'
@@ -91,7 +93,14 @@ function FeaturedAuctionItem({ auctionCoords, ...props }: { auctionCoords: strin
 
 	if (!auction) return null
 
-	return <AuctionCard auction={auction} {...props} />
+	return (
+		<AuctionCard
+			auction={auction}
+			getBidderStatus={(input) => getAuctionBidderStatus(input as unknown as Parameters<typeof getAuctionBidderStatus>[0])}
+			renderBidBlocked={(admission) => <InvalidAuctionBidBlock admission={admission} itemLabel="auction" compact />}
+			{...props}
+		/>
+	)
 }
 
 // FeaturedUserItem has been replaced with FeaturedUserCard component

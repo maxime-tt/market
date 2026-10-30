@@ -65,6 +65,9 @@ test('renders the auction library', async ({ page }) => {
 		'BidProgressLockUncertain',
 		'BidProgressRejected',
 		'BidProgressDepositUncertain',
+		'AuctionCardView',
+		'AuctionCardViewWinning',
+		'AuctionCardViewEndedNoImage',
 		'BidderPanelFull',
 		'BidderPanelCompact',
 		'BidderPanelAntiSnipe',
@@ -165,6 +168,30 @@ test('renders the bidder panel money-path gating states', async ({ page }) => {
 	const rules = page.getByTestId('widget-BidderRulesDialog')
 	await expect(rules).toContainText('Review auction rules before bidding')
 	await expect(rules).toContainText('I understand these rules')
+})
+
+/**
+ * I-PARKED commit D: the list card is the auction discovery surface, so the
+ * spec asserts the price/count surfaces and the badge/pill mapping.
+ */
+test('renders the auction card surface states', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const withBids = page.getByTestId('widget-AuctionCardView')
+	await expect(withBids).toContainText('Handmade mug')
+	await expect(withBids).toContainText('21,000 sats')
+	await expect(withBids).toContainText('3 Bids')
+	await expect(withBids).toContainText('LIVE')
+	await expect(withBids).toContainText('2d 3h left')
+
+	const winning = page.getByTestId('widget-AuctionCardViewWinning')
+	await expect(winning).toContainText("You're winning")
+	await expect(winning).not.toContainText('3 Bids')
+
+	const ended = page.getByTestId('widget-AuctionCardViewEndedNoImage')
+	await expect(ended).toContainText('No image')
+	await expect(ended).toContainText('ENDED')
+	await expect(ended).toContainText('You were outbid')
 })
 
 test('renders the four simple editor tabs', async ({ page }) => {

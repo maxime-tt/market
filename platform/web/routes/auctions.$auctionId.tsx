@@ -1,4 +1,4 @@
-import { AuctionCard } from '@/components/AuctionCard'
+import { AuctionCardHost as AuctionCard } from '@platform/web/auctions/AuctionCardHost'
 import { AuctionCountdown, useAuctionCountdown } from '@platform/web/auctions/AuctionCountdownHost'
 import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
@@ -1098,7 +1098,12 @@ function AuctionDetailRoute() {
 					<h2 className="font-heading text-2xl text-center lg:text-left">More from this seller</h2>
 					<ItemGrid className="gap-4 sm:gap-6">
 						{moreFromSeller.map((item) => (
-							<AuctionCard key={item.id} auction={item} />
+							<AuctionCard
+								key={item.id}
+								auction={item}
+								getBidderStatus={(input) => getAuctionBidderStatus(input as unknown as Parameters<typeof getAuctionBidderStatus>[0])}
+								renderBidBlocked={(admission) => <InvalidAuctionBidBlock admission={admission} itemLabel="auction" compact />}
+							/>
 						))}
 					</ItemGrid>
 				</div>

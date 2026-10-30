@@ -1,4 +1,6 @@
-import { AuctionCard } from '@/components/AuctionCard'
+import { AuctionCardHost as AuctionCard } from '@platform/web/auctions/AuctionCardHost'
+import { getAuctionBidderStatus } from '@/lib/auctionBidderStatus'
+import { InvalidAuctionBidBlock } from '@/components/InvalidAuctionNotice'
 import { Media } from '@ui/shared/media'
 import { LoadingState } from '@ui/shared/loading-state'
 import { AuctionFiltersView } from '@ui/auction/auction-list-views'
@@ -404,7 +406,13 @@ function AuctionsRoute() {
 
 						<ItemGrid className="gap-4 sm:gap-8">
 							{filteredAndSortedAuctions.map((auction) => (
-								<AuctionCard key={auction.id} auction={auction} bids={bidsByAuctionId?.get(getAuctionRootEventId(auction) || auction.id)} />
+								<AuctionCard
+									key={auction.id}
+									auction={auction}
+									bids={bidsByAuctionId?.get(getAuctionRootEventId(auction) || auction.id)}
+									getBidderStatus={(input) => getAuctionBidderStatus(input as unknown as Parameters<typeof getAuctionBidderStatus>[0])}
+									renderBidBlocked={(admission) => <InvalidAuctionBidBlock admission={admission} itemLabel="auction" compact />}
+								/>
 							))}
 						</ItemGrid>
 					</>

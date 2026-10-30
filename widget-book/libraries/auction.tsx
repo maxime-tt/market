@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
@@ -30,6 +30,7 @@ import {
 	AuctionRulesDialogView,
 	type AuctionBidderViewProps,
 } from '@ui/auction/auction-bidder-views'
+import { AuctionCardView } from '@ui/auction/auction-card-view'
 import { AuctionTimelineChartView } from '@ui/auction/auction-timeline-chart-view'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import {
@@ -410,6 +411,13 @@ const bidderPanelProps = (overrides: Partial<AuctionBidderViewProps>): AuctionBi
 	onOpenRules: () => {},
 	...overrides,
 })
+
+/** Host stand-in for the router link the card host injects (`Link to={`/auctions/${id}`}`). */
+const sampleCardRenderLink = (children: ReactNode, className?: string) => (
+	<a href="#auction" className={className} data-slot="card-link">
+		{children}
+	</a>
+)
 
 /** Host stand-in for the confirm dialog's seller card (`UserCardHost`). */
 function SampleSellerCard() {
@@ -1164,6 +1172,62 @@ export const auction: WidgetLibrary = {
 						refundLocktime={1_767_000_000}
 						onConfirm={() => {}}
 						confirmButtonDisabled={false}
+					/>
+				</div>
+			),
+		},
+		{
+			// I-PARKED commit D: the auction list card — one entry per surface state
+			// (bids-count fallback, winning pill, ended badge). The countdown, the
+			// test-label notice and the compact bidder panel are host-owned nodes,
+			// so the gallery shows the slots as plain stand-ins.
+			name: 'AuctionCardView',
+			render: () => (
+				<div className="max-w-[280px]">
+					<AuctionCardView
+						title="Handmade mug"
+						imageUrl={AUCTION_THUMBNAIL}
+						currentPrice={21_000}
+						bidsCount={3}
+						bidderStatus={null}
+						ended={false}
+						notStarted={false}
+						renderLink={sampleCardRenderLink}
+						countdown={<span className="text-xs text-text-mid">2d 3h left</span>}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'AuctionCardViewWinning',
+			render: () => (
+				<div className="max-w-[280px]">
+					<AuctionCardView
+						title="Handmade mug"
+						imageUrl={AUCTION_THUMBNAIL}
+						currentPrice={21_000}
+						bidsCount={3}
+						bidderStatus={{ status: 'winning', label: "You're winning" }}
+						ended={false}
+						notStarted={false}
+						renderLink={sampleCardRenderLink}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'AuctionCardViewEndedNoImage',
+			render: () => (
+				<div className="max-w-[280px]">
+					<AuctionCardView
+						title="Handmade mug"
+						imageUrl={null}
+						currentPrice={21_000}
+						bidsCount={1}
+						bidderStatus={{ status: 'was_outbid', label: 'You were outbid' }}
+						ended
+						notStarted={false}
+						renderLink={sampleCardRenderLink}
 					/>
 				</div>
 			),

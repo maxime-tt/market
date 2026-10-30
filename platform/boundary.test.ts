@@ -29,7 +29,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/index.tsx',
 	// J-0: the retired io seam's last src consumers read the platform homes
 	// directly (the drain, transitional until their owners retire).
-	'src/components/AuctionCard.tsx', // I-PARKED component; reads the port via readContext
 	'src/lib/actions/testLabelActions.ts', // signs/publishes test labels via the publish bridge
 	'src/publish/shipping.tsx', // store drain D2 slice 17; shim deleted in E1
 	'src/publish/products.tsx',
@@ -80,6 +79,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/terms.ts', // Wave F W-E5a; shim deleted in E1b
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
 	'src/components/AuctionSettlement.tsx', // I-PARKED A: reads the platform DLEQ keyset polling hook; retires with the auction-family drains
+	'src/components/nostr/AuctionSectionGrid.tsx', // I-PARKED D: renders the platform AuctionCardHost; retires with the auction-family drains
 	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
 	// --- I-c-hooks: src/ consumers re-pointed to the moved platform hooks (retire with these leaves in D3). ---
 	'src/components/UserCard.tsx', // I-c-hooks; useBreakpoint moved to platform/web/app
