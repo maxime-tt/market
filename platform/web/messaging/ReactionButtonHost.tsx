@@ -1,16 +1,23 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { usePublishDeletionMutation, usePublishReactionMutation } from '@/publish/reactions'
-import { useEventReactions } from '@/queries/reactions'
-import { useAuth } from '@/lib/stores/auth'
+import { useAuth } from '@platform/web/auth/authStore'
+import { usePublishDeletionMutation, usePublishReactionMutation } from '@platform/web/messaging/reactionPublish'
+import { useEventReactions } from '@platform/web/messaging/reactionQuery'
+import { ReactionButtonView } from '@ui/community/social-buttons'
 import { toast } from 'sonner'
 import type { ButtonProps } from '@ui/wrappers/button-props'
-import { ReactionButtonView } from '@ui/community/social-buttons'
+import type { NDKEvent } from '@platform/web/readContext'
 
-interface ReactionButtonProps extends ButtonProps {
+interface ReactionButtonHostProps extends ButtonProps {
 	event: NDKEvent
 }
 
-export function ReactionButton({ event, onClick: _onClick, ...props }: ReactionButtonProps) {
+/**
+ * Host for the pure `@ui/community/social-buttons` reaction button. Moved
+ * verbatim from the retiring `src/components/social/ReactionButton.tsx`
+ * (H-b kit 6 social cluster) onto its platform homes: the auth store and the
+ * platform reaction query/publish bindings. The event type arrives through the
+ * read facade, so this host names no transport.
+ */
+export function ReactionButtonHost({ event, onClick: _onClick, ...props }: ReactionButtonHostProps) {
 	const { user, isAuthenticated } = useAuth()
 	const { data: reactionsAll } = useEventReactions(event)
 	const mutationPublish = usePublishReactionMutation()

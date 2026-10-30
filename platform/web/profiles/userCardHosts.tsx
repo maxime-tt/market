@@ -10,7 +10,7 @@ import {
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { isValidHexKey, isValidNpub } from '@sdk/core/utils/utils'
 import { VerifiedBadge } from '@ui/nostr/verified-badge'
-import { ProfileAvatarView } from '@ui/nostr/identity'
+import { ProfileAvatarView, type ProfileAvatarViewProps } from '@ui/nostr/identity'
 import { UserCardView, type UserCardSize } from '@ui/nostr/user-card'
 import { useQuery } from '@tanstack/react-query'
 import { nip19 } from 'nostr-tools'
@@ -73,20 +73,19 @@ export function Nip05BadgeHost({ pubkey, className = '', showAddress = true }: N
 	)
 }
 
-interface AvatarHostProps {
+interface AvatarHostProps extends Omit<ProfileAvatarViewProps, 'name' | 'picture' | 'isLoading'> {
 	pubkey?: string
-	className?: string
 }
 
 /**
  * Host for the presentational avatar. It resolves the profile and renders the
  * bare `ProfileAvatarView`, reproducing the retiring
- * `src/components/AvatarUser.tsx` read (D4 S4b). The legacy `colored` /
- * `deterministicFallbackText` props were never `AvatarUser` props and are
- * destructured out by `ProfileAvatarView` anyway, so the rendered avatar is
- * unchanged.
+ * `src/components/AvatarUser.tsx` read (D4 S4b) and its full prop surface: the
+ * remaining `ProfileAvatarView` props forward unchanged, and the two legacy
+ * compat props (`colored`, `deterministicFallbackText`) are destructured out by
+ * the view itself, so the rendered avatar is unchanged.
  */
-export function AvatarHost({ pubkey, className }: AvatarHostProps) {
+export function AvatarHost({ pubkey, ...props }: AvatarHostProps) {
 	const { data: profileData, isLoading } = useProfile(pubkey)
 	const { profile } = profileData ?? {}
 
@@ -95,7 +94,7 @@ export function AvatarHost({ pubkey, className }: AvatarHostProps) {
 			name={getNormalizedProfileDisplayName(profile)}
 			picture={getNormalizedProfilePicture(profile)}
 			isLoading={isLoading}
-			className={className}
+			{...props}
 		/>
 	)
 }

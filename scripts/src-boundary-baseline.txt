@@ -140,7 +140,22 @@
 # reporting informationally). OUTBOUND rows are re-measured, never ratcheted; the INBOUND
 # platform -> src row stays as measured by E3 and is ratcheted only by E3.
 
-platform -> src production 254 65
+# 2026-10-30 (H-b kit 4, B2 commit A — AvatarUser/Nip05Badge): the avatar + NIP-05 hosts retired
+# src/components/{AvatarUser,Nip05Badge}.tsx onto platform/web/profiles/userCardHosts.tsx; the three
+# platform routes re-pointed to the platform-internal host (M4 -4) and the dead Nip05Badge import
+# left the collection route. INBOUND platform -> src re-measured by the guard at this commit and
+# ratcheted to the measured value; the row also absorbs the merged lanes' un-lowered falls (the
+# guard had been reporting them informationally at the 6568249c base). OUTBOUND rows are
+# re-measured, never ratcheted; the src -> platform growth here is the drain (the retiring kits'
+# src consumers now read the platform hosts directly).
+#
+# 2026-10-30 (H-b kit 6, B2 commit D — the social cluster): the social action row + its five src
+# members (SocialInteractions, ReactionButton, CommentButton, ShareButton, ReactionsList,
+# ZapsList) and the share dialog retired onto platform/web/messaging/*Host files in one fused
+# commit; the INBOUND platform -> src row falls 238 -> 235 (the deleted members' inbound imports
+# left with them) and is ratcheted. OUTBOUND src -> platform re-measured 92/78.
+
+platform -> src production 235 65
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -149,11 +164,11 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 81 74
-src -> platform test 29 17
+src -> platform production 92 78
+src -> platform test 32 20
 
-src -> ui production 221 105
+src -> ui production 209 97
 src -> ui test 0 0
 
-src -> sdk production 128 106
-src -> sdk test 10 9
+src -> sdk production 106 94
+src -> sdk test 22 20

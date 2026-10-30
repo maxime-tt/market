@@ -1,5 +1,6 @@
 import { ChatMessageBubbleView, ChatOrderItemView, type ChatMessageEvent } from '@ui/messages/chat-message-bubble-view'
 import { ConversationListItemView, ConversationViewLayout, MessageInputView } from '@ui/messages/messaging-views'
+import { LiveChatMessageView } from '@ui/messages/live-chat-message-view'
 import type { ReactNode } from 'react'
 import type { WidgetLibrary } from '../libraries'
 
@@ -230,6 +231,25 @@ export const messages: WidgetLibrary = {
 			render: () => (
 				<div className="max-w-md">
 					<MessageInputView onSendMessage={async () => {}} isSending={false} isLoggedIn={false} />
+				</div>
+			),
+		},
+		{
+			// NIP-53 live-chat rows. The author card is a host-owned node, so the
+			// entry passes a literal stand-in instead of the platform UserCardHost.
+			name: 'LiveChatMessageView',
+			render: () => (
+				<div className="max-w-md space-y-1">
+					<LiveChatMessageView
+						authorCard={<span className="text-xs font-medium">satoshi</span>}
+						timeLabel="5m ago"
+						content="gm frens, who is bidding?"
+					/>
+					<LiveChatMessageView
+						authorCard={<span className="text-xs font-medium">hal</span>}
+						timeLabel="just now"
+						content="watch the reserve — it moves fast in the last minute"
+					/>
 				</div>
 			),
 		},

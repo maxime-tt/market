@@ -1,15 +1,22 @@
-import { groupReactionsByContent, useEventReactions, type Reaction } from '@/queries/reactions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useAuth } from '@/lib/stores/auth'
-import { usePublishDeletionMutation, usePublishReactionMutation } from '@/publish/reactions'
+import { useAuth } from '@platform/web/auth/authStore'
+import { usePublishDeletionMutation, usePublishReactionMutation } from '@platform/web/messaging/reactionPublish'
+import { groupReactionsByContent, useEventReactions, type Reaction } from '@platform/web/messaging/reactionQuery'
 import { ReactionsListView } from '@ui/community/social-lists'
+import type { NDKEvent } from '@platform/web/readContext'
 
-interface ReactionsListProps {
+interface ReactionsListHostProps {
 	event: NDKEvent
 	asChildren?: boolean
 }
 
-export const ReactionsList = ({ event, asChildren = false }: ReactionsListProps) => {
+/**
+ * Host for the pure `@ui/community/social-lists` reactions list. Moved
+ * verbatim from the retiring `src/components/social/ReactionsList.tsx`
+ * (H-b kit 6 social cluster) onto the platform reaction bindings and auth
+ * store; the event type arrives through the read facade, so this host names
+ * no transport.
+ */
+export const ReactionsListHost = ({ event, asChildren = false }: ReactionsListHostProps) => {
 	const { user, isAuthenticated } = useAuth()
 	const { data: reactions } = useEventReactions(event)
 	const reactionsGrouped = reactions && groupReactionsByContent(reactions)
