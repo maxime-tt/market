@@ -9,7 +9,7 @@ import {
 	deriveAuctionHdXpub,
 	loadWalletKeyMaterial,
 	normalizeWalletKeyMaterial,
-} from './walletKeys'
+} from '@sdk/commerce/payments/wallet/walletKeys'
 
 // Test-only material: fixed, obviously-derived bytes. Never a real wallet key.
 const bytesToHex = (bytes: Uint8Array): string =>

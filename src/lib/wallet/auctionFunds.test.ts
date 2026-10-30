@@ -20,9 +20,9 @@ import {
 	formatReclaimWaitSeconds,
 	getAuctionReclaimReadyAt,
 	AUCTION_RECLAIM_SKEW_BUFFER_SECONDS,
-} from './auctionFunds'
-import type { AuctionFundsWallet, AuctionReclaimHost } from './auctionFunds'
-import type { PendingToken } from './types'
+} from '@sdk/commerce/payments/wallet/auctionFunds'
+import type { AuctionFundsWallet, AuctionReclaimHost } from '@sdk/commerce/payments/wallet/auctionFunds'
+import type { PendingToken } from '@sdk/commerce/payments/wallet/types'
 
 // ---------- localStorage polyfill (as in preLockRecoveryRecordBound.test.ts) ----------
 

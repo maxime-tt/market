@@ -42,7 +42,7 @@ import {
 	getAuctionTitle,
 } from '@/queries/auctions'
 import { auctionKeys } from '@/queries/queryKeyFactory'
-import { formatSats } from '@/lib/wallet/display'
+import { formatSats } from '@sdk/commerce/payments/display'
 
 const SETTLEMENT_CLOSE_DELAY_MS = 1500
 

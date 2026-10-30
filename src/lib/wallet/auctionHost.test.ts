@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 
-import { createAuctionHost, type AuctionHost } from './auctionHost'
-import type { PendingToken, PendingTokenContext } from './types'
-import { deriveAuctionHdXpub, normalizeWalletKeyMaterial } from './walletKeys'
+import { createAuctionHost, type AuctionHost } from '@sdk/commerce/payments/wallet/auctionHost'
+import type { PendingToken, PendingTokenContext } from '@sdk/commerce/payments/wallet/types'
+import { deriveAuctionHdXpub, normalizeWalletKeyMaterial } from '@sdk/commerce/payments/wallet/walletKeys'
 
 // Test-only material: fixed, obviously-derived bytes. Never a real wallet key.
 const bytesToHex = (bytes: Uint8Array): string =>

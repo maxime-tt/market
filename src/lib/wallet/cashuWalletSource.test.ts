@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { Amount, type Proof } from '@cashu/cashu-ts'
-import { createCocoWalletSource, type CashuProofRepository } from './cashuWalletSource'
+import { createCocoWalletSource, type CashuProofRepository } from '@sdk/commerce/payments/wallet/cashuWalletSource'
 
 const MINT = 'https://mint.example'
 const OTHER_MINT = 'https://mint.other'

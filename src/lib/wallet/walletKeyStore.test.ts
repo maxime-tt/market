@@ -7,9 +7,14 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { SealedWalletKeyStore, WalletKeySealerUnavailableError, WalletKeyStoreError, createSignerWalletKeySealer } from './walletKeyStore'
-import type { WalletKeySealer, WalletKeyStorage } from './walletKeyStore'
-import type { WalletKeyMaterial } from './walletKeys'
+import {
+	SealedWalletKeyStore,
+	WalletKeySealerUnavailableError,
+	WalletKeyStoreError,
+	createSignerWalletKeySealer,
+} from '@sdk/commerce/payments/wallet/walletKeyStore'
+import type { WalletKeySealer, WalletKeyStorage } from '@sdk/commerce/payments/wallet/walletKeyStore'
+import type { WalletKeyMaterial } from '@sdk/commerce/payments/wallet/walletKeys'
 
 /** A user-scoped storage stand-in; the real one is `@/lib/wallet/storage`. */
 const memoryStorage = (): WalletKeyStorage & { dump: () => Record<string, unknown> } => {

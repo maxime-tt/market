@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getSpendableProofsForMint } from './proofs'
+import { getSpendableProofsForMint } from '@sdk/commerce/payments/wallet/proofs'
 
 describe('getSpendableProofsForMint', () => {
 	test('requests only spendable proofs from wallet state and returns them', () => {

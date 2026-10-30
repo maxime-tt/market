@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { createAppWalletKeyStorage, createAppWalletKeyStore } from './walletKeyStorage'
+import { createAppWalletKeyStorage, createAppWalletKeyStore } from '@sdk/commerce/payments/wallet/walletKeyStorage'
 
 // B4c: the pubkey is now an explicit parameter. `NO_USER` is the logged-out accessor —
 // the storage scopes to no user, which is the fail-closed case these tests exercise.

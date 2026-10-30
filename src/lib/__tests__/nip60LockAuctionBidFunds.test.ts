@@ -123,7 +123,7 @@ const realWalletOps: typeof import('@/lib/stores/walletOps') = await import(`${i
 type AuctionBidLockMutationPossibleErrorInstance = InstanceType<typeof realWalletOps.AuctionBidLockMutationPossibleError>
 const { walletOps } = realWalletOps
 import { cashuStore } from '@/lib/stores/cashu'
-import { loadUserData } from '@/lib/wallet/storage'
+import { loadUserData } from '@sdk/commerce/payments/wallet/storage'
 
 // =============================================================================
 // Fixtures
