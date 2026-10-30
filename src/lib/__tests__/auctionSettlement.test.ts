@@ -15,7 +15,7 @@ import {
 	getAuctionWindowValidBids,
 	parseAuctionNonNegativeInt,
 	resolveAuctionVersionSet,
-} from '../auctionSettlement'
+} from '@sdk/commerce/auctions/settlement'
 
 const makeBid = (params: {
 	id: string

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { parseValidatorPolicyEvent } from '../schemas/auction/validatorEvents'
-import { DEFAULT_MAX_SKEW_SECONDS, VALIDATOR_POLICY_KIND } from '../auction/constants'
+import { parseValidatorPolicyEvent } from '@sdk/commerce/auctions/schemas/validatorEvents'
+import { DEFAULT_MAX_SKEW_SECONDS, VALIDATOR_POLICY_KIND } from '@sdk/commerce/auctions/constants'
 import { DEFAULT_BID_SPAM_POLICY } from '@platform/server/auction-validator/spamPolicy'
 import { publishValidatorPolicy, resolvePublishedValidatorPolicyDocument } from '@platform/server/auction-validator/policy'
 

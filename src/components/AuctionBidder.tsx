@@ -30,23 +30,23 @@ import {
 	getAuctionAuditorQuorum,
 	useAuctionVerdicts,
 } from '@/queries/auctions'
-import { computeValidatedBids } from '@/lib/auction/bidValidation'
+import { computeValidatedBids } from '@sdk/commerce/auctions/bidValidation'
 import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
-import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
-import { inspectAuctionAdmission } from '@/lib/schemas/auction/auctionAdmission'
+import { parseAuctionEvent } from '@sdk/commerce/auctions/schemas/auctionEvent'
+import { inspectAuctionAdmission } from '@sdk/commerce/auctions/schemas/auctionAdmission'
 import { InvalidAuctionBidBlock } from '@/components/InvalidAuctionNotice'
-import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
-import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import { parseBidEvent } from '@sdk/commerce/auctions/schemas/bidEvent'
+import { parseValidatorVerdictEvent } from '@sdk/commerce/auctions/schemas/validatorEvents'
 import { toRawEvent } from '@/lib/nostr/eventLike'
 import { UserCard } from './UserCard'
 import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
-import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
-import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
+import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@sdk/commerce/auctions/settlement'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@sdk/commerce/auctions/constants'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { toast } from 'sonner'
 import { useMemo, useState, useEffect, useCallback, useRef, type ChangeEvent, type ClipboardEvent } from 'react'
 import { useAuctionCountdown } from './AuctionCountdown'
-import { formatAuctionCountdownDetailed } from '@/lib/auctionCountdownLabels'
+import { formatAuctionCountdownDetailed } from '@sdk/commerce/auctions/countdownLabels'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@ui/primitives/input-group'
 import { cn } from '@/lib/utils'
 import { TooltipToggleGroupItem } from '@ui/wrappers/tooltip-toggle-group-item'
@@ -55,7 +55,7 @@ import { cashuStore } from '@/lib/stores/cashu'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl, getMintHostname } from '@/lib/wallet'
-import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
+import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@sdk/commerce/auctions/mintSelection'
 import { useAuctionBidFunding } from '@platform/web/auctions/useAuctionBidFunding'
 import { AuctionBidProgressDialog } from '@/components/AuctionBidProgressDialog'
 
@@ -158,7 +158,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		() =>
 			bids
 				.map((b) => parseBidEvent(toRawEvent(b)))
-				.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
+				.filter((r): r is { ok: true; value: import('@sdk/commerce/auctions/events').ParsedBidEvent } => r.ok)
 				.map((r) => r.value),
 		[bids],
 	)
@@ -171,7 +171,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		if (!parsedAuctionResult.ok) return null
 		const parsedVerdicts = verdictsData
 			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
-			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
+			.filter((r): r is { ok: true; value: import('@sdk/commerce/auctions/events').ParsedValidatorVerdictEvent } => r.ok)
 			.map((r) => r.value)
 		return computeValidatedBids({
 			auction: parsedAuctionResult.value,

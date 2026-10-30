@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
-import { auctionP2pkPubkeysMatch, deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
+import { auctionP2pkPubkeysMatch, deriveAuctionChildP2pkPubkeyFromXpub } from '@sdk/commerce/auctions/auctionP2pk'
 
 import {
 	InMemoryWalletKeyStore,

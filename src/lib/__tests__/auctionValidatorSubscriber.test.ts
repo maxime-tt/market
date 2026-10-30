@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getPublicKey, type EventTemplate, type NostrEvent } from 'nostr-tools'
-import { AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND, AUCTION_KIND } from '../auction/constants'
+import { AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND, AUCTION_KIND } from '@sdk/commerce/auctions/constants'
 import {
 	createValidatorState,
 	setAuctionMintReachability,
@@ -8,7 +8,7 @@ import {
 	type ValidatorState,
 } from '@platform/server/auction-validator/state'
 import { createValidatorSubscriber } from '@platform/server/auction-validator/subscriber'
-import { parseAuctionEvent } from '../schemas/auction/auctionEvent'
+import { parseAuctionEvent } from '@sdk/commerce/auctions/schemas/auctionEvent'
 
 const VALIDATOR_PUBKEY = 'a'.repeat(64)
 const SELLER_PUBKEY = 'b'.repeat(64)

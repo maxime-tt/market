@@ -839,7 +839,7 @@ interface ValidatedCurrentPriceResult {
  * un-verdicted bids — correct behaviour per the quorum requirement.
  *
  * NOTE: no call sites yet. Consumers that already hold a `ValidatedBidSet`
- * should prefer the pure selectors in `@/lib/auction/validatedBidView`
+ * should prefer the pure selectors in `@sdk/commerce/auctions/validatedBidView`
  * (`getValidatedTopAmount`, `getValidatedBidderState`, `getBidClassification`);
  * this wrapper exists for surfaces that still receive raw events and therefore
  * need the parse step too (the deferred AuctionCard verdict-fetch work). If

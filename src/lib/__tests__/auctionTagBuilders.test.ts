@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildBidEventTags } from '../auction/tagBuilders'
+import { buildBidEventTags } from '@sdk/commerce/auctions/tagBuilders'
 import type { DleqProof } from '../cashu/dleq'
 
 const ROOT_EVENT_ID = '1'.repeat(64)

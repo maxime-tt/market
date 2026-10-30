@@ -14,7 +14,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Amount, type Proof, type Wallet } from '@cashu/cashu-ts'
 
 import { authStore } from '../stores/auth'
-import { persistPreLockRecoveryRecord, upsertBidderRecord } from '../auction/bidderRecords'
+import { persistPreLockRecoveryRecord, upsertBidderRecord } from '@sdk/commerce/auctions/bidderRecords'
 import {
 	createAuctionReclaim,
 	formatReclaimWaitSeconds,

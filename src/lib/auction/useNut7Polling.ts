@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchBidNut7States, type CheckProofStateFn } from '@sdk/commerce/auctions/nut7Polling'
 import { checkProofStateBatch } from '../cashu/nut7'
-import type { Nut7ProofState } from './constants'
-import type { ParsedBidEvent } from './events'
+import type { Nut7ProofState } from '@sdk/commerce/auctions/constants'
+import type { ParsedBidEvent } from '@sdk/commerce/auctions/events'
 
 const POLL_INTERVAL_MS = 60_000
 

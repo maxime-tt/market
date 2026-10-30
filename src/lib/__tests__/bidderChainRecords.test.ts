@@ -19,7 +19,7 @@ import {
 	upsertBidderRecord,
 	walkBidderRecordChain,
 	type BidderBidRecord,
-} from '../auction/bidderRecords'
+} from '@sdk/commerce/auctions/bidderRecords'
 
 // ---------- polyfill ----------
 

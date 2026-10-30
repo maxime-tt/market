@@ -13,8 +13,8 @@
 import { describe, expect, test } from 'bun:test'
 
 import { toRawEvent, type NostrEventLike } from '@sdk/core/nostr/eventLike'
-import { parseAuctionEvent } from '../schemas/auction/auctionEvent'
-import { parseBidEvent } from '../schemas/auction/bidEvent'
+import { parseAuctionEvent } from '@sdk/commerce/auctions/schemas/auctionEvent'
+import { parseBidEvent } from '@sdk/commerce/auctions/schemas/bidEvent'
 
 const HEX64 = 'a'.repeat(64)
 const BIDDER_HEX64 = 'b'.repeat(64)

@@ -4,7 +4,7 @@ import {
 	formatAuctionEndTimeLabel,
 	formatAuctionStartsIn,
 	getAuctionCountdownLabels,
-} from '@/lib/auctionCountdownLabels'
+} from '@sdk/commerce/auctions/countdownLabels'
 import { useEffect, useMemo, useState } from 'react'
 import ProgressBar from '@ui/shared/progress-bar'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getUniqueAuctionShippingRefs, parseAuctionShippingRef } from '@/lib/auctionShippingRefs'
+import { getUniqueAuctionShippingRefs, parseAuctionShippingRef } from '@sdk/commerce/auctions/shippingRefs'
 
 const sellerA = 'a'.repeat(64)
 const sellerB = 'b'.repeat(64)
