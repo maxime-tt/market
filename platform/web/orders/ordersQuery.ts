@@ -1213,3 +1213,10 @@ function isAddressableRef(value: string, expectedKind: string, expectedPubkey: s
 function isHexPubkey(value: string): boolean {
 	return HEX_PUBKEY_RE.test(value)
 }
+
+/**
+ * The order-claim composition host (I-a A2 S3): re-exported here so the sanctioned `src/queries/orders.tsx`
+ * shim carries it to `src/` consumers — no new `SRC_TO_PLATFORM_ALLOWLIST` row.
+ */
+export { useOrderClaimForSeller } from './orderClaimsBinding'
+export type { OrderClaimForSellerView } from './orderClaimsBinding'
