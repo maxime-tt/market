@@ -78,8 +78,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/stores/config.ts', // Wave E adapter drain W-E3.6; shim deleted in E1b
 	'src/lib/stores/wallet.ts', // Wave E adapter drain W-E3.7; shim deleted in E1b
 	'src/lib/stores/walletOps.ts', // Wave D walletOps drain S2; shim deleted in E1b
-	'src/lib/stores/vanity.ts', // Wave E adapter drain W-E3.1; shim deleted in E1b
-	'src/lib/stores/blacklist.ts', // Wave E adapter drain W-E3.2; shim deleted in E1b
 	'src/lib/stores/testLabels.ts', // Wave E adapter drain W-E3.3; shim deleted in E1b
 	'src/lib/terms.ts', // Wave F W-E5a; shim deleted in E1b
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
@@ -95,7 +93,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/dashboard/AuctionListItemHost.tsx', // I-c; reads the read marks + notification scopes; retired in D3
 	'src/components/messages/ConversationView.tsx', // I-c; reads the read marks; retired in D3
 	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
-	'src/components/messages/ConversationListItem.tsx', // C2; reads the derived counts, retired in D3
 	'src/components/social/SocialInteractions.tsx', // H-b kit 2: zaps via the platform ZapButtonHost; retires with the B2 SocialInteractions kit
 	'src/components/FeaturedSections.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e/AuctionCard park
 	'src/components/orders/OrderDetailComponent.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e4 orders cluster
