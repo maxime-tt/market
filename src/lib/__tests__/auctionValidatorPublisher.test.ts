@@ -3,7 +3,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { EventTemplate } from 'nostr-tools'
 import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
-import { makeHonestDleqProof } from '../cashu/dleqFixture'
+import { makeHonestDleqProof } from '@sdk/core/testing/dleqFixture'
 import { createVerdictPublisher } from '@platform/server/auction-validator/publisher'
 import { createValidatorState, setAuctionMintReachability, upsertAuction, upsertBid } from '@platform/server/auction-validator/state'
 

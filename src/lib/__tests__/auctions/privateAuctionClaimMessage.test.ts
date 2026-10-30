@@ -12,7 +12,7 @@ import {
 	privateAuctionClaimMatchesPublicMarker,
 	type AuctionClaimMessageFields,
 } from '../../auctions/privateAuctionClaimMessage'
-import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@sdk/core/testing/piiSentinelFixture'
 
 const CREATED_AT = 1_700_000_000
 const AUCTION_EVENT_ID = 'a'.repeat(64)

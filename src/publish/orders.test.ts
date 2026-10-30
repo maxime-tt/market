@@ -231,7 +231,7 @@ import type { SignerCapability } from '@sdk/core/signer'
 import { decryptPrivateOrderMessage } from '@sdk/commerce/messaging/privateOrderMessage'
 import { createOrder, createOrderCreationEvent, publishOrderWithDependencies, publishOrderWorkflowWithDependencies } from '@/publish/orders'
 import { privateDetailsMatchPublicOrder } from '@/queries/orders'
-import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@sdk/core/testing/piiSentinelFixture'
 
 const PII_SENTINELS = [
 	'buyer@example.com',

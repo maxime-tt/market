@@ -11,7 +11,7 @@ import {
 	type OrderWithRelatedEvents,
 	type SellerPrivateOrderDetailsCandidate,
 } from '../orders'
-import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@sdk/core/testing/piiSentinelFixture'
 
 const CREATED_AT = 1_700_000_000
 const PII_SENTINELS = [

@@ -2626,7 +2626,7 @@ childPubkey` on the bidder side before locking funds (§5.6).
 
 ### 15.7 Offline DLEQ test fixture
 
-`src/lib/cashu/dleqFixture.ts` provides an in-process, deterministic NUT-12
+`sdk/core/testing/dleqFixture.ts` provides an in-process, deterministic NUT-12
 DLEQ proof fixture for tests. It constructs a keyset and a valid DLEQ proof
 offline so that `hasValidDleq(proof, keyset)` returns `true` (honest case)
 and exposes per-field corruption helpers for negative-path verification

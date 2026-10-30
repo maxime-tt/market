@@ -22,7 +22,7 @@ import {
 	corruptField,
 	type DleqProofWithSecret,
 	type CorruptibleField,
-} from '../cashu/dleqFixture'
+} from '@sdk/core/testing/dleqFixture'
 
 /**
  * `hasValidDleq` *throws* (rather than returns false) when the proof's

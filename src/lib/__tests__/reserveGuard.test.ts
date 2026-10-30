@@ -20,7 +20,7 @@ import { computeValidatedBids } from '../auction/bidValidation'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
 import type { Nut7ProofState } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
-import { makeDleqKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
+import { makeDleqKeyset, makeHonestDleqProof } from '@sdk/core/testing/dleqFixture'
 import { evaluateReserveNotMetGuard, resolveReserveNotMetPublish } from '../auction/reserveGuard'
 import type { MintKeys } from '@cashu/cashu-ts'
 
