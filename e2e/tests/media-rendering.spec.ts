@@ -9,7 +9,7 @@ import { finalizeEvent } from 'nostr-tools/pure'
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
-import { devUser1, XPUB } from '../../src/lib/fixtures'
+import { devUser1, XPUB } from '../../scripts/fixtures'
 
 useWebSocketImplementation(WebSocket)
 

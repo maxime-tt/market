@@ -1,6 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
-import { devUser1, devUser2, devUser3, devUser4, devUser5 } from '@/lib/fixtures'
+import { devUser1, devUser2, devUser3, devUser4, devUser5 } from './fixtures'
 import { AppSettingsSchema } from '@sdk/config/schemas/app'
 import { SHIPPING_KIND } from '@sdk/config/schemas/shippingOption'
 

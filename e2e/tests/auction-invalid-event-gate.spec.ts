@@ -27,7 +27,7 @@ import { finalizeEvent, type EventTemplate, type VerifiedEvent } from 'nostr-too
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import type { Page } from '@playwright/test'
-import { devUser1, devUser3 } from '../../src/lib/fixtures'
+import { devUser1, devUser3 } from '../../scripts/fixtures'
 import { queryRelayEvents } from '../utils/relay-query'
 
 test.use({ scenario: 'merchant' })

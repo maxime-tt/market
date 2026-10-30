@@ -1,4 +1,4 @@
-import { resolveServerOrigins, serveProductPageWithOg, type ServerOriginsEnv } from '@/lib/ogTags'
+import { resolveServerOrigins, serveProductPageWithOg, type ServerOriginsEnv } from '@sdk/commerce/products/ogTags'
 import { getProductOgMeta } from '../ogMeta'
 import { PORT, RELAY_URL } from '../runtime'
 import type { BunRoutes } from './types'

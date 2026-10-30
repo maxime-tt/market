@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
 import { LightningMock } from '../utils/lightning-mock'
-import { devUser2 } from '../../src/lib/fixtures'
+import { devUser2 } from '../../scripts/fixtures'
 import { nip19 } from 'nostr-tools'
 
 test.use({ scenario: 'marketplace' })

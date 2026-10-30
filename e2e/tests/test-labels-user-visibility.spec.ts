@@ -3,7 +3,7 @@ import { test, expect } from '../fixtures'
 import { finalizeEvent, type EventTemplate, type VerifiedEvent } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
-import { devUser1 } from '../../src/lib/fixtures'
+import { devUser1 } from '../../scripts/fixtures'
 
 test.use({ scenario: 'merchant' })
 

@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures'
-import { devUser2 } from '../../src/lib/fixtures'
+import { devUser2 } from '../../scripts/fixtures'
 import { resetRemoteCartForUser } from '../scenarios'
 import { SELF_HOSTED_HANDLER_ID, SELF_HOSTED_INSTANCE_NAME, SELF_HOSTED_SITE_URL, TEST_APP_PUBLIC_KEY } from '../test-config'
 import { filterByTag, getTagValue, queryRelayEvents } from '../utils/relay-query'

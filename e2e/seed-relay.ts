@@ -7,7 +7,7 @@
 import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
-import { devUser1 } from '../src/lib/fixtures'
+import { devUser1 } from '../scripts/fixtures'
 import {
 	RELAY_URL,
 	SELF_HOSTED_HANDLER_ID,

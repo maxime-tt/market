@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { devUser1, devUser2 } from '../../scripts/fixtures'
 import { waitForLatestCartSnapshotToBeEmpty } from '../utils/relay-query'
 import { resetRemoteCartForUser } from '../scenarios'
 

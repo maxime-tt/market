@@ -35,7 +35,7 @@ import { finalizeEvent, getPublicKey, type EventTemplate, type VerifiedEvent } f
 import { generateSecretKey } from 'nostr-tools'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes, bytesToHex } from '@noble/hashes/utils.js'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { devUser1, devUser2 } from '../../scripts/fixtures'
 import { setupAuthContext, type TestUser } from '../fixtures/auth'
 import { ensureScenario } from '../scenarios'
 import { TEST_APP_PRIVATE_KEY } from '../test-config'

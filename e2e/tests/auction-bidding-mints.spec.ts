@@ -20,7 +20,7 @@ import { finalizeEvent, type EventTemplate, type Event } from 'nostr-tools/pure'
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
-import { devUser1, devUser2, XPUB } from '../../src/lib/fixtures'
+import { devUser1, devUser2, XPUB } from '../../scripts/fixtures'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 

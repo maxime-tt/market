@@ -1,5 +1,5 @@
 // seed.ts
-import { devUser1, devUser2, devUser3, devUser4, devUser5, WALLETED_USER_LUD16, XPUB } from '@/lib/fixtures'
+import { devUser1, devUser2, devUser3, devUser4, devUser5, WALLETED_USER_LUD16, XPUB } from './fixtures'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@sdk/commerce/messaging/orderSchema'
 import { SHIPPING_KIND } from '@sdk/config/schemas/shippingOption'
