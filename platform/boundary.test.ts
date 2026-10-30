@@ -45,7 +45,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/liveChat.tsx',
 	'src/publish/reactions.tsx',
 	'src/publish/shareNotes.ts',
-	'src/publish/relay-list.tsx',
 	'src/publish/wallet.tsx',
 	'src/publish/nip89.ts',
 	'src/publish/migration.tsx',
@@ -53,8 +52,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/payment.tsx', // store drain D2 slice 14; shim deleted in E1
 	'src/publish/app-settings.tsx', // store drain D2 slice 18; shim deleted in E1
 	'src/publish/blacklist.tsx', // store drain D2 slice 16; shim deleted in E1
-	'src/queries/relay-list.tsx', // store drain D1 slice 1; shim deleted in E1
-	'src/queries/relay-preferences.tsx', // store drain D1 slice 1; shim deleted in E1
 	'src/queries/config.tsx', // store drain D1 slice 1; shim deleted in E1
 	'src/queries/posts.tsx', // store drain D1 slice 2; shim deleted in E1
 	'src/queries/bugReports.tsx', // store drain D1 slice 2; shim deleted in E1
