@@ -155,7 +155,18 @@
 # commit; the INBOUND platform -> src row falls 238 -> 235 (the deleted members' inbound imports
 # left with them) and is ratcheted. OUTBOUND src -> platform re-measured 92/78.
 
-platform -> src production 235 65
+# 2026-10-30 (E3, Wave H/I + Checkpoint C pass — the single ratchet): every row set to the value
+# MEASURED by `bash scripts/check-src-boundary.sh` at the merged tip 789f666b. The waves drained twelve
+# `src/` hosts to platform/sdk (I-c hooks + notifications + monitors, the H-b kit chain, the H-c/H-e
+# leaves, I-a A2 S2→S3, E1b dead shims, and A3.1–A3.7 signer consolidation), so the INBOUND
+# `platform -> src` row is ratcheted 235/65 -> 230/64 and may only fall from here. The OUTBOUND `src -> *`
+# rows are RE-MEASURED, not ratcheted: src -> platform production 92/78 -> 84/72, src -> platform test
+# 32/20 (flat imports, files flat), src -> ui production 209/97 -> 185/87, src -> sdk production
+# 106/94 -> 102/91, src -> sdk test 22/20 -> 38/31 (the test row grows as the drain moves the suites'
+# mocks onto the platform/sdk homes — informational, never a gate). With these rows the guard reports
+# OK and no INBOUND row prints `(decreased)`: baseline equals measurement.
+
+platform -> src production 230 64
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -164,11 +175,11 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 92 78
+src -> platform production 84 72
 src -> platform test 32 20
 
-src -> ui production 209 97
+src -> ui production 185 87
 src -> ui test 0 0
 
-src -> sdk production 106 94
-src -> sdk test 22 20
+src -> sdk production 102 91
+src -> sdk test 38 31
