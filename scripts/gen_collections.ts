@@ -1,5 +1,5 @@
-import type { ProductCollectionSchema } from '@/lib/schemas/productCollection'
-import { createClientTag } from '@/publish/nip89'
+import type { ProductCollectionSchema } from '@sdk/config/schemas/productCollection'
+import { createClientTag } from '@platform/web/nip89'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import type { z } from 'zod'

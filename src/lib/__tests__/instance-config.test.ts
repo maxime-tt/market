@@ -9,7 +9,7 @@ import {
 import { APP_SETTINGS_D_TAG } from '@/lib/appSettings'
 import { AppSettingsSchema } from '@/lib/schemas/app'
 import { configActions, configStore } from '@/lib/stores/config'
-import { createHandlerInfoEventData, createClientTag } from '@/publish/nip89'
+import { createHandlerInfoEventData, createClientTag } from '@platform/web/nip89'
 
 const existingSettings = {
 	name: 'Existing Market',

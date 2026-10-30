@@ -2,7 +2,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { devUser1, devUser2, devUser3, devUser4, devUser5 } from '@/lib/fixtures'
 import { AppSettingsSchema } from '@/lib/schemas/app'
-import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
+import { SHIPPING_KIND } from '@sdk/config/schemas/shippingOption'
 
 // Force local relay only mode to prevent connecting to public relays during startup
 // This must be set before ndkActions.initialize() is called

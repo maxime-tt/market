@@ -40,13 +40,8 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/queries/orders.tsx', // store drain D1 slice 7; shim deleted in E1
 	'src/queries/messages.tsx', // store drain D1 slice 7; shim deleted in E1
 	'src/queries/liveChat.tsx', // store drain D1 slice 7; shim deleted in E1
-	'src/queries/zaps.tsx', // store drain D1 slice 7; shim deleted in E1
 	'src/publish/comments.tsx',
 	'src/publish/liveChat.tsx',
-	'src/publish/reactions.tsx',
-	'src/publish/shareNotes.ts',
-	'src/publish/wallet.tsx',
-	'src/publish/nip89.ts',
 	'src/publish/migration.tsx',
 	'src/publish/featured.tsx', // store drain D2 slice 11; shim deleted in E1
 	'src/publish/payment.tsx', // store drain D2 slice 14; shim deleted in E1
@@ -57,7 +52,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/queries/bugReports.tsx', // store drain D1 slice 2; shim deleted in E1
 	'src/queries/nip05.tsx', // store drain D1 slice 2; shim deleted in E1
 	'src/queries/vanity.tsx', // store drain D1 slice 2; shim deleted in E1
-	'src/queries/reactions.tsx', // store drain D1 slice 2; shim deleted in E1
 	'src/queries/comments.tsx', // store drain D1 slice 2; shim deleted in E1
 	'src/queries/blacklist.tsx', // store drain D1 slice 3; shim deleted in E1
 	'src/queries/testLabels.tsx', // store drain D1 slice 3; shim deleted in E1
