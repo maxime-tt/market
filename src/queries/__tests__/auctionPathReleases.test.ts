@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { AUCTION_PATH_RELEASE_KIND } from '@/lib/auction/constants'
-import type { NostrEvent, NostrFilter } from '@/lib/nostr/io'
+import type { NostrEvent } from 'nostr-tools/pure'
+import type { Filter as NostrFilter } from 'nostr-tools'
 
 type RelayEvent = NostrEvent
 

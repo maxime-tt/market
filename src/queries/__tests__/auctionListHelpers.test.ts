@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { AUCTION_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auction/constants'
-import type { NostrFilter } from '@/lib/nostr/io'
+import type { Filter as NostrFilter } from 'nostr-tools'
 
 let fetchedRequests: Array<NostrFilter | NostrFilter[]> = []
 let relayEvents = new Set<RelayEvent>()

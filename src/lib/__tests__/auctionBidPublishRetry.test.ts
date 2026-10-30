@@ -22,7 +22,7 @@ import { Amount, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from 'nostr-tools'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { authStore } from '../stores/auth'
-import { setSignerSource } from '../nostr/io-applesauce'
+import { setSignerSource } from '@platform/web/applesauceIo'
 import {
 	findBidderRecord,
 	findPreLockRecoveryRecordByRefundPubkey,

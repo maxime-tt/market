@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { finalizeEvent } from 'nostr-tools'
 import type { NostrEvent } from 'nostr-tools/pure'
 
-import { applesauceIo } from '@/lib/nostr/io'
+import { applesauceIo } from '@platform/web/applesauceIo'
 import { ndkActions } from '@/lib/stores/ndk'
 import { fetchSellerPrivateOrderGiftWraps, subscribeToOrderUpdates } from '../orders'
 

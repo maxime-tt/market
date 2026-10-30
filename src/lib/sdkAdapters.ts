@@ -1,6 +1,4 @@
-import type { KeyValueStoragePort, NostrRelayPort, WalletPort, WalletRecoveryPort } from '@sdk/core'
-import { getNostrIo } from '@/lib/nostr/io'
-import type { NostrIo, NostrFilter as AppNostrFilter, NostrEvent as RawNostrEvent } from '@/lib/nostr/io'
+import type { KeyValueStoragePort, WalletPort, WalletRecoveryPort } from '@sdk/core'
 import { loadUserData, removeUserData, saveUserData } from '@/lib/wallet/storage'
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 
@@ -14,22 +12,6 @@ const defaultUserStorageBindings: UserStorageBindings = {
 	load: loadUserData,
 	save: saveUserData,
 	remove: removeUserData,
-}
-
-/** Adapt the app Nostr I/O seam to SDK relay operations with explicit targets. */
-export function createNostrRelayPort(
-	io: Pick<NostrIo, 'fetchEvents' | 'subscribe' | 'publish'> = getNostrIo(),
-): NostrRelayPort<RawNostrEvent> {
-	return {
-		fetchEvents: (filters, relayUrls) =>
-			io.fetchEvents(filters as unknown as AppNostrFilter | AppNostrFilter[], { relayUrls: [...relayUrls] }),
-		subscribe: (filters, onEvent, relayUrls) =>
-			io.subscribe(filters as unknown as AppNostrFilter | AppNostrFilter[], onEvent, { relayUrls: [...relayUrls] }),
-		publish: async (event, relayUrls) => {
-			const result = await io.publish(event, { relayUrls: [...relayUrls] })
-			return { acceptedRelays: [...result.publishedRelays] }
-		},
-	}
 }
 
 /**

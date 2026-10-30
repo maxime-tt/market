@@ -1,29 +1,107 @@
 /**
- * Applesauce-backed implementation of the {@link NostrIo} port — the
- * destination of the NDK -> applesauce migration.
+ * platform/web/applesauceIo.ts — the web host's applesauce Nostr I/O port,
+ * moved verbatim out of the retired `src/lib/nostr/{io-types,io-applesauce}.ts`
+ * seam (J-0, ADR-0002's 2026-10-29 R3 amendment).
  *
- * Uses `applesauce-relay`'s `RelayPool` for subscribe/fetch/publish. Relays
- * are mirrored from the NDK store for now (temporary coupling that goes away
- * when the NDK singleton is deleted in Wave D).
+ * This is the platform adapter over the app's single shared applesauce
+ * `RelayPool`. It is the pool's OWNER; the SDK seam beside it
+ * (`platform/web/sdkNostrIo.ts` → `sdk/core/nostr-io`, protected — adopt, do
+ * not edit) wraps the SAME pool via `relayPoolAdapter`, so the two seams share
+ * connections. New relay I/O routes through the SDK seam; this legacy-shaped
+ * port (per-call relay overrides, `sign`/`getUser`) survives only because the
+ * auction publish family and the read adapters still speak its shapes — it
+ * retires as those consumers drain.
  *
  * `sign`/`getUser` are wired through an **injected signer source** (A3.1): the
  * composition root (`platform/web/boot.ts`) registers a
  * `() => SignerCapability | null` resolver at boot, and this module never
- * statically imports the auth store — `authStore` → `walletOps` →
- * `ndkPublishContext` → `@/lib/nostr/io` → `io-applesauce` is a real cycle, so
- * the source arrives by registration instead. Unregistered access fails
- * closed with a typed refusal rather than falling back to the NDK bridge.
+ * statically imports the auth store — `authStore` → `readContext` →
+ * `applesauceIo` would be a real cycle, so the source arrives by registration
+ * instead. Unregistered access fails closed with a typed refusal rather than
+ * falling back to any bridge.
  */
 import { RelayGroup, RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
+import type { Filter } from 'nostr-tools'
 import type { SignerCapability } from '@sdk/core/signer'
 
-import { getWriteRelays, ndkStore } from '@/lib/stores/ndk'
-// The contract is imported from `./io-types`, not `./io`: `./io` imports this
-// adapter to re-export it, so importing back from it would be a cycle.
-import type { FetchOptions, NostrFilter, NostrIo, NostrUser, PublishOptions, PublishResult, SubscribeOptions } from './io-types'
+import { getWriteRelays, ndkStore } from '@platform/web/ndk/ndkStore'
 
-let pool: RelayPool | null = null
+// ---------------------------------------------------------------------------
+// The port's contract — moved verbatim from the retired `io-types.ts`.
+// ---------------------------------------------------------------------------
+
+export type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
+export type NostrFilter = Filter
+
+export interface NostrUser {
+	pubkey: string
+}
+
+export interface FetchOptions {
+	/** Abort the fetch after this many milliseconds (default: ~8s). */
+	timeoutMs?: number
+	/** Restrict the fetch to these relay URLs. Default: adapter's configured relays. */
+	relayUrls?: string[]
+}
+
+export interface SubscribeOptions {
+	/**
+	 * Close the subscription once relays reach EOSE. Default: false.
+	 *
+	 * Caveat (applesauce 5.2): applesauce 5.2's req() emitted a virtual
+	 * EOSE after ~10s as a backstop when a relay never sent one; 6.x only
+	 * surfaces the relay's own EOSE. A closeOnEose: true subscription can
+	 * therefore hang open on a never-EOSE relay — callers that need bounded
+	 * lifetime should add their own timeout.
+	 */
+	closeOnEose?: boolean
+	/** Restrict the subscription to these relay URLs. Default: adapter's configured relays. */
+	relayUrls?: string[]
+	/**
+	 * Boundary notification, fired once. NOT a stop signal — the subscription
+	 * stays open unless `closeOnEose` is set. Used by callers that buffer events
+	 * until the initial page has arrived.
+	 *
+	 * Semantics (review 2026-09-18, item 6): fires when the subscription's
+	 * relays have all settled (their own EOSE, or a terminal CLOSED/ERROR).
+	 * Callers that need a hard "every relay settled" boundary get exactly that.
+	 */
+	onEose?: () => void
+}
+
+export interface PublishOptions {
+	/** Restrict publishing to these relay URLs. Default: adapter's write relays. */
+	relayUrls?: string[]
+}
+
+/**
+ * Result of a publish. `publishedRelays` holds only the relay URLs that
+ * acknowledged (ACKed) the event — an empty set means no relay accepted it,
+ * which callers must treat as a publish failure rather than a success.
+ */
+export interface PublishResult {
+	publishedRelays: ReadonlySet<string>
+}
+
+export interface NostrIo {
+	/**
+	 * Fetch events matching `filter` (a single filter, or several OR-ed filters).
+	 *
+	 * Contract — callers may rely on these:
+	 *   - the result is a flat collection of raw nostr-tools events;
+	 *   - **events are unique by `id`.** An event that matches more than one of
+	 *     the supplied filters is returned exactly once. Downstream semantic
+	 *     layers treat a repeated event as two distinct inputs — e.g.
+	 *     `computeValidatedBids` flags a duplicated bid as proof reuse — so
+	 *     uniqueness is load-bearing, not cosmetic.
+	 */
+	fetchEvents(filter: NostrFilter | NostrFilter[], opts?: FetchOptions): Promise<NostrEvent[]>
+	subscribe(filter: NostrFilter | NostrFilter[], onEvent: (event: NostrEvent) => void, opts?: SubscribeOptions): () => void
+	publish(event: NostrEvent, opts?: PublishOptions): Promise<PublishResult>
+	sign(template: EventTemplate): Promise<NostrEvent>
+	getUser(): Promise<NostrUser | null>
+}
 
 // ---------------------------------------------------------------------------
 // The injected signer source (A3.1): registration API, never a static import.
@@ -42,7 +120,7 @@ export function setSignerSource(source: SignerSource | null): void {
 	signerSource = source
 }
 
-/** The registered signer source, or null when no composition registered one yet. A3.7: io-ndk re-points its sign/getUser here. */
+/** The registered signer source, or null when no composition registered one yet. */
 export function getRegisteredSignerSource(): SignerSource | null {
 	return signerSource
 }
@@ -55,6 +133,12 @@ function requireSignerSource(): SignerSource {
 	}
 	return signerSource
 }
+
+// ---------------------------------------------------------------------------
+// The shared pool and the adapter.
+// ---------------------------------------------------------------------------
+
+let pool: RelayPool | null = null
 
 function getPool(): RelayPool {
 	if (!pool) pool = new RelayPool()
@@ -110,12 +194,11 @@ export const applesauceIo: NostrIo = {
 		// `RelayPool.request(urls, filters)` delivers an event once per matching
 		// filter, so a request with several filters (e.g. fetchAuctionBids sends
 		// `#e` AND `#a`) emits any event carrying both tags more than once. The
-		// NDK adapter this port replaces returned a `Set` (deduplicated by
-		// `deduplicationKey()`, see `ndkActions.fetchEventsWithTimeout`), and the
-		// `NostrIo` port documents a single collection of matching events. Callers
-		// rely on that: duplicate bids make `computeValidatedBids`' M5
-		// same-bidder proof-reuse screen flag a legitimate bid as invalid, which
-		// aborts a settlement publish.
+		// NDK adapter this port replaced returned a `Set` (deduplicated by
+		// `deduplicationKey()`), and the `NostrIo` port documents a single
+		// collection of matching events. Callers rely on that: duplicate bids
+		// make `computeValidatedBids`' M5 same-bidder proof-reuse screen flag a
+		// legitimate bid as invalid, which aborts a settlement publish.
 		//
 		// Uniqueness is therefore part of the port contract and is enforced here,
 		// at the seam, so every caller gets it.
@@ -246,8 +329,8 @@ export const applesauceIo: NostrIo = {
 
 	async getUser(): Promise<NostrUser | null> {
 		const capability = requireSignerSource()()
-		// Logged out (or no active session) is null, matching the NDK bridge's
-		// `user?.pubkey ? { pubkey } : null` — not an error.
+		// Logged out (or no active session) is null, matching the retired NDK
+		// bridge's `user?.pubkey ? { pubkey } : null` — not an error.
 		if (!capability) return null
 		return { pubkey: await capability.getPublicKey() }
 	},

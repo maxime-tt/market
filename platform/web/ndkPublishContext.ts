@@ -1,6 +1,7 @@
-import { ndkActions, getWriteRelaySet, getWriteRelays, fetchLatestAppEvent } from '@platform/web/ndk/ndkStore'
-import { NDKEvent, type NDKSigner, type NDKFilter } from '@/lib/nostr/ndk-events'
-import type { NostrEvent } from 'nostr-tools/pure'
+import { ndkActions, ndkStore, getWriteRelaySet, getWriteRelays, fetchLatestAppEvent } from '@platform/web/ndk/ndkStore'
+import { NDKEvent, NDKRelaySet, type NDKSigner, type NDKFilter } from '@/lib/nostr/ndk-events'
+import { applesauceIo, type NostrUser, type PublishOptions, type PublishResult } from '@platform/web/applesauceIo'
+import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { EventPublishContext } from '@sdk/core/ports/eventPublish'
 
 export type NdkClient = NonNullable<ConstructorParameters<typeof NDKEvent>[0]>
@@ -56,15 +57,54 @@ export { submitAppSettings as submitAppSettingsEvent } from '@/lib/appSettings'
  */
 
 /**
- * The auction publish bindings sign, publish and identify through the active
- * first-party I/O seam (`src/lib/nostr/io.ts`), never through `applesauceIo`:
- * `io.ts` is the seam that honours `setNostrIo` and the host's signer, and the
- * auction suites drive it by swapping the store's active signer. Re-exported
- * here so those bindings add no new `platform -> src` edge — this file already
- * owns the `@/lib` edges a publish binding needs.
+ * Publish a raw **signed** event through the NDK publish binding. The publish
+ * families build their context with `createSignerPublishContext(capability, ...)` now,
+ * whose publish half carries a `NostrEvent`; this wraps it into the `NDKEvent`
+ * `ndkActions.publishEvent` takes, so the families' publish path is unchanged
+ * (still `ndkActions.publishEvent`, transitional until the relay stream flips).
  */
-export { getUser, publish as publishNostrEvent, sign as signNostrEvent } from '@/lib/nostr/io'
-export type { EventTemplate, NostrEvent, PublishOptions } from '@/lib/nostr/io'
+async function publishViaNdk(event: NostrEvent, opts?: PublishOptions): Promise<PublishResult> {
+	const ndk = ndkStore.state.ndk
+	if (!ndk) throw new Error('NDK not initialized')
+	const relaySet = opts?.relayUrls?.length ? NDKRelaySet.fromRelayUrls(opts.relayUrls, ndk) : undefined
+	const ndkEvent = new NDKEvent(ndk, event)
+	// ndkActions.publishEvent resolves with the set of relays that ACKed the
+	// event (NDKRelay), so the bridge can surface truthful relay URLs.
+	const published = await ndkActions.publishEvent(ndkEvent, relaySet)
+	return { publishedRelays: new Set(Array.from(published, (relay) => (relay as { url: string }).url)) }
+}
+
+/**
+ * The first-party publish bridge — the seam object the auction publish
+ * families and the test-label actions sign, publish and identify through.
+ *
+ * Moved out of the retired `src/lib/nostr/{io,io-ndk}.ts` seam (J-0) with its
+ * production behavior preserved: `sign`/`getUser` resolve the auth session's
+ * capability through the port's injected signer source (identical in both former
+ * adapters), and `publish` keeps the NDK publish path the former default adapter
+ * (`ndkIo.publish`) answered — `ndkActions.publishEvent` with an optional relay
+ * override — until the relay stream flips (Wave K / the SDK-seam drain).
+ * The object is mutable so the suites that used to drive the seam via
+ * `setNostrIo` can patch its members directly (same idiom as patching
+ * `applesauceIo`'s methods).
+ */
+export const nostrPublishBridge = {
+	sign: (template: EventTemplate): Promise<NostrEvent> => applesauceIo.sign(template),
+	getUser: (): Promise<NostrUser | null> => applesauceIo.getUser(),
+	publish: (event: NostrEvent, opts?: PublishOptions): Promise<PublishResult> => publishViaNdk(event, opts),
+}
+
+/** Sign an event template through the active signer capability. */
+export const signNostrEvent = (template: EventTemplate): Promise<NostrEvent> => nostrPublishBridge.sign(template)
+
+/** The active user's pubkey, or null while logged out. */
+export const getUser = (): Promise<NostrUser | null> => nostrPublishBridge.getUser()
+
+/** Publish a signed raw event (optionally restricted to explicit relays). */
+export const publishNostrEvent = (event: NostrEvent, opts?: PublishOptions): Promise<PublishResult> =>
+	nostrPublishBridge.publish(event, opts)
+
+export type { EventTemplate, NostrEvent, PublishOptions, PublishResult }
 
 /**
  * Re-exported for the auction publish bindings, which open the user-scoped
