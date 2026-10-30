@@ -4,7 +4,7 @@ import { computeBidFloor, validateBid } from '../auction/validation'
 import type { ParsedAuctionEvent, ParsedBidEvent, MinBidCurve } from '../auction/events'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS, VALIDATOR_REASONS } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
-import { makeHonestDleqProof } from '../cashu/dleqFixture'
+import { makeHonestDleqProof } from '@sdk/core/testing/dleqFixture'
 import type { DleqProof } from '../cashu/dleq'
 
 // =============================================================================

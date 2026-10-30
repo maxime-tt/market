@@ -3,7 +3,7 @@ import { computeValidatedBids, validateBidChainNut7PrePublish } from '../auction
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
 import type { Nut7ProofState } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
-import { makeDleqKeyset as makeFixtureKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
+import { makeDleqKeyset as makeFixtureKeyset, makeHonestDleqProof } from '@sdk/core/testing/dleqFixture'
 import { fetchDleqKeysetsForBidsDetailed, verifyBidDleqWithKeysets, type DleqKeysetFetcher } from '../cashu/dleq'
 import type { MintKeys } from '@cashu/cashu-ts'
 import { parseBidEvent } from '../schemas/auction/bidEvent'

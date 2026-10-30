@@ -8,7 +8,7 @@ import {
 	type DleqVerifyResult,
 } from '../cashu/dleq'
 import { Amount, type MintKeys, type Proof } from '@cashu/cashu-ts'
-import { makeHonestDleqProof, makeHonestDleqFixture, makeDleqKeyset } from '../cashu/dleqFixture'
+import { makeHonestDleqProof, makeHonestDleqFixture, makeDleqKeyset } from '@sdk/core/testing/dleqFixture'
 
 // ---------- Fixture: minimal keyset with valid secp256k1 public keys ----------
 

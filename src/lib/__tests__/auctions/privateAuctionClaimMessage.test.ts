@@ -1,9 +1,9 @@
 /**
  * The private-auction-claim suite (money/PII-critical). The module it covers moved to
  * `@sdk/commerce/auctions/privateAuctionClaimMessage` (Wave I, slice I-a A2 S2, 2026-10-29); this
- * suite stays in `src/` for now because its `@/lib/piiSentinelFixture` import is a `sdk -> src`
- * edge the source-boundary guard ratchets at 0 for sdk test files — the suite and the shared
- * fixture move to their final homes together in the dedicated D7-prep pass (debt row DR-3).
+ * suite stays in `src/` for now (a test-only residual); the shared PII sentinel fixture moved to
+ * `@sdk/core/testing/piiSentinelFixture` in the D7-prep pass (C5/J-d), so this import is no longer
+ * a `sdk -> src` edge (debt row DR-3 retired).
  */
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, getPublicKey, nip44 } from 'nostr-tools'
@@ -19,7 +19,7 @@ import {
 	privateAuctionClaimMatchesPublicMarker,
 	type AuctionClaimMessageFields,
 } from '@sdk/commerce/auctions/privateAuctionClaimMessage'
-import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@sdk/core/testing/piiSentinelFixture'
 
 const CREATED_AT = 1_700_000_000
 const AUCTION_EVENT_ID = 'a'.repeat(64)

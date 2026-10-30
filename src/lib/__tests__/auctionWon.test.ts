@@ -11,7 +11,7 @@ import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
-import { makeDleqKeyset, makeHonestDleqProof } from '@/lib/cashu/dleqFixture'
+import { makeDleqKeyset, makeHonestDleqProof } from '@sdk/core/testing/dleqFixture'
 import { Amount, getEncodedToken, type MintKeys, type Proof } from '@cashu/cashu-ts'
 
 /**

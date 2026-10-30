@@ -14,7 +14,7 @@ import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 import { ProjectivePoint, etc } from '@noble/secp256k1'
 import { HDKey } from '@scure/bip32'
 import { Amount, getEncodedToken, type Proof, type MintKeys, type MintKeyset } from '@cashu/cashu-ts'
-import { makeDleqKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
+import { makeDleqKeyset, makeHonestDleqProof } from '@sdk/core/testing/dleqFixture'
 import { parseBidEvent } from '../schemas/auction/bidEvent'
 
 const SELLER_PUBKEY = 'a'.repeat(64)
