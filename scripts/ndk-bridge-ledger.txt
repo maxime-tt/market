@@ -40,3 +40,10 @@ platform/web/payments/ZapDialogHost.tsx|h-kit/H-b|sdk/core/query/queryKeyFactory
 # I-c-notifications (2026-10-29): the monitor moved from src/hooks/ and names the NDK transport
 # (subscribe/fetch through the platform NDK store), so it is declared the day it lands.
 platform/web/notifications/monitor.ts|I-c-notifications|sdk/commerce/auctions/auctionRead.ts|the notification monitor subscribes/fetches through the platform NDK store and injects the sdk auction-read getters (bid amounts, start/cutoff times, root ids) to scope relay events into notification keys|client-NDK-removal (ADR-0002; post-Wave-J)
+# H-c/H-e relays cluster (2026-10-30): the relay-manager leaves moved to
+# ui/settings/relay-manager-views + platform/web/relays/RelayManagerHost, and the
+# NDK status classification they needed landed in this existing NDK read helper
+# (relay connectivity is NDK-transport knowledge; the host stays NDK-free). The
+# file names the transport and injects the sdk relay-list read model, so it is
+# declared the day it is touched (declare-as-you-touch).
+platform/web/relays/relayListNdkRead.ts|h-kit/H-c+B3|sdk/core/relays|the NIP-65 relay-list read and the relay connectivity classifier run through the platform NDK store bridge and inject the sdk relay-list read/parse model|client-NDK-removal (ADR-0002; post-Wave-J)

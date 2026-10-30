@@ -1,5 +1,5 @@
 import { PageHeader } from '@ui/layout/page-header'
-import { RelayManager } from '@/components/ui/relay-manager'
+import { RelayManagerHost } from '@platform/web/relays/RelayManagerHost'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { Globe } from 'lucide-react'
@@ -31,7 +31,7 @@ function NetworkComponent() {
 						</div>
 					</div>
 				</div>
-				<RelayManager />
+				<RelayManagerHost />
 			</div>
 		</div>
 	)

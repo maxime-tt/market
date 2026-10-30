@@ -10,6 +10,7 @@ import {
 	TeamRoleSection,
 } from '@ui/settings/operator-settings-views'
 import { ProfileWalletCheckView } from '@ui/settings/profile-wallet-check-view'
+import { RelayCardView, RelayManagerView } from '@ui/settings/relay-manager-views'
 import type { WidgetLibrary } from '../libraries'
 
 /**
@@ -156,6 +157,75 @@ export const settings: WidgetLibrary = {
 			render: () => (
 				<div className="max-w-xl">
 					<ProfileWalletCheckView isLoading={false} hasLud16={false} lud16={null} instanceName="Marketplace" />
+				</div>
+			),
+		},
+		{
+			name: 'RelayCardView',
+			render: () => (
+				<div className="max-w-xl space-y-2">
+					<RelayCardView url="wss://relay.example.com" type="explicit" status="connected" onRemove={() => {}} />
+					<RelayCardView url="wss://backup.example.org" type="outbox" status="connecting" onRemove={() => {}} />
+					<RelayCardView url="not-a-url" type="outbox" status="disconnected" onRemove={() => {}} />
+				</div>
+			),
+		},
+		{
+			name: 'RelayManagerView',
+			render: () => (
+				<div className="max-w-xl">
+					<RelayManagerView
+						ndkReady
+						showNostrSync
+						relayListLoading={false}
+						preferencesLoading={false}
+						preferencesPending={false}
+						saving={false}
+						hasUnsavedChanges
+						includeAppDefaults
+						onLoadFromNostr={() => {}}
+						onSaveToNostr={() => {}}
+						onToggleAppDefaults={() => {}}
+						newRelayUrl=""
+						onNewRelayUrlChange={() => {}}
+						onAddRelay={() => {}}
+						addingRelay={false}
+						onConnectToDefaults={() => {}}
+						explicitRelays={[
+							{ url: 'wss://relay.example.com', status: 'connected' },
+							{ url: 'wss://backup.example.org', status: 'connecting' },
+						]}
+						outboxRelays={[{ url: 'wss://discovered.example.net', status: 'disconnected' }]}
+						onRemoveRelay={() => {}}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'RelayManagerViewSignedOut',
+			render: () => (
+				<div className="max-w-xl">
+					<RelayManagerView
+						ndkReady
+						showNostrSync={false}
+						relayListLoading={false}
+						preferencesLoading={false}
+						preferencesPending={false}
+						saving={false}
+						hasUnsavedChanges={false}
+						includeAppDefaults
+						onLoadFromNostr={() => {}}
+						onSaveToNostr={() => {}}
+						onToggleAppDefaults={() => {}}
+						newRelayUrl=""
+						onNewRelayUrlChange={() => {}}
+						onAddRelay={() => {}}
+						addingRelay={false}
+						onConnectToDefaults={() => {}}
+						explicitRelays={[]}
+						outboxRelays={[]}
+						onRemoveRelay={() => {}}
+					/>
 				</div>
 			),
 		},
