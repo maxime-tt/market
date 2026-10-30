@@ -158,10 +158,10 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 90 78
+src -> platform production 92 78
 src -> platform test 32 20
 
-src -> ui production 213 99
+src -> ui production 209 97
 src -> ui test 0 0
 
 src -> sdk production 106 94

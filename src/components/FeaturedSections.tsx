@@ -1,5 +1,5 @@
-import { CollectionCard } from '@/components/CollectionCard'
-import { FeaturedUserCard } from '@/components/FeaturedUserCard'
+import { CollectionCardHost as CollectionCard } from '@platform/web/collections/CollectionCardHost'
+import { FeaturedUserCardHost as FeaturedUserCard } from '@platform/web/featured/FeaturedUserCardHost'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
 import { AuctionCard } from '@/components/AuctionCard'

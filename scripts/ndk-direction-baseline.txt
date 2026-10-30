@@ -42,7 +42,12 @@ sdk production 0 zero
 sdk test 0 allow
 platform/web production 33 bridge
 platform/web test 1 ratchet
+# 2026-10-30 (H-b kit 4b, B2 commit B — CollectionCard/FeaturedUserCard): the collection + featured-user
+# cards retired onto their D4 hosts (CollectionCardHost/FeaturedUserCardHost). CollectionCard carried the
+# kit's one src NDK literal, so the src ratchet rows are re-seeded to the guard's measurement at this
+# commit; the fall also absorbs the merged lanes' un-lowered falls the guard had been reporting
+# informationally at the 6568249c base.
 platform/server production 14 bridge
-src production 41 ratchet
-src test 25 ratchet
+src production 28 ratchet
+src test 18 ratchet
 contextvm production 0 zero
