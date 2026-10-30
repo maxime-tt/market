@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { ValidatedBidSet } from '@sdk/commerce/auctions/bidValidation'
 import type { ParsedBidEvent } from '@sdk/commerce/auctions/events'
 import {
@@ -21,7 +21,7 @@ import {
 //   - all four bidder status kinds (winning, outbid, won, was_outbid)
 // =============================================================================
 
-const stubRawEvent = (): NDKEvent =>
+const stubRawEvent = (): NostrEventLike =>
 	({
 		kind: 1023,
 		pubkey: '',
@@ -29,7 +29,7 @@ const stubRawEvent = (): NDKEvent =>
 		tags: [] as string[][],
 		id: 'stub',
 		created_at: 0,
-	}) as unknown as NDKEvent
+	}) as unknown as NostrEventLike
 
 function makeParsedBid(id: string, bidderPubkey: string, amount: number, createdAt: number): ParsedBidEvent {
 	return {

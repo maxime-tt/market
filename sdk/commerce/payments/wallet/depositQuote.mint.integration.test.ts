@@ -27,7 +27,7 @@ const MINT_PORT = 3358
 const MINT_URL = `http://127.0.0.1:${MINT_PORT}`
 const DEPOSIT_AMOUNT = 21
 
-const PROJECT_ROOT = path.resolve(import.meta.dir, '../../..')
+const PROJECT_ROOT = path.resolve(import.meta.dir, '../../../..')
 const MINT_DIR = mkdtempSync(path.join(tmpdir(), 'cashu-mint-deposit-'))
 const MINT_LOG = path.join(MINT_DIR, 'mint.log')
 

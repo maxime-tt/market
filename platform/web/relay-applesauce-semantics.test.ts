@@ -39,8 +39,8 @@ import * as path from 'node:path'
 // Real library classes via the shim package (see header). node_modules is
 // git-ignored, so the copy is a throwaway runtime artifact, rebuilt fresh
 // on every invocation of this file.
-const realDir = path.join(import.meta.dir, '../../../node_modules/applesauce-relay')
-const shimDir = path.join(import.meta.dir, '../../../node_modules/applesauce-relay-hermetic')
+const realDir = path.join(import.meta.dir, '../../node_modules/applesauce-relay')
+const shimDir = path.join(import.meta.dir, '../../node_modules/applesauce-relay-hermetic')
 fs.rmSync(shimDir, { recursive: true, force: true })
 fs.mkdirSync(path.join(shimDir, 'dist'), { recursive: true })
 fs.cpSync(path.join(realDir, 'dist'), path.join(shimDir, 'dist'), { recursive: true })
@@ -56,8 +56,8 @@ fs.writeFileSync(
 // Types come from the real package's dist declarations (import type is erased
 // at runtime, so the mock registry never intercepts it); values come from the
 // shim, so the classes are real no matter which files share the invocation.
-import type { RelayGroup as RelayGroupType } from '../../../node_modules/applesauce-relay/dist/group.js'
-import type { RelayPool as RelayPoolType } from '../../../node_modules/applesauce-relay/dist/pool.js'
+import type { RelayGroup as RelayGroupType } from '../../node_modules/applesauce-relay/dist/group.js'
+import type { RelayPool as RelayPoolType } from '../../node_modules/applesauce-relay/dist/pool.js'
 
 const { RelayPool } = (await import('applesauce-relay-hermetic/dist/pool.js')) as {
 	RelayPool: typeof RelayPoolType

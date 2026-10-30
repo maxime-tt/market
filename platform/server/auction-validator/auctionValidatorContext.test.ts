@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type {
 	MinBidCurve,
 	ParsedAuctionEvent,
@@ -39,7 +39,7 @@ const buildAuctionRawEvent = (
 		sellerPubkey?: string
 		dTag?: string
 	} = {},
-): NDKEvent => {
+): NostrEventLike => {
 	const endAt = overrides.endAt ?? 2_000
 	const mints = overrides.mints ?? ['https://mint.test']
 	const sellerPubkey = overrides.sellerPubkey ?? SELLER_PK
@@ -71,7 +71,7 @@ const buildAuctionRawEvent = (
 			['fallback_delay_sec', '1800'],
 			...mints.map((mint) => ['mint', mint] as string[]),
 		],
-	} as unknown as NDKEvent
+	} as unknown as NostrEventLike
 }
 
 const buildAuction = (
@@ -128,7 +128,7 @@ const buildBid = (overrides: { id?: string; mint?: string } = {}): ParsedBidEven
 		created_at: 1_500,
 		content: '',
 		tags: [],
-	} as unknown as NDKEvent,
+	} as unknown as NostrEventLike,
 	id: overrides.id ?? '2'.repeat(64),
 	bidderPubkey: BIDDER_PK,
 	createdAt: 1_500,
@@ -326,7 +326,7 @@ const buildPathRelease = (bid: ParsedBidEvent, overrides: Partial<ParsedPathRele
 		created_at: 2_200,
 		content: '',
 		tags: [],
-	} as unknown as NDKEvent,
+	} as unknown as NostrEventLike,
 	id: overrides.id ?? '5'.repeat(64),
 	bidderPubkey: overrides.bidderPubkey ?? bid.bidderPubkey,
 	createdAt: 2_200,
@@ -350,7 +350,7 @@ const buildSettlement = (auction: ParsedAuctionEvent, overrides: Partial<ParsedS
 		created_at: 2_200,
 		content: '',
 		tags: [],
-	} as unknown as NDKEvent,
+	} as unknown as NostrEventLike,
 	id: overrides.id ?? '6'.repeat(64),
 	sellerPubkey: overrides.sellerPubkey ?? auction.sellerPubkey,
 	createdAt: 2_200,

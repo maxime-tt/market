@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, MinBidCurve } from '@sdk/commerce/auctions/events'
 import { NUT7_REACHABILITY_PROBE_Y } from '@sdk/commerce/payments/cashu/nut7'
 import { POST_GRACE_BASE_BACKOFF_SEC, POST_GRACE_MAX_ATTEMPTS, createNut7Poller } from '@platform/server/auction-validator/nut7Poller'
@@ -29,7 +29,7 @@ const buildAuctionRawEvent = (
 		p2pkXpub?: string
 		mints?: string[]
 	} = {},
-): NDKEvent => {
+): NostrEventLike => {
 	const endAt = overrides.endAt ?? 2_000
 	const maxEndAt = overrides.maxEndAt ?? 2_100
 	const settlementGrace = overrides.settlementGrace ?? 100
@@ -62,7 +62,7 @@ const buildAuctionRawEvent = (
 			['fallback_delay_sec', '1800'],
 			...mints.map((mint) => ['mint', mint] as string[]),
 		],
-	} as unknown as NDKEvent
+	} as unknown as NostrEventLike
 }
 
 const buildAuction = (
@@ -119,7 +119,7 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: { id?: string; proofY?
 			created_at: 1_500,
 			content: '',
 			tags: [],
-		} as unknown as NDKEvent,
+		} as unknown as NostrEventLike,
 		id,
 		bidderPubkey: BIDDER_PK,
 		createdAt: 1_500,
@@ -151,7 +151,7 @@ const buildPathRelease = (auction: ParsedAuctionEvent, bid: ParsedBidEvent): Par
 		created_at: auction.maxEndAt + 120,
 		content: '',
 		tags: [],
-	} as unknown as NDKEvent,
+	} as unknown as NostrEventLike,
 	id: '9'.repeat(64),
 	bidderPubkey: bid.bidderPubkey,
 	createdAt: auction.maxEndAt + 120,

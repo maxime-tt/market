@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { Nip46Mock } from '../../../e2e/utils/nip46-mock'
+import { Nip46Mock } from './nip46Mock'
 
 describe('Nip46Mock', () => {
 	const originalConsoleError = console.error

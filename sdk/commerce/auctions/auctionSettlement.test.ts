@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import {
 	buildActiveAuctionBidChains,
 	compareAuctionBidChainPriority,
@@ -25,7 +25,7 @@ const makeBid = (params: {
 	auctionEventId?: string
 	status?: string
 	prevBidId?: string
-}): NDKEvent =>
+}): NostrEventLike =>
 	({
 		id: params.id,
 		pubkey: params.pubkey,
@@ -37,7 +37,7 @@ const makeBid = (params: {
 			['status', params.status ?? 'locked'],
 			...(params.prevBidId ? ([['prev_bid', params.prevBidId]] as string[][]) : []),
 		],
-	}) as NDKEvent
+	}) as NostrEventLike
 
 const makeAuction = (params: {
 	id: string
@@ -55,7 +55,7 @@ const makeAuction = (params: {
 	maxEndAt?: number
 	/** `<shape>:<peak>` (e.g. `linear:5.0`). Omit for no curve. */
 	minBidCurve?: string
-}): NDKEvent =>
+}): NostrEventLike =>
 	({
 		id: params.id,
 		pubkey: params.pubkey ?? 'seller',
@@ -85,7 +85,7 @@ const makeAuction = (params: {
 			['max_end_at', String(params.maxEndAt ?? params.endAt)],
 			...(params.minBidCurve ? ([['min_bid_curve', params.minBidCurve]] as string[][]) : []),
 		],
-	}) as NDKEvent
+	}) as NostrEventLike
 
 describe('auctionSettlement helpers', () => {
 	test('parses only complete safe nonnegative integer strings', () => {

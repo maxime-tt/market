@@ -12,7 +12,7 @@ import {
 	type ValidatorAuctionState,
 } from '@platform/server/auction-validator/state'
 import type { MinBidCurve, ParsedAuctionEvent } from '@sdk/commerce/auctions/events'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 const VALIDATOR_PK = 'c'.repeat(64)
 const SELLER_PK = 'a'.repeat(64)
@@ -26,7 +26,7 @@ const buildAuction = (mints: string[]): ParsedAuctionEvent => {
 		created_at: 1_000,
 		content: '',
 		tags: mints.map((m) => ['mint', m]),
-	} as unknown as NDKEvent
+	} as unknown as NostrEventLike
 	return {
 		rawEvent,
 		dTag: 'auction-test',

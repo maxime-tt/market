@@ -26,7 +26,7 @@ import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
 
 // E1b (2026-10-30): the src shim is deleted — the pin reads the store module at
 // its platform home, which is where the production store lives now.
-const CASHU_STORE_SOURCE = join(import.meta.dir, '..', '..', '..', 'platform', 'web', 'wallet', 'cashuStore.ts')
+const CASHU_STORE_SOURCE = join(import.meta.dir, 'cashuStore.ts')
 
 type CocoMint = { mintUrl: string; name: string; mintInfo: Record<string, never>; trusted: boolean; createdAt: number; updatedAt: number }
 
@@ -138,6 +138,8 @@ describe('cashu store — the mint list is coco’s', () => {
 		const source = readFileSync(CASHU_STORE_SOURCE, 'utf8')
 
 		expect(source).not.toMatch(/nip60/i)
-		expect(source).not.toMatch(/@nostr-dev-kit/)
+		// Deliberately broader than the package name with its scope prefix: any
+		// nostr-dev-kit mention fails, package-prefix or not.
+		expect(source).not.toMatch(/nostr-dev-kit/)
 	})
 })

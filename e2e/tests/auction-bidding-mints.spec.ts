@@ -503,7 +503,7 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 // 2.9.0 cannot even verify. nutshell 0.19.2 (the known-good triple
 // already pinned in ci-unit.yml) returns NUT-12 DLEQ proofs on mint AND
 // swap. e2e.yml now pins 'cashu==0.19.2', and
-// src/lib/__tests__/auctionDLEQ.mint.integration.test.ts locks the
+// sdk/commerce/payments/cashu/auctionDLEQ.mint.integration.test.ts locks the
 // property in CI: the P2PK lock-path swap issues output proofs carrying
 // verifiable DLEQ (ADR-0011 Blocker 2).
 //

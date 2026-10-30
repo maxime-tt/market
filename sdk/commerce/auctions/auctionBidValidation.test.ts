@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { computeBidFloor, validateBid } from '@sdk/commerce/auctions/validation'
 import type { ParsedAuctionEvent, ParsedBidEvent, MinBidCurve } from '@sdk/commerce/auctions/events'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS, VALIDATOR_REASONS } from '@sdk/commerce/auctions/constants'
@@ -12,8 +12,8 @@ import type { DleqProof } from '@sdk/commerce/payments/cashu/dleq'
 //
 // Build `ParsedAuctionEvent` and `ParsedBidEvent` directly (skipping the Zod
 // parsers) — the validation pipeline reads only the parsed fields, so we don't
-// need real NDKEvents. `rawEvent` is type-cast on a small object literal so
-// tests compile without dragging in NDK internals.
+// need real Nostr events. `rawEvent` is type-cast on a small object literal so
+// tests compile without dragging in relay-client internals.
 // =============================================================================
 
 const SELLER_PK = 'a'.repeat(64)
@@ -35,7 +35,7 @@ const NO_CURVE: MinBidCurve = { shape: 'none', peakMultiplier: 1, raw: '' }
 // stable timestamp.
 const DLEQ_EPOCH = 1_700_000_000
 
-const stubRawEvent = (kind: number, pubkey: string, content = ''): NDKEvent =>
+const stubRawEvent = (kind: number, pubkey: string, content = ''): NostrEventLike =>
 	({
 		kind,
 		pubkey,
@@ -43,7 +43,7 @@ const stubRawEvent = (kind: number, pubkey: string, content = ''): NDKEvent =>
 		tags: [] as string[][],
 		id: 'stub',
 		created_at: 0,
-	}) as unknown as NDKEvent
+	}) as unknown as NostrEventLike
 
 interface AuctionOverrides {
 	startAt?: number
