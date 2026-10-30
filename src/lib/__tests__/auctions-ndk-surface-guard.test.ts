@@ -5,11 +5,11 @@
  * The guard resolves ROOT from its own location, so we can stage a throwaway
  * "repo" (scripts/ + src/) in a temp dir, copy the real script in, write the
  * production auctions files, and invoke it via bash — then assert on exit code
- * and stdout for the clean / dirty / allowlisted branches. One test runs the
- * real script against the real repo so the committed file set is covered.
+ * and stdout for the clean / dirty branches. One test runs the real script
+ * against the real repo so the committed file set is covered.
  */
 import { spawnSync } from 'node:child_process'
-import { mkdtemp, mkdir, rm, writeFile, copyFile, readFile } from 'node:fs/promises'
+import { copyFile, exists, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -17,7 +17,13 @@ import { afterEach, describe, expect, test } from 'bun:test'
 
 const ROOT = join(import.meta.dir, '..', '..', '..')
 const SCRIPT = join(ROOT, 'scripts', 'check-auctions-ndk-surface.sh')
-const ALLOWLISTED_FILE = 'src/lib/auctions/privateAuctionClaimMessage.ts'
+// I-a A2 S2 (2026-10-29): the private-claim module left `src/lib/auctions/` for
+// the sdk home (the two ambient-signer helpers went to platform/web/
+// ndkReadContext.ts), so the guard covers it through the
+// `sdk/commerce/auctions/*.ts` glob family and the `src/lib/auctions/*.ts`
+// family is deleted. These tests pin that post-S2 shape.
+const CLAIM_MODULE = 'sdk/commerce/auctions/privateAuctionClaimMessage.ts'
+const RETIRED_SRC_CLAIM = 'src/lib/auctions/privateAuctionClaimMessage.ts'
 
 const NDK_PACKAGE = '@nostr-dev' + '-kit/ndk'
 const NDK_IMPORT = `import { NDKEvent } from '${NDK_PACKAGE}'\n`
@@ -63,6 +69,9 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		expect(r.exitCode).toBe(0)
 		expect(r.stdout).toContain('Auctions NDK-surface guard:')
 		expect(r.stdout).toContain('coverage strict=1')
+		// The #1252 allowlist is empty since A3.3 (and stays empty after the S2
+		// move): the guard scans every auctions file, allowlisted 0.
+		expect(r.stdout).toContain('allowlisted 0 (#1252-gated)')
 		expect(r.stdout).toContain('OK')
 	})
 
@@ -107,7 +116,7 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		expect(source).toContain('src/lib/nostr/ndk-events.ts')
 	})
 
-	test('the guard source retires the #1252 allowlist (A3.3)', async () => {
+	test('the guard source retires the #1252 allowlist and the src/lib/auctions family (A3.3 + I-a S2)', async () => {
 		const source = await readFile(SCRIPT, 'utf8')
 		expect(source).toContain('1252')
 		// The per-file ALLOWLIST is empty since A3.3: the claim file flipped onto
@@ -115,19 +124,31 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		// so the guard scans it like every other auctions file.
 		expect(source).toContain('ALLOWLIST=()')
 		expect(source).not.toMatch(/^\t"src\//m)
+		// S2: the claim module now lives in the sdk home, so the `src/lib/auctions`
+		// glob family left the guard's assembled set. The historical count table
+		// may still mention the old path in prose, but the family must never be
+		// re-assembled while the directory is empty.
+		expect(source).not.toContain('"$ROOT"/src/lib/auctions/*.ts')
 	})
 
-	test('the retired #1252 private-claim file is NDK-surface-free (the guard scans it now)', async () => {
-		// The guard no longer skips this file, so an NDK mention it re-acquired
-		// would fail `exits 0 against the real repo`. Pin the retirement's shape:
-		// the signer comes from the auth composition root's capability accessor,
-		// adapted onto the SDK port — never the raw NDK signer.
-		const source = await readFile(join(ROOT, ALLOWLISTED_FILE), 'utf8')
-		expect(source).toContain('getActiveSignerCapability')
-		expect(source).toContain('asEncryptingSigner')
+	test('the moved private-claim module is NDK-surface-free and scanned at its sdk home', async () => {
+		// S2 moved the module to sdk/commerce/auctions/ — the guard scans it via
+		// the sdk/commerce/auctions/*.ts family, so an NDK mention it re-acquired
+		// would fail `exits 0 against the real repo`. Pin the post-S2 shape: the
+		// sdk module is host-free (no capability accessor — that half lives in the
+		// platform read adapter) and never touches the raw NDK signer.
+		const source = await readFile(join(ROOT, CLAIM_MODULE), 'utf8')
+		expect(source).not.toContain('getActiveSignerCapability')
+		expect(source).not.toContain('asEncryptingSigner')
 		expect(source).not.toContain('ndkActions')
 		expect(source).not.toContain('ndkStore')
 		expect(source).not.toContain('@nostr-dev-kit')
+		// The src original is gone with its directory — a resurrected copy would
+		// be unscanned (no family matches it) and must not slip back silently.
+		expect(await exists(join(ROOT, RETIRED_SRC_CLAIM))).toBe(false)
+		// The sdk family the moved module is covered by is still assembled.
+		const guardSource = await readFile(SCRIPT, 'utf8')
+		expect(guardSource).toContain('"$ROOT"/sdk/commerce/auctions/*.ts')
 	})
 
 	test('exits 0 when the production file set has no NDK surface', async () => {
@@ -156,21 +177,21 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		expect(runGuard(store).exitCode).toBe(1)
 	})
 
-	test('fails (exit 1) when the retired #1252 private-claim file imports @nostr-dev-kit', async () => {
-		// A3.3 removed the allowlist row: the claim file is scanned like every
-		// other auctions file, so a re-acquired NDK import must fail the guard —
-		// while a clean claim file passes with an empty allowlist.
+	test('fails (exit 1) when the moved private-claim module (sdk home) imports @nostr-dev-kit', async () => {
+		// S2: the claim module is scanned at its sdk home via the
+		// sdk/commerce/auctions/*.ts family — a re-acquired NDK import must fail
+		// the guard, while a clean claim module passes with an empty allowlist.
 		const dirty = await stageRepo({
-			[ALLOWLISTED_FILE]: NDK_IMPORT,
+			[CLAIM_MODULE]: NDK_IMPORT,
 			'src/publish/auctions.tsx': "import { sign } from '@/lib/nostr/io'\n",
 		})
 		const dirtyResult = runGuard(dirty)
 		expect(dirtyResult.exitCode).toBe(1)
 		expect(dirtyResult.stdout).toContain('::error::')
-		expect(dirtyResult.stdout).toContain(ALLOWLISTED_FILE)
+		expect(dirtyResult.stdout).toContain(CLAIM_MODULE)
 
 		const clean = await stageRepo({
-			[ALLOWLISTED_FILE]: "import { getActiveSignerCapability } from '@/lib/stores/auth'\n",
+			[CLAIM_MODULE]: "import { createNip59GiftWrapWithSigner } from '@sdk/core/nostr/nip59'\n",
 			'src/publish/auctions.tsx': "import { sign } from '@/lib/nostr/io'\n",
 		})
 		const cleanResult = runGuard(clean)

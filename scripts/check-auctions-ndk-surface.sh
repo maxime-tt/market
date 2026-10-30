@@ -67,9 +67,14 @@ MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-112}"
 # (2026-10-29): the one #1252-gated file, src/lib/auctions/
 # privateAuctionClaimMessage.ts, flipped onto the auth composition root's
 # signer capability accessor (`getActiveSignerCapability`) + `asEncryptingSigner`
-# and stopped touching the raw NDK signer entirely, so the guard now scans it
-# like every other auctions file. A file that genuinely needs the raw signer
-# again must re-open this list with a comment citing #1252.
+# and stopped touching the raw NDK signer entirely. I-a A2 S2 (2026-10-29) then
+# moved the pure module to sdk/commerce/auctions/privateAuctionClaimMessage.ts
+# (scanned via the sdk/commerce/auctions/*.ts family), moved the two
+# ambient-signer helpers to platform/web/ndkReadContext.ts (host adapter code,
+# deliberately outside this guard's file set — it reads the signer through the
+# capability, never the raw NDK signer), and deleted the src/lib/auctions/*.ts
+# family with the file. A file that genuinely needs the raw signer again must
+# re-open this list with a comment citing #1252.
 ALLOWLIST=()
 
 # Pinned production files that MUST exist. A missing pinned path means the guard
@@ -108,12 +113,15 @@ PINNED=(
 #   src/components/sheet-contents/auctions/*.tsx                 2
 #   src/components/sheet-contents/NewAuction*.tsx                1
 #
-# Only FOUR of those families are also asserted by
+# Only THREE of those families are also asserted by
 # src/lib/__tests__/auctions-ndk-surface-guard.test.ts, so only they force a
 # two-file (script + test) retirement: src/publish/auctions.tsx,
-# src/queries/auctions.tsx, src/lib/auction/*.ts, and the #1252 allowlist row
-# src/lib/auctions/privateAuctionClaimMessage.ts (the test's ALLOWLISTED_FILE
-# const plus its signer-shape assertion). The other eight need no test edit.
+# src/queries/auctions.tsx, and src/lib/auction/*.ts. The fourth — the #1252
+# allowlist row src/lib/auctions/privateAuctionClaimMessage.ts — left with its
+# whole family in I-a A2 S2 (the module moved to sdk/commerce/auctions/, the
+# ambient-signer helpers to platform/web/ndkReadContext.ts), and the guard
+# tests were re-pointed to the sdk home in the same fused commit. The other
+# eight families need no test edit.
 #
 # A3.3 (2026-10-29): the #1252 row is RETIRED — the claim file flipped onto
 # `getActiveSignerCapability()` + `asEncryptingSigner` and no longer touches
@@ -135,7 +143,12 @@ GLOBS=(
 	"$ROOT"/src/components/Auction*.tsx
 	"$ROOT"/src/lib/auction*.ts
 	"$ROOT"/src/lib/auction/*.ts
-	"$ROOT"/src/lib/auctions/*.ts
+	# `src/lib/auctions/*.ts` was retired here (I-a A2 S2, 2026-10-29): its only member,
+	# privateAuctionClaimMessage.ts, moved to sdk/commerce/auctions/ (covered by the
+	# sdk/commerce/auctions/*.ts family below) and the two ambient-signer helpers moved to
+	# platform/web/ndkReadContext.ts (host adapter code, outside this guard's file set), so the
+	# family matches nothing and the coverage check fails by design. Re-add an auctions family
+	# if an auction module reappears under src/lib/auctions/.
 	"$ROOT"/src/lib/utils/auction*.ts
 	# `src/lib/stores/auction*.ts` was retired here: its only member, `auctionWon.ts`, was deleted when the
 	# auction-win flow moved onto the notification mechanism (see the C1/C2 increments), so the family matches

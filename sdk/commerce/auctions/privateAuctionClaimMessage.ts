@@ -1,8 +1,23 @@
+/**
+ * sdk/commerce/auctions/privateAuctionClaimMessage.ts — the private auction claim message
+ * (NIP-59 gift wrap + public marker), money/PII-critical.
+ *
+ * Moved from `src/lib/auctions/privateAuctionClaimMessage.ts` (Wave I, slice I-a A2 S2, 2026-10-29).
+ * The pure half moved verbatim: only the import specifiers changed — the order tag constants come
+ * from `@sdk/commerce/messaging/orderSchema` (the module the deleted `@/lib/schemas/order` shim
+ * re-exported) and the NIP-59 primitives from `@sdk/core/nostr/nip59`, both already the resolved
+ * homes, so the module graph is unchanged. The two ambient-signer helpers
+ * (`createPrivateAuctionClaimMessageForActiveSigner` /
+ * `decryptPrivateAuctionClaimMessageForActiveSigner`) are HOST code — they read the auth
+ * composition root's signer capability — and moved to `platform/web/ndkReadContext.ts` in the same
+ * slice; this module is framework- and host-free and never touches the raw signer.
+ *
+ * The claim payload carries the buyer's shipping address (PII): it travels only inside the NIP-59
+ * gift wrap; the public marker tags (`buildAuctionClaimPublicMarkerTags`) must stay free of it.
+ */
 import type { Event } from 'nostr-tools'
-import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
-import { asEncryptingSigner } from '@sdk/core'
+import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/messaging/orderSchema'
 import type { EncryptingSigner } from '@sdk/core'
-import { getActiveSignerCapability } from '@/lib/stores/auth'
 import {
 	createNip59GiftWrap,
 	createNip59GiftWrapWithSigner,
@@ -123,23 +138,6 @@ export function createPrivateAuctionClaimMessage(params: CreatePrivateAuctionCla
 	}
 }
 
-/**
- * A3.3 (post-#1252): NIP-59 private-claim creation needs the raw active signer
- * (NIP-44 encryption + event signing). The signer capability is now acquired
- * from the auth composition root (`getActiveSignerCapability`, the session's
- * `currentSigner()`) and adapted with `asEncryptingSigner` — the raw NDK
- * signer acquisition is retired along with this file's #1252 ALLOWLIST row in
- * `scripts/check-auctions-ndk-surface.sh`, so the guard scans this file like
- * every other auctions file.
- */
-export async function createPrivateAuctionClaimMessageForActiveSigner(
-	params: Omit<CreatePrivateAuctionClaimMessageWithSignerParams, 'signer'>,
-): Promise<PrivateAuctionClaimGiftWrap> {
-	const capability = getActiveSignerCapability()
-	if (!capability) throw new Error('No active signer available for the private auction claim')
-	return createPrivateAuctionClaimMessageWithSigner({ ...params, signer: asEncryptingSigner(capability) })
-}
-
 export async function createPrivateAuctionClaimMessageWithSigner(
 	params: CreatePrivateAuctionClaimMessageWithSignerParams,
 ): Promise<PrivateAuctionClaimGiftWrap> {
@@ -167,15 +165,6 @@ export function decryptPrivateAuctionClaimMessage(params: DecryptPrivateAuctionC
 	})
 
 	return parseUnwrappedAuctionClaim(unwrapped, params)
-}
-
-/** A3.3 counterpart to {@link createPrivateAuctionClaimMessageForActiveSigner}. */
-export async function decryptPrivateAuctionClaimMessageForActiveSigner(
-	params: Omit<DecryptPrivateAuctionClaimMessageWithSignerParams, 'signer'>,
-): Promise<PrivateAuctionClaimMessage> {
-	const capability = getActiveSignerCapability()
-	if (!capability) throw new Error('No active signer available for the private auction claim')
-	return decryptPrivateAuctionClaimMessageWithSigner({ ...params, signer: asEncryptingSigner(capability) })
 }
 
 export async function decryptPrivateAuctionClaimMessageWithSigner(

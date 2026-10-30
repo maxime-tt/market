@@ -90,7 +90,7 @@ import {
 	getLegacyAuctionClaimPublicDetails,
 	type LegacyAuctionClaimPublicDetails,
 	type PrivateAuctionClaimPayload,
-} from '@/lib/auctions/privateAuctionClaimMessage'
+} from '@sdk/commerce/auctions/privateAuctionClaimMessage'
 
 function formatAuctionStatus(startAt: number, endAt: number, now: number): string {
 	if (endAt > 0 && now >= endAt) return 'Ended'

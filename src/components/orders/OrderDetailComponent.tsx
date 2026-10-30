@@ -9,7 +9,7 @@ import {
 	OrderProductsCardView,
 	OrderTimelineView,
 } from '@ui/orders/order-detail-layout'
-import { getAuctionClaimPublicMarkerFields } from '@/lib/auctions/privateAuctionClaimMessage'
+import { getAuctionClaimPublicMarkerFields } from '@sdk/commerce/auctions/privateAuctionClaimMessage'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { getCoordsFromATag } from '@/lib/utils/coords'

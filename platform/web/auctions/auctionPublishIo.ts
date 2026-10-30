@@ -77,7 +77,8 @@ export async function publishAuctionClaimMarkerToPrivateRelays(event: NostrEvent
  * comparison is vacuous here rather than removed. The identity property that
  * actually matters — the pubkey written into the public marker is the identity
  * that encrypted the private claim — holds because
- * `privateAuctionClaimMessage.ts` produces the gift wrap from the same active
+ * `createPrivateAuctionClaimMessageForActiveSigner` (platform/web/ndkReadContext.ts,
+ * over the sdk private-claim module) produces the gift wrap from the same active
  * signer. The #1252 signer migration re-points `getUser()`; if it ever makes
  * identity independent of the signer, that migration MUST re-establish the
  * cross-account assertion (review 2026-09-18, item 5).
