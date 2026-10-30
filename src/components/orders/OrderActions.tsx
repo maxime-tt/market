@@ -1,4 +1,4 @@
-import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
+import { ORDER_STATUS, SHIPPING_STATUS } from '@sdk/commerce/messaging/orderSchema'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getOrderStatus } from '@/queries/orders'

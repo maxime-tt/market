@@ -11,7 +11,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 
 import { applesauceIo } from '@platform/web/applesauceIo'
 import { AUCTION_CLAIM_SUBJECT } from '@sdk/commerce/auctions/privateAuctionClaimMessage'
-import { ORDER_MESSAGE_TYPE } from '@/lib/schemas/order'
+import { ORDER_MESSAGE_TYPE } from '@sdk/commerce/messaging/orderSchema'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { fetchPrivateAuctionClaimForMarker } from '../auctions'
 

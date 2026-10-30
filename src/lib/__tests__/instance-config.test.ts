@@ -5,9 +5,9 @@ import {
 	resolveHandlerIdChain,
 	resolveInstanceConfig,
 	toMarketConfig,
-} from '@/lib/instance-config'
+} from '@sdk/config/instance-config'
 import { APP_SETTINGS_D_TAG } from '@/lib/appSettings'
-import { AppSettingsSchema } from '@/lib/schemas/app'
+import { AppSettingsSchema } from '@sdk/config/schemas/app'
 import { configActions, configStore } from '@/lib/stores/config'
 import { createHandlerInfoEventData, createClientTag } from '@platform/web/nip89'
 

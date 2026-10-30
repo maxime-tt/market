@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { finalizeEvent, getPublicKey, verifyEvent as realVerifyEvent } from 'nostr-tools'
-import { parseLiveActivity, deriveLiveActivityStatus, buildLiveActivityDTag, LIVE_ACTIVITY_KIND } from '@/lib/nip53'
+import { parseLiveActivity, deriveLiveActivityStatus, buildLiveActivityDTag, LIVE_ACTIVITY_KIND } from '@sdk/core/nostr/nip53'
 import { configStore } from '@/lib/stores/config'
 
 const CVM_PUBKEY = 'c'.repeat(64)

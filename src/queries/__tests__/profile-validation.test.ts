@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { nip19 } from 'nostr-tools'
 
 import { isValidHexKey } from '../../lib/utils'
-import { getProfileIdentifierValidationError, validateProfileIdentifier } from '@/lib/utils/profileValidation'
+import { getProfileIdentifierValidationError, validateProfileIdentifier } from '@sdk/core/profile/profileValidation'
 import { getNormalizedProfileDisplayName, getNormalizedProfileNip05, normalizeOptionalPubkey } from '@/queries/profiles'
 import { getUserCardTitle, isKeyboardCopyActivationKey } from '@/components/UserCard'
 

@@ -1,4 +1,4 @@
-import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
+import { DEFAULT_NIP46_RELAYS } from '@sdk/config/constants'
 import { authActions } from '@/lib/stores/auth'
 import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'

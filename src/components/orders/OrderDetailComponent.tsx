@@ -11,7 +11,7 @@ import {
 } from '@ui/orders/order-detail-layout'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
-import { getCoordsFromATag } from '@/lib/utils/coords'
+import { getCoordsFromATag } from '@sdk/core/utils/coords'
 import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
 import { useOrderClaimForSeller, type OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'

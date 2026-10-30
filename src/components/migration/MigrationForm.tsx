@@ -1,5 +1,5 @@
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
-import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
+import { CURRENCIES, PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import { authStore, getActiveSignerCapability } from '@/lib/stores/auth'
 import { ndkActions, useNDK } from '@/lib/stores/ndk'
 import { publishMigratedProduct, type MigrationProgress } from '@/publish/migration'

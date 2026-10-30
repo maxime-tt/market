@@ -22,7 +22,7 @@ import { CollectionCardHost as CollectionCard } from '@platform/web/collections/
 import { useV4VMerchants } from '@/queries/v4v'
 import { FeaturedUserCardHost as FeaturedUserCard } from '@platform/web/featured/FeaturedUserCardHost'
 import { blacklistStore } from '@platform/web/config/blacklistStore'
-import { filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
+import { filterBlacklistedPubkeys } from '@sdk/config/blacklist'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedCollections } from '@/queries/featured'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'

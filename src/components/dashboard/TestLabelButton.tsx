@@ -1,6 +1,6 @@
 import { TestLabelDialog } from '@/components/dashboard/TestLabelDialog'
 import { TEST_LABEL_PRODUCT_KIND } from '@/lib/constants/testLabels'
-import { getATagFromCoords } from '@/lib/utils/coords'
+import { getATagFromCoords } from '@sdk/core/utils/coords'
 import { useUserRole } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
 import { useTestLabelForCoordinate } from '@/queries/testLabels'

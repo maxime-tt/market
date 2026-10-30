@@ -6,7 +6,7 @@ import { authActions, getActiveSignerCapability } from '@platform/web/auth/authS
 import { setSignerSource } from '@platform/web/applesauceIo'
 import { walletActions } from '@platform/web/config/walletStore'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
-import type { PublicAppConfig } from '@/lib/instance-config'
+import type { PublicAppConfig } from '@sdk/config/instance-config'
 import { parsePublicConfigEnvelope } from '@sdk/core/publicConfig'
 
 /**

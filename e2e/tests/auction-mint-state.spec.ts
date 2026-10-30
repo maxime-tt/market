@@ -1,4 +1,4 @@
-import { DEFAULT_TRUSTED_MINTS } from '@/lib/constants'
+import { DEFAULT_TRUSTED_MINTS } from '@sdk/config/constants'
 import { test, expect } from '../fixtures'
 
 test.use({ scenario: 'merchant' })

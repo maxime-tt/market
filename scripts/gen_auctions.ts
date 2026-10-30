@@ -1,4 +1,4 @@
-import { PRODUCT_CATEGORIES } from '@/lib/constants'
+import { PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@sdk/commerce/auctions/auctionP2pk'

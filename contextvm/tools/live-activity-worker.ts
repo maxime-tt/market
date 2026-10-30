@@ -9,7 +9,7 @@ import {
 	buildLiveActivityCoord,
 	deriveLiveActivityStatus,
 	type LiveActivityStatus,
-} from '../../src/lib/nip53'
+} from '@sdk/core/nostr/nip53'
 
 export interface LiveActivityWorkerContext {
 	relayPool: ApplesauceRelayPool

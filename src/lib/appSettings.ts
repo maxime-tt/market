@@ -1,6 +1,6 @@
 import NDK, { type NDKFilter, type NDKEvent, type NostrEvent } from '@nostr-dev-kit/ndk'
-import { AppSettingsSchema, type AppSettings } from './schemas/app'
-import { isValidHexKey } from './utils'
+import { AppSettingsSchema, type AppSettings } from '@sdk/config/schemas/app'
+import { isValidHexKey } from '@sdk/core/utils/utils'
 
 /** Kind for NIP-89 handler information / app-config events. */
 export const APP_SETTINGS_KIND = 31990

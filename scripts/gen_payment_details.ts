@@ -1,5 +1,5 @@
-import type { PaymentDetailsMethod } from '@/lib/constants'
-import { PAYMENT_DETAILS_METHOD } from '@/lib/constants'
+import type { PaymentDetailsMethod } from '@sdk/config/constants'
+import { PAYMENT_DETAILS_METHOD } from '@sdk/config/constants'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, NDKKind, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { nip04, nip19 } from 'nostr-tools'

@@ -14,7 +14,7 @@ import { Label } from '@ui/primitives/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
-import { getATagFromCoords, getCoordsFromATag } from '@/lib/utils/coords'
+import { getATagFromCoords, getCoordsFromATag } from '@sdk/core/utils/coords'
 import {
 	addToFeaturedCollections,
 	addToFeaturedProducts,
