@@ -1,7 +1,7 @@
 import { Button } from '@ui/primitives/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@ui/primitives/tooltip'
 import { CURRENCIES } from '@sdk/config/constants'
-import { uiActions, uiStore, type SupportedCurrency } from '@/lib/stores/ui'
+import { uiActions, uiStore, type SupportedCurrency } from '@platform/web/app/uiStore'
 import { useStore } from '@tanstack/react-store'
 import { ChevronDown } from 'lucide-react'
 import { useState } from 'react'

@@ -1,6 +1,6 @@
 import { Button } from '@ui/wrappers/button'
 import { Checkbox } from '@ui/primitives/checkbox'
-import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
+import { ImageUploader } from '@platform/web/media/ImageUploader'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'

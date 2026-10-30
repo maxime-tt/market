@@ -1,4 +1,4 @@
-import { AuctionWonModal } from '@/components/AuctionWonModal'
+import { AuctionWonModal } from '@platform/web/auctions/AuctionWonModal'
 import { FooterHost } from '@platform/web/layout/FooterHost'
 import { Header } from '@/components/layout/Header'
 import { Pattern } from '@ui/shared/pattern'

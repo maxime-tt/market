@@ -1,4 +1,4 @@
-import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
+import { ImageUploader } from '@platform/web/media/ImageUploader'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import type { ProductShippingOption as RichShippingInfo } from '@sdk/commerce/products'
 import { getActiveSignerCapability } from '@/lib/stores/auth'

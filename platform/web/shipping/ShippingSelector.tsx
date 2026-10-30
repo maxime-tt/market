@@ -1,9 +1,9 @@
-import type { RichShippingInfo } from '@/lib/stores/cart'
-import { cartActions } from '@/lib/stores/cart'
+import type { RichShippingInfo } from '@platform/web/cart/cartStore'
+import { cartActions } from '@platform/web/cart/cartStore'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { Loader2 } from 'lucide-react'
-import { useShippingOptionsByPubkey, getShippingInfo, createShippingReference } from '@/queries/shipping'
-import { getProductPubkey, productQueryOptions } from '@/queries/products'
+import { useShippingOptionsByPubkey, getShippingInfo, createShippingReference } from '@platform/web/shipping/shippingQuery'
+import { getProductPubkey, productQueryOptions } from '@platform/web/products/productQuery'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState, useEffect } from 'react'
 

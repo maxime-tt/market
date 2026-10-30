@@ -1,4 +1,4 @@
-import CartItem from '@/components/CartItem'
+import CartItem from '@platform/web/cart/CartItem'
 import { ScrollArea } from '@ui/primitives/scroll-area'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'
@@ -8,7 +8,7 @@ import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo } from 'react'
 import { EmptyCartScreen } from '@ui/checkout/empty-cart-screen'
 import { CartFooter, CartLineShipping, CartSellerCard, CartShippingReminder, type CartSellerTotals } from '@ui/checkout/cart-views'
-import { UserCard } from '@/components/UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 const EMPTY_SELLER_TOTALS: CartSellerTotals = {
 	satsTotal: 0,
@@ -71,7 +71,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 						.map(([sellerPubkey, products]) => (
 							<CartSellerCard
 								key={sellerPubkey}
-								seller={<UserCard pubkey={sellerPubkey} size="sm" subtitle="nip-05" />}
+								seller={<UserCardHost pubkey={sellerPubkey} size="sm" subtitle="nip-05" />}
 								totals={sellerData[sellerPubkey] || EMPTY_SELLER_TOTALS}
 								items={products.map((product) => ({
 									key: product.id,

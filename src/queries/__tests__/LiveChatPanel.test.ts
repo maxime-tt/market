@@ -46,6 +46,12 @@ mock.module('@/publish/liveChat', () => ({
 	usePublishLiveChatMessageMutation: () => baseUsePublishLiveChatMessageMutation(),
 }))
 
+// Batch 2 lane D: LiveChatPanel moved to @platform/web/messaging/LiveChatPanel, so it now loads
+// the publish binding from its platform home. Mock added additively (the legacy key stays).
+mock.module('@platform/web/messaging/liveChatPublish', () => ({
+	usePublishLiveChatMessageMutation: () => baseUsePublishLiveChatMessageMutation(),
+}))
+
 const authStoreMock = {
 	authStore: emptyAuthStore,
 }
@@ -119,7 +125,7 @@ describe('LiveChatPanel hooks order', () => {
 			],
 		} as import('@nostr-dev-kit/ndk').NDKEvent
 
-		const { LiveChatPanel } = await import('@/components/LiveChatPanel')
+		const { LiveChatPanel } = await import('@platform/web/messaging/LiveChatPanel')
 
 		const logs = captureReactErrors(() => {
 			renderToString(React.createElement(LiveChatPanel, { auctionEvent }))

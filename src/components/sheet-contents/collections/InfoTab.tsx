@@ -1,4 +1,4 @@
-import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
+import { ImageUploader } from '@platform/web/media/ImageUploader'
 import { Label } from '@ui/primitives/label'
 import { EditorTextField } from '@ui/wrappers/editor-fields'
 import { collectionFormStore, collectionFormActions } from '@/lib/stores/collection'

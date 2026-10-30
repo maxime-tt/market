@@ -1,6 +1,6 @@
 import { AuctionCardHost as AuctionCard } from '@platform/web/auctions/AuctionCardHost'
 import { AuctionCountdown, useAuctionCountdown } from '@platform/web/auctions/AuctionCountdownHost'
-import { Comments } from '@/components/Comments'
+import { Comments } from '@platform/web/messaging/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
 import { AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
 import { StatusBadge } from '@ui/shared/status-badge'
@@ -16,7 +16,7 @@ import { Button } from '@ui/wrappers/button'
 import { Input } from '@ui/primitives/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/primitives/tooltip'
-import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
+import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@platform/web/auctions/auctionBidderStatus'
 import { getUniqueAuctionShippingRefs } from '@sdk/commerce/auctions/shippingRefs'
 import { authStore } from '@platform/web/auth/authStore'
 import { applesauceIo } from '@platform/web/readContext'
@@ -76,7 +76,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Check, Gavel, Landmark, Radio } from 'lucide-react'
-import { InvalidAuctionBidBlock, InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
+import { InvalidAuctionBidBlock, InvalidAuctionNotice } from '@platform/web/auctions/InvalidAuctionNotice'
 import { TestListingNoticeHost as TestListingNotice } from '@platform/web/config/testListingNoticeHost'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'
@@ -85,14 +85,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
 import { AuctionBidderHost as AuctionBidder } from '@platform/web/auctions/AuctionBidderHost'
-import { LiveChatPanel } from '@/components/LiveChatPanel'
-import { UserCard } from '@/components/UserCard'
+import { LiveChatPanel } from '@platform/web/messaging/LiveChatPanel'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { AuctionVerdictPanelHost } from '@platform/web/auctions/AuctionVerdictPanelHost'
 import { useAuctionVerdicts } from '@/queries/auctions'
 import { parseValidatorVerdictEvent } from '@sdk/commerce/auctions/schemas/validatorEvents'
 import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
 import { computeValidatedBids } from '@sdk/commerce/auctions/bidValidation'
-import { AuctionSettlement } from '@/components/AuctionSettlement'
+import { AuctionSettlement } from '@platform/web/auctions/AuctionSettlement'
 import { parseAuctionEvent } from '@sdk/commerce/auctions/schemas/auctionEvent'
 import { parseBidEvent } from '@sdk/commerce/auctions/schemas/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
@@ -752,7 +752,7 @@ function AuctionDetailRoute() {
 							<InvalidAuctionNotice event={toRawEvent(auction)} itemLabel="Auction" />
 
 							<span>Posted by</span>
-							<UserCard pubkey={auction.pubkey} size="md" />
+							<UserCardHost pubkey={auction.pubkey} size="md" />
 
 							<div className="text-lg">{summary || 'No summary provided.'}</div>
 
@@ -986,7 +986,7 @@ function AuctionDetailRoute() {
 								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
 									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Seller</p>
 									<div className="mt-4 flex flex-wrap items-center gap-3">
-										<UserCard pubkey={auction.pubkey} />
+										<UserCardHost pubkey={auction.pubkey} />
 									</div>
 								</section>
 
@@ -995,7 +995,7 @@ function AuctionDetailRoute() {
 									{topBidOverall ? (
 										<div className="mt-4 space-y-3">
 											<div className="flex flex-wrap items-center gap-3">
-												<UserCard pubkey={topBidOverall.pubkey} />
+												<UserCardHost pubkey={topBidOverall.pubkey} />
 											</div>
 											<DetailField
 												className="border-b border-border py-3 last:border-b-0"
@@ -1019,7 +1019,7 @@ function AuctionDetailRoute() {
 								<section className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-5">
 									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Settlement winner</p>
 									<div className="mt-4 flex flex-wrap items-center gap-3">
-										<UserCard pubkey={settlementWinner} />
+										<UserCardHost pubkey={settlementWinner} />
 									</div>
 									{settlementFinalAmount > 0 && (
 										<div className="mt-4">
@@ -1051,7 +1051,7 @@ function AuctionDetailRoute() {
 											<div key={summary.pubkey} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
 												<div className="flex flex-wrap items-start justify-between gap-3">
 													<div className="flex flex-wrap items-center gap-3">
-														<UserCard pubkey={summary.pubkey} />
+														<UserCardHost pubkey={summary.pubkey} />
 													</div>
 													<div className="flex flex-wrap justify-end gap-2">
 														{summary.isCurrentLeader && <StatusBadge status="Current leading bidder" tone="success" />}

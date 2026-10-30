@@ -3,7 +3,8 @@
  * reads the legacy `src/components/PriceDisplay.tsx` owned — the ui-state selected
  * currency (`@sdk/config/ui` `uiState`, the same store `useStore(uiStore)` read) and
  * the exchange-rate/conversion queries — and renders the view unchanged. The legacy
- * component stays alive for its remaining `src/` consumer (`src/components/CartItem.tsx`).
+ * component retired in batch 2 lane D; its last consumer (`src/components/CartItem.tsx`)
+ * now imports this host.
  */
 import { uiState } from '@sdk/config/ui'
 import { isBitcoinCurrency, resolvePriceDisplay } from '@sdk/commerce/products/priceDisplay'

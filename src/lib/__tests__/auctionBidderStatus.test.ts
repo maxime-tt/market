@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { getAuctionBidderStatus, getValidatedBidderStatus } from '@/lib/auctionBidderStatus'
+import { getAuctionBidderStatus, getValidatedBidderStatus } from '@platform/web/auctions/auctionBidderStatus'
 import type { ValidatedBidSet } from '@sdk/commerce/auctions/bidValidation'
 import type { ParsedBidEvent } from '@sdk/commerce/auctions/events'
 

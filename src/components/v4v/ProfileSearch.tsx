@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { truncateNpub } from '@ui/nostr/npub-display'
 import { Input } from '@ui/primitives/input'
 import { Button } from '@ui/primitives/button'
-import { WotBadge } from '@/components/WotScore'
+import { WotBadge } from '@platform/web/profiles/WotScore'
 import { Loader2, ExternalLink } from 'lucide-react'
 import { nip19 } from 'nostr-tools'
 import { Link } from '@tanstack/react-router'
@@ -11,7 +11,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
-import { UserCard } from '../UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 // Known relays that support NIP-50 search
 const PROFILE_SEARCH_RELAYS = [
@@ -266,7 +266,7 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 											onClick={() => handleSelect(npub)}
 											data-testid={`profile-search-result-${event.pubkey}`}
 										>
-											<UserCard pubkey={event.pubkey} size="xs" onPress="none" />
+											<UserCardHost pubkey={event.pubkey} size="xs" onPress="none" />
 											<span className="flex flex-col flex-1">
 												<span className="font-bold">
 													{profile?.name || profile?.displayName || truncateNpub(npub, { head: 10, tail: 0 })}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchBidNut7States, type CheckProofStateFn } from '@sdk/commerce/auctions/nut7Polling'
-import { checkProofStateBatch } from '../cashu/nut7'
+import { checkProofStateBatch } from '@sdk/commerce/payments/cashu/nut7'
 import type { Nut7ProofState } from '@sdk/commerce/auctions/constants'
 import type { ParsedBidEvent } from '@sdk/commerce/auctions/events'
 

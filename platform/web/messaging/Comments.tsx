@@ -4,19 +4,18 @@ import {
 	useComments,
 	type Comment,
 	type CommentThread,
-} from '@/queries/comments'
-import { usePublishCommentMutation } from '@/publish/comments'
-import { authStore, useAuth } from '@/lib/stores/auth'
+} from '@platform/web/messaging/commentQuery'
+import { usePublishCommentMutation } from '@platform/web/messaging/commentPublish'
+import { authStore, useAuth } from '@platform/web/auth/authStore'
 import { useStore } from '@tanstack/react-store'
 import { Fragment, useState } from 'react'
 import { truncateNpub } from '@ui/nostr/npub-display'
 import { Button } from '@ui/primitives/button'
 import { Textarea } from '@ui/primitives/textarea'
 import { CircleX, MessageSquare, Reply, X } from 'lucide-react'
-import { ProfileName } from './ProfileName'
-import { useProfile, useProfileName } from '@/queries/profiles'
+import { useProfile, useProfileName } from '@platform/web/profiles/profileQuery'
 import { npubEncode } from 'nostr-tools/nip19'
-import { UserCard } from './UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { SocialInteractionsHost as SocialInteractions } from '@platform/web/messaging/SocialInteractionsHost'
 import { toast } from 'sonner'
@@ -74,7 +73,7 @@ function CommentItem({ comment, onPressReply }: CommentItemProps) {
 	return (
 		<div className="relative border-b border-gray-200 py-2 my-4 last:border-b-0">
 			<div className="flex items-center justify-between mb-3">
-				<UserCard pubkey={comment.authorPubkey} />
+				<UserCardHost pubkey={comment.authorPubkey} />
 				<span className="text-sm text-gray-500">{formatDate(comment.createdAt)}</span>
 			</div>
 

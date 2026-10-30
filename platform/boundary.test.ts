@@ -75,12 +75,21 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/stores/testLabels.ts', // Wave E adapter drain W-E3.3; shim deleted in E1b
 	'src/lib/terms.ts', // Wave F W-E5a; shim deleted in E1b
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
-	'src/components/AuctionSettlement.tsx', // I-PARKED A: reads the platform DLEQ keyset polling hook; retires with the auction-family drains
 	'src/components/nostr/AuctionSectionGrid.tsx', // I-PARKED D: renders the platform AuctionCardHost; retires with the auction-family drains
-	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
+	// --- batch 2 lane D (2026-10-30): the root singles left src/ for platform/web/<feature>/; each row
+	// below is a src/ consumer re-pointed onto a moved component and retires when the consumer itself
+	// leaves src/ (batch 2 lanes B/C/A). ---
+	'src/components/layout/MobileMenu.tsx', // batch 2 lane D; retires when layout/MobileMenu leaves src/ (lane C)
+	'src/components/v4v/ProfileSearch.tsx', // batch 2 lane D; retires when v4v/ProfileSearch leaves src/ (lane C)
+	'src/components/sheet-contents/collections/InfoTab.tsx', // batch 2 lane D; retires when collections/InfoTab leaves src/ (lane A)
+	'src/components/sheet-contents/auctions/AuctionFormContent.tsx', // batch 2 lane D; retires when auctions/AuctionFormContent leaves src/ (lane A)
+	'src/components/migration/MigrationForm.tsx', // batch 2 lane D; retires when migration/MigrationForm leaves src/ (lane C)
+	'src/components/sheet-contents/cart/CartContent.tsx', // batch 2 lane D; reads the moved CartItem + UserCardHost; retires when CartContent leaves src/ (lane A)
+	'src/components/sheet-contents/ConversationSheetContent.tsx', // batch 2 lane D; reads UserCardHost; retires when ConversationSheetContent leaves src/ (lane A)
+	'src/components/v4v/RecipientItem.tsx', // batch 2 lane D; reads UserCardHost; retires when RecipientItem leaves src/ (lane C)
+	'src/components/v4v/RecipientPreview.tsx', // batch 2 lane D; reads UserCardHost; retires when RecipientPreview leaves src/ (lane C)
+	'src/components/orders/orderColumns.tsx', // batch 2 lane D; reads UserCardHost; retires when orderColumns leaves src/ (lane B)
 	// --- I-c-hooks: src/ consumers re-pointed to the moved platform hooks (retire with these leaves in D3). ---
-	'src/components/UserCard.tsx', // I-c-hooks; useBreakpoint moved to platform/web/app
-	'src/components/EntityActionsMenu.tsx', // I-c-hooks; useEntityPermissions moved to platform/web/permissions
 	'src/components/pages/ProfilePage.tsx', // I-c-hooks; useBreakpoint/useEntityPermissions moved to platform
 	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
 	// --- store drain I-c (2026-10-29): the notification monitor and its src-side seam moved to
@@ -89,14 +98,8 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/dashboard/AuctionListItemHost.tsx', // I-c; reads the read marks + notification scopes; retired in D3
 	'src/components/messages/ConversationView.tsx', // I-c; reads the read marks; retired in D3
 	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
-	'src/components/FeaturedSections.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e/AuctionCard park
-	'src/components/orders/OrderDetailComponent.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e4 orders cluster
 	// --- H-b kit 4 (B2): the identity kit retires onto the D4 userCardHosts; each row retires with its owner. ---
-	'src/components/BugReportItem.tsx', // H-b kit 4: renders the platform AvatarHost; retires with the H-e6 layout/nav cluster
-	'src/components/LiveChatPanel.tsx', // H-b kit 5: renders the platform LiveChatMessageHost; retires with its H-c leaf slice
-	'src/components/Comments.tsx', // H-b kit 6: renders the platform SocialInteractionsHost; retires with its H-c leaf slice
-	'src/components/ui/image-uploader/ImageUploader.tsx', // Wave G media host (G-a1.2); retires with the H-e8 image-uploader leaf cluster
-	'src/components/BugReportModal.tsx', // Wave G media host (G-a1.2); retires with the D3 layout/Header.tsx consumer chain
+	'src/components/orders/OrderDetailComponent.tsx', // H-b kit 3 + batch 2 lane D: renders the platform ProductCardHost + UserCardHost; retires with the H-e4 orders cluster
 	// --- I-c-monitors (2026-10-29): useAuctionBidFunding moved to
 	// platform/web/auctions/useAuctionBidFunding.ts and the src/ original is deleted, so these
 	// src/ consumers read the platform hook directly until their own slices retire them. ---

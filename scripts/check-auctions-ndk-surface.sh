@@ -124,9 +124,9 @@ PINNED=(
 # that have since shrunk):
 #   src/publish/auctions.tsx                                     1
 #   src/queries/auctions.tsx                                     1
-#   src/components/Auction*.tsx                                  7
-#   src/lib/auction*.ts                                         12
-#   src/lib/auction/*.ts                                        14
+#   src/components/Auction*.tsx                                  0 (family retired below, batch 2 lane D)
+#   src/lib/auction*.ts                                          1 test-only match (family retired below)
+#   src/lib/auction/*.ts                                         0 (family retired below, batch 2 lane D)
 #   src/lib/auctions/*.ts                                        1 (#1252-gated claim)
 #   src/lib/utils/auction*.ts                                    2
 #   src/hooks/useAuction*.ts                                     2
@@ -148,6 +148,18 @@ PINNED=(
 #   src/lib/auction*.ts                                          2 (1 production + 1 test)
 #   src/lib/auction/*.ts                                         2
 #   src/lib/schemas/auction/*.ts                                0 (family deleted below)
+#
+# Batch 2 lane D (2026-10-30): the last src/components/Auction*.tsx members
+# (AuctionClaimDialog, AuctionSettlement, AuctionWonModal) moved verbatim to
+# `platform/web/auctions/` and AuctionCountdown.tsx retired onto the existing
+# AuctionCountdownHost; auctionBidderStatus.ts and the useNut7Polling hook moved
+# to the same directory, emptying the `src/lib/auction*.ts` and
+# `src/lib/auction/*.ts` families of production files. All three src families are
+# retired here (same-commit rule) and coverage moves to the new
+# `platform/web/auctions/*.tsx` family — the moved components keep their
+# NDK-surface scanning at their new home, and the pre-existing hosts join the
+# scanned set. `platform/web/auctions/*.ts` already covered the moved lib
+# modules, so the scanned-set size does not fall; MIN_SCANNED stays 87.
 #
 # Only THREE of those families are also asserted by
 # src/lib/__tests__/auctions-ndk-surface-guard.test.ts, so only they force a
@@ -176,9 +188,12 @@ GLOBS=(
 	# is actually deleted.
 	"$ROOT"/src/publish/auctions.tsx
 	"$ROOT"/src/queries/auctions.tsx
-	"$ROOT"/src/components/Auction*.tsx
-	"$ROOT"/src/lib/auction*.ts
-	"$ROOT"/src/lib/auction/*.ts
+	# Batch 2 lane D (2026-10-30): `src/components/Auction*.tsx`, `src/lib/auction*.ts`
+	# and `src/lib/auction/*.ts` were retired here — the last production members moved
+	# verbatim to `platform/web/auctions/`, covered by the `platform/web/auctions/*.ts`
+	# family below and the new `platform/web/auctions/*.tsx` family. Re-add a src
+	# family if an auction component/hook reappears under src/.
+	"$ROOT"/platform/web/auctions/*.tsx
 	# `src/lib/auctions/*.ts` was retired here (I-a A2 S2, 2026-10-29): its only member,
 	# privateAuctionClaimMessage.ts, moved to sdk/commerce/auctions/ (covered by the
 	# sdk/commerce/auctions/*.ts family below) and the two ambient-signer helpers moved to

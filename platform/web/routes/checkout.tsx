@@ -1,6 +1,6 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
-import { CartSummary } from '@/components/CartSummary'
+import { CartSummary } from '@platform/web/cart/CartSummary'
 import { LoginDialog } from '@/components/auth/LoginDialog'
 import { OrderFinalizeComponent } from '@/components/checkout/OrderFinalizeComponent'
 import { PaymentContent } from '@/components/checkout/PaymentContent'

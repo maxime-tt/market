@@ -87,20 +87,23 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		expect(r.stdout).toContain('sdk/commerce/auctions/workflows.ts')
 	})
 
-	test('reads a newly created file under src/lib/auction/ (set completeness)', async () => {
+	test('reads a newly created file under platform/web/auctions/ (set completeness)', async () => {
 		// The guard's own suite passed with `scanned 0` before this: prove that a
 		// brand-new production file in the real auction directory is scanned and
-		// flagged, so the directory cannot be a blind spot.
-		const root = await stageRepo({ 'src/lib/auction/newlyAdded.ts': NDK_IMPORT })
+		// flagged, so the directory cannot be a blind spot. (Batch 2 lane D: the
+		// auction directory is platform/web/auctions/ now — the src/ families
+		// retired with the files.)
+		const root = await stageRepo({ 'platform/web/auctions/newlyAdded.ts': NDK_IMPORT })
 		const r = runGuard(root)
 		expect(r.exitCode).toBe(1)
-		expect(r.stdout).toContain('src/lib/auction/newlyAdded.ts')
+		expect(r.stdout).toContain('platform/web/auctions/newlyAdded.ts')
 	})
 
 	test('the guard source derives the auction directory and documents the scope gaps', async () => {
 		const source = await readFile(SCRIPT, 'utf8')
-		// The real directory must be scanned via a glob, not `src/lib/auction*.ts`.
-		expect(source).toContain('src/lib/auction/*.ts')
+		// Batch 2 lane D: the real directory is platform/web/auctions/, scanned via
+		// the platform families — the src/ glob families retired with the files.
+		expect(source).toContain('platform/web/auctions/*.tsx')
 		expect(source).toContain('AUCTIONS_GUARD_REQUIRE_COVERAGE')
 		// Wave 7 retarget: the surface is pinned in the sdk/platform seams and the
 		// `src/` shims that are still in the tree keep their own glob families.
@@ -170,10 +173,12 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 	})
 
 	test('fails (exit 1) when a non-allowlisted auctions file uses ndkActions or ndkStore', async () => {
-		const actions = await stageRepo({ 'src/components/AuctionCard.tsx': NDK_ACTIONS })
+		// Batch 2 lane D: the auction components/hooks live under platform/web/auctions/
+		// now, so the staged dirty files use the platform families.
+		const actions = await stageRepo({ 'platform/web/auctions/AuctionCard.tsx': NDK_ACTIONS })
 		expect(runGuard(actions).exitCode).toBe(1)
 
-		const store = await stageRepo({ 'src/lib/auctionHd.ts': NDK_STORE })
+		const store = await stageRepo({ 'platform/web/auctions/auctionHd.ts': NDK_STORE })
 		expect(runGuard(store).exitCode).toBe(1)
 	})
 

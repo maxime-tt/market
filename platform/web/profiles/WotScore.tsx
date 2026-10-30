@@ -1,4 +1,4 @@
-import { wotScoreQueryOptions } from '@/queries/profiles'
+import { wotScoreQueryOptions } from '@platform/web/profiles/profileQuery'
 import { useQuery } from '@tanstack/react-query'
 import { Shield, ShieldAlert, ShieldCheck, CircleQuestionMark } from 'lucide-react'
 

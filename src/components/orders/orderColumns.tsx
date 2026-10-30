@@ -5,7 +5,7 @@ import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
 import { OrderAmountText, OrderDateText, OrderReferenceBadge } from '@ui/orders/order-list-cells'
 import { OrderActions } from './OrderActions'
-import { UserCard } from '../UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 // Base columns that are common to all order lists
 export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
@@ -74,13 +74,13 @@ const salesActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
 const sellerColumn: ColumnDef<OrderWithRelatedEvents> = {
 	accessorKey: 'seller',
 	header: 'Seller',
-	cell: ({ row }) => <UserCard pubkey={getOrderRecipientPubkey(row.original.order) || ''} size="xs" onPress="none" />,
+	cell: ({ row }) => <UserCardHost pubkey={getOrderRecipientPubkey(row.original.order) || ''} size="xs" onPress="none" />,
 }
 
 const buyerColumn: ColumnDef<OrderWithRelatedEvents> = {
 	accessorKey: 'buyer',
 	header: 'Buyer',
-	cell: ({ row }) => <UserCard pubkey={row.original.order.pubkey || ''} size="xs" onPress="none" />,
+	cell: ({ row }) => <UserCardHost pubkey={row.original.order.pubkey || ''} size="xs" onPress="none" />,
 }
 
 // Columns for purchases (buyer's perspective)

@@ -10,7 +10,7 @@ import { useZapCapabilityInfo } from '@/queries/profiles'
 import { Badge } from '@ui/primitives/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@ui/primitives/tooltip'
 import { Spinner } from '@ui/primitives/spinner'
-import { UserCard } from '../UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 interface RecipientItemProps {
 	share: V4VDTO
@@ -65,7 +65,7 @@ export function RecipientItem({ share, onRemove, onPercentageChange, color: prov
 			style={{ borderLeftWidth: '4px', borderLeftColor: color }}
 		>
 			<div className="flex items-center gap-2 p-3">
-				<UserCard pubkey={pubkey} size="xs" />
+				<UserCardHost pubkey={pubkey} size="xs" />
 
 				{/* Zap capability badges */}
 				<div className="flex items-center gap-1">

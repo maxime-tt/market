@@ -9,9 +9,9 @@
  * `NostrEventLike` from `@sdk/core/nostr/eventLike` — a structural type every call site
  * satisfies, since each one passes an `NDKEvent`. No runtime behaviour changes.
  *
- * The legacy `src/components/AuctionCountdown.tsx` STAYS ALIVE for its `src/`
- * consumers (AuctionCard, AuctionDisplayComponent, AuctionWonModal, AuctionListItemHost
- * and `src/lib/__tests__/auctionCountdownPreStart.test.ts`).
+ * The legacy `src/components/AuctionCountdown.tsx` retired in batch 2 lane D; its remaining
+ * consumers (`src/components/AuctionWonModal.tsx` and `src/components/dashboard/AuctionListItemHost.tsx`)
+ * import this host now.
  */
 import { useEffect, useMemo, useState } from 'react'
 import ProgressBar from '@ui/shared/progress-bar'

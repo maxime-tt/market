@@ -1,4 +1,4 @@
-import { CurrencyDropdown } from '@/components/CurrencyDropdown'
+import { CurrencyDropdown } from '@platform/web/layout/CurrencyDropdown'
 import { Pattern } from '@ui/shared/pattern'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { uiActions, uiStore } from '@/lib/stores/ui'

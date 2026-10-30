@@ -26,7 +26,7 @@ import { appNotificationsBinding, appUnseenCounts } from '@platform/web/notifica
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
-import { UserCard } from '@/components/UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -202,7 +202,7 @@ function DashboardLayout() {
 						) : (
 							<>
 								{isMessageDetailView && chatProfile ? (
-									<UserCard pubkey={chatProfile?.user?.pubkey || ''} size="sm" className="[&>h2]:text-white" />
+									<UserCardHost pubkey={chatProfile?.user?.pubkey || ''} size="sm" className="[&>h2]:text-white" />
 								) : (
 									<>
 										{dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>}
@@ -272,7 +272,7 @@ function DashboardLayout() {
 									{!isMobile && (
 										<h1 className="left-1/2 absolute flex items-center gap-2 font-bold text-[1.6rem] -translate-x-1/2">
 											{isMessageDetailView && chatProfile?.user?.pubkey ? (
-												<UserCard pubkey={chatProfile?.user?.pubkey} size="md" />
+												<UserCardHost pubkey={chatProfile?.user?.pubkey} size="md" />
 											) : (
 												dashboardTitle
 											)}

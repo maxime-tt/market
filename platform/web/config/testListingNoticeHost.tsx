@@ -6,8 +6,9 @@
  * needs `nip19`, which `ui/` may not import, so it happens here and the view
  * receives an already-shortened string.
  *
- * The legacy `src/components/TestListingNotice.tsx` stays alive for its remaining
- * `src/` consumer (`src/components/AuctionCard.tsx`).
+ * The legacy `src/components/TestListingNotice.tsx` retired in batch 2 lane D; its
+ * remaining platform route consumers already alias this host (`TestListingNoticeHost
+ * as TestListingNotice`).
  */
 import { useTestLabelForCoordinate } from '@platform/web/config/testLabelsBinding'
 import { TestListingNoticeView } from '@ui/dashboard/test-label-views'

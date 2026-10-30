@@ -4,7 +4,7 @@ import {
 	getAuctionWindowValidBids,
 	type AuctionBidChainGroup,
 } from '@sdk/commerce/auctions/settlement'
-import type { NDKEvent } from '@/lib/nostr/ndk-events'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { ValidatedBidSet } from '@sdk/commerce/auctions/bidValidation'
 import { getValidatedBidderState } from '@sdk/commerce/auctions/validatedBidView'
 
@@ -17,8 +17,8 @@ export interface AuctionBidderStatus {
 
 export interface AuctionBidderStatusInput {
 	currentUserPubkey?: string | null
-	auction: NDKEvent | null
-	bids: NDKEvent[]
+	auction: NostrEventLike | null
+	bids: NostrEventLike[]
 	isEnded: boolean
 	/**
 	 * Optional validated bid set. When present, the status is derived from

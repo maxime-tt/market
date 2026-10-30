@@ -2,9 +2,8 @@
  * ProfileNameHost — the platform/web host for the ProfileName display.
  *
  * Reproduces `src/components/ProfileName.tsx` exactly, with zero `@/`
- * specifiers. The legacy component stays alive for its
- * `src/components/pages/ProfilePage.tsx` consumer; this host is the
- * platform/web replacement for the two re-pointed dashboard routes.
+ * specifiers. The legacy component retired in batch 2 lane D; its
+ * `src/components/pages/ProfilePage.tsx` consumer imports this host now.
  */
 import { useProfileName } from '@platform/web/profiles/profileQuery'
 import { formatPubkeyShort } from '@sdk/core/nostr/pubkeyDisplay'

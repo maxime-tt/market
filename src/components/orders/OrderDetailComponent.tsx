@@ -49,7 +49,7 @@ import {
 	TrackingInfoDisplay,
 	V4VRecipientsCard,
 } from './detail'
-import { UserCard } from '@/components/UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -301,7 +301,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				actions={<OrderActions order={order} userPubkey={user?.pubkey || ''} />}
 			/>
 
-			<OrderBuyerCardView userCard={<UserCard pubkey={buyerPubkey} size="md" subtitle="nip-05" />} />
+			<OrderBuyerCardView userCard={<UserCardHost pubkey={buyerPubkey} size="md" subtitle="nip-05" />} />
 
 			{canViewLegacyBuyerContact && deliveryContact && <OrderBuyerContactCard deliveryContact={deliveryContact} />}
 

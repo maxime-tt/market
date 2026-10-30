@@ -1,4 +1,4 @@
-import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
+import { ImageUploader } from '@platform/web/media/ImageUploader'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import { authStore, getActiveSignerCapability } from '@/lib/stores/auth'
 import { ndkActions, useNDK } from '@/lib/stores/ndk'

@@ -1,9 +1,9 @@
 import { PickupLocationDialog } from '@ui/dialogs/pickup-location-dialog'
-import { ShareProfileDialog } from '@/components/dialogs/ShareProfileDialog'
-import { EntityActionsMenu } from '@/components/EntityActionsMenu'
+import { ShareProfileDialog } from '@platform/web/profiles/ShareProfileDialog'
+import { EntityActionsMenu } from '@platform/web/permissions/EntityActionsMenu'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
-import { ProfileName } from '@/components/ProfileName'
+import { ProfileNameHost as ProfileName } from '@platform/web/profiles/ProfileNameHost'
 import { Button } from '@ui/primitives/button'
 import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
@@ -32,7 +32,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { Edit, MapPin, MessageCircle, Minus, Plus, RotateCcw, Share2, Timer } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
-import { UserCard } from '../UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { TooltipButton } from '@ui/wrappers/tooltip-button'
 
 interface ProfilePageProps {
@@ -301,7 +301,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 			</div>
 			<div className="z-10 relative flex flex-col flex-1 pt-[18vh] sm:pt-[22vh] md:pt-[30vh]">
 				<div className="flex flex-row justify-between items-center bg-black px-4 py-4">
-					<UserCard pubkey={profilePubkey} className="[&>h2]:text-white" subtitle="npub" onPress="copy-npub" />
+					<UserCardHost pubkey={profilePubkey} className="[&>h2]:text-white" subtitle="npub" onPress="copy-npub" />
 					{!isSmallScreen && (
 						<div className="flex gap-2">
 							{user && <ZapButton event={user} />}

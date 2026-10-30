@@ -1,10 +1,10 @@
-import CartItem from '@/components/CartItem'
-import { cartActions, cartStore } from '@/lib/stores/cart'
+import CartItem from '@platform/web/cart/CartItem'
+import { cartActions, cartStore } from '@platform/web/cart/cartStore'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo } from 'react'
 import { CartSellerCard, CartShippingReminder, CartTotals, CartTotalsDetails, type CartSellerTotals } from '@ui/checkout/cart-views'
-import { UserCard } from './UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 const EMPTY_SELLER_TOTALS: CartSellerTotals = {
 	satsTotal: 0,
@@ -65,7 +65,7 @@ export function CartSummary({
 				{Object.entries(productsBySeller).map(([sellerPubkey, products]) => (
 					<CartSellerCard
 						key={sellerPubkey}
-						seller={<UserCard pubkey={sellerPubkey} size="sm" subtitle="nip-05" />}
+						seller={<UserCardHost pubkey={sellerPubkey} size="sm" subtitle="nip-05" />}
 						totals={sellerData[sellerPubkey] || EMPTY_SELLER_TOTALS}
 						items={products.map((product) => ({
 							key: product.id,

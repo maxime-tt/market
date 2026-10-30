@@ -2,13 +2,17 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { Button } from '@ui/primitives/button'
 import { Card } from '@ui/primitives/card'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { cn } from '@ui/utils/cn'
 import { findBidderRecord } from '@sdk/commerce/auctions/bidderRecords'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
-import { auctionKeys } from '@/queries/queryKeyFactory'
-import { settleAuctionAsWinner, usePublishAuctionSettlementMutation, type AuctionSettlementFormData } from '@/publish/auctions'
+import { auctionKeys } from '@sdk/core/query/queryKeyFactory'
+import {
+	settleAuctionAsWinner,
+	usePublishAuctionSettlementMutation,
+	type AuctionSettlementFormData,
+} from '@platform/web/auctions/auctionPublish'
 import {
 	getSettlementDescriptor,
 	type GetSettlementDescriptorInput,
@@ -16,9 +20,9 @@ import {
 	type SettlementDescriptor,
 	type SettlementIconKey,
 } from '@sdk/commerce/auctions/settlementDescriptor'
-import { useNut7Polling } from '@/lib/auction/useNut7Polling'
+import { useNut7Polling } from '@platform/web/auctions/useNut7Polling'
 import { useDleqKeysetPolling } from '@platform/web/auctions/useDleqKeysetPolling'
-import type { NostrEventLike } from '@/lib/nostr/eventLike'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type {
 	ParsedAuctionEvent,
 	ParsedBidEvent,

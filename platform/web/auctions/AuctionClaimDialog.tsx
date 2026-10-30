@@ -5,7 +5,7 @@ import { Label } from '@ui/primitives/label'
 import { Textarea } from '@ui/primitives/textarea'
 import { CountryCombobox, isValidCountry } from '@ui/shared/country-combobox'
 import { CityCombobox } from '@ui/shared/city-combobox'
-import { usePublishAuctionClaimOrderMutation, type AuctionClaimFormData } from '@/publish/auctions'
+import { usePublishAuctionClaimOrderMutation, type AuctionClaimFormData } from '@platform/web/auctions/auctionPublish'
 import { useState } from 'react'
 
 interface AuctionClaimDialogProps {

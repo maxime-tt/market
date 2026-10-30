@@ -19,7 +19,7 @@ import { useForm, useStore } from '@tanstack/react-form'
 import { createFileRoute } from '@tanstack/react-router'
 import { nip19 } from 'nostr-tools'
 import { toast } from 'sonner'
-import { UserCard } from '@/components/UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/app-miscelleneous')({
 	component: AppMiscelleneousComponent,
@@ -778,7 +778,7 @@ function OwnerField({ ownerPk }: { ownerPk?: string }) {
 		<div>
 			<Label className="font-medium">Owner</Label>
 			<div className="mt-1 mb-1">
-				{ownerPk ? <UserCard pubkey={ownerPk} size="md" onPress="none" /> : <span className="text-muted-foreground">Unknown</span>}
+				{ownerPk ? <UserCardHost pubkey={ownerPk} size="md" onPress="none" /> : <span className="text-muted-foreground">Unknown</span>}
 			</div>
 			<div className="flex items-center gap-2">
 				<Input value={ownerNpub} disabled className="bg-gray-50 border-2 text-muted-foreground" />

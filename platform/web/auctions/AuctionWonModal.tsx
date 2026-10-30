@@ -17,12 +17,12 @@ import {
 } from '@ui/primitives/alert-dialog'
 import { Button } from '@ui/primitives/button'
 import { Media } from '@ui/shared/media'
-import { UserCard } from '@/components/UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { ConfettiBurst } from '@ui/shared/confetti-burst'
 import { appNotifications, auctionWonPayloadOf, useAppNotifications } from '@platform/web/notifications'
-import { authStore } from '@/lib/stores/auth'
-import { settleAuctionAsWinner } from '@/publish/auctions'
-import { useAuctionCountdown } from '@/components/AuctionCountdown'
+import { authStore } from '@platform/web/auth/authStore'
+import { settleAuctionAsWinner } from '@platform/web/auctions/auctionPublish'
+import { useAuctionCountdown } from '@platform/web/auctions/AuctionCountdownHost'
 import { getAuctionCoordinate } from '@sdk/commerce/auctions/settlement'
 import {
 	hasFinalSettlementForAuctionWin,
@@ -40,8 +40,8 @@ import {
 	getAuctionImages,
 	getAuctionSettlementGrace,
 	getAuctionTitle,
-} from '@/queries/auctions'
-import { auctionKeys } from '@/queries/queryKeyFactory'
+} from '@platform/web/auctions/auctionsQuery'
+import { auctionKeys } from '@sdk/core/query/queryKeyFactory'
 import { formatSats } from '@sdk/commerce/payments/display'
 
 const SETTLEMENT_CLOSE_DELAY_MS = 1500
@@ -297,7 +297,7 @@ export function AuctionWonModal() {
 						{sellerPubkey && (
 							<div className="flex items-center gap-2 text-sm text-muted-foreground">
 								<span>Seller:</span>
-								<UserCard pubkey={sellerPubkey} size="xs" subtitle="none" onPress="none" />
+								<UserCardHost pubkey={sellerPubkey} size="xs" subtitle="none" onPress="none" />
 							</div>
 						)}
 

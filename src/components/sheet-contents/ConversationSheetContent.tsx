@@ -1,7 +1,7 @@
 import { ConversationView } from '@/components/messages/ConversationView'
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@ui/primitives/sheet'
 import { useState } from 'react'
-import { UserCard } from '../UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 interface ConversationSheetContentProps {
 	pubkey: string
@@ -14,7 +14,7 @@ export function ConversationSheetContent({ pubkey }: ConversationSheetContentPro
 		<SheetContent side="right" className="w-full sm:max-w-xl flex flex-col p-0">
 			<SheetHeader className="p-6 pb-4 border-b">
 				<SheetTitle className="flex items-center gap-2">
-					<UserCard pubkey={pubkey} subtitle="npub" />
+					<UserCardHost pubkey={pubkey} subtitle="npub" />
 				</SheetTitle>
 				<SheetDescription className="mt-2">Chat with this user</SheetDescription>
 			</SheetHeader>

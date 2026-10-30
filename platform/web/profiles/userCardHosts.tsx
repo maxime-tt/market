@@ -112,8 +112,8 @@ interface UserCardHostProps {
  * NIP-05 validation host, the avatar and the pure `@ui/nostr/user-card` view,
  * reproducing the retiring `src/components/UserCard.tsx` (and folding in the
  * two-line `src/components/AvatarUser.tsx` read). The rest of the identity kit
- * adopts this host; `src/components/UserCard.tsx` stays alive for its remaining
- * src/ consumers.
+ * adopts this host; the legacy `src/components/UserCard.tsx` retired in batch 2
+ * lane D and all of its consumers import this host now.
  */
 export function UserCardHost({ pubkey, className = '', size = 'md', subtitle = 'nip-05', onPress = 'profile' }: UserCardHostProps) {
 	const safePubkey = normalizeOptionalPubkey(pubkey)

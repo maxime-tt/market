@@ -1,8 +1,8 @@
-import { EntityActionsMenu } from '@/components/EntityActionsMenu'
+import { EntityActionsMenu } from '@platform/web/permissions/EntityActionsMenu'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
 import { Button } from '@ui/wrappers/button'
-import { UserCard } from '@/components/UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { useEntityPermissions } from '@platform/web/permissions/useEntityPermissions'
@@ -200,7 +200,7 @@ function RouteComponent() {
 					</div>
 				</div>
 				<div className="flex flex-row justify-between items-center bg-black px-4 py-2">
-					<UserCard pubkey={pubkey} size="md" className="[&>h2]:text-white" />
+					<UserCardHost pubkey={pubkey} size="md" className="[&>h2]:text-white" />
 					{!isSmallScreen && (
 						<div className="flex gap-2">
 							{user && <ZapButton event={user} />}

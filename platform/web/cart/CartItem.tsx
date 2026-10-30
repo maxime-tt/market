@@ -10,15 +10,15 @@ import {
 	useProductPrice,
 	useProductImages,
 	useProductStock,
-} from '@/queries/products'
+} from '@platform/web/products/productQuery'
 import { Skeleton } from '@ui/primitives/skeleton'
-import { ShippingSelector } from '@/components/ShippingSelector'
-import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
-import type { RichShippingInfo } from '@/lib/stores/cart'
-import { cartActions, cartStore } from '@/lib/stores/cart'
+import { ShippingSelector } from '@platform/web/shipping/ShippingSelector'
+import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@platform/web/shipping/shippingQuery'
+import type { RichShippingInfo } from '@platform/web/cart/cartStore'
+import { cartActions, cartStore } from '@platform/web/cart/cartStore'
 import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@sdk/commerce/products'
 import { useQuery } from '@tanstack/react-query'
-import { PriceDisplay } from '@/components/PriceDisplay'
+import { PriceDisplayHost } from '@platform/web/products/PriceDisplayHost'
 
 interface CartItemProps {
 	productId: string
@@ -229,7 +229,7 @@ export default function CartItem({
 					<div>
 						<h3 className="text-base font-medium">{title || 'Untitled Product'}</h3>
 						<div className="mt-1">
-							<PriceDisplay priceValue={price} originalCurrency={currency} showOriginalPrice={true} showSatsPrice={true} />
+							<PriceDisplayHost priceValue={price} originalCurrency={currency} showOriginalPrice={true} showSatsPrice={true} />
 						</div>
 					</div>
 

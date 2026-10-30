@@ -1,5 +1,5 @@
 import { Button } from '@ui/primitives/button'
-import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
+import { ImageUploader } from '@platform/web/media/ImageUploader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import {
 	AUCTION_MIN_DURATION_SECONDS,

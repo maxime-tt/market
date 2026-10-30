@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { Input } from '@ui/primitives/input'
 import { useNavigate } from '@tanstack/react-router'
-import { useProductSearch, productQueryOptions } from '@/queries/products'
+import { useProductSearch, productQueryOptions } from '@platform/web/products/productQuery'
 import { useQueryClient } from '@tanstack/react-query'
-import { UserCard } from './UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { ProductSearchResults } from '@ui/products/product-search-results'
 import { Media } from '@ui/shared/media'
 
@@ -98,7 +98,7 @@ export function ProductSearch() {
 						renderImage={(imageUrl, title) => (
 							<Media src={imageUrl} alt={title || 'Product'} className="size-8 shrink-0 rounded object-cover" />
 						)}
-						renderSeller={(pubkey) => <UserCard pubkey={pubkey} size="xs" onPress="none" />}
+						renderSeller={(pubkey) => <UserCardHost pubkey={pubkey} size="xs" onPress="none" />}
 					/>
 				</div>
 			)}

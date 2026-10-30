@@ -1,11 +1,11 @@
-import { EntityActionsMenu } from '@/components/EntityActionsMenu'
+import { EntityActionsMenu } from '@platform/web/permissions/EntityActionsMenu'
 import { ImageCarousel } from '@ui/shared/image-carousel'
 import { ImageViewerModal } from '@ui/shared/image-viewer-modal'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { PriceDisplayHost as PriceDisplay } from '@platform/web/products/PriceDisplayHost'
 import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
-import { Comments } from '@/components/Comments'
-import { ShippingSelector } from '@/components/ShippingSelector'
+import { Comments } from '@platform/web/messaging/Comments'
+import { ShippingSelector } from '@platform/web/shipping/ShippingSelector'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import {
 	AdultContentGate,
@@ -14,7 +14,7 @@ import {
 	ProductNotFoundState,
 	ProductPurchasePanel,
 } from '@ui/products/product-page-views'
-import { UserCard } from '@/components/UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { useEntityPermissions } from '@platform/web/permissions/useEntityPermissions'
@@ -737,7 +737,7 @@ function RouteComponent() {
 							/>
 
 							<span>Sold by:</span>
-							<UserCard pubkey={pubkey} size="md" />
+							<UserCardHost pubkey={pubkey} size="md" />
 
 							<SocialInteractions event={product} onCommentButtonPressed={handleNavigateToComments} className="dark" />
 						</div>

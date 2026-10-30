@@ -1,6 +1,6 @@
 import { nip19 } from 'nostr-tools'
 import { Card } from '@ui/primitives/card'
-import { UserCard } from '../UserCard'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 interface RecipientPreviewProps {
 	npub: string
@@ -46,7 +46,7 @@ export function RecipientPreview({ npub, percentage, canReceiveZaps, isLoading }
 	return (
 		<Card className={`p-3 border-dashed ${canReceiveZaps ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'} mt-2`}>
 			<div className="flex items-center gap-2">
-				<UserCard pubkey={pubkey} size="xs" />
+				<UserCardHost pubkey={pubkey} size="xs" />
 				<div className="flex-grow"></div>
 				<div className="font-semibold">{percentage}%</div>
 				{canReceiveZaps === false && <div className="text-sm text-red-600">Cannot receive zaps</div>}
