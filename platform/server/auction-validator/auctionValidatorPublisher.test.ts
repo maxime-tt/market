@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { EventTemplate } from 'nostr-tools'
 import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent } from '@sdk/commerce/auctions/events'
 import { hashToCurveHexFromString } from '@sdk/commerce/payments/cashu/hashToCurve'
@@ -25,7 +25,7 @@ const buildAuction = (): ParsedAuctionEvent => {
 		created_at: 1_000,
 		content: '',
 		tags: [],
-	} as unknown as NDKEvent
+	} as unknown as NostrEventLike
 
 	return {
 		rawEvent,
@@ -69,7 +69,7 @@ const buildBid = (
 		created_at: 1_500,
 		content: '',
 		tags: [],
-	} as unknown as NDKEvent,
+	} as unknown as NostrEventLike,
 	id: input.id,
 	bidderPubkey: input.bidderPubkey,
 	createdAt: 1_500,

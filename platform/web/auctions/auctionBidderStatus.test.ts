@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { getAuctionBidderStatus, getValidatedBidderStatus } from '@platform/web/auctions/auctionBidderStatus'
 import type { ValidatedBidSet } from '@sdk/commerce/auctions/bidValidation'
 import type { ParsedBidEvent } from '@sdk/commerce/auctions/events'
 
-const makeAuction = (params: { id?: string; startAt?: number; endAt?: number }): NDKEvent =>
+const makeAuction = (params: { id?: string; startAt?: number; endAt?: number }): NostrEventLike =>
 	({
 		id: params.id ?? 'auction-root',
 		pubkey: 'seller',
@@ -18,9 +18,9 @@ const makeAuction = (params: { id?: string; startAt?: number; endAt?: number }):
 			['max_end_at', String(params.endAt ?? 300)],
 			['extension_rule', 'none'],
 		],
-	}) as NDKEvent
+	}) as NostrEventLike
 
-const makeBid = (params: { id: string; pubkey: string; amount: number; createdAt: number; status?: string }): NDKEvent =>
+const makeBid = (params: { id: string; pubkey: string; amount: number; createdAt: number; status?: string }): NostrEventLike =>
 	({
 		id: params.id,
 		pubkey: params.pubkey,
@@ -31,7 +31,7 @@ const makeBid = (params: { id: string; pubkey: string; amount: number; createdAt
 			['amount', String(params.amount), 'SAT'],
 			['status', params.status ?? 'locked'],
 		],
-	}) as NDKEvent
+	}) as NostrEventLike
 
 describe('auction bidder status', () => {
 	test('no current user returns no status', () => {

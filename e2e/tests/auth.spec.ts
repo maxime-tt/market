@@ -5,7 +5,7 @@ import { getPublicKey, finalizeEvent, type UnsignedEvent } from 'nostr-tools/pur
 import { v2 as nip44 } from 'nostr-tools/nip44'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { nip19 } from 'nostr-tools'
-import { Nip46Mock } from '../utils/nip46-mock'
+import { Nip46Mock } from '../../sdk/core/testing/nip46Mock'
 import { RELAY_URL } from '../test-config'
 import { encrypt } from 'nostr-tools/nip49'
 

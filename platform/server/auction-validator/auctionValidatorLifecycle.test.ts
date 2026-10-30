@@ -1,11 +1,8 @@
 /**
  * Pure-function tests for the auction validator's verdict-derivation
  * lifecycle. No relays, no mint, no time mocks beyond passing `now`
- * explicitly.
- *
- * Lives under `src/lib/__tests__/` so the existing `bun test:unit`
- * glob picks it up (the validator code itself sits under
- * `src/server/auction-validator/`).
+ * explicitly. Co-located with the validator code it exercises under
+ * `platform/server/auction-validator/`.
  */
 
 import { describe, expect, test } from 'bun:test'

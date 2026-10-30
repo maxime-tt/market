@@ -24,7 +24,7 @@ import { join } from 'node:path'
 
 import { describe, expect, test } from 'bun:test'
 
-const REPO_ROOT = join(import.meta.dir, '..', '..', '..')
+const REPO_ROOT = join(import.meta.dir, '..', '..')
 const WORKFLOW_PATH = join(REPO_ROOT, '.github', 'workflows', 'e2e.yml')
 const OG_SPEC_PATH = join(REPO_ROOT, 'e2e', 'tests', 'og-meta-tags.spec.ts')
 const AUCTIONS_LABEL_SPEC_PATH = join(REPO_ROOT, 'e2e', 'tests', 'test-labels-auctions.spec.ts')

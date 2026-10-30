@@ -22,8 +22,8 @@ import { join } from 'node:path'
 
 import { describe, expect, test } from 'bun:test'
 
-const WORKFLOW_PATH = join(import.meta.dir, '..', '..', '..', '.github', 'workflows', 'e2e.yml')
-const PLAYWRIGHT_CONFIG_PATH = join(import.meta.dir, '..', '..', '..', 'e2e', 'playwright.config.ts')
+const WORKFLOW_PATH = join(import.meta.dir, '..', '..', '.github', 'workflows', 'e2e.yml')
+const PLAYWRIGHT_CONFIG_PATH = join(import.meta.dir, '..', '..', 'e2e', 'playwright.config.ts')
 
 /** Extract the `path:` value of every `actions/upload-artifact@v4` step. */
 async function uploadPaths(): Promise<{ name: string; path: string }[]> {

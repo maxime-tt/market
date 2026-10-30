@@ -35,7 +35,7 @@ const GENERATOR_HEX = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815
 
 // Project root — resolves the repo checkout regardless of the caller's cwd,
 // so the `e2e/start-local-mint.sh` script is found reliably.
-const PROJECT_ROOT = path.resolve(import.meta.dir, '../../..')
+const PROJECT_ROOT = path.resolve(import.meta.dir, '../../../..')
 
 /** Fresh, isolated mint data dir per run — avoids stale-DB/schema collisions. */
 const MINT_DIR = mkdtempSync(path.join(tmpdir(), 'cashu-mint-i3-'))

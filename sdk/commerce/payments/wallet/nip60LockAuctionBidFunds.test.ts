@@ -120,7 +120,7 @@ mock.module('@cashu/cashu-ts', () => ({
 // This file drives the store instance it loads here — self-consistent,
 // order-independent, zero network (ADR-0005).
 const realWalletOps: typeof import('@platform/web/wallet/walletOps') = await import(
-	`${import.meta.dir}/../../../platform/web/wallet/walletOps.ts?b1-real-store=1`
+	`${import.meta.dir}/../../../../platform/web/wallet/walletOps.ts?b1-real-store=1`
 )
 type AuctionBidLockMutationPossibleErrorInstance = InstanceType<typeof realWalletOps.AuctionBidLockMutationPossibleError>
 const { walletOps } = realWalletOps

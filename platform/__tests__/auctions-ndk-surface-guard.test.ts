@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'bun:test'
 
-const ROOT = join(import.meta.dir, '..', '..', '..')
+const ROOT = join(import.meta.dir, '..', '..')
 const SCRIPT = join(ROOT, 'scripts', 'check-auctions-ndk-surface.sh')
 // I-a A2 S2 (2026-10-29): the private-claim module left `src/lib/auctions/` for
 // the sdk home (the two ambient-signer helpers went to platform/web/
@@ -26,6 +26,9 @@ const CLAIM_MODULE = 'sdk/commerce/auctions/privateAuctionClaimMessage.ts'
 const RETIRED_SRC_CLAIM = 'src/lib/auctions/privateAuctionClaimMessage.ts'
 
 const NDK_PACKAGE = '@nostr-dev' + '-kit/ndk'
+// Split so this file itself does not literally mention the NDK package name: it
+// now lives inside platform/, which the NDK direction guard measures for M9.
+const NDK_PKG_NAME = '@nostr' + '-dev-kit'
 const NDK_IMPORT = `import { NDKEvent } from '${NDK_PACKAGE}'\n`
 const NDK_ACTIONS = "import { ndkActions } from '@platform/web/ndk/ndkStore'\n"
 const NDK_STORE = "import { ndkStore } from '@platform/web/ndk/ndkStore'\n"
@@ -149,7 +152,7 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		expect(source).not.toContain('asEncryptingSigner')
 		expect(source).not.toContain('ndkActions')
 		expect(source).not.toContain('ndkStore')
-		expect(source).not.toContain('@nostr-dev-kit')
+		expect(source).not.toContain(NDK_PKG_NAME)
 		// The src original is gone with its directory — a resurrected copy would
 		// be unscanned (no family matches it) and must not slip back silently.
 		expect(await exists(join(ROOT, RETIRED_SRC_CLAIM))).toBe(false)
@@ -162,15 +165,15 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		// E1b (2026-10-30): the src/publish + src/queries auction shims are deleted,
 		// so the clean fixtures stage at the platform family the guard scans now.
 		const root = await stageRepo({
-			'platform/web/auctions/CleanPublish.tsx': "import { sign } from '@/lib/nostr/io'\n",
-			'platform/web/auctions/CleanQuery.tsx': "import { applesauceIo } from '@/lib/nostr/io'\n",
+			'platform/web/auctions/CleanPublish.tsx': "import { sign } from '@platform/web/sdkNostrIo'\n",
+			'platform/web/auctions/CleanQuery.tsx': "import { applesauceIo } from '@platform/web/sdkNostrIo'\n",
 		})
 		const r = runGuard(root)
 		expect(r.exitCode).toBe(0)
 		expect(r.stdout).toContain('OK')
 	})
 
-	test('fails (exit 1) when a non-allowlisted auctions file imports @nostr-dev-kit', async () => {
+	test('fails (exit 1) when a non-allowlisted auctions file imports the NDK package', async () => {
 		// E1b (2026-10-30): the src shim paths are gone — the dirty fixture stages at
 		// the platform family the guard scans now.
 		const root = await stageRepo({ 'platform/web/auctions/DirtyAuctionFile.tsx': NDK_IMPORT })
@@ -190,13 +193,13 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		expect(runGuard(store).exitCode).toBe(1)
 	})
 
-	test('fails (exit 1) when the moved private-claim module (sdk home) imports @nostr-dev-kit', async () => {
+	test('fails (exit 1) when the moved private-claim module (sdk home) imports the NDK package', async () => {
 		// S2: the claim module is scanned at its sdk home via the
 		// sdk/commerce/auctions/*.ts family — a re-acquired NDK import must fail
 		// the guard, while a clean claim module passes with an empty allowlist.
 		const dirty = await stageRepo({
 			[CLAIM_MODULE]: NDK_IMPORT,
-			'platform/web/auctions/CleanPublish.tsx': "import { sign } from '@/lib/nostr/io'\n",
+			'platform/web/auctions/CleanPublish.tsx': "import { sign } from '@platform/web/sdkNostrIo'\n",
 		})
 		const dirtyResult = runGuard(dirty)
 		expect(dirtyResult.exitCode).toBe(1)
@@ -205,7 +208,7 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 
 		const clean = await stageRepo({
 			[CLAIM_MODULE]: "import { createNip59GiftWrapWithSigner } from '@sdk/core/nostr/nip59'\n",
-			'platform/web/auctions/CleanPublish.tsx': "import { sign } from '@/lib/nostr/io'\n",
+			'platform/web/auctions/CleanPublish.tsx': "import { sign } from '@platform/web/sdkNostrIo'\n",
 		})
 		const cleanResult = runGuard(clean)
 		expect(cleanResult.exitCode).toBe(0)

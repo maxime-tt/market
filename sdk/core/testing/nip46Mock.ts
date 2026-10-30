@@ -1,5 +1,9 @@
 /**
- * NIP-46 remote signer mock for e2e testing.
+ * NIP-46 remote signer mock for e2e tests and the unit suite.
+ *
+ * Lives in `sdk/core/testing/` so both the Playwright e2e specs and the
+ * globbed unit tree (`nip46Mock.test.ts` next to it) can import it; e2e/**
+ * itself is excluded from `bun test` discovery.
  *
  * Uses a raw WebSocket connection (instead of nostr-tools Relay) to avoid
  * the "mute: no one was listening" error that nostr-tools throws on
@@ -20,7 +24,13 @@ import { hexToBytes } from '@noble/hashes/utils.js'
 import { encrypt as nip04Encrypt, decrypt as nip04Decrypt } from 'nostr-tools/nip04'
 import { v2 as nip44 } from 'nostr-tools/nip44'
 import WebSocket from 'ws'
-import { RELAY_URL } from '../test-config'
+
+/**
+ * Default relay for `startSignerLoop` — mirrors `RELAY_URL` in
+ * `e2e/test-config.ts` (the local e2e relay). Duplicated rather than imported
+ * so this sdk/ testing fixture does not depend on the e2e tree.
+ */
+const DEFAULT_RELAY_URL = 'ws://localhost:10547'
 
 interface SignerLoopOptions {
 	requireAuthForSecretless?: boolean
@@ -248,7 +258,7 @@ export class Nip46Mock {
 	 * Returns a cleanup function.
 	 */
 	async startSignerLoop(relayUrl?: string, options: SignerLoopOptions = {}): Promise<() => void> {
-		await this.connectAndSubscribe(relayUrl || RELAY_URL)
+		await this.connectAndSubscribe(relayUrl || DEFAULT_RELAY_URL)
 
 		this.setEventHandler(async (event) => {
 			const decrypted = await this.decryptContent(event.pubkey, event.content)
