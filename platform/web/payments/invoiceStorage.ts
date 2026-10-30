@@ -1,4 +1,15 @@
-import type { PaymentInvoiceData } from '@/lib/types/invoice'
+/**
+ * platform/web/payments/invoiceStorage.ts — the platform home of the invoice
+ * persistence helpers.
+ *
+ * Moved out of `src/lib/utils/invoiceStorage.ts` (the L-payments slice, drained
+ * early here because the checkout flow host must not hold a `platform -> src`
+ * edge). The localStorage key and the read/upsert/write behaviour are carried
+ * over verbatim; the only change is the `PaymentInvoiceData` import, which now
+ * comes from `@sdk/commerce/checkout` instead of the retired `@/lib/types/invoice`
+ * shim.
+ */
+import type { PaymentInvoiceData } from '@sdk/commerce/checkout'
 
 const STORAGE_KEY = 'market_invoice_history_v1'
 

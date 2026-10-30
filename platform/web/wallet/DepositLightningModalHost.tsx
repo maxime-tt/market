@@ -1,16 +1,22 @@
+/**
+ * Deposit Lightning — platform host.
+ *
+ * The retired `src/feature/wallet/components/DepositLightningModal.tsx` split:
+ * every state machine, effect, `useRef` latch and store subscription stays
+ * here, and `@ui/wallet/deposit-lightning-modal-view` renders the props-only
+ * dialog. Behaviour is carried over verbatim — in particular the
+ * evidence-gated `deposit_outcome_uncertain` classification and the
+ * open→closed reset — so the money path is unchanged by the split.
+ */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
-import { Button } from '@ui/primitives/button'
-import { cashuActions, cashuStore } from '@/lib/stores/cashu'
-import { getActiveSignerCapability } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
-import { useWallets, walletActions } from '@/lib/stores/wallet'
-import { classifyDepositTerminalErrorOutcome } from '@platform/web/auctions/useAuctionBidFunding'
 import { useStore } from '@tanstack/react-store'
-import { Loader2, Copy, Check, Zap } from 'lucide-react'
 import { toast } from 'sonner'
-import { QRCodeSVG } from 'qrcode.react'
-import { getMintHostname, normalizeMintUrl } from '@/lib/wallet'
+import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { useWallets, walletActions } from '@platform/web/config/walletStore'
+import { classifyDepositTerminalErrorOutcome, type AuctionBidFundingFailureReason } from '@platform/web/auctions/useAuctionBidFunding'
+import { normalizeMintUrl } from '@sdk/commerce/payments/display'
+import { DepositLightningModalView } from '@ui/wallet/deposit-lightning-modal-view'
 
 const isValidMintUrl = (mintUrl: string): boolean => {
 	const normalizedMintUrl = normalizeMintUrl(mintUrl)
@@ -28,7 +34,7 @@ const normalizeValidMintUrl = (mintUrl: string): string | null => {
 	return isValidMintUrl(normalizedMintUrl) ? normalizedMintUrl : null
 }
 
-interface DepositLightningModalProps {
+interface DepositLightningModalHostProps {
 	open: boolean
 	onClose: () => void
 	initialAmount?: number
@@ -37,7 +43,7 @@ interface DepositLightningModalProps {
 	onSuccess?: () => void
 	onInvoiceCreated?: (invoice: string) => void
 	onPaymentAcknowledged?: () => void
-	onFundingFailed?: (reason: AuctionFundingFailureReason) => void
+	onFundingFailed?: (reason: AuctionBidFundingFailureReason) => void
 	/**
 	 * 'bid' renders the compact "Bid with lightning" quick-pay view: fixed
 	 * (non-editable) amount and auto-generated QR once a mint resolves.
@@ -46,14 +52,9 @@ interface DepositLightningModalProps {
 	variant?: 'bid' | 'topup'
 }
 
-export type AuctionFundingFailureReason =
-	| 'invoice_unpaid_or_expired_reclaimable'
-	| 'invoice_paid_mint_failed_reclaimable'
-	| 'deposit_outcome_uncertain'
-
 type NwcDepositPaymentStatus = 'idle' | 'paying' | 'sent'
 
-export function DepositLightningModal({
+export function DepositLightningModalHost({
 	open,
 	onClose,
 	initialAmount,
@@ -64,7 +65,7 @@ export function DepositLightningModal({
 	onPaymentAcknowledged,
 	onFundingFailed,
 	variant = 'topup',
-}: DepositLightningModalProps) {
+}: DepositLightningModalHostProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus, error: depositError } = useStore(cashuStore)
 	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
 	const [amount, setAmount] = useState('')
@@ -385,230 +386,36 @@ export function DepositLightningModal({
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-			<DialogContent className="sm:max-w-md">
-				<DialogHeader>
-					<DialogTitle className="flex items-center gap-2">
-						<Zap className="w-5 h-5 text-yellow-500" />
-						{isBidQuickView ? 'Bid with lightning' : 'Deposit Lightning'}
-					</DialogTitle>
-					<DialogDescription>
-						{isBidQuickView ? 'Pay this invoice to lock your bid.' : 'Generate a Lightning invoice to mint eCash'}
-					</DialogDescription>
-				</DialogHeader>
-
-				{depositStatus === 'success' ? (
-					<div className="py-6 text-center">
-						<div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
-							<Check className="w-6 h-6 text-green-600" />
-						</div>
-						<p className="text-lg font-medium text-green-600">Deposit Successful!</p>
-						<p className="text-sm text-muted-foreground mt-2">Your eCash has been minted</p>
-						<Button onClick={handleClose} className="mt-4">
-							Done
-						</Button>
-					</div>
-				) : isBidQuickView ? (
-					<div className="space-y-4">
-						<div className="flex justify-center">
-							<div className="w-[216px] h-[216px] flex items-center justify-center bg-white rounded-lg p-4">
-								{depositInvoice ? (
-									<button type="button" onClick={handleCopyInvoice} className="cursor-pointer outline-none" title="Click to copy invoice">
-										<QRCodeSVG value={depositInvoice} size={184} />
-									</button>
-								) : (
-									<div className="text-xs text-muted-foreground text-center px-2">
-										{selectedMint || isGenerating ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'No mint selected yet'}
-									</div>
-								)}
-							</div>
-						</div>
-
-						<p className="text-center text-2xl font-bold">
-							{Number.isFinite(parseInt(amount, 10)) ? parseInt(amount, 10).toLocaleString() : 0} sats
-						</p>
-
-						{depositInvoice && (
-							<div className="space-y-2">
-								<p className="text-sm font-medium">Lightning Invoice</p>
-								<div className="flex gap-2">
-									<input
-										type="text"
-										value={depositInvoice}
-										readOnly
-										className="flex-1 px-3 py-2 text-sm bg-muted rounded-md font-mono truncate"
-									/>
-									<Button variant="outline" size="icon" onClick={handleCopyInvoice} title="Copy invoice">
-										{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-									</Button>
-								</div>
-							</div>
-						)}
-
-						{copied && <p className="text-xs text-center text-muted-foreground">Invoice copied to clipboard</p>}
-
-						{depositStatus === 'error' && (
-							<p className="text-sm text-destructive text-center">{depositError || 'Failed to generate invoice. Please try again.'}</p>
-						)}
-						{!hasAllowedMints && !depositInvoice && (
-							<p className="text-sm text-destructive text-center">No accepted auction mints are available in this wallet.</p>
-						)}
-
-						{/* Payment status indicator */}
-						{depositInvoice && (depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry') && (
-							<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-								{needsConfirmationRetry ? (
-									<>
-										<span className="text-amber-600">Confirmation timed out.</span>
-										<Button type="button" variant="outline" size="sm" onClick={handleRetryConfirmation}>
-											Retry check
-										</Button>
-									</>
-								) : nwcPaymentSent ? (
-									<span>Payment sent. Waiting for mint confirmation...</span>
-								) : (
-									<span>Waiting for payment...</span>
-								)}
-							</div>
-						)}
-
-						<div className="flex items-center justify-between gap-2 pt-1">
-							<Button type="button" variant="outline" onClick={handleClose} disabled={isPayingWithNwc}>
-								Cancel
-							</Button>
-							{depositInvoice && depositStatus === 'pending' && !needsConfirmationRetry && (
-								<Button type="button" variant="ghost" size="sm" onClick={handleConfirmCheckNow} disabled={isCheckingDeposit}>
-									{isCheckingDeposit ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-									Check payment
-								</Button>
-							)}
-						</div>
-					</div>
-				) : depositInvoice ? (
-					<div className="space-y-4">
-						<div className="flex justify-center">
-							<div className="p-4 bg-white rounded-lg">
-								<QRCodeSVG value={depositInvoice} size={200} />
-							</div>
-						</div>
-						<div className="space-y-2">
-							<p className="text-sm font-medium">Lightning Invoice</p>
-							<div className="flex gap-2">
-								<input
-									type="text"
-									value={depositInvoice}
-									readOnly
-									className="flex-1 px-3 py-2 text-sm bg-muted rounded-md font-mono truncate"
-								/>
-								<Button variant="outline" size="icon" onClick={handleCopyInvoice}>
-									{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-								</Button>
-							</div>
-						</div>
-						{savedNwcWallets.length > 0 && (
-							<div className="space-y-2 rounded-md border p-3">
-								<label className="text-sm font-medium" htmlFor="deposit-nwc-wallet">
-									Pay with connected wallet
-								</label>
-								<select
-									id="deposit-nwc-wallet"
-									value={selectedNwcWalletId}
-									onChange={(e) => setSelectedNwcWalletId(e.target.value)}
-									disabled={isPayingWithNwc || nwcPaymentAttempted}
-									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
-								>
-									{savedNwcWallets.map((wallet) => (
-										<option key={wallet.id} value={wallet.id}>
-											{wallet.name}
-										</option>
-									))}
-								</select>
-								<Button
-									type="button"
-									className="w-full"
-									onClick={handlePayWithNwc}
-									disabled={isPayingWithNwc || nwcPaymentAttempted || !selectedNwcWalletId}
-								>
-									{isPayingWithNwc ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-									Pay invoice with NWC
-								</Button>
-							</div>
-						)}
-						<p className="text-sm text-muted-foreground text-center">
-							{needsConfirmationRetry
-								? 'Confirmation timed out. Retry to check the mint again.'
-								: nwcPaymentSent
-									? 'Payment sent. Waiting for mint confirmation...'
-									: 'Waiting for payment...'}
-						</p>
-						{needsConfirmationRetry ? (
-							<div className="flex justify-center">
-								<Button type="button" onClick={handleRetryConfirmation}>
-									Retry confirmation
-								</Button>
-							</div>
-						) : (
-							<div className="flex justify-center">
-								<Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-							</div>
-						)}
-						<div className="flex justify-end gap-2">
-							<Button variant="outline" onClick={handleClose} disabled={isPayingWithNwc}>
-								{nwcPaymentAttempted ? 'Close' : 'Cancel'}
-							</Button>
-						</div>
-					</div>
-				) : (
-					<div className="space-y-4">
-						<div className="space-y-2">
-							<label className="text-sm font-medium">Amount (sats)</label>
-							<input
-								type="number"
-								value={amount}
-								onChange={(e) => setAmount(e.target.value)}
-								placeholder="Enter amount in sats"
-								className="w-full px-3 py-2 text-sm border rounded-md bg-background"
-								min="1"
-							/>
-						</div>
-
-						<div className="space-y-2">
-							<label className="text-sm font-medium">Mint</label>
-							{hasAllowedMints ? (
-								<select
-									value={selectedMint}
-									onChange={(e) => setSelectedMint(e.target.value)}
-									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
-								>
-									{filteredMints.map((mint) => (
-										<option key={mint} value={mint}>
-											{getMintHostname(mint)}
-										</option>
-									))}
-								</select>
-							) : (
-								<p className="text-sm text-destructive">
-									{allowedMints?.length ? 'No accepted auction mints are available in this wallet.' : 'No mints available.'}
-								</p>
-							)}
-						</div>
-
-						{depositStatus === 'error' && (
-							<p className="text-sm text-destructive">{depositError || 'Failed to generate invoice. Please try again.'}</p>
-						)}
-
-						<div className="flex justify-end gap-2">
-							<Button variant="outline" onClick={handleClose}>
-								Cancel
-							</Button>
-							<Button onClick={handleGenerateInvoice} disabled={isGenerating || !amount || !selectedMint || !hasAllowedMints}>
-								{isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-								Generate Invoice
-							</Button>
-						</div>
-					</div>
-				)}
-			</DialogContent>
-		</Dialog>
+		<DepositLightningModalView
+			open={open}
+			onClose={handleClose}
+			variant={variant}
+			isBidQuickView={isBidQuickView}
+			amount={amount}
+			onAmountChange={setAmount}
+			selectedMint={selectedMint}
+			onSelectedMintChange={setSelectedMint}
+			filteredMints={filteredMints}
+			hasAllowedMints={hasAllowedMints}
+			allowedMints={allowedMints}
+			depositInvoice={depositInvoice}
+			depositStatus={depositStatus}
+			depositError={depositError}
+			isGenerating={isGenerating}
+			copied={copied}
+			onCopyInvoice={handleCopyInvoice}
+			savedNwcWallets={savedNwcWallets}
+			selectedNwcWalletId={selectedNwcWalletId}
+			onSelectedNwcWalletChange={setSelectedNwcWalletId}
+			isPayingWithNwc={isPayingWithNwc}
+			nwcPaymentSent={nwcPaymentSent}
+			nwcPaymentAttempted={nwcPaymentAttempted}
+			needsConfirmationRetry={needsConfirmationRetry}
+			onRetryConfirmation={handleRetryConfirmation}
+			onConfirmCheckNow={handleConfirmCheckNow}
+			isCheckingDeposit={isCheckingDeposit}
+			onPayWithNwc={handlePayWithNwc}
+			onGenerateInvoice={handleGenerateInvoice}
+		/>
 	)
 }

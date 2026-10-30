@@ -14,8 +14,8 @@ import { ErrorState } from '@ui/shared/error-state'
 import { LoadingState } from '@ui/shared/loading-state'
 import { Notice } from '@ui/shared/notice'
 import { Button } from '@ui/wrappers/button'
-import { resolveCheckoutCardTitle, resolveSummaryCardTitle } from '@/feature/checkout/checkoutFlow'
-import { useCheckout } from '@/feature/checkout/useCheckout'
+import { resolveCheckoutCardTitle, resolveSummaryCardTitle } from '@platform/web/checkout/checkoutFlow'
+import { useCheckout } from '@platform/web/checkout/useCheckout'
 
 export const Route = createFileRoute('/checkout')({
 	component: RouteComponent,
@@ -24,9 +24,9 @@ export const Route = createFileRoute('/checkout')({
 /**
  * Checkout — the assembler.
  *
- * The flow's state machine lives in `@/feature/checkout/useCheckout` (host half:
+ * The flow's state machine lives in `@platform/web/checkout/useCheckout` (host half:
  * stores, queries, invoice mutation, publishing) with its pure transitions in
- * `@/feature/checkout/checkoutFlow`. The page frames live in
+ * `@platform/web/checkout/checkoutFlow`. The page frames live in
  * `@ui/checkout/checkout-layout-views`. This module only composes them: it holds
  * no state, computes no derived values and defines nothing but its page
  * container, so the ADR-0007 assembler guard sees the route stop importing

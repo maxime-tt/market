@@ -1,4 +1,4 @@
-import { getPersistedInvoicesForOrder, persistInvoicesLocally, updatePersistedInvoiceLocally } from '@/lib/utils/invoiceStorage'
+import { getPersistedInvoicesForOrder, persistInvoicesLocally, updatePersistedInvoiceLocally } from '@platform/web/payments/invoiceStorage'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import type { V4VDTO } from '@/lib/stores/cart'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'

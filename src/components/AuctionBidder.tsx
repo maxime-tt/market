@@ -6,7 +6,7 @@ import { Separator } from '@ui/primitives/separator'
 import { Label } from '@ui/primitives/label'
 import { DetailField } from '@ui/shared/detail-field'
 import { Alert, AlertDescription } from '@ui/primitives/alert'
-import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
+import { DepositLightningModalHost } from '@platform/web/wallet/DepositLightningModalHost'
 import { usePublishAuctionBidMutation, useRepublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
 import {
 	getAuctionBiddingCutoffAt,
@@ -663,7 +663,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	return (
 		<div className="flex flex-col gap-2 w-full" data-testid="auction-bidder">
-			<DepositLightningModal
+			<DepositLightningModalHost
 				open={isDepositOpen}
 				onClose={handleDepositModalClose}
 				initialAmount={depositAmount}

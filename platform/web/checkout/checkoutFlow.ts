@@ -5,7 +5,7 @@ import {
 	type CheckoutDeliveryRequirements,
 	type PaymentInvoiceData,
 } from '@sdk/commerce/checkout'
-import type { V4VDTO } from '@/lib/stores/cart'
+import type { V4VDTO } from '@platform/web/cart/cartStore'
 
 /**
  * The checkout flow's pure transitions and derived values.
