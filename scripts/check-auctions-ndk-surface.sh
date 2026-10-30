@@ -64,7 +64,13 @@ REQUIRE_COVERAGE="${AUCTIONS_GUARD_REQUIRE_COVERAGE:-1}"
 # the SAME commit (the E0 fusion rule above) — never around it. Enforced only
 # against the real repo (REQUIRE_COVERAGE=1); staged throwaway repos opt out
 # with the same switch.
-MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-89}"
+MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-88}"
+
+# I-PARKED wave 3 commit C (2026-10-30): the bidder panel moved verbatim out of
+# `src/components/AuctionBidder.tsx` to its platform host + ui view pair
+# (`platform/web/auctions/AuctionBidderHost.tsx` + `ui/auction/auction-bidder-views.tsx`),
+# so another src/components/Auction*.tsx family member left the scanned set and
+# MIN_SCANNED drops 89 -> 88 with it — same commit, per the E0 fusion rule above.
 
 # I-PARKED wave 3 commit B (2026-10-30): the bid progress dialog moved verbatim out of
 # `src/components/AuctionBidProgressDialog.tsx` to its platform host + ui view pair

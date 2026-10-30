@@ -29,7 +29,8 @@ import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState } from 'react'
-import { AuctionBidder } from './AuctionBidder'
+import { AuctionBidderHost as AuctionBidder } from '@platform/web/auctions/AuctionBidderHost'
+import { InvalidAuctionBidBlock } from '@/components/InvalidAuctionNotice'
 import { cn } from '@/lib/utils'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@sdk/commerce/auctions/constants'
 
@@ -179,7 +180,13 @@ export function AuctionCard({
 					<AuctionCountdown auction={auction} bids={bids} className="w-full justify-between" compact />
 				</div>
 
-				<AuctionBidder auction={auction} currentUserPubkey={currentUser?.pubkey} bids={bids} compact />
+				<AuctionBidder
+					auction={auction}
+					currentUserPubkey={currentUser?.pubkey}
+					bids={bids}
+					compact
+					renderBidBlocked={(admission) => <InvalidAuctionBidBlock admission={admission} itemLabel="auction" compact />}
+				/>
 			</div>
 		</div>
 	)

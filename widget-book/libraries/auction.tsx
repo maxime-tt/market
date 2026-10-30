@@ -24,6 +24,12 @@ import { AuctionShippingDetailRow, AuctionShippingOptionCard } from '@ui/auction
 import { AuctionVerdictView } from '@ui/auction/auction-verdict-view'
 import { AuctionBidsView } from '@ui/auction/auction-bids-view'
 import { AuctionBidProgressDialogView, type AuctionBidProgressDialogViewProps } from '@ui/auction/auction-bid-progress-view'
+import {
+	AuctionBidderView,
+	AuctionConfirmBidDialogView,
+	AuctionRulesDialogView,
+	type AuctionBidderViewProps,
+} from '@ui/auction/auction-bidder-views'
 import { AuctionTimelineChartView } from '@ui/auction/auction-timeline-chart-view'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import {
@@ -371,6 +377,49 @@ function AuctionBidProgressDialogViewDemo({
 				lockOutcomeUncertain={lockOutcomeUncertain}
 			/>
 		</div>
+	)
+}
+
+const BIDDER_MINT_OPTIONS: AuctionBidderViewProps['availableMints'] = [
+	{ mintUrl: 'https://mint.example', hostname: 'mint.example', balance: 12_000, hasSufficientBalance: true },
+	{ mintUrl: 'https://mint.two.example', hostname: 'mint.two.example', balance: 40_000, hasSufficientBalance: true },
+]
+
+const bidderPanelProps = (overrides: Partial<AuctionBidderViewProps>): AuctionBidderViewProps => ({
+	compact: false,
+	ended: false,
+	notStarted: false,
+	isOwnAuction: false,
+	hasSignedInBidder: true,
+	inCurveWindow: false,
+	curveShape: 'none',
+	curvePeakMultiplier: 2,
+	minBid: 10_000,
+	bidStep: 1_000,
+	showMintSelector: true,
+	availableMints: BIDDER_MINT_OPTIONS,
+	selectedMint: 'https://mint.example',
+	onSelectMint: () => {},
+	isDisabledInput: false,
+	isDisabledBid: false,
+	bidAmountInput: '10000',
+	onBidAmountChange: () => {},
+	onBidAmountPaste: () => {},
+	buttonText: 'Place Bid',
+	onSubmitBid: () => {},
+	onOpenRules: () => {},
+	...overrides,
+})
+
+/** Host stand-in for the confirm dialog's seller card (`UserCardHost`). */
+function SampleSellerCard() {
+	return (
+		<span data-slot="seller-card" className="inline-flex items-center gap-2 text-sm text-text-high">
+			<span className="flex h-8 w-8 items-center justify-center rounded-full bg-fill-accent text-xs font-semibold text-on-fill-accent">
+				S
+			</span>
+			<span>satoshi</span>
+		</span>
 	)
 }
 
@@ -1052,6 +1101,71 @@ export const auction: WidgetLibrary = {
 			name: 'BidProgressRejected',
 			render: () => (
 				<AuctionBidProgressDialogViewDemo lifecycleState="bid_published" hasNegativeVerdict representativeVerdictClaim="fraudulent_bid" />
+			),
+		},
+		{
+			// I-PARKED commit C: the bidder panel — one entry per gating state the
+			// host resolves (curve window, compact card, ended, lower-bound gate).
+			name: 'BidderPanelFull',
+			render: () => <AuctionBidderView {...bidderPanelProps({})} />,
+		},
+		{
+			name: 'BidderPanelCompact',
+			render: () => <AuctionBidderView {...bidderPanelProps({ compact: true, buttonText: 'Bid 10,000 sats' })} />,
+		},
+		{
+			// AUCTIONS.md §6.1: the anti-snipe banner inside `(end_at, max_end_at]`.
+			name: 'BidderPanelAntiSnipe',
+			render: () => <AuctionBidderView {...bidderPanelProps({ inCurveWindow: true, curveShape: 'linear', curvePeakMultiplier: 2 })} />,
+		},
+		{
+			name: 'BidderPanelEnded',
+			render: () => <AuctionBidderView {...bidderPanelProps({ ended: true, buttonText: 'Auction Ended' })} />,
+		},
+		{
+			// Lower-bound gate: bidding has not opened yet (`now < start_at`).
+			name: 'BidderPanelNotStarted',
+			render: () => <AuctionBidderView {...bidderPanelProps({ notStarted: true, buttonText: 'Bidding not started' })} />,
+		},
+		{
+			// The rules acknowledgement dialog, rendered OPEN.
+			name: 'BidderRulesDialog',
+			render: () => <AuctionRulesDialogView open onOpenChange={() => {}} publishPending={false} onConfirmRules={() => {}} />,
+		},
+		{
+			// The confirm-bid dialog: mint options, the delta top-up and the
+			// refund locktime warning, rendered OPEN.
+			name: 'BidderConfirmDialog',
+			render: () => (
+				<div className="max-w-2xl">
+					<AuctionConfirmBidDialogView
+						open
+						onOpenChange={() => {}}
+						publishPending={false}
+						auctionThumbnailUrl={AUCTION_THUMBNAIL}
+						auctionTitle={'Handmade mug'}
+						renderSellerCard={<SampleSellerCard />}
+						endsInLabel={'2d 3h'}
+						minBid={10_000}
+						bidStep={1_000}
+						inCurveWindow={false}
+						curveShape={'none'}
+						curvePeakMultiplier={2}
+						confirmBidAmountInput={'11000'}
+						onConfirmBidAmountChange={() => {}}
+						mintOptions={BIDDER_MINT_OPTIONS}
+						confirmBidMint={'https://mint.example'}
+						onConfirmBidMintChange={() => {}}
+						hasExistingBid={false}
+						confirmMintBalance={12_000}
+						previousBidAmount={5_000}
+						confirmDeltaAmount={6_000}
+						confirmTopUpNeeded={0}
+						refundLocktime={1_767_000_000}
+						onConfirm={() => {}}
+						confirmButtonDisabled={false}
+					/>
+				</div>
 			),
 		},
 		{

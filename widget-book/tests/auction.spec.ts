@@ -65,6 +65,13 @@ test('renders the auction library', async ({ page }) => {
 		'BidProgressLockUncertain',
 		'BidProgressRejected',
 		'BidProgressDepositUncertain',
+		'BidderPanelFull',
+		'BidderPanelCompact',
+		'BidderPanelAntiSnipe',
+		'BidderPanelEnded',
+		'BidderPanelNotStarted',
+		'BidderRulesDialog',
+		'BidderConfirmDialog',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
@@ -108,6 +115,56 @@ test('renders the bid progress dialog money-path states', async ({ page }) => {
 	const deposit = page.getByTestId('widget-BidProgressDepositUncertain')
 	await expect(deposit).toContainText('Payment outcome unconfirmed')
 	await expect(deposit).not.toContainText('Funding Failed')
+})
+
+/**
+ * I-PARKED commit C: the bidder panel is the money-path bid control, so the
+ * spec asserts the gating (lower-bound gate, ended, compact card, anti-snipe
+ * banner) and the confirm-bid surfaces, not just visibility.
+ */
+test('renders the bidder panel money-path gating states', async ({ page }) => {
+	await page.goto('/?library=auction')
+
+	const full = page.getByTestId('widget-BidderPanelFull')
+	await expect(full).toContainText('Minimum allowed bid: 10,000 sats')
+	await expect(full).toContainText('Mint:')
+	await expect(full).toContainText('mint.example')
+	await expect(full).toContainText('Review auction rules')
+	await expect(full.getByRole('button', { name: 'Place Bid' })).toBeEnabled()
+
+	// Compact card mode: the amount input and the minimum-bid info are hidden.
+	const compact = page.getByTestId('widget-BidderPanelCompact')
+	await expect(compact).toContainText('Bid 10,000 sats')
+	await expect(compact).not.toContainText('Minimum allowed bid:')
+	await expect(compact).not.toContainText('Mint:')
+
+	// AUCTIONS.md §6.1: the banner shows only inside `(end_at, max_end_at]`.
+	const antiSnipe = page.getByTestId('widget-BidderPanelAntiSnipe')
+	await expect(antiSnipe).toContainText('Anti-snipe window — minimum bid rising')
+	await expect(antiSnipe).toContainText('Floor right now: 10,000 sats.')
+
+	const ended = page.getByTestId('widget-BidderPanelEnded')
+	await expect(ended).toContainText('Auction Ended')
+	await expect(ended).not.toContainText('Minimum allowed bid:')
+
+	// Lower-bound gate: bids cannot be placed before start_at.
+	const notStarted = page.getByTestId('widget-BidderPanelNotStarted')
+	await expect(notStarted).toContainText('Bidding not started')
+	await expect(notStarted.getByRole('button', { name: 'Bidding not started' })).toBeDisabled()
+
+	// The confirm-bid dialog surfaces the auction identity, the mint options,
+	// the funding delta and the refund locktime.
+	const confirm = page.getByTestId('widget-BidderConfirmDialog')
+	await expect(confirm).toContainText('Confirm Bid')
+	await expect(confirm).toContainText('Handmade mug')
+	await expect(confirm).toContainText('Minimum allowed bid: 10,000 sats')
+	await expect(confirm).toContainText('To lock')
+	await expect(confirm).toContainText('6,000 sats')
+	await expect(confirm).toContainText('Your funds will be locked in this auction until')
+
+	const rules = page.getByTestId('widget-BidderRulesDialog')
+	await expect(rules).toContainText('Review auction rules before bidding')
+	await expect(rules).toContainText('I understand these rules')
 })
 
 test('renders the four simple editor tabs', async ({ page }) => {

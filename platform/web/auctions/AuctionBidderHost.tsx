@@ -1,13 +1,32 @@
-import { Button } from '@ui/primitives/button'
-import { ToggleGroup } from '@ui/primitives/toggle-group'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
-import { Separator } from '@ui/primitives/separator'
-import { Label } from '@ui/primitives/label'
-import { DetailField } from '@ui/shared/detail-field'
-import { Alert, AlertDescription } from '@ui/primitives/alert'
+/**
+ * platform/web/auctions/AuctionBidderHost.tsx — host for the bidder's money-path panel.
+ *
+ * Moved verbatim out of `src/components/AuctionBidder.tsx` (the component retires in this
+ * fused commit): this half owns the entire bid state machine — the bid mutations, the
+ * mint-selection hook, the DLEQ keyset polling, the validated-bid set, the rules
+ * acknowledgement, the funding lifecycle (`@platform/web/auctions/useAuctionBidFunding`)
+ * and the confirm-bid submission — and hands resolved values plus handlers to the
+ * props-only `@ui/auction/auction-bidder-views` (the panel, the rules dialog and the
+ * confirm-bid dialog). The presentation holds no state; the host holds no
+ * `platform -> @/` edge.
+ *
+ * The spec-validity gate (AUCTIONS.md §4.1) stays here: a malformed auction event is not
+ * biddable, and the blocked panel is injected by the caller (`renderBidBlocked`) because
+ * the notice module is still a `src/` component until its own slice retires it.
+ *
+ * Declared inert drops (zero importers/effect, verified before landing): the unused
+ * `Input` and `AvatarHost as AvatarUser` imports the retiring component carried.
+ */
+import { toast } from 'sonner'
+import { useMemo, useState, useEffect, useCallback, useRef, type ChangeEvent, type ClipboardEvent, type ReactNode } from 'react'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import type { AuctionAdmission } from '@sdk/commerce/auctions/schemas/auctionAdmission'
 import { DepositLightningModalHost } from '@platform/web/wallet/DepositLightningModalHost'
-import { usePublishAuctionBidMutation, useRepublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
+import {
+	usePublishAuctionBidMutation,
+	useRepublishAuctionBidMutation,
+	type AuctionBidFormData,
+} from '@platform/web/auctions/auctionPublishBid'
 import {
 	getAuctionBiddingCutoffAt,
 	getAuctionEndAt,
@@ -29,48 +48,47 @@ import {
 	getAuctionAuditors,
 	getAuctionAuditorQuorum,
 	useAuctionVerdicts,
-} from '@/queries/auctions'
+} from '@platform/web/auctions/auctionsQuery'
 import { computeValidatedBids } from '@sdk/commerce/auctions/bidValidation'
 import { useDleqKeysetPolling } from '@platform/web/auctions/useDleqKeysetPolling'
 import { parseAuctionEvent } from '@sdk/commerce/auctions/schemas/auctionEvent'
 import { inspectAuctionAdmission } from '@sdk/commerce/auctions/schemas/auctionAdmission'
-import { InvalidAuctionBidBlock } from '@/components/InvalidAuctionNotice'
 import { parseBidEvent } from '@sdk/commerce/auctions/schemas/bidEvent'
 import { parseValidatorVerdictEvent } from '@sdk/commerce/auctions/schemas/validatorEvents'
-import { toRawEvent } from '@/lib/nostr/eventLike'
-import { UserCard } from './UserCard'
-import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
+import { toRawEvent } from '@sdk/core/nostr/eventLike'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@sdk/commerce/auctions/settlement'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@sdk/commerce/auctions/constants'
-import type { NDKEvent } from '@/lib/nostr/ndk-events'
-import { toast } from 'sonner'
-import { useMemo, useState, useEffect, useCallback, useRef, type ChangeEvent, type ClipboardEvent } from 'react'
-import { useAuctionCountdown } from './AuctionCountdown'
+import { useAuctionCountdown } from '@platform/web/auctions/AuctionCountdownHost'
 import { formatAuctionCountdownDetailed } from '@sdk/commerce/auctions/countdownLabels'
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@ui/primitives/input-group'
-import { cn } from '@/lib/utils'
-import { TooltipToggleGroupItem } from '@ui/wrappers/tooltip-toggle-group-item'
 import { useStore } from '@tanstack/react-store'
-import { cashuStore } from '@/lib/stores/cashu'
-import { authStore } from '@/lib/stores/auth'
-import { uiActions } from '@/lib/stores/ui'
-import { normalizeMintUrl, getMintHostname } from '@/lib/wallet'
-import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@sdk/commerce/auctions/mintSelection'
+import { cashuStore } from '@platform/web/wallet/cashuStore'
+import { authStore } from '@platform/web/auth/authStore'
+import { uiActions } from '@platform/web/app/uiStore'
+import { normalizeMintUrl, getMintHostname } from '@sdk/commerce/payments/display'
+import { resolveAuctionMintSelection, type MintSelectionResult } from '@sdk/commerce/auctions/mintSelection'
 import { useAuctionBidFunding } from '@platform/web/auctions/useAuctionBidFunding'
-import { AuctionBidProgressDialogHost as AuctionBidProgressDialog } from '@platform/web/auctions/AuctionBidProgressDialogHost'
+import { AuctionBidProgressDialogHost } from '@platform/web/auctions/AuctionBidProgressDialogHost'
+import { AuctionBidderView, AuctionRulesDialogView, AuctionConfirmBidDialogView } from '@ui/auction/auction-bidder-views'
 
 const AUCTION_RULES_ACK_VERSION = 'v1'
 
-interface AuctionBidderProps {
-	auction: NDKEvent
+interface AuctionBidderHostProps {
+	auction: NostrEventLike
 	/** Pre-fetched bids from a parent. Skip the internal bid subscription when provided. */
-	bids?: NDKEvent[]
+	bids?: NostrEventLike[]
 	currentUserPubkey?: string
 	onBidSuccess?: () => void
 	compact?: boolean
+	/**
+	 * The spec-validity gate's blocked panel (the retiring component rendered
+	 * `InvalidAuctionBidBlock` directly; the notice module is still a `src/`
+	 * component, so its owner injects it here until that slice retires it).
+	 */
+	renderBidBlocked: (admission: AuctionAdmission) => ReactNode
 }
 
-export function useAuctionMintSelection(trustedMints: string[], bidAmount: number, previousBidAmount: number = 0) {
+function useAuctionMintSelection(trustedMints: string[], bidAmount: number, previousBidAmount: number = 0) {
 	const cashuState = useStore(cashuStore)
 	const [manualMint, setManualMint] = useState<string | null>(null)
 
@@ -119,7 +137,14 @@ export function useAuctionMintSelection(trustedMints: string[], bidAmount: numbe
 	}
 }
 
-export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBidSuccess, compact = false }: AuctionBidderProps) {
+export function AuctionBidderHost({
+	auction,
+	bids: bidsProp,
+	currentUserPubkey,
+	onBidSuccess,
+	compact = false,
+	renderBidBlocked,
+}: AuctionBidderHostProps) {
 	const bidMutation = usePublishAuctionBidMutation()
 	// #1235 Blocking 1: idempotent rebroadcast for a funded-but-unpublished
 	// bid — never re-locks funds on retry.
@@ -658,11 +683,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// so panel and badge cannot disagree.
 	const admission = useMemo(() => inspectAuctionAdmission(toRawEvent(auction)), [auction])
 	if (!admission.admissible) {
-		return <InvalidAuctionBidBlock admission={admission} itemLabel="auction" compact={compact} />
+		return <>{renderBidBlocked(admission)}</>
 	}
 
 	return (
-		<div className="flex flex-col gap-2 w-full" data-testid="auction-bidder">
+		<>
 			<DepositLightningModalHost
 				open={isDepositOpen}
 				onClose={handleDepositModalClose}
@@ -675,7 +700,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				onFundingFailed={handleFundingFailed}
 				variant="bid"
 			/>
-			<AuctionBidProgressDialog
+			<AuctionBidProgressDialogHost
 				open={isBidProgressDialogOpen}
 				onClose={handleCloseBidProgressDialog}
 				lifecycleState={bidFundingLifecycleState}
@@ -689,262 +714,63 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				onRetryPublish={() => void retryBidPublish()}
 				lockOutcomeUncertain={lockOutcomeUncertainRecoveryRecordId !== null}
 			/>
-			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
-				<DialogContent className="sm:max-w-lg">
-					<DialogHeader>
-						<DialogTitle>Review auction rules before bidding</DialogTitle>
-						<DialogDescription>
-							Auction bids use Cashu e-cash with P2PK locks. Review what can happen to your funds before placing bids in this auction.
-						</DialogDescription>
-					</DialogHeader>
-					<div className="space-y-3 py-2 text-sm text-muted-foreground">
-						<ul className="list-disc space-y-2 pl-5">
-							<li>
-								Your bid may lock Cashu e-cash to an auction-derived P2PK key, with a refund path that only opens after the auction and
-								settlement window.
-							</li>
-							<li>
-								The lock is designed so the seller cannot redeem the bid from public relay data alone before settlement; settlement requires
-								the bid-specific path secret.
-							</li>
-							<li>
-								If you win, settlement may require you to reveal or transfer the bid's path secret so the seller can redeem the funds.
-							</li>
-							<li>
-								If the winning bid is not settled before the settlement window closes, it may be invalidated or move to the refund/fallback
-								path.
-							</li>
-							<li>If you lose, or settlement does not complete, your funds may only become refundable after the refund window opens.</li>
-							<li>
-								This auction still relies on trusted parties: Cashu mints custody the bitcoin behind e-cash, validators/auditors and relay
-								data affect what the app shows, and bidders/sellers must complete settlement and delivery honestly.
-							</li>
-						</ul>
-					</div>
-					<DialogFooter>
-						<Button variant="outline" onClick={() => handleRulesDialogOpenChange(false)} disabled={bidMutation.isPending}>
-							Cancel
-						</Button>
-						<Button onClick={handleConfirmRules} disabled={bidMutation.isPending}>
-							I understand these rules
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-			<Dialog open={isConfirmBidDialogOpen} onOpenChange={handleConfirmBidDialogOpenChange}>
-				<DialogContent className="sm:max-w-2xl">
-					<DialogHeader>
-						<DialogTitle className="text-xl">Confirm Bid</DialogTitle>
-						<DialogDescription>Review the auction details and set your bid amount.</DialogDescription>
-					</DialogHeader>
-
-					{/* Top section: two-column layout with auction image and details */}
-					<div className="flex gap-6 py-4">
-						{/* Left column: Auction image */}
-						{auctionThumbnailUrl && (
-							<img
-								src={auctionThumbnailUrl}
-								alt={auctionTitle}
-								className="w-40 h-40 rounded-lg object-cover shrink-0 border border-border"
-							/>
-						)}
-						{/* Right column: Auction metadata */}
-						<div className="flex flex-col gap-3 min-w-0 grow">
-							<div className="min-w-0">
-								<h3 className="font-semibold text-lg truncate">{auctionTitle}</h3>
-							</div>
-							<div className="min-w-0">
-								<UserCard pubkey={auction.pubkey} size="md" subtitle="nip-05" onPress="none" />
-							</div>
-							<div className="flex flex-col gap-1">
-								<DetailField
-									label="Ends in"
-									value={ended ? 'Ended' : formatAuctionCountdownDetailed(Math.max(0, biddingCutoffAt - countdown.now))}
-								/>
-								<DetailField label="Min. bid" value={`${minBid.toLocaleString()} sats`} valueClassName="font-semibold" />
-							</div>
-						</div>
-					</div>
-
-					<Separator />
-
-					{/* Bottom section: Bid details */}
-					<div className="flex flex-col gap-4 py-4">
-						{/* Bid amount input */}
-						<div className="flex flex-col gap-2">
-							<Label htmlFor="confirm-bid-amount">Bid amount</Label>
-							<InputGroup>
-								<InputGroupInput
-									id="confirm-bid-amount"
-									type="number"
-									min={minBid}
-									step={bidStep}
-									value={confirmBidAmountInput}
-									onChange={(e) => setConfirmBidAmountInput(e.target.value)}
-									placeholder={`Minimum: ${minBid.toLocaleString()} sats`}
-									disabled={bidMutation.isPending}
-								/>
-								<InputGroupAddon align="inline-end">sats</InputGroupAddon>
-							</InputGroup>
-							<p className="text-sm text-muted-foreground">Minimum allowed bid: {minBid.toLocaleString()} sats</p>
-							{inCurveWindow && auctionCurve.shape !== 'none' && (
-								<Alert className="border-amber-300 bg-amber-50 text-amber-800">
-									<AlertDescription className="text-sm text-amber-700">
-										Anti-snipe window active — minimum bid is rising ({auctionCurve.shape}, {auctionCurve.peakMultiplier}x by cutoff).
-									</AlertDescription>
-								</Alert>
-							)}
-						</div>
-
-						{/* Mint selection */}
-						<div className="flex flex-col gap-2">
-							<Label>Mint</Label>
-							{confirmMintOptions.length > 0 ? (
-								<Select value={confirmBidMint ?? ''} onValueChange={(val) => setConfirmBidMint(val)} disabled={hasExistingBid}>
-									<SelectTrigger className="w-full">
-										<SelectValue placeholder="Select a mint" />
-									</SelectTrigger>
-									<SelectContent>
-										{confirmMintOptions.map((m) => (
-											<SelectItem key={m.mintUrl} value={m.mintUrl}>
-												{m.hostname} ({m.balance.toLocaleString()} sats)
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							) : (
-								<p className="text-sm text-destructive">No trusted mints available</p>
-							)}
-							{hasExistingBid && (
-								<p className="text-sm text-muted-foreground">
-									Multiple chained bids from the same mint only — your previous bid uses this mint.
-								</p>
-							)}
-						</div>
-
-						{/* Funding details */}
-						<div className="flex flex-col gap-2">
-							<DetailField label="Available in mint" value={`${confirmMintBalance.toLocaleString()} sats`} />
-							{previousBidAmount > 0 && (
-								<DetailField label="Already locked (previous bid)" value={`${previousBidAmount.toLocaleString()} sats`} />
-							)}
-							<DetailField label="To lock" value={`${confirmDeltaAmount.toLocaleString()} sats`} />
-						</div>
-
-						{/* Top-up amount (big, prominent) */}
-						{confirmTopUpNeeded > 0 && (
-							<div className="flex flex-col items-center gap-1 py-2">
-								<p className="text-sm text-muted-foreground">Pay via Lightning</p>
-								<p className="text-3xl font-bold text-amber-600">{confirmTopUpNeeded.toLocaleString()} sats</p>
-							</div>
-						)}
-
-						{/* Lock time warning */}
-						{refundLocktimeTs > 0 && (
-							<Alert className="border-amber-300 bg-amber-50">
-								<AlertDescription className="text-sm font-medium text-amber-800">
-									Your funds will be locked in this auction until{' '}
-									{new Date(refundLocktimeTs * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-								</AlertDescription>
-							</Alert>
-						)}
-					</div>
-
-					<DialogFooter>
-						<Button variant="outline" onClick={() => handleConfirmBidDialogOpenChange(false)} disabled={bidMutation.isPending}>
-							Cancel
-						</Button>
-						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending || !confirmBidMint || confirmAmountIsBelowFloor}>
-							{bidMutation.isPending ? 'Submitting...' : 'Confirm Bid'}
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-			{/* Anti-snipe curve banner — visible only when we're inside
-			    `(end_at, max_end_at]` AND the auction has a non-`none` curve.
-			    Tells the bidder why the floor is higher than they'd expect
-			    from the flat minimum bid / raise. AUCTIONS.md §6.1. */}
-			{!ended && inCurveWindow && auctionCurve.shape !== 'none' && (
-				<div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-					<p className="font-semibold">Anti-snipe window — minimum bid rising</p>
-					<p className="mt-0.5 text-amber-700">
-						Flat bidding has ended. Bids are still accepted until auction end, but the floor ramps up{' '}
-						<span className="font-semibold">{auctionCurve.shape}</span>ly to {auctionCurve.peakMultiplier}× by then. Floor right now:{' '}
-						<span className="font-semibold">{minBid.toLocaleString()} sats</span>.
-					</p>
-				</div>
-			)}
-
-			{!compact && showMintSelector && (
-				<div className="flex items-center gap-2">
-					<span className="text-xs text-foreground/60 whitespace-nowrap">Mint:</span>
-					<ToggleGroup
-						type="single"
-						value={selectedMint ?? ''}
-						onValueChange={(val) => {
-							if (val) setSelectedMint(val)
-						}}
-						className="flex flex-wrap gap-1"
-					>
-						{availableMints
-							.filter((m) => m.balance > 0)
-							.map((m) => (
-								<TooltipToggleGroupItem
-									key={m.mintUrl}
-									value={m.mintUrl}
-									variant="outline"
-									size="sm"
-									tooltip={`${m.mintUrl} — ${m.balance.toLocaleString()} sats`}
-									disabled={isDisabledInput || !m.hasSufficientBalance}
-									className={cn('cursor-pointer flex text-xs', !m.hasSufficientBalance && 'opacity-60')}
-								>
-									{m.hostname} <span className="text-foreground/50">({m.balance.toLocaleString()})</span>
-								</TooltipToggleGroupItem>
-							))}
-					</ToggleGroup>
-				</div>
-			)}
-			{/* Main Action Area */}
-			<div className={cn('flex flex-col sm:flex-row gap-2 items-stretch sm:items-center')}>
-				{!compact && (
-					<InputGroup className="grow w-auto">
-						<InputGroupInput
-							type="number"
-							min={minBid}
-							step={bidStep}
-							value={bidAmountInput}
-							onChange={handleBidAmountInputChange}
-							onPaste={handleBidAmountInputPaste}
-							placeholder={`Min: ${minBid.toLocaleString()}`}
-							disabled={isDisabledInput}
-						/>
-					</InputGroup>
-				)}
-
-				{/* Place Bid Button */}
-				<Button
-					onClick={handleSubmitBid}
-					disabled={isDisabledBid}
-					variant={ended ? 'ghost' : isOwnAuction ? 'secondary' : 'default'}
-					className={cn('whitespace-nowrap flex grow')}
-				>
-					{buttonText}
-				</Button>
-			</div>
-
-			{/* Minimum Bid Info */}
-			{!compact && !ended && <div className="text-xs text-foreground/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>}
-			{!compact && hasSignedInBidder && !isOwnAuction && (
-				<Button
-					type="button"
-					variant="link"
-					size="sm"
-					onClick={() => setIsRulesDialogOpen(true)}
-					className="h-auto justify-start p-0 text-xs text-muted-foreground"
-				>
-					Review auction rules
-				</Button>
-			)}
-		</div>
+			<AuctionRulesDialogView
+				open={isRulesDialogOpen}
+				onOpenChange={handleRulesDialogOpenChange}
+				publishPending={bidMutation.isPending}
+				onConfirmRules={handleConfirmRules}
+			/>
+			<AuctionConfirmBidDialogView
+				open={isConfirmBidDialogOpen}
+				onOpenChange={handleConfirmBidDialogOpenChange}
+				publishPending={bidMutation.isPending}
+				auctionThumbnailUrl={auctionThumbnailUrl}
+				auctionTitle={auctionTitle}
+				renderSellerCard={<UserCardHost pubkey={auction.pubkey} size="md" subtitle="nip-05" onPress="none" />}
+				endsInLabel={ended ? 'Ended' : formatAuctionCountdownDetailed(Math.max(0, biddingCutoffAt - countdown.now))}
+				minBid={minBid}
+				bidStep={bidStep}
+				inCurveWindow={inCurveWindow}
+				curveShape={auctionCurve.shape}
+				curvePeakMultiplier={auctionCurve.peakMultiplier}
+				confirmBidAmountInput={confirmBidAmountInput}
+				onConfirmBidAmountChange={setConfirmBidAmountInput}
+				mintOptions={confirmMintOptions}
+				confirmBidMint={confirmBidMint}
+				onConfirmBidMintChange={setConfirmBidMint}
+				hasExistingBid={hasExistingBid}
+				confirmMintBalance={confirmMintBalance}
+				previousBidAmount={previousBidAmount}
+				confirmDeltaAmount={confirmDeltaAmount}
+				confirmTopUpNeeded={confirmTopUpNeeded}
+				refundLocktime={refundLocktimeTs}
+				onConfirm={() => void handleConfirmBid()}
+				confirmButtonDisabled={!confirmBidMint || confirmAmountIsBelowFloor}
+			/>
+			<AuctionBidderView
+				compact={compact}
+				ended={ended}
+				notStarted={notStarted}
+				isOwnAuction={isOwnAuction}
+				hasSignedInBidder={hasSignedInBidder}
+				inCurveWindow={inCurveWindow}
+				curveShape={auctionCurve.shape}
+				curvePeakMultiplier={auctionCurve.peakMultiplier}
+				minBid={minBid}
+				bidStep={bidStep}
+				showMintSelector={showMintSelector}
+				availableMints={availableMints}
+				selectedMint={selectedMint}
+				onSelectMint={setSelectedMint}
+				isDisabledInput={isDisabledInput}
+				isDisabledBid={isDisabledBid}
+				bidAmountInput={bidAmountInput}
+				onBidAmountChange={handleBidAmountInputChange}
+				onBidAmountPaste={handleBidAmountInputPaste}
+				buttonText={buttonText}
+				onSubmitBid={() => void handleSubmitBid()}
+				onOpenRules={() => setIsRulesDialogOpen(true)}
+			/>
+		</>
 	)
 }

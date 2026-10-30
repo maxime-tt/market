@@ -76,7 +76,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Check, Gavel, Landmark, Radio } from 'lucide-react'
-import { InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
+import { InvalidAuctionBidBlock, InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
 import { TestListingNoticeHost as TestListingNotice } from '@platform/web/config/testListingNoticeHost'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'
@@ -84,7 +84,7 @@ import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
-import { AuctionBidder } from '@/components/AuctionBidder'
+import { AuctionBidderHost as AuctionBidder } from '@platform/web/auctions/AuctionBidderHost'
 import { LiveChatPanel } from '@/components/LiveChatPanel'
 import { UserCard } from '@/components/UserCard'
 import { AuctionVerdictPanelHost } from '@platform/web/auctions/AuctionVerdictPanelHost'
@@ -790,7 +790,12 @@ function AuctionDetailRoute() {
 							    *other* auctions on this page are not bid controls for this
 							    one. */}
 							<div className="w-full" data-testid="auction-bid-area">
-								<AuctionBidder auction={auction} currentUserPubkey={activeUserPubkey} bids={bids} />
+								<AuctionBidder
+									auction={auction}
+									currentUserPubkey={activeUserPubkey}
+									bids={bids}
+									renderBidBlocked={(admission) => <InvalidAuctionBidBlock admission={admission} itemLabel="auction" />}
+								/>
 							</div>
 							{parsedAuctionForSettlement && (
 								<AuctionSettlement
