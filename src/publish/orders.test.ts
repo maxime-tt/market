@@ -207,11 +207,11 @@ const ndkStoreMock = () => ({
 	},
 })
 
-mock.module('@/lib/stores/ndk', ndkStoreMock)
-// L-utils mock repair (additive, registration-only): the order publish path reads
-// the NDK store through the platform module directly, so the suite registers the
-// same factory for `@platform/web/ndk/ndkStore` alongside the src shim specifier.
 mock.module('@platform/web/ndk/ndkStore', ndkStoreMock)
+// L-utils mock repair (additive, registration-only): the order publish path reads
+// the NDK store through the platform module directly. The src shim specifier that
+// used to sit alongside this registration retired with E1b (shim deleted), so a
+// single registration on the platform module remains.
 
 mock.module('@nostr-dev-kit/ndk', () => ({
 	NDKUser: TestNDKUser,
@@ -223,20 +223,24 @@ mock.module('@nostr-dev-kit/ndk', () => ({
 // (`getActiveSignerCapability` / `getCurrentPubkey`), so the suite registers
 // the capability + identity view of the same `currentSigner`/`currentBuyer` the
 // ndk store mock above already answers with — same keys, same option
-// semantics. Both specifiers are registered: the platform module is what the
-// production code resolves; the src shim keeps the pre-A3.4 resolution green.
+// semantics. Both specifiers were registered pre-E1b; the src shim specifier is
+// gone, so one registration on the platform module remains.
 const authStoreMock = () => ({
 	getActiveSignerCapability: () => capabilityFor(currentSigner),
 	getCurrentPubkey: () => currentBuyer?.pubkey ?? null,
 })
-mock.module('@/lib/stores/auth', authStoreMock)
 mock.module('@platform/web/auth/authStore', authStoreMock)
 
 import type { CheckoutFormData } from '@platform/web/checkout/ShippingAddressForm'
 import type { SignerCapability } from '@sdk/core/signer'
 import { decryptPrivateOrderMessage } from '@sdk/commerce/messaging/privateOrderMessage'
-import { createOrder, createOrderCreationEvent, publishOrderWithDependencies, publishOrderWorkflowWithDependencies } from '@/publish/orders'
-import { privateDetailsMatchPublicOrder } from '@/queries/orders'
+import {
+	createOrder,
+	createOrderCreationEvent,
+	publishOrderWithDependencies,
+	publishOrderWorkflowWithDependencies,
+} from '@platform/web/orders/orderPublish'
+import { privateDetailsMatchPublicOrder } from '@platform/web/orders/ordersQuery'
 import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@sdk/core/testing/piiSentinelFixture'
 
 const PII_SENTINELS = [

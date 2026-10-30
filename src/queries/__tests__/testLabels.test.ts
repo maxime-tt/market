@@ -14,8 +14,8 @@ import {
 	LABEL_VALUE_TEST,
 	TEST_LABEL_PRODUCT_KIND,
 	l_TAG,
-} from '@/lib/constants/testLabels'
-import { testLabelActions, testLabelStore } from '@/lib/stores/testLabels'
+} from '@sdk/config/test-label-constants'
+import { testLabelActions, testLabelStore } from '@platform/web/config/testLabelsStore'
 import {
 	excludeTestLabeledEvents,
 	fetchTestLabels,
@@ -24,7 +24,7 @@ import {
 	isValidAuthorizedTestLabel,
 	reconcileActiveTestLabels,
 	resetAuthorizedLabelersCache,
-} from '../testLabels'
+} from '@platform/web/config/testLabelsBinding'
 
 // --- Test fixtures ---
 
@@ -358,7 +358,7 @@ describe('fetchTestLabels fail-open (via store)', () => {
 		testLabelActions.clearLabels()
 
 		// fetchTestLabels with no NDK available must leave the store unloaded
-		const { fetchTestLabels } = await import('../testLabels')
+		const { fetchTestLabels } = await import('@platform/web/config/testLabelsBinding')
 		const result = await fetchTestLabels([PRODUCT_COORD])
 
 		expect(result.size).toBe(0)
@@ -449,8 +449,7 @@ describe('fetchTestLabels chunk scheduling', () => {
 			getBugRelay: () => null,
 			getMainRelay: () => null,
 		})
-		mock.module('@/lib/stores/ndk', ndkStoreMock)
-		mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
+		mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // E1b: src shim retired — consumers load the platform store
 
 		const result = await fetchTestLabels(coordinates)
 
@@ -559,7 +558,7 @@ describe('test-label publish via the platform publish bridge', () => {
 
 // --- Authorized labeler set: editors UNION admins (ADR-0009) ---
 //
-// These cases install a `@/queries/app-settings` mock whose reads SUCCEED. Bun's
+// These cases install a `@platform/web/app-settings/appSettingsQuery` mock whose reads SUCCEED. Bun's
 // mock registry is process-wide and is never uninstalled, and every earlier
 // case (fail-open, the show-test-listings toggle, chunk scheduling) depends on
 // authorization resolving to null — a succeeding mock sends those down the real

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { finalizeEvent, getPublicKey, verifyEvent as realVerifyEvent } from 'nostr-tools'
 import { parseLiveActivity, deriveLiveActivityStatus, buildLiveActivityDTag, LIVE_ACTIVITY_KIND } from '@sdk/core/nostr/nip53'
-import { configStore } from '@/lib/stores/config'
+import { configStore } from '@platform/web/config/appConfigStore'
 
 const CVM_PUBKEY = 'c'.repeat(64)
 const SELLER_PUBKEY = 'a'.repeat(64)
@@ -56,10 +56,9 @@ const ndkStoreMock = () => ({
 	// imports statically (store drain D1, slice 7).
 	fetchLatestAppEvent: () => null,
 })
-mock.module('@/lib/stores/ndk', ndkStoreMock)
-mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // E1b: src shim retired — consumers load the platform store
 
-const { fetchLiveActivity } = await import('@/queries/liveChat')
+const { fetchLiveActivity } = await import('@platform/web/messaging/liveChatQuery')
 
 /** Create a plain (unsigned) event object for tests that don't need real crypto */
 function liveActivityEvent(

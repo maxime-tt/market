@@ -7,7 +7,7 @@ import {
 	serializeCartIntent,
 } from '@platform/web/cart/cartPersistence'
 import { CART_PERSISTENCE_D_TAG, CART_PERSISTENCE_KIND, type PersistedCartContent } from '@platform/web/cart/cartPersistenceSchema'
-import type { NormalizedCart } from '@/lib/stores/cart'
+import type { NormalizedCart } from '@platform/web/cart/cartStore'
 
 const sellerA = 'a'.repeat(64)
 const sellerB = 'b'.repeat(64)

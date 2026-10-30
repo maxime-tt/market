@@ -33,7 +33,7 @@ function baseUsePublishLiveChatMessageMutation() {
 // Import the real module so we can preserve non-hook exports (fetchLiveActivity)
 // while overriding only the hooks. Mocking the entire namespace would shadow
 // fetchLiveActivity and break liveChat.test.ts when Bun runs both files together.
-const realLiveChat = await import('@/queries/liveChat')
+const realLiveChat = await import('@platform/web/messaging/liveChatQuery')
 
 mock.module('@platform/web/messaging/liveChatQuery', () => ({
 	fetchLiveActivity: realLiveChat.fetchLiveActivity,
@@ -42,27 +42,23 @@ mock.module('@platform/web/messaging/liveChatQuery', () => ({
 	useLiveChatMessages: () => baseUseLiveChatMessages(),
 }))
 
-mock.module('@/publish/liveChat', () => ({
-	usePublishLiveChatMessageMutation: () => baseUsePublishLiveChatMessageMutation(),
-}))
-
-// Batch 2 lane D: LiveChatPanel moved to @platform/web/messaging/LiveChatPanel, so it now loads
-// the publish binding from its platform home. Mock added additively (the legacy key stays).
 mock.module('@platform/web/messaging/liveChatPublish', () => ({
 	usePublishLiveChatMessageMutation: () => baseUsePublishLiveChatMessageMutation(),
 }))
 
+// Batch 2 lane D: LiveChatPanel moved to @platform/web/messaging/LiveChatPanel, so it now loads
+// the publish binding from its platform home. Single registration since E1b retired the src shim.
+
 const authStoreMock = {
 	authStore: emptyAuthStore,
 }
-mock.module('@/lib/stores/auth', () => authStoreMock)
-mock.module('@platform/web/auth/authStore', () => authStoreMock) // Wave F W-E5b: consumers load the platform store
+mock.module('@platform/web/auth/authStore', () => authStoreMock) // E1b: src shim retired — consumers load the platform store
 
 // LiveChatPanel transitively imports @/lib/utils which imports from
-// @/lib/stores/ndk. Some Bun 1.3.x runners leak module mocks between test
+// @platform/web/ndk/ndkStore. Some Bun 1.3.x runners leak module mocks between test
 // files, so provide a complete mock here before dynamically importing the
 // component.
-mock.module('@/lib/stores/ndk', () => ({
+mock.module('@platform/web/ndk/ndkStore', () => ({
 	ndkStore: {
 		state: { ndk: null, explicitRelayUrls: [], writeRelayUrls: [], health: 'unknown', connectedRelayCount: 0 },
 	},

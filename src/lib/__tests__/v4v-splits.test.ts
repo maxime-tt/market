@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { V4VDTO } from '@/lib/stores/cart'
+import type { V4VDTO } from '@platform/web/cart/cartStore'
 import {
 	addRecipientToShares,
 	deriveInitialSharesFromStored,

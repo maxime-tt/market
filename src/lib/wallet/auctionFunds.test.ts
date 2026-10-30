@@ -13,7 +13,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Amount, type Proof, type Wallet } from '@cashu/cashu-ts'
 
-import { authStore } from '../stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { persistPreLockRecoveryRecord, upsertBidderRecord } from '@sdk/commerce/auctions/bidderRecords'
 import {
 	createAuctionReclaim,

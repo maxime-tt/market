@@ -3,8 +3,8 @@ import { finalizeEvent } from 'nostr-tools'
 import type { NostrEvent } from 'nostr-tools/pure'
 
 import { applesauceIo } from '@platform/web/applesauceIo'
-import { ndkActions } from '@/lib/stores/ndk'
-import { fetchSellerPrivateOrderGiftWraps, subscribeToOrderUpdates } from '../orders'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { fetchSellerPrivateOrderGiftWraps, subscribeToOrderUpdates } from '@platform/web/orders/ordersQuery'
 
 const GIFT_WRAP_KIND = 1059
 const ORDER_PROCESS_KIND = 16

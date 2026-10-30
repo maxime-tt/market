@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { resolveAuctionMintSelection } from '@sdk/commerce/auctions/mintSelection'
-import type { CashuState } from '@/lib/stores/cashu'
+import type { CashuState } from '@platform/web/wallet/cashuStore'
 
 const MINT_A = 'https://mint-a.example.com'
 const MINT_B = 'https://mint-b.example.com'

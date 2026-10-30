@@ -1,9 +1,9 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'
 import type { Filter as NostrFilter } from 'nostr-tools'
-import type { NostrEventLike } from '@/lib/nostr/eventLike'
-import { testLabelActions } from '@/lib/stores/testLabels'
-import { setCachedTestLabel, invalidateTestLabelCache } from '../testLabels'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { testLabelActions } from '@platform/web/config/testLabelsStore'
+import { setCachedTestLabel, invalidateTestLabelCache } from '@platform/web/config/testLabelsBinding'
 
 /**
  * ADR-0009 — the auctions half of the gate, at the read boundary.
@@ -93,7 +93,7 @@ mock.module('@platform/web/app-settings/appSettingsQuery', () => ({
 const ndkStoreMock = () => ({
 	getWriteRelays: () => [],
 	// The authorized-labeler settings read pulls these through
-	// `@/queries/app-settings`; returning nothing keeps it offline and lands on
+	// `@platform/web/app-settings/appSettingsQuery`; returning nothing keeps it offline and lands on
 	// "authorization undeterminable" → the gate fails open (asserted below).
 	getMainRelay: () => null,
 	fetchLatestAppEvent: async () => null,
@@ -111,27 +111,26 @@ const ndkStoreMock = () => ({
 	// statically (store drain D1, slice 3b).
 	getBugRelay: () => null,
 })
-mock.module('@/lib/stores/ndk', ndkStoreMock)
-mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // E1b: src shim retired — consumers load the platform store
 
 /**
  * Loaded in `beforeAll`, not at module scope: the `mock.module` calls above
- * must be registered before `@/queries/auctions` is imported and Bun does not
+ * must be registered before `@platform/web/auctions/auctionsQuery` is imported and Bun does not
  * hoist them. Deliberately not a top-level `await` — the repo's tsconfig sets
  * `module: preserve` with no `target`, so TLA is a type error for every file
  * that uses it, and this file adds no new diagnostics.
  */
 let applesauceIo: (typeof import('@platform/web/applesauceIo'))['applesauceIo']
-let fetchAuction: (typeof import('@/queries/auctions'))['fetchAuction']
-let fetchAuctionByATag: (typeof import('@/queries/auctions'))['fetchAuctionByATag']
-let fetchAuctions: (typeof import('@/queries/auctions'))['fetchAuctions']
-let fetchAuctionsByPubkey: (typeof import('@/queries/auctions'))['fetchAuctionsByPubkey']
+let fetchAuction: (typeof import('@platform/web/auctions/auctionsQuery'))['fetchAuction']
+let fetchAuctionByATag: (typeof import('@platform/web/auctions/auctionsQuery'))['fetchAuctionByATag']
+let fetchAuctions: (typeof import('@platform/web/auctions/auctionsQuery'))['fetchAuctions']
+let fetchAuctionsByPubkey: (typeof import('@platform/web/auctions/auctionsQuery'))['fetchAuctionsByPubkey']
 let realFetchEvents: (typeof import('@platform/web/applesauceIo'))['applesauceIo']['fetchEvents']
 let realFetch: typeof globalThis.fetch
 
 beforeAll(async () => {
 	;({ applesauceIo } = await import('@platform/web/applesauceIo'))
-	;({ fetchAuction, fetchAuctionByATag, fetchAuctions, fetchAuctionsByPubkey } = await import('@/queries/auctions'))
+	;({ fetchAuction, fetchAuctionByATag, fetchAuctions, fetchAuctionsByPubkey } = await import('@platform/web/auctions/auctionsQuery'))
 	realFetchEvents = applesauceIo.fetchEvents
 	realFetch = globalThis.fetch
 })

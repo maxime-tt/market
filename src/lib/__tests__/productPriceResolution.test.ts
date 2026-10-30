@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test'
 
 // Mock the publish layer before importing the product form store so
 // continuePublishing can be asserted without relay/network side effects.
-mock.module('@/publish/products', () => ({
+mock.module('@platform/web/products/productPublish', () => ({
 	publishProduct: mock(async () => 'test-published-event-id'),
 	updateProduct: mock(async () => 'test-updated-event-id'),
 }))
 
-import { publishProduct } from '@/publish/products'
-import { productFormActions } from '@/lib/stores/product'
+import { publishProduct } from '@platform/web/products/productPublish'
+import { productFormActions } from '@platform/web/products/productFormStore'
 import { applyFiatPriceEdit, deriveSatsPriceFromFiat, resolvePublishPrice } from '@sdk/commerce/products/productPriceResolution'
 
 // Deterministic converter for tests: 1 unit of currency = 100_000 sats.

@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'
 import type { Filter as NostrFilter } from 'nostr-tools'
-import type { NostrEventLike } from '@/lib/nostr/eventLike'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 /**
  * Spec-validity admission at the read boundary (AUCTIONS.md §4.1).
@@ -70,22 +70,21 @@ const ndkStoreMock = () => ({
 	// statically (store drain D1, slice 3b).
 	getBugRelay: () => null,
 })
-mock.module('@/lib/stores/ndk', ndkStoreMock)
-mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // E1b: src shim retired — consumers load the platform store
 
 let applesauceIo: (typeof import('@platform/web/applesauceIo'))['applesauceIo']
-let fetchAuction: (typeof import('@/queries/auctions'))['fetchAuction']
-let fetchAuctionByATag: (typeof import('@/queries/auctions'))['fetchAuctionByATag']
-let fetchAuctions: (typeof import('@/queries/auctions'))['fetchAuctions']
-let fetchAuctionsByPubkey: (typeof import('@/queries/auctions'))['fetchAuctionsByPubkey']
-let auctionsByPubkeyQueryOptions: (typeof import('@/queries/auctions'))['auctionsByPubkeyQueryOptions']
-let getAuctionStartingBid: (typeof import('@/queries/auctions'))['getAuctionStartingBid']
+let fetchAuction: (typeof import('@platform/web/auctions/auctionsQuery'))['fetchAuction']
+let fetchAuctionByATag: (typeof import('@platform/web/auctions/auctionsQuery'))['fetchAuctionByATag']
+let fetchAuctions: (typeof import('@platform/web/auctions/auctionsQuery'))['fetchAuctions']
+let fetchAuctionsByPubkey: (typeof import('@platform/web/auctions/auctionsQuery'))['fetchAuctionsByPubkey']
+let auctionsByPubkeyQueryOptions: (typeof import('@platform/web/auctions/auctionsQuery'))['auctionsByPubkeyQueryOptions']
+let getAuctionStartingBid: (typeof import('@platform/web/auctions/auctionsQuery'))['getAuctionStartingBid']
 let realFetchEvents: (typeof import('@platform/web/applesauceIo'))['applesauceIo']['fetchEvents']
 
 beforeAll(async () => {
 	;({ applesauceIo } = await import('@platform/web/applesauceIo'))
 	;({ fetchAuction, fetchAuctionByATag, fetchAuctions, fetchAuctionsByPubkey, auctionsByPubkeyQueryOptions, getAuctionStartingBid } =
-		await import('@/queries/auctions'))
+		await import('@platform/web/auctions/auctionsQuery'))
 	realFetchEvents = applesauceIo.fetchEvents
 })
 

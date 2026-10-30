@@ -7,7 +7,7 @@ import {
 	cashuStore,
 	validateAuctionDepositInvoiceQuote,
 	waitForDepositConfirmation,
-} from '@/lib/stores/cashu'
+} from '@platform/web/wallet/cashuStore'
 
 type DepositEventName = 'success' | 'error'
 

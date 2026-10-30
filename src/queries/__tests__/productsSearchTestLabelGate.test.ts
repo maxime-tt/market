@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
-import { ndkActions } from '@/lib/stores/ndk'
-import { testLabelActions } from '@/lib/stores/testLabels'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { testLabelActions } from '@platform/web/config/testLabelsStore'
 import type { NDKEvent, NDKFilter } from '@platform/web/ndk/ndkEvents'
-import { invalidateTestLabelCache, setCachedTestLabel } from '../testLabels'
-import { fetchProductsBySearch, fetchProductsBySearchWithSellers, productsSearchQueryOptions } from '../products'
+import { invalidateTestLabelCache, setCachedTestLabel } from '@platform/web/config/testLabelsBinding'
+import { fetchProductsBySearch, fetchProductsBySearchWithSellers, productsSearchQueryOptions } from '@platform/web/products/productQuery'
 
 /**
  * ADR-0009 regression: the seller-name half of product search is a browsing

@@ -10,7 +10,7 @@ import {
 	privateDetailsMatchPublicOrder,
 	type OrderWithRelatedEvents,
 	type SellerPrivateOrderDetailsCandidate,
-} from '../orders'
+} from '@platform/web/orders/ordersQuery'
 import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@sdk/core/testing/piiSentinelFixture'
 
 const CREATED_AT = 1_700_000_000

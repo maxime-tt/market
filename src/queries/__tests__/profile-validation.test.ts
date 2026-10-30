@@ -3,7 +3,7 @@ import { nip19 } from 'nostr-tools'
 
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import { getProfileIdentifierValidationError, validateProfileIdentifier } from '@sdk/core/profile/profileValidation'
-import { getNormalizedProfileDisplayName, getNormalizedProfileNip05, normalizeOptionalPubkey } from '@/queries/profiles'
+import { getNormalizedProfileDisplayName, getNormalizedProfileNip05, normalizeOptionalPubkey } from '@platform/web/profiles/profileQuery'
 import { getUserCardTitle, isKeyboardCopyActivationKey } from '@ui/nostr/user-card'
 
 const VALID_HEX = 'a'.repeat(64)

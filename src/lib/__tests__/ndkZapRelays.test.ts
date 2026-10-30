@@ -13,7 +13,7 @@ import { computeNdkConfig } from '@sdk/core/relay-policy'
  *
  * The zap relay set is derived at the same seam as the read set, so it is
  * asserted here rather than through the NDK store: several co-running test
- * files `mock.module('@/lib/stores/ndk')`, and bun applies module mocks
+ * files `mock.module('@platform/web/ndk/ndkStore')`, and bun applies module mocks
  * process-wide (see AGENTS.md "Test Isolation").
  */
 describe('computeNdkConfig zap relay set', () => {

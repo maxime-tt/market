@@ -45,9 +45,9 @@ afterEach(() => {
 	originalSend = undefined
 })
 
-import { cashuStore } from '@/lib/stores/cashu'
-import { walletOps } from '@/lib/stores/walletOps'
-import { authStore } from '@/lib/stores/auth'
+import { cashuStore } from '@platform/web/wallet/cashuStore'
+import { walletOps } from '@platform/web/wallet/walletOps'
+import { authStore } from '@platform/web/auth/authStore'
 
 // Bun's test runtime doesn't provide localStorage by default.
 const installLocalStoragePolyfill = (): void => {

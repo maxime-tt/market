@@ -6,7 +6,7 @@ import {
 	resolveProductShippingSelections,
 	resolvePublishedProductShippingOptions,
 } from '@sdk/commerce/products/productShipping'
-import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@/lib/stores/product'
+import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@platform/web/products/productFormStore'
 
 describe('product shipping selection normalization', () => {
 	beforeEach(() => {

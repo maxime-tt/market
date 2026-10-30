@@ -1,10 +1,16 @@
 import { expect, test, describe, beforeEach, afterEach } from 'bun:test'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { createSignerFromKey } from '@sdk/core/signer'
 import { devUser1 } from '../../../scripts/fixtures'
-import { productFormStore, productFormActions, DEFAULT_FORM_STATE } from '@/lib/stores/product'
-import { fetchProduct, getProductTitle, getProductDescription, getProductPrice, getProductImages } from '@/queries/products'
+import { productFormStore, productFormActions, DEFAULT_FORM_STATE } from '@platform/web/products/productFormStore'
+import {
+	fetchProduct,
+	getProductTitle,
+	getProductDescription,
+	getProductPrice,
+	getProductImages,
+} from '@platform/web/products/productQuery'
 
 const RELAY_URL = process.env.APP_RELAY_URL
 if (!RELAY_URL) {

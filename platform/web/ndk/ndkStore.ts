@@ -2,8 +2,9 @@
  * platform/web/ndk/ndkStore.ts — the platform home of the NDK connection store, moved verbatim
  * out of `src/lib/stores/ndk.ts` in Wave E W-E4 (route (a)). The only changes are the two `@/`-free
  * platform substitutions for the config and wallet store adapters (W-E3.6/7 supplied their platform
- * homes). `src/lib/stores/ndk.ts` is the re-export shim that the 45 `src/` importers and the 11
- * `mock.module` test suites still resolve.
+ * homes). `src/lib/stores/ndk.ts` was the re-export shim the `src/` importers and the `mock.module`
+ * suites resolved through; it was deleted with every other src shim by the E1b mega-deletion
+ * (2026-10-30), and the suites now resolve this platform path directly.
  */
 import { defaultRelaysUrls, type Stage } from '@sdk/config/constants'
 import { computeNdkConfig, resolveMainRelay } from '@sdk/core/relay-policy'

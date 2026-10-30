@@ -19,7 +19,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { hashToCurve as cashuTsHashToCurve } from '@cashu/cashu-ts'
-import { hashToCurveHex, hashToCurveHexFromString } from '../cashu/hashToCurve'
+import { hashToCurveHex, hashToCurveHexFromString } from '@sdk/commerce/payments/cashu/hashToCurve'
 
 const enc = new TextEncoder()
 

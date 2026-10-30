@@ -27,8 +27,8 @@ const RETIRED_SRC_CLAIM = 'src/lib/auctions/privateAuctionClaimMessage.ts'
 
 const NDK_PACKAGE = '@nostr-dev' + '-kit/ndk'
 const NDK_IMPORT = `import { NDKEvent } from '${NDK_PACKAGE}'\n`
-const NDK_ACTIONS = "import { ndkActions } from '@/lib/stores/ndk'\n"
-const NDK_STORE = "import { ndkStore } from '@/lib/stores/ndk'\n"
+const NDK_ACTIONS = "import { ndkActions } from '@platform/web/ndk/ndkStore'\n"
+const NDK_STORE = "import { ndkStore } from '@platform/web/ndk/ndkStore'\n"
 
 /**
  * Run the guard. `strict` enables the coverage gate (pinned paths must exist,
@@ -111,8 +111,11 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		expect(source).toContain('sdk/commerce/auctions/auctionRead.ts')
 		expect(source).toContain('platform/web/auctions/auctionPublish.ts')
 		expect(source).toContain('platform/web/auctions/auctionsQuery.ts')
-		expect(source).toContain('src/publish/auctions.tsx')
-		expect(source).toContain('src/queries/auctions.tsx')
+		// E1b mega-deletion (2026-10-30): the src shim families are retired — the
+		// shims (and every other src shim) are deleted, so the guard must not keep
+		// coverage-less glob families for them (the E0 same-commit rule).
+		expect(source).not.toContain('"$ROOT"/src/publish/auctions.tsx')
+		expect(source).not.toContain('"$ROOT"/src/queries/auctions.tsx')
 		// The out-of-scope files are named, not silently ignored: the wallet store
 		// directory, and the sanctioned first-party NDK wrapper (moved to its platform
 		// home by batch 2 lane C, 2026-10-30).
@@ -156,9 +159,11 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 	})
 
 	test('exits 0 when the production file set has no NDK surface', async () => {
+		// E1b (2026-10-30): the src/publish + src/queries auction shims are deleted,
+		// so the clean fixtures stage at the platform family the guard scans now.
 		const root = await stageRepo({
-			'src/publish/auctions.tsx': "import { sign } from '@/lib/nostr/io'\n",
-			'src/queries/auctions.tsx': "import { applesauceIo } from '@/lib/nostr/io'\n",
+			'platform/web/auctions/CleanPublish.tsx': "import { sign } from '@/lib/nostr/io'\n",
+			'platform/web/auctions/CleanQuery.tsx': "import { applesauceIo } from '@/lib/nostr/io'\n",
 		})
 		const r = runGuard(root)
 		expect(r.exitCode).toBe(0)
@@ -166,11 +171,13 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 	})
 
 	test('fails (exit 1) when a non-allowlisted auctions file imports @nostr-dev-kit', async () => {
-		const root = await stageRepo({ 'src/publish/auctions.tsx': NDK_IMPORT })
+		// E1b (2026-10-30): the src shim paths are gone — the dirty fixture stages at
+		// the platform family the guard scans now.
+		const root = await stageRepo({ 'platform/web/auctions/DirtyAuctionFile.tsx': NDK_IMPORT })
 		const r = runGuard(root)
 		expect(r.exitCode).toBe(1)
 		expect(r.stdout).toContain('::error::')
-		expect(r.stdout).toContain('src/publish/auctions.tsx')
+		expect(r.stdout).toContain('platform/web/auctions/DirtyAuctionFile.tsx')
 	})
 
 	test('fails (exit 1) when a non-allowlisted auctions file uses ndkActions or ndkStore', async () => {
@@ -189,7 +196,7 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		// the guard, while a clean claim module passes with an empty allowlist.
 		const dirty = await stageRepo({
 			[CLAIM_MODULE]: NDK_IMPORT,
-			'src/publish/auctions.tsx': "import { sign } from '@/lib/nostr/io'\n",
+			'platform/web/auctions/CleanPublish.tsx': "import { sign } from '@/lib/nostr/io'\n",
 		})
 		const dirtyResult = runGuard(dirty)
 		expect(dirtyResult.exitCode).toBe(1)
@@ -198,7 +205,7 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 
 		const clean = await stageRepo({
 			[CLAIM_MODULE]: "import { createNip59GiftWrapWithSigner } from '@sdk/core/nostr/nip59'\n",
-			'src/publish/auctions.tsx': "import { sign } from '@/lib/nostr/io'\n",
+			'platform/web/auctions/CleanPublish.tsx': "import { sign } from '@/lib/nostr/io'\n",
 		})
 		const cleanResult = runGuard(clean)
 		expect(cleanResult.exitCode).toBe(0)

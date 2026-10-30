@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { cartActions, cartStore, cartTestUtils, type NormalizedCart, type CartProduct } from '@/lib/stores/cart'
+import { cartActions, cartStore, cartTestUtils, type NormalizedCart, type CartProduct } from '@platform/web/cart/cartStore'
 
 class MemoryStorage {
 	private store = new Map<string, string>()

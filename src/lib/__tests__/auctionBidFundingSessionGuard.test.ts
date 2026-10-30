@@ -28,13 +28,13 @@ import { act } from 'react'
 import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { toast } from 'sonner'
-import { cashuStore } from '@/lib/stores/cashu'
+import { cashuStore } from '@platform/web/wallet/cashuStore'
 import {
 	AuctionBidLockedButUnpublishedError,
 	AuctionBidLockOutcomeUncertainError,
 	AuctionBidPublishFailedError,
 	type AuctionBidFormData,
-} from '@/publish/auctions'
+} from '@platform/web/auctions/auctionPublish'
 import {
 	isSessionCurrent,
 	nextLockedUnpublishedTokenIdOnSessionStart,

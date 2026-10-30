@@ -56,10 +56,9 @@ const ndkStoreMock = () => ({
 	getBugRelay: () => null,
 	getMainRelay: () => null,
 })
-mock.module('@/lib/stores/ndk', ndkStoreMock)
-mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // E1b: src shim retired — consumers load the platform store
 
-const { buildAuctionPathReleaseFilter, fetchAuctionPathReleases } = await import('@/queries/auctions')
+const { buildAuctionPathReleaseFilter, fetchAuctionPathReleases } = await import('@platform/web/auctions/auctionsQuery')
 
 const injectedFetch = mock(async (filter: NostrFilter | NostrFilter[]) => {
 	fetchedFilters.push(filter as NostrFilter)

@@ -11,7 +11,7 @@
  */
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { authStore } from '../stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import {
 	findBidderRecordByRefundPubkey,
 	findLatestBidderRecordForAuction,

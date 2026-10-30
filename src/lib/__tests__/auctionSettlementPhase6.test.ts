@@ -23,7 +23,7 @@
 import { describe, expect, test } from 'bun:test'
 import { AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '@sdk/commerce/auctions/constants'
 import { buildPathReleaseTags, buildSettlementTags } from '@sdk/commerce/auctions/tagBuilders'
-import type { NostrEventLike } from '../nostr/eventLike'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { parsePathReleaseEvent, parseSettlementEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@sdk/commerce/auctions/auctionP2pk'
 

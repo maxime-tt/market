@@ -12,7 +12,7 @@
  */
 import { afterEach, describe, expect, test } from 'bun:test'
 
-import { cashuActions, cashuStore, depositStatusForPhase, type CashuDepositPhase } from './cashu'
+import { cashuActions, cashuStore, depositStatusForPhase, type CashuDepositPhase } from '@platform/web/wallet/cashuStore'
 
 const TEST_MINT = 'https://mint.example.test'
 /** Checksum-valid bolt11 invoice encoding a 2,000 sat amount. */

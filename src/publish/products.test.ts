@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createProductEvent } from '@/publish/products'
+import { createProductEvent } from '@platform/web/products/productPublish'
 
 const BASE_FORM_DATA = {
 	name: 'Product',

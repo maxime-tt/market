@@ -20,7 +20,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { parseAuctionEvent } from '@sdk/commerce/auctions/schemas/auctionEvent'
 import { buildAuctionEventTags } from '@sdk/commerce/auctions/tagBuilders'
-import type { NostrEventLike } from '../nostr/eventLike'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 const SELLER_PK = 'a'.repeat(64)
 const AUDITOR_PK = 'b'.repeat(64)

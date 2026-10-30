@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveV4VConfigurationState } from '@/queries/v4v'
+import { resolveV4VConfigurationState } from '@platform/web/v4v/v4vQuery'
 
 describe('resolveV4VConfigurationState', () => {
 	test('resolves no V4V event to never-configured', () => {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { DEFAULT_FORM_STATE, productFormActions, productFormStore, type ProductFormState } from '@/lib/stores/product'
-import { uiStore } from '@/lib/stores/ui'
+import { DEFAULT_FORM_STATE, productFormActions, productFormStore, type ProductFormState } from '@platform/web/products/productFormStore'
+import { uiStore } from '@platform/web/app/uiStore'
 
 const DIRTY_CREATE_STATE: ProductFormState = {
 	...DEFAULT_FORM_STATE,

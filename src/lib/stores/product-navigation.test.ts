@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@/lib/stores/product'
+import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@platform/web/products/productFormStore'
 
 describe('product form navigation semantics', () => {
 	let timeoutCalls = 0

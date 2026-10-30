@@ -14,83 +14,11 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 	'platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx',
 ])
 
-// Legacy src/ host modules allowed to depend on Platform while they are migrated; do not grow this list
-// except for host modules that now delegate to SDK workflows through a Platform host — publish adapters
-// (the Platform publish context) and media hosts (the Wave G blossom upload host). Rows are a migration
-// ledger: each is removed when its owner leaves src/.
-//
-// The entries below marked "store drain" are the notification chapters' migration-time edges (increments
-// C1/C2). They are the same class this list already describes — legacy src/ host modules that depend on
-// Platform while they are migrated — and three of them were already violations before those increments ran.
-// Each is removed when its owner leaves src/ (E1 deletes the shims; D3 retires the legacy components), so
-// treat them as a migration ledger, not a permanent grant. Decision recorded in
-// companions/STORE-DRAIN-CHAPTER-PLAN.md ("src -> platform during the drain").
-const SRC_TO_PLATFORM_ALLOWLIST = new Set([
-	'src/index.tsx',
-	'src/publish/shipping.tsx', // store drain D2 slice 17; shim deleted in E1
-	'src/publish/products.tsx',
-	'src/publish/collections.tsx',
-	'src/publish/orders.tsx', // store drain D2 slice 19; shim deleted in E1
-	'src/publish/auctions.tsx', // store drain D2 slice 20; shim deleted in E1
-	'src/queries/shipping.tsx',
-	'src/queries/products.tsx',
-	'src/queries/collections.tsx',
-	'src/queries/auctions.tsx',
-	'src/queries/payment.tsx',
-	'src/queries/orders.tsx', // store drain D1 slice 7; shim deleted in E1
-	'src/queries/messages.tsx', // store drain D1 slice 7; shim deleted in E1
-	'src/queries/liveChat.tsx', // store drain D1 slice 7; shim deleted in E1
-	'src/publish/comments.tsx',
-	'src/publish/liveChat.tsx',
-	'src/publish/migration.tsx',
-	'src/publish/featured.tsx', // store drain D2 slice 11; shim deleted in E1
-	'src/publish/payment.tsx', // store drain D2 slice 14; shim deleted in E1
-	'src/publish/app-settings.tsx', // store drain D2 slice 18; shim deleted in E1
-	'src/publish/blacklist.tsx', // store drain D2 slice 16; shim deleted in E1
-	'src/queries/config.tsx', // store drain D1 slice 1; shim deleted in E1
-	'src/queries/posts.tsx', // store drain D1 slice 2; shim deleted in E1
-	'src/queries/bugReports.tsx', // store drain D1 slice 2; shim deleted in E1
-	'src/queries/nip05.tsx', // store drain D1 slice 2; shim deleted in E1
-	'src/queries/vanity.tsx', // store drain D1 slice 2; shim deleted in E1
-	'src/queries/comments.tsx', // store drain D1 slice 2; shim deleted in E1
-	'src/queries/blacklist.tsx', // store drain D1 slice 3; shim deleted in E1
-	'src/queries/testLabels.tsx', // store drain D1 slice 3; shim deleted in E1
-	'src/queries/featured.tsx', // store drain D1 slice 4; shim deleted in E1
-	'src/queries/profiles.tsx', // store drain D1 slice 4; shim deleted in E1
-	'src/queries/wallet.tsx', // store drain D1 slice 4; shim deleted in E1
-	'src/queries/external.tsx', // store drain D1 slice 4; shim deleted in E1
-	'src/queries/app-settings.tsx', // store drain D1 slice 5; shim deleted in E1
-	'src/queries/migration.tsx', // store drain D1 slice 5; shim deleted in E1
-	'src/queries/v4v.tsx', // store drain D1 slice 5; shim deleted in E1
-	'src/lib/stores/collection.ts', // store drain; shim deleted in E1b
-	'src/lib/utils/productFormStorage.ts', // Wave C product drain S0; shim deleted in E1b
-	'src/lib/stores/product.ts', // Wave C product drain S1-S3; shim deleted in E1b
-	'src/lib/stores/ndk.ts', // Wave C ndk drain S2; reads the moved NDK adapters directly, edge retired in E1b
-	'src/lib/stores/cart.ts', // Wave D cart drain S0-S2; imports the moved cart model; shim deleted in E1b
-	'src/lib/stores/cashu.ts', // Wave D walletOps drain S0; shim deleted in E1b
-	'src/lib/stores/ui.ts', // Wave E adapter drain W-E3.5; shim deleted in E1b
-	'src/lib/stores/config.ts', // Wave E adapter drain W-E3.6; shim deleted in E1b
-	'src/lib/stores/wallet.ts', // Wave E adapter drain W-E3.7; shim deleted in E1b
-	'src/lib/stores/walletOps.ts', // Wave D walletOps drain S2; shim deleted in E1b
-	'src/lib/stores/testLabels.ts', // Wave E adapter drain W-E3.3; shim deleted in E1b
-	'src/lib/terms.ts', // Wave F W-E5a; shim deleted in E1b
-	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
-	// --- I-c-hooks: src/ consumers re-pointed to the moved platform hooks (retire with these leaves in D3). ---
-	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
-	// --- store drain I-c (2026-10-29): the notification monitor and its src-side seam moved to
-	// platform/web/notifications/ and both files are deleted, so their rows went with them; the seam's
-	// two src/ consumers read the platform barrel directly until D3 retires them. ---
-	// --- H-b kit 4 (B2): the identity kit retires onto the D4 userCardHosts; each row retires with its owner. ---
-	// --- I-c-monitors (2026-10-29): useAuctionBidFunding moved to
-	// platform/web/auctions/useAuctionBidFunding.ts and the src/ original is deleted, so these
-	// src/ consumers read the platform hook directly until their own slices retire them. ---
-	// --- J-b (C2): the wallet modals left src/feature/wallet/, and the checkout flow host +
-	// invoice-storage helpers left src/; the one src/ consumer they left behind reads the platform
-	// home directly until its own slice retires it. ---
-	// --- batch 2 lane B (2026-10-30): orders/checkout/payments/wallet/account components left src/;
-	// the src/ consumer below is re-pointed onto the moved module and retires when it does. ---
-	'src/publish/orders.test.ts', // batch 2 lane B; retires when the src/publish orders shim retires (E1)
-])
+// Legacy src/ host modules allowed to depend on Platform while they are migrated. The rows were a
+// migration ledger — each removed when its owner left src/ — and the E1b mega-deletion
+// (2026-10-30) retired the last 49 rows with the 57 deleted src shims. Only the composition root
+// remains.
+const SRC_TO_PLATFORM_ALLOWLIST = new Set(['src/index.tsx'])
 
 async function listSourceFiles(directory: string): Promise<string[]> {
 	const entries = await readdir(directory, { withFileTypes: true })

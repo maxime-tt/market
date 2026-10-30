@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseBidEvent } from '@sdk/commerce/auctions/schemas/bidEvent'
-import type { NostrEventLike } from '../nostr/eventLike'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { AUCTION_BID_KIND } from '@sdk/commerce/auctions/constants'
 
 const BIDDER_PK = 'b'.repeat(64)

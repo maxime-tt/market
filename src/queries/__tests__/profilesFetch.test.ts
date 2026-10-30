@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { QueryClient } from '@tanstack/react-query'
 
-import { ndkActions } from '@/lib/stores/ndk'
-import { fetchProfileByIdentifier, profileByIdentifierQueryOptions, wotScoreQueryOptions } from '../profiles'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { fetchProfileByIdentifier, profileByIdentifierQueryOptions, wotScoreQueryOptions } from '@platform/web/profiles/profileQuery'
 
 // Infer NDK return types from the function under test instead of importing
 // the NDK package directly — the NDK-footprint CI guard counts any src/ file

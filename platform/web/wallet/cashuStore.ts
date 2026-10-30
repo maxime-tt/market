@@ -11,7 +11,8 @@
  * SDK primitive is the single source of truth, a direct `setState` writes through to it, and the SDK store
  * mirrors every change back into the `Store`.
  *
- * Moved out of `src/lib/stores/cashu.ts` in Wave D walletOps drain S0; that file is now the src/ shim.
+ * Moved out of `src/lib/stores/cashu.ts` in Wave D walletOps drain S0 (the src/ file was deleted by the
+ * E1b mega-deletion, 2026-10-30).
  *
  * The adapter is TEMPORARY: it is deleted when the `useStore(cashuStore)` consumers are rewired to a reactive
  * binding and `walletOps.ts`/the tests stop writing the tanstack store directly.

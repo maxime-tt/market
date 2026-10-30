@@ -21,7 +21,7 @@
  */
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { authStore } from '../stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { loadUserData, saveUserData } from '@sdk/commerce/payments/wallet/storage'
 import { loadBidderRecords, upsertBidderRecord, type BidderBidRecord } from '@sdk/commerce/auctions/bidderRecords'
 

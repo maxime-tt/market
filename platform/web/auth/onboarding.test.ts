@@ -75,10 +75,8 @@ mock.module('@platform/web/applesauceIo', () => ({
 // The ndk store: only the two onboarding effects it observes.
 const addSingleRelay = mock((_url: string) => {})
 const setActiveNwcWalletUri = mock((_uri: string | null) => {})
-mock.module('@/lib/stores/ndk', () => ({
-	ndkActions: { addSingleRelay, setActiveNwcWalletUri, getNDK: () => ({}) },
-	ndkStore: { state: { explicitRelayUrls: [], writeRelayUrls: [] }, setState: mock((_u: unknown) => {}) },
-}))
+// E1b (2026-10-30): the src shim specifier is retired — single registration on
+// the platform module remains.
 mock.module('@platform/web/ndk/ndkStore', () => ({
 	ndkActions: { addSingleRelay, setActiveNwcWalletUri, getNDK: () => ({}) },
 	ndkStore: { state: { explicitRelayUrls: [], writeRelayUrls: [] }, setState: mock((_u: unknown) => {}) },

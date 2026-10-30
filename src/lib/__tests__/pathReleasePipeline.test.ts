@@ -11,7 +11,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Amount, type Proof } from '@cashu/cashu-ts'
 import { getDecodedToken } from '@cashu/cashu-ts'
-import { authStore } from '../stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@sdk/commerce/auctions/auctionP2pk'
 import { upsertBidderRecord, walkBidderRecordChain, type BidderBidRecord } from '@sdk/commerce/auctions/bidderRecords'
 import { buildPathReleaseTags } from '@sdk/commerce/auctions/tagBuilders'

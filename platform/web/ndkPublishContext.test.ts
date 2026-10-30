@@ -62,8 +62,7 @@ const ndkStoreMock = () => ({
 	ndkActions: mockNdkActions,
 	ndkStore: mockNdkStore,
 })
-mock.module('@/lib/stores/ndk', ndkStoreMock)
-mock.module('@platform/web/ndk/ndkStore', ndkStoreMock)
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // E1b: src shim specifier retired
 
 import { publishNostrEvent } from './ndkPublishContext'
 

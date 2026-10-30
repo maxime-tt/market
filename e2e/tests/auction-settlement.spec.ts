@@ -8,7 +8,7 @@ import { devUser1, devUser2, devUser3 } from '../../scripts/fixtures'
 import type { Page } from 'playwright/test'
 import { getAuctionHdAccountFromWalletKeys } from '../../sdk/commerce/auctions/hd'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../../sdk/commerce/auctions/auctionP2pk'
-import { hashToCurveHexFromString } from '../../src/lib/cashu/hashToCurve'
+import { hashToCurveHexFromString } from '@sdk/commerce/payments/cashu/hashToCurve'
 import { Amount, Mint, Wallet, getEncodedToken, type Proof } from '@cashu/cashu-ts'
 
 // ---------------------------------------------------------------------------

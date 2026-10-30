@@ -22,9 +22,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Manager } from '@cashu/coco-core'
 
-import { cashuActions, cashuStore } from '@/lib/stores/cashu'
+import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
 
-const CASHU_STORE_SOURCE = join(import.meta.dir, '..', 'stores', 'cashu.ts')
+// E1b (2026-10-30): the src shim is deleted — the pin reads the store module at
+// its platform home, which is where the production store lives now.
+const CASHU_STORE_SOURCE = join(import.meta.dir, '..', '..', '..', 'platform', 'web', 'wallet', 'cashuStore.ts')
 
 type CocoMint = { mintUrl: string; name: string; mintInfo: Record<string, never>; trusted: boolean; createdAt: number; updatedAt: number }
 

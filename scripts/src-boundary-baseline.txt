@@ -190,7 +190,21 @@
 # platform production 82/68 -> 97/77, src -> platform test 43/26 -> 46/27, src -> ui production 173/82 ->
 # 169/79, src -> sdk production 100/68 -> 76/48, src -> sdk test 170/73 -> 217/92 (the outbound rows move
 # with the drain — informational, never a gate). Guard reports OK with no `(decreased)` on any row.
-platform -> src production 175 53
+# 2026-10-30 (E3 re-seed, E1b mega-deletion — the single ratchet): measured by
+# `bash scripts/check-src-boundary.sh` at the E1b commit (base 8b97a18a, batch 3 step 2 of the
+# SIMPLIFIED D7 path). E1b git-rm'd all 57 now-importer-less src shims (24 src/queries, 12
+# src/publish, 11 src/lib/stores, plus the 10 lib leaves: cashu dleq/hashToCurve/nut7, nostr
+# eventLike/naddr, payments/proof, types/invoice, utils/productFormStorage, terms, constants/testLabels)
+# after every src test file's imports and mock.module paths were re-pointed onto the owning
+# @platform/web / @sdk modules. M1 (non-test src files) fell 68 -> 11. The INBOUND `platform -> src`
+# row is ratcheted 175/53 -> 0/0 — the inbound debt is now ZERO and may only stay there: no file
+# outside src/ imports src/ any more. OUTBOUND re-measured to the same measurement: src -> platform
+# production 97/77 -> 1/1 (only the src/index.tsx composition root remains), src -> platform test
+# 46/27 -> 135/66 and src -> sdk test 217/92 -> 250/95 (the suites' imports/mocks now name the
+# platform/sdk homes directly — drain movement, informational, never a gate), src -> ui production
+# 169/79 -> 0/0, src -> ui test 0/0 -> 1/1, src -> sdk production 76/48 -> 0/0. With these rows the
+# guard reports OK and no row prints `(decreased)`: baseline equals measurement.
+platform -> src production 0 0
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -199,11 +213,11 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 97 77
-src -> platform test 46 27
+src -> platform production 1 1
+src -> platform test 135 66
 
-src -> ui production 169 79
-src -> ui test 0 0
+src -> ui production 0 0
+src -> ui test 1 1
 
-src -> sdk production 76 48
-src -> sdk test 217 92
+src -> sdk production 0 0
+src -> sdk test 250 95

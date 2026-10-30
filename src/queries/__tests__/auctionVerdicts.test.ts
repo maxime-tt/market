@@ -68,10 +68,9 @@ const ndkStoreMock = () => ({
 	getBugRelay: () => null,
 	getMainRelay: () => null,
 })
-mock.module('@/lib/stores/ndk', ndkStoreMock)
-mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // E1b: src shim retired — consumers load the platform store
 
-const { fetchAuctionVerdicts } = await import('@/queries/auctions')
+const { fetchAuctionVerdicts } = await import('@platform/web/auctions/auctionsQuery')
 
 // The fetch path under test is the applesauce I/O seam (injected), so the
 // ndkActions mock above only satisfies the store import — applesauceIo falls

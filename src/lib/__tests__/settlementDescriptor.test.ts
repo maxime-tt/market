@@ -12,8 +12,8 @@ import type {
 	ParsedValidatorVerdictEvent,
 } from '@sdk/commerce/auctions/events'
 import type { Nut7ProofState } from '@sdk/commerce/auctions/constants'
-import type { NostrEventLike } from '../nostr/eventLike'
-import { hashToCurveHexFromString } from '../cashu/hashToCurve'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { hashToCurveHexFromString } from '@sdk/commerce/payments/cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@sdk/commerce/auctions/auctionP2pk'
 import { ProjectivePoint, etc } from '@noble/secp256k1'
 import { HDKey } from '@scure/bip32'

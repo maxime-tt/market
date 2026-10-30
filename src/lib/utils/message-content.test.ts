@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, describe } from 'bun:test'
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { looksLikeJSON, extractActualContent, isSafeImageUrl } from '@sdk/commerce/messaging/messageContent'
-import { getMessageSnippet } from '@/queries/messages'
+import { getMessageSnippet } from '@platform/web/messaging/messagesQuery'
 
 describe('Message Content Utilities', () => {
 	describe('looksLikeJSON', () => {

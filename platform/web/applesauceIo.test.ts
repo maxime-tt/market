@@ -45,8 +45,7 @@ const ndkStoreMock = () => ({
 	ndkActions: mockNdkActions,
 	ndkStore: mockNdkStore,
 })
-mock.module('@/lib/stores/ndk', ndkStoreMock)
-mock.module('@platform/web/ndk/ndkStore', ndkStoreMock)
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // E1b: src shim specifier retired
 
 // Controllable RelayPool stub for the adapter. The port caches a single pool
 // instance (`let pool`), so the controllers below are module-level bindings

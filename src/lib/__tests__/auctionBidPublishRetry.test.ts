@@ -20,8 +20,8 @@ import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { Amount, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from 'nostr-tools'
-import type { NostrEventLike } from '../nostr/eventLike'
-import { authStore } from '../stores/auth'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { authStore } from '@platform/web/auth/authStore'
 import { setSignerSource } from '@platform/web/applesauceIo'
 import {
 	findBidderRecord,
@@ -225,56 +225,18 @@ setSignerSource(() => ({
 	},
 }))
 
-// Wave F W-E5b (rev-2.6 item-5): the auth composition root moved to
-// '@platform/web/auth/authStore' and now binds walletOps and the NDK actions through the
-// platform modules directly, so these src-path mocks alone no longer patch the modules the
-// publish flow actually loads (bun only patches a re-export shim's target once the shim is
-// loaded — and the moved store never loads it, so the src capture below returns the mock
-// instead of the real surface). Capture the REAL error class from the platform module BEFORE
-// any walletOps mock, keep it on every registration (keys added, none removed), and register
-// the same factories on the platform paths so the interception is explicit on both.
+// Wave F W-E5b (rev-2.6 item-5) + E1b (2026-10-30): the auth composition root moved to
+// '@platform/web/auth/authStore' and binds walletOps and the NDK actions through the
+// platform modules directly, and the src re-export shims (@/lib/stores/{walletOps,ndk})
+// are deleted — so only the platform-path registrations remain. Capture the REAL error
+// class from the platform module BEFORE any walletOps mock: the publish layer's
+// instanceof check needs the same AuctionBidLockMutationPossibleError class reference,
+// and the mock must re-export it (bun re-imports the module graph when mock.module
+// runs, so publish/auctions binds to the mocked module).
 const realPlatformWalletOps = await import('@platform/web/wallet/walletOps')
-
-mock.module('@/lib/stores/walletOps', () => ({
-	walletOps: {
-		lockAuctionBidFunds: lockAuctionBidFundsMock,
-		updatePendingTokenContext: updatePendingTokenContextMock,
-	},
-	AuctionBidLockMutationPossibleError: realPlatformWalletOps.AuctionBidLockMutationPossibleError,
-}))
-
-mock.module('@/lib/stores/ndk', () => ({
-	ndkActions: {
-		publishEvent: publishEventMock,
-		getNDK: () => ndkInstance,
-		getSigner: () => currentSigner,
-		getUser: async () => {
-			const user = await currentSigner.user()
-			return user?.pubkey ? { pubkey: user.pubkey } : null
-		},
-	},
-	ndkStore: {
-		state: { ndk: ndkInstance },
-	},
-}))
 
 mock.module('@platform/web/auctions/auctionsQuery', () => ({
 	fetchAuction: mock(async () => auctionEventFixture),
-}))
-
-// #1235 round-3 B1: capture the REAL wallet-ops surface BEFORE registering the
-// mock — the publish layer's instanceof check needs the same
-// AuctionBidLockMutationPossibleError class reference, and the mock must
-// re-export it (bun re-imports the module graph when mock.module runs, so
-// publish/auctions binds to the mocked module).
-const realWalletOps = await import('@/lib/stores/walletOps')
-
-mock.module('@/lib/stores/walletOps', () => ({
-	walletOps: {
-		lockAuctionBidFunds: lockAuctionBidFundsMock,
-		updatePendingTokenContext: updatePendingTokenContextMock,
-	},
-	AuctionBidLockMutationPossibleError: realWalletOps.AuctionBidLockMutationPossibleError,
 }))
 
 // Wave F W-E5b (rev-2.6 item-5): the platform paths the moved composition root and the
@@ -311,7 +273,7 @@ import {
 	AuctionBidPublishFailedError,
 	publishAuctionBid,
 	republishAuctionBid,
-} from '@/publish/auctions'
+} from '@platform/web/auctions/auctionPublish'
 
 // =============================================================================
 // Test lifecycle
@@ -817,7 +779,7 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 	})
 
 	test('mutation-possible lock error surfaces the DISTINCT uncertain error — never a bare error, record preserved', async () => {
-		lockShouldThrow = new realWalletOps.AuctionBidLockMutationPossibleError({
+		lockShouldThrow = new realPlatformWalletOps.AuctionBidLockMutationPossibleError({
 			mintUrl: 'https://mint.test',
 			amount: 500,
 			lockPubkey: '02' + 'c'.repeat(64),

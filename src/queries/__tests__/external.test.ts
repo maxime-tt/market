@@ -16,7 +16,7 @@ mock.module('@sdk/commerce/payments/ctxcnClient', () => ({
 	},
 }))
 
-import { convertCurrencyToSats, fetchBtcExchangeRates } from '../external'
+import { convertCurrencyToSats, fetchBtcExchangeRates } from '@platform/web/payments/exchangeRatesQuery'
 
 const ORIGINAL_FETCH = globalThis.fetch
 

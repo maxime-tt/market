@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { fetchUserPaymentDetails, fetchProductPaymentDetails } from '../payment'
+import { fetchUserPaymentDetails, fetchProductPaymentDetails } from '@platform/web/payments/paymentQuery'
 import { authorQueryOptions } from '@platform/web/profiles/authorQuery'
-import { collectionsByPubkeyQueryOptions } from '../collections'
-import { shippingOptionsByPubkeyQueryOptions } from '../shipping'
+import { collectionsByPubkeyQueryOptions } from '@platform/web/collections/collectionQuery'
+import { shippingOptionsByPubkeyQueryOptions } from '@platform/web/shipping/shippingQuery'
 
 const VALID_PUBKEY = 'a'.repeat(64)
 

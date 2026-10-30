@@ -27,7 +27,7 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import type { Proof, SendResponse } from '@cashu/cashu-ts'
-import { authStore } from '../stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 
 // =============================================================================
 // localStorage polyfill — Bun's test runtime doesn't provide one.
@@ -113,16 +113,18 @@ mock.module('@cashu/cashu-ts', () => ({
 
 // Import the REAL wallet-ops module via a UNIQUE query-string specifier: bun
 // applies module mocks across every test file in one run (an earlier-loading
-// file's `mock.module('@/lib/stores/walletOps')` would otherwise shadow this
+// file's `mock.module('@platform/web/wallet/walletOps')` would otherwise shadow this
 // file's alias import), and no other file can have mocked this specifier.
 // The fresh module body loads AFTER the cashu overlay above is registered,
 // so its `@cashu/cashu-ts` imports resolve to the stubbed `Wallet`.
 // This file drives the store instance it loads here — self-consistent,
 // order-independent, zero network (ADR-0005).
-const realWalletOps: typeof import('@/lib/stores/walletOps') = await import(`${import.meta.dir}/../stores/walletOps.ts?b1-real-store=1`)
+const realWalletOps: typeof import('@platform/web/wallet/walletOps') = await import(
+	`${import.meta.dir}/../../../platform/web/wallet/walletOps.ts?b1-real-store=1`
+)
 type AuctionBidLockMutationPossibleErrorInstance = InstanceType<typeof realWalletOps.AuctionBidLockMutationPossibleError>
 const { walletOps } = realWalletOps
-import { cashuStore } from '@/lib/stores/cashu'
+import { cashuStore } from '@platform/web/wallet/cashuStore'
 import { loadUserData } from '@sdk/commerce/payments/wallet/storage'
 
 // =============================================================================

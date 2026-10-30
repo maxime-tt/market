@@ -64,7 +64,11 @@ REQUIRE_COVERAGE="${AUCTIONS_GUARD_REQUIRE_COVERAGE:-1}"
 # the SAME commit (the E0 fusion rule above) — never around it. Enforced only
 # against the real repo (REQUIRE_COVERAGE=1); staged throwaway repos opt out
 # with the same switch.
-MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-87}"
+# E1b mega-deletion (2026-10-30): the last two src auction shims —
+# src/publish/auctions.tsx and src/queries/auctions.tsx — left the tree with every
+# remaining src shim, so the scanned set falls (94 -> 92 measured) and the floor
+# drops 87 -> 85 with them (same commit, per the E0 fusion rule above).
+MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-85}"
 
 # I-PARKED wave 3 commit D (2026-10-30): the list card moved verbatim out of
 # `src/components/AuctionCard.tsx` to its platform host + ui view pair
@@ -122,8 +126,8 @@ PINNED=(
 # below are, with the file count measured at 06cc831c (Wave G-b, lane L2; the
 # 71f6fb79 figures this block used to quote were 8 and 7 for the two families
 # that have since shrunk):
-#   src/publish/auctions.tsx                                     1
-#   src/queries/auctions.tsx                                     1
+#   src/publish/auctions.tsx                                     0 (E1b mega-deletion retired the family, 2026-10-30)
+#   src/queries/auctions.tsx                                     0 (E1b mega-deletion retired the family, 2026-10-30)
 #   src/components/Auction*.tsx                                  0 (family retired below, batch 2 lane D)
 #   src/lib/auction*.ts                                          1 test-only match (family retired below)
 #   src/lib/auction/*.ts                                         0 (family retired below, batch 2 lane D)
@@ -169,7 +173,10 @@ PINNED=(
 # whole family in I-a A2 S2 (the module moved to sdk/commerce/auctions/, the
 # ambient-signer helpers to platform/web/ndkReadContext.ts), and the guard
 # tests were re-pointed to the sdk home in the same fused commit. The other
-# eight families need no test edit.
+# eight families need no test edit. The E1b mega-deletion (2026-10-30) performed
+# the src/publish + src/queries two-file retirement: both families left the
+# GLOBS above and the guard-test pins flipped to the retired shape in the same
+# commit.
 #
 # A3.3 (2026-10-29): the #1252 row is RETIRED — the claim file flipped onto
 # `getActiveSignerCapability()` + `asEncryptingSigner` and no longer touches
@@ -182,12 +189,11 @@ PINNED=(
 # library directories, hooks, schemas, and the server-side validator.
 GLOBS=(
 	"$ROOT"/platform/web/routes/auctions.*.tsx
-	# The `src/publish` and `src/queries` auction shims are still in the tree, so
-	# they keep coverage as single-file families now that their PINNED entries
-	# moved to the sdk/platform seams above. Delete a family only when its file
-	# is actually deleted.
-	"$ROOT"/src/publish/auctions.tsx
-	"$ROOT"/src/queries/auctions.tsx
+	# The `src/publish` and `src/queries` auction shims kept single-file coverage
+	# families while they existed; the E1b mega-deletion (2026-10-30) deleted both
+	# files (and every other src shim), so the families are retired here per the
+	# E0 same-commit rule — the surface stays covered by the sdk/platform families
+	# below. Re-add a src family only if an auction shim reappears under src/.
 	# Batch 2 lane D (2026-10-30): `src/components/Auction*.tsx`, `src/lib/auction*.ts`
 	# and `src/lib/auction/*.ts` were retired here — the last production members moved
 	# verbatim to `platform/web/auctions/`, covered by the `platform/web/auctions/*.ts`
