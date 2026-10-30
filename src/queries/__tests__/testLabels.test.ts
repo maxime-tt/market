@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'b
 import type { NDKEvent, NDKFilter } from '@/lib/nostr/ndk-events'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import { nostrPublishBridge } from '@platform/web/ndkPublishContext'
-import { publishTestLabel, publishTestLabelDeletion } from '@/lib/actions/testLabelActions'
+import { publishTestLabel, publishTestLabelDeletion } from '@platform/web/curation/testLabelActions'
 import {
 	A_TAG,
 	E_TAG,

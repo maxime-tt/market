@@ -10,7 +10,7 @@ import {
 	applyFiatPriceEdit,
 	deriveSatsPriceFromFiat,
 } from '@sdk/commerce/products'
-import { MempoolService } from '@/lib/utils/mempool'
+import { MempoolService } from '@platform/web/payments/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'

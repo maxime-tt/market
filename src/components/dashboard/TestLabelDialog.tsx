@@ -1,4 +1,4 @@
-import { publishTestLabel, publishTestLabelDeletion } from '@/lib/actions/testLabelActions'
+import { publishTestLabel, publishTestLabelDeletion } from '@platform/web/curation/testLabelActions'
 import { TEST_LABEL_PRODUCT_KIND } from '@/lib/constants/testLabels'
 import { getATagFromCoords } from '@sdk/core/utils/coords'
 import { invalidateTestLabelCaches, useTestLabelForCoordinate } from '@/queries/testLabels'

@@ -1,5 +1,5 @@
 import { ORDER_PROCESS_KIND } from '@sdk/commerce/messaging/orderSchema'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
 
 export interface PIIScanResult {
 	hasPII: boolean

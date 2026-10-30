@@ -11,7 +11,7 @@
  * boundary (`scaleSharesByTotal`); an auction adapter would instead keep the
  * pool at a fixed total (e.g. 10000 bps) with the owner as the remainder.
  */
-import type { V4VDTO } from '@/lib/stores/cart'
+import type { V4VDTO } from '@platform/web/cart/cartModel'
 
 const SUM_EPSILON = 0.0001
 const MIN_SHARE = 0.01

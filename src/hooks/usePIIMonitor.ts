@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
-import { scanForPIIExposure } from '@/lib/utils/piiScanner'
-import type { PIIScanResult } from '@/lib/utils/piiScanner'
+import { scanForPIIExposure } from '@platform/web/account/piiScanner'
+import type { PIIScanResult } from '@platform/web/account/piiScanner'
 
 /**
  * Monitor for PII exposure in user's events

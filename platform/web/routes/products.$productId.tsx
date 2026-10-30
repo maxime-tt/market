@@ -75,7 +75,7 @@ import {
 import { toast } from 'sonner'
 import { SocialInteractionsHost as SocialInteractions } from '@platform/web/messaging/SocialInteractionsHost'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { scrollToElementWithOffset } from '@/lib/utils/ui'
+import { scrollToElementWithOffset } from '@platform/web/utils/scroll'
 import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@sdk/commerce/products'
 
 // Hook to inject Open Graph and Twitter Card meta tags for social sharing

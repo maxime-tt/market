@@ -5,7 +5,7 @@ import {
 	removeRecipientFromShares,
 	scaleSharesByTotal,
 	updateSharePercentage,
-} from '@/lib/v4v/splits'
+} from '@platform/web/v4v/splits'
 import { getDistinctColorsForRecipients } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import { useZapCapabilityByNpub } from '@/queries/profiles'

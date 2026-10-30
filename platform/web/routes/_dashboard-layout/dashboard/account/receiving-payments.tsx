@@ -14,7 +14,12 @@ import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@sdk/config/c
 import { useNDK } from '@platform/web/ndk/ndkStore'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { isValidNip05 } from '@/lib/utils'
-import { deriveAddresses, isExtendedPublicKey, parsePaymentDetailsFromClipboard, paymentMethodLabels } from '@/lib/utils/paymentDetails'
+import {
+	deriveAddresses,
+	isExtendedPublicKey,
+	parsePaymentDetailsFromClipboard,
+	paymentMethodLabels,
+} from '@platform/web/payments/paymentDetails'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import {
 	useDeletePaymentDetail,

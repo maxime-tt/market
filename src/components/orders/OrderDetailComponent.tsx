@@ -12,7 +12,7 @@ import {
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { getCoordsFromATag } from '@sdk/core/utils/coords'
-import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
+import { getStatusMessaging, getStatusStyles } from '@platform/web/orders/orderUtils'
 import { useOrderClaimForSeller, type OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
 import {

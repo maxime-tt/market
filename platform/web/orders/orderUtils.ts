@@ -1,6 +1,6 @@
 import { ORDER_STATUS, SHIPPING_STATUS } from '@sdk/commerce/messaging/orderSchema'
-import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { getShippingStatus, getOrderStatus } from '@/queries/orders'
+import type { OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
+import { getShippingStatus, getOrderStatus } from '@platform/web/orders/ordersQuery'
 
 // Invoice-related types for order utility functions
 export interface InvoiceData {
