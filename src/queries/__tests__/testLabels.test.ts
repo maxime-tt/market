@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import type { NDKEvent, NDKFilter } from '@/lib/nostr/ndk-events'
-import { type EventTemplate, type NostrEvent, ndkIo, setNostrIo } from '@/lib/nostr/io'
+import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
+import { nostrPublishBridge } from '@platform/web/ndkPublishContext'
 import { publishTestLabel, publishTestLabelDeletion } from '@/lib/actions/testLabelActions'
 import {
 	A_TAG,
@@ -460,12 +461,19 @@ describe('fetchTestLabels chunk scheduling', () => {
 	})
 })
 
-// --- Publish path through the io seam (ADR-0002) ---
+// --- Publish path through the platform publish bridge (ADR-0002) ---
 
-describe('test-label publish via the io seam', () => {
-	// testLabelActions must reach the relay only through the seam. Swapping the
-	// active adapter (rather than mock.module) keeps the swap scoped to this
-	// describe and restored afterwards.
+describe('test-label publish via the platform publish bridge', () => {
+	// testLabelActions must reach the relay only through the bridge. Patching
+	// the bridge's members (rather than mock.module) keeps the swap scoped to
+	// this describe and restored afterwards — the same idiom the read suites
+	// use to patch `applesauceIo`'s methods.
+	const realBridge = {
+		getUser: nostrPublishBridge.getUser,
+		sign: nostrPublishBridge.sign,
+		publish: nostrPublishBridge.publish,
+	}
+
 	const seamGetUser = mock(async () => ({ pubkey: ADMIN_PUBKEY }))
 	const seamSign = mock(
 		async (template: EventTemplate): Promise<NostrEvent> => ({
@@ -477,16 +485,11 @@ describe('test-label publish via the io seam', () => {
 	)
 	let seamPublishedRelays: ReadonlySet<string> = new Set(['wss://relay.example'])
 	const seamPublish = mock(async (_event: NostrEvent) => ({ publishedRelays: seamPublishedRelays }))
-	const seamStub = {
-		fetchEvents: mock(async () => []),
-		subscribe: mock(() => () => {}),
-		publish: seamPublish,
-		sign: seamSign,
-		getUser: seamGetUser,
-	}
 
 	beforeEach(() => {
-		setNostrIo(seamStub)
+		nostrPublishBridge.getUser = seamGetUser
+		nostrPublishBridge.sign = seamSign
+		nostrPublishBridge.publish = seamPublish
 		testLabelActions.clearLabels()
 		seamGetUser.mockClear()
 		seamSign.mockClear()
@@ -494,7 +497,11 @@ describe('test-label publish via the io seam', () => {
 		seamPublishedRelays = new Set(['wss://relay.example'])
 	})
 
-	afterAll(() => setNostrIo(ndkIo))
+	afterAll(() => {
+		nostrPublishBridge.getUser = realBridge.getUser
+		nostrPublishBridge.sign = realBridge.sign
+		nostrPublishBridge.publish = realBridge.publish
+	})
 
 	test('publishTestLabel signs a kind-1985 template and publishes it through the seam', async () => {
 		const event = await publishTestLabel({ coordinate: PRODUCT_COORD, contactRef: 'npub1contact' })

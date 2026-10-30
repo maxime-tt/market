@@ -14,7 +14,7 @@ import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import { useQueryClient } from '@tanstack/react-query'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { createHandlerInfoEventData } from '@platform/web/nip89'
-import { sign } from '@/lib/nostr/io'
+import { signNostrEvent } from '@platform/web/ndkPublishContext'
 import { useForm, useStore } from '@tanstack/react-form'
 import { createFileRoute } from '@tanstack/react-router'
 import { nip19 } from 'nostr-tools'
@@ -155,7 +155,7 @@ function AppMiscelleneousComponent() {
 					handlerId,
 					value.siteUrl,
 				)
-				await submitAppSettings(await sign(handlerEvent))
+				await submitAppSettings(await signNostrEvent(handlerEvent))
 
 				// Wait a bit for the event to be processed
 				await new Promise((resolve) => setTimeout(resolve, 1000))

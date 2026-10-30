@@ -2,11 +2,13 @@
  * PRIVATE ADAPTER — do not import from a feature binding.
  *
  * This module is the host's raw/applesauce read adapter and owns the `platform -> src` edge to
- * the relay client. Feature bindings import `@platform/web/readContext` instead, which re-exports
- * the accessors they need and chooses the adapter by configuration (D1 seam `d1-neutral-seam`).
- * Direction is one-way: `readContext.ts -> this adapter`, never the reverse.
+ * the relay client's NDK event helpers. Feature bindings import `@platform/web/readContext`
+ * instead, which re-exports the accessors they need and chooses the adapter by configuration
+ * (D1 seam `d1-neutral-seam`). Direction is one-way: `readContext.ts -> this adapter`, never
+ * the reverse.
  */
-import { applesauceIo, type NostrFilter } from '@/lib/nostr/io'
+import { useEffect, useRef, useState } from 'react'
+import { applesauceIo, type NostrFilter } from '@platform/web/applesauceIo'
 import {
 	fetchNdkEventSet,
 	mergeNdkEventSetsById,
@@ -20,18 +22,66 @@ import { createMemoryEventStore, type EventReadContext, type EventStorePort } fr
 
 /**
  * Re-exported so Platform bindings (the order reads) can consume the NDK event
- * helpers without adding a new `platform -> src` edge: this file already owns
- * the `@/lib/nostr/io` edge.
+ * helpers without adding a new `platform -> src` edge: this file owns the
+ * raw/applesauce read surface.
  */
 export { applesauceIo, fetchNdkEventSet, mergeNdkEventSetsById, rehydrateVerifiedNdkEvent }
 export type { NDKEvent, NDKFilter, NDKSigner, NostrFilter }
 
 /**
- * Re-exported so the auction read binding can keep the live-subscription hook
- * without adding a new `platform -> src` edge: this file already owns the
- * applesauce seam the hook subscribes through (D1 slice 8).
+ * Live subscription to a Nostr filter via the applesauce I/O adapter.
+ *
+ * Streams events as they arrive (deduped by id, sorted newest-first) and
+ * tracks an `isStreaming` flag that flips off once the subscription has been
+ * established for a grace period. The legacy-shaped `NostrIo` port deliberately
+ * has no EOSE callback, so the grace timeout is the only signal that
+ * "loading" is done.
+ *
+ * Returns a cleanup-safe unsubscribe on unmount and when `filter`/`enabled`
+ * change. Moved verbatim out of the retired
+ * `src/lib/nostr/useSubscriptionEvents.ts` (J-0).
  */
-export { useSubscriptionEvents } from '@/lib/nostr/useSubscriptionEvents'
+export function useSubscriptionEvents(
+	filter: NostrFilter | NostrFilter[] | null,
+	enabled: boolean,
+): { events: NostrEventLike[]; isStreaming: boolean } {
+	const [events, setEvents] = useState<NostrEventLike[]>([])
+	const [isStreaming, setIsStreaming] = useState(false)
+	const seenIds = useRef(new Set<string>())
+
+	// Serialize the filter so we only re-subscribe when it actually changes,
+	// not on every render where the caller allocates a fresh array.
+	const filterKey = filter ? JSON.stringify(filter) : null
+
+	useEffect(() => {
+		if (!enabled || !filter) return
+
+		seenIds.current.clear()
+		setEvents([])
+		setIsStreaming(true)
+
+		const unsubscribe = applesauceIo.subscribe(filter, (event) => {
+			if (seenIds.current.has(event.id)) return
+			seenIds.current.add(event.id)
+			setEvents((prev) => {
+				if (prev.some((e) => e.id === event.id)) return prev
+				return [...prev, event].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+			})
+		})
+
+		// Flip the streaming flag off after a grace window so loading states
+		// resolve even when the relay never reaches (or reports) EOSE.
+		const timer = setTimeout(() => setIsStreaming(false), 10000)
+
+		return () => {
+			clearTimeout(timer)
+			unsubscribe()
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [enabled, filterKey])
+
+	return { events, isStreaming }
+}
 
 // Raw-event reads (the applesauce seam used by auctions) get their own store; NDKEvent reads use ndkReadContext.
 const rawEventStore = createMemoryEventStore<NostrEventLike>()

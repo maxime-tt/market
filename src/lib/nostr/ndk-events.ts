@@ -1,12 +1,16 @@
 import { NDKEvent, NDKRelaySet, type NDKFilter, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { verifyEvent, type Event } from 'nostr-tools'
-
-import type { NostrFilter, NostrIo } from './io'
+import type { Filter as NostrFilter, NostrEvent as RawNostrEvent } from 'nostr-tools'
 
 export { NDKEvent, NDKRelaySet }
 export type { NDKFilter, NDKSigner }
 
 type NdkEventContext = ConstructorParameters<typeof NDKEvent>[0]
+
+/** The one verb of the raw-event port `fetchNdkEventSet` needs (J-0: the legacy `NostrIo` port is retired). */
+type RawFetchEventsPort = {
+	fetchEvents(filter: NostrFilter | NostrFilter[]): Promise<RawNostrEvent[]>
+}
 
 export function rehydrateVerifiedNdkEvent(ndk: NdkEventContext, event: Event): NDKEvent | null {
 	try {
@@ -31,7 +35,7 @@ function isNewerEvent(candidate: NDKEvent, existing: NDKEvent): boolean {
 }
 
 export async function fetchNdkEventSet(
-	nostrIo: Pick<NostrIo, 'fetchEvents'>,
+	nostrIo: RawFetchEventsPort,
 	ndk: NdkEventContext,
 	filter: NDKFilter | NDKFilter[],
 ): Promise<Set<NDKEvent>> {

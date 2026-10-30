@@ -1,4 +1,4 @@
-import { getApplesauceRelayPool } from '@/lib/nostr/io-applesauce'
+import { getApplesauceRelayPool } from '@platform/web/applesauceIo'
 import { getWriteRelays, ndkStore } from '@platform/web/ndk/ndkStore'
 import { createPoolRelayPort, type NostrFilter, type NostrRelayPort } from '@sdk/core'
 import { createNostrIo, relayPoolAdapter, type Event, type NostrIo, type PoolPort, type RelayPolicy } from '@sdk/core/nostr-io'

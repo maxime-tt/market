@@ -19,7 +19,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/pr
 import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
 import { getUniqueAuctionShippingRefs } from '@sdk/commerce/auctions/shippingRefs'
 import { authStore } from '@platform/web/auth/authStore'
-import { applesauceIo } from '@/lib/nostr/io'
+import { applesauceIo } from '@platform/web/readContext'
 import { uiStore } from '@platform/web/app/uiStore'
 import { settleAuctionAsWinner, usePublishAuctionBidMutation } from '@/publish/auctions'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'

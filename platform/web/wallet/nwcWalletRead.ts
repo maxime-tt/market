@@ -28,9 +28,9 @@ export type { NwcBalance } from '@sdk/commerce/payments/wallet/nwcWalletRead'
  * A3.4: the **capability-typed** wallet-list port. The signer reads come from an
  * SDK signer capability (the auth session's `currentSigner()`, never the NDK
  * instance's signer), the self-decrypt is NIP-44 over the capability's own
- * pair, and the relay fetch is INJECTED. The fetch is a parameter (not an
- * `@/lib/nostr/io` import) because the callers supply the seam they read
- * through — the app composition passes the io seam's fetch, tests their own.
+ * pair, and the relay fetch is INJECTED. The fetch is a parameter (not a
+ * port import) because the callers supply the read they go through — the app
+ * composition passes the read context's fetch, tests their own.
  */
 export function createCapabilityWalletListPort(
 	capability: SignerCapability,

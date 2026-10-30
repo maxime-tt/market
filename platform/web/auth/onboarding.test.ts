@@ -34,7 +34,7 @@ mock.module('@sdk/config/wallet', () => ({
 	walletStore: { state: {}, setState: mock((_updater: unknown) => {}) },
 }))
 
-// The io seam fetch the onboarding reads the user's events through.
+// The applesauce port fetch the onboarding reads the user's events through.
 const fetchEvents = mock(async (filter: { kinds: number[] }) => {
 	if (filter.kinds.includes(10002)) {
 		return [
@@ -68,9 +68,8 @@ const fetchEvents = mock(async (filter: { kinds: number[] }) => {
 		},
 	]
 })
-mock.module('@/lib/nostr/io', () => ({
+mock.module('@platform/web/applesauceIo', () => ({
 	applesauceIo: { fetchEvents },
-	ndkIo: { getUser: async () => null },
 }))
 
 // The ndk store: only the two onboarding effects it observes.

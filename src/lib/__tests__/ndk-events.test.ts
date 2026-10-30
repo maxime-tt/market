@@ -16,9 +16,8 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent } from 'nostr-tools'
-import type { NostrEvent } from 'nostr-tools/pure'
+import type { Filter as NostrFilter, NostrEvent } from 'nostr-tools'
 
-import type { NostrIo } from '@/lib/nostr/io'
 import { fetchNdkEventSet } from '@/lib/nostr/ndk-events'
 
 const TEST_SECRET_KEY = new Uint8Array(32).fill(7)
@@ -36,9 +35,9 @@ function signedEvent(template: EventTemplate, secretKey: Uint8Array = TEST_SECRE
 	return finalizeEvent(template, secretKey)
 }
 
-/** Stub seam port returning a fixed relay result, in the given arrival order. */
-function ioReturning(events: NostrEvent[]): Pick<NostrIo, 'fetchEvents'> {
-	return { fetchEvents: async () => events } as unknown as Pick<NostrIo, 'fetchEvents'>
+/** Stub raw-read port returning a fixed relay result, in the given arrival order. */
+function ioReturning(events: NostrEvent[]): { fetchEvents(filter: NostrFilter | NostrFilter[]): Promise<NostrEvent[]> } {
+	return { fetchEvents: async () => events } as unknown as { fetchEvents(filter: NostrFilter | NostrFilter[]): Promise<NostrEvent[]> }
 }
 
 // NDKEvent rehydration only stores the reference (see NDKEvent's constructor);

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { AUCTION_KIND } from '@/lib/auction/constants'
-import type { NostrFilter } from '@/lib/nostr/io'
+import type { Filter as NostrFilter } from 'nostr-tools'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
 
 /**
@@ -73,17 +73,17 @@ const ndkStoreMock = () => ({
 mock.module('@/lib/stores/ndk', ndkStoreMock)
 mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumers load the platform store
 
-let applesauceIo: (typeof import('@/lib/nostr/io-applesauce'))['applesauceIo']
+let applesauceIo: (typeof import('@platform/web/applesauceIo'))['applesauceIo']
 let fetchAuction: (typeof import('@/queries/auctions'))['fetchAuction']
 let fetchAuctionByATag: (typeof import('@/queries/auctions'))['fetchAuctionByATag']
 let fetchAuctions: (typeof import('@/queries/auctions'))['fetchAuctions']
 let fetchAuctionsByPubkey: (typeof import('@/queries/auctions'))['fetchAuctionsByPubkey']
 let auctionsByPubkeyQueryOptions: (typeof import('@/queries/auctions'))['auctionsByPubkeyQueryOptions']
 let getAuctionStartingBid: (typeof import('@/queries/auctions'))['getAuctionStartingBid']
-let realFetchEvents: (typeof import('@/lib/nostr/io-applesauce'))['applesauceIo']['fetchEvents']
+let realFetchEvents: (typeof import('@platform/web/applesauceIo'))['applesauceIo']['fetchEvents']
 
 beforeAll(async () => {
-	;({ applesauceIo } = await import('@/lib/nostr/io-applesauce'))
+	;({ applesauceIo } = await import('@platform/web/applesauceIo'))
 	;({ fetchAuction, fetchAuctionByATag, fetchAuctions, fetchAuctionsByPubkey, auctionsByPubkeyQueryOptions, getAuctionStartingBid } =
 		await import('@/queries/auctions'))
 	realFetchEvents = applesauceIo.fetchEvents

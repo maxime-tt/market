@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { AUCTION_KIND } from '@/lib/auction/constants'
-import type { NostrFilter } from '@/lib/nostr/io'
+import type { Filter as NostrFilter } from 'nostr-tools'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { testLabelActions } from '@/lib/stores/testLabels'
 import { setCachedTestLabel, invalidateTestLabelCache } from '../testLabels'
@@ -121,16 +121,16 @@ mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // Wave E W-E4: consumer
  * `module: preserve` with no `target`, so TLA is a type error for every file
  * that uses it, and this file adds no new diagnostics.
  */
-let applesauceIo: (typeof import('@/lib/nostr/io-applesauce'))['applesauceIo']
+let applesauceIo: (typeof import('@platform/web/applesauceIo'))['applesauceIo']
 let fetchAuction: (typeof import('@/queries/auctions'))['fetchAuction']
 let fetchAuctionByATag: (typeof import('@/queries/auctions'))['fetchAuctionByATag']
 let fetchAuctions: (typeof import('@/queries/auctions'))['fetchAuctions']
 let fetchAuctionsByPubkey: (typeof import('@/queries/auctions'))['fetchAuctionsByPubkey']
-let realFetchEvents: (typeof import('@/lib/nostr/io-applesauce'))['applesauceIo']['fetchEvents']
+let realFetchEvents: (typeof import('@platform/web/applesauceIo'))['applesauceIo']['fetchEvents']
 let realFetch: typeof globalThis.fetch
 
 beforeAll(async () => {
-	;({ applesauceIo } = await import('@/lib/nostr/io-applesauce'))
+	;({ applesauceIo } = await import('@platform/web/applesauceIo'))
 	;({ fetchAuction, fetchAuctionByATag, fetchAuctions, fetchAuctionsByPubkey } = await import('@/queries/auctions'))
 	realFetchEvents = applesauceIo.fetchEvents
 	realFetch = globalThis.fetch

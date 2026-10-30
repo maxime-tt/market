@@ -6,7 +6,7 @@ import { TestListingNotice } from '@/components/TestListingNotice'
 import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
 import { getItemTestLabelCoordinate } from '@/lib/utils/testLabelFilters'
 import { authStore } from '@/lib/stores/auth'
-import { applesauceIo } from '@/lib/nostr/io'
+import { applesauceIo } from '@platform/web/readContext'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
 	getAuctionBiddingCutoffAt,

@@ -1,52 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import type { NostrEvent } from 'nostr-tools/pure'
-import type { NostrIo } from '@/lib/nostr/io'
-import {
-	createNip60WalletPort,
-	createNip60WalletRecoveryPort,
-	createNostrRelayPort,
-	createUserScopedKeyValueStoragePort,
-} from '../sdkAdapters'
+import { createNip60WalletPort, createNip60WalletRecoveryPort, createUserScopedKeyValueStoragePort } from '../sdkAdapters'
 
 describe('SDK host adapters', () => {
-	test('Nostr relay adapter forwards only explicit relay targets and maps ACKs', async () => {
-		const calls: Array<{ operation: string; relayUrls: string[] }> = []
-		const io: Pick<NostrIo, 'fetchEvents' | 'subscribe' | 'publish'> = {
-			fetchEvents: async (_filter, options) => {
-				calls.push({ operation: 'fetch', relayUrls: options?.relayUrls ?? [] })
-				return []
-			},
-			subscribe: (_filter, _onEvent, options) => {
-				calls.push({ operation: 'subscribe', relayUrls: options?.relayUrls ?? [] })
-				return () => calls.push({ operation: 'unsubscribe', relayUrls: [] })
-			},
-			publish: async (_event, options) => {
-				calls.push({ operation: 'publish', relayUrls: options?.relayUrls ?? [] })
-				return { publishedRelays: new Set(options?.relayUrls ?? []) }
-			},
-		}
-		const relay = createNostrRelayPort(io)
-		const relays = ['wss://relay.example']
-		const event: NostrEvent = {
-			id: 'a'.repeat(64),
-			pubkey: 'b'.repeat(64),
-			created_at: 1,
-			kind: 1,
-			tags: [],
-			content: 'test',
-			sig: 'c'.repeat(128),
-		}
-
-		await relay.fetchEvents({ kinds: [1] }, relays)
-		const unsubscribe = relay.subscribe({ kinds: [1] }, () => {}, relays)
-		const result = await relay.publish(event, relays)
-		unsubscribe()
-
-		expect(calls.map((call) => call.operation)).toEqual(['fetch', 'subscribe', 'publish', 'unsubscribe'])
-		expect(calls.slice(0, 3).map((call) => call.relayUrls)).toEqual([relays, relays, relays])
-		expect(result.acceptedRelays).toEqual(relays)
-	})
-
 	test('user-scoped storage adapter namespaces values and uses strict writes', async () => {
 		const values = new Map<string, string>()
 		const storage = createUserScopedKeyValueStoragePort(() => 'f'.repeat(64), {

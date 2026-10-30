@@ -9,7 +9,8 @@ import {
 	LABEL_VALUE_TEST,
 	l_TAG,
 } from '@/lib/constants/testLabels'
-import { type EventTemplate, type NostrEvent, getUser, publish, sign } from '@/lib/nostr/io'
+import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
+import { nostrPublishBridge } from '@platform/web/ndkPublishContext'
 import { testLabelActions } from '@/lib/stores/testLabels'
 import { invalidateTestLabelCache, setCachedTestLabel } from '@/queries/testLabels'
 
@@ -55,7 +56,7 @@ export interface PublishTestLabelParams {
 export async function publishTestLabel({ coordinate, contactRef, reason, content }: PublishTestLabelParams): Promise<NostrEvent> {
 	if (!coordinate) throw new Error('A coordinate is required to publish a test label')
 
-	const labeler = await getUser()
+	const labeler = await nostrPublishBridge.getUser()
 	if (!labeler?.pubkey) throw new Error('Unable to determine the current labeler pubkey')
 
 	// Optimistic update — the item disappears from feeds immediately
@@ -73,8 +74,8 @@ export async function publishTestLabel({ coordinate, contactRef, reason, content
 			content: content?.trim() ? content : buildTestLabelContent(reason, contactRef),
 		}
 
-		const event = await sign(template)
-		const result = await publish(event)
+		const event = await nostrPublishBridge.sign(template)
+		const result = await nostrPublishBridge.publish(event)
 		if (result.publishedRelays.size === 0) {
 			throw new Error('Test label was not published to any relays')
 		}
@@ -111,7 +112,7 @@ export async function publishTestLabelDeletion({ coordinate, labelEventId, reaso
 	if (!coordinate || !labelEventId) throw new Error('A coordinate and label event id are required to un-label')
 	if (labelEventId === PENDING_LABEL_EVENT_ID) throw new Error('Label is still being published — try again shortly')
 
-	const labeler = await getUser()
+	const labeler = await nostrPublishBridge.getUser()
 	if (!labeler?.pubkey) throw new Error('Unable to determine the current labeler pubkey')
 
 	// NIP-09: only the label event's author may delete it. Validate the
@@ -136,8 +137,8 @@ export async function publishTestLabelDeletion({ coordinate, labelEventId, reaso
 			content: reason?.trim() || 'Unmarking test label.',
 		}
 
-		const event = await sign(template)
-		const result = await publish(event)
+		const event = await nostrPublishBridge.sign(template)
+		const result = await nostrPublishBridge.publish(event)
 		if (result.publishedRelays.size === 0) {
 			throw new Error('Test label deletion was not published to any relays')
 		}
