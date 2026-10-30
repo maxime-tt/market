@@ -1,4 +1,4 @@
-import { AuctionCard } from '@/components/AuctionCard'
+import { AuctionCardHost as AuctionCard } from '@platform/web/auctions/AuctionCardHost'
 import { AuctionCountdown, useAuctionCountdown } from '@platform/web/auctions/AuctionCountdownHost'
 import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@ui/primitives/accordion'
@@ -23,7 +23,7 @@ import { applesauceIo } from '@platform/web/readContext'
 import { uiStore } from '@platform/web/app/uiStore'
 import { settleAuctionAsWinner, usePublishAuctionBidMutation } from '@/publish/auctions'
 import { findBidderRecord } from '@sdk/commerce/auctions/bidderRecords'
-import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
+import { useDleqKeysetPolling } from '@platform/web/auctions/useDleqKeysetPolling'
 import { toRawEvent } from '@sdk/core'
 import { useQueryClient } from '@tanstack/react-query'
 import { auctionKeys } from '@sdk/core/query/queryKeyFactory'
@@ -76,7 +76,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Check, Gavel, Landmark, Radio } from 'lucide-react'
-import { InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
+import { InvalidAuctionBidBlock, InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
 import { TestListingNoticeHost as TestListingNotice } from '@platform/web/config/testListingNoticeHost'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'
@@ -84,7 +84,7 @@ import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
-import { AuctionBidder } from '@/components/AuctionBidder'
+import { AuctionBidderHost as AuctionBidder } from '@platform/web/auctions/AuctionBidderHost'
 import { LiveChatPanel } from '@/components/LiveChatPanel'
 import { UserCard } from '@/components/UserCard'
 import { AuctionVerdictPanelHost } from '@platform/web/auctions/AuctionVerdictPanelHost'
@@ -790,7 +790,12 @@ function AuctionDetailRoute() {
 							    *other* auctions on this page are not bid controls for this
 							    one. */}
 							<div className="w-full" data-testid="auction-bid-area">
-								<AuctionBidder auction={auction} currentUserPubkey={activeUserPubkey} bids={bids} />
+								<AuctionBidder
+									auction={auction}
+									currentUserPubkey={activeUserPubkey}
+									bids={bids}
+									renderBidBlocked={(admission) => <InvalidAuctionBidBlock admission={admission} itemLabel="auction" />}
+								/>
 							</div>
 							{parsedAuctionForSettlement && (
 								<AuctionSettlement
@@ -1093,7 +1098,12 @@ function AuctionDetailRoute() {
 					<h2 className="font-heading text-2xl text-center lg:text-left">More from this seller</h2>
 					<ItemGrid className="gap-4 sm:gap-6">
 						{moreFromSeller.map((item) => (
-							<AuctionCard key={item.id} auction={item} />
+							<AuctionCard
+								key={item.id}
+								auction={item}
+								getBidderStatus={(input) => getAuctionBidderStatus(input as unknown as Parameters<typeof getAuctionBidderStatus>[0])}
+								renderBidBlocked={(admission) => <InvalidAuctionBidBlock admission={admission} itemLabel="auction" compact />}
+							/>
 						))}
 					</ItemGrid>
 				</div>

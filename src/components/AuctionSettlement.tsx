@@ -17,7 +17,7 @@ import {
 	type SettlementIconKey,
 } from '@sdk/commerce/auctions/settlementDescriptor'
 import { useNut7Polling } from '@/lib/auction/useNut7Polling'
-import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
+import { useDleqKeysetPolling } from '@platform/web/auctions/useDleqKeysetPolling'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import type {
 	ParsedAuctionEvent,

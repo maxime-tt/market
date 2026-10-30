@@ -29,7 +29,8 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/index.tsx',
 	// J-0: the retired io seam's last src consumers read the platform homes
 	// directly (the drain, transitional until their owners retire).
-	'src/components/AuctionCard.tsx', // I-PARKED component; reads the port via readContext
+'src/components/AuctionCard.tsx', // I-PARKED component; reads the port via readContext
+'src/lib/actions/testLabelActions.ts', // signs/publishes test labels via the publish bridge
 	'src/publish/shipping.tsx', // store drain D2 slice 17; shim deleted in E1
 	'src/publish/products.tsx',
 	'src/publish/collections.tsx',
@@ -78,6 +79,8 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/stores/testLabels.ts', // Wave E adapter drain W-E3.3; shim deleted in E1b
 	'src/lib/terms.ts', // Wave F W-E5a; shim deleted in E1b
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
+	'src/components/AuctionSettlement.tsx', // I-PARKED A: reads the platform DLEQ keyset polling hook; retires with the auction-family drains
+	'src/components/nostr/AuctionSectionGrid.tsx', // I-PARKED D: renders the platform AuctionCardHost; retires with the auction-family drains
 	'src/components/AuctionWonModal.tsx', // pre-existing; owner leaves src/ in D3
 	// --- I-c-hooks: src/ consumers re-pointed to the moved platform hooks (retire with these leaves in D3). ---
 	'src/components/UserCard.tsx', // I-c-hooks; useBreakpoint moved to platform/web/app
@@ -103,8 +106,6 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	// --- I-c-monitors (2026-10-29): useAuctionBidFunding moved to
 	// platform/web/auctions/useAuctionBidFunding.ts and the src/ original is deleted, so these
 	// src/ consumers read the platform hook directly until their own slices retire them. ---
-	'src/components/AuctionBidder.tsx', // I-c-monitors; retires in I-PARKED (the AuctionBidder host)
-	'src/components/AuctionBidProgressDialog.tsx', // I-c-monitors; retires in I-PARKED
 	// --- J-b (C2): the wallet modals left src/feature/wallet/, and the checkout flow host +
 	// invoice-storage helpers left src/; the one src/ consumer they left behind reads the platform
 	// home directly until its own slice retires it. ---

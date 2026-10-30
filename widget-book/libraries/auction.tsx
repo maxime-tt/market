@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
@@ -23,6 +23,14 @@ import { BidStatusBanner, BidStatusPill, getBidStatusCopy, type BidStatusDisplay
 import { AuctionShippingDetailRow, AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
 import { AuctionVerdictView } from '@ui/auction/auction-verdict-view'
 import { AuctionBidsView } from '@ui/auction/auction-bids-view'
+import { AuctionBidProgressDialogView, type AuctionBidProgressDialogViewProps } from '@ui/auction/auction-bid-progress-view'
+import {
+	AuctionBidderView,
+	AuctionConfirmBidDialogView,
+	AuctionRulesDialogView,
+	type AuctionBidderViewProps,
+} from '@ui/auction/auction-bidder-views'
+import { AuctionCardView } from '@ui/auction/auction-card-view'
 import { AuctionTimelineChartView } from '@ui/auction/auction-timeline-chart-view'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import {
@@ -319,6 +327,131 @@ function SampleBidderCard({ pubkey }: { pubkey: string }) {
 		</span>
 	)
 }
+
+/** Host stand-in for the progress dialog's validator avatar row: a plain deterministic node. */
+function SampleValidatorAvatar({ pubkey }: { pubkey: string }) {
+	return (
+		<span
+			data-slot="validator-avatar"
+			className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-fill-accent text-[10px] font-semibold text-on-fill-accent"
+		>
+			{pubkey.slice(0, 1).toUpperCase()}
+		</span>
+	)
+}
+
+const PROGRESS_VALIDATOR_PUBKEYS = ['f'.repeat(64)]
+
+/**
+ * The bid progress dialog behind a trigger, with literal verdict booleans, so
+ * the spec opens one lifecycle state at a time and asserts the stage mapping,
+ * the verdict-bound copy and the #1235 retry gating.
+ */
+function AuctionBidProgressDialogViewDemo({
+	trigger,
+	lifecycleState,
+	hasPositiveVerdict = false,
+	hasNegativeVerdict = false,
+	hasNeutralVerdict = false,
+	representativeVerdictClaim,
+	bidAmount,
+	refundLocktime,
+	onRetryPublish,
+	lockOutcomeUncertain,
+}: {
+	trigger: string
+	lifecycleState: AuctionBidProgressDialogViewProps['lifecycleState']
+} & Partial<Omit<AuctionBidProgressDialogViewProps, 'lifecycleState'>>) {
+	return (
+		<ModalTrigger label={trigger}>
+			{(open, setOpen) => (
+				<AuctionBidProgressDialogView
+					open={open}
+					onClose={() => setOpen(false)}
+					lifecycleState={lifecycleState}
+					hasPositiveVerdict={hasPositiveVerdict}
+					hasNegativeVerdict={hasNegativeVerdict}
+					hasNeutralVerdict={hasNeutralVerdict}
+					representativeVerdictClaim={representativeVerdictClaim}
+					validatorPubkeys={PROGRESS_VALIDATOR_PUBKEYS}
+					renderValidatorAvatar={(pubkey) => <SampleValidatorAvatar pubkey={pubkey} />}
+					bidAmount={bidAmount}
+					refundLocktime={refundLocktime}
+					onRetryPublish={onRetryPublish}
+					lockOutcomeUncertain={lockOutcomeUncertain}
+				/>
+			)}
+		</ModalTrigger>
+	)
+}
+
+/**
+ * Trigger-driven dialog mount: a mounted-open Radix dialog hides the rest of the
+ * catalogue from the accessibility tree and blocks pointer events, so every dialog
+ * entry renders CLOSED behind its own trigger button and the spec opens/closes
+ * one dialog at a time (the wallet-library discipline, C2/J-b).
+ */
+function ModalTrigger({ label, children }: { label: string; children: (open: boolean, setOpen: (open: boolean) => void) => ReactNode }) {
+	const [open, setOpen] = useState(false)
+	return (
+		<div className="min-h-20 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+			<button type="button" className="rounded-md border px-3 py-1.5 text-sm" onClick={() => setOpen(true)}>
+				{label}
+			</button>
+			{children(open, setOpen)}
+		</div>
+	)
+}
+
+/** Host stand-in for the router link the card host injects (`Link to={`/auctions/${id}`}`). */
+const sampleCardRenderLink = (children: ReactNode, className?: string) => (
+	<a href="#auction" className={className} data-slot="card-link">
+		{children}
+	</a>
+)
+
+/** Host stand-in for the confirm dialog's seller card (`UserCardHost`). */
+function SampleSellerCard() {
+	return (
+		<span data-slot="seller-card" className="inline-flex items-center gap-2 text-sm text-text-high">
+			<span className="flex h-8 w-8 items-center justify-center rounded-full bg-fill-accent text-xs font-semibold text-on-fill-accent">
+				S
+			</span>
+			<span>satoshi</span>
+		</span>
+	)
+}
+
+const BIDDER_MINT_OPTIONS: AuctionBidderViewProps['availableMints'] = [
+	{ mintUrl: 'https://mint.example', hostname: 'mint.example', balance: 12_000, hasSufficientBalance: true },
+	{ mintUrl: 'https://mint.two.example', hostname: 'mint.two.example', balance: 40_000, hasSufficientBalance: true },
+]
+
+const bidderPanelProps = (overrides: Partial<AuctionBidderViewProps>): AuctionBidderViewProps => ({
+	compact: false,
+	ended: false,
+	notStarted: false,
+	isOwnAuction: false,
+	hasSignedInBidder: true,
+	inCurveWindow: false,
+	curveShape: 'none',
+	curvePeakMultiplier: 2,
+	minBid: 10_000,
+	bidStep: 1_000,
+	showMintSelector: true,
+	availableMints: BIDDER_MINT_OPTIONS,
+	selectedMint: 'https://mint.example',
+	onSelectMint: () => {},
+	isDisabledInput: false,
+	isDisabledBid: false,
+	bidAmountInput: '10000',
+	onBidAmountChange: () => {},
+	onBidAmountPaste: () => {},
+	buttonText: 'Place Bid',
+	onSubmitBid: () => {},
+	onOpenRules: () => {},
+	...overrides,
+})
 
 const BIDS_VIEW_TOP_PUBKEY = 'd'.repeat(64)
 const BIDS_VIEW_OTHER_PUBKEY = 'e'.repeat(64)
@@ -955,6 +1088,202 @@ export const auction: WidgetLibrary = {
 			// windows, and a plain host-injected identity slot.
 			name: 'AuctionTimelineChartView',
 			render: () => <AuctionTimelineChartViewDemo />,
+		},
+		{
+			// I-PARKED commit B: the bid submission progress dialog — one entry per
+			// money-path lifecycle state the host can hand the view. Each holds its own
+			// `open` state behind a trigger (a mounted-open Radix dialog hides the rest
+			// of the catalogue from the accessibility tree), so the spec opens one state
+			// at a time to assert the stage mapping, the verdict-bound copy and the
+			// retry gating.
+			name: 'BidProgressPlacing',
+			render: () => <AuctionBidProgressDialogViewDemo trigger="Open placing-your-bid dialog" lifecycleState="payment_acknowledged" />,
+		},
+		{
+			name: 'BidProgressConfirmed',
+			render: () => (
+				<AuctionBidProgressDialogViewDemo
+					trigger="Open confirmed-bid dialog"
+					lifecycleState="bid_published"
+					hasPositiveVerdict
+					representativeVerdictClaim="valid_bid_placed"
+					bidAmount={21000}
+					refundLocktime={1_767_000_000}
+				/>
+			),
+		},
+		{
+			name: 'BidProgressPublishFailedRetry',
+			render: () => (
+				<AuctionBidProgressDialogViewDemo
+					trigger="Open publish-failed dialog"
+					lifecycleState="mint_succeeded_bid_publish_failed_reclaimable"
+					onRetryPublish={() => {}}
+				/>
+			),
+		},
+		{
+			// #1235 round-3 fix 3: the uncertain-lock variant — same publish-failed
+			// lifecycle state, re-branded copy, and NO retry affordance.
+			name: 'BidProgressLockUncertain',
+			render: () => (
+				<AuctionBidProgressDialogViewDemo
+					trigger="Open lock-uncertain dialog"
+					lifecycleState="mint_succeeded_bid_publish_failed_reclaimable"
+					lockOutcomeUncertain
+					onRetryPublish={() => {}}
+				/>
+			),
+		},
+		{
+			name: 'BidProgressRejected',
+			render: () => (
+				<AuctionBidProgressDialogViewDemo
+					trigger="Open rejected-bid dialog"
+					lifecycleState="bid_published"
+					hasNegativeVerdict
+					representativeVerdictClaim="fraudulent_bid"
+				/>
+			),
+		},
+		{
+			// I-PARKED commit C: the bidder panel — one entry per gating state the
+			// host resolves (curve window, compact card, ended, lower-bound gate).
+			name: 'BidderPanelFull',
+			render: () => <AuctionBidderView {...bidderPanelProps({})} />,
+		},
+		{
+			name: 'BidderPanelCompact',
+			render: () => <AuctionBidderView {...bidderPanelProps({ compact: true, buttonText: 'Bid 10,000 sats' })} />,
+		},
+		{
+			// AUCTIONS.md §6.1: the anti-snipe banner inside `(end_at, max_end_at]`.
+			name: 'BidderPanelAntiSnipe',
+			render: () => <AuctionBidderView {...bidderPanelProps({ inCurveWindow: true, curveShape: 'linear', curvePeakMultiplier: 2 })} />,
+		},
+		{
+			name: 'BidderPanelEnded',
+			render: () => <AuctionBidderView {...bidderPanelProps({ ended: true, buttonText: 'Auction Ended' })} />,
+		},
+		{
+			// Lower-bound gate: bidding has not opened yet (`now < start_at`).
+			name: 'BidderPanelNotStarted',
+			render: () => (
+				<AuctionBidderView
+					{...bidderPanelProps({ notStarted: true, isDisabledInput: true, isDisabledBid: true, buttonText: 'Bidding not started' })}
+				/>
+			),
+		},
+		{
+			// The rules acknowledgement dialog, trigger-driven.
+			name: 'BidderRulesDialog',
+			render: () => (
+				<ModalTrigger label="Open auction rules dialog">
+					{(open, setOpen) => (
+						<AuctionRulesDialogView open={open} onOpenChange={setOpen} publishPending={false} onConfirmRules={() => setOpen(false)} />
+					)}
+				</ModalTrigger>
+			),
+		},
+		{
+			// The confirm-bid dialog: mint options, the delta top-up and the
+			// refund locktime warning, trigger-driven.
+			name: 'BidderConfirmDialog',
+			render: () => (
+				<ModalTrigger label="Open confirm-bid dialog">
+					{(open, setOpen) => (
+						<AuctionConfirmBidDialogView
+							open={open}
+							onOpenChange={setOpen}
+							publishPending={false}
+							auctionThumbnailUrl={AUCTION_THUMBNAIL}
+							auctionTitle={'Handmade mug'}
+							renderSellerCard={<SampleSellerCard />}
+							endsInLabel={'2d 3h'}
+							minBid={10_000}
+							bidStep={1_000}
+							inCurveWindow={false}
+							curveShape={'none'}
+							curvePeakMultiplier={2}
+							confirmBidAmountInput={'11000'}
+							onConfirmBidAmountChange={() => {}}
+							mintOptions={BIDDER_MINT_OPTIONS}
+							confirmBidMint={'https://mint.example'}
+							onConfirmBidMintChange={() => {}}
+							hasExistingBid={false}
+							confirmMintBalance={12_000}
+							previousBidAmount={5_000}
+							confirmDeltaAmount={6_000}
+							confirmTopUpNeeded={0}
+							refundLocktime={1_767_000_000}
+							onConfirm={() => {}}
+							confirmButtonDisabled={false}
+						/>
+					)}
+				</ModalTrigger>
+			),
+		},
+		{
+			// I-PARKED commit D: the auction list card — one entry per surface state
+			// (bids-count fallback, winning pill, ended badge). The countdown, the
+			// test-label notice and the compact bidder panel are host-owned nodes,
+			// so the gallery shows the slots as plain stand-ins.
+			name: 'AuctionCardView',
+			render: () => (
+				<div className="max-w-[280px]">
+					<AuctionCardView
+						title="Handmade mug"
+						imageUrl={AUCTION_THUMBNAIL}
+						currentPrice={21_000}
+						bidsCount={3}
+						bidderStatus={null}
+						ended={false}
+						notStarted={false}
+						renderLink={sampleCardRenderLink}
+						countdown={<span className="text-xs text-text-mid">2d 3h left</span>}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'AuctionCardViewWinning',
+			render: () => (
+				<div className="max-w-[280px]">
+					<AuctionCardView
+						title="Handmade mug"
+						imageUrl={AUCTION_THUMBNAIL}
+						currentPrice={21_000}
+						bidsCount={3}
+						bidderStatus={{ status: 'winning', label: "You're winning" }}
+						ended={false}
+						notStarted={false}
+						renderLink={sampleCardRenderLink}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'AuctionCardViewEndedNoImage',
+			render: () => (
+				<div className="max-w-[280px]">
+					<AuctionCardView
+						title="Handmade mug"
+						imageUrl={null}
+						currentPrice={21_000}
+						bidsCount={1}
+						bidderStatus={{ status: 'was_outbid', label: 'You were outbid' }}
+						ended
+						notStarted={false}
+						renderLink={sampleCardRenderLink}
+					/>
+				</div>
+			),
+		},
+		{
+			// #1235 round-3 B3: the deposit closed with an unevidenced Lightning
+			// outcome — terminal, but NOT rendered as "Funding Failed".
+			name: 'BidProgressDepositUncertain',
+			render: () => <AuctionBidProgressDialogViewDemo trigger="Open deposit-uncertain dialog" lifecycleState="deposit_outcome_uncertain" />,
 		},
 		{
 			// S5b: the degenerate Available branches as four reachable states.

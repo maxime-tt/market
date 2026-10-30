@@ -1,7 +1,18 @@
 /**
- * Bid submission progress dialog — a single modal that tracks the entire
- * bid lifecycle from e-cash funding through relay publication to
- * third-party validator (kind-30440) confirmation.
+ * Bid submission progress dialog — the presentational half of the money-path
+ * dialog that tracks the entire bid lifecycle from e-cash funding through relay
+ * publication to third-party validator (kind-30440) confirmation.
+ *
+ * Lifted verbatim out of `src/components/AuctionBidProgressDialog.tsx` (the
+ * component retires in the same fused commit). The verdict query, the kind-30440
+ * parsing and the quorum resolution stay in the host
+ * (`platform/web/auctions/AuctionBidProgressDialogHost.tsx`); the resolved
+ * booleans, the validator identities (rendered by an injected avatar node) and
+ * the lifecycle state arrive as props, so this view holds no query plumbing.
+ *
+ * Declared visible changes: the raw-palette classes of the retiring component
+ * were migrated to the Tier-1 role vocabulary (green → success, blue → info,
+ * amber → warning). Markup and copy are otherwise identical.
  *
  * Protocol stages per AUCTIONS.md:
  *
@@ -21,28 +32,47 @@
  * The dialog does NOT auto-close. The user dismisses it explicitly after
  * a terminal state (confirmed, rejected, or failed).
  */
-
-import { useMemo } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@ui/primitives/dialog'
-import { Button } from '@ui/primitives/button'
+import { Fragment, type ReactNode } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../primitives/dialog'
+import { Button } from '../primitives/button'
 import { Loader2, Check, AlertCircle } from 'lucide-react'
-import { useAuctionVerdicts } from '@/queries/auctions'
-import { parseValidatorVerdictEvent } from '@sdk/commerce/auctions/schemas/validatorEvents'
-import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
-import { computeVerdictQuorum, type VerdictQuorumResult } from '@sdk/commerce/auctions/verdictQuorum'
-import type { AuctionBidFundingLifecycleState } from '@platform/web/auctions/useAuctionBidFunding'
-import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
-import { cn } from '@ui/utils/cn'
+import { cn } from '../utils/cn'
 
-interface AuctionBidProgressDialogProps {
+/** The bid-funding lifecycle states, mirrored one-for-one from the platform hook. */
+export type AuctionBidProgressLifecycleState =
+	| 'idle'
+	| 'funding_session_created'
+	| 'invoice_created'
+	| 'payment_acknowledged'
+	| 'minting_started'
+	| 'ecash_minted'
+	| 'ecash_minted_pending_rules_ack'
+	| 'bid_publish_attempted'
+	| 'bid_published'
+	| 'invoice_unpaid_or_expired_reclaimable'
+	| 'invoice_paid_mint_failed_reclaimable'
+	| 'mint_succeeded_bid_publish_failed_reclaimable'
+	| 'funding_canceled'
+	| 'deposit_outcome_uncertain'
+
+type StageStatus = 'done' | 'active' | 'pending' | 'error'
+
+export interface AuctionBidProgressDialogViewProps {
 	open: boolean
 	onClose: () => void
-	lifecycleState: AuctionBidFundingLifecycleState
-	auctionRootEventId: string
-	auctionCoordinates: string
+	lifecycleState: AuctionBidProgressLifecycleState
+	/** True when the CURRENT session's verdicts bound to this bid confirm it. */
+	hasPositiveVerdict: boolean
+	/** True when a bound verdict condemns the bid. */
+	hasNegativeVerdict: boolean
+	/** True when a bound verdict is not final (pending/neutral). */
+	hasNeutralVerdict: boolean
+	/** `representativeVerdict?.claim`, when one is bound. */
+	representativeVerdictClaim?: string
+	/** The auction's validator pubkeys (kind-30440 authors). */
 	validatorPubkeys: string[]
-	bidEventId?: string
-	auditorQuorum?: number
+	/** Host-owned avatar node for one validator pubkey. */
+	renderValidatorAvatar: (pubkey: string) => ReactNode
 	bidAmount?: number
 	refundLocktime?: number
 	onRetryPublish?: () => void
@@ -56,46 +86,6 @@ interface AuctionBidProgressDialogProps {
 	 */
 	lockOutcomeUncertain?: boolean
 }
-
-type StageStatus = 'done' | 'active' | 'pending' | 'error'
-
-/**
- * Quorum result shown while the current funding session has not yet produced a
- * published bid event id (#1235 Blocking 5): no verdicts bound, nothing
- * confirmed, nothing condemned.
- */
-const NO_SESSION_VERDICT_QUORUM: VerdictQuorumResult = {
-	representativeVerdict: null,
-	confirmCount: 0,
-	condemnCount: 0,
-	hasPositiveVerdict: false,
-	hasNegativeVerdict: false,
-	hasNeutralVerdict: false,
-}
-
-/**
- * #1235 Blocking 5 — cross-leg verdict leak: verdict binding is scoped to the
- * CURRENT session's published bid event.
- *
- * The dialog must never display a validator verdict bound to an event id
- * other than the bid published in the current session. `bidEventId` is
- * undefined until the current session's publish attempt produced an id (e.g.
- * a rebid's new leg at `ecash_minted` / `bid_publish_attempted`); until then
- * NO verdict may be attributed to the bid at all — `computeVerdictQuorum`
- * without an id falls back to a legacy no-filter mode that would happily
- * count the PREVIOUS leg's confirm verdicts and render "Bid successfully
- * placed!" for a bid that has not been published yet.
- *
- * Exported for unit tests (the dialog itself is portal-rendered, so its output
- * is not directly assertable in the SSR-based unit suite).
- */
-export const resolveProgressDialogVerdictQuorum = (
-	verdicts: ParsedValidatorVerdictEvent[],
-	bidEventId: string | undefined,
-	validatorPubkeys: string[],
-	auditorQuorum: number | undefined,
-): VerdictQuorumResult =>
-	bidEventId ? computeVerdictQuorum(verdicts, bidEventId, validatorPubkeys, auditorQuorum) : NO_SESSION_VERDICT_QUORUM
 
 // Lifecycle state groups
 const FUNDING_STATES: ReadonlySet<string> = new Set([
@@ -120,8 +110,8 @@ const PUBLISH_FAILED_STATES: ReadonlySet<string> = new Set(['mint_succeeded_bid_
 
 function ProgressStage({ label, status, description }: { label: string; status: StageStatus; description?: string }) {
 	const icon = {
-		done: <Check className="w-5 h-5 text-green-500" />,
-		active: <Loader2 className="w-5 h-5 animate-spin text-blue-500" />,
+		done: <Check className="w-5 h-5 text-success" />,
+		active: <Loader2 className="w-5 h-5 animate-spin text-info" />,
 		pending: <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30" />,
 		error: <AlertCircle className="w-5 h-5 text-destructive" />,
 	}[status]
@@ -159,36 +149,21 @@ function formatLocktime(unixSeconds: number): string {
 	}
 }
 
-export function AuctionBidProgressDialog({
+export function AuctionBidProgressDialogView({
 	open,
 	onClose,
 	lifecycleState,
-	auctionRootEventId,
-	auctionCoordinates,
+	hasPositiveVerdict,
+	hasNegativeVerdict,
+	hasNeutralVerdict,
+	representativeVerdictClaim,
 	validatorPubkeys,
-	bidEventId,
-	auditorQuorum,
+	renderValidatorAvatar,
 	bidAmount,
 	refundLocktime,
 	onRetryPublish,
 	lockOutcomeUncertain,
-}: AuctionBidProgressDialogProps) {
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId, 500, auctionCoordinates, validatorPubkeys)
-
-	const parsedVerdicts = useMemo(
-		() =>
-			(verdictsQuery.data ?? [])
-				.map(parseValidatorVerdictEvent)
-				.filter((r): r is { ok: true; value: ParsedValidatorVerdictEvent } => r.ok)
-				.map((r) => r.value),
-		[verdictsQuery.data],
-	)
-
-	const { representativeVerdict, hasPositiveVerdict, hasNegativeVerdict, hasNeutralVerdict } = useMemo(
-		() => resolveProgressDialogVerdictQuorum(parsedVerdicts, bidEventId, validatorPubkeys, auditorQuorum),
-		[parsedVerdicts, bidEventId, validatorPubkeys, auditorQuorum],
-	)
-
+}: AuctionBidProgressDialogViewProps) {
 	const isFundingActive = FUNDING_STATES.has(lifecycleState)
 	const isFundingDone = FUNDING_DONE_STATES.has(lifecycleState)
 	const isFundingFailed = FUNDING_FAILED_STATES.has(lifecycleState)
@@ -256,11 +231,11 @@ export function AuctionBidProgressDialog({
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
 						{hasPositiveVerdict ? (
-							<Check className="w-5 h-5 text-green-500" />
+							<Check className="w-5 h-5 text-success" />
 						) : isFundingFailed || isPublishFailed || hasNegativeVerdict || isDepositOutcomeUncertain ? (
-							<AlertCircle className="w-5 h-5 text-amber-500" />
+							<AlertCircle className="w-5 h-5 text-warning" />
 						) : (
-							<Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+							<Loader2 className="w-5 h-5 animate-spin text-info" />
 						)}
 						{hasPositiveVerdict
 							? 'Bid successfully placed!'
@@ -288,7 +263,7 @@ export function AuctionBidProgressDialog({
 									: isDepositOutcomeUncertain
 										? 'The result of your Lightning payment could not be confirmed — we can neither claim it was paid nor that it went unpaid. The deposit stays preserved: if it settles, this flow continues automatically. Your wallet recovery paths remain available.'
 										: hasNegativeVerdict
-											? `A validator has flagged this bid: ${representativeVerdict?.claim ?? 'rejected'}`
+											? `A validator has flagged this bid: ${representativeVerdictClaim ?? 'rejected'}`
 											: 'Tracking your bid through confirmation stages.'}
 					</DialogDescription>
 				</DialogHeader>
@@ -296,10 +271,10 @@ export function AuctionBidProgressDialog({
 				{hasPositiveVerdict ? (
 					/* Success summary — bid amount + refund locktime */
 					<div className="space-y-3 py-2">
-						<div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
-							<Check className="w-8 h-8 text-green-500 mx-auto mb-2" />
-							<p className="text-2xl font-bold text-green-700">{bidAmount?.toLocaleString() ?? 0} sats</p>
-							<p className="text-sm text-green-600 mt-1">bid locked</p>
+						<div className="rounded-lg border border-success-border bg-success-muted p-4 text-center">
+							<Check className="w-8 h-8 text-success mx-auto mb-2" />
+							<p className="text-2xl font-bold text-success-muted-foreground">{bidAmount?.toLocaleString() ?? 0} sats</p>
+							<p className="text-sm text-success-muted-foreground mt-1">bid locked</p>
 						</div>
 						{refundLocktime && refundLocktime > 0 && (
 							<div className="flex items-center justify-between text-xs text-muted-foreground px-1">
@@ -314,7 +289,7 @@ export function AuctionBidProgressDialog({
 							<ProgressStage
 								label="Validator confirmed"
 								status="done"
-								description={representativeVerdict ? `Verdict: ${representativeVerdict.claim}` : undefined}
+								description={representativeVerdictClaim ? `Verdict: ${representativeVerdictClaim}` : undefined}
 							/>
 						</div>
 					</div>
@@ -369,13 +344,13 @@ export function AuctionBidProgressDialog({
 							status={validatorStage}
 							description={
 								hasPositiveVerdict
-									? `Validator confirmed: ${representativeVerdict?.claim}`
+									? `Validator confirmed: ${representativeVerdictClaim}`
 									: hasNegativeVerdict
-										? `Validator verdict: ${representativeVerdict?.claim}`
+										? `Validator verdict: ${representativeVerdictClaim}`
 										: isAwaitingValidator && validatorPubkeys.length === 0
 											? 'No validators configured for this auction'
 											: isAwaitingValidator && hasNeutralVerdict
-												? `Validator review pending (${representativeVerdict?.claim}) — awaiting final verdict`
+												? `Validator review pending (${representativeVerdictClaim}) — awaiting final verdict`
 												: isAwaitingValidator
 													? 'Waiting for kind-30440 verdict from auction validators'
 													: undefined
@@ -388,9 +363,7 @@ export function AuctionBidProgressDialog({
 					<div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
 						<span>Validators:</span>
 						{validatorPubkeys.map((pk) => (
-							// `colored`/`deterministicFallbackText` are not AvatarUser props —
-							// PR-introduced tsc error class, fixed for this file's instance only.
-							<AvatarUser key={pk} pubkey={pk} className="h-5 w-5" />
+							<Fragment key={pk}>{renderValidatorAvatar(pk)}</Fragment>
 						))}
 					</div>
 				)}

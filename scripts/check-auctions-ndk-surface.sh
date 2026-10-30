@@ -64,7 +64,26 @@ REQUIRE_COVERAGE="${AUCTIONS_GUARD_REQUIRE_COVERAGE:-1}"
 # the SAME commit (the E0 fusion rule above) — never around it. Enforced only
 # against the real repo (REQUIRE_COVERAGE=1); staged throwaway repos opt out
 # with the same switch.
-MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-90}"
+MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-87}"
+
+# I-PARKED wave 3 commit D (2026-10-30): the list card moved verbatim out of
+# `src/components/AuctionCard.tsx` to its platform host + ui view pair
+# (`platform/web/auctions/AuctionCardHost.tsx` + `ui/auction/auction-card-view.tsx`),
+# so the last-but-one src/components/Auction*.tsx family member left the scanned set
+# and MIN_SCANNED drops 88 -> 87 with it — same commit, per the E0 fusion rule above.
+
+# I-PARKED wave 3 commit C (2026-10-30): the bidder panel moved verbatim out of
+# `src/components/AuctionBidder.tsx` to its platform host + ui view pair
+# (`platform/web/auctions/AuctionBidderHost.tsx` + `ui/auction/auction-bidder-views.tsx`),
+# so another src/components/Auction*.tsx family member left the scanned set and
+# MIN_SCANNED drops 89 -> 88 with it — same commit, per the E0 fusion rule above.
+
+# I-PARKED wave 3 commit B (2026-10-30): the bid progress dialog moved verbatim out of
+# `src/components/AuctionBidProgressDialog.tsx` to its platform host + ui view pair
+# (`platform/web/auctions/AuctionBidProgressDialogHost.tsx` +
+# `ui/auction/auction-bid-progress-view.tsx`), so the src/components/Auction*.tsx family
+# member left the scanned set and MIN_SCANNED drops 90 -> 89 with it — same commit,
+# per the E0 fusion rule above. The family still matches its six live members.
 
 # #1252-gated allowlist — paths relative to the repo root. EMPTY since A3.3
 # (2026-10-29): the one #1252-gated file, src/lib/auctions/
