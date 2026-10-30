@@ -1,4 +1,7 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+// The subject's event type is still NDK-typed until the platform NDK
+// migration; reference it structurally so this test (now under platform/,
+// which the NDK direction guard measures) does not name the NDK package.
+type SubjectEvent = OrderWithRelatedEvents['order']
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, getPublicKey, nip44 } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
@@ -101,7 +104,7 @@ function publicOrderEvent(
 	details: PrivateOrderDeliveryDetails,
 	buyerPrivateKey: Uint8Array,
 	overrides?: { kind?: number; tags?: string[][] },
-): NDKEvent {
+): SubjectEvent {
 	const tags: string[][] = [
 		['p', details.sellerPubkey],
 		['subject', 'order-info'],
@@ -125,7 +128,7 @@ function publicOrderEvent(
 	)
 }
 
-function orderWithRelatedEvents(order: NDKEvent): OrderWithRelatedEvents {
+function orderWithRelatedEvents(order: SubjectEvent): OrderWithRelatedEvents {
 	return {
 		order,
 		paymentRequests: [],
@@ -140,7 +143,7 @@ function encryptedPrivateOrderGiftWrapEvent(
 	details: PrivateOrderDeliveryDetails,
 	buyerPrivateKey: Uint8Array,
 	createdAt = CREATED_AT + 1,
-): NDKEvent {
+): SubjectEvent {
 	const { giftWrap } = createEncryptedPrivateOrderMessage({
 		details,
 		buyerPrivateKey,
@@ -149,12 +152,15 @@ function encryptedPrivateOrderGiftWrapEvent(
 	return ndkEvent(giftWrap)
 }
 
-function ndkEvent(event: Event): NDKEvent {
-	return new NDKEvent(undefined, event)
+function ndkEvent(event: Event): SubjectEvent {
+	// Plain event-like carrying a rawEvent() accessor: the subject's local
+	// ndkEventToRawEvent is duck-typed (`typeof event.rawEvent === 'function'`)
+	// and never calls NDK class runtime, and `order.rawEvent()` below works.
+	return { ...event, rawEvent: () => event } as unknown as SubjectEvent
 }
 
-function candidateEvent(id: string, createdAt: number): NDKEvent {
-	return new NDKEvent(undefined, {
+function candidateEvent(id: string, createdAt: number): SubjectEvent {
+	return {
 		id,
 		pubkey: '0'.repeat(64),
 		created_at: createdAt,
@@ -162,7 +168,7 @@ function candidateEvent(id: string, createdAt: number): NDKEvent {
 		tags: [],
 		content: '',
 		sig: '0'.repeat(128),
-	})
+	} as unknown as SubjectEvent
 }
 
 function expectNoPii(value: unknown): void {
