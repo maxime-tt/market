@@ -1,10 +1,10 @@
-import { NOSTR_AUTO_LOGIN, useAuth } from '@/lib/stores/auth'
+import { NOSTR_AUTO_LOGIN, useAuth } from '@platform/web/auth/authStore'
 import { useState } from 'react'
 import { NostrConnectQR } from './NostrConnectQR'
 import { PrivateKeyLogin } from './PrivateKeyLogin'
 import { BunkerConnect } from './BunkerConnect'
-import { hasAcceptedTerms } from '@/lib/terms'
-import { uiActions } from '@/lib/stores/ui'
+import { hasAcceptedTerms } from '@platform/web/app/terms'
+import { uiActions } from '@platform/web/app/uiStore'
 import { LoginDialogView } from '@ui/auth/login-dialog-view'
 
 interface LoginDialogProps {

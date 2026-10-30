@@ -1,4 +1,4 @@
-import { authActions, NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY } from '@/lib/stores/auth'
+import { authActions, NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY } from '@platform/web/auth/authStore'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { useEffect, useState } from 'react'

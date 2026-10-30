@@ -1,4 +1,4 @@
-import { LoginDialog } from '@/components/auth/LoginDialog'
+import { LoginDialog } from '@platform/web/auth/LoginDialog'
 import { QRScannerDialog } from '@platform/web/wallet/QRScannerDialog'
 import { V4VSetupDialog } from '@/components/dialogs/V4VSetupDialog'
 import { TermsConditionsDialog } from '@/components/dialogs/TermsConditionsDialog'

@@ -18,7 +18,7 @@ import { describe, expect, test } from 'bun:test'
 import { finalizeEvent } from 'nostr-tools'
 import type { Filter as NostrFilter, NostrEvent } from 'nostr-tools'
 
-import { fetchNdkEventSet } from '@/lib/nostr/ndk-events'
+import { fetchNdkEventSet } from './ndkEvents'
 
 const TEST_SECRET_KEY = new Uint8Array(32).fill(7)
 const OTHER_SECRET_KEY = new Uint8Array(32).fill(8)

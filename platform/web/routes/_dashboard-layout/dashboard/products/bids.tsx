@@ -39,7 +39,7 @@ import {
 } from '@/queries/auctions'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import type { NDKEvent } from '@/lib/nostr/ndk-events'
+import type { NDKEvent } from '@platform/web/ndk/ndkEvents'
 import { useQueries } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'

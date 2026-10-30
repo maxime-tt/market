@@ -1,4 +1,4 @@
-import type { V4VDTO } from '@/lib/stores/cart'
+import type { V4VDTO } from '@platform/web/cart/cartStore'
 import {
 	addRecipientToShares,
 	equalizeAllShares,
@@ -7,9 +7,9 @@ import {
 	updateSharePercentage,
 } from '@platform/web/v4v/splits'
 import { getDistinctColorsForRecipients } from '@platform/web/utils/colors'
-import { useConfigQuery } from '@/queries/config'
-import { useZapCapabilityByNpub } from '@/queries/profiles'
-import { usePublishV4VShares } from '@/queries/v4v'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useZapCapabilityByNpub } from '@platform/web/profiles/profileQuery'
+import { usePublishV4VShares } from '@platform/web/v4v/v4vQuery'
 import { nip19 } from 'nostr-tools'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'

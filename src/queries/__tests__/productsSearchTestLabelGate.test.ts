@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { ndkActions } from '@/lib/stores/ndk'
 import { testLabelActions } from '@/lib/stores/testLabels'
-import type { NDKEvent, NDKFilter } from '@/lib/nostr/ndk-events'
+import type { NDKEvent, NDKFilter } from '@platform/web/ndk/ndkEvents'
 import { invalidateTestLabelCache, setCachedTestLabel } from '../testLabels'
 import { fetchProductsBySearch, fetchProductsBySearchWithSellers, productsSearchQueryOptions } from '../products'
 

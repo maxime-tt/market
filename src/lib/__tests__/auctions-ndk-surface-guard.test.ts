@@ -114,9 +114,10 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 		expect(source).toContain('src/publish/auctions.tsx')
 		expect(source).toContain('src/queries/auctions.tsx')
 		// The out-of-scope files are named, not silently ignored: the wallet store
-		// directory, and the sanctioned first-party NDK wrapper.
+		// directory, and the sanctioned first-party NDK wrapper (moved to its platform
+		// home by batch 2 lane C, 2026-10-30).
 		expect(source).toContain('src/lib/stores/')
-		expect(source).toContain('src/lib/nostr/ndk-events.ts')
+		expect(source).toContain('platform/web/ndk/ndkEvents.ts')
 	})
 
 	test('the guard source retires the #1252 allowlist and the src/lib/auctions family (A3.3 + I-a S2)', async () => {

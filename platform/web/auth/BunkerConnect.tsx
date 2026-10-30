@@ -1,4 +1,4 @@
-import { authActions } from '@/lib/stores/auth'
+import { authActions } from '@platform/web/auth/authStore'
 import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { useState } from 'react'
 import { toast } from 'sonner'

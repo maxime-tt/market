@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import type { NDKEvent, NDKFilter } from '@/lib/nostr/ndk-events'
+import type { NDKEvent, NDKFilter } from '@platform/web/ndk/ndkEvents'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import { nostrPublishBridge } from '@platform/web/ndkPublishContext'
 import { publishTestLabel, publishTestLabelDeletion } from '@platform/web/curation/testLabelActions'

@@ -1,6 +1,6 @@
 import { AuctionWonModal } from '@platform/web/auctions/AuctionWonModal'
 import { FooterHost } from '@platform/web/layout/FooterHost'
-import { Header } from '@/components/layout/Header'
+import { Header } from '@platform/web/layout/Header'
 import { Pattern } from '@ui/shared/pattern'
 import { useDocumentIdentity } from '@platform/web/app/useDocumentIdentity'
 import { useRootRedirects } from '@platform/web/app/useRootRedirects'

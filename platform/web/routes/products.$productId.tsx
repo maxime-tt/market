@@ -31,7 +31,7 @@ import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
 import { useAmIAdmin } from '@/queries/app-settings'
 import { useTestLabelForCoordinate } from '@/queries/testLabels'
-import { TestLabelDialog } from '@/components/dashboard/TestLabelDialog'
+import { TestLabelDialog } from '@platform/web/curation/TestLabelDialog'
 import { TestListingNoticeHost as TestListingNotice } from '@platform/web/config/testListingNoticeHost'
 import {
 	getProductCoordinates,

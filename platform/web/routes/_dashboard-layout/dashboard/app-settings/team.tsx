@@ -1,5 +1,5 @@
 import { UserDisplayHost } from '@platform/web/app-settings/entityDisplayHosts'
-import { ProfileSearch } from '@/components/v4v/ProfileSearch'
+import { ProfileSearch } from '@platform/web/v4v/ProfileSearch'
 import {
 	AddTeamMemberCard,
 	RoleActionButtons,

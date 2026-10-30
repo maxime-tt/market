@@ -1,5 +1,5 @@
 import { ndkActions, ndkStore, getWriteRelaySet, getWriteRelays, fetchLatestAppEvent } from '@platform/web/ndk/ndkStore'
-import { NDKEvent, NDKRelaySet, NDKUser, NDKZapper, type NDKSigner, type NDKFilter } from '@/lib/nostr/ndk-events'
+import { NDKEvent, NDKRelaySet, NDKUser, NDKZapper, type NDKSigner, type NDKFilter } from '@platform/web/ndk/ndkEvents'
 import { applesauceIo, type NostrUser, type PublishOptions, type PublishResult } from '@platform/web/applesauceIo'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { EventPublishContext } from '@sdk/core/ports/eventPublish'

@@ -35,11 +35,11 @@
 # since been deleted with the wallet cut. These files are deliberately NOT in the
 # scanned set and NOT in the #1252 allowlist below.
 #
-# First-party wrapper: `src/lib/nostr/ndk-events.ts` re-exports NDK types and is
-# part of the seam, not an auction file — auction files may import it. Six scanned
-# files use it. This gate's literal `@nostr-dev-kit` grep cannot distinguish the
-# wrapper from a direct import; the wrapper lives outside the scanned set and is
-# the sanctioned pattern.
+# First-party wrapper: `platform/web/ndk/ndkEvents.ts` (batch 2 lane C, 2026-10-30; formerly
+# `src/lib/nostr/ndk-events.ts`) re-exports NDK types and is part of the seam, not an auction file —
+# auction files may import it. This gate's literal `@nostr-dev-kit` grep cannot distinguish the
+# wrapper from a direct import; the wrapper lives outside the scanned set and is the sanctioned
+# pattern.
 #
 # Allowlist: NIP-59 / private-claim encryption needs the raw active signer
 # object, which the library-agnostic I/O seam does not expose. Such files are
@@ -131,7 +131,7 @@ PINNED=(
 #   src/lib/utils/auction*.ts                                    2
 #   src/hooks/useAuction*.ts                                     2
 #   src/lib/schemas/auction/*.ts                                 5
-#   src/components/nostr/AuctionSectionGrid.tsx                  1
+#   src/components/nostr/AuctionSectionGrid.tsx                  0 (family retired below, batch 2 lane C)
 #   src/components/sheet-contents/auctions/*.tsx                 2
 #   src/components/sheet-contents/NewAuction*.tsx                1
 #
@@ -215,7 +215,10 @@ GLOBS=(
 	# the family matches nothing and the coverage check fails by design. Re-add a
 	# schemas family if an auction schema module reappears under src/lib/schemas/.
 	"$ROOT"/platform/server/auction-validator/*.ts
-	"$ROOT"/src/components/nostr/AuctionSectionGrid.tsx
+	# Batch 2 lane C (2026-10-30): the `src/components/nostr/AuctionSectionGrid.tsx` single-file
+	# family was retired here — the component moved verbatim to
+	# `platform/web/auctions/AuctionSectionGrid.tsx`, joining the existing
+	# `platform/web/auctions/*.tsx` family (scanned-set size unchanged, MIN_SCANNED stays 87).
 	"$ROOT"/src/components/sheet-contents/auctions/*.tsx
 	"$ROOT"/src/components/sheet-contents/NewAuction*.tsx
 	"$ROOT"/platform/web/routes/_dashboard-layout/dashboard/products/auctions*.tsx

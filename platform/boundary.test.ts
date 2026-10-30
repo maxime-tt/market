@@ -75,28 +75,18 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/lib/stores/testLabels.ts', // Wave E adapter drain W-E3.3; shim deleted in E1b
 	'src/lib/terms.ts', // Wave F W-E5a; shim deleted in E1b
 	// --- store drain: the notification chapters' migration-time edges (see the note above). ---
-	'src/components/nostr/AuctionSectionGrid.tsx', // I-PARKED D: renders the platform AuctionCardHost; retires with the auction-family drains
 	// --- batch 2 lane D (2026-10-30): the root singles left src/ for platform/web/<feature>/; each row
 	// below is a src/ consumer re-pointed onto a moved component and retires when the consumer itself
 	// leaves src/ (batch 2 lanes B/C/A). ---
-	'src/components/layout/MobileMenu.tsx', // batch 2 lane D; retires when layout/MobileMenu leaves src/ (lane C)
-	'src/components/v4v/ProfileSearch.tsx', // batch 2 lane D; retires when v4v/ProfileSearch leaves src/ (lane C)
 	'src/components/sheet-contents/collections/InfoTab.tsx', // batch 2 lane D; retires when collections/InfoTab leaves src/ (lane A)
 	'src/components/sheet-contents/auctions/AuctionFormContent.tsx', // batch 2 lane D; retires when auctions/AuctionFormContent leaves src/ (lane A)
-	'src/components/migration/MigrationForm.tsx', // batch 2 lane D; retires when migration/MigrationForm leaves src/ (lane C)
 	'src/components/sheet-contents/cart/CartContent.tsx', // batch 2 lane D; reads the moved CartItem + UserCardHost; retires when CartContent leaves src/ (lane A)
-	'src/components/sheet-contents/ConversationSheetContent.tsx', // batch 2 lane D; reads UserCardHost; retires when ConversationSheetContent leaves src/ (lane A)
-	'src/components/v4v/RecipientItem.tsx', // batch 2 lane D; reads UserCardHost; retires when RecipientItem leaves src/ (lane C)
-	'src/components/v4v/RecipientPreview.tsx', // batch 2 lane D; reads UserCardHost; retires when RecipientPreview leaves src/ (lane C)
+	'src/components/sheet-contents/ConversationSheetContent.tsx', // batch 2 lane D; reads UserCardHost + the moved ConversationView; retires when ConversationSheetContent leaves src/ (lane A)
 	// --- I-c-hooks: src/ consumers re-pointed to the moved platform hooks (retire with these leaves in D3). ---
-	'src/components/pages/ProfilePage.tsx', // I-c-hooks; useBreakpoint/useEntityPermissions moved to platform
 	'src/lib/stores/auth.ts', // pre-existing; shim deleted in E1
 	// --- store drain I-c (2026-10-29): the notification monitor and its src-side seam moved to
 	// platform/web/notifications/ and both files are deleted, so their rows went with them; the seam's
 	// two src/ consumers read the platform barrel directly until D3 retires them. ---
-	'src/components/dashboard/AuctionListItemHost.tsx', // I-c; reads the read marks + notification scopes; retired in D3
-	'src/components/messages/ConversationView.tsx', // I-c; reads the read marks; retired in D3
-	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
 	// --- H-b kit 4 (B2): the identity kit retires onto the D4 userCardHosts; each row retires with its owner. ---
 	// --- I-c-monitors (2026-10-29): useAuctionBidFunding moved to
 	// platform/web/auctions/useAuctionBidFunding.ts and the src/ original is deleted, so these
@@ -108,14 +98,10 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	// homes; each src/ consumer below is re-pointed at the moved module and retires with its own leaf slice. ---
 	'src/components/sheet-contents/products/tabs.tsx', // L-utils; MempoolService moved to platform/web/payments
 	'src/components/dialogs/V4VSetupDialog.tsx', // L-utils; V4V split math + props moved to platform/web/v4v
-	'src/components/dashboard/TestLabelDialog.tsx', // L-utils; test-label actions moved to platform/web/curation
-	'src/hooks/useV4VManager.ts', // L-utils; V4V split math moved to platform/web/v4v
-	'src/components/auth/NostrConnectQR.tsx', // L-utils; copyToClipboard moved to platform/web/utils
 	// --- batch 2 lane B (2026-10-30): orders/checkout/payments/wallet/account components left src/;
 	// the two src/ consumers below are re-pointed onto the moved modules and retire when they do. ---
-	'src/components/DialogRegistry.tsx', // batch 2 lane B; retires when DialogRegistry leaves src/ (lane A)
+	'src/components/DialogRegistry.tsx', // batch 2 lane B; reads the moved LoginDialog too; retires when DialogRegistry leaves src/ (lane A)
 	'src/publish/orders.test.ts', // batch 2 lane B; retires when the src/publish orders shim retires (E1)
-	'src/components/v4v/RecipientItem.tsx', // L-utils; color helpers moved to platform/web/utils
 ])
 
 async function listSourceFiles(directory: string): Promise<string[]> {

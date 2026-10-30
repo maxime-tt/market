@@ -7,7 +7,7 @@
  * Direction is one-way: `readContext.ts -> this adapter`, never the reverse.
  */
 import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from '@platform/web/ndk/ndkStore'
-import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
+import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@platform/web/ndk/ndkEvents'
 import { authStore, getCurrentPubkey, getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { configActions } from '@sdk/config/app-config'
 import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'

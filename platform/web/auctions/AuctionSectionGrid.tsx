@@ -3,8 +3,8 @@ import { getAuctionBidderStatus } from '@platform/web/auctions/auctionBidderStat
 import { InvalidAuctionBidBlock } from '@platform/web/auctions/InvalidAuctionNotice'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { cn } from '@ui/utils/cn'
-import { getAuctionRootEventId } from '@/queries/auctions'
-import type { NostrEventLike } from '@/lib/nostr/eventLike'
+import { getAuctionRootEventId } from '@platform/web/auctions/auctionsQuery'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 interface AuctionSectionGridProps {
 	title: string

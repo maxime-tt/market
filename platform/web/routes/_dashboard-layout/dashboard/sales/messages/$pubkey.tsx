@@ -1,5 +1,5 @@
-import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
-import { MessageInput } from '@/components/messages/MessageInput'
+import { ChatMessageBubble } from '@platform/web/messages/ChatMessageBubble'
+import { MessageInput } from '@platform/web/messages/MessageInput'
 import { PrivateOrderDetailsCard } from '@platform/web/orders/PrivateOrderDetailsCard'
 import { Button } from '@ui/wrappers/button'
 import { LoadingState } from '@ui/shared/loading-state'

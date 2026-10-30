@@ -1,4 +1,4 @@
-import { ConversationView } from '@/components/messages/ConversationView'
+import { ConversationView } from '@platform/web/messages/ConversationView'
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@ui/primitives/sheet'
 import { useState } from 'react'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'

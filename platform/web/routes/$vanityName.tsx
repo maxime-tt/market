@@ -1,4 +1,4 @@
-import { ProfilePage } from '@/components/pages/ProfilePage'
+import { ProfilePage } from '@platform/web/profiles/ProfilePage'
 import { LoadingState } from '@ui/shared/loading-state'
 import { vanityActions, vanityStore } from '@platform/web/config/vanityStore'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'

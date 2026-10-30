@@ -47,3 +47,15 @@ platform/web/notifications/monitor.ts|I-c-notifications|sdk/commerce/auctions/au
 # file names the transport and injects the sdk relay-list read model, so it is
 # declared the day it is touched (declare-as-you-touch).
 platform/web/relays/relayListNdkRead.ts|h-kit/H-c+B3|sdk/core/relays|the NIP-65 relay-list read and the relay connectivity classifier run through the platform NDK store bridge and inject the sdk relay-list read/parse model|client-NDK-removal (ADR-0002; post-Wave-J)
+
+# --- batch 2 lane C (2026-10-30): the auth/messages/v4v/layout/dashboard/pages components left src/
+# for platform/web/<feature>/; the four moved files below name the NDK transport AND import a real
+# sdk capability, so each is declared the day it lands (declare-as-you-touch). BunkerConnect.tsx and
+# ndk/ndkEvents.ts also moved but inject no sdk capability (an NDKPrivateKeySigner producer and the
+# NDK type re-export itself), so they cannot carry a ledger row without a fabricated target; they
+# stay undeclared and ride the bridge ratchet (32 <= 33) until the auth wave (A3) and
+# client-NDK-removal retire them.
+platform/web/auth/NostrConnectQR.tsx|batch-2-lane-C|sdk/config/constants.ts|the NIP-46 connect panel names the NDK transport (NDKEvent/NDKPrivateKeySigner) and injects the sdk shared constants (DEFAULT_NIP46_RELAYS)|client-NDK-removal (ADR-0002; post-Wave-J)
+platform/web/migration/MigrationForm.tsx|batch-2-lane-C|sdk/commerce/products/nip15Migration.ts|the migration form names the NDK transport (NDKEvent typing, platform NDK store) and injects the sdk nip-15 product parser plus the shared query-key factory|client-NDK-removal (ADR-0002; post-Wave-J)
+platform/web/profiles/ProfilePage.tsx|batch-2-lane-C|sdk/core/profile/profileValidation.ts|the profile page names the NDK transport (NDKEvent typing, platform NDK store) and injects the sdk profile validation capability|client-NDK-removal (ADR-0002; post-Wave-J)
+platform/web/v4v/ProfileSearch.tsx|batch-2-lane-C|sdk/core/query/queryKeyFactory.ts|the v4v recipient search publishes through the platform NDK store and injects the sdk query-key factory for the profile keys|client-NDK-removal (ADR-0002; post-Wave-J)

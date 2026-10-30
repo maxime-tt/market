@@ -5,8 +5,8 @@ import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'
 import { getOrderReference } from '@sdk/commerce/orders'
 import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
 import { AuctionCountdown } from '@platform/web/auctions/AuctionCountdownHost'
-import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
-import type { NDKEvent } from '@/lib/nostr/ndk-events'
+import { TestLabelButton } from '@platform/web/curation/TestLabelButton'
+import type { NDKEvent } from '@platform/web/ndk/ndkEvents'
 import { appNotificationsBinding, notificationScopes, readMarkFamilies, readMarks, scopedLastSeenOf } from '@platform/web/notifications'
 import {
 	getAuctionBiddingCutoffAt,
@@ -21,10 +21,10 @@ import {
 	getAuctionTopBidFromBids,
 	getBidAmount,
 	useAuctionClaimOrders,
-} from '@/queries/auctions'
-import { useComments } from '@/queries/comments'
-import { useLiveActivity, useLiveChatMessages } from '@/queries/liveChat'
-import { useProfileName } from '@/queries/profiles'
+} from '@platform/web/auctions/auctionsQuery'
+import { useComments } from '@platform/web/messaging/commentQuery'
+import { useLiveActivity, useLiveChatMessages } from '@platform/web/messaging/liveChatQuery'
+import { useProfileName } from '@platform/web/profiles/profileQuery'
 import { AuctionListItemView, AuctionTopBidBox } from '@ui/auction/auction-list-views'
 import { Button } from '@ui/wrappers/button'
 

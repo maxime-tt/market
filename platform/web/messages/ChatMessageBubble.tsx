@@ -1,4 +1,4 @@
-import { useProductImages, useProductPrice, useProductTitle } from '@/queries/products'
+import { useProductImages, useProductPrice, useProductTitle } from '@platform/web/products/productQuery'
 import { getCoordsFromATag } from '@sdk/core/utils/coords'
 import { ChatMessageBubbleView, ChatOrderItemView, type ChatMessageEvent } from '@ui/messages/chat-message-bubble-view'
 

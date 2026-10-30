@@ -1,4 +1,4 @@
-import { authStore } from '@/lib/stores/auth'
+import { authStore } from '@platform/web/auth/authStore'
 import { useStore } from '@tanstack/react-store'
 import { MessageInputView } from '@ui/messages/messaging-views'
 

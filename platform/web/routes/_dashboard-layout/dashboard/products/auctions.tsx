@@ -7,7 +7,7 @@ import { PageHeader } from '@ui/layout/page-header'
 import { authStore } from '@platform/web/auth/authStore'
 import { uiActions } from '@platform/web/app/uiStore'
 import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
-import { AuctionListItemHost } from '@/components/dashboard/AuctionListItemHost'
+import { AuctionListItemHost } from '@platform/web/dashboard/AuctionListItemHost'
 import {
 	auctionsByPubkeyQueryOptions,
 	getAuctionId,
@@ -16,7 +16,7 @@ import {
 	useAuctionPathReleasesForList,
 	useAuctionSettlementsForList,
 } from '@/queries/auctions'
-import type { NDKEvent } from '@/lib/nostr/ndk-events'
+import type { NDKEvent } from '@platform/web/ndk/ndkEvents'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { parseSettlementEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
 import { useAutoAnimate } from '@formkit/auto-animate/react'

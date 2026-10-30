@@ -1,4 +1,4 @@
-import type { useV4VManager } from '@/hooks/useV4VManager'
+import type { useV4VManager } from '@platform/web/v4v/useV4VManager'
 
 /**
  * Map the sales / "all products" adapter hook output to the props expected by

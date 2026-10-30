@@ -16,7 +16,7 @@ import {
 	type NDKEvent,
 	type NDKFilter,
 	type NDKSigner,
-} from '@/lib/nostr/ndk-events'
+} from '@platform/web/ndk/ndkEvents'
 import type { NostrEventLike } from '@sdk/core'
 import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 

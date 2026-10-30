@@ -1,12 +1,12 @@
 import { Alert, AlertDescription } from '@ui/primitives/alert'
 import { Button } from '@ui/primitives/button'
 import { Slider } from '@ui/primitives/slider'
-import { ProfileSearch } from '@/components/v4v/ProfileSearch'
-import { RecipientItem } from '@/components/v4v/RecipientItem'
-import { RecipientPreview } from '@/components/v4v/RecipientPreview'
+import { ProfileSearch } from '@platform/web/v4v/ProfileSearch'
+import { RecipientItem } from '@platform/web/v4v/RecipientItem'
+import { RecipientPreview } from '@platform/web/v4v/RecipientPreview'
 import type { V4VConfig, V4VLabels } from '@sdk/commerce/v4v/labels'
 import { cn } from '@ui/utils/cn'
-import type { V4VDTO } from '@/lib/stores/cart'
+import type { V4VDTO } from '@platform/web/cart/cartStore'
 import { forwardRef } from 'react'
 
 /**

@@ -9,7 +9,7 @@ import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
 import { nip15ProductsQueryOptions, migratedEventsQueryOptions } from '@/queries/migration'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { MigrationForm } from '@/components/migration/MigrationForm'
+import { MigrationForm } from '@platform/web/migration/MigrationForm'
 import { ArrowRightLeft } from 'lucide-react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/products/migration-tool')({
