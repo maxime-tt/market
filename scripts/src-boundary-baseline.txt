@@ -182,7 +182,15 @@
 # 185/87 -> 173/82, src -> sdk production 97/86 -> 100/68, src -> sdk test 39/32 -> 170/73 (the test rows
 # grow as the auction/feature suites' mocks move onto the sdk homes — informational, never a gate). Guard
 # reports OK with no INBOUND `(decreased)`.
-platform -> src production 212 61
+# 2026-10-30 (E3 re-seed, Wave 3 close-out): measured by `bash scripts/check-src-boundary.sh` at the merged
+# tip fc83b5f5 (L-wallet 95444796, L-utils c92563a0, C3/I-PARKED fc83b5f5). Wave 3 retired the src/lib
+# wallet cluster (M1 -18) and the remaining src/lib util/schema/action shims (M1 -24) plus the three
+# AuctionBidder/AuctionCard/AuctionBidProgressDialog components, so the INBOUND `platform -> src` row is
+# ratcheted 212/61 -> 175/53 and may only fall. OUTBOUND re-measured to the same measurement: src ->
+# platform production 82/68 -> 97/77, src -> platform test 43/26 -> 46/27, src -> ui production 173/82 ->
+# 169/79, src -> sdk production 100/68 -> 76/48, src -> sdk test 170/73 -> 217/92 (the outbound rows move
+# with the drain — informational, never a gate). Guard reports OK with no `(decreased)` on any row.
+platform -> src production 175 53
 platform -> src test 0 0
 
 ui -> src production 0 0
@@ -191,11 +199,11 @@ ui -> src test 0 0
 sdk -> src production 0 0
 sdk -> src test 0 0
 
-src -> platform production 82 68
-src -> platform test 43 26
+src -> platform production 97 77
+src -> platform test 46 27
 
-src -> ui production 173 82
+src -> ui production 169 79
 src -> ui test 0 0
 
-src -> sdk production 100 68
-src -> sdk test 170 73
+src -> sdk production 76 48
+src -> sdk test 217 92

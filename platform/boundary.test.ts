@@ -27,10 +27,6 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 // companions/STORE-DRAIN-CHAPTER-PLAN.md ("src -> platform during the drain").
 const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/index.tsx',
-	// J-0: the retired io seam's last src consumers read the platform homes
-	// directly (the drain, transitional until their owners retire).
-'src/components/AuctionCard.tsx', // I-PARKED component; reads the port via readContext
-'src/lib/actions/testLabelActions.ts', // signs/publishes test labels via the publish bridge
 	'src/publish/shipping.tsx', // store drain D2 slice 17; shim deleted in E1
 	'src/publish/products.tsx',
 	'src/publish/collections.tsx',
@@ -93,12 +89,10 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/components/dashboard/AuctionListItemHost.tsx', // I-c; reads the read marks + notification scopes; retired in D3
 	'src/components/messages/ConversationView.tsx', // I-c; reads the read marks; retired in D3
 	'src/components/layout/Header.tsx', // C2; reads the derived counts, retired in D3
-	'src/components/social/SocialInteractions.tsx', // H-b kit 2: zaps via the platform ZapButtonHost; retires with the B2 SocialInteractions kit
 	'src/components/FeaturedSections.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e/AuctionCard park
 	'src/components/orders/OrderDetailComponent.tsx', // H-b kit 3: renders the platform ProductCardHost; retires with the H-e4 orders cluster
 	// --- H-b kit 4 (B2): the identity kit retires onto the D4 userCardHosts; each row retires with its owner. ---
 	'src/components/BugReportItem.tsx', // H-b kit 4: renders the platform AvatarHost; retires with the H-e6 layout/nav cluster
-	'src/components/social/ZapsList.tsx', // H-b kit 4: renders the platform AvatarHost; retires with the H-e3 social cluster
 	'src/components/LiveChatPanel.tsx', // H-b kit 5: renders the platform LiveChatMessageHost; retires with its H-c leaf slice
 	'src/components/Comments.tsx', // H-b kit 6: renders the platform SocialInteractionsHost; retires with its H-c leaf slice
 	'src/components/ui/image-uploader/ImageUploader.tsx', // Wave G media host (G-a1.2); retires with the H-e8 image-uploader leaf cluster
