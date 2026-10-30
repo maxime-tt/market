@@ -187,7 +187,7 @@ mock.module('@platform/web/profiles/profileQuery', () => ({
 	})),
 }))
 
-mock.module('@/lib/stores/ndk', () => ({
+const ndkStoreMock = () => ({
 	ndkActions: {
 		getNDK: () => ({
 			activeUser: currentBuyer
@@ -205,7 +205,13 @@ mock.module('@/lib/stores/ndk', () => ({
 			return new Set(['wss://relay.example'])
 		}),
 	},
-}))
+})
+
+mock.module('@/lib/stores/ndk', ndkStoreMock)
+// L-utils mock repair (additive, registration-only): the order publish path reads
+// the NDK store through the platform module directly, so the suite registers the
+// same factory for `@platform/web/ndk/ndkStore` alongside the src shim specifier.
+mock.module('@platform/web/ndk/ndkStore', ndkStoreMock)
 
 mock.module('@nostr-dev-kit/ndk', () => ({
 	NDKUser: TestNDKUser,
