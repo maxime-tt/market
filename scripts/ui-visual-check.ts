@@ -27,7 +27,7 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 import { setupAuthContext, type TestUser } from '../e2e/fixtures/auth'
 
-/** devUser1 — owner/admin. A committed dev fixture, see `src/lib/fixtures.ts`. */
+/** devUser1 — owner/admin. A committed dev fixture, see `scripts/fixtures.ts`. */
 const DEV_USER1: TestUser = {
 	pk: '86a82cab18b293f53cbaaae8cdcbee3f7ec427fdf9f9c933db77800bb5ef38a0',
 	sk: '5c81bffa8303bbd7726d6a5a1170f3ee46de2addabefd6a735845166af01f5c0',

@@ -117,7 +117,7 @@ jobs:
             apps: [
               {
                 name: 'market-production',
-                script: 'src/index.tsx',
+                script: 'platform/web/app/entry.tsx',
                 interpreter: process.env.HOME + '/.bun/bin/bun',
                 cwd: '/opt/market-production',
                 instances: 1,

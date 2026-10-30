@@ -37,7 +37,7 @@ cp tsconfig.json "$DEPLOY_DIR/"
 cat > "$DEPLOY_DIR/package-staging.json" << 'EOF'
 {
   "scripts": {
-    "start:staging": "NODE_ENV=production bun src/index.tsx"
+    "start:staging": "NODE_ENV=production bun platform/web/app/entry.tsx"
   }
 }
 EOF

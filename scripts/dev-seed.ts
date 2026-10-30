@@ -7,7 +7,7 @@
  * CVM client to request real derivation paths for every seeded bid),
  * then leaves the server running and starts the bun web dev server.
  *
- * Replaces the previous `bun run startup && bun run seed && bun --hot src/index.tsx`
+ * Replaces the previous `bun run startup && bun run seed && bun --hot platform/web/app/entry.tsx`
  * chain — the seed now needs the CVM server alive before it can publish
  * auctions whose `path_issuer` resolves to anything reachable.
  *
@@ -114,7 +114,7 @@ async function main() {
 		// `bun --hot` runs in the foreground; keeping the CVM server alive
 		// happens implicitly because we never killed it.
 		const webServer = spawn({
-			cmd: ['bun', '--hot', 'src/index.tsx', '--host', '0.0.0.0'],
+			cmd: ['bun', '--hot', 'platform/web/app/entry.tsx', '--host', '0.0.0.0'],
 			stdio: ['inherit', 'inherit', 'inherit'],
 			env: process.env,
 		})

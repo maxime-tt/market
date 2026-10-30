@@ -14,11 +14,16 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 	'platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx',
 ])
 
+// The Bun PROCESS entry composes the server and is never part of the browser
+// bundle — the SPA shell (index.html) pulls `frontend.tsx`, not the entry.
+const WEB_SERVER_ENTRY = 'platform/web/app/entry.tsx'
+
 // Legacy src/ host modules allowed to depend on Platform while they are migrated. The rows were a
 // migration ledger — each removed when its owner left src/ — and the E1b mega-deletion
-// (2026-10-30) retired the last 49 rows with the 57 deleted src shims. Only the composition root
-// remains.
-const SRC_TO_PLATFORM_ALLOWLIST = new Set(['src/index.tsx'])
+// (2026-10-30) retired the last 49 rows with the 57 deleted src shims. The composition root moved
+// to `platform/web/app/entry.tsx` (d7-s2/B4), emptying the ledger; J-c (d7-s2/B5) removes the
+// `src` tree from the guard entirely.
+const SRC_TO_PLATFORM_ALLOWLIST = new Set<string>([])
 
 async function listSourceFiles(directory: string): Promise<string[]> {
 	const entries = await readdir(directory, { withFileTypes: true })
@@ -88,7 +93,10 @@ describe('Platform dependency boundary', () => {
 
 	test('web code does not pull server modules into the browser bundle', async () => {
 		const violations = (await collectImports(join(PLATFORM_ROOT, 'web')))
-			.filter(({ file, specifier }) => specifier.startsWith('@platform/server') && !WEB_TO_SERVER_ALLOWLIST.has(repoPath(file)))
+			.filter(
+				({ file, specifier }) =>
+					specifier.startsWith('@platform/server') && !WEB_TO_SERVER_ALLOWLIST.has(repoPath(file)) && repoPath(file) !== WEB_SERVER_ENTRY,
+			)
 			.map(({ file, specifier }) => `${repoPath(file)} imports ${specifier}`)
 		expect(violations).toEqual([])
 	})

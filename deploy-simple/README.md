@@ -411,15 +411,15 @@ Browser → Caddy (port 80)
 
 ### What Gets Deployed
 
-| Directory    | Purpose                                       |
-| ------------ | --------------------------------------------- |
-| `dist/`      | Pre-built static files (served by Caddy)      |
-| `src/`       | Server code for the main app (run by Bun/PM2) |
-| `contextvm/` | ContextVM server code (run by Bun/PM2)        |
-| `sdk/`       | Shared SDK                                    |
-| `ui/`        | Presentational kit                            |
-| `platform/`  | Server + host/binding layer                   |
-| `.env`       | Environment configuration                     |
+| Directory    | Purpose                                                                                                                    |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `dist/`      | Pre-built static files (served by Caddy)                                                                                   |
+| `src/`       | Test files for the boundary guard until batch 5; app entrypoint now lives at `platform/web/app/entry.tsx` (run by Bun/PM2) |
+| `contextvm/` | ContextVM server code (run by Bun/PM2)                                                                                     |
+| `sdk/`       | Shared SDK                                                                                                                 |
+| `ui/`        | Presentational kit                                                                                                         |
+| `platform/`  | Server + host/binding layer                                                                                                |
+| `.env`       | Environment configuration                                                                                                  |
 
 ### Directory Structure on VPS
 
@@ -441,7 +441,7 @@ Browser → Caddy (port 80)
 ## Deployment Flow
 
 1. **Build** - Runs `bun run build` locally (creates `dist/`)
-2. **Package** - Prepares deployment package (dist, src, package.json)
+2. **Package** - Prepares deployment package (dist, src, package.json) — the entrypoint (`platform/web/app/entry.tsx`) ships via the `platform/` tree; `src/` is retired in the follow-up batch
 3. **Upload** - SCPs package to `/home/deployer/releases/market-{stage}-{timestamp}`
 4. **Configure** - Copies stage-specific `.env` file
 5. **Install** - Runs `bun install --production`

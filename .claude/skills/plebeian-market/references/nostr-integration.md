@@ -375,7 +375,7 @@ useEffect(() => {
 
 ## WebSocket Server Integration
 
-The backend server (src/index.tsx) handles WebSocket messages:
+The backend server (platform/web/app/entry.tsx) handles WebSocket messages:
 
 ```typescript
 export const server = serve({
