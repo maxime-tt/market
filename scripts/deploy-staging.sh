@@ -26,7 +26,6 @@ mkdir -p "$DEPLOY_DIR"
 # Copy necessary files
 cp -r dist/ "$DEPLOY_DIR/"
 cp -r public/ "$DEPLOY_DIR/"
-cp -r src/ "$DEPLOY_DIR/"
 # sdk/ ui/ platform/ - the split trees composed by the server (`@platform/server`)
 cp -r sdk/ ui/ platform/ "$DEPLOY_DIR/"
 cp package.json "$DEPLOY_DIR/"

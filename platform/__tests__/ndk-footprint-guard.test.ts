@@ -2,9 +2,10 @@
  * Tests for the NDK footprint CI guard (`scripts/check-ndk-footprint.sh`).
  *
  * The guard resolves ROOT from its own location, so we stage a throwaway "repo"
- * (scripts/ + src/ + an empty contextvm/) in a temp dir, copy the real script
- * in, write a baseline, and invoke it via bash — then assert on exit code and
- * stdout for the equal / exceeds / ratchet-down branches.
+ * (scripts/ + platform/ + an empty contextvm/ + sdk/) in a temp dir, copy the real
+ * script in, write a baseline, and invoke it via bash — then assert on exit code
+ * and stdout for the equal / exceeds / ratchet-down branches. (J-c: the fixture
+ * NDK files live under platform/ — src/ left the scan scope with its deletion.)
  */
 import { spawnSync } from 'node:child_process'
 import { mkdtemp, mkdir, rm, writeFile, copyFile } from 'node:fs/promises'
@@ -20,7 +21,7 @@ const NDK_IMPORT = `import { NDK } from '${NDK_PACKAGE}'\n`
 async function stageRepo(baseline: number, ndkFiles: number): Promise<string> {
 	const root = await mkdtemp(join(tmpdir(), 'ndk-guard-'))
 	await mkdir(join(root, 'scripts'))
-	await mkdir(join(root, 'src'))
+	await mkdir(join(root, 'platform'))
 	await mkdir(join(root, 'contextvm')) // exists in the real repo; keeps grep's paths valid
 	await mkdir(join(root, 'sdk')) // in scope since wave 7 (F3); keeps the paths valid
 
@@ -28,7 +29,7 @@ async function stageRepo(baseline: number, ndkFiles: number): Promise<string> {
 	await copyFile(scriptSrc, join(root, 'scripts', 'check-ndk-footprint.sh'))
 	await writeFile(join(root, 'scripts', 'ndk-baseline.txt'), `${baseline}\n`)
 	for (let i = 0; i < ndkFiles; i++) {
-		await writeFile(join(root, 'src', `f${i}.ts`), NDK_IMPORT)
+		await writeFile(join(root, 'platform', `f${i}.ts`), NDK_IMPORT)
 	}
 	return root
 }
@@ -86,13 +87,13 @@ describe('NDK footprint guard (scripts/check-ndk-footprint.sh)', () => {
 		const root = await mkdtemp(join(tmpdir(), 'ndk-guard-tsx-'))
 		roots.push(root)
 		await mkdir(join(root, 'scripts'))
-		await mkdir(join(root, 'src'))
+		await mkdir(join(root, 'platform'))
 		await mkdir(join(root, 'contextvm'))
 		await mkdir(join(root, 'sdk'))
 		await copyFile(join(import.meta.dir, '..', '..', 'scripts', 'check-ndk-footprint.sh'), join(root, 'scripts', 'check-ndk-footprint.sh'))
 		await writeFile(join(root, 'scripts', 'ndk-baseline.txt'), '1\n')
-		await writeFile(join(root, 'src', 'a.ts'), NDK_IMPORT)
-		await writeFile(join(root, 'src', 'b.tsx'), NDK_IMPORT)
+		await writeFile(join(root, 'platform', 'a.ts'), NDK_IMPORT)
+		await writeFile(join(root, 'platform', 'b.tsx'), NDK_IMPORT)
 
 		const r = runGuard(root)
 		expect(r.exitCode).toBe(1)

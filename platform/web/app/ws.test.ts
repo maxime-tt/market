@@ -1,8 +1,8 @@
 import { expect, test, describe, beforeEach, afterEach } from 'bun:test'
 import { finalizeEvent, generateSecretKey } from 'nostr-tools/pure'
-import { devUser1 } from '../scripts/fixtures'
+import { devUser1 } from '../../../scripts/fixtures'
 import { getEventHandler } from '@platform/server'
-import { serverPromise, type NostrMessage } from './index.tsx'
+import { serverPromise, type NostrMessage } from './entry'
 
 describe('WebSocket Server', () => {
 	const WS_URL = 'ws://localhost:3000'

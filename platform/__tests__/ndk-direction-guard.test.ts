@@ -98,25 +98,9 @@ describe('NDK direction guard (scripts/check-ndk-direction.sh)', () => {
 		expect(Number(m9![1])).toBeLessThanOrEqual(48)
 		expect(Number(m9![1])).toBeLessThanOrEqual(Number(m9![2]))
 		expect(r.stdout).toContain('M10 ledger-target-failures=0')
-		// src/ is a RATCHET, so assert the invariant (current <= baseline), never an
-		// absolute count: any lane that deletes a src/ NDK file (e.g. A1's
-		// `src/lib/blossom.ts`, which took src production 44 -> 43) must leave this
-		// test green without editing it. Same for the `+N` test count.
-		const srcRow = r.stdout.match(/src\s+production\s+(\d+)\s+(\d+)\s+ratchet/)
-		expect(srcRow).not.toBeNull()
-		expect(Number(srcRow![1])).toBeLessThanOrEqual(Number(srcRow![2]))
-		const srcMetrics = r.stdout.match(/src=(\d+)\+(\d+)/)
-		expect(srcMetrics).not.toBeNull()
-		expect(Number(srcMetrics![1])).toBeLessThanOrEqual(Number(srcRow![2]))
-		// The `+N` test count follows the same rule as the production row: A3.2
-		// deleted four NDK-mentioning src test files (nip17*.test.ts × 3 +
-		// privateOrderMessage.test.ts), taking src test 25 -> 21 (production
-		// 44-curve 38 the same way) — so assert the ratchet invariant against the
-		// row's own BASE, never an absolute count.
-		const srcTestRow = r.stdout.match(/src\s+test\s+(\d+)\s+(\d+)\s+ratchet/)
-		expect(srcTestRow).not.toBeNull()
-		expect(Number(srcTestRow![1])).toBeLessThanOrEqual(Number(srcTestRow![2]))
-		expect(Number(srcMetrics![2])).toBe(Number(srcTestRow![1]))
+		// (J-c, d7-s2/B5: src/ is deleted — the src ratchet rows and the `src=N+N`
+		// metrics left with it; the guard now reports `src=n/a+n/a`. The old src
+		// ratchet-invariant assertions below were retired with the rows.)
 		expect(r.stdout).toContain('complete=no')
 		expect(r.stdout).toContain('OK')
 	})

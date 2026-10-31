@@ -1,1 +1,3 @@
-84
+59
+# 2026-10-30 (J-c, d7-s2/B5): re-seeded to the post-shell measurement — src/ left the scan
+# scope with its NDK test files (d7-s2/B4b). Ratchet tight from here.

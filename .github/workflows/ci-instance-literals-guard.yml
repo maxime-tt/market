@@ -1,6 +1,6 @@
 name: Instance Literals Guard
 
-# Prevents new Plebeian-specific literals from being hardcoded under src/,
+# Prevents new Plebeian-specific literals from being hardcoded under
 # platform/ and sdk/
 # (ADR-018: docs/adr/ADR-018-instance-configuration-and-self-hosting.md).
 # New instance identity values must resolve from instance config instead.

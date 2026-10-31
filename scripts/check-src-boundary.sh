@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Source-boundary guard for the src/ retirement.
 #
+# (J-c, d7-s2/B5, 2026-10-30: src/ is DELETED. This guard now measures no
+# directions — deliberately vacuous until post-D7 retires it outright. The
+# historical text below is the retirement record.)
+#
 # src/ is transitional: it will be deleted once its contents have moved to
 # sdk/, ui/ and platform/. The six measured directions are every cross-tree edge
 # that touches src/, but they are NOT equal (user ruling, 2026-10-23):
@@ -47,8 +51,8 @@ export LC_ALL=C
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE_FILE="$ROOT/scripts/src-boundary-baseline.txt"
-TREES=(src ui sdk platform)
-DIRECTIONS=("platform src" "ui src" "sdk src" "src platform" "src ui" "src sdk")
+TREES=(ui sdk platform)
+DIRECTIONS=()
 
 fail_run() {
 	echo ""
@@ -225,14 +229,8 @@ if [ "${#gre_w[@]}" -gt 0 ]; then
 		fi
 	done
 	echo ""
-	echo "Nothing outside src/ may depend on src/: those INBOUND edges are what keep"
-	echo "src/ from being deleted, so they are frozen and may only fall. Move the"
-	echo "import to the sdk/ui/platform seam it belongs to instead of adding a line to"
-	echo "scripts/src-boundary-baseline.txt. If an edge is genuinely unavoidable, raise"
-	echo "the baseline in a dedicated commit that explains why."
-	echo ""
-	echo "(Outbound src/ -> sdk|ui|platform growth is the drain and does not fail this"
-	echo "guard - see the header.)"
+	echo "(J-c, d7-s2/B5: src/ is deleted; this guard measures no directions and is"
+	echo "deliberately vacuous until post-D7 retires it outright.)"
 	exit 1
 fi
 

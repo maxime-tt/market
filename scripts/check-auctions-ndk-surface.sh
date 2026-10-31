@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Auctions NDK-surface guard (ADR-0002, auctions publish seam).
+# (src/ retired 2026-10-30, d7-s2/B5 J-c — historical src/ references below are
+# the retirement record.)
 #
 # Fails if any PRODUCTION file in the auctions file set imports @nostr-dev-kit
 # directly (a value import or `import type`) or touches the NDK store singleton
@@ -331,7 +333,7 @@ if [ "${#hits[@]}" -gt 0 ]; then
 	echo "::error::NDK API surface found in the auctions production file set:"
 	printf '  %s\n' "${hits[@]}"
 	echo ""
-	echo "Route relay I/O, signing, and identity through src/lib/nostr/io.ts."
+	echo "Route relay I/O, signing, and identity through platform/web/sdkNostrIo.ts."
 	echo "If a file genuinely needs the raw signer (NIP-59 / #1252), add it to the"
 	echo "ALLOWLIST in this script with a comment citing #1252."
 	exit 1
