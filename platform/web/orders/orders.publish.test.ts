@@ -118,58 +118,6 @@ function capabilityFor(signer: TestSigner | undefined): SignerCapability | null 
 	}
 }
 
-class TestNDKEvent {
-	kind?: number
-	created_at?: number
-	content = ''
-	tags: string[][] = []
-	id = ''
-	pubkey = ''
-	sig = ''
-
-	constructor(_ndk?: unknown, event?: Partial<Event>) {
-		if (!event) return
-		this.kind = event.kind
-		this.created_at = event.created_at
-		this.content = event.content ?? ''
-		this.tags = event.tags?.map((tag) => [...tag]) ?? []
-		this.id = event.id ?? ''
-		this.pubkey = event.pubkey ?? ''
-		this.sig = event.sig ?? ''
-	}
-
-	async sign(signer = currentSigner) {
-		if (!signer) throw new Error('No active signer')
-		const user = await signer.user()
-		this.pubkey = user.pubkey
-		this.created_at ??= Math.floor(Date.now() / 1000)
-		if (typeof this.kind !== 'number') throw new Error('Missing event kind')
-
-		const unsignedEvent = {
-			kind: this.kind,
-			created_at: this.created_at,
-			tags: this.tags,
-			content: this.content,
-			pubkey: this.pubkey,
-		}
-		this.id = getEventHash(unsignedEvent)
-		this.sig = await signer.sign(unsignedEvent)
-	}
-
-	rawEvent(): Event {
-		if (typeof this.kind !== 'number' || typeof this.created_at !== 'number') throw new Error('Incomplete test event')
-		return {
-			id: this.id,
-			pubkey: this.pubkey,
-			created_at: this.created_at,
-			kind: this.kind,
-			tags: this.tags.map((tag) => [...tag]),
-			content: this.content,
-			sig: this.sig,
-		}
-	}
-}
-
 mock.module('@platform/web/shipping/shippingQuery', () => ({
 	getShippingEvent: mock(async (shippingRef: string) => {
 		if (!(shippingRef in shippingServices)) return null
@@ -212,11 +160,13 @@ mock.module('@platform/web/ndk/ndkStore', ndkStoreMock)
 // the NDK store through the platform module directly. The src shim specifier that
 // used to sit alongside this registration retired with E1b (shim deleted), so a
 // single registration on the platform module remains.
-
-mock.module('@nostr-dev-kit/ndk', () => ({
-	NDKUser: TestNDKUser,
-	NDKEvent: TestNDKEvent,
-}))
+//
+// The NDK package itself is NOT mocked here (this file now lives under platform/,
+// whose NDK-test rail cannot grow): the subject's sign path is
+// signNdkEventWithActiveCapability (A3.4), which signs through the SDK signer
+// capability and lands id/pubkey/sig in place — NDK's own sign() is never
+// called, so the real NDKEvent class serves as the plain data wrapper the
+// subject constructs.
 
 // A3.4 mock repair (additive, registration-only): the order publish path reads
 // the active signer + identity through the auth composition root now
