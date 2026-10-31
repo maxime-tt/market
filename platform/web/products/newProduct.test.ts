@@ -1,6 +1,5 @@
 import { expect, test, describe, beforeEach, afterEach } from 'bun:test'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
-import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { createSignerFromKey } from '@sdk/core/signer'
 import { devUser1 } from '../../../scripts/fixtures'
 import { productFormStore, productFormActions, DEFAULT_FORM_STATE } from '@platform/web/products/productFormStore'
@@ -49,9 +48,9 @@ describe('Product Publishing', () => {
 	})
 
 	test('should publish a product and retrieve it correctly', async () => {
-		// Set up the signer with devUser1
-		const signer = new NDKPrivateKeySigner(devUser1.sk)
-		await signer.blockUntilReady()
+		// Set up the signer with devUser1 (the SDK capability — this test no
+		// longer needs the relay-client runtime under platform/).
+		const signer = createSignerFromKey(devUser1.sk)
 
 		// A3.7: the ndk store's signer copy is retired; this test publishes through
 		// the capability above and reads the relay's public events.
@@ -78,7 +77,7 @@ describe('Product Publishing', () => {
 		const productId = publishResult as string
 
 		// Get all products by the user's pubkey to find our newly created product
-		const userPubkey = (await signer.user()).pubkey
+		const userPubkey = await signer.getPublicKey()
 		const userEvents = await ndk!.fetchEvents({
 			kinds: [30402],
 			authors: [userPubkey],
