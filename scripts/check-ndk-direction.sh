@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # NDK DIRECTION guard — the directional successor to the flat footprint tripwire.
+# (src/ retired 2026-10-30, d7-s2/B5 J-c — historical src/ references below are
+# the retirement record.)
 #
 # Why this guard exists (A4 reframing, plans/A4-guard-reframing.md §2):
 # `scripts/check-ndk-footprint.sh` compares ONE integer across src/, platform/,
@@ -245,7 +247,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
 	fi
 	case "$lpath" in
 		platform/*) ;;
-		*) err "$row: '$lpath' is not under platform/ — a bridge lives in the host, never in sdk/ or src/" ; bad=1 ;;
+		*) err "$row: '$lpath' is not under platform/ — a bridge lives in the host, never in sdk/ (src/ is gone)" ; bad=1 ;;
 	esac
 	case "$ltarget" in
 		sdk/*) ;;

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ADR-018 instance-literal footprint guard, modelled on check-ndk-footprint.sh.
 #
-# Fails when the count of Plebeian-specific literals under src/ increases
+# Fails when the count of Plebeian-specific literals under platform/ and sdk/
+# increases
 # beyond the committed baseline. Existing occurrences are a ratcheting
 # migration baseline, not an endorsement — some are legitimate (frozen
 # software identity, shipped tier-3 defaults, tests), but new ones should be
@@ -29,7 +30,7 @@ for token in "${TOKENS[@]}"; do
 	# `sdk/` is in scope: the framework-free layer owns instance defaults and
 	# protocol identifiers too, so leaving it unscanned made the guard blind to
 	# the layer that now holds most of them.
-	done < <(find "$ROOT/src" "$ROOT/platform" "$ROOT/sdk" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.html' \) -print | sed "s#^$ROOT/##" | sort)
+	done < <(find "$ROOT/platform" "$ROOT/sdk" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.html' \) -print | sed "s#^$ROOT/##" | sort)
 done | sort > "$CURRENT"
 
 CURRENT_TOTAL="$(awk -F'|' '{sum += $3} END {print sum + 0}' "$CURRENT")"
@@ -40,8 +41,8 @@ echo "Instance-literal footprint: $CURRENT_TOTAL occurrence(s) (baseline: $BASEL
 if [[ "$CURRENT_TOTAL" -gt "$BASELINE_TOTAL" ]]; then
 	echo ""
 	echo "::error::ADR-018 instance-literal footprint increased from $BASELINE_TOTAL to $CURRENT_TOTAL."
-	echo "New Plebeian-specific literals under src/ are blocked. Read the value from"
-	echo "the resolved instance config (src/lib/instance-config.ts) instead. New"
+	echo "New Plebeian-specific literals under platform/ and sdk/ are blocked. Read the value from"
+	echo "the resolved instance config (platform/web/config/appConfigStore.ts) instead. New"
 	echo "frozen software-identity literals (see ADR-018) belong in the baseline with"
 	echo "an inline comment explaining why they're frozen."
 	echo ""

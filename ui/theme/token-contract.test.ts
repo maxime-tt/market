@@ -244,7 +244,8 @@ function countMatches(pattern: RegExp): { total: number; hits: string[] } {
 	const root = join(import.meta.dir, '..', '..')
 	let total = 0
 	const hits: string[] = []
-	for (const tree of ['ui', 'src', 'platform']) {
+	for (const tree of ['ui', 'platform']) {
+		// J-c: 'src' retired with the src/ deletion (d7-s2/B5)
 		for (const file of appSources(join(root, tree))) {
 			const matches = readFileSync(file, 'utf8').match(pattern)
 			if (!matches) continue

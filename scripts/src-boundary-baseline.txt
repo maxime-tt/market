@@ -204,20 +204,6 @@
 # platform/sdk homes directly — drain movement, informational, never a gate), src -> ui production
 # 169/79 -> 0/0, src -> ui test 0/0 -> 1/1, src -> sdk production 76/48 -> 0/0. With these rows the
 # guard reports OK and no row prints `(decreased)`: baseline equals measurement.
-platform -> src production 0 0
-platform -> src test 0 0
-
-ui -> src production 0 0
-ui -> src test 0 0
-
-sdk -> src production 0 0
-sdk -> src test 0 0
-
-src -> platform production 1 1
-src -> platform test 135 66
-
-src -> ui production 0 0
-src -> ui test 1 1
-
-src -> sdk production 0 0
-src -> sdk test 250 95
+# 2026-10-30 (J-c, d7-s2/B5): src/ DELETED. All rows above retired with it;
+# the guard (TREES=ui sdk platform, DIRECTIONS=()) is deliberately vacuous until
+# post-D7 retires it outright. The historical notes remain the retirement record.

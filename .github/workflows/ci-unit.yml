@@ -28,9 +28,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check source-boundary footprint
-        # Fails when any import edge between src/ and platform/, ui/ or sdk/
-        # grows past scripts/src-boundary-baseline.txt. See
-        # scripts/check-src-boundary.sh for the measured directions.
+        # Vacuous since d7-s2/B5 (src/ deleted): the guard measures the
+        # ui/sdk/platform trees and no directions; it stays until post-D7
+        # retires it outright. See scripts/check-src-boundary.sh.
         run: bash scripts/check-src-boundary.sh
 
       - name: Setup Bun

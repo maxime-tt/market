@@ -18,12 +18,8 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 // bundle — the SPA shell (index.html) pulls `frontend.tsx`, not the entry.
 const WEB_SERVER_ENTRY = 'platform/web/app/entry.tsx'
 
-// Legacy src/ host modules allowed to depend on Platform while they are migrated. The rows were a
-// migration ledger — each removed when its owner left src/ — and the E1b mega-deletion
-// (2026-10-30) retired the last 49 rows with the 57 deleted src shims. The composition root moved
-// to `platform/web/app/entry.tsx` (d7-s2/B4), emptying the ledger; J-c (d7-s2/B5) removes the
-// `src` tree from the guard entirely.
-const SRC_TO_PLATFORM_ALLOWLIST = new Set<string>([])
+// (J-c, d7-s2/B5: the legacy src/ allowlist + its test retired with the src/ deletion —
+// the tree is gone and the ledger was already emptied at d7-s2/B4.)
 
 async function listSourceFiles(directory: string): Promise<string[]> {
 	const entries = await readdir(directory, { withFileTypes: true })
@@ -101,12 +97,8 @@ describe('Platform dependency boundary', () => {
 		expect(violations).toEqual([])
 	})
 
-	test('legacy src/ code only depends on Platform from the allowlisted host modules', async () => {
-		const violations = (await collectImports(join(REPO_ROOT, 'src')))
-			.filter(({ file, specifier }) => specifier.startsWith('@platform/') && !SRC_TO_PLATFORM_ALLOWLIST.has(repoPath(file)))
-			.map(({ file, specifier }) => `${repoPath(file)} imports ${specifier}`)
-		expect(violations).toEqual([])
-	})
+	// (J-c: the 'legacy src/ only depends on Platform from the allowlisted host
+	// modules' test was here — deleted with the src/ tree it measured.)
 
 	test('web feature bindings reach the read adapters only through readContext.ts', async () => {
 		const violations = (await collectImports(join(PLATFORM_ROOT, 'web')))

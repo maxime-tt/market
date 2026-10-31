@@ -48,6 +48,7 @@ platform/web test 1 ratchet
 # commit; the fall also absorbs the merged lanes' un-lowered falls the guard had been reporting
 # informationally at the 6568249c base.
 platform/server production 14 bridge
-src production 22 ratchet
-src test 18 ratchet
+# 2026-10-30 (J-c, d7-s2/B5): the `src production 22 ratchet` and `src test 18 ratchet`
+# rows dropped with the src/ deletion (a ratchet row whose tree is gone hard-fails;
+# dropping is the documented fix).
 contextvm production 0 zero

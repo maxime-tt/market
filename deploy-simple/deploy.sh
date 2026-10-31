@@ -186,9 +186,7 @@ trap "rm -rf $TEMP_DIR" EXIT
 
 # dist/ - pre-built static files (served by Caddy)
 cp -r "$PROJECT_DIR/dist" "$TEMP_DIR/"
-# src/ - test files for the boundary guard until batch 5; the API entrypoint
-# is platform/web/app/entry.tsx (run by Bun/PM2)
-cp -r "$PROJECT_DIR/src" "$TEMP_DIR/"
+# the API entrypoint is platform/web/app/entry.tsx (run by Bun/PM2)
 # contextvm/ - ContextVM server code (run by Bun/PM2)
 cp -r "$PROJECT_DIR/contextvm" "$TEMP_DIR/"
 # sdk/ - shared SDK (read models + nostr client types)

@@ -5,7 +5,7 @@ name: Package Smoke
 # `platform/web/app/entry.tsx` (-> `@platform/server`) and `contextvm/server.ts`
 # (-> `../platform/server/auction-validator`) resolve into those trees, while
 # `platform/` itself resolves `@sdk/` and `@ui/`. A deploy that copies only
-# `dist/ src/ contextvm/` therefore dies on the VPS with
+# `dist/ contextvm/` therefore dies on the VPS with
 # `Cannot find module '@platform/server'`.
 #
 # `bun build` walks and resolves the whole import graph and fails with
@@ -58,7 +58,7 @@ jobs:
       - name: Create deployment package (same file set as the deploy jobs)
         run: |
           mkdir -p /tmp/smoke-package
-          cp -r dist src contextvm sdk ui platform /tmp/smoke-package/
+          cp -r dist contextvm sdk ui platform /tmp/smoke-package/
           cp package.json bun.lock tsconfig.json /tmp/smoke-package/
 
       - name: Install packaged dependencies
