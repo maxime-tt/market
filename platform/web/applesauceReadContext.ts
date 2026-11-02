@@ -7,7 +7,7 @@
  * (D1 seam `d1-neutral-seam`). Direction is one-way: `readContext.ts -> this adapter`, never
  * the reverse.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { applesauceIo, createRelayStream, type NostrFilter } from '@platform/web/applesauceIo'
 import {
 	fetchNdkEventSet,
@@ -23,6 +23,7 @@ import {
 	createApplesauceEventStore,
 	createEventReadContext,
 	createStoreStream,
+	type EventFilter,
 	type EventReadContext,
 	type EventStorePort,
 } from '@sdk/core/event-store'
@@ -36,17 +37,13 @@ export { applesauceIo, fetchNdkEventSet, mergeNdkEventSetsById, rehydrateVerifie
 export type { NDKEvent, NDKFilter, NDKSigner, NostrFilter }
 
 /**
- * Live subscription to a Nostr filter via the applesauce I/O adapter.
+ * Live subscription to a Nostr filter over the store stream (contract rev 2.21/2.22).
  *
- * Streams events as they arrive (deduped by id, sorted newest-first) and
- * tracks an `isStreaming` flag that flips off once the subscription has been
- * established for a grace period. The legacy-shaped `NostrIo` port deliberately
- * has no EOSE callback, so the grace timeout is the only signal that
- * "loading" is done.
+ * Consumes `createApplesauceReadContext().stream(...)`: already-stored matches replay first, live relay
+ * arrivals follow, and the `caught-up` marker flips `isStreaming` off — no grace timeout needed, because the
+ * stream now carries a real EOSE boundary. Deduped by id, sorted newest-first.
  *
- * Returns a cleanup-safe unsubscribe on unmount and when `filter`/`enabled`
- * change. Moved verbatim out of the retired
- * `src/lib/nostr/useSubscriptionEvents.ts` (J-0).
+ * Returns a cleanup-safe unsubscribe on unmount and when `filter`/`enabled` change.
  */
 export function useSubscriptionEvents(
 	filter: NostrFilter | NostrFilter[] | null,
@@ -54,7 +51,6 @@ export function useSubscriptionEvents(
 ): { events: NostrEventLike[]; isStreaming: boolean } {
 	const [events, setEvents] = useState<NostrEventLike[]>([])
 	const [isStreaming, setIsStreaming] = useState(false)
-	const seenIds = useRef(new Set<string>())
 
 	// Serialize the filter so we only re-subscribe when it actually changes,
 	// not on every render where the caller allocates a fresh array.
@@ -63,26 +59,34 @@ export function useSubscriptionEvents(
 	useEffect(() => {
 		if (!enabled || !filter) return
 
-		seenIds.current.clear()
 		setEvents([])
 		setIsStreaming(true)
+		const controller = new AbortController()
+		let cancelled = false
+		const filters = (Array.isArray(filter) ? filter : [filter]) as unknown as EventFilter[]
 
-		const unsubscribe = applesauceIo.subscribe(filter, (event) => {
-			if (seenIds.current.has(event.id)) return
-			seenIds.current.add(event.id)
-			setEvents((prev) => {
-				if (prev.some((e) => e.id === event.id)) return prev
-				return [...prev, event].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-			})
-		})
-
-		// Flip the streaming flag off after a grace window so loading states
-		// resolve even when the relay never reaches (or reports) EOSE.
-		const timer = setTimeout(() => setIsStreaming(false), 10000)
+		const run = async () => {
+			try {
+				for await (const item of createApplesauceReadContext().stream(filters, { signal: controller.signal })) {
+					if (cancelled) break
+					if (item.type === 'caught-up') {
+						setIsStreaming(false)
+						continue
+					}
+					setEvents((prev) => {
+						if (prev.some((e) => e.id === item.event.id)) return prev
+						return [...prev, item.event].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+					})
+				}
+			} catch {
+				// aborted on unmount / filter change
+			}
+		}
+		void run()
 
 		return () => {
-			clearTimeout(timer)
-			unsubscribe()
+			cancelled = true
+			controller.abort()
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [enabled, filterKey])
