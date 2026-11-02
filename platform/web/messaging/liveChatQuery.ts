@@ -1,6 +1,6 @@
 import { getAppNdk } from '@platform/web/ndkPublishContext'
 import { fetchEventsByFilter } from '@platform/web/readContext'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { verifyNostrEventSignature } from '@sdk/core/nostr/eventSignature'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { liveActivityKeys } from '@sdk/core/query/queryKeyFactory'
@@ -22,7 +22,7 @@ import {
 import { getAuctionId } from '@sdk/commerce/auctions/auctionId'
 import { appConfigBinding } from '@platform/web/config/appConfigBinding'
 
-export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity | null> => {
+export const fetchLiveActivity = async (event: NostrEventLike): Promise<LiveActivity | null> => {
 	const dTag = getAuctionId(event)
 	if (!dTag) return null
 
@@ -110,7 +110,7 @@ export interface UseLiveActivityOptions {
 	refetchInterval?: number
 }
 
-export const useLiveActivity = (event: NDKEvent | null, options?: UseLiveActivityOptions) => {
+export const useLiveActivity = (event: NostrEventLike | null, options?: UseLiveActivityOptions) => {
 	const dTag = event ? getAuctionId(event) : ''
 	const coord = event && dTag ? `${AUCTION_KIND}:${event.pubkey}:${dTag}` : ''
 

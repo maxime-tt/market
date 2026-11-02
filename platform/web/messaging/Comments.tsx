@@ -16,7 +16,11 @@ import { CircleX, MessageSquare, Reply, X } from 'lucide-react'
 import { useProfile, useProfileName } from '@platform/web/profiles/profileQuery'
 import { npubEncode } from 'nostr-tools/nip19'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+// Facade fallback (batch D): the event type stays `NDKEvent` — widening these props to
+// `NostrEventLike` breaks the out-of-scope `commentPublish.ts` (mutateAsync requires NDKEvent)
+// and, via the commentQuery aliases, the out-of-scope SocialInteractionsHost — so the type is
+// sourced from the platform facade instead of the NDK package directly.
+import type { NDKEvent } from '@platform/web/readContext'
 import { SocialInteractionsHost as SocialInteractions } from '@platform/web/messaging/SocialInteractionsHost'
 import { toast } from 'sonner'
 

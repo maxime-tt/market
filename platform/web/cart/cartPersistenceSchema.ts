@@ -1,4 +1,4 @@
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import {
 	CART_PERSISTENCE_VERSION,
 	MAX_PERSISTED_CART_ITEMS,
@@ -33,15 +33,15 @@ export {
 }
 export type { PersistedCartContent, PersistedCartItem }
 
-export function getCartPersistenceDTag(event: Pick<NDKEvent, 'tags'> | null | undefined): string | undefined {
+export function getCartPersistenceDTag(event: Pick<NostrEventLike, 'tags'> | null | undefined): string | undefined {
 	return event?.tags.find((tag) => tag[0] === 'd')?.[1]
 }
 
-export function isCartPersistenceEvent(event: Pick<NDKEvent, 'kind' | 'tags'> | null | undefined): boolean {
+export function isCartPersistenceEvent(event: Pick<NostrEventLike, 'kind' | 'tags'> | null | undefined): boolean {
 	return event?.kind === CART_PERSISTENCE_KIND
 }
 
-export function isExpectedCartSnapshot(event: Pick<NDKEvent, 'kind' | 'tags'> | null | undefined): boolean {
+export function isExpectedCartSnapshot(event: Pick<NostrEventLike, 'kind' | 'tags'> | null | undefined): boolean {
 	return isCartPersistenceEvent(event) && getCartPersistenceDTag(event) === CART_PERSISTENCE_D_TAG
 }
 

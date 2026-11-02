@@ -2,7 +2,8 @@ import { SHIPPING_STATUS } from '@sdk/commerce/messaging/orderSchema'
 import { SHIPPING_KIND } from '@sdk/config/schemas/shippingOption'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import { naddrFromAddress } from '@sdk/core/nostr/naddr'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import type { EventStorePort } from '@sdk/core/event-store'
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -25,7 +26,8 @@ import { createNdkReadContext, getNdkEventStore, fetchEventById, fetchEventByNad
 export { shippingKeys }
 
 /** True once the author's NIP-09 deletion for this option has been seen by the shared store. */
-export const isShippingOptionDeleted = (event: NDKEvent): boolean => getNdkEventStore().isDeleted(event)
+export const isShippingOptionDeleted = (event: NostrEventLike): boolean =>
+	(getNdkEventStore() as EventStorePort<NostrEventLike>).isDeleted(event)
 
 // --- DATA FETCHING FUNCTIONS ---
 
@@ -232,7 +234,7 @@ export const useUpdateShippingStatusMutation = () => {
 /**
  * Gets the event that created a shipping option based on its ID
  * @param id The shipping option event ID
- * @returns A promise that resolves to the NDKEvent or null if not found
+ * @returns A promise that resolves to the NostrEventLike or null if not found
  */
 export const getShippingEvent = async (id: string) => {
 	try {

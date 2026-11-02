@@ -1,7 +1,7 @@
 import { getAppNdk } from '@platform/web/ndkPublishContext'
 import { zapKeys } from '@sdk/core/query/queryKeyFactory'
 import { useQuery } from '@tanstack/react-query'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { buildProfileMetadataFilter } from '@sdk/core/profile'
 import {
 	assertLnurlAllowsNostr,
@@ -14,7 +14,7 @@ import {
 	type ZapReceiptRecord,
 } from '@sdk/commerce/payments'
 
-export type LightningZap = ZapReceiptRecord<NDKEvent>
+export type LightningZap = ZapReceiptRecord<NostrEventLike>
 
 /**
  * Step 1: Fetch User Profile to get lud16
@@ -97,7 +97,7 @@ export const fetchZapsForUserViaProvider = async (userPubkey: string, targetEven
 	return sortZapReceiptsNewestFirst(validZaps)
 }
 
-export const useZapsViaProvider = (event: NDKEvent) => {
+export const useZapsViaProvider = (event: NostrEventLike) => {
 	return useQuery({
 		queryKey: zapKeys.byProvider(event.pubkey, event.id), // You'll need to add this key
 		queryFn: () => fetchZapsForUserViaProvider(event.pubkey, event.id),

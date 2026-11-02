@@ -1,4 +1,4 @@
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { NormalizedCart } from '@platform/web/cart/cartModel'
 import {
 	createCartIntent,
@@ -34,11 +34,13 @@ export function serializeCartIntent(cart: NormalizedCart): PersistedCartContent 
 
 /**
  * Nostr event selection now lives framework-free in `@sdk/commerce/cart/cartRead`
- * (`chooseNewerCartSnapshotEvent`, store drain D1 slice 5); this adapter keeps the NDKEvent-shaped
+ * (`chooseNewerCartSnapshotEvent`, store drain D1 slice 5); this adapter keeps the NostrEventLike-shaped
  * signature its callers use.
  */
-export function chooseNewerCartSnapshot(events: Array<Pick<NDKEvent, 'kind' | 'tags' | 'content' | 'created_at' | 'id'>>): NDKEvent | null {
-	return chooseNewerCartSnapshotEvent(events) as unknown as NDKEvent | null
+export function chooseNewerCartSnapshot(
+	events: Array<Pick<NostrEventLike, 'kind' | 'tags' | 'content' | 'created_at' | 'id'>>,
+): NostrEventLike | null {
+	return chooseNewerCartSnapshotEvent(events) as NostrEventLike | null
 }
 
 /** Converts normalized SDK cart intent into the existing app store model. */

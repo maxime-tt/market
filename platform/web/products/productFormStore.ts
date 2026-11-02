@@ -29,7 +29,7 @@ import {
 } from '@sdk/commerce/products'
 import { uiActions, uiState } from '@sdk/config/ui'
 import type { SignerCapability } from '@sdk/core/signer'
-import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
+import type { NdkClient } from '@platform/web/ndkPublishContext'
 import { QueryClient } from '@tanstack/react-query'
 import { Store } from '@tanstack/store'
 import type { z } from 'zod'
@@ -428,7 +428,7 @@ export const productFormActions = {
 		}
 	},
 
-	continuePublishing: async (signer: SignerCapability, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
+	continuePublishing: async (signer: SignerCapability, ndk: NdkClient, queryClient?: QueryClient): Promise<boolean | string> => {
 		const state = productFormStore.state
 
 		// Resolve the price/currency pair to publish from the form's
@@ -502,7 +502,7 @@ export const productFormActions = {
 		}
 	},
 
-	publishProduct: async (signer: SignerCapability, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
+	publishProduct: async (signer: SignerCapability, ndk: NdkClient, queryClient?: QueryClient): Promise<boolean | string> => {
 		// V4V check is now handled in the UI layer, so we can directly publish
 		return productFormActions.continuePublishing(signer, ndk, queryClient)
 	},
