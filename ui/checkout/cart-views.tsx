@@ -29,7 +29,7 @@ export interface CartLineShippingProps {
 
 export function CartLineShipping({ shippingMethodId, shippingMethodName, shippingCost, shippingCostCurrency }: CartLineShippingProps) {
 	return (
-		<div className="mt-2 text-sm text-muted-foreground">
+		<div className="mt-2 text-sm text-text-mid">
 			{shippingMethodId ? (
 				<span>
 					Shipping: {shippingMethodName || 'Selected'}

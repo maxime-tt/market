@@ -27,7 +27,7 @@ export function NwcWalletStatusView({ connected, connectedWalletCount, settingsL
 	const walletLabel = `${connectedWalletCount} NWC wallet${connectedWalletCount === 1 ? '' : 's'} connected`
 
 	return (
-		<div ref={ref} data-slot="nwc-wallet-status" className={cn('rounded-lg border bg-muted/40 p-3', className)}>
+		<div ref={ref} data-slot="nwc-wallet-status" className={cn('rounded-lg border bg-surface-sunken/40 p-3', className)}>
 			<div className="flex items-center justify-between text-sm">
 				<span className="font-medium text-text-high">Wallet Status:</span>
 				<div className="flex items-center gap-2">
@@ -38,13 +38,13 @@ export function NwcWalletStatusView({ connected, connectedWalletCount, settingsL
 						</>
 					) : (
 						<>
-							<span aria-hidden="true" className="h-2 w-2 rounded-full bg-muted-foreground" />
-							<span className="text-muted-foreground">Fast Payments available with NWC, setup in {settingsLink}</span>
+							<span aria-hidden="true" className="h-2 w-2 rounded-full bg-text-mid" />
+							<span className="text-text-mid">Fast Payments available with NWC, setup in {settingsLink}</span>
 						</>
 					)}
 				</div>
 			</div>
-			{connected && <p className="mt-1 text-xs text-muted-foreground">Fast payments available • Configure more wallets in settings</p>}
+			{connected && <p className="mt-1 text-xs text-text-mid">Fast payments available • Configure more wallets in settings</p>}
 		</div>
 	)
 }
