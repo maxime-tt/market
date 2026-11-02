@@ -40,7 +40,10 @@ complete=no
 
 sdk production 0 zero
 sdk test 0 allow
-platform/web production 20 bridge
+# 2026-11-02 (d7-s2/ndk-web batch C): payments zapsQuery.ts retired its NDK types
+# (LightningZap/useZapsViaProvider widened onto @sdk/core/nostr/eventLike); the platform/web
+# production bridge row is re-seeded to the guard's measurement at this commit.
+platform/web production 19 bridge
 # 2026-11-02 (d7-s2/ndk-web batch B): cart persistence retired its NDK types
 # (cartPersistenceSchema.ts, cartPersistence.ts onto @sdk/core/nostr/eventLike);
 # the platform/web production bridge row is re-seeded to the guard's measurement at this commit.
