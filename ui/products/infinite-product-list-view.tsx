@@ -125,7 +125,7 @@ export function InfiniteProductListView<TProduct extends InfiniteProductListItem
 			{/* End of results message */}
 			{!hasMore && products.length > 0 && (
 				<div className="flex justify-center py-8">
-					<p className="text-sm text-muted-foreground" data-testid="infinite-product-list-end">
+					<p className="text-sm text-text-mid" data-testid="infinite-product-list-end">
 						Showing {products.length} of {totalProducts} products
 					</p>
 				</div>

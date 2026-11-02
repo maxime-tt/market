@@ -71,7 +71,7 @@ export function ProductPricingView(props: ProductPricingViewProps) {
 					<div className="space-y-2 flex-1">
 						<Label htmlFor="fiat-price" className="text-sm font-medium">
 							Price <span className="text-error">*</span>
-							<span className="text-xs text-muted-foreground ml-1">(In {currency})</span>
+							<span className="text-xs text-text-mid ml-1">(In {currency})</span>
 						</Label>
 						<Input
 							id="fiat-price"
@@ -89,7 +89,7 @@ export function ProductPricingView(props: ProductPricingViewProps) {
 				<div className="space-y-2 flex-1">
 					<Label htmlFor="bitcoin-price" className="text-sm font-medium">
 						Price in {bitcoinUnit} <span className="text-error">*</span>
-						<span className="text-xs text-muted-foreground ml-1">(Bitcoin)</span>
+						<span className="text-xs text-text-mid ml-1">(Bitcoin)</span>
 					</Label>
 					<div className="relative">
 						<Input
@@ -199,7 +199,7 @@ export function ProductPricingView(props: ProductPricingViewProps) {
 						<AlertTriangle className="w-4 h-4 text-warning" />
 						This product contains adult/sensitive content
 					</Label>
-					<p className="text-xs text-muted-foreground">
+					<p className="text-xs text-text-mid">
 						Check this if your product contains NSFW material, alcohol, tobacco, weapons, or other age-restricted content. Products marked
 						as NSFW will be hidden from users who haven't enabled adult content viewing.
 					</p>
@@ -546,11 +546,7 @@ export function ProductShippingView(props: ProductShippingViewProps) {
 											<div className="font-medium">{template.name}</div>
 											<div className="text-sm text-text-mid">{template.description}</div>
 										</div>
-										{props.isCreating ? (
-											<Spinner className="size-5 text-muted-foreground" />
-										) : (
-											<PlusIcon className="w-5 h-5 text-text-mid" />
-										)}
+										{props.isCreating ? <Spinner className="size-5 text-text-mid" /> : <PlusIcon className="w-5 h-5 text-text-mid" />}
 									</button>
 								))}
 							</div>
