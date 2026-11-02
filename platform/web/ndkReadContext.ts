@@ -10,7 +10,7 @@ import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from 
 import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@platform/web/ndk/ndkEvents'
 import { authStore, getCurrentPubkey, getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { configActions } from '@sdk/config/app-config'
-import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
+import { createApplesauceEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 
 /** Re-exported so Platform bindings can type their read context without a `platform -> src` edge. */
 export type { NDKEvent, NDKFilter }
@@ -66,7 +66,8 @@ export type { PrivateAuctionClaimMessage }
 export { authStore, getCurrentPubkey }
 
 // The browser host is one market instance, so module scope is the instance boundary for its store.
-const ndkEventStore = createMemoryEventStore<NDKEvent>()
+// Backed by the applesauce `EventStorePort` adapter (default in-memory `EventMemory` database for now).
+const ndkEventStore = createApplesauceEventStore<NDKEvent>()
 
 export function getNdkEventStore(): EventStorePort<NDKEvent> {
 	return ndkEventStore

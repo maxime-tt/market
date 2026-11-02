@@ -18,7 +18,7 @@ import {
 	type NDKSigner,
 } from '@platform/web/ndk/ndkEvents'
 import type { NostrEventLike } from '@sdk/core'
-import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
+import { createApplesauceEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 
 /**
  * Re-exported so Platform bindings (the order reads) can consume the NDK event
@@ -84,7 +84,8 @@ export function useSubscriptionEvents(
 }
 
 // Raw-event reads (the applesauce seam used by auctions) get their own store; NDKEvent reads use ndkReadContext.
-const rawEventStore = createMemoryEventStore<NostrEventLike>()
+// Backed by the applesauce `EventStorePort` adapter (default in-memory `EventMemory` database for now).
+const rawEventStore = createApplesauceEventStore<NostrEventLike>()
 
 export function getRawEventStore(): EventStorePort<NostrEventLike> {
 	return rawEventStore
