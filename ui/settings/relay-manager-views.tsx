@@ -77,13 +77,13 @@ export function RelayCardView({ url, type, status, onRemove, className, ref }: R
 				{STATUS_ICON[status]}
 				<div className="min-w-0 flex-1 overflow-hidden">
 					<div className="mb-1 flex flex-wrap items-center gap-2">
-						<Globe className="h-3 w-3 shrink-0 text-muted-foreground" />
+						<Globe className="h-3 w-3 shrink-0 text-text-mid" />
 						<span className="truncate text-sm font-medium">{relayDomain(url)}</span>
 						<Badge variant="secondary" className="shrink-0 text-xs">
 							{type}
 						</Badge>
 					</div>
-					<div className="truncate break-all text-xs text-muted-foreground">{url}</div>
+					<div className="truncate break-all text-xs text-text-mid">{url}</div>
 				</div>
 			</div>
 			<div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
@@ -93,7 +93,7 @@ export function RelayCardView({ url, type, status, onRemove, className, ref }: R
 						variant="ghost"
 						size="sm"
 						onClick={() => onRemove(url)}
-						className="text-muted-foreground hover:text-error"
+						className="text-text-mid hover:text-error"
 						aria-label={`Remove ${url}`}
 					>
 						<Trash2 className="h-4 w-4" />
@@ -222,7 +222,7 @@ export function RelayManagerView({
 								<Label htmlFor="include-defaults" className="text-sm font-medium">
 									Include app default relays
 								</Label>
-								<p className="text-xs text-muted-foreground">
+								<p className="text-xs text-text-mid">
 									When enabled, products are also published to common public relays for better discoverability
 								</p>
 							</div>

@@ -18,10 +18,10 @@ export interface SettingsPageHeaderProps {
 function SettingsHeading({ icon: Icon, title, description }: SettingsPageHeaderProps) {
 	return (
 		<div className="flex items-center gap-3">
-			<Icon className="h-6 w-6 text-muted-foreground" />
+			<Icon className="h-6 w-6 text-text-mid" />
 			<div>
 				<h1 className="text-2xl font-bold">{title}</h1>
-				<p className="text-sm text-muted-foreground">{description}</p>
+				<p className="text-sm text-text-mid">{description}</p>
 			</div>
 		</div>
 	)
