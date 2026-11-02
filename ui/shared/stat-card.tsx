@@ -54,7 +54,7 @@ export function StatCard({
 			)}
 			{...props}
 		>
-			{eyebrow && <p className="text-[11px] font-semibold tracking-[0.18em] text-text-mid uppercase">{eyebrow}</p>}
+			{eyebrow && <p className="text-2xs font-semibold tracking-[0.18em] text-text-mid uppercase">{eyebrow}</p>}
 			<p className="text-sm text-text-mid">{label}</p>
 			<p className={cn('text-2xl font-medium', trend && TREND_CLASS[trend])}>{value}</p>
 			{helper && <p className="text-xs text-text-mid">{helper}</p>}

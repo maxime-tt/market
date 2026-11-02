@@ -209,7 +209,7 @@ export function PhoneInput({ value, onChange, onBlur, placeholder = '7751892718'
 					<button
 						type="button"
 						onClick={toggleDropdown}
-						className="flex h-10 items-center gap-1 rounded-l-md border border-r-0 border-border-strong bg-bg px-3 text-sm hover:bg-accent/50 transition-colors"
+						className="flex h-10 items-center gap-1 rounded-l-md border border-r-0 border-border-strong bg-bg px-3 text-sm hover:bg-surface-hover/50 transition-colors"
 					>
 						<span className="min-w-[3.5rem] text-left">{selectedDialCode || '+?'}</span>
 						<ChevronDownIcon className="size-4 opacity-50" />
@@ -241,12 +241,12 @@ export function PhoneInput({ value, onChange, onBlur, placeholder = '7751892718'
 				<div
 					ref={listRef}
 					className={cn(
-						'absolute z-50 w-full max-h-60 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md',
+						'absolute z-50 w-full max-h-60 overflow-auto rounded-md border bg-surface-raised text-text-high shadow-md',
 						openUpward ? 'bottom-full mb-1' : 'top-full mt-1',
 					)}
 				>
 					{/* Search input inside dropdown */}
-					<div className="sticky top-0 bg-popover border-b p-2">
+					<div className="sticky top-0 bg-surface-raised border-b p-2">
 						<input
 							type="text"
 							value={searchValue}
@@ -262,7 +262,7 @@ export function PhoneInput({ value, onChange, onBlur, placeholder = '7751892718'
 					</div>
 
 					{filteredCountries.length === 0 ? (
-						<EmptyState compact title="No countries found" className="px-3 text-muted-foreground" />
+						<EmptyState compact title="No countries found" className="px-3 text-text-mid" />
 					) : (
 						filteredCountries.map((country, index) => {
 							const isSelected = country.dialCode === selectedDialCode
@@ -275,12 +275,12 @@ export function PhoneInput({ value, onChange, onBlur, placeholder = '7751892718'
 									onClick={() => handleSelectCountry(country)}
 									className={cn(
 										'relative flex cursor-pointer items-center px-3 py-2 text-sm outline-none select-none',
-										isHighlighted && 'bg-accent text-accent-foreground',
-										isSelected && !isHighlighted && 'bg-accent/50',
+										isHighlighted && 'bg-surface-hover text-text-high',
+										isSelected && !isHighlighted && 'bg-surface-hover/50',
 									)}
 									onMouseEnter={() => setHighlightedIndex(index)}
 								>
-									<span className="w-16 font-mono text-muted-foreground">{country.dialCode}</span>
+									<span className="w-16 font-mono text-text-mid">{country.dialCode}</span>
 									<span className="flex-1">{country.name}</span>
 									{isSelected && <CheckIcon className="size-4 ml-2 text-fill-accent" />}
 								</div>
