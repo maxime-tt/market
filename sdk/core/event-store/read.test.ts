@@ -2,7 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { matchesFilter, type EventFilter } from './filter'
 import { createMemoryEventStore } from './memoryEventStore'
-import { buildDeletionLookupFilters, excludeDeleted, readThroughStore, type EventReadContext } from './read'
+import {
+	buildDeletionLookupFilters,
+	createEventReadContext,
+	excludeDeleted,
+	readThroughStore,
+	streamFromFetch,
+	type EventReadContext,
+} from './read'
 import { readProductListWorkflow, isProductListed } from '../../commerce/discovery/productRead'
 
 let counter = 0
@@ -19,14 +26,12 @@ const event = (overrides: Partial<NostrEventLike>): NostrEventLike => ({
 /** Fake relay: answers every filter from a fixed event list and records requests. */
 function createContext(relayEvents: NostrEventLike[]): EventReadContext & { requests: EventFilter[][] } {
 	const requests: EventFilter[][] = []
-	return {
-		requests,
-		store: createMemoryEventStore(),
-		fetch: async (filters) => {
-			requests.push([...filters])
-			return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
-		},
-	}
+	const store = createMemoryEventStore()
+	const stream = streamFromFetch(store, async (filters) => {
+		requests.push([...filters])
+		return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
+	})
+	return { ...createEventReadContext({ store, stream }), requests }
 }
 
 describe('readThroughStore', () => {
@@ -60,7 +65,7 @@ describe('readThroughStore', () => {
 		await readThroughStore(context, [{ kinds: [30402] }])
 
 		const newer = event({ created_at: 150 })
-		const later = { ...context, fetch: async () => [newer] }
+		const later = createEventReadContext({ store: context.store, stream: streamFromFetch(context.store, async () => [newer]) })
 		expect((await readThroughStore(later, [{ kinds: [30402] }])).map((e) => e.id)).toEqual([newer.id])
 	})
 })

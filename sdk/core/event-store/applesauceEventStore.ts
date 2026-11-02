@@ -1,4 +1,4 @@
-import { EventStore, type IEventDatabase } from 'applesauce-core/event-store'
+import { AsyncEventStore, EventMemory, type IAsyncEventDatabase } from 'applesauce-core/event-store'
 import type { NostrEvent } from 'nostr-tools'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { matchesFilter, selectMatching, type EventFilter } from './filter'
@@ -15,13 +15,36 @@ import {
 import type { EventAdmission, EventStoreAddResult, EventStorePort } from './port'
 
 /**
- * applesauce-backed `EventStorePort` over `applesauce-core`'s `EventStore`.
+ * An in-memory `IAsyncEventDatabase` for the applesauce `AsyncEventStore` — the async counterpart of
+ * applesauce's sync `EventMemory`. It is the adapter's default database and the non-browser host's
+ * memory option; browser hosts inject `applesauce-indexeddb`'s database instead (the SDK never depends on
+ * it).
+ */
+export function createMemoryAsyncEventDatabase(): IAsyncEventDatabase {
+	const memory = new EventMemory()
+	return {
+		add: async (event) => memory.add(event),
+		remove: async (event) => memory.remove(event),
+		removeByFilters: async (filters) => memory.removeByFilters(filters),
+		hasEvent: async (id) => memory.hasEvent(id),
+		getEvent: async (id) => memory.getEvent(id),
+		hasReplaceable: async (kind, pubkey, identifier) => memory.hasReplaceable(kind, pubkey, identifier),
+		getReplaceable: async (kind, pubkey, identifier) => memory.getReplaceable(kind, pubkey, identifier),
+		getReplaceableHistory: async (kind, pubkey, identifier) => memory.getReplaceableHistory(kind, pubkey, identifier),
+		getByFilters: async (filters) => memory.getByFilters(filters),
+		getTimeline: async (filters) => memory.getTimeline(filters),
+		update: (event) => memory.update(event),
+	}
+}
+
+/**
+ * applesauce-backed `EventStorePort` over `applesauce-core`'s async `AsyncEventStore`.
  *
  * The `EventStorePort` contract is authoritative over applesauce's own semantics. Adapter decisions and
  * divergences, each deliberate:
  *
- * 1. Kind-5 deletion requests are applied but not stored: applesauce's `DeleteManager` consumes them
- *    (removing already-stored deleted events from its database) and `EventStore.add` never persists a
+ * 1. Kind-5 deletion requests are applied but not stored: applesauce's delete manager consumes them
+ *    (removing already-stored deleted events from its database) and `AsyncEventStore.add` never persists a
  *    kind-5 event, so `get`/`query` never surface one. Listeners are still notified.
  * 2. `query` selects candidates through applesauce's index-backed `getByFilters` (with `limit` stripped;
  *    applesauce applies no per-filter limit and returns an unordered set), then re-selects with
@@ -35,11 +58,13 @@ import type { EventAdmission, EventStoreAddResult, EventStorePort } from './port
  *    targets they cannot parse. The adapter therefore keeps its own `DeletionTargets` tracker (fed by
  *    `readDeletionTargets`) and removes already-stored covered events itself, so the port rule wins
  *    for `add` verdicts, `isDeleted` and store contents. The kind-5 event is still handed to
- *    `store.add` so applesauce's DeleteManager bookkeeping stays aligned with the tracker.
+ *    `store.add` so applesauce's delete bookkeeping stays aligned with the tracker.
+ * 5. The adapter owns its listener set (sync fan-out) instead of subscribing to applesauce's RxJS
+ *    `insert$`: that keeps `rxjs` out of `sdk/` and lets `subscribe` stay synchronous while `add` is async.
  */
 export interface ApplesauceEventStoreOptions<E extends NostrEventLike> {
-	/** Host-supplied applesauce database (e.g. IndexedDB-backed); defaults to applesauce's in-memory `EventMemory`. */
-	database?: IEventDatabase
+	/** Host-supplied async database (browser: `applesauce-indexeddb`; default: in-memory). */
+	database?: IAsyncEventDatabase
 	/** Per-kind parsers; kinds without an entry are admitted as-is. */
 	admission?: Partial<Record<number, EventAdmission<E>>>
 }
@@ -47,8 +72,8 @@ export interface ApplesauceEventStoreOptions<E extends NostrEventLike> {
 export function createApplesauceEventStore<E extends NostrEventLike = NostrEventLike>(
 	options: ApplesauceEventStoreOptions<E> = {},
 ): EventStorePort<E> {
-	const store = new EventStore({
-		database: options.database,
+	const store = new AsyncEventStore({
+		database: options.database ?? createMemoryAsyncEventDatabase(),
 		keepOldVersions: false,
 		keepExpired: true,
 		verifyEvent: () => true,
@@ -60,9 +85,9 @@ export function createApplesauceEventStore<E extends NostrEventLike = NostrEvent
 	const isDeleted = (event: E) => deletions.some((deletion) => isDeletedBy(event, deletion))
 
 	/** Removes already-stored events covered by a deletion, per the port's rules (applesauce's own removal is best-effort). */
-	const removeDeleted = (deletion: DeletionTargets) => {
-		for (const stored of store.getByFilters({}) as unknown as E[]) {
-			if (isDeletedBy(stored, deletion)) store.remove(stored.id)
+	const removeDeleted = async (deletion: DeletionTargets) => {
+		for (const stored of (await store.getByFilters({})) as unknown as E[]) {
+			if (isDeletedBy(stored, deletion)) await store.remove(stored.id)
 		}
 	}
 
@@ -72,8 +97,8 @@ export function createApplesauceEventStore<E extends NostrEventLike = NostrEvent
 		}
 	}
 
-	const add = (event: E): EventStoreAddResult => {
-		if (store.hasEvent(event.id)) return { status: 'duplicate' }
+	const add = async (event: E): Promise<EventStoreAddResult> => {
+		if (await store.hasEvent(event.id)) return { status: 'duplicate' }
 
 		const admit = options.admission?.[event.kind]
 		const verdict = admit ? admit(event) : true
@@ -82,8 +107,8 @@ export function createApplesauceEventStore<E extends NostrEventLike = NostrEvent
 		if (event.kind === DELETION_REQUEST_KIND) {
 			const deletion = readDeletionTargets(event)
 			deletions.push(deletion)
-			removeDeleted(deletion)
-			store.add(event as unknown as NostrEvent)
+			await removeDeleted(deletion)
+			await store.add(event as unknown as NostrEvent)
 			notify(event)
 			return { status: 'added' }
 		}
@@ -91,23 +116,23 @@ export function createApplesauceEventStore<E extends NostrEventLike = NostrEvent
 
 		const key = getReplaceableKey(event)
 		if (key) {
-			const current = store.getReplaceable(event.kind, event.pubkey, isAddressableKind(event.kind) ? getDTag(event) : undefined)
-			if (current && !isNewerVersion(event, current)) return { status: 'superseded' }
+			const current = await store.getReplaceable(event.kind, event.pubkey, isAddressableKind(event.kind) ? getDTag(event) : undefined)
+			if (current && !isNewerVersion(event, current as unknown as E)) return { status: 'superseded' }
 		}
 
-		store.add(event as unknown as NostrEvent)
+		await store.add(event as unknown as NostrEvent)
 		notify(event)
 		return { status: 'added' }
 	}
 
 	return {
 		add,
-		get: (id) => store.getEvent(id) as E | undefined,
-		getReplaceable: (kind, pubkey, d) => store.getReplaceable(kind, pubkey, d) as E | undefined,
-		query: (filters) => {
+		get: async (id) => (await store.getEvent(id)) as E | undefined,
+		getReplaceable: async (kind, pubkey, d) => (await store.getReplaceable(kind, pubkey, d)) as E | undefined,
+		query: async (filters) => {
 			const list = Array.isArray(filters) ? filters : [filters as EventFilter]
 			const stripped = list.map(({ limit: _limit, ...withoutLimit }) => withoutLimit)
-			return selectMatching(store.getByFilters(stripped) as E[], filters)
+			return selectMatching((await store.getByFilters(stripped)) as E[], filters)
 		},
 		subscribe: (filters, listener) => {
 			const entry = { filters: Array.isArray(filters) ? filters : [filters as EventFilter], listener }

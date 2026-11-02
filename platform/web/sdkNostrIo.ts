@@ -2,7 +2,7 @@ import { getApplesauceRelayPool } from '@platform/web/applesauceIo'
 import { getWriteRelays, ndkStore } from '@platform/web/ndk/ndkStore'
 import { createPoolRelayPort, type NostrFilter, type NostrRelayPort } from '@sdk/core'
 import { createNostrIo, relayPoolAdapter, type Event, type NostrIo, type PoolPort, type RelayPolicy } from '@sdk/core/nostr-io'
-import type { EventReadContext, EventStorePort } from '@sdk/core/event-store'
+import { createEventReadContext, streamFromFetch, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 
 /** Same relay choice as the app's applesauce adapter: configured relays to read, write relays to publish. */
 export const webRelayPolicy: RelayPolicy = (operation) => (operation === 'publish' ? getWriteRelays() : ndkStore.state.explicitRelayUrls)
@@ -31,5 +31,8 @@ export function createWebRelayReadContext(
 	options: { deadlineMs?: number } = { deadlineMs: 8000 },
 ): EventReadContext<Event> {
 	const port = createWebRelayPort(options)
-	return { store, fetch: (filters) => port.fetchEvents(filters as readonly NostrFilter[], relayUrls) }
+	return createEventReadContext({
+		store,
+		stream: streamFromFetch(store, (filters) => port.fetchEvents(filters as readonly NostrFilter[], relayUrls)),
+	})
 }

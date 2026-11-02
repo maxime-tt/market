@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { EventFilter } from '../event-store/filter'
 import { matchesFilter } from '../event-store/filter'
 import { createMemoryEventStore } from '../event-store/memoryEventStore'
-import type { EventReadContext } from '../event-store/read'
+import { createEventReadContext, streamFromFetch, type EventReadContext } from '../event-store/read'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { readNip05SettingsWorkflow } from './nip05'
 
@@ -22,14 +22,12 @@ const registry = (overrides: Partial<NostrEventLike>): NostrEventLike => ({
 /** Fake relay: answers every filter from a fixed event list and records the requests. */
 function createContext(relayEvents: NostrEventLike[]): EventReadContext & { requests: EventFilter[][] } {
 	const requests: EventFilter[][] = []
-	return {
-		requests,
-		store: createMemoryEventStore(),
-		fetch: async (filters) => {
-			requests.push([...filters])
-			return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
-		},
-	}
+	const store = createMemoryEventStore()
+	const stream = streamFromFetch(store, async (filters) => {
+		requests.push([...filters])
+		return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
+	})
+	return { ...createEventReadContext({ store, stream }), requests }
 }
 
 describe('readNip05SettingsWorkflow', () => {

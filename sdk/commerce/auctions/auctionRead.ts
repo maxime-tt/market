@@ -51,8 +51,8 @@ export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled
 const AUCTION_LIST_FILTER_CHUNK_SIZE = 80
 
 /** Records the author's own published deletion so later reads drop it even if relays keep serving the auction. */
-export const recordAuctionDeletion = (store: EventStorePort<NostrEventLike>, deletion: NostrEventLike) => {
-	store.add(deletion)
+export const recordAuctionDeletion = async (store: EventStorePort<NostrEventLike>, deletion: NostrEventLike): Promise<void> => {
+	await store.add(deletion)
 }
 
 // Deletion lookup only: auction reads keep every version, because the canonical event is resolved from the whole version set.

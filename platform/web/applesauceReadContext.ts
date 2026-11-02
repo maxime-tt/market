@@ -18,7 +18,13 @@ import {
 	type NDKSigner,
 } from '@platform/web/ndk/ndkEvents'
 import type { NostrEventLike } from '@sdk/core'
-import { createApplesauceEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
+import {
+	createApplesauceEventStore,
+	createEventReadContext,
+	streamFromFetch,
+	type EventReadContext,
+	type EventStorePort,
+} from '@sdk/core/event-store'
 
 /**
  * Re-exported so Platform bindings (the order reads) can consume the NDK event
@@ -92,8 +98,10 @@ export function getRawEventStore(): EventStorePort<NostrEventLike> {
 }
 
 export function createApplesauceReadContext(): EventReadContext<NostrEventLike> {
-	return {
+	return createEventReadContext({
 		store: rawEventStore,
-		fetch: (filters) => applesauceIo.fetchEvents(filters.length === 1 ? (filters[0] as NostrFilter) : (filters as NostrFilter[])),
-	}
+		stream: streamFromFetch(rawEventStore, (filters) =>
+			applesauceIo.fetchEvents(filters.length === 1 ? (filters[0] as NostrFilter) : (filters as NostrFilter[])),
+		),
+	})
 }

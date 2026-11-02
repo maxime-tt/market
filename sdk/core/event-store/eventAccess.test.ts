@@ -3,7 +3,7 @@ import type { NostrEventLike } from '../nostr/eventLike'
 import { matchesFilter, type EventFilter } from './filter'
 import { createEventAccess } from './eventAccess'
 import { createMemoryEventStore } from './memoryEventStore'
-import type { EventReadContext } from './read'
+import { createEventReadContext, streamFromFetch, type EventReadContext } from './read'
 
 let counter = 0
 const event = (overrides: Partial<NostrEventLike>): NostrEventLike => ({
@@ -19,14 +19,12 @@ const event = (overrides: Partial<NostrEventLike>): NostrEventLike => ({
 /** Fake relay: answers every filter from a fixed event list and records requests. */
 function createContext(relayEvents: NostrEventLike[]): EventReadContext & { requests: EventFilter[][] } {
 	const requests: EventFilter[][] = []
-	return {
-		requests,
-		store: createMemoryEventStore(),
-		fetch: async (filters) => {
-			requests.push([...filters])
-			return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
-		},
-	}
+	const store = createMemoryEventStore()
+	const stream = streamFromFetch(store, async (filters) => {
+		requests.push([...filters])
+		return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
+	})
+	return { ...createEventReadContext({ store, stream }), requests }
 }
 
 describe('createEventAccess', () => {
@@ -38,12 +36,12 @@ describe('createEventAccess', () => {
 		const access = createEventAccess(context)
 
 		expect((await access.read([{ kinds: [30402] }])).map((e) => e.id)).toEqual([kept.id])
-		expect(access.store.get(kept.id)).toBe(kept)
-		expect(access.store.get(deleted.id)).toBeUndefined()
+		expect(await access.store.get(kept.id)).toBe(kept)
+		expect(await access.store.get(deleted.id)).toBeUndefined()
 
 		// the relay still serves the deleted listing; a re-read keeps it out of the answer
 		expect((await access.read([{ kinds: [30402] }])).map((e) => e.id)).toEqual([kept.id])
-		expect(access.store.get(deleted.id)).toBeUndefined()
+		expect(await access.store.get(deleted.id)).toBeUndefined()
 	})
 
 	test('query() is local-only: it answers from the store without calling fetch', async () => {
@@ -55,10 +53,10 @@ describe('createEventAccess', () => {
 		await access.read([{ kinds: [30402] }])
 		const fetchCallsAfterRead = context.requests.length
 
-		expect(access.query({ kinds: [30402] }).map((e) => e.id)).toEqual([listing.id])
-		expect(access.query([{ kinds: [30402] }, { authors: ['seller'] }]).map((e) => e.id)).toEqual([listing.id])
+		expect((await access.query({ kinds: [30402] })).map((e) => e.id)).toEqual([listing.id])
+		expect((await access.query([{ kinds: [30402] }, { authors: ['seller'] }])).map((e) => e.id)).toEqual([listing.id])
 		// unknown kinds stay absent — nothing is fetched to fill the store
-		expect(access.query({ kinds: [9999] })).toEqual([])
+		expect(await access.query({ kinds: [9999] })).toEqual([])
 		expect(context.requests).toHaveLength(fetchCallsAfterRead)
 	})
 
@@ -74,8 +72,20 @@ describe('createEventAccess', () => {
 		expect(seen).toEqual([first.id, second.id])
 
 		stop()
-		access.store.add(event({ created_at: 300 }))
+		await access.store.add(event({ created_at: 300 }))
 		expect(seen).toEqual([first.id, second.id])
+	})
+
+	test('stream() delivers events then the caught-up marker', async () => {
+		const listing = event({})
+		const context = createContext([listing])
+		const access = createEventAccess(context)
+
+		const items: string[] = []
+		for await (const item of access.stream([{ kinds: [30402] }])) {
+			items.push(item.type === 'event' ? `event:${item.event.id}` : 'caught-up')
+		}
+		expect(items).toEqual([`event:${listing.id}`, 'caught-up'])
 	})
 
 	test('read() preserves the deletion lookup request shape', async () => {

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { NostrEventLike } from '../core/nostr/eventLike'
 import { matchesFilter, type EventFilter } from '../core/event-store/filter'
 import { createMemoryEventStore } from '../core/event-store/memoryEventStore'
-import type { EventReadContext } from '../core/event-store/read'
+import { createEventReadContext, streamFromFetch, type EventReadContext } from '../core/event-store/read'
 import { readCollectionsWorkflow } from './collections/collectionRead'
 import { readPaymentDetailEventsWorkflow } from './payments/paymentDetailRead'
 import { readShippingOptionsWorkflow } from './shipping/shippingRead'
@@ -20,14 +20,12 @@ const event = (kind: number, dTag: string, overrides: Partial<NostrEventLike> = 
 
 function createContext(relayEvents: NostrEventLike[]): EventReadContext & { requests: EventFilter[][] } {
 	const requests: EventFilter[][] = []
-	return {
-		requests,
-		store: createMemoryEventStore(),
-		fetch: async (filters) => {
-			requests.push([...filters])
-			return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
-		},
-	}
+	const store = createMemoryEventStore()
+	const stream = streamFromFetch(store, async (filters) => {
+		requests.push([...filters])
+		return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
+	})
+	return { ...createEventReadContext({ store, stream }), requests }
 }
 
 const deletionOf = (coordinate: string) => event(5, '', { created_at: 200, tags: [['a', coordinate]] })

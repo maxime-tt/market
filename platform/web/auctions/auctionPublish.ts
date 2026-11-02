@@ -232,7 +232,7 @@ export const deleteAuction = async (auctionDTag: string): Promise<boolean> => {
 
 	const event = await signNostrEvent(template)
 	await publishRequired(event)
-	recordAuctionDeletion(event)
+	await recordAuctionDeletion(event)
 	return true
 }
 

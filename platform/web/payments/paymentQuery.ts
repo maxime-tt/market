@@ -532,7 +532,7 @@ export const deletePaymentDetail = async (params: DeletePaymentDetailParams): Pr
 		await publishAppEvent(event)
 
 		// Relays may keep serving the detail; the store applies the deletion to every later read.
-		getNdkEventStore().add(event)
+		await getNdkEventStore().add(event)
 
 		return event.id
 	} catch (error) {

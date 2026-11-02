@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { EventFilter } from '../../core/event-store/filter'
 import { matchesFilter } from '../../core/event-store/filter'
 import { createMemoryEventStore } from '../../core/event-store/memoryEventStore'
-import type { EventReadContext } from '../../core/event-store/read'
+import { createEventReadContext, streamFromFetch, type EventReadContext } from '../../core/event-store/read'
 import type { NostrEventLike } from '../../core/nostr/eventLike'
 import { readBugReportsWorkflow } from './bugReportRead'
 
@@ -21,14 +21,12 @@ const reportEvent = (overrides: Partial<NostrEventLike>): NostrEventLike => ({
 /** Fake relay: answers every filter from a fixed event list and records the requests. */
 function createContext(relayEvents: NostrEventLike[]): EventReadContext & { requests: EventFilter[][] } {
 	const requests: EventFilter[][] = []
-	return {
-		requests,
-		store: createMemoryEventStore(),
-		fetch: async (filters) => {
-			requests.push([...filters])
-			return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
-		},
-	}
+	const store = createMemoryEventStore()
+	const stream = streamFromFetch(store, async (filters) => {
+		requests.push([...filters])
+		return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
+	})
+	return { ...createEventReadContext({ store, stream }), requests }
 }
 
 describe('readBugReportsWorkflow', () => {
@@ -71,7 +69,7 @@ describe('readBugReportsWorkflow', () => {
 
 		// A store-backed read would issue a second (kind-5) lookup and write the event.
 		expect(context.requests).toHaveLength(1)
-		expect(context.store.get('only')).toBeUndefined()
+		expect(await context.store.get('only')).toBeUndefined()
 	})
 
 	test('no report yields an empty list', async () => {
