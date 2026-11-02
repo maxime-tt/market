@@ -112,7 +112,7 @@ function ProgressStage({ label, status, description }: { label: string; status: 
 	const icon = {
 		done: <Check className="w-5 h-5 text-success" />,
 		active: <Loader2 className="w-5 h-5 animate-spin text-info" />,
-		pending: <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30" />,
+		pending: <div className="w-5 h-5 rounded-full border-2 border-text-mid/30" />,
 		error: <AlertCircle className="w-5 h-5 text-destructive" />,
 	}[status]
 
@@ -123,15 +123,15 @@ function ProgressStage({ label, status, description }: { label: string; status: 
 				<span
 					className={cn(
 						'text-sm font-medium',
-						status === 'pending' && 'text-muted-foreground',
-						status === 'done' && 'text-foreground',
-						status === 'active' && 'text-foreground',
+						status === 'pending' && 'text-text-mid',
+						status === 'done' && 'text-text-high',
+						status === 'active' && 'text-text-high',
 						status === 'error' && 'text-destructive',
 					)}
 				>
 					{label}
 				</span>
-				{description && <span className="text-xs text-muted-foreground">{description}</span>}
+				{description && <span className="text-xs text-text-mid">{description}</span>}
 			</div>
 		</div>
 	)
@@ -277,9 +277,9 @@ export function AuctionBidProgressDialogView({
 							<p className="text-sm text-success-muted-foreground mt-1">bid locked</p>
 						</div>
 						{refundLocktime && refundLocktime > 0 && (
-							<div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+							<div className="flex items-center justify-between text-xs text-text-mid px-1">
 								<span>Refund available after:</span>
-								<span className="font-medium text-foreground">{formatLocktime(refundLocktime)}</span>
+								<span className="font-medium text-text-high">{formatLocktime(refundLocktime)}</span>
 							</div>
 						)}
 						<div className="space-y-1 pt-1">
@@ -360,7 +360,7 @@ export function AuctionBidProgressDialogView({
 				)}
 
 				{validatorPubkeys.length > 0 && !hasPositiveVerdict && (
-					<div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
+					<div className="flex items-center gap-2 py-1 text-xs text-text-mid">
 						<span>Validators:</span>
 						{validatorPubkeys.map((pk) => (
 							<Fragment key={pk}>{renderValidatorAvatar(pk)}</Fragment>

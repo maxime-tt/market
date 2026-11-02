@@ -11,7 +11,7 @@ import { cn } from '../utils/cn'
  * store selector and the comments/live-chat/claim-order queries) stays in the
  * host and arrives as props.
  *
- * Declared visible changes: raw `pink-600` becomes `text-primary` for the "N New"
+ * Declared visible changes: raw `pink-600` becomes `text-fill-ink` for the "N New"
  * highlight, and the host's `STATUS_BADGE_STYLES` map is replaced by the shared
  * `AuctionStatusBadge` tone map.
  */

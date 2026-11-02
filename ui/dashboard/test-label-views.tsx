@@ -254,11 +254,11 @@ export function TestListingNoticeView({
 
 					<div className="space-y-2 text-sm">
 						<p className="font-medium">Think this is a mistake?</p>
-						<p className="text-muted-foreground">
+						<p className="text-text-mid">
 							Contact the curator who applied the label, or the Plebeian team, and ask for the label to be removed. Only the curator who
 							applied a label can delete it.
 						</p>
-						<p data-testid="test-listing-notice-contact" className="text-muted-foreground">
+						<p data-testid="test-listing-notice-contact" className="text-text-mid">
 							{curatorNpubShort && renderCuratorLink ? (
 								<>
 									Curator:{' '}

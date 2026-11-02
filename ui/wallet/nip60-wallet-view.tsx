@@ -239,12 +239,12 @@ export function Nip60WalletView({
 					</div>
 
 					{lastDevMint && (
-						<p className="text-[11px] text-warning-muted-foreground/90">
+						<p className="text-2xs text-warning-muted-foreground/90">
 							Last mint: {lastDevMint.amount.toLocaleString()} sats via {getMintHostname(lastDevMint.mintUrl)}
 						</p>
 					)}
 					{lastDevBid && (
-						<p className="text-[11px] text-warning-muted-foreground/90 break-words">
+						<p className="text-2xs text-warning-muted-foreground/90 break-words">
 							Last bid: {lastDevBid.bidAmount.toLocaleString()} sats on {lastDevBid.auctionTitle}
 						</p>
 					)}
@@ -377,7 +377,7 @@ export function Nip60WalletView({
 								<textarea
 									value={viewingToken.token}
 									readOnly
-									className="bg-muted px-3 py-2 rounded-md w-full h-24 font-mono text-sm resize-none"
+									className="bg-surface-sunken px-3 py-2 rounded-md w-full h-24 font-mono text-sm resize-none"
 								/>
 								<div className="flex justify-end">
 									<Button variant="outline" size="sm" onClick={() => onCopyToken(viewingToken.token)} className="gap-2">
@@ -386,7 +386,7 @@ export function Nip60WalletView({
 									</Button>
 								</div>
 							</div>
-							<p className="text-muted-foreground text-xs text-center">Created {new Date(viewingToken.createdAt).toLocaleString()}</p>
+							<p className="text-text-mid text-xs text-center">Created {new Date(viewingToken.createdAt).toLocaleString()}</p>
 							<div className="flex justify-end gap-2">
 								<Button
 									variant="outline"

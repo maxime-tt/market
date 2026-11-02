@@ -79,7 +79,7 @@ export function OrderActionsView({
 					)}
 				</div>
 			) : (
-				<div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+				<div className="flex items-center gap-2 text-sm text-text-mid flex-wrap">
 					{status === ORDER_STATUS.COMPLETED ? (
 						<>
 							<CheckCircle className="w-4 h-4 text-success" />
@@ -226,7 +226,7 @@ export function StockUpdateDialogView({ open, onOpenChange, rows, loading, onSto
 				</DialogHeader>
 
 				{loading && rows.length === 0 ? (
-					<div className="py-8 text-center text-muted-foreground">Loading product information...</div>
+					<div className="py-8 text-center text-text-mid">Loading product information...</div>
 				) : (
 					<div className="space-y-4 py-4">
 						{rows.map((product) => (
@@ -234,11 +234,11 @@ export function StockUpdateDialogView({ open, onOpenChange, rows, loading, onSto
 								<div className="font-medium">{product.productName}</div>
 								<div className="grid grid-cols-3 gap-4 text-sm">
 									<div>
-										<Label className="text-muted-foreground">Ordered</Label>
+										<Label className="text-text-mid">Ordered</Label>
 										<div className="font-medium">{product.quantityOrdered}</div>
 									</div>
 									<div>
-										<Label className="text-muted-foreground">Current Stock</Label>
+										<Label className="text-text-mid">Current Stock</Label>
 										<div className="font-medium">{product.currentStock}</div>
 									</div>
 									<div>

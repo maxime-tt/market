@@ -156,7 +156,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex, onC
 					</CardContent>
 				)}
 				<CardFooter className="flex justify-center pt-4">
-					<span className="text-xs text-muted-foreground">{eventDate}</span>
+					<span className="text-xs text-text-mid">{eventDate}</span>
 				</CardFooter>
 			</Card>
 		)
@@ -180,7 +180,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex, onC
 				</CardContent>
 			)}
 			<CardFooter className="flex justify-center">
-				<span className="text-xs text-muted-foreground">{eventDate}</span>
+				<span className="text-xs text-text-mid">{eventDate}</span>
 			</CardFooter>
 		</Card>
 	)

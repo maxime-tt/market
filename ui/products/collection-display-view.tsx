@@ -49,22 +49,22 @@ export function CollectionDisplayView({
 
 	return (
 		<div
-			className={cn('flex items-center gap-4 rounded-lg border bg-card p-4 text-card-foreground', className)}
+			className={cn('flex items-center gap-4 rounded-lg border bg-surface-raised p-4 text-text-high', className)}
 			data-index={index}
 			{...props}
 		>
-			<div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
+			<div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-surface-sunken">
 				{imageUrl ? (
 					(renderImage?.(imageUrl, imageAlt) ?? <UiImage src={imageUrl} alt={imageAlt} className="h-full w-full object-cover" />)
 				) : (
-					<div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">No image</div>
+					<div className="flex h-full w-full items-center justify-center text-xs text-text-mid">No image</div>
 				)}
 			</div>
 
 			<div className="min-w-0 flex-1">
 				<h3 className="truncate text-sm font-semibold">{title}</h3>
-				<p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{summary}</p>
-				<p className="mt-1 text-xs text-muted-foreground">ID: {collectionId || (collection ? getCollectionId(collection) : '')}</p>
+				<p className="mt-1 line-clamp-2 text-xs text-text-mid">{summary}</p>
+				<p className="mt-1 text-xs text-text-mid">ID: {collectionId || (collection ? getCollectionId(collection) : '')}</p>
 			</div>
 
 			<div className="flex flex-col gap-1">
@@ -74,7 +74,7 @@ export function CollectionDisplayView({
 						onClick={onMoveUp}
 						disabled={!canMoveUp || isReordering}
 						aria-label={`Move collection ${index + 1} up`}
-						className="flex size-8 items-center justify-center rounded-md border bg-bg text-text-high hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+						className="flex size-8 items-center justify-center rounded-md border bg-bg text-text-high hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
 					>
 						<ChevronUp className="size-4" aria-hidden="true" />
 					</button>
@@ -85,7 +85,7 @@ export function CollectionDisplayView({
 						onClick={onMoveDown}
 						disabled={!canMoveDown || isReordering}
 						aria-label={`Move collection ${index + 1} down`}
-						className="flex size-8 items-center justify-center rounded-md border bg-bg text-text-high hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+						className="flex size-8 items-center justify-center rounded-md border bg-bg text-text-high hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
 					>
 						<ChevronDown className="size-4" aria-hidden="true" />
 					</button>

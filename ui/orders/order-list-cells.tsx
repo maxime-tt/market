@@ -28,7 +28,7 @@ export function OrderDateText({ order }: { order: { created_at?: number } }) {
 			})
 		: '-'
 
-	return <span className="text-xs text-muted-foreground">{date}</span>
+	return <span className="text-xs text-text-mid">{date}</span>
 }
 
 export function OrderAmountText({ order }: { order: OrderReadEvent }) {

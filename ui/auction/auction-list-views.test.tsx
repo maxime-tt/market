@@ -131,7 +131,7 @@ describe('AuctionFiltersView', () => {
 
 	test('shows the applied-filter count when filters are active', () => {
 		const idle = renderToStaticMarkup(<AuctionFiltersView {...baseProps} />)
-		expect(idle).not.toContain('rounded-full bg-primary')
+		expect(idle).not.toContain('rounded-full bg-fill-ink')
 		const active = renderToStaticMarkup(<AuctionFiltersView {...baseProps} appliedFilterCount={2} />)
 		expect(active).toContain('>2</span>')
 	})

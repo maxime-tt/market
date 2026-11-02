@@ -98,7 +98,7 @@ export function DepositLightningModalView({
 							<Check className="w-6 h-6 text-success" />
 						</div>
 						<p className="text-lg font-medium text-success">Deposit Successful!</p>
-						<p className="text-sm text-muted-foreground mt-2">Your eCash has been minted</p>
+						<p className="text-sm text-text-mid mt-2">Your eCash has been minted</p>
 						<Button onClick={onClose} className="mt-4">
 							Done
 						</Button>
@@ -112,7 +112,7 @@ export function DepositLightningModalView({
 										<QRCode value={depositInvoice} size={184} includeMargin={false} showBorder={false} />
 									</button>
 								) : (
-									<div className="text-xs text-muted-foreground text-center px-2">
+									<div className="text-xs text-text-mid text-center px-2">
 										{selectedMint || isGenerating ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'No mint selected yet'}
 									</div>
 								)}
@@ -131,7 +131,7 @@ export function DepositLightningModalView({
 										type="text"
 										value={depositInvoice}
 										readOnly
-										className="flex-1 px-3 py-2 text-sm bg-muted rounded-md font-mono truncate"
+										className="flex-1 px-3 py-2 text-sm bg-surface-sunken rounded-md font-mono truncate"
 									/>
 									<Button variant="outline" size="icon" onClick={onCopyInvoice} title="Copy invoice">
 										{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -140,7 +140,7 @@ export function DepositLightningModalView({
 							</div>
 						)}
 
-						{copied && <p className="text-xs text-center text-muted-foreground">Invoice copied to clipboard</p>}
+						{copied && <p className="text-xs text-center text-text-mid">Invoice copied to clipboard</p>}
 
 						{depositStatus === 'error' && (
 							<p className="text-sm text-destructive text-center">{depositError || 'Failed to generate invoice. Please try again.'}</p>
@@ -151,7 +151,7 @@ export function DepositLightningModalView({
 
 						{/* Payment status indicator */}
 						{depositInvoice && (depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry') && (
-							<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+							<div className="flex items-center justify-center gap-2 text-sm text-text-mid">
 								{needsConfirmationRetry ? (
 									<>
 										<span className="text-warning">Confirmation timed out.</span>
@@ -193,7 +193,7 @@ export function DepositLightningModalView({
 									type="text"
 									value={depositInvoice}
 									readOnly
-									className="flex-1 px-3 py-2 text-sm bg-muted rounded-md font-mono truncate"
+									className="flex-1 px-3 py-2 text-sm bg-surface-sunken rounded-md font-mono truncate"
 								/>
 								<Button variant="outline" size="icon" onClick={onCopyInvoice}>
 									{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -210,7 +210,7 @@ export function DepositLightningModalView({
 									value={selectedNwcWalletId}
 									onChange={(e) => onSelectedNwcWalletChange(e.target.value)}
 									disabled={isPayingWithNwc || nwcPaymentAttempted}
-									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+									className="w-full px-3 py-2 text-sm border rounded-md bg-bg"
 								>
 									{savedNwcWallets.map((wallet) => (
 										<option key={wallet.id} value={wallet.id}>
@@ -229,7 +229,7 @@ export function DepositLightningModalView({
 								</Button>
 							</div>
 						)}
-						<p className="text-sm text-muted-foreground text-center">
+						<p className="text-sm text-text-mid text-center">
 							{needsConfirmationRetry
 								? 'Confirmation timed out. Retry to check the mint again.'
 								: nwcPaymentSent
@@ -244,7 +244,7 @@ export function DepositLightningModalView({
 							</div>
 						) : (
 							<div className="flex justify-center">
-								<Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+								<Loader2 className="w-5 h-5 animate-spin text-text-mid" />
 							</div>
 						)}
 						<div className="flex justify-end gap-2">
@@ -262,7 +262,7 @@ export function DepositLightningModalView({
 								value={amount}
 								onChange={(e) => onAmountChange(e.target.value)}
 								placeholder="Enter amount in sats"
-								className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+								className="w-full px-3 py-2 text-sm border rounded-md bg-bg"
 								min="1"
 							/>
 						</div>
@@ -273,7 +273,7 @@ export function DepositLightningModalView({
 								<select
 									value={selectedMint}
 									onChange={(e) => onSelectedMintChange(e.target.value)}
-									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+									className="w-full px-3 py-2 text-sm border rounded-md bg-bg"
 								>
 									{filteredMints.map((mint) => (
 										<option key={mint} value={mint}>

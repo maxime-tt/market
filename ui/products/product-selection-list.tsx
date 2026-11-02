@@ -46,7 +46,7 @@ export function ProductSelectionList({
 
 	return (
 		<div className={cn('space-y-4', className)}>
-			<p className="text-muted-foreground">Select products to include in this collection</p>
+			<p className="text-text-mid">Select products to include in this collection</p>
 			<div className="space-y-3">
 				{items.map((product) => {
 					const isSelected = selectedCoordinates.includes(product.coordinates)
@@ -74,7 +74,7 @@ export function ProductSelectionList({
 			</div>
 
 			{selectedCoordinates.length > 0 && (
-				<div className="mt-4 text-sm text-muted-foreground">
+				<div className="mt-4 text-sm text-text-mid">
 					{selectedCoordinates.length} product{selectedCoordinates.length !== 1 ? 's' : ''} selected
 				</div>
 			)}

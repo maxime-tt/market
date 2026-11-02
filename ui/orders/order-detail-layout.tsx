@@ -87,7 +87,7 @@ export function OrderPaymentDetailsCardView({
 						<CreditCard className="w-5 h-5" />
 						<div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
 							<CardTitle>Payment Details</CardTitle>
-							<span className="text-muted-foreground">({totalInvoices} invoices)</span>
+							<span className="text-text-mid">({totalInvoices} invoices)</span>
 						</div>
 					</div>
 					<div className="my-3 border-b border-border-default sm:hidden" />

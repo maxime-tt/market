@@ -113,7 +113,7 @@ export function SendEcashModalView({
 										fallback={
 											<div className="flex flex-col items-center gap-2 p-8 text-center">
 												<AlertTriangle className="w-8 h-8 text-warning" />
-												<p className="text-sm text-muted-foreground">
+												<p className="text-sm text-text-mid">
 													QR code is too dense to render. Use the copy button below to share the token.
 												</p>
 											</div>
@@ -124,10 +124,10 @@ export function SendEcashModalView({
 								</div>
 							</div>
 						) : (
-							<div className="flex flex-col items-center gap-2 p-6 text-center border rounded-lg bg-muted/50">
+							<div className="flex flex-col items-center gap-2 p-6 text-center border rounded-lg bg-surface-sunken/50">
 								<AlertTriangle className="w-8 h-8 text-warning" />
 								<p className="text-sm font-medium">Token too large for QR code</p>
-								<p className="text-xs text-muted-foreground">
+								<p className="text-xs text-text-mid">
 									This token exceeds QR code capacity. Use copy/paste to share it, or try sending a smaller amount.
 								</p>
 							</div>
@@ -139,7 +139,7 @@ export function SendEcashModalView({
 								<textarea
 									value={generatedToken}
 									readOnly
-									className="flex-1 px-3 py-2 text-sm bg-muted rounded-md font-mono resize-none h-24"
+									className="flex-1 px-3 py-2 text-sm bg-surface-sunken rounded-md font-mono resize-none h-24"
 								/>
 							</div>
 							<div className="flex justify-end">
@@ -149,8 +149,8 @@ export function SendEcashModalView({
 								</Button>
 							</div>
 						</div>
-						<p className="text-sm text-muted-foreground text-center">Share this token with the recipient. It can only be redeemed once.</p>
-						<p className="text-xs text-muted-foreground text-center">
+						<p className="text-sm text-text-mid text-center">Share this token with the recipient. It can only be redeemed once.</p>
+						<p className="text-xs text-text-mid text-center">
 							Token saved to pending list. You can reclaim it if the recipient doesn't claim it.
 						</p>
 						<div className="flex justify-end gap-2">
@@ -169,7 +169,7 @@ export function SendEcashModalView({
 								value={amount}
 								onChange={(e) => onAmountChange(e.target.value)}
 								placeholder="Enter amount in sats"
-								className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+								className="w-full px-3 py-2 text-sm border rounded-md bg-bg"
 								min="1"
 								max={totalBalance}
 							/>
@@ -181,7 +181,7 @@ export function SendEcashModalView({
 								<select
 									value={selectedMint}
 									onChange={(e) => onSelectedMintChange(e.target.value)}
-									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+									className="w-full px-3 py-2 text-sm border rounded-md bg-bg"
 								>
 									{mintsWithBalance.map((mint) => (
 										<option key={mint} value={mint}>
@@ -193,7 +193,7 @@ export function SendEcashModalView({
 						)}
 
 						{cashuInitializing && (
-							<p className="text-sm text-muted-foreground flex items-center gap-2">
+							<p className="text-sm text-text-mid flex items-center gap-2">
 								<Loader2 className="w-4 h-4 animate-spin" />
 								Initializing wallet...
 							</p>

@@ -30,20 +30,32 @@ test('rotates through the presets and re-resolves the primary token', async ({ p
 	const switcher = page.getByTestId('theme-switcher')
 	const themeName = page.getByTestId('theme-name')
 
+	// The stylesheet value is minified by the CSS pipeline (`oklch(.42 …)`) while
+	// a preset's inline value is not (`oklch(0.42 …)`), so compare canonically.
+	const normalize = (value: string) => value.replace(/0\./g, '.')
+
 	await expect(themeName).toHaveText('Brand')
-	const brandPrimary = await token(page, '--primary')
+	const brandPrimary = normalize(await token(page, '--primary'))
 	expect(brandPrimary).not.toBe('')
 
-	for (const preset of PRESETS.slice(1)) {
+	// Phase 0 made Hedgerow the live baseline: it carries the Tier-1 values that
+	// `.theme-new` declares, so it resolves exactly what Brand inherits. The two
+	// differ only in that Hedgerow states them explicitly.
+	await switcher.click()
+	await expect(themeName).toHaveText('Hedgerow')
+	expect(normalize(await token(page, '--primary'))).toBe(brandPrimary)
+
+	// Every remaining preset still repaints the token.
+	for (const preset of PRESETS.slice(2)) {
 		await switcher.click()
 		await expect(themeName).toHaveText(preset)
-		expect(await token(page, '--primary')).not.toBe(brandPrimary)
+		expect(normalize(await token(page, '--primary'))).not.toBe(brandPrimary)
 	}
 
 	// Cycling past the last preset returns to the baseline.
 	await switcher.click()
 	await expect(themeName).toHaveText('Brand')
-	expect(await token(page, '--primary')).toBe(brandPrimary)
+	expect(normalize(await token(page, '--primary'))).toBe(brandPrimary)
 })
 
 test('the tune panel drives radius, shadow, glass, texture and hand-made tokens', async ({ page }) => {

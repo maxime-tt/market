@@ -67,7 +67,7 @@ export function ReceiveEcashModalView({
 							<Check className="w-6 h-6 text-success" />
 						</div>
 						<p className="text-lg font-medium text-success">eCash Received!</p>
-						<p className="text-sm text-muted-foreground mt-2">The tokens have been added to your wallet</p>
+						<p className="text-sm text-text-mid mt-2">The tokens have been added to your wallet</p>
 						<Button onClick={onClose} className="mt-4">
 							Done
 						</Button>
@@ -91,7 +91,7 @@ export function ReceiveEcashModalView({
 								value={token}
 								onChange={(e) => onTokenChange(e.target.value)}
 								placeholder="cashuA..."
-								className="w-full px-3 py-2 text-sm border rounded-md bg-background font-mono resize-none h-24"
+								className="w-full px-3 py-2 text-sm border rounded-md bg-bg font-mono resize-none h-24"
 							/>
 							<div className="flex justify-end">
 								<Button variant="ghost" size="sm" onClick={() => onShowScannerChange(true)} className="gap-2">
@@ -102,7 +102,7 @@ export function ReceiveEcashModalView({
 						</div>
 
 						{cashuInitializing && (
-							<p className="text-sm text-muted-foreground flex items-center gap-2">
+							<p className="text-sm text-text-mid flex items-center gap-2">
 								<Loader2 className="w-4 h-4 animate-spin" />
 								Initializing wallet...
 							</p>

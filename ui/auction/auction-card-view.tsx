@@ -86,7 +86,7 @@ export function AuctionCardView({
 		<div
 			{...props}
 			className={cn(
-				'border border-primary rounded-lg bg-background shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200',
+				'border border-fill-ink rounded-lg bg-bg shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200',
 				className,
 			)}
 		>

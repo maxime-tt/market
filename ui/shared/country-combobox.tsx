@@ -220,12 +220,12 @@ export function CountryCombobox({ value, onChange, onBlur, placeholder = 'e.g. U
 				<div
 					ref={listRef}
 					className={cn(
-						'absolute z-50 w-full max-h-60 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md',
+						'absolute z-50 w-full max-h-60 overflow-auto rounded-md border bg-surface-raised text-text-high shadow-md',
 						openUpward ? 'bottom-full mb-1' : 'top-full mt-1',
 					)}
 				>
 					{filteredCountries.length === 0 ? (
-						<EmptyState compact title="No countries found" className="px-3 text-muted-foreground" />
+						<EmptyState compact title="No countries found" className="px-3 text-text-mid" />
 					) : (
 						filteredCountries.map((country, index) => {
 							const isSelected = country === value
@@ -238,8 +238,8 @@ export function CountryCombobox({ value, onChange, onBlur, placeholder = 'e.g. U
 									onClick={() => handleSelectCountry(country)}
 									className={cn(
 										'relative flex cursor-pointer items-center px-3 py-2 text-sm outline-none select-none',
-										isHighlighted && 'bg-accent text-accent-foreground',
-										isSelected && !isHighlighted && 'bg-accent/50',
+										isHighlighted && 'bg-surface-hover text-text-high',
+										isSelected && !isHighlighted && 'bg-surface-hover/50',
 									)}
 									onMouseEnter={() => setHighlightedIndex(index)}
 								>

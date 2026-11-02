@@ -27,7 +27,7 @@ export interface AuctionBidsViewProps {
 function TechnicalDataRow({ label, value }: { label: string; value: ReactNode }) {
 	return (
 		<div className="rounded-lg border border-border-default bg-surface-sunken px-3 py-3">
-			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-mid">{label}</p>
+			<p className="text-2xs font-semibold uppercase tracking-[0.16em] text-text-mid">{label}</p>
 			<div className="mt-1 break-all text-sm font-medium text-text-high">{value}</div>
 		</div>
 	)
@@ -59,7 +59,7 @@ function BidMintRow({ mint }: { mint: string }) {
 	return (
 		<div className="flex flex-wrap items-center gap-2 text-sm text-text-high">
 			<div className="relative flex h-6 cursor-default items-center px-2">
-				<Landmark className="size-4 text-primary" />
+				<Landmark className="size-4 text-fill-ink" />
 				<span className="absolute -bottom-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-fill-accent text-[9px] font-bold leading-none text-on-fill-accent">
 					<Check className="h-2 w-2 text-on-fill-accent stroke-[3]" />
 				</span>
@@ -74,7 +74,7 @@ function BidEventDetails({ bidEvent }: { bidEvent: NostrEventLike }) {
 	const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
 
 	return (
-		<Accordion type="single" collapsible className="rounded-xl border border-border-default bg-card px-4">
+		<Accordion type="single" collapsible className="rounded-xl border border-border-default bg-surface-raised px-4">
 			<AccordionItem value={`bid-${bidEvent.id}`} className="border-none">
 				<AccordionTrigger className="py-4 text-sm font-semibold text-text-high hover:no-underline">Bid event details</AccordionTrigger>
 				<AccordionContent className="space-y-3 pb-4">
@@ -155,7 +155,7 @@ export function AuctionBidsView({
 				<div className={cn('flex flex-col gap-4 rounded-xl border-2 px-4 py-4 shadow-sm', toneContainerClassName[topBidTone])}>
 					<div className="flex flex-wrap items-start justify-between gap-3">
 						<div>
-							<p className={cn('text-[11px] font-semibold uppercase tracking-[0.18em]', toneLabelClassName[topBidTone])}>
+							<p className={cn('text-2xs font-semibold uppercase tracking-[0.18em]', toneLabelClassName[topBidTone])}>
 								Highest visible bid
 							</p>
 							<p className="mt-1 text-3xl font-semibold tracking-tight text-text-high">{formatSats(topAmount)} sats</p>
