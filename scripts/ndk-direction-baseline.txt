@@ -40,7 +40,7 @@ complete=no
 
 sdk production 0 zero
 sdk test 0 allow
-platform/web production 33 bridge
+platform/web production 26 bridge
 platform/web test 1 ratchet
 # 2026-10-30 (H-b kit 4b, B2 commit B — CollectionCard/FeaturedUserCard): the collection + featured-user
 # cards retired onto their D4 hosts (CollectionCardHost/FeaturedUserCardHost). CollectionCard carried the

@@ -64,3 +64,13 @@ platform/web/v4v/ProfileSearch.tsx|batch-2-lane-C|sdk/core/query/queryKeyFactory
 # NDK transport landed under platform/ and are declared the day they land (declare-as-you-touch).
 platform/server/appSettings.ts|b3-relocate|sdk/config/app-settings.ts|the server-side app-settings fetcher builds a one-off NDK relay client and injects the sdk app-settings event contract (kind/d-tag/AppSettingsEventLike) plus the sdk app schema|client-NDK-removal (ADR-0002; post-Wave-J)
 platform/web/payments/zapPurchase.ts|b3-relocate|sdk/config/constants.ts|the zap purchase helper signs kind-9734 requests through the caller's NDK client and injects the sdk shared ZAP_RELAYS constant|client-NDK-removal (ADR-0002; post-Wave-J)
+
+# --- d7-s2/ndk-web batch A1 (2026-11-02): the six platform/web transport-owning hosts named in the
+# batch-0 classification (ndk/wallet/cart/payments), each injecting a verified NDK-free sdk capability;
+# declared ledger-only, no code edits (declare-as-you-touch ratchet descent).
+platform/web/ndk/ndkStore.ts|d7-s2-ndk-web|sdk/core/relay-policy.ts|the platform NDK store constructs the two NDK clients and imports the sdk relay-policy capability (computeNdkConfig/resolveMainRelay) for relay selection|client-NDK-removal (ADR-0002; post-Wave-J)
+platform/web/wallet/walletOps.ts|d7-s2-ndk-web|sdk/commerce/payments/wallet|the wallet host owns the NDK zapper/nutzap transport and injects the sdk wallet mechanism barrel|client-NDK-removal (ADR-0002; post-Wave-J)
+platform/web/wallet/walletQuery.ts|d7-s2-ndk-web|sdk/commerce/payments/wallet/nwcWalletRead.ts|the wallet read query casts NDKFilter into the platform ndk fetchEvents and injects the sdk NWC wallet-read capability|client-NDK-removal (ADR-0002; post-Wave-J)
+platform/web/cart/cartStore.ts|d7-s2-ndk-web|sdk/commerce/cart|the cart store holds the platform NDK client and injects the sdk cart mechanism|client-NDK-removal (ADR-0002; post-Wave-J)
+platform/web/payments/paymentQuery.ts|d7-s2-ndk-web|sdk/config/constants.ts|the payment read query names NDKEvent/NDKKind and injects the sdk shared payment constants (PAYMENT_DETAILS_METHOD/ZAP_RELAYS)|client-NDK-removal (ADR-0002; post-Wave-J)
+platform/web/payments/paymentPublish.ts|d7-s2-ndk-web|sdk/commerce/payments/preimage.ts|the payment publish helper constructs NDKEvent and injects the sdk preimage-validation capability|client-NDK-removal (ADR-0002; post-Wave-J)
