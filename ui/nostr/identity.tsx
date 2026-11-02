@@ -33,7 +33,7 @@ export interface ProfileAvatarViewProps extends ComponentProps<typeof AvatarPrim
 	 * `getColorFromNpub` in `src/lib/utils.ts` looks like the dropped
 	 * implementation of `colored`, and restoring either behaviour is a visual
 	 * change that needs a ruling. The label is `text-on-fill-accent` rather than
-	 * `text-background`: the fill is scheme-stable but `--background` inverts, so
+	 * `text-bg`: the fill is scheme-stable but `--background` inverts, so
 	 * the old pairing rendered white on pink in light and dark-on-pink in dark
 	 * (the "role switching identity" defect the token split exists to remove).
 	 */
