@@ -52,7 +52,7 @@ sdk test 0 allow
 # precedent); collections collectionQuery.ts took the facade-typed zero-type-change path
 # (structural retirement deferred with its route consumers); the platform/web production
 # bridge row is re-seeded to the guard's measurement at this commit.
-platform/web production 14 bridge
+platform/web production 13 bridge
 # 2026-11-02 (d7-s2/ndk-web batch B): cart persistence retired its NDK types
 # (cartPersistenceSchema.ts, cartPersistence.ts onto @sdk/core/nostr/eventLike);
 # the platform/web production bridge row is re-seeded to the guard's measurement at this commit.
