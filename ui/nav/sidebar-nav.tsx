@@ -9,7 +9,7 @@ import type { NavItemWithBadge, NavSectionView } from './model'
  */
 export const SIDEBAR_NAV_LINK_CLASS = cn(
 	'block relative bg-surface-raised data-[status=active]:bg-surface-raised lg:bg-transparent',
-	'p-[calc(var(--gap)*1rem)] lg:px-[calc(var(--gap)*1.5rem)] lg:py-[calc(var(--gap)*0.5rem)] border border-foreground data-[status=active]:border-border-default lg:border-0',
+	'p-[calc(var(--gap)*1rem)] lg:px-[calc(var(--gap)*1.5rem)] lg:py-[calc(var(--gap)*0.5rem)] border border-text-high data-[status=active]:border-border-default lg:border-0',
 	'rounded lg:rounded-none font-bold data-[status=active]:text-on-fill-accent hover:text-fill-accent transition-colors',
 )
 
@@ -66,7 +66,7 @@ export function SidebarNav({ sections, renderLink, onNavigate, className }: Side
 		<div className={cn('lg:space-y-2', className)} data-slot="sidebar-nav">
 			{sections.map((section) => (
 				<div key={section.title}>
-					<h3 className="bg-foreground mb-0 px-4 py-2 font-header text-background lg:mb-2">{section.title}</h3>
+					<h3 className="bg-text-high mb-0 px-4 py-2 font-header text-bg lg:mb-2">{section.title}</h3>
 					<nav className="space-y-2 p-[calc(var(--gap)*1rem)] text-xl lg:p-0 lg:text-base">
 						{section.items.map((item) =>
 							renderLink({
