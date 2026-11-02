@@ -214,4 +214,24 @@ describe('createApplesauceEventStore', () => {
 		expect(await store.add(synthetic)).toEqual({ status: 'added' })
 		expect(await store.get(synthetic.id)).toBeDefined()
 	})
+
+	test('miss-fetches through eventLoader, deduplicated across concurrent gets', async () => {
+		const target = event({ kind: 1 })
+		let loads = 0
+		const store = createApplesauceEventStore({
+			eventLoader: async (pointer) => {
+				loads += 1
+				await new Promise((resolve) => setTimeout(resolve, 5))
+				return 'id' in pointer && pointer.id === target.id ? target : undefined
+			},
+		})
+
+		const [a, b] = await Promise.all([store.get(target.id), store.get(target.id)])
+		expect(a?.id).toBe(target.id)
+		expect(b?.id).toBe(target.id)
+		// one in-flight load shared by both misses; the second get now hits the warmed store
+		expect(loads).toBe(1)
+		expect((await store.get(target.id))?.id).toBe(target.id)
+		expect(loads).toBe(1)
+	})
 })

@@ -17,6 +17,7 @@ import {
 	type EventReadContext,
 	type EventStorePort,
 } from '@sdk/core/event-store'
+import { createIndexedDbEventDatabase } from '@platform/web/indexedDbEventDatabase'
 
 /** Re-exported so Platform bindings can type their read context without a `platform -> src` edge. */
 export type { NDKEvent, NDKFilter }
@@ -72,8 +73,10 @@ export type { PrivateAuctionClaimMessage }
 export { authStore, getCurrentPubkey }
 
 // The browser host is one market instance, so module scope is the instance boundary for its store.
-// Backed by the applesauce `EventStorePort` adapter (default in-memory `EventMemory` database for now).
-const ndkEventStore = createApplesauceEventStore<NDKEvent>()
+// Backed by the applesauce `EventStorePort` adapter; the browser host injects the IndexedDB database (contract
+// rev 2.21 decision 3). The NDK live-relay stream migration belongs to the NDK-web lane, so these contexts keep
+// the bounded NDK-fetch source for now.
+const ndkEventStore = createApplesauceEventStore<NDKEvent>({ database: createIndexedDbEventDatabase() })
 
 export function getNdkEventStore(): EventStorePort<NDKEvent> {
 	return ndkEventStore

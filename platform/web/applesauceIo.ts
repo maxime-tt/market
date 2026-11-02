@@ -23,6 +23,7 @@
 import { RelayGroup, RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { Filter } from 'nostr-tools'
+import type { EventStreamItem } from '@sdk/core/event-store'
 import type { SignerCapability } from '@sdk/core/signer'
 
 import { getWriteRelays, ndkStore } from '@platform/web/ndk/ndkStore'
@@ -334,4 +335,99 @@ export const applesauceIo: NostrIo = {
 		if (!capability) return null
 		return { pubkey: await capability.getPublicKey() }
 	},
+}
+
+/**
+ * The live relay source behind `EventReadContext.stream`.
+ *
+ * One `req()` to the group: emits each EVENT as it arrives and a single `caught-up` marker when every relay
+ * has settled — its own EOSE, a terminal CLOSED/ERROR, or the never-EOSE timeout (`timeoutMs`, default 8s).
+ * The stream stays open after the marker (a live read); the consumer closes it (a bounded `fetch` closes at
+ * the marker). Events are admitted by the consumer (`createStoreStream`), so duplicates are dropped at the
+ * store's admission point — `req()` (the only group call that surfaces per-relay EOSE messages) does not
+ * take an `eventStore` dedup param, so the `asAsyncEventStoreActions` facade is not used on this path.
+ */
+export function createRelayStream(
+	filters: NostrFilter | NostrFilter[],
+	options: { relayUrls?: readonly string[]; timeoutMs?: number; signal?: AbortSignal } = {},
+): AsyncIterable<EventStreamItem<NostrEvent>> {
+	const urls = [...(options.relayUrls ?? relayUrls())]
+	const list = asFilters(filters)
+	const timeoutMs = options.timeoutMs ?? 8000
+	return {
+		async *[Symbol.asyncIterator]() {
+			if (urls.length === 0) {
+				yield { type: 'caught-up', info: { eose: [], pending: [], complete: true } }
+				return
+			}
+			const queue: EventStreamItem<NostrEvent>[] = []
+			let wake: (() => void) | null = null
+			let finished = false
+			const settled = new Set<string>()
+			const eose: string[] = []
+			const pending: string[] = []
+			let caughtUp = false
+			const push = (item: EventStreamItem<NostrEvent>) => {
+				queue.push(item)
+				wake?.()
+				wake = null
+			}
+			const markSettled = (url: string, status: 'eose' | 'closed') => {
+				if (settled.has(url)) return
+				settled.add(url)
+				if (status === 'eose') eose.push(url)
+				else pending.push(url)
+				if (!caughtUp && settled.size >= urls.length) {
+					caughtUp = true
+					push({ type: 'caught-up', info: { eose: [...eose], pending: [...pending], complete: false } })
+				}
+			}
+			const subscription = getPool()
+				.req(urls, list, { resubscribe: false, reconnect: SUBSCRIBE_RECONNECT })
+				.subscribe({
+					next: (message) => {
+						if (message.type === 'EVENT') push({ type: 'event', event: message.event as NostrEvent })
+						else if (message.type === 'EOSE') markSettled(message.from, 'eose')
+						else if (message.type === 'CLOSED' || message.type === 'ERROR') markSettled(message.from, 'closed')
+					},
+					error: () => {
+						finished = true
+						wake?.()
+						wake = null
+					},
+					complete: () => {
+						finished = true
+						wake?.()
+						wake = null
+					},
+				})
+			// Never-EOSE fallback: settle the remaining relays so a bounded read cannot hang.
+			const timer = setTimeout(() => {
+				if (caughtUp) return
+				for (const url of urls) if (!settled.has(url)) markSettled(url, 'closed')
+			}, timeoutMs)
+			const onAbort = () => {
+				finished = true
+				wake?.()
+				wake = null
+			}
+			options.signal?.addEventListener('abort', onAbort)
+			try {
+				while (true) {
+					if (queue.length > 0) {
+						yield queue.shift()!
+						continue
+					}
+					if (finished) return
+					await new Promise<void>((resolve) => {
+						wake = resolve
+					})
+				}
+			} finally {
+				clearTimeout(timer)
+				options.signal?.removeEventListener('abort', onAbort)
+				subscription.unsubscribe()
+			}
+		},
+	}
 }

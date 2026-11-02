@@ -8,7 +8,7 @@
  * the reverse.
  */
 import { useEffect, useRef, useState } from 'react'
-import { applesauceIo, type NostrFilter } from '@platform/web/applesauceIo'
+import { applesauceIo, createRelayStream, type NostrFilter } from '@platform/web/applesauceIo'
 import {
 	fetchNdkEventSet,
 	mergeNdkEventSetsById,
@@ -18,10 +18,11 @@ import {
 	type NDKSigner,
 } from '@platform/web/ndk/ndkEvents'
 import type { NostrEventLike } from '@sdk/core'
+import { createIndexedDbEventDatabase } from '@platform/web/indexedDbEventDatabase'
 import {
 	createApplesauceEventStore,
 	createEventReadContext,
-	streamFromFetch,
+	createStoreStream,
 	type EventReadContext,
 	type EventStorePort,
 } from '@sdk/core/event-store'
@@ -90,8 +91,19 @@ export function useSubscriptionEvents(
 }
 
 // Raw-event reads (the applesauce seam used by auctions) get their own store; NDKEvent reads use ndkReadContext.
-// Backed by the applesauce `EventStorePort` adapter (default in-memory `EventMemory` database for now).
-const rawEventStore = createApplesauceEventStore<NostrEventLike>()
+// Backed by the applesauce `EventStorePort` adapter; the browser host injects the IndexedDB database (contract
+// rev 2.21 decision 3) and a local-first miss-fetch loader (non-browser falls back to the in-memory default).
+const rawEventStore = createApplesauceEventStore<NostrEventLike>({
+	database: createIndexedDbEventDatabase(),
+	eventLoader: async (pointer) => {
+		const filters: NostrFilter[] =
+			'id' in pointer
+				? [{ ids: [pointer.id] }]
+				: [{ kinds: [pointer.kind], authors: [pointer.pubkey], ...(pointer.d ? { '#d': [pointer.d] } : {}) }]
+		const events = await applesauceIo.fetchEvents(filters)
+		return (events[0] as unknown as NostrEventLike) ?? undefined
+	},
+})
 
 export function getRawEventStore(): EventStorePort<NostrEventLike> {
 	return rawEventStore
@@ -100,8 +112,18 @@ export function getRawEventStore(): EventStorePort<NostrEventLike> {
 export function createApplesauceReadContext(): EventReadContext<NostrEventLike> {
 	return createEventReadContext({
 		store: rawEventStore,
-		stream: streamFromFetch(rawEventStore, (filters) =>
-			applesauceIo.fetchEvents(filters.length === 1 ? (filters[0] as NostrFilter) : (filters as NostrFilter[])),
-		),
+		// Bounded reads (the derived `fetch`) use the bounded relay request; live reads hold a subscription.
+		stream: createStoreStream({
+			store: rawEventStore,
+			source: (filters, options) => {
+				if (options?.bounded) {
+					return (async function* () {
+						for (const event of await applesauceIo.fetchEvents(filters as NostrFilter[])) yield { type: 'event' as const, event }
+						yield { type: 'caught-up' as const, info: { eose: [], pending: [], complete: true } }
+					})()
+				}
+				return createRelayStream(filters as NostrFilter[], { signal: options?.signal })
+			},
+		}),
 	})
 }

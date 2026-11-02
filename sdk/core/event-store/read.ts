@@ -23,6 +23,11 @@ export interface EventStreamOptions {
 	/** Fetch from relays as part of the stream. Default: true (the live read path). */
 	live?: boolean
 	/**
+	 * A bounded read (the derived `fetch`): the source should use a bounded relay request and end at
+	 * caught-up, rather than hold a persistent subscription open. Set by `createEventReadContext`'s `fetch`.
+	 */
+	bounded?: boolean
+	/**
 	 * Admit emitted events into the store. Default: true for a live `stream` (the store is the single
 	 * admission point). The bounded `fetch` passes `false`: a detail/one-off read must not warm or pollute
 	 * the shared store (e.g. kind-1 comments/reports must not leak into the kind-1 feed).
@@ -81,7 +86,7 @@ export function createEventReadContext<E extends NostrEventLike = NostrEventLike
 		store,
 		stream,
 		publish,
-		fetch: (filters) => collectStream(stream(filters, { live: true, admit: false })),
+		fetch: (filters) => collectStream(stream(filters, { live: true, admit: false, bounded: true })),
 	}
 }
 
@@ -104,6 +109,66 @@ export function streamFromFetch<E extends NostrEventLike = NostrEventLike>(
 			yield { type: 'event', event }
 		}
 		yield { type: 'caught-up', info: { eose: [], pending: [], complete: true } }
+	}
+}
+
+/**
+ * A host-provided live source for `createStoreStream`: opens sync (returns an AsyncIterable) and emits relay
+ * arrivals plus one `caught-up` marker. The platform adapter implements this over applesauce's RelayGroup; a
+ * non-browser host can implement it over any transport.
+ */
+export type EventStreamSource<E extends NostrEventLike = NostrEventLike> = (
+	filters: readonly EventFilter[],
+	options?: EventStreamOptions,
+) => AsyncIterable<EventStreamItem<E>>
+
+/**
+ * The real stream: replay already-stored matches first (local-first), then forward the live source, admitting
+ * each arrival into the store unless the caller opted out (`admit: false`, used by the bounded `fetch`).
+ * The `caught-up` marker is forwarded from the source; a live stream stays open after it, a bounded `fetch`
+ * closes at it.
+ */
+export function createStoreStream<E extends NostrEventLike = NostrEventLike>(parts: {
+	store: EventStorePort<E>
+	source: EventStreamSource<E>
+}): EventReadContext<E>['stream'] {
+	const { store, source } = parts
+	return async function* (filters, options) {
+		// 1. Live reads replay what the store already has (the local cache). A bounded `fetch` does not:
+		// it is a relay answer, and the store still merges the arrivals on admission.
+		if (options?.bounded !== true) {
+			for (const event of await store.query(filters)) yield { type: 'event', event }
+		}
+		if (options?.live === false) {
+			yield { type: 'caught-up', info: { eose: [], pending: [], complete: true } }
+			return
+		}
+		// 2. Forward the live relay source; the store stays the single admission point.
+		const admit = options?.admit ?? true
+		for await (const item of source(filters, options)) {
+			if (item.type === 'event' && admit) await store.add(item.event)
+			yield item
+		}
+	}
+}
+
+/**
+ * Adapt `EventStorePort` to applesauce's `IAsyncEventStoreActions` shape so a relay group can deduplicate
+ * events against our store (`RelayGroup.subscription/request({ eventStore })`). `add` admits and returns the
+ * event only when it was newly added (a duplicate/superseded/deleted/rejected event returns `null`, so the
+ * group drops it). The port has no `remove`/`update`, so those are best-effort no-ops.
+ */
+export function asAsyncEventStoreActions<E extends NostrEventLike = NostrEventLike>(
+	store: EventStorePort<E>,
+): {
+	add(event: E): Promise<E | null>
+	remove(event: string | E): Promise<boolean>
+	update(event: E): Promise<void>
+} {
+	return {
+		add: async (event) => ((await store.add(event)).status === 'added' ? event : null),
+		remove: async () => false,
+		update: async () => {},
 	}
 }
 

@@ -67,7 +67,15 @@ export interface ApplesauceEventStoreOptions<E extends NostrEventLike> {
 	database?: IAsyncEventDatabase
 	/** Per-kind parsers; kinds without an entry are admitted as-is. */
 	admission?: Partial<Record<number, EventAdmission<E>>>
+	/**
+	 * Local-first miss-fetch: called when `get`/`getReplaceable` misses, so a host can load the event from its
+	 * relay source and warm the store. In-flight loads are deduplicated by pointer, so a miss cannot stampede.
+	 */
+	eventLoader?: (pointer: EventPointerQuery) => Promise<E | undefined>
 }
+
+/** Pointer accepted by `ApplesauceEventStoreOptions.eventLoader`. */
+export type EventPointerQuery = { id: string } | { kind: number; pubkey: string; d?: string }
 
 export function createApplesauceEventStore<E extends NostrEventLike = NostrEventLike>(
 	options: ApplesauceEventStoreOptions<E> = {},
@@ -81,6 +89,24 @@ export function createApplesauceEventStore<E extends NostrEventLike = NostrEvent
 
 	const deletions: DeletionTargets[] = []
 	const listeners = new Set<{ filters: readonly EventFilter[]; listener: (event: E) => void }>()
+	const inFlightLoads = new Map<string, Promise<E | undefined>>()
+
+	/** Local-first miss-fetch, deduplicated by pointer so concurrent misses share one load. */
+	const load = (key: string, pointer: EventPointerQuery): Promise<E | undefined> => {
+		const existing = inFlightLoads.get(key)
+		if (existing) return existing
+		const pending = (async () => {
+			try {
+				const loaded = await options.eventLoader!(pointer)
+				if (loaded) await store.add(loaded as unknown as NostrEvent)
+				return loaded
+			} finally {
+				inFlightLoads.delete(key)
+			}
+		})()
+		inFlightLoads.set(key, pending)
+		return pending
+	}
 
 	const isDeleted = (event: E) => deletions.some((deletion) => isDeletedBy(event, deletion))
 
@@ -127,8 +153,16 @@ export function createApplesauceEventStore<E extends NostrEventLike = NostrEvent
 
 	return {
 		add,
-		get: async (id) => (await store.getEvent(id)) as E | undefined,
-		getReplaceable: async (kind, pubkey, d) => (await store.getReplaceable(kind, pubkey, d)) as E | undefined,
+		get: async (id) => {
+			const found = (await store.getEvent(id)) as E | undefined
+			if (found || !options.eventLoader) return found
+			return load(`id:${id}`, { id })
+		},
+		getReplaceable: async (kind, pubkey, d) => {
+			const found = (await store.getReplaceable(kind, pubkey, d)) as E | undefined
+			if (found || !options.eventLoader) return found
+			return load(`addr:${kind}:${pubkey}:${d ?? ''}`, { kind, pubkey, d })
+		},
 		query: async (filters) => {
 			const list = Array.isArray(filters) ? filters : [filters as EventFilter]
 			const stripped = list.map(({ limit: _limit, ...withoutLimit }) => withoutLimit)

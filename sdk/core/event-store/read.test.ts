@@ -3,8 +3,10 @@ import type { NostrEventLike } from '../nostr/eventLike'
 import { matchesFilter, type EventFilter } from './filter'
 import { createMemoryEventStore } from './memoryEventStore'
 import {
+	asAsyncEventStoreActions,
 	buildDeletionLookupFilters,
 	createEventReadContext,
+	createStoreStream,
 	excludeDeleted,
 	readThroughStore,
 	streamFromFetch,
@@ -111,5 +113,56 @@ describe('product reads', () => {
 		expect(isProductListed(soldOut, 'not-hidden')).toBe(true)
 		expect(isProductListed(soldOut, 'purchasable')).toBe(false)
 		expect(isProductListed(preOrder, 'purchasable')).toBe(true)
+	})
+})
+
+describe('createStoreStream', () => {
+	test('replays stored matches first, then forwards the live source and its caught-up marker', async () => {
+		const store = createMemoryEventStore()
+		const cached = event({ created_at: 100, tags: [['d', 'cached']] })
+		await store.add(cached)
+		const live = event({ created_at: 200, tags: [['d', 'live']] })
+
+		const stream = createStoreStream({
+			store,
+			source: async function* () {
+				yield { type: 'event', event: live }
+				yield { type: 'caught-up', info: { eose: ['wss://relay'], pending: [], complete: false } }
+			},
+		})
+
+		const items = []
+		for await (const item of stream([{ kinds: [30402] }])) items.push(item)
+
+		expect(items.filter((item) => item.type === 'event').map((item) => item.event.id)).toEqual([cached.id, live.id])
+		expect(items.at(-1)).toEqual({ type: 'caught-up', info: { eose: ['wss://relay'], pending: [], complete: false } })
+	})
+
+	test('admits live arrivals into the store unless admit is false', async () => {
+		const store = createMemoryEventStore()
+		const live = event({ created_at: 200 })
+		const stream = createStoreStream({
+			store,
+			source: async function* () {
+				yield { type: 'event', event: live }
+			},
+		})
+
+		for await (const _ of stream([{ kinds: [1] }], { admit: false })) {
+			/* drain */
+		}
+		expect(await store.get(live.id)).toBeUndefined()
+	})
+})
+
+describe('asAsyncEventStoreActions', () => {
+	test('admits once and returns null for a duplicate relay delivery', async () => {
+		const store = createMemoryEventStore()
+		const actions = asAsyncEventStoreActions(store)
+		const note = event({ kind: 1 })
+
+		expect(await actions.add(note)).toBe(note)
+		expect(await actions.add(note)).toBeNull()
+		expect(await store.get(note.id)).toBe(note)
 	})
 })
