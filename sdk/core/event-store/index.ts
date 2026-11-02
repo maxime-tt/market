@@ -1,5 +1,7 @@
 export { createMemoryEventStore } from './memoryEventStore'
 export type { MemoryEventStoreOptions } from './memoryEventStore'
+export { createApplesauceEventStore } from './applesauceEventStore'
+export type { ApplesauceEventStoreOptions } from './applesauceEventStore'
 export { matchesFilter, selectMatching } from './filter'
 export type { EventFilter } from './filter'
 export {
