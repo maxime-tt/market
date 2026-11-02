@@ -14,7 +14,10 @@ const QUERY_ROOTS_BY_KIND: Record<number, readonly unknown[]> = {
 }
 
 /** Refetches the cached lists a newly seen deletion affects; returns an unsubscribe function. */
-export function syncEventStoresToQueryClient(queryClient: QueryClient): () => void {
+export function syncEventStoresToQueryClient(
+	queryClient: QueryClient,
+	stores: EventStorePort<NostrEventLike>[] = [getNdkEventStore() as EventStorePort<NostrEventLike>, getRawEventStore()],
+): () => void {
 	const sessionStartedAt = Math.floor(Date.now() / 1000)
 
 	const onDeletion = (deletion: NostrEventLike) => {
@@ -27,7 +30,6 @@ export function syncEventStoresToQueryClient(queryClient: QueryClient): () => vo
 		}
 	}
 
-	const stores: EventStorePort<NostrEventLike>[] = [getNdkEventStore() as EventStorePort<NostrEventLike>, getRawEventStore()]
 	const unsubscribes = stores.map((store) => store.subscribe({ kinds: [DELETION_REQUEST_KIND] }, onDeletion))
 	return () => unsubscribes.forEach((unsubscribe) => unsubscribe())
 }
