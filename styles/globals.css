@@ -71,6 +71,91 @@
 	--color-tertiary-black: var(--tertiary-black);
 }
 
+/* ─── Foundation scales (design Phase 0) ──────────────────────────────
+   Structural, theme-independent tokens: type, line-height, tracking, space,
+   elevation and motion. They are their own layer — deliberately NOT Tier-1
+   colour roles — so the Tier-1 budget pinned by
+   `ui/theme/token-contract.test.ts` is untouched (R8).
+   Values: the `design-foundations` craft manual §1. `@theme static` is used
+   so every variable is emitted whether or not a utility consumes it yet;
+   Phase 1 is what adopts them in components.
+   Spacing note: Tailwind's numeric spacing utilities (p-4, gap-6, …) already
+   resolve to these same values through the built-in `--spacing` base. */
+@theme static {
+	/* Type scale */
+	--text-2xs: 0.6875rem;
+	--text-xs: 0.75rem;
+	--text-sm: 0.875rem;
+	--text-md: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.25rem;
+	--text-2xl: 1.5rem;
+	--text-3xl: 2rem;
+	--text-4xl: clamp(2rem, 1.61rem + 1.74vw, 3rem);
+
+	/* Line-height + tracking */
+	--lh-tight: 1.1;
+	--lh-snug: 1.25;
+	--lh-normal: 1.5;
+	--lh-relaxed: 1.65;
+	--leading-tight: var(--lh-tight);
+	--leading-snug: var(--lh-snug);
+	--leading-normal: var(--lh-normal);
+	--leading-relaxed: var(--lh-relaxed);
+
+	--tracking-display: -0.02em;
+	--tracking-heading: -0.01em;
+	--tracking-normal: 0;
+	--tracking-wide: 0.04em;
+	--tracking-caps: 0.08em;
+
+	/* Space scale — 4px base */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.5rem;
+	--space-6: 2rem;
+	--space-7: 2.5rem;
+	--space-8: 3rem;
+	--space-9: 4rem;
+	--space-10: 5rem;
+	--space-11: 6rem;
+	--space-12: 8rem;
+
+	/* Elevation — offsets stay scaled by --shadow-scale so the theme tune
+	   (Theme Studio / Hedgerow preset) still drives depth. */
+	--shadow-1:
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) rgb(0 0 0 / 0.06),
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 3px) rgb(0 0 0 / 0.1);
+	--shadow-2:
+		0 calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * 4px) rgb(0 0 0 / 0.06),
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 12px) rgb(0 0 0 / 0.1);
+	--shadow-3:
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 8px) rgb(0 0 0 / 0.08),
+		0 calc(var(--shadow-scale) * 12px) calc(var(--shadow-scale) * 28px) rgb(0 0 0 / 0.14);
+	--shadow-4:
+		0 calc(var(--shadow-scale) * 8px) calc(var(--shadow-scale) * 16px) rgb(0 0 0 / 0.12),
+		0 calc(var(--shadow-scale) * 24px) calc(var(--shadow-scale) * 48px) rgb(0 0 0 / 0.18);
+	--shadow-inset: inset 0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) rgb(0 0 0 / 0.07);
+
+	/* Motion — Material 3 durations/easings */
+	--dur-instant: 50ms;
+	--dur-fast: 100ms;
+	--dur-base: 200ms;
+	--dur-slow: 300ms;
+	--dur-enter: 250ms;
+	--dur-exit: 150ms;
+	--dur-page: 450ms;
+
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--ease-accelerate: cubic-bezier(0.3, 0, 1, 1);
+	--ease-decelerate: cubic-bezier(0, 0, 0, 1);
+	--ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+	--ease-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+	--ease-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+
 /* Add specific styling for headings using the reglisse font */
 .font-heading {
 	font-family: var(--font-heading);
@@ -220,24 +305,27 @@ button {
 	   ─────────────────────────────────────────────────────────────────── */
 	--brand-pink: oklch(0.688 0.249 348);
 
-	--bg: oklch(1 0 0);
-	--surface-raised: oklch(1 0 0);
-	--surface-sunken: oklch(0.961 0.005 314.8);
-	--surface-hover: oklch(0.92 0.008 319.4);
+	/* Phase 0 values — the warm-editorial (Hedgerow) direction. Kept byte-
+	   identical to the .theme-new mirror in styles/globals-new.css; the
+	   token-contract test asserts that agreement. */
+	--bg: oklch(0.96 0.02 90);
+	--surface-raised: oklch(0.98 0.015 90);
+	--surface-sunken: oklch(0.93 0.02 90);
+	--surface-hover: oklch(0.9 0.04 90);
 
-	--fill-accent: var(--brand-pink);
+	--fill-accent: oklch(0.62 0.13 55);
 	--on-fill-accent: oklch(0.145 0 0);
-	--fill-ink: oklch(0.231 0 0);
-	--on-fill-ink: oklch(0.985 0 0);
-	--fill-ink-hover: oklch(0.145 0 0);
+	--fill-ink: oklch(0.42 0.07 145);
+	--on-fill-ink: oklch(0.98 0.015 90);
+	--fill-ink-hover: oklch(0.36 0.06 145);
 
-	--text-high: oklch(0.218 0 0);
-	--text-mid: oklch(0.51 0 0);
+	--text-high: oklch(0.28 0.03 140);
+	--text-mid: oklch(0.48 0.03 130);
 
-	--border-default: oklch(0.851 0.025 340.4);
-	--border-strong: oklch(0.574 0.078 342.7);
+	--border-default: oklch(0.86 0.03 85);
+	--border-strong: oklch(0.62 0.045 85);
 
-	--focus-ring: var(--brand-pink);
+	--focus-ring: oklch(0.55 0.1 145);
 	--focus-attention: oklch(0.885 0.164 92.6);
 
 	/* Text/icon over content the theme does not control: imagery (hero bands,
@@ -319,24 +407,27 @@ button {
 	   identity tokens are deliberately identical in both modes (R1/R5). */
 	--brand-pink: oklch(0.688 0.249 348);
 
-	--bg: oklch(0.135 0.005 285.8);
-	--surface-raised: oklch(0.135 0.005 285.8);
-	--surface-sunken: oklch(0.274 0.006 286);
-	--surface-hover: oklch(0.274 0.006 286);
+	/* Phase 0 dark mirror: chroma ≈ −30 %, surfaces elevate by lightening,
+	   text L .93–.96. --fill-accent/--focus-ring/--on-media stay scheme-
+	   stable, as the token-contract test requires. */
+	--bg: oklch(0.19 0.014 90);
+	--surface-raised: oklch(0.23 0.011 90);
+	--surface-sunken: oklch(0.27 0.014 90);
+	--surface-hover: oklch(0.31 0.028 90);
 
-	--fill-accent: var(--brand-pink);
+	--fill-accent: oklch(0.62 0.13 55);
 	--on-fill-accent: oklch(0.145 0 0);
-	--fill-ink: oklch(0.982 0 0);
-	--on-fill-ink: oklch(0.206 0.008 285.7);
-	--fill-ink-hover: oklch(0.9 0.01 286);
+	--fill-ink: oklch(0.8 0.05 145);
+	--on-fill-ink: oklch(0.25 0.03 145);
+	--fill-ink-hover: oklch(0.86 0.045 145);
 
-	--text-high: oklch(0.982 0 0);
-	--text-mid: oklch(0.712 0.012 286.1);
+	--text-high: oklch(0.94 0.021 140);
+	--text-mid: oklch(0.75 0.021 130);
 
-	--border-default: oklch(0.274 0.006 286);
-	--border-strong: oklch(0.274 0.006 286);
+	--border-default: oklch(0.32 0.02 85);
+	--border-strong: oklch(0.52 0.03 85);
 
-	--focus-ring: var(--brand-pink);
+	--focus-ring: oklch(0.55 0.1 145);
 	--focus-attention: oklch(0.885 0.164 92.6);
 	--on-media: oklch(1 0 0);
 
@@ -397,6 +488,7 @@ button {
 	--color-chart-3: var(--chart-3);
 	--color-chart-4: var(--chart-4);
 	--color-chart-5: var(--chart-5);
+	--radius-xs: calc(var(--radius) * 0.5);
 	--radius-sm: calc(var(--radius) - 4px);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-lg: var(--radius);

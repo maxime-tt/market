@@ -72,6 +72,92 @@ const DARK_MODE_TOKENS: Record<string, ToneTokens> = {
 }
 
 const WCAG_AA_NORMAL = 4.5
+const WCAG_AA_NON_TEXT = 3
+
+/**
+ * Phase 0 — the Tier-1 role values and their boundaries.
+ *
+ * These mirror `styles/globals-new.css` literally, exactly as the UX-state
+ * tables above do: change a token and this file changes in the same commit.
+ * Text pairs must clear WCAG AA 4.5:1; the interactive boundary
+ * (`--border-strong`) and the focus ring must clear the 3:1 of WCAG 1.4.11 /
+ * 2.4.13. `--border-default` is a decorative hairline (1.4:1 by design, per
+ * the warm-editorial direction) and is deliberately not asserted.
+ */
+type RolePair = readonly [number, number, number]
+type RoleTable = Record<string, RolePair>
+
+const LIGHT_ROLES = {
+	bg: [0.96, 0.02, 90],
+	'surface-raised': [0.98, 0.015, 90],
+	'surface-sunken': [0.93, 0.02, 90],
+	'surface-hover': [0.9, 0.04, 90],
+	'fill-accent': [0.62, 0.13, 55],
+	'on-fill-accent': [0.145, 0, 0],
+	'fill-ink': [0.42, 0.07, 145],
+	'on-fill-ink': [0.98, 0.015, 90],
+	'fill-ink-hover': [0.36, 0.06, 145],
+	'text-high': [0.28, 0.03, 140],
+	'text-mid': [0.48, 0.03, 130],
+	'border-strong': [0.62, 0.045, 85],
+	'focus-ring': [0.55, 0.1, 145],
+} satisfies RoleTable
+
+const DARK_ROLES = {
+	bg: [0.19, 0.014, 90],
+	'surface-raised': [0.23, 0.011, 90],
+	'surface-sunken': [0.27, 0.014, 90],
+	'surface-hover': [0.31, 0.028, 90],
+	'fill-accent': [0.62, 0.13, 55],
+	'on-fill-accent': [0.145, 0, 0],
+	'fill-ink': [0.8, 0.05, 145],
+	'on-fill-ink': [0.25, 0.03, 145],
+	'fill-ink-hover': [0.86, 0.045, 145],
+	'text-high': [0.94, 0.021, 140],
+	'text-mid': [0.75, 0.021, 130],
+	'border-strong': [0.52, 0.03, 85],
+	'focus-ring': [0.55, 0.1, 145],
+} satisfies RoleTable
+
+function roleTextPairs(roles: RoleTable): Array<[string, RolePair, RolePair]> {
+	const pair = (label: string, a: string, b: string): [string, RolePair, RolePair] => [label, roles[a]!, roles[b]!]
+	return [
+		pair('--text-high on --bg', 'bg', 'text-high'),
+		pair('--text-high on --surface-raised', 'surface-raised', 'text-high'),
+		pair('--text-mid on --bg', 'bg', 'text-mid'),
+		pair('--text-mid on --surface-raised', 'surface-raised', 'text-mid'),
+		pair('--text-mid on --surface-sunken', 'surface-sunken', 'text-mid'),
+		pair('--on-fill-accent on --fill-accent', 'fill-accent', 'on-fill-accent'),
+		pair('--on-fill-ink on --fill-ink', 'fill-ink', 'on-fill-ink'),
+		pair('--on-fill-ink on --fill-ink-hover', 'fill-ink-hover', 'on-fill-ink'),
+	]
+}
+
+function expectPairs(minimum: number, pairs: Array<[string, RolePair, RolePair]>) {
+	const failures = pairs
+		.map(([label, a, b]) => [label, contrastRatio(oklchToLuminance(...a), oklchToLuminance(...b))] as const)
+		.filter(([, ratio]) => ratio < minimum)
+		.map(([label, ratio]) => `${label} = ${ratio.toFixed(2)}:1`)
+	expect(failures).toEqual([])
+}
+
+describe('theme contrast — Tier-1 roles (Phase 0 warm-editorial values)', () => {
+	for (const [mode, roles] of [
+		['light', LIGHT_ROLES],
+		['dark', DARK_ROLES],
+	] as const) {
+		test(`${mode}: every text pair clears ${WCAG_AA_NORMAL}:1`, () => {
+			expectPairs(WCAG_AA_NORMAL, roleTextPairs(roles))
+		})
+
+		test(`${mode}: interactive boundary and focus ring clear ${WCAG_AA_NON_TEXT}:1`, () => {
+			expectPairs(WCAG_AA_NON_TEXT, [
+				['--border-strong on --bg', roles.bg, roles['border-strong']],
+				['--focus-ring on --bg', roles.bg, roles['focus-ring']],
+			])
+		})
+	}
+})
 
 describe('theme contrast — WCAG AA for UX-state tokens (≥ 4.5:1)', () => {
 	describe('light mode', () => {
