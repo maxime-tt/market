@@ -90,7 +90,7 @@ test('summarises conversations with unseen counts and the active highlight', asy
 	const badge = widget.locator('.bg-fill-accent')
 	await expect(badge).toHaveCount(1)
 	await expect(badge).toContainText('3')
-	await expect(widget.locator('a.bg-muted\\/20')).toHaveCount(1)
+	await expect(widget.locator('a.bg-surface-sunken\\/20')).toHaveCount(1)
 })
 
 test('shows the four resolved states of the conversation pane', async ({ page }) => {

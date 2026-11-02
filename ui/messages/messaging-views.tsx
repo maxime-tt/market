@@ -76,12 +76,12 @@ export function ConversationListItemView({
 	isActive,
 }: ConversationListItemViewProps) {
 	const dateElement = lastMessageAt && (
-		<span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(lastMessageAt * 1000).toLocaleString()}</span>
+		<span className="text-xs text-text-mid whitespace-nowrap">{new Date(lastMessageAt * 1000).toLocaleString()}</span>
 	)
 
 	return (
-		<UiLink href={href} className={isActive ? 'block w-full bg-muted/20 rounded-lg' : 'block w-full'}>
-			<Card className="p-4 hover:bg-muted/50 transition-colors relative">
+		<UiLink href={href} className={isActive ? 'block w-full bg-surface-sunken/20 rounded-lg' : 'block w-full'}>
+			<Card className="p-4 hover:bg-surface-sunken/50 transition-colors relative">
 				{unseenCount > 0 && (
 					<div className="absolute top-2 right-2 inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 text-xs font-bold text-on-fill-accent bg-fill-accent rounded-full">
 						{unseenCount > 99 ? '99+' : unseenCount}
@@ -89,8 +89,8 @@ export function ConversationListItemView({
 				)}
 
 				<div className="flex items-center gap-4">
-					<div className="p-2 bg-muted rounded-full">
-						<MessageSquareText className="h-6 w-6 text-muted-foreground" />
+					<div className="p-2 bg-surface-sunken rounded-full">
+						<MessageSquareText className="h-6 w-6 text-text-mid" />
 					</div>
 
 					<div className="flex-1 flex flex-col gap-1">
@@ -99,7 +99,7 @@ export function ConversationListItemView({
 							{!isMobile && dateElement}
 						</div>
 						<div className="pr-12">
-							<p className={`text-sm break-words ${unseenCount > 0 ? 'font-semibold text-text-high' : 'text-muted-foreground'}`}>
+							<p className={`text-sm break-words ${unseenCount > 0 ? 'font-semibold text-text-high' : 'text-text-mid'}`}>
 								{lastMessageSnippet}
 							</p>
 						</div>

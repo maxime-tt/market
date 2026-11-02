@@ -149,9 +149,9 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 	const hasHashtags = hashTags.length > 0
 
 	return (
-		<div className="max-w-md rounded-lg border border-border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+		<div className="max-w-md rounded-lg border border-border-default bg-surface-raised overflow-hidden shadow-sm hover:shadow-md transition-shadow">
 			{hasImage && (
-				<div className="w-full h-40 bg-muted overflow-hidden">
+				<div className="w-full h-40 bg-surface-sunken overflow-hidden">
 					<Media src={image!} alt={title || 'Event image'} className="w-full h-full object-cover" />
 				</div>
 			)}
@@ -160,16 +160,16 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 				{hasTitle && <h3 className="font-semibold text-sm text-text-high line-clamp-2">{title}</h3>}
 				{!hasTitle && alt && <h3 className="font-semibold text-sm text-text-high line-clamp-2">{alt}</h3>}
 
-				{summary && <p className="text-xs text-muted-foreground font-medium">{summary}</p>}
-				{!summary && description && <p className="text-xs text-muted-foreground font-medium">{description}</p>}
+				{summary && <p className="text-xs text-text-mid font-medium">{summary}</p>}
+				{!summary && description && <p className="text-xs text-text-mid font-medium">{description}</p>}
 
 				{hasContent && !summary && (
 					<div className="text-xs text-text-high line-clamp-4 whitespace-pre-wrap leading-relaxed">{cleanContent}</div>
 				)}
 
 				{hasOptions && (
-					<div className="space-y-1.5 pt-2 border-t border-border">
-						<span className="text-xs font-medium text-muted-foreground">Options:</span>
+					<div className="space-y-1.5 pt-2 border-t border-border-default">
+						<span className="text-xs font-medium text-text-mid">Options:</span>
 						<ul className="space-y-1">
 							{options.map((opt: any, idx: number) => (
 								<li key={idx} className="flex items-start gap-2 text-xs text-text-high">
@@ -186,16 +186,16 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 				{hasHashtags && (
 					<div className="flex flex-wrap gap-1 pt-2">
 						{hashTags.slice(0, 6).map((tag: string, idx: number) => (
-							<span key={idx} className="inline-block bg-muted/50 px-2 py-0.5 rounded text-xs text-muted-foreground">
+							<span key={idx} className="inline-block bg-surface-sunken/50 px-2 py-0.5 rounded text-xs text-text-mid">
 								#{tag}
 							</span>
 						))}
-						{hashTags.length > 6 && <span className="inline-block text-xs text-muted-foreground pt-0.5">+{hashTags.length - 6}</span>}
+						{hashTags.length > 6 && <span className="inline-block text-xs text-text-mid pt-0.5">+{hashTags.length - 6}</span>}
 					</div>
 				)}
 
 				{!hasContent && !hasTitle && relays.length > 0 && (
-					<div className="text-xs text-muted-foreground pt-2 border-t border-border">
+					<div className="text-xs text-text-mid pt-2 border-t border-border-default">
 						<span className="font-medium">Relays:</span>
 						<ul className="mt-1 space-y-0.5">
 							{relays.slice(0, 3).map((relay: string, idx: number) => (
@@ -209,7 +209,7 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 				)}
 			</div>
 
-			{kind && <div className="px-4 py-2 bg-muted/20 border-t border-border text-xs text-muted-foreground">Kind {kind}</div>}
+			{kind && <div className="px-4 py-2 bg-surface-sunken/20 border-t border-border-default text-xs text-text-mid">Kind {kind}</div>}
 		</div>
 	)
 }
@@ -242,7 +242,7 @@ export function ChatOrderItemView({ title, quantity, price, imageUrl }: ChatOrde
 
 			<div className="flex-1 min-w-0">
 				<p className="font-medium text-sm truncate">{title}</p>
-				<div className="flex items-center gap-2 text-xs text-muted-foreground">
+				<div className="flex items-center gap-2 text-xs text-text-mid">
 					<span>Qty: {quantity}</span>
 					{price && (
 						<>
@@ -290,7 +290,7 @@ const EmbeddedProductMessage = ({ productData }: { productData: EmbeddedProductE
 
 				<div className="flex-1 min-w-0">
 					<p className="font-medium text-sm truncate">{title}</p>
-					{price && <p className="text-xs text-muted-foreground mt-0.5">{price}</p>}
+					{price && <p className="text-xs text-text-mid mt-0.5">{price}</p>}
 					{description && <p className="text-xs text-text-mid mt-1 line-clamp-2">{description}</p>}
 				</div>
 			</div>
@@ -514,7 +514,7 @@ const PaymentReceiptMessage = ({ event }: { event: ChatMessageEvent }) => {
 
 export function ChatMessageBubbleView({ event, isCurrentUser, renderOrderItem }: ChatMessageBubbleViewProps) {
 	const alignment = isCurrentUser ? 'justify-end' : 'justify-start'
-	const bubbleStyles = isCurrentUser ? 'bg-surface-sunken border border-border-strong text-text-high' : 'bg-muted'
+	const bubbleStyles = isCurrentUser ? 'bg-surface-sunken border border-border-strong text-text-high' : 'bg-surface-sunken'
 
 	const renderStructuredContent = () => {
 		if (event.kind === 14) {
@@ -571,7 +571,7 @@ export function ChatMessageBubbleView({ event, isCurrentUser, renderOrderItem }:
 								return contentToShow && contentToShow.trim() ? (
 									<p className="text-sm">{contentToShow}</p>
 								) : (
-									<p className="text-sm text-muted-foreground/70">(Empty message)</p>
+									<p className="text-sm text-text-mid/70">(Empty message)</p>
 								)
 							})()}
 						</>
@@ -580,7 +580,7 @@ export function ChatMessageBubbleView({ event, isCurrentUser, renderOrderItem }:
 					{event.kind !== 14 && !structuredPart && hasContent && <p className="text-sm">{event.content}</p>}
 				</div>
 				{event.created_at && (
-					<span className={`text-xs text-muted-foreground mt-1 px-1 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
+					<span className={`text-xs text-text-mid mt-1 px-1 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
 						{format(new Date(event.created_at * 1000), 'p')}
 					</span>
 				)}

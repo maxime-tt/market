@@ -26,9 +26,9 @@ export function LiveChatMessageView({ authorCard, timeLabel, content, className 
 			<div className="min-w-0 flex-1">
 				<div className="flex items-baseline justify-between gap-2">
 					{authorCard}
-					<span className="text-[10px] text-muted-foreground">{timeLabel}</span>
+					<span className="text-[10px] text-text-mid">{timeLabel}</span>
 				</div>
-				<p className="text-sm mt-2 text-muted-foreground break-words">{content}</p>
+				<p className="text-sm mt-2 text-text-mid break-words">{content}</p>
 			</div>
 		</div>
 	)
