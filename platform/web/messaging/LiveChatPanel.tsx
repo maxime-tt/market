@@ -3,17 +3,17 @@ import { Send, MessageCircle, ChevronDown } from 'lucide-react'
 import { useLiveChatMessages, useLiveActivity } from '@platform/web/messaging/liveChatQuery'
 import { usePublishLiveChatMessageMutation } from '@platform/web/messaging/liveChatPublish'
 import { deriveLiveActivityStatus, type LiveActivityStatus } from '@sdk/core/nostr/nip53'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { getAuctionId } from '@platform/web/auctions/auctionsQuery'
 import { getAuctionStartAt, getAuctionBiddingCutoffAt } from '@sdk/commerce/auctions/settlement'
 import { LiveChatMessageHost as LiveChatMessageBubble } from '@platform/web/messaging/LiveChatMessageHost'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@platform/web/auth/authStore'
 import { Button } from '@ui/primitives/button'
 import { cn } from '@ui/utils/cn'
 
 interface LiveChatPanelProps {
-	auctionEvent: NDKEvent
+	auctionEvent: NostrEventLike
 }
 
 function getInputPlaceholder(status: LiveActivityStatus): string {
