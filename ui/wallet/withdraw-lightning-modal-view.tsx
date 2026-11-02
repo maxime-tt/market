@@ -76,7 +76,7 @@ export function WithdrawLightningModalView({
 							<Check className="w-6 h-6 text-success" />
 						</div>
 						<p className="text-lg font-medium text-success">Withdrawal Successful!</p>
-						<p className="text-sm text-muted-foreground mt-2">Your Lightning invoice has been paid</p>
+						<p className="text-sm text-text-mid mt-2">Your Lightning invoice has been paid</p>
 						<Button onClick={onClose} className="mt-4">
 							Done
 						</Button>
@@ -100,7 +100,7 @@ export function WithdrawLightningModalView({
 								<select
 									value={selectedMint}
 									onChange={(e) => onSelectedMintChange(e.target.value)}
-									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+									className="w-full px-3 py-2 text-sm border rounded-md bg-bg"
 								>
 									{mintsWithBalance.map((mint) => (
 										<option key={mint} value={mint}>
@@ -118,7 +118,7 @@ export function WithdrawLightningModalView({
 									value={invoice}
 									onChange={(e) => onInvoiceChange(e.target.value)}
 									placeholder="lnbc..."
-									className="flex-1 px-3 py-2 text-sm border rounded-md bg-background font-mono resize-none h-24"
+									className="flex-1 px-3 py-2 text-sm border rounded-md bg-bg font-mono resize-none h-24"
 								/>
 							</div>
 							<div className="flex justify-end">
@@ -130,7 +130,7 @@ export function WithdrawLightningModalView({
 						</div>
 
 						{cashuInitializing && (
-							<p className="text-sm text-muted-foreground flex items-center gap-2">
+							<p className="text-sm text-text-mid flex items-center gap-2">
 								<Loader2 className="w-4 h-4 animate-spin" />
 								Initializing wallet...
 							</p>
