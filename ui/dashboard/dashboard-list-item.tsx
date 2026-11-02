@@ -42,22 +42,22 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 					<CollapsibleTrigger asChild>
 						<div className="p-4 flex flex-row items-center justify-between cursor-pointer group rounded-lg">
 							<div className="flex items-center gap-4 min-w-0 flex-1 overflow-hidden">
-								{icon !== false && <div className="p-2 bg-muted rounded-full shrink-0">{icon ?? <WalletIcon className="h-6 w-6" />}</div>}
+								{icon !== false && (
+									<div className="p-2 bg-surface-sunken rounded-full shrink-0">{icon ?? <WalletIcon className="h-6 w-6" />}</div>
+								)}
 								<div className="min-w-0 flex-1 overflow-hidden">{triggerContent}</div>
 							</div>
 							<div className="flex items-center gap-2 shrink-0 ml-2">
 								{actions}
 								{useCloseIcon ? (
 									isOpen ? (
-										<XIcon className="h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground" />
+										<XIcon className="h-5 w-5 shrink-0 transition-transform duration-200 text-text-mid" />
 									) : (
-										<ChevronLeftIcon className="h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground rotate-0" />
+										<ChevronLeftIcon className="h-5 w-5 shrink-0 transition-transform duration-200 text-text-mid rotate-0" />
 									)
 								) : (
 									<ChevronLeftIcon
-										className={`h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground ${
-											isOpen ? '-rotate-90' : 'rotate-0'
-										}`}
+										className={`h-5 w-5 shrink-0 transition-transform duration-200 text-text-mid ${isOpen ? '-rotate-90' : 'rotate-0'}`}
 									/>
 								)}
 							</div>
