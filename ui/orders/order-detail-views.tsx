@@ -198,7 +198,7 @@ export function InvoiceCardView({
 	const preimage = invoice.preimage || invoiceToUse.preimage
 
 	return (
-		<Card className={cn('p-4', isPaid ? 'bg-success-muted' : 'bg-card')}>
+		<Card className={cn('p-4', isPaid ? 'bg-success-muted' : 'bg-surface-raised')}>
 			<div className="flex items-center justify-between gap-3">
 				<div className="flex items-center gap-3 min-w-0">
 					{totalInvoices > 1 && (
@@ -218,7 +218,7 @@ export function InvoiceCardView({
 					)}
 					<div className="min-w-0">
 						<h4 className="font-medium truncate">{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}</h4>
-						<p className="text-sm text-muted-foreground">
+						<p className="text-sm text-text-mid">
 							{invoice.amount.toLocaleString()} sats
 							{invoiceToUse.expiresAt && (
 								<span className={cn('ml-2', isExpired ? 'text-error' : 'text-text-mid')}>
@@ -236,7 +236,7 @@ export function InvoiceCardView({
 			</div>
 
 			{isBuyer && !isPaid && (
-				<div className="mt-4 pt-4 border-t border-muted space-y-3">
+				<div className="mt-4 pt-4 border-t border-surface-sunken space-y-3">
 					<div className="flex flex-wrap gap-2">
 						{hasBolt11 && !isExpired && (
 							<Button size="sm" className="flex-1 min-w-[140px]" onClick={() => onPay(invoiceToUse)}>
@@ -369,7 +369,7 @@ export function OrderCardView({ href, orderEventId, isBuyer, status, createdAt }
 	return (
 		<UiLink
 			href={href}
-			className="flex justify-between items-center hover:bg-accent p-4 border rounded-lg overflow-hidden transition-colors"
+			className="flex justify-between items-center hover:bg-surface-hover p-4 border rounded-lg overflow-hidden transition-colors"
 		>
 			<div className="flex items-center gap-4 min-w-0">
 				<div className="flex justify-center items-center bg-fill-accent rounded-full w-12 h-12 text-2xl shrink-0">
@@ -379,7 +379,7 @@ export function OrderCardView({ href, orderEventId, isBuyer, status, createdAt }
 					<div className="font-medium truncate">
 						{isBuyer ? 'Purchase' : 'Sale'} #{orderEventId.slice(0, 8)}
 					</div>
-					<div className="text-muted-foreground text-sm">{new Date((createdAt || 0) * 1000).toLocaleDateString()}</div>
+					<div className="text-text-mid text-sm">{new Date((createdAt || 0) * 1000).toLocaleDateString()}</div>
 				</div>
 			</div>
 			<Badge variant={status.toLowerCase() === 'completed' ? 'default' : 'outline'} className="shrink-0">

@@ -78,7 +78,7 @@ export function ShippingOptionsMobileToolbar({ serviceFilter, onServiceFilterCha
 	return (
 		<div className="space-y-4 lg:hidden">
 			<div>
-				<p className="text-muted-foreground">Manage your shipping options for customers</p>
+				<p className="text-text-mid">Manage your shipping options for customers</p>
 			</div>
 
 			<ServiceFilterSelect

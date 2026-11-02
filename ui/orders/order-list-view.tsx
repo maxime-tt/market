@@ -131,7 +131,7 @@ export function OrderListView({ heading, search, orderBy, statusFilter, isCompac
 								<Card
 									key={row.id}
 									onClick={row.onOpen}
-									className="cursor-pointer hover:bg-muted/50"
+									className="cursor-pointer hover:bg-surface-sunken/50"
 									data-state={row.isSelected ? 'selected' : undefined}
 								>
 									<div className="block xl:hidden p-4">
@@ -160,7 +160,7 @@ export function OrderListView({ heading, search, orderBy, statusFilter, isCompac
 					</div>
 				) : (
 					<div className="px-4 xl:px-6">
-						<EmptyState title={emptyMessage} className="mt-4 rounded-md border bg-card p-6" />
+						<EmptyState title={emptyMessage} className="mt-4 rounded-md border bg-surface-raised p-6" />
 					</div>
 				)}
 			</div>
