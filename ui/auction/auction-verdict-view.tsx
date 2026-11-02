@@ -35,7 +35,7 @@ const claimToneClass = (claim: string): string => {
 	if (claim === 'lost_pending_refund') return 'border-border-default bg-surface-sunken text-text-high'
 	if (claim === 'griefed' || claim === 'griefed_pending_fallback' || claim === 'fraudulent_bid' || claim === 'bid_invalid')
 		return 'border-error-border bg-error-muted text-error-muted-foreground'
-	return 'border-border-default bg-card text-text-high'
+	return 'border-border-default bg-surface-raised text-text-high'
 }
 
 const formatTs = (ts: number): string => {

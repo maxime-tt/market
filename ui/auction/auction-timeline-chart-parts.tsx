@@ -74,9 +74,9 @@ export const AuctionTimelineTooltip = ({ active, payload, renderUserCard }: Auct
 	const dateStr = new Date(data.x).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 
 	return (
-		<div className="bg-card border border-border-default rounded-lg shadow-lg p-3 min-w-40 z-50">
+		<div className="bg-surface-raised border border-border-default rounded-lg shadow-lg p-3 min-w-40 z-50">
 			{data.pubkey && <div className="mb-2">{renderUserCard(data.pubkey)}</div>}
-			<p className="text-xs text-foreground mb-1">{dateStr}</p>
+			<p className="text-xs text-text-high mb-1">{dateStr}</p>
 			<p className="font-semibold text-text-high">{data.y.toLocaleString()} sats</p>
 		</div>
 	)

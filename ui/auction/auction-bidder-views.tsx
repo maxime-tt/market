@@ -113,7 +113,7 @@ export function AuctionBidderView({
 
 			{!compact && showMintSelector && (
 				<div className="flex items-center gap-2">
-					<span className="text-xs text-foreground/60 whitespace-nowrap">Mint:</span>
+					<span className="text-xs text-text-high/60 whitespace-nowrap">Mint:</span>
 					<ToggleGroup
 						type="single"
 						value={selectedMint ?? ''}
@@ -134,7 +134,7 @@ export function AuctionBidderView({
 									disabled={isDisabledInput || !m.hasSufficientBalance}
 									className={cn('cursor-pointer flex text-xs', !m.hasSufficientBalance && 'opacity-60')}
 								>
-									{m.hostname} <span className="text-foreground/50">({m.balance.toLocaleString()})</span>
+									{m.hostname} <span className="text-text-high/50">({m.balance.toLocaleString()})</span>
 								</TooltipToggleGroupItem>
 							))}
 					</ToggleGroup>
@@ -169,15 +169,9 @@ export function AuctionBidderView({
 			</div>
 
 			{/* Minimum Bid Info */}
-			{!compact && !ended && <div className="text-xs text-foreground/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>}
+			{!compact && !ended && <div className="text-xs text-text-high/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>}
 			{!compact && hasSignedInBidder && !isOwnAuction && (
-				<Button
-					type="button"
-					variant="link"
-					size="sm"
-					onClick={onOpenRules}
-					className="h-auto justify-start p-0 text-xs text-muted-foreground"
-				>
+				<Button type="button" variant="link" size="sm" onClick={onOpenRules} className="h-auto justify-start p-0 text-xs text-text-mid">
 					Review auction rules
 				</Button>
 			)}
@@ -203,7 +197,7 @@ export function AuctionRulesDialogView({ open, onOpenChange, publishPending, onC
 						Auction bids use Cashu e-cash with P2PK locks. Review what can happen to your funds before placing bids in this auction.
 					</DialogDescription>
 				</DialogHeader>
-				<div className="space-y-3 py-2 text-sm text-muted-foreground">
+				<div className="space-y-3 py-2 text-sm text-text-mid">
 					<ul className="list-disc space-y-2 pl-5">
 						<li>
 							Your bid may lock Cashu e-cash to an auction-derived P2PK key, with a refund path that only opens after the auction and
@@ -311,7 +305,11 @@ export function AuctionConfirmBidDialogView({
 				<div className="flex gap-6 py-4">
 					{/* Left column: Auction image */}
 					{auctionThumbnailUrl && (
-						<img src={auctionThumbnailUrl} alt={auctionTitle} className="w-40 h-40 rounded-lg object-cover shrink-0 border border-border" />
+						<img
+							src={auctionThumbnailUrl}
+							alt={auctionTitle}
+							className="w-40 h-40 rounded-lg object-cover shrink-0 border border-border-default"
+						/>
 					)}
 					{/* Right column: Auction metadata */}
 					<div className="flex flex-col gap-3 min-w-0 grow">
@@ -346,7 +344,7 @@ export function AuctionConfirmBidDialogView({
 							/>
 							<InputGroupAddon align="inline-end">sats</InputGroupAddon>
 						</InputGroup>
-						<p className="text-sm text-muted-foreground">Minimum allowed bid: {minBid.toLocaleString()} sats</p>
+						<p className="text-sm text-text-mid">Minimum allowed bid: {minBid.toLocaleString()} sats</p>
 						{inCurveWindow && shape !== 'none' && (
 							<Alert className="border-warning-border bg-warning-muted text-warning-muted-foreground">
 								<AlertDescription className="text-sm text-warning-muted-foreground">
@@ -376,9 +374,7 @@ export function AuctionConfirmBidDialogView({
 							<p className="text-sm text-destructive">No trusted mints available</p>
 						)}
 						{hasExistingBid && (
-							<p className="text-sm text-muted-foreground">
-								Multiple chained bids from the same mint only — your previous bid uses this mint.
-							</p>
+							<p className="text-sm text-text-mid">Multiple chained bids from the same mint only — your previous bid uses this mint.</p>
 						)}
 					</div>
 
@@ -394,7 +390,7 @@ export function AuctionConfirmBidDialogView({
 					{/* Top-up amount (big, prominent) */}
 					{confirmTopUpNeeded > 0 && (
 						<div className="flex flex-col items-center gap-1 py-2">
-							<p className="text-sm text-muted-foreground">Pay via Lightning</p>
+							<p className="text-sm text-text-mid">Pay via Lightning</p>
 							<p className="text-3xl font-bold text-warning">{confirmTopUpNeeded.toLocaleString()} sats</p>
 						</div>
 					)}

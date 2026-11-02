@@ -167,7 +167,7 @@ export function AntiSnipeCurveSettings({
 						)
 					})}
 				</div>
-				{windowDisabled && <p className="text-[11px] text-warning-foreground">Pick a window above to enable the curve.</p>}
+				{windowDisabled && <p className="text-2xs text-warning-foreground">Pick a window above to enable the curve.</p>}
 			</div>
 
 			<div className="grid gap-1.5">
@@ -196,7 +196,7 @@ export function AntiSnipeCurveSettings({
 					})}
 				</div>
 				{!curveDisabled && (
-					<p className="text-[11px] text-text-mid">
+					<p className="text-2xs text-text-mid">
 						Floor at auction end will be {minBidCurvePeakMultiplier}× the floor when the anti-snipe ramp begins.
 					</p>
 				)}

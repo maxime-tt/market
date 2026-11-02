@@ -44,7 +44,7 @@ export function BidLadderPreview({ startingBid, bidIncrement, reserve, className
 
 	return (
 		<div ref={ref} className={cn('rounded-lg border border-border-default bg-surface-raised px-4 py-4', className)}>
-			<p className="text-[11px] font-semibold uppercase tracking-wide text-text-mid">Bid ladder preview</p>
+			<p className="text-2xs font-semibold uppercase tracking-wide text-text-mid">Bid ladder preview</p>
 
 			<div className="relative mt-3 h-12 rounded-md bg-gradient-to-r from-success-muted via-warning-muted to-warning-muted">
 				{Array.from({ length: tickCount }).map((_, i) => (

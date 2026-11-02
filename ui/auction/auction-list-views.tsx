@@ -140,7 +140,7 @@ export function AuctionTopBidBox({
 			<div>
 				<div
 					className={cn(
-						'flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]',
+						'flex items-center gap-2 text-2xs font-semibold uppercase tracking-[0.18em]',
 						isSettlementPhase ? 'text-success-foreground' : 'text-text-high',
 					)}
 				>
@@ -302,14 +302,14 @@ export function AuctionListItemView({
 					</div>
 					<div className="w-full space-y-3 rounded-xl border border-border-default bg-surface-sunken px-5 py-5">
 						<div className="flex items-center justify-between gap-3">
-							<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-mid">Activity</p>
+							<p className="text-2xs font-semibold uppercase tracking-[0.18em] text-text-mid">Activity</p>
 							<Button
 								type="button"
 								variant="ghost"
 								size="sm"
 								onClick={onMarkActivitySeen}
 								disabled={!hasNewActivity}
-								className="h-7 rounded-md border border-border-default bg-surface-raised px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-mid hover:bg-surface-hover hover:text-text-high"
+								className="h-7 rounded-md border border-border-default bg-surface-raised px-2 text-2xs font-semibold uppercase tracking-[0.12em] text-text-mid hover:bg-surface-hover hover:text-text-high"
 							>
 								<CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
 								Mark as seen
@@ -368,7 +368,7 @@ export function AuctionFiltersView({
 						<Filter className="w-4 h-4" />
 						<span>Filter &amp; Sort</span>
 						{appliedFilterCount > 0 && (
-							<span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+							<span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-fill-ink text-[10px] font-medium text-on-fill-ink">
 								{appliedFilterCount}
 							</span>
 						)}

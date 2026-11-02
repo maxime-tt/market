@@ -64,7 +64,7 @@ export function AuctionTimelinePreview({
 			<div
 				ref={ref}
 				className={cn(
-					'mt-3 rounded-md border border-dashed border-border-default bg-surface-sunken px-3 py-2 text-[11px] text-text-mid',
+					'mt-3 rounded-md border border-dashed border-border-default bg-surface-sunken px-3 py-2 text-2xs text-text-mid',
 					className,
 				)}
 			>
@@ -160,7 +160,7 @@ export function AuctionTimelinePreview({
 	return (
 		<div ref={ref} className={cn('mt-3 rounded-md border border-border-default bg-surface-sunken px-3 py-3', className)}>
 			<div className="flex items-baseline justify-between gap-2">
-				<p className="text-[11px] font-semibold uppercase tracking-wide text-text-mid">Bidding timeline</p>
+				<p className="text-2xs font-semibold uppercase tracking-wide text-text-mid">Bidding timeline</p>
 				<p className="text-[10px] text-text-mid">
 					Preview top bid <span className="font-mono text-text-high">{previewTopBid.toLocaleString()} sats</span>{' '}
 					<span className="text-text-mid">({hasReserve ? 'from reserve' : 'no reserve, using starting bid'})</span>
@@ -220,7 +220,7 @@ export function AuctionTimelinePreview({
 				/>
 			</svg>
 
-			<div className="mt-2 flex flex-wrap items-baseline justify-between gap-2 text-[11px] text-text-mid">
+			<div className="mt-2 flex flex-wrap items-baseline justify-between gap-2 text-2xs text-text-mid">
 				<p>
 					Floor when <span className="font-semibold text-text-high">{hasWindow ? 'anti-snipe ramp begins' : 'auction ends'}</span>:{' '}
 					<span className="font-semibold">{baseline.toLocaleString()} sats</span>
