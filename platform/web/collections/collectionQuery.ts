@@ -2,7 +2,11 @@ import { CollectionImageTagSchema, CollectionSummaryTagSchema, CollectionTitleTa
 import { filterBlacklistedEvents } from '@sdk/config/blacklist'
 import { naddrFromAddress } from '@sdk/core/nostr/naddr'
 import { isValidHexKey } from '@sdk/core/utils/utils'
-import type { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
+// Facade fallback (batch E): the structural `NostrEventLike` widening is blocked by two deferred
+// route consumers (routes/collection.$collectionId.tsx, routes/community.index.tsx) that still
+// require `NDKEvent`; the event type is sourced from the platform read facade, and the structural
+// retirement moves with those routes. Zero type change vs HEAD.
+import type { NDKEvent, NDKFilter } from '@platform/web/readContext'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { collectionKeys, collectionsKeys } from '@sdk/core/query/queryKeyFactory'
@@ -60,7 +64,7 @@ export const fetchCollection = async (dTag: string) => {
 	if (!dTag) return null
 
 	const events = await fetchEventsByFilter({
-		kinds: [30405 as NDKKind],
+		kinds: [30405 as NonNullable<NDKFilter['kinds']>[number]],
 		'#d': [dTag],
 	})
 
