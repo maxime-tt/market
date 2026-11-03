@@ -65,6 +65,12 @@ const BOUNDARY_LEAK_ALLOWLIST = new Set([
 	'platform/web/messaging/CommentButtonHost.tsx',
 	'platform/web/orders/ordersQuery.ts',
 	'platform/web/routes/_dashboard-layout/dashboard/products/migration-tool.tsx',
+	// collections (batch 3): the only blocker left is the app-relay fetch entry point —
+	// `fetchEventsByFilter(filter: NDKFilter)` in the transport boundary takes the NDK filter type,
+	// and its branded `kinds` is not satisfiable from a structural `EventFilter`. The read context's
+	// own `fetch` takes the structural filter but is a different path (timeout + store admission),
+	// so switching to it would be a behaviour change. Everything else here is converted.
+	'platform/web/collections/collectionQuery.ts',
 	'platform/web/products/productQuery.ts',
 	'platform/web/products/useStreamingProducts.ts',
 	'platform/web/products/ProductCardHost.tsx',
@@ -83,7 +89,7 @@ const BOUNDARY_LEAK_ALLOWLIST = new Set([
  * batch that converts them (config 42→37, routes →24, collections →23, products →20,
  * orders →14, messaging →4, tail →0).
  */
-const BASELINE = 22
+const BASELINE = 21
 
 async function listSourceFiles(directory: string): Promise<string[]> {
 	const entries = await readdir(directory, { withFileTypes: true })
