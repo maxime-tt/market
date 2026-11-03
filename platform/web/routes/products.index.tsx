@@ -7,7 +7,9 @@ import { PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import { authStore } from '@platform/web/auth/authStore'
 import { productFormActions } from '@platform/web/products/productFormStore'
 import { uiActions } from '@platform/web/app/uiStore'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+// Facade fallback (batch F1): this route feeds NDKEvent-typed feature getters (productQuery), so the
+// event type comes from the platform read facade (zero type change); structural retirement moves with them.
+import type { NDKEvent } from '@platform/web/readContext'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'

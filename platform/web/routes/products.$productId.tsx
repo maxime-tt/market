@@ -74,7 +74,9 @@ import {
 } from 'react'
 import { toast } from 'sonner'
 import { SocialInteractionsHost as SocialInteractions } from '@platform/web/messaging/SocialInteractionsHost'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+// Facade fallback (batch F1): this route feeds NDKEvent-typed feature getters (productQuery), so the
+// event type comes from the platform read facade (zero type change); structural retirement moves with them.
+import type { NDKEvent } from '@platform/web/readContext'
 import { scrollToElementWithOffset } from '@platform/web/utils/scroll'
 import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@sdk/commerce/products'
 
