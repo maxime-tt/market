@@ -52,7 +52,18 @@ sdk test 0 allow
 # precedent); collections collectionQuery.ts took the facade-typed zero-type-change path
 # (structural retirement deferred with its route consumers); the platform/web production
 # bridge row is re-seeded to the guard's measurement at this commit.
-platform/web production 13 bridge
+# 2026-11-03 (d7-s2/ndk-web batch F2): the five dashboard routes (products/migration-tool.tsx,
+# products/collections.tsx, products/products.tsx, products/shipping-options.tsx, account/profile.tsx)
+# dropped their direct @nostr-dev-kit/ndk type imports: the event type now comes from the
+# @platform/web/readContext facade and the profile form type is re-exported by its declared bridge
+# (profiles/profileQuery.ts). Type-only, zero type change; platform/web production falls 13 -> 8.
+# 2026-11-03 (d7-s2/ndk-web batch F1): the five public routes (index.tsx, products.index.tsx,
+# collection.$collectionId.tsx, community.index.tsx, products.$productId.tsx) dropped their direct
+# @nostr-dev-kit/ndk type imports for the @platform/web/readContext facade — the same zero-type-change
+# fallback, because each feeds NDKEvent-typed feature getters (productQuery/collectionQuery/hosts).
+# platform/web production falls 8 -> 3; the 3 remaining are the BLOCKED files (ndk/ndkEvents.ts,
+# auth/BunkerConnect.tsx, messaging/BugReportModal.tsx), which retire at client-NDK-removal only.
+platform/web production 3 bridge
 # 2026-11-02 (d7-s2/ndk-web batch B): cart persistence retired its NDK types
 # (cartPersistenceSchema.ts, cartPersistence.ts onto @sdk/core/nostr/eventLike);
 # the platform/web production bridge row is re-seeded to the guard's measurement at this commit.

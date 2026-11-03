@@ -10,7 +10,9 @@ import { readMarks } from '@platform/web/notifications'
 import { productFormActions } from '@platform/web/products/productFormStore'
 import { useDeleteProductMutation } from '@platform/web/products/productPublish'
 import { getProductId, getProductTitle, productQueryOptions, productsByPubkeyQueryOptions } from '@platform/web/products/productQuery'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+// Facade fallback (batch F2): this route feeds NDKEvent-typed feature hosts, so the event type comes
+// from the platform read facade (zero type change); structural retirement moves with those hosts.
+import type { NDKEvent } from '@platform/web/readContext'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
