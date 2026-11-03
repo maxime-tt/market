@@ -1,9 +1,28 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
-// Facade fallback (batch F2): the profile form state type is owned by the declared profileRead bridge
-// (profileQuery), so the route stops importing the package directly; zero type change.
-import type { NDKUserProfile } from '@platform/web/profiles/profileQuery'
+import type { ProfileDisplayFields } from '@sdk/core'
+
+/**
+ * The NIP-01 kind-0 display fields this form reads and writes, as a structural type. The SDK exposes
+ * `ProfileDisplayFields` (the display subset) and `ProfileMetadataEvent` (the event), but no typed
+ * kind-0 profile, so the form owns the extra field list it touches. Until then the read model
+ * (`profiles/profileQuery.ts`, a declared bridge) still answers a partial profile type from the NDK
+ * package; that shape is structurally identical, so it stays assignable here.
+ */
+type ProfileFields = ProfileDisplayFields & {
+	name?: string
+	displayName?: string
+	nip05?: string
+	picture?: string
+	about?: string
+	lud16?: string
+	lud06?: string
+	website?: string
+	banner?: string
+	image?: string
+	[key: string]: string | number | undefined
+}
 import { ImageUploader } from '@platform/web/media/ImageUploader'
 import { Button } from '@ui/wrappers/button'
 import { LoadingState } from '@ui/shared/loading-state'
@@ -29,7 +48,7 @@ function ProfileComponent() {
 	const ndk = ndkActions.getNDK()
 	const pubkey = ndk?.activeUser?.pubkey
 
-	// Fetch profile data with Tanstack Query
+	// fetch: the signed-in user's own kind-0 profile (single entity; a stream is not warranted)
 	const profileOptions = profileByIdentifierQueryOptions(pubkey || '')
 	const { data: fetchedData, isLoading: isLoadingProfile } = useQuery({
 		...profileOptions,
@@ -40,8 +59,8 @@ function ProfileComponent() {
 	const fetchedProfile = fetchedData?.profile
 
 	// Manage local state for profile data
-	const [profile, setProfile] = useState<NDKUserProfile>({})
-	const [originalProfile, setOriginalProfile] = useState<NDKUserProfile>({})
+	const [profile, setProfile] = useState<ProfileFields>({})
+	const [originalProfile, setOriginalProfile] = useState<ProfileFields>({})
 
 	// Form state (separate from profile for controlled inputs)
 	const [formData, setFormData] = useState({

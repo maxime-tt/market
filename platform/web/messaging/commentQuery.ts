@@ -1,5 +1,5 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
-import type { NDKEvent } from '@platform/web/ndkPublishContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { createNdkReadContext } from '@platform/web/readContext'
 import {
 	buildCommentThreads,
@@ -22,15 +22,15 @@ import { commentKeys } from '@sdk/core/query/queryKeyFactory'
 
 export { MAX_COMMENT_THREAD_DEPTH } from '@sdk/commerce/messaging'
 
-export type Comment = CommentRecord<NDKEvent>
+export type Comment = CommentRecord
 
-export type CommentThread = CommentThreadRecord<NDKEvent>
+export type CommentThread = CommentThreadRecord
 
 /**
  * Fetches NIP-22 comments for a product
  * @param event - The event (product listing, comment, …) the comments target
  */
-export const fetchProductComments = async (event: NDKEvent): Promise<Comment[]> =>
+export const fetchProductComments = async (event: NostrEventLike): Promise<Comment[]> =>
 	readProductCommentsWorkflow(createNdkReadContext(), event)
 
 export const transformCommentsMapIntoThreads = (comments: Comment[]): CommentThread[] => buildCommentThreads(comments)
@@ -38,7 +38,7 @@ export const transformCommentsMapIntoThreads = (comments: Comment[]): CommentThr
 /**
  * Hook to fetch comments for a product
  */
-export const useComments = (event: NDKEvent) => {
+export const useComments = (event: NostrEventLike) => {
 	const targetCoordinates = getCommentTargetKey(event)
 
 	return useQuery(

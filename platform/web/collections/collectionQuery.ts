@@ -6,6 +6,7 @@ import { isValidHexKey } from '@sdk/core/utils/utils'
 // route consumers (routes/collection.$collectionId.tsx, routes/community.index.tsx) that still
 // require `NDKEvent`; the event type is sourced from the platform read facade, and the structural
 // retirement moves with those routes. Zero type change vs HEAD.
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { NDKEvent, NDKFilter } from '@platform/web/readContext'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
@@ -128,7 +129,8 @@ export const fetchCollectionById = async (id: string): Promise<NDKEvent | null> 
 /**
  * Gets the collection title from an event
  */
-export const getCollectionTitle = (event: NDKEvent | null): z.infer<typeof CollectionTitleTagSchema>[1] => getCollectionTitleFromSdk(event)
+export const getCollectionTitle = (event: NostrEventLike | null): z.infer<typeof CollectionTitleTagSchema>[1] =>
+	getCollectionTitleFromSdk(event)
 
 /**
  * Get the collection summary from an event
@@ -139,7 +141,7 @@ export const getCollectionSummary = (event: NDKEvent | null): z.infer<typeof Col
 /**
  * Gets the collection ID from an event
  */
-export const getCollectionId = (event: NDKEvent): string => {
+export const getCollectionId = (event: NostrEventLike): string => {
 	return getCollectionIdFromSdk(event)
 }
 

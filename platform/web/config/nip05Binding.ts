@@ -21,7 +21,8 @@ import { Store, useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { createNdkReadContext } from '@platform/web/readContext'
-import { getAppNdk, type NDKEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk } from '@platform/web/ndkPublishContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { nip05State } from '@sdk/config/nip05'
 import type { Nip05State } from '@sdk/config/nip05'
 import {
@@ -79,7 +80,7 @@ export function useNip05State(): Nip05State {
 export { getExpiredNip05ForPubkey, getNip05ForPubkey, isNip05Available }
 export type { Nip05Entry } from '@sdk/core/profile'
 
-export type Nip05Settings = SdkNip05Settings<NDKEvent>
+export type Nip05Settings = SdkNip05Settings<NostrEventLike>
 
 /**
  * Fetches NIP-05 registry (kind 30000 with d=nip05-names) for the app

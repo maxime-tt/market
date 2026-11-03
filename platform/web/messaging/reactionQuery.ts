@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { NDKEvent } from '@platform/web/ndkPublishContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { createNdkReadContext } from '@platform/web/readContext'
 import {
 	filterForLatestReactionsOnly as filterForLatestReactionsOnlySdk,
@@ -20,7 +20,7 @@ import { reactionKeys } from '@sdk/core/query/queryKeyFactory'
  * value (and to the publish side's invalidation target in `src/publish/reactions.tsx`).
  */
 
-export type Reaction = ReactionRecord<NDKEvent>
+export type Reaction = ReactionRecord
 
 export const filterForLatestReactionsOnly = (reactions: Reaction[]): Reaction[] => filterForLatestReactionsOnlySdk(reactions)
 
@@ -33,12 +33,13 @@ export const sortReactionsIntoGroups = (reactions: Reaction[]): Map<string, Reac
  * @param event - The event to fetch reactions for
  * @returns Reactions, latest per author/emoji, without author-deleted ones
  */
-export const fetchEventReactions = async (event: NDKEvent): Promise<Reaction[]> => readEventReactionsWorkflow(createNdkReadContext(), event)
+export const fetchEventReactions = async (event: NostrEventLike): Promise<Reaction[]> =>
+	readEventReactionsWorkflow(createNdkReadContext(), event)
 
 /**
  * Hook to fetch reactions for an event
  */
-export const useEventReactions = (event: NDKEvent) => {
+export const useEventReactions = (event: NostrEventLike) => {
 	return useQuery({
 		queryKey: reactionKeys.byEvent(event.id, event.pubkey),
 		queryFn: () => fetchEventReactions(event),

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import type { NDKEvent, NDKFilter } from '@platform/web/ndk/ndkEvents'
+import type { EventFilter, NostrEventLike } from '@sdk/core'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import { nostrPublishBridge } from '@platform/web/ndkPublishContext'
 import { publishTestLabel, publishTestLabelDeletion } from '@platform/web/curation/testLabelActions'
@@ -37,7 +37,7 @@ const MERCHANT_PUBKEY = 'c'.repeat(64)
 const PRODUCT_COORD = `30402:${MERCHANT_PUBKEY}:my-product`
 const AUCTION_COORD = `30408:${MERCHANT_PUBKEY}:my-auction`
 
-const makeFakeEvent = (params: { kind?: number; id?: string; pubkey?: string; created_at?: number; tags: string[][] }): NDKEvent =>
+const makeFakeEvent = (params: { kind?: number; id?: string; pubkey?: string; created_at?: number; tags: string[][] }): NostrEventLike =>
 	({
 		kind: params.kind ?? LABEL_EVENT_KIND,
 		id: params.id ?? 'label-event-id-' + Math.random().toString(36).slice(2, 8),
@@ -45,7 +45,7 @@ const makeFakeEvent = (params: { kind?: number; id?: string; pubkey?: string; cr
 		created_at: params.created_at ?? 1724178700,
 		tags: params.tags,
 		content: '',
-	}) as unknown as NDKEvent
+	}) as unknown as NostrEventLike
 
 const makeTestLabelEvent = (params: {
 	coordinate?: string
@@ -56,7 +56,7 @@ const makeTestLabelEvent = (params: {
 	value?: string
 	includePTag?: boolean
 	kind?: number
-}): NDKEvent => {
+}): NostrEventLike => {
 	const coordinate = params.coordinate ?? PRODUCT_COORD
 	const tags: string[][] = [
 		[L_TAG, params.namespace ?? LABEL_NAMESPACE],
@@ -67,7 +67,7 @@ const makeTestLabelEvent = (params: {
 	return makeFakeEvent({ kind: params.kind, id: params.id, pubkey: params.pubkey, created_at: params.created_at, tags })
 }
 
-const makeTestLabelDeletionEvent = (params: { labelId: string; pubkey?: string; kind?: number; kTag?: string | null }): NDKEvent => {
+const makeTestLabelDeletionEvent = (params: { labelId: string; pubkey?: string; kind?: number; kTag?: string | null }): NostrEventLike => {
 	const tags: string[][] = [['e', params.labelId]]
 	if (params.kTag !== null) tags.push(['k', params.kTag ?? String(LABEL_EVENT_KIND)])
 	return makeFakeEvent({ kind: params.kind ?? LABEL_DELETION_KIND, pubkey: params.pubkey, tags })
@@ -369,7 +369,7 @@ describe('fetchTestLabels fail-open (via store)', () => {
 // --- Show-test-listings toggle (ADR-0009 rev 3) ---
 
 describe('excludeTestLabeledEvents toggle', () => {
-	const makeProductEvent = (dTag: string): NDKEvent =>
+	const makeProductEvent = (dTag: string): NostrEventLike =>
 		({
 			kind: TEST_LABEL_PRODUCT_KIND,
 			pubkey: MERCHANT_PUBKEY,
@@ -378,7 +378,7 @@ describe('excludeTestLabeledEvents toggle', () => {
 			tags: [['d', dTag]],
 			content: '',
 			tagValue: (name: string) => (name === 'd' ? dTag : undefined),
-		}) as unknown as NDKEvent
+		}) as unknown as NostrEventLike
 
 	test('returns events unfiltered when showTestListings is true', async () => {
 		testLabelActions.clearLabels()
@@ -411,7 +411,7 @@ describe('fetchTestLabels chunk scheduling', () => {
 		const stats = new Map<number, { calls: number; maxInFlight: number }>()
 		let inFlight = 0
 
-		const fetchEventsWithTimeout = async (filter: NDKFilter) => {
+		const fetchEventsWithTimeout = async (filter: EventFilter) => {
 			const kind = Array.isArray(filter.kinds) ? filter.kinds[0] : undefined
 			const entry = stats.get(kind ?? -1) ?? { calls: 0, maxInFlight: 0 }
 			entry.calls += 1
@@ -425,7 +425,7 @@ describe('fetchTestLabels chunk scheduling', () => {
 				const chunk = (filter['#a'] as string[] | undefined) ?? []
 				return new Set(chunk.map((coordinate) => makeTestLabelEvent({ coordinate, id: `chunk-label-${coordinate}` })))
 			}
-			return new Set<NDKEvent>()
+			return new Set<NostrEventLike>()
 		}
 
 		// Stand-ins for the modules fetchTestLabels imports dynamically. Bun's

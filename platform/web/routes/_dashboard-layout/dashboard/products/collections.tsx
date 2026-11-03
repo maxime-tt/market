@@ -9,9 +9,7 @@ import { collectionFormActions } from '@platform/web/collections/collectionFormS
 
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@platform/web/collections/collectionQuery'
 import { useDeleteCollectionMutation } from '@platform/web/collections/collectionPublish'
-// Facade fallback (batch F2): this route feeds NDKEvent-typed feature hosts, so the event type comes
-// from the platform read facade (zero type change); structural retirement moves with those hosts.
-import type { NDKEvent } from '@platform/web/readContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState, useMemo } from 'react'
@@ -29,7 +27,7 @@ function CollectionListItem({
 	onDelete,
 	isDeleting,
 }: {
-	collection: NDKEvent
+	collection: NostrEventLike
 	isExpanded: boolean
 	onToggleExpanded: () => void
 	onEdit: () => void
@@ -82,7 +80,7 @@ function CollectionsComponent() {
 	const matchRoute = useMatchRoute()
 	const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
 	const [orderBy, setOrderBy] = useState<string>('newest')
-	const [pendingDeleteCollection, setPendingDeleteCollection] = useState<NDKEvent | null>(null)
+	const [pendingDeleteCollection, setPendingDeleteCollection] = useState<NostrEventLike | null>(null)
 	useDashboardTitle('Collections')
 
 	// Auto-animate for smooth list transitions
@@ -146,7 +144,7 @@ function CollectionsComponent() {
 		setExpandedCollection(expandedCollection === collectionId ? null : collectionId)
 	}
 
-	const handleDeleteCollectionClick = (collection: NDKEvent) => {
+	const handleDeleteCollectionClick = (collection: NostrEventLike) => {
 		setPendingDeleteCollection(collection)
 	}
 

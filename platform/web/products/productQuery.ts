@@ -20,6 +20,7 @@ import { discoverNip50Relays } from '@sdk/core/relays/nip50'
 import { filterBlacklistedEvents, filterBlacklistedPubkeys } from '@sdk/config/blacklist'
 import { excludeTestLabeledEvents } from '@platform/web/config/testLabelsBinding'
 import { naddrFromAddress } from '@sdk/core/nostr/naddr'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import {
 	type NDKEvent,
@@ -87,7 +88,7 @@ export const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
  * @param event The product event
  * @returns true if the product is in stock
  */
-export const isProductInStock = (event: NDKEvent): boolean => {
+export const isProductInStock = (event: NostrEventLike): boolean => {
 	return isProductInStockFromSdk(event)
 }
 
@@ -378,7 +379,7 @@ export const productsByCollectionQueryOptions = (collectionEvent: NDKEvent | nul
  * @param event The product event or null
  * @returns The product ID string
  */
-export const getProductId = (event: NDKEvent | null): string => {
+export const getProductId = (event: NostrEventLike | null): string => {
 	return getProductIdFromSdk(event)
 }
 
@@ -387,7 +388,7 @@ export const getProductId = (event: NDKEvent | null): string => {
  * @param event The product event
  * @returns The product coordinates string
  */
-export const getProductCoordinates = (event: NDKEvent): string => {
+export const getProductCoordinates = (event: NostrEventLike): string => {
 	return getProductCoordinatesFromSdk(event)
 }
 
@@ -396,21 +397,22 @@ export const getProductCoordinates = (event: NDKEvent): string => {
  * @param event The product event or null
  * @returns The product title string
  */
-export const getProductTitle = (event: NDKEvent | null): z.infer<typeof ProductTitleTagSchema>[1] => getProductTitleFromSdk(event)
+export const getProductTitle = (event: NostrEventLike | null): z.infer<typeof ProductTitleTagSchema>[1] => getProductTitleFromSdk(event)
 
 /**
  * Gets the product description from a product event
  * @param event The product event or null
  * @returns The product description string
  */
-export const getProductDescription = (event: NDKEvent | null): string => getProductDescriptionFromSdk(event)
+export const getProductDescription = (event: NostrEventLike | null): string => getProductDescriptionFromSdk(event)
 
 /**
  * Gets the product summary from a product event
  * @param event The product event or null
  * @returns The product summary string
  */
-export const getProductSummary = (event: NDKEvent | null): z.infer<typeof ProductSummaryTagSchema>[1] => getProductSummaryFromSdk(event)
+export const getProductSummary = (event: NostrEventLike | null): z.infer<typeof ProductSummaryTagSchema>[1] =>
+	getProductSummaryFromSdk(event)
 
 /**
  * Gets the price tag from a product event
@@ -421,7 +423,7 @@ export const getProductSummary = (event: NDKEvent | null): z.infer<typeof Produc
  * - [2]: currency (string)
  * - [3]: frequency (optional string)
  */
-export const getProductPrice = (event: NDKEvent | null): z.infer<typeof ProductPriceTagSchema> | undefined => {
+export const getProductPrice = (event: NostrEventLike | null): z.infer<typeof ProductPriceTagSchema> | undefined => {
 	return getProductPriceFromSdk(event) as z.infer<typeof ProductPriceTagSchema> | undefined
 }
 
@@ -434,7 +436,7 @@ export const getProductPrice = (event: NDKEvent | null): z.infer<typeof ProductP
  * - [2]: dimensions (optional string)
  * - [3]: order (optional string - numeric)
  */
-export const getProductImages = (event: NDKEvent | null): z.infer<typeof ProductImageTagSchema>[] => {
+export const getProductImages = (event: NostrEventLike | null): z.infer<typeof ProductImageTagSchema>[] => {
 	return getProductImagesFromSdk(event) as z.infer<typeof ProductImageTagSchema>[]
 }
 
@@ -446,7 +448,7 @@ export const getProductImages = (event: NDKEvent | null): z.infer<typeof Product
  * - [1]: key (string)
  * - [2]: value (string)
  */
-export const getProductSpecs = (event: NDKEvent | null): z.infer<typeof ProductSpecTagSchema>[] => {
+export const getProductSpecs = (event: NostrEventLike | null): z.infer<typeof ProductSpecTagSchema>[] => {
 	return getProductSpecsFromSdk(event) as z.infer<typeof ProductSpecTagSchema>[]
 }
 
@@ -458,7 +460,7 @@ export const getProductSpecs = (event: NDKEvent | null): z.infer<typeof ProductS
  * - [1]: productType ('simple' | 'variable' | 'variation')
  * - [2]: physicalType ('digital' | 'physical')
  */
-export const getProductType = (event: NDKEvent | null): z.infer<typeof ProductTypeTagSchema> | undefined => {
+export const getProductType = (event: NostrEventLike | null): z.infer<typeof ProductTypeTagSchema> | undefined => {
 	return getProductTypeFromSdk(event) as z.infer<typeof ProductTypeTagSchema> | undefined
 }
 
@@ -469,7 +471,7 @@ export const getProductType = (event: NDKEvent | null): z.infer<typeof ProductTy
  * - [0]: 'visibility' (literal)
  * - [1]: visibility ('hidden' | 'on-sale' | 'pre-order')
  */
-export const getProductVisibility = (event: NDKEvent | null): z.infer<typeof ProductVisibilityTagSchema> | undefined => {
+export const getProductVisibility = (event: NostrEventLike | null): z.infer<typeof ProductVisibilityTagSchema> | undefined => {
 	return getProductVisibilityFromSdk(event) as z.infer<typeof ProductVisibilityTagSchema> | undefined
 }
 
@@ -480,7 +482,7 @@ export const getProductVisibility = (event: NDKEvent | null): z.infer<typeof Pro
  * - [0]: 'stock' (literal)
  * - [1]: stock (string - numeric)
  */
-export const getProductStock = (event: NDKEvent | null): z.infer<typeof ProductStockTagSchema> | undefined => {
+export const getProductStock = (event: NostrEventLike | null): z.infer<typeof ProductStockTagSchema> | undefined => {
 	return getProductStockFromSdk(event) as z.infer<typeof ProductStockTagSchema> | undefined
 }
 
@@ -492,7 +494,7 @@ export const getProductStock = (event: NDKEvent | null): z.infer<typeof ProductS
  * - [1]: value (string - numeric)
  * - [2]: unit (string)
  */
-export const getProductWeight = (event: NDKEvent | null): z.infer<typeof ProductWeightTagSchema> | undefined => {
+export const getProductWeight = (event: NostrEventLike | null): z.infer<typeof ProductWeightTagSchema> | undefined => {
 	return getProductWeightFromSdk(event) as z.infer<typeof ProductWeightTagSchema> | undefined
 }
 
@@ -504,7 +506,7 @@ export const getProductWeight = (event: NDKEvent | null): z.infer<typeof Product
  * - [1]: dimensions (string - in format LxWxH)
  * - [2]: unit (string)
  */
-export const getProductDimensions = (event: NDKEvent | null): z.infer<typeof ProductDimensionsTagSchema> | undefined => {
+export const getProductDimensions = (event: NostrEventLike | null): z.infer<typeof ProductDimensionsTagSchema> | undefined => {
 	return getProductDimensionsFromSdk(event) as z.infer<typeof ProductDimensionsTagSchema> | undefined
 }
 
@@ -513,7 +515,7 @@ export const getProductDimensions = (event: NDKEvent | null): z.infer<typeof Pro
  * @param event The product event or null
  * @returns An array of shipping option tuples with format [tag, shipping_reference, extra_cost?]
  */
-export const getProductShippingOptions = (event: NDKEvent | null): Array<string[]> => {
+export const getProductShippingOptions = (event: NostrEventLike | null): Array<string[]> => {
 	return getProductShippingOptionsFromSdk(event)
 }
 
@@ -522,7 +524,7 @@ export const getProductShippingOptions = (event: NDKEvent | null): Array<string[
  * @param event The product event or null
  * @returns The collection reference string or null
  */
-export const getProductCollection = (event: NDKEvent | null): string | null => {
+export const getProductCollection = (event: NostrEventLike | null): string | null => {
 	return getProductCollectionFromSdk(event)
 }
 
@@ -531,7 +533,7 @@ export const getProductCollection = (event: NDKEvent | null): string | null => {
  * @param event The product event or null
  * @returns An array of category tuples
  */
-export const getProductCategories = (event: NDKEvent | null): z.infer<typeof ProductCategoryTagSchema>[] => {
+export const getProductCategories = (event: NostrEventLike | null): z.infer<typeof ProductCategoryTagSchema>[] => {
 	return getProductCategoriesFromSdk(event) as z.infer<typeof ProductCategoryTagSchema>[]
 }
 
@@ -540,28 +542,28 @@ export const getProductCategories = (event: NDKEvent | null): z.infer<typeof Pro
  * @param event The product event or null
  * @returns The creation timestamp (number)
  */
-export const getProductCreatedAt = (event: NDKEvent | null): number => getProductCreatedAtFromSdk(event)
+export const getProductCreatedAt = (event: NostrEventLike | null): number => getProductCreatedAtFromSdk(event)
 
 /**
  * Gets the pubkey from a product event
  * @param event The product event or null
  * @returns The pubkey (string)
  */
-export const getProductPubkey = (event: NDKEvent | null): string => getProductPubkeyFromSdk(event)
+export const getProductPubkey = (event: NostrEventLike | null): string => getProductPubkeyFromSdk(event)
 
 /**
  * Gets the location for product from the event tags
  * @param event The product event or null
  * @returns The location in string format or empty string
  */
-export const getProductLocation = (event: NDKEvent | null): string => getProductLocationFromSdk(event)
+export const getProductLocation = (event: NostrEventLike | null): string => getProductLocationFromSdk(event)
 
 /**
  * Gets the content warning tag from a product event
  * @param event The product event or null
  * @returns The content warning tuple or undefined
  */
-export const getProductContentWarning = (event: NDKEvent | null): z.infer<typeof ProductContentWarningTagSchema> | undefined => {
+export const getProductContentWarning = (event: NostrEventLike | null): z.infer<typeof ProductContentWarningTagSchema> | undefined => {
 	return getProductContentWarningFromSdk(event) as z.infer<typeof ProductContentWarningTagSchema> | undefined
 }
 
@@ -570,7 +572,7 @@ export const getProductContentWarning = (event: NDKEvent | null): z.infer<typeof
  * @param event The product event or null
  * @returns true if the product is marked as NSFW
  */
-export const isNSFWProduct = (event: NDKEvent | null): boolean => {
+export const isNSFWProduct = (event: NostrEventLike | null): boolean => {
 	return isNSFWProductFromSdk(event)
 }
 
@@ -580,7 +582,7 @@ export const isNSFWProduct = (event: NDKEvent | null): boolean => {
  * @param showNSFW Whether to show NSFW products (if true, no filtering is done)
  * @returns Filtered array of product events
  */
-export const filterNSFWProducts = (events: NDKEvent[], showNSFW: boolean): NDKEvent[] => {
+export const filterNSFWProducts = <E extends NostrEventLike>(events: E[], showNSFW: boolean): E[] => {
 	if (showNSFW) return events
 	return events.filter((event) => !isNSFWProduct(event))
 }

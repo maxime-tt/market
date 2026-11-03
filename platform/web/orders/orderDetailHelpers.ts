@@ -1,5 +1,5 @@
 import type { PaymentInvoiceData } from '@sdk/commerce/checkout'
-import type { NDKEvent } from '@platform/web/readContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import {
 	getOrderAmountSats,
 	getOrderItems as readOrderItems,
@@ -8,15 +8,15 @@ import {
 	getOrderShippingReference,
 } from '@sdk/commerce/orders'
 
-export const getOrderId = (orderEvent: NDKEvent): string => getOrderReference(orderEvent) || orderEvent.id
+export const getOrderId = (orderEvent: NostrEventLike): string => getOrderReference(orderEvent) || orderEvent.id
 
-export const getTotalAmount = (orderEvent: NDKEvent): number => parseInt(getOrderAmountSats(orderEvent) || '0')
+export const getTotalAmount = (orderEvent: NostrEventLike): number => parseInt(getOrderAmountSats(orderEvent) || '0')
 
-export const getOrderItems = (orderEvent: NDKEvent): Array<{ productRef: string; quantity: number }> => readOrderItems(orderEvent)
+export const getOrderItems = (orderEvent: NostrEventLike): Array<{ productRef: string; quantity: number }> => readOrderItems(orderEvent)
 
-export const getSellerPubkey = (orderEvent: NDKEvent): string => getOrderRecipientPubkey(orderEvent) || ''
+export const getSellerPubkey = (orderEvent: NostrEventLike): string => getOrderRecipientPubkey(orderEvent) || ''
 
-export const getShippingRef = (orderEvent: NDKEvent): string | undefined => getOrderShippingReference(orderEvent) ?? undefined
+export const getShippingRef = (orderEvent: NostrEventLike): string | undefined => getOrderShippingReference(orderEvent) ?? undefined
 
 export const makeInvoiceKey = (invoice: PaymentInvoiceData) => {
 	return `${invoice.orderId}:${invoice.recipientPubkey}:${invoice.amount}:${invoice.type}`

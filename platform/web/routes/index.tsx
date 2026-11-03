@@ -14,9 +14,6 @@ import { PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import { getProductCategories } from '@platform/web/products/productQuery'
 import { useQuery } from '@tanstack/react-query'
 import { productsQueryOptions } from '@platform/web/products/productQuery'
-// Facade fallback (batch F1): this route feeds NDKEvent-typed feature getters (productQuery), so the
-// event type comes from the platform read facade (zero type change); structural retirement moves with them.
-import type { NDKEvent } from '@platform/web/readContext'
 import { z } from 'zod'
 import { SelectableBadge } from '@ui/wrappers/selectable-badge'
 
@@ -40,7 +37,7 @@ function Index() {
 		// Retry every 3 seconds if we got empty results (NDK wasn't ready)
 		refetchInterval: (query) => (query.state.data?.length ? false : 3000),
 	})
-	const products = (productsQuery.data ?? []) as NDKEvent[]
+	const products = productsQuery.data ?? []
 
 	// Extract all unique tags from products
 	const allTags = useMemo(() => {

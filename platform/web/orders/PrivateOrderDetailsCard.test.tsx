@@ -1,6 +1,5 @@
 import type { PrivateOrderDeliveryDetails } from '@sdk/commerce/messaging/privateOrderMessage'
 import type { OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
-import type { NDKEvent } from '@platform/web/readContext'
 import { describe, expect, test } from 'bun:test'
 import { canViewPrivateOrderDetails, getPrivateOrderDetailsRows } from './PrivateOrderDetailsCard'
 
@@ -21,7 +20,7 @@ function orderWithSeller(sellerPubkey = SELLER_PUBKEY): OrderWithRelatedEvents {
 				['phone', '+15550000000'],
 				['name', 'Public Name'],
 			],
-		} as NDKEvent,
+		} as OrderWithRelatedEvents['order'],
 		paymentRequests: [],
 		statusUpdates: [],
 		shippingUpdates: [],

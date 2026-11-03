@@ -2,10 +2,10 @@ import { useAuth } from '@platform/web/auth/authStore'
 import { usePublishDeletionMutation, usePublishReactionMutation } from '@platform/web/messaging/reactionPublish'
 import { groupReactionsByContent, useEventReactions, type Reaction } from '@platform/web/messaging/reactionQuery'
 import { ReactionsListView } from '@ui/community/social-lists'
-import type { NDKEvent } from '@platform/web/readContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 interface ReactionsListHostProps {
-	event: NDKEvent
+	event: NostrEventLike
 	asChildren?: boolean
 }
 

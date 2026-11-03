@@ -20,7 +20,7 @@
 import { Store, useStore } from '@tanstack/react-store'
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { createAppRelayReadContext, isAppRelayReady, readAuthorizedLabelers, type NDKEvent } from '@platform/web/readContext'
+import { createAppRelayReadContext, isAppRelayReady, readAuthorizedLabelers } from '@platform/web/readContext'
 import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@sdk/config/testLabelFilters'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { testLabelState, type TestLabelInfo } from '@sdk/config/test-labels'
@@ -35,7 +35,6 @@ import {
 	resetAuthorizedLabelersCache,
 	resolveAuthorizedLabelers,
 	setCachedTestLabel,
-	type TestLabelReadDeps,
 } from '@sdk/config/testLabelRead'
 import { testLabelKeys } from '@sdk/core/query/queryKeyFactory'
 
@@ -107,7 +106,10 @@ export const getAuthorizedLabelerPubkeys = async (): Promise<string[] | null> =>
  * policy and its readiness stay on the host side, the framework-free read model imports no NDK, and
  * the binding adds no counted `platform -> src` edge.
  */
-const createTestLabelReadDeps = (timeoutMs = 8000): TestLabelReadDeps<NDKEvent> => ({
+// The deps' event type is inferred from `createAppRelayReadContext()`. It cannot be annotated as
+// `TestLabelReadDeps<NostrEventLike>`: the read context embeds its store port, which is invariant in
+// the event type, so the structural annotation would need a cast (d7s2/ndk-structural keeps no NDK name).
+const createTestLabelReadDeps = (timeoutMs = 8000) => ({
 	context: createAppRelayReadContext(timeoutMs),
 	readAuthorizedLabelers,
 	isReady: isAppRelayReady,

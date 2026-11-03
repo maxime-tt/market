@@ -165,7 +165,7 @@ mock.module('@platform/web/ndk/ndkStore', ndkStoreMock)
 // whose NDK-test rail cannot grow): the subject's sign path is
 // signNdkEventWithActiveCapability (A3.4), which signs through the SDK signer
 // capability and lands id/pubkey/sig in place — NDK's own sign() is never
-// called, so the real NDKEvent class serves as the plain data wrapper the
+// called, so the real NDK event class serves as the plain data wrapper the
 // subject constructs.
 
 // A3.4 mock repair (additive, registration-only): the order publish path reads
