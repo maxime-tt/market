@@ -171,6 +171,7 @@ export async function readProductCommentsWorkflow<E extends NostrEventLike>(
 	const { filters, replyFilters, fallbackFilters } = buildCommentFilters(target)
 
 	const [events, replies, fallbackEvents] = await Promise.all([
+		// fetch: product comments (list/live — stream is the default; bounded for now, rev 2.22)
 		context.fetch(filters),
 		context.fetch(replyFilters),
 		fallbackFilters ? context.fetch(fallbackFilters) : Promise.resolve([] as E[]),

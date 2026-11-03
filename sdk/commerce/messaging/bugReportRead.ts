@@ -74,6 +74,7 @@ export async function readBugReportsWorkflow<E extends NostrEventLike>(
 	limit = 20,
 	until?: number,
 ): Promise<BugReport<E>[]> {
+	// fetch: bug reports, paginated (list — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch([buildBugReportsFilter(limit, until)])
 	return parseBugReports(events)
 }

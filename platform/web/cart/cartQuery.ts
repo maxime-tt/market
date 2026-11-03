@@ -28,6 +28,7 @@ function createCartSnapshotPort(): CartSnapshotReadPort {
 	if (!getAppNdk()) throw new Error('NDK not initialized')
 	const context = createNdkReadContext()
 	return {
+		// fetch: cart snapshot by coordinate (single-entity — justified)
 		fetchEvents: (filter: CartSnapshotFilter) => context.fetch([filter]),
 	}
 }
