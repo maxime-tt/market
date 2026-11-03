@@ -60,15 +60,20 @@ function selectReplaceable(events: NostrEventLike[]): NostrEventLike | null {
 }
 
 /**
- * Fetches and validates one author's storefront page.
+ * Fetches and validates one addressable page: `(author, kind 30024, d)`.
+ *
+ * The `d` tag defaults to the profile storefront's own coordinate; the generic
+ * address route (HANDOVER §6.1) passes the path segment verbatim — there is no
+ * date parsing and no prefix handling anywhere in this read, because the
+ * segment IS the `d` tag.
  *
  * Returns the empty result for an author who has no page. Relay/transport
  * failures are allowed to reject so React Query reports `isError` and keeps any
  * previously cached page, rather than committing a null-shaped success that
  * would flash the profile fallback over a page that does exist.
  */
-export async function fetchStorefrontPage(pubkey: string): Promise<StorefrontPageResult> {
-	if (!isValidHexKey(pubkey)) return EMPTY_RESULT
+export async function fetchStorefrontPage(pubkey: string, dTag: string = STOREFRONT_PAGE_D_TAG): Promise<StorefrontPageResult> {
+	if (!isValidHexKey(pubkey) || dTag.length === 0) return EMPTY_RESULT
 
 	// Read-seam justification (ADR-READ-SEAM-STREAMS §8): a single mounted page is a
 	// single-entity/detail read — one addressable coordinate (author, kind, `d`) — so a
@@ -77,7 +82,7 @@ export async function fetchStorefrontPage(pubkey: string): Promise<StorefrontPag
 		{
 			kinds: [STOREFRONT_PAGE_KIND],
 			authors: [pubkey],
-			'#d': [STOREFRONT_PAGE_D_TAG],
+			'#d': [dTag],
 		},
 	])
 
@@ -86,9 +91,7 @@ export async function fetchStorefrontPage(pubkey: string): Promise<StorefrontPag
 	// rendering whatever came back.
 	const addressed = events.filter(
 		(event) =>
-			event.kind === STOREFRONT_PAGE_KIND &&
-			event.pubkey === pubkey &&
-			event.tags.some((tag) => tag[0] === 'd' && tag[1] === STOREFRONT_PAGE_D_TAG),
+			event.kind === STOREFRONT_PAGE_KIND && event.pubkey === pubkey && event.tags.some((tag) => tag[0] === 'd' && tag[1] === dTag),
 	)
 
 	const event = selectReplaceable(addressed)
@@ -111,6 +114,30 @@ export const storefrontPageQueryOptions = (pubkey: string) =>
 /** One author's storefront page. `pubkey` must be hex; resolve npub/NIP-05 first. */
 export function useStorefrontPage(pubkey: string | undefined) {
 	return useQuery(storefrontPageQueryOptions(pubkey ?? ''))
+}
+
+/**
+ * Query options for the generic address coordinate: `(author, kind 30024, d)`.
+ *
+ * This is the read behind the generic address route (HANDOVER §6.1): the `d`
+ * tag arrives verbatim from the path segment, so `/featured` and
+ * `/featured-2026-11-03` are plain coordinates here — no route-level date or
+ * prefix logic exists. The sdk key factory has no per-`d` member and this lane
+ * must not edit `sdk/`, so the address key is composed from `storefrontKeys.all`.
+ */
+export const storefrontAddressPageQueryOptions = (pubkey: string, dTag: string) =>
+	queryOptions({
+		queryKey: [...storefrontKeys.all, 'address', pubkey, dTag] as const,
+		queryFn: () => fetchStorefrontPage(pubkey, dTag),
+		enabled: isValidHexKey(pubkey) && dTag.length > 0,
+		// Same cadence as the profile page read: pages change rarely and sit on
+		// the critical path of the address route.
+		staleTime: 2 * 60 * 1000,
+	})
+
+/** One addressable page by `(author, d)`. Resolve the author (e.g. the app key) first. */
+export function useStorefrontAddressPage(pubkey: string | undefined, dTag: string) {
+	return useQuery(storefrontAddressPageQueryOptions(pubkey ?? '', dTag))
 }
 
 /**

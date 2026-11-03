@@ -55,10 +55,11 @@ let buildStorefrontPageEvent: (typeof import('./storefrontPublish'))['buildStore
 let publishStorefrontPage: (typeof import('./storefrontPublish'))['publishStorefrontPage']
 let fetchStorefrontPage: (typeof import('./storefrontQuery'))['fetchStorefrontPage']
 let shouldRenderStorefrontPage: (typeof import('./storefrontQuery'))['shouldRenderStorefrontPage']
+let storefrontAddressPageQueryOptions: (typeof import('./storefrontQuery'))['storefrontAddressPageQueryOptions']
 
 beforeAll(async () => {
 	;({ buildStorefrontPageEvent, publishStorefrontPage } = await import('./storefrontPublish'))
-	;({ fetchStorefrontPage, shouldRenderStorefrontPage } = await import('./storefrontQuery'))
+	;({ fetchStorefrontPage, shouldRenderStorefrontPage, storefrontAddressPageQueryOptions } = await import('./storefrontQuery'))
 })
 
 function pageEvent(overrides: Partial<NostrEventLike> & { content?: string } = {}): NostrEventLike {
@@ -191,6 +192,64 @@ describe('fetchStorefrontPage', () => {
 		expect(result.event).not.toBeNull()
 		expect(result.page).toBeNull()
 		expect(result.error).toBeTruthy()
+	})
+})
+
+describe('fetchStorefrontPage — generic address coordinate (HANDOVER §6.1)', () => {
+	test('the requested d tag is the filter, verbatim', async () => {
+		fetchResult = []
+		await fetchStorefrontPage(AUTHOR, 'featured-2026-11-03')
+		expect(lastFilters).toEqual([
+			{
+				kinds: [STOREFRONT_PAGE_KIND],
+				authors: [AUTHOR],
+				'#d': ['featured-2026-11-03'],
+			},
+		])
+	})
+
+	test('a plain segment and a dated segment resolve through the identical path', async () => {
+		// The no-special-casing proof: whatever the segment looks like, the only
+		// thing that changes is the d tag inside the same filter shape.
+		fetchResult = [pageEvent({ id: 'plain', tags: [['d', 'featured']] })]
+		expect((await fetchStorefrontPage(AUTHOR, 'featured')).event?.id).toBe('plain')
+
+		fetchResult = [pageEvent({ id: 'dated', tags: [['d', 'featured-2026-11-03']] })]
+		expect((await fetchStorefrontPage(AUTHOR, 'featured-2026-11-03')).event?.id).toBe('dated')
+	})
+
+	test('an event at a different d tag never wins the address', async () => {
+		fetchResult = [pageEvent({ tags: [['d', 'some-other-page']], created_at: 9999 })]
+		const result = await fetchStorefrontPage(AUTHOR, 'featured')
+		expect(result.event).toBeNull()
+		expect(result.page).toBeNull()
+	})
+
+	test('an absent coordinate is the empty result, not an error', async () => {
+		fetchResult = []
+		const result = await fetchStorefrontPage(AUTHOR, 'featured')
+		expect(result.event).toBeNull()
+		expect(result.error).toBeNull()
+	})
+})
+
+describe('storefrontAddressPageQueryOptions', () => {
+	test('composes a distinct cache key per (author, d) coordinate', () => {
+		// Spread: `queryOptions` brands the key, so the assertion compares the
+		// plain tuple it denotes.
+		expect([...storefrontAddressPageQueryOptions(AUTHOR, 'featured').queryKey]).toEqual(['storefront', 'address', AUTHOR, 'featured'])
+		expect([...storefrontAddressPageQueryOptions(AUTHOR, 'featured-2026-11-03').queryKey]).toEqual([
+			'storefront',
+			'address',
+			AUTHOR,
+			'featured-2026-11-03',
+		])
+	})
+
+	test('gates on a valid author and a non-empty d tag', () => {
+		expect(storefrontAddressPageQueryOptions(AUTHOR, 'featured').enabled).toBe(true)
+		expect(storefrontAddressPageQueryOptions('not-a-pubkey', 'featured').enabled).toBe(false)
+		expect(storefrontAddressPageQueryOptions(AUTHOR, '').enabled).toBe(false)
 	})
 })
 
