@@ -25,14 +25,15 @@ import {
 	type EditorSettings as SdkEditorSettings,
 } from '@sdk/commerce/curation'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
-import { createAppRelayReadContext, getAppRelayUrl, type NDKEvent } from '@platform/web/readContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { createAppRelayReadContext, getAppRelayUrl } from '@platform/web/readContext'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
 
 export { getFormattedAdmins, getFormattedEditors, getUserRoleForPubkey, isAdmin, isEditor, isOwner }
 
-export type AdminSettings = SdkAdminSettings<NDKEvent>
+export type AdminSettings = SdkAdminSettings<NostrEventLike>
 
-export type EditorSettings = SdkEditorSettings<NDKEvent>
+export type EditorSettings = SdkEditorSettings<NostrEventLike>
 
 /**
  * Fetches admin settings (kind 30000) for the app
@@ -41,7 +42,7 @@ export const fetchAdminSettings = async (appPubkey?: string): Promise<AdminSetti
 	if (!getAppNdk()) throw new Error('NDK not initialized')
 
 	// If no app pubkey provided, the read throws 'App pubkey is required' (the pre-drain behaviour).
-	return await readAdminSettingsWorkflow<NDKEvent>(createAppRelayReadContext(), appPubkey)
+	return await readAdminSettingsWorkflow(createAppRelayReadContext(), appPubkey)
 }
 
 /**
@@ -127,7 +128,7 @@ export const useAmIAdmin = (appPubkey?: string) => {
 export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSettings | null> => {
 	if (!getAppNdk()) throw new Error('NDK not initialized')
 
-	return await readEditorSettingsWorkflow<NDKEvent>(createAppRelayReadContext(), appPubkey)
+	return await readEditorSettingsWorkflow(createAppRelayReadContext(), appPubkey)
 }
 
 /**

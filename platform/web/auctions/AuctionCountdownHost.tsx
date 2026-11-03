@@ -7,7 +7,7 @@
  * shim of it), the auction getters from `@platform/web/auctions/auctionsQuery` (which
  * re-exports `@sdk/commerce/auctions/auctionRead`), and the event prop is typed as
  * `NostrEventLike` from `@sdk/core/nostr/eventLike` — a structural type every call site
- * satisfies, since each one passes an `NDKEvent`. No runtime behaviour changes.
+ * satisfies, since each one passes a fully-formed relay event. No runtime behaviour changes.
  *
  * The legacy `src/components/AuctionCountdown.tsx` retired in batch 2 lane D; its remaining
  * consumers (`src/components/AuctionWonModal.tsx` and `src/components/dashboard/AuctionListItemHost.tsx`)
