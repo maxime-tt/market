@@ -89,7 +89,7 @@ const BOUNDARY_LEAK_ALLOWLIST = new Set([
  * batch that converts them (config 42→37, routes →24, collections →23, products →20,
  * orders →14, messaging →4, tail →0).
  */
-const BASELINE = 21
+const BASELINE = 18
 
 async function listSourceFiles(directory: string): Promise<string[]> {
 	const entries = await readdir(directory, { withFileTypes: true })

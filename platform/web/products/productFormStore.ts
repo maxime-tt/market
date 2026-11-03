@@ -243,7 +243,7 @@ export const productFormActions = {
 			const dimensionsTag = getProductDimensions(event)
 			const shippingTags = getProductShippingOptions(event)
 
-			// First category from NDKEvent is considered "Main" category.
+			// The first category on the event is treated as the "Main" category.
 			// The next 3 are the "sub-categories".
 			const mainCategoryFromTags = categories.at(0)?.at(1)
 			const subCategoriesFromTags = categories.slice(1, 4).map((tag, index) => ({

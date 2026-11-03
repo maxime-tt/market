@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { testLabelActions } from '@platform/web/config/testLabelsStore'
-import type { NDKEvent, NDKFilter } from '@platform/web/ndk/ndkEvents'
+import type { EventFilter, NostrEventLike } from '@sdk/core'
 import { invalidateTestLabelCache, setCachedTestLabel } from '@platform/web/config/testLabelsBinding'
 import { fetchProductsBySearch, fetchProductsBySearchWithSellers, productsSearchQueryOptions } from '@platform/web/products/productQuery'
 
@@ -42,7 +42,7 @@ const SELLER_REAL_COORD = `30402:${SELLER_PUBKEY}:${SELLER_REAL_D}`
 
 const SEARCH_QUERY = 'alice'
 
-const makeProduct = (params: { id: string; pubkey: string; dTag: string; title?: string }): NDKEvent => {
+const makeProduct = (params: { id: string; pubkey: string; dTag: string; title?: string }): NostrEventLike => {
 	const tags: string[][] = [
 		['d', params.dTag],
 		['title', params.title ?? params.dTag],
@@ -57,10 +57,10 @@ const makeProduct = (params: { id: string; pubkey: string; dTag: string; title?:
 		content: '',
 		tags,
 		tagValue: (name: string) => tags.find((tag) => tag[0] === name)?.[1],
-	} as unknown as NDKEvent
+	} as unknown as NostrEventLike
 }
 
-const makeProfile = (pubkey: string): NDKEvent =>
+const makeProfile = (pubkey: string): NostrEventLike =>
 	({
 		id: 'profile-' + pubkey.slice(0, 8),
 		kind: 0,
@@ -69,7 +69,7 @@ const makeProfile = (pubkey: string): NDKEvent =>
 		content: '',
 		tags: [],
 		tagValue: () => undefined,
-	}) as unknown as NDKEvent
+	}) as unknown as NostrEventLike
 
 const DIRECT_HIT = makeProduct({ id: '1'.repeat(64), pubkey: OTHER_SELLER_PUBKEY, dTag: DIRECT_HIT_D })
 const SELLER_TEST_ITEM = makeProduct({ id: '2'.repeat(64), pubkey: SELLER_PUBKEY, dTag: SELLER_TEST_D })
@@ -80,9 +80,9 @@ const ALL_COORDINATES = [DIRECT_HIT_COORD, SELLER_TEST_COORD, SELLER_REAL_COORD]
 const UNGATED_IDS = [DIRECT_HIT.id, SELLER_TEST_ITEM.id, SELLER_REAL_ITEM.id]
 
 /** NIP-50 product hits plus a seller whose profile name matches the query. */
-const makeStubNdk = (directHits: NDKEvent[] = [DIRECT_HIT]) => ({
+const makeStubNdk = (directHits: NostrEventLike[] = [DIRECT_HIT]) => ({
 	addExplicitRelay: () => {},
-	fetchEvents: async (filter: NDKFilter) => {
+	fetchEvents: async (filter: EventFilter) => {
 		if (filter.kinds?.includes(0)) return [makeProfile(SELLER_PUBKEY)]
 		if (filter.kinds?.includes(30402)) return directHits
 		return []
@@ -96,11 +96,11 @@ const realFetchEventsWithTimeout = ndkActions.fetchEventsWithTimeout
 const realFetch = globalThis.fetch
 
 /** Catalogue returned for the by-author read the seller expansion performs. */
-let sellerCatalogue: NDKEvent[] = []
-let byAuthorFilters: NDKFilter[] = []
-let directSearchHits: NDKEvent[] = [DIRECT_HIT]
+let sellerCatalogue: NostrEventLike[] = []
+let byAuthorFilters: EventFilter[] = []
+let directSearchHits: NostrEventLike[] = [DIRECT_HIT]
 
-const stubNdk = (directHits?: NDKEvent[]) => {
+const stubNdk = (directHits?: NostrEventLike[]) => {
 	directSearchHits = directHits ?? [DIRECT_HIT]
 	;(ndkActions as { getNDK: () => unknown }).getNDK = () => makeStubNdk(directHits)
 }
@@ -124,7 +124,7 @@ beforeEach(() => {
 	globalThis.fetch = (() => Promise.reject(new Error('ADR-0005: unit tests make no network calls'))) as unknown as typeof fetch
 
 	stubNdk()
-	;(ndkActions as { fetchEventsWithTimeout: unknown }).fetchEventsWithTimeout = (async (filter: NDKFilter) => {
+	;(ndkActions as { fetchEventsWithTimeout: unknown }).fetchEventsWithTimeout = (async (filter: EventFilter) => {
 		// Only the by-author product read is stubbed; label/deletion reads yield nothing.
 		if (filter.kinds?.includes(30402) && filter.authors?.length) {
 			byAuthorFilters.push(filter)
@@ -153,7 +153,7 @@ afterEach(() => {
 	invalidateTestLabelCache()
 })
 
-const ids = (events: NDKEvent[]) => events.map((event) => event.id)
+const ids = (events: NostrEventLike[]) => events.map((event) => event.id)
 
 describe('fetchProductsBySearchWithSellers — the seller-name half is gated (ADR-0009)', () => {
 	test('excludes a test-labeled product reached through the seller match', async () => {

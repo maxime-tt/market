@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useStreamingProducts } from './useStreamingProducts'
 import { getProductTitle } from '@platform/web/products/productQuery'
-import type { NDKEvent } from '@platform/web/readContext'
+
 import type { SortOption } from '@ui/products/product-filters'
 
 interface UseSimpleInfiniteScrollOptions {
@@ -16,8 +16,11 @@ interface UseSimpleInfiniteScrollOptions {
 	country?: string
 }
 
+/** The streamed product read model's own event type, derived so this file names no NDK type. */
+type StreamedProduct = ReturnType<typeof useStreamingProducts>['products'][number]
+
 interface UseSimpleInfiniteScrollReturn {
-	products: NDKEvent[]
+	products: StreamedProduct[]
 	hasMore: boolean
 	isLoading: boolean
 	isError: boolean

@@ -571,7 +571,7 @@ export const getProductContentWarning = (event: NDKEvent | null): z.infer<typeof
  * @param event The product event or null
  * @returns true if the product is marked as NSFW
  */
-export const isNSFWProduct = (event: NDKEvent | null): boolean => {
+export const isNSFWProduct = (event: NostrEventLike | null): boolean => {
 	return isNSFWProductFromSdk(event)
 }
 
@@ -581,7 +581,7 @@ export const isNSFWProduct = (event: NDKEvent | null): boolean => {
  * @param showNSFW Whether to show NSFW products (if true, no filtering is done)
  * @returns Filtered array of product events
  */
-export const filterNSFWProducts = (events: NDKEvent[], showNSFW: boolean): NDKEvent[] => {
+export const filterNSFWProducts = <E extends NostrEventLike>(events: E[], showNSFW: boolean): E[] => {
 	if (showNSFW) return events
 	return events.filter((event) => !isNSFWProduct(event))
 }
