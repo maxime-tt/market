@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
-import type { NDKEvent } from '@platform/web/readContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import {
 	getProductTitle,
 	getProductDescription,
@@ -29,7 +29,7 @@ interface ProductStockUpdate {
 	quantityOrdered: number
 	currentStock: number
 	newStock: number
-	productEvent: NDKEvent | null
+	productEvent: NostrEventLike | null
 }
 
 interface StockUpdateDialogProps {
@@ -69,7 +69,7 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 						continue
 					}
 
-					let productEvent: NDKEvent | null = null
+					let productEvent: NostrEventLike | null = null
 
 					// First, try to fetch by d-tag (new format)
 					productEvent = await fetchProductByATag(pubkey, identifier)

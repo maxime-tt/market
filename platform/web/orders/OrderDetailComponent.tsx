@@ -24,7 +24,6 @@ import {
 	shippingOptionQueryOptions,
 } from '@platform/web/shipping/shippingQuery'
 import { fetchV4VShares } from '@platform/web/v4v/v4vQuery'
-import type { NDKEvent } from '@platform/web/readContext'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { MessageSquare, Package, Receipt, Truck, CreditCard } from 'lucide-react'
@@ -211,7 +210,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const pickupAddress = shippingOption && isPickupService ? getShippingPickupAddressString(shippingOption) : null
 	const shouldShowPrivateDetailsUnavailable = isOrderSeller && Boolean(shippingOption) && !isPickupService && !order.privateOrderDetails
 
-	const products = productQueries.map((query) => query.data).filter(Boolean) as NDKEvent[]
+	const products = productQueries.flatMap((query) => (query.data ? [query.data] : []))
 
 	const openPaymentDialog = (invoiceList: PaymentInvoiceData[]) => {
 		if (!invoiceList.length) return

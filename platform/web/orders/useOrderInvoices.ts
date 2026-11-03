@@ -1,7 +1,6 @@
 import { getPersistedInvoicesForOrder, persistInvoicesLocally, updatePersistedInvoiceLocally } from '@platform/web/payments/invoiceStorage'
 import type { PaymentInvoiceData } from '@sdk/commerce/checkout'
 import type { V4VDTO } from '@platform/web/cart/cartStore'
-import type { NDKEvent } from '@platform/web/readContext'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useGenerateInvoiceMutation } from '@platform/web/payments/paymentQuery'
