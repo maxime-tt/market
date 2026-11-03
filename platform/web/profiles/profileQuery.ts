@@ -29,6 +29,10 @@ import {
 import { profileKeys } from '@sdk/core/query/queryKeyFactory'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
 
+// Facade fallback (batch F2): the dashboard profile route's form state is typed by this bridge's own
+// `NDKUserProfile`; re-exported here so route consumers stop importing the package directly.
+export type { NDKUserProfile }
+
 export { normalizeOptionalPubkey, normalizeOptionalString }
 export type { ZapCapabilityInfo }
 export type { ZapMethod } from '@sdk/core/profile'

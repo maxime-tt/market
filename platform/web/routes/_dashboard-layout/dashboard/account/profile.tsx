@@ -1,7 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
-import { type NDKUserProfile } from '@nostr-dev-kit/ndk'
+// Facade fallback (batch F2): the profile form state type is owned by the declared profileRead bridge
+// (profileQuery), so the route stops importing the package directly; zero type change.
+import type { NDKUserProfile } from '@platform/web/profiles/profileQuery'
 import { ImageUploader } from '@platform/web/media/ImageUploader'
 import { Button } from '@ui/wrappers/button'
 import { LoadingState } from '@ui/shared/loading-state'

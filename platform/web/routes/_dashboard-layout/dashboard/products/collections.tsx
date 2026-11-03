@@ -9,7 +9,9 @@ import { collectionFormActions } from '@platform/web/collections/collectionFormS
 
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@platform/web/collections/collectionQuery'
 import { useDeleteCollectionMutation } from '@platform/web/collections/collectionPublish'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+// Facade fallback (batch F2): this route feeds NDKEvent-typed feature hosts, so the event type comes
+// from the platform read facade (zero type change); structural retirement moves with those hosts.
+import type { NDKEvent } from '@platform/web/readContext'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState, useMemo } from 'react'

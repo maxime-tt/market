@@ -8,7 +8,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
 import { nip15ProductsQueryOptions, migratedEventsQueryOptions } from '@platform/web/migration/migrationQuery'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+// Facade fallback (batch F2): this route feeds NDKEvent-typed feature hosts (MigrationForm), so the
+// event type comes from the platform read facade (zero type change); structural retirement moves with them.
+import type { NDKEvent } from '@platform/web/readContext'
 import { MigrationForm } from '@platform/web/migration/MigrationForm'
 import { ArrowRightLeft } from 'lucide-react'
 
