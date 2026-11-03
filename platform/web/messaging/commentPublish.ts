@@ -4,7 +4,8 @@ import { toast } from 'sonner'
 import { getEventAddress } from '@sdk/core/nostr/eventLike'
 import { commentKeys } from '@sdk/core/query/queryKeyFactory'
 import { publishCommentWorkflow, type CommentRecord } from '@sdk/commerce/messaging'
-import { getAppNdk, publishAppNostrEvent, type NDKEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import type { NostrEvent } from 'nostr-tools'
@@ -19,11 +20,11 @@ import type { NostrEvent } from 'nostr-tools'
  * existing call sites; deleted in E1.
  */
 
-type Comment = CommentRecord<NDKEvent>
+type Comment = CommentRecord
 
 interface PublishCommentParams {
 	content: string
-	targetEvent: NDKEvent // The event being commented on (Product, Comment, etc.)
+	targetEvent: NostrEventLike // The event being commented on (Product, Comment, etc.)
 	parentComment?: Comment // For replies to other comments
 }
 

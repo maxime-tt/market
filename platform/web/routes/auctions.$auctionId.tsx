@@ -476,7 +476,7 @@ function AuctionDetailRoute() {
 		if (validatedSet) {
 			const mine = validatedSet.validBids.filter((b) => b.bidderPubkey === activeUserPubkey)
 			if (!mine.length) return null
-			// Map back to the raw NDKEvent for path-release / bidder-record lookups
+			// Map back to the raw relay bid event for path-release / bidder-record lookups
 			const topParsedBid = mine.reduce((best, b) => (b.amount > best.amount ? b : best), mine[0])
 			return bids.find((b) => b.id === topParsedBid.id) ?? null
 		}
@@ -497,7 +497,7 @@ function AuctionDetailRoute() {
 
 	const topBidOverall = useMemo(() => {
 		if (validatedSet && validatedSet.canonicalWinner) {
-			// Map canonicalWinner (ParsedBidEvent) back to raw NDKEvent for rendering
+			// Map canonicalWinner (ParsedBidEvent) back to the raw relay event for rendering
 			const rawBid = bids.find((b) => b.id === validatedSet.canonicalWinner!.id)
 			if (rawBid) return rawBid
 		}

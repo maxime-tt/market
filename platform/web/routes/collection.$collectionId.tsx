@@ -24,9 +24,6 @@ import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useFeaturedCollections } from '@platform/web/featured/featuredQueries'
 import { useProductsByCollection } from '@platform/web/products/productQuery'
 import { profileByIdentifierQueryOptions, useProfileName } from '@platform/web/profiles/profileQuery'
-// Facade fallback (batch F1): this route feeds NDKEvent-typed feature getters (collectionQuery,
-// ProductCardHost), so the event type comes from the platform read facade (zero type change).
-import type { NDKEvent } from '@platform/web/readContext'
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -257,7 +254,7 @@ function RouteComponent() {
 						// 	</div>
 						// }
 						>
-							{products?.map((product: NDKEvent) => (
+							{products?.map((product) => (
 								<ProductCard key={product.id} product={product} />
 							))}
 						</ItemGrid>

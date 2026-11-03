@@ -39,7 +39,7 @@ import {
 } from '@platform/web/auctions/auctionsQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import type { NDKEvent } from '@platform/web/ndk/ndkEvents'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { useQueries } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -51,8 +51,8 @@ type BidGroup = {
 	auctionEventId: string
 	auctionCoordinates?: string
 	sellerPubkey: string
-	latestBid: NDKEvent
-	bids: NDKEvent[]
+	latestBid: NostrEventLike
+	bids: NostrEventLike[]
 	pendingTokens: PendingToken[]
 }
 
@@ -73,7 +73,7 @@ const getPendingAuctionBidTokens = (tokens: PendingToken[]): PendingToken[] =>
  */
 const getPendingTokenReclaimReadyAt = (token: PendingToken): number => getAuctionReclaimReadyAt(token.token, token.context?.locktime)
 
-const getLatestBidForGroup = (bids: NDKEvent[]): NDKEvent =>
+const getLatestBidForGroup = (bids: NostrEventLike[]): NostrEventLike =>
 	[...bids].sort((a, b) => {
 		const amountDelta = getBidAmount(b) - getBidAmount(a)
 		if (amountDelta !== 0) return amountDelta
@@ -82,7 +82,7 @@ const getLatestBidForGroup = (bids: NDKEvent[]): NDKEvent =>
 		return b.id.localeCompare(a.id)
 	})[0]
 
-const getBidGroupState = (group: BidGroup, settlementEvent: NDKEvent | null, userPubkey: string, now: number) =>
+const getBidGroupState = (group: BidGroup, settlementEvent: NostrEventLike | null, userPubkey: string, now: number) =>
 	resolveBidGroupStatus<PendingToken>({
 		latestBidId: group.latestBid.id,
 		latestBidLocktime: getBidLocktime(group.latestBid),
@@ -171,7 +171,7 @@ function BidsOverviewComponent() {
 
 		for (const group of Array.from(groups.values())) {
 			group.latestBid = getLatestBidForGroup(group.bids)
-			const groupBidIds = new Set(group.bids.map((bid: NDKEvent) => bid.id))
+			const groupBidIds = new Set(group.bids.map((bid: NostrEventLike) => bid.id))
 			group.pendingTokens = auctionBidTokens
 				.filter((token) => {
 					const context = token.context

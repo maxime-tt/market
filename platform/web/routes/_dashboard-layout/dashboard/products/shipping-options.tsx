@@ -32,9 +32,7 @@ import {
 	useShippingOptionsByPubkey,
 } from '@platform/web/shipping/shippingQuery'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
-// Facade fallback (batch F2): this route feeds NDKEvent-typed feature hosts, so the event type comes
-// from the platform read facade (zero type change); structural retirement moves with those hosts.
-import type { NDKEvent } from '@platform/web/readContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { EntityListItem } from '@ui/shared/entity-list-item'
@@ -67,7 +65,7 @@ const DURATION_UNITS = [
 ] as const
 
 interface ShippingOptionFormProps {
-	shippingOption: NDKEvent | null
+	shippingOption: NostrEventLike | null
 	isOpen: boolean
 	onOpenChange: (open: boolean) => void
 	onSuccess?: () => void

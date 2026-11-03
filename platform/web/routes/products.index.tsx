@@ -7,9 +7,6 @@ import { PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import { authStore } from '@platform/web/auth/authStore'
 import { productFormActions } from '@platform/web/products/productFormStore'
 import { uiActions } from '@platform/web/app/uiStore'
-// Facade fallback (batch F1): this route feeds NDKEvent-typed feature getters (productQuery), so the
-// event type comes from the platform read facade (zero type change); structural retirement moves with them.
-import type { NDKEvent } from '@platform/web/readContext'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -43,8 +40,7 @@ function useFeaturedProductEvents(featuredProducts: string[] | undefined) {
 
 	// Filter out loading and null products, return only loaded products
 	return results
-		.filter((result) => !result.isLoading && result.data)
-		.map((result) => result.data as NDKEvent)
+		.flatMap((result) => (!result.isLoading && result.data ? [result.data] : []))
 		.filter((product) => {
 			// Only include products with images
 			return product.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
@@ -71,7 +67,7 @@ function ProductsRoute() {
 		// Retry every 3 seconds if we got empty results (NDK wasn't ready)
 		refetchInterval: (query) => (query.state.data?.length ? false : 3000),
 	})
-	const products = (productsQuery.data ?? []) as NDKEvent[]
+	const products = productsQuery.data ?? []
 
 	const { isAuthenticated } = useStore(authStore)
 
@@ -88,7 +84,7 @@ function ProductsRoute() {
 			: isFeaturedLoading
 				? [] // Don't flash generic products while featured are still loading
 				: products
-						.filter((product: NDKEvent) => {
+						.filter((product) => {
 							return product.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
 						})
 						.slice(0, 4)

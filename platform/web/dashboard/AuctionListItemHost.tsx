@@ -6,7 +6,7 @@ import { getOrderReference } from '@sdk/commerce/orders'
 import { AvatarHost as AvatarUser } from '@platform/web/profiles/userCardHosts'
 import { AuctionCountdown } from '@platform/web/auctions/AuctionCountdownHost'
 import { TestLabelButton } from '@platform/web/curation/TestLabelButton'
-import type { NDKEvent } from '@platform/web/ndk/ndkEvents'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { appNotificationsBinding, notificationScopes, readMarkFamilies, readMarks, scopedLastSeenOf } from '@platform/web/notifications'
 import {
 	getAuctionBiddingCutoffAt,
@@ -54,10 +54,10 @@ function formatAuctionStatus(startAt: number, biddingCutoffAt: number, settlemen
 }
 
 export interface AuctionListItemHostProps {
-	auction: NDKEvent
-	bids: NDKEvent[]
-	latestSettlement: NDKEvent | null
-	pathReleases: NDKEvent[]
+	auction: NostrEventLike
+	bids: NostrEventLike[]
+	latestSettlement: NostrEventLike | null
+	pathReleases: NostrEventLike[]
 	/** Resolved by the list assembler (`getAuctionCoordinates`). */
 	auctionCoordinates: string
 	onPublishSettlement: () => void

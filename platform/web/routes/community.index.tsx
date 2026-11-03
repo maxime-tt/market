@@ -25,9 +25,6 @@ import { blacklistStore } from '@platform/web/config/blacklistStore'
 import { filterBlacklistedPubkeys } from '@sdk/config/blacklist'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useFeaturedCollections } from '@platform/web/featured/featuredQueries'
-// Facade fallback (batch F1): this route feeds NDKEvent-typed feature getters (collectionQuery), so the
-// event type comes from the platform read facade (zero type change); structural retirement moves with them.
-import type { NDKEvent } from '@platform/web/readContext'
 
 // Hook to fetch featured collection events using useQueries
 function useFeaturedCollectionEvents(featuredCollections: string[] | undefined) {
@@ -43,8 +40,7 @@ function useFeaturedCollectionEvents(featuredCollections: string[] | undefined) 
 
 	// Filter out loading and null collections, return only loaded collections
 	return results
-		.filter((result) => !result.isLoading && result.data)
-		.map((result) => result.data as NDKEvent)
+		.flatMap((result) => (!result.isLoading && result.data ? [result.data] : []))
 		.filter((collection) => {
 			// Only include collections with images
 			return collection.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
@@ -92,7 +88,7 @@ function CommunityRoute() {
 			: isFeaturedLoading
 				? [] // Don't flash generic collections while featured are still loading
 				: collections
-						.filter((collection: NDKEvent) => {
+						.filter((collection) => {
 							return collection.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
 						})
 						.slice(0, 4)

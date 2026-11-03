@@ -20,6 +20,7 @@ import { discoverNip50Relays } from '@sdk/core/relays/nip50'
 import { filterBlacklistedEvents, filterBlacklistedPubkeys } from '@sdk/config/blacklist'
 import { excludeTestLabeledEvents } from '@platform/web/config/testLabelsBinding'
 import { naddrFromAddress } from '@sdk/core/nostr/naddr'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import {
 	type NDKEvent,
@@ -378,7 +379,7 @@ export const productsByCollectionQueryOptions = (collectionEvent: NDKEvent | nul
  * @param event The product event or null
  * @returns The product ID string
  */
-export const getProductId = (event: NDKEvent | null): string => {
+export const getProductId = (event: NostrEventLike | null): string => {
 	return getProductIdFromSdk(event)
 }
 
@@ -396,7 +397,7 @@ export const getProductCoordinates = (event: NDKEvent): string => {
  * @param event The product event or null
  * @returns The product title string
  */
-export const getProductTitle = (event: NDKEvent | null): z.infer<typeof ProductTitleTagSchema>[1] => getProductTitleFromSdk(event)
+export const getProductTitle = (event: NostrEventLike | null): z.infer<typeof ProductTitleTagSchema>[1] => getProductTitleFromSdk(event)
 
 /**
  * Gets the product description from a product event

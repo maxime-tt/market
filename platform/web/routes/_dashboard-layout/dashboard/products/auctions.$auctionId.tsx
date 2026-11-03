@@ -361,7 +361,7 @@ function DashboardAuctionDetailRoute() {
 
 	const topBid = useMemo(() => {
 		if (validatedBidSet && validatedBidSet.canonicalWinner) {
-			// Map canonicalWinner back to raw NDKEvent for downstream render + path-release gating
+			// Map canonicalWinner back to the raw relay event for downstream render + path-release gating
 			const rawBid = bids.find((b) => b.id === validatedBidSet.canonicalWinner!.id)
 			if (rawBid) return rawBid
 		}
@@ -456,7 +456,7 @@ function DashboardAuctionDetailRoute() {
 		if (validatedBidSet) {
 			const mine = validatedBidSet.validBids.filter((b) => b.bidderPubkey === user.pubkey)
 			if (!mine.length) return null
-			// Map back to raw NDKEvent for path-release / bidder-record lookups
+			// Map back to the raw relay event for path-release / bidder-record lookups
 			const topParsed = mine.reduce((best, b) => (b.amount > best.amount ? b : best), mine[0])
 			return bids.find((b) => b.id === topParsed.id) ?? null
 		}

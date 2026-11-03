@@ -9,10 +9,17 @@ import { authStore } from '@platform/web/auth/authStore'
 import { readMarks } from '@platform/web/notifications'
 import { productFormActions } from '@platform/web/products/productFormStore'
 import { useDeleteProductMutation } from '@platform/web/products/productPublish'
-import { getProductId, getProductTitle, productQueryOptions, productsByPubkeyQueryOptions } from '@platform/web/products/productQuery'
-// Facade fallback (batch F2): this route feeds NDKEvent-typed feature hosts, so the event type comes
-// from the platform read facade (zero type change); structural retirement moves with those hosts.
-import type { NDKEvent } from '@platform/web/readContext'
+import {
+	fetchProductSmart,
+	getProductId,
+	getProductTitle,
+	productQueryOptions,
+	productsByPubkeyQueryOptions,
+} from '@platform/web/products/productQuery'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+
+/** The product read model's own event type, derived so no NDK type name is written here. */
+type DashboardProduct = NonNullable<Awaited<ReturnType<typeof fetchProductSmart>>>
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -31,7 +38,7 @@ function ProductListItem({
 	onDelete,
 	isDeleting,
 }: {
-	product: NDKEvent
+	product: NostrEventLike
 	isExpanded: boolean
 	onToggleExpanded: () => void
 	onEdit: () => void
@@ -85,7 +92,13 @@ function ProductListItem({
 				renderLink={(children) => (
 					<Link
 						to={`/products/${product.id}`}
-						onClick={() => queryClient.setQueryData(productQueryOptions(product.id).queryKey, product)}
+						onClick={() =>
+							queryClient.setQueryData(
+								productQueryOptions(product.id).queryKey,
+								// The detail cache slot is typed by the read model; this is the same event the list returned.
+								product as DashboardProduct,
+							)
+						}
 						className="block cursor-pointer border-t bg-gray-50 p-4 transition-colors hover:bg-gray-100"
 					>
 						{children}
@@ -107,8 +120,8 @@ function ProductsOverviewComponent() {
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
 	const [orderBy, setOrderBy] = useState<string>('newest')
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
-	const [productToShare, setProductToShare] = useState<NDKEvent | null>(null)
-	const [pendingDeleteProduct, setPendingDeleteProduct] = useState<NDKEvent | null>(null)
+	const [productToShare, setProductToShare] = useState<NostrEventLike | null>(null)
+	const [pendingDeleteProduct, setPendingDeleteProduct] = useState<NostrEventLike | null>(null)
 	useDashboardTitle('Products')
 
 	useEffect(() => {
@@ -193,12 +206,12 @@ function ProductsOverviewComponent() {
 		setExpandedProduct(expandedProduct === productId ? null : productId)
 	}
 
-	const handleShareProductClick = (product: NDKEvent) => {
+	const handleShareProductClick = (product: NostrEventLike) => {
 		setProductToShare(product)
 		setShareDialogOpen(true)
 	}
 
-	const handleDeleteProductClick = (product: NDKEvent) => {
+	const handleDeleteProductClick = (product: NostrEventLike) => {
 		setPendingDeleteProduct(product)
 	}
 

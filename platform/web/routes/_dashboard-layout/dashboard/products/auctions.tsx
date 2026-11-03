@@ -16,7 +16,7 @@ import {
 	useAuctionPathReleasesForList,
 	useAuctionSettlementsForList,
 } from '@platform/web/auctions/auctionsQuery'
-import type { NDKEvent } from '@platform/web/ndk/ndkEvents'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import { parseSettlementEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
@@ -32,19 +32,19 @@ import {
 	type AuctionSortOption,
 } from '@platform/web/auctions/auctionFiltering'
 
-const getAuctionCoordinates = (auction: NDKEvent): string => {
+const getAuctionCoordinates = (auction: NostrEventLike): string => {
 	const auctionDTag = getAuctionId(auction)
 	return auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 }
 
-const compareEventRecencyDescending = (left: NDKEvent, right: NDKEvent): number => {
+const compareEventRecencyDescending = (left: NostrEventLike, right: NostrEventLike): number => {
 	const createdAtDelta = (right.created_at || 0) - (left.created_at || 0)
 	if (createdAtDelta !== 0) return createdAtDelta
 	return right.id.localeCompare(left.id)
 }
 
-const dedupeEventsById = (events: NDKEvent[]): NDKEvent[] => {
-	const byId = new Map<string, NDKEvent>()
+const dedupeEventsById = (events: NostrEventLike[]): NostrEventLike[] => {
+	const byId = new Map<string, NostrEventLike>()
 	for (const event of events) {
 		if (!event?.id) continue
 		byId.set(event.id, event)
@@ -53,8 +53,8 @@ const dedupeEventsById = (events: NDKEvent[]): NDKEvent[] => {
 }
 
 const isCanonicalSellerSettlementForAuction = (
-	event: NDKEvent,
-	auction: NDKEvent,
+	event: NostrEventLike,
+	auction: NostrEventLike,
 	auctionRootEventId: string,
 	auctionCoordinates: string,
 ): boolean => {
@@ -70,11 +70,11 @@ const isCanonicalSellerSettlementForAuction = (
 }
 
 const resolveLatestCanonicalSettlementForAuction = (
-	auction: NDKEvent,
+	auction: NostrEventLike,
 	auctionRootEventId: string,
 	auctionCoordinates: string,
-	settlementsByAuctionKey?: Map<string, NDKEvent[]>,
-): NDKEvent | null => {
+	settlementsByAuctionKey?: Map<string, NostrEventLike[]>,
+): NostrEventLike | null => {
 	const events = dedupeEventsById([
 		...(settlementsByAuctionKey?.get(auctionRootEventId) ?? []),
 		...(settlementsByAuctionKey?.get(auctionCoordinates) ?? []),
@@ -129,7 +129,7 @@ function AuctionsOverviewComponent() {
 	const { data: pathReleasesByAuctionCoordinate } = useAuctionPathReleasesForList(auctionCoordinatesForList, 200)
 	const sortedAuctions = useFilteredAuctions({ auctions: auctions ?? [], filters: { sort: sort }, bidsByAuctionId, tag: undefined })
 
-	const handlePublishSettlement = async (auction: NDKEvent) => {
+	const handlePublishSettlement = async (auction: NostrEventLike) => {
 		const auctionRootEventId = getAuctionRootEventId(auction)
 		const auctionCoordinates = getAuctionCoordinates(auction)
 		setSettlingAuctionId(auction.id)
