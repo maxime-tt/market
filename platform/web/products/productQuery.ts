@@ -148,6 +148,7 @@ export const fetchProduct = async (id: string) => {
 		limit: 1,
 	}
 
+	// fetch: product detail by id (single-entity — justified)
 	const events = await createNdkReadContext(8000).fetch([filter])
 	const event = Array.from(events)[0] ?? null
 	if (event) {
@@ -875,6 +876,7 @@ export const fetchProductsBySearch = async (query: string, limit: number = 20) =
 	const SEARCH_TIMEOUT_MS = 15000
 	try {
 		const fetchPromise = createNdkReadContext(SEARCH_TIMEOUT_MS)
+			// fetch: product search results (list — stream is the default; bounded for now, rev 2.22)
 			.fetch([filter])
 			.then((events) => filterBlacklistedEvents(Array.from(events)))
 			.then((events) => excludeDeletedProducts(createNdkReadContext(), events))
@@ -933,6 +935,7 @@ export const fetchSellersBySearch = async (query: string, limit: number = 10): P
 	const SEARCH_TIMEOUT_MS = 10000 // Profile search timeout
 	try {
 		const fetchPromise = createNdkReadContext(SEARCH_TIMEOUT_MS)
+			// fetch: seller search results (list — stream is the default; bounded for now, rev 2.22)
 			.fetch([filter])
 			.then((events) => filterBlacklistedPubkeys(Array.from(events).map((e) => e.pubkey)))
 			.catch((err) => {

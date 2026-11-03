@@ -115,6 +115,7 @@ const fetchAuctionVersionEvents = async (
 ): Promise<NostrEventLike[]> => {
 	if (!pubkey || !dTag) return []
 
+	// fetch: version resolution for a known coordinate set (bounded helper for the feed)
 	const events = await context.fetch([
 		{
 			kinds: [AUCTION_KIND],
@@ -142,6 +143,7 @@ export const fetchAuctions = async (context: EventReadContext, limit: number = 2
 		limit,
 	}
 
+	// fetch: the auction feed (list — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch([filter])
 	// Discovery surface (the auction feed): blacklist → local deletes, then
 	// collapse versions. The test-label gate is the host's — this reader returns
@@ -166,6 +168,7 @@ export const fetchAuction = async (context: EventReadContext, id: string, verify
 		limit: 1,
 	}
 
+	// fetch: auction detail by id (single-entity — justified)
 	const events = await context.fetch([filter])
 	const event = filterVerifiedAuctionEvents(events, verifySignatures)[0] ?? null
 	if (!event) return null
@@ -218,6 +221,7 @@ export const fetchAuctionsByPubkey = async (
 		limit,
 	}
 
+	// fetch: a seller's listings, profile view (author profile — justified)
 	const events = await context.fetch([filter])
 	// Test labels do not gate this read (ADR-0009: label gating is
 	// browsing-only, and this surface is also how the owner reaches their own
@@ -233,6 +237,7 @@ export const fetchAuctionByATag = async (context: EventReadContext, pubkey: stri
 
 	const versionEvents = await fetchAuctionVersionEvents(context, pubkey, dTag)
 	if (versionEvents.length === 0) {
+		// fetch: auction detail by coordinate (single-entity — justified)
 		const fallbackEvents = await context.fetch([
 			{
 				kinds: [AUCTION_KIND],
@@ -270,6 +275,7 @@ export const fetchAuctionBidsForList = async (
 	const ids = Array.from(new Set(auctionRootEventIds.filter(Boolean)))
 	if (ids.length === 0) return new Map()
 
+	// fetch: bids for one auction, list view (list — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch([
 		{
 			kinds: [AUCTION_BID_KIND],
@@ -322,6 +328,7 @@ export const fetchAuctionSettlementsForList = async (
 
 	if (filters.length === 0) return new Map()
 
+	// fetch: settlements for one auction, list view (list — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch(filters)
 	const settlements = filterBlacklistedEvents(dedupeEventsById(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
@@ -372,6 +379,7 @@ export const fetchAuctionPathReleasesForList = async (
 
 	if (filters.length === 0) return new Map()
 
+	// fetch: path releases for one auction, list view (list — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch(filters)
 	const releases = filterBlacklistedEvents(dedupeEventsById(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
@@ -421,6 +429,7 @@ export const fetchAuctionBids = async (
 		})
 	}
 
+	// fetch: auction bids (list/live — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch(filters)
 	return filterVerifiedAuctionEvents(filterBlacklistedEvents(events), verifySignatures).sort(
 		(a, b) => (a.created_at || 0) - (b.created_at || 0),
@@ -436,6 +445,7 @@ export const fetchAuctionBidsByBidder = async (
 ): Promise<NostrEventLike[]> => {
 	if (!pubkey) return []
 
+	// fetch: one bidder's bids (list — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch([
 		{
 			kinds: [AUCTION_BID_KIND],
@@ -474,6 +484,7 @@ export const fetchAuctionSettlements = async (
 		})
 	}
 
+	// fetch: auction settlements (list — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch(filters)
 	return filterVerifiedAuctionEvents(filterBlacklistedEvents(events), verifySignatures).sort(
 		(a, b) => (b.created_at || 0) - (a.created_at || 0),
@@ -500,6 +511,7 @@ export const fetchAuctionPathReleases = async (
 
 	void auctionEventId
 
+	// fetch: auction path releases (list — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch([filter])
 	return filterVerifiedAuctionEvents(filterBlacklistedEvents(events), verifySignatures)
 		.filter((event) => isAuctionPathReleaseForCoordinate(event, coordinate))
@@ -562,6 +574,7 @@ export const fetchAuctionVerdicts = async (
 	if (auctionEventId) filter['#e'] = [auctionEventId]
 	if (auctionCoordinates) filter['#a'] = [auctionCoordinates]
 
+	// fetch: auction verdicts (list — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch([filter])
 	return (
 		filterBlacklistedEvents(events)
@@ -987,6 +1000,7 @@ export const fetchAuctionClaimOrders = async (context: EventReadContext, auction
 		limit: 20,
 	}
 
+	// fetch: orders for one auction (detail — justified)
 	const events = await context.fetch([filter])
 	return events
 		.filter((e) => {

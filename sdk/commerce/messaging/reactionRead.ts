@@ -151,10 +151,12 @@ export async function readEventReactionsWorkflow<E extends NostrEventLike>(
 	context: EventReadContext<E>,
 	targetEvent: E,
 ): Promise<ReactionRecord<E>[]> {
+	// fetch: reactions for one event (list/live — stream is the default; bounded for now, rev 2.22)
 	const events = await context.fetch([buildReactionFilter(targetEvent)])
 	const reactions = events.map((event) => parseReaction(event, targetEvent))
 
 	const reactionsUnique = filterForLatestReactionsOnly(reactions)
+	// fetch: kind-5 deletions for the resolved reactions (bounded helper)
 	const deletionEvents = await context.fetch([buildReactionDeletionFilter(reactionsUnique.map((reaction) => reaction.id))])
 
 	return sortReactionsNewestFirst(removeDeletedReactions(reactionsUnique, collectDeletedEventIds(deletionEvents)))

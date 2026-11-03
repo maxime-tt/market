@@ -195,6 +195,7 @@ async function readNewestCurationListEvent<E extends NostrEventLike>(
 	list: CurationListKey,
 	appPubkey: string,
 ): Promise<E | null> {
+	// fetch: one blacklist-settings coordinate (single-entity — justified)
 	const events = await context.fetch([buildCurationListFilter(list, appPubkey)])
 	return [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0] ?? null
 }
