@@ -34,6 +34,7 @@ const EXPECTED: ReadonlyArray<readonly [path: string, emoji: string, title: stri
 	['/dashboard/account/vanity-url', '✨', 'Vanity URL'],
 	['/dashboard/account/nostr-address', '📧', 'Nostr Address'],
 	['/dashboard/account/profile', '👤', 'Profile'],
+	['/dashboard/account/profile-page', '🎨', 'Profile Page'],
 	['/dashboard/account/making-payments', '💳', 'Make Payments'],
 	['/dashboard/account/receiving-payments', '💸', 'Receive Payments'],
 	['/dashboard/account/your-purchases', '🛍️', 'Your Purchases'],

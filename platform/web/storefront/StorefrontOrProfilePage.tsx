@@ -3,8 +3,11 @@ import { StorefrontRenderer } from '@ui/storefront'
 import { LoadingState } from '@ui/shared/loading-state'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import { profileByIdentifierQueryOptions } from '@platform/web/profiles/profileQuery'
+import { useStore } from '@tanstack/react-store'
+import { authStore } from '@platform/web/auth/authStore'
 import { shouldRenderStorefrontPage, useStorefrontPage } from './storefrontQuery'
 import { storefrontBlockSlots } from './StorefrontBlockSlots'
+import { loadStorefrontDraft } from './draftStorage'
 import { useQuery } from '@tanstack/react-query'
 
 /**
@@ -21,6 +24,8 @@ import { useQuery } from '@tanstack/react-query'
  * they find out in the builder, which validates strictly before signing.
  */
 export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
+	const { user } = useStore(authStore)
+	const isDraftPreview = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('preview') === 'draft'
 	// npub, nprofile and NIP-05 identifiers all have to become a hex pubkey
 	// before a page can be addressed. Hex skips the lookup; everything else
 	// borrows the profile query `ProfilePage` is about to run anyway, so the
@@ -35,6 +40,15 @@ export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
 	const pubkey = needsResolution ? (profileData?.user?.pubkey ?? '') : profileId
 
 	const { data: storefront, isLoading: isLoadingStorefront } = useStorefrontPage(pubkey)
+	const isAuthorPreview = isDraftPreview && isValidHexKey(pubkey) && user?.pubkey === pubkey
+	const previewPage = isAuthorPreview ? (loadStorefrontDraft(pubkey) ?? storefront?.page ?? null) : null
+
+	// The preview URL is intentionally local to the signed-in author: it reads
+	// their validated local draft (or their stored page when no draft exists),
+	// without publishing or exposing that draft to other visitors.
+	if (previewPage && previewPage.content.length > 0) {
+		return <StorefrontRenderer page={previewPage} pubkey={pubkey} slots={storefrontBlockSlots} />
+	}
 
 	// Both queries are in flight concurrently, so this waits on the slower of
 	// two requests that would have happened regardless. Deciding before they
