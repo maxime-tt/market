@@ -1,6 +1,8 @@
 import { ndkActions, ndkStore, getWriteRelaySet, getWriteRelays, fetchLatestAppEvent } from '@platform/web/ndk/ndkStore'
 import { NDKEvent, NDKRelaySet, NDKUser, NDKZapper, type NDKSigner, type NDKFilter } from '@platform/web/ndk/ndkEvents'
 import { applesauceIo, type NostrUser, type PublishOptions, type PublishResult } from '@platform/web/applesauceIo'
+import { getNdkEventStore, getRawEventStore } from '@platform/web/readContext'
+import type { NostrEventLike } from '@sdk/core'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { EventPublishContext } from '@sdk/core/ports/eventPublish'
 
@@ -20,7 +22,20 @@ export type NdkClient = NonNullable<ConstructorParameters<typeof NDKEvent>[0]>
  * (`createSignerPublishContext`) instead.
  */
 export const getAppNdk = () => ndkActions.getNDK()
-export const publishAppEvent = (event: NDKEvent) => ndkActions.publishEvent(event)
+/**
+ * Publish write-through (contract rev 2.21 decision 4): a published signed event is admitted to the read
+ * store(s) so the store's local fan-out surfaces it to subscribers immediately, without waiting for a relay
+ * round-trip. Best-effort — a store failure must never fail the publish, which already succeeded.
+ */
+async function writeThroughPublishedEvent(event: NDKEvent): Promise<void> {
+	await Promise.allSettled([getRawEventStore().add(event as unknown as NostrEventLike), getNdkEventStore().add(event)])
+}
+
+export const publishAppEvent = async (event: NDKEvent) => {
+	const result = await ndkActions.publishEvent(event)
+	await writeThroughPublishedEvent(event)
+	return result
+}
 
 /**
  * A3.5: publish a raw **signed** event through the NDK publish binding. The publish

@@ -20,7 +20,7 @@
  * own, so it is not a second `platform -> src` file; the adapter it re-exports from is.
  */
 import type { NostrEventLike } from '@sdk/core'
-import type { EventReadContext } from '@sdk/core/event-store'
+import { createEventReadContext, type EventReadContext } from '@sdk/core/event-store'
 import { toNostrEventLike } from '@sdk/core/nostr/eventLike'
 import {
 	addAppExplicitRelays,
@@ -130,8 +130,13 @@ export function configureReadContext(config: ReadContextConfig): void {
 export function getReadContext(): EventReadContext<NostrEventLike> {
 	const context: EventReadContext<NostrEventLike> =
 		readContextConfig.adapter === 'ndk' ? createNdkReadContext(readContextConfig.timeoutMs) : createApplesauceReadContext()
-	return {
+	return createEventReadContext({
 		store: context.store,
-		fetch: async (filters) => (await context.fetch(filters)).map(toNostrEventLike),
-	}
+		// Forward the adapter's live stream, normalizing each event to `NostrEventLike` at this edge.
+		stream: async function* (filters, options) {
+			for await (const item of context.stream(filters, options)) {
+				yield item.type === 'event' ? { type: 'event', event: toNostrEventLike(item.event) } : item
+			}
+		},
+	})
 }

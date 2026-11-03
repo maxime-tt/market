@@ -2,7 +2,16 @@ import { describe, expect, test } from 'bun:test'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { matchesFilter, type EventFilter } from './filter'
 import { createMemoryEventStore } from './memoryEventStore'
-import { buildDeletionLookupFilters, excludeDeleted, readThroughStore, type EventReadContext } from './read'
+import {
+	asAsyncEventStoreActions,
+	buildDeletionLookupFilters,
+	createEventReadContext,
+	createStoreStream,
+	excludeDeleted,
+	readThroughStore,
+	streamFromFetch,
+	type EventReadContext,
+} from './read'
 import { readProductListWorkflow, isProductListed } from '../../commerce/discovery/productRead'
 
 let counter = 0
@@ -19,14 +28,12 @@ const event = (overrides: Partial<NostrEventLike>): NostrEventLike => ({
 /** Fake relay: answers every filter from a fixed event list and records requests. */
 function createContext(relayEvents: NostrEventLike[]): EventReadContext & { requests: EventFilter[][] } {
 	const requests: EventFilter[][] = []
-	return {
-		requests,
-		store: createMemoryEventStore(),
-		fetch: async (filters) => {
-			requests.push([...filters])
-			return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
-		},
-	}
+	const store = createMemoryEventStore()
+	const stream = streamFromFetch(store, async (filters) => {
+		requests.push([...filters])
+		return relayEvents.filter((candidate) => filters.some((filter) => matchesFilter(candidate, filter)))
+	})
+	return { ...createEventReadContext({ store, stream }), requests }
 }
 
 describe('readThroughStore', () => {
@@ -60,7 +67,7 @@ describe('readThroughStore', () => {
 		await readThroughStore(context, [{ kinds: [30402] }])
 
 		const newer = event({ created_at: 150 })
-		const later = { ...context, fetch: async () => [newer] }
+		const later = createEventReadContext({ store: context.store, stream: streamFromFetch(context.store, async () => [newer]) })
 		expect((await readThroughStore(later, [{ kinds: [30402] }])).map((e) => e.id)).toEqual([newer.id])
 	})
 })
@@ -106,5 +113,56 @@ describe('product reads', () => {
 		expect(isProductListed(soldOut, 'not-hidden')).toBe(true)
 		expect(isProductListed(soldOut, 'purchasable')).toBe(false)
 		expect(isProductListed(preOrder, 'purchasable')).toBe(true)
+	})
+})
+
+describe('createStoreStream', () => {
+	test('replays stored matches first, then forwards the live source and its caught-up marker', async () => {
+		const store = createMemoryEventStore()
+		const cached = event({ created_at: 100, tags: [['d', 'cached']] })
+		await store.add(cached)
+		const live = event({ created_at: 200, tags: [['d', 'live']] })
+
+		const stream = createStoreStream({
+			store,
+			source: async function* () {
+				yield { type: 'event', event: live }
+				yield { type: 'caught-up', info: { eose: ['wss://relay'], pending: [], complete: false } }
+			},
+		})
+
+		const items = []
+		for await (const item of stream([{ kinds: [30402] }])) items.push(item)
+
+		expect(items.filter((item) => item.type === 'event').map((item) => item.event.id)).toEqual([cached.id, live.id])
+		expect(items.at(-1)).toEqual({ type: 'caught-up', info: { eose: ['wss://relay'], pending: [], complete: false } })
+	})
+
+	test('admits live arrivals into the store unless admit is false', async () => {
+		const store = createMemoryEventStore()
+		const live = event({ created_at: 200 })
+		const stream = createStoreStream({
+			store,
+			source: async function* () {
+				yield { type: 'event', event: live }
+			},
+		})
+
+		for await (const _ of stream([{ kinds: [1] }], { admit: false })) {
+			/* drain */
+		}
+		expect(await store.get(live.id)).toBeUndefined()
+	})
+})
+
+describe('asAsyncEventStoreActions', () => {
+	test('admits once and returns null for a duplicate relay delivery', async () => {
+		const store = createMemoryEventStore()
+		const actions = asAsyncEventStoreActions(store)
+		const note = event({ kind: 1 })
+
+		expect(await actions.add(note)).toBe(note)
+		expect(await actions.add(note)).toBeNull()
+		expect(await store.get(note.id)).toBe(note)
 	})
 })

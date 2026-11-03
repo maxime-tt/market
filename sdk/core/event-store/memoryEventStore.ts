@@ -41,7 +41,7 @@ export function createMemoryEventStore<E extends NostrEventLike = NostrEventLike
 		}
 	}
 
-	const add = (event: E): EventStoreAddResult => {
+	const add = async (event: E): Promise<EventStoreAddResult> => {
 		if (byId.has(event.id)) return { status: 'duplicate' }
 
 		const admit = options.admission?.[event.kind]
@@ -71,9 +71,9 @@ export function createMemoryEventStore<E extends NostrEventLike = NostrEventLike
 
 	return {
 		add,
-		get: (id) => byId.get(id),
-		getReplaceable: (kind, pubkey, d) => latestByKey.get(d === undefined ? `${kind}:${pubkey}` : `${kind}:${pubkey}:${d}`),
-		query: (filters) => selectMatching(byId.values(), filters),
+		get: async (id) => byId.get(id),
+		getReplaceable: async (kind, pubkey, d) => latestByKey.get(d === undefined ? `${kind}:${pubkey}` : `${kind}:${pubkey}:${d}`),
+		query: async (filters) => selectMatching(byId.values(), filters),
 		subscribe: (filters, listener) => {
 			const entry = { filters: Array.isArray(filters) ? filters : [filters as EventFilter], listener }
 			listeners.add(entry)

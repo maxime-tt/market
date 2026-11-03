@@ -10,7 +10,14 @@ import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from 
 import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@platform/web/ndk/ndkEvents'
 import { authStore, getCurrentPubkey, getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { configActions } from '@sdk/config/app-config'
-import { createMemoryEventStore, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
+import {
+	createApplesauceEventStore,
+	createEventReadContext,
+	streamFromFetch,
+	type EventReadContext,
+	type EventStorePort,
+} from '@sdk/core/event-store'
+import { createIndexedDbEventDatabase } from '@platform/web/indexedDbEventDatabase'
 
 /** Re-exported so Platform bindings can type their read context without a `platform -> src` edge. */
 export type { NDKEvent, NDKFilter }
@@ -66,7 +73,10 @@ export type { PrivateAuctionClaimMessage }
 export { authStore, getCurrentPubkey }
 
 // The browser host is one market instance, so module scope is the instance boundary for its store.
-const ndkEventStore = createMemoryEventStore<NDKEvent>()
+// Backed by the applesauce `EventStorePort` adapter; the browser host injects the IndexedDB database (contract
+// rev 2.21 decision 3). The NDK live-relay stream migration belongs to the NDK-web lane, so these contexts keep
+// the bounded NDK-fetch source for now.
+const ndkEventStore = createApplesauceEventStore<NDKEvent>({ database: createIndexedDbEventDatabase() })
 
 export function getNdkEventStore(): EventStorePort<NDKEvent> {
 	return ndkEventStore
@@ -81,13 +91,13 @@ export { getAppRelaySet }
 
 /** Platform adapter: SDK read workflows fetch through the host's NDK relay policy and merge into the shared store. */
 export function createNdkReadContext(timeoutMs = 8000): EventReadContext<NDKEvent> {
-	return {
+	return createEventReadContext({
 		store: ndkEventStore,
-		fetch: async (filters) => {
+		stream: streamFromFetch(ndkEventStore, async (filters) => {
 			const ndkFilters = filters as NDKFilter[]
 			return Array.from(await ndkActions.fetchEventsWithTimeout(ndkFilters.length === 1 ? ndkFilters[0] : ndkFilters, { timeoutMs }))
-		},
-	}
+		}),
+	})
 }
 
 /**
@@ -196,9 +206,9 @@ export const readAuthorizedLabelers = async (): Promise<string[] | null> => {
  * answers empty rather than reaching the network, mirroring the pre-drain readers.
  */
 export function createAppRelayReadContext(timeoutMs = 8000): EventReadContext<NDKEvent> {
-	return {
+	return createEventReadContext({
 		store: ndkEventStore,
-		fetch: async (filters) => {
+		stream: streamFromFetch(ndkEventStore, async (filters) => {
 			const ndk = ndkActions.getNDK()
 			if (!ndk) return []
 
@@ -210,8 +220,8 @@ export function createAppRelayReadContext(timeoutMs = 8000): EventReadContext<ND
 					relaySet,
 				}),
 			)
-		},
-	}
+		}),
+	})
 }
 
 /**
@@ -222,23 +232,27 @@ export function createAppRelayReadContext(timeoutMs = 8000): EventReadContext<ND
  * reports never reach the general kind-1 reads).
  */
 export function createBugRelayReadContext(timeoutMs = 8000): EventReadContext<NDKEvent> {
-	return {
+	return createEventReadContext({
 		store: ndkEventStore,
-		fetch: async (filters) => {
-			const ndk = ndkActions.getNDK()
-			if (!ndk) throw new Error('NDK not initialized')
-			const relayUrl = getBugRelay()
-			if (!relayUrl) throw new Error('App relay not configured')
+		stream: streamFromFetch(
+			ndkEventStore,
+			async (filters) => {
+				const ndk = ndkActions.getNDK()
+				if (!ndk) throw new Error('NDK not initialized')
+				const relayUrl = getBugRelay()
+				if (!relayUrl) throw new Error('App relay not configured')
 
-			const relaySet = NDKRelaySet.fromRelayUrls([relayUrl], ndk)
-			const ndkFilters = filters as NDKFilter[]
-			return Array.from(
-				await ndkActions.fetchEventsWithTimeout(ndkFilters.length === 1 ? ndkFilters[0] : ndkFilters, {
-					timeoutMs,
-					relaySet,
-					subId: 'bug-reports',
-				}),
-			)
-		},
-	}
+				const relaySet = NDKRelaySet.fromRelayUrls([relayUrl], ndk)
+				const ndkFilters = filters as NDKFilter[]
+				return Array.from(
+					await ndkActions.fetchEventsWithTimeout(ndkFilters.length === 1 ? ndkFilters[0] : ndkFilters, {
+						timeoutMs,
+						relaySet,
+						subId: 'bug-reports',
+					}),
+				)
+			},
+			{ admit: false },
+		),
+	})
 }

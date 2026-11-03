@@ -56,7 +56,7 @@ import {
 } from '@sdk/commerce/auctions/auctionRead'
 import { AUCTION_BID_KIND, AUCTION_KIND } from '@sdk/commerce/auctions/constants'
 import { filterBlacklistedEvents } from '@sdk/config/blacklist'
-import type { EventFilter, EventReadContext } from '@sdk/core/event-store'
+import { createEventReadContext, streamFromFetch, type EventFilter, type EventReadContext } from '@sdk/core/event-store'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { NIP59_GIFT_WRAP_KIND } from '@sdk/core/nostr/nip59'
 import { auctionKeys, type AuctionByPubkeyScope } from '@sdk/core/query/queryKeyFactory'
@@ -82,15 +82,20 @@ type EventFetcher = (filter: EventFilter | EventFilter[]) => Promise<NostrEventL
  */
 const readContextFor = (fetchFn?: EventFetcher): EventReadContext => {
 	if (!fetchFn) return createApplesauceReadContext()
-	return {
-		store: getRawEventStore(),
+	const store = getRawEventStore()
+	return createEventReadContext({
+		store,
 		// Mirrors `createApplesauceReadContext`: a one-filter batch is handed to the port unwrapped.
-		fetch: async (filters) => fetchFn(filters.length === 1 ? (filters[0] as EventFilter) : (filters as EventFilter[])),
-	}
+		stream: streamFromFetch(store, async (filters) =>
+			fetchFn(filters.length === 1 ? (filters[0] as EventFilter) : (filters as EventFilter[])),
+		),
+	})
 }
 
 /** Records the author's own published deletion so later reads drop it even if relays keep serving the auction. */
-export const recordAuctionDeletion = (deletion: NostrEventLike) => recordAuctionDeletionInStore(getRawEventStore(), deletion)
+export const recordAuctionDeletion = async (deletion: NostrEventLike): Promise<void> => {
+	await recordAuctionDeletionInStore(getRawEventStore(), deletion)
+}
 
 export const fetchAuctions = async (limit: number = 200): Promise<NostrEventLike[]> => {
 	// Discovery surface (the auction feed): the SDK reader applies blacklist → local deletes →

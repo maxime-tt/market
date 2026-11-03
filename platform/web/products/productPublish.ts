@@ -92,7 +92,7 @@ export const deleteProduct = async (productDTag: string, signer: SignerCapabilit
 		// Relays may keep serving the listing; the store applies the deletion to every later read.
 		// A3.5: the deletion is a raw signed event now; the NDK read store still
 		// holds NDKEvents, so the raw event is wrapped into one at this boundary.
-		getNdkEventStore().add(new NDKEvent(ndk, deletion))
+		await getNdkEventStore().add(new NDKEvent(ndk, deletion))
 		return true
 	} catch (error) {
 		console.error('Error deleting product:', error)
