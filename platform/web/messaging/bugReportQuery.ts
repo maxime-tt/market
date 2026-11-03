@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import type { NDKEvent } from '@platform/web/ndkPublishContext'
 import { createBugRelayReadContext } from '@platform/web/readContext'
 import { bugReportKeys, readBugReportsWorkflow, type BugReport as SdkBugReport } from '@sdk/commerce/messaging'
 
@@ -14,7 +13,7 @@ import { bugReportKeys, readBugReportsWorkflow, type BugReport as SdkBugReport }
  * pre-drain values.
  */
 
-export type BugReport = SdkBugReport<NDKEvent>
+export type BugReport = SdkBugReport
 
 export interface UserProfile {
 	pubkey: string

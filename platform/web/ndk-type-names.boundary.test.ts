@@ -63,6 +63,11 @@ const BOUNDARY_ALLOWLIST = new Set([
 const BOUNDARY_LEAK_ALLOWLIST = new Set([
 	'platform/web/messaging/ReactionButtonHost.tsx',
 	'platform/web/messaging/CommentButtonHost.tsx',
+	// messaging (batch 6): Comments/SocialInteractions forward the event to those two hosts,
+	// whose props are pinned by their `event.ndk` client back-reference — converting this pair
+	// needs a host-provided readiness signal, i.e. a behaviour change, not a type swap.
+	'platform/web/messaging/Comments.tsx',
+	'platform/web/messaging/SocialInteractionsHost.tsx',
 	'platform/web/orders/ordersQuery.ts',
 	'platform/web/routes/_dashboard-layout/dashboard/products/migration-tool.tsx',
 	// collections (batch 3): the only blocker left is the app-relay fetch entry point —
@@ -89,7 +94,7 @@ const BOUNDARY_LEAK_ALLOWLIST = new Set([
  * batch that converts them (config 42→37, routes →24, collections →23, products →20,
  * orders →14, messaging →4, tail →0).
  */
-const BASELINE = 12
+const BASELINE = 6
 
 async function listSourceFiles(directory: string): Promise<string[]> {
 	const entries = await readdir(directory, { withFileTypes: true })

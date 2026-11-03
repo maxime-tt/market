@@ -1,10 +1,10 @@
 import { useZapsViaProvider } from '@platform/web/payments/zapsQuery'
 import { AvatarHost } from '@platform/web/profiles/userCardHosts'
 import { ZapsListView } from '@ui/community/social-lists'
-import type { NDKEvent } from '@platform/web/readContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 interface ZapsListHostProps {
-	event: NDKEvent
+	event: NostrEventLike
 	asChildren?: boolean
 }
 

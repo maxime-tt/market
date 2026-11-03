@@ -4,10 +4,10 @@ import { ShareProductDialogHost } from '@platform/web/messaging/ShareProductDial
 import { ShareButtonView } from '@ui/community/social-buttons'
 import { useState } from 'react'
 import type { ButtonProps } from '@ui/wrappers/button-props'
-import type { NDKEvent } from '@platform/web/readContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 interface ShareButtonHostProps extends ButtonProps {
-	event: NDKEvent
+	event: NostrEventLike
 	itemName?: string
 }
 

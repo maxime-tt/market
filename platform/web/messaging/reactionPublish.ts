@@ -2,7 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { reactionKeys } from '@sdk/core/query/queryKeyFactory'
 import { publishReactionDeletionWorkflow, publishReactionWorkflow, type ReactionRecord } from '@sdk/commerce/messaging'
-import { getAppNdk, publishAppNostrEvent, type NDKEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import type { NostrEvent } from 'nostr-tools'
@@ -17,11 +18,11 @@ import type { NostrEvent } from 'nostr-tools'
  * call sites; deleted in E1.
  */
 
-type Reaction = ReactionRecord<NDKEvent>
+type Reaction = ReactionRecord
 
 interface PublishReactionParams {
 	emoji: string
-	event: NDKEvent
+	event: NostrEventLike
 }
 
 interface PublishDeletionParams {
@@ -32,7 +33,7 @@ interface PublishDeletionParams {
  * Publishes a NIP-25 reaction to an event
  *
  * @param emoji - The reaction emoji/content (e.g., '+', '-', '❤️', ':custom:')
- * @param event - The target NDKEvent to react to
+ * @param event - The target event to react to
  * @returns Promise that resolves to the published reaction event
  */
 export const publishReaction = async ({ emoji, event }: PublishReactionParams): Promise<NostrEvent> => {
