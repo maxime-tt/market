@@ -21,7 +21,8 @@ import { Store, useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { createNdkReadContext } from '@platform/web/readContext'
-import { getAppNdk, type NDKEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk } from '@platform/web/ndkPublishContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { vanityState } from '@sdk/config/vanity'
 import type { VanityState } from '@sdk/config/vanity'
 import {
@@ -80,7 +81,7 @@ export function useVanityState(): VanityState {
 export { getExpiredVanityForPubkey, getVanityForPubkey, isVanityAvailable, resolveVanity }
 export type { VanityEntry } from '@sdk/commerce/curation'
 
-export type VanitySettings = SdkVanitySettings<NDKEvent>
+export type VanitySettings = SdkVanitySettings<NostrEventLike>
 
 /**
  * Fetches vanity registry (kind 30000 with d=vanity-urls) for the app

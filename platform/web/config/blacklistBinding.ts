@@ -21,7 +21,8 @@ import { Store, useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { createAppRelayReadContext, getAppRelayUrl } from '@platform/web/readContext'
-import { getAppNdk, type NDKEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk } from '@platform/web/ndkPublishContext'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import {
 	buildBlacklistFilter,
 	getFormattedBlacklist,
@@ -76,7 +77,7 @@ export function useBlacklistState(): BlacklistState {
 // literal-identical to the pre-drain value and to the writers' invalidation target.
 
 export { getFormattedBlacklist, isBlacklisted }
-export type BlacklistSettings = SdkBlacklistSettings<NDKEvent>
+export type BlacklistSettings = SdkBlacklistSettings<NostrEventLike>
 
 /**
  * Fetches blacklist settings (kind 10000) for the app
