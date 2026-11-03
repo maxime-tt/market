@@ -1,6 +1,32 @@
 export { Badge, badgeVariants } from './primitives/badge'
 export type { SelectableBadgeProps } from './wrappers/selectable-badge'
 export { SelectableBadge } from './wrappers/selectable-badge'
+export {
+	StorefrontProvider,
+	useStorefrontContext,
+	StorefrontLink,
+	MiniMarkdown,
+	StorefrontRoot,
+	StorefrontBlockView,
+	StorefrontRenderer,
+	HeroBlock,
+	TextBlock,
+	ImageBlock,
+	LinkListBlock,
+	DividerBlock,
+	SpacerBlock,
+	ProductGridBlock,
+	FeaturedProductBlock,
+	ProfileHeaderBlock,
+} from './storefront/index'
+export type {
+	StorefrontContextValue,
+	StorefrontDataSlots,
+	StorefrontRendererProps,
+	ProductGridBlockProps,
+	FeaturedProductBlockProps,
+	ProfileHeaderBlockProps,
+} from './storefront/index'
 export { ProductSearchResults } from './products/product-search-results'
 export type { ProductSearchResultEvent, ProductSearchResultsProps } from './products/product-search-results'
 export { ProductCardView } from './products/product-card-view'

@@ -294,14 +294,29 @@ describe('deferred fixes stay honestly deferred (S1)', () => {
 		expect({ total, hits }).toEqual({ total: 0, hits: [] })
 	})
 
-	test('F4: the two font-body/font-header consumers are recorded, not silently fixed', () => {
+	test('F4: the font-body/font-header consumers are recorded, not silently fixed', () => {
 		// Declaring these at :root (F4) is a visible change: sidebar-nav's heading
 		// asks for font-header, which is undefined outside .theme-new today, so it
-		// currently inherits IBM Plex Mono. If a third consumer appears, this fails
+		// currently inherits IBM Plex Mono. If a new consumer appears, this fails
 		// and the F4 commit has to be re-scoped.
+		//
+		// Re-scoped 2026-11-03 (CMS storefront port, batch 2): the four ported
+		// ui/storefront views adopt `font-header` for their display headings —
+		// the fork carried the legacy `font-heading` spelling, which the migrated
+		// scope renamed away, and a heading that silently inherits the body font
+		// is exactly the drift F4 exists to record. `--font-header` resolves at
+		// :root (styles/globals.css), so the adoption is a consumer-count move,
+		// not a declaration change.
 		const { total, hits } = countMatches(/\bfont-(?:body|header)\b/g)
-		expect(total).toBe(2)
-		expect(hits.map((hit) => hit.split(' (')[0]).sort()).toEqual(['ui/nav/sidebar-nav.tsx', 'ui/nostr/user-card.tsx'])
+		expect(total).toBe(6)
+		expect(hits.map((hit) => hit.split(' (')[0]).sort()).toEqual([
+			'ui/nav/sidebar-nav.tsx',
+			'ui/nostr/user-card.tsx',
+			'ui/storefront/MiniMarkdown.tsx',
+			'ui/storefront/blocks/HeroBlock.tsx',
+			'ui/storefront/blocks/ProfileHeaderBlock.tsx',
+			'ui/storefront/blocks/shared.tsx',
+		])
 	})
 })
 
