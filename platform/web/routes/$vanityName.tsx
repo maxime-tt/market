@@ -1,4 +1,4 @@
-import { ProfilePage } from '@platform/web/profiles/ProfilePage'
+import { StorefrontOrProfilePage } from '@platform/web/storefront/StorefrontOrProfilePage'
 import { LoadingState } from '@ui/shared/loading-state'
 import { vanityActions, vanityStore } from '@platform/web/config/vanityStore'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
@@ -31,9 +31,9 @@ function VanityRouteComponent() {
 		return <LoadingState className="min-h-screen" label="Loading…" />
 	}
 
-	// Vanity URL resolved - render profile page directly
+	// Vanity URL resolved - render the storefront page (or the standard profile fallback)
 	if (resolvedPubkey) {
-		return <ProfilePage profileId={resolvedPubkey} />
+		return <StorefrontOrProfilePage profileId={resolvedPubkey} />
 	}
 
 	// Vanity URL not found - show 404-like message
