@@ -52,3 +52,5 @@ ui/settings/operator-settings-views.test.tsx|raw-palette-test|1
 ui/shared/image-carousel.tsx|parked-scheme-black|2
 ui/shared/image-viewer-modal.tsx|parked-scrim|16
 ui/shared/info-tooltip.test.tsx|enforcement-assertion|1
+ui/storefront/blocks/HeroBlock.tsx|parked-scrim|2
+ui/storefront/blocks/ProfileHeaderBlock.tsx|parked-scrim|3

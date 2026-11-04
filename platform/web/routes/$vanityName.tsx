@@ -1,8 +1,9 @@
-import { ProfilePage } from '@platform/web/profiles/ProfilePage'
+import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
+import { StorefrontOrProfilePage } from '@platform/web/storefront/StorefrontOrProfilePage'
 import { LoadingState } from '@ui/shared/loading-state'
 import { vanityActions, vanityStore } from '@platform/web/config/vanityStore'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useMemo } from 'react'
+import { createFileRoute } from '@tanstack/react-router'
+import { useMemo } from 'react'
 import { useStore } from '@tanstack/react-store'
 
 export const Route = createFileRoute('/$vanityName')({
@@ -11,7 +12,6 @@ export const Route = createFileRoute('/$vanityName')({
 
 function VanityRouteComponent() {
 	const { vanityName } = Route.useParams()
-	const navigate = useNavigate()
 	const isLoaded = useStore(vanityStore, (s) => s.isLoaded)
 	const lastUpdated = useStore(vanityStore, (s) => s.lastUpdated)
 
@@ -21,36 +21,22 @@ function VanityRouteComponent() {
 		return entry?.pubkey ?? null
 	}, [vanityName, isLoaded, lastUpdated])
 
-	// Re-check resolution when store updates
-	useEffect(() => {
-		// If still not found after store is loaded, stay on this page (shows 404)
-	}, [vanityName, isLoaded, lastUpdated])
-
 	// Loading state while store syncs
 	if (!isLoaded) {
 		return <LoadingState className="min-h-screen" label="Loading…" />
 	}
 
-	// Vanity URL resolved - render profile page directly
+	// Vanity URL resolved - render the storefront page (or the standard profile fallback)
 	if (resolvedPubkey) {
-		return <ProfilePage profileId={resolvedPubkey} />
+		return <StorefrontOrProfilePage profileId={resolvedPubkey} />
 	}
 
-	// Vanity URL not found - show 404-like message
-	return (
-		<div className="flex items-center justify-center min-h-screen">
-			<div className="text-center max-w-md mx-auto p-8">
-				<h1 className="text-4xl font-bold mb-4">Page Not Found</h1>
-				<p className="text-muted-foreground mb-6">
-					The vanity URL <span className="font-mono text-primary">/{vanityName}</span> is not registered or has expired.
-				</p>
-				<button
-					onClick={() => navigate({ to: '/' })}
-					className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
-				>
-					Go Home
-				</button>
-			</div>
-		</div>
-	)
+	// Vanity resolution found nothing: the SAME segment is then a generic page
+	// address on the app key (owner ruling, HANDOVER-CMS-INTEGRATION §6.1 — the
+	// app router maps a path to a page event by address). The segment is handed
+	// over verbatim as the `d` tag: `/featured` and `/featured-2026-11-03` take
+	// this identical path, with no date or prefix special-casing anywhere. An
+	// explicitly registered vanity name keeps precedence, which is why the
+	// lookup order is vanity first, app-key page second.
+	return <StorefrontAddressPage dTag={vanityName} />
 }
