@@ -3,11 +3,6 @@
  * price row, and context menu (Add to list › / Copy link / Report).
  *
  * Heart + three-dots in the text block — icon-first ghost buttons, no outline.
- *
- * TOKEN RELAXATION: Avatar tint colors use raw oklch() inline styles. The seller
- * avatar tint is computed dynamically from the pubkey hash (deterministic, never
- * hardcoded). No semantic token exists for "per-seller distinct hue". The frames
- * draw this with oklch() literals too. See AGENTS.md § relaxed tokens.
  */
 
 import type { FC, MouseEventHandler, PointerEventHandler, Ref, TouchEventHandler } from 'react'
@@ -38,14 +33,7 @@ export interface ProductContextMenuProps {
  * Context menu — "Add to list ›" / "Copy link" / "Report".
  * Driven by props (open/onAdd/onCopy/onReport); same menu for right-click and long-press.
  */
-export const ProductContextMenu: FC<ProductContextMenuProps> = ({
-	open,
-	onAddToList,
-	onCopyLink,
-	onReport,
-	onClose,
-	className,
-}) => {
+export const ProductContextMenu: FC<ProductContextMenuProps> = ({ open, onAddToList, onCopyLink, onReport, onClose, className }) => {
 	if (!open) return null
 
 	return (
@@ -103,10 +91,7 @@ export const ProductContextMenu: FC<ProductContextMenuProps> = ({
 					</svg>
 				</button>
 			)}
-			<div
-				data-slot="menu-separator"
-				className="h-px my-[5px] mx-2 bg-border-default"
-			/>
+			<div data-slot="menu-separator" className="h-px my-[5px] mx-2 bg-border-default" />
 			{onCopyLink && (
 				<button
 					type="button"
@@ -225,12 +210,7 @@ const HeartIcon: FC<{ active?: boolean }> = ({ active }) => (
 // ---------------------------------------------------------------------------
 
 const ThreeDotsIcon: FC<{ open?: boolean }> = ({ open }) => (
-	<svg
-		className="size-3.5"
-		viewBox="0 0 24 24"
-		fill="currentColor"
-		aria-hidden="true"
-	>
+	<svg className="size-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 		<circle cx="12" cy="5" r="1.7" />
 		<circle cx="12" cy="12" r="1.7" />
 		<circle cx="12" cy="19" r="1.7" />
@@ -291,11 +271,11 @@ export const ProductCard: FC<ProductCardProps> = ({
 		if (e.pointerType !== 'touch') return
 		// 500ms long-press on touch → open menu
 		const timer = setTimeout(() => onThreeDots?.(), 500)
-		;(e.currentTarget as HTMLElement & { _longPressTimer?: number })._longPressTimer = timer
+		;(e.currentTarget as HTMLElement & { _longPressTimer?: ReturnType<typeof setTimeout> })._longPressTimer = timer
 	}
 
 	const handleLongPressEnd: PointerEventHandler = (e) => {
-		const el = e.currentTarget as HTMLElement & { _longPressTimer?: number }
+		const el = e.currentTarget as HTMLElement & { _longPressTimer?: ReturnType<typeof setTimeout> }
 		const timer = el._longPressTimer
 		if (timer) {
 			clearTimeout(timer)
@@ -303,12 +283,9 @@ export const ProductCard: FC<ProductCardProps> = ({
 		}
 	}
 
-	// Deterministic tint from seller pubkey hash — inline style for dynamic values
-	const avatarTint = sellerPubkey ? (parseInt(sellerPubkey, 16) % 3) : 0
-	const tintHues = ['345', '20', '320']
-	const avatarStyle = sellerPubkey
-		? { backgroundColor: `oklch(0.7 0.06 ${tintHues[avatarTint]})` }
-		: undefined
+	// Seller avatar tint — uses .m1–.m8 avatar-tint-* classes from art module
+	const avatarTint = sellerPubkey ? parseInt(sellerPubkey, 16) % 3 : 0
+	const avatarTintClass = `avatar-tint-${avatarTint}`
 
 	return (
 		<article
@@ -381,23 +358,14 @@ export const ProductCard: FC<ProductCardProps> = ({
 				{/* Tinted avatar circle */}
 				<div
 					data-slot="seller-avatar"
-					className={cn(
-						'size-3.5',
-						'rounded-full',
-						'shrink-0',
-					)}
-					style={avatarStyle}
+					className={cn('size-3.5', 'rounded-full', 'shrink-0', 'avatar-tint-' + avatarTint)}
 					aria-hidden="true"
 				/>
 				<span data-slot="seller-name" className="truncate flex-1">
 					{seller}
 				</span>
 				{/* Actions — icon-first ghost buttons, no outline */}
-				<div
-					data-slot="tools"
-					data-testid={`widget-product-card-tools-${id}`}
-					className="relative flex gap-0.5 shrink-0"
-				>
+				<div data-slot="tools" data-testid={`widget-product-card-tools-${id}`} className="relative flex gap-0.5 shrink-0">
 					{onHeart && (
 						<button
 							type="button"
@@ -459,20 +427,12 @@ export const ProductCard: FC<ProductCardProps> = ({
 			<div
 				data-slot="price-row"
 				data-testid={`widget-product-card-price-${id}`}
-				className={cn(
-					'mt-2.5',
-					'flex',
-					'items-center',
-					'justify-between',
-				)}
+				className={cn('mt-2.5', 'flex', 'items-center', 'justify-between')}
 			>
 				<b className="text-sm">
-					{formatSats(price)}{' '}
-					<small className="font-normal text-text-mid">sats</small>
+					{formatSats(price)} <small className="font-normal text-text-mid">sats</small>
 				</b>
-				{stockNote && (
-					<small className="text-xs text-text-mid">{stockNote}</small>
-				)}
+				{stockNote && <small className="text-xs text-text-mid">{stockNote}</small>}
 			</div>
 		</article>
 	)

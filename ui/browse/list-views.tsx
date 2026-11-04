@@ -52,9 +52,7 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({
 	const respondedCount = relays.filter((r) => r.status === 'responded').length
 	const timeoutCount = relays.filter((r) => r.status === 'timeout').length
 	const refusedCount = relays.filter((r) => r.status === 'refused').length
-	const cachedCount = relays
-		.filter((r) => r.status === 'responded')
-		.reduce((sum, r) => sum + r.count, 0)
+	const cachedCount = relays.filter((r) => r.status === 'responded').reduce((sum, r) => sum + r.count, 0)
 
 	return (
 		<div
@@ -72,16 +70,11 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({
 			)}
 		>
 			{/* Status dot */}
-			<div
-				data-slot="status-dot"
-				className="size-[7px] rounded-full bg-fill-ink flex-none"
-				aria-hidden="true"
-			/>
+			<div data-slot="status-dot" className="size-[7px] rounded-full bg-fill-ink flex-none" aria-hidden="true" />
 			{/* Summary line */}
 			<span>
 				{responded} relay{responded !== 1 ? 's' : ''} responded with{' '}
-				<b className="font-normal text-text-high">{totalProducts.toLocaleString()}</b>{' '}
-				products
+				<b className="font-normal text-text-high">{totalProducts.toLocaleString()}</b> products
 			</span>
 			{/* Expand button */}
 			{relays.length > 0 && onToggle && (
@@ -110,12 +103,7 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({
 				>
 					local index
 					<svg
-						className={cn(
-							'size-3',
-							'text-text-mid',
-							'transition-transform',
-							expanded && 'rotate-180',
-						)}
+						className={cn('size-3', 'text-text-mid', 'transition-transform', expanded && 'rotate-180')}
 						viewBox="0 0 24 24"
 						fill="none"
 						stroke="currentColor"
@@ -166,14 +154,7 @@ export const DeadSearchError: FC<DeadSearchErrorProps> = ({
 		<div
 			data-slot="dead-search-error"
 			data-testid="widget-dead-search-error"
-			className={cn(
-				'rounded',
-				'border',
-				'border-border-default',
-				'bg-surface-sunken',
-				'p-4',
-				className,
-			)}
+			className={cn('rounded', 'border', 'border-border-default', 'bg-surface-sunken', 'p-4', className)}
 		>
 			<div className="text-xs text-text-mid mb-2">
 				{totalRelays} relays contacted · {timeoutCount} timed out · {refusedCount} refused
@@ -258,9 +239,7 @@ export const ListRow: FC<ListRowProps> = ({ item, className }) => {
 			)}
 		>
 			<div className="flex-1 min-w-0">
-				<div className="text-[16.5px] font-medium leading-snug text-text-high">
-					{item.name}
-				</div>
+				<div className="text-[16.5px] font-medium leading-snug text-text-high">{item.name}</div>
 				<div className="flex items-center gap-2 mt-2 text-xs text-text-mid">
 					<span>{item.itemCount} items</span>
 					{item.privacy === 'private' && (
@@ -285,9 +264,7 @@ export const ListRow: FC<ListRowProps> = ({ item, className }) => {
 						</span>
 					)}
 				</div>
-				{item.note && (
-					<p className="text-xs text-text-mid mt-2 leading-relaxed">{item.note}</p>
-				)}
+				{item.note && <p className="text-xs text-text-mid mt-2 leading-relaxed">{item.note}</p>}
 			</div>
 			<div data-slot="list-row-arrow" className="shrink-0">
 				<svg
@@ -353,30 +330,18 @@ export const ListDetail: FC<ListDetailProps> = ({
 	className,
 }) => {
 	return (
-		<div
-			data-slot="list-detail"
-			data-testid="widget-list-detail"
-			className={cn('flex', 'flex-col', 'gap-4', className)}
-		>
+		<div data-slot="list-detail" data-testid="widget-list-detail" className={cn('flex', 'flex-col', 'gap-4', className)}>
 			{/* Eyebrow */}
-			<div
-				data-slot="list-eyebrow"
-				className="flex items-center gap-2.5 text-xs tracking-[0.14em] uppercase text-text-mid"
-			>
+			<div data-slot="list-eyebrow" className="flex items-center gap-2.5 text-xs tracking-[0.14em] uppercase text-text-mid">
 				<span>Browse</span>
 				<span>/</span>
 				<span className="font-medium text-text-high">Lists</span>
 			</div>
 
 			{/* Head: title + chip */}
-			<div
-				data-slot="list-head"
-				className="flex items-end justify-between gap-6"
-			>
+			<div data-slot="list-head" className="flex items-end justify-between gap-6">
 				<div className="flex items-center gap-3">
-					<h1 className="text-[34px] font-bold leading-tight tracking-[-0.015em] text-text-high">
-						{name}
-					</h1>
+					<h1 className="text-[34px] font-bold leading-tight tracking-[-0.015em] text-text-high">{name}</h1>
 					{privacy && (
 						<span
 							data-slot="list-privacy-chip"
@@ -414,10 +379,7 @@ export const ListDetail: FC<ListDetailProps> = ({
 			</div>
 
 			{/* Actions row */}
-			<div
-				data-slot="list-actions"
-				className="flex items-center gap-2.5"
-			>
+			<div data-slot="list-actions" className="flex items-center gap-2.5">
 				<button
 					type="button"
 					data-slot="btn-add-items"
@@ -487,10 +449,7 @@ export const ListDetail: FC<ListDetailProps> = ({
 			</div>
 
 			{/* Meta line: Owned by + npub + count + privacy note */}
-			<div
-				data-slot="list-meta"
-				className="flex items-center gap-2 mt-2 text-xs leading-relaxed text-text-mid"
-			>
+			<div data-slot="list-meta" className="flex items-center gap-2 mt-2 text-xs leading-relaxed text-text-mid">
 				<span>
 					Owned by <span className="font-medium text-text-high">{owner}</span>
 				</span>
@@ -502,20 +461,13 @@ export const ListDetail: FC<ListDetailProps> = ({
 
 			{/* Note */}
 			{note && (
-				<div
-					data-slot="list-note"
-					className="rounded bg-surface-sunken p-3 text-sm leading-relaxed text-text-mid"
-				>
-					<b className="font-medium text-text-high">Note</b>
-					{' '}{note}
+				<div data-slot="list-note" className="rounded bg-surface-sunken p-3 text-sm leading-relaxed text-text-mid">
+					<b className="font-medium text-text-high">Note</b> {note}
 				</div>
 			)}
 
 			{/* Toolbar */}
-			<div
-				data-slot="list-toolbar"
-				className="flex items-center justify-between text-xs text-text-mid"
-			>
+			<div data-slot="list-toolbar" className="flex items-center justify-between text-xs text-text-mid">
 				<span>
 					{shownItems} of {totalItems} items shown
 				</span>

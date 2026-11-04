@@ -65,14 +65,18 @@ describe('BrowseNav', () => {
 		renderToStaticMarkup(
 			createElement(BrowseNav, {
 				active: true,
-				onNavigateHome: () => { called = true },
+				onNavigateHome: () => {
+					called = true
+				},
 			}),
 		)
 		// The handler is attached; verify the anchor exists
 		const markup = renderToStaticMarkup(
 			createElement(BrowseNav, {
 				active: true,
-				onNavigateHome: () => { called = true },
+				onNavigateHome: () => {
+					called = true
+				},
 			}),
 		)
 		expect(markup).toContain('href="/"')
@@ -97,39 +101,29 @@ describe('BrowseNav', () => {
 
 describe('SearchField', () => {
 	test('renders with empty value', () => {
-		const markup = renderToStaticMarkup(
-			createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {} }),
-		)
+		const markup = renderToStaticMarkup(createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {} }))
 		expect(markup).toContain('widget-search-field')
 		expect(markup).toContain('Search')
 	})
 
 	test('renders with non-empty value', () => {
-		const markup = renderToStaticMarkup(
-			createElement(SearchField, { value: 'ceramic bowl', onChange: () => {}, onGo: () => {} }),
-		)
+		const markup = renderToStaticMarkup(createElement(SearchField, { value: 'ceramic bowl', onChange: () => {}, onGo: () => {} }))
 		expect(markup).toContain('widget-search-field')
 		expect(markup).toContain('ceramic bowl')
 	})
 
 	test('shows clear button when value is non-empty', () => {
-		const markup = renderToStaticMarkup(
-			createElement(SearchField, { value: 'bowl', onChange: () => {}, onGo: () => {} }),
-		)
+		const markup = renderToStaticMarkup(createElement(SearchField, { value: 'bowl', onChange: () => {}, onGo: () => {} }))
 		expect(markup).toContain('widget-search-field-clear')
 	})
 
 	test('hides clear button when value is empty', () => {
-		const markup = renderToStaticMarkup(
-			createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {} }),
-		)
+		const markup = renderToStaticMarkup(createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {} }))
 		expect(markup).not.toContain('widget-search-field-clear')
 	})
 
 	test('go button has fill-ink styles', () => {
-		const markup = renderToStaticMarkup(
-			createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {} }),
-		)
+		const markup = renderToStaticMarkup(createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {} }))
 		expect(markup).toContain('widget-search-field-go')
 		expect(markup).toContain('bg-fill-ink')
 		expect(markup).toContain('text-on-fill-ink')
@@ -138,7 +132,13 @@ describe('SearchField', () => {
 	test('go button fires onGo', () => {
 		let fired = false
 		const markup = renderToStaticMarkup(
-			createElement(SearchField, { value: '', onChange: () => {}, onGo: () => { fired = true } }),
+			createElement(SearchField, {
+				value: '',
+				onChange: () => {},
+				onGo: () => {
+					fired = true
+				},
+			}),
 		)
 		expect(markup).toContain('widget-search-field-go')
 	})
@@ -174,7 +174,9 @@ describe('SearchField', () => {
 				value: 'test',
 				onChange: () => {},
 				onGo: () => {},
-				onClear: () => { cleared = true },
+				onClear: () => {
+					cleared = true
+				},
 			}),
 		)
 		const markup = renderToStaticMarkup(
@@ -182,7 +184,9 @@ describe('SearchField', () => {
 				value: 'test',
 				onChange: () => {},
 				onGo: () => {},
-				onClear: () => { cleared = true },
+				onClear: () => {
+					cleared = true
+				},
 			}),
 		)
 		expect(markup).toContain('widget-search-field-clear')
@@ -195,9 +199,7 @@ describe('SearchField', () => {
 
 describe('ProductArt', () => {
 	test('renders with default material and symbol', () => {
-		const markup = renderToStaticMarkup(
-			createElement(ProductArt, { material: 'm1' }),
-		)
+		const markup = renderToStaticMarkup(createElement(ProductArt, { material: 'm1' }))
 		expect(markup).toContain('widget-product-art-m1')
 		expect(markup).toContain('m1')
 	})
@@ -211,9 +213,7 @@ describe('ProductArt', () => {
 	})
 
 	test('renders with custom symbol', () => {
-		const markup = renderToStaticMarkup(
-			createElement(ProductArt, { material: 'm3', symbolId: 'p-jar' }),
-		)
+		const markup = renderToStaticMarkup(createElement(ProductArt, { material: 'm3', symbolId: 'p-jar' }))
 		expect(markup).toContain('p-jar')
 	})
 

@@ -48,13 +48,7 @@ export interface ProductStripProps {
  * Idle: just the material art.
  * Hover: title + seller overlay, lift + saturate.
  */
-export const ProductStrip: FC<ProductStripProps> = ({
-	items,
-	onSelect,
-	className,
-	ref,
-	...props
-}) => {
+export const ProductStrip: FC<ProductStripProps> = ({ items, onSelect, className, ref, ...props }) => {
 	const handleClick: MouseEventHandler = (e) => {
 		const target = e.currentTarget
 		const article = target.closest('article')
@@ -69,14 +63,7 @@ export const ProductStrip: FC<ProductStripProps> = ({
 			ref={ref}
 			data-slot="product-strip"
 			data-testid="widget-product-strip"
-			className={cn(
-				'flex',
-				'items-start',
-				'gap-4',
-				'overflow-x-auto',
-				'py-2',
-				className,
-			)}
+			className={cn('flex', 'items-start', 'gap-4', 'overflow-x-auto', 'py-2', className)}
 			{...props}
 		>
 			{items.map((item) => (
@@ -105,21 +92,8 @@ export const ProductStrip: FC<ProductStripProps> = ({
 					onClick={handleClick}
 				>
 					{/* Material art tile */}
-					<div
-						data-slot="strip-tile"
-						className={cn(
-							'relative',
-							'w-full',
-							'h-full',
-							'overflow-hidden',
-						)}
-					>
-						<ProductArt
-							material={item.material}
-							symbolId={item.symbolId}
-							ratio="1/1"
-							className="size-full"
-						/>
+					<div data-slot="strip-tile" className={cn('relative', 'w-full', 'h-full', 'overflow-hidden')}>
+						<ProductArt material={item.material} symbolId={item.symbolId} ratio="1/1" className="size-full" />
 						{/* Paper veil overlay (always present but only visible on hover) */}
 						<div
 							data-slot="tile-veil"
@@ -154,29 +128,12 @@ export const ProductStrip: FC<ProductStripProps> = ({
 						)}
 						// Hover lift via :has() trick on the parent row
 					>
-						<div
-							data-slot="strip-seller"
-							className={cn(
-								'text-[10px]',
-								'tracking-[0.13em]',
-								'uppercase',
-								'text-on-media',
-								'opacity-80',
-							)}
-						>
+						<div data-slot="strip-seller" className={cn('text-[10px]', 'tracking-[0.13em]', 'uppercase', 'text-on-media', 'opacity-80')}>
 							{item.seller}
 						</div>
 						<div
 							data-slot="strip-title"
-							className={cn(
-								'text-xs',
-								'font-medium',
-								'text-on-media',
-								'opacity-100',
-								'leading-tight',
-								'mt-0.5',
-								'truncate',
-							)}
+							className={cn('text-xs', 'font-medium', 'text-on-media', 'opacity-100', 'leading-tight', 'mt-0.5', 'truncate')}
 						>
 							{item.title}
 						</div>

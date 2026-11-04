@@ -20,10 +20,46 @@ import type { WidgetLibrary } from '../libraries'
 // ---- Mock data ----
 
 const PRODUCTS = [
-	{ id: 'evt-1', title: 'Handcrafted Ceramic Ball', seller: 'atelier-norte', sellerPubkey: 'abcdef01', price: 21000, stock: '76 in stock', material: 'm1' as const, symbol: 'p-bowl' as const },
-	{ id: 'evt-2', title: 'Ceramic Pour-Over Set', seller: 'kiln-and-co', sellerPubkey: '234567', price: 34500, stock: '12 left', material: 'm5' as const, symbol: 'p-jar' as const },
-	{ id: 'evt-3', title: 'Hand-thrown Tumbler, 300 ml', seller: 'atelier-norte', sellerPubkey: 'abcdef01', price: 12900, stock: '40 in stock', material: 'm7' as const, symbol: 'p-mug' as const },
-	{ id: 'evt-4', title: 'Stoneware Planter, Matte White', seller: 'terra-studio', sellerPubkey: '89abcdef', price: 28400, stock: '9 left', material: 'm2' as const, symbol: 'p-bottle' as const },
+	{
+		id: 'evt-1',
+		title: 'Handcrafted Ceramic Ball',
+		seller: 'atelier-norte',
+		sellerPubkey: 'abcdef01',
+		price: 21000,
+		stock: '76 in stock',
+		material: 'm1' as const,
+		symbol: 'p-bowl' as const,
+	},
+	{
+		id: 'evt-2',
+		title: 'Ceramic Pour-Over Set',
+		seller: 'kiln-and-co',
+		sellerPubkey: '234567',
+		price: 34500,
+		stock: '12 left',
+		material: 'm5' as const,
+		symbol: 'p-jar' as const,
+	},
+	{
+		id: 'evt-3',
+		title: 'Hand-thrown Tumbler, 300 ml',
+		seller: 'atelier-norte',
+		sellerPubkey: 'abcdef01',
+		price: 12900,
+		stock: '40 in stock',
+		material: 'm7' as const,
+		symbol: 'p-mug' as const,
+	},
+	{
+		id: 'evt-4',
+		title: 'Stoneware Planter, Matte White',
+		seller: 'terra-studio',
+		sellerPubkey: '89abcdef',
+		price: 28400,
+		stock: '9 left',
+		material: 'm2' as const,
+		symbol: 'p-bottle' as const,
+	},
 ]
 
 const STRIP_ITEMS = PRODUCTS.slice(0, 6).map((p, i) => ({
@@ -36,13 +72,9 @@ const STRIP_ITEMS = PRODUCTS.slice(0, 6).map((p, i) => ({
 
 // ---- browse-nav entries ----
 
-const BrowseNavDefault = () => (
-	<BrowseNav active={true} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
-)
+const BrowseNavDefault = () => <BrowseNav active={true} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
 
-const BrowseNavInactive = () => (
-	<BrowseNav active={false} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
-)
+const BrowseNavInactive = () => <BrowseNav active={false} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
 
 const BrowseNavWithSlots = () => {
 	const [query, setQuery] = useState('ceramic')
@@ -53,7 +85,7 @@ const BrowseNavWithSlots = () => {
 			onNavigateFeatured={() => {}}
 			searchSlot={<SearchField value={query} onChange={setQuery} onGo={() => {}} />}
 			accountSlot={
-				<div data-testid="widget-browse-nav-account" className="flex items-center gap-2 text-sm text-text-mid">
+				<div className="flex items-center gap-2 text-sm text-text-mid">
 					<div className="size-7 rounded-full bg-fill-ink text-on-fill-ink grid place-items-center text-xs font-bold">M</div>
 					Maxime
 				</div>
@@ -86,34 +118,34 @@ const SearchFieldFocused = () => {
 // ---- art module entries ----
 
 const ArtSprite = () => (
-	<div className="relative w-0 h-0 overflow-hidden">
+	<div className="relative w-16 h-16 border border-dashed border-gray-300">
 		<ProductSprite />
 	</div>
 )
 
-const ArtM1 = () => <ProductArt material="m1" data-testid="widget-art-m1" />
-const ArtM2 = () => <ProductArt material="m2" data-testid="widget-art-m2" />
-const ArtM3 = () => <ProductArt material="m3" data-testid="widget-art-m3" />
-const ArtM4 = () => <ProductArt material="m4" data-testid="widget-art-m4" />
-const ArtM5 = () => <ProductArt material="m5" data-testid="widget-art-m5" />
-const ArtM6 = () => <ProductArt material="m6" data-testid="widget-art-m6" />
-const ArtM7 = () => <ProductArt material="m7" data-testid="widget-art-m7" />
-const ArtM8 = () => <ProductArt material="m8" data-testid="widget-art-m8" />
+const ArtM1 = () => <ProductArt material="m1" />
+const ArtM2 = () => <ProductArt material="m2" />
+const ArtM3 = () => <ProductArt material="m3" />
+const ArtM4 = () => <ProductArt material="m4" />
+const ArtM5 = () => <ProductArt material="m5" />
+const ArtM6 = () => <ProductArt material="m6" />
+const ArtM7 = () => <ProductArt material="m7" />
+const ArtM8 = () => <ProductArt material="m8" />
 
 const ArtAllMaterials = () => (
 	<div className="grid grid-cols-4 gap-2">
-		<ProductArt material="m1" data-testid="widget-art-all-m1" />
-		<ProductArt material="m2" data-testid="widget-art-all-m2" />
-		<ProductArt material="m3" data-testid="widget-art-all-m3" />
-		<ProductArt material="m4" data-testid="widget-art-all-m4" />
-		<ProductArt material="m5" data-testid="widget-art-all-m5" />
-		<ProductArt material="m6" data-testid="widget-art-all-m6" />
-		<ProductArt material="m7" data-testid="widget-art-all-m7" />
-		<ProductArt material="m8" data-testid="widget-art-all-m8" />
+		<ProductArt material="m1" />
+		<ProductArt material="m2" />
+		<ProductArt material="m3" />
+		<ProductArt material="m4" />
+		<ProductArt material="m5" />
+		<ProductArt material="m6" />
+		<ProductArt material="m7" />
+		<ProductArt material="m8" />
 	</div>
 )
 
-const ArtSquareRatio = () => <ProductArt material="m3" ratio="1/1" data-testid="widget-art-square" />
+const ArtSquareRatio = () => <ProductArt material="m3" ratio="1/1" />
 
 // ---- product-card entries ----
 
@@ -191,13 +223,9 @@ const ProductCardMenuOpen = () => {
 
 // ---- product-strip entries ----
 
-const ProductStripDefault = () => (
-	<ProductStrip items={STRIP_ITEMS} onSelect={() => {}} />
-)
+const ProductStripDefault = () => <ProductStrip items={STRIP_ITEMS} onSelect={() => {}} />
 
-const ProductStripSingleItem = () => (
-	<ProductStrip items={[STRIP_ITEMS[0]]} onSelect={() => {}} />
-)
+const ProductStripSingleItem = () => <ProductStrip items={[STRIP_ITEMS[0]]} onSelect={() => {}} />
 
 // ---- account-pane entries ----
 

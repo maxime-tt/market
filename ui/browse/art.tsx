@@ -35,6 +35,16 @@ export const MATERIAL_CSS = `
 .m8{ --obj:oklch(0.42 0.07 300); --obj2:oklch(0.61 0.06 295);
      background:linear-gradient(180deg, oklch(0.95 0.022 300), oklch(0.92 0.032 295) 72%, oklch(0.87 0.038 290) 78%, oklch(0.93 0.026 300)); }
 `
+/**
+ * Seller avatar tint classes — deterministic hues derived from seller pubkey.
+ * Three hues rotate per seller; matches the per-seller tinting pattern from
+ * the frames. Documented here as CSS rather than inline style (AGENTS.md §6).
+ */
+export const AVATAR_TINT_CSS = `
+.avatar-tint-0 { --tint: oklch(0.7 0.06 345); background: var(--tint); }
+.avatar-tint-1 { --tint: oklch(0.7 0.06 20); background: var(--tint); }
+.avatar-tint-2 { --tint: oklch(0.7 0.06 320); background: var(--tint); }
+`
 
 // ---------------------------------------------------------------------------
 // SVG sprite symbols — verbatim from the frames
@@ -137,12 +147,7 @@ const SVG_SYMBOLS: { id: string; d: React.ReactNode }[] = [
  */
 export function ProductSprite({ className }: { className?: string }) {
 	return (
-		<svg
-			className={cn('sprite', 'absolute', 'left-0', 'top-0', 'overflow-hidden', className)}
-			aria-hidden="true"
-			width="0"
-			height="0"
-		>
+		<svg className={cn('sprite', 'absolute', 'left-0', 'top-0', 'overflow-hidden', className)} aria-hidden="true" width="0" height="0">
 			{SVG_SYMBOLS.map((sym) => (
 				<symbol key={sym.id} id={sym.id} viewBox="0 0 188 176">
 					{sym.d}
@@ -195,11 +200,7 @@ export const ProductArt: FC<ProductArtProps> = ({ material, symbolId, ratio = '3
 			)}
 			{...props}
 		>
-			<svg
-				className="absolute inset-0 size-full"
-				viewBox="0 0 188 176"
-				aria-hidden="true"
-			>
+			<svg className="absolute inset-0 size-full" viewBox="0 0 188 176" aria-hidden="true">
 				<use href={`#${symbolId ?? defaultSymbol}`} />
 			</svg>
 		</div>

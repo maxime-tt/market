@@ -130,9 +130,7 @@ export const AccountPane: FC<AccountPaneProps> = ({
 
 			{/* Cashu balance section */}
 			<div data-slot="balance" className="border-t border-border-default pt-4">
-				<div className="text-xs tracking-wide text-text-mid">
-					Cashu balance · held here
-				</div>
+				<div className="text-xs tracking-wide text-text-mid">Cashu balance · held here</div>
 				<div
 					data-slot="balance-amount"
 					className="text-[32px] font-medium text-text-high leading-tight"
@@ -142,8 +140,8 @@ export const AccountPane: FC<AccountPaneProps> = ({
 					<small className="text-base text-text-mid font-normal ml-1">sats</small>
 				</div>
 				<p className="text-xs text-text-mid mt-1.5 leading-relaxed">
-					Bearer tokens you hold — payable without a third party. Lightning is
-					never custodied: invoices are served by your own wallet over NWC.
+					Bearer tokens you hold — payable without a third party. Lightning is never custodied: invoices are served by your own wallet over
+					NWC.
 				</p>
 				<div data-slot="balance-actions" className="mt-3 flex flex-wrap gap-2">
 					{onTopUp && (
@@ -363,11 +361,7 @@ export const AccountPane: FC<AccountPaneProps> = ({
 					)}
 				</ul>
 				<div className="border-t border-border-default mt-2" />
-				<div
-					data-slot="sign-out"
-					data-testid="widget-account-pane-sign-out"
-					className="mt-3.5 pt-3 border-t border-border-default"
-				>
+				<div data-slot="sign-out" data-testid="widget-account-pane-sign-out" className="mt-3.5 pt-3 border-t border-border-default">
 					{onSignOut ? (
 						<button
 							type="button"

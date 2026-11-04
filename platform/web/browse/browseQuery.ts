@@ -11,90 +11,115 @@
 
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { getReadContext } from '../readContext'
+import type { EventFilter } from '@sdk/core/event-store/filter'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
-// EventFilter is imported implicitly via getReadContext's return type
+// Canonical read model: sdk/commerce/discovery/productReadModel.ts
+import {
+	getProductCategories,
+	getProductImages,
+	getProductPrice,
+	getProductId,
+	getProductPubkey,
+	getProductStock,
+	getProductTitle,
+} from '@sdk/commerce/discovery'
+
 // ---------------------------------------------------------------------------
 // Query key factory
 // ---------------------------------------------------------------------------
 
 export const browseKeys = {
 	all: ['browse'] as const,
-	/** Stream filter for all products (kind-30405) matching a query/tag. */
-	search: (filters: { kind?: number; tag?: string; limit?: number }) =>
-		[...browseKeys.all, 'search', filters] as const,
+	/** Stream filter for kind-30402 products matching a query/tag. */
+	search: (filters: { query: string; tag?: string; limit?: number }) => [...browseKeys.all, 'search', filters] as const,
 	/** Single product detail by event id (fetch, not stream). */
 	detail: (id: string) => [...browseKeys.all, 'detail', id] as const,
-	/** Account profile by current pubkey. */
-	profile: (pubkey: string) => [...browseKeys.all, 'profile', pubkey] as const,
 } as const
+
+// ---------------------------------------------------------------------------
+// BrowseProduct shape — consumed by @ui/browse/product-card
+// ---------------------------------------------------------------------------
+
+/** The minimal product shape the Browse UI expects. */
+export interface BrowseProduct {
+	id: string
+	pubkey: string
+	title: string
+	price?: number
+	stock?: string
+	image?: string
+	categories: string[]
+}
+
+/**
+ * Map a kind-30402 NostrEventLike into a BrowseProduct using the canonical
+ * discovery read model (sdk/commerce/discovery/productReadModel.ts).
+ * Exactly as ui/products/product-card-view.tsx does: getProductId,
+ * getProductTitle, getProductPrice, getProductImages, getProductStock,
+ * getProductCategories — each over ProductReadEvent.
+ */
+function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
+	const title = getProductTitle(event)
+	const priceTag = getProductPrice(event)
+	const price = priceTag ? Number(priceTag[1]) || undefined : undefined
+	const stockTag = getProductStock(event)
+	const stock = stockTag?.[1]
+	const images = getProductImages(event)
+	const image = images.length > 0 ? images[0][1] : undefined
+	const categories = getProductCategories(event).map((t) => t[1])
+	const pubkey = getProductPubkey(event)
+	const id = getProductId(event) || event.id
+
+	if (!title && !id) return undefined
+
+	return {
+		id,
+		pubkey,
+		title: title || 'Untitled',
+		price,
+		stock,
+		image,
+		categories,
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Search/results stream
 // ---------------------------------------------------------------------------
 
-export interface BrowseProduct {
-	/** Nostr event id. */
-	id: string
-	/** Pubkey of the publisher. */
-	pubkey: string
-	/** Product title. */
-	title: string
-	/** Price in sats (kind-30405 d-tag). */
-	price?: number
-	/** Stock note (kind-30405 d-tag or content). */
-	stock?: string
-	/** Product image URL (kind-30405 d-tag). */
-	image?: string
-	/** Categories (kind-30405 d-tags). */
-	categories?: string[]
-}
-
-function extractProduct(event: NostrEventLike): BrowseProduct | undefined {
-	const content = typeof event.content === 'string' ? event.content : ''
-	const title = event.tags.find((t) => t[0] === 'd' && t[1] === 'title')?.[1] ?? content.split('\n')[0]
-	const priceTag = event.tags.find((t) => t[0] === 'd' && t[1] === 'price')?.[1]
-	const price = priceTag ? parseInt(priceTag, 10) : undefined
-	const stockTag = event.tags.find((t) => t[0] === 'd' && t[1] === 'stock')?.[1]
-	const imageTag = event.tags.find((t) => t[0] === 'd' && t[1] === 'image')?.[1]
-	const categories = event.tags.filter((t) => t[0] === 'd' && t[1] !== 'title' && t[1] !== 'price' && t[1] !== 'stock' && t[1] !== 'image').map((t) => t[1])
-
-	return {
-		id: event.id,
-		pubkey: event.pubkey,
-		title: title ?? 'Untitled',
-		price,
-		stock: stockTag,
-		image: imageTag,
-		categories,
-	}
-}
-
 /**
  * Query options for the browse search/results stream.
  * Uses `stream()` — never `fetch` for lists.
+ * Mirrors platform/web/products/productQuery.ts fetchProductsBySearch:
+ * kind 30402, NIP-50 free-text search string, optional #t tag filter.
  */
-export function browseSearchQueryOptions(
-	query: string,
-	tag?: string,
-	limit = 100,
-) {
+export function browseSearchQueryOptions(query: string, tag?: string, limit = 100) {
 	return queryOptions({
-		queryKey: browseKeys.search({ kind: 30405, tag, limit }),
+		queryKey: browseKeys.search({ query, tag, limit }),
 		queryFn: async () => {
+			if (!query?.trim()) return []
+
 			const ctx = getReadContext()
-			const filters = [
-				{ kinds: [30405], search: query ? query.split(/\s+/) : [] },
-			]
-			const results: NostrEventLike[] = []
-			for await (const item of ctx.stream(filters)) {
+			const filter: EventFilter = {
+				kinds: [30402],
+				search: query, // NIP-50 search takes a string, not an array
+				limit,
+			}
+			if (tag) {
+				filter['#t'] = [tag]
+			}
+
+			const results: BrowseProduct[] = []
+			for await (const item of ctx.stream([filter])) {
 				if (item.type === 'event') {
-					const product = extractProduct(item.event)
-					if (product) results.push(item.event as NostrEventLike)
+					const product = mapProduct(item.event)
+					if (product) results.push(product)
 				}
 				if (item.type === 'caught-up') break
 			}
 			return results
 		},
+		enabled: !!query?.trim(),
 	})
 }
 
@@ -110,18 +135,20 @@ export function useBrowseSearch(query: string, tag?: string, limit?: number) {
  * Fetch a single product by event id. Uses `fetch()` (bounded stream, not
  * `stream()`) because this is a single-entity read by coordinate.
  */
-export function browseProductDetailQueryOptions(id: string) {
+export function browseProductDetailQueryOptions(id: string | undefined) {
 	return queryOptions({
-		queryKey: browseKeys.detail(id),
+		queryKey: browseKeys.detail(id ?? ''),
 		queryFn: async () => {
+			if (!id) return []
 			const ctx = getReadContext()
 			// Bounded fetch for single product detail (not a list)
-			const events = await ctx.fetch([{ ids: [id], kinds: [30405] }])
-			return events.map(extractProduct).filter(Boolean) as BrowseProduct[]
+			const events = await ctx.fetch([{ ids: [id], kinds: [30402] }])
+			return events.map(mapProduct).filter(Boolean) as BrowseProduct[]
 		},
+		enabled: Boolean(id),
 	})
 }
 
-export function useBrowseProductDetail(id: string) {
+export function useBrowseProductDetail(id: string | undefined) {
 	return useQuery(browseProductDetailQueryOptions(id))
 }

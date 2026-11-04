@@ -116,14 +116,7 @@ export const BrowseNav: FC<BrowseNavProps> = ({
 					href="/#featured"
 					data-slot="featured-link"
 					data-testid="widget-browse-nav-featured"
-					className={cn(
-						'text-sm',
-						'font-medium',
-						'text-text-mid',
-						'hover:text-fill-ink',
-						'transition-colors',
-						'cursor-pointer',
-					)}
+					className={cn('text-sm', 'font-medium', 'text-text-mid', 'hover:text-fill-ink', 'transition-colors', 'cursor-pointer')}
 					onClick={handleFeaturedClick}
 					aria-label="Featured products"
 				>
@@ -133,20 +126,14 @@ export const BrowseNav: FC<BrowseNavProps> = ({
 
 			{/* Centre: search field slot */}
 			{searchSlot && (
-				<div
-					data-slot="search-slot"
-					className="flex-1 flex justify-center"
-				>
+				<div data-slot="search-slot" className="flex-1 flex justify-center">
 					{searchSlot}
 				</div>
 			)}
 
 			{/* Right: account slot */}
 			{accountSlot && (
-				<div
-					data-slot="account-slot"
-					className="ml-auto"
-				>
+				<div data-slot="account-slot" className="ml-auto">
 					{accountSlot}
 				</div>
 			)}
