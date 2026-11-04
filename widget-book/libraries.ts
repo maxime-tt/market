@@ -19,6 +19,7 @@ import { settings } from './libraries/settings'
 import { storefront } from './libraries/storefront'
 import { shared } from './libraries/shared'
 import { wallet } from './libraries/wallet'
+import { browse } from './libraries/browse'
 import { wrappers } from './libraries/wrappers'
 
 export interface WidgetEntry {
@@ -61,6 +62,7 @@ export const libraries: WidgetLibrary[] = [
 	shared,
 	storefront,
 	wallet,
+	browse,
 	wrappers,
 ]
 
