@@ -1,141 +1,44 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Button } from '@ui/wrappers/button'
-import { Badge } from '@ui/primitives/badge'
-import { productFormActions } from '@platform/web/products/productFormStore'
-import { uiActions } from '@platform/web/app/uiStore'
-import { authStore } from '@platform/web/auth/authStore'
-import { useStore } from '@tanstack/react-store'
-import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
-import { useMemo } from 'react'
-import { Link } from '@tanstack/react-router'
-import { FeaturedSections } from '@platform/web/featured/FeaturedSections'
-import { InfiniteProductListHost } from '@platform/web/products/InfiniteProductListHost'
-import { PRODUCT_CATEGORIES } from '@sdk/config/constants'
-import { getProductCategories } from '@platform/web/products/productQuery'
-import { useQuery } from '@tanstack/react-query'
-import { productsQueryOptions } from '@platform/web/products/productQuery'
 import { z } from 'zod'
-import { SelectableBadge } from '@ui/wrappers/selectable-badge'
+import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
 
-const homeSearchSchema = z.object({
+/**
+ * Browse URL state: ?q=&tag=&p=
+ *
+ * q   — search query string
+ * tag — product category/hashtag filter
+ * p   — open product event id; the split-view panel that consumes it is Phase 2
+ */
+const browseSearchSchema = z.object({
+	q: z.string().default(''),
 	tag: z.string().optional(),
+	p: z.string().optional(),
 })
 
 export const Route = createFileRoute('/')({
-	component: Index,
-	validateSearch: homeSearchSchema,
+	component: BrowseIndex,
+	validateSearch: browseSearchSchema,
 })
 
-function Index() {
+function BrowseIndex() {
+	const { q, tag, p } = Route.useSearch()
 	const navigate = useNavigate()
-	const { tag } = Route.useSearch()
-	const { isAuthenticated } = useStore(authStore)
-	// Fetch all products without tag filter to extract all available tags
-	// Using useQuery (not useSuspenseQuery) for progressive loading - page renders immediately
-	const productsQuery = useQuery({
-		...productsQueryOptions(500),
-		// Retry every 3 seconds if we got empty results (NDK wasn't ready)
-		refetchInterval: (query) => (query.state.data?.length ? false : 3000),
-	})
-	const products = productsQuery.data ?? []
-
-	// Extract all unique tags from products
-	const allTags = useMemo(() => {
-		const tagSet = new Set<string>()
-		products.forEach((product) => {
-			const categories = getProductCategories(product)
-			categories.forEach((cat) => {
-				if (cat[1]) tagSet.add(cat[1])
-			})
-		})
-		return Array.from(tagSet)
-	}, [products])
-
-	// Separate default categories and other tags
-	const defaultTags = PRODUCT_CATEGORIES.filter((cat) => allTags.includes(cat))
-
-	const handleTagClick = (selectedTag: string) => {
-		if (tag === selectedTag) {
-			// If clicking the same tag, clear the filter
-			navigate({ to: '/products' })
-		} else {
-			navigate({ to: '/products', search: (prev: any) => ({ ...prev, tag: selectedTag }) })
-		}
-	}
-
-	const handleClearFilter = () => {
-		navigate({ to: '/' })
-	}
-
-	// Use the market image for homepage background
-	const marketBackgroundImageUrl = '/images/market-background.jpg'
-
-	const handleStartSelling = () => {
-		if (isAuthenticated) {
-			productFormActions.openCreateProductDrawer()
-		} else {
-			uiActions.openDialog('login')
-		}
-	}
 
 	return (
-		<div>
-			{/* Hero Section */}
-			<div
-				className={`relative hero-container ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
-				style={heroBackgroundStyle(marketBackgroundImageUrl)}
-			>
-				<div className="hero-overlays">
-					<div className="z-10 absolute inset-0 bg-radial-overlay opacity-40" />
-					<div className="z-10 absolute inset-0 bg-dots-overlay opacity-20" />
-				</div>
-
-				<div className="hero-content">
-					<div className="z-20 relative flex flex-col justify-center items-center lg:col-span-2 mt-16 lg:mt-0 text-white text-center">
-						<div className="flex justify-center items-center h-24 lg:h-32">
-							<h1 className="font-theylive text-4xl lg:text-5xl transition-opacity duration-500">Buy & Sell Stuff with sats</h1>
-						</div>
-
-						<Button variant="secondary" size="lg" onClick={handleStartSelling} className="bg-focus rounded hover:bg-focus-foreground-hover">
-							<span className="flex items-center gap-2">
-								<span className="size-6 i-nostr" />
-								Start Selling
-							</span>
-						</Button>
-					</div>
-				</div>
-			</div>
-			{/* Tag Filter Bar */}
-			{defaultTags.length > 0 && (
-				<div className="top-0 z-20 sticky bg-off-black shadow-sm border-b">
-					<div className="hide-scrollbar overflow-x-auto px-4 py-3">
-						<div className="flex items-center gap-2 min-w-max">
-							<SelectableBadge isSelected className="transition-colors cursor-pointer" onClick={handleClearFilter}>
-								All
-							</SelectableBadge>
-							{defaultTags.map((tagName) => (
-								<SelectableBadge key={tagName} className="transition-colors cursor-pointer" onClick={() => handleTagClick(tagName)}>
-									{tagName}
-								</SelectableBadge>
-							))}
-						</div>
-					</div>
-				</div>
-			)}
-
-			<FeaturedSections maxItemsPerSection={5} />
-
-			{/* Infinite Product List */}
-			<div className="px-8 py-4">
-				<InfiniteProductListHost
-					title="All Products"
-					scrollKey="homepage-products"
-					chunkSize={20}
-					threshold={1000}
-					autoLoad={true}
-					tag={tag}
-				/>
-			</div>
-		</div>
+		<BrowseIndexHost
+			q={q}
+			tag={tag}
+			onNavigate={(search) => {
+				navigate({
+					to: '/',
+					search: {
+						q: search.q ?? q,
+						tag: search.tag ?? tag,
+						p: search.p ?? p,
+					},
+				})
+			}}
+			onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+		/>
 	)
 }

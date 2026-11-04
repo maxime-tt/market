@@ -36,7 +36,6 @@ platform/web/routes/auctions.$auctionId.tsx|raw-palette|61
 platform/web/routes/auctions.index.tsx|raw-palette|11
 platform/web/routes/collection.$collectionId.tsx|raw-palette|6
 platform/web/routes/community.index.tsx|raw-palette|12
-platform/web/routes/index.tsx|raw-palette|2
 platform/web/routes/posts.$postId.tsx|raw-palette|1
 platform/web/routes/products.$productId.tsx|raw-palette|29
 platform/web/routes/products.index.tsx|raw-palette|11
@@ -54,3 +53,4 @@ ui/shared/image-viewer-modal.tsx|parked-scrim|16
 ui/shared/info-tooltip.test.tsx|enforcement-assertion|1
 ui/storefront/blocks/HeroBlock.tsx|parked-scrim|2
 ui/storefront/blocks/ProfileHeaderBlock.tsx|parked-scrim|3
+ui/wallet/wallet-views.test.tsx|enforcement-assertion|2
