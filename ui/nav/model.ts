@@ -146,7 +146,7 @@ export const DASHBOARD_NAV: readonly NavSection[] = [
 			// like the other editors: the Puck chrome owns the panel edge to edge.
 			// `isNavItemActive`'s trailing-slash boundary keeps this item distinct
 			// from the plain `/dashboard/account/profile` item above.
-			item('/dashboard/account/profile-page', '🎨', 'Profile Page', { fullBleed: true, hidesPageTitle: true }),
+			item('/dashboard/account/profile-page', '🎨', 'Storefront', { fullBleed: true, hidesPageTitle: true }),
 			item('/dashboard/account/making-payments', '💳', 'Make Payments', { fullBleed: true, hidesPageTitle: true }),
 			item('/dashboard/account/receiving-payments', '💸', 'Receive Payments', { fullBleed: true, hidesPageTitle: true }),
 			item('/dashboard/account/your-purchases', '🛍️', 'Your Purchases', {

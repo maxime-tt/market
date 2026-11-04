@@ -85,6 +85,10 @@ const BOUNDARY_LEAK_ALLOWLIST = new Set([
 	'platform/web/shipping/shippingPublish.ts',
 	'platform/web/nip89.ts',
 	'platform/web/migration.tsx',
+	// cms (d7s2): storefront product grid uses NDKEvent casts in the product card host;
+	// the storefront theme-studio lane owns this file — converting needs the messaging
+	// batch to also cover the StorefrontBlockSlots product-render bridge.
+	'platform/web/storefront/StorefrontBlockSlots.tsx',
 	// tail (batch 7): the NIP-15 read's only consumer is the dashboard migration route, whose
 	// `MigrationForm` host is a declared bridge that still requires the NDK event type.
 	'platform/web/migration/migrationQuery.ts',

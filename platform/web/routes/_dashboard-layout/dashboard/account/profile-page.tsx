@@ -7,7 +7,7 @@ import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profile-page')({
 	component: () => {
-		useDashboardTitle('🎨 Profile Page')
+		useDashboardTitle('Storefront')
 		const user = useStore(authStore, (state) => state.user)
 		const pubkey = user?.pubkey
 
