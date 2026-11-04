@@ -35,6 +35,30 @@ test.describe('browse library', () => {
 		await expect(page.locator('[data-testid="widget-browse-nav-featured"]')).toBeVisible()
 	})
 
+	test('product-card entries render', async ({ page }) => {
+		await page.goto('/?library=browse')
+
+		// Default card
+		const defaultCard = page.locator('[data-widget="product-card-default"] [data-testid]')
+		await expect(defaultCard).toBeVisible()
+
+		// Auction card with bid pill
+		const auctionCard = page.locator('[data-widget="product-card-auction"] [data-slot="bid-pill"]')
+		await expect(auctionCard).toBeVisible()
+		await expect(auctionCard).toContainText('bids')
+	})
+
+	test('product-strip entries render', async ({ page }) => {
+		await page.goto('/?library=browse')
+
+		const strip = page.locator('[data-widget="product-strip-default"] [data-testid="widget-product-strip"]')
+		await expect(strip).toBeVisible()
+
+		// Each strip item should be visible
+		const stripItems = strip.locator('[data-testid^="widget-strip-item-"]')
+		await expect(stripItems).toHaveCount(6)
+	})
+
 	test('search-field entries render', async ({ page }) => {
 		await page.goto('/?library=browse')
 
