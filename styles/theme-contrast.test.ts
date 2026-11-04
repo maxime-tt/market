@@ -83,40 +83,45 @@ const WCAG_AA_NON_TEXT = 3
  * (`--border-strong`) and the focus ring must clear the 3:1 of WCAG 1.4.11 /
  * 2.4.13. `--border-default` is a decorative hairline (1.4:1 by design, per
  * the warm-editorial direction) and is deliberately not asserted.
+ *
+ * Deviation: the frame (notes/artboards/browse/frames/Glje8eeQGh__browse-idle-1440.html)
+ * uses --focus-ring: oklch(0.45 0.15 350) as a scheme-stable value. This cannot clear
+ * 3:1 on dark ground (max 2.59:1 on pure black). The adopted single scheme-stable value
+ * is oklch(0.58 0.15 350): 4.65:1 on light bg, 3.90:1 on dark bg.
  */
 type RolePair = readonly [number, number, number]
 type RoleTable = Record<string, RolePair>
 
 const LIGHT_ROLES = {
-	bg: [0.96, 0.02, 90],
-	'surface-raised': [0.98, 0.015, 90],
-	'surface-sunken': [0.93, 0.02, 90],
-	'surface-hover': [0.9, 0.04, 90],
-	'fill-accent': [0.62, 0.13, 55],
-	'on-fill-accent': [0.145, 0, 0],
-	'fill-ink': [0.42, 0.07, 145],
-	'on-fill-ink': [0.98, 0.015, 90],
-	'fill-ink-hover': [0.36, 0.06, 145],
-	'text-high': [0.28, 0.03, 140],
-	'text-mid': [0.48, 0.03, 130],
-	'border-strong': [0.62, 0.045, 85],
-	'focus-ring': [0.55, 0.1, 145],
+	bg: [1, 0, 0],
+	'surface-raised': [0.985, 0, 0],
+	'surface-sunken': [0.96, 0.008, 350],
+	'surface-hover': [0.93, 0.016, 350],
+	'fill-accent': [0.34, 0.11, 350],
+	'on-fill-accent': [0.99, 0, 0],
+	'fill-ink': [0.688, 0.249, 348],
+	'on-fill-ink': [0.145, 0, 0],
+	'fill-ink-hover': [0.63, 0.24, 348],
+	'text-high': [0.22, 0.02, 340],
+	'text-mid': [0.48, 0.03, 340],
+	'border-strong': [0.66, 0.03, 340],
+	'focus-ring': [0.58, 0.15, 350],
 } satisfies RoleTable
 
 const DARK_ROLES = {
-	bg: [0.19, 0.014, 90],
-	'surface-raised': [0.23, 0.011, 90],
-	'surface-sunken': [0.27, 0.014, 90],
-	'surface-hover': [0.31, 0.028, 90],
-	'fill-accent': [0.62, 0.13, 55],
-	'on-fill-accent': [0.145, 0, 0],
-	'fill-ink': [0.8, 0.05, 145],
-	'on-fill-ink': [0.25, 0.03, 145],
-	'fill-ink-hover': [0.86, 0.045, 145],
-	'text-high': [0.94, 0.021, 140],
-	'text-mid': [0.75, 0.021, 130],
-	'border-strong': [0.52, 0.03, 85],
-	'focus-ring': [0.55, 0.1, 145],
+	bg: [0.2, 0, 0],
+	'surface-raised': [0.24, 0, 0],
+	'surface-sunken': [0.15, 0.0056, 350],
+	'surface-hover': [0.19, 0.01, 350],
+	'fill-accent': [0.34, 0.11, 350],
+	'on-fill-accent': [0.99, 0, 0],
+	'fill-ink': [0.85, 0.174, 348],
+	'on-fill-ink': [0.12, 0, 0],
+	'fill-ink-hover': [0.91, 0.168, 348],
+	'text-high': [0.95, 0.014, 340],
+	'text-mid': [0.76, 0.021, 340],
+	'border-strong': [0.55, 0.021, 340],
+	'focus-ring': [0.58, 0.15, 350],
 } satisfies RoleTable
 
 function roleTextPairs(roles: RoleTable): Array<[string, RolePair, RolePair]> {
@@ -157,6 +162,63 @@ describe('theme contrast — Tier-1 roles (Phase 0 warm-editorial values)', () =
 			])
 		})
 	}
+})
+
+describe('theme contrast — legacy fill/label pairs (≥ 4.5:1)', () => {
+	// --primary/primary-foreground (+hover), --secondary/secondary-foreground,
+	// --focus/focus-foreground (+hover) must all clear 4.5:1 in both modes.
+	const legacyLight = {
+		'--primary': { fill: [0.688, 0.249, 348] as RolePair, fg: [0.145, 0, 0] as RolePair, fgHover: [0.145, 0, 0] as RolePair },
+		'--secondary': { fill: [0.688, 0.249, 348] as RolePair, fg: [0.145, 0, 0] as RolePair, fgHover: [0.145, 0, 0] as RolePair },
+		'--focus': { fill: [0.688, 0.249, 348] as RolePair, fg: [0.145, 0, 0] as RolePair, fgHover: [0.12, 0, 0] as RolePair },
+	} satisfies Record<string, { fill: RolePair; fg: RolePair; fgHover: RolePair }>
+	for (const [name, { fill, fg, fgHover }] of Object.entries(legacyLight)) {
+		test(`${name} foreground passes WCAG AA (light)`, () => {
+			const ratio = contrastRatio(oklchToLuminance(...fill), oklchToLuminance(...fg))
+			expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_NORMAL)
+		})
+		test(`${name} foreground-hover passes WCAG AA (light)`, () => {
+			const ratio = contrastRatio(oklchToLuminance(...fill), oklchToLuminance(...fgHover))
+			expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_NORMAL)
+		})
+	}
+	const legacyDark = {
+		'--primary': { fill: [0.85, 0.174, 348] as RolePair, fg: [0.12, 0, 0] as RolePair, fgHover: [0.12, 0, 0] as RolePair },
+		'--secondary': { fill: [0.85, 0.174, 348] as RolePair, fg: [0.12, 0, 0] as RolePair, fgHover: [0.12, 0, 0] as RolePair },
+		'--focus': { fill: [0.85, 0.174, 348] as RolePair, fg: [0.12, 0, 0] as RolePair, fgHover: [0.12, 0, 0] as RolePair },
+	} satisfies Record<string, { fill: RolePair; fg: RolePair; fgHover: RolePair }>
+	for (const [name, { fill, fg, fgHover }] of Object.entries(legacyDark)) {
+		test(`${name} foreground passes WCAG AA (dark)`, () => {
+			const ratio = contrastRatio(oklchToLuminance(...fill), oklchToLuminance(...fg))
+			expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_NORMAL)
+		})
+		test(`${name} foreground-hover passes WCAG AA (dark)`, () => {
+			const ratio = contrastRatio(oklchToLuminance(...fill), oklchToLuminance(...fgHover))
+			expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_NORMAL)
+		})
+	}
+})
+
+describe('theme contrast — legacy boundary pairs (≥ 3:1)', () => {
+	const WCAG_NON_TEXT = 3
+	const bgLight = [1, 0, 0] as RolePair
+	const bgDark = [0.2, 0, 0] as RolePair
+	const ring = [0.58, 0.15, 350] as RolePair
+	const inputLight = [0.66, 0.03, 340] as RolePair
+	const inputDark = [0.55, 0.021, 340] as RolePair
+
+	test('--ring clears 3:1 on light bg', () => {
+		expect(contrastRatio(oklchToLuminance(...bgLight), oklchToLuminance(...ring))).toBeGreaterThanOrEqual(WCAG_NON_TEXT)
+	})
+	test('--ring clears 3:1 on dark bg', () => {
+		expect(contrastRatio(oklchToLuminance(...bgDark), oklchToLuminance(...ring))).toBeGreaterThanOrEqual(WCAG_NON_TEXT)
+	})
+	test('--input clears 3:1 on light bg', () => {
+		expect(contrastRatio(oklchToLuminance(...bgLight), oklchToLuminance(...inputLight))).toBeGreaterThanOrEqual(WCAG_NON_TEXT)
+	})
+	test('--input clears 3:1 on dark bg', () => {
+		expect(contrastRatio(oklchToLuminance(...bgDark), oklchToLuminance(...inputDark))).toBeGreaterThanOrEqual(WCAG_NON_TEXT)
+	})
 })
 
 describe('theme contrast — WCAG AA for UX-state tokens (≥ 4.5:1)', () => {
