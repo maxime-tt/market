@@ -5,38 +5,40 @@ import { ProductCard } from '@ui/browse/product-card'
 import { EmptyState } from '@ui/shared/empty-state'
 import { LoadingState } from '@ui/shared/loading-state'
 import { ErrorState } from '@ui/shared/error-state'
-import { useBrowseSearch, useBrowseProductDetail } from '@platform/web/browse/browseQuery'
-import type { BrowseProduct } from '@platform/web/browse/browseQuery'
+import { useBrowseSearch } from '@platform/web/browse/browseQuery'
 import { useAuth } from '@platform/web/auth/authStore'
+
+/** The Browse URL state the host asks the route to write back. */
+export interface BrowseSearchState {
+	q?: string
+	tag?: string
+	p?: string
+}
 
 interface BrowseIndexHostProps {
 	q: string
 	tag: string | undefined
-	p: string | undefined
-	onNavigate: (search: Record<string, unknown>) => void
+	onNavigate: (search: BrowseSearchState) => void
+	onNavigateFeatured: () => void
 }
 
 /**
- * Host that wires up the Browse shell with data/state.
- * The route (platform/web/routes/index.tsx) composes this + BrowseNav slot.
+ * Host that wires the Browse shell to real reads. The route
+ * (platform/web/routes/index.tsx) composes it.
  *
- * Phase-2 surfaces omitted: account pane, relay indicator, wallet balance,
- * context menu actions. The account trigger shows the real auth identity
- * or nothing when signed out.
+ * Phase-2 surfaces are deliberately absent: the account pane, the relay
+ * indicator, the wallet balance, the card context-menu actions and the `?p=`
+ * split view. The account affordance renders the signed-in identity read-only.
+ * `browseProductDetailQueryOptions` in ./browseQuery is the seam the panel lane
+ * consumes when it fills the split view.
  */
-export function BrowseIndexHost({ q, tag, p, onNavigate }: BrowseIndexHostProps) {
+export function BrowseIndexHost({ q, tag, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 
 	const { user } = useAuth()
 
 	const searchQuery = useBrowseSearch(q, tag, 100)
 	const products = searchQuery.data ?? []
-
-	// useBrowseProductDetail takes string | undefined; enabled guards the query.
-	const detailQuery = useBrowseProductDetail(p)
-	const openProduct = p && detailQuery?.data?.[0] ? detailQuery.data[0] : undefined
-
-	const isDeadSearch = searchQuery.isError && products.length === 0
 
 	const handleSearchChange = (value: string) => {
 		onNavigate({ q: value, p: undefined, tag: tag ?? undefined })
@@ -60,29 +62,24 @@ export function BrowseIndexHost({ q, tag, p, onNavigate }: BrowseIndexHostProps)
 		return `m${(hash % 8) + 1}` as 'm1' | 'm2' | 'm3' | 'm4' | 'm5' | 'm6' | 'm7' | 'm8'
 	}
 
-	/** Derive a display name from the real auth state, or nothing when signed out. */
-	const accountSlot = user?.name ? (user.name.length > 1 ? user.name.slice(0, 2).toUpperCase() : user.name.toUpperCase()) : undefined
+	/** The signed-in pubkey's initial, or nothing when signed out. */
+	const accountInitial = user?.pubkey ? user.pubkey.slice(0, 2).toUpperCase() : undefined
 
 	return (
 		<div className="min-h-screen bg-background">
 			<BrowseNav
 				active={true}
 				onNavigateHome={() => onNavigate({ q: '', p: undefined, tag: undefined })}
-				onNavigateFeatured={() => {}}
+				onNavigateFeatured={onNavigateFeatured}
 				searchSlot={<SearchField value={q} onChange={handleSearchChange} onGo={handleSearchGo} />}
 				accountSlot={
-					accountSlot ? (
-						<button
-							type="button"
-							data-slot="account-trigger"
-							className="flex items-center gap-2 text-sm text-text-mid cursor-pointer"
-							onClick={() => {}}
-						>
-							<div className="size-7 rounded-full bg-fill-ink text-on-fill-ink grid place-items-center text-xs font-bold">
-								{accountSlot}
-							</div>
-							{accountSlot.length <= 2 ? accountSlot : accountSlot.slice(0, 2).toUpperCase()}
-						</button>
+					accountInitial ? (
+						<span data-slot="account-trigger" className="flex items-center gap-2 text-sm text-text-mid" title="Account">
+							<span className="size-7 rounded-full bg-fill-ink text-on-fill-ink grid place-items-center text-xs font-bold">
+								{accountInitial}
+							</span>
+							{/* The account pane itself is a Phase-2 surface. */}
+						</span>
 					) : null
 				}
 			/>

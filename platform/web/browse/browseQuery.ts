@@ -21,6 +21,7 @@ import {
 	getProductId,
 	getProductPubkey,
 	getProductStock,
+	getProductSummary,
 	getProductTitle,
 } from '@sdk/commerce/discovery'
 
@@ -100,20 +101,24 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
 			if (!query?.trim()) return []
 
 			const ctx = getReadContext()
-			const filter: EventFilter = {
-				kinds: [30402],
-				search: query, // NIP-50 search takes a string, not an array
-				limit,
-			}
+			// The sdk read seam's EventFilter has no NIP-50 `search` field yet, so Browse
+			// v1 reads a bounded kind-30402 set and matches the query locally — the interim
+			// shape the plan records (`search-v2-fast-index` owns its replacement).
+			const filter: EventFilter = { kinds: [30402], limit }
 			if (tag) {
 				filter['#t'] = [tag]
 			}
 
+			const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
 			const results: BrowseProduct[] = []
 			for await (const item of ctx.stream([filter])) {
 				if (item.type === 'event') {
 					const product = mapProduct(item.event)
-					if (product) results.push(product)
+					if (product) {
+						const haystack =
+							`${getProductTitle(item.event)} ${getProductSummary(item.event) ?? ''} ${(getProductCategories(item.event) ?? []).flat().join(' ')}`.toLowerCase()
+						if (terms.every((term) => haystack.includes(term))) results.push(product)
+					}
 				}
 				if (item.type === 'caught-up') break
 			}

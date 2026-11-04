@@ -3,19 +3,17 @@ import { z } from 'zod'
 import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
 
 /**
- * URL state: ?q=&tag=&p=
+ * Browse URL state: ?q=&tag=&p=
  *
- * q — search query string
+ * q   — search query string
  * tag — product category/hashtag filter
- * p — open product event id (resolves into right-hand panel in Phase 2)
+ * p   — open product event id; the split-view panel that consumes it is Phase 2
  */
-export const browseSearchSchema = z.object({
+const browseSearchSchema = z.object({
 	q: z.string().default(''),
 	tag: z.string().optional(),
 	p: z.string().optional(),
 })
-
-export type BrowseSearchState = z.infer<typeof browseSearchSchema>
 
 export const Route = createFileRoute('/')({
 	component: BrowseIndex,
@@ -30,9 +28,9 @@ function BrowseIndex() {
 		<BrowseIndexHost
 			q={q}
 			tag={tag}
-			p={p}
-			onNavigate={(search: Partial<BrowseSearchState>) => {
+			onNavigate={(search) => {
 				navigate({
+					to: '/',
 					search: {
 						q: search.q ?? q,
 						tag: search.tag ?? tag,
@@ -40,6 +38,7 @@ function BrowseIndex() {
 					},
 				})
 			}}
+			onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
 		/>
 	)
 }

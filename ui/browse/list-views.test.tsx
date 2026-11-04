@@ -210,6 +210,8 @@ describe('ListDetail', () => {
 			createElement(ListDetail, {
 				name: 'Private List',
 				privacyLabel: 'Private',
+				owner: 'OwnerName',
+				ownerNpub: 'npub1owner',
 				itemCount: 5,
 				shownItems: 5,
 				totalItems: 5,
@@ -239,6 +241,8 @@ describe('ListDetail', () => {
 		const markup = renderToStaticMarkup(
 			createElement(ListDetail, {
 				name: 'Custom',
+				owner: 'OwnerName',
+				ownerNpub: 'npub1owner',
 				itemCount: 1,
 				shownItems: 1,
 				totalItems: 1,
