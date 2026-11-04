@@ -2,7 +2,8 @@
  * widget-book/libraries/browse.tsx — Browse foundation widget library.
  *
  * One entry per state of every new ui/ view.
- * Covers: browse-nav, search-field, art module, product-card, product-strip.
+ * Covers: browse-nav, search-field, art module, product-card, product-strip,
+ * account-pane, list-row, list-detail, relay-indicator, dead-search-error.
  */
 
 import { useState } from 'react'
@@ -12,15 +13,17 @@ import { SearchField } from '@ui/browse/search-field'
 import { ProductArt, ProductSprite } from '@ui/browse/art'
 import { ProductCard, ProductContextMenu } from '@ui/browse/product-card'
 import { ProductStrip } from '@ui/browse/product-strip'
+import { AccountPane } from '@ui/browse/account-pane'
+import { ListDetail, ListRow, RelayIndicator, DeadSearchError } from '@ui/browse/list-views'
 import type { WidgetLibrary } from '../libraries'
 
 // ---- Mock data ----
 
 const PRODUCTS = [
-	{ id: 'evt-1', title: 'Handcrafted Ceramic Ball', seller: 'atelier-norte', sellerPubkey: 'abcdef01', price: 21000, stock: '76 in stock', material: 'm1', symbol: 'p-bowl' as const },
-	{ id: 'evt-2', title: 'Ceramic Pour-Over Set', seller: 'kiln-and-co', sellerPubkey: '234567', price: 34500, stock: '12 left', material: 'm5', symbol: 'p-jar' as const },
-	{ id: 'evt-3', title: 'Hand-thrown Tumbler, 300 ml', seller: 'atelier-norte', sellerPubkey: 'abcdef01', price: 12900, stock: '40 in stock', material: 'm7', symbol: 'p-mug' as const },
-	{ id: 'evt-4', title: 'Stoneware Planter, Matte White', seller: 'terra-studio', sellerPubkey: '89abcdef', price: 28400, stock: '9 left', material: 'm2', symbol: 'p-bottle' as const },
+	{ id: 'evt-1', title: 'Handcrafted Ceramic Ball', seller: 'atelier-norte', sellerPubkey: 'abcdef01', price: 21000, stock: '76 in stock', material: 'm1' as const, symbol: 'p-bowl' as const },
+	{ id: 'evt-2', title: 'Ceramic Pour-Over Set', seller: 'kiln-and-co', sellerPubkey: '234567', price: 34500, stock: '12 left', material: 'm5' as const, symbol: 'p-jar' as const },
+	{ id: 'evt-3', title: 'Hand-thrown Tumbler, 300 ml', seller: 'atelier-norte', sellerPubkey: 'abcdef01', price: 12900, stock: '40 in stock', material: 'm7' as const, symbol: 'p-mug' as const },
+	{ id: 'evt-4', title: 'Stoneware Planter, Matte White', seller: 'terra-studio', sellerPubkey: '89abcdef', price: 28400, stock: '9 left', material: 'm2' as const, symbol: 'p-bottle' as const },
 ]
 
 const STRIP_ITEMS = PRODUCTS.slice(0, 6).map((p, i) => ({
@@ -196,6 +199,79 @@ const ProductStripSingleItem = () => (
 	<ProductStrip items={[STRIP_ITEMS[0]]} onSelect={() => {}} />
 )
 
+// ---- account-pane entries ----
+
+const AccountPaneDefault = () => (
+	<AccountPane
+		name="Maxime"
+		npub="npub1q…7f3k"
+		avatarInitial="M"
+		signedInWith="Signed in with extension signer, remote signer or nsec"
+		balance={128400}
+		onTopUp={() => {}}
+		onWithdraw={() => {}}
+		onTransactions={() => {}}
+		onConnectNWC={() => {}}
+		onOrders={() => {}}
+		onNotifications={() => {}}
+		onSavedLists={() => {}}
+		onSignOut={() => {}}
+	/>
+)
+
+// ---- list-row / list-detail entries ----
+
+const ListRowDefault = () => (
+	<ListRow
+		item={{
+			id: 'list-1',
+			name: 'Want to buy',
+			itemCount: 12,
+			privacy: 'private',
+			note: 'For the studio wall — nothing over 40,000 sats, no glazed blues.',
+		}}
+	/>
+)
+
+const ListDetailDefault = () => (
+	<ListDetail
+		name="Want to buy"
+		privacyLabel="Private"
+		owner="Maxime"
+		ownerNpub="npub1q…7f3k"
+		itemCount={12}
+		privacy="private"
+		note="For the studio wall — nothing over 40,000 sats, no glazed blues."
+		shownItems={8}
+		totalItems={12}
+	/>
+)
+
+// ---- relay-indicator entries ----
+
+const RelayIndicatorDefault = () => (
+	<RelayIndicator
+		responded={38}
+		totalProducts={1208}
+		relays={[
+			{ relay: 'nostr.wine', count: 304, status: 'responded' },
+			{ relay: 'relay.damus.io', count: 287, status: 'responded' },
+			{ relay: 'nos.lol', count: 256, status: 'responded' },
+			{ relay: 'relay.nostr.band', count: 0, status: 'timeout' },
+		]}
+	/>
+)
+
+const DeadSearchErrorDefault = () => (
+	<DeadSearchError
+		totalRelays={12}
+		timeoutCount={10}
+		refusedCount={2}
+		message="All relays failed. Check your connection and try again."
+		onRetry={() => {}}
+	/>
+)
+
 // ---- Library ----
 
 export const browse: WidgetLibrary = {
@@ -229,5 +305,14 @@ export const browse: WidgetLibrary = {
 		// product-strip
 		{ name: 'product-strip-default', render: ProductStripDefault },
 		{ name: 'product-strip-single', render: ProductStripSingleItem },
+		// account-pane
+		{ name: 'account-pane-default', render: AccountPaneDefault },
+		// list-views
+		{ name: 'list-row-default', render: ListRowDefault },
+		{ name: 'list-detail-default', render: ListDetailDefault },
+		// relay-indicator
+		{ name: 'relay-indicator-default', render: RelayIndicatorDefault },
+		// dead-search-error
+		{ name: 'dead-search-error-default', render: DeadSearchErrorDefault },
 	],
 }
