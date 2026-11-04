@@ -1,8 +1,13 @@
 /**
- * browse/product-card.tsx — Product card view with shot, title, seller row, price row,
- * and context menu (Add to list › / Copy link / Report).
+ * browse/product-card.tsx — Product card view with shot, title, seller row,
+ * price row, and context menu (Add to list › / Copy link / Report).
  *
  * Heart + three-dots in the text block — icon-first ghost buttons, no outline.
+ *
+ * TOKEN RELAXATION: Avatar tint colors use raw oklch() inline styles. The seller
+ * avatar tint is computed dynamically from the pubkey hash (deterministic, never
+ * hardcoded). No semantic token exists for "per-seller distinct hue". The frames
+ * draw this with oklch() literals too. See AGENTS.md § relaxed tokens.
  */
 
 import type { FC, MouseEventHandler, PointerEventHandler, Ref, TouchEventHandler } from 'react'
@@ -298,13 +303,12 @@ export const ProductCard: FC<ProductCardProps> = ({
 		}
 	}
 
-	// Deterministic tint color from sellerPubkey hash
+	// Deterministic tint from seller pubkey hash — inline style for dynamic values
 	const avatarTint = sellerPubkey ? (parseInt(sellerPubkey, 16) % 3) : 0
-	const tintClasses = [
-		'bg-[oklch(0.7_0.06_345)]',
-		'bg-[oklch(0.7_0.06_20)]',
-		'bg-[oklch(0.7_0.06_320)]',
-	]
+	const tintHues = ['345', '20', '320']
+	const avatarStyle = sellerPubkey
+		? { backgroundColor: `oklch(0.7 0.06 ${tintHues[avatarTint]})` }
+		: undefined
 
 	return (
 		<article
@@ -381,8 +385,8 @@ export const ProductCard: FC<ProductCardProps> = ({
 						'size-3.5',
 						'rounded-full',
 						'shrink-0',
-						tintClasses[avatarTint],
 					)}
+					style={avatarStyle}
 					aria-hidden="true"
 				/>
 				<span data-slot="seller-name" className="truncate flex-1">
