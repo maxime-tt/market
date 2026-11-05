@@ -1,10 +1,17 @@
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
-import NDK from '@nostr-dev-kit/ndk'
+/**
+ * BlacklistManager — handles blacklist events and loads existing blacklist
+ * from relay via the sdk PoolPort.
+ *
+ * This file is a BRIDGE: it owns NDK transport via ndk.ts but speaks
+ * through the sdk port (PoolPort) to consumers.
+ */
 import type { EventSigner } from './EventSigner'
 import type { NDKService } from './NDKService'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { getPoolPort } from './ndk'
 
 export interface BlacklistManager {
-	handleBlacklistEvent(event: NostrEvent): Promise<void>
+	handleBlacklistEvent(event: NostrEventLike): Promise<void>
 	isBlacklisted(pubkey: string): boolean
 	isProductBlacklisted(productCoords: string): boolean
 	isCollectionBlacklisted(collectionCoords: string): boolean
@@ -19,18 +26,13 @@ export class BlacklistManagerImpl implements BlacklistManager {
 	private blacklistedCollections: Set<string> = new Set()
 	private eventSigner: EventSigner
 	private ndkService: NDKService
-	private ndk: NDK | null = null
 
 	constructor(eventSigner: EventSigner, ndkService: NDKService) {
 		this.eventSigner = eventSigner
 		this.ndkService = ndkService
 	}
 
-	public setNDK(ndk: NDK): void {
-		this.ndk = ndk
-	}
-
-	public async handleBlacklistEvent(event: NostrEvent): Promise<void> {
+	public async handleBlacklistEvent(event: NostrEventLike): Promise<void> {
 		console.log('Processing blacklist event:', event.id)
 
 		// Extract blacklisted items from the event tags
@@ -61,7 +63,7 @@ export class BlacklistManagerImpl implements BlacklistManager {
 		)
 	}
 
-	private extractBlacklistedPubkeys(event: NostrEvent): string[] {
+	private extractBlacklistedPubkeys(event: NostrEventLike): string[] {
 		// Extract pubkeys from 'p' tags as per NIP-51 mute list specification
 		return event.tags
 			.filter((tag) => tag[0] === 'p' && tag[1])
@@ -69,12 +71,12 @@ export class BlacklistManagerImpl implements BlacklistManager {
 			.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)) // Validate hex format
 	}
 
-	private extractBlacklistedProducts(event: NostrEvent): string[] {
+	private extractBlacklistedProducts(event: NostrEventLike): string[] {
 		// Extract product coordinates from 'a' tags with kind 30402
 		return event.tags.filter((tag) => tag[0] === 'a' && tag[1] && tag[1].startsWith('30402:')).map((tag) => tag[1])
 	}
 
-	private extractBlacklistedCollections(event: NostrEvent): string[] {
+	private extractBlacklistedCollections(event: NostrEventLike): string[] {
 		// Extract collection coordinates from 'a' tags with kind 30405
 		return event.tags.filter((tag) => tag[0] === 'a' && tag[1] && tag[1].startsWith('30405:')).map((tag) => tag[1])
 	}
@@ -104,25 +106,20 @@ export class BlacklistManagerImpl implements BlacklistManager {
 	}
 
 	public async loadExistingBlacklist(appPubkey: string): Promise<void> {
-		if (!this.ndk) {
-			console.warn('NDK not available, cannot load existing blacklist')
-			return
-		}
-
+		const pool = await getPoolPort()
 		try {
 			// Fetch the most recent blacklist event (kind 10000) from the app
-			const blacklistEvents = await this.ndk.fetchEvents({
+			const result = await pool.query({
 				kinds: [10000],
 				authors: [appPubkey],
 				limit: 1,
 			})
 
-			if (blacklistEvents.size > 0) {
-				const latestBlacklistEvent = Array.from(blacklistEvents)[0]
-				const rawEvent = latestBlacklistEvent.rawEvent()
-				const blacklistedPubkeys = this.extractBlacklistedPubkeys(rawEvent)
-				const blacklistedProducts = this.extractBlacklistedProducts(rawEvent)
-				const blacklistedCollections = this.extractBlacklistedCollections(rawEvent)
+			if (result.events.length > 0) {
+				const latestBlacklistEvent = result.events[0]
+				const blacklistedPubkeys = this.extractBlacklistedPubkeys(latestBlacklistEvent)
+				const blacklistedProducts = this.extractBlacklistedProducts(latestBlacklistEvent)
+				const blacklistedCollections = this.extractBlacklistedCollections(latestBlacklistEvent)
 
 				this.blacklistedPubkeys.clear()
 				blacklistedPubkeys.forEach((pubkey) => this.blacklistedPubkeys.add(pubkey))
