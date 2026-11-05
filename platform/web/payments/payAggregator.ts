@@ -132,7 +132,6 @@ export function createNwcAdapter(opts: NwcAggregatorAdapterOptions): AggregatorW
 export interface PayAggregatorConfig {
 	readonly bolt11: Bolt11AggregatorAdapterOptions
 	readonly nwc?: NwcAggregatorAdapterOptions
-	// cashu would go here when the engine host adapter is ready
 }
 
 export function buildAggregatorWrappers(
