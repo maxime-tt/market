@@ -1,4 +1,4 @@
-# ADR-008: Server App-Key Signer Stays Its Own Trust Boundary
+# ADR-022: Server App-Key Signer Stays Its Own Trust Boundary
 
 ## Status
 
@@ -10,7 +10,7 @@ Accepted
 
 ## Related
 
-- ADR-0002: NDK → Applesauce Nostr I/O Migration (Wave E covers server runtime migration)
+- ADR-0023: Server Nostr I/O — Port Shape and Applesauce-Relay Adapter
 - `notes/ADR-server-signer.md`: author draft
 - HANDOVER-WAVE-K-SERVER-NDK.md: lane contract
 
@@ -72,3 +72,13 @@ Negative / tradeoffs:
 - `EventSigner.ts` remains in `platform/server/` with a custom adapter — it is not removed by
   the generic NDK→sdk migration.
 - The server signer is not covered by the SDK signer's test harness.
+
+## Supersedes
+
+ADR-0008: Server App-Key Signer Stays Its Own Trust Boundary (renumbered; original content unchanged).
+
+## Ledger row
+
+```
+platform/server/EventSigner.ts|wave-k|NostrEventLike, EventTemplate|no behavior change|wave-k-server-ndk
+```
