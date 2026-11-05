@@ -27,20 +27,19 @@ describe('RelayIndicator', () => {
 		expect(markup).toContain('42')
 	})
 
-	test('renders expand button when onToggle provided with relays', () => {
+	test('renders expand chip when not all relays responded', () => {
 		const relays: RelayDetail[] = [
 			{ relay: 'wss://r1.example', status: 'responded' },
 			{ relay: 'wss://r2.example', status: 'pending' },
 		]
 		const markup = renderToStaticMarkup(
 			createElement(RelayIndicator, {
-				responded: 3,
+				responded: 1,
 				totalProducts: 42,
 				relays,
-				onToggle: () => {},
 			}),
 		)
-		expect(markup).toContain('widget-relay-indicator-expand')
+		expect(markup).toContain('widget-relay-indicator-chip')
 	})
 
 	test('renders summary counts from relays array', () => {
