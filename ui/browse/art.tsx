@@ -206,3 +206,24 @@ export const ProductArt: FC<ProductArtProps> = ({ material, symbolId, ratio = '3
 		</div>
 	)
 }
+
+// ---------------------------------------------------------------------------
+// Skeleton shimmer keyframes — injected once via a <style> element
+// ---------------------------------------------------------------------------
+
+/**
+ * Shimmer animation for skeleton placeholders.
+ * Ported verbatim from frames: `background-position: 130% → -130%`
+ * over 1.6s linear infinite.
+ */
+export const SKELETON_SHIMMER_CSS = `
+@keyframes skeleton-shimmer {
+  0% { background-position: 130% 0 }
+  100% { background-position: -130% 0 }
+}
+.animate-skeleton-shimmer {
+  background: linear-gradient(90deg, var(--surface-sunken) 0%, var(--surface-raised) 50%, var(--surface-sunken) 100%);
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.6s linear infinite;
+}
+`
