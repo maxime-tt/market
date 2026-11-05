@@ -121,7 +121,7 @@ export function getPayAggregatorInstance(): {
 		return instance
 	}
 
-	const setStore: SetStore = new LocalSetStore();
+	const setStore: SetStore = new LocalSetStore()
 
 	// Create the verifier using real SHA-256 for preimage verification.
 	const settlementVerifier = createSettlementVerifier()
