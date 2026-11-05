@@ -1,4 +1,4 @@
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { EventHandlerConfig, ProcessedEvent } from './types'
 import { AdminManagerImpl } from './AdminManager'
 import { EditorManagerImpl } from './EditorManager'
@@ -202,7 +202,7 @@ export class EventHandler {
 		console.log(`Subscribed to zap purchase receipts (${label})`)
 	}
 
-	public handleEvent(event: NostrEvent): NostrEvent | null {
+	public handleEvent(event: NostrEventLike): NostrEventLike | null {
 		if (!this.isInitialized) {
 			throw new Error('EventHandler is not initialized')
 		}
@@ -211,7 +211,7 @@ export class EventHandler {
 		return processed.signedEvent
 	}
 
-	public processEvent(event: NostrEvent): ProcessedEvent {
+	public processEvent(event: NostrEventLike): ProcessedEvent {
 		if (!this.isInitialized || !this.eventValidator || !this.eventSigner) {
 			throw new Error('EventHandler is not initialized')
 		}
@@ -244,7 +244,7 @@ export class EventHandler {
 		}
 	}
 
-	private async handleSpecialEvents(event: NostrEvent): Promise<void> {
+	private async handleSpecialEvents(event: NostrEventLike): Promise<void> {
 		const isSetupEvent = event.kind === 31990 && event.content.includes('"name":')
 		const isAdminListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'admins')
 		const isEditorListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'editors')

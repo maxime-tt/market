@@ -1,4 +1,4 @@
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { getPublicKey } from 'nostr-tools'
 import type { EventValidationResult, AdminManager, EditorManager, BootstrapManager } from './types'
 import { bytesFromHex } from '@platform/server/util/bytes'
@@ -16,7 +16,7 @@ export class EventValidator {
 		this.bootstrapManager = bootstrapManager
 	}
 
-	public validateEvent(event: NostrEvent): EventValidationResult {
+	public validateEvent(event: NostrEventLike): EventValidationResult {
 		const eventType = this.getEventType(event)
 
 		switch (eventType) {
@@ -32,7 +32,7 @@ export class EventValidator {
 		}
 	}
 
-	private getEventType(event: NostrEvent): string {
+	private getEventType(event: NostrEventLike): string {
 		if (event.kind === 31990 && event.content.includes('"name":')) {
 			return 'setup'
 		}
@@ -47,7 +47,7 @@ export class EventValidator {
 		return 'general'
 	}
 
-	private validateSetupEvent(event: NostrEvent): EventValidationResult {
+	private validateSetupEvent(event: NostrEventLike): EventValidationResult {
 		const appPubkey = getPublicKey(bytesFromHex(this.appPrivateKey))
 
 		if (!this.bootstrapManager.isBootstrapMode() && event.pubkey !== appPubkey && !this.adminManager.isAdmin(event.pubkey)) {
@@ -60,7 +60,7 @@ export class EventValidator {
 		return { isValid: true }
 	}
 
-	private validateRoleListEvent(event: NostrEvent): EventValidationResult {
+	private validateRoleListEvent(event: NostrEventLike): EventValidationResult {
 		if (!this.bootstrapManager.isBootstrapMode() && !this.adminManager.isAdmin(event.pubkey)) {
 			return {
 				isValid: false,
@@ -71,7 +71,7 @@ export class EventValidator {
 		return { isValid: true }
 	}
 
-	private validateBlacklistEvent(event: NostrEvent): EventValidationResult {
+	private validateBlacklistEvent(event: NostrEventLike): EventValidationResult {
 		if (!this.adminManager.isAdmin(event.pubkey) && !this.editorManager.isEditor(event.pubkey)) {
 			return {
 				isValid: false,
@@ -82,7 +82,7 @@ export class EventValidator {
 		return { isValid: true }
 	}
 
-	private validateGeneralEvent(event: NostrEvent): EventValidationResult {
+	private validateGeneralEvent(event: NostrEventLike): EventValidationResult {
 		if (!this.adminManager.isAdmin(event.pubkey)) {
 			return {
 				isValid: false,

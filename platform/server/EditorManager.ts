@@ -1,4 +1,4 @@
-import type { NDKEvent, NostrEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { EditorManager } from './types'
 
 export class EditorManagerImpl implements EditorManager {
@@ -23,7 +23,7 @@ export class EditorManagerImpl implements EditorManager {
 		return new Set(this.editorPubkeys)
 	}
 
-	public updateFromEvent(event: NostrEvent | NDKEvent): void {
+	public updateFromEvent(event: NostrEventLike): void {
 		try {
 			// Extract editor pubkeys from 'p' tags in the editor list event
 			const newEditors = event.tags.filter((tag) => tag[0] === 'p' && tag[1] && tag[1].length === 64).map((tag) => tag[1])
