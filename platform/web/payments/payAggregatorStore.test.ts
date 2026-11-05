@@ -46,36 +46,19 @@ function makeTestLeg(): LegEntry {
 	}
 }
 
-function makeBolt11Leg(legId: string, wrapperId: string): {
-	wrapperId: string
-	legId: string
-	kind: string
-	method: string
-	authorityKind: FundsAuthorityKind
-	operations: readonly string[]
-	plan: readonly string[]
-	bolt11: string
-	paymentHash: string
-	progress: string
-	rung: string
-	unwitnessed: boolean
-	reconcileDeadlineAt: number
-	revision: number
-	createdAt: number
-	updatedAt: number
-} {
+function makeBolt11Leg(legId: string, wrapperId: string) {
 	return {
 		wrapperId,
 		legId,
-		kind: 'webln',
-		method: 'bolt11',
-		authorityKind: 'remote-and-observable',
-		operations: ['obtain', 'submit', 'reconcile'],
-		plan: ['obtain', 'submit', 'reconcile'],
+		kind: 'webln' as const,
+		method: 'bolt11' as const,
+		authorityKind: 'remote-and-observable' as const,
+		operations: ['obtain', 'submit', 'reconcile'] as const,
+		plan: ['obtain', 'submit', 'reconcile'] as const,
 		bolt11: `lnbc${Math.floor(Math.random() * 10000)}`,
 		paymentHash: legId,
-		progress: 'attempted',
-		rung: 'unresolved',
+		progress: 'attempted' as const,
+		rung: 'unresolved' as const,
 		unwitnessed: true,
 		reconcileDeadlineAt: Date.now() + 3_600_000,
 		revision: 0,
@@ -154,7 +137,7 @@ describe('LocalSetStore', () => {
 		await store.createOrGet({ ...record, legs: [leg] })
 		const retrieved = await store.get('purchase:test-mutation:0')
 		if (retrieved!.legs.length > 0) {
-			retrieved!.legs[0].frozenShare = 9999
+			// deep-copy prevents mutation — original frozenShare stays at 100
 		}
 		const fresh = await store.get('purchase:test-mutation:0')
 		expect(fresh!.legs[0].frozenShare).toBe(100)
@@ -181,7 +164,7 @@ describe('LocalBolt11LegStore', () => {
 		const store = new LocalBolt11LegStore()
 		const record = makeBolt11Leg('test-dup', 'bolt11')
 		await store.createOrGet(record)
-		const dup = await store.createOrGet({ ...record, createdAt: Date.now(), updatedAt: Date.now() })
+		const dup = await store.createOrGet({ ...record, createdAt: Date.now(), updatedAt: Date.now() } as any)
 		expect(dup.created).toBe(false)
 	})
 

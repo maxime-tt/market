@@ -12,13 +12,15 @@ import {
 	type CheckoutFormData,
 	type PaymentInvoiceData,
 } from '@sdk/commerce/checkout'
+import type { SetIntent } from '@sdk/core/wallet'
 import type { SellerOrderPublishOutcome } from '@sdk/commerce/orders'
 import { authStore } from '@platform/web/auth/authStore'
 import { cartActions, cartStore } from '@platform/web/cart/cartStore'
 import { parseNwcUri, useWallets } from '@platform/web/config/walletStore'
 import { persistInvoicesLocally, updatePersistedInvoiceLocally } from '@platform/web/payments/invoiceStorage'
 import { publishOrderWorkflowWithDependencies } from '@platform/web/orders/orderPublish'
-import { publishPaymentReceipt } from '@platform/web/payments/paymentPublish'
+import { getPayAggregatorInstance } from '@platform/web/payments/payAggregatorInstance'
+import { persistSetForOrder } from '@platform/web/payments/payAggregatorStore'
 import { getShippingEvent, getShippingService } from '@platform/web/shipping/shippingQuery'
 import { useGenerateInvoiceMutation, type PaymentDetail } from '@platform/web/payments/paymentQuery'
 import {
@@ -516,25 +518,62 @@ export function useCheckout() {
 	const handlePaymentComplete = async (invoiceId: string, preimage: string, skipAutoAdvance = false) => {
 		setPaymentFailure(null)
 
-		// Find the invoice to get bolt11 for receipt creation
+		// Find the invoice to get payment data
 		const invoice = invoices.find((inv) => inv.id === invoiceId)
 		const resolvedOrderId = resolveInvoiceOrderId(invoice, specOrderIds)
 
-		// Create payment receipt
 		if (invoice) {
 			try {
-				await publishPaymentReceipt({
-					invoice: { ...invoice, orderId: resolvedOrderId, bolt11: invoice.bolt11 ?? undefined },
+				const { payAggregator, bolt11Wrapper } = getPayAggregatorInstance()
+
+				// Build a SetIntent with a single bolt11 leg per invoice
+				const intent: SetIntent = {
+					orderId: resolvedOrderId,
+					totalSat: invoice.amount,
+					legs: [
+						{
+							wrapperId: 'bolt11',
+							legId: invoice.id,
+							method: 'bolt11',
+							frozenShare: invoice.amount,
+							expectedPaymentHash: invoice.bolt11 || '',
+							authorityKind: 'remote-and-observable',
+							operations: ['obtain', 'submit', 'reconcile'] as const,
+							plan: ['obtain', 'submit', 'reconcile'] as const,
+						},
+					],
+				}
+
+				// Open the purchase set
+				const handle = await payAggregator.pay(intent)
+
+				// Submit the bolt11 leg with the preimage to settle it
+				await bolt11Wrapper.submit(
+					{
+						wrapperId: 'bolt11',
+						legId: invoice.id,
+						method: 'bolt11',
+						authorityKind: 'remote-and-observable',
+						operations: ['obtain', 'submit', 'reconcile'],
+						plan: ['obtain', 'submit', 'reconcile'],
+						reference: invoice.bolt11 || '',
+					},
 					preimage,
-					bolt11: invoice.bolt11 || '',
-				})
+				)
+
+				// Reconcile to read back the settled state
+				const settled = await payAggregator.reconcile(handle.setId)
+
+				// Persist the orderId → setId mapping for the orders view
+				persistSetForOrder(resolvedOrderId, handle.setId)
+
 				updatePersistedInvoiceLocally(resolvedOrderId, invoice.id, {
 					status: 'paid',
 					preimage,
 				})
 			} catch (error) {
-				console.error('Failed to publish payment receipt:', error)
-				toast.error(`Failed to create receipt: ${error instanceof Error ? error.message : 'Unknown error'}`)
+				console.error('Failed to process payment via aggregator:', error)
+				toast.error(`Failed to process payment: ${error instanceof Error ? error.message : 'Unknown error'}`)
 			}
 		}
 

@@ -168,6 +168,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		handleGenerateNewInvoice,
 		handlePaymentComplete,
 		handlePaymentFailed,
+		setVerdict,
+		openRefund,
 	} = useOrderInvoices({
 		order,
 		sellerV4VShares,
