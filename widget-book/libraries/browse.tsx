@@ -19,6 +19,7 @@ import { RelayIndicator, DeadSearchError } from '@ui/browse/relay-error'
 import { BrowseIdle } from '@ui/browse/browse-idle'
 import { SkeletonGrid } from '@ui/browse/skeleton-grid'
 import { EmptyStateBrowse } from '@ui/browse/empty-state-browse'
+import { SearchResultsGrid } from '@ui/browse/search-results-grid'
 import { TagFilterBadge } from '@ui/browse/relay-error'
 import type { WidgetLibrary } from '../libraries'
 import type { StripItem } from '@ui/browse/product-strip'
@@ -113,10 +114,9 @@ const SearchFieldWithValue = () => {
 }
 
 const SearchFieldFocused = () => {
-	const [value, setValue] = useState('')
 	return (
 		<div className="focus-within:ring-2 focus-within:ring-focus-ring">
-			<SearchField value={value} onChange={setValue} onGo={() => {}} />
+			<SearchField value="ceramic" onChange={() => {}} onGo={() => {}} submitted />
 		</div>
 	)
 }
@@ -383,7 +383,359 @@ const RelayIndicatorExpanded = () => (
 	/>
 )
 
+
+// ---- Search results grid ----
+
+const SearchResultsGridDefault = () => (
+	<div className="w-[960px]">
+		<SearchResultsGrid
+			facets={[
+				{ label: 'All', count: 1208, active: true },
+				{ label: 'Handmade', count: 214 },
+				{ label: 'Pottery', count: 168 },
+				{ label: 'Stoneware', count: 96 },
+				{ label: 'Wood-fired', count: 61 },
+				{ label: 'Tableware', count: 44 },
+			]}
+		>
+			<ProductCard
+				id="evt-1"
+				title="Handcrafted Ceramic Ball"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={21000}
+				stockNote="76 in stock"
+				material="m1"
+				symbolId="p-bowl"
+				inList={true}
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-2"
+				title="Ceramic Pour-Over Set"
+				seller="kiln-and-co"
+				sellerPubkey="234567"
+				price={34500}
+				stockNote="12 left"
+				material="m5"
+				symbolId="p-jar"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-3"
+				title="Hand-thrown Tumbler, 300 ml"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={12900}
+				stockNote="40 in stock"
+				material="m7"
+				symbolId="p-mug"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-4"
+				title="Stoneware Planter, Matte White"
+				seller="terra-studio"
+				sellerPubkey="89abcdef"
+				price={28400}
+				stockNote="9 left"
+				material="m2"
+				symbolId="p-bottle"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-5"
+				title="Wood-fired Tea Bowl"
+				seller="kiln-and-co"
+				sellerPubkey="234567"
+				price={46000}
+				stockNote="1 of 3"
+				material="m6"
+				symbolId="p-bowl"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-6"
+				title="Raku Vase, one of one"
+				seller="Auction · ends 18:00"
+				sellerPubkey="abcdef01"
+				price={88000}
+				stockNote="2h 14m left"
+				material="m1"
+				symbolId="p-candle"
+				bidCount={18}
+				onSelect={() => {}}
+			/>
+		</SearchResultsGrid>
+	</div>
+)
+
+const SearchResultsGridActiveFacet = () => (
+	<div className="w-[960px]">
+		<SearchResultsGrid
+			facets={[
+				{ label: 'All', count: 1208 },
+				{ label: 'Handmade', count: 214, active: true },
+				{ label: 'Pottery', count: 168 },
+				{ label: 'Stoneware', count: 96 },
+				{ label: 'Wood-fired', count: 61 },
+				{ label: 'Tableware', count: 44 },
+			]}
+		>
+			<ProductCard
+				id="evt-1"
+				title="Handcrafted Ceramic Ball"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={21000}
+				stockNote="76 in stock"
+				material="m1"
+				symbolId="p-bowl"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-2"
+				title="Ceramic Pour-Over Set"
+				seller="kiln-and-co"
+				sellerPubkey="234567"
+				price={34500}
+				stockNote="12 left"
+				material="m5"
+				symbolId="p-jar"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-3"
+				title="Hand-thrown Tumbler, 300 ml"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={12900}
+				stockNote="40 in stock"
+				material="m7"
+				symbolId="p-mug"
+				onSelect={() => {}}
+			/>
+		</SearchResultsGrid>
+	</div>
+)
+
+const SearchResultsGridNoFacets = () => (
+	<div className="w-[960px]">
+		<SearchResultsGrid>
+			<ProductCard
+				id="evt-1"
+				title="Handcrafted Ceramic Ball"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={21000}
+				stockNote="76 in stock"
+				material="m1"
+				symbolId="p-bowl"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-2"
+				title="Ceramic Pour-Over Set"
+				seller="kiln-and-co"
+				sellerPubkey="234567"
+				price={34500}
+				stockNote="12 left"
+				material="m5"
+				symbolId="p-jar"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-3"
+				title="Hand-thrown Tumbler, 300 ml"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={12900}
+				stockNote="40 in stock"
+				material="m7"
+				symbolId="p-mug"
+				onSelect={() => {}}
+			/>
+		</SearchResultsGrid>
+	</div>
+)
+
 // ---- Library ----
+
+// ---- Search results grid ----
+
+const SearchResultsGridDefault = () => (
+	<div className="w-[960px]">
+		<SearchResultsGrid
+			facets={[
+				{ label: 'All', count: 1208, active: true },
+				{ label: 'Handmade', count: 214 },
+				{ label: 'Pottery', count: 168 },
+				{ label: 'Stoneware', count: 96 },
+				{ label: 'Wood-fired', count: 61 },
+				{ label: 'Tableware', count: 44 },
+			]}
+		>
+			<ProductCard
+				id="evt-1"
+				title="Handcrafted Ceramic Ball"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={21000}
+				stockNote="76 in stock"
+				material="m1"
+				symbolId="p-bowl"
+				inList={true}
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-2"
+				title="Ceramic Pour-Over Set"
+				seller="kiln-and-co"
+				sellerPubkey="234567"
+				price={34500}
+				stockNote="12 left"
+				material="m5"
+				symbolId="p-jar"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-3"
+				title="Hand-thrown Tumbler, 300 ml"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={12900}
+				stockNote="40 in stock"
+				material="m7"
+				symbolId="p-mug"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-4"
+				title="Stoneware Planter, Matte White"
+				seller="terra-studio"
+				sellerPubkey="89abcdef"
+				price={28400}
+				stockNote="9 left"
+				material="m2"
+				symbolId="p-bottle"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-5"
+				title="Wood-fired Tea Bowl"
+				seller="kiln-and-co"
+				sellerPubkey="234567"
+				price={46000}
+				stockNote="1 of 3"
+				material="m6"
+				symbolId="p-bowl"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-6"
+				title="Raku Vase, one of one"
+				seller="Auction · ends 18:00"
+				sellerPubkey="abcdef01"
+				price={88000}
+				stockNote="2h 14m left"
+				material="m1"
+				symbolId="p-candle"
+				bidCount={18}
+				onSelect={() => {}}
+			/>
+		</SearchResultsGrid>
+	</div>
+)
+
+const SearchResultsGridActiveFacet = () => (
+	<div className="w-[960px]">
+		<SearchResultsGrid
+			facets={[
+				{ label: 'All', count: 1208 },
+				{ label: 'Handmade', count: 214, active: true },
+				{ label: 'Pottery', count: 168 },
+				{ label: 'Stoneware', count: 96 },
+				{ label: 'Wood-fired', count: 61 },
+				{ label: 'Tableware', count: 44 },
+			]}
+		>
+			<ProductCard
+				id="evt-1"
+				title="Handcrafted Ceramic Ball"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={21000}
+				stockNote="76 in stock"
+				material="m1"
+				symbolId="p-bowl"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-2"
+				title="Ceramic Pour-Over Set"
+				seller="kiln-and-co"
+				sellerPubkey="234567"
+				price={34500}
+				stockNote="12 left"
+				material="m5"
+				symbolId="p-jar"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-3"
+				title="Hand-thrown Tumbler, 300 ml"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={12900}
+				stockNote="40 in stock"
+				material="m7"
+				symbolId="p-mug"
+				onSelect={() => {}}
+			/>
+		</SearchResultsGrid>
+	</div>
+)
+
+const SearchResultsGridNoFacets = () => (
+	<div className="w-[960px]">
+		<SearchResultsGrid>
+			<ProductCard
+				id="evt-1"
+				title="Handcrafted Ceramic Ball"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={21000}
+				stockNote="76 in stock"
+				material="m1"
+				symbolId="p-bowl"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-2"
+				title="Ceramic Pour-Over Set"
+				seller="kiln-and-co"
+				sellerPubkey="234567"
+				price={34500}
+				stockNote="12 left"
+				material="m5"
+				symbolId="p-jar"
+				onSelect={() => {}}
+			/>
+			<ProductCard
+				id="evt-3"
+				title="Hand-thrown Tumbler, 300 ml"
+				seller="atelier-norte"
+				sellerPubkey="abcdef01"
+				price={12900}
+				stockNote="40 in stock"
+				material="m7"
+				symbolId="p-mug"
+				onSelect={() => {}}
+			/>
+		</SearchResultsGrid>
+	</div>
+)
+
 // ---- Library ----
 
 export const browse: WidgetLibrary = {
@@ -435,7 +787,11 @@ export const browse: WidgetLibrary = {
 		{ name: 'empty-state-browse-default', render: EmptyStateBrowseDefault },
 		// phase 2: tag-filtered-badge
 		{ name: 'tag-filtered-badge-default', render: TagFilterBadgeDefault },
-		// phase 2: relay-indicator expanded
+			// phase 2: relay-indicator expanded
 		{ name: 'relay-indicator-expanded', render: RelayIndicatorExpanded },
+		// search results grid
+		{ name: 'search-results-grid-default', render: SearchResultsGridDefault },
+		{ name: 'search-results-grid-active-facet', render: SearchResultsGridActiveFacet },
+		{ name: 'search-results-grid-no-facets', render: SearchResultsGridNoFacets },
 	],
 }
