@@ -66,9 +66,7 @@ export const SearchResultsGrid: FC<SearchResultsGridProps> = ({ facets, children
 								'text-xs',
 								'whitespace-nowrap',
 								'cursor-default',
-								badge.active
-									? 'bg-fill-ink border-fill-ink text-on-fill-ink'
-									: 'border-border-default text-text-mid',
+								badge.active ? 'bg-fill-ink border-fill-ink text-on-fill-ink' : 'border-border-default text-text-mid',
 							)}
 						>
 							{badge.label}
@@ -79,11 +77,7 @@ export const SearchResultsGrid: FC<SearchResultsGridProps> = ({ facets, children
 			)}
 
 			{/* Grid of product cards — 3 cols desktop, 2 cols tablet */}
-			<div
-				data-slot="results-grid"
-				data-testid="widget-results-grid"
-				className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5"
-			>
+			<div data-slot="results-grid" data-testid="widget-results-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">
 				{children}
 			</div>
 		</div>

@@ -253,4 +253,3 @@ export const SEARCH_FIELD_CARET_CSS = `
   50.001%, 100% { opacity: 0 }
 }
 `
-

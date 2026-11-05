@@ -140,7 +140,10 @@ export const SearchField: FC<SearchFieldProps> = ({
 			) : (
 				<div className="flex-1 min-w-0 text-[17px] leading-tight text-text-high whitespace-nowrap overflow-hidden">
 					{value}
-					<span className="inline-block w-[2px] h-[17px] ml-[2px] mb-[4px] align-[-4px] bg-fill-ink animate-search-caret-blink" aria-hidden="true" />
+					<span
+						className="inline-block w-[2px] h-[17px] ml-[2px] mb-[4px] align-[-4px] bg-fill-ink animate-search-caret-blink"
+						aria-hidden="true"
+					/>
 				</div>
 			)}
 

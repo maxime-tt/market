@@ -383,7 +383,6 @@ const RelayIndicatorExpanded = () => (
 	/>
 )
 
-
 // ---- Search results grid ----
 
 const SearchResultsGridDefault = () => (
@@ -559,7 +558,6 @@ const SearchResultsGridNoFacets = () => (
 	</div>
 )
 
-
 // ---- Library ----
 
 export const browse: WidgetLibrary = {
@@ -611,7 +609,7 @@ export const browse: WidgetLibrary = {
 		{ name: 'empty-state-browse-default', render: EmptyStateBrowseDefault },
 		// phase 2: tag-filtered-badge
 		{ name: 'tag-filtered-badge-default', render: TagFilterBadgeDefault },
-			// phase 2: relay-indicator expanded
+		// phase 2: relay-indicator expanded
 		{ name: 'relay-indicator-expanded', render: RelayIndicatorExpanded },
 		// search results grid
 		{ name: 'search-results-grid-default', render: SearchResultsGridDefault },
