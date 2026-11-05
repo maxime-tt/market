@@ -219,9 +219,7 @@ export class LocalBolt11LegStore implements Bolt11LegStore {
 	}
 
 	async list(wrapperId?: string): Promise<readonly Bolt11LegRecord[]> {
-		return [...this.legs.values()]
-			.filter((r) => !wrapperId || r.wrapperId === wrapperId)
-			.map((r) => ({ ...r }))
+		return [...this.legs.values()].filter((r) => !wrapperId || r.wrapperId === wrapperId).map((r) => ({ ...r }))
 	}
 
 	async compareAndSet(key: Bolt11LegKey, expectedRevision: number, next: Bolt11LegRecord): Promise<Bolt11LegRecord> {
