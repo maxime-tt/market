@@ -11,7 +11,8 @@
 
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { getReadContext } from '../readContext'
-import type { CaughtUpInfo, EventFilter } from '@sdk/core/event-store/filter'
+import type { EventFilter } from '@sdk/core/event-store/filter'
+import type { CaughtUpInfo } from '@sdk/core/event-store/read'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 // Canonical read model: sdk/commerce/discovery/productReadModel.ts
 import {

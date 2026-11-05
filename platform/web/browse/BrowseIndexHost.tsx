@@ -125,12 +125,12 @@ export function BrowseIndexHost({ q, tag, onNavigate, onNavigateFeatured }: Brow
 	const totalRelays = eoseRelays.length + pendingRelays.length
 	const respondedCount = eoseRelays.length
 	const relayDetails: Array<{ relay: string; status: 'responded' | 'pending' }> = [
-		...eoseRelays.map((r) => ({ relay: r, status: 'responded' as const })),
-		...pendingRelays.map((r) => ({ relay: r, status: 'pending' as const })),
+		...eoseRelays.map((r: string) => ({ relay: r, status: 'responded' as const })),
+		...pendingRelays.map((r: string) => ({ relay: r, status: 'pending' as const })),
 	]
 
 	// Tag facet badges — derived from loaded products' real categories
-	const facetSet = () => {
+	const facetSet = (() => {
 		if (!result || result.products.length === 0) return { all: 0, facets: [] as { label: string; count: number }[] }
 		const counts = new Map<string, number>()
 		for (const p of result.products) {
@@ -143,7 +143,7 @@ export function BrowseIndexHost({ q, tag, onNavigate, onNavigateFeatured }: Brow
 			.slice(0, 6)
 			.map(([label, count]) => ({ label, count }))
 		return { all: result.products.length, facets }
-	}
+	})()
 
 	// Empty state hints — real data only
 	const EMPTY_HINTS = [{ label: 'local index empty' }]
