@@ -9,6 +9,11 @@
  *
  * The aggregator's SetStore is provided by the caller; this module only wires the wrapper ports.
  * The composing app injects one adapter per rail via AggregatorOptions.wrappers.
+ *
+ * Cashu / coco needs an `EngineHost` port (the mint engine binding required by
+ * `sdk/core/cashu-wrapper's CocoPortAdapter.requireHost()` — methods run(),
+ * get(), recover(). Until that host is built in platform/web/wallet/, the cashu
+ * wrapper cannot be instantiated and cannot be wired here.
  */
 import type { AggregatorOptions, AggregatorWrapper, SetStore, WitnessVerifier } from '@sdk/core/wallet'
 import type { FundsHandle } from '@sdk/core/funds-contract'
