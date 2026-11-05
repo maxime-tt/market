@@ -1,56 +1,61 @@
-import NDK from '@nostr-dev-kit/ndk'
-import { APP_PRIVATE_KEY, RELAY_URL } from './runtime'
-import { NdkAdapter } from './ndk-adapter'
+import { RelayPool } from 'applesauce-relay'
+import { RELAY_URL } from './runtime'
+import { RelayPoolAdapter } from './ndk-adapter'
 import type { PoolPort } from '@sdk/core/nostr-io/ts/types'
 
 /**
- * Module-level singletons for the issuer's NDK.
+ * Module-level singleton for the issuer's RelayPool.
  *
- * The issuer process owns one NDK instance pointed at the configured app
- * relay (`APP_RELAY_URL`).  The NDK is lazy — first call creates and
+ * The issuer process owns one RelayPool pointed at the configured app
+ * relay (`RELAY_URL`).  The pool is lazy — first call creates and
  * connects it.
  */
 
-let invoiceNdk: NDK | null = null
-let invoiceNdkConnectPromise: Promise<void> | null = null
-let invoiceNdkAdapter: NdkAdapter | null = null
+let invoicePool: RelayPool | null = null
+let invoicePoolConnectPromise: Promise<RelayPool> | null = null
+let invoicePoolAdapter: RelayPoolAdapter | null = null
 
 /**
- * Ensure the NDK client is connected and return it for callers that need
- * NDK-specific methods (e.g. getUser / fetchProfile in lightning.ts).
+ * Ensure the RelayPool is connected and return it for callers that need
+ * applesauce-relay-specific methods (e.g. getUser / fetchProfile in lightning.ts).
  */
-export async function ensureInvoiceNdkConnected(): Promise<NDK> {
+export async function ensureInvoicePoolConnected(): Promise<RelayPool> {
 	if (!RELAY_URL) {
-		throw new Error('Missing APP_RELAY_URL')
+		throw new Error('Missing RELAY_URL')
 	}
-	if (!invoiceNdk) {
-		invoiceNdk = new NDK({ explicitRelayUrls: [RELAY_URL] })
+	if (!invoicePool) {
+		invoicePool = new RelayPool()
+		invoicePool.relay(RELAY_URL) // connects lazily on first use
 	}
-	if (!invoiceNdkConnectPromise) {
-		invoiceNdkConnectPromise = invoiceNdk.connect().catch((error) => {
-			invoiceNdkConnectPromise = null
+	if (!invoicePoolConnectPromise) {
+		invoicePoolConnectPromise = Promise.resolve().then(async () => {
+			// Trigger relay connection by accessing it
+			await invoicePool!.relay(RELAY_URL!)
+		}).catch((error) => {
+			invoicePoolConnectPromise = null
 			throw error
 		})
 	}
-	await invoiceNdkConnectPromise
-	return invoiceNdk
+	await invoicePoolConnectPromise
+	return invoicePool
 }
 
 /**
- * Return a PoolPort backed by the NDK instance (lazy-connects if needed).
+ * Return a PoolPort backed by the RelayPool instance (lazy-connects if needed).
  *
  * This is the preferred access path for all I/O that does not require
- * NDK-specific methods (getUser, fetchProfile, etc.).
+ * applesauce-relay-specific methods (getUser, fetchProfile, etc.).
  */
 export async function getPoolPort(): Promise<PoolPort> {
-	await ensureInvoiceNdkConnected()
-	if (!invoiceNdkAdapter) {
-		invoiceNdkAdapter = new NdkAdapter(invoiceNdk)
+	await ensureInvoicePoolConnected()
+	if (!invoicePoolAdapter) {
+		invoicePoolAdapter = new RelayPoolAdapter(invoicePool)
 	}
-	return invoiceNdkAdapter
+	return invoicePoolAdapter
 }
+
 /**
- * Create a fresh PoolPort backed by a new NDK instance at the given
+ * Create a fresh PoolPort backed by a new RelayPool at the given
  * relay URLs.  Unlike getPoolPort(), this does NOT reuse the singleton —
  * it is used for per-URL isolation (zap relays, per-init relay).
  */
@@ -58,7 +63,10 @@ export async function createPoolPort(relayUrls: string[]): Promise<PoolPort> {
 	if (relayUrls.length === 0) {
 		throw new Error('createPoolPort requires at least one relay URL')
 	}
-	const ndk = new NDK({ explicitRelayUrls: relayUrls })
-	await ndk.connect()
-	return new NdkAdapter(ndk)
+	const pool = new RelayPool()
+	// Pre-connect all relays
+	for (const url of relayUrls) {
+		pool.relay(url)
+	}
+	return new RelayPoolAdapter(pool)
 }

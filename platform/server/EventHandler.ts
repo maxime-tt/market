@@ -93,7 +93,10 @@ export class EventHandler {
 		try {
 			const { promise, resolve, reject } = Promise.withResolvers<void>()
 			const id = setTimeout(() => reject(new Error('NDK service init timeout')), 10000)
-			this.ndkService.initialize(config.relayUrl).then(resolve, reject).finally(() => clearTimeout(id))
+			this.ndkService
+				.initialize(config.relayUrl)
+				.then(resolve, reject)
+				.finally(() => clearTimeout(id))
 			await promise
 		} catch (e) {
 			console.warn('⚠️ NDK service init failed, continuing anyway:', e)
@@ -102,7 +105,10 @@ export class EventHandler {
 		try {
 			const { promise, resolve, reject } = Promise.withResolvers<void>()
 			const id = setTimeout(() => reject(new Error('Load existing data timeout')), 10000)
-			this.ndkService.loadExistingData().then(resolve, reject).finally(() => clearTimeout(id))
+			this.ndkService
+				.loadExistingData()
+				.then(resolve, reject)
+				.finally(() => clearTimeout(id))
 			await promise
 		} catch (e) {
 			console.warn('⚠️ Load existing data failed, continuing anyway:', e)

@@ -110,22 +110,16 @@ export class NDKService {
 	 */
 	public startSubscriptions(): void {
 		if (!this.pool) return
-		this.adminSubscription = this.pool.subscribe(
-			{ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] },
-			{ closeOnEose: false },
-		)
-		this.adminSubscription.events.subscribe((event) => {
+		const adminSub = this.pool.subscribe({ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] }, { closeOnEose: false })
+		adminSub.events.subscribe((event) => {
 			const ts = event.created_at ?? 0
 			if (ts <= this.latestAdminEventTime) return
 			this.latestAdminEventTime = ts
 			console.log(`Live admin list update received (created_at=${ts})`)
 			this.adminManager.updateFromEvent(event as NostrEventLike)
 		})
-
-		this.editorSubscription = this.pool.subscribe(
-			{ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'] },
-			{ closeOnEose: false },
-		)
+		this.adminSubscription = { events: adminSub.events, errors: adminSub.failures.map((f) => new RelaySeamError(f.reason, f.message)), unsubscribe: adminSub.unsubscribe.bind(adminSub) }
+		this.editorSubscription = this.pool.subscribe({ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'] }, { closeOnEose: false })
 		this.editorSubscription.events.subscribe((event) => {
 			const ts = event.created_at ?? 0
 			if (ts <= this.latestEditorEventTime) return

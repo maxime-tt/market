@@ -205,6 +205,11 @@ export interface PoolPort {
 	/** The connection health of the target set, as the pool observes it. */
 	status(relays: RelayUrl[]): RelayStatus[]
 	/** Tear the pool down. */
+	query(
+		filters: FilterIn | FilterIn[],
+		opts?: QueryOptions,
+	): Promise<WireResult>
+	/** Tear the pool down. */
 	close(): void
 }
 
