@@ -31,6 +31,44 @@ const writeSets = (sets: Record<string, SetRecord>) => {
 	}
 }
 
+const BYHASH_STORAGE_KEY = 'market_pay_aggregator_byhash_v1'
+
+const readByHash = (): Record<string, { setId: string; legId: string }> => {
+	try {
+		const raw = localStorage.getItem(BYHASH_STORAGE_KEY)
+		return raw ? JSON.parse(raw) : {}
+	} catch {
+		return {}
+	}
+}
+
+const writeByHash = (map: Record<string, { setId: string; legId: string }>) => {
+	try {
+		localStorage.setItem(BYHASH_STORAGE_KEY, JSON.stringify(map))
+	} catch {
+		// best-effort persistence
+	}
+}
+
+const REFUND_STORAGE_KEY = 'market_pay_aggregator_refunds_v1'
+
+const readRefunds = (): Record<string, string> => {
+	try {
+		const raw = localStorage.getItem(REFUND_STORAGE_KEY)
+		return raw ? JSON.parse(raw) : {}
+	} catch {
+		return {}
+	}
+}
+
+const writeRefunds = (map: Record<string, string>) => {
+	try {
+		localStorage.setItem(REFUND_STORAGE_KEY, JSON.stringify(map))
+	} catch {
+		// best-effort persistence
+	}
+}
+
 const deepCopySet = (record: SetRecord): SetRecord => ({
 	...record,
 	legs: record.legs.map((leg) => ({
@@ -44,9 +82,10 @@ const deepCopySet = (record: SetRecord): SetRecord => ({
 /**
  * Durable SetStore backed by localStorage.
  *
- * Persists set records, the hash-to-set index, and the refund index so that
- * set state survives a page reload. The CAS discipline (compareAndSet) is
- * enforced in-memory; the storage itself is best-effort JSON.
+ * Persists set records, the hash-to-set index, and the refund index to
+ * separate localStorage keys so that the full store survives a page reload.
+ * Each map has its own key and its own read/write pair, mirroring the
+ * pattern established by `invoiceStorage.ts`.
  */
 export class LocalSetStore implements SetStore {
 	private readonly sets = new Map<string, SetRecord>()
@@ -57,6 +96,14 @@ export class LocalSetStore implements SetStore {
 		const stored = readSets()
 		for (const [setId, record] of Object.entries(stored)) {
 			this.sets.set(setId, deepCopySet(record))
+		}
+		const byHashStored = readByHash()
+		for (const [hash, entry] of Object.entries(byHashStored)) {
+			this.byHash.set(hash, entry)
+		}
+		const refundsStored = readRefunds()
+		for (const [orderId, setId] of Object.entries(refundsStored)) {
+			this.refunds.set(orderId, setId)
 		}
 	}
 
@@ -96,6 +143,8 @@ export class LocalSetStore implements SetStore {
 
 	async claimHash(paymentHash: string, setId: string, legId: string): Promise<void> {
 		this.byHash.set(paymentHash, { setId, legId })
+		const byHashMap = Object.fromEntries(this.byHash)
+		writeByHash(byHashMap)
 	}
 
 	async refundForOrder(orderId: string): Promise<string | null> {
@@ -104,7 +153,7 @@ export class LocalSetStore implements SetStore {
 
 	async recordRefund(orderId: string, setId: string): Promise<void> {
 		this.refunds.set(orderId, setId)
-		writeSets(Object.fromEntries(this.sets))
+		writeRefunds(Object.fromEntries(this.refunds))
 	}
 
 	/** Load a specific set by orderId — iterates persisted records to find matching sets. */
