@@ -15,6 +15,10 @@ import { ProductCard, ProductContextMenu } from '@ui/browse/product-card'
 import { ProductStrip } from '@ui/browse/product-strip'
 import { AccountPane } from '@ui/browse/account-pane'
 import { ListDetail, ListRow, RelayIndicator, DeadSearchError } from '@ui/browse/list-views'
+import { BrowseIdle } from '@ui/browse/browse-idle'
+import { SkeletonGrid } from '@ui/browse/skeleton-grid'
+import { EmptyStateBrowse } from '@ui/browse/empty-state-browse'
+import { TagFilterBadge } from '@ui/browse/relay-error'
 import type { WidgetLibrary } from '../libraries'
 
 // ---- Mock data ----
@@ -342,5 +346,100 @@ export const browse: WidgetLibrary = {
 		{ name: 'relay-indicator-default', render: RelayIndicatorDefault },
 		// dead-search-error
 		{ name: 'dead-search-error-default', render: DeadSearchErrorDefault },
+		// phase 2: idle wall strips
+		{ name: 'browse-idle-default', render: BrowseIdleDefault },
+		{ name: 'browse-idle-with-search', render: BrowseIdleWithSearch },
+		// phase 2: skeleton-grid
+		{ name: 'skeleton-grid-default', render: SkeletonGridDefault },
+		// phase 2: empty-state-browse
+		{ name: 'empty-state-browse-default', render: EmptyStateBrowseDefault },
+		// phase 2: tag-filtered-badge
+		{ name: 'tag-filtered-badge-default', render: TagFilterBadgeDefault },
+		// phase 2: relay-indicator expanded
+		{ name: 'relay-indicator-expanded', render: RelayIndicatorExpanded },
 	],
 }
+
+// ---- Phase 2: idle wall strips ----
+
+const IDLE_ITEMS = [
+	{ id: 'idle-1', title: 'Speckled Bowl, 6 in', seller: 'ATELIER-NORTE', material: 'm1' as const, symbolId: 'p-bowl' },
+	{ id: 'idle-2', title: 'Amber Dropper, 30 ml', seller: 'GLASSWORKS', material: 'm2' as const, symbolId: 'p-bottle' },
+	{ id: 'idle-3', title: 'Stoneware Mug, 400 ml', seller: 'CLAYHOUSE', material: 'm3' as const, symbolId: 'p-mug' },
+	{ id: 'idle-4', title: 'Pendant Lantern', seller: 'FORGE', material: 'm4' as const, symbolId: 'p-lamp' },
+	{ id: 'idle-5', title: 'Botanical Print Folio', seller: 'PRESS', material: 'm5' as const, symbolId: 'p-books' },
+	{ id: 'idle-6', title: 'Nesting Crates (3)', seller: 'JOINERY', material: 'm6' as const, symbolId: 'p-crate' },
+]
+
+const BrowseIdleDefault = () => (
+	<div className="h-[500px]">
+		<BrowseIdle query="" onSearchChange={() => {}} onSearchGo={() => {}} stripsAbove={IDLE_ITEMS} stripsBelow={IDLE_ITEMS} />
+	</div>
+)
+
+const BrowseIdleWithSearch = () => {
+	const [query, setQuery] = useState('ceramic')
+	return (
+		<div className="h-[500px]">
+			<BrowseIdle
+				query={query}
+				onSearchChange={setQuery}
+				onSearchGo={() => {}}
+				active={false}
+				onNavigateHome={() => {}}
+				onNavigateFeatured={() => {}}
+				accountSlot={
+					<div className="flex items-center gap-2 text-sm text-text-mid">
+						<div className="size-7 rounded-full bg-fill-ink text-on-fill-ink grid place-items-center text-xs font-bold">M</div>
+					</div>
+				}
+			/>
+		</div>
+	)
+}
+
+// ---- Phase 2: skeleton-grid ----
+
+const SkeletonGridDefault = () => (
+	<div className="h-[400px]">
+		<SkeletonGrid rows={8} columns={3} />
+	</div>
+)
+
+// ---- Phase 2: empty-state-browse ----
+
+const EmptyStateBrowseDefault = () => (
+	<div className="max-w-[600px] mx-auto py-8">
+		<EmptyStateBrowse query="ceramic" />
+	</div>
+)
+
+// ---- Phase 2: tag-filtered-badge ----
+
+const TagFilterBadgeDefault = () => (
+	<div className="flex flex-wrap gap-2">
+		<TagFilterBadge label="All" count={1208} active={true} />
+		<TagFilterBadge label="Handmade" count={214} />
+		<TagFilterBadge label="Pottery" count={168} />
+		<TagFilterBadge label="Stoneware" count={96} />
+		<TagFilterBadge label="Wood-fired" count={61} />
+		<TagFilterBadge label="Tableware" count={44} />
+	</div>
+)
+
+// ---- Phase 2: relay-indicator expanded popover ----
+
+const RelayIndicatorExpanded = () => (
+	<RelayIndicator
+		responded={9}
+		totalProducts={40}
+		relays={[
+			{ relay: 'relay.damus.io', count: 18, status: 'responded' },
+			{ relay: 'nostr.wine', count: 12, status: 'responded' },
+			{ relay: 'nos.lol', count: 8, status: 'responded' },
+			{ relay: 'relay.nostr.band', count: 0, status: 'timeout' },
+			{ relay: 'relay.foliax.xyz', count: 2, status: 'timeout' },
+			{ relay: 'relay.opennoderelay.net', count: 0, status: 'refused' },
+		]}
+	/>
+)

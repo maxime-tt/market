@@ -66,4 +66,30 @@ test.describe('browse library', () => {
 		await expect(page.getByTestId('widget-relay-indicator-default')).toBeVisible()
 		await expect(page.getByTestId('widget-dead-search-error-default')).toBeVisible()
 	})
+
+	test('browse-idle entries', async ({ page }) => {
+		await page.goto('/?library=browse')
+		await expect(page.getByTestId('widget-browse-idle-default')).toBeVisible()
+		await expect(page.getByTestId('widget-browse-idle-with-search')).toBeVisible()
+	})
+
+	test('skeleton-grid entries', async ({ page }) => {
+		await page.goto('/?library=browse')
+		await expect(page.getByTestId('widget-skeleton-grid-default')).toBeVisible()
+	})
+
+	test('empty-state-browse entries', async ({ page }) => {
+		await page.goto('/?library=browse')
+		await expect(page.getByTestId('widget-empty-state-browse-default')).toBeVisible()
+	})
+
+	test('tag-filtered-badge entries', async ({ page }) => {
+		await page.goto('/?library=browse')
+		await expect(page.getByTestId('widget-tag-filtered-badge-default')).toBeVisible()
+	})
+
+	test('relay-indicator expanded entries', async ({ page }) => {
+		await page.goto('/?library=browse')
+		await expect(page.getByTestId('widget-relay-indicator-expanded')).toBeVisible()
+	})
 })
