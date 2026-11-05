@@ -92,4 +92,11 @@ test.describe('browse library', () => {
 		await page.goto('/?library=browse')
 		await expect(page.getByTestId('widget-relay-indicator-expanded')).toBeVisible()
 	})
+
+	test('search-results-grid entries', async ({ page }) => {
+		await page.goto('/?library=browse')
+		await expect(page.getByTestId('widget-search-results-grid-default')).toBeVisible()
+		await expect(page.getByTestId('widget-search-results-grid-active-facet')).toBeVisible()
+		await expect(page.getByTestId('widget-search-results-grid-no-facets')).toBeVisible()
+	})
 })
