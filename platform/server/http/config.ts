@@ -80,8 +80,20 @@ export const configRoutes: BunRoutes = {
 			const timestamp = Math.floor(Date.now() / 1000)
 			const settings = { ...settingsResult.data, handlerId: getInstanceConfig().handlerId }
 			const eventTemplates: NostrEventLike[] = [
-				{ kind: 30000, created_at: timestamp, id: '', tags: [['d', 'admins'], ...payload.admins.map((pubkey) => ['p', pubkey])], content: '' },
-				{ kind: 30000, created_at: timestamp, id: '', tags: [['d', 'editors'], ...payload.editors.map((pubkey) => ['p', pubkey])], content: '' },
+				{
+					kind: 30000,
+					created_at: timestamp,
+					id: '',
+					tags: [['d', 'admins'], ...payload.admins.map((pubkey) => ['p', pubkey])],
+					content: '',
+				},
+				{
+					kind: 30000,
+					created_at: timestamp,
+					id: '',
+					tags: [['d', 'editors'], ...payload.editors.map((pubkey) => ['p', pubkey])],
+					content: '',
+				},
 				{
 					kind: 31990,
 					created_at: timestamp,

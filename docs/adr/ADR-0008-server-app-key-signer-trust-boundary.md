@@ -31,13 +31,13 @@ designed for a server process signing with its own app key.
 The server keeps its own app-key signer. It **does not** adopt `sdk/core/signer`, because the
 two are different trust boundaries:
 
-| | SDK signer (`sdk/core/signer`) | Server signer (`platform/server/EventSigner`) |
-|---|---|---|
-| Identity | User session (browser key, bunker, NIP-07) | Server process (`APP_PRIVATE_KEY`) |
-| Lifecycle | Per-user session state machine | Singleton per server process |
-| Storage | Encrypted vault (PBKDF2, AES-GCM) | Environment variable (`APP_PRIVATE_KEY`) |
-| Signing | Through session capability gates | Direct `finalizeEvent` |
-| Trust boundary | User-consented, per-RPC authorization | Server-administrated |
+|                | SDK signer (`sdk/core/signer`)             | Server signer (`platform/server/EventSigner`) |
+| -------------- | ------------------------------------------ | --------------------------------------------- |
+| Identity       | User session (browser key, bunker, NIP-07) | Server process (`APP_PRIVATE_KEY`)            |
+| Lifecycle      | Per-user session state machine             | Singleton per server process                  |
+| Storage        | Encrypted vault (PBKDF2, AES-GCM)          | Environment variable (`APP_PRIVATE_KEY`)      |
+| Signing        | Through session capability gates           | Direct `finalizeEvent`                        |
+| Trust boundary | User-consented, per-RPC authorization      | Server-administrated                          |
 
 The server signer adopts **SDK port types** (`NostrEventLike` from `@sdk/core/nostr/eventLike`,
 `EventTemplate` from `@sdk/core/signer/types`) for library-agnostic compatibility, but the
@@ -49,8 +49,8 @@ implementation stays as a server-only concrete adapter using `nostr-tools` direc
 import type { NostrEventLike, EventTemplate } from '@sdk/core/nostr/eventLike'
 
 export interface ServerSigner {
-  signEvent(template: EventTemplate): NostrEventLike
-  getAppPubkey(): string
+	signEvent(template: EventTemplate): NostrEventLike
+	getAppPubkey(): string
 }
 ```
 
