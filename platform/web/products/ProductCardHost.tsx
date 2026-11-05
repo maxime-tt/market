@@ -57,7 +57,7 @@ export function ProductCardHost({ product, className }: ProductCardHostProps) {
 	const queryClient = useQueryClient()
 	const { user, isAuthenticated } = useAuth()
 
-	const isOwnProduct = isAuthenticated && user?.pubkey === product.author.pubkey
+	const isOwnProduct = isAuthenticated && user?.pubkey === product.pubkey
 
 	// ADR-0009: coordinate used by the test-listing indicator. Cards normally
 	// only carry test-labeled items when the viewer revealed them or is on the
