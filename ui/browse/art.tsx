@@ -237,3 +237,20 @@ export const SKELETON_SHIMMER_CSS = `
   animation: skeleton-shimmer 1.6s linear infinite;
 }
 `
+
+// ---------------------------------------------------------------------------
+// Search caret blink animation — injected via <style> or consumed by components
+// ---------------------------------------------------------------------------
+
+/**
+ * Blinking caret animation for the submitted/active search state.
+ * Ported verbatim from frames: `background-position: 130% → -130%`
+ * over 1.6s linear infinite.
+ */
+export const SEARCH_FIELD_CARET_CSS = `
+@keyframes search-caret-blink {
+  0%, 50% { opacity: 1 }
+  50.001%, 100% { opacity: 0 }
+}
+`
+

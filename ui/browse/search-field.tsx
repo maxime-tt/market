@@ -3,10 +3,16 @@
  *
  * 18px search glyph, query text, clear control, `go` pill button
  * (fill-ink bg / on-fill-ink label).
+ *
+ * When `submitted` is true, renders query text + blinking caret instead of
+ * an input field — matches the active/submitted state in frames W8vkrHbRq6
+ * and QPUcf4Fs38.
  */
 
+import { useEffect, useState } from 'react'
 import type { FC, KeyboardEvent, Ref } from 'react'
 import { cn } from '../utils/cn'
+import { SEARCH_FIELD_CARET_CSS } from './art'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -26,6 +32,8 @@ export interface SearchFieldProps {
 	/** Extra classes for the root container. */
 	className?: string
 	ref?: Ref<HTMLDivElement>
+	/** Show submitted state: text + caret, no input. */
+	submitted?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -45,9 +53,21 @@ export const SearchField: FC<SearchFieldProps> = ({
 	onClear,
 	className,
 	ref,
+	submitted,
 	...props
 }) => {
 	const hasValue = value.length > 0
+
+	// Inject caret blink keyframes once (de-duplicated by browser)
+	const [injected, setInjected] = useState(false)
+	useEffect(() => {
+		if (!injected) {
+			setInjected(true)
+			const style = document.createElement('style')
+			style.textContent = SEARCH_FIELD_CARET_CSS
+			document.head.appendChild(style)
+		}
+	}, [injected])
 
 	const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
 		if (e.key === 'Enter') {
@@ -99,23 +119,30 @@ export const SearchField: FC<SearchFieldProps> = ({
 			</svg>
 
 			{/* Query text input */}
-			<input
-				type="text"
-				value={value}
-				onChange={(e) => onChange(e.target.value)}
-				onKeyDown={handleKeyDown}
-				placeholder={placeholder}
-				className={cn(
-					'flex-1',
-					'bg-transparent',
-					'outline-none',
-					'text-[17px]',
-					'leading-tight',
-					'text-text-high',
-					'placeholder:text-text-mid',
-				)}
-				aria-label="Search"
-			/>
+			{!submitted ? (
+				<input
+					type="text"
+					value={value}
+					onChange={(e) => onChange(e.target.value)}
+					onKeyDown={handleKeyDown}
+					placeholder={placeholder}
+					className={cn(
+						'flex-1',
+						'bg-transparent',
+						'outline-none',
+						'text-[17px]',
+						'leading-tight',
+						'text-text-high',
+						'placeholder:text-text-mid',
+					)}
+					aria-label="Search"
+				/>
+			) : (
+				<div className="flex-1 min-w-0 text-[17px] leading-tight text-text-high whitespace-nowrap overflow-hidden">
+					{value}
+					<span className="inline-block w-[2px] h-[17px] ml-[2px] mb-[4px] align-[-4px] bg-fill-ink animate-search-caret-blink" aria-hidden="true" />
+				</div>
+			)}
 
 			{/* Clear control — only when there's content */}
 			{hasValue && (
