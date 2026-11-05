@@ -60,6 +60,18 @@ export async function getPoolPort(): Promise<PoolPort> {
 }
 
 /**
+ * The relay URLs the app-level singleton PoolPort (`getPoolPort()`) is
+ * configured with — the same value the pool itself is built from.
+ *
+ * `PoolPort.status()`, `subscribe()` and `publish()` operate on the relays they
+ * are *given*, so a caller that must publish or subscribe has to name its
+ * target set explicitly.  This is that set for the app relay.
+ */
+export function getAppPoolRelays(): string[] {
+	return RELAY_URL ? [RELAY_URL] : []
+}
+
+/**
  * Create a fresh PoolPort backed by a new RelayPool at the given
  * relay URLs.  Unlike getPoolPort(), this does NOT reuse the singleton —
  * it is used for per-URL isolation (zap relays, per-init relay).

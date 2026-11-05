@@ -8,8 +8,8 @@
 import { naddrFromAddress } from '@sdk/core/nostr/naddr'
 import { map as rxMap } from 'rxjs'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
-import { getPoolPort } from './ndk'
-import type { Subscription, PoolPort } from '@sdk/core/nostr-io/ts/types'
+import { getAppPoolRelays, getPoolPort } from './ndk'
+import type { FilterIn, Subscription, PoolPort } from '@sdk/core/nostr-io/ts/types'
 import { RelaySeamError } from '@sdk/core/nostr-io/ts/errors'
 import type { AdminManager, EditorManager, BootstrapManager } from './types'
 
@@ -112,14 +112,10 @@ export class NDKService {
 	 */
 	public startSubscriptions(): void {
 		if (!this.pool) return
-		// Derive relays from pool status - adapter stores known relay set
-		const relays = this.pool
-			.status([])
-			.map((s) => s.url)
-			.filter(Boolean) as string[]
+		const relays = getAppPoolRelays()
 		const adminSub = this.pool.subscribe(relays, [
 			{ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] },
-		] as import('@sdk/core/nostr-io/ts/types').FilterIn[])
+		] as FilterIn[])
 		adminSub.events.subscribe((event) => {
 			const ts = event.created_at ?? 0
 			if (ts <= this.latestAdminEventTime) return
@@ -134,7 +130,7 @@ export class NDKService {
 		}
 		const editorSub = this.pool.subscribe(relays, [
 			{ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'] },
-		] as import('@sdk/core/nostr-io/ts/types').FilterIn[])
+		] as FilterIn[])
 		this.editorSubscription = {
 			events: editorSub.events,
 			errors: editorSub.failures.pipe(rxMap((f) => new RelaySeamError(f.reason, f.message ?? ''))),

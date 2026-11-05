@@ -1,4 +1,4 @@
-# ADR-022: Server App-Key Signer Stays Its Own Trust Boundary
+# ADR-0022: Server App-Key Signer Stays Its Own Trust Boundary
 
 ## Status
 
@@ -12,7 +12,7 @@ Accepted
 
 - ADR-0023: Server Nostr I/O — Port Shape and Applesauce-Relay Adapter
 - `notes/ADR-server-signer.md`: author draft
-- HANDOVER-WAVE-K-SERVER-NDK.md: lane contract
+- `runs/union-1420/D3D4-CONTRACT.md` rev 2.29 §2: the owner ruling that the server keeps its own signer and drops NDK
 
 ## Context
 

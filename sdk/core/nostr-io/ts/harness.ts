@@ -182,7 +182,7 @@ export function workingPool(spec: WorkingPoolSpec = {}): WorkingPool {
 				return spec.status ? spec.status(relays) : relays.map((url) => ({ url, connected: true, ready: true, authenticated: false }))
 			},
 			query: (filters: FilterIn | FilterIn[], opts?: QueryOptions) => {
-				calls.push({ method: 'query', filters: filters as Filter | Filter[] })
+				calls.push({ method: 'query', relays: [], filters: Array.isArray(filters) ? filters : [filters] })
 				return spec.query ? spec.query(filters, opts) : Promise.resolve({ events: [], eose: true, failures: [] })
 			},
 			close: () => {

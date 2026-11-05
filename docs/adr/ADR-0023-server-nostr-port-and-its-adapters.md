@@ -1,4 +1,4 @@
-# ADR-023: Server Nostr I/O — Port Shape and Applesauce-Relay Adapter
+# ADR-0023: Server Nostr I/O — Port Shape and Applesauce-Relay Adapter
 
 ## Status
 

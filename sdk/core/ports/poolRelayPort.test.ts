@@ -31,6 +31,10 @@ function createPool() {
 			return relays.map((url, index): RelayAck => ({ url, accepted: index === 0, reason: index === 0 ? undefined : 'rejected' }))
 		},
 		count: async () => ({ count: 0, approximate: false }),
+		query: async (filters) => {
+			calls.push({ op: 'query', relays: [], filters: Array.isArray(filters) ? filters : [filters] })
+			return { events: [], eose: true, failures: [] }
+		},
 		status: () => [],
 		close: () => {
 			throw new Error('the shared pool must never be closed by the port')

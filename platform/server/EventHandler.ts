@@ -19,7 +19,7 @@ import { ZAP_RELAYS } from '@sdk/config/constants'
 import { map as rxMap } from 'rxjs'
 import type { ZapPurchaseManager, ZapPurchaseEntry } from './ZapPurchaseManager'
 import { createPoolPort, getPoolPort } from './ndk'
-import type { PoolPort, Subscription } from '@sdk/core/nostr-io/ts/types'
+import type { FilterIn, PoolPort, Subscription } from '@sdk/core/nostr-io/ts/types'
 import { RelaySeamError } from '@sdk/core/nostr-io/ts/errors'
 
 export class EventHandler {
@@ -174,18 +174,13 @@ export class EventHandler {
 	 * Each manager self-filters by its own label tag, so a single subscription
 	 * routes receipts to vanity URLs, badges, NIP-05.
 	 */
-	private subscribeToZapPurchases(pool: PoolPort, label: string, relays?: string[]): void {
+	private subscribeToZapPurchases(pool: PoolPort, label: string, relays: string[]): void {
 		const appPubkey = this.eventSigner.getAppPubkey()
 
-		// Subscribe to zap receipts where app pubkey is the recipient
-		// Use caller-provided relays if available, otherwise fall back to pool status
-		const targetRelays =
-			relays ??
-			(pool
-				.status([])
-				.map((s) => s.url)
-				.filter(Boolean) as string[])
-		const sub = pool.subscribe(targetRelays, [{ kinds: [9735], '#p': [appPubkey] }] as import('@sdk/core/nostr-io/ts/types').FilterIn[])
+		// Subscribe to zap receipts where app pubkey is the recipient.
+		// `PoolPort.subscribe()` targets exactly the relays it is given, so the
+		// caller always names them — there is no pool-side default to fall back on.
+		const sub = pool.subscribe(relays, [{ kinds: [9735], '#p': [appPubkey] }] as FilterIn[])
 
 		// Listen for events on the subscription
 		sub.events.subscribe(async (event) => {
