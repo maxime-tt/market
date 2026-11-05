@@ -16,7 +16,7 @@ export class EventSigner {
 	public signEvent(event: NostrEventLike): NostrEventLike {
 		const unsignedEvent: UnsignedEvent = {
 			kind: event.kind as number,
-			created_at: event.created_at,
+			created_at: event.created_at ?? 0,
 			tags: event.tags,
 			content: event.content,
 			pubkey: this.appPubkey,

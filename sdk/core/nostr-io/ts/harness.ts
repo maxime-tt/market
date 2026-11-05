@@ -112,6 +112,10 @@ export function fakePool(): FakePool {
 			status(): RelayStatus[] {
 				return refuse('status')
 			},
+			async query(): Promise<WireResult> {
+				return refuse('query')
+			},
+
 			close(): void {
 				refuse('close')
 			},
@@ -173,6 +177,10 @@ export function workingPool(spec: WorkingPoolSpec = {}): WorkingPool {
 			status: (relays) => {
 				calls.push({ method: 'status', relays: [...relays] })
 				return spec.status ? spec.status(relays) : relays.map((url) => ({ url, connected: true, ready: true, authenticated: false }))
+			},
+			query: (filters, opts) => {
+				calls.push({ method: 'query', filters: filters })
+				return spec.query ? spec.query(filters, opts) : Promise.resolve({ events: [], eose: true, failures: [] })
 			},
 			close: () => {
 				calls.push({ method: 'close', relays: [] })

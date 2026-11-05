@@ -16,9 +16,11 @@ import { EventValidator } from './EventValidator'
 import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
 import { ZAP_RELAYS } from '@sdk/config/constants'
+import { map as rxMap } from 'rxjs'
 import type { ZapPurchaseManager, ZapPurchaseEntry } from './ZapPurchaseManager'
 import { createPoolPort, getPoolPort } from './ndk'
 import type { PoolPort, Subscription } from '@sdk/core/nostr-io/ts/types'
+import { RelaySeamError } from '@sdk/core/nostr-io/ts/errors'
 
 export class EventHandler {
 	private static instance: EventHandler
@@ -159,7 +161,7 @@ export class EventHandler {
 			} catch (error) {
 				console.warn('⚠️ Failed to connect zap relay PoolPort; zap purchase receipts may not be processed:', error)
 				// Subscribe anyway in case some relays connected
-				this.subscribeToZapPurchases(this.zapPool, 'Zap relays (partial)')
+				if (this.zapPool) this.subscribeToZapPurchases(this.zapPool, 'Zap relays (partial)')
 			}
 		}
 
@@ -176,12 +178,10 @@ export class EventHandler {
 		const appPubkey = this.eventSigner.getAppPubkey()
 
 		// Subscribe to zap receipts where app pubkey is the recipient
+		const relays = pool.status([]).map((s) => s.url).filter(Boolean) as string[]
 		const sub = pool.subscribe(
-			{
-				kinds: [9735],
-				'#p': [appPubkey],
-			},
-			{ closeOnEose: false },
+			relays,
+			[{ kinds: [9735], '#p': [appPubkey] }] as import('@sdk/core/nostr-io/ts/types').FilterIn[],
 		)
 
 		// Listen for events on the subscription
@@ -205,7 +205,11 @@ export class EventHandler {
 			}
 		})
 
-		this.zapSubscriptions.push(sub)
+		this.zapSubscriptions.push({
+			events: sub.events,
+			errors: sub.failures.pipe(rxMap((f) => new RelaySeamError(f.reason, f.message ?? ''))),
+			unsubscribe: sub.unsubscribe,
+		})
 		console.log(`Subscribed to zap purchase receipts (${label})`)
 	}
 

@@ -33,7 +33,7 @@ import { NEVER, Observable, Subject, filter, firstValueFrom, map, share, takeUnt
 
 import { RelaySeamError } from './errors'
 import { mapClosedReason, normalizeRelayUrl } from './pool'
-import type { CountResult, Event, FilterIn, PoolPort, PoolSubscription, RelayAck, RelayFailure, RelayStatus, RelayUrl } from './types'
+import type { CountResult, Event, FilterIn, PoolPort, PoolSubscription, RelayAck, RelayFailure, RelayStatus, RelayUrl, QueryOptions, WireResult } from './types'
 
 /** The vendor's per-relay EVENT message, narrowed without a cast. */
 type EventMessage = Extract<GroupReqMessage, { type: 'EVENT' }>
@@ -246,6 +246,46 @@ class RelayPoolTransport implements PoolPort {
 		})
 	}
 
+
+	query(filters: FilterIn | FilterIn[], opts?: QueryOptions): Promise<WireResult> {
+		const events: Event[] = []
+		const failures: RelaySeamError[] = []
+		const source = this.pool.req([], filters as FilterIn[])
+		const sub = source.subscribe({
+			next: (message) => {
+				if (message.type === 'EVENT') events.push(message.event)
+				if (message.type === 'CLOSED') failures.push(new RelaySeamError(mapClosedReason(message.reason), message.reason))
+				if (message.type === 'ERROR') {
+					const err = message.error instanceof Error ? message.error : new Error(String(message.error))
+					failures.push(new RelaySeamError('rejected', err.message))
+				}
+			},
+			error: (err) => {
+				const e = err instanceof Error ? err : new Error(String(err))
+				failures.push(new RelaySeamError('rejected', e.message))
+			},
+			complete: () => {
+				// nothing
+			},
+		})
+		// Wait for EOSE by taking until we see one, or signal aborts
+		const eose$ = source.pipe(
+			filter((m): m is Extract<GroupReqMessage, { type: 'EOSE'; from: string }> => m.type === 'EOSE'),
+			tap(() => sub.unsubscribe()),
+			opts?.signal
+				? takeUntil(new Observable<void>((s) => opts.signal!.addEventListener('abort', () => s.next(), { once: true })) as unknown as Observable<void>)
+				: undefined,
+		)
+		return firstValueFrom(eose$).then(() => {
+			sub.unsubscribe()
+			return { events, eose: true, failures }
+		}).catch((err) => {
+			sub.unsubscribe()
+			// If the EOSE never arrived (signal aborted), report partial results with eose: false
+			if (opts?.signal?.aborted) return { events, eose: false, failures }
+			throw err
+		})
+	}
 	close(): void {
 		this.pool.close()
 	}

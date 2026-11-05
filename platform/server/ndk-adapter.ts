@@ -7,6 +7,7 @@
  * is now applesauce-relay — identical to what `sdk/core/nostr-io` ships.
  */
 import { RelayPool } from 'applesauce-relay'
+import { RelaySeamError } from '@sdk/core/nostr-io/ts/errors'
 import type { NostrEvent as ApplesauceEvent } from 'applesauce-core/helpers/event'
 import { Observable, Subject, filter, map, share, takeUntil, takeWhile, firstValueFrom, tap } from 'rxjs'
 import type {
@@ -17,7 +18,6 @@ import type {
 	RelayStatus,
 	RelayUrl,
 	CountResult,
-	RelaySeamError,
 	RelayFailure,
 	WireResult,
 } from '@sdk/core/nostr-io/ts/types'
@@ -63,12 +63,12 @@ export class RelayPoolAdapter implements PoolPort {
 				if (isClosedMessage(message)) failures.push(new RelaySeamError(mapClosedReason(message.reason), message.reason))
 				if (isErrorMessage(message)) {
 					const err = message.error instanceof Error ? message.error : new Error(String(message.error))
-					failures.push(new RelaySeamError('unknown', err.message))
+					failures.push(new RelaySeamError('rejected', err.message))
 				}
 			},
 			error: (err) => {
 				const e = err instanceof Error ? err : new Error(String(err))
-				failures.push(new RelaySeamError('unknown', e.message))
+				failures.push(new RelaySeamError('rejected', e.message))
 			},
 			complete: () => {
 				// nothing
@@ -79,12 +79,21 @@ export class RelayPoolAdapter implements PoolPort {
 			filter(isEoseMessage),
 			tap(() => sub.unsubscribe()),
 			opts?.signal
-				? takeUntil(new Observable<void>((s) => opts.signal!.addEventListener('abort', () => s.next(), { once: true })) as any)
-				: undefined,
+				? takeUntil(new Observable<void>((s) => opts.signal!.addEventListener('abort', () => s.next(), { once: true })) as unknown as Observable<void>)
+				: share(),
 		)
-		await firstValueFrom(eose$)
+		try {
+			await firstValueFrom(eose$)
+		} catch {
+			// If the EOSE never arrived (signal aborted), report partial results with eose: false
+			if (opts?.signal?.aborted) {
+				sub.unsubscribe()
+				return { events, eose: false, failures }
+			}
+			throw
+		}
 		sub.unsubscribe()
-		return { events: events as unknown as any, eose: true, failures }
+		return { events, eose: true, failures }
 	}
 
 	request(relays: RelayUrl[], filters: FilterIn[], opts?: { signal?: AbortSignal }): Observable<ApplesauceEvent> {
@@ -105,7 +114,9 @@ export class RelayPoolAdapter implements PoolPort {
 			takeWhile(() => seen.size < target.size, true),
 			filter(isEventMessage),
 			map((message) => message.event),
-			takeUntil(opts?.signal ? new Observable<void>((s) => opts.signal!.addEventListener('abort', () => s.next(), { once: true })) : new Observable<void>(() => {})),
+			opts?.signal
+				? takeUntil(new Observable<void>((s) => opts.signal!.addEventListener('abort', () => s.next(), { once: true })) as unknown as Observable<void>)
+				: share(),
 		)
 	}
 
@@ -122,7 +133,7 @@ export class RelayPoolAdapter implements PoolPort {
 				if (message.type === 'CLOSED') return { relay: message.from, reason: mapClosedReason(message.reason), message: message.reason }
 				if (message.type === 'ERROR') {
 					const error = message.error instanceof Error ? message.error : new Error(String(message.error))
-					return { relay: message.from, reason: 'unknown', message: error.message }
+					return { relay: message.from, reason: 'rejected', message: error.message }
 				}
 				return null
 			}),
@@ -135,9 +146,9 @@ export class RelayPoolAdapter implements PoolPort {
 			share(),
 		)
 		return {
-			events: events.asObservable(),
-			failures: failures.asObservable(),
-			eose: eose.asObservable(),
+			events,
+			failures,
+			eose,
 			unsubscribe: () => {
 				stop.next()
 				stop.complete()
@@ -161,7 +172,8 @@ export class RelayPoolAdapter implements PoolPort {
 		let approximate = false
 		for (const response of Object.values(record)) {
 			count += response.count
-			if (response.approximate) approximate = true
+			const approx: unknown = (response as Record<string, unknown>).approximate
+			if (approx === true) approximate = true
 		}
 		return { count, approximate }
 	}

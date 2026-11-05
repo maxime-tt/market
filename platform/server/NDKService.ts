@@ -6,9 +6,11 @@
  * and never names `@nostr-dev-kit` directly.
  */
 import { naddrFromAddress } from '@sdk/core/nostr/naddr'
+import { map as rxMap } from 'rxjs'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { getPoolPort } from './ndk'
 import type { Subscription, PoolPort } from '@sdk/core/nostr-io/ts/types'
+import { RelaySeamError } from '@sdk/core/nostr-io/ts/errors'
 import type { AdminManager, EditorManager, BootstrapManager } from './types'
 
 export class NDKService {
@@ -110,7 +112,8 @@ export class NDKService {
 	 */
 	public startSubscriptions(): void {
 		if (!this.pool) return
-		const adminSub = this.pool.subscribe({ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] }, { closeOnEose: false })
+		const relays = this.pool.status([]).map((s) => s.url).filter(Boolean) as string[]
+		const adminSub = this.pool.subscribe(relays, [{ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] }] as import('@sdk/core/nostr-io/ts/types').FilterIn[])
 		adminSub.events.subscribe((event) => {
 			const ts = event.created_at ?? 0
 			if (ts <= this.latestAdminEventTime) return
@@ -118,8 +121,9 @@ export class NDKService {
 			console.log(`Live admin list update received (created_at=${ts})`)
 			this.adminManager.updateFromEvent(event as NostrEventLike)
 		})
-		this.adminSubscription = { events: adminSub.events, errors: adminSub.failures.map((f) => new RelaySeamError(f.reason, f.message)), unsubscribe: adminSub.unsubscribe.bind(adminSub) }
-		this.editorSubscription = this.pool.subscribe({ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'] }, { closeOnEose: false })
+		this.adminSubscription = { events: adminSub.events, errors: adminSub.failures.pipe(rxMap((f) => new RelaySeamError(f.reason, f.message ?? ''))), unsubscribe: () => adminSub.unsubscribe() }
+		const editorSub = this.pool.subscribe(relays, [{ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'] }] as import('@sdk/core/nostr-io/ts/types').FilterIn[])
+		this.editorSubscription = { events: editorSub.events, errors: editorSub.failures.pipe(rxMap((f) => new RelaySeamError(f.reason, f.message ?? ''))), unsubscribe: () => editorSub.unsubscribe() }
 		this.editorSubscription.events.subscribe((event) => {
 			const ts = event.created_at ?? 0
 			if (ts <= this.latestEditorEventTime) return

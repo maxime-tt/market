@@ -31,6 +31,9 @@ export async function ensureInvoicePoolConnected(): Promise<RelayPool> {
 		invoicePoolConnectPromise = Promise.resolve().then(async () => {
 			// Trigger relay connection by accessing it
 			await invoicePool!.relay(RELAY_URL!)
+			return invoicePool
+			// relay() resolves void; the pool is the value we need to return
+			return invoicePool
 		}).catch((error) => {
 			invoicePoolConnectPromise = null
 			throw error
@@ -49,7 +52,7 @@ export async function ensureInvoicePoolConnected(): Promise<RelayPool> {
 export async function getPoolPort(): Promise<PoolPort> {
 	await ensureInvoicePoolConnected()
 	if (!invoicePoolAdapter) {
-		invoicePoolAdapter = new RelayPoolAdapter(invoicePool)
+		invoicePoolAdapter = new RelayPoolAdapter(invoicePool!)
 	}
 	return invoicePoolAdapter
 }

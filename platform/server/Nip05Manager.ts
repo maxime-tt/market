@@ -1,4 +1,5 @@
 // NostrEvent type was unused; the parent ZapPurchaseManager provides its own
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { ZapPurchaseManager, type PricingTier, type ZapPurchaseEntry } from './ZapPurchaseManager'
 import type { EventSigner } from './EventSigner'
 

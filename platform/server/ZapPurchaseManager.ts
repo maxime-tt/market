@@ -405,11 +405,14 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 			if (!signedEvent) return
 
 			// Publish via the PoolPort
-			const outcome = await pool.publish(signedEvent)
+			const relays = pool.status([]).map((s) => s.url).filter(Boolean) as string[]
+			const outcome = relays.length > 0
+				? await pool.publish(relays, signedEvent)
+				: []
 			console.log(`[${this.config.registryDTag}] Registry published: ${signedEvent.id}`)
 
 			// Log per-relay acks
-			for (const ack of outcome.acks) {
+			for (const ack of outcome) {
 				if (!ack.accepted) {
 					console.warn(`[${this.config.registryDTag}] Relay rejected registry event: ${ack.url} — ${ack.reason}`)
 				}

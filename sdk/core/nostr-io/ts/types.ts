@@ -204,7 +204,7 @@ export interface PoolPort {
 	count(relays: RelayUrl[], filters: FilterIn[]): Promise<CountResult>
 	/** The connection health of the target set, as the pool observes it. */
 	status(relays: RelayUrl[]): RelayStatus[]
-	/** Tear the pool down. */
+	/** A single REQ that resolves at EOSE, with a failure channel and deadline. */
 	query(
 		filters: FilterIn | FilterIn[],
 		opts?: QueryOptions,
