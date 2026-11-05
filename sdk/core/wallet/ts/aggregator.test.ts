@@ -270,6 +270,26 @@ test('the refund guard refuses an unresolvable correlation and a refund above th
 	}
 	expect(over?.reason).toBe('over-total')
 })
+test('the refund guard refuses a non-purchase direction', async () => {
+	const aggregator = new PayAggregator(options([wrapperFor({})]))
+	const purchase = await aggregator.pay({ orderId: 'order-8', totalSat: 1000, legs: [legIntent()] })
+	// open a refund first — the purchase set's direction is 'purchase', not 'refund'
+	await aggregator.openRefund({ purchaseSetId: purchase.setId, refundTotalSat: 500, legs: [legIntent({ expectedPaymentHash: 'r3' })] })
+	// trying to open a second refund for the same order uses the refund's direction
+	// which is not 'purchase', so the guard refuses
+	let error: FundsDuplicateRefundError | undefined
+	try {
+		await aggregator.openRefund({
+			purchaseSetId: 'refund:order-8:1',
+			refundTotalSat: 100,
+			legs: [legIntent({ expectedPaymentHash: 'r4' })],
+		})
+	} catch (thrown) {
+		error = thrown as FundsDuplicateRefundError
+	}
+	expect(error).toBeInstanceOf(FundsDuplicateRefundError)
+	expect(error?.reason).toBe('unresolvable')
+})
 
 test('the partition derives the merchant share as the residual', () => {
 	const aggregator = new PayAggregator(options([wrapperFor({})]))

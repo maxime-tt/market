@@ -22,7 +22,7 @@ export interface AggregatorWrapper {
  * `#c5418e` SetDirection — a set is either the purchase direction (buyer to seller) or the refund direction
  * (seller to buyer); the refund is a separate set, never a mutation of the purchase set.
  */
-export type SetDirection = 'purchase' | 'refund'
+export type SetDirection = 'purchase' | 'refund' | 'tip'
 
 /**
  * `#16a79e` SetState — the set's own vocabulary, never a wallet operation's name: `unfinished` while any leg is
