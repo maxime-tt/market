@@ -105,7 +105,11 @@ class RelayPoolTransport implements PoolPort {
 
 	constructor(pool: RelayPool) {
 		this.pool = pool
+		this.relays = Array.from(pool.relays.keys())
 	}
+
+	/** Track the relays this transport was created with. */
+	private readonly relays: string[]
 
 	request(relays: RelayUrl[], filters: FilterIn[], opts?: { signal?: AbortSignal }): Observable<Event> {
 		// The set a pool is handed is the **unique** one, and the seam is where that
@@ -232,7 +236,8 @@ class RelayPoolTransport implements PoolPort {
 	 * cannot be asked about is a typed refusal: health is reported, never invented.
 	 */
 	status(relays: RelayUrl[]): RelayStatus[] {
-		return [...relays].map((url) => {
+		const target = relays.length > 0 ? relays : this.relays
+		return [...target].map((url) => {
 			let key: string
 			try {
 				key = normalizeRelayUrl(url)

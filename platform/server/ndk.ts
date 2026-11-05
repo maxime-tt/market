@@ -14,6 +14,7 @@ import type { PoolPort } from '@sdk/core/nostr-io/ts/types'
 let invoicePool: RelayPool | null = null
 let invoicePoolConnectPromise: Promise<RelayPool> | null = null
 let invoicePoolAdapter: RelayPoolAdapter | null = null
+let invoicePoolRelayUrl: string | null = null
 
 /**
  * Ensure the RelayPool is connected and return it for callers that need
@@ -25,15 +26,14 @@ export async function ensureInvoicePoolConnected(): Promise<RelayPool> {
 	}
 	if (!invoicePool) {
 		invoicePool = new RelayPool()
+		invoicePoolRelayUrl = RELAY_URL
 		invoicePool.relay(RELAY_URL) // connects lazily on first use
 	}
 	if (!invoicePoolConnectPromise) {
 		invoicePoolConnectPromise = Promise.resolve().then(async () => {
 			// Trigger relay connection by accessing it
 			await invoicePool!.relay(RELAY_URL!)
-			return invoicePool
-			// relay() resolves void; the pool is the value we need to return
-			return invoicePool
+			return invoicePool!
 		}).catch((error) => {
 			invoicePoolConnectPromise = null
 			throw error

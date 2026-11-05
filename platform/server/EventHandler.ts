@@ -137,7 +137,7 @@ export class EventHandler {
 				await this.nip05Manager.loadExistingNip05Registry(this.eventSigner.getAppPubkey())
 
 				// Subscribe to zap receipts for all purchase managers (app relay)
-				this.subscribeToZapPurchases(this.appPool, 'App relay')
+				this.subscribeToZapPurchases(this.appPool, 'App relay', [config.relayUrl].filter(Boolean) as string[])
 			} catch (e) {
 				console.warn('⚠️ App relay PoolPort setup failed, continuing anyway:', e)
 			}
@@ -157,11 +157,11 @@ export class EventHandler {
 
 			try {
 				this.zapPool = await createPoolPort(zapRelayUrls)
-				this.subscribeToZapPurchases(this.zapPool, 'Zap relays')
+				this.subscribeToZapPurchases(this.zapPool, 'Zap relays', zapRelayUrls)
 			} catch (error) {
 				console.warn('⚠️ Failed to connect zap relay PoolPort; zap purchase receipts may not be processed:', error)
 				// Subscribe anyway in case some relays connected
-				if (this.zapPool) this.subscribeToZapPurchases(this.zapPool, 'Zap relays (partial)')
+				if (this.zapPool) this.subscribeToZapPurchases(this.zapPool, 'Zap relays (partial)', zapRelayUrls)
 			}
 		}
 
@@ -174,13 +174,14 @@ export class EventHandler {
 	 * Each manager self-filters by its own label tag, so a single subscription
 	 * routes receipts to vanity URLs, badges, NIP-05.
 	 */
-	private subscribeToZapPurchases(pool: PoolPort, label: string): void {
+	private subscribeToZapPurchases(pool: PoolPort, label: string, relays?: string[]): void {
 		const appPubkey = this.eventSigner.getAppPubkey()
 
 		// Subscribe to zap receipts where app pubkey is the recipient
-		const relays = pool.status([]).map((s) => s.url).filter(Boolean) as string[]
+		// Use caller-provided relays if available, otherwise fall back to pool status
+		const targetRelays = relays ?? pool.status([]).map((s) => s.url).filter(Boolean) as string[]
 		const sub = pool.subscribe(
-			relays,
+			targetRelays,
 			[{ kinds: [9735], '#p': [appPubkey] }] as import('@sdk/core/nostr-io/ts/types').FilterIn[],
 		)
 

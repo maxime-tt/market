@@ -112,6 +112,7 @@ export class NDKService {
 	 */
 	public startSubscriptions(): void {
 		if (!this.pool) return
+		// Derive relays from pool status - adapter stores known relay set
 		const relays = this.pool.status([]).map((s) => s.url).filter(Boolean) as string[]
 		const adminSub = this.pool.subscribe(relays, [{ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] }] as import('@sdk/core/nostr-io/ts/types').FilterIn[])
 		adminSub.events.subscribe((event) => {

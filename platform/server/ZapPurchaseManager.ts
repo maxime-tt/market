@@ -1,6 +1,7 @@
 import type { EventSigner } from './EventSigner'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { getPoolPort } from './ndk'
+import { RELAY_URL } from './runtime'
 import type { PoolPort } from '@sdk/core/nostr-io/ts/types'
 
 export interface PricingTier {
@@ -405,10 +406,11 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 			if (!signedEvent) return
 
 			// Publish via the PoolPort
+			// Use the singleton's stored relay URL from getPoolPort()
 			const relays = pool.status([]).map((s) => s.url).filter(Boolean) as string[]
 			const outcome = relays.length > 0
-				? await pool.publish(relays, signedEvent)
-				: []
+				? await pool.publish(relays, signedEvent as import('nostr-tools').NostrEvent)
+				: await pool.publish([RELAY_URL ?? ''], signedEvent as import('nostr-tools').NostrEvent)
 			console.log(`[${this.config.registryDTag}] Registry published: ${signedEvent.id}`)
 
 			// Log per-relay acks
