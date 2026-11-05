@@ -20,6 +20,7 @@ import { SkeletonGrid } from '@ui/browse/skeleton-grid'
 import { EmptyStateBrowse } from '@ui/browse/empty-state-browse'
 import { TagFilterBadge } from '@ui/browse/relay-error'
 import type { WidgetLibrary } from '../libraries'
+import type { StripItem } from '@ui/browse/product-strip'
 
 // ---- Mock data ----
 
@@ -304,65 +305,9 @@ const DeadSearchErrorDefault = () => (
 	/>
 )
 
-// ---- Library ----
-
-export const browse: WidgetLibrary = {
-	name: 'browse',
-	entries: [
-		// browse-nav
-		{ name: 'browse-nav-default', render: BrowseNavDefault },
-		{ name: 'browse-nav-inactive', render: BrowseNavInactive },
-		{ name: 'browse-nav-with-slots', render: BrowseNavWithSlots },
-		// search-field
-		{ name: 'search-field-empty', render: SearchFieldEmpty },
-		{ name: 'search-field-with-value', render: SearchFieldWithValue },
-		{ name: 'search-field-focused', render: SearchFieldFocused },
-		// art module
-		{ name: 'art-sprite', render: ArtSprite },
-		{ name: 'art-m1', render: ArtM1 },
-		{ name: 'art-m2', render: ArtM2 },
-		{ name: 'art-m3', render: ArtM3 },
-		{ name: 'art-m4', render: ArtM4 },
-		{ name: 'art-m5', render: ArtM5 },
-		{ name: 'art-m6', render: ArtM6 },
-		{ name: 'art-m7', render: ArtM7 },
-		{ name: 'art-m8', render: ArtM8 },
-		{ name: 'art-all-materials', render: ArtAllMaterials },
-		{ name: 'art-square-ratio', render: ArtSquareRatio },
-		// product-card
-		{ name: 'product-card-default', render: ProductCardDefault },
-		{ name: 'product-card-in-list', render: ProductCardInList },
-		{ name: 'product-card-auction', render: ProductCardAuction },
-		{ name: 'product-card-menu-open', render: ProductCardMenuOpen },
-		// product-strip
-		{ name: 'product-strip-default', render: ProductStripDefault },
-		{ name: 'product-strip-single', render: ProductStripSingleItem },
-		// account-pane
-		{ name: 'account-pane-default', render: AccountPaneDefault },
-		// list-views
-		{ name: 'list-row-default', render: ListRowDefault },
-		{ name: 'list-detail-default', render: ListDetailDefault },
-		// relay-indicator
-		{ name: 'relay-indicator-default', render: RelayIndicatorDefault },
-		// dead-search-error
-		{ name: 'dead-search-error-default', render: DeadSearchErrorDefault },
-		// phase 2: idle wall strips
-		{ name: 'browse-idle-default', render: BrowseIdleDefault },
-		{ name: 'browse-idle-with-search', render: BrowseIdleWithSearch },
-		// phase 2: skeleton-grid
-		{ name: 'skeleton-grid-default', render: SkeletonGridDefault },
-		// phase 2: empty-state-browse
-		{ name: 'empty-state-browse-default', render: EmptyStateBrowseDefault },
-		// phase 2: tag-filtered-badge
-		{ name: 'tag-filtered-badge-default', render: TagFilterBadgeDefault },
-		// phase 2: relay-indicator expanded
-		{ name: 'relay-indicator-expanded', render: RelayIndicatorExpanded },
-	],
-}
-
 // ---- Phase 2: idle wall strips ----
 
-const IDLE_ITEMS = [
+const IDLE_ITEMS: StripItem[] = [
 	{ id: 'idle-1', title: 'Speckled Bowl, 6 in', seller: 'ATELIER-NORTE', material: 'm1' as const, symbolId: 'p-bowl' },
 	{ id: 'idle-2', title: 'Amber Dropper, 30 ml', seller: 'GLASSWORKS', material: 'm2' as const, symbolId: 'p-bottle' },
 	{ id: 'idle-3', title: 'Stoneware Mug, 400 ml', seller: 'CLAYHOUSE', material: 'm3' as const, symbolId: 'p-mug' },
@@ -443,3 +388,60 @@ const RelayIndicatorExpanded = () => (
 		]}
 	/>
 )
+
+// ---- Library ----
+// ---- Library ----
+
+export const browse: WidgetLibrary = {
+	name: 'browse',
+	entries: [
+		// browse-nav
+		{ name: 'browse-nav-default', render: BrowseNavDefault },
+		{ name: 'browse-nav-inactive', render: BrowseNavInactive },
+		{ name: 'browse-nav-with-slots', render: BrowseNavWithSlots },
+		// search-field
+		{ name: 'search-field-empty', render: SearchFieldEmpty },
+		{ name: 'search-field-with-value', render: SearchFieldWithValue },
+		{ name: 'search-field-focused', render: SearchFieldFocused },
+		// art module
+		{ name: 'art-sprite', render: ArtSprite },
+		{ name: 'art-m1', render: ArtM1 },
+		{ name: 'art-m2', render: ArtM2 },
+		{ name: 'art-m3', render: ArtM3 },
+		{ name: 'art-m4', render: ArtM4 },
+		{ name: 'art-m5', render: ArtM5 },
+		{ name: 'art-m6', render: ArtM6 },
+		{ name: 'art-m7', render: ArtM7 },
+		{ name: 'art-m8', render: ArtM8 },
+		{ name: 'art-all-materials', render: ArtAllMaterials },
+		{ name: 'art-square-ratio', render: ArtSquareRatio },
+		// product-card
+		{ name: 'product-card-default', render: ProductCardDefault },
+		{ name: 'product-card-in-list', render: ProductCardInList },
+		{ name: 'product-card-auction', render: ProductCardAuction },
+		{ name: 'product-card-menu-open', render: ProductCardMenuOpen },
+		// product-strip
+		{ name: 'product-strip-default', render: ProductStripDefault },
+		{ name: 'product-strip-single', render: ProductStripSingleItem },
+		// account-pane
+		{ name: 'account-pane-default', render: AccountPaneDefault },
+		// list-views
+		{ name: 'list-row-default', render: ListRowDefault },
+		{ name: 'list-detail-default', render: ListDetailDefault },
+		// relay-indicator
+		{ name: 'relay-indicator-default', render: RelayIndicatorDefault },
+		// dead-search-error
+		{ name: 'dead-search-error-default', render: DeadSearchErrorDefault },
+		// phase 2: idle wall strips
+		{ name: 'browse-idle-default', render: BrowseIdleDefault },
+		{ name: 'browse-idle-with-search', render: BrowseIdleWithSearch },
+		// phase 2: skeleton-grid
+		{ name: 'skeleton-grid-default', render: SkeletonGridDefault },
+		// phase 2: empty-state-browse
+		{ name: 'empty-state-browse-default', render: EmptyStateBrowseDefault },
+		// phase 2: tag-filtered-badge
+		{ name: 'tag-filtered-badge-default', render: TagFilterBadgeDefault },
+		// phase 2: relay-indicator expanded
+		{ name: 'relay-indicator-expanded', render: RelayIndicatorExpanded },
+	],
+}
