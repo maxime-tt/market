@@ -60,11 +60,11 @@ describe('createBolt11Adapter', () => {
 			now,
 		})
 
-		expect(adapter.registration.wrapperId).toBe('bolt11-test')
-		expect(adapter.registration.method).toBe('bolt11')
-		expect(adapter.registration.authorityKind).toBe('remote-and-observable')
-		expect(adapter.registration.operations).toEqual(['obtain', 'submit', 'reconcile'])
-		expect(adapter.registration.contractVersion).toBe('0.1')
+		expect(adapter.adapter.registration.wrapperId).toBe('bolt11-test')
+		expect(adapter.adapter.registration.method).toBe('bolt11')
+		expect(adapter.adapter.registration.authorityKind).toBe('remote-and-observable')
+		expect(adapter.adapter.registration.operations).toEqual(['obtain', 'submit', 'reconcile'])
+		expect(adapter.adapter.registration.contractVersion).toBe('0.1')
 	})
 
 	test('reconcileLeg forwards paymentHash to wrapper.reconcile(bolt11)', async () => {
@@ -85,7 +85,7 @@ describe('createBolt11Adapter', () => {
 
 		// Calling reconcileLeg with the payment hash should look up the invoice
 		// from the store and forward it to wrapper.reconcile(bolt11).
-		const handle = await adapter.reconcileLeg('abc123')
+		const handle = await adapter.adapter.reconcileLeg('abc123')
 		expect(handle.wrapperId).toBe('bolt11-test')
 		expect(handle.legId).toBe('abc123')
 	})
@@ -103,6 +103,6 @@ describe('createBolt11Adapter', () => {
 			now,
 		})
 
-		await expect(adapter.reconcileLeg('nonexistent')).rejects.toThrow('bolt11: no leg for nonexistent')
+		await expect(adapter.adapter.reconcileLeg('nonexistent')).rejects.toThrow('bolt11: no leg for nonexistent')
 	})
 })

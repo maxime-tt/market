@@ -28,9 +28,9 @@ import type {
 	Bolt11LegCommand,
 } from '@sdk/core/bolt11-wrapper'
 import { Bolt11Wrapper } from '@sdk/core/bolt11-wrapper'
+export { Bolt11Wrapper } from '@sdk/core/bolt11-wrapper'
 import type { NwcWrapperOptions, NwcInvoiceCodec, NwcLegStore } from '@sdk/core/nwc-wrapper'
 import { NwcWrapper } from '@sdk/core/nwc-wrapper'
-
 // ---------------------------------------------------------------------------
 // Bolt11 adapter — bridge Bolt11Wrapper.reconcile(reference: bolt11) to
 // AggregatorWrapper.reconcileLeg(legId: paymentHash).
@@ -50,7 +50,7 @@ export interface Bolt11AggregatorAdapterOptions {
 	readonly now: () => number
 }
 
-export function createBolt11Adapter(opts: Bolt11AggregatorAdapterOptions): AggregatorWrapper {
+export function createBolt11Adapter(opts: Bolt11AggregatorAdapterOptions): { wrapper: Bolt11Wrapper; adapter: AggregatorWrapper } {
 	const wrapper = new Bolt11Wrapper({
 		wrapperId: opts.wrapperId,
 		store: opts.store,
@@ -66,17 +66,18 @@ export function createBolt11Adapter(opts: Bolt11AggregatorAdapterOptions): Aggre
 	})
 
 	return {
-		get registration() {
-			return wrapper.registration
-		},
-		async reconcileLeg(legId: string): Promise<FundsHandle> {
-			// legId is the payment hash; look up the bolt11 invoice from the leg store
-			// and forward it to the wrapper's reconcile(reference) which decodes the hash again.
-			const record = await opts.store.get({ wrapperId: opts.wrapperId, legId })
-			if (!record) {
-				throw new Error(`bolt11: no leg for ${legId}`)
-			}
-			return wrapper.reconcile(record.bolt11)
+		wrapper,
+		adapter: {
+			get registration() {
+				return wrapper.registration
+			},
+			async reconcileLeg(legId: string): Promise<FundsHandle> {
+				const record = await opts.store.get({ wrapperId: opts.wrapperId, legId })
+				if (!record) {
+					throw new Error(`bolt11: no leg for ${legId}`)
+				}
+				return wrapper.reconcile(record.bolt11)
+			},
 		},
 	}
 }
@@ -102,7 +103,7 @@ export interface NwcAggregatorAdapterOptions {
 	readonly reconnect: NwcWrapperOptions['reconnect']
 }
 
-export function createNwcAdapter(opts: NwcAggregatorAdapterOptions): AggregatorWrapper {
+export function createNwcAdapter(opts: NwcAggregatorAdapterOptions): { wrapper: NwcWrapper; adapter: AggregatorWrapper } {
 	const wrapper = new NwcWrapper({
 		wrapperId: opts.wrapperId,
 		store: opts.store,
@@ -118,13 +119,16 @@ export function createNwcAdapter(opts: NwcAggregatorAdapterOptions): AggregatorW
 	})
 
 	return {
-		get registration() {
-			return wrapper.registration
-		},
-		async reconcileLeg(legId: string): Promise<FundsHandle> {
-			// NWC wrapper's reconcile(reference) uses the reference as payment hash,
-			// which is the same as legId in the NWC rail.
-			return wrapper.reconcile(legId)
+		wrapper,
+		adapter: {
+			get registration() {
+				return wrapper.registration
+			},
+			async reconcileLeg(legId: string): Promise<FundsHandle> {
+				// NWC wrapper's reconcile(reference) uses the reference as payment hash,
+				// which is the same as legId in the NWC rail.
+				return wrapper.reconcile(legId)
+			},
 		},
 	}
 }
@@ -146,10 +150,12 @@ export function buildAggregatorWrappers(
 ): {
 	wrappers: readonly AggregatorWrapper[]
 	options: AggregatorOptions
+	bolt11Wrapper: Bolt11Wrapper
 } {
-	const wrappers: AggregatorWrapper[] = [createBolt11Adapter(config.bolt11)]
+	const bolt11 = createBolt11Adapter(config.bolt11)
+	const wrappers: AggregatorWrapper[] = [bolt11.adapter]
 	if (config.nwc) {
-		wrappers.push(createNwcAdapter(config.nwc))
+		wrappers.push(createNwcAdapter(config.nwc).adapter)
 	}
 
 	return {
@@ -162,5 +168,6 @@ export function buildAggregatorWrappers(
 			now: config.bolt11.now,
 			wrappers,
 		},
+		bolt11Wrapper: bolt11.wrapper,
 	}
 }
