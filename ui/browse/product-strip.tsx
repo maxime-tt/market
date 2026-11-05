@@ -7,7 +7,7 @@
  * No veil — the strips are meant to be read and clicked.
  */
 
-import type { FC, MouseEventHandler, Ref } from 'react'
+import type { FC, MouseEventHandler, ReactNode, Ref } from 'react'
 import { cn } from '../utils/cn'
 import { ProductArt, type MaterialClass } from './art'
 
@@ -46,7 +46,7 @@ export interface ProductStripProps {
  * Product strip — a horizontal row of clickable tiles.
  *
  * Idle: just the material art.
- * Hover: title + seller overlay, lift + saturate.
+ * Hover: title + seller overlay, lift + saturate, arrow affordance.
  */
 export const ProductStrip: FC<ProductStripProps> = ({ items, onSelect, className, ref, ...props }) => {
 	const handleClick: MouseEventHandler = (e) => {
@@ -91,24 +91,19 @@ export const ProductStrip: FC<ProductStripProps> = ({ items, onSelect, className
 					)}
 					onClick={handleClick}
 				>
-					{/* Material art tile */}
+					{/* Material art tile — no veil, strips are meant to be read and clicked */}
 					<div data-slot="strip-tile" className={cn('relative', 'w-full', 'h-full', 'overflow-hidden')}>
 						<ProductArt material={item.material} symbolId={item.symbolId} ratio="1/1" className="size-full" />
-						{/* Paper veil overlay (always present but only visible on hover) */}
-						<div
-							data-slot="tile-veil"
-							className={cn(
-								'absolute',
-								'inset-0',
-								'bg-gradient-to-t',
-								'from-background/40',
-								'to-transparent',
-								'opacity-0',
-								'pointer-events-none',
-								'group-hover:opacity-100',
-								'transition-opacity',
-							)}
-						/>
+					</div>
+
+					{/* Arrow affordance — click opens the panel */}
+					<div
+						data-slot="strip-arrow"
+						className="absolute top-2.5 right-2.5 text-text-high opacity-0 group-hover:opacity-75 transition-opacity"
+					>
+						<svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+							<path d="M9 6l6 6-6 6" />
+						</svg>
 					</div>
 
 					{/* Title + seller overlay — visible on hover/focus */}
@@ -126,14 +121,13 @@ export const ProductStrip: FC<ProductStripProps> = ({ items, onSelect, className
 							'transition-opacity',
 							'duration-150',
 						)}
-						// Hover lift via :has() trick on the parent row
 					>
-						<div data-slot="strip-seller" className={cn('text-[10px]', 'tracking-[0.13em]', 'uppercase', 'text-on-media', 'opacity-80')}>
+						<div data-slot="strip-seller" className={cn('text-[10px]', 'tracking-[0.13em]', 'uppercase', 'text-text-high', 'opacity-80')}>
 							{item.seller}
 						</div>
 						<div
 							data-slot="strip-title"
-							className={cn('text-xs', 'font-medium', 'text-on-media', 'opacity-100', 'leading-tight', 'mt-0.5', 'truncate')}
+							className={cn('text-xs', 'font-medium', 'text-text-high', 'opacity-100', 'leading-tight', 'mt-0.5', 'truncate')}
 						>
 							{item.title}
 						</div>

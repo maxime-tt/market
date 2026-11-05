@@ -12,6 +12,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { getReadContext } from '../readContext'
 import type { EventFilter } from '@sdk/core/event-store/filter'
+import type { CaughtUpInfo } from '@sdk/core/event-store/read'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 // Canonical read model: sdk/commerce/discovery/productReadModel.ts
 import {
@@ -50,6 +51,16 @@ export interface BrowseProduct {
 	stock?: string
 	image?: string
 	categories: string[]
+}
+
+/** Return shape for the browse search stream — products plus relay status. */
+export interface BrowseSearchResult {
+	/** Filtered products from the stream. */
+	products: BrowseProduct[]
+	/** Relays that reached EOSE (answered) before the caught-up marker. */
+	eose: string[]
+	/** Relays that did not reach EOSE (still pending). */
+	pending: string[]
 }
 
 /**
@@ -98,7 +109,7 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
 	return queryOptions({
 		queryKey: browseKeys.search({ query, tag, limit }),
 		queryFn: async () => {
-			if (!query?.trim()) return []
+			if (!query?.trim()) return { products: [], eose: [], pending: [] }
 
 			const ctx = getReadContext()
 			// The sdk read seam's EventFilter has no NIP-50 `search` field yet, so Browse
@@ -110,19 +121,23 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
 			}
 
 			const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
-			const results: BrowseProduct[] = []
+			const products: BrowseProduct[] = []
+			let caughtUpInfo: CaughtUpInfo | null = null
 			for await (const item of ctx.stream([filter])) {
 				if (item.type === 'event') {
 					const product = mapProduct(item.event)
 					if (product) {
 						const haystack =
 							`${getProductTitle(item.event)} ${getProductSummary(item.event) ?? ''} ${(getProductCategories(item.event) ?? []).flat().join(' ')}`.toLowerCase()
-						if (terms.every((term) => haystack.includes(term))) results.push(product)
+						if (terms.every((term) => haystack.includes(term))) products.push(product)
 					}
 				}
-				if (item.type === 'caught-up') break
+				if (item.type === 'caught-up') {
+					caughtUpInfo = item.info
+					break
+				}
 			}
-			return results
+			return { products, eose: caughtUpInfo?.eose ?? [], pending: caughtUpInfo?.pending ?? [] }
 		},
 		enabled: !!query?.trim(),
 	})

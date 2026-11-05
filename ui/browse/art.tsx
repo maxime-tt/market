@@ -45,6 +45,16 @@ export const AVATAR_TINT_CSS = `
 .avatar-tint-1 { --tint: oklch(0.7 0.06 20); background: var(--tint); }
 .avatar-tint-2 { --tint: oklch(0.7 0.06 320); background: var(--tint); }
 `
+/**
+ * Skeleton grid circle tint classes — deterministic hues for per-card avatar tints.
+ * Matches the frame skeleton pattern. Documented here as CSS rather than inline styles (AGENTS.md §6).
+ */
+export const SKELETON_CIRCLE_CSS = `
+.skeleton-circle-0 { --tint: oklch(0.72 0.06 60); background: var(--tint); }
+.skeleton-circle-1 { --tint: oklch(0.7 0.06 200); background: var(--tint); }
+.skeleton-circle-2 { --tint: oklch(0.74 0.07 320); background: var(--tint); }
+.skeleton-circle-3 { --tint: oklch(0.7 0.05 150); background: var(--tint); }
+`
 
 // ---------------------------------------------------------------------------
 // SVG sprite symbols — verbatim from the frames
@@ -206,3 +216,24 @@ export const ProductArt: FC<ProductArtProps> = ({ material, symbolId, ratio = '3
 		</div>
 	)
 }
+
+// ---------------------------------------------------------------------------
+// Skeleton shimmer keyframes — injected once via a <style> element
+// ---------------------------------------------------------------------------
+
+/**
+ * Shimmer animation for skeleton placeholders.
+ * Ported verbatim from frames: `background-position: 130% → -130%`
+ * over 1.6s linear infinite.
+ */
+export const SKELETON_SHIMMER_CSS = `
+@keyframes skeleton-shimmer {
+  0% { background-position: 130% 0 }
+  100% { background-position: -130% 0 }
+}
+.animate-skeleton-shimmer {
+  background: linear-gradient(90deg, var(--surface-sunken) 0%, var(--surface-raised) 50%, var(--surface-sunken) 100%);
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.6s linear infinite;
+}
+`
