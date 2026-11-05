@@ -1,18 +1,18 @@
 /**
  * platform/web/payments/payAggregatorInstance.ts — lazily-built PayAggregator singleton.
  *
- * Built from buildAggregatorWrappers(...) plus a real SetStore (MemorySetStore — interim,
- * no durability yet; durable CAS to a database is a later decision), a real WitnessVerifier,
- * and the bolt11 adapter config.
+ * Built from buildAggregatorWrappers(...) plus the durable LocalSetStore (set
+ * records + hash/refund indexes), the durable LocalBolt11LegStore (bolt11 leg
+ * records), a real WitnessVerifier, and the bolt11 adapter config.
  *
- * Interim store: MemorySetStore from sdk/core/wallet/ts/memory.ts.
- * Durability is a later decision.
+ * Durable stores: LocalSetStore and LocalBolt11LegStore from
+ * payAggregatorStore.ts, both backed by localStorage.
  */
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
-import { PayAggregator, MemorySetStore, type SetStore, type WitnessVerifier } from '@sdk/core/wallet'
+import { PayAggregator, type SetStore, type WitnessVerifier } from '@sdk/core/wallet'
 import { buildAggregatorWrappers, type Bolt11Wrapper, type PayAggregatorConfig } from './payAggregator'
-import type { Bolt11LegKey, Bolt11LegRecord, Bolt11InvoiceCodec } from '@sdk/core/bolt11-wrapper'
+import { LocalSetStore, LocalBolt11LegStore } from './payAggregatorStore'
 
 // ---------------------------------------------------------------------------
 // Witness verifier — real SHA-256 for preimage, reference matching for zaps,
@@ -121,8 +121,7 @@ export function getPayAggregatorInstance(): {
 		return instance
 	}
 
-	// Create the interim store (MemorySetStore — no durability yet).
-	const setStore: SetStore = new MemorySetStore()
+	const setStore: SetStore = new LocalSetStore();
 
 	// Create the verifier using real SHA-256 for preimage verification.
 	const settlementVerifier = createSettlementVerifier()
@@ -131,38 +130,7 @@ export function getPayAggregatorInstance(): {
 	const config: PayAggregatorConfig = {
 		bolt11: {
 			wrapperId: 'bolt11',
-			store: {
-				async createOrGet(record: Bolt11LegRecord) {
-					const existing = bolt11LegRecords.get(record.legId)
-					if (existing) {
-						return { record: existing, created: false }
-					}
-					bolt11LegRecords.set(record.legId, record)
-					return { record, created: true }
-				},
-				async get(key: Bolt11LegKey): Promise<Bolt11LegRecord | null> {
-					const record = bolt11LegRecords.get(key.legId)
-					return record ?? null
-				},
-				async list(wrapperId?: string) {
-					const records = Array.from(bolt11LegRecords.values())
-					if (wrapperId) {
-						return records.filter((r) => r.wrapperId === wrapperId)
-					}
-					return records
-				},
-				async compareAndSet(key: Bolt11LegKey, expectedRevision: number, next: Bolt11LegRecord) {
-					const existing = bolt11LegRecords.get(key.legId)
-					if (!existing || existing.revision !== expectedRevision) {
-						throw new Error('pay_stale_writer')
-					}
-					if (next.revision !== expectedRevision + 1) {
-						throw new Error('pay_stale_writer')
-					}
-					bolt11LegRecords.set(key.legId, next)
-					return next
-				},
-			},
+			store: new LocalBolt11LegStore(),
 			storeKind: 'bolt11',
 			codec: {
 				paymentHash: (bolt11: string) => bolt11,
@@ -185,13 +153,10 @@ export function getPayAggregatorInstance(): {
 	return instance
 }
 
-// Simple in-memory store for bolt11 leg records
-const bolt11LegRecords = new Map<string, Bolt11LegRecord>()
-
 /**
  * Reset the singleton for testing.
+ * The durable stores persist in localStorage; tests should clear them manually.
  */
 export function resetPayAggregatorInstance(): void {
 	instance = null
-	bolt11LegRecords.clear()
 }
