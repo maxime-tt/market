@@ -38,8 +38,8 @@ describe('RelayIndicator', () => {
 
 	test('renders expand button when onToggle provided with relays', () => {
 		const relays: RelayDetail[] = [
-			{ relay: 'wss://r1.example', count: 10, status: 'responded' },
-			{ relay: 'wss://r2.example', count: 0, status: 'timeout' },
+			{ relay: 'wss://r1.example', status: 'responded' },
+			{ relay: 'wss://r2.example', status: 'pending' },
 		]
 		const markup = renderToStaticMarkup(
 			createElement(RelayIndicator, {
@@ -54,9 +54,9 @@ describe('RelayIndicator', () => {
 
 	test('renders summary counts from relays array', () => {
 		const relays: RelayDetail[] = [
-			{ relay: 'wss://r1.example', count: 10, status: 'responded' },
-			{ relay: 'wss://r2.example', count: 0, status: 'timeout' },
-			{ relay: 'wss://r3.example', count: 0, status: 'refused' },
+			{ relay: 'wss://r1.example', status: 'responded' },
+			{ relay: 'wss://r2.example', status: 'pending' },
+			{ relay: 'wss://r3.example', status: 'pending' },
 		]
 		const markup = renderToStaticMarkup(
 			createElement(RelayIndicator, {
@@ -90,8 +90,7 @@ describe('DeadSearchError', () => {
 		const markup = renderToStaticMarkup(
 			createElement(DeadSearchError, {
 				totalRelays: 3,
-				timeoutCount: 2,
-				refusedCount: 1,
+				pendingCount: 1,
 			}),
 		)
 		expect(markup).toContain('widget-dead-search-error')
@@ -102,8 +101,7 @@ describe('DeadSearchError', () => {
 		const markup = renderToStaticMarkup(
 			createElement(DeadSearchError, {
 				totalRelays: 2,
-				timeoutCount: 2,
-				refusedCount: 0,
+				pendingCount: 2,
 				message: 'Custom error message',
 			}),
 		)
@@ -115,8 +113,7 @@ describe('DeadSearchError', () => {
 		const markup = renderToStaticMarkup(
 			createElement(DeadSearchError, {
 				totalRelays: 3,
-				timeoutCount: 3,
-				refusedCount: 0,
+				pendingCount: 3,
 				onRetry: () => {},
 			}),
 		)
@@ -127,8 +124,7 @@ describe('DeadSearchError', () => {
 		const markup = renderToStaticMarkup(
 			createElement(DeadSearchError, {
 				totalRelays: 1,
-				timeoutCount: 1,
-				refusedCount: 0,
+				pendingCount: 1,
 				className: 'custom-error-class',
 			}),
 		)

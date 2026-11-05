@@ -45,6 +45,16 @@ export const AVATAR_TINT_CSS = `
 .avatar-tint-1 { --tint: oklch(0.7 0.06 20); background: var(--tint); }
 .avatar-tint-2 { --tint: oklch(0.7 0.06 320); background: var(--tint); }
 `
+/**
+ * Skeleton grid circle tint classes — deterministic hues for per-card avatar tints.
+ * Matches the frame skeleton pattern. Documented here as CSS rather than inline styles (AGENTS.md §6).
+ */
+export const SKELETON_CIRCLE_CSS = `
+.skeleton-circle-0 { --tint: oklch(0.72 0.06 60); background: var(--tint); }
+.skeleton-circle-1 { --tint: oklch(0.7 0.06 200); background: var(--tint); }
+.skeleton-circle-2 { --tint: oklch(0.74 0.07 320); background: var(--tint); }
+.skeleton-circle-3 { --tint: oklch(0.7 0.05 150); background: var(--tint); }
+`
 
 // ---------------------------------------------------------------------------
 // SVG sprite symbols — verbatim from the frames

@@ -12,6 +12,7 @@
 
 import type { FC } from 'react'
 import { cn } from '../utils/cn'
+import { SKELETON_CIRCLE_CSS } from './art'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -60,6 +61,8 @@ export const SkeletonGrid: FC<SkeletonGridProps> = ({ rows = 8, columns = 3, cla
 					<SkeletonCard key={i} cardIndex={i} />
 				))}
 			</div>
+			{/* Inject skeleton circle tint classes into DOM */}
+			<style dangerouslySetInnerHTML={{ __html: SKELETON_CIRCLE_CSS }} />
 		</div>
 	)
 }
@@ -69,10 +72,6 @@ export const SkeletonGrid: FC<SkeletonGridProps> = ({ rows = 8, columns = 3, cla
 // ---------------------------------------------------------------------------
 
 const SkeletonCard: FC<{ cardIndex: number }> = ({ cardIndex }) => {
-	// Per-card tinted circle hue — matches frame pattern
-	const circleHues = ['oklch(0.72 0.06 60)', 'oklch(0.7 0.06 200)', 'oklch(0.74 0.07 320)', 'oklch(0.7 0.05 150)']
-	const circleHue = circleHues[cardIndex % circleHues.length]
-
 	return (
 		<div
 			data-slot="skeleton-card"
@@ -95,11 +94,7 @@ const SkeletonCard: FC<{ cardIndex: number }> = ({ cardIndex }) => {
 
 			{/* Seller row — tinted circle + name bar */}
 			<div className="mt-[11px] flex items-center gap-1.5">
-				<div
-					className={cn('size-3.5', 'rounded-full', 'shrink-0', 'bg-surface-sunken')}
-					style={{ backgroundColor: circleHue }}
-					aria-hidden="true"
-				/>
+				<div className={cn('size-3.5', 'rounded-full', 'shrink-0', `skeleton-circle-${cardIndex % 4}`)} aria-hidden="true" />
 				<div
 					data-slot="skeleton-seller-bar"
 					className={cn('h-[9px]', 'rounded', 'w-[38%]', 'flex-1', 'bg-surface-sunken', 'animate-skeleton-shimmer')}

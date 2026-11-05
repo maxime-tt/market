@@ -22,10 +22,8 @@ import { cn } from '../utils/cn'
 export interface RelayDetail {
 	/** Relay URL (last 8 chars for display). */
 	relay: string
-	/** Number of products from this relay. */
-	count: number
-	/** Status: responded, timeout, or refused. */
-	status: 'responded' | 'timeout' | 'refused'
+	/** Whether this relay reached EOSE. */
+	status: 'responded' | 'pending'
 }
 
 export interface RelayIndicatorProps {
@@ -42,10 +40,8 @@ export interface RelayIndicatorProps {
 export interface DeadSearchErrorProps {
 	/** Total relays contacted. */
 	totalRelays: number
-	/** Relays that timed out. */
-	timeoutCount: number
-	/** Relays that refused. */
-	refusedCount: number
+	/** Relays that did not reach EOSE. */
+	pendingCount: number
 	/** Suggestion text. */
 	message?: string
 	/** Retry callback. */
@@ -80,9 +76,8 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({ responded, totalProduc
 	const [expanded, setExpanded] = useState(false)
 
 	const respondedCount = relays.filter((r) => r.status === 'responded').length
-	const timeoutCount = relays.filter((r) => r.status === 'timeout').length
-	const refusedCount = relays.filter((r) => r.status === 'refused').length
-	const totalRelays = respondedCount + timeoutCount + refusedCount
+	const pendingCount = relays.filter((r) => r.status === 'pending').length
+	const totalRelays = respondedCount + pendingCount
 
 	// Don't show indicator if all relays responded
 	if (responded === totalRelays && totalRelays > 0) return null
@@ -137,7 +132,7 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({ responded, totalProduc
 					aria-expanded={expanded}
 					onClick={() => setExpanded(!expanded)}
 				>
-					<span>{timeoutCount} timeout</span>
+					<span>{pendingCount} pending</span>
 					<svg
 						className={cn('size-3', 'text-text-mid', 'transition-transform', expanded && 'rotate-180')}
 						viewBox="0 0 24 24"
@@ -196,19 +191,17 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({ responded, totalProduc
 					</div>
 
 					{/* Per-relay rows grouped by status */}
-					{(['responded', 'timeout', 'refused'] as const).map((group) => {
+					{(['responded', 'pending'] as const).map((group) => {
 						const groupRelays = relays.filter((r) => r.status === group)
 						if (groupRelays.length === 0) return null
 
 						const groupLabels: Record<string, string> = {
 							responded: 'Responded',
-							timeout: 'Timed out',
-							refused: 'Refused',
+							pending: 'Pending',
 						}
 						const groupDotClass: Record<string, string> = {
 							responded: '',
-							timeout: 't',
-							refused: 'r',
+							pending: 'p',
 						}
 
 						return (
@@ -219,14 +212,14 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({ responded, totalProduc
 								>
 									{groupLabels[group]}
 								</div>
-								<div data-slot="pop-rows" className={cn('grid', 'grid-cols-[1fr_82px_42px]', 'gap-2', 'items-center')}>
+								<div data-slot="pop-rows" className={cn('flex', 'flex-col', 'gap-2', 'items-center')}>
 									{groupRelays.map((r, i) => (
 										<div
 											key={i}
 											data-slot="pop-row"
 											className={cn(
 												'grid',
-												'grid-cols-[1fr_82px_42px]',
+												'grid-cols-[1fr_auto]',
 												'items-center',
 												'gap-2',
 												'py-[5px]',
@@ -241,12 +234,6 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({ responded, totalProduc
 												<div className={cn('size-[6px]', 'rounded-full', 'flex-none', 'bg-fill-ink', groupDotClass[group])} />
 												{r.status}
 											</div>
-											<span
-												data-slot="pop-count"
-												className={cn('text-text-mid', 'text-right', 'text-sm', 'font-variant-numeric-tabular-nums')}
-											>
-												{r.count}
-											</span>
 										</div>
 									))}
 								</div>
@@ -270,8 +257,7 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({ responded, totalProduc
  */
 export const DeadSearchError: FC<DeadSearchErrorProps> = ({
 	totalRelays,
-	timeoutCount,
-	refusedCount,
+	pendingCount,
 	message = 'All relays failed. Check your connection and try again.',
 	onRetry,
 	className,
@@ -308,7 +294,7 @@ export const DeadSearchError: FC<DeadSearchErrorProps> = ({
 			</svg>
 			<div className="min-w-0 flex-1">
 				<div className="text-[10.5px] tracking-[0.14em] uppercase text-text-mid">
-					{totalRelays} relays contacted · {timeoutCount} timed out · {refusedCount} refused
+					{totalRelays} relays contacted · {pendingCount} pending
 				</div>
 				<p className="mt-1 text-sm leading-relaxed text-text-high">{message}</p>
 			</div>

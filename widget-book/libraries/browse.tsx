@@ -284,27 +284,20 @@ const ListDetailDefault = () => (
 
 const RelayIndicatorDefault = () => (
 	<RelayIndicator
-		responded={38}
+		responded={3}
 		totalProducts={1208}
 		relays={[
-			{ relay: 'nostr.wine', count: 304, status: 'responded' },
-			{ relay: 'relay.damus.io', count: 287, status: 'responded' },
-			{ relay: 'nos.lol', count: 256, status: 'responded' },
-			{ relay: 'relay.nostr.band', count: 0, status: 'timeout' },
+			{ relay: 'nostr.wine', status: 'responded' },
+			{ relay: 'relay.damus.io', status: 'responded' },
+			{ relay: 'nos.lol', status: 'responded' },
+			{ relay: 'relay.nostr.band', status: 'pending' },
 		]}
 	/>
 )
 
 const DeadSearchErrorDefault = () => (
-	<DeadSearchError
-		totalRelays={12}
-		timeoutCount={10}
-		refusedCount={2}
-		message="All relays failed. Check your connection and try again."
-		onRetry={() => {}}
-	/>
+	<DeadSearchError totalRelays={4} pendingCount={1} message="All relays failed. Check your connection and try again." onRetry={() => {}} />
 )
-
 // ---- Phase 2: idle wall strips ----
 
 const IDLE_ITEMS: StripItem[] = [
@@ -376,15 +369,15 @@ const TagFilterBadgeDefault = () => (
 
 const RelayIndicatorExpanded = () => (
 	<RelayIndicator
-		responded={9}
+		responded={3}
 		totalProducts={40}
 		relays={[
-			{ relay: 'relay.damus.io', count: 18, status: 'responded' },
-			{ relay: 'nostr.wine', count: 12, status: 'responded' },
-			{ relay: 'nos.lol', count: 8, status: 'responded' },
-			{ relay: 'relay.nostr.band', count: 0, status: 'timeout' },
-			{ relay: 'relay.foliax.xyz', count: 2, status: 'timeout' },
-			{ relay: 'relay.opennoderelay.net', count: 0, status: 'refused' },
+			{ relay: 'relay.damus.io', status: 'responded' },
+			{ relay: 'nostr.wine', status: 'responded' },
+			{ relay: 'nos.lol', status: 'responded' },
+			{ relay: 'relay.nostr.band', status: 'pending' },
+			{ relay: 'relay.foliax.xyz', status: 'pending' },
+			{ relay: 'relay.opennoderelay.net', status: 'pending' },
 		]}
 	/>
 )

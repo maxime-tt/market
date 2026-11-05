@@ -15,10 +15,8 @@ import { cn } from '../utils/cn'
 export interface RelayDetail {
 	/** Relay URL (last 8 chars for display). */
 	relay: string
-	/** Number of products from this relay. */
-	count: number
-	/** Status: responded, timeout, or refused. */
-	status: 'responded' | 'timeout' | 'refused'
+	/** Whether this relay reached EOSE. */
+	status: 'responded' | 'pending'
 }
 
 export interface RelayIndicatorProps {
@@ -50,9 +48,8 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({
 	className,
 }) => {
 	const respondedCount = relays.filter((r) => r.status === 'responded').length
-	const timeoutCount = relays.filter((r) => r.status === 'timeout').length
-	const refusedCount = relays.filter((r) => r.status === 'refused').length
-	const cachedCount = relays.filter((r) => r.status === 'responded').reduce((sum, r) => sum + r.count, 0)
+	const pendingCount = relays.filter((r) => r.status === 'pending').length
+	const totalRelays = respondedCount + pendingCount
 
 	return (
 		<div
@@ -126,10 +123,8 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({
 export interface DeadSearchErrorProps {
 	/** Total relays contacted. */
 	totalRelays: number
-	/** Relays that timed out. */
-	timeoutCount: number
-	/** Relays that refused. */
-	refusedCount: number
+	/** Relays that did not reach EOSE. */
+	pendingCount: number
 	/** Suggestion text. */
 	message?: string
 	/** Retry callback. */
@@ -144,8 +139,7 @@ export interface DeadSearchErrorProps {
  */
 export const DeadSearchError: FC<DeadSearchErrorProps> = ({
 	totalRelays,
-	timeoutCount,
-	refusedCount,
+	pendingCount,
 	message = 'All relays failed. Check your connection and try again.',
 	onRetry,
 	className,
@@ -157,7 +151,7 @@ export const DeadSearchError: FC<DeadSearchErrorProps> = ({
 			className={cn('rounded', 'border', 'border-border-default', 'bg-surface-sunken', 'p-4', className)}
 		>
 			<div className="text-xs text-text-mid mb-2">
-				{totalRelays} relays contacted · {timeoutCount} timed out · {refusedCount} refused
+				{totalRelays} relays contacted · {pendingCount} pending
 			</div>
 			{message && <p className="text-sm text-text-high">{message}</p>}
 			{onRetry && (
