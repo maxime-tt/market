@@ -30,14 +30,16 @@ export async function ensureInvoicePoolConnected(): Promise<RelayPool> {
 		invoicePool.relay(RELAY_URL) // connects lazily on first use
 	}
 	if (!invoicePoolConnectPromise) {
-		invoicePoolConnectPromise = Promise.resolve().then(async () => {
-			// Trigger relay connection by accessing it
-			await invoicePool!.relay(RELAY_URL!)
-			return invoicePool!
-		}).catch((error) => {
-			invoicePoolConnectPromise = null
-			throw error
-		})
+		invoicePoolConnectPromise = Promise.resolve()
+			.then(async () => {
+				// Trigger relay connection by accessing it
+				await invoicePool!.relay(RELAY_URL!)
+				return invoicePool!
+			})
+			.catch((error) => {
+				invoicePoolConnectPromise = null
+				throw error
+			})
 	}
 	await invoicePoolConnectPromise
 	return invoicePool

@@ -33,7 +33,19 @@ import { NEVER, Observable, Subject, filter, firstValueFrom, map, share, takeUnt
 
 import { RelaySeamError } from './errors'
 import { mapClosedReason, normalizeRelayUrl } from './pool'
-import type { CountResult, Event, FilterIn, PoolPort, PoolSubscription, RelayAck, RelayFailure, RelayStatus, RelayUrl, QueryOptions, WireResult } from './types'
+import type {
+	CountResult,
+	Event,
+	FilterIn,
+	PoolPort,
+	PoolSubscription,
+	RelayAck,
+	RelayFailure,
+	RelayStatus,
+	RelayUrl,
+	QueryOptions,
+	WireResult,
+} from './types'
 
 /** The vendor's per-relay EVENT message, narrowed without a cast. */
 type EventMessage = Extract<GroupReqMessage, { type: 'EVENT' }>
@@ -251,7 +263,6 @@ class RelayPoolTransport implements PoolPort {
 		})
 	}
 
-
 	query(filters: FilterIn | FilterIn[], opts?: QueryOptions): Promise<WireResult> {
 		const events: Event[] = []
 		const failures: RelaySeamError[] = []
@@ -278,18 +289,24 @@ class RelayPoolTransport implements PoolPort {
 			filter((m): m is Extract<GroupReqMessage, { type: 'EOSE'; from: string }> => m.type === 'EOSE'),
 			tap(() => sub.unsubscribe()),
 			opts?.signal
-				? takeUntil(new Observable<void>((s) => opts.signal!.addEventListener('abort', () => s.next(), { once: true })) as unknown as Observable<void>)
+				? takeUntil(
+						new Observable<void>((s) =>
+							opts.signal!.addEventListener('abort', () => s.next(), { once: true }),
+						) as unknown as Observable<void>,
+					)
 				: undefined,
 		)
-		return firstValueFrom(eose$).then(() => {
-			sub.unsubscribe()
-			return { events, eose: true, failures }
-		}).catch((err) => {
-			sub.unsubscribe()
-			// If the EOSE never arrived (signal aborted), report partial results with eose: false
-			if (opts?.signal?.aborted) return { events, eose: false, failures }
-			throw err
-		})
+		return firstValueFrom(eose$)
+			.then(() => {
+				sub.unsubscribe()
+				return { events, eose: true, failures }
+			})
+			.catch((err) => {
+				sub.unsubscribe()
+				// If the EOSE never arrived (signal aborted), report partial results with eose: false
+				if (opts?.signal?.aborted) return { events, eose: false, failures }
+				throw err
+			})
 	}
 	close(): void {
 		this.pool.close()

@@ -89,14 +89,16 @@ export class RelayPoolAdapter implements PoolPort {
 		})
 		// Wait for EOSE by taking until we see one, or signal aborts
 		const eoseSubject = new Subject<boolean>()
-		source.pipe(
-			filter(isEoseMessage),
-			tap((msg) => {
-				eoseSubject.next(true)
-				sub.unsubscribe()
-			}),
-			takeUntil(this.abortSignalObservable(opts?.signal)),
-		).subscribe()
+		source
+			.pipe(
+				filter(isEoseMessage),
+				tap((msg) => {
+					eoseSubject.next(true)
+					sub.unsubscribe()
+				}),
+				takeUntil(this.abortSignalObservable(opts?.signal)),
+			)
+			.subscribe()
 		// Wait for EOSE or abort, with timeout fallback
 		try {
 			const eose = await firstValueFrom(eoseSubject)

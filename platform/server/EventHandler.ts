@@ -179,11 +179,13 @@ export class EventHandler {
 
 		// Subscribe to zap receipts where app pubkey is the recipient
 		// Use caller-provided relays if available, otherwise fall back to pool status
-		const targetRelays = relays ?? pool.status([]).map((s) => s.url).filter(Boolean) as string[]
-		const sub = pool.subscribe(
-			targetRelays,
-			[{ kinds: [9735], '#p': [appPubkey] }] as import('@sdk/core/nostr-io/ts/types').FilterIn[],
-		)
+		const targetRelays =
+			relays ??
+			(pool
+				.status([])
+				.map((s) => s.url)
+				.filter(Boolean) as string[])
+		const sub = pool.subscribe(targetRelays, [{ kinds: [9735], '#p': [appPubkey] }] as import('@sdk/core/nostr-io/ts/types').FilterIn[])
 
 		// Listen for events on the subscription
 		sub.events.subscribe(async (event) => {

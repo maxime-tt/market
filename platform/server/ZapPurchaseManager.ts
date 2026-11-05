@@ -407,10 +407,14 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 
 			// Publish via the PoolPort
 			// Use the singleton's stored relay URL from getPoolPort()
-			const relays = pool.status([]).map((s) => s.url).filter(Boolean) as string[]
-			const outcome = relays.length > 0
-				? await pool.publish(relays, signedEvent as import('nostr-tools').NostrEvent)
-				: await pool.publish([RELAY_URL ?? ''], signedEvent as import('nostr-tools').NostrEvent)
+			const relays = pool
+				.status([])
+				.map((s) => s.url)
+				.filter(Boolean) as string[]
+			const outcome =
+				relays.length > 0
+					? await pool.publish(relays, signedEvent as import('nostr-tools').NostrEvent)
+					: await pool.publish([RELAY_URL ?? ''], signedEvent as import('nostr-tools').NostrEvent)
 			console.log(`[${this.config.registryDTag}] Registry published: ${signedEvent.id}`)
 
 			// Log per-relay acks

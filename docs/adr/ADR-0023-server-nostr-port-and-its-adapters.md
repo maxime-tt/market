@@ -43,19 +43,19 @@ pool singleton.
 ```typescript
 // sdk/core/nostr-io/ts/types.ts — the port
 interface PoolPort {
-  request(relays: RelayUrl[], filters: FilterIn[], opts?: { signal?: AbortSignal }): Observable<Event>
-  subscribe(relays: RelayUrl[], filters: FilterIn[]): PoolSubscription
-  publish(relays: RelayUrl[], event: Event): Promise<RelayAck[]>
-  count(relays: RelayUrl[], filters: FilterIn[]): Promise<CountResult>
-  status(relays: RelayUrl[]): RelayStatus[]
-  close(): void
+	request(relays: RelayUrl[], filters: FilterIn[], opts?: { signal?: AbortSignal }): Observable<Event>
+	subscribe(relays: RelayUrl[], filters: FilterIn[]): PoolSubscription
+	publish(relays: RelayUrl[], event: Event): Promise<RelayAck[]>
+	count(relays: RelayUrl[], filters: FilterIn[]): Promise<CountResult>
+	status(relays: RelayUrl[]): RelayStatus[]
+	close(): void
 }
 
 interface PoolSubscription {
-  events: Observable<Event>
-  failures: Observable<RelayFailure>
-  eose: Observable<void>
-  unsubscribe: Unsub
+	events: Observable<Event>
+	failures: Observable<RelayFailure>
+	eose: Observable<void>
+	unsubscribe: Unsub
 }
 ```
 
@@ -65,16 +65,16 @@ Both adapters implement this port using `applesauce-relay`'s `RelayPool`. The br
 
 ## Where the server adapter differs from the browser's
 
-| Aspect | Server adapter (`ndk-adapter.ts`) | Browser adapter (relay-adapter.ts) |
-|--------|-----------------------------------|-------------------------------------|
-| Library | `applesauce-relay` | `applesauce-relay` (identical) |
-| `request()` | `pool.req(relays, filters)` + EOSE tracking | Identical |
-| `publish()` | `pool.publish(relays, event)` | Identical |
-| `subscribe()` | `pool.req(relays, filters)` + split streams | Identical |
-| `count()` | `firstValueFrom(pool.count(relays, filters))` | Identical |
-| `status()` | Iterates `pool.relays` map | Iterates `pool.relays` map (identical) |
-| `close()` | `pool.close()` | Identical |
-| Event shape | `applesauce-core`'s `NostrEvent` | `applesauce-core`'s `NostrEvent` (identical) |
+| Aspect        | Server adapter (`ndk-adapter.ts`)             | Browser adapter (relay-adapter.ts)           |
+| ------------- | --------------------------------------------- | -------------------------------------------- |
+| Library       | `applesauce-relay`                            | `applesauce-relay` (identical)               |
+| `request()`   | `pool.req(relays, filters)` + EOSE tracking   | Identical                                    |
+| `publish()`   | `pool.publish(relays, event)`                 | Identical                                    |
+| `subscribe()` | `pool.req(relays, filters)` + split streams   | Identical                                    |
+| `count()`     | `firstValueFrom(pool.count(relays, filters))` | Identical                                    |
+| `status()`    | Iterates `pool.relays` map                    | Iterates `pool.relays` map (identical)       |
+| `close()`     | `pool.close()`                                | Identical                                    |
+| Event shape   | `applesauce-core`'s `NostrEvent`              | `applesauce-core`'s `NostrEvent` (identical) |
 
 The server adapter is now functionally identical to the browser adapter. The only difference is
 the pool singleton lifecycle (managed separately in `platform/server/ndk.ts`).
