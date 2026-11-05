@@ -10,9 +10,33 @@
  */
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
+import { Invoice } from '@getalby/lightning-tools'
+import { validatePreimage } from '@sdk/commerce/payments/preimage'
 import { PayAggregator, type SetStore, type WitnessVerifier } from '@sdk/core/wallet'
 import { buildAggregatorWrappers, type Bolt11Wrapper, type PayAggregatorConfig } from './payAggregator'
 import { LocalSetStore, LocalBolt11LegStore } from './payAggregatorStore'
+
+// ---------------------------------------------------------------------------
+// BOLT11 invoice codec — the rail's own decoder (`@getalby/lightning-tools`,
+// which the port deliberately does not import; see the codec's doc comment)
+// ---------------------------------------------------------------------------
+
+/**
+ * Decode a bolt11 invoice's payment hash (hex). Throws on an undecodable
+ * invoice — an unreadable invoice cannot be a leg, so this is never asserted
+ * around.
+ */
+export const bolt11PaymentHash = (bolt11: string): string => new Invoice({ pr: bolt11 }).paymentHash
+
+/**
+ * The invoice's absolute expiry instant in Unix **milliseconds**. `timestamp` is
+ * the invoice's creation instant (seconds) and `expiry` is its validity
+ * **duration** (seconds), so the two are added — never confused.
+ */
+export const bolt11ExpiresAt = (bolt11: string): number => {
+	const invoice = new Invoice({ pr: bolt11 })
+	return (invoice.timestamp + invoice.expiry) * 1000
+}
 
 // ---------------------------------------------------------------------------
 // Witness verifier — real SHA-256 for preimage, reference matching for zaps,
@@ -133,9 +157,9 @@ export function getPayAggregatorInstance(): {
 			store: new LocalBolt11LegStore(),
 			storeKind: 'bolt11',
 			codec: {
-				paymentHash: (bolt11: string) => bolt11,
-				validatePreimage: (bolt11: string, preimage: string) => true,
-				expiresAt: () => Date.now() + 3_600_000,
+				paymentHash: bolt11PaymentHash,
+				validatePreimage: (bolt11: string, preimage: string) => validatePreimage(bolt11, preimage),
+				expiresAt: bolt11ExpiresAt,
 			},
 			ceiling: 1_000_000_000,
 			reconcileDeadlineMs: 3_600_000,
