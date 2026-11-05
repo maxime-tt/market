@@ -4,13 +4,11 @@ import type { V4VDTO } from '@platform/web/cart/cartStore'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useGenerateInvoiceMutation } from '@platform/web/payments/paymentQuery'
-import { getPayAggregatorInstance } from '@platform/web/payments/payAggregatorInstance'
-import { resolveSetIdForOrder } from '@platform/web/payments/payAggregatorStore'
+import { publishPaymentReceipt } from '@platform/web/payments/paymentPublish'
 import { useQueryClient } from '@tanstack/react-query'
 import { orderKeys } from '@sdk/core/query/queryKeyFactory'
 import { extractPaymentMethods, getOrderId, getSellerPubkey, isPaymentCompleted, makeInvoiceKey } from './orderDetailHelpers'
 import type { OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
-import type { SetIntent, RefundRequest } from '@sdk/core/wallet'
 import type { InvoiceWithSource } from '@sdk/commerce/orders/orderDetail'
 
 export type { InvoiceWithSource } from '@sdk/commerce/orders/orderDetail'
@@ -202,60 +200,34 @@ export function useOrderInvoices({ order, sellerV4VShares, userPubkey }: UseOrde
 
 			const invoice = enrichedInvoices.find((inv) => inv.id === invoiceId) || dialogInvoices.find((inv) => inv.id === invoiceId)
 
-			if (invoice) {
+			if (invoice && invoice.bolt11) {
 				try {
-					const { payAggregator, bolt11Wrapper } = getPayAggregatorInstance()
-
-					// Build a SetIntent with a single bolt11 leg
-					const intent: SetIntent = {
-						orderId,
-						totalSat: invoice.amount,
-						legs: [
-							{
-								wrapperId: 'bolt11',
-								legId: invoice.id,
-								method: 'bolt11',
-								frozenShare: invoice.amount,
-								expectedPaymentHash: invoice.bolt11 || '',
-								authorityKind: 'remote-and-observable' as const,
-								operations: ['obtain', 'submit', 'reconcile'] as const,
-								plan: ['obtain', 'submit', 'reconcile'] as const,
-							},
-						],
-					}
-
-					const handle = await payAggregator.pay(intent)
-
-					// Submit the bolt11 leg with the preimage to settle it
-					await bolt11Wrapper.submit(
-						{
-							wrapperId: 'bolt11',
-							legId: invoice.id,
-							method: 'bolt11',
-							authorityKind: 'remote-and-observable',
-							operations: ['obtain', 'submit', 'reconcile'],
-							plan: ['obtain', 'submit', 'reconcile'],
-							reference: invoice.bolt11 || '',
+					await publishPaymentReceipt({
+						invoice: {
+							orderId,
+							recipientPubkey: invoice.recipientPubkey,
+							amount: invoice.amount,
+							description: invoice.description,
+							id: invoice.id,
+							bolt11: invoice.bolt11,
 						},
 						preimage,
-					)
-
-					// Reconcile to read back the settled state
-					await payAggregator.reconcile(handle.setId)
-
-					updatePersistedInvoiceLocally(orderId, invoiceId, {
-						status: 'paid',
-						preimage,
+						bolt11: invoice.bolt11,
 					})
-				} catch (error) {
-					console.error('Failed to process payment via aggregator:', error)
-					toast.error(`Failed to process payment: ${error instanceof Error ? error.message : 'Unknown error'}`)
+
+					queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
+				} catch (err) {
+					console.error('Failed to publish payment receipt:', err)
 				}
 			}
 
+			updatePersistedInvoiceLocally(orderId, invoiceId, {
+				status: 'paid',
+				preimage,
+			})
 			refreshLocalInvoices()
 		},
-		[orderId, enrichedInvoices, refreshLocalInvoices],
+		[orderId, enrichedInvoices, queryClient, refreshLocalInvoices],
 	)
 
 	// Handle payment failure
@@ -277,69 +249,6 @@ export function useOrderInvoices({ order, sellerV4VShares, userPubkey }: UseOrde
 	const totalInvoices = enrichedInvoices.length
 	const paymentProgress = totalInvoices > 0 ? (paidInvoices.length / totalInvoices) * 100 : 0
 
-	// Derive set verdict from the orderId → setId mapping for this order
-	const [setVerdict, setSetVerdict] = useState<{ state: string | null; settled: boolean }>({
-		state: null,
-		settled: false,
-	})
-
-	useEffect(() => {
-		const setId = resolveSetIdForOrder(orderId)
-		if (!setId) {
-			setSetVerdict({ state: null, settled: false })
-			return
-		}
-
-		let cancelled = false
-		const fetchSetVerdict = async () => {
-			try {
-				const { payAggregator } = getPayAggregatorInstance()
-				const handle = await payAggregator.status(setId)
-				if (!cancelled) {
-					setSetVerdict({ state: handle.state, settled: handle.state === 'complete' })
-				}
-			} catch {
-				if (!cancelled) {
-					setSetVerdict({ state: null, settled: false })
-				}
-			}
-		}
-		fetchSetVerdict()
-
-		// Refresh periodically for live settlement updates
-		const interval = setInterval(fetchSetVerdict, 10000)
-		return () => {
-			cancelled = true
-			clearInterval(interval)
-		}
-	}, [orderId])
-
-	// Open a refund set for this order
-	const openRefund = useCallback(
-		async (refundTotalSat: number) => {
-			try {
-				const { payAggregator } = getPayAggregatorInstance()
-				const purchaseSetId = resolveSetIdForOrder(orderId)
-				if (!purchaseSetId) {
-					toast.error('No purchase set found for this order')
-					return
-				}
-				const handle = await payAggregator.openRefund({
-					purchaseSetId,
-					refundTotalSat,
-					legs: [],
-				} as RefundRequest)
-				toast.success('Refund set opened successfully')
-				return handle
-			} catch (error) {
-				console.error('Failed to open refund:', error)
-				toast.error(`Failed to open refund: ${error instanceof Error ? error.message : 'Unknown error'}`)
-				return null
-			}
-		},
-		[orderId],
-	)
-
 	return {
 		enrichedInvoices,
 		paidInvoices,
@@ -347,8 +256,6 @@ export function useOrderInvoices({ order, sellerV4VShares, userPubkey }: UseOrde
 		totalInvoices,
 		paymentProgress,
 		generatingInvoices,
-		setVerdict,
-		openRefund,
 		handleGenerateNewInvoice,
 		handlePaymentComplete,
 		handlePaymentFailed,
