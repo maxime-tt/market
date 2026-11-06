@@ -158,6 +158,50 @@ describe('SellerProfileView', () => {
 		expect(markup).toContain('widget-seller-profile-header')
 	})
 
+	test('error replaces the listing region and keeps the header', () => {
+		const markup = renderToStaticMarkup(
+			createElement(
+				SellerProfileView,
+				makeView({ error: createElement('div', { id: 'listings-error' }) }),
+				createElement(ProductCard, CARD),
+			),
+		)
+		expect(markup).toContain('listings-error')
+		expect(markup).not.toContain('widget-product-card-evt-1')
+		expect(markup).toContain('widget-seller-profile-header')
+		expect(markup).toContain('widget-seller-profile-listings')
+	})
+
+	// A failed read is not an empty seller: when a caller hands both (a
+	// regression a host could introduce), the failure is what the region states.
+	test('error wins over empty', () => {
+		const markup = renderToStaticMarkup(
+			createElement(
+				SellerProfileView,
+				makeView({
+					error: createElement('div', { id: 'listings-error' }),
+					empty: createElement('div', { id: 'no-listings' }),
+				}),
+			),
+		)
+		expect(markup).toContain('listings-error')
+		expect(markup).not.toContain('no-listings')
+	})
+
+	test('loading wins over error', () => {
+		const markup = renderToStaticMarkup(
+			createElement(
+				SellerProfileView,
+				makeView({
+					loading: createElement('div', { id: 'skeleton' }),
+					error: createElement('div', { id: 'listings-error' }),
+				}),
+			),
+		)
+		expect(markup).toContain('skeleton')
+		expect(markup).not.toContain('listings-error')
+	})
+
 	test('renders with a custom className', () => {
 		const markup = renderToStaticMarkup(createElement(SellerProfileView, makeView({ className: 'custom-seller-class' })))
 		expect(markup).toContain('custom-seller-class')
