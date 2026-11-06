@@ -1,4 +1,5 @@
-import { ensureInvoiceNdkConnected } from './ndk'
+import { getPoolPort } from './ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { getAppPublicKeyOrThrow } from './runtime'
 
 /**
@@ -21,11 +22,17 @@ export async function getAppLightningIdentifier(): Promise<string> {
 		return cachedAppLightningIdentifier.value
 	}
 
-	const ndk = await ensureInvoiceNdkConnected()
-	const user = ndk.getUser({ pubkey: getAppPublicKeyOrThrow() })
-	await user.fetchProfile()
+	const poolPort = await getPoolPort()
+	// Query kind 0 (profile) events for the app pubkey using PoolPort
+	const result = await poolPort.query([{ kinds: [0], authors: [getAppPublicKeyOrThrow()] }])
+	const profileEvent = result.events[0] as NostrEventLike | undefined
 
-	const identifier = user.profile?.lud16 || user.profile?.lud06
+	if (!profileEvent || !profileEvent.content) {
+		throw new Error('App does not have a Lightning Address configured (missing lud16/lud06 on app profile)')
+	}
+
+	const profile = JSON.parse(profileEvent.content)
+	const identifier = profile.lud16 || profile.lud06
 	if (!identifier) {
 		throw new Error('App does not have a Lightning Address configured (missing lud16/lud06 on app profile)')
 	}

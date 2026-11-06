@@ -1,4 +1,10 @@
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
+/**
+ * EventHandler - central event routing and manager orchestration.
+ *
+ * This file is a BRIDGE: it imports NDK only through ndk.ts (getPoolPort,
+ * createPoolPort) and never names `@nostr-dev-kit` directly.
+ */
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { EventHandlerConfig, ProcessedEvent } from './types'
 import { AdminManagerImpl } from './AdminManager'
 import { EditorManagerImpl } from './EditorManager'
@@ -9,9 +15,12 @@ import { Nip05ManagerImpl } from './Nip05Manager'
 import { EventValidator } from './EventValidator'
 import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
-import NDK from '@nostr-dev-kit/ndk'
 import { ZAP_RELAYS } from '@sdk/config/constants'
+import { map as rxMap } from 'rxjs'
 import type { ZapPurchaseManager, ZapPurchaseEntry } from './ZapPurchaseManager'
+import { createPoolPort, getPoolPort } from './ndk'
+import type { FilterIn, PoolPort, Subscription } from '@sdk/core/nostr-io/ts/types'
+import { RelaySeamError } from '@sdk/core/nostr-io/ts/errors'
 
 export class EventHandler {
 	private static instance: EventHandler
@@ -27,12 +36,15 @@ export class EventHandler {
 	private eventValidator: EventValidator
 	private eventSigner: EventSigner
 	private ndkService: NDKService
-	private ndk: NDK | null = null
-	private zapNdk: NDK | null = null
+	private appPool: PoolPort | null = null
+	private zapPool: PoolPort | null = null
 	private handledZapReceiptIds: Set<string> = new Set()
 
 	// Registered zap purchase managers (vanity URLs, nip05)
 	private purchaseManagers: ZapPurchaseManager<ZapPurchaseEntry>[] = []
+
+	// Zap subscription handles (for cleanup)
+	private zapSubscriptions: Subscription[] = []
 
 	private constructor() {
 		// Initialize with empty managers - components requiring private key will be set up during initialize()
@@ -81,19 +93,25 @@ export class EventHandler {
 
 		// Initialize NDK service and load existing data with timeout
 		try {
-			await Promise.race([
-				this.ndkService.initialize(config.relayUrl),
-				new Promise((_, reject) => setTimeout(() => reject(new Error('NDK service init timeout')), 10000)),
-			])
+			const { promise, resolve, reject } = Promise.withResolvers<void>()
+			const id = setTimeout(() => reject(new Error('NDK service init timeout')), 10000)
+			this.ndkService
+				.initialize(config.relayUrl)
+				.then(resolve, reject)
+				.finally(() => clearTimeout(id))
+			await promise
 		} catch (e) {
 			console.warn('⚠️ NDK service init failed, continuing anyway:', e)
 		}
 
 		try {
-			await Promise.race([
-				this.ndkService.loadExistingData(),
-				new Promise((_, reject) => setTimeout(() => reject(new Error('Load existing data timeout')), 10000)),
-			])
+			const { promise, resolve, reject } = Promise.withResolvers<void>()
+			const id = setTimeout(() => reject(new Error('Load existing data timeout')), 10000)
+			this.ndkService
+				.loadExistingData()
+				.then(resolve, reject)
+				.finally(() => clearTimeout(id))
+			await promise
 		} catch (e) {
 			console.warn('⚠️ Load existing data failed, continuing anyway:', e)
 		}
@@ -104,31 +122,24 @@ export class EventHandler {
 			console.warn('⚠️ Starting NDK service subscriptions failed, continuing anyway:', e)
 		}
 
-		// Set up NDK for blacklist and vanity managers
+		// Set up PoolPort for blacklist and vanity managers
 		if (config.relayUrl) {
-			this.ndk = new NDK({ explicitRelayUrls: [config.relayUrl] })
 			try {
-				await Promise.race([
-					this.ndk.connect(),
-					new Promise((_, reject) => setTimeout(() => reject(new Error('App relay NDK connect timeout')), 10000)),
-				])
+				this.appPool = await createPoolPort([config.relayUrl])
 
-				// Initialize blacklist
-				this.blacklistManager.setNDK(this.ndk)
+				// Initialize blacklist (uses getPoolPort() internally)
 				await this.blacklistManager.loadExistingBlacklist(this.eventSigner.getAppPubkey())
 
-				// Initialize vanity
-				this.vanityManager.setNDK(this.ndk)
+				// Initialize vanity (uses getPoolPort() internally)
 				await this.vanityManager.loadExistingVanityRegistry(this.eventSigner.getAppPubkey())
 
-				// Initialize NIP-05
-				this.nip05Manager.setNDK(this.ndk)
+				// Initialize NIP-05 (uses getPoolPort() internally)
 				await this.nip05Manager.loadExistingNip05Registry(this.eventSigner.getAppPubkey())
 
 				// Subscribe to zap receipts for all purchase managers (app relay)
-				this.subscribeToZapPurchases(this.ndk, 'App relay')
+				this.subscribeToZapPurchases(this.appPool, 'App relay', [config.relayUrl].filter(Boolean) as string[])
 			} catch (e) {
-				console.warn('⚠️ App relay NDK setup failed, continuing anyway:', e)
+				console.warn('⚠️ App relay PoolPort setup failed, continuing anyway:', e)
 			}
 
 			// Subscribe on dedicated zap relays in production; some LSPs do not
@@ -143,17 +154,14 @@ export class EventHandler {
 				? [config.relayUrl].filter(Boolean)
 				: Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
 			console.log(`Connecting to zap relays: ${zapRelayUrls.join(', ')}`)
-			this.zapNdk = new NDK({ explicitRelayUrls: zapRelayUrls })
+
 			try {
-				await Promise.race([
-					this.zapNdk.connect(),
-					new Promise((_, reject) => setTimeout(() => reject(new Error('Zap relay connection timeout')), 15000)),
-				])
-				this.subscribeToZapPurchases(this.zapNdk, 'Zap relays')
+				this.zapPool = await createPoolPort(zapRelayUrls)
+				this.subscribeToZapPurchases(this.zapPool, 'Zap relays', zapRelayUrls)
 			} catch (error) {
-				console.warn('⚠️ Failed to connect zap relay NDK; zap purchase receipts may not be processed:', error)
+				console.warn('⚠️ Failed to connect zap relay PoolPort; zap purchase receipts may not be processed:', error)
 				// Subscribe anyway in case some relays connected
-				this.subscribeToZapPurchases(this.zapNdk, 'Zap relays (partial)')
+				if (this.zapPool) this.subscribeToZapPurchases(this.zapPool, 'Zap relays (partial)', zapRelayUrls)
 			}
 		}
 
@@ -166,19 +174,16 @@ export class EventHandler {
 	 * Each manager self-filters by its own label tag, so a single subscription
 	 * routes receipts to vanity URLs, badges, NIP-05.
 	 */
-	private subscribeToZapPurchases(ndk: NDK, label: string): void {
+	private subscribeToZapPurchases(pool: PoolPort, label: string, relays: string[]): void {
 		const appPubkey = this.eventSigner.getAppPubkey()
 
-		// Subscribe to zap receipts where app pubkey is the recipient
-		const sub = ndk.subscribe(
-			{
-				kinds: [9735],
-				'#p': [appPubkey],
-			},
-			{ closeOnEose: false },
-		)
+		// Subscribe to zap receipts where app pubkey is the recipient.
+		// `PoolPort.subscribe()` targets exactly the relays it is given, so the
+		// caller always names them — there is no pool-side default to fall back on.
+		const sub = pool.subscribe(relays, [{ kinds: [9735], '#p': [appPubkey] }] as FilterIn[])
 
-		sub.on('event', async (event) => {
+		// Listen for events on the subscription
+		sub.events.subscribe(async (event) => {
 			try {
 				if (event.id) {
 					if (this.handledZapReceiptIds.has(event.id)) return
@@ -190,19 +195,23 @@ export class EventHandler {
 					}
 				}
 				// Route to all purchase managers; each filters by its own label
-				const raw = event.rawEvent()
 				for (const manager of this.purchaseManagers) {
-					await manager.handleZapReceipt(raw)
+					await manager.handleZapReceipt(event)
 				}
 			} catch (error) {
 				console.error('Error handling zap purchase receipt:', error)
 			}
 		})
 
+		this.zapSubscriptions.push({
+			events: sub.events,
+			errors: sub.failures.pipe(rxMap((f) => new RelaySeamError(f.reason, f.message ?? ''))),
+			unsubscribe: sub.unsubscribe,
+		})
 		console.log(`Subscribed to zap purchase receipts (${label})`)
 	}
 
-	public handleEvent(event: NostrEvent): NostrEvent | null {
+	public handleEvent(event: NostrEventLike): NostrEventLike | null {
 		if (!this.isInitialized) {
 			throw new Error('EventHandler is not initialized')
 		}
@@ -211,7 +220,7 @@ export class EventHandler {
 		return processed.signedEvent
 	}
 
-	public processEvent(event: NostrEvent): ProcessedEvent {
+	public processEvent(event: NostrEventLike): ProcessedEvent {
 		if (!this.isInitialized || !this.eventValidator || !this.eventSigner) {
 			throw new Error('EventHandler is not initialized')
 		}
@@ -244,7 +253,7 @@ export class EventHandler {
 		}
 	}
 
-	private async handleSpecialEvents(event: NostrEvent): Promise<void> {
+	private async handleSpecialEvents(event: NostrEventLike): Promise<void> {
 		const isSetupEvent = event.kind === 31990 && event.content.includes('"name":')
 		const isAdminListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'admins')
 		const isEditorListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'editors')
@@ -353,6 +362,11 @@ export class EventHandler {
 	}
 
 	public shutdown(): void {
+		// Unsubscribe from zap receipts
+		this.zapSubscriptions.forEach((sub) => sub.unsubscribe())
+		this.zapSubscriptions = []
+
+		// Shut down NDKService
 		if (this.ndkService) {
 			this.ndkService.shutdown()
 		}

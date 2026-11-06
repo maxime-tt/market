@@ -1,5 +1,5 @@
 import { Relay } from 'nostr-tools'
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import {
 	determineStage,
 	getAppPublicKeyOrThrow,
@@ -79,19 +79,35 @@ export const configRoutes: BunRoutes = {
 			const appPubkey = getAppPublicKeyOrThrow()
 			const timestamp = Math.floor(Date.now() / 1000)
 			const settings = { ...settingsResult.data, handlerId: getInstanceConfig().handlerId }
-			const eventTemplates = [
-				{ kind: 30000, created_at: timestamp, tags: [['d', 'admins'], ...payload.admins.map((pubkey) => ['p', pubkey])], content: '' },
-				{ kind: 30000, created_at: timestamp, tags: [['d', 'editors'], ...payload.editors.map((pubkey) => ['p', pubkey])], content: '' },
+			const eventTemplates: NostrEventLike[] = [
+				{
+					kind: 30000,
+					created_at: timestamp,
+					id: '',
+					pubkey: appPubkey,
+					tags: [['d', 'admins'], ...payload.admins.map((pubkey) => ['p', pubkey])],
+					content: '',
+				},
+				{
+					kind: 30000,
+					created_at: timestamp,
+					id: '',
+					pubkey: appPubkey,
+					tags: [['d', 'editors'], ...payload.editors.map((pubkey) => ['p', pubkey])],
+					content: '',
+				},
 				{
 					kind: 31990,
 					created_at: timestamp,
+					id: '',
+					pubkey: appPubkey,
 					tags: [['d', settings.handlerId]],
 					content: JSON.stringify(settings),
 				},
 			]
 
 			const signedEvents = eventTemplates.map((template) => {
-				const processed = handler.processEvent({ ...template, pubkey: appPubkey } as NostrEvent)
+				const processed = handler.processEvent({ ...template, pubkey: appPubkey } as NostrEventLike)
 				if (!processed.signedEvent) throw new Error(processed.validationResult.reason || 'Setup event was rejected')
 				return processed.signedEvent
 			})

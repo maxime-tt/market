@@ -33,7 +33,19 @@ import { NEVER, Observable, Subject, filter, firstValueFrom, map, share, takeUnt
 
 import { RelaySeamError } from './errors'
 import { mapClosedReason, normalizeRelayUrl } from './pool'
-import type { CountResult, Event, FilterIn, PoolPort, PoolSubscription, RelayAck, RelayFailure, RelayStatus, RelayUrl } from './types'
+import type {
+	CountResult,
+	Event,
+	FilterIn,
+	PoolPort,
+	PoolSubscription,
+	RelayAck,
+	RelayFailure,
+	RelayStatus,
+	RelayUrl,
+	QueryOptions,
+	WireResult,
+} from './types'
 
 /** The vendor's per-relay EVENT message, narrowed without a cast. */
 type EventMessage = Extract<GroupReqMessage, { type: 'EVENT' }>
@@ -105,7 +117,11 @@ class RelayPoolTransport implements PoolPort {
 
 	constructor(pool: RelayPool) {
 		this.pool = pool
+		this.relays = Array.from(pool.relays.keys())
 	}
+
+	/** Track the relays this transport was created with. */
+	private readonly relays: string[]
 
 	request(relays: RelayUrl[], filters: FilterIn[], opts?: { signal?: AbortSignal }): Observable<Event> {
 		// The set a pool is handed is the **unique** one, and the seam is where that
@@ -232,7 +248,8 @@ class RelayPoolTransport implements PoolPort {
 	 * cannot be asked about is a typed refusal: health is reported, never invented.
 	 */
 	status(relays: RelayUrl[]): RelayStatus[] {
-		return [...relays].map((url) => {
+		const target = relays.length > 0 ? relays : this.relays
+		return [...target].map((url) => {
 			let key: string
 			try {
 				key = normalizeRelayUrl(url)
@@ -246,6 +263,49 @@ class RelayPoolTransport implements PoolPort {
 		})
 	}
 
+	query(filters: FilterIn | FilterIn[], opts?: QueryOptions): Promise<WireResult> {
+		const events: Event[] = []
+		const failures: RelaySeamError[] = []
+		const source = this.pool.req([], filters as FilterIn[])
+		const sub = source.subscribe({
+			next: (message) => {
+				if (message.type === 'EVENT') events.push(message.event)
+				if (message.type === 'CLOSED') failures.push(new RelaySeamError(mapClosedReason(message.reason), message.reason))
+				if (message.type === 'ERROR') {
+					const err = message.error instanceof Error ? message.error : new Error(String(message.error))
+					failures.push(new RelaySeamError('rejected', err.message))
+				}
+			},
+			error: (err) => {
+				const e = err instanceof Error ? err : new Error(String(err))
+				failures.push(new RelaySeamError('rejected', e.message))
+			},
+			complete: () => {
+				// nothing
+			},
+		})
+		// Abort the EOSE wait when the caller's signal fires; with no signal the
+		// policy is "never" — the pipe must always receive a real operator.
+		const abort$ = opts?.signal
+			? new Observable<void>((s) => opts.signal!.addEventListener('abort', () => s.next(), { once: true }))
+			: NEVER
+		const eose$ = source.pipe(
+			filter((m): m is Extract<GroupReqMessage, { type: 'EOSE'; from: string }> => m.type === 'EOSE'),
+			tap(() => sub.unsubscribe()),
+			takeUntil(abort$),
+		)
+		return firstValueFrom(eose$)
+			.then(() => {
+				sub.unsubscribe()
+				return { events, eose: true, failures }
+			})
+			.catch((err) => {
+				sub.unsubscribe()
+				// If the EOSE never arrived (signal aborted), report partial results with eose: false
+				if (opts?.signal?.aborted) return { events, eose: false, failures }
+				throw err
+			})
+	}
 	close(): void {
 		this.pool.close()
 	}

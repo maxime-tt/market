@@ -1,4 +1,4 @@
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { getPublicKey } from 'nostr-tools'
 import { finalizeEvent, type UnsignedEvent } from 'nostr-tools/pure'
 
@@ -13,10 +13,10 @@ export class EventSigner {
 		this.appPubkey = getPublicKey(this.privateBytes)
 	}
 
-	public signEvent(event: NostrEvent): NostrEvent {
+	public signEvent(event: NostrEventLike): NostrEventLike {
 		const unsignedEvent: UnsignedEvent = {
 			kind: event.kind as number,
-			created_at: event.created_at,
+			created_at: event.created_at ?? 0,
 			tags: event.tags,
 			content: event.content,
 			pubkey: this.appPubkey,

@@ -46,12 +46,14 @@ import type {
 	FilterIn,
 	PoolPort,
 	PoolSubscription,
+	QueryOptions,
 	RelayAck,
 	RelayFailure,
 	RelayPolicy,
 	RelayReason,
 	RelayStatus,
 	RelayUrl,
+	WireResult,
 } from './types'
 
 /** The author the tests sign as, generated at run time. */
@@ -112,6 +114,10 @@ export function fakePool(): FakePool {
 			status(): RelayStatus[] {
 				return refuse('status')
 			},
+			async query(): Promise<WireResult> {
+				return refuse('query')
+			},
+
 			close(): void {
 				refuse('close')
 			},
@@ -125,6 +131,7 @@ export interface WorkingPoolSpec {
 	publish?: (relays: RelayUrl[], event: Event) => Promise<RelayAck[]>
 	count?: (relays: RelayUrl[], filters: FilterIn[]) => Promise<CountResult>
 	status?: (relays: RelayUrl[]) => RelayStatus[]
+	query?: (filters: FilterIn | FilterIn[], opts?: QueryOptions) => Promise<WireResult>
 }
 
 export interface WorkingPool {
@@ -173,6 +180,10 @@ export function workingPool(spec: WorkingPoolSpec = {}): WorkingPool {
 			status: (relays) => {
 				calls.push({ method: 'status', relays: [...relays] })
 				return spec.status ? spec.status(relays) : relays.map((url) => ({ url, connected: true, ready: true, authenticated: false }))
+			},
+			query: (filters: FilterIn | FilterIn[], opts?: QueryOptions) => {
+				calls.push({ method: 'query', relays: [], filters: Array.isArray(filters) ? filters : [filters] })
+				return spec.query ? spec.query(filters, opts) : Promise.resolve({ events: [], eose: true, failures: [] })
 			},
 			close: () => {
 				calls.push({ method: 'close', relays: [] })

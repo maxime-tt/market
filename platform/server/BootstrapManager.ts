@@ -1,4 +1,4 @@
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { nip19 } from 'nostr-tools'
 import type { BootstrapManager, AdminManager } from './types'
 
@@ -30,7 +30,7 @@ export class BootstrapManagerImpl implements BootstrapManager {
 		console.log('Exited bootstrap mode')
 	}
 
-	public handleSetupEvent(event: NostrEvent): void {
+	public handleSetupEvent(event: NostrEventLike): void {
 		if (!this.hasSetupEvent) {
 			this.hasSetupEvent = true
 			console.log('First setup event received and validated')
