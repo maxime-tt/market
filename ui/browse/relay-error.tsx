@@ -33,6 +33,12 @@ export interface RelayIndicatorProps {
 	totalProducts: number
 	/** Per-relay breakdown for the expanding detail. */
 	relays?: readonly RelayDetail[]
+	/**
+	 * What the count counts. The results grid leaves it at `products`; the
+	 * seller profile reads `products from this seller`, so the sentence stays
+	 * true about the read it summarises.
+	 */
+	productsLabel?: string
 	/** Extra classes for the root. */
 	className?: string
 }
@@ -72,7 +78,13 @@ export interface TagFilterBadgeProps {
  * A failing relay is NORMAL — results are kept and the indicator shows
  * the per-relay breakdown on demand.
  */
-export const RelayIndicator: FC<RelayIndicatorProps> = ({ responded, totalProducts, relays = [], className }) => {
+export const RelayIndicator: FC<RelayIndicatorProps> = ({
+	responded,
+	totalProducts,
+	relays = [],
+	productsLabel = 'products',
+	className,
+}) => {
 	const [expanded, setExpanded] = useState(false)
 
 	const respondedCount = relays.filter((r) => r.status === 'responded').length
@@ -104,7 +116,7 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({ responded, totalProduc
 			{/* Summary line */}
 			<span>
 				{responded} relay{responded !== 1 ? 's' : ''} responded with{' '}
-				<b className="font-normal text-text-high">{totalProducts.toLocaleString()}</b> products
+				<b className="font-normal text-text-high">{totalProducts.toLocaleString()}</b> {productsLabel}
 			</span>
 
 			{/* Expand chip — shows offline count */}

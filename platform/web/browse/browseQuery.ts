@@ -24,6 +24,11 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { getReadContext } from '../readContext'
 import type { EventFilter } from '@sdk/core/event-store/filter'
 import type { CaughtUpInfo } from '@sdk/core/event-store/read'
+import { excludeDeleted } from '@sdk/core/event-store/read'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { isValidHexKey } from '@sdk/core/utils/utils'
+import { filterBlacklistedEvents } from '@sdk/config/blacklist'
+import { buildProductListFilter, isProductListed } from '@sdk/commerce/discovery'
 // Shared shapes and the canonical kind-30402 mapper (also used by the client).
 import { mapProduct, type BrowseProduct, type BrowseSearchResult } from './browseProductMap'
 // Canonical read model: sdk/commerce/discovery/productReadModel.ts
@@ -44,6 +49,8 @@ export const browseKeys = {
 		[...browseKeys.all, 'search', filters] as const,
 	/** Single product detail by event id (fetch, not stream). */
 	detail: (id: string) => [...browseKeys.all, 'detail', id] as const,
+	/** A seller's own listings (the seller-profile screen's list stream). */
+	sellerListings: (pubkey: string, limit: number) => [...browseKeys.all, 'seller-listings', pubkey, limit] as const,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -193,4 +200,64 @@ export function browseProductDetailQueryOptions(id: string | undefined) {
 
 export function useBrowseProductDetail(id: string | undefined) {
 	return useQuery(browseProductDetailQueryOptions(id))
+}
+
+// ---------------------------------------------------------------------------
+// Seller listings — the seller-profile screen (frame YcjyRPZbVo)
+// ---------------------------------------------------------------------------
+
+/** A seller's listings plus the seam's relay verdict for that read. */
+export interface SellerListingsResult {
+	/** Current, non-deleted, purchasable listings from this author, newest first. */
+	listings: BrowseProduct[]
+	/** Relays that answered before the caught-up marker. */
+	eose: string[]
+	/** Relays that did not answer (still pending, or failed). */
+	pending: string[]
+}
+
+/**
+ * A seller's listings: the SDK read seam's kind-30402 **stream** for this author,
+ * built with the products module's own filter (`buildProductListFilter`), under
+ * the same rules the seller's product list applies — `purchasable` visibility,
+ * the blacklist, and NIP-09 deletions. A list is a stream (never a `fetch`);
+ * breaking at the caught-up marker is what bounds it and what gives the
+ * seller-profile frame's status line a real relay verdict instead of an assumed
+ * one.
+ */
+export async function fetchSellerListings(pubkey: string, limit = 50): Promise<SellerListingsResult> {
+	if (!isValidHexKey(pubkey)) return { listings: [], eose: [], pending: [] }
+
+	const context = getReadContext()
+	const events: NostrEventLike[] = []
+	let caughtUpInfo: CaughtUpInfo | null = null
+	for await (const item of context.stream([buildProductListFilter({ limit, author: pubkey })])) {
+		if (item.type === 'event') events.push(item.event)
+		if (item.type === 'caught-up') {
+			caughtUpInfo = item.info
+			break
+		}
+	}
+
+	// A listing its author deleted never surfaces, exactly as in the products
+	// module's own list read.
+	const live = await excludeDeleted(context, events)
+	const listings = filterBlacklistedEvents(live)
+		.filter((event) => isProductListed(event, 'purchasable'))
+		.map(mapProduct)
+		.filter((product): product is BrowseProduct => product !== undefined)
+
+	return { listings, eose: caughtUpInfo?.eose ?? [], pending: caughtUpInfo?.pending ?? [] }
+}
+
+export function sellerListingsQueryOptions(pubkey: string, limit = 50) {
+	return queryOptions({
+		queryKey: browseKeys.sellerListings(pubkey, limit),
+		queryFn: () => fetchSellerListings(pubkey, limit),
+		enabled: isValidHexKey(pubkey),
+	})
+}
+
+export function useSellerListings(pubkey: string, limit?: number) {
+	return useQuery(sellerListingsQueryOptions(pubkey, limit))
 }

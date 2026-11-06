@@ -99,4 +99,14 @@ test.describe('browse library', () => {
 		await expect(page.getByTestId('widget-search-results-grid-active-facet')).toBeVisible()
 		await expect(page.getByTestId('widget-search-results-grid-no-facets')).toBeVisible()
 	})
+
+	test('seller profile entries', async ({ page }) => {
+		await page.goto('/?library=browse')
+		await expect(page.getByTestId('widget-product-card-with-category')).toBeVisible()
+		await expect(page.getByTestId('widget-seller-profile-header-default')).toBeVisible()
+		await expect(page.getByTestId('widget-seller-profile-header-minimal')).toBeVisible()
+		await expect(page.getByTestId('widget-seller-profile-view-default')).toBeVisible()
+		await expect(page.getByTestId('widget-seller-profile-view-loading')).toBeVisible()
+		await expect(page.getByTestId('widget-seller-profile-view-empty')).toBeVisible()
+	})
 })

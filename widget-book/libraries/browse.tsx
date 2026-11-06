@@ -20,6 +20,9 @@ import { BrowseIdle } from '@ui/browse/browse-idle'
 import { SkeletonGrid } from '@ui/browse/skeleton-grid'
 import { EmptyStateBrowse } from '@ui/browse/empty-state-browse'
 import { SearchResultsGrid } from '@ui/browse/search-results-grid'
+import { SellerProfileHeader, SellerProfileView } from '@ui/browse/seller-profile'
+import { EmptyState } from '@ui/shared/empty-state'
+import { Button } from '@ui/primitives/button'
 import { TagFilterBadge } from '@ui/browse/relay-error'
 import type { WidgetLibrary } from '../libraries'
 import type { StripItem } from '@ui/browse/product-strip'
@@ -695,6 +698,148 @@ const SearchProviderRabbitholeDead = () => (
 	</div>
 )
 
+// ---- seller profile (frame YcjyRPZbVo) ----
+//
+// The frame's seller page. Two of its parts are deliberately absent from every
+// entry, because the seam cannot supply them and the harness must not pretend
+// otherwise: the Follow control (no contact-list read/write exists) and the
+// trades / zapped-sats facts (orders are gift-wrapped to the seller; there is
+// no zap-receipt read). `facts` shows exactly what a read returns.
+
+const SELLER_NPUB = 'npub18x2s4kzqgsu37ykmq5g6m3h3qfqr8r3rjy3t9x3q4k3q8v4w4s9qj5s7k0'
+
+const SELLER_LISTINGS = [
+	{
+		id: 'seller-1',
+		title: 'Handcrafted Ceramic Ball',
+		category: 'pottery',
+		price: 21000,
+		stockNote: '14 in stock',
+		material: 'm1' as const,
+		symbolId: 'p-bowl' as const,
+	},
+	{
+		id: 'seller-2',
+		title: 'Ceramic Pour-Over Dripper',
+		category: 'tableware',
+		price: 34500,
+		stockNote: '5 in stock',
+		material: 'm3' as const,
+		symbolId: 'p-jar' as const,
+	},
+	{
+		id: 'seller-3',
+		title: 'Hand-thrown Mug, 350 ml',
+		category: 'pottery',
+		price: 12900,
+		stockNote: '22 in stock',
+		material: 'm5' as const,
+		symbolId: 'p-mug' as const,
+	},
+]
+
+const SELLER_STATUS = (
+	<RelayIndicator
+		responded={2}
+		totalProducts={SELLER_LISTINGS.length}
+		productsLabel="products from this seller"
+		relays={[
+			{ relay: 'nostr.wine', status: 'responded' },
+			{ relay: 'relay.damus.io', status: 'responded' },
+			{ relay: 'relay.nostr.band', status: 'pending' },
+		]}
+	/>
+)
+
+const SellerProfileHeaderDefault = () => (
+	<div className="w-[1040px] max-w-full bg-background p-4">
+		<SellerProfileHeader
+			name="atelier-norte"
+			category="pottery"
+			npub={SELLER_NPUB}
+			facts={['Joined Mar 2024']}
+			shipsFrom="Vila Nova de Gaia, PT"
+			onContact={() => {}}
+			affordances={
+				<Button variant="outline" className="rounded-full">
+					Share
+				</Button>
+			}
+		/>
+	</div>
+)
+
+const SellerProfileHeaderMinimal = () => (
+	<div className="w-[1040px] max-w-full bg-background p-4">
+		{/* Nothing the reads did not return: no reputation line, no ships-from,
+		    no Follow control. The header has to look like this — not like a
+		    zeroed-out version of the frame — when the seam has nothing to say. */}
+		<SellerProfileHeader name="kiln-and-co" />
+	</div>
+)
+
+const SellerProfileViewDefault = () => (
+	<div className="w-[1040px] max-w-full bg-background p-4">
+		<SellerProfileView
+			status={SELLER_STATUS}
+			name="atelier-norte"
+			category="pottery"
+			npub={SELLER_NPUB}
+			facts={['Joined Mar 2024']}
+			shipsFrom="Vila Nova de Gaia, PT"
+			onContact={() => {}}
+		>
+			{SELLER_LISTINGS.map((listing) => (
+				<ProductCard
+					key={listing.id}
+					id={listing.id}
+					title={listing.title}
+					category={listing.category}
+					seller="atelier-norte · ships from PT"
+					sellerPubkey="abcdef01"
+					price={listing.price}
+					stockNote={listing.stockNote}
+					material={listing.material}
+					symbolId={listing.symbolId}
+					onSelect={() => {}}
+				/>
+			))}
+		</SellerProfileView>
+	</div>
+)
+
+const SellerProfileViewLoading = () => (
+	<div className="w-[1040px] max-w-full bg-background p-4">
+		<SellerProfileView name="atelier-norte" category="pottery" npub={SELLER_NPUB} loading={<SkeletonGrid rows={6} columns={3} />} />
+	</div>
+)
+
+const SellerProfileViewEmpty = () => (
+	<div className="w-[1040px] max-w-full bg-background p-4">
+		<SellerProfileView
+			name="kiln-and-co"
+			empty={<EmptyState title="No listings yet" description="This seller has nothing listed right now." />}
+		/>
+	</div>
+)
+
+const ProductCardWithCategory = () => (
+	<div className="w-[320px]">
+		<ProductCard
+			id="evt-cat-1"
+			title="Handcrafted Ceramic Ball"
+			category="pottery"
+			seller="atelier-norte"
+			sellerPubkey="abcdef01"
+			price={21000}
+			stockNote="14 in stock"
+			material="m1"
+			symbolId="p-bowl"
+			onSelect={() => {}}
+		/>
+	</div>
+)
+
 // ---- Library ----
 
 export const browse: WidgetLibrary = {
@@ -755,5 +900,13 @@ export const browse: WidgetLibrary = {
 		// search provider — compare both providers on the same query
 		{ name: 'search-provider-compare', render: SearchProviderCompare },
 		{ name: 'search-provider-rabbithole-dead', render: SearchProviderRabbitholeDead },
+		// product-card category chip (the seller-profile card's title row)
+		{ name: 'product-card-with-category', render: ProductCardWithCategory },
+		// seller profile (frame YcjyRPZbVo)
+		{ name: 'seller-profile-header-default', render: SellerProfileHeaderDefault },
+		{ name: 'seller-profile-header-minimal', render: SellerProfileHeaderMinimal },
+		{ name: 'seller-profile-view-default', render: SellerProfileViewDefault },
+		{ name: 'seller-profile-view-loading', render: SellerProfileViewLoading },
+		{ name: 'seller-profile-view-empty', render: SellerProfileViewEmpty },
 	],
 }
