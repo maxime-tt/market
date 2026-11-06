@@ -23,6 +23,17 @@
  * - Follow                    omitted. The seam has no contact-list (NIP-02)
  *                             read or write, so the control could only be a
  *                             no-op. Contact is real and is wired below.
+ * - listings error            a failed listings read is stated as a failure in
+ *                             the grid region (with a retry), never dressed up
+ *                             as the empty state's "this seller has nothing
+ *                             listed" — that would report a fact the read did
+ *                             not observe.
+ *
+ * This component IS the seller page the product surfaces link to: the route is
+ * `platform/web/routes/profile.$profileId.tsx` (path `/profile/$profileId`,
+ * reached from a seller name as `/profile/<hex-pubkey>`), which resolves the
+ * CMS storefront first and falls back to this page. No second seller URL was
+ * added.
  */
 
 import { PickupLocationDialog } from '@ui/dialogs/pickup-location-dialog'
@@ -33,6 +44,7 @@ import { ProductCard } from '@ui/browse/product-card'
 import { RelayIndicator } from '@ui/browse/relay-error'
 import { SkeletonGrid } from '@ui/browse/skeleton-grid'
 import { EmptyState } from '@ui/shared/empty-state'
+import { ErrorState } from '@ui/shared/error-state'
 import { Button } from '@ui/primitives/button'
 import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost'
 import { getActiveSignerCapability, useAuth } from '@platform/web/auth/authStore'
@@ -121,10 +133,20 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 
 	// The seller's listings: the read seam's stream for this author, carrying
 	// the relay verdict the frame's status line reports.
-	const { data: listingsData, isLoading: listingsAreLoading } = useSellerListings(profilePubkey ?? '')
+	const {
+		data: listingsData,
+		isLoading: listingsAreLoading,
+		isError: listingsDidFail,
+		refetch: refetchListings,
+	} = useSellerListings(profilePubkey ?? '')
 	const listings = useMemo(() => listingsData?.listings ?? [], [listingsData])
 	const eoseRelays = listingsData?.eose ?? []
 	const pendingRelays = listingsData?.pending ?? []
+
+	// A failed listings read is NOT "this seller has nothing listed": the page
+	// states the failure in the grid region (with a retry) rather than telling
+	// the visitor a fact the read never observed.
+	const listingsLoadFailed = !listingsAreLoading && listingsDidFail
 
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 	const [pickupLocationDialogOpen, setPickupLocationDialogOpen] = useState(false)
@@ -376,7 +398,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	)
 
 	const relayStatus =
-		profilePubkey && !listingsAreLoading ? (
+		profilePubkey && !listingsAreLoading && !listingsLoadFailed ? (
 			<RelayIndicator
 				responded={eoseRelays.length}
 				totalProducts={listings.length}
@@ -402,8 +424,19 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 				affordances={affordances}
 				isLoading={profileIsLoading}
 				loading={listingsAreLoading ? <SkeletonGrid rows={6} columns={3} /> : undefined}
+				error={
+					listingsLoadFailed ? (
+						<ErrorState
+							title="Could not load this seller's listings"
+							message="The relays did not answer for this seller. Their listings may still be there — try again."
+							onRetry={() => void refetchListings()}
+							retryLabel="Try again"
+							retryTestId="profile-listings-retry"
+						/>
+					) : undefined
+				}
 				empty={
-					!listingsAreLoading && listings.length === 0 ? (
+					!listingsAreLoading && !listingsLoadFailed && listings.length === 0 ? (
 						<EmptyState
 							title="No listings yet"
 							description={isSelf ? 'Listings you publish appear here.' : 'This seller has nothing listed right now.'}

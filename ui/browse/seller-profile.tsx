@@ -184,6 +184,12 @@ export interface SellerProfileViewProps extends SellerProfileHeaderProps {
 	children?: ReactNode
 	/** Rendered instead of the grid while the listings read is in flight. */
 	loading?: ReactNode
+	/**
+	 * Rendered instead of the grid when the listings read failed. A failed read
+	 * is NOT an empty seller: the grid region says so rather than reporting a
+	 * fact about the seller that was never observed.
+	 */
+	error?: ReactNode
 	/** Rendered instead of the grid when the seller has no visible listings. */
 	empty?: ReactNode
 }
@@ -191,11 +197,12 @@ export interface SellerProfileViewProps extends SellerProfileHeaderProps {
 /**
  * The seller profile page: relay status, seller header, listings.
  *
- * `loading` wins over `empty`, which wins over the listing grid, so a caller
- * never has to decide precedence — and a seller with nothing listed is a fact
- * the page states, not a grid that happens to be empty.
+ * `loading` wins over `error`, which wins over `empty`, which wins over the
+ * listing grid, so a caller never has to decide precedence — and a seller with
+ * nothing listed is a fact the page states, not a grid that happens to be
+ * empty (nor an error dressed up as one).
  */
-export function SellerProfileView({ status, children, loading, empty, className, ...header }: SellerProfileViewProps) {
+export function SellerProfileView({ status, children, loading, error, empty, className, ...header }: SellerProfileViewProps) {
 	return (
 		<div
 			data-slot="seller-profile-view"
@@ -207,6 +214,10 @@ export function SellerProfileView({ status, children, loading, empty, className,
 			{loading ? (
 				<div data-slot="seller-profile-listings" data-testid="widget-seller-profile-listings" className="mt-3">
 					{loading}
+				</div>
+			) : error ? (
+				<div data-slot="seller-profile-listings" data-testid="widget-seller-profile-listings" className="mt-3">
+					{error}
 				</div>
 			) : empty ? (
 				<div data-slot="seller-profile-listings" data-testid="widget-seller-profile-listings" className="mt-3">
