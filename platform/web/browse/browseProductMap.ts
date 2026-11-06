@@ -38,11 +38,45 @@ export interface BrowseProduct {
 	pubkey: string
 	title: string
 	price?: number
+	/**
+	 * The unit the amount is in — the `price` tag's third element
+	 * (`["price","53","USD"]` → `USD`), kept rather than dropped so a renderer
+	 * never labels a fiat amount "sats". Absent when the tag omits it (a sats
+	 * listing may write `SATS`/`SAT` or leave it out).
+	 */
+	currency?: string
 	stock?: string
 	image?: string
 	categories: string[]
 	/** The author's own `location` tag ("ships from"); absent when unset. */
 	location?: string
+	/**
+	 * The relays this listing was actually seen on, from the provider's index
+	 * hit (`hits[].relays_seen`). Absent means unknown: the local stream does
+	 * not know a listing's relays, so it states none rather than fabricating a
+	 * set (and the search-level `eose`/`pending` set is the index's fan-out,
+	 * not any one listing's relays).
+	 */
+	relays?: string[]
+}
+
+/**
+ * One server-suggested facet: a real, market-scoped count for an index filter.
+ * The search service's `search` frame carries these; the count is scoped to the
+ * market (not to the loaded window), which is what lets a pill state a number
+ * the client cannot derive.
+ */
+export interface BrowseFacet {
+	/** The indexed field, e.g. `category_tags`, `currency`. */
+	field: string
+	/** The field's value — the pill's label. */
+	value: string
+	/** How many market listings carry this value. */
+	count: number
+	/** The share of the market the value covers, when the service states it. */
+	coverage?: number
+	/** The index filter string to send back for this value, e.g. `category_tags = "pottery"`. */
+	filter?: string
 }
 
 /**
@@ -61,6 +95,12 @@ export interface BrowseSearchResult {
 	eose: string[]
 	/** Relays that did not reach EOSE (still pending, or failed). */
 	pending: string[]
+	/**
+	 * The service's own facet suggestions from the `search` frame, when it
+	 * states them. Absent for the local stream, which indexes no facets — the
+	 * host then shows no pills rather than counting its loaded window.
+	 */
+	suggested?: BrowseFacet[]
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +118,9 @@ export function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
 	const title = getProductTitle(event)
 	const priceTag = getProductPrice(event)
 	const price = priceTag ? Number(priceTag[1]) || undefined : undefined
+	// The tag's own unit, kept alongside the amount: without it a renderer can
+	// only guess, and the card's guess was "sats" for every listing.
+	const currency = priceTag?.[2]
 	const stockTag = getProductStock(event)
 	const stock = stockTag?.[1]
 	const images = getProductImages(event)
@@ -95,6 +138,7 @@ export function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
 		pubkey,
 		title: title || 'Untitled',
 		price,
+		currency: currency || undefined,
 		stock,
 		image,
 		categories,

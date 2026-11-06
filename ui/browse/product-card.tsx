@@ -5,9 +5,9 @@
  * Heart + three-dots in the text block — icon-first ghost buttons, no outline.
  */
 
-import type { FC, MouseEventHandler, PointerEventHandler, Ref, TouchEventHandler } from 'react'
+import { useState, type FC, type MouseEventHandler, type PointerEventHandler, type Ref, type TouchEventHandler } from 'react'
 import { cn } from '../utils/cn'
-import { formatSats } from '../utils/format'
+import { formatPriceUnit, formatSats } from '../utils/format'
 import { ProductArt, type MaterialClass, type ProductSymbolId } from './art'
 
 /**
@@ -145,6 +145,55 @@ export const ProductContextMenu: FC<ProductContextMenuProps> = ({ open, onAddToL
 }
 
 // ---------------------------------------------------------------------------
+// The listing's shot — its own image when it has one, art when it does not
+// ---------------------------------------------------------------------------
+
+export interface ListingImageProps {
+	/** The listing's first `image` tag, when it carries one. */
+	image?: string
+	/** Material gradient class (.m1–.m8) — the fallback tile. */
+	material: MaterialClass
+	/** Product icon symbol for the fallback tile. */
+	symbolId?: ProductSymbolId
+	/** Aspect ratio, as {@link ProductArt} takes it. */
+	ratio?: '3/2' | '16/9' | '1/1' | 'detail'
+	/** Extra classes for the shot (the card's outline, the pane's sizing). */
+	className?: string
+	/** The image's alt text; the listing title where a caller has one. */
+	alt?: string
+	'data-slot'?: string
+}
+
+/**
+ * The listing's shot: the seller's own first `image` tag when the listing
+ * carries one, and the deterministic {@link ProductArt} tile otherwise — never
+ * the art as an unconditional default over a real image. A URL that fails to
+ * load falls back to the art too, rather than leaving a broken frame.
+ */
+export const ListingImage: FC<ListingImageProps> = ({ image, material, symbolId, ratio = '3/2', className, alt = '', ...rest }) => {
+	const [failed, setFailed] = useState(false)
+
+	if (image && !failed) {
+		return (
+			<img
+				{...rest}
+				src={image}
+				alt={alt}
+				loading="lazy"
+				onError={() => setFailed(true)}
+				className={cn(
+					ratio === '3/2' ? 'aspect-[3/2]' : ratio === '16/9' ? 'aspect-[16/9]' : ratio === '1/1' ? 'aspect-square' : undefined,
+					'w-full rounded-[6px] border border-border-default object-cover',
+					className,
+				)}
+			/>
+		)
+	}
+
+	return <ProductArt {...rest} material={material} symbolId={symbolId} ratio={ratio} className={className} />
+}
+
+// ---------------------------------------------------------------------------
 // Product card props
 // ---------------------------------------------------------------------------
 
@@ -163,12 +212,27 @@ export interface ProductCardProps {
 	seller: string
 	/** Seller pubkey prefix (first 8 chars). */
 	sellerPubkey: string
+	/** The seller's resolved profile display name; the pubkey-derived `seller` is the fallback. */
+	sellerName?: string
+	/** The seller's resolved profile picture; the tinted disc is the fallback. */
+	sellerPicture?: string
+	/**
+	 * The listing's first `image` tag, when it carries one — rendered as the
+	 * shot, with the deterministic art as the fallback.
+	 */
+	image?: string
 	/**
 	 * Price in sats. Omitted when the listing carries no `price` tag: the card
 	 * then shows no price at all, because "0 sats" would be a price the author
 	 * never set.
 	 */
 	price?: number
+	/** The listing's own price unit (`price` tag's third element); `SATS`/absent spell as `sats`. */
+	priceCurrency?: string
+	/** The amount as the app's display path resolved it; the raw `price` is the fallback. */
+	priceLabel?: string
+	/** The unit for `priceLabel`; `priceCurrency` is the fallback. */
+	priceUnit?: string
 	/** Stock note, e.g. "76 in stock", "12 left", "40 in stock", "1 of 3". */
 	stockNote?: string
 	/** Material gradient class (.m1–.m8). */
@@ -274,7 +338,13 @@ export const ProductCard: FC<ProductCardProps> = ({
 	category,
 	seller,
 	sellerPubkey,
+	sellerName,
+	sellerPicture,
+	image,
 	price,
+	priceCurrency,
+	priceLabel,
+	priceUnit,
 	stockNote,
 	material,
 	symbolId,
@@ -348,16 +418,15 @@ export const ProductCard: FC<ProductCardProps> = ({
 			onPointerCancel={handleLongPressEnd}
 			{...props}
 		>
-			{/* Shot — material gradient + SVG icon */}
+			{/* Shot — the listing's own image, else the material gradient + SVG icon */}
 			<div className="relative">
-				<ProductArt
+				<ListingImage
+					image={image}
+					alt={title}
 					material={material}
 					symbolId={symbolId}
 					ratio={presentation === 'row' ? '16/9' : '3/2'}
-					className={cn(
-						'size-full rounded-[6px] border border-border-default text-on-media',
-						selected && 'outline-2 outline-offset-2 outline-fill-ink',
-					)}
+					className={cn('text-on-media', selected && 'outline-2 outline-offset-2 outline-fill-ink')}
 				/>
 
 				{/* Bid pill — auctions */}
@@ -406,14 +475,24 @@ export const ProductCard: FC<ProductCardProps> = ({
 				data-testid={`widget-product-card-seller-${id}`}
 				className="mt-[11px] flex items-center gap-1.5 text-xs tracking-[0.13em] uppercase text-text-mid"
 			>
-				{/* Tinted avatar circle */}
-				<div
-					data-slot="seller-avatar"
-					className={cn('size-3.5', 'rounded-full', 'shrink-0', 'avatar-tint-' + avatarTint)}
-					aria-hidden="true"
-				/>
+				{/* Avatar — the seller's profile picture when it resolves, else the tinted circle */}
+				{sellerPicture ? (
+					<img
+						data-slot="seller-avatar"
+						src={sellerPicture}
+						alt=""
+						loading="lazy"
+						className="size-3.5 shrink-0 rounded-full object-cover"
+					/>
+				) : (
+					<div
+						data-slot="seller-avatar"
+						className={cn('size-3.5', 'rounded-full', 'shrink-0', 'avatar-tint-' + avatarTint)}
+						aria-hidden="true"
+					/>
+				)}
 				<span data-slot="seller-name" className="truncate flex-1">
-					{seller}
+					{sellerName ?? seller}
 					{selected && <span data-slot="card-open-note"> · open</span>}
 				</span>
 				{/* Actions — icon-first ghost buttons, no outline */}
@@ -492,7 +571,8 @@ export const ProductCard: FC<ProductCardProps> = ({
 			>
 				{typeof price === 'number' ? (
 					<b className="text-sm">
-						{formatSats(price)} <small className="font-normal text-text-mid">sats</small>
+						{priceLabel ?? formatSats(price)}{' '}
+						<small className="font-normal text-text-mid">{priceUnit ?? formatPriceUnit(priceCurrency)}</small>
 					</b>
 				) : (
 					<span />

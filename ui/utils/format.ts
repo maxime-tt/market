@@ -20,3 +20,18 @@ export function formatSats(sats: number): string {
 export function formatSatsWithUnit(sats: number): string {
 	return `${formatSats(sats)} sats`
 }
+
+/**
+ * The unit a listing's own currency code renders as: `SATS`/`SAT` (and an
+ * absent code, the historical sats listing) spell as the lowercase `sats`, and
+ * every other code (`USD`, `EUR`, `BTC`, …) renders as written.
+ *
+ * The spelling lives here because a price tag's third element is the only place
+ * the real unit is stated — a renderer that hardcodes "sats" states a unit the
+ * author never wrote.
+ */
+export function formatPriceUnit(currency: string | undefined): string {
+	if (!currency) return 'sats'
+	const upper = currency.toUpperCase()
+	return upper === 'SATS' || upper === 'SAT' ? 'sats' : upper
+}
