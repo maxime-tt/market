@@ -261,14 +261,34 @@ describe('BrowseIndexHost split view', () => {
 		expect(markup).toContain('data-slot="skeleton-card"')
 	})
 
-	// The click-through contract (ROUND3 §3.10): the URL carries the open
-	// product, so `?p=` with no term is the results state with the panel open —
-	// previously it fell back to the idle screen and dropped the panel.
-	test('opens the panel for a bare ?p= deep link (no term, no tag)', () => {
+	// The click-through contract (ROUND3 §3.10), as the owner corrected it:
+	// `?p=` says *what is open*, not which page you are on. A selection on the
+	// home — a wall tile, a strip tile, a category-row card — and a bare `?p=`
+	// deep link both keep the home and open the panel beside it. The page swap
+	// to the results branch was the defect.
+	test('opens the panel beside the home for a bare ?p= deep link — never an empty results grid', () => {
 		const markup = renderHost({ q: '', p: 'ceramic-ball' })
+
+		// the home is still the base state
+		expect(markup).toContain('data-testid="widget-browse-idle-ctas"')
+		expect(markup).toContain('data-testid="widget-browse-idle-search"')
+		// …inside the split's master pane
+		expect(markup).toContain('data-slot="split-master"')
+		expect(markup).toContain('data-slot="split-detail"')
+		expect(markup).toContain('data-slot="product-detail-panel"')
+
+		const master = markup.slice(markup.indexOf('data-slot="split-master"'), markup.indexOf('data-slot="split-detail"'))
+		expect(master).toContain('widget-browse-idle-ctas')
+		expect(master).toContain('widget-category-rows')
+	})
+
+	test('a tag-only browse keeps the results base state, with the panel beside the grid', () => {
+		const markup = renderHost({ q: '', tag: 'pottery', p: 'ceramic-ball' })
+
 		expect(markup).not.toContain('data-testid="widget-browse-idle-ctas"')
 		expect(markup).toContain('data-slot="split-master"')
 		expect(markup).toContain('data-slot="product-detail-panel"')
+		expect(markup).toContain('data-testid="widget-product-card-ceramic-ball"')
 	})
 
 	test('renders the idle screen (no panel) when there is no term, no tag and no open product', () => {
@@ -477,5 +497,120 @@ describe('BrowseIndexHost listing truth', () => {
 		expect(markup).toContain('53.00')
 		expect(markup).toContain('USD')
 		expect(markup).not.toContain('53 sats')
+	})
+})
+
+// ---------------------------------------------------------------------------
+// The search field — one element, in every state
+// ---------------------------------------------------------------------------
+
+/**
+ * The structure the typing fix rests on, asserted where markup can see it.
+ *
+ * Focus itself is not visible in a string; `BrowseIndexHost.search-focus.test.tsx`
+ * proves that against a real DOM. What *is* visible here — and what made the
+ * focus loss possible in the first place — is where the field lives: before the
+ * fix each state branch carried its own field, so the first keystroke unmounted
+ * the focused input. These assertions pin the invariant that replaced it: the
+ * nav band and its field are rendered once, by the host, outside the branch.
+ */
+describe('BrowseIndexHost search field', () => {
+	/** The nav's search slot — from its own attribute through the end of the nav. */
+	const navSlot = (markup: string) => {
+		const at = markup.indexOf('data-slot="search-slot"')
+		expect(at).toBeGreaterThan(-1)
+		return markup.slice(at, markup.indexOf('</nav>', at))
+	}
+
+	/** The search field's opening tag, where its classes live. */
+	const fieldRoot = (markup: string) => {
+		const at = markup.indexOf('data-slot="search-field"')
+		expect(at).toBeGreaterThan(-1)
+		return markup.slice(markup.lastIndexOf('<', at), markup.indexOf('>', at))
+	}
+
+	/** The `<input>` element a field renders — the node focus lives on. */
+	const inputElement = (markup: string) => {
+		const at = markup.indexOf('<input')
+		expect(at).toBeGreaterThan(-1)
+		return markup.slice(at, markup.indexOf('/>', at) + 2)
+	}
+
+	test('the nav band renders exactly once in every state', () => {
+		for (const state of [{ q: '' }, { q: 'ceramic' }, { q: '', p: 'ceramic-ball' }, { q: '', tag: 'pottery' }]) {
+			const markup = renderHost(state)
+			expect(markup.split('data-testid="widget-browse-nav"').length - 1).toBe(1)
+			expect(markup.split('data-slot="search-slot"').length - 1).toBe(1)
+		}
+	})
+
+	test('the nav field is the same element in the idle tree and the results tree', () => {
+		const idle = navSlot(renderHost({ q: '' }))
+		const results = navSlot(renderHost({ q: 'ceramic' }))
+
+		// The same input, attribute for attribute — the only difference the two
+		// states may have is the text it holds, never the element the caret is in.
+		const identity = (markup: string) => inputElement(markup).replace(/ value="[^"]*"/, '')
+		expect(identity(idle)).toBe(identity(results))
+
+		// Hidden while the idle hero's own large field is the one on screen…
+		expect(fieldRoot(idle)).toContain('hidden')
+		// …and visible the moment the page leaves the idle state.
+		expect(fieldRoot(results)).not.toContain('hidden')
+	})
+
+	test('the compact field is the one on screen when a product is open beside the home', () => {
+		const markup = renderHost({ q: '', p: 'ceramic-ball' })
+		const slot = navSlot(markup)
+		expect(fieldRoot(slot)).not.toContain('hidden')
+	})
+
+	test('the idle hero gets the large field; a results state keeps only the compact one', () => {
+		const idle = renderHost({ q: '' })
+		expect(idle).toContain('data-testid="widget-browse-idle-search"')
+		expect(idle).toContain('data-size="hero"')
+		expect(idle).toContain('h-[70px]')
+
+		const results = renderHost({ q: 'ceramic' })
+		expect(results).not.toContain('data-testid="widget-browse-idle-search"')
+		expect(results).not.toContain('data-size="hero"')
+		expect(results).toContain('data-size="nav"')
+		expect(results).toContain('h-10')
+	})
+
+	test("the hero placeholder states this index's loaded count, never the frame's market total", () => {
+		feedData = { rows: [], products: [], stats: { products: 12 }, eose: [], pending: [] }
+		expect(renderHost({ q: '' })).toContain('Search 12 items')
+
+		// No read, no number: the field keeps the plain copy.
+		feedData = null
+		expect(renderHost({ q: '' })).not.toContain('Search 0 items')
+	})
+})
+
+// ---------------------------------------------------------------------------
+// The relay indicator — present, and honest about what it knows
+// ---------------------------------------------------------------------------
+
+describe('BrowseIndexHost relay indicator', () => {
+	test('is present while the search is still loading, in its fetching state', () => {
+		searchData = null
+		searchLoading = true
+
+		const markup = renderHost()
+		expect(markup).toContain('data-testid="widget-relay-indicator"')
+		expect(markup).toContain('data-state="fetching"')
+		// The flash the owner saw: a zero verdict about a query still running.
+		expect(markup).not.toContain('0 relays responded')
+		expect(markup).not.toContain('0 products')
+	})
+
+	test('keeps the relays and the product count once the read settles', () => {
+		const markup = renderHost()
+		expect(markup).toContain('data-state="settled"')
+		expect(markup).toContain('1 relay responded with')
+		expect(markup).toContain('2')
+		// …and it does not disappear when every relay answered.
+		expect(markup).toContain('data-testid="widget-relay-indicator"')
 	})
 })

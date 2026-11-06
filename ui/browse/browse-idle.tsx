@@ -10,12 +10,15 @@
  * Frame `ECglgpRxcl__browse-idle-390.html` (mobile):
  * - Compact nav, search + CTAs in a 2-column grid below the field
  * - No wall strips on mobile (screen too small)
+ *
+ * The screen is the hero body only: the nav band (and the search field it
+ * carries) belongs to the host, which renders it once for every state. The
+ * idle hero's own large field arrives as `searchSlot`, so the host owns both
+ * instances and the query that drives them.
  */
 
-import type { FC, MouseEventHandler } from 'react'
+import type { FC, MouseEventHandler, ReactNode } from 'react'
 import { cn } from '../utils/cn'
-import { BrowseNav } from './browse-nav'
-import { SearchField } from './search-field'
 import { ProductStrip, type StripItem } from './product-strip'
 
 // ---------------------------------------------------------------------------
@@ -93,12 +96,13 @@ export interface BrowseIdleProps {
 	stripsAbove?: readonly StripItem[]
 	/** Product strip items below the hero. */
 	stripsBelow?: readonly StripItem[]
-	/** Current search query. */
-	query: string
-	/** Search query change handler. */
-	onSearchChange: (value: string) => void
-	/** Search submit handler. */
-	onSearchGo: () => void
+	/**
+	 * The hero's large search field, rendered by the host. It sits between the
+	 * MotD and the CTAs — the frame's title block — and shares its value with
+	 * the nav field, so whichever instance the visitor types in writes the same
+	 * query.
+	 */
+	searchSlot?: ReactNode
 	/** Callback when Browse products is clicked. */
 	onBrowseProducts?: () => void
 	/**
@@ -110,14 +114,6 @@ export interface BrowseIdleProps {
 	onWhyPlebeian?: () => void
 	/** Callback when Post a listing is clicked (handoff stub). */
 	onPostListing?: () => void
-	/** Whether the wordmark link is active. */
-	active?: boolean
-	/** Callback when wordmark is clicked. */
-	onNavigateHome?: () => void
-	/** Callback when Featured link is clicked. */
-	onNavigateFeatured?: () => void
-	/** Account slot (avatar/identity). */
-	accountSlot?: React.ReactNode
 	/** Extra classes for the root. */
 	className?: string
 }
@@ -144,17 +140,11 @@ export const BrowseIdle: FC<BrowseIdleProps> = ({
 	stats,
 	stripsAbove,
 	stripsBelow,
-	query,
-	onSearchChange,
-	onSearchGo,
+	searchSlot,
 	onBrowseProducts,
 	onSelectProduct,
 	onWhyPlebeian,
 	onPostListing,
-	active = true,
-	onNavigateHome,
-	onNavigateFeatured,
-	accountSlot,
 	className,
 }) => {
 	const heroStats = describeIdleStats(stats)
@@ -179,14 +169,6 @@ export const BrowseIdle: FC<BrowseIdleProps> = ({
 
 	return (
 		<div className={cn('min-h-screen bg-background', className)}>
-			<BrowseNav
-				active={active}
-				onNavigateHome={onNavigateHome}
-				onNavigateFeatured={onNavigateFeatured}
-				searchSlot={<SearchField value={query} onChange={onSearchChange} onGo={onSearchGo} />}
-				accountSlot={accountSlot}
-			/>
-
 			<main className="max-w-[1040px] mx-auto px-4 lg:px-6 py-4">
 				{/* Hero section */}
 				<section className="flex flex-col items-center py-8 lg:py-12">
@@ -223,6 +205,15 @@ export const BrowseIdle: FC<BrowseIdleProps> = ({
 							</span>
 						)}
 					</div>
+
+					{/* The hero's large search field — the frame's title block, between
+					    the MotD and the CTAs. The host owns the instance, so the same
+					    query drives it and the nav field. */}
+					{searchSlot && (
+						<div data-slot="browse-idle-search" data-testid="widget-browse-idle-search" className="mt-6 w-full max-w-[800px]">
+							{searchSlot}
+						</div>
+					)}
 
 					{/* CTAs — stacked on mobile, inline on desktop */}
 					<div data-slot="ctas" data-testid="widget-browse-idle-ctas" className="mt-6 flex flex-wrap justify-center gap-3">

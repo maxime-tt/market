@@ -69,6 +69,45 @@ describe('RelayIndicator', () => {
 		)
 		expect(markup).toContain('custom-indicator-class')
 	})
+
+	test('is present even when every relay answered — a verdict does not vanish', () => {
+		const relays: RelayDetail[] = [{ relay: 'wss://r1.example', status: 'responded' }]
+		const markup = renderToStaticMarkup(createElement(RelayIndicator, { responded: 1, totalProducts: 7, relays }))
+
+		expect(markup).toContain('widget-relay-indicator')
+		expect(markup).toContain('1 relay responded with')
+		expect(markup).toContain('data-state="settled"')
+	})
+
+	test('while loading it states the search as fetching — never a zero verdict', () => {
+		const markup = renderToStaticMarkup(createElement(RelayIndicator, { responded: 0, totalProducts: 0, loading: true }))
+
+		expect(markup).toContain('data-state="fetching"')
+		expect(markup).toContain('Searching relays')
+		expect(markup).not.toContain('0 relays responded')
+		expect(markup).not.toContain('0 products')
+	})
+
+	test('while loading with partial answers it states the counts it has', () => {
+		const relays: RelayDetail[] = [
+			{ relay: 'wss://r1.example', status: 'responded' },
+			{ relay: 'wss://r2.example', status: 'pending' },
+			{ relay: 'wss://r3.example', status: 'pending' },
+		]
+		const markup = renderToStaticMarkup(createElement(RelayIndicator, { responded: 1, totalProducts: 6, relays, loading: true }))
+
+		expect(markup).toContain('1 of 3 relays responded')
+		expect(markup).toContain('6')
+		expect(markup).toContain('so far')
+		expect(markup).toContain('data-state="fetching"')
+	})
+
+	test('states missing relay detail rather than a zero count', () => {
+		const markup = renderToStaticMarkup(createElement(RelayIndicator, { responded: 0, totalProducts: 0 }))
+
+		expect(markup).toContain('Relay detail unavailable')
+		expect(markup).not.toContain('0 relays responded')
+	})
 })
 
 // ---------------------------------------------------------------------------

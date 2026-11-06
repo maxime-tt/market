@@ -34,6 +34,14 @@ export interface RelayIndicatorProps {
 	/** Per-relay breakdown for the expanding detail. */
 	relays?: readonly RelayDetail[]
 	/**
+	 * The read is still in flight. The indicator then states the search as
+	 * *fetching* — "Searching relays…", or the partial count — instead of
+	 * announcing "0 relays responded with 0 products" about a query that has
+	 * not finished answering. It is always the caller's read state: the
+	 * component never guesses one.
+	 */
+	loading?: boolean
+	/**
 	 * What the count counts. The results grid leaves it at `products`; the
 	 * seller profile reads `products from this seller`, so the sentence stays
 	 * true about the read it summarises.
@@ -72,16 +80,24 @@ export interface TagFilterBadgeProps {
 // ---------------------------------------------------------------------------
 
 /**
- * Minimal relay indicator: "N relays responded with M products" (12px, text-mid,
- * tabular-nums) + compact expanding per-relay detail popover.
+ * Relay indicator: the read's relay state, always present.
  *
- * A failing relay is NORMAL — results are kept and the indicator shows
- * the per-relay breakdown on demand.
+ * Its one job is to never lie about a query. "N relays responded with M
+ * products" is a **verdict**, and a verdict is only true once the read has
+ * finished — so while `loading` the line states the search as in flight
+ * ("Searching relays…", or "2 of 5 relays responded · 12 products so far"), and
+ * a zero-verdict is never printed about a query still running. Once the counts
+ * are known they stay on screen; the per-relay breakdown (which relay answered,
+ * which is pending) is behind the expand chip.
+ *
+ * A failing relay is NORMAL — results are kept and the indicator shows the
+ * per-relay breakdown on demand.
  */
 export const RelayIndicator: FC<RelayIndicatorProps> = ({
 	responded,
 	totalProducts,
 	relays = [],
+	loading = false,
 	productsLabel = 'products',
 	className,
 }) => {
@@ -89,15 +105,17 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({
 
 	const respondedCount = relays.filter((r) => r.status === 'responded').length
 	const pendingCount = relays.filter((r) => r.status === 'pending').length
-	const totalRelays = respondedCount + pendingCount
+	// The caller may state a responded count without a per-relay list; the
+	// larger of the two is the only total that cannot undercount.
+	const totalRelays = Math.max(respondedCount + pendingCount, responded)
 
-	// Don't show indicator if all relays responded
-	if (responded === totalRelays && totalRelays > 0) return null
+	const products = totalProducts.toLocaleString()
 
 	return (
 		<div
 			data-slot="relay-indicator"
 			data-testid="widget-relay-indicator"
+			data-state={loading ? 'fetching' : 'settled'}
 			className={cn(
 				'flex',
 				'items-center',
@@ -110,13 +128,30 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({
 				className,
 			)}
 		>
-			{/* Status dot */}
-			<div data-slot="status-dot" className="size-[7px] rounded-full bg-fill-ink flex-none" aria-hidden="true" />
+			{/* Status dot — pulses while the read is in flight */}
+			<div
+				data-slot="status-dot"
+				className={cn('size-[7px] rounded-full flex-none', loading ? 'bg-text-mid animate-pulse' : 'bg-fill-ink')}
+				aria-hidden="true"
+			/>
 
-			{/* Summary line */}
+			{/* Summary line — a verdict only once the read has settled */}
 			<span>
-				{responded} relay{responded !== 1 ? 's' : ''} responded with{' '}
-				<b className="font-normal text-text-high">{totalProducts.toLocaleString()}</b> {productsLabel}
+				{loading && totalRelays === 0 ? (
+					<span data-slot="relay-fetching">Searching relays…</span>
+				) : loading ? (
+					<span data-slot="relay-fetching">
+						{responded} of {totalRelays} relay{totalRelays === 1 ? '' : 's'} responded ·{' '}
+						<b className="font-normal text-text-high">{products}</b> {productsLabel} so far
+					</span>
+				) : totalRelays === 0 ? (
+					<span data-slot="relay-unreported">Relay detail unavailable for this search</span>
+				) : (
+					<>
+						{responded} relay{responded !== 1 ? 's' : ''} responded with <b className="font-normal text-text-high">{products}</b>{' '}
+						{productsLabel}
+					</>
+				)}
 			</span>
 
 			{/* Expand chip — shows offline count */}

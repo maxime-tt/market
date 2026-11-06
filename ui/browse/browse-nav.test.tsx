@@ -205,6 +205,33 @@ describe('SearchField', () => {
 		)
 		expect(markup).toContain('widget-search-field-clear')
 	})
+
+	test('nav is the frame’s compact field; hero is the idle frame’s large one', () => {
+		const nav = renderToStaticMarkup(createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {} }))
+		const hero = renderToStaticMarkup(createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {}, size: 'hero' }))
+
+		// nav band: 40px tall, 560px wide, 18px glyph, no keyboard affordance
+		expect(nav).toContain('data-size="nav"')
+		expect(nav).toContain('h-10')
+		expect(nav).toContain('w-[560px]')
+		expect(nav).not.toContain('widget-search-field-kbd')
+
+		// idle hero: 70px tall, 22px glyph, the ⌘K affordance
+		expect(hero).toContain('data-size="hero"')
+		expect(hero).toContain('h-[70px]')
+		expect(hero).toContain('size-[22px]')
+		expect(hero).toContain('widget-search-field-kbd')
+		expect(hero).toContain('⌘K')
+	})
+
+	test('className still wins over the size table', () => {
+		const markup = renderToStaticMarkup(
+			createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {}, className: 'h-12 w-full hidden' }),
+		)
+		expect(markup).toContain('h-12')
+		expect(markup).not.toContain('h-10')
+		expect(markup).toContain('hidden')
+	})
 })
 
 // ---------------------------------------------------------------------------
