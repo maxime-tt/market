@@ -1,4 +1,4 @@
-import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import type { NDKEvent, NostrEvent } from '@nostr-dev-kit/ndk'
 import type { AdminManager } from './types'
 
 export class AdminManagerImpl implements AdminManager {
@@ -23,7 +23,7 @@ export class AdminManagerImpl implements AdminManager {
 		return new Set(this.adminPubkeys)
 	}
 
-	public updateFromEvent(event: NostrEventLike): void {
+	public updateFromEvent(event: NostrEvent | NDKEvent): void {
 		try {
 			// Extract admin pubkeys from 'p' tags in the admin list event
 			const newAdmins = event.tags.filter((tag) => tag[0] === 'p' && tag[1] && tag[1].length === 64).map((tag) => tag[1])

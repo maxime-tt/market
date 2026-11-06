@@ -1,5 +1,4 @@
-import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
-// NostrEvent type was unused; the parent ZapPurchaseManager provides its own
+import type { NostrEvent } from '@nostr-dev-kit/ndk'
 import { ZapPurchaseManager, type PricingTier, type ZapPurchaseEntry } from './ZapPurchaseManager'
 import type { EventSigner } from './EventSigner'
 
@@ -76,7 +75,7 @@ export class VanityManagerImpl extends ZapPurchaseManager<VanityEntry> {
 
 	// --- ZapPurchaseManager abstract implementations ---
 
-	protected extractRegistryKey(zapRequest: NostrEventLike): string | null {
+	protected extractRegistryKey(zapRequest: NostrEvent): string | null {
 		const tag = zapRequest.tags.find((t) => t[0] === 'vanity')
 		return tag?.[1]?.toLowerCase() ?? null
 	}
@@ -95,7 +94,7 @@ export class VanityManagerImpl extends ZapPurchaseManager<VanityEntry> {
 		return null
 	}
 
-	protected extractEntriesFromEvent(event: NostrEventLike): Array<{ key: string; entry: VanityEntry }> {
+	protected extractEntriesFromEvent(event: NostrEvent): Array<{ key: string; entry: VanityEntry }> {
 		return event.tags
 			.filter((tag) => tag[0] === 'vanity' && tag[1] && tag[2] && tag[3])
 			.map((tag) => ({
@@ -139,7 +138,7 @@ export class VanityManagerImpl extends ZapPurchaseManager<VanityEntry> {
 	 * Handle vanity registry event (kind 30000 with d=vanity-urls).
 	 * Convenience wrapper over base class handleRegistryEvent.
 	 */
-	public async handleVanityEvent(event: NostrEventLike): Promise<void> {
+	public async handleVanityEvent(event: NostrEvent): Promise<void> {
 		return this.handleRegistryEvent(event)
 	}
 

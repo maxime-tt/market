@@ -1,5 +1,4 @@
-// NostrEvent type was unused; the parent ZapPurchaseManager provides its own
-import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import type { NostrEvent } from '@nostr-dev-kit/ndk'
 import { ZapPurchaseManager, type PricingTier, type ZapPurchaseEntry } from './ZapPurchaseManager'
 import type { EventSigner } from './EventSigner'
 
@@ -57,7 +56,7 @@ export class Nip05ManagerImpl extends ZapPurchaseManager<Nip05Entry> {
 
 	// --- ZapPurchaseManager abstract implementations ---
 
-	protected extractRegistryKey(zapRequest: NostrEventLike): string | null {
+	protected extractRegistryKey(zapRequest: NostrEvent): string | null {
 		const tag = zapRequest.tags.find((t) => t[0] === 'nip05')
 		return tag?.[1]?.toLowerCase() ?? null
 	}
@@ -76,7 +75,7 @@ export class Nip05ManagerImpl extends ZapPurchaseManager<Nip05Entry> {
 		return null
 	}
 
-	protected extractEntriesFromEvent(event: NostrEventLike): Array<{ key: string; entry: Nip05Entry }> {
+	protected extractEntriesFromEvent(event: NostrEvent): Array<{ key: string; entry: Nip05Entry }> {
 		return event.tags
 			.filter((tag) => tag[0] === 'nip05' && tag[1] && tag[2] && tag[3])
 			.map((tag) => ({

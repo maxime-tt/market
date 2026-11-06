@@ -1,4 +1,4 @@
-import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import type { NDKEvent, NostrEvent } from '@nostr-dev-kit/ndk'
 import type { UnsignedEvent } from 'nostr-tools/pure'
 
 export interface EventHandlerConfig {
@@ -15,8 +15,8 @@ export interface EventValidationResult {
 }
 
 export interface ProcessedEvent {
-	originalEvent: NostrEventLike
-	signedEvent: NostrEventLike | null
+	originalEvent: NostrEvent
+	signedEvent: NostrEvent | null
 	validationResult: EventValidationResult
 }
 
@@ -24,25 +24,25 @@ export interface AdminManager {
 	addAdmin(pubkey: string): void
 	isAdmin(pubkey: string): boolean
 	getAdmins(): Set<string>
-	updateFromEvent(event: NostrEventLike): void
+	updateFromEvent(event: NostrEvent | NDKEvent): void
 }
 
 export interface EditorManager {
 	addEditor(pubkey: string): void
 	isEditor(pubkey: string): boolean
 	getEditors(): Set<string>
-	updateFromEvent(event: NostrEventLike): void
+	updateFromEvent(event: NostrEvent | NDKEvent): void
 }
 
 export interface BootstrapManager {
 	isBootstrapMode(): boolean
 	exitBootstrapMode(): void
-	handleSetupEvent(event: NostrEventLike): void
+	handleSetupEvent(event: NostrEvent): void
 	hasSetup(): boolean
 }
 
 export interface BlacklistManager {
-	handleBlacklistEvent(event: NostrEventLike): Promise<void>
+	handleBlacklistEvent(event: NostrEvent): Promise<void>
 	isBlacklisted(pubkey: string): boolean
 	getBlacklistedPubkeys(): string[]
 	loadExistingBlacklist(appPubkey: string): Promise<void>

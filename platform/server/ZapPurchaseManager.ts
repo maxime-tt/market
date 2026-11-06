@@ -1,8 +1,6 @@
+import type { NostrEvent } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { EventSigner } from './EventSigner'
-import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
-import type { NostrEvent } from 'nostr-tools'
-import { getAppPoolRelays, getPoolPort } from './ndk'
-import type { PoolPort } from '@sdk/core/nostr-io/ts/types'
 
 export interface PricingTier {
 	sats: number
@@ -60,11 +58,11 @@ export interface ZapPurchaseConfig {
 	maxReceiptAge?: number
 }
 
-/** Abstract manager for zap-purchased registry entries (vanity names, NIP-05). */
 export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 	protected registry: Map<string, TEntry> = new Map()
 	private processedReceipts: Set<string> = new Set()
 	protected eventSigner: EventSigner
+	protected ndk: NDK | null = null
 	protected appPubkey: string = ''
 	public readonly config: ZapPurchaseConfig
 
@@ -72,25 +70,26 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		this.config = config
 		this.eventSigner = eventSigner
 	}
-
 	// --- Abstract methods implemented in subclasses ---
-	protected abstract extractRegistryKey(zapRequest: NostrEventLike): string | null
+	protected abstract extractRegistryKey(zapRequest: NostrEvent): string | null
 	protected abstract validateRegistration(key: string, pubkey: string): string | null
-	protected abstract extractEntriesFromEvent(event: NostrEventLike): Array<{ key: string; entry: TEntry }>
+	protected abstract extractEntriesFromEvent(event: NostrEvent): Array<{ key: string; entry: TEntry }>
 	protected abstract buildRegistryTags(entries: Map<string, TEntry>): string[][]
 	protected abstract createEntry(key: string, pubkey: string, validUntil: number): TEntry
 
 	// --- Optional hooks (override in subclass) ---
 	protected onEntryRegistered?(key: string, entry: TEntry): void
 	protected onRegistryRebuilt?(): void
-
+	public setNDK(ndk: NDK): void {
+		this.ndk = ndk
+	}
 	public setAppPubkey(pubkey: string): void {
 		this.appPubkey = pubkey
 	}
 
 	// Handle a registry event (rebuild in-memory state from a Nostr event).
-	// Called when a registry kind (kind 30000) event is received.
-	public async handleRegistryEvent(event: NostrEventLike): Promise<void> {
+	// Called when a registry kind(kind 30000)) event is received.
+	public async handleRegistryEvent(event: NostrEvent): Promise<void> {
 		console.log(`[${this.config.registryDTag}] Processing registry event: ${event.id}`)
 
 		const entries = this.extractEntriesFromEvent(event)
@@ -111,7 +110,7 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 	// Handle a zap receipt (kind 9735) and register the purchase if valid.
 	// Validates - duplicity, recency, label tag, payment amount, and domain-specific rules.
 	// On success, creates/extends the registry entry and publishes the updated registry.
-	public async handleZapReceipt(event: NostrEventLike): Promise<void> {
+	public async handleZapReceipt(event: NostrEvent): Promise<void> {
 		const eventId = event.id
 		if (!eventId) return
 		if (this.processedReceipts.has(eventId)) return
@@ -135,7 +134,7 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		const zapRequestTag = event.tags.find((t) => t[0] === 'description')
 		if (!zapRequestTag?.[1]) return
 
-		let zapRequest: NostrEventLike
+		let zapRequest: NostrEvent
 		try {
 			zapRequest = JSON.parse(zapRequestTag[1])
 		} catch {
@@ -207,22 +206,26 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		)
 	}
 
-	// Load existing registry state from the relay on startup.
+	//Load existing registry state from the relay on startup.
 	public async loadExistingRegistry(appPubkey: string): Promise<void> {
+		if (!this.ndk) {
+			console.warn(`[${this.config.registryDTag}] NDK not available, cannot load existing registry`)
+			return
+		}
+
 		this.appPubkey = appPubkey
-		const pool = await getPoolPort()
 
 		try {
-			const result = await pool.query({
+			const events = await this.ndk.fetchEvents({
 				kinds: [this.config.registryEventKind],
 				authors: [appPubkey],
 				'#d': [this.config.registryDTag],
 				limit: 1,
 			})
 
-			if (result.events.length > 0) {
-				const latestEvent = result.events[0]
-				await this.handleRegistryEvent(latestEvent)
+			if (events.size > 0) {
+				const latestEvent = Array.from(events)[0]
+				await this.handleRegistryEvent(latestEvent.rawEvent())
 				console.log(`[${this.config.registryDTag}] Loaded existing registry`)
 			} else {
 				console.log(`[${this.config.registryDTag}] No existing registry found`)
@@ -295,7 +298,7 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		}
 
 		// Validate registry key from zap request matches the declared key
-		const extractedKey = this.extractRegistryKey(zapRequest as NostrEventLike)
+		const extractedKey = this.extractRegistryKey(zapRequest as unknown as NostrEvent)
 		if (extractedKey !== registryKey) {
 			throw new ZapInvoiceError('zapRequest registry key must match registryKey', 400)
 		}
@@ -386,36 +389,28 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		return null
 	}
 
-	// Publish the current registry as a signed Nostr event to connected relays.
+	//Publish the current registry as a signed Nostr event to connected relays.
 	protected async publishRegistry(): Promise<void> {
-		const pool = await getPoolPort()
-
-		// Build the unsigned event template
-		const unsignedEvent: NostrEventLike = {
-			id: '',
-			pubkey: '',
-			kind: this.config.registryEventKind,
-			created_at: Math.floor(Date.now() / 1000),
-			tags: [['d', this.config.registryDTag], ...this.buildRegistryTags(this.registry)],
-			content: '',
+		if (!this.ndk) {
+			console.error(`[${this.config.registryDTag}] NDK not available, cannot publish registry`)
+			return
 		}
 
+		const event = new NDKEvent(this.ndk)
+		event.kind = this.config.registryEventKind
+		event.content = ''
+		event.created_at = Math.floor(Date.now() / 1000)
+
+		const tags: string[][] = [['d', this.config.registryDTag]]
+		tags.push(...this.buildRegistryTags(this.registry))
+		event.tags = tags
+
 		try {
-			// Sign using the server's app key
-			const signedEvent = this.eventSigner.signEvent(unsignedEvent)
-			if (!signedEvent) return
-
-			// Publish the registry to the app relay set.  `PoolPort.publish()`
-			// targets exactly the relays it is given, so the set is named here
-			// rather than inferred from the pool.
-			const outcome = await pool.publish(getAppPoolRelays(), signedEvent as NostrEvent)
-			console.log(`[${this.config.registryDTag}] Registry published: ${signedEvent.id}`)
-
-			// Log per-relay acks
-			for (const ack of outcome) {
-				if (!ack.accepted) {
-					console.warn(`[${this.config.registryDTag}] Relay rejected registry event: ${ack.url} — ${ack.reason}`)
-				}
+			const signedEvent = this.eventSigner.signEvent(event.rawEvent())
+			if (signedEvent) {
+				const ndkEvent = new NDKEvent(this.ndk, signedEvent)
+				await ndkEvent.publish()
+				console.log(`[${this.config.registryDTag}] Registry published: ${signedEvent.id}`)
 			}
 		} catch (error) {
 			console.error(`[${this.config.registryDTag}] Failed to publish registry:`, error)
@@ -423,7 +418,7 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 	}
 }
 
-// Error thrown during invoice generation
+//Error thrown during invoice generation
 export class ZapInvoiceError extends Error {
 	public readonly status: number
 	constructor(message: string, status: number) {

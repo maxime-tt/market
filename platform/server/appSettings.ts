@@ -1,8 +1,7 @@
+import NDK, { type NDKFilter, type NDKEvent } from '@nostr-dev-kit/ndk'
 import { APP_SETTINGS_D_TAG, APP_SETTINGS_KIND, type AppSettingsEventLike } from '@sdk/config/app-settings'
 import { AppSettingsSchema, type AppSettings } from '@sdk/config/schemas/app'
 import { isValidHexKey } from '@sdk/core/utils/utils'
-import { getPoolPort } from './ndk'
-import type { PoolPort } from '@sdk/core/nostr-io/ts/types'
 
 /**
  * Server-side app-settings resolution (b3-relocate, 2026-10-30; moved verbatim
@@ -78,29 +77,49 @@ export function resolveFetchedAppSettings(
 	return result.data
 }
 
-/**
- * Fetch app-settings from a relay using the sdk PoolPort.
- */
 export async function fetchAppSettings(relayUrl: string, appPubkey: string, handlerIds?: string[]): Promise<AppSettings | null> {
 	const effectiveHandlerIds = handlerIds?.length ? handlerIds : [APP_SETTINGS_D_TAG]
 	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey} with handler IDs: ${effectiveHandlerIds.join(', ')}`)
 
-	// Reject a malformed app pubkey before creating any NDK instance or issuing
-	// any relay request.
+	// Reject a malformed app pubkey before creating an NDK instance or issuing
+	// any relay request. NDK's strict filter validation would also fail closed,
+	// but validating here gives a clear, early failure and guarantees the
+	// authors constraint is never satisfied by an unrelated publisher.
 	if (!isValidHexKey(appPubkey)) {
 		throw new Error(`Invalid app pubkey provided: ${appPubkey}`)
 	}
 
 	try {
-		const pool = await getPoolPort()
+		// Create a fresh NDK instance for server-side initialization
+		// to avoid shared store issues with ndkActions
+		const ndk = new NDK({
+			explicitRelayUrls: [relayUrl],
+			// Server-side, one-off fetch of app-config events. AI guardrails are a
+			// dev-time educational tool and have no place here. NDK's default strict
+			// filter validation is retained (a malformed appPubkey fails closed
+			// rather than broadening the query).
+			aiGuardrails: false,
+		})
 
-		// Set up a dedicated PoolPort for this one-off fetch. The pool will
-		// connect to `relayUrl` when the first query arrives.
-		const poolPort = await createPoolPortForUrl(relayUrl, pool)
+		// Connect with timeout
+		try {
+			await Promise.race([
+				ndk.connect(),
+				new Promise<never>((_, reject) => setTimeout(() => reject(new Error('NDK connect timeout')), 5000)),
+			])
+		} catch (connectErr) {
+			console.warn('NDK connect warning (may still work):', connectErr)
+			// Check if we have any connected relays despite the timeout
+			const connected = ndk.pool?.connectedRelays() || []
+			if (connected.length === 0) {
+				throw new Error('No relays connected, cannot fetch app settings')
+			}
+			console.log(`Connected to ${connected.length} relays despite timeout`)
+		}
 
 		// NIP-33 parameterized replaceable events (kind 31990) are indexed by pubkey+kind+d tag.
 		// Query for all handler IDs in the fallback chain in a single filter.
-		const filter = {
+		const filter: NDKFilter = {
 			kinds: [31990],
 			authors: [appPubkey],
 			'#d': effectiveHandlerIds,
@@ -110,49 +129,29 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string, hand
 		console.log('Fetching with filter:', JSON.stringify(filter))
 
 		// Add a soft timeout so we don't hang forever if the relay is slow.
-		const fetchWithTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
-			const { promise, resolve, reject } = Promise.withResolvers<T>()
-			const id = setTimeout(() => reject(new Error(`fetchEvents timeout after ${ms}ms`)), ms)
-			p.then(
-				(v) => {
+		const fetchWithTimeout = <T>(p: Promise<T>, ms: number) =>
+			new Promise<T>((resolve, reject) => {
+				const id = setTimeout(() => reject(new Error(`fetchEvents timeout after ${ms}ms`)), ms)
+				p.then((v) => {
 					clearTimeout(id)
 					resolve(v)
-				},
-				(e) => {
+				}).catch((e) => {
 					clearTimeout(id)
 					reject(e)
-				},
-			)
-			return promise
-		}
+				})
+			})
 
-		const result = await fetchWithTimeout(poolPort.query(filter), 10000)
-		console.log(`Fetch returned ${result.events.length} events`)
+		const events = (await fetchWithTimeout(ndk.fetchEvents(filter), 10000)) as Set<NDKEvent>
+		const eventArray = Array.from(events)
+		console.log(`Fetch returned ${eventArray.length} events`)
 
-		if (result.events.length === 0) {
+		if (eventArray.length === 0) {
 			console.log(`No app settings events found for pubkey: ${appPubkey}`)
 		}
 
-		return resolveFetchedAppSettings(result.events, appPubkey, effectiveHandlerIds)
+		return resolveFetchedAppSettings(eventArray, appPubkey, effectiveHandlerIds)
 	} catch (err) {
 		console.error('Failed to fetch app settings:', err)
 		throw err
 	}
-}
-
-/**
- * Create a PoolPort connected to a specific relay URL.
- *
- * The existing getPoolPort() uses the global singleton connected to RELAY_URL.
- * This function creates a temporary PoolPort connected to the caller's URL.
- */
-async function createPoolPortForUrl(url: string, _existingPool: PoolPort): Promise<PoolPort> {
-	// The PoolPort is stateless for queries — we use the existing adapter
-	// which is already connected to the global NDK. For per-URL isolation,
-	// we would need a separate NDK instance, but the current design shares
-	// one NDK for all server I/O.
-	//
-	// If a dedicated connection is needed in the future, createPoolPort can
-	// instantiate a separate NDK + NdkAdapter here.
-	return _existingPool
 }

@@ -1,26 +1,15 @@
-/**
- * NDKService — manages long-lived subscriptions for admin/editor list
- * updates using the sdk PoolPort.
- *
- * This file is a BRIDGE: it imports NDK only through ndk.ts (getPoolPort)
- * and never names `@nostr-dev-kit` directly.
- */
+import NDK, { type NDKSubscription } from '@nostr-dev-kit/ndk'
 import { naddrFromAddress } from '@sdk/core/nostr/naddr'
-import { map as rxMap } from 'rxjs'
-import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
-import { getAppPoolRelays, getPoolPort } from './ndk'
-import type { FilterIn, Subscription, PoolPort } from '@sdk/core/nostr-io/ts/types'
-import { RelaySeamError } from '@sdk/core/nostr-io/ts/errors'
 import type { AdminManager, EditorManager, BootstrapManager } from './types'
 
 export class NDKService {
-	private pool: PoolPort | null = null
+	private ndk: NDK | null = null
 	private appPubkey: string
 	private adminManager: AdminManager
 	private editorManager: EditorManager
 	private bootstrapManager: BootstrapManager
-	private adminSubscription: Subscription | null = null
-	private editorSubscription: Subscription | null = null
+	private adminSubscription: NDKSubscription | null = null
+	private editorSubscription: NDKSubscription | null = null
 	private latestAdminEventTime = 0
 	private latestEditorEventTime = 0
 
@@ -33,30 +22,36 @@ export class NDKService {
 
 	public async initialize(relayUrl?: string): Promise<void> {
 		if (!relayUrl) return
+
 		try {
-			// getPoolPort() uses the global singleton connected to RELAY_URL.
-			// For per-init relay, ndk.ts would need a createPoolPort(url) overload.
-			// For now we accept the shared singleton — callers that need per-url
-			// isolation should create their own PoolPort.
-			this.pool = await getPoolPort()
-			console.log('NDK service connected to relay')
+			this.ndk = new NDK({ explicitRelayUrls: [relayUrl] })
+			await this.ndk.connect()
+			console.log('NDK service connected to relay:', relayUrl)
 		} catch (e) {
 			console.error('Failed to connect to relay for initialization', e)
 		}
 	}
 
 	public async loadExistingData(): Promise<void> {
-		if (!this.pool) return
+		if (!this.ndk) return
+
 		await Promise.all([this.checkExistingSetupEvent(), this.loadExistingAdminList(), this.loadExistingEditorList()])
 	}
 
 	private async checkExistingSetupEvent(): Promise<void> {
-		if (!this.pool) return
+		if (!this.ndk) return
+
 		try {
-			const result = await this.pool.query({ kinds: [31990], authors: [this.appPubkey], limit: 1 })
-			const firstEvent = result.events[0]
+			const setupEvents = await this.ndk.fetchEvents({
+				kinds: [31990],
+				authors: [this.appPubkey],
+				limit: 1,
+			})
+
+			const firstEvent = setupEvents.values().next().value
 			if (firstEvent) {
 				console.log('Found existing setup event')
+
 				try {
 					const settings = JSON.parse(firstEvent.content)
 					if (settings.ownerPk) {
@@ -72,14 +67,14 @@ export class NDKService {
 	}
 
 	private async loadExistingAdminList(): Promise<void> {
-		if (!this.pool) return
+		if (!this.ndk) return
+
 		try {
 			const naddr = naddrFromAddress(30000, this.appPubkey, 'admins')
-			const result = await this.pool.query({ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'], limit: 1 })
-			const latestAdminEvent = result.events[0]
+			const latestAdminEvent = await this.ndk.fetchEvent(naddr)
 			if (latestAdminEvent) {
 				console.log('Found existing admin list, updating internal list')
-				this.adminManager.updateFromEvent(latestAdminEvent as NostrEventLike)
+				this.adminManager.updateFromEvent(latestAdminEvent)
 				this.latestAdminEventTime = latestAdminEvent.created_at ?? 0
 			}
 		} catch (e) {
@@ -88,14 +83,14 @@ export class NDKService {
 	}
 
 	private async loadExistingEditorList(): Promise<void> {
-		if (!this.pool) return
+		if (!this.ndk) return
+
 		try {
 			const naddr = naddrFromAddress(30000, this.appPubkey, 'editors')
-			const result = await this.pool.query({ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'], limit: 1 })
-			const latestEditorEvent = result.events[0]
+			const latestEditorEvent = await this.ndk.fetchEvent(naddr)
 			if (latestEditorEvent) {
 				console.log('Found existing editor list, updating internal list')
-				this.editorManager.updateFromEvent(latestEditorEvent as NostrEventLike)
+				this.editorManager.updateFromEvent(latestEditorEvent)
 				this.latestEditorEventTime = latestEditorEvent.created_at ?? 0
 			}
 		} catch (e) {
@@ -104,48 +99,40 @@ export class NDKService {
 	}
 
 	/**
-	 * Open long-lived subscriptions on the app relay for admin and editor
-	 * list updates. Without this, the in-memory admin/editor caches only
-	 * refresh when the bun proxy itself processes a publish for these kinds
-	 * — direct relay publishes (via nak or other clients) wouldn't
-	 * propagate, and the authorization gate stays stale.
+	 * Open long-lived subscriptions on the app relay for admin and editor list updates.
+	 * Without this, the in-memory admin/editor caches only refresh when the bun proxy
+	 * itself processes a publish for these kinds — direct relay publishes (via nak or
+	 * other clients) wouldn't propagate, and the authorization gate stays stale.
 	 */
 	public startSubscriptions(): void {
-		if (!this.pool) return
-		const relays = getAppPoolRelays()
-		const adminSub = this.pool.subscribe(relays, [{ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] }] as FilterIn[])
-		adminSub.events.subscribe((event) => {
+		if (!this.ndk) return
+
+		this.adminSubscription = this.ndk.subscribe({ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] }, { closeOnEose: false })
+		this.adminSubscription.on('event', (event) => {
 			const ts = event.created_at ?? 0
 			if (ts <= this.latestAdminEventTime) return
 			this.latestAdminEventTime = ts
 			console.log(`Live admin list update received (created_at=${ts})`)
-			this.adminManager.updateFromEvent(event as NostrEventLike)
+			this.adminManager.updateFromEvent(event)
 		})
-		this.adminSubscription = {
-			events: adminSub.events,
-			errors: adminSub.failures.pipe(rxMap((f) => new RelaySeamError(f.reason, f.message ?? ''))),
-			unsubscribe: () => adminSub.unsubscribe(),
-		}
-		const editorSub = this.pool.subscribe(relays, [{ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'] }] as FilterIn[])
-		this.editorSubscription = {
-			events: editorSub.events,
-			errors: editorSub.failures.pipe(rxMap((f) => new RelaySeamError(f.reason, f.message ?? ''))),
-			unsubscribe: () => editorSub.unsubscribe(),
-		}
-		this.editorSubscription.events.subscribe((event) => {
+
+		this.editorSubscription = this.ndk.subscribe({ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'] }, { closeOnEose: false })
+		this.editorSubscription.on('event', (event) => {
 			const ts = event.created_at ?? 0
 			if (ts <= this.latestEditorEventTime) return
 			this.latestEditorEventTime = ts
 			console.log(`Live editor list update received (created_at=${ts})`)
-			this.editorManager.updateFromEvent(event as NostrEventLike)
+			this.editorManager.updateFromEvent(event)
 		})
 	}
 
 	public shutdown(): void {
-		this.adminSubscription?.unsubscribe()
-		this.editorSubscription?.unsubscribe()
+		this.adminSubscription?.stop()
+		this.editorSubscription?.stop()
 		this.adminSubscription = null
 		this.editorSubscription = null
-		this.pool = null
+		if (this.ndk) {
+			this.ndk = null
+		}
 	}
 }
