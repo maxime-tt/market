@@ -42,15 +42,12 @@ export interface EmptyStateBrowseProps {
  *
  * Displays a headline, explanatory paragraph, suggestion line,
  * and optional metadata hints. The results grid renders beneath it.
+ *
+ * `hints` defaults to **empty**: the frame's bar ("412 ms", "synced 6 min
+ * ago") is placeholder copy, and a timing this view never measured must not
+ * be rendered as one. A caller that has a real measurement passes it.
  */
-export const EmptyStateBrowse: FC<EmptyStateBrowseProps> = ({
-	query,
-	headline,
-	description,
-	suggestions,
-	hints = [{ label: 'local index empty' }, { label: '412 ms' }, { label: 'synced 6 min ago' }],
-	className,
-}) => {
+export const EmptyStateBrowse: FC<EmptyStateBrowseProps> = ({ query, headline, description, suggestions, hints = [], className }) => {
 	return (
 		<div data-slot="empty-browse" data-testid="widget-empty-browse" className={cn('max-w-[960px] mx-auto', className)}>
 			{/* Headline */}

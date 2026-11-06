@@ -19,10 +19,76 @@ import { SearchField } from './search-field'
 import { ProductStrip, type StripItem } from './product-strip'
 
 // ---------------------------------------------------------------------------
+// Hero stats — measured facts, never placeholders
+// ---------------------------------------------------------------------------
+
+/**
+ * What the hero line may state. Every field is optional, and a field that is
+ * absent renders nothing at all.
+ *
+ * These are *not* market totals: the Browse read is a bounded kind-30402 set,
+ * so each number describes what this view loaded. The wording built by
+ * {@link describeIdleStats} says so ("items loaded") instead of keeping the
+ * frame's market-wide placeholder copy over a different fact.
+ */
+export interface BrowseIdleStats {
+	/** Listings the read loaded into this view. */
+	products?: number
+	/** Distinct authors among those listings. */
+	sellers?: number
+	/** Listings among them published in the last 24 hours. */
+	postedLast24h?: number
+	/** Relays the read queried (answered plus still pending). */
+	relays?: number
+}
+
+/** Thousands-separated count. `en-US` is pinned so the copy is locale-stable. */
+export function formatIdleCount(value: number): string {
+	return value.toLocaleString('en-US')
+}
+
+/**
+ * The hero line fragments for a stats record — the headline fragments first,
+ * then the relay fragment. Absent values contribute nothing; an empty record
+ * yields an empty array and the hero shows no numbers.
+ */
+export function describeIdleStats(stats: BrowseIdleStats | undefined): { headline: string[]; relays?: string } {
+	if (!stats) return { headline: [] }
+
+	const headline: string[] = []
+	const { products, sellers, postedLast24h } = stats
+	const items = (n: number) => `${formatIdleCount(n)} item${n === 1 ? '' : 's'}`
+	const sellerCount = (n: number) => `${formatIdleCount(n)} seller${n === 1 ? '' : 's'}`
+
+	if (products !== undefined && sellers !== undefined) {
+		headline.push(`${items(products)} loaded from ${sellerCount(sellers)}`)
+	} else if (products !== undefined) {
+		headline.push(`${items(products)} loaded`)
+	} else if (sellers !== undefined) {
+		headline.push(`${sellerCount(sellers)} in this view`)
+	}
+
+	if (postedLast24h !== undefined) {
+		headline.push(`${formatIdleCount(postedLast24h)} posted in the last 24 hours`)
+	}
+
+	return {
+		headline,
+		relays: stats.relays !== undefined ? `${formatIdleCount(stats.relays)} relay${stats.relays === 1 ? '' : 's'} queried` : undefined,
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
 export interface BrowseIdleProps {
+	/**
+	 * Measured hero facts (loaded items, sellers among them, 24h postings,
+	 * relays queried). Omit a field and its fragment disappears; omit the whole
+	 * record and the hero shows no numbers.
+	 */
+	stats?: BrowseIdleStats
 	/** Product strip items above the hero. */
 	stripsAbove?: readonly StripItem[]
 	/** Product strip items below the hero. */
@@ -35,6 +101,11 @@ export interface BrowseIdleProps {
 	onSearchGo: () => void
 	/** Callback when Browse products is clicked. */
 	onBrowseProducts?: () => void
+	/**
+	 * Callback when an idle-wall tile is clicked — the tile's product id, which
+	 * the host resolves into the open product (`?p=`).
+	 */
+	onSelectProduct?: (id: string) => void
 	/** Callback when Why Plebeian? is clicked. */
 	onWhyPlebeian?: () => void
 	/** Callback when Post a listing is clicked (handoff stub). */
@@ -70,12 +141,14 @@ export interface BrowseIdleProps {
  * 4. No wall strips (screen too narrow)
  */
 export const BrowseIdle: FC<BrowseIdleProps> = ({
+	stats,
 	stripsAbove,
 	stripsBelow,
 	query,
 	onSearchChange,
 	onSearchGo,
 	onBrowseProducts,
+	onSelectProduct,
 	onWhyPlebeian,
 	onPostListing,
 	active = true,
@@ -84,6 +157,11 @@ export const BrowseIdle: FC<BrowseIdleProps> = ({
 	accountSlot,
 	className,
 }) => {
+	const heroStats = describeIdleStats(stats)
+	// Mobile is one short line: the item count when we have it, else the first
+	// fragment the desktop line leads with.
+	const mobileHeadline = stats?.products !== undefined ? `${formatIdleCount(stats.products)} items` : (heroStats.headline[0] ?? '')
+
 	const handleBrowseClick: MouseEventHandler = (e) => {
 		e.preventDefault()
 		onBrowseProducts?.()
@@ -117,27 +195,33 @@ export const BrowseIdle: FC<BrowseIdleProps> = ({
 						The whole market, <span className="text-fill-ink italic">one search</span>.
 					</h1>
 
-					{/* MotD — mobile shows minimal */}
+					{/* MotD — measured facts only; absent stats render no numbers */}
 					<div
 						data-slot="motd"
 						data-testid="widget-browse-idle-motd"
 						className="mt-5 flex items-baseline gap-3 text-sm text-text-mid max-w-[720px] text-center"
 					>
-						<span className="hidden sm:inline">3,418 items live from 611 sellers — 412 posted in the last 24 hours.</span>
-						<span className="sm:hidden text-text-high font-medium">3,418 items</span>
-						<span className="ml-auto hidden md:inline-flex items-center gap-1.5 text-xs font-variant-numeric-tabular-nums">
-							<svg
-								className="size-3 text-text-mid"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="2"
-								aria-hidden="true"
-							>
-								<path d="M12 2v4m0 12v4M2 12h4m12 0h4" strokeLinecap="round" />
-							</svg>
-							38 relays mirrored, live
-						</span>
+						{heroStats.headline.length > 0 && (
+							<>
+								<span className="hidden sm:inline">{heroStats.headline.join(' — ')}</span>
+								<span className="sm:hidden text-text-high font-medium">{mobileHeadline}</span>
+							</>
+						)}
+						{heroStats.relays && (
+							<span className="ml-auto hidden md:inline-flex items-center gap-1.5 text-xs font-variant-numeric-tabular-nums">
+								<svg
+									className="size-3 text-text-mid"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									aria-hidden="true"
+								>
+									<path d="M12 2v4m0 12v4M2 12h4m12 0h4" strokeLinecap="round" />
+								</svg>
+								{heroStats.relays}
+							</span>
+						)}
 					</div>
 
 					{/* CTAs — stacked on mobile, inline on desktop */}
@@ -220,14 +304,14 @@ export const BrowseIdle: FC<BrowseIdleProps> = ({
 				{/* Product strip above the hero (desktop only) */}
 				{stripsAbove && stripsAbove.length > 0 && (
 					<section className="mb-6">
-						<ProductStrip items={stripsAbove} onSelect={() => {}} />
+						<ProductStrip items={stripsAbove} onSelect={onSelectProduct} />
 					</section>
 				)}
 
 				{/* Product strip below the hero (desktop only) */}
 				{stripsBelow && stripsBelow.length > 0 && (
 					<section>
-						<ProductStrip items={stripsBelow} onSelect={() => {}} />
+						<ProductStrip items={stripsBelow} onSelect={onSelectProduct} />
 					</section>
 				)}
 			</main>

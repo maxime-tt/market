@@ -17,6 +17,7 @@ import { AccountPane } from '@ui/browse/account-pane'
 import { ListDetail, ListRow } from '@ui/browse/list-views'
 import { RelayIndicator, DeadSearchError } from '@ui/browse/relay-error'
 import { BrowseIdle } from '@ui/browse/browse-idle'
+import { CategoryRow, CategoryRows } from '@ui/browse/category-rows'
 import { SkeletonGrid } from '@ui/browse/skeleton-grid'
 import { EmptyStateBrowse } from '@ui/browse/empty-state-browse'
 import { SearchResultsGrid } from '@ui/browse/search-results-grid'
@@ -321,6 +322,26 @@ const BrowseIdleDefault = () => (
 	</div>
 )
 
+/**
+ * The hero with measured facts — every number is a prop here, and the wording
+ * says what was measured ("loaded"), never the frame's market-wide placeholder.
+ */
+const BrowseIdleWithStats = () => (
+	<div className="h-[500px]">
+		<BrowseIdle
+			query=""
+			onSearchChange={() => {}}
+			onSearchGo={() => {}}
+			stats={{ products: 1208, sellers: 38, postedLast24h: 412, relays: 38 }}
+			stripsAbove={IDLE_ITEMS}
+			stripsBelow={IDLE_ITEMS}
+		/>
+	</div>
+)
+
+/** The Featured destination marked current (frame RBtsnyppDS). */
+const BrowseNavFeatured = () => <BrowseNav currentPage="featured" onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+
 const BrowseIdleWithSearch = () => {
 	const [query, setQuery] = useState('ceramic')
 	return (
@@ -354,7 +375,82 @@ const SkeletonGridDefault = () => (
 
 const EmptyStateBrowseDefault = () => (
 	<div className="max-w-[600px] mx-auto py-8">
-		<EmptyStateBrowse query="ceramic" />
+		{/* Hints are explicit: the component renders none by default, because the
+		    frame's bar ("412 ms", "synced 6 min ago") is placeholder copy. */}
+		<EmptyStateBrowse query="ceramic" hints={[{ label: 'local index empty' }]} />
+	</div>
+)
+
+// ---- Browse by category (frame V3PpdwmvGG) ----
+
+const CategoryRowItems = ({ offset }: { offset: number }) =>
+	PRODUCTS.map((p, i) => (
+		<ProductCard
+			key={p.id}
+			id={`row-${offset}-${i}`}
+			title={p.title}
+			seller={p.seller}
+			sellerPubkey={p.sellerPubkey}
+			price={p.price}
+			stockNote={p.stock}
+			material={p.material}
+			symbolId={p.symbol}
+			presentation="row"
+			onThreeDots={() => {}}
+			onCopyLink={() => {}}
+		/>
+	))
+
+const CategoryRowDefault = () => (
+	<div className="max-w-[960px] mx-auto py-6">
+		<CategoryRow title="Bitcoin" count={PRODUCTS.length} onSeeAll={() => {}}>
+			<CategoryRowItems offset={1} />
+		</CategoryRow>
+	</div>
+)
+
+const CategoryRowsDefault = () => (
+	<div className="max-w-[960px] mx-auto py-6">
+		<CategoryRows>
+			<CategoryRow title="Bitcoin" count={4} onSeeAll={() => {}}>
+				<CategoryRowItems offset={1} />
+			</CategoryRow>
+			<CategoryRow title="Health & Beauty" count={2} onSeeAll={() => {}}>
+				<CategoryRowItems offset={2} />
+			</CategoryRow>
+		</CategoryRows>
+	</div>
+)
+
+const CategoryRowsLoading = () => (
+	<div className="max-w-[960px] mx-auto py-6">
+		<CategoryRows isLoading />
+	</div>
+)
+
+const CategoryRowsError = () => (
+	<div className="max-w-[960px] mx-auto py-6">
+		<CategoryRows isError />
+	</div>
+)
+
+// ---- browse-by-category row card (the frame's no-top-rule treatment) ----
+
+const ProductCardRow = () => (
+	<div className="max-w-[240px]">
+		<ProductCard
+			id="row-card"
+			title="Bitcoin Hardware Wallet Sleeve"
+			seller="mill-works"
+			sellerPubkey="abcdef01"
+			price={44000}
+			stockNote="18 in stock"
+			material="m4"
+			symbolId="p-crate"
+			presentation="row"
+			onThreeDots={() => {}}
+			onCopyLink={() => {}}
+		/>
 	</div>
 )
 
@@ -993,6 +1089,7 @@ export const browse: WidgetLibrary = {
 		{ name: 'browse-nav-default', render: BrowseNavDefault },
 		{ name: 'browse-nav-inactive', render: BrowseNavInactive },
 		{ name: 'browse-nav-with-slots', render: BrowseNavWithSlots },
+		{ name: 'browse-nav-featured-current', render: BrowseNavFeatured },
 		// search-field
 		{ name: 'search-field-empty', render: SearchFieldEmpty },
 		{ name: 'search-field-with-value', render: SearchFieldWithValue },
@@ -1028,7 +1125,15 @@ export const browse: WidgetLibrary = {
 		{ name: 'dead-search-error-default', render: DeadSearchErrorDefault },
 		// phase 2: idle wall strips
 		{ name: 'browse-idle-default', render: BrowseIdleDefault },
+		{ name: 'browse-idle-with-stats', render: BrowseIdleWithStats },
 		{ name: 'browse-idle-with-search', render: BrowseIdleWithSearch },
+		// browse by category (frame V3PpdwmvGG)
+		{ name: 'category-row-default', render: CategoryRowDefault },
+		{ name: 'category-rows-default', render: CategoryRowsDefault },
+		{ name: 'category-rows-loading', render: CategoryRowsLoading },
+		{ name: 'category-rows-failed', render: CategoryRowsError },
+		// the row card's treatment: no top rule, 16/9 shot
+		{ name: 'product-card-row', render: ProductCardRow },
 		// phase 2: skeleton-grid
 		{ name: 'skeleton-grid-default', render: SkeletonGridDefault },
 		// phase 2: empty-state-browse

@@ -71,6 +71,65 @@ test.describe('browse library', () => {
 		await page.goto('/?library=browse')
 		await expect(page.getByTestId('widget-browse-idle-default')).toBeVisible()
 		await expect(page.getByTestId('widget-browse-idle-with-search')).toBeVisible()
+		await expect(page.getByTestId('widget-browse-idle-with-stats')).toBeVisible()
+	})
+
+	// The regression guard for the fabricated hero statistics: the entry with no
+	// stats renders the hero's MotD band with no text in it at all. (The band is
+	// an empty flex line then, which is why its *text* is asserted, not visibility.)
+	test('the idle hero renders no number it was not handed', async ({ page }) => {
+		await page.goto('/?library=browse')
+		const noStats = page.getByTestId('widget-browse-idle-default')
+		await expect(noStats).toBeVisible()
+		const motd = noStats.getByTestId('widget-browse-idle-motd')
+		expect(await motd.textContent()).toBe('')
+
+		// ...and the entry that is handed facts states them, scoped as loaded.
+		const withStats = page.getByTestId('widget-browse-idle-with-stats')
+		const statsMotd = withStats.getByTestId('widget-browse-idle-motd')
+		await expect(statsMotd).toContainText('1,208 items loaded from 38 sellers')
+		await expect(statsMotd).toContainText('412 posted in the last 24 hours')
+		await expect(statsMotd).toContainText('38 relays queried')
+	})
+
+	test('browse by category entries', async ({ page }) => {
+		await page.goto('/?library=browse')
+
+		// the section, its rows and their headers
+		const rowsEntry = page.getByTestId('widget-category-rows-default')
+		await expect(rowsEntry.getByTestId('widget-category-rows')).toBeVisible()
+		await expect(rowsEntry.getByTestId('widget-category-row-Bitcoin')).toBeVisible()
+		await expect(rowsEntry.getByTestId('widget-category-row-see-all-Bitcoin')).toBeVisible()
+		await expect(rowsEntry.getByTestId('widget-category-row-Health & Beauty')).toBeVisible()
+		// the header states the loaded count, never a market total
+		await expect(rowsEntry.getByTestId('widget-category-row-Bitcoin')).toContainText('4 loaded')
+		// the row's cards are the frame's treatment: no top rule
+		await expect(rowsEntry.locator('[data-testid^="widget-product-card-price-"]').first()).toBeVisible()
+
+		// the section's own read states
+		await expect(page.getByTestId('widget-category-rows-failed').getByTestId('widget-category-rows-error')).toContainText(
+			'no relay answered',
+		)
+		await expect(page.getByTestId('widget-category-rows-loading').locator('[data-slot="skeleton-card"]').first()).toBeVisible()
+	})
+
+	test('the featured nav marks its destination current', async ({ page }) => {
+		await page.goto('/?library=browse')
+		const entry = page.getByTestId('widget-browse-nav-featured-current')
+		const featured = entry.getByTestId('widget-browse-nav-featured')
+		await expect(featured).toHaveAttribute('aria-current', 'page')
+		await expect(featured).toHaveAttribute('href', '/featured')
+		await expect(featured).toHaveClass(/border-b-2 border-fill-ink/)
+		// the marker is on exactly one destination: the wordmark is not current
+		await expect(entry.getByTestId('widget-browse-nav-wordmark')).not.toHaveAttribute('aria-current', 'page')
+	})
+
+	test('the row card presentation renders without a top rule', async ({ page }) => {
+		await page.goto('/?library=browse')
+		const card = page.getByTestId('widget-product-card-row-card')
+		await expect(card).toBeVisible()
+		await expect(card).not.toHaveClass(/border-border-strong/)
+		await expect(card.locator('[data-testid^="widget-product-art-"]')).toHaveClass(/aspect-\[16\/9\]/)
 	})
 
 	test('skeleton-grid entries', async ({ page }) => {

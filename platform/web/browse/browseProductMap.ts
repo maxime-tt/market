@@ -23,7 +23,7 @@ import {
 	getProductStock,
 	getProductTitle,
 } from '@sdk/commerce/discovery'
-import type { MaterialClass } from '@ui/browse/art'
+import { PRODUCT_SYMBOL_IDS, type MaterialClass, type ProductSymbolId } from '@ui/browse/art'
 
 // ---------------------------------------------------------------------------
 // BrowseProduct shape — consumed by @ui/browse/product-card
@@ -115,6 +115,17 @@ export function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
 export function materialForPubkey(pubkey: string): MaterialClass {
 	const hash = pubkey.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
 	return `m${(hash % 8) + 1}` as MaterialClass
+}
+
+/**
+ * The product icon for a seller's tile — the same rule as the material: a
+ * stable function of the pubkey, so a real listing that carries no image still
+ * draws one of the sprite's eight icons instead of a placeholder. Position-
+ * weighted so the icon does not move in lockstep with the material.
+ */
+export function symbolForPubkey(pubkey: string): ProductSymbolId {
+	const hash = pubkey.split('').reduce((acc, ch, i) => acc + ch.charCodeAt(0) * (i + 3), 0)
+	return PRODUCT_SYMBOL_IDS[hash % PRODUCT_SYMBOL_IDS.length]
 }
 
 // ---------------------------------------------------------------------------
