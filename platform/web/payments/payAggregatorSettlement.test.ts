@@ -133,17 +133,13 @@ describe('the settlement chain', () => {
 
 	test('an unknown source claiming a preimage with no material stays unsettled', () => {
 		const verifier = createSettlementVerifier()
-		expect(verifier.verify(PAYMENT_HASH, { kind: 'preimage', source: 'some-other-rail', observedAt: Date.now() })).toBe(false)
+		expect(verifier.verify(PAYMENT_HASH, { kind: 'preimage', source: 'some-other-rail' })).toBe(false)
 	})
 
 	test('a witness that carries material is still re-derived, not trusted', () => {
 		const verifier = createSettlementVerifier()
-		expect(
-			verifier.verify(PAYMENT_HASH, { kind: 'preimage', source: 'manual', reference: PREIMAGE, observedAt: Date.now() }),
-		).toBe(true)
-		expect(
-			verifier.verify(PAYMENT_HASH, { kind: 'preimage', source: 'manual', reference: 'deadbeef', observedAt: Date.now() }),
-		).toBe(false)
+		expect(verifier.verify(PAYMENT_HASH, { kind: 'preimage', source: 'manual', reference: PREIMAGE })).toBe(true)
+		expect(verifier.verify(PAYMENT_HASH, { kind: 'preimage', source: 'manual', reference: 'deadbeef' })).toBe(false)
 	})
 
 	test('the witness the rail returns carries no preimage material', async () => {
