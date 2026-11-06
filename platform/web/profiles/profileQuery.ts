@@ -11,7 +11,7 @@
  */
 import { type NDKUserProfile, NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { NDKWoT } from '@nostr-dev-kit/wot'
-import { queryOptions, useQuery } from '@tanstack/react-query'
+import { queryOptions, useQueries, useQuery } from '@tanstack/react-query'
 import {
 	emptyZapCapabilityInfo,
 	getNormalizedProfileDisplayName as sdkGetNormalizedProfileDisplayName,
@@ -191,6 +191,29 @@ export const useProfile = (pubkey: string | undefined) => {
 		staleTime: 5 * 60 * 1000,
 		retry: 2,
 	})
+}
+
+/**
+ * The display names for a set of authors, in one batched read: one profile
+ * query per distinct pubkey, on the same `profileKeys.details` key the
+ * single-profile hook uses, so a name a card already loaded is reused rather
+ * than fetched again.
+ *
+ * A seller with no profile (or no display name) is simply absent from the map —
+ * the caller keeps its own fallback instead of rendering an empty name.
+ */
+export const useProfileNames = (pubkeys: readonly string[]): Map<string, string> => {
+	const unique = [...new Set(pubkeys)]
+	const results = useQueries({
+		queries: unique.map((pubkey) => profileByIdentifierQueryOptions(pubkey)),
+	})
+
+	const names = new Map<string, string>()
+	unique.forEach((pubkey, index) => {
+		const name = getNormalizedProfileDisplayName(results[index]?.data?.profile)
+		if (name) names.set(pubkey, name)
+	})
+	return names
 }
 
 export const checkZapCapability = async (event: NDKEvent | NDKUser): Promise<boolean> => {
