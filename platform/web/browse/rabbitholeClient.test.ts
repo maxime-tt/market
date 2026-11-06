@@ -373,3 +373,131 @@ describe('rabbitholeSearch — request shaping', () => {
 		expect(new RabbitHoleError('timeout', 'x').code).toBe('timeout')
 	})
 })
+
+// ---------------------------------------------------------------------------
+// The search frame's own statements: facets and per-listing relays
+// ---------------------------------------------------------------------------
+
+describe('rabbitholeSearch — the search frame', () => {
+	test('maps the frame’s suggested facets onto the result', async () => {
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({
+							type: 'search',
+							candidateCount: 120,
+							hits: [],
+							suggested: [
+								{ field: 'category_tags', value: 'pottery', count: 120, coverage: 0.3, filter: 'category_tags = "pottery"' },
+								{ field: 'currency', value: 'USD', count: 61 },
+							],
+						}),
+						outcomeFrame('complete', ['wss://a'], []),
+					]),
+				),
+			},
+		)
+
+		expect(result.suggested).toEqual([
+			{ field: 'category_tags', value: 'pottery', count: 120, coverage: 0.3, filter: 'category_tags = "pottery"' },
+			{ field: 'currency', value: 'USD', count: 61, coverage: undefined, filter: undefined },
+		])
+	})
+
+	test('states an empty facet list when the frame carries none', async () => {
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(ndjsonResponse([JSON.stringify({ type: 'search', hits: [] }), outcomeFrame('complete', [], [])])),
+			},
+		)
+		expect(result.suggested).toEqual([])
+	})
+
+	test('attaches the listing’s own relays from its index hit, by coordinate', async () => {
+		const event = productEvent('e1', 'Ceramic Mug')
+		const coordinate = `30402:${PUBKEY}:e1`
+
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({
+							type: 'search',
+							candidateCount: 1,
+							hits: [{ coordinate, event_id: 'e1', relays_seen: ['wss://nos.lol', 'wss://relay.damus.io'] }],
+						}),
+						JSON.stringify({ type: 'event', event }),
+						outcomeFrame('complete', ['wss://nos.lol', 'wss://relay.damus.io'], []),
+					]),
+				),
+			},
+		)
+
+		// The listing's relays are the hit's, not the search-level fan-out set.
+		expect(result.products[0]?.relays).toEqual(['wss://nos.lol', 'wss://relay.damus.io'])
+	})
+
+	test('states no relays for a listing its index hit did not name', async () => {
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({
+							type: 'search',
+							candidateCount: 1,
+							hits: [{ coordinate: `30402:${PUBKEY}:other`, relays_seen: ['wss://nos.lol'] }],
+						}),
+						JSON.stringify({ type: 'event', event: productEvent('e1', 'Ceramic Mug') }),
+						outcomeFrame('complete', ['wss://nos.lol'], []),
+					]),
+				),
+			},
+		)
+
+		expect(result.products[0]?.relays).toBeUndefined()
+	})
+
+	test('states the facets of an indexOnly probe too (no outcome frame)', async () => {
+		const result = await rabbitholeSearch(
+			{ q: '', indexOnly: true, filters: ['category_tags = "bitcoin"'] },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({
+							type: 'search',
+							query: '',
+							candidateCount: 160,
+							hits: [],
+							suggested: [{ field: 'currency', value: 'EUR', count: 5 }],
+						}),
+					]),
+				),
+			},
+		)
+
+		expect(result.suggested).toEqual([{ field: 'currency', value: 'EUR', count: 5, coverage: undefined, filter: undefined }])
+	})
+
+	test('accepts a filter-only request (empty query, an index filter)', async () => {
+		let body: Record<string, unknown> | null = null
+		const fetchImpl = (async (_url: string, init?: RequestInit) => {
+			body = JSON.parse((init as RequestInit).body as string)
+			return ndjsonResponse([JSON.stringify({ type: 'search', query: '', hits: [] }), outcomeFrame('complete', [], [])])
+		}) as unknown as typeof fetch
+
+		const result = await rabbitholeSearch({ q: '', filters: ['category_tags = "bitcoin"'], limit: 5 }, { fetchImpl })
+		expect(body).toMatchObject({ q: '', filters: ['category_tags = "bitcoin"'] })
+		expect(result.products).toEqual([])
+	})
+
+	test('still rejects an empty query with nothing to narrow it', async () => {
+		await expect(rabbitholeSearch({ q: '   ' }, { fetchImpl: fetchReturning(ndjsonResponse([])) })).rejects.toMatchObject({
+			code: 'bad-request',
+		})
+	})
+})

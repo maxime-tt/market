@@ -26,7 +26,8 @@
  * breakdown) — never in `eose`, and never dropped.
  */
 
-import { mapProduct, type BrowseProduct, type BrowseSearchResult } from './browseProductMap'
+import { mapProduct, type BrowseFacet, type BrowseProduct, type BrowseSearchResult } from './browseProductMap'
+import { getProductCoordinates } from '@sdk/commerce/discovery'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 // ---------------------------------------------------------------------------
@@ -185,13 +186,19 @@ export class RabbitHoleError extends Error {
 
 function assertValidRequest(request: RabbitHoleSearchRequest): void {
 	const q = request.q
-	if (typeof q !== 'string' || q.trim() === '') throw new RabbitHoleError('bad-request', 'RabbitHole: query must be a non-empty string')
+	if (typeof q !== 'string') throw new RabbitHoleError('bad-request', 'RabbitHole: query must be a string')
 	if (q.length > RABBITHOLE_LIMITS.maxQueryLength) {
 		throw new RabbitHoleError('bad-request', `RabbitHole: query exceeds ${RABBITHOLE_LIMITS.maxQueryLength} chars (got ${q.length})`)
 	}
 	const filters = request.filters ?? []
 	if (filters.length > RABBITHOLE_LIMITS.maxFilters) {
 		throw new RabbitHoleError('bad-request', `RabbitHole: at most ${RABBITHOLE_LIMITS.maxFilters} filters (got ${filters.length})`)
+	}
+	// An empty query is a real request — the index answers a filter-only browse
+	// (the category-row `See all →`) and an `indexOnly` facet probe. What is
+	// never valid is an empty query with nothing else to narrow it.
+	if (q.trim() === '' && filters.length === 0 && !request.indexOnly) {
+		throw new RabbitHoleError('bad-request', 'RabbitHole: query must be non-empty unless filters are supplied')
 	}
 	const limit = request.limit
 	if (limit !== undefined && (!Number.isInteger(limit) || limit < RABBITHOLE_LIMITS.minLimit || limit > RABBITHOLE_LIMITS.maxLimit)) {
@@ -328,6 +335,11 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	const seenEventIds = new Set<string>()
 	let outcome: RabbitHoleOutcomeFrame | null = null
 	let lineBuffer = ''
+	// The `search` frame's own statements: the service's facet list, and the
+	// relays each index hit was seen on (keyed by the listing's coordinate, so
+	// the later `event` frame for that coordinate can carry them).
+	let suggested: BrowseFacet[] = []
+	const relaysByCoordinate = new Map<string, string[]>()
 
 	const dispatchLine = (line: string): void => {
 		let frame: RabbitHoleFrame
@@ -344,6 +356,21 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 				// The index hits are the fast first paint; the canonical product
 				// data is the `event` frames that follow. Hits whose event never
 				// arrives are not products.
+				// The wire's suggestion shape restated as the seam's own facet type.
+				suggested = (frame.suggested ?? []).map(
+					(suggestion): BrowseFacet => ({
+						field: suggestion.field,
+						value: suggestion.value,
+						count: suggestion.count,
+						coverage: suggestion.coverage,
+						filter: suggestion.filter,
+					}),
+				)
+				for (const hit of frame.hits ?? []) {
+					if (hit.coordinate && hit.relays_seen && hit.relays_seen.length > 0) {
+						relaysByCoordinate.set(hit.coordinate, [...hit.relays_seen])
+					}
+				}
 				break
 			case 'relay':
 				noteRelay(frame.relay, frame.state)
@@ -353,7 +380,12 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 				if (event && event.id && !seenEventIds.has(event.id)) {
 					seenEventIds.add(event.id)
 					const product = mapProduct(event)
-					if (product) products.push(product)
+					if (product) {
+						// The listing's own relays, from its index hit — correlated
+						// by coordinate, never the search-level fan-out set.
+						const relays = relaysByCoordinate.get(getProductCoordinates(event))
+						products.push(relays ? { ...product, relays } : product)
+					}
 				}
 				break
 			}
@@ -419,10 +451,10 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	// service never dials a relay), so an empty stream there is valid, not
 	// truncated. Every other stream MUST end in its `outcome` frame.
 	if (!outcome) {
-		if (ctx.indexOnly) return { products, eose: [], pending: [] }
+		if (ctx.indexOnly) return { products, eose: [], pending: [], suggested }
 		throw new RabbitHoleError('truncated', 'RabbitHole: stream ended without an outcome frame')
 	}
-	return toBrowseSearchResult(outcome, products, relayOrder, relayState)
+	return toBrowseSearchResult(outcome, products, relayOrder, relayState, suggested)
 }
 
 /**
@@ -439,6 +471,7 @@ function toBrowseSearchResult(
 	products: BrowseProduct[],
 	relayOrder: string[],
 	relayState: Map<string, RabbitHoleRelayState>,
+	suggested: BrowseFacet[],
 ): BrowseSearchResult {
 	const verdict = outcome.outcome
 	let eose: string[]
@@ -456,7 +489,7 @@ function toBrowseSearchResult(
 		}
 	}
 
-	return { products, eose: orderBySeen(eose, relayOrder), pending: orderBySeen(pending, relayOrder) }
+	return { products, eose: orderBySeen(eose, relayOrder), pending: orderBySeen(pending, relayOrder), suggested }
 }
 
 /** Order a relay list by first-seen wire order; relays not seen on a `relay` frame keep their relative order at the end. */

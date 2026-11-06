@@ -29,13 +29,25 @@ const getSelectedCurrency = () => uiState.get().selectedCurrency
 export const isPriceDisplayLoading = (originalCurrency: string, ratesLoading: boolean, satsLoading: boolean): boolean =>
 	ratesLoading || (!isBitcoinCurrency(originalCurrency) && satsLoading)
 
-export function PriceDisplayHost({ priceValue, originalCurrency = 'SATS', ...display }: PriceDisplayHostProps) {
+/**
+ * The price-display read itself: the viewer's selected currency, the BTC rates
+ * and the fiat→sats conversion, resolved by the shared `resolvePriceDisplay`.
+ * Exported so a surface that renders its own price layout (the Browse card's
+ * one-line row) uses the same resolution instead of a second implementation.
+ */
+export function usePriceDisplay(priceValue: number, originalCurrency: string) {
 	const selectedCurrency = useSyncExternalStore(subscribeSelectedCurrency, getSelectedCurrency, () => 'USD')
 	const { data: exchangeRates, isLoading: ratesLoading } = useBtcExchangeRates()
 	const { data: satsFromFiat, isLoading: satsLoading } = useCurrencyConversion(originalCurrency, priceValue)
 
 	const price = resolvePriceDisplay({ priceValue, originalCurrency, selectedCurrency, exchangeRates, satsFromFiat })
 	const isLoading = isPriceDisplayLoading(originalCurrency, ratesLoading, satsLoading)
+
+	return { price, isLoading, selectedCurrency }
+}
+
+export function PriceDisplayHost({ priceValue, originalCurrency = 'SATS', ...display }: PriceDisplayHostProps) {
+	const { price, isLoading, selectedCurrency } = usePriceDisplay(priceValue, originalCurrency)
 
 	return (
 		<PriceDisplayView

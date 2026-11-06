@@ -18,7 +18,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { BrowseNav } from '@ui/browse/browse-nav'
 import { SearchField } from '@ui/browse/search-field'
-import { ProductCard } from '@ui/browse/product-card'
+import { ProductCard, type CardPresentation } from '@ui/browse/product-card'
 import { BrowseIdle } from '@ui/browse/browse-idle'
 import { CategoryRow, CategoryRows } from '@ui/browse/category-rows'
 import { SkeletonGrid } from '@ui/browse/skeleton-grid'
@@ -27,9 +27,12 @@ import { ProductArtMount, SKELETON_SHIMMER_CSS } from '@ui/browse/art'
 import { RelayIndicator, DeadSearchError, TagFilterBadge } from '@ui/browse/relay-error'
 import { SplitView } from '@ui/browse/split-view'
 import { ProductDetailPanel, type ProductDetailPanelState } from '@ui/browse/product-detail-panel'
-import { useBrowseSearch, useBrowseProductDetail } from '@platform/web/browse/browseQuery'
-import { materialForPubkey } from '@platform/web/browse/browseProductMap'
+import { formatPriceUnit } from '@ui/utils/format'
+import { useBrowseSearch, useBrowseFacets, useBrowseProductDetail } from '@platform/web/browse/browseQuery'
+import { materialForPubkey, type BrowseFacet, type BrowseProduct } from '@platform/web/browse/browseProductMap'
 import { feedStrips, useBrowseIndexFeed } from '@platform/web/browse/browseIndexFeed'
+import { getNormalizedProfileDisplayName, getNormalizedProfilePicture, useProfile } from '@platform/web/profiles/profileQuery'
+import { usePriceDisplay } from '@platform/web/products/PriceDisplayHost'
 import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { useAuth } from '@platform/web/auth/authStore'
 import { npubEncode } from 'nostr-tools/nip19'
@@ -69,6 +72,13 @@ const CATEGORY_ROW_LIMIT = 4
 /** The section the `Browse products` CTA scrolls to. */
 const CATEGORY_SECTION_ID = 'browse-categories'
 
+/**
+ * How many facet pills the collapsed row shows. The service caps `suggested` at
+ * eight, so the "more" control reveals at most two more — this cap is display,
+ * not a claim about the market.
+ */
+const FACET_PILL_LIMIT = 6
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -96,6 +106,82 @@ function AccountChip({ initial }: { initial: string }) {
 	)
 }
 
+/**
+ * A listing's price as the app's existing display path resolves it
+ * (`usePriceDisplay` — the same resolution `PriceDisplayHost` renders) for an
+ * amount that is NOT in sats. A sats- (or absent-) currency listing gets
+ * `undefined`: the card renders its own sats line exactly as before, so a sats
+ * listing is untouched by this path.
+ *
+ * A fiat amount renders the path's own figure in the listing's currency (never
+ * the "sats" label, which the amount never carried); a BTC amount renders in
+ * BTC. No rate is invented, and no unit is assumed.
+ */
+function useListingPriceDisplay(price?: number, currency?: string): { label: string; unit: string } | undefined {
+	const unit = formatPriceUnit(currency)
+	const needsDisplay = typeof price === 'number' && unit !== 'sats'
+	// The hook itself is unconditional; a zero amount keeps its conversion query
+	// off for the listings that do not need one.
+	const { price: resolution } = usePriceDisplay(needsDisplay ? (price as number) : 0, currency || 'SATS')
+	if (!needsDisplay) return undefined
+	if (unit === 'BTC') return { label: (price as number).toLocaleString(undefined, { maximumFractionDigits: 8 }), unit }
+	const fiat = resolution.fiatValue
+	return {
+		label: (fiat?.value ?? (price as number)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+		unit: fiat?.currency ?? unit,
+	}
+}
+
+interface BrowseResultCardProps {
+	product: BrowseProduct
+	presentation?: CardPresentation
+	selected?: boolean
+	menuOpen?: boolean
+	onSelect: (id: string) => void
+	onThreeDots: () => void
+	onCopyLink: () => void
+}
+
+/**
+ * One Browse card: resolves the seller's profile (display name + picture, with
+ * the pubkey-derived string and the tinted disc as fallbacks) and the listing's
+ * price display through the app's existing seams, then renders the props-only
+ * card.
+ *
+ * It is a component of its own because the profile read is a hook and the grid
+ * maps over its products — a hook cannot be called inside that `map`.
+ */
+function BrowseResultCard({ product, presentation, selected, menuOpen, onSelect, onThreeDots, onCopyLink }: BrowseResultCardProps) {
+	const { data: profileData } = useProfile(product.pubkey)
+	const sellerName = getNormalizedProfileDisplayName(profileData?.profile) ?? undefined
+	const sellerPicture = getNormalizedProfilePicture(profileData?.profile) || undefined
+	const price = useListingPriceDisplay(product.price, product.currency)
+
+	return (
+		<ProductCard
+			id={product.id}
+			title={product.title}
+			seller={product.pubkey.slice(0, 8)}
+			sellerPubkey={product.pubkey}
+			sellerName={sellerName}
+			sellerPicture={sellerPicture}
+			image={product.image}
+			price={product.price}
+			priceCurrency={product.currency}
+			priceLabel={price?.label}
+			priceUnit={price?.unit}
+			stockNote={typeof product.stock === 'string' ? product.stock : undefined}
+			material={materialForPubkey(product.pubkey)}
+			presentation={presentation}
+			selected={selected}
+			menuOpen={menuOpen}
+			onSelect={onSelect}
+			onThreeDots={onThreeDots}
+			onCopyLink={onCopyLink}
+		/>
+	)
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -110,7 +196,7 @@ function AccountChip({ initial }: { initial: string }) {
  * - Query loading → SkeletonGrid (shimmering placeholders)
  * - Query error → DeadSearchError (if no relays responded) or ErrorState
  * - Query empty results → EmptyStateBrowse (everything answered, none matched)
- * - Query results → RelayIndicator + card grid (with optional facet badges)
+ * - Query results → RelayIndicator + card grid (with the service's facet pills)
  * - Results + `?p=` → the same grid as the split view's master pane, with the
  *   product panel in the detail pane
  *
@@ -119,13 +205,25 @@ function AccountChip({ initial }: { initial: string }) {
  * `See all →` — or by an open product alone, a bare `?p=` deep link); the idle
  * index reads the bounded index feed (`useBrowseIndexFeed`). Relay data comes
  * from the read seam (ctx.stream caught-up event), never fabricated.
+ *
+ * The facet pills are the service's own `suggested` list — real market counts —
+ * read through `useBrowseFacets`, the unfiltered index probe, so selecting one
+ * of its pills cannot rotate the set it was chosen from.
  */
 export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+	const [facetsExpanded, setFacetsExpanded] = useState(false)
 
 	const { user } = useAuth()
 
-	const searchQuery = useBrowseSearch(q, tag, 100, p)
+	// The facet probe: the same term with NO filter, so the pill list cannot
+	// rotate as the visitor selects one of its pills — and, because it is
+	// already loaded before a pill is clicked, the click's own filter string is
+	// known on the very first request rather than after a round trip.
+	const facetsQuery = useBrowseFacets(q, Boolean(q.trim()) || Boolean(tag))
+	const activeFilter = tag ? facetsQuery.data?.find((facet) => facet.value === tag)?.filter : undefined
+
+	const searchQuery = useBrowseSearch(q, tag, 100, p, activeFilter)
 	const result = searchQuery.data ?? null
 
 	// The idle index's own feed: one bounded stream that supplies the wall
@@ -136,6 +234,13 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 
 	const detailQuery = useBrowseProductDetail(p)
 	const detail = detailQuery.data ?? null
+
+	// The open product's seller, through the profile seam — the panel's own
+	// read is the single-entity one, so one hook here is enough.
+	const detailProfile = useProfile(detail?.pubkey)
+	const detailSellerName = getNormalizedProfileDisplayName(detailProfile.data?.profile) ?? undefined
+	const detailSellerPicture = getNormalizedProfilePicture(detailProfile.data?.profile) || undefined
+	const detailPrice = useListingPriceDisplay(detail?.price, detail?.currency)
 
 	/** The signed-in pubkey's initial, or nothing when signed out. */
 	const accountInitial = user?.pubkey ? user.pubkey.slice(0, 2).toUpperCase() : undefined
@@ -206,21 +311,12 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 		...pendingRelays.map((r: string) => ({ relay: r, status: 'pending' as const })),
 	]
 
-	// Tag facet badges — derived from loaded products' real categories
-	const facetSet = (() => {
-		if (!result || result.products.length === 0) return { all: 0, facets: [] as { label: string; count: number }[] }
-		const counts = new Map<string, number>()
-		for (const product of result.products) {
-			for (const cat of product.categories ?? []) {
-				counts.set(cat, (counts.get(cat) ?? 0) + 1)
-			}
-		}
-		const facets = Array.from(counts.entries())
-			.sort((a, b) => b[1] - a[1])
-			.slice(0, 6)
-			.map(([label, count]) => ({ label, count }))
-		return { all: result.products.length, facets }
-	})()
+	// Facet pills — the service's own market-scoped counts, from the unfiltered
+	// probe. The results read is never the source: once a filter is selected it
+	// would answer with that filter's own facet list, rotating the pills out
+	// from under the person who just picked one.
+	const facets: BrowseFacet[] = facetsQuery.data ?? []
+	const visibleFacets = facetsExpanded ? facets : facets.slice(0, FACET_PILL_LIMIT)
 
 	// Empty state hints — real data only
 	const EMPTY_HINTS = [{ label: 'local index empty' }]
@@ -273,16 +369,10 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 								onSeeAll={() => handleCategorySeeAll(row.category)}
 							>
 								{row.items.slice(0, CATEGORY_ROW_LIMIT).map((product) => (
-									<ProductCard
+									<BrowseResultCard
 										key={product.id}
+										product={product}
 										presentation="row"
-										id={product.id}
-										title={product.title}
-										seller={product.pubkey.slice(0, 8)}
-										sellerPubkey={product.pubkey}
-										price={product.price}
-										stockNote={typeof product.stock === 'string' ? product.stock : undefined}
-										material={materialForPubkey(product.pubkey)}
 										onSelect={(id) => handleCategoryCardSelect(row.category, id)}
 										onThreeDots={() => handleMenuToggle(product.id)}
 										onCopyLink={() => handleCopyLink(product.id)}
@@ -304,15 +394,9 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 
 	// The result cards — the grid's children in both layouts
 	const cards: ReactNode = (result?.products ?? []).map((product) => (
-		<ProductCard
+		<BrowseResultCard
 			key={product.id}
-			id={product.id}
-			title={product.title}
-			seller={product.pubkey.slice(0, 8)}
-			sellerPubkey={product.pubkey}
-			price={product.price}
-			stockNote={typeof product.stock === 'string' ? product.stock : undefined}
-			material={materialForPubkey(product.pubkey)}
+			product={product}
 			selected={p === product.id}
 			onSelect={handleCardSelect}
 			onThreeDots={() => handleMenuToggle(product.id)}
@@ -357,19 +441,35 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 				{/* Relay indicator — under the search area */}
 				{relayIndicator}
 
-				{/* Tag facet badges — derived from search, narrow the result set */}
-				{(result?.products.length ?? 0) > 0 && (
-					<div className="mt-3 flex flex-wrap gap-2">
-						{facetSet.facets.map((facet) => (
+				{/* Facet pills — the service's own market-scoped counts and filters */}
+				{facets.length > 0 && (
+					<div
+						data-slot="browse-facets"
+						className={
+							facetsExpanded ? 'mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1' : 'mt-3 flex flex-wrap items-center gap-2'
+						}
+					>
+						{visibleFacets.map((facet) => (
 							<TagFilterBadge
-								key={facet.label}
-								label={facet.label}
+								key={`${facet.field}:${facet.value}`}
+								label={facet.value}
 								count={facet.count}
-								active={tag === facet.label}
-								onToggle={() => onNavigate({ q, p: undefined, tag: tag === facet.label ? undefined : facet.label })}
+								active={tag === facet.value}
+								onToggle={() => onNavigate({ q, p: undefined, tag: tag === facet.value ? undefined : facet.value })}
 							/>
 						))}
-						<span className="text-xs text-text-mid ml-1 self-center">more</span>
+						{facets.length > FACET_PILL_LIMIT && (
+							<button
+								type="button"
+								data-slot="browse-facets-more"
+								data-testid="widget-browse-facets-more"
+								aria-expanded={facetsExpanded}
+								className="h-7 shrink-0 px-3 rounded-full border border-border-default text-xs text-text-mid cursor-pointer transition-colors hover:text-text-high"
+								onClick={() => setFacetsExpanded((prev) => !prev)}
+							>
+								{facetsExpanded ? 'less' : 'more'}
+							</button>
+						)}
 					</div>
 				)}
 
@@ -408,9 +508,15 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 													id: detail.id,
 													title: detail.title,
 													seller: detail.pubkey.slice(0, 8),
+													sellerName: detailSellerName,
+													sellerPicture: detailSellerPicture,
 													sellerNpub: elideNpub(detail.pubkey),
 													location: detail.location,
+													image: detail.image,
 													price: detail.price,
+													currency: detail.currency,
+													priceLabel: detailPrice?.label,
+													priceUnit: detailPrice?.unit,
 													stockNote: typeof detail.stock === 'string' ? detail.stock : undefined,
 													description: detail.description || undefined,
 													shipping: detail.shipping,

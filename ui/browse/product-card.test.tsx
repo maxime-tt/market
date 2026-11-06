@@ -101,6 +101,41 @@ describe('ProductCard', () => {
 		expect(markup).toContain('3 in stock')
 		expect(markup).not.toContain('sats')
 	})
+
+	test("renders the listing's own image when it carries one", () => {
+		const markup = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c12', image: 'https://example.test/mug.png' })))
+		expect(markup).toContain('src="https://example.test/mug.png"')
+	})
+
+	test('falls back to the deterministic art when the listing carries no image', () => {
+		const markup = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c13' })))
+		expect(markup).not.toContain('<img')
+		expect(markup).toContain('widget-product-art-m1')
+	})
+
+	test("renders the price tag's own unit, never the sats label on a fiat amount", () => {
+		const fiat = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c14', price: 53, priceCurrency: 'USD' })))
+		expect(fiat).toContain('53')
+		expect(fiat).toContain('USD')
+		expect(fiat).not.toContain('sats')
+
+		// A sats listing keeps the canonical sats line.
+		const sats = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c15', price: 21000, priceCurrency: 'SATS' })))
+		expect(sats).toContain('21,000')
+		expect(sats).toContain('sats')
+	})
+
+	test('renders the resolved seller name and picture, with the pubkey fallback', () => {
+		const resolved = renderToStaticMarkup(
+			createElement(ProductCard, makeCard({ id: 'c16', sellerName: 'Porto Ceramics', sellerPicture: 'https://example.test/a.png' })),
+		)
+		expect(resolved).toContain('Porto Ceramics')
+		expect(resolved).toContain('src="https://example.test/a.png"')
+
+		const fallback = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c17', seller: 'abcdef01' })))
+		expect(fallback).toContain('abcdef01')
+		expect(fallback).toContain('avatar-tint-')
+	})
 })
 
 // ---------------------------------------------------------------------------

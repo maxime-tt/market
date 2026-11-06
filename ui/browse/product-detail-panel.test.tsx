@@ -112,6 +112,45 @@ describe('ProductDetailPanel', () => {
 		expect(markup).not.toContain('0 sats')
 	})
 
+	test("renders the listing's own image, with the art as the fallback", () => {
+		const withImage = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct({ image: 'https://example.test/ball.png' }),
+			}),
+		)
+		expect(withImage).toContain('data-slot="product-detail-art"')
+		expect(withImage).toContain('src="https://example.test/ball.png"')
+
+		const withoutImage = renderToStaticMarkup(createElement(ProductDetailPanel, { state: 'ready', product: makeProduct() }))
+		expect(withoutImage).not.toContain('<img')
+		expect(withoutImage).toContain('widget-product-art-m1')
+	})
+
+	test('renders the price unit the tag states, never "sats" on a fiat amount', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductDetailPanel, { state: 'ready', product: makeProduct({ price: 53, currency: 'USD' }) }),
+		)
+		expect(markup).toContain('53')
+		expect(markup).toContain('USD')
+		expect(markup).not.toContain('53 sats')
+	})
+
+	test('renders the resolved seller name and picture, with the pubkey fallback', () => {
+		const resolved = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct({ sellerName: 'Porto Ceramics', sellerPicture: 'https://example.test/a.png' }),
+			}),
+		)
+		expect(resolved).toContain('Porto Ceramics')
+		expect(resolved).toContain('src="https://example.test/a.png"')
+
+		const fallback = renderToStaticMarkup(createElement(ProductDetailPanel, { state: 'ready', product: makeProduct() }))
+		expect(fallback).toContain('AB')
+		expect(fallback).toContain('abcdef01')
+	})
+
 	test('renders no action or tool without a callback (nothing inert)', () => {
 		const markup = renderToStaticMarkup(createElement(ProductDetailPanel, { state: 'ready', product: makeProduct() }))
 		expect(markup).not.toContain('data-slot="tools"')
