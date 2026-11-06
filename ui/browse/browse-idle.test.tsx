@@ -63,7 +63,7 @@ describe('BrowseIdle hero', () => {
 	})
 
 	test('draws one full-bleed strip above the title block and one below it', () => {
-		const strip = (id: string) => ({ id, title: `Product ${id}`, seller: 'atelier-norte', material: 'm1' as const })
+		const strip = (id: string) => ({ id, title: `Product ${id}`, seller: 'atelier-norte', material: 'm1' as const, href: `/?p=${id}` })
 		const markup = renderToStaticMarkup(
 			createElement(BrowseIdle, { ...BASE, stripsAbove: [strip('above')], stripsBelow: [strip('below')] }),
 		)

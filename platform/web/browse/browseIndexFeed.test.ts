@@ -64,6 +64,8 @@ describe('feedStrips', () => {
 				id: '1',
 				title: 'Product 1',
 				seller: A.slice(0, 8),
+				sellerHref: `/profile/${A}`,
+				href: '/?p=1',
 				image: undefined,
 				price: undefined,
 				priceCurrency: undefined,

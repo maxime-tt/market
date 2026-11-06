@@ -10,6 +10,8 @@ export interface UiLinkProps {
 	/** In-app path or absolute URL; the host decides how to navigate. */
 	href: string
 	className?: string
+	/** Keyboard order, e.g. -1 for a duplicated decorative copy of a link. */
+	tabIndex?: number
 	onClick?: (event: MouseEvent<HTMLAnchorElement>) => void
 	children: ReactNode
 }
@@ -46,9 +48,9 @@ function DefaultImage({ src, alt, className }: UiImageProps) {
 	return <img src={src} alt={alt} loading="lazy" className={className} />
 }
 
-function DefaultLink({ href, className, onClick, children }: UiLinkProps) {
+function DefaultLink({ href, className, tabIndex, onClick, children }: UiLinkProps) {
 	return (
-		<a href={href} className={className} onClick={onClick}>
+		<a href={href} className={className} tabIndex={tabIndex} onClick={onClick}>
 			{children}
 		</a>
 	)

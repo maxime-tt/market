@@ -81,6 +81,7 @@ const STRIP_ITEMS = PRODUCTS.slice(0, 6).map((p, i) => ({
 	seller: p.seller,
 	material: p.material,
 	symbolId: p.symbol,
+	href: `/?p=strip-${i}`,
 }))
 
 // ---- browse-nav entries ----
@@ -308,12 +309,12 @@ const DeadSearchErrorDefault = () => (
 // ---- Phase 2: idle wall strips ----
 
 const IDLE_ITEMS: StripItem[] = [
-	{ id: 'idle-1', title: 'Speckled Bowl, 6 in', seller: 'ATELIER-NORTE', material: 'm1' as const, symbolId: 'p-bowl' },
-	{ id: 'idle-2', title: 'Amber Dropper, 30 ml', seller: 'GLASSWORKS', material: 'm2' as const, symbolId: 'p-bottle' },
-	{ id: 'idle-3', title: 'Stoneware Mug, 400 ml', seller: 'CLAYHOUSE', material: 'm3' as const, symbolId: 'p-mug' },
-	{ id: 'idle-4', title: 'Pendant Lantern', seller: 'FORGE', material: 'm4' as const, symbolId: 'p-lamp' },
-	{ id: 'idle-5', title: 'Botanical Print Folio', seller: 'PRESS', material: 'm5' as const, symbolId: 'p-books' },
-	{ id: 'idle-6', title: 'Nesting Crates (3)', seller: 'JOINERY', material: 'm6' as const, symbolId: 'p-crate' },
+	{ id: 'idle-1', title: 'Speckled Bowl, 6 in', seller: 'ATELIER-NORTE', material: 'm1' as const, symbolId: 'p-bowl', href: '/?p=idle-1' },
+	{ id: 'idle-2', title: 'Amber Dropper, 30 ml', seller: 'GLASSWORKS', material: 'm2' as const, symbolId: 'p-bottle', href: '/?p=idle-2' },
+	{ id: 'idle-3', title: 'Stoneware Mug, 400 ml', seller: 'CLAYHOUSE', material: 'm3' as const, symbolId: 'p-mug', href: '/?p=idle-3' },
+	{ id: 'idle-4', title: 'Pendant Lantern', seller: 'FORGE', material: 'm4' as const, symbolId: 'p-lamp', href: '/?p=idle-4' },
+	{ id: 'idle-5', title: 'Botanical Print Folio', seller: 'PRESS', material: 'm5' as const, symbolId: 'p-books', href: '/?p=idle-5' },
+	{ id: 'idle-6', title: 'Nesting Crates (3)', seller: 'JOINERY', material: 'm6' as const, symbolId: 'p-crate', href: '/?p=idle-6' },
 ]
 
 const BrowseIdleDefault = () => (

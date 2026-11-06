@@ -22,6 +22,7 @@ import { EmptyState } from '../shared/empty-state'
 import { ErrorState } from '../shared/error-state'
 import { SKELETON_SHIMMER_CSS, type MaterialClass, type ProductSymbolId } from './art'
 import { HeartIcon, ListingImage, ProductContextMenu, ThreeDotsIcon } from './product-card'
+import { UiLink } from '../provider/UiProvider'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -47,6 +48,8 @@ export interface ProductDetailPanelProduct {
 	sellerPicture?: string
 	/** Elided seller npub, e.g. `npub1q…7f3k`. */
 	sellerNpub?: string
+	/** The seller's profile link (`/profile/<pubkey>`) — the seller line's name and npub. */
+	sellerHref?: string
 	/** Seller location from the listing's `location` tag, e.g. `Porto`. */
 	location?: string
 	/** The listing's first `image` tag, when it carries one — the shot, with art as the fallback. */
@@ -162,7 +165,6 @@ const PanelContent: FC<{
 	onBuy?: () => void
 }> = ({ product, menuOpen, onHeart, onThreeDots, onAddToList, onCopyLink, onReport, onBuy }) => {
 	const initials = product.seller.slice(0, 2).toUpperCase()
-	const sellerMeta = [product.sellerNpub, product.location].filter(Boolean).join(' · ')
 
 	return (
 		<>
@@ -201,8 +203,29 @@ const PanelContent: FC<{
 						</span>
 					)}
 					<span data-slot="seller-who" className="flex flex-col gap-[3px]">
-						<b className="font-medium text-text-high">{product.sellerName ?? product.seller}</b>
-						{sellerMeta && <em className="text-[10.5px] not-italic tracking-[0.1em]">{sellerMeta}</em>}
+						<b className="font-medium text-text-high">
+							{product.sellerHref ? (
+								<UiLink href={product.sellerHref} className="hover:underline">
+									{product.sellerName ?? product.seller}
+								</UiLink>
+							) : (
+								(product.sellerName ?? product.seller)
+							)}
+						</b>
+						{(product.sellerNpub || product.location) && (
+							<em className="text-[10.5px] not-italic tracking-[0.1em]">
+								{product.sellerNpub &&
+									(product.sellerHref ? (
+										<UiLink href={product.sellerHref} className="hover:underline">
+											{product.sellerNpub}
+										</UiLink>
+									) : (
+										product.sellerNpub
+									))}
+								{product.sellerNpub && product.location ? ' · ' : null}
+								{product.location}
+							</em>
+						)}
 					</span>
 				</div>
 

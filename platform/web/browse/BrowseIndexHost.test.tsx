@@ -85,6 +85,8 @@ mock.module('@platform/web/browse/browseIndexFeed', () => ({
 			id: product.id,
 			title: product.title,
 			seller: sellerNameFor?.(product.pubkey) ?? product.pubkey.slice(0, 8),
+			sellerHref: `/profile/${product.pubkey}`,
+			href: `/?p=${product.id}`,
 			image: product.image,
 			price: product.price,
 			priceCurrency: product.currency,
@@ -300,6 +302,17 @@ describe('BrowseIndexHost split view', () => {
 		expect(master).toContain('widget-category-rows')
 	})
 
+	test('mounts exactly one panel for ?q= with a product open', () => {
+		const markup = renderHost({ q: '', p: 'ceramic-ball' })
+
+		// The regression: the home's split and the results split both rendered the
+		// same `panel`, so the right side showed two stacked product panes. One
+		// base state owns the panel, so exactly one of each slot may appear.
+		expect(markup.split('data-slot="split-view"').length - 1).toBe(1)
+		expect(markup.split('data-slot="split-detail"').length - 1).toBe(1)
+		expect(markup.split('data-slot="product-detail-panel"').length - 1).toBe(1)
+	})
+
 	test('a tag-only browse keeps the results base state, with the panel beside the grid', () => {
 		const markup = renderHost({ q: '', tag: 'pottery', p: 'ceramic-ball' })
 
@@ -313,6 +326,29 @@ describe('BrowseIndexHost split view', () => {
 		const markup = renderHost({ q: '', p: undefined })
 		expect(markup).toContain('data-testid="widget-browse-idle-ctas"')
 		expect(markup).not.toContain('data-slot="split-master"')
+	})
+})
+
+describe('BrowseIndexHost card sizing', () => {
+	/** The results grid's opening tag, where the track sizing lives. */
+	const gridTag = (markup: string) => {
+		const at = markup.indexOf('data-slot="results-grid"')
+		expect(at).toBeGreaterThan(-1)
+		return markup.slice(markup.lastIndexOf('<', at), markup.indexOf('>', at) + 1)
+	}
+
+	test('sizes its tracks, so a card is the same width with and without the panel', () => {
+		const plain = gridTag(renderHost({ q: 'ceramic', p: undefined }))
+		const split = gridTag(renderHost({ q: 'ceramic', p: 'ceramic-ball' }))
+
+		// The card width is the grid's own track, capped at the frame's 320px —
+		// not a fraction of the pane, which is what made the card grow when the
+		// split took its share. Opening the panel changes the fit, not the size.
+		for (const grid of [plain, split]) {
+			expect(grid).toContain('grid-template-columns:repeat(auto-fit, minmax(0, 320px))')
+			expect(grid).toContain('justify-content:center')
+			expect(grid).not.toContain('grid-cols-3')
+		}
 	})
 })
 
@@ -364,6 +400,22 @@ describe('BrowseIndexHost idle index', () => {
 		expect(strip).toContain('seller-aaaa')
 		expect(strip).toContain('seller-bbbb')
 		expect(strip).not.toContain(`>${PUBKEY_A.slice(0, 8)}<`)
+	})
+
+	test('product surfaces are real links — the deep link and the seller profile', () => {
+		feedData = FEED
+
+		const home = renderHost({ q: '', p: undefined })
+		// The wall tile and the row card both link to the product's own state,
+		// and the seller line links to the profile route.
+		expect(home).toContain('href="/?p=ceramic-ball"')
+		expect(home).toContain(`href="/profile/${PUBKEY_A}"`)
+
+		// A results card keeps the term; the href is the state a plain click
+		// produces, so hover previews and middle-click are truthful.
+		const results = renderHost({ q: 'ceramic', p: undefined })
+		expect(results).toContain('href="/?q=ceramic&amp;p=ceramic-ball"')
+		expect(results).toContain(`href="/profile/${PUBKEY_A}"`)
 	})
 
 	test('states a category row count as loaded items, never the frame total', () => {

@@ -19,13 +19,20 @@
  * image (the deterministic art when it has none) and reveals its seller, title
  * and price on hover/focus. No veil — the strips are meant to be read and
  * clicked.
+ *
+ * Each tile is a real anchor to the product's deep link (a cover link over the
+ * whole 188×176 surface), so hover previews, middle-click and open-in-new-tab
+ * are the browser's own behaviour; a plain left click is intercepted and routed
+ * through `onSelect` so the host can open the panel in place. The seller in the
+ * hover info is a separate link to the profile route, painted above the cover.
  */
 
-import type { CSSProperties, FC, KeyboardEvent, MouseEventHandler, Ref } from 'react'
+import type { CSSProperties, FC, MouseEvent, Ref } from 'react'
 import { cn } from '../utils/cn'
 import { formatPriceUnit, formatSats } from '../utils/format'
+import { UiLink } from '../provider/UiProvider'
 import type { MaterialClass, ProductSymbolId } from './art'
-import { ListingImage } from './product-card'
+import { isModifiedActivation, ListingImage } from './product-card'
 
 // ---------------------------------------------------------------------------
 // Strip item props
@@ -54,6 +61,14 @@ export interface StripItem {
 	material: MaterialClass
 	/** Product icon symbol (defaults to material-indexed icon). */
 	symbolId?: ProductSymbolId
+	/**
+	 * The tile's real destination: the product's deep link (`?p=<id>`, with the
+	 * surface's `q`/`tag` where they apply). The whole tile is this link, so
+	 * hover previews, middle-click and open-in-new-tab work.
+	 */
+	href: string
+	/** The seller's profile link (`/profile/<pubkey>`), rendered in the hover info. */
+	sellerHref?: string
 }
 
 export interface ProductStripProps {
@@ -113,16 +128,16 @@ export const STRIP_DRIFT_CSS = `
  * it, so a tile can be read and clicked.
  */
 export const ProductStrip: FC<ProductStripProps> = ({ items, onSelect, reverse = false, className, ref, ...props }) => {
-	const handleClick: MouseEventHandler<HTMLElement> = (event) => {
-		const id = event.currentTarget.getAttribute('data-item-id')
-		if (id) onSelect?.(id)
-	}
-
-	const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-		if (event.key !== 'Enter' && event.key !== ' ') return
+	/**
+	 * A tile's activation. The tile is a real anchor; a plain left click opens
+	 * the product in place (the host's `?p=`), while modifier-clicks fall through
+	 * to the browser so the real href opens in a new tab/window. With no
+	 * `onSelect` the link simply navigates.
+	 */
+	const handleActivate = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
+		if (!onSelect || isModifiedActivation(event)) return
 		event.preventDefault()
-		const id = event.currentTarget.getAttribute('data-item-id')
-		if (id) onSelect?.(id)
+		onSelect(id)
 	}
 
 	const runs = stripRunCount(items.length)
@@ -149,11 +164,6 @@ export const ProductStrip: FC<ProductStripProps> = ({ items, onSelect, reverse =
 							data-item-id={item.id}
 							data-slot="strip-item"
 							data-testid={clone ? undefined : `widget-strip-item-${item.id}`}
-							role="button"
-							// The repeated runs are the same products: clickable, but not a
-							// second stop in the tab order or a second entry for a reader.
-							tabIndex={clone ? -1 : 0}
-							aria-label={priceLine ? `${item.title} — ${item.seller}, ${priceLine}` : `${item.title} — ${item.seller}`}
 							className={cn(
 								'group/tile',
 								'relative',
@@ -172,12 +182,7 @@ export const ProductStrip: FC<ProductStripProps> = ({ items, onSelect, reverse =
 								'hover:scale-[1.04]',
 								'hover:border-border-strong',
 								'hover:shadow-[0_4px_12px_rgba(0,0,0,0.12)]',
-								'focus-visible:outline-2',
-								'focus-visible:outline-offset-2',
-								'focus-visible:outline-focus-ring',
 							)}
-							onClick={handleClick}
-							onKeyDown={handleKeyDown}
 						>
 							{/* The listing's own shot; the deterministic art when it has none. */}
 							<ListingImage
@@ -190,7 +195,8 @@ export const ProductStrip: FC<ProductStripProps> = ({ items, onSelect, reverse =
 							/>
 
 							{/* Seller + title + price — visible on hover/focus, over a scrim so
-							    the ink stays legible whatever the image behind it is. */}
+							    the ink stays legible whatever the image behind it is. The
+							    seller is its own link, above the tile's cover link. */}
 							<div
 								data-slot="strip-info"
 								className={cn(
@@ -210,14 +216,24 @@ export const ProductStrip: FC<ProductStripProps> = ({ items, onSelect, reverse =
 									'transition-opacity',
 									'duration-150',
 									'group-hover/tile:opacity-100',
-									'group-focus/tile:opacity-100',
+									'group-focus-within/tile:opacity-100',
 								)}
 							>
 								<div
 									data-slot="strip-seller"
 									className={cn('text-[10px]', 'tracking-[0.12em]', 'uppercase', 'text-on-media/80', 'truncate')}
 								>
-									{item.seller}
+									{item.sellerHref ? (
+										<UiLink
+											href={item.sellerHref}
+											onClick={(e) => e.stopPropagation()}
+											className="pointer-events-auto relative z-20 hover:underline"
+										>
+											{item.seller}
+										</UiLink>
+									) : (
+										item.seller
+									)}
 								</div>
 								<div className={cn('flex', 'items-baseline', 'gap-1')}>
 									<span
@@ -236,6 +252,20 @@ export const ProductStrip: FC<ProductStripProps> = ({ items, onSelect, reverse =
 									</div>
 								)}
 							</div>
+
+							{/* The tile's cover link: the whole 188×176 surface is the anchor,
+							    so hover, middle-click and open-in-new-tab are native link
+							    behaviour. The seller link sits above it with its own target,
+							    and the duplicated runs are out of the tab order. */}
+							<UiLink
+								href={item.href}
+								onClick={(e) => handleActivate(e, item.id)}
+								aria-label={priceLine ? `${item.title} — ${item.seller}, ${priceLine}` : `${item.title} — ${item.seller}`}
+								tabIndex={clone ? -1 : undefined}
+								className="absolute inset-0 z-10 rounded-[6px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+							>
+								{null}
+							</UiLink>
 						</article>
 					)
 				})}
