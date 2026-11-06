@@ -3,7 +3,7 @@
  *
  * Wires the Browse shell to real reads (relay status, search/results stream,
  * tag facets, product detail). Renders all Phase-2 states:
- * - Idle: wall strips above/below hero (desktop only)
+ * - Idle: full-bleed wall strips above and below the hero
  * - Search results: grid with skeleton shimmer, empty marketplace, relay indicator
  * - Relay error: expanding per-relay detail popover; dead-search error panel
  * - Tag-filtered: facet badges derived from the search
@@ -39,7 +39,12 @@ import { formatPriceUnit } from '@ui/utils/format'
 import { useBrowseSearch, useBrowseFacets, useBrowseProductDetail } from '@platform/web/browse/browseQuery'
 import { materialForPubkey, type BrowseFacet, type BrowseProduct } from '@platform/web/browse/browseProductMap'
 import { feedStrips, useBrowseIndexFeed } from '@platform/web/browse/browseIndexFeed'
-import { getNormalizedProfileDisplayName, getNormalizedProfilePicture, useProfile } from '@platform/web/profiles/profileQuery'
+import {
+	getNormalizedProfileDisplayName,
+	getNormalizedProfilePicture,
+	useProfile,
+	useProfileNames,
+} from '@platform/web/profiles/profileQuery'
 import { usePriceDisplay } from '@platform/web/products/PriceDisplayHost'
 import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { useAuth } from '@platform/web/auth/authStore'
@@ -289,6 +294,13 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	const feedQuery = useBrowseIndexFeed()
 	const feed = feedQuery.data ?? null
 
+	// The wall's sellers, resolved in one batched profile read: a strip tile
+	// states the seller's name, not a pubkey prefix. The read is unconditional
+	// (hooks cannot be called inside the idle branch) and covers exactly the
+	// listings the wall can draw.
+	const wallProducts = (feed?.products ?? []).slice(0, IDLE_WALL_LIMIT)
+	const wallSellerNames = useProfileNames(wallProducts.map((product) => product.pubkey))
+
 	/**
 	 * The open product's row in the results — the hit that opened the panel.
 	 * A RabbitHole hit carries the relays it was seen on (`relays_seen`), which
@@ -473,9 +485,10 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 			? `Search ${feed.stats.products.toLocaleString('en-US')} items — try “ceramic”, “oak bowl”, or a seller’s npub`
 			: undefined
 
-	// The idle wall: loaded listings, split either side of the hero. Art is
-	// assigned the same way the cards assign it.
-	const wall = isIdle ? feedStrips(feed?.products ?? [], IDLE_WALL_LIMIT) : []
+	// The idle wall: the loaded listings, split either side of the hero. Each
+	// tile carries its own image, title, price and resolved seller name, and the
+	// art is assigned the same way the cards assign it.
+	const wall = isIdle ? feedStrips(wallProducts, IDLE_WALL_LIMIT, (pubkey) => wallSellerNames.get(pubkey)) : []
 	const wallSplit = Math.ceil(wall.length / 2)
 
 	const hasResults = !searchQuery.isLoading && (result?.products.length ?? 0) > 0
@@ -701,19 +714,23 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 						<EmptyStateBrowse query={q} hints={EMPTY_HINTS} {...emptyCopy} />
 					)}
 
-					{/* Results — the plain grid, or the same grid with the open product's
-					    panel beside it. The panel is the one element the home renders too. */}
-					{hasResults &&
-						(panel ? (
-							<SplitView
-								className="mt-5 h-[calc(100vh-10.5rem)] min-h-[520px]"
-								master={<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">{cards}</div>}
-								detail={panel}
-							/>
-						) : (
-							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">{cards}</div>
-						))}
+					{/* Results — the plain grid. The split view is rendered outside this
+					    container (below) so both of its panes reach the viewport edges;
+					    with a product open the same grid becomes its master pane. */}
+					{hasResults && !p && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">{cards}</div>}
 				</main>
+			)}
+
+			{/* The split is full-bleed: the owner's deliberate deviation from the
+			    frame's 56px side margins, so both panes take the page's full width.
+			    Nothing else on this screen leaves the container above. It renders
+			    the same `panel` element the home's own split renders. */}
+			{hasResults && p && (
+				<SplitView
+					className="mt-5 h-[calc(100vh-10.5rem)] min-h-[520px]"
+					master={<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">{cards}</div>}
+					detail={panel}
+				/>
 			)}
 
 			{/* Inject shimmer keyframes into DOM (art module CSS) */}

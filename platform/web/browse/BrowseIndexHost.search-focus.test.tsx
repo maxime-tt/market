@@ -59,6 +59,9 @@ mock.module('@platform/web/utils/clipboard', () => ({ copyToClipboard: async () 
 
 mock.module('@platform/web/profiles/profileQuery', () => ({
 	useProfile: () => ({ data: null }),
+	// The host reads the idle wall's seller names unconditionally — a hook
+	// cannot live inside the state branch — so the stub answers it empty.
+	useProfileNames: () => new Map<string, string>(),
 	getNormalizedProfileDisplayName: () => null,
 	getNormalizedProfilePicture: () => '',
 }))

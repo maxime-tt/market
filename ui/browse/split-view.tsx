@@ -24,6 +24,14 @@
  *
  * The group fills its parent, so `className` lands on the wrapper that carries
  * the height: the frame pins its split to the viewport's middle row.
+ *
+ * **Full-bleed, by the owner's decision.** The frame insets the split by 56px on
+ * each side (`margin: 0 56px`); the owner asked for those side margins removed
+ * so both panes take the page's full width, edge to edge. That is a deliberate
+ * deviation from the frame, and it is why the split carries no horizontal
+ * margin or padding of its own: the caller renders it outside the page's
+ * centred container, and each pane keeps only its own inner gutter (`px-6.5`)
+ * so content is not glued to the viewport edge.
  */
 
 import { useState, type CSSProperties, type FC, type KeyboardEvent, type PointerEvent, type ReactNode, type Ref } from 'react'
@@ -134,7 +142,7 @@ export const SplitView: FC<SplitViewProps> = ({
 				className="h-full animate-[split-master-shift_300ms_ease-out_both] motion-reduce:animate-none"
 				style={{ transform: 'translateX(calc(-1 * var(--split-detail-width)))' }}
 			>
-				<div data-slot="split-master" className="h-full min-h-0 overflow-y-auto pr-6.5 pt-4">
+				<div data-slot="split-master" className="h-full min-h-0 overflow-y-auto px-6.5 pt-4">
 					{master}
 				</div>
 			</div>
@@ -142,7 +150,7 @@ export const SplitView: FC<SplitViewProps> = ({
 			{/* The detail overlays the right edge and slides in over the master. */}
 			<div
 				data-slot="split-detail"
-				className="absolute inset-y-0 right-0 flex min-h-0 flex-col overflow-y-auto border-l border-border-default bg-background pl-6.5 pt-4 animate-[split-detail-in_300ms_ease-out_both] motion-reduce:animate-none"
+				className="absolute inset-y-0 right-0 flex min-h-0 flex-col overflow-y-auto border-l border-border-default bg-background px-6.5 pt-4 animate-[split-detail-in_300ms_ease-out_both] motion-reduce:animate-none"
 				style={{ width: 'var(--split-detail-width)' }}
 			>
 				{detail}

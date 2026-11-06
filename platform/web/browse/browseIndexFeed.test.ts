@@ -57,11 +57,52 @@ describe('groupProductsByCategory', () => {
 })
 
 describe('feedStrips', () => {
-	test('maps real listings to strip items — id, title, and the pubkey as seller', () => {
+	test('maps real listings to strip items — id, title, and the pubkey as the seller fallback', () => {
 		const strips = feedStrips([product('1', A, [])], 8)
 		expect(strips).toEqual([
-			{ id: '1', title: 'Product 1', seller: A.slice(0, 8), material: expect.any(String), symbolId: expect.any(String) },
+			{
+				id: '1',
+				title: 'Product 1',
+				seller: A.slice(0, 8),
+				image: undefined,
+				price: undefined,
+				priceCurrency: undefined,
+				material: expect.any(String),
+				symbolId: expect.any(String),
+			},
 		])
+	})
+
+	test("carries the listing's own image, price and unit — the facts the card shows", () => {
+		const listing: BrowseProduct = {
+			...product('1', A, []),
+			image: 'https://cdn.example/bowl.jpg',
+			price: 21000,
+			currency: 'USD',
+		}
+		const [strip] = feedStrips([listing], 8)
+		expect(strip?.image).toBe('https://cdn.example/bowl.jpg')
+		expect(strip?.price).toBe(21000)
+		expect(strip?.priceCurrency).toBe('USD')
+	})
+
+	test('a listing with no image still carries the deterministic art as its fallback', () => {
+		const [strip] = feedStrips([product('1', A, [])], 8)
+		expect(strip?.image).toBeUndefined()
+		// The art is the fallback the tile renders: material + symbol, assigned
+		// from the pubkey exactly as the card assigns them.
+		expect(strip?.material).toMatch(/^m[1-8]$/)
+		expect(strip?.symbolId).toMatch(/^p-/)
+	})
+
+	test('states the seller name the resolver returns, not a pubkey prefix', () => {
+		const [strip] = feedStrips([product('1', A, [])], 8, (pubkey) => (pubkey === A ? 'Atelier Norte' : undefined))
+		expect(strip?.seller).toBe('Atelier Norte')
+	})
+
+	test('falls back to the pubkey prefix when the seller has no profile name', () => {
+		const [strip] = feedStrips([product('1', A, [])], 8, () => undefined)
+		expect(strip?.seller).toBe(A.slice(0, 8))
 	})
 
 	test('caps at the requested limit', () => {

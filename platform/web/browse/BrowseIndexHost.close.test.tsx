@@ -57,6 +57,7 @@ mock.module('@platform/web/utils/clipboard', () => ({
 // the host builds its cards and panel without a QueryClient or NDK behind it.
 mock.module('@platform/web/profiles/profileQuery', () => ({
 	useProfile: () => ({ data: null }),
+	useProfileNames: () => new Map<string, string>(),
 	getNormalizedProfileDisplayName: () => null,
 	getNormalizedProfilePicture: () => '',
 }))

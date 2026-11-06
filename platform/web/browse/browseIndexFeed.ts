@@ -79,12 +79,29 @@ export function groupProductsByCategory(products: readonly BrowseProduct[]): Bro
 	})).filter((row) => row.items.length > 0)
 }
 
-/** The wall strips: real listings, art assigned the same way the cards assign it. */
-export function feedStrips(products: readonly BrowseProduct[], limit: number): StripItem[] {
+/**
+ * The wall strips: real listings, carrying the same facts the card shows — the
+ * listing's own image (the deterministic art is the fallback), its title, its
+ * seller and its price — with the art assigned the same way the cards assign
+ * it.
+ *
+ * `sellerNameFor` resolves an author's profile display name; a seller with no
+ * profile keeps the pubkey prefix, which is the card's own fallback. The
+ * resolver is a parameter rather than a read here because this module is the
+ * feed, not a React binding: the host owns the profile read.
+ */
+export function feedStrips(
+	products: readonly BrowseProduct[],
+	limit: number,
+	sellerNameFor?: (pubkey: string) => string | undefined,
+): StripItem[] {
 	return products.slice(0, limit).map((product) => ({
 		id: product.id,
 		title: product.title,
-		seller: product.pubkey.slice(0, 8),
+		seller: sellerNameFor?.(product.pubkey) ?? product.pubkey.slice(0, 8),
+		image: product.image,
+		price: product.price,
+		priceCurrency: product.currency,
 		material: materialForPubkey(product.pubkey),
 		symbolId: symbolForPubkey(product.pubkey),
 	}))

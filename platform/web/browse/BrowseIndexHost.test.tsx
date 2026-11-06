@@ -54,6 +54,9 @@ let profilePicture = ''
 
 mock.module('@platform/web/profiles/profileQuery', () => ({
 	useProfile: () => ({ data: profileName || profilePicture ? { profile: { display_name: profileName, picture: profilePicture } } : null }),
+	// The wall's batched seller-name read: one name per author, as the real hook
+	// returns it, so the strip's seller is a name rather than a pubkey prefix.
+	useProfileNames: (pubkeys: readonly string[]) => new Map(pubkeys.map((pubkey) => [pubkey, `seller-${pubkey.slice(0, 4)}`])),
 	getNormalizedProfileDisplayName: (profile: { display_name?: string | null } | null | undefined) => profile?.display_name ?? null,
 	getNormalizedProfilePicture: (profile: { picture?: string } | null | undefined) => profile?.picture ?? '',
 }))
@@ -75,12 +78,16 @@ let feedError = false
 
 mock.module('@platform/web/browse/browseIndexFeed', () => ({
 	useBrowseIndexFeed: () => ({ data: feedData, isLoading: feedLoading, isError: feedError }),
-	// The real pure helpers: the strips the host renders are the shape under test.
-	feedStrips: (products: readonly BrowseProduct[], limit: number) =>
+	// The strips the host renders are the shape under test: the same fields the
+	// real helper carries, including the seller-name resolver the host passes.
+	feedStrips: (products: readonly BrowseProduct[], limit: number, sellerNameFor?: (pubkey: string) => string | undefined) =>
 		products.slice(0, limit).map((product) => ({
 			id: product.id,
 			title: product.title,
-			seller: product.pubkey.slice(0, 8),
+			seller: sellerNameFor?.(product.pubkey) ?? product.pubkey.slice(0, 8),
+			image: product.image,
+			price: product.price,
+			priceCurrency: product.currency,
 			material: 'm1',
 			symbolId: 'p-bowl',
 		})),
@@ -218,6 +225,17 @@ describe('BrowseIndexHost split view', () => {
 		expect(markup).toContain('aria-label="Close product"')
 	})
 
+	test('renders the split outside the page’s centred container, so both panes are full-bleed', () => {
+		const markup = renderHost({ p: 'ceramic-ball' })
+
+		// The results container keeps its max-width; the split is a sibling of it,
+		// not a child, so its panes reach the viewport edges.
+		const mainEnd = markup.indexOf('</main>')
+		const splitStart = markup.indexOf('data-slot="split-view"')
+		expect(mainEnd).toBeGreaterThan(-1)
+		expect(splitStart).toBeGreaterThan(mainEnd)
+	})
+
 	test('leaves the plain results grid when ?p= is absent', () => {
 		const markup = renderHost({ p: undefined })
 
@@ -334,6 +352,18 @@ describe('BrowseIndexHost idle index', () => {
 
 		// the wall strips are the feed's own listings
 		expect(markup).toContain('Handcrafted Ceramic Ball')
+	})
+
+	test('the wall tiles state the seller’s name, not a pubkey prefix', () => {
+		feedData = FEED
+		const markup = renderHost({ q: '', p: undefined })
+
+		// The batched profile read resolves each author; the strip carries it.
+		const stripStart = markup.indexOf('data-slot="product-strip"')
+		const strip = markup.slice(stripStart, markup.indexOf('data-testid="widget-category-rows"'))
+		expect(strip).toContain('seller-aaaa')
+		expect(strip).toContain('seller-bbbb')
+		expect(strip).not.toContain(`>${PUBKEY_A.slice(0, 8)}<`)
 	})
 
 	test('states a category row count as loaded items, never the frame total', () => {

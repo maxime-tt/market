@@ -60,6 +60,25 @@ describe('SplitView', () => {
 		expect(markup).toContain('@keyframes split-detail-in')
 	})
 
+	test('both panes are full-bleed — no side margins, only each pane’s own gutter', () => {
+		const markup = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null }))
+
+		// The owner's deviation from the frame's `margin: 0 56px`: the split
+		// carries no horizontal margin or padding of its own, so both panes reach
+		// the viewport edges.
+		const root = markup.slice(markup.indexOf('data-slot="split-view"'), markup.indexOf('data-slot="split-shift"'))
+		expect(root).not.toContain('mx-')
+		expect(root).not.toContain('px-')
+		expect(root).not.toContain('margin')
+
+		// Each pane keeps a symmetric inner gutter, so content is not glued to
+		// the edge — the master's left and the detail's right included.
+		const master = markup.slice(markup.indexOf('data-slot="split-master"'), markup.indexOf('data-slot="split-detail"'))
+		expect(master).toContain('px-6.5')
+		const detail = markup.slice(markup.indexOf('data-slot="split-detail"'), markup.indexOf('data-slot="split-separator"'))
+		expect(detail).toContain('px-6.5')
+	})
+
 	test('applies extra classes to the wrapper', () => {
 		const markup = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null, className: 'h-[640px]' }))
 		expect(markup).toContain('h-[640px]')

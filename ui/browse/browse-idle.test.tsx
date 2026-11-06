@@ -62,6 +62,36 @@ describe('BrowseIdle hero', () => {
 		expect(motdText(markup)).not.toMatch(/\d/)
 	})
 
+	test('draws one full-bleed strip above the title block and one below it', () => {
+		const strip = (id: string) => ({ id, title: `Product ${id}`, seller: 'atelier-norte', material: 'm1' as const })
+		const markup = renderToStaticMarkup(
+			createElement(BrowseIdle, { ...BASE, stripsAbove: [strip('above')], stripsBelow: [strip('below')] }),
+		)
+
+		const above = markup.indexOf('data-slot="browse-strip-above"')
+		const title = markup.indexOf('<h1')
+		const below = markup.indexOf('data-slot="browse-strip-below"')
+
+		// The owner's order: a row of products above the title block, one below.
+		expect(above).toBeGreaterThan(-1)
+		expect(title).toBeGreaterThan(above)
+		expect(below).toBeGreaterThan(title)
+
+		// Both strips are the same full-bleed band, drifting opposite ways.
+		expect(markup).toContain('widget-strip-item-above')
+		expect(markup).toContain('widget-strip-item-below')
+		expect(markup).toContain('animate-[strip-drift_58s_linear_infinite]')
+		expect(markup).toContain('animate-[strip-drift_72s_linear_infinite_reverse]')
+	})
+
+	test('the band is full-bleed while the hero keeps its centred column', () => {
+		const markup = renderToStaticMarkup(createElement(BrowseIdle, BASE))
+		// The band's container carries no max-width of its own…
+		expect(markup).toContain('<main class="w-full py-4">')
+		// …and the hero inside it is the frame's ~800px column.
+		expect(markup).toContain('max-w-[800px]')
+	})
+
 	test('renders the measured facts when stats are passed', () => {
 		const markup = renderToStaticMarkup(
 			createElement(BrowseIdle, { ...BASE, stats: { products: 5, sellers: 2, postedLast24h: 1, relays: 3 } }),
