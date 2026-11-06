@@ -80,6 +80,10 @@ describe('NDK direction guard (scripts/check-ndk-direction.sh)', () => {
 		while (roots.length) await rm(roots.pop()!, { recursive: true, force: true })
 	})
 
+	// This test spawns the real guard script over the whole repo. Measured on this box: 7.7s
+	// standalone, over 5s under load — against Bun's default 5s per-test budget, so the budget was
+	// the flake, not the assertion. The 30s third argument below gives it room; what it asserts is
+	// unchanged.
 	test('exits 0 against the real repo and reports M8/M9/M10', () => {
 		const r = runGuard(ROOT)
 		expect(r.stderr).toBe('')
@@ -103,7 +107,7 @@ describe('NDK direction guard (scripts/check-ndk-direction.sh)', () => {
 		// ratchet-invariant assertions below were retired with the rows.)
 		expect(r.stdout).toContain('complete=no')
 		expect(r.stdout).toContain('OK')
-	})
+	}, 30_000)
 
 	test('fails (exit 1) when sdk/ production gains an un-allowlisted NDK import', async () => {
 		const root = await stageRepo({
