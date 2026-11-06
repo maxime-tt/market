@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { configActions } from '@sdk/config/app-config'
+import { applyBrowseSearchConfig } from '@platform/web/config/browseSearchBinding'
 import type { PublicAppConfig } from '@sdk/config/instance-config'
 import { parsePublicConfigEnvelope } from '@sdk/core/publicConfig'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
@@ -30,6 +31,7 @@ const fetchConfig = async (): Promise<PublicAppConfig> => {
 	console.log('Fetched config:', config)
 	cachedConfig = config
 	configActions.setConfig(config)
+	applyBrowseSearchConfig(config)
 	return config
 }
 

@@ -1,6 +1,7 @@
 import { Store } from '@tanstack/store'
 import type { QueryClient } from '@tanstack/react-query'
 import { configActions } from '@platform/web/config/appConfigStore'
+import { applyBrowseSearchConfig } from '@platform/web/config/browseSearchBinding'
 import { ndkActions, ndkStore } from '@platform/web/ndk/ndkStore'
 import { authActions, getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { setSignerSource } from '@platform/web/applesauceIo'
@@ -51,6 +52,7 @@ export function bootApp(queryClient: QueryClient): Promise<void> {
 			const config = await fetchConfig()
 
 			configActions.setConfig(config)
+			applyBrowseSearchConfig(config)
 			queryClient.setQueryData(configKeys.all, config)
 			console.log('Fetched config:', { stage: config.stage, appRelay: config.appRelay })
 

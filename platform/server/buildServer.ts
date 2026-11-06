@@ -1,4 +1,5 @@
 import { serve, type Server } from 'bun'
+import { buildBrowseSearchRoutes } from './http/browseSearch'
 import { configRoutes } from './http/config'
 import { nip05Routes } from './http/nip05'
 import { ogRoutes } from './http/og'
@@ -36,6 +37,9 @@ export function buildServer({ indexHtml }: BuildServerOptions): Server<undefined
 		...zapPurchaseRoutes,
 		...nip05Routes,
 		...staticRoutes,
+		// Browse search proxy — mounted only when the instance selects the
+		// `rabbithole` provider; an empty record (nothing mounted) by default.
+		...buildBrowseSearchRoutes(),
 		// Product pages get og: meta tags server-rendered into the initial
 		// HTML (issue #459) — must beat the catch-all below.
 		...ogRoutes(indexHtml),

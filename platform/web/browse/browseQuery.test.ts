@@ -139,6 +139,7 @@ import {
 	configureBrowseSearch,
 	fetchSellerListings,
 	getBrowseSearchProvider,
+	resetBrowseSearchConfig,
 	type BrowseSearchResult,
 } from './browseQuery'
 
@@ -187,7 +188,7 @@ async function runQueryFn(query: string, tag?: string, signal?: AbortSignal): Pr
 }
 
 beforeEach(() => {
-	configureBrowseSearch({ provider: 'local' })
+	resetBrowseSearchConfig()
 	localStreamCalls = 0
 	fetchStub = null
 	lastStreamFilters = []
@@ -197,7 +198,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-	configureBrowseSearch({ provider: 'local' })
+	resetBrowseSearchConfig()
 	globalThis.fetch = realFetch
 })
 
@@ -238,6 +239,37 @@ describe('browse search provider switch', () => {
 		expect(result.products.map((p) => p.id)).toEqual(['rh-mug'])
 		expect(result.eose).toEqual(['wss://a'])
 		expect(localStreamCalls).toBe(0) // the local stream was not consulted
+	})
+
+	test('with no configured base URL the client keeps its loopback default', async () => {
+		configureBrowseSearch({ provider: 'rabbithole' })
+		const requestedUrls: string[] = []
+		stubFetch(async (input: RequestInfo | URL) => {
+			requestedUrls.push(String(input))
+			return ndjsonResponse([JSON.stringify({ type: 'search', candidateCount: 0, hits: [] }), rhOutcome('complete', [], [])])
+		})
+
+		await runQueryFn('ceramic mug')
+		expect(requestedUrls).toEqual(['http://127.0.0.1:7711/search'])
+	})
+
+	test('a configured base URL is honoured end to end (config → client)', async () => {
+		configureBrowseSearch({ provider: 'rabbithole', baseUrl: '/api/browse-search' })
+		const requestedUrls: string[] = []
+		stubFetch(async (input: RequestInfo | URL) => {
+			requestedUrls.push(String(input))
+			return ndjsonResponse([
+				JSON.stringify({ type: 'search', candidateCount: 1, hits: [] }),
+				JSON.stringify({ type: 'event', event: rhEvent }),
+				rhOutcome('complete', ['wss://a'], []),
+			])
+		})
+
+		const result = await runQueryFn('ceramic mug')
+		// The same-origin proxy path the host publishes — never the loopback address.
+		expect(requestedUrls).toEqual(['/api/browse-search/search'])
+		expect(result.products.map((p) => p.id)).toEqual(['rh-mug'])
+		expect(localStreamCalls).toBe(0)
 	})
 
 	test('a rabbithole partial verdict reaches the result as the relay-failure state', async () => {

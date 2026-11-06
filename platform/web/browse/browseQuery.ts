@@ -63,10 +63,18 @@ export type BrowseSearchProvider = 'local' | 'rabbithole'
 export interface BrowseSearchConfig {
 	/** The search provider. Omitting it keeps the current value (default `local`). */
 	provider?: BrowseSearchProvider
+	/**
+	 * The API base the client POSTs to, e.g. `/api/browse-search` on the app's own
+	 * origin. Omitting it keeps the current value (the RabbitHole client's own
+	 * default, `http://127.0.0.1:7711`) — which only works when the browser IS on
+	 * the service's box, so a deployed instance always sets this.
+	 */
+	baseUrl?: string
 }
 
 interface ResolvedBrowseSearchConfig {
 	provider: BrowseSearchProvider
+	baseUrl?: string
 }
 
 let browseSearchConfig: ResolvedBrowseSearchConfig = { provider: 'local' }
@@ -77,12 +85,25 @@ let browseSearchConfig: ResolvedBrowseSearchConfig = { provider: 'local' }
  * until this is called with `rabbithole`.
  */
 export function configureBrowseSearch(config: BrowseSearchConfig): void {
-	browseSearchConfig = { provider: config.provider ?? browseSearchConfig.provider }
+	browseSearchConfig = {
+		provider: config.provider ?? browseSearchConfig.provider,
+		baseUrl: config.baseUrl ?? browseSearchConfig.baseUrl,
+	}
 }
 
 /** The configured browse search provider (read at query time, per request). */
 export function getBrowseSearchProvider(): BrowseSearchProvider {
 	return browseSearchConfig.provider
+}
+
+/** The configured API base, or `undefined` to let the client use its loopback default. */
+export function getBrowseSearchBaseUrl(): string | undefined {
+	return browseSearchConfig.baseUrl
+}
+
+/** Reset the switch to its defaults (`local`, no base override), primarily for tests. */
+export function resetBrowseSearchConfig(): void {
+	browseSearchConfig = { provider: 'local' }
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +176,7 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
 						{ q: query, limit, filters },
 						{
 							signal: context.signal,
+							baseUrl: getBrowseSearchBaseUrl(),
 						},
 					)
 				} catch (err) {
