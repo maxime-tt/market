@@ -21,6 +21,7 @@ import (
 
 	cmtbytes "github.com/cometbft/cometbft/libs/bytes"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	jsonrpctypes "github.com/cometbft/cometbft/rpc/jsonrpc/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 )
 
@@ -67,6 +68,15 @@ type APIServer struct {
 }
 
 const browserReleasePinsPath = "/etc/plebeian-auctions-friday/browser-r20-pins.json"
+
+// applicationRejectionLogMarker identifies a deterministic CheckTx rejection in
+// the CometBFT RPC error body.  broadcast_tx_commit returns JSON-RPC code
+// -32603 ("Internal error") with the application's verdict embedded as
+// "broadcast error on transaction validation: tx ... is invalid: code=1,
+// data=, log='<app log>', codespace='<app codespace>'".  Only that explicit
+// marker proves an application verdict; a timeout, refused connection or
+// ambiguous broadcast does not carry it and must stay a 503.
+const applicationRejectionLogMarker = "broadcast error on transaction validation:"
 
 type BrowserReleasePinsV1 struct {
 	Schema                  string `json:"schema"`
@@ -579,9 +589,18 @@ func (server *APIServer) broadcast(response http.ResponseWriter, request *http.R
 	}
 	result, err := client.BroadcastTxCommit(ctx, cmttypes.Tx(raw))
 	if err != nil {
-		// A transport, RPC, timeout, cache or duplicate outcome is not proof of a
-		// permanent application rejection.  Only an explicit CheckTx/FinalizeBlock
-		// result below is safe to classify as 422.
+		// A deterministic application rejection must not be reported as a
+		// transport failure.  CometBFT's BroadcastTxCommit surfaces a CheckTx
+		// rejection as an error (RPCError code 22, with the CheckTx log) rather
+		// than as a populated result, so the branch below never fires for the
+		// commonest failure a user actually hits.  Classify only that explicit,
+		// documented shape as 422; every other error stays a 503, because a
+		// transport, RPC, timeout, cache or duplicate outcome is not proof of a
+		// permanent application rejection.
+		if rejected, ok := applicationRejectionLog(err); ok {
+			writeError(response, http.StatusUnprocessableEntity, errors.New(rejected))
+			return
+		}
 		writeError(response, http.StatusServiceUnavailable, errors.New("consensus transaction outcome unavailable"))
 		return
 	}
@@ -594,6 +613,49 @@ func (server *APIServer) broadcast(response http.ResponseWriter, request *http.R
 		return
 	}
 	writeJSON(response, http.StatusOK, map[string]any{"height": result.Height, "tx_hash": strings.ToUpper(hex.EncodeToString(result.Hash)), "check_code": result.CheckTx.Code, "deliver_code": result.TxResult.Code})
+}
+
+// applicationRejectionLog reports the CheckTx log when err is CometBFT's
+// deterministic application rejection, and false for every transport-shaped
+// error.  CometBFT returns RPCError code 22 ("Invalid Request", carrying the
+// CheckTx log) when CheckTx refuses a transaction; a timeout, a refused
+// connection or an ambiguous broadcast does not carry that code, so those stay
+// 503 rather than being mislabelled as a permanent rejection.
+func applicationRejectionLog(err error) (string, bool) {
+	// The HTTP client returns *RPCError (a pointer) while other callers can
+	// produce the value form, so both must classify.  A pointer target alone
+	// would silently fail errors.As for a value error, which is exactly how the
+	// original bug hid.
+	var detail string
+	var rpcErrPtr *jsonrpctypes.RPCError
+	if errors.As(err, &rpcErrPtr) && rpcErrPtr != nil {
+		detail = rpcErrPtr.Data
+	} else {
+		var rpcErrValue jsonrpctypes.RPCError
+		if !errors.As(err, &rpcErrValue) {
+			return "", false
+		}
+		detail = rpcErrValue.Data
+	}
+	if !strings.Contains(detail, applicationRejectionLogMarker) {
+		return "", false
+	}
+	// Require an actual verdict after the marker.  A body that is only the
+	// marker carries no application reason, so it is not proof of a rejection.
+	verdict := strings.TrimSpace(detail[strings.Index(detail, applicationRejectionLogMarker)+len(applicationRejectionLogMarker):])
+	if verdict == "" {
+		return "", false
+	}
+	// Prefer the application's own log= field; fall back to the whole verdict so
+	// the caller still sees a real reason rather than a generic transport error.
+	if start := strings.Index(verdict, "log='"); start >= 0 {
+		if end := strings.Index(verdict[start+len("log='"):], "'"); end >= 0 {
+			if appLog := strings.TrimSpace(verdict[start+len("log='") : start+len("log='")+end]); appLog != "" {
+				return appLog, true
+			}
+		}
+	}
+	return verdict, true
 }
 
 func (server *APIServer) firstHealthyClient(ctx context.Context) (*rpchttp.HTTP, error) {
