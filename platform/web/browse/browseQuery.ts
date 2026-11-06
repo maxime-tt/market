@@ -7,24 +7,31 @@
  * - A single-entity read (product detail by id) may `fetch` with a
  *   one-line justification comment at the call site
  * - Never `fetch` a list
+ *
+ * The search list has ONE query path (`browseSearchQueryOptions` /
+ * `useBrowseSearch`) with a **provider switch**:
+ * - `local` (the default) — the SDK event-store stream, matched in memory
+ * - `rabbithole` — the RabbitHole search service (streamed NDJSON), which
+ *   falls back to the local stream when unreachable or when it fails
+ *
+ * The switch is one config point ({@link configureBrowseSearch}); the default
+ * is `local`, so behaviour is unchanged until it is switched. The switch only
+ * chooses the data source — the query's signature, return type, and every
+ * downstream state (skeleton, empty, relay-failed, tag-filtered) are unchanged.
  */
 
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { getReadContext } from '../readContext'
 import type { EventFilter } from '@sdk/core/event-store/filter'
 import type { CaughtUpInfo } from '@sdk/core/event-store/read'
-import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+// Shared shapes and the canonical kind-30402 mapper (also used by the client).
+import { mapProduct, type BrowseProduct, type BrowseSearchResult } from './browseProductMap'
 // Canonical read model: sdk/commerce/discovery/productReadModel.ts
-import {
-	getProductCategories,
-	getProductImages,
-	getProductPrice,
-	getProductId,
-	getProductPubkey,
-	getProductStock,
-	getProductSummary,
-	getProductTitle,
-} from '@sdk/commerce/discovery'
+import { getProductCategories, getProductSummary, getProductTitle } from '@sdk/commerce/discovery'
+import { rabbitholeSearch } from './rabbitholeClient'
+
+// Re-exported so existing consumers (`BrowseIndexHost`) keep their imports.
+export type { BrowseProduct, BrowseSearchResult }
 
 // ---------------------------------------------------------------------------
 // Query key factory
@@ -32,67 +39,80 @@ import {
 
 export const browseKeys = {
 	all: ['browse'] as const,
-	/** Stream filter for kind-30402 products matching a query/tag. */
-	search: (filters: { query: string; tag?: string; limit?: number }) => [...browseKeys.all, 'search', filters] as const,
+	/** Stream filter for kind-30402 products matching a query/tag (per provider). */
+	search: (filters: { query: string; tag?: string; limit?: number; provider: BrowseSearchProvider }) =>
+		[...browseKeys.all, 'search', filters] as const,
 	/** Single product detail by event id (fetch, not stream). */
 	detail: (id: string) => [...browseKeys.all, 'detail', id] as const,
 } as const
 
 // ---------------------------------------------------------------------------
-// BrowseProduct shape — consumed by @ui/browse/product-card
+// Search provider switch — one config point, defaulting to the local stream
 // ---------------------------------------------------------------------------
 
-/** The minimal product shape the Browse UI expects. */
-export interface BrowseProduct {
-	id: string
-	pubkey: string
-	title: string
-	price?: number
-	stock?: string
-	image?: string
-	categories: string[]
+/** Which search provider answers the browse search list. */
+export type BrowseSearchProvider = 'local' | 'rabbithole'
+
+export interface BrowseSearchConfig {
+	/** The search provider. Omitting it keeps the current value (default `local`). */
+	provider?: BrowseSearchProvider
 }
 
-/** Return shape for the browse search stream — products plus relay status. */
-export interface BrowseSearchResult {
-	/** Filtered products from the stream. */
-	products: BrowseProduct[]
-	/** Relays that reached EOSE (answered) before the caught-up marker. */
-	eose: string[]
-	/** Relays that did not reach EOSE (still pending). */
-	pending: string[]
+interface ResolvedBrowseSearchConfig {
+	provider: BrowseSearchProvider
 }
+
+let browseSearchConfig: ResolvedBrowseSearchConfig = { provider: 'local' }
 
 /**
- * Map a kind-30402 NostrEventLike into a BrowseProduct using the canonical
- * discovery read model (sdk/commerce/discovery/productReadModel.ts).
- * Exactly as ui/products/product-card-view.tsx does: getProductId,
- * getProductTitle, getProductPrice, getProductImages, getProductStock,
- * getProductCategories — each over ProductReadEvent.
+ * Choose the browse search provider as configuration rather than import.
+ * Merges into the current config. The default is `local`, so nothing changes
+ * until this is called with `rabbithole`.
  */
-function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
-	const title = getProductTitle(event)
-	const priceTag = getProductPrice(event)
-	const price = priceTag ? Number(priceTag[1]) || undefined : undefined
-	const stockTag = getProductStock(event)
-	const stock = stockTag?.[1]
-	const images = getProductImages(event)
-	const image = images.length > 0 ? images[0][1] : undefined
-	const categories = getProductCategories(event).map((t) => t[1])
-	const pubkey = getProductPubkey(event)
-	const id = getProductId(event) || event.id
+export function configureBrowseSearch(config: BrowseSearchConfig): void {
+	browseSearchConfig = { provider: config.provider ?? browseSearchConfig.provider }
+}
 
-	if (!title && !id) return undefined
+/** The configured browse search provider (read at query time, per request). */
+export function getBrowseSearchProvider(): BrowseSearchProvider {
+	return browseSearchConfig.provider
+}
 
-	return {
-		id,
-		pubkey,
-		title: title || 'Untitled',
-		price,
-		stock,
-		image,
-		categories,
+// ---------------------------------------------------------------------------
+// Search — local provider (the SDK event-store stream)
+// ---------------------------------------------------------------------------
+
+/**
+ * The local search: the SDK read seam's kind-30402 stream, matched in memory.
+ * The sdk read seam's EventFilter has no NIP-50 `search` field yet, so Browse
+ * v1 reads a bounded kind-30402 set and matches the query locally — the interim
+ * shape the plan records (`search-v2-fast-index` owns its replacement).
+ */
+async function searchLocal(query: string, tag: string | undefined, limit: number): Promise<BrowseSearchResult> {
+	const ctx = getReadContext()
+	const filter: EventFilter = { kinds: [30402], limit }
+	if (tag) {
+		filter['#t'] = [tag]
 	}
+
+	const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+	const products: BrowseProduct[] = []
+	let caughtUpInfo: CaughtUpInfo | null = null
+	for await (const item of ctx.stream([filter])) {
+		if (item.type === 'event') {
+			const product = mapProduct(item.event)
+			if (product) {
+				const haystack =
+					`${getProductTitle(item.event)} ${getProductSummary(item.event) ?? ''} ${(getProductCategories(item.event) ?? []).flat().join(' ')}`.toLowerCase()
+				if (terms.every((term) => haystack.includes(term))) products.push(product)
+			}
+		}
+		if (item.type === 'caught-up') {
+			caughtUpInfo = item.info
+			break
+		}
+	}
+	return { products, eose: caughtUpInfo?.eose ?? [], pending: caughtUpInfo?.pending ?? [] }
 }
 
 // ---------------------------------------------------------------------------
@@ -101,43 +121,45 @@ function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
 
 /**
  * Query options for the browse search/results stream.
- * Uses `stream()` — never `fetch` for lists.
- * Mirrors platform/web/products/productQuery.ts fetchProductsBySearch:
- * kind 30402, NIP-50 free-text search string, optional #t tag filter.
+ *
+ * The provider choice ({@link getBrowseSearchProvider}) is the only variable:
+ * - `local` reads the SDK event-store stream (the list is a **stream**).
+ * - `rabbithole` POSTs the query to the search service and reads its one
+ *   streamed NDJSON response (also a stream — one request, one response).
+ *   When the service is unreachable, times out, or fails, it falls back to the
+ *   local stream, so a dead provider degrades Browse to its v1 behaviour
+ *   instead of breaking it.
+ *
+ * The signature and `BrowseSearchResult` return type are unchanged by the
+ * switch; a RabbitHole `partial` verdict keeps its failed relays in `pending`
+ * (the relay-failure state) and is never flattened into a plain result.
  */
 export function browseSearchQueryOptions(query: string, tag?: string, limit = 100) {
 	return queryOptions({
-		queryKey: browseKeys.search({ query, tag, limit }),
-		queryFn: async () => {
+		queryKey: browseKeys.search({ query, tag, limit, provider: getBrowseSearchProvider() }),
+		queryFn: async (context) => {
 			if (!query?.trim()) return { products: [], eose: [], pending: [] }
 
-			const ctx = getReadContext()
-			// The sdk read seam's EventFilter has no NIP-50 `search` field yet, so Browse
-			// v1 reads a bounded kind-30402 set and matches the query locally — the interim
-			// shape the plan records (`search-v2-fast-index` owns its replacement).
-			const filter: EventFilter = { kinds: [30402], limit }
-			if (tag) {
-				filter['#t'] = [tag]
+			if (getBrowseSearchProvider() === 'rabbithole') {
+				try {
+					// The tag narrows the index to that category (the `#t` source).
+					const filters = tag ? [`category_tags = "${tag}"`] : undefined
+					return await rabbitholeSearch(
+						{ q: query, limit, filters },
+						{
+							signal: context.signal,
+						},
+					)
+				} catch (err) {
+					// A caller abort (react-query cancel) is not a provider failure —
+					// propagate it so the query is cancelled, not retried locally.
+					if (err instanceof DOMException && err.name === 'AbortError') throw err
+					// The provider is down or failed — fall back to the local stream.
+					console.warn('[browse] RabbitHole search failed, falling back to the local stream:', err instanceof Error ? err.message : err)
+				}
 			}
 
-			const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
-			const products: BrowseProduct[] = []
-			let caughtUpInfo: CaughtUpInfo | null = null
-			for await (const item of ctx.stream([filter])) {
-				if (item.type === 'event') {
-					const product = mapProduct(item.event)
-					if (product) {
-						const haystack =
-							`${getProductTitle(item.event)} ${getProductSummary(item.event) ?? ''} ${(getProductCategories(item.event) ?? []).flat().join(' ')}`.toLowerCase()
-						if (terms.every((term) => haystack.includes(term))) products.push(product)
-					}
-				}
-				if (item.type === 'caught-up') {
-					caughtUpInfo = item.info
-					break
-				}
-			}
-			return { products, eose: caughtUpInfo?.eose ?? [], pending: caughtUpInfo?.pending ?? [] }
+			return searchLocal(query, tag, limit)
 		},
 		enabled: !!query?.trim(),
 	})

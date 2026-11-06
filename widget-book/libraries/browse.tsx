@@ -558,6 +558,143 @@ const SearchResultsGridNoFacets = () => (
 	</div>
 )
 
+// ---- search provider — compare both providers on the same query ----
+//
+// The browse search has ONE query path with a provider switch (local by default,
+// or RabbitHole). Both answer the SAME query and render the SAME products; the
+// difference is the relay verdict. The RabbitHole `partial` verdict (a relay
+// failed) reaches the UI as the relay-failure state — the `RelayIndicator`
+// shows the failed relay in `pending` — and is never flattened into a plain
+// result. These are literals (the harness is props-only) rendered through the
+// same `ui/` components the app host uses.
+
+const COMPARE_QUERY = 'ceramic mug'
+
+// The three products both providers return for the shared query (same query →
+// same set; the panels differ only in their relay verdict).
+const COMPARE_CARDS = [
+	{
+		id: 'cmp-1',
+		title: 'Speckled Stoneware Mug',
+		seller: 'kiln-and-co',
+		sellerPubkey: '234567',
+		price: 12900,
+		stockNote: '40 in stock',
+		material: 'm7' as const,
+		symbolId: 'p-mug' as const,
+	},
+	{
+		id: 'cmp-2',
+		title: 'Hand-thrown Tumbler, 300 ml',
+		seller: 'atelier-norte',
+		sellerPubkey: 'abcdef01',
+		price: 15500,
+		stockNote: '12 left',
+		material: 'm1' as const,
+		symbolId: 'p-mug' as const,
+	},
+	{
+		id: 'cmp-3',
+		title: 'Glazed Tea Cup, 120 ml',
+		seller: 'terra-studio',
+		sellerPubkey: '9f8e7d',
+		price: 9800,
+		stockNote: '7 in stock',
+		material: 'm5' as const,
+		symbolId: 'p-jar' as const,
+	},
+]
+
+function CompareGrid() {
+	return (
+		<SearchResultsGrid>
+			{COMPARE_CARDS.map((c) => (
+				<ProductCard
+					key={c.id}
+					id={c.id}
+					title={c.title}
+					seller={c.seller}
+					sellerPubkey={c.sellerPubkey}
+					price={c.price}
+					stockNote={c.stockNote}
+					material={c.material}
+					symbolId={c.symbolId}
+					onSelect={() => {}}
+				/>
+			))}
+		</SearchResultsGrid>
+	)
+}
+
+const SearchProviderCompare = () => (
+	<div className="w-[960px] max-w-full">
+		{/* The shared query both providers answer. */}
+		<SearchField value={COMPARE_QUERY} onChange={() => {}} onGo={() => {}} submitted />
+
+		<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+			{/* local provider — the default: a complete verdict, no failed relays */}
+			<div className="border border-border-default rounded p-3">
+				<div className="text-[10.5px] tracking-[0.14em] uppercase text-text-mid">
+					local · <span className="text-text-high">complete</span>
+				</div>
+				{/* complete → every relay answered, so no indicator (nothing to flag) */}
+				<RelayIndicator
+					responded={3}
+					totalProducts={COMPARE_CARDS.length}
+					relays={[
+						{ relay: 'nostr.wine', status: 'responded' },
+						{ relay: 'relay.damus.io', status: 'responded' },
+						{ relay: 'nos.lol', status: 'responded' },
+					]}
+				/>
+				<CompareGrid />
+			</div>
+
+			{/* RabbitHole provider — a partial verdict (a relay failed) reaches the
+			    UI as the relay-failure state: the failed relay is in `pending`. */}
+			<div className="border border-border-default rounded p-3">
+				<div className="text-[10.5px] tracking-[0.14em] uppercase text-text-mid">
+					rabbithole · <span className="text-text-high">partial — relay failure</span>
+				</div>
+				<RelayIndicator
+					responded={2}
+					totalProducts={COMPARE_CARDS.length}
+					relays={[
+						{ relay: 'nostr.wine', status: 'responded' },
+						{ relay: 'relay.damus.io', status: 'responded' },
+						{ relay: 'relay.nostr.band', status: 'pending' },
+					]}
+				/>
+				<CompareGrid />
+			</div>
+		</div>
+	</div>
+)
+
+const SearchProviderRabbitholeDead = () => (
+	<div className="w-[960px] max-w-full">
+		{/* The shared query, answered by RabbitHole, where every relay failed —
+		    the dead-search state (the strongest form of the relay-failure state). */}
+		<SearchField value={COMPARE_QUERY} onChange={() => {}} onGo={() => {}} submitted />
+		<div className="mt-4">
+			<RelayIndicator
+				responded={0}
+				totalProducts={0}
+				relays={[
+					{ relay: 'nostr.wine', status: 'pending' },
+					{ relay: 'relay.damus.io', status: 'pending' },
+				]}
+			/>
+			<DeadSearchError
+				totalRelays={2}
+				pendingCount={2}
+				message="All relays failed. The search fell back to the local index."
+				onRetry={() => {}}
+			/>
+		</div>
+	</div>
+)
+
 // ---- Library ----
 
 export const browse: WidgetLibrary = {
@@ -615,5 +752,8 @@ export const browse: WidgetLibrary = {
 		{ name: 'search-results-grid-default', render: SearchResultsGridDefault },
 		{ name: 'search-results-grid-active-facet', render: SearchResultsGridActiveFacet },
 		{ name: 'search-results-grid-no-facets', render: SearchResultsGridNoFacets },
+		// search provider — compare both providers on the same query
+		{ name: 'search-provider-compare', render: SearchProviderCompare },
+		{ name: 'search-provider-rabbithole-dead', render: SearchProviderRabbitholeDead },
 	],
 }
