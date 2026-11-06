@@ -41,10 +41,12 @@ const localEvents: NostrEventLike[] = [
 ]
 
 /**
- * The detail read's listing, with every tag the panel renders (description,
- * location, stock, shipping option). Kept OUT of `localEvents` on purpose: it is
- * deliberately purchasable, so leaving it in the stream would perturb the
- * product-list and seller-listing reads that share this backlog.
+ * The detail read's listings, covering every identifier shape the panel can
+ * hand out: a `d`-tag slug, a listing published without a `d` tag (whose id is
+ * the 64-char event id), and a full NIP-33 coordinate. Kept OUT of
+ * `localEvents` on purpose: they are deliberately purchasable, so leaving them
+ * in the stream would perturb the product-list and seller-listing reads that
+ * share this backlog.
  */
 const detailEvents: NostrEventLike[] = [
 	{
@@ -61,6 +63,33 @@ const detailEvents: NostrEventLike[] = [
 			['location', 'Porto'],
 			['stock', '40 in stock'],
 			['shipping_option', '30406:' + 'd'.repeat(64) + ':worldwide', '2400'],
+		],
+	},
+	{
+		// No `d` tag: `mapProduct` falls back to the event id, so this is the
+		// identifier shape that legitimately belongs in an `ids` filter.
+		id: 'f'.repeat(64),
+		pubkey: 'b'.repeat(64),
+		kind: 30402,
+		created_at: 1_700_000_000,
+		content: 'A listing published without a `d` tag.',
+		tags: [
+			['title', 'Hex-id listing'],
+			['price', '500', 'SATS'],
+		],
+	},
+	{
+		// The full NIP-33 address `30402:<pubkey>:<d>` a coordinate-aware caller
+		// (not the `?p=` slug) would hand out.
+		id: 'coord-event',
+		pubkey: 'b'.repeat(64),
+		kind: 30402,
+		created_at: 1_700_000_000,
+		content: 'A coordinate-addressed listing.',
+		tags: [
+			['d', 'coord-mug'],
+			['title', 'Coordinate Mug'],
+			['price', '800', 'SATS'],
 		],
 	},
 ]
@@ -465,16 +494,57 @@ async function runDetailQueryFn(id: string, relays?: readonly string[]) {
 }
 
 describe('browse product detail read', () => {
-	test('fetches the listing by coordinate (#d), with the event id as one OR', async () => {
+	test('a `d`-tag slug is read with one `#d` filter and no `ids` entry', async () => {
 		fetchedFilters.length = 0
 
 		await runDetailQueryFn('detail-mug')
-		expect(fetchedFilters).toEqual([
-			[
-				{ kinds: [30402], '#d': ['detail-mug'] },
-				{ kinds: [30402], ids: ['detail-mug'] },
-			],
-		])
+		expect(fetchedFilters).toEqual([[{ kinds: [30402], '#d': ['detail-mug'] }]])
+	})
+
+	test('a 64-character hex identifier is read by event id', async () => {
+		const eventId = 'f'.repeat(64)
+
+		const detail = await runDetailQueryFn(eventId)
+		expect(fetchedFilters).toEqual([[{ kinds: [30402], ids: [eventId] }]])
+		expect(detail?.title).toBe('Hex-id listing')
+	})
+
+	test('a NIP-33 coordinate is read by kind/author/#d, with no `ids` entry', async () => {
+		const coordinate = `30402:${'b'.repeat(64)}:coord-mug`
+
+		const detail = await runDetailQueryFn(coordinate)
+		expect(fetchedFilters).toEqual([[{ kinds: [30402], authors: ['b'.repeat(64)], '#d': ['coord-mug'] }]])
+		expect(detail?.title).toBe('Coordinate Mug')
+	})
+
+	test('every value ever placed in `ids` is 64-character hex', async () => {
+		// The invariant behind the defect: a slug in `ids` makes the relay reject
+		// the whole REQ (CLOSED ... unexpected character in from_hex), which the
+		// local store never reproduces. Every shape a caller can hand out, plus
+		// shapes that are none of the three (so a new call path cannot smuggle
+		// one through): all of them must obey it.
+		const identifiers = [
+			'detail-mug',
+			'handcrafted-ceramic-ball',
+			'orange-flock-black-orange-edition-high-top-sneakers-ma5ond',
+			'f'.repeat(64),
+			'A'.repeat(64),
+			`30402:${'b'.repeat(64)}:coord-mug`,
+			'30402:not-hex:slug',
+			'a:b:c:d',
+			'',
+		]
+		for (const identifier of identifiers) await runDetailQueryFn(identifier)
+
+		const hex64 = /^[0-9a-f]{64}$/i
+		for (const filters of fetchedFilters) {
+			for (const filter of filters) {
+				for (const id of filter.ids ?? []) expect(id).toMatch(hex64)
+				for (const author of filter.authors ?? []) expect(author).toMatch(hex64)
+			}
+		}
+		// The slug's read carried no `ids` key at all — the defect's exact shape.
+		expect(fetchedFilters[0]).toEqual([{ kinds: [30402], '#d': ['detail-mug'] }])
 	})
 
 	test('maps the listing tags the panel renders', async () => {
@@ -516,12 +586,7 @@ describe('browse product detail read', () => {
 		const detail = await runDetailQueryFn('detail-mug', [])
 
 		expect(relayFetches).toEqual([])
-		expect(fetchedFilters).toEqual([
-			[
-				{ kinds: [30402], '#d': ['detail-mug'] },
-				{ kinds: [30402], ids: ['detail-mug'] },
-			],
-		])
+		expect(fetchedFilters).toEqual([[{ kinds: [30402], '#d': ['detail-mug'] }]])
 		expect(detail?.title).toBe('Ceramic Mug')
 	})
 

@@ -30,6 +30,7 @@ import type { CaughtUpInfo } from '@sdk/core/event-store/read'
 import { excludeDeleted } from '@sdk/core/event-store/read'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { isValidHexKey } from '@sdk/core/utils/utils'
+import { getCoordsFromATag, isValidATag, type AddressableEventCoordinate } from '@sdk/core/utils/coords'
 import { filterBlacklistedEvents } from '@sdk/config/blacklist'
 import { buildProductListFilter, isProductListed } from '@sdk/commerce/discovery'
 // Shared shapes and the canonical kind-30402 mappers (also used by the client).
@@ -275,7 +276,9 @@ export function useBrowseFacets(query: string, enabled: boolean) {
  *
  * That identifier is `mapProduct`'s `id`: the kind-30402 `d` tag (the frame's
  * `?p=handcrafted-ceramic-ball`), falling back to the event id for a listing
- * without one. Both filters are sent as one OR, so either identity resolves.
+ * without one. The read is built from that identifier's **shape** — one filter,
+ * never a two-filter OR that can put a slug into `ids` (see
+ * {@link buildProductDetailFilters} for the invariant).
  *
  * `relays` is where the listing was actually found: a RabbitHole search hit
  * carries the `relays_seen` the client records on the product (`BrowseProduct.relays`),
@@ -301,17 +304,55 @@ export function browseProductDetailQueryOptions(id: string | undefined, relays?:
 		queryKey: browseKeys.detail(id ?? '', relayTargets),
 		queryFn: async (): Promise<BrowseProductDetail | null> => {
 			if (!id) return null
-			// Bounded fetch for a single product by id or coordinate (not a list)
-			const filters: EventFilter[] = [
-				{ kinds: [30402], '#d': [id] },
-				{ kinds: [30402], ids: [id] },
-			]
+			// Bounded fetch for a single product, shaped by the identifier (not a list)
+			const filters = buildProductDetailFilters(id)
 			const events = relayTargets ? await fetchFromRelays(filters, relayTargets) : await getReadContext().fetch(filters)
 			const newest = [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 			return newest ? (mapProductDetail(newest) ?? null) : null
 		},
 		enabled: Boolean(id),
 	})
+}
+
+/**
+ * The detail read's filters, built from the identifier's shape.
+ *
+ * A relay rejects an **entire** REQ when any one of its filters is malformed:
+ * `{"kinds":[30402],"ids":["handcrafted-ceramic-ball"]}` is answered with
+ * `CLOSED ... bad req: error parsing ids: unexpected character in from_hex`,
+ * so a sibling `#d` filter in the same REQ never runs and the read resolves
+ * empty — the panel's "This listing is not on the relays". The app's own event
+ * store tolerates the malformed filter, so only a real relay (or a shape
+ * assertion) can catch it.
+ *
+ * INVARIANT: a non-hex string MUST NOT appear in an `ids` (or `authors`)
+ * filter, and every value placed in one MUST be 64-character hex. The shapes:
+ *   - 64-char hex                    (an event id) → `{ kinds: [30402], ids: [id] }`
+ *   - NIP-33 coordinate `kind:pubkey:d`            → `{ kinds: [kind], authors: [pubkey], '#d': [d] }`
+ *   - anything else — the `?p=` `d`-tag slug       → `{ kinds: [30402], '#d': [id] }`
+ */
+function buildProductDetailFilters(id: string): EventFilter[] {
+	const coordinate = parseAddressCoordinate(id)
+	if (coordinate) return [{ kinds: [coordinate.kind], authors: [coordinate.pubkey], '#d': [coordinate.identifier] }]
+	// A 64-character hex string is the only thing an `ids` filter may carry.
+	if (isValidHexKey(id)) return [{ kinds: [30402], ids: [id] }]
+	return [{ kinds: [30402], '#d': [id] }]
+}
+
+/**
+ * Split a NIP-33 address (`kind:pubkey:d`) into its parts, or `null` when the
+ * identifier is not one. The SDK's a-tag parser splits and validates the kind;
+ * its `authors` value is then required to be a real 64-character hex key,
+ * because a non-hex pubkey is malformed in exactly the way a bad `ids` value is.
+ */
+function parseAddressCoordinate(id: string): AddressableEventCoordinate | null {
+	if (!isValidATag(id)) return null
+	try {
+		const coordinate = getCoordsFromATag(id)
+		return isValidHexKey(coordinate.pubkey) ? coordinate : null
+	} catch {
+		return null
+	}
 }
 
 /**
