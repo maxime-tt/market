@@ -19,6 +19,14 @@ const browseSearchSchema = z.object({
 export const Route = createFileRoute('/')({
 	component: BrowseIndex,
 	validateSearch: browseSearchSchema,
+	/**
+	 * The Browse surface draws its own nav (`BrowseNav`, rendered by
+	 * `BrowseIndexHost` in every state — idle, results, split view), so the root
+	 * layout must not stack the legacy app header above it. Declared here, on the
+	 * route, because it is a property of this surface: every search state
+	 * (`?q=`, `?tag=`, `?p=`) inherits it. See `platform/web/layout/appChrome.ts`.
+	 */
+	staticData: { hidesAppHeader: true },
 })
 
 function BrowseIndex() {
