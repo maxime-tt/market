@@ -416,7 +416,7 @@ describe('rabbitholeSearch — the search frame', () => {
 		expect(result.suggested).toEqual([])
 	})
 
-	test('attaches the listing’s own relays from its index hit, by coordinate', async () => {
+	test('attaches the listing’s own relays from its index hit, by event id', async () => {
 		const event = productEvent('e1', 'Ceramic Mug')
 		const coordinate = `30402:${PUBKEY}:e1`
 
@@ -439,6 +439,77 @@ describe('rabbitholeSearch — the search frame', () => {
 
 		// The listing's relays are the hit's, not the search-level fan-out set.
 		expect(result.products[0]?.relays).toEqual(['wss://nos.lol', 'wss://relay.damus.io'])
+	})
+
+	test('falls back to the hit’s coordinate when it omits event_id', async () => {
+		const event = productEvent('e1', 'Ceramic Mug')
+
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({
+							type: 'search',
+							candidateCount: 1,
+							hits: [{ coordinate: `30402:${PUBKEY}:e1`, relays_seen: ['wss://nos.lol'] }],
+						}),
+						JSON.stringify({ type: 'event', event }),
+						outcomeFrame('complete', ['wss://nos.lol'], []),
+					]),
+				),
+			},
+		)
+
+		expect(result.products[0]?.relays).toEqual(['wss://nos.lol'])
+	})
+
+	test('attaches the listing’s own relays when the hit’s coordinate is not the canonical address', async () => {
+		// The live shape: the index’s `coordinate` is a title-derived slug — a
+		// `-<title bits><pubkey fragment>` suffix on the addressable `d` — so it
+		// can never equal the delivered event’s canonical `30402:<pubkey>:<d>`.
+		// Only `event_id` correlates the two. A fixture whose coordinate is
+		// already canonical is self-confirming and would hide this.
+		const event: NostrEventLike = {
+			id: '0c5733242fd6453099812aa7972cf4d9b1ee41e2acbd3fb922eca4edd156d8dc',
+			pubkey: PUBKEY,
+			kind: 30402,
+			created_at: 1_700_000_000,
+			content: 'sneakers body',
+			tags: [
+				['d', 'orange-flock-urban-camo-sneakers-pn52ch'],
+				['title', 'Orange Flock Urban Camo Sneakers'],
+				['price', '2500', 'SATS'],
+			],
+		}
+
+		const result = await rabbitholeSearch(
+			{ q: 'sneakers' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({
+							type: 'search',
+							candidateCount: 1,
+							hits: [
+								{
+									coordinate: `30402:${PUBKEY}:orange-flock-urban-camo-sneakers-pn52ch-11-5-men-13-5-women-10dosx9`,
+									event_id: event.id,
+									relays_seen: ['wss://nos.lol', 'wss://relay.primal.net'],
+								},
+							],
+						}),
+						JSON.stringify({ type: 'event', event }),
+						outcomeFrame('complete', ['wss://nos.lol', 'wss://relay.primal.net'], []),
+					]),
+				),
+			},
+		)
+
+		expect(result.products[0]?.eventId).toBe(event.id)
+		// The hit named its relays; the product must carry them despite the
+		// coordinate mismatch.
+		expect(result.products[0]?.relays).toEqual(['wss://nos.lol', 'wss://relay.primal.net'])
 	})
 
 	test('states no relays for a listing its index hit did not name', async () => {

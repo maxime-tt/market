@@ -336,9 +336,16 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	let outcome: RabbitHoleOutcomeFrame | null = null
 	let lineBuffer = ''
 	// The `search` frame's own statements: the service's facet list, and the
-	// relays each index hit was seen on (keyed by the listing's coordinate, so
-	// the later `event` frame for that coordinate can carry them).
+	// relays each index hit was seen on, keyed two ways so the later `event`
+	// frame can carry them:
+	//   - by `event_id` — the exact correlation; the hit's `event_id` is the
+	//     delivered event's `id` (measured 20/20 on a live response);
+	//   - by `coordinate` — a fallback for a provider that omits `event_id`.
+	//     The hit's `coordinate` is NOT the listing's canonical address (the
+	//     index slugs it with title-derived text), so it only ever matches a
+	//     provider that states the canonical `30402:<pubkey>:<d>` form.
 	let suggested: BrowseFacet[] = []
+	const relaysByEventId = new Map<string, string[]>()
 	const relaysByCoordinate = new Map<string, string[]>()
 
 	const dispatchLine = (line: string): void => {
@@ -367,9 +374,9 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 					}),
 				)
 				for (const hit of frame.hits ?? []) {
-					if (hit.coordinate && hit.relays_seen && hit.relays_seen.length > 0) {
-						relaysByCoordinate.set(hit.coordinate, [...hit.relays_seen])
-					}
+					if (!hit.relays_seen || hit.relays_seen.length === 0) continue
+					if (hit.event_id) relaysByEventId.set(hit.event_id, [...hit.relays_seen])
+					if (hit.coordinate) relaysByCoordinate.set(hit.coordinate, [...hit.relays_seen])
 				}
 				break
 			case 'relay':
@@ -382,8 +389,10 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 					const product = mapProduct(event)
 					if (product) {
 						// The listing's own relays, from its index hit — correlated
-						// by coordinate, never the search-level fan-out set.
-						const relays = relaysByCoordinate.get(getProductCoordinates(event))
+						// by `event_id` (exact), with the hit's coordinate as a
+						// fallback for a provider that omits `event_id`. Never the
+						// search-level fan-out set.
+						const relays = relaysByEventId.get(event.id) ?? relaysByCoordinate.get(getProductCoordinates(event))
 						products.push(relays ? { ...product, relays } : product)
 					}
 				}
