@@ -4,12 +4,15 @@
  * Frame `Glje8eeQGh__browse-idle-1440.html`:
  * - Hero: "The whole market, **one search**." with MotD and search pill
  * - CTAs: Browse products, Why Plebeian?, Post a listing (handoff stub)
- * - Two product-strip rows above and below the hero
- * - No veil — strips are clickable products
+ * - One full-bleed product strip above the title block and one below it, at
+ *   full contrast, no veil — the strips are clickable products
+ * - The band is full-bleed; the hero inside it is the frame's centred ~800px
+ *   column (`.hero-in{ width:800px }`)
  *
  * Frame `ECglgpRxcl__browse-idle-390.html` (mobile):
  * - Compact nav, search + CTAs in a 2-column grid below the field
- * - No wall strips on mobile (screen too small)
+ * - The strips stay: they are the same full-bleed band, and the loop is what
+ *   makes a narrow viewport work
  */
 
 import type { FC, MouseEventHandler } from 'react'
@@ -131,14 +134,15 @@ export interface BrowseIdleProps {
  *
  * Layout (1440):
  * 1. Nav bar (wordmark, Featured, search, account)
- * 2. Hero: title + MotD + search pill + CTAs
- * 3. Product strips above and below the hero area
+ * 2. Full-bleed product strip above the title block
+ * 3. Hero: title + MotD + search pill + CTAs, in the centred 800px column
+ * 4. Full-bleed product strip below the title block
  *
  * Layout (390):
  * 1. Compact nav band
- * 2. Search field
- * 3. CTAs in 2-column grid
- * 4. No wall strips (screen too narrow)
+ * 2. The same strips, full-bleed
+ * 3. Search field
+ * 4. CTAs in 2-column grid
  */
 export const BrowseIdle: FC<BrowseIdleProps> = ({
 	stats,
@@ -187,9 +191,21 @@ export const BrowseIdle: FC<BrowseIdleProps> = ({
 				accountSlot={accountSlot}
 			/>
 
-			<main className="max-w-[1040px] mx-auto px-4 lg:px-6 py-4">
-				{/* Hero section */}
-				<section className="flex flex-col items-center py-8 lg:py-12">
+			{/*
+			 * The band is full-bleed and its content is not: the strips span the
+			 * viewport edge to edge (frame `.wall{ inset:0 }`), while the hero keeps
+			 * the frame's centred ~800px column (`.hero-in{ width:800px }`).
+			 */}
+			<main className="w-full py-4">
+				{/* Product strip above the title block — full-bleed, drifting left */}
+				{stripsAbove && stripsAbove.length > 0 && (
+					<section data-slot="browse-strip-above" className="w-full">
+						<ProductStrip items={stripsAbove} onSelect={onSelectProduct} />
+					</section>
+				)}
+
+				{/* Hero section — the frame's centred ~800px column inside the band */}
+				<section className="mx-auto flex w-full max-w-[800px] flex-col items-center px-4 py-8 lg:py-12">
 					{/* Title — mobile truncates to one line */}
 					<h1 className="text-center font-display text-3xl sm:text-4xl lg:text-5xl font-medium leading-tight tracking-tight text-text-high max-w-[600px]">
 						The whole market, <span className="text-fill-ink italic">one search</span>.
@@ -301,17 +317,10 @@ export const BrowseIdle: FC<BrowseIdleProps> = ({
 					</div>
 				</section>
 
-				{/* Product strip above the hero (desktop only) */}
-				{stripsAbove && stripsAbove.length > 0 && (
-					<section className="mb-6">
-						<ProductStrip items={stripsAbove} onSelect={onSelectProduct} />
-					</section>
-				)}
-
-				{/* Product strip below the hero (desktop only) */}
+				{/* Product strip below the title block — full-bleed, drifting the other way */}
 				{stripsBelow && stripsBelow.length > 0 && (
-					<section>
-						<ProductStrip items={stripsBelow} onSelect={onSelectProduct} />
+					<section data-slot="browse-strip-below" className="w-full">
+						<ProductStrip items={stripsBelow} onSelect={onSelectProduct} reverse />
 					</section>
 				)}
 			</main>

@@ -3,7 +3,7 @@
  *
  * Wires the Browse shell to real reads (relay status, search/results stream,
  * tag facets, product detail). Renders all Phase-2 states:
- * - Idle: wall strips above/below hero (desktop only)
+ * - Idle: full-bleed wall strips above and below the hero
  * - Search results: grid with skeleton shimmer, empty marketplace, relay indicator
  * - Relay error: expanding per-relay detail popover; dead-search error panel
  * - Tag-filtered: facet badges derived from the search
@@ -33,7 +33,12 @@ import { formatPriceUnit } from '@ui/utils/format'
 import { useBrowseSearch, useBrowseFacets, useBrowseProductDetail } from '@platform/web/browse/browseQuery'
 import { materialForPubkey, type BrowseFacet, type BrowseProduct } from '@platform/web/browse/browseProductMap'
 import { feedStrips, useBrowseIndexFeed } from '@platform/web/browse/browseIndexFeed'
-import { getNormalizedProfileDisplayName, getNormalizedProfilePicture, useProfile } from '@platform/web/profiles/profileQuery'
+import {
+	getNormalizedProfileDisplayName,
+	getNormalizedProfilePicture,
+	useProfile,
+	useProfileNames,
+} from '@platform/web/profiles/profileQuery'
 import { usePriceDisplay } from '@platform/web/products/PriceDisplayHost'
 import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { useAuth } from '@platform/web/auth/authStore'
@@ -234,6 +239,13 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	const feedQuery = useBrowseIndexFeed()
 	const feed = feedQuery.data ?? null
 
+	// The wall's sellers, resolved in one batched profile read: a strip tile
+	// states the seller's name, not a pubkey prefix. The read is unconditional
+	// (hooks cannot be called inside the idle branch) and covers exactly the
+	// listings the wall can draw.
+	const wallProducts = (feed?.products ?? []).slice(0, IDLE_WALL_LIMIT)
+	const wallSellerNames = useProfileNames(wallProducts.map((product) => product.pubkey))
+
 	/**
 	 * The open product's row in the results — the hit that opened the panel.
 	 * A RabbitHole hit carries the relays it was seen on (`relays_seen`), which
@@ -346,9 +358,10 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	// No term, no tag, no open product → the idle index: hero, wall strips read
 	// from the feed, and the browse-by-category rows below them.
 	if (isIdle) {
-		// The wall shows loaded listings, split either side of the hero. Art is
-		// assigned the same way the cards assign it.
-		const wall = feedStrips(feed?.products ?? [], IDLE_WALL_LIMIT)
+		// The wall shows loaded listings, split either side of the hero. Each tile
+		// carries the listing's own image, title, seller name and price, and the
+		// art is assigned the same way the cards assign it.
+		const wall = feedStrips(wallProducts, IDLE_WALL_LIMIT, (pubkey) => wallSellerNames.get(pubkey))
 		const wallSplit = Math.ceil(wall.length / 2)
 
 		return (
@@ -505,49 +518,52 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 					<EmptyStateBrowse query={q} hints={EMPTY_HINTS} {...emptyCopy} />
 				)}
 
-				{/* Results — the plain grid, or the split view when a product is open */}
-				{hasResults &&
-					(p ? (
-						<SplitView
-							className="mt-5 h-[calc(100vh-10.5rem)] min-h-[520px]"
-							master={<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">{cards}</div>}
-							detail={
-								<ProductDetailPanel
-									state={panelState}
-									product={
-										detail
-											? {
-													id: detail.id,
-													title: detail.title,
-													seller: detail.pubkey.slice(0, 8),
-													sellerName: detailSellerName,
-													sellerPicture: detailSellerPicture,
-													sellerNpub: elideNpub(detail.pubkey),
-													location: detail.location,
-													image: detail.image,
-													price: detail.price,
-													currency: detail.currency,
-													priceLabel: detailPrice?.label,
-													priceUnit: detailPrice?.unit,
-													stockNote: typeof detail.stock === 'string' ? detail.stock : undefined,
-													description: detail.description || undefined,
-													shipping: detail.shipping,
-													material: materialForPubkey(detail.pubkey),
-												}
-											: undefined
-									}
-									menuOpen={menuOpenId === p}
-									onClose={() => onNavigate({ q, p: undefined, tag })}
-									onThreeDots={() => handleMenuToggle(p)}
-									onCopyLink={() => handleCopyLink(p)}
-									onRetry={() => void detailQuery.refetch()}
-								/>
-							}
-						/>
-					) : (
-						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">{cards}</div>
-					))}
+				{/* Results — the plain grid. The split view is rendered outside this
+				    container (below) so both of its panes reach the viewport edges. */}
+				{hasResults && !p && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">{cards}</div>}
 			</main>
+
+			{/* The split is full-bleed: the owner's deliberate deviation from the
+			    frame's 56px side margins, so both panes take the page's full width.
+			    Nothing else on this screen leaves the container above. */}
+			{hasResults && p && (
+				<SplitView
+					className="mt-5 h-[calc(100vh-10.5rem)] min-h-[520px]"
+					master={<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">{cards}</div>}
+					detail={
+						<ProductDetailPanel
+							state={panelState}
+							product={
+								detail
+									? {
+											id: detail.id,
+											title: detail.title,
+											seller: detail.pubkey.slice(0, 8),
+											sellerName: detailSellerName,
+											sellerPicture: detailSellerPicture,
+											sellerNpub: elideNpub(detail.pubkey),
+											location: detail.location,
+											image: detail.image,
+											price: detail.price,
+											currency: detail.currency,
+											priceLabel: detailPrice?.label,
+											priceUnit: detailPrice?.unit,
+											stockNote: typeof detail.stock === 'string' ? detail.stock : undefined,
+											description: detail.description || undefined,
+											shipping: detail.shipping,
+											material: materialForPubkey(detail.pubkey),
+										}
+									: undefined
+							}
+							menuOpen={menuOpenId === p}
+							onClose={() => onNavigate({ q, p: undefined, tag })}
+							onThreeDots={() => handleMenuToggle(p)}
+							onCopyLink={() => handleCopyLink(p)}
+							onRetry={() => void detailQuery.refetch()}
+						/>
+					}
+				/>
+			)}
 
 			{/* Inject shimmer keyframes into DOM (art module CSS) */}
 			<style dangerouslySetInnerHTML={{ __html: SKELETON_SHIMMER_CSS }} />
