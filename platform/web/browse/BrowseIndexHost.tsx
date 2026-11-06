@@ -22,6 +22,7 @@ import { SKELETON_SHIMMER_CSS } from '@ui/browse/art'
 import { EmptyState } from '@ui/shared/empty-state'
 import { LoadingState } from '@ui/shared/loading-state'
 import { useBrowseSearch, type BrowseSearchResult } from '@platform/web/browse/browseQuery'
+import { materialForPubkey } from '@platform/web/browse/browseProductMap'
 import { useAuth } from '@platform/web/auth/authStore'
 
 /** The Browse URL state the host asks the route to write back. */
@@ -92,12 +93,6 @@ export function BrowseIndexHost({ q, tag, onNavigate, onNavigateFeatured }: Brow
 
 	const searchQuery = useBrowseSearch(q, tag, 100)
 	const result = searchQuery.data ?? null
-
-	/** Deterministic material class from a pubkey hash. */
-	const materialForPubkey = (pubkey: string): 'm1' | 'm2' | 'm3' | 'm4' | 'm5' | 'm6' | 'm7' | 'm8' => {
-		const hash = pubkey.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
-		return `m${(hash % 8) + 1}` as 'm1' | 'm2' | 'm3' | 'm4' | 'm5' | 'm6' | 'm7' | 'm8'
-	}
 
 	/** The signed-in pubkey's initial, or nothing when signed out. */
 	const accountInitial = user?.pubkey ? user.pubkey.slice(0, 2).toUpperCase() : undefined
@@ -249,7 +244,7 @@ export function BrowseIndexHost({ q, tag, onNavigate, onNavigateFeatured }: Brow
 								title={product.title}
 								seller={product.pubkey.slice(0, 8)}
 								sellerPubkey={product.pubkey}
-								price={typeof product.price === 'number' ? product.price : 0}
+								price={product.price}
 								stockNote={typeof product.stock === 'string' ? product.stock : undefined}
 								material={materialForPubkey(product.pubkey)}
 								onSelect={handleCardSelect}

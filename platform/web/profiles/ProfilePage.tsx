@@ -1,18 +1,45 @@
+/**
+ * platform/web/profiles/ProfilePage.tsx — the seller profile page.
+ *
+ * Redesigned onto the `YcjyRPZbVo__seller-profile-1440` frame (Browse Phase 3):
+ * the seller header (avatar, name + primary category, npub, reputation facts,
+ * ships-from, affordances) over the seller's listings, with the relay verdict
+ * the read seam actually returned above the header.
+ *
+ * Where each of the frame's values comes from — and the two it cannot have:
+ *
+ * - name / category / avatar  kind-0 profile read; the category is the most
+ *                             common real `t` tag across the seller's listings
+ * - npub                      the pubkey encoder host
+ * - listings                  the SDK read seam's kind-30402 stream for this
+ *                             author (a list is a stream, never a `fetch`)
+ * - ships-from                the author's own `location` tag — listing first,
+ *                             shipping option second
+ * - reputation                the kind-0 event's `created_at`, and nothing
+ *                             else. The frame's "N trades" is not readable in
+ *                             this deployment (orders are gift-wrapped to the
+ *                             seller) and "N sats zapped" has no receipt read,
+ *                             so both are omitted rather than invented.
+ * - Follow                    omitted. The seam has no contact-list (NIP-02)
+ *                             read or write, so the control could only be a
+ *                             no-op. Contact is real and is wired below.
+ */
+
 import { PickupLocationDialog } from '@ui/dialogs/pickup-location-dialog'
 import { ShareProfileDialog } from '@platform/web/profiles/ShareProfileDialog'
 import { EntityActionsMenu } from '@platform/web/permissions/EntityActionsMenu'
-import { ItemGrid } from '@ui/shared/item-grid'
-import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
-import { ProfileNameHost as ProfileName } from '@platform/web/profiles/ProfileNameHost'
+import { SellerProfileView } from '@ui/browse/seller-profile'
+import { ProductCard } from '@ui/browse/product-card'
+import { RelayIndicator } from '@ui/browse/relay-error'
+import { SkeletonGrid } from '@ui/browse/skeleton-grid'
+import { EmptyState } from '@ui/shared/empty-state'
 import { Button } from '@ui/primitives/button'
 import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost'
-import { useBreakpoint } from '@platform/web/app/useBreakpoint'
+import { getActiveSignerCapability, useAuth } from '@platform/web/auth/authStore'
 import { useEntityPermissions } from '@platform/web/permissions/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey } from '@platform/web/utils/colors'
-import { truncateText } from '@platform/web/utils/text'
-import { checkImageLoadable } from '@platform/web/utils/image'
+import { formatPubkeyShort } from '@sdk/core/nostr/pubkeyDisplay'
 import { isValidHexKey } from '@sdk/core/utils/utils'
-import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { productFormActions } from '@platform/web/products/productFormStore'
 import { uiActions } from '@platform/web/app/uiStore'
@@ -21,32 +48,40 @@ import { addToFeaturedUsers, removeFromFeaturedUsers } from '@platform/web/featu
 import { useBlacklistSettings } from '@platform/web/config/blacklistBinding'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useFeaturedUsers } from '@platform/web/featured/featuredQueries'
-import { productsByPubkeyQueryOptions } from '@platform/web/products/productQuery'
-import { profileByIdentifierQueryOptions } from '@platform/web/profiles/profileQuery'
+import { useSellerListings } from '@platform/web/browse/browseQuery'
+import { materialForPubkey } from '@platform/web/browse/browseProductMap'
 import {
 	useShippingOptionsByPubkey,
-	getShippingService,
+	getShippingLocation,
 	getShippingPickupAddress,
+	getShippingService,
 	getShippingTitle,
 } from '@platform/web/shipping/shippingQuery'
+import {
+	getNormalizedProfileDisplayName,
+	getNormalizedProfilePicture,
+	profileByIdentifierQueryOptions,
+} from '@platform/web/profiles/profileQuery'
+import { encodeIdentifierToNpub } from '@platform/web/profiles/userCardHosts'
 import { getProfileIdentifierValidationError } from '@sdk/core/profile/profileValidation'
-import { useAutoAnimate } from '@formkit/auto-animate/react'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Edit, MapPin, MessageCircle, Minus, Plus, RotateCcw, Share2, Timer } from 'lucide-react'
-import { useState, useEffect, useMemo } from 'react'
+import { Edit, MapPin, Plus, RotateCcw, Share2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { TooltipButton } from '@ui/wrappers/tooltip-button'
 
 interface ProfilePageProps {
 	profileId: string
 }
 
+/** The profile event's own date, as the frame's "joined Mar 2024". */
+const JOINED_LABEL = new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' })
+
 export function ProfilePage({ profileId }: ProfilePageProps) {
 	const navigate = useNavigate()
-	const [animationParent] = useAutoAnimate()
+	const queryClient = useQueryClient()
+	const { user: viewer } = useAuth()
 	const validationError = getProfileIdentifierValidationError(profileId)
 
 	const profileOptions = profileByIdentifierQueryOptions(profileId)
@@ -84,25 +119,15 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		}
 	}, [user])
 
-	const sellerProductOptions = productsByPubkeyQueryOptions(profilePubkey ?? '')
-	const { data: sellerProducts = [], isLoading: sellerProductsIsLoading } = useQuery({
-		...sellerProductOptions,
-		enabled: sellerProductOptions.enabled,
-	})
+	// The seller's listings: the read seam's stream for this author, carrying
+	// the relay verdict the frame's status line reports.
+	const { data: listingsData, isLoading: listingsAreLoading } = useSellerListings(profilePubkey ?? '')
+	const listings = useMemo(() => listingsData?.listings ?? [], [listingsData])
+	const eoseRelays = listingsData?.eose ?? []
+	const pendingRelays = listingsData?.pending ?? []
 
-	const [showFullAbout, setShowFullAbout] = useState(false)
-	const [bannerIsLoadable, setBannerIsLoadable] = useState<boolean | null>(null)
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 	const [pickupLocationDialogOpen, setPickupLocationDialogOpen] = useState(false)
-	const breakpoint = useBreakpoint()
-	const isSmallScreen = breakpoint === 'sm'
-	const queryClient = useQueryClient()
-	const aboutText = profile?.about?.trim() ?? ''
-	const hasAbout = aboutText.length > 0
-	const truncationLength = isSmallScreen ? 70 : 250
-	const aboutTruncated = truncateText(aboutText, truncationLength)
-	const shouldTruncateAbout = hasAbout && aboutTruncated !== aboutText
-	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 
 	// Get app config
 	const { data: config } = useConfigQuery()
@@ -151,6 +176,42 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		return locations
 	}, [shippingOptions])
 
+	const isSelf = !!viewer?.pubkey && viewer.pubkey === profilePubkey
+	const displayName = getNormalizedProfileDisplayName(profile) ?? (profilePubkey ? formatPubkeyShort(profilePubkey) : 'Profile')
+	const npub = encodeIdentifierToNpub(profilePubkey ?? undefined) ?? undefined
+
+	/**
+	 * The frame's reputation line — filled only as far as the reads reach.
+	 * The kind-0 event's own `created_at` is the one reputation fact this
+	 * deployment can read; trades and zapped sats have no readable source.
+	 */
+	const reputationFacts = useMemo(() => {
+		const createdAt = profile?.created_at
+		if (typeof createdAt !== 'number' || createdAt <= 0) return []
+		return [`Joined ${JOINED_LABEL.format(new Date(createdAt * 1000))}`]
+	}, [profile?.created_at])
+
+	/** The seller's primary category: the most common real `t` tag across their listings. */
+	const primaryCategory = useMemo(() => {
+		const counts = new Map<string, number>()
+		for (const listing of listings) {
+			for (const category of listing.categories) counts.set(category, (counts.get(category) ?? 0) + 1)
+		}
+		const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+		return ranked[0]?.[0]
+	}, [listings])
+
+	/**
+	 * "Ships from": the author's own location string — their listings first,
+	 * their shipping options second. Absent when they published neither, in
+	 * which case the header shows no origin at all.
+	 */
+	const shipsFrom = useMemo(() => {
+		const fromListing = listings.find((listing) => listing.location)?.location
+		if (fromListing) return fromListing
+		return shippingOptions?.map((option) => getShippingLocation(option)?.[1]).find((value) => Boolean(value)) ?? undefined
+	}, [listings, shippingOptions])
+
 	// Handle edit profile
 	const handleEdit = () => {
 		navigate({ to: '/dashboard/account/profile' })
@@ -166,7 +227,12 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	const handleMessageClick = () => {
 		if (!profilePubkey) return
 		uiActions.openConversation(profilePubkey)
-		console.log('Opening conversation with', profilePubkey)
+	}
+
+	// A listing opens its own page — the event id is what the product read
+	// addresses it by, not the addressable `d` identifier.
+	const handleListingSelect = (eventId: string) => {
+		navigate({ to: '/products/$productId', params: { productId: eventId } })
 	}
 
 	// Handle blacklist toggle
@@ -226,19 +292,6 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		}
 	}
 
-	// Check if banner image is loadable
-	useEffect(() => {
-		const validateBanner = async () => {
-			if (profile?.banner) {
-				const isLoadable = await checkImageLoadable(profile.banner)
-				setBannerIsLoadable(isLoadable)
-			} else {
-				setBannerIsLoadable(null)
-			}
-		}
-		validateBanner()
-	}, [profile?.banner])
-
 	// Transport error: the query failed (timeout, disconnect, relay
 	// exception) on initial load with no cached profile to show. This is
 	// distinct from metadata not observed (below) — it is retryable. When a
@@ -287,126 +340,100 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		return <ProfileLoadingState />
 	}
 
+	// Host-owned actions beside the frame's Contact affordance: the controls
+	// this page already carried (curation, share, pickup, edit), so the
+	// redesign adds the frame without dropping what only this page offers.
+	const affordances = (
+		<>
+			{user && <ZapButton event={user} />}
+			{pickupLocations.length > 0 && (
+				<TooltipButton variant="outline" size="icon" tooltip="Pickup locations" onClick={() => setPickupLocationDialogOpen(true)}>
+					<MapPin className="size-4" />
+				</TooltipButton>
+			)}
+			<TooltipButton variant="outline" size="icon" tooltip="Share" onClick={() => setShareDialogOpen(true)}>
+				<Share2 className="size-4" />
+			</TooltipButton>
+			{permissions.canEdit && (
+				<Button variant="outline" onClick={handleEdit} className="rounded-full">
+					<Edit className="size-4" />
+					Edit profile
+				</Button>
+			)}
+			<EntityActionsMenu
+				permissions={permissions}
+				entityType="profile"
+				entityId={profilePubkey}
+				isBlacklisted={isBlacklisted}
+				isFeatured={isFeatured}
+				onEdit={permissions.canEdit ? handleEdit : undefined}
+				onBlacklist={permissions.canBlacklist && !isBlacklisted ? handleBlacklistToggle : undefined}
+				onUnblacklist={permissions.canBlacklist && isBlacklisted ? handleBlacklistToggle : undefined}
+				onSetFeatured={permissions.canSetFeatured && !isFeatured ? handleFeaturedToggle : undefined}
+				onUnsetFeatured={permissions.canSetFeatured && isFeatured ? handleFeaturedToggle : undefined}
+			/>
+		</>
+	)
+
+	const relayStatus =
+		profilePubkey && !listingsAreLoading ? (
+			<RelayIndicator
+				responded={eoseRelays.length}
+				totalProducts={listings.length}
+				productsLabel="products from this seller"
+				relays={[
+					...eoseRelays.map((relay) => ({ relay, status: 'responded' as const })),
+					...pendingRelays.map((relay) => ({ relay, status: 'pending' as const })),
+				]}
+			/>
+		) : undefined
+
 	return (
-		<div className="relative flex flex-col min-h-screen">
-			<div className="top-0 right-0 left-0 z-0 absolute bg-hero-image-margin h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
-				{profile?.banner && bannerIsLoadable === true ? (
-					<div className="-ml-[25%] sm:ml-0 w-[150%] sm:w-full h-full">
-						<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
-					</div>
-				) : (
-					<div
-						className="w-full h-full"
-						style={{
-							background: `linear-gradient(45deg, ${getHexColorFingerprintFromHexPubkey(profilePubkey)} 0%, #000 100%)`,
-							opacity: 0.8,
-						}}
-					/>
-				)}
-			</div>
-			<div className="z-10 relative flex flex-col flex-1 pt-[18vh] sm:pt-[22vh] md:pt-[30vh]">
-				<div className="flex flex-row justify-between items-center bg-black px-4 py-4">
-					<UserCardHost pubkey={profilePubkey} className="[&>h2]:text-white" subtitle="npub" onPress="copy-npub" />
-					{!isSmallScreen && (
-						<div className="flex gap-2">
-							{user && <ZapButton event={user} />}
-							<TooltipButton
-								variant="outline"
-								size="icon"
-								tooltip="Message"
-								onClick={handleMessageClick}
-								className="bg-transparent hover:bg-background border-2 border-background rounded text-background hover:text-foreground"
-							>
-								<MessageCircle className="size-5" />
-							</TooltipButton>
-							{pickupLocations.length > 0 && (
-								<TooltipButton
-									variant="secondary"
-									size="icon"
-									tooltip="Set Pickup Location"
-									onClick={() => setPickupLocationDialogOpen(true)}
-								>
-									<MapPin className="size-5" />
-								</TooltipButton>
-							)}
-							<TooltipButton variant="secondary" size="icon" tooltip="Share" onClick={() => setShareDialogOpen(true)}>
-								<Share2 className="size-5" />
-							</TooltipButton>
-							{/* Edit button for profile owner */}
-							{permissions.canEdit && (
-								<Button variant="secondary" onClick={handleEdit} className="flex items-center gap-2">
-									<Edit className="size-5" />
-									<span className="hidden md:inline">Edit Profile</span>
-								</Button>
-							)}
-							{/* Entity Actions Menu for admins/editors (blacklist and featured functionality) */}
-							<EntityActionsMenu
-								permissions={permissions}
-								entityType="profile"
-								entityId={profilePubkey}
-								isBlacklisted={isBlacklisted}
-								isFeatured={isFeatured}
-								onEdit={permissions.canEdit ? handleEdit : undefined}
-								onBlacklist={permissions.canBlacklist && !isBlacklisted ? handleBlacklistToggle : undefined}
-								onUnblacklist={permissions.canBlacklist && isBlacklisted ? handleBlacklistToggle : undefined}
-								onSetFeatured={permissions.canSetFeatured && !isFeatured ? handleFeaturedToggle : undefined}
-								onUnsetFeatured={permissions.canSetFeatured && isFeatured ? handleFeaturedToggle : undefined}
-							/>
-						</div>
-					)}
-				</div>
-
-				<div
-					ref={animationParent}
-					className="flex flex-row justify-between items-center bg-zinc-900 px-4 py-4 min-h-[52px] text-white text-xs sm:text-sm"
-				>
-					{hasAbout ? (
-						shouldTruncateAbout ? (
-							<>
-								<p className="flex-1 break-words">{showFullAbout ? aboutText : aboutTruncated}</p>
-								<Button variant="ghost" size="icon" onClick={() => setShowFullAbout(!showFullAbout)}>
-									{showFullAbout ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-								</Button>
-							</>
-						) : (
-							<p className="w-full break-words">{aboutText}</p>
-						)
-					) : (
-						<div className="w-full" aria-hidden="true" />
-					)}
-				</div>
-
-				<div className="flex flex-col flex-1 p-4">
-					{sellerProductsIsLoading ? (
-						<div className="flex flex-col flex-1 justify-center items-center gap-4">
-							<span className="font-heading text-2xl">Loading products...</span>
-						</div>
-					) : sellerProducts.length > 0 ? (
-						<ItemGrid
-							title={
-								<div className="flex sm:flex-row flex-col sm:items-center sm:gap-2 sm:text-left text-center">
-									<span className="font-heading text-2xl">Products from</span>
-									<ProfileName pubkey={profilePubkey} className="font-heading text-2xl" />
-								</div>
+		<div className="flex min-h-screen flex-col pb-10">
+			<SellerProfileView
+				status={relayStatus}
+				name={displayName}
+				picture={getNormalizedProfilePicture(profile) || null}
+				category={primaryCategory}
+				npub={npub}
+				facts={reputationFacts}
+				shipsFrom={shipsFrom}
+				onContact={isSelf ? undefined : handleMessageClick}
+				affordances={affordances}
+				isLoading={profileIsLoading}
+				loading={listingsAreLoading ? <SkeletonGrid rows={6} columns={3} /> : undefined}
+				empty={
+					!listingsAreLoading && listings.length === 0 ? (
+						<EmptyState
+							title="No listings yet"
+							description={isSelf ? 'Listings you publish appear here.' : 'This seller has nothing listed right now.'}
+							action={
+								permissions.canEdit ? (
+									<Button onClick={handleAddProduct}>
+										<Plus className="size-4" />
+										Add your first listing
+									</Button>
+								) : undefined
 							}
-						>
-							{sellerProducts.map((product: NDKEvent) => (
-								<ProductCard key={product.id} product={product} />
-							))}
-						</ItemGrid>
-					) : (
-						<div className="flex flex-col flex-1 justify-center items-center gap-4">
-							<span className="font-heading text-2xl">No products found</span>
-							{permissions.canEdit && (
-								<Button onClick={handleAddProduct} className="flex items-center gap-2">
-									<Plus className="w-5 h-5" />
-									Add Your First Product
-								</Button>
-							)}
-						</div>
-					)}
-				</div>
-			</div>
+						/>
+					) : undefined
+				}
+			>
+				{listings.map((listing) => (
+					<ProductCard
+						key={listing.id}
+						id={listing.id}
+						title={listing.title}
+						category={listing.categories[0]}
+						seller={listing.location ? `${displayName} · ships from ${listing.location}` : displayName}
+						sellerPubkey={listing.pubkey}
+						price={listing.price}
+						stockNote={listing.stock}
+						material={materialForPubkey(listing.pubkey)}
+						onSelect={() => handleListingSelect(listing.eventId)}
+					/>
+				))}
+			</SellerProfileView>
 
 			<ShareProfileDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} pubkey={profilePubkey} profileName={profile?.name} />
 
@@ -425,18 +452,9 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 function ProfileLoadingState() {
 	return (
 		<div className="relative flex flex-col min-h-screen">
-			<div className="top-0 right-0 left-0 z-0 absolute bg-hero-image-margin h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
-				<div
-					className="w-full h-full"
-					style={{
-						background: 'linear-gradient(45deg, hsl(0, 0%, 30%) 0%, #000 100%)',
-						opacity: 0.8,
-					}}
-				/>
-			</div>
-			<div className="z-10 relative flex flex-col flex-1 justify-center items-center px-4 text-center">
+			<div className="z-10 relative flex flex-1 justify-center items-center px-4 text-center">
 				<div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-				<p className="mt-4 text-sm text-muted-foreground">Loading profile...</p>
+				<p className="ml-4 text-sm text-text-mid">Loading profile...</p>
 			</div>
 		</div>
 	)
@@ -449,22 +467,14 @@ interface ProfileErrorStateProps {
 	onRetry?: () => void
 }
 
-function ProfileErrorState({ title, message, gradientColor = 'hsl(0, 0%, 30%)', onRetry }: ProfileErrorStateProps) {
+function ProfileErrorState({ title, message, gradientColor = 'var(--surface-sunken)', onRetry }: ProfileErrorStateProps) {
 	return (
 		<div className="relative flex flex-col min-h-screen">
-			<div className="top-0 right-0 left-0 z-0 absolute bg-hero-image-margin h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
-				<div
-					className="w-full h-full"
-					style={{
-						background: `linear-gradient(45deg, ${gradientColor} 0%, #000 100%)`,
-						opacity: 0.8,
-					}}
-				/>
-			</div>
-			<div className="z-10 relative flex flex-col flex-1 pt-[18vh] sm:pt-[22vh] md:pt-[30vh] px-4">
-				<div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-background/90 p-8 text-center shadow-xl backdrop-blur">
-					<h1 className="text-3xl font-semibold text-foreground">{title}</h1>
-					<p className="mt-4 text-sm text-muted-foreground">{message}</p>
+			<div className="z-10 relative flex flex-1 items-center px-4">
+				<div className="mx-auto w-full max-w-3xl rounded-lg border border-border-default bg-surface-raised p-8 text-center">
+					<div className="mx-auto mb-4 size-12 rounded-full" style={{ background: gradientColor }} aria-hidden="true" />
+					<h1 className="text-2xl font-semibold text-text-high">{title}</h1>
+					<p className="mt-3 text-sm text-text-mid">{message}</p>
 					{onRetry && (
 						<Button onClick={onRetry} className="mt-6" variant="secondary">
 							<RotateCcw className="w-4 h-4 mr-2" />

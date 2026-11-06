@@ -41,21 +41,38 @@ const localEvents: NostrEventLike[] = [
 ]
 
 let localStreamCalls = 0
+/** The filters the last stream was opened with (asserted by the seller-listings tests). */
+let lastStreamFilters: readonly EventFilter[] = []
+/** Extra events the stub stream yields after the canned local ones (per-test, cleared in afterEach). */
+let extraStreamEvents: NostrEventLike[] = []
+/** Event ids the stub store reports as deleted (NIP-09), plus the deletions the lookup `fetch` returns. */
+let deletedEventIds: Record<string, true> = {}
+let deletionEvents: NostrEventLike[] = []
 
 mock.module('@platform/web/readContext', () => ({
 	getReadContext: () => ({
-		stream: async function* (_filters: readonly EventFilter[]): AsyncIterable<EventStreamItem<NostrEventLike>> {
+		stream: async function* (filters: readonly EventFilter[]): AsyncIterable<EventStreamItem<NostrEventLike>> {
 			localStreamCalls++
+			lastStreamFilters = filters
 			// Yield the canned local events, then the caught-up marker.
-			for (const event of localEvents) yield { type: 'event', event }
+			for (const event of [...localEvents, ...extraStreamEvents]) yield { type: 'event', event }
 			yield { type: 'caught-up', info: { eose: ['wss://local'], pending: [], complete: true } }
 		},
-		fetch: async (_filters: readonly EventFilter[]) => localEvents,
-		store: {},
+		fetch: async (_filters: readonly EventFilter[]) => deletionEvents,
+		store: {
+			add: async (event: NostrEventLike) => ({ status: 'added' as const, event }),
+			isDeleted: (event: NostrEventLike) => deletedEventIds[event.id] === true,
+		},
 	}),
 }))
 
-import { browseSearchQueryOptions, configureBrowseSearch, getBrowseSearchProvider, type BrowseSearchResult } from './browseQuery'
+import {
+	browseSearchQueryOptions,
+	configureBrowseSearch,
+	fetchSellerListings,
+	getBrowseSearchProvider,
+	type BrowseSearchResult,
+} from './browseQuery'
 
 // ---------------------------------------------------------------------------
 // The RabbitHole global-fetch stub
@@ -105,6 +122,10 @@ beforeEach(() => {
 	configureBrowseSearch({ provider: 'local' })
 	localStreamCalls = 0
 	fetchStub = null
+	lastStreamFilters = []
+	extraStreamEvents = []
+	deletedEventIds = {}
+	deletionEvents = []
 })
 
 afterEach(() => {
@@ -232,5 +253,81 @@ describe('browse search provider switch', () => {
 
 		await runQueryFn('mug', 'pottery')
 		expect(sentBody).toMatchObject({ q: 'mug', filters: ['category_tags = "pottery"'] })
+	})
+})
+
+// ---------------------------------------------------------------------------
+// The seller profile's list read (frame YcjyRPZbVo)
+// ---------------------------------------------------------------------------
+
+/** An in-stock, visible listing for the seller the tests read. */
+function listingEvent(id: string, extraTags: string[][] = []): NostrEventLike {
+	return {
+		id,
+		pubkey: 'b'.repeat(64),
+		kind: 30402,
+		created_at: 1_700_000_000,
+		content: '',
+		tags: [['d', id], ['title', `Listing ${id}`], ['price', '2100', 'SATS'], ['stock', '3'], ...extraTags],
+	}
+}
+
+describe('seller listings read', () => {
+	// The canned `local-events` fixture carries no `stock` tag, which the
+	// products module's own `purchasable` rule treats as out of stock — so the
+	// seller read drops it too. The listing under test is an in-stock one.
+	test('streams this author only, and reports the seam verdict verbatim', async () => {
+		const seller = 'b'.repeat(64)
+		extraStreamEvents = [listingEvent('in-stock')]
+		const result = await fetchSellerListings(seller, 25)
+
+		// One filter, this author, the frame's listing kind.
+		expect(lastStreamFilters).toEqual([{ kinds: [30402], limit: 25, authors: [seller] }])
+		expect(result.listings.map((listing) => listing.id)).toEqual(['in-stock'])
+		expect(result.listings[0]?.eventId).toBe('in-stock')
+		// The relay verdict is the seam's, not a guess: both arrays pass through.
+		expect(result.eose).toEqual(['wss://local'])
+		expect(result.pending).toEqual([])
+	})
+
+	test('an invalid pubkey reads nothing', async () => {
+		const result = await fetchSellerListings('not-a-pubkey')
+		expect(result).toEqual({ listings: [], eose: [], pending: [] })
+		expect(localStreamCalls).toBe(0)
+	})
+
+	test('drops a listing its author deleted (NIP-09)', async () => {
+		extraStreamEvents = [listingEvent('live'), listingEvent('gone')]
+		deletedEventIds = { gone: true }
+
+		const result = await fetchSellerListings('b'.repeat(64))
+		expect(result.listings.map((listing) => listing.id)).toEqual(['live'])
+	})
+
+	test('drops hidden, sold-out and stockless listings, as the product list does', async () => {
+		extraStreamEvents = [
+			listingEvent('live'),
+			listingEvent('hidden', [['visibility', 'hidden']]),
+			{
+				...listingEvent('sold-out'),
+				tags: [
+					['d', 'sold-out'],
+					['title', 'Sold out'],
+					['price', '100', 'SATS'],
+					['stock', '0'],
+				],
+			},
+			{
+				...listingEvent('no-stock-tag'),
+				tags: [
+					['d', 'no-stock-tag'],
+					['title', 'No stock tag'],
+					['price', '100', 'SATS'],
+				],
+			},
+		]
+
+		const result = await fetchSellerListings('b'.repeat(64))
+		expect(result.listings.map((listing) => listing.id)).toEqual(['live'])
 	})
 })

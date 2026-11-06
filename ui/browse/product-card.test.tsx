@@ -83,6 +83,24 @@ describe('ProductCard', () => {
 		const markup = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c8', seller: 'Unique Seller Name' })))
 		expect(markup).toContain('Unique Seller Name')
 	})
+
+	test('renders the category chip beside the title only when a category is supplied', () => {
+		const withCategory = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c9', category: 'pottery' })))
+		expect(withCategory).toContain('widget-product-card-category-c9')
+		expect(withCategory).toContain('pottery')
+
+		const withoutCategory = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c10' })))
+		expect(withoutCategory).not.toContain('widget-product-card-category-c10')
+	})
+
+	test('renders no price when the listing carries none', () => {
+		// "0 sats" would be a price the author never set — the row keeps the
+		// stock note and drops the amount.
+		const markup = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c11', price: undefined, stockNote: '3 in stock' })))
+		expect(markup).toContain('widget-product-card-price-c11')
+		expect(markup).toContain('3 in stock')
+		expect(markup).not.toContain('sats')
+	})
 })
 
 // ---------------------------------------------------------------------------

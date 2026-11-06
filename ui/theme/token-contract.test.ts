@@ -307,9 +307,16 @@ describe('deferred fixes stay honestly deferred (S1)', () => {
 		// is exactly the drift F4 exists to record. `--font-header` resolves at
 		// :root (styles/globals.css), so the adoption is a consumer-count move,
 		// not a declaration change.
+		//
+		// Re-scoped 2026-11-06 (Browse Phase 3, seller profile): the frame's
+		// seller name and avatar initials are drawn in the display face
+		// (`YcjyRPZbVo__seller-profile-1440.html` `.sname`/`.sheader-av`), so
+		// `ui/browse/seller-profile.tsx` adopts `font-header` twice. Recorded,
+		// not silently dropped — the same consumer-count move as above.
 		const { total, hits } = countMatches(/\bfont-(?:body|header)\b/g)
-		expect(total).toBe(6)
+		expect(total).toBe(8)
 		expect(hits.map((hit) => hit.split(' (')[0]).sort()).toEqual([
+			'ui/browse/seller-profile.tsx',
 			'ui/nav/sidebar-nav.tsx',
 			'ui/nostr/user-card.tsx',
 			'ui/storefront/MiniMarkdown.tsx',

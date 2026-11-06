@@ -147,12 +147,22 @@ export interface ProductCardProps {
 	id: string
 	/** Product title. */
 	title: string
+	/**
+	 * The listing's primary category, rendered as the small chip beside the
+	 * title (the seller-profile frame's `NIP-99:310` slot). Real `t` tag only —
+	 * omit it and no chip renders.
+	 */
+	category?: string
 	/** Seller name / store name. */
 	seller: string
 	/** Seller pubkey prefix (first 8 chars). */
 	sellerPubkey: string
-	/** Price in sats. */
-	price: number
+	/**
+	 * Price in sats. Omitted when the listing carries no `price` tag: the card
+	 * then shows no price at all, because "0 sats" would be a price the author
+	 * never set.
+	 */
+	price?: number
 	/** Stock note, e.g. "76 in stock", "12 left", "40 in stock", "1 of 3". */
 	stockNote?: string
 	/** Material gradient class (.m1–.m8). */
@@ -236,6 +246,7 @@ const ThreeDotsIcon: FC<{ open?: boolean }> = ({ open }) => (
 export const ProductCard: FC<ProductCardProps> = ({
 	id,
 	title,
+	category,
 	seller,
 	sellerPubkey,
 	price,
@@ -347,6 +358,15 @@ export const ProductCard: FC<ProductCardProps> = ({
 				className="mt-[5px] text-[15px] font-medium leading-[1.3] text-text-high"
 			>
 				{title}
+				{category ? (
+					<span
+						data-slot="card-category"
+						data-testid={`widget-product-card-category-${id}`}
+						className="ml-1.5 inline-block rounded-xs bg-surface-sunken px-1.5 py-px align-middle text-[10px] font-normal leading-tight text-text-mid"
+					>
+						{category}
+					</span>
+				) : null}
 			</h3>
 
 			{/* Seller row — tinted avatar + seller name + heart + three-dots */}
@@ -429,9 +449,13 @@ export const ProductCard: FC<ProductCardProps> = ({
 				data-testid={`widget-product-card-price-${id}`}
 				className={cn('mt-2.5', 'flex', 'items-center', 'justify-between')}
 			>
-				<b className="text-sm">
-					{formatSats(price)} <small className="font-normal text-text-mid">sats</small>
-				</b>
+				{typeof price === 'number' ? (
+					<b className="text-sm">
+						{formatSats(price)} <small className="font-normal text-text-mid">sats</small>
+					</b>
+				) : (
+					<span />
+				)}
 				{stockNote && <small className="text-xs text-text-mid">{stockNote}</small>}
 			</div>
 		</article>

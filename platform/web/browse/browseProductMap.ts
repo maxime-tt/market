@@ -14,12 +14,14 @@ import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import {
 	getProductCategories,
 	getProductImages,
+	getProductLocation,
 	getProductPrice,
 	getProductId,
 	getProductPubkey,
 	getProductStock,
 	getProductTitle,
 } from '@sdk/commerce/discovery'
+import type { MaterialClass } from '@ui/browse/art'
 
 // ---------------------------------------------------------------------------
 // BrowseProduct shape — consumed by @ui/browse/product-card
@@ -27,13 +29,18 @@ import {
 
 /** The minimal product shape the Browse UI expects. */
 export interface BrowseProduct {
+	/** The addressable `d` identifier when present, else the event id. */
 	id: string
+	/** The event id — the product page addresses a listing by event id. */
+	eventId: string
 	pubkey: string
 	title: string
 	price?: number
 	stock?: string
 	image?: string
 	categories: string[]
+	/** The author's own `location` tag ("ships from"); absent when unset. */
+	location?: string
 }
 
 /**
@@ -76,16 +83,34 @@ export function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
 	const categories = getProductCategories(event).map((t) => t[1])
 	const pubkey = getProductPubkey(event)
 	const id = getProductId(event) || event.id
+	const location = getProductLocation(event)
 
 	if (!title && !id) return undefined
 
 	return {
 		id,
+		eventId: event.id,
 		pubkey,
 		title: title || 'Untitled',
 		price,
 		stock,
 		image,
 		categories,
+		location: location || undefined,
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic art assignment
+// ---------------------------------------------------------------------------
+
+/**
+ * The material tile for a seller's product: a stable function of the pubkey, so
+ * the same seller always draws the same art (the frames' rule). Lives here, with
+ * the mapper, so every Browse-shaped surface assigns art the same way instead of
+ * re-implementing the hash.
+ */
+export function materialForPubkey(pubkey: string): MaterialClass {
+	const hash = pubkey.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
+	return `m${(hash % 8) + 1}` as MaterialClass
 }
