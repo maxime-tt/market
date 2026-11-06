@@ -318,7 +318,8 @@ const IDLE_ITEMS: StripItem[] = [
 
 const BrowseIdleDefault = () => (
 	<div className="h-[500px]">
-		<BrowseIdle query="" onSearchChange={() => {}} onSearchGo={() => {}} stripsAbove={IDLE_ITEMS} stripsBelow={IDLE_ITEMS} />
+		<BrowseNav onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+		<BrowseIdle stripsAbove={IDLE_ITEMS} stripsBelow={IDLE_ITEMS} />
 	</div>
 )
 
@@ -328,37 +329,28 @@ const BrowseIdleDefault = () => (
  */
 const BrowseIdleWithStats = () => (
 	<div className="h-[500px]">
-		<BrowseIdle
-			query=""
-			onSearchChange={() => {}}
-			onSearchGo={() => {}}
-			stats={{ products: 1208, sellers: 38, postedLast24h: 412, relays: 38 }}
-			stripsAbove={IDLE_ITEMS}
-			stripsBelow={IDLE_ITEMS}
-		/>
+		<BrowseNav onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+		<BrowseIdle stats={{ products: 1208, sellers: 38, postedLast24h: 412, relays: 38 }} stripsAbove={IDLE_ITEMS} stripsBelow={IDLE_ITEMS} />
 	</div>
 )
 
 /** The Featured destination marked current (frame RBtsnyppDS). */
 const BrowseNavFeatured = () => <BrowseNav currentPage="featured" onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
 
+/**
+ * The idle screen with its search populated: the hero's large field and the
+ * nav's compact one are the same query, exactly as the host wires them.
+ */
 const BrowseIdleWithSearch = () => {
 	const [query, setQuery] = useState('ceramic')
 	return (
 		<div className="h-[500px]">
-			<BrowseIdle
-				query={query}
-				onSearchChange={setQuery}
-				onSearchGo={() => {}}
-				active={false}
+			<BrowseNav
 				onNavigateHome={() => {}}
 				onNavigateFeatured={() => {}}
-				accountSlot={
-					<div className="flex items-center gap-2 text-sm text-text-mid">
-						<div className="size-7 rounded-full bg-fill-ink text-on-fill-ink grid place-items-center text-xs font-bold">M</div>
-					</div>
-				}
+				searchSlot={<SearchField value={query} onChange={setQuery} onGo={() => {}} />}
 			/>
+			<BrowseIdle searchSlot={<SearchField value={query} onChange={setQuery} onGo={() => {}} size="hero" />} onWhyPlebeian={() => {}} />
 		</div>
 	)
 }

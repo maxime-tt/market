@@ -13,12 +13,15 @@
  * - Compact nav, search + CTAs in a 2-column grid below the field
  * - The strips stay: they are the same full-bleed band, and the loop is what
  *   makes a narrow viewport work
+ *
+ * The screen is the hero body only: the nav band (and the search field it
+ * carries) belongs to the host, which renders it once for every state. The
+ * idle hero's own large field arrives as `searchSlot`, so the host owns both
+ * instances and the query that drives them.
  */
 
-import type { FC, MouseEventHandler } from 'react'
+import type { FC, MouseEventHandler, ReactNode } from 'react'
 import { cn } from '../utils/cn'
-import { BrowseNav } from './browse-nav'
-import { SearchField } from './search-field'
 import { ProductStrip, type StripItem } from './product-strip'
 
 // ---------------------------------------------------------------------------
@@ -96,12 +99,13 @@ export interface BrowseIdleProps {
 	stripsAbove?: readonly StripItem[]
 	/** Product strip items below the hero. */
 	stripsBelow?: readonly StripItem[]
-	/** Current search query. */
-	query: string
-	/** Search query change handler. */
-	onSearchChange: (value: string) => void
-	/** Search submit handler. */
-	onSearchGo: () => void
+	/**
+	 * The hero's large search field, rendered by the host. It sits between the
+	 * MotD and the CTAs — the frame's title block — and shares its value with
+	 * the nav field, so whichever instance the visitor types in writes the same
+	 * query.
+	 */
+	searchSlot?: ReactNode
 	/** Callback when Browse products is clicked. */
 	onBrowseProducts?: () => void
 	/**
@@ -113,14 +117,6 @@ export interface BrowseIdleProps {
 	onWhyPlebeian?: () => void
 	/** Callback when Post a listing is clicked (handoff stub). */
 	onPostListing?: () => void
-	/** Whether the wordmark link is active. */
-	active?: boolean
-	/** Callback when wordmark is clicked. */
-	onNavigateHome?: () => void
-	/** Callback when Featured link is clicked. */
-	onNavigateFeatured?: () => void
-	/** Account slot (avatar/identity). */
-	accountSlot?: React.ReactNode
 	/** Extra classes for the root. */
 	className?: string
 }
@@ -132,33 +128,25 @@ export interface BrowseIdleProps {
 /**
  * Browse idle screen — the landing state when no search is active.
  *
- * Layout (1440):
- * 1. Nav bar (wordmark, Featured, search, account)
- * 2. Full-bleed product strip above the title block
- * 3. Hero: title + MotD + search pill + CTAs, in the centred 800px column
- * 4. Full-bleed product strip below the title block
+ * Layout (1440): the hero body below the host's nav band —
+ * 1. Full-bleed product strip above the title block
+ * 2. Hero: title + MotD + search pill + CTAs, in the centred 800px column
+ * 3. Full-bleed product strip below the title block
  *
- * Layout (390):
- * 1. Compact nav band
- * 2. The same strips, full-bleed
- * 3. Search field
- * 4. CTAs in 2-column grid
+ * Layout (390): the same body —
+ * 1. The same strips, full-bleed
+ * 2. Search field
+ * 3. CTAs in 2-column grid
  */
 export const BrowseIdle: FC<BrowseIdleProps> = ({
 	stats,
 	stripsAbove,
 	stripsBelow,
-	query,
-	onSearchChange,
-	onSearchGo,
+	searchSlot,
 	onBrowseProducts,
 	onSelectProduct,
 	onWhyPlebeian,
 	onPostListing,
-	active = true,
-	onNavigateHome,
-	onNavigateFeatured,
-	accountSlot,
 	className,
 }) => {
 	const heroStats = describeIdleStats(stats)
@@ -183,14 +171,6 @@ export const BrowseIdle: FC<BrowseIdleProps> = ({
 
 	return (
 		<div className={cn('min-h-screen bg-background', className)}>
-			<BrowseNav
-				active={active}
-				onNavigateHome={onNavigateHome}
-				onNavigateFeatured={onNavigateFeatured}
-				searchSlot={<SearchField value={query} onChange={onSearchChange} onGo={onSearchGo} />}
-				accountSlot={accountSlot}
-			/>
-
 			{/*
 			 * The band is full-bleed and its content is not: the strips span the
 			 * viewport edge to edge (frame `.wall{ inset:0 }`), while the hero keeps
@@ -239,6 +219,15 @@ export const BrowseIdle: FC<BrowseIdleProps> = ({
 							</span>
 						)}
 					</div>
+
+					{/* The hero's large search field — the frame's title block, between
+					    the MotD and the CTAs. The host owns the instance, so the same
+					    query drives it and the nav field. */}
+					{searchSlot && (
+						<div data-slot="browse-idle-search" data-testid="widget-browse-idle-search" className="mt-6 w-full max-w-[800px]">
+							{searchSlot}
+						</div>
+					)}
 
 					{/* CTAs — stacked on mobile, inline on desktop */}
 					<div data-slot="ctas" data-testid="widget-browse-idle-ctas" className="mt-6 flex flex-wrap justify-center gap-3">

@@ -10,9 +10,9 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { BrowseIdle, describeIdleStats, formatIdleCount } from './browse-idle'
+import { BrowseIdle, describeIdleStats, formatIdleCount, type BrowseIdleProps } from './browse-idle'
 
-const BASE = { query: '', onSearchChange: () => {}, onSearchGo: () => {} }
+const BASE: BrowseIdleProps = {}
 
 function motdText(markup: string): string {
 	// Start at the band's own `<div` (not at its attribute), then read only the

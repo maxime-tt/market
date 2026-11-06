@@ -7,9 +7,15 @@
  * - Search results: grid with skeleton shimmer, empty marketplace, relay indicator
  * - Relay error: expanding per-relay detail popover; dead-search error panel
  * - Tag-filtered: facet badges derived from the search
- * - Split view: a clicked card opens the product panel over the results, driven
- *   by the route's `?p=` (deep links and back/forward come for free), and the
- *   open card's own click, the panel's close button, or Escape clears it
+ * - Split view: a clicked card — or a home tile — opens the product panel beside
+ *   the page it was clicked on, driven by the route's `?p=` (deep links and
+ *   back/forward come for free); the open card's own click, the panel's close
+ *   button, or Escape clears it
+ *
+ * One tree, never one branch per state: the nav band and its search field are
+ * rendered outside the state branch, so typing cannot unmount the focused input
+ * when the first character flips the page. The home's own large field hands its
+ * caret to the nav field on that same commit.
  *
  * The product panel's read is the single-entity `useBrowseProductDetail` (a
  * `fetch` by coordinate), aimed at the relays the search hit was seen on and
@@ -17,7 +23,7 @@
  * grid's read stays the search stream.
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { BrowseNav } from '@ui/browse/browse-nav'
 import { SearchField } from '@ui/browse/search-field'
 import { ProductCard, type CardPresentation } from '@ui/browse/product-card'
@@ -85,6 +91,41 @@ const CATEGORY_SECTION_ID = 'browse-categories'
  * not a claim about the market.
  */
 const FACET_PILL_LIMIT = 6
+
+// ---------------------------------------------------------------------------
+// Scroll — the one place the page listens to it
+// ---------------------------------------------------------------------------
+
+/**
+ * How far the page scrolls before the nav band takes the search over.
+ *
+ * The idle frame homes the search in the hero's title block; the results frame
+ * embeds the compact one in the nav band. The handoff is scroll position, so
+ * one pixel past the top is already "scrolled" — the hero field is sticky
+ * enough in sight at 8px that nothing appears to jump.
+ */
+const NAV_SEARCH_HANDOFF_PX = 8
+
+/**
+ * Whether the page has scrolled past `threshold`.
+ *
+ * Read in a passive listener and stored as a boolean, so a scroll burst
+ * re-renders nothing once the flag has flipped.
+ */
+function usePageScrolled(threshold = NAV_SEARCH_HANDOFF_PX): boolean {
+	const [scrolled, setScrolled] = useState(false)
+
+	useEffect(() => {
+		const read = () => setScrolled(window.scrollY > threshold)
+		// A restored scroll position (back/forward) is already past the top on
+		// mount, so the first read is not optional.
+		read()
+		window.addEventListener('scroll', read, { passive: true })
+		return () => window.removeEventListener('scroll', read)
+	}, [threshold])
+
+	return scrolled
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -196,10 +237,13 @@ function BrowseResultCard({ product, presentation, selected, menuOpen, onSelect,
 /**
  * Host that wires the Browse shell to the read seam.
  *
- * State machine:
- * - Idle (no term, no tag, no open product) → BrowseIdle: hero with measured
- *   facts, wall strips from the index feed, and the browse-by-category rows
- *   below them; the `Browse products` CTA scrolls to those rows
+ * Two base states — the home, or a search's results — and one open product
+ * (`?p=`) that never changes which of them you are on:
+ * - Home (no term, no tag) → BrowseIdle: hero with measured facts, wall strips
+ *   from the index feed, and the browse-by-category rows below them; the
+ *   `Browse products` CTA scrolls to those rows
+ * - Home + `?p=` → the same home as the split view's master pane, with the
+ *   product panel beside it: a tile click opens the panel **in place**
  * - Query loading → SkeletonGrid (shimmering placeholders)
  * - Query error → DeadSearchError (if no relays responded) or ErrorState
  * - Query empty results → EmptyStateBrowse (everything answered, none matched)
@@ -207,11 +251,14 @@ function BrowseResultCard({ product, presentation, selected, menuOpen, onSelect,
  * - Results + `?p=` → the same grid as the split view's master pane, with the
  *   product panel in the detail pane
  *
+ * `?p=` is a property of the *open product*, not of the page: closing the panel
+ * clears it and returns whichever base state was underneath.
+ *
  * Two reads, one source each: the grid and the panel read the search stream
  * (`useBrowseSearch`, also enabled by a tag alone — the category row's
- * `See all →` — or by an open product alone, a bare `?p=` deep link); the idle
- * index reads the bounded index feed (`useBrowseIndexFeed`). Relay data comes
- * from the read seam (ctx.stream caught-up event), never fabricated.
+ * `See all →` — or by an open product alone, a bare `?p=` deep link); the home
+ * reads the bounded index feed (`useBrowseIndexFeed`). Relay data comes from
+ * the read seam (ctx.stream caught-up event), never fabricated.
  *
  * The facet pills are the service's own `suggested` list — real market counts —
  * read through `useBrowseFacets`, the unfiltered index probe, so selecting one
@@ -220,6 +267,14 @@ function BrowseResultCard({ product, presentation, selected, menuOpen, onSelect,
 export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 	const [facetsExpanded, setFacetsExpanded] = useState(false)
+
+	/** The nav field's input and the hero's — the two ends of the handoff. */
+	const navSearchInput = useRef<HTMLInputElement>(null)
+	const heroSearchInput = useRef<HTMLInputElement>(null)
+	/** Which field must take the caret on the next commit, set by the other one. */
+	const focusTarget = useRef<'nav' | 'hero' | null>(null)
+
+	const scrolled = usePageScrolled()
 
 	const { user } = useAuth()
 
@@ -270,7 +325,26 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	const accountInitial = user?.pubkey ? user.pubkey.slice(0, 2).toUpperCase() : undefined
 
 	// Handlers
+	/**
+	 * The nav field's change. Emptying it returns the idle screen, where this
+	 * field is hidden unless the page has scrolled — so the hero's field, the
+	 * one actually on screen, takes the caret (see the layout effect below).
+	 */
 	const handleSearchChange = (value: string) => {
+		focusTarget.current = value.trim().length === 0 && !scrolled ? 'hero' : null
+		onNavigate({ q: value, p: undefined, tag })
+	}
+
+	/**
+	 * The hero field's own change. The first character typed there ends the idle
+	 * state, and the hero — the input with it — unmounts in the same commit. The
+	 * character survives in the URL, but focus does not, so the query would
+	 * accept exactly one character per click. The nav field (rendered by this
+	 * host, outside every branch) is already mounted; the layout effect below
+	 * moves focus into it before the next keystroke.
+	 */
+	const handleHeroSearchChange = (value: string) => {
+		focusTarget.current = value.trim().length > 0 ? 'nav' : null
 		onNavigate({ q: value, p: undefined, tag })
 	}
 
@@ -346,76 +420,88 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	const EMPTY_HINTS = [{ label: 'local index empty' }]
 
 	/**
-	 * The idle index: no term, no tag, and no open product. A `?p=` deep link
-	 * (or a strip/row click) is a *results* state, not the idle one — its
-	 * master pane is the loaded set and its detail pane is the open product.
+	 * The idle index: no term and no tag. The open product (`?p=`) is **not**
+	 * part of this: selecting a wall/strip/row tile keeps the home page and
+	 * opens its panel beside it, and a `?p=` deep link lands on the same place —
+	 * never on an empty results grid. The results state is a *search* state, so
+	 * only a term or a tag can leave the home.
 	 */
-	const isIdle = !q.trim() && !tag && !p
+	const isIdle = !q.trim() && !tag
+
+	/**
+	 * Focus handoff across the idle ↔ results change.
+	 *
+	 * The hero's large field lives on the idle screen and unmounts with it; the
+	 * nav's compact field is rendered by this host, outside every branch, so it
+	 * is already mounted when the branch flips. Whichever field the visitor was
+	 * typing in dies or hides, so the other one takes the caret on the same
+	 * commit — before the next keystroke, and with the caret at the end of the
+	 * text the character just wrote.
+	 */
+	useLayoutEffect(() => {
+		const target = focusTarget.current
+		if (!target) return
+		focusTarget.current = null
+
+		const input = target === 'nav' ? navSearchInput.current : heroSearchInput.current
+		if (!input || !input.isConnected) return
+		input.focus()
+		// The caret belongs after the character that got us here, not at 0.
+		input.setSelectionRange(input.value.length, input.value.length)
+	}, [isIdle, q])
 
 	const accountSlot = accountInitial ? <AccountChip initial={accountInitial} /> : null
 
-	// Render — State machine
-	// No term, no tag, no open product → the idle index: hero, wall strips read
-	// from the feed, and the browse-by-category rows below them.
-	if (isIdle) {
-		// The wall shows loaded listings, split either side of the hero. Each tile
-		// carries the listing's own image, title, seller name and price, and the
-		// art is assigned the same way the cards assign it.
-		const wall = feedStrips(wallProducts, IDLE_WALL_LIMIT, (pubkey) => wallSellerNames.get(pubkey))
-		const wallSplit = Math.ceil(wall.length / 2)
+	/**
+	 * The nav band's compact field, and when it is the one on screen.
+	 *
+	 * The idle frame homes the search in the hero; the results and split frames
+	 * put it in the nav band. So the compact instance shows on every search
+	 * state, on the home once the page has scrolled past the hero's field, and
+	 * on the home with a product open beside it (the split frame — the hero may
+	 * be scrolled out inside the master pane).
+	 *
+	 * It is rendered unconditionally — hidden, never unmounted — because the
+	 * element holding the caret must not be remounted by a state change.
+	 */
+	const navSearchHidden = isIdle && !scrolled && !p
+	const navSearch = (
+		<SearchField
+			value={q}
+			onChange={handleSearchChange}
+			onGo={handleSearchGo}
+			inputRef={navSearchInput}
+			className={navSearchHidden ? 'hidden' : undefined}
+		/>
+	)
 
-		return (
-			<>
-				<ProductArtMount />
-				<BrowseIdle
-					stats={feed?.stats}
-					query={q}
-					onSearchChange={handleSearchChange}
-					onSearchGo={handleSearchGo}
-					onSelectProduct={(id) => onNavigate({ q: '', tag: undefined, p: id })}
-					onBrowseProducts={handleBrowseProducts}
-					onWhyPlebeian={onNavigateFeatured}
-					stripsAbove={wall.slice(0, wallSplit)}
-					stripsBelow={wall.slice(wallSplit)}
-					active={true}
-					onNavigateHome={() => onNavigate({ q: '', p: undefined, tag: undefined })}
-					onNavigateFeatured={onNavigateFeatured}
-					accountSlot={accountSlot}
-				/>
+	/**
+	 * The hero's placeholder states what this index loaded — the frame's
+	 * "Search 3,418 items" is that count, never a market total. Without the read
+	 * there is no number to state, so the field keeps the plain copy.
+	 */
+	const heroPlaceholder =
+		feed?.stats?.products !== undefined
+			? `Search ${feed.stats.products.toLocaleString('en-US')} items — try “ceramic”, “oak bowl”, or a seller’s npub`
+			: undefined
 
-				{/* Browse by category — the rows the `Browse products` CTA scrolls to */}
-				<div id={CATEGORY_SECTION_ID} className="max-w-[1120px] mx-auto px-4 lg:px-6 pb-12">
-					<CategoryRows isLoading={feedQuery.isLoading} isError={feedQuery.isError}>
-						{(feed?.rows ?? []).map((row) => (
-							<CategoryRow
-								key={row.category}
-								title={row.category}
-								count={row.items.length}
-								onSeeAll={() => handleCategorySeeAll(row.category)}
-							>
-								{row.items.slice(0, CATEGORY_ROW_LIMIT).map((product) => (
-									<BrowseResultCard
-										key={product.id}
-										product={product}
-										presentation="row"
-										onSelect={(id) => handleCategoryCardSelect(row.category, id)}
-										onThreeDots={() => handleMenuToggle(product.id)}
-										onCopyLink={() => handleCopyLink(product.id)}
-										menuOpen={menuOpenId === product.id}
-									/>
-								))}
-							</CategoryRow>
-						))}
-					</CategoryRows>
-				</div>
-			</>
-		)
-	}
+	// The idle wall: the loaded listings, split either side of the hero. Each
+	// tile carries its own image, title, price and resolved seller name, and the
+	// art is assigned the same way the cards assign it.
+	const wall = isIdle ? feedStrips(wallProducts, IDLE_WALL_LIMIT, (pubkey) => wallSellerNames.get(pubkey)) : []
+	const wallSplit = Math.ceil(wall.length / 2)
 
 	const hasResults = !searchQuery.isLoading && (result?.products.length ?? 0) > 0
 
-	// Relay indicator (always present under search when searching)
-	const relayIndicator = <RelayIndicator responded={respondedCount} totalProducts={result?.products.length ?? 0} relays={relayDetails} />
+	// Relay indicator — always present, with the read's own fetching state
+	const relayIndicator = (
+		<RelayIndicator
+			responded={respondedCount}
+			totalProducts={result?.products.length ?? 0}
+			relays={relayDetails}
+			loading={searchQuery.isLoading}
+		/>
+	)
 
 	// The result cards — the grid's children in both layouts
 	const cards: ReactNode = (result?.products ?? []).map((product) => (
@@ -448,120 +534,202 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 				}
 			: {}
 
+	/**
+	 * The open product's panel — one element, rendered by whichever base state is
+	 * showing. `?p=` says *what is open*, never which page you are on: the home
+	 * keeps its wall, hero, strips and rows, and the results keep their grid.
+	 */
+	const panel = p ? (
+		<ProductDetailPanel
+			state={panelState}
+			product={
+				detail
+					? {
+							id: detail.id,
+							title: detail.title,
+							seller: detail.pubkey.slice(0, 8),
+							sellerName: detailSellerName,
+							sellerPicture: detailSellerPicture,
+							sellerNpub: elideNpub(detail.pubkey),
+							location: detail.location,
+							image: detail.image,
+							price: detail.price,
+							currency: detail.currency,
+							priceLabel: detailPrice?.label,
+							priceUnit: detailPrice?.unit,
+							stockNote: typeof detail.stock === 'string' ? detail.stock : undefined,
+							description: detail.description || undefined,
+							shipping: detail.shipping,
+							material: materialForPubkey(detail.pubkey),
+						}
+					: undefined
+			}
+			menuOpen={menuOpenId === p}
+			onClose={() => onNavigate({ q, p: undefined, tag })}
+			onThreeDots={() => handleMenuToggle(p)}
+			onCopyLink={() => handleCopyLink(p)}
+			onRetry={() => void detailQuery.refetch()}
+		/>
+	) : null
+
+	/**
+	 * The home page: hero (with its large field), the wall strips read from the
+	 * feed, and the browse-by-category rows the CTA scrolls to. It is the base
+	 * state of the index — a search leaves it, an open product does not.
+	 */
+	const homeBody = (
+		<>
+			{/* Idle index: hero (with the large field), wall strips read from the
+					    feed, and the browse-by-category rows below them. */}
+			<BrowseIdle
+				stats={feed?.stats}
+				searchSlot={
+					<SearchField
+						value={q}
+						placeholder={heroPlaceholder}
+						onChange={handleHeroSearchChange}
+						onGo={handleSearchGo}
+						inputRef={heroSearchInput}
+						size="hero"
+					/>
+				}
+				onSelectProduct={(id) => onNavigate({ q: '', tag: undefined, p: id })}
+				onBrowseProducts={handleBrowseProducts}
+				onWhyPlebeian={onNavigateFeatured}
+				stripsAbove={wall.slice(0, wallSplit)}
+				stripsBelow={wall.slice(wallSplit)}
+			/>
+
+			{/* Browse by category — the rows the `Browse products` CTA scrolls to */}
+			<div id={CATEGORY_SECTION_ID} className="max-w-[1120px] mx-auto px-4 lg:px-6 pb-12">
+				<CategoryRows isLoading={feedQuery.isLoading} isError={feedQuery.isError}>
+					{(feed?.rows ?? []).map((row) => (
+						<CategoryRow
+							key={row.category}
+							title={row.category}
+							count={row.items.length}
+							onSeeAll={() => handleCategorySeeAll(row.category)}
+						>
+							{row.items.slice(0, CATEGORY_ROW_LIMIT).map((product) => (
+								<BrowseResultCard
+									key={product.id}
+									product={product}
+									presentation="row"
+									onSelect={(id) => handleCategoryCardSelect(row.category, id)}
+									onThreeDots={() => handleMenuToggle(product.id)}
+									onCopyLink={() => handleCopyLink(product.id)}
+									menuOpen={menuOpenId === product.id}
+								/>
+							))}
+						</CategoryRow>
+					))}
+				</CategoryRows>
+			</div>
+		</>
+	)
+
+	// Render — one tree, two states
+	//
+	// The nav band and its search field are rendered once, above the branch.
+	// They must not live inside it: `q` changes on every keystroke, so a field
+	// nested in a `isIdle ? … : …` branch is unmounted by the first character,
+	// which is the bug this structure exists to prevent. The hero's own large
+	// field is the only branch-scoped one, and the handoff above covers it.
 	return (
 		<div className="min-h-screen bg-background">
 			{/* Page-level art mount: the SVG sprite + the eight material classes */}
 			<ProductArtMount />
 
-			{/* Nav */}
+			{/* Nav — the same element in every state */}
 			<BrowseNav
 				active={true}
 				onNavigateHome={() => onNavigate({ q: '', p: undefined, tag: undefined })}
 				onNavigateFeatured={onNavigateFeatured}
-				searchSlot={<SearchField value={q} onChange={handleSearchChange} onGo={handleSearchGo} />}
+				searchSlot={navSearch}
 				accountSlot={accountSlot}
 			/>
 
-			<main className="max-w-[1120px] mx-auto px-4 lg:px-6 py-4">
-				{/* Relay indicator — under the search area */}
-				{relayIndicator}
+			{isIdle ? (
+				panel ? (
+					/* Selecting a tile on the home opens the panel beside it: the home is
+					   still the base state, and only the pane is added. */
+					<SplitView className="h-[calc(100vh-4rem)] min-h-[520px]" master={homeBody} detail={panel} />
+				) : (
+					homeBody
+				)
+			) : (
+				<main className="max-w-[1120px] mx-auto px-4 lg:px-6 py-4">
+					{/* Relay indicator — under the search area */}
+					{relayIndicator}
 
-				{/* Facet pills — the service's own market-scoped counts and filters */}
-				{facets.length > 0 && (
-					<div
-						data-slot="browse-facets"
-						className={
-							facetsExpanded ? 'mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1' : 'mt-3 flex flex-wrap items-center gap-2'
-						}
-					>
-						{visibleFacets.map((facet) => (
-							<TagFilterBadge
-								key={`${facet.field}:${facet.value}`}
-								label={facet.value}
-								count={facet.count}
-								active={tag === facet.value}
-								onToggle={() => onNavigate({ q, p: undefined, tag: tag === facet.value ? undefined : facet.value })}
-							/>
-						))}
-						{facets.length > FACET_PILL_LIMIT && (
-							<button
-								type="button"
-								data-slot="browse-facets-more"
-								data-testid="widget-browse-facets-more"
-								aria-expanded={facetsExpanded}
-								className="h-7 shrink-0 px-3 rounded-full border border-border-default text-xs text-text-mid cursor-pointer transition-colors hover:text-text-high"
-								onClick={() => setFacetsExpanded((prev) => !prev)}
-							>
-								{facetsExpanded ? 'less' : 'more'}
-							</button>
-						)}
-					</div>
-				)}
+					{/* Facet pills — the service's own market-scoped counts and filters */}
+					{facets.length > 0 && (
+						<div
+							data-slot="browse-facets"
+							className={
+								facetsExpanded ? 'mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1' : 'mt-3 flex flex-wrap items-center gap-2'
+							}
+						>
+							{visibleFacets.map((facet) => (
+								<TagFilterBadge
+									key={`${facet.field}:${facet.value}`}
+									label={facet.value}
+									count={facet.count}
+									active={tag === facet.value}
+									onToggle={() => onNavigate({ q, p: undefined, tag: tag === facet.value ? undefined : facet.value })}
+								/>
+							))}
+							{facets.length > FACET_PILL_LIMIT && (
+								<button
+									type="button"
+									data-slot="browse-facets-more"
+									data-testid="widget-browse-facets-more"
+									aria-expanded={facetsExpanded}
+									className="h-7 shrink-0 px-3 rounded-full border border-border-default text-xs text-text-mid cursor-pointer transition-colors hover:text-text-high"
+									onClick={() => setFacetsExpanded((prev) => !prev)}
+								>
+									{facetsExpanded ? 'less' : 'more'}
+								</button>
+							)}
+						</div>
+					)}
 
-				{/* Loading state — skeleton grid */}
-				{searchQuery.isLoading && <SkeletonGrid rows={8} columns={3} />}
+					{/* Loading state — skeleton grid */}
+					{searchQuery.isLoading && <SkeletonGrid rows={8} columns={3} />}
 
-				{/* Error state — dead search (all relays failed) */}
-				{searchQuery.isError && respondedCount === 0 && (
-					<DeadSearchError
-						totalRelays={totalRelays}
-						pendingCount={pendingRelays.length}
-						message="All relays failed. Check your connection and try again."
-						onRetry={() => handleSearchGo()}
-					/>
-				)}
+					{/* Error state — dead search (all relays failed) */}
+					{searchQuery.isError && respondedCount === 0 && (
+						<DeadSearchError
+							totalRelays={totalRelays}
+							pendingCount={pendingRelays.length}
+							message="All relays failed. Check your connection and try again."
+							onRetry={() => handleSearchGo()}
+						/>
+					)}
 
-				{searchQuery.isError && respondedCount > 0 && <EmptyStateBrowse query={q} headline="The search errored." hints={EMPTY_HINTS} />}
+					{searchQuery.isError && respondedCount > 0 && <EmptyStateBrowse query={q} headline="The search errored." hints={EMPTY_HINTS} />}
 
-				{/* Empty marketplace — every relay answered, none matched */}
-				{!searchQuery.isLoading && result && result.products.length === 0 && !searchQuery.isError && (
-					<EmptyStateBrowse query={q} hints={EMPTY_HINTS} {...emptyCopy} />
-				)}
+					{/* Empty marketplace — every relay answered, none matched */}
+					{!searchQuery.isLoading && result && result.products.length === 0 && !searchQuery.isError && (
+						<EmptyStateBrowse query={q} hints={EMPTY_HINTS} {...emptyCopy} />
+					)}
 
-				{/* Results — the plain grid. The split view is rendered outside this
-				    container (below) so both of its panes reach the viewport edges. */}
-				{hasResults && !p && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">{cards}</div>}
-			</main>
+					{/* Results — the plain grid. The split view is rendered outside this
+					    container (below) so both of its panes reach the viewport edges;
+					    with a product open the same grid becomes its master pane. */}
+					{hasResults && !p && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">{cards}</div>}
+				</main>
+			)}
 
 			{/* The split is full-bleed: the owner's deliberate deviation from the
 			    frame's 56px side margins, so both panes take the page's full width.
-			    Nothing else on this screen leaves the container above. */}
+			    Nothing else on this screen leaves the container above. It renders
+			    the same `panel` element the home's own split renders. */}
 			{hasResults && p && (
 				<SplitView
 					className="mt-5 h-[calc(100vh-10.5rem)] min-h-[520px]"
 					master={<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">{cards}</div>}
-					detail={
-						<ProductDetailPanel
-							state={panelState}
-							product={
-								detail
-									? {
-											id: detail.id,
-											title: detail.title,
-											seller: detail.pubkey.slice(0, 8),
-											sellerName: detailSellerName,
-											sellerPicture: detailSellerPicture,
-											sellerNpub: elideNpub(detail.pubkey),
-											location: detail.location,
-											image: detail.image,
-											price: detail.price,
-											currency: detail.currency,
-											priceLabel: detailPrice?.label,
-											priceUnit: detailPrice?.unit,
-											stockNote: typeof detail.stock === 'string' ? detail.stock : undefined,
-											description: detail.description || undefined,
-											shipping: detail.shipping,
-											material: materialForPubkey(detail.pubkey),
-										}
-									: undefined
-							}
-							menuOpen={menuOpenId === p}
-							onClose={() => onNavigate({ q, p: undefined, tag })}
-							onThreeDots={() => handleMenuToggle(p)}
-							onCopyLink={() => handleCopyLink(p)}
-							onRetry={() => void detailQuery.refetch()}
-						/>
-					}
+					detail={panel}
 				/>
 			)}
 
