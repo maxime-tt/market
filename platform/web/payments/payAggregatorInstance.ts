@@ -1,18 +1,43 @@
 /**
  * platform/web/payments/payAggregatorInstance.ts — lazily-built PayAggregator singleton.
  *
- * Built from buildAggregatorWrappers(...) plus a real SetStore (MemorySetStore — interim,
- * no durability yet; durable CAS to a database is a later decision), a real WitnessVerifier,
- * and the bolt11 adapter config.
+ * Built from buildAggregatorWrappers(...) plus the durable LocalSetStore (set
+ * records + hash/refund indexes), the durable LocalBolt11LegStore (bolt11 leg
+ * records), a real WitnessVerifier, and the bolt11 adapter config.
  *
- * Interim store: MemorySetStore from sdk/core/wallet/ts/memory.ts.
- * Durability is a later decision.
+ * Durable stores: LocalSetStore and LocalBolt11LegStore from
+ * payAggregatorStore.ts, both backed by localStorage.
  */
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
-import { PayAggregator, MemorySetStore, type SetStore, type WitnessVerifier } from '@sdk/core/wallet'
+import { Invoice } from '@getalby/lightning-tools'
+import { validatePreimage } from '@sdk/commerce/payments/preimage'
+import { PayAggregator, type SetStore, type WitnessVerifier } from '@sdk/core/wallet'
 import { buildAggregatorWrappers, type Bolt11Wrapper, type PayAggregatorConfig } from './payAggregator'
-import type { Bolt11LegKey, Bolt11LegRecord, Bolt11InvoiceCodec } from '@sdk/core/bolt11-wrapper'
+import { LocalSetStore, LocalBolt11LegStore } from './payAggregatorStore'
+
+// ---------------------------------------------------------------------------
+// BOLT11 invoice codec — the rail's own decoder (`@getalby/lightning-tools`,
+// which the port deliberately does not import; see the codec's doc comment)
+// ---------------------------------------------------------------------------
+
+/**
+ * Decode a bolt11 invoice's payment hash (hex). Throws on an undecodable
+ * invoice — an unreadable invoice cannot be a leg, so this is never asserted
+ * around.
+ */
+export const bolt11PaymentHash = (bolt11: string): string => new Invoice({ pr: bolt11 }).paymentHash
+
+/**
+ * The invoice's absolute expiry instant in Unix **milliseconds**. `timestamp` is
+ * the invoice's creation instant (seconds) and `expiry` is its validity
+ * **duration** (seconds), so the two are added — never confused.
+ */
+export const bolt11ExpiresAt = (bolt11: string): number => {
+	const invoice = new Invoice({ pr: bolt11 })
+	// BOLT11: an invoice that omits the `x` field expires 3600s after its timestamp.
+	return invoice.expiryDate ? invoice.expiryDate.getTime() : (invoice.timestamp + 3600) * 1000
+}
 
 // ---------------------------------------------------------------------------
 // Witness verifier — real SHA-256 for preimage, reference matching for zaps,
@@ -54,18 +79,25 @@ export function createSettlementVerifier(): SettlementVerifier {
 		verify(expectedPaymentHash: string, witness: { kind: string; source?: string; reference?: string }): boolean {
 			switch (witness.kind) {
 				case 'preimage': {
-					// A preimage is valid when sha256(preimage bytes) === expectedPaymentHash
-					// The reference field holds the preimage as a hex string.
-					if (!witness.reference) {
-						return false
+					// A preimage is valid when sha256(preimage bytes) === expectedPaymentHash.
+					// When the witness carries the material (reference = the preimage as hex)
+					// the hash is re-derived here.
+					if (witness.reference) {
+						try {
+							const preimageBytes = hexToBytes(witness.reference)
+							return bytesToHex(sha256(preimageBytes)) === expectedPaymentHash.toLowerCase()
+						} catch {
+							return false
+						}
 					}
-					try {
-						const preimageBytes = hexToBytes(witness.reference)
-						const digest = bytesToHex(sha256(preimageBytes))
-						return digest === expectedPaymentHash.toLowerCase()
-					} catch {
-						return false
-					}
+					// Otherwise the rail's own attestation settles the leg: the bolt11 wrapper
+					// validates the preimage against the invoice's recorded payment hash with
+					// its codec BEFORE it records the settled rung — at `submit` for a
+					// manual-preimage leg, at `reconcile` for an lnurl verification — and its
+					// witness deliberately carries no copy of the reference. Only those two
+					// rail-validated sources are accepted (owner ruling 2026-11-06); any other
+					// source with no material stays unsettled.
+					return witness.source === 'manual' || witness.source === 'lnurl_verify'
 				}
 				case 'mint_quote_state': {
 					// A mint quote state settles when the quote's state proves settlement
@@ -121,8 +153,7 @@ export function getPayAggregatorInstance(): {
 		return instance
 	}
 
-	// Create the interim store (MemorySetStore — no durability yet).
-	const setStore: SetStore = new MemorySetStore()
+	const setStore: SetStore = new LocalSetStore()
 
 	// Create the verifier using real SHA-256 for preimage verification.
 	const settlementVerifier = createSettlementVerifier()
@@ -131,43 +162,12 @@ export function getPayAggregatorInstance(): {
 	const config: PayAggregatorConfig = {
 		bolt11: {
 			wrapperId: 'bolt11',
-			store: {
-				async createOrGet(record: Bolt11LegRecord) {
-					const existing = bolt11LegRecords.get(record.legId)
-					if (existing) {
-						return { record: existing, created: false }
-					}
-					bolt11LegRecords.set(record.legId, record)
-					return { record, created: true }
-				},
-				async get(key: Bolt11LegKey): Promise<Bolt11LegRecord | null> {
-					const record = bolt11LegRecords.get(key.legId)
-					return record ?? null
-				},
-				async list(wrapperId?: string) {
-					const records = Array.from(bolt11LegRecords.values())
-					if (wrapperId) {
-						return records.filter((r) => r.wrapperId === wrapperId)
-					}
-					return records
-				},
-				async compareAndSet(key: Bolt11LegKey, expectedRevision: number, next: Bolt11LegRecord) {
-					const existing = bolt11LegRecords.get(key.legId)
-					if (!existing || existing.revision !== expectedRevision) {
-						throw new Error('pay_stale_writer')
-					}
-					if (next.revision !== expectedRevision + 1) {
-						throw new Error('pay_stale_writer')
-					}
-					bolt11LegRecords.set(key.legId, next)
-					return next
-				},
-			},
+			store: new LocalBolt11LegStore(),
 			storeKind: 'bolt11',
 			codec: {
-				paymentHash: (bolt11: string) => bolt11,
-				validatePreimage: (bolt11: string, preimage: string) => true,
-				expiresAt: () => Date.now() + 3_600_000,
+				paymentHash: bolt11PaymentHash,
+				validatePreimage: (bolt11: string, preimage: string) => validatePreimage(bolt11, preimage),
+				expiresAt: bolt11ExpiresAt,
 			},
 			ceiling: 1_000_000_000,
 			reconcileDeadlineMs: 3_600_000,
@@ -185,13 +185,10 @@ export function getPayAggregatorInstance(): {
 	return instance
 }
 
-// Simple in-memory store for bolt11 leg records
-const bolt11LegRecords = new Map<string, Bolt11LegRecord>()
-
 /**
  * Reset the singleton for testing.
+ * The durable stores persist in localStorage; tests should clear them manually.
  */
 export function resetPayAggregatorInstance(): void {
 	instance = null
-	bolt11LegRecords.clear()
 }

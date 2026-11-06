@@ -19,6 +19,9 @@ import { parseNwcUri, useWallets } from '@platform/web/config/walletStore'
 import { persistInvoicesLocally, updatePersistedInvoiceLocally } from '@platform/web/payments/invoiceStorage'
 import { publishOrderWorkflowWithDependencies } from '@platform/web/orders/orderPublish'
 import { publishPaymentReceipt } from '@platform/web/payments/paymentPublish'
+import { bolt11PaymentHash, getPayAggregatorInstance } from '@platform/web/payments/payAggregatorInstance'
+import { persistSetForOrder } from '@platform/web/payments/payAggregatorStore'
+import type { LegIntent } from '@sdk/core/wallet'
 import { getShippingEvent, getShippingService } from '@platform/web/shipping/shippingQuery'
 import { useGenerateInvoiceMutation, type PaymentDetail } from '@platform/web/payments/paymentQuery'
 import {
@@ -528,6 +531,49 @@ export function useCheckout() {
 					preimage,
 					bolt11: invoice.bolt11 || '',
 				})
+
+				// Record the settlement with the pay aggregator: declare the intent set for
+				// this invoice, submit the witness, reconcile the verdict, and persist the
+				// order→set correlation the orders view reads. The receipt above stays the
+				// network proof; this is the settlement record. A failure here is logged and
+				// never blocks the order. The leg's id and expected hash are the invoice's
+				// PAYMENT HASH — decoded from the bolt11, never the invoice string itself.
+				if (invoice.bolt11) {
+					try {
+						const { payAggregator, bolt11Wrapper } = getPayAggregatorInstance()
+						// Obtain the leg from the rail first: `obtain` decodes the invoice's
+						// payment hash, writes the leg record before any money moves, and returns
+						// the quote the set is declared with — its `legId` IS the payment hash,
+						// and its operations/plan are the rail's own declaration. The invoice
+						// string is never used as the expected hash.
+						const obtained = await bolt11Wrapper.obtain({
+							kind: 'manual-preimage',
+							amountSat: invoice.amount,
+							description: invoice.description,
+							bolt11: invoice.bolt11,
+						})
+						if ('refused' in obtained) {
+							throw new Error(`bolt11 leg refused: ${obtained.reason} (${obtained.field})`)
+						}
+						const leg: LegIntent = {
+							wrapperId: obtained.wrapperId,
+							legId: obtained.legId,
+							method: obtained.method,
+							frozenShare: invoice.amount,
+							expectedPaymentHash: obtained.legId,
+							authorityKind: obtained.authorityKind,
+							operations: obtained.operations,
+							plan: obtained.plan,
+						}
+						const handle = await payAggregator.pay({ orderId: resolvedOrderId, totalSat: invoice.amount, legs: [leg] })
+						await bolt11Wrapper.submit(obtained, preimage)
+						await payAggregator.reconcile(handle.setId)
+						persistSetForOrder(resolvedOrderId, handle.setId)
+					} catch (aggregationError) {
+						console.error('Failed to record the settlement with the pay aggregator:', aggregationError)
+					}
+				}
+
 				updatePersistedInvoiceLocally(resolvedOrderId, invoice.id, {
 					status: 'paid',
 					preimage,
