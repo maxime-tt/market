@@ -5,7 +5,10 @@
  * read doctrine (contract rev 2.22):
  * - The results/search list is a **stream** (list/live) — use `stream()`
  * - A single-entity read (product detail by id) may `fetch` with a
- *   one-line justification comment at the call site
+ *   one-line justification comment at the call site. When the search hit
+ *   recorded the relays it was seen on, that single read is aimed at those
+ *   relays (`applesauceIo.fetchEvents`'s `relayUrls`) instead of the app's
+ *   own context — still one bounded request for one entity
  * - Never `fetch` a list
  *
  * The search list has ONE query path (`browseSearchQueryOptions` /
@@ -21,7 +24,7 @@
  */
 
 import { queryOptions, useQuery } from '@tanstack/react-query'
-import { getReadContext } from '../readContext'
+import { applesauceIo, getReadContext, type NostrFilter } from '../readContext'
 import type { EventFilter } from '@sdk/core/event-store/filter'
 import type { CaughtUpInfo } from '@sdk/core/event-store/read'
 import { excludeDeleted } from '@sdk/core/event-store/read'
@@ -47,8 +50,8 @@ export const browseKeys = {
 	/** Stream filter for kind-30402 products matching a query/tag (per provider). */
 	search: (filters: { query: string; tag?: string; limit?: number; provider: BrowseSearchProvider }) =>
 		[...browseKeys.all, 'search', filters] as const,
-	/** Single product detail by event id (fetch, not stream). */
-	detail: (id: string) => [...browseKeys.all, 'detail', id] as const,
+	/** Single product detail by event id (fetch, not stream), scoped to the relays it was seen on. */
+	detail: (id: string, relays?: readonly string[]) => [...browseKeys.all, 'detail', id, relays ?? null] as const,
 	/** A seller's own listings (the seller-profile screen's list stream). */
 	sellerListings: (pubkey: string, limit: number) => [...browseKeys.all, 'seller-listings', pubkey, limit] as const,
 } as const
@@ -222,24 +225,36 @@ export function useBrowseSearch(query: string, tag?: string, limit?: number, ope
  * `?p=handcrafted-ceramic-ball`), falling back to the event id for a listing
  * without one. Both filters are sent as one OR, so either identity resolves.
  *
- * `fetch()` (bounded stream, not `stream()`) because this is a single-entity
- * read: a stream would hold a live subscription open for one listing whose
- * identity the panel already knows.
+ * `relays` is where the listing was actually found: a RabbitHole search hit
+ * carries the `relays_seen` the client records on the product (`BrowseProduct.relays`),
+ * and RabbitHole answers from relays this app is not connected to — reading the
+ * detail from the app's own context alone therefore resolved to nothing for a
+ * listing visibly on screen. With those relays named, the detail read goes to
+ * the relays that served the hit; without them (the local stream, which reads
+ * the app's own store, or any provider that records none) it falls back to the
+ * app's read context unchanged.
+ *
+ * Both paths are a bounded single-entity `fetch` — a stream would hold a live
+ * subscription open for one listing whose identity the panel already knows.
+ * A relay set that does not answer is a read that found nothing, not a failed
+ * read: the panel shows its empty state rather than an error.
  *
  * A coordinate can be published by more than one author, so the newest event
  * for it wins — deterministic, and the same event a card would have shown.
  */
-export function browseProductDetailQueryOptions(id: string | undefined) {
+export function browseProductDetailQueryOptions(id: string | undefined, relays?: readonly string[]) {
+	// A relay set given once and reused by the key and the read.
+	const relayTargets = relays && relays.length > 0 ? [...relays] : undefined
 	return queryOptions({
-		queryKey: browseKeys.detail(id ?? ''),
+		queryKey: browseKeys.detail(id ?? '', relayTargets),
 		queryFn: async (): Promise<BrowseProductDetail | null> => {
 			if (!id) return null
-			const ctx = getReadContext()
 			// Bounded fetch for a single product by id or coordinate (not a list)
-			const events = await ctx.fetch([
+			const filters: EventFilter[] = [
 				{ kinds: [30402], '#d': [id] },
 				{ kinds: [30402], ids: [id] },
-			])
+			]
+			const events = relayTargets ? await fetchFromRelays(filters, relayTargets) : await getReadContext().fetch(filters)
 			const newest = [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 			return newest ? (mapProductDetail(newest) ?? null) : null
 		},
@@ -247,8 +262,22 @@ export function browseProductDetailQueryOptions(id: string | undefined) {
 	})
 }
 
-export function useBrowseProductDetail(id: string | undefined) {
-	return useQuery(browseProductDetailQueryOptions(id))
+/**
+ * The same bounded single-entity read, aimed at the relays the search hit was
+ * seen on. An unreachable relay degrades to no events (the panel's empty
+ * state) rather than rejecting the query into its error state.
+ */
+async function fetchFromRelays(filters: EventFilter[], relays: string[]): Promise<NostrEventLike[]> {
+	try {
+		return await applesauceIo.fetchEvents(filters as NostrFilter[], { relayUrls: relays })
+	} catch (err) {
+		console.warn('[browse] the listing’s own relays did not answer; showing the empty state:', err instanceof Error ? err.message : err)
+		return []
+	}
+}
+
+export function useBrowseProductDetail(id: string | undefined, relays?: readonly string[]) {
+	return useQuery(browseProductDetailQueryOptions(id, relays))
 }
 
 // ---------------------------------------------------------------------------

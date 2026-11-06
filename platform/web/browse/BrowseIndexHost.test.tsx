@@ -25,10 +25,15 @@ let searchError = false
 let detailData: BrowseProductDetail | null = null
 let detailLoading = false
 let detailError = false
+/** The arguments the host handed the detail read (id and the hit's relays). */
+let detailReadArgs: { id?: string; relays?: readonly string[] } | null = null
 
 mock.module('@platform/web/browse/browseQuery', () => ({
 	useBrowseSearch: () => ({ data: searchData, isLoading: searchLoading, isError: searchError }),
-	useBrowseProductDetail: () => ({ data: detailData, isLoading: detailLoading, isError: detailError, refetch: () => {} }),
+	useBrowseProductDetail: (id?: string, relays?: readonly string[]) => {
+		detailReadArgs = { id, relays }
+		return { data: detailData, isLoading: detailLoading, isError: detailError, refetch: () => {} }
+	},
 }))
 
 // The idle index feed is a read of its own; it is stubbed here for the same
@@ -61,27 +66,36 @@ mock.module('@platform/web/utils/clipboard', () => ({
 
 import { BrowseIndexHost } from './BrowseIndexHost'
 
+/**
+ * A search hit as the RabbitHole client records it: the product plus the relays
+ * the listing was seen on (`hits[].relays_seen`). Typed here as an intersection
+ * so the literal is checked whatever `BrowseProduct` gains.
+ */
+type BrowseProductWithRelays = BrowseProduct & { relays?: string[] }
+
+const CERAMIC_BALL: BrowseProductWithRelays = {
+	id: 'ceramic-ball',
+	eventId: 'evt-ceramic-ball',
+	pubkey: PUBKEY_A,
+	title: 'Handcrafted Ceramic Ball',
+	price: 21000,
+	stock: '76 in stock',
+	categories: ['pottery'],
+	relays: ['wss://rabbithole-a', 'wss://rabbithole-b'],
+}
+
+const POUR_OVER: BrowseProductWithRelays = {
+	id: 'pour-over',
+	eventId: 'evt-pour-over',
+	pubkey: PUBKEY_B,
+	title: 'Ceramic Pour-Over Set',
+	price: 34500,
+	stock: '12 left',
+	categories: ['pottery'],
+}
+
 const RESULTS: BrowseSearchResult = {
-	products: [
-		{
-			id: 'ceramic-ball',
-			eventId: 'evt-ceramic-ball',
-			pubkey: PUBKEY_A,
-			title: 'Handcrafted Ceramic Ball',
-			price: 21000,
-			stock: '76 in stock',
-			categories: ['pottery'],
-		},
-		{
-			id: 'pour-over',
-			eventId: 'evt-pour-over',
-			pubkey: PUBKEY_B,
-			title: 'Ceramic Pour-Over Set',
-			price: 34500,
-			stock: '12 left',
-			categories: ['pottery'],
-		},
-	],
+	products: [CERAMIC_BALL, POUR_OVER],
 	eose: ['wss://local'],
 	pending: [],
 }
@@ -112,6 +126,7 @@ function renderHost(options: { q?: string; p?: string } = {}) {
 }
 
 beforeEach(() => {
+	detailReadArgs = null
 	searchData = RESULTS
 	searchLoading = false
 	searchError = false
@@ -145,6 +160,27 @@ describe('BrowseIndexHost split view', () => {
 		expect(markup).toContain('Porto')
 		expect(markup).toContain('2,400 sats')
 		expect(markup).toContain('npub1')
+	})
+
+	test('reads the open listing from the relays its search hit was seen on', () => {
+		renderHost({ p: 'ceramic-ball' })
+
+		expect(detailReadArgs?.id).toBe('ceramic-ball')
+		expect(detailReadArgs?.relays).toEqual(['wss://rabbithole-a', 'wss://rabbithole-b'])
+	})
+
+	test('leaves the detail read on the app context when the hit recorded no relays', () => {
+		renderHost({ p: 'pour-over' })
+
+		expect(detailReadArgs?.id).toBe('pour-over')
+		expect(detailReadArgs?.relays).toBeUndefined()
+	})
+
+	test('the open panel carries its own close affordance', () => {
+		const markup = renderHost({ p: 'ceramic-ball' })
+
+		expect(markup).toContain('data-slot="product-detail-close"')
+		expect(markup).toContain('aria-label="Close product"')
 	})
 
 	test('leaves the plain results grid when ?p= is absent', () => {

@@ -105,8 +105,30 @@ let deletedEventIds: Record<string, true> = {}
 let deletionEvents: NostrEventLike[] = []
 /** The filters every single-entity `fetch` has been called with, in order. */
 const fetchedFilters: EventFilter[][] = []
+/** The relay sets every relay-targeted detail read has been aimed at, in order. */
+const relayFetches: Array<{ relayUrls?: string[] }> = []
+/** When set, the relay-targeted read rejects — an unreachable relay. */
+let relayFetchError: Error | null = null
+
+/** Resolve the canned backlog by the ids/coordinates a filter set asks for. */
+function eventsForFilters(filters: readonly EventFilter[]): NostrEventLike[] {
+	const wanted = filters.flatMap((filter) => [...(filter.ids ?? []), ...(filter['#d'] ?? [])])
+	if (wanted.length === 0) return []
+	return [...localEvents, ...detailEvents, ...duplicateUrns].filter(
+		(event) => wanted.includes(event.id) || event.tags.some((tag) => tag[0] === 'd' && wanted.includes(tag[1])),
+	)
+}
 
 mock.module('@platform/web/readContext', () => ({
+	// The relay-targeted read the detail query uses when the search hit named the
+	// relays it was seen on (`applesauceIo.fetchEvents` and its `relayUrls`).
+	applesauceIo: {
+		fetchEvents: async (filters: readonly EventFilter[], opts?: { relayUrls?: string[] }) => {
+			relayFetches.push({ relayUrls: opts?.relayUrls })
+			if (relayFetchError) throw relayFetchError
+			return eventsForFilters(filters)
+		},
+	},
 	getReadContext: () => ({
 		stream: async function* (filters: readonly EventFilter[]): AsyncIterable<EventStreamItem<NostrEventLike>> {
 			localStreamCalls++
@@ -120,11 +142,7 @@ mock.module('@platform/web/readContext', () => ({
 			// The NIP-09 deletion lookup (`#e`) is a different read from the
 			// single-product read by id/coordinate (`#d` / `ids`).
 			if (filters.some((filter) => filter['#e'])) return deletionEvents
-			const wanted = filters.flatMap((filter) => [...(filter.ids ?? []), ...(filter['#d'] ?? [])])
-			if (wanted.length === 0) return []
-			return [...localEvents, ...detailEvents, ...duplicateUrns].filter(
-				(event) => wanted.includes(event.id) || event.tags.some((tag) => tag[0] === 'd' && wanted.includes(tag[1])),
-			)
+			return eventsForFilters(filters)
 		},
 		store: {
 			add: async (event: NostrEventLike) => ({ status: 'added' as const, event }),
@@ -195,6 +213,9 @@ beforeEach(() => {
 	extraStreamEvents = []
 	deletedEventIds = {}
 	deletionEvents = []
+	fetchedFilters.length = 0
+	relayFetches.length = 0
+	relayFetchError = null
 })
 
 afterEach(() => {
@@ -437,8 +458,8 @@ describe('seller listings read', () => {
 // Product detail — the split-view panel's single read
 // ---------------------------------------------------------------------------
 
-async function runDetailQueryFn(id: string) {
-	const options = browseProductDetailQueryOptions(id)
+async function runDetailQueryFn(id: string, relays?: readonly string[]) {
+	const options = browseProductDetailQueryOptions(id, relays)
 	return await options.queryFn!({} as Parameters<NonNullable<typeof options.queryFn>>[0])
 }
 
@@ -477,5 +498,39 @@ describe('browse product detail read', () => {
 		const detail = await runDetailQueryFn('duplicated-urn')
 		expect(detail?.title).toBe('Unglazed Urn (new)')
 		expect(detail?.description).toBe('A newer urn.')
+	})
+
+	test('reads the listing from the relays the search hit was seen on', async () => {
+		const detail = await runDetailQueryFn('detail-mug', ['wss://rabbithole-one', 'wss://rabbithole-two'])
+
+		// The hit's own relays, in the order the hit recorded them…
+		expect(relayFetches).toEqual([{ relayUrls: ['wss://rabbithole-one', 'wss://rabbithole-two'] }])
+		// …and the app's own read context is not consulted for the same read.
+		expect(fetchedFilters).toEqual([])
+		// The same single-entity OR, and the same mapped listing the panel renders.
+		expect(detail?.title).toBe('Ceramic Mug')
+	})
+
+	test('falls back to the app read context when the hit recorded no relays', async () => {
+		const detail = await runDetailQueryFn('detail-mug', [])
+
+		expect(relayFetches).toEqual([])
+		expect(fetchedFilters).toEqual([
+			[
+				{ kinds: [30402], '#d': ['detail-mug'] },
+				{ kinds: [30402], ids: ['detail-mug'] },
+			],
+		])
+		expect(detail?.title).toBe('Ceramic Mug')
+	})
+
+	test('an unreachable relay degrades to the empty state, not to an error', async () => {
+		relayFetchError = new Error('relay refused the connection')
+
+		expect(await runDetailQueryFn('detail-mug', ['wss://dead-relay'])).toBeNull()
+	})
+
+	test('the relays are part of the query key, so a different set is a different read', () => {
+		expect(browseProductDetailQueryOptions('mug', ['wss://a']).queryKey).not.toEqual(browseProductDetailQueryOptions('mug').queryKey)
 	})
 })
