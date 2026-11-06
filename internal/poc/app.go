@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -240,6 +241,10 @@ func (app *Application) FinalizeBlock(_ context.Context, request *abci.FinalizeB
 		}
 		results = append(results, &abci.ExecTxResult{Code: abci.CodeTypeOK})
 	}
+	state, err := app.closeExpiredAuctions(state, request.Time.Unix())
+	if err != nil {
+		return nil, err
+	}
 	state.Height = request.Height
 	state.LastConsensusTime = request.Time.Unix()
 	hash, err := state.CanonicalHash()
@@ -254,6 +259,48 @@ func (app *Application) FinalizeBlock(_ context.Context, request *abci.FinalizeB
 	app.pending = &pendingState{state: state, hash: hash}
 	app.mu.Unlock()
 	return &abci.FinalizeBlockResponse{TxResults: results, AppHash: append([]byte(nil), hash[:]...)}, nil
+}
+
+// closeExpiredAuctions returns the state with every still-open auction whose
+// end time has been reached closed, using only the block time and the
+// already-committed state so that every validator deterministically derives the
+// same next state and app hash.
+//
+// It must NOT mutate the state it is given. When a finalized block carries no
+// transactions, FinalizeBlock's `state` is a shallow copy of app.state, so an
+// in-place map write would corrupt the still-committed state before Commit
+// swaps it. It therefore clones before writing anything.
+//
+// Applying a close is deliberately non-fatal. A return from FinalizeBlock is a
+// node-level fault, not a per-transaction rejection, so a close that cannot be
+// applied (already committed, lock missing, legacy note authority unavailable)
+// is skipped, never propagated. The candidate set and the state it acts on are
+// identical on every validator, so skipping is deterministic too.
+func (app *Application) closeExpiredAuctions(state State, now int64) (State, error) {
+	ids := make([]string, 0)
+	for id, auction := range state.Auctions {
+		if auction.Status == "open" && auction.EndTime <= now {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return state, nil
+	}
+	// Map iteration order is unspecified; sort so the sequence of candidate
+	// closes is identical on every validator.
+	sort.Strings(ids)
+	next, err := state.Clone()
+	if err != nil {
+		return State{}, err
+	}
+	var privateKey ed25519.PrivateKey
+	if len(app.mintSeed) == ed25519.SeedSize {
+		privateKey = ed25519.NewKeyFromSeed(app.mintSeed)
+	}
+	for _, id := range ids {
+		_ = applyClose(&next, id, now, privateKey)
+	}
+	return next, nil
 }
 
 func (app *Application) Commit(context.Context, *abci.CommitRequest) (*abci.CommitResponse, error) {

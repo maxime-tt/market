@@ -342,7 +342,10 @@ async function refreshCommittedAuction(auctionId, minimumHeight, attempts = 3) {
 function renderWallet() {
   const wallet = state.wallet, target = byId("notes"); target.replaceChildren();
   byId("spendable").textContent = wallet ? ui.formatSats(wallet.available) : "—";
-  byId("locked").textContent = wallet ? ui.formatSats(wallet.reserved + wallet.locked) : "—";
+  // "locked" here is an attestation, not a deduction: the underlying ledger note
+  // stays spendable, so showing both as independent totals double-counts the
+  // same value. Say so rather than implying a hold.
+  byId("locked").textContent = wallet ? `${ui.formatSats(wallet.reserved + wallet.locked)} (attested)` : "—";
   byId("refundable").textContent = wallet ? ui.formatSats(wallet.pending + wallet.unresolved) : "—";
   if (!wallet) { target.append(empty("Connect an identity", "The threshold wallet remains fail-closed until an exact signer and release are connected.")); return; }
   const card = el("div", "note");
@@ -407,12 +410,12 @@ function participantStatus(auction) {
   if (latest && leading && auction.status === "open") return {
     tone: "leading", title: "You are leading",
     detail: legacyFundingReady()
-      ? `${ui.formatSats(auction.high_bid)} fake sats are reserved against your demo balance.`
+      ? `${ui.formatSats(auction.high_bid)} fake sats are attested by the demo coordinator; this is not a mint-enforced hold.`
       : `${ui.formatSats(auction.high_bid)} fake sats remain in the exact funded pool.`,
   };
   if (latest && !leading) return { tone: "refund", title: "Outbid return pending or imported", detail: "Automatic import rechecks the certified terminal return on refresh." };
   return legacyFundingReady()
-    ? { tone: "", title: "Ready to bid", detail: "The bid is funded by a committee-attested custodial reservation from your demo balance." }
+    ? { tone: "", title: "Ready to bid", detail: "The bid is attested by the demo coordinator. No real value is locked; this is not a mint-enforced hold." }
     : { tone: "", title: "Ready to bid", detail: "The next bid uses a fresh exact threshold-funded pool." };
 }
 function renderAuctions() {
