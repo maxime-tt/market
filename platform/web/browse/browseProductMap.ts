@@ -13,11 +13,13 @@ import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 // Canonical read model: sdk/commerce/discovery/productReadModel.ts
 import {
 	getProductCategories,
+	getProductDescription,
 	getProductImages,
-	getProductLocation,
 	getProductPrice,
 	getProductId,
 	getProductPubkey,
+	getProductLocation,
+	getProductShippingOptions,
 	getProductStock,
 	getProductTitle,
 } from '@sdk/commerce/discovery'
@@ -113,4 +115,54 @@ export function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
 export function materialForPubkey(pubkey: string): MaterialClass {
 	const hash = pubkey.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
 	return `m${(hash % 8) + 1}` as MaterialClass
+}
+
+// ---------------------------------------------------------------------------
+// kind-30402 -> BrowseProductDetail (the split-view panel's single read)
+// ---------------------------------------------------------------------------
+
+/**
+ * One shipping option's extra cost, from the listing's `shipping_option` tags.
+ * The option's own name lives in its kind-30406 event, which this read does not
+ * fetch — the panel labels the row generically rather than inventing a name.
+ */
+export interface BrowseProductShipping {
+	/** Extra cost in sats (the tag's third element). */
+	costSats: number
+}
+
+/**
+ * The single-entity product read: {@link BrowseProduct} plus the listing's own
+ * description and shipping tags. Location stays `BrowseProduct`'s — the panel
+ * and the card read one `location` mapping.
+ */
+export interface BrowseProductDetail extends BrowseProduct {
+	/** Description (`content`). */
+	description: string
+	/** Shipping options on the listing, when it carries any. */
+	shipping: BrowseProductShipping[]
+}
+
+/**
+ * Map a kind-30402 event into the split-view panel's product, using the same
+ * canonical read model as {@link mapProduct} — the panel and the card therefore
+ * agree on title, price, stock, categories and location.
+ *
+ * Only the fields the panel renders are added: the description and the shipping
+ * option costs. A listing with no shipping options maps to `[]` (the panel
+ * renders no shipping row), never to a made-up default.
+ */
+export function mapProductDetail(event: NostrEventLike): BrowseProductDetail | undefined {
+	const product = mapProduct(event)
+	if (!product) return undefined
+
+	const shipping = getProductShippingOptions(event)
+		.map((tag) => ({ costSats: Number(tag[2]) }))
+		.filter((option) => Number.isFinite(option.costSats))
+
+	return {
+		...product,
+		description: getProductDescription(event),
+		shipping,
+	}
 }

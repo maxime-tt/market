@@ -7,7 +7,8 @@ import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
  *
  * q   — search query string
  * tag — product category/hashtag filter
- * p   — open product event id; the split-view panel that consumes it is Phase 2
+ * p   — the open product (the listing's kind-30402 `d` tag); the split-view
+ *       panel resolves it into the right-hand pane
  */
 const browseSearchSchema = z.object({
 	q: z.string().default(''),
@@ -28,13 +29,18 @@ function BrowseIndex() {
 		<BrowseIndexHost
 			q={q}
 			tag={tag}
+			p={p}
 			onNavigate={(search) => {
+				// The host states every field it owns, so the search object is written
+				// back as given: `undefined` means "clear this param" (closing the
+				// panel, switching the tag filter off), which a `?? <current>`
+				// fallback here would silently swallow.
 				navigate({
 					to: '/',
 					search: {
-						q: search.q ?? q,
-						tag: search.tag ?? tag,
-						p: search.p ?? p,
+						q: search.q,
+						tag: search.tag,
+						p: search.p,
 					},
 				})
 			}}

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 
 import '../styles/index.css'
 import { TooltipProvider } from '@ui/primitives/tooltip'
+import { ProductArtMount } from '@ui/browse/art'
 import { ThemeMigrationWrapper } from '@ui/theme/theme-migration-wrapper'
 import { surpriseTune, tuneTokens, type TuneSettings } from '@ui/theme/tune'
 import { TunePanel } from '@ui/theme/tune-panel'
@@ -75,6 +76,9 @@ function WidgetBook({ selection }: { selection: string }) {
 
 	return (
 		<ThemeMigrationWrapper theme={theme} className="grain min-h-screen bg-background text-foreground">
+			{/* Page-level mount for the product art raw material (the SVG sprite the
+			    product icons reference + the eight material classes). */}
+			<ProductArtMount />
 			<div className="mx-auto max-w-5xl p-8">
 				<header className="mb-8 border-b pb-4">
 					<h1 className="font-header text-2xl font-semibold" data-testid="widget-book-title">

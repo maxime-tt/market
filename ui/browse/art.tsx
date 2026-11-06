@@ -6,7 +6,7 @@
  * the doop frames. They are the *only* product art — no grey placeholders.
  */
 
-import type { CSSProperties, FC, Ref } from 'react'
+import type { FC, HTMLAttributes } from 'react'
 import { cn } from '../utils/cn'
 
 // ---------------------------------------------------------------------------
@@ -56,11 +56,14 @@ export const SKELETON_CIRCLE_CSS = `
 .skeleton-circle-3 { --tint: oklch(0.7 0.05 150); background: var(--tint); }
 `
 
+/** The product-icon symbols the sprite defines (frame ids: p-bowl … p-jar). */
+export type ProductSymbolId = 'p-bowl' | 'p-bottle' | 'p-mug' | 'p-lamp' | 'p-books' | 'p-crate' | 'p-candle' | 'p-jar'
+
 // ---------------------------------------------------------------------------
 // SVG sprite symbols — verbatim from the frames
 // ---------------------------------------------------------------------------
 
-const SVG_SYMBOLS: { id: string; d: React.ReactNode }[] = [
+const SVG_SYMBOLS: { id: ProductSymbolId; d: React.ReactNode }[] = [
 	{
 		id: 'p-bowl',
 		d: (
@@ -167,17 +170,33 @@ export function ProductSprite({ className }: { className?: string }) {
 	)
 }
 
+/**
+ * The page-level mount for the art module's raw material: the SVG sprite the
+ * product icons reference (`#p-bowl` … `#p-jar`) plus the eight material
+ * classes. Both are inert unless something is on the page, so a screen that
+ * renders product art must render this once (the same contract as
+ * {@link ProductSprite}).
+ */
+export function ProductArtMount() {
+	return (
+		<>
+			<ProductSprite />
+			<style dangerouslySetInnerHTML={{ __html: MATERIAL_CSS }} />
+		</>
+	)
+}
+
 // ---------------------------------------------------------------------------
 // Product art icon — renders a single material tile with the named product icon
 // ---------------------------------------------------------------------------
 
-export interface ProductArtProps {
+export interface ProductArtProps extends HTMLAttributes<HTMLDivElement> {
 	/** Which material gradient (.m1–.m8). */
 	material: MaterialClass
 	/** Which product icon (p-bowl … p-jar). Defaults to a random pick. */
-	symbolId?: 'p-bowl' | 'p-bottle' | 'p-mug' | 'p-lamp' | 'p-books' | 'p-crate' | 'p-candle' | 'p-jar'
-	/** Aspect ratio: 3/2 for product-card shot, 1/1 for strips. */
-	ratio?: '3/2' | '1/1'
+	symbolId?: ProductSymbolId
+	/** Aspect ratio: 3/2 for product-card shot, 1/1 for strips, detail for the split-view pane. */
+	ratio?: '3/2' | '1/1' | 'detail'
 	/** Extra classes. */
 	className?: string
 	ref?: React.Ref<HTMLDivElement>
@@ -187,6 +206,10 @@ export interface ProductArtProps {
  * Renders a product-art tile: material gradient + SVG icon silhouette.
  * The icon uses `currentColor` for the object tone and `--obj2` for accents,
  * both set by the material class.
+ *
+ * `ratio="detail"` is the split-view pane's shot: no aspect ratio (it fills its
+ * flex slot, min-height 220px) and the 188×176 studio viewBox is grown into the
+ * frame — `scale(1.5)` from `50% 58%`, as the frame does.
  */
 export const ProductArt: FC<ProductArtProps> = ({ material, symbolId, ratio = '3/2', className, ref, ...props }) => {
 	// Deterministic symbol selection from material index
@@ -201,11 +224,12 @@ export const ProductArt: FC<ProductArtProps> = ({ material, symbolId, ratio = '3
 				MATERIAL_CLASSES[materialIdx],
 				'relative',
 				'overflow-hidden',
-				ratio === '3/2' ? 'aspect-[3/2]' : 'aspect-square',
+				ratio === '3/2' ? 'aspect-[3/2]' : ratio === '1/1' ? 'aspect-square' : undefined,
 				'rounded-[6px]',
 				'border',
 				'border-border-default',
 				'text-on-media',
+				ratio === 'detail' && '[&>svg]:scale-150 [&>svg]:origin-[50%_58%]',
 				className,
 			)}
 			{...props}

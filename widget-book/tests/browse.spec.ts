@@ -109,4 +109,48 @@ test.describe('browse library', () => {
 		await expect(page.getByTestId('widget-seller-profile-view-loading')).toBeVisible()
 		await expect(page.getByTestId('widget-seller-profile-view-empty')).toBeVisible()
 	})
+
+	test('split-view entries', async ({ page }) => {
+		await page.goto('/?library=browse')
+		await expect(page.getByTestId('widget-split-view-default')).toBeVisible()
+		// the frame's split: a master pane, a drag separator, a detail pane
+		await expect(page.getByTestId('widget-split-view-default').locator('[data-slot="split-master"]')).toBeVisible()
+		await expect(page.getByTestId('widget-split-view-default').locator('[data-slot="split-separator"]')).toBeVisible()
+		await expect(page.getByTestId('widget-split-view-default').locator('[data-slot="split-detail"]')).toBeVisible()
+	})
+
+	test('product-detail-panel entries', async ({ page }) => {
+		await page.goto('/?library=browse')
+		await expect(page.getByTestId('widget-product-detail-default')).toBeVisible()
+		await expect(page.getByTestId('widget-product-detail-open')).toBeVisible()
+		await expect(page.getByTestId('widget-product-detail-no-tags')).toBeVisible()
+		await expect(page.getByTestId('widget-product-detail-loading')).toBeVisible()
+		await expect(page.getByTestId('widget-product-detail-empty')).toBeVisible()
+		await expect(page.getByTestId('widget-product-detail-error')).toBeVisible()
+	})
+
+	test('product-detail entries render the frame content and every state', async ({ page }) => {
+		await page.goto('/?library=browse')
+
+		// the open panel (the frame's own state): title, action row beside it, sats, stock
+		const open = page.getByTestId('widget-product-detail-open')
+		await expect(open.locator('[data-slot="product-detail-title"]')).toHaveText('Handcrafted Ceramic Ball')
+		await expect(open.locator('[data-slot="product-detail-price"]')).toContainText('21,000')
+		await expect(open.locator('[data-slot="product-detail-stock"]')).toHaveText('76 in stock')
+		await expect(open.locator('[data-slot="tools"]')).toBeVisible()
+		await expect(open.getByTestId('widget-product-context-menu')).toBeVisible()
+
+		// the read states
+		await expect(page.getByTestId('widget-product-detail-loading').locator('[data-state="loading"]')).toBeVisible()
+		await expect(page.getByTestId('widget-product-detail-empty').locator('[data-slot="empty-state"]')).toContainText(
+			'This listing is not on the relays',
+		)
+		await expect(page.getByTestId('widget-product-detail-error').getByTestId('widget-product-detail-retry')).toBeVisible()
+	})
+
+	test('selected product card entry', async ({ page }) => {
+		await page.goto('/?library=browse')
+		await expect(page.getByTestId('widget-product-card-selected')).toBeVisible()
+		await expect(page.getByTestId('widget-product-card-selected').locator('[data-slot="card-open-note"]')).toHaveText(/·\s*open/)
+	})
 })

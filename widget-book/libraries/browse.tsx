@@ -21,6 +21,8 @@ import { SkeletonGrid } from '@ui/browse/skeleton-grid'
 import { EmptyStateBrowse } from '@ui/browse/empty-state-browse'
 import { SearchResultsGrid } from '@ui/browse/search-results-grid'
 import { SellerProfileHeader, SellerProfileView } from '@ui/browse/seller-profile'
+import { SplitView } from '@ui/browse/split-view'
+import { ProductDetailPanel, type ProductDetailPanelProduct } from '@ui/browse/product-detail-panel'
 import { EmptyState } from '@ui/shared/empty-state'
 import { Button } from '@ui/primitives/button'
 import { TagFilterBadge } from '@ui/browse/relay-error'
@@ -840,6 +842,148 @@ const ProductCardWithCategory = () => (
 	</div>
 )
 
+// ---- split-view — the frame's master–detail screen ----
+//
+// Frame of record: vnwQ7csazs__split-view-product-detail-1440.html. The detail
+// pane's own read states are the entries below; these are literals (the harness
+// is props-only) rendered through the same `ui/` components the app host uses.
+
+const DETAIL_PRODUCT: ProductDetailPanelProduct = {
+	id: 'handcrafted-ceramic-ball',
+	title: 'Handcrafted Ceramic Ball',
+	seller: 'atelier-norte',
+	sellerNpub: 'npub1q…7f3k',
+	location: 'Porto',
+	price: 21000,
+	stockNote: '76 in stock',
+	description: 'Wood-fired stoneware, thrown and glazed by hand. Each ball keeps the kiln’s marks, so no two are identical.',
+	shipping: [{ costSats: 2400 }],
+	material: 'm1',
+	symbolId: 'p-bowl',
+}
+
+const ProductDetailDefault = () => (
+	<div className="h-[640px] max-w-[520px]">
+		<ProductDetailPanel state="ready" product={DETAIL_PRODUCT} onThreeDots={() => {}} onBuy={() => {}} onAddToList={() => {}} />
+	</div>
+)
+
+const ProductDetailOpen = () => {
+	const [menuOpen, setMenuOpen] = useState(true)
+	return (
+		<div className="h-[640px] max-w-[520px]">
+			<ProductDetailPanel
+				state="ready"
+				product={{ ...DETAIL_PRODUCT, inList: true }}
+				menuOpen={menuOpen}
+				onThreeDots={() => setMenuOpen(!menuOpen)}
+				onHeart={() => {}}
+				onAddToList={() => {}}
+				onCopyLink={() => {}}
+				onReport={() => {}}
+				onBuy={() => {}}
+			/>
+		</div>
+	)
+}
+
+const ProductDetailNoTags = () => (
+	<div className="h-[520px] max-w-[520px]">
+		<ProductDetailPanel
+			state="ready"
+			product={{
+				...DETAIL_PRODUCT,
+				id: 'unpriced-urn',
+				title: 'Unglazed Urn, 40 cm',
+				price: undefined,
+				location: undefined,
+				shipping: [],
+				description: '',
+			}}
+			onThreeDots={() => {}}
+		/>
+	</div>
+)
+
+const ProductDetailLoading = () => (
+	<div className="h-[640px] max-w-[520px]">
+		<ProductDetailPanel state="loading" />
+	</div>
+)
+
+const ProductDetailEmpty = () => (
+	<div className="h-[640px] max-w-[520px]">
+		<ProductDetailPanel state="empty" />
+	</div>
+)
+
+const ProductDetailError = () => (
+	<div className="h-[640px] max-w-[520px]">
+		<ProductDetailPanel state="error" onRetry={() => {}} />
+	</div>
+)
+
+const ProductCardSelected = () => (
+	<div className="w-[320px]">
+		<ProductCard
+			id="evt-1"
+			title="Handcrafted Ceramic Ball"
+			seller="atelier-norte"
+			sellerPubkey="abcdef01"
+			price={21000}
+			stockNote="76 in stock"
+			material="m1"
+			symbolId="p-bowl"
+			selected={true}
+			onSelect={() => {}}
+			onThreeDots={() => {}}
+			onCopyLink={() => {}}
+		/>
+	</div>
+)
+
+const SplitViewDefault = () => (
+	<SplitView
+		className="h-[720px] w-[1200px] max-w-full"
+		master={
+			<div className="grid grid-cols-2 gap-y-5 gap-x-4.5">
+				{COMPARE_CARDS.map((c) => (
+					<ProductCard
+						key={c.id}
+						id={c.id}
+						title={c.title}
+						seller={c.seller}
+						sellerPubkey={c.sellerPubkey}
+						price={c.price}
+						stockNote={c.stockNote}
+						material={c.material}
+						symbolId={c.symbolId}
+						selected={c.id === 'cmp-1'}
+						onSelect={() => {}}
+						onThreeDots={() => {}}
+					/>
+				))}
+			</div>
+		}
+		detail={
+			<ProductDetailPanel
+				state="ready"
+				product={{
+					...DETAIL_PRODUCT,
+					id: 'cmp-1',
+					title: 'Speckled Stoneware Mug',
+					seller: 'kiln-and-co',
+					price: 12900,
+					stockNote: '40 in stock',
+				}}
+				onThreeDots={() => {}}
+				onBuy={() => {}}
+				onAddToList={() => {}}
+			/>
+		}
+	/>
+)
+
 // ---- Library ----
 
 export const browse: WidgetLibrary = {
@@ -908,5 +1052,15 @@ export const browse: WidgetLibrary = {
 		{ name: 'seller-profile-view-default', render: SellerProfileViewDefault },
 		{ name: 'seller-profile-view-loading', render: SellerProfileViewLoading },
 		{ name: 'seller-profile-view-empty', render: SellerProfileViewEmpty },
+
+		// split view — the frame's master–detail screen
+		{ name: 'split-view-default', render: SplitViewDefault },
+		{ name: 'product-detail-default', render: ProductDetailDefault },
+		{ name: 'product-detail-open', render: ProductDetailOpen },
+		{ name: 'product-detail-no-tags', render: ProductDetailNoTags },
+		{ name: 'product-detail-loading', render: ProductDetailLoading },
+		{ name: 'product-detail-empty', render: ProductDetailEmpty },
+		{ name: 'product-detail-error', render: ProductDetailError },
+		{ name: 'product-card-selected', render: ProductCardSelected },
 	],
 }

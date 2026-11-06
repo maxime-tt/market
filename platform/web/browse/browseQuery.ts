@@ -29,14 +29,14 @@ import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import { filterBlacklistedEvents } from '@sdk/config/blacklist'
 import { buildProductListFilter, isProductListed } from '@sdk/commerce/discovery'
-// Shared shapes and the canonical kind-30402 mapper (also used by the client).
-import { mapProduct, type BrowseProduct, type BrowseSearchResult } from './browseProductMap'
+// Shared shapes and the canonical kind-30402 mappers (also used by the client).
+import { mapProduct, mapProductDetail, type BrowseProduct, type BrowseProductDetail, type BrowseSearchResult } from './browseProductMap'
 // Canonical read model: sdk/commerce/discovery/productReadModel.ts
 import { getProductCategories, getProductSummary, getProductTitle } from '@sdk/commerce/discovery'
 import { rabbitholeSearch } from './rabbitholeClient'
 
 // Re-exported so existing consumers (`BrowseIndexHost`) keep their imports.
-export type { BrowseProduct, BrowseSearchResult }
+export type { BrowseProduct, BrowseProductDetail, BrowseSearchResult }
 
 // ---------------------------------------------------------------------------
 // Query key factory
@@ -181,18 +181,33 @@ export function useBrowseSearch(query: string, tag?: string, limit?: number) {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch a single product by event id. Uses `fetch()` (bounded stream, not
- * `stream()`) because this is a single-entity read by coordinate.
+ * Fetch one product by the identifier a card hands out — the split-view panel's
+ * single read.
+ *
+ * That identifier is `mapProduct`'s `id`: the kind-30402 `d` tag (the frame's
+ * `?p=handcrafted-ceramic-ball`), falling back to the event id for a listing
+ * without one. Both filters are sent as one OR, so either identity resolves.
+ *
+ * `fetch()` (bounded stream, not `stream()`) because this is a single-entity
+ * read: a stream would hold a live subscription open for one listing whose
+ * identity the panel already knows.
+ *
+ * A coordinate can be published by more than one author, so the newest event
+ * for it wins — deterministic, and the same event a card would have shown.
  */
 export function browseProductDetailQueryOptions(id: string | undefined) {
 	return queryOptions({
 		queryKey: browseKeys.detail(id ?? ''),
-		queryFn: async () => {
-			if (!id) return []
+		queryFn: async (): Promise<BrowseProductDetail | null> => {
+			if (!id) return null
 			const ctx = getReadContext()
-			// Bounded fetch for single product detail (not a list)
-			const events = await ctx.fetch([{ ids: [id], kinds: [30402] }])
-			return events.map(mapProduct).filter(Boolean) as BrowseProduct[]
+			// Bounded fetch for a single product by id or coordinate (not a list)
+			const events = await ctx.fetch([
+				{ kinds: [30402], '#d': [id] },
+				{ kinds: [30402], ids: [id] },
+			])
+			const newest = [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+			return newest ? (mapProductDetail(newest) ?? null) : null
 		},
 		enabled: Boolean(id),
 	})

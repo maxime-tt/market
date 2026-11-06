@@ -40,6 +40,61 @@ const localEvents: NostrEventLike[] = [
 	},
 ]
 
+/**
+ * The detail read's listing, with every tag the panel renders (description,
+ * location, stock, shipping option). Kept OUT of `localEvents` on purpose: it is
+ * deliberately purchasable, so leaving it in the stream would perturb the
+ * product-list and seller-listing reads that share this backlog.
+ */
+const detailEvents: NostrEventLike[] = [
+	{
+		id: 'detail-mug',
+		pubkey: 'b'.repeat(64),
+		kind: 30402,
+		created_at: 1_700_000_000,
+		content: 'A local ceramic mug.',
+		tags: [
+			['d', 'detail-mug'],
+			['title', 'Ceramic Mug'],
+			['price', '1500', 'SATS'],
+			['t', 'pottery'],
+			['location', 'Porto'],
+			['stock', '40 in stock'],
+			['shipping_option', '30406:' + 'd'.repeat(64) + ':worldwide', '2400'],
+		],
+	},
+]
+
+/**
+ * Two publications of the SAME coordinate (same `d`), for the detail read's
+ * newest-wins rule. Kept out of `localEvents` so the search stream's product
+ * list (one product per event) is unchanged.
+ */
+const duplicateUrns: NostrEventLike[] = [
+	{
+		id: 'urn-old',
+		pubkey: 'e'.repeat(64),
+		kind: 30402,
+		created_at: 1_600_000_000,
+		content: 'An older urn.',
+		tags: [
+			['d', 'duplicated-urn'],
+			['title', 'Unglazed Urn (old)'],
+		],
+	},
+	{
+		id: 'urn-new',
+		pubkey: 'e'.repeat(64),
+		kind: 30402,
+		created_at: 1_700_000_000,
+		content: 'A newer urn.',
+		tags: [
+			['d', 'duplicated-urn'],
+			['title', 'Unglazed Urn (new)'],
+		],
+	},
+]
+
 let localStreamCalls = 0
 /** The filters the last stream was opened with (asserted by the seller-listings tests). */
 let lastStreamFilters: readonly EventFilter[] = []
@@ -48,6 +103,8 @@ let extraStreamEvents: NostrEventLike[] = []
 /** Event ids the stub store reports as deleted (NIP-09), plus the deletions the lookup `fetch` returns. */
 let deletedEventIds: Record<string, true> = {}
 let deletionEvents: NostrEventLike[] = []
+/** The filters every single-entity `fetch` has been called with, in order. */
+const fetchedFilters: EventFilter[][] = []
 
 mock.module('@platform/web/readContext', () => ({
 	getReadContext: () => ({
@@ -58,7 +115,17 @@ mock.module('@platform/web/readContext', () => ({
 			for (const event of [...localEvents, ...extraStreamEvents]) yield { type: 'event', event }
 			yield { type: 'caught-up', info: { eose: ['wss://local'], pending: [], complete: true } }
 		},
-		fetch: async (_filters: readonly EventFilter[]) => deletionEvents,
+		fetch: async (filters: readonly EventFilter[]) => {
+			fetchedFilters.push(filters.map((filter) => ({ ...filter })))
+			// The NIP-09 deletion lookup (`#e`) is a different read from the
+			// single-product read by id/coordinate (`#d` / `ids`).
+			if (filters.some((filter) => filter['#e'])) return deletionEvents
+			const wanted = filters.flatMap((filter) => [...(filter.ids ?? []), ...(filter['#d'] ?? [])])
+			if (wanted.length === 0) return []
+			return [...localEvents, ...detailEvents, ...duplicateUrns].filter(
+				(event) => wanted.includes(event.id) || event.tags.some((tag) => tag[0] === 'd' && wanted.includes(tag[1])),
+			)
+		},
 		store: {
 			add: async (event: NostrEventLike) => ({ status: 'added' as const, event }),
 			isDeleted: (event: NostrEventLike) => deletedEventIds[event.id] === true,
@@ -67,6 +134,7 @@ mock.module('@platform/web/readContext', () => ({
 }))
 
 import {
+	browseProductDetailQueryOptions,
 	browseSearchQueryOptions,
 	configureBrowseSearch,
 	fetchSellerListings,
@@ -257,6 +325,7 @@ describe('browse search provider switch', () => {
 })
 
 // ---------------------------------------------------------------------------
+
 // The seller profile's list read (frame YcjyRPZbVo)
 // ---------------------------------------------------------------------------
 
@@ -329,5 +398,52 @@ describe('seller listings read', () => {
 
 		const result = await fetchSellerListings('b'.repeat(64))
 		expect(result.listings.map((listing) => listing.id)).toEqual(['live'])
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Product detail — the split-view panel's single read
+// ---------------------------------------------------------------------------
+
+async function runDetailQueryFn(id: string) {
+	const options = browseProductDetailQueryOptions(id)
+	return await options.queryFn!({} as Parameters<NonNullable<typeof options.queryFn>>[0])
+}
+
+describe('browse product detail read', () => {
+	test('fetches the listing by coordinate (#d), with the event id as one OR', async () => {
+		fetchedFilters.length = 0
+
+		await runDetailQueryFn('detail-mug')
+		expect(fetchedFilters).toEqual([
+			[
+				{ kinds: [30402], '#d': ['detail-mug'] },
+				{ kinds: [30402], ids: ['detail-mug'] },
+			],
+		])
+	})
+
+	test('maps the listing tags the panel renders', async () => {
+		const detail = await runDetailQueryFn('detail-mug')
+		expect(detail).toMatchObject({
+			id: 'detail-mug',
+			title: 'Ceramic Mug',
+			price: 1500,
+			stock: '40 in stock',
+			categories: ['pottery'],
+			description: 'A local ceramic mug.',
+			location: 'Porto',
+			shipping: [{ costSats: 2400 }],
+		})
+	})
+
+	test('resolves a coordinate with no event to null, not to a placeholder product', async () => {
+		expect(await runDetailQueryFn('missing-listing')).toBeNull()
+	})
+
+	test('a coordinate published twice resolves to the newest publication', async () => {
+		const detail = await runDetailQueryFn('duplicated-urn')
+		expect(detail?.title).toBe('Unglazed Urn (new)')
+		expect(detail?.description).toBe('A newer urn.')
 	})
 })
