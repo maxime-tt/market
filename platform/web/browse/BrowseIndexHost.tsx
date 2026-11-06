@@ -19,8 +19,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { BrowseNav } from '@ui/browse/browse-nav'
 import { SearchField } from '@ui/browse/search-field'
 import { ProductCard } from '@ui/browse/product-card'
-import type { StripItem } from '@ui/browse/product-strip'
 import { BrowseIdle } from '@ui/browse/browse-idle'
+import { CategoryRow, CategoryRows } from '@ui/browse/category-rows'
 import { SkeletonGrid } from '@ui/browse/skeleton-grid'
 import { EmptyStateBrowse } from '@ui/browse/empty-state-browse'
 import { ProductArtMount, SKELETON_SHIMMER_CSS } from '@ui/browse/art'
@@ -29,6 +29,7 @@ import { SplitView } from '@ui/browse/split-view'
 import { ProductDetailPanel, type ProductDetailPanelState } from '@ui/browse/product-detail-panel'
 import { useBrowseSearch, useBrowseProductDetail } from '@platform/web/browse/browseQuery'
 import { materialForPubkey } from '@platform/web/browse/browseProductMap'
+import { feedStrips, useBrowseIndexFeed } from '@platform/web/browse/browseIndexFeed'
 import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { useAuth } from '@platform/web/auth/authStore'
 import { npubEncode } from 'nostr-tools/nip19'
@@ -54,30 +55,19 @@ interface BrowseIndexHostProps {
 }
 
 // ---------------------------------------------------------------------------
-// Mock idle wall data — replace with real featured/curated stream
+// The idle index — read, never mocked
 // ---------------------------------------------------------------------------
 
-const IDLE_STrips_ABOVE: StripItem[] = [
-	{ id: 'idle-1', title: 'Speckled Bowl, 6 in', seller: 'ATELIER-NORTE', material: 'm1', symbolId: 'p-bowl' },
-	{ id: 'idle-2', title: 'Amber Dropper, 30 ml', seller: 'GLASSWORKS', material: 'm2', symbolId: 'p-bottle' },
-	{ id: 'idle-3', title: 'Stoneware Mug, 400 ml', seller: 'CLAYHOUSE', material: 'm3', symbolId: 'p-mug' },
-	{ id: 'idle-4', title: 'Pendant Lantern', seller: 'FORGE', material: 'm4', symbolId: 'p-lamp' },
-	{ id: 'idle-5', title: 'Botanical Print Folio', seller: 'PRESS', material: 'm5', symbolId: 'p-books' },
-	{ id: 'idle-6', title: 'Nesting Crates (3)', seller: 'JOINERY', material: 'm6', symbolId: 'p-crate' },
-	{ id: 'idle-7', title: 'Hand-thrown Tumbler', seller: 'KILN-AND-CO', material: 'm7', symbolId: 'p-mug' },
-	{ id: 'idle-8', title: 'Speckled Dinner Plate', seller: 'TERRA-STUDIO', material: 'm8', symbolId: 'p-bowl' },
-]
+/**
+ * How many loaded listings the idle wall shows (split above/below the hero) and
+ * how many of them each category row draws. Both are display caps over the
+ * *same* bounded feed read (`useBrowseIndexFeed`), not market totals.
+ */
+const IDLE_WALL_LIMIT = 16
+const CATEGORY_ROW_LIMIT = 4
 
-const IDLE_STrips_BELOW: StripItem[] = [
-	{ id: 'idle-9', title: 'Glazed Ramen Bowl, set of 2', seller: 'ATELIER-NORTE', material: 'm1', symbolId: 'p-jar' },
-	{ id: 'idle-10', title: 'Wood-fired Tea Bowl', seller: 'KILN-AND-CO', material: 'm6', symbolId: 'p-bowl' },
-	{ id: 'idle-11', title: 'Ceramic Honing Rod', seller: 'CAST-AND-CO', material: 'm3', symbolId: 'p-crate' },
-	{ id: 'idle-12', title: 'Speckled Dinner Plate, 26 cm', seller: 'TERRA-STUDIO', material: 'm4', symbolId: 'p-books' },
-	{ id: 'idle-13', title: 'Ceramic Water Filter', seller: 'MILL-WORKS', material: 'm5', symbolId: 'p-bottle' },
-	{ id: 'idle-14', title: 'Stoneware Butter Keeper', seller: 'KILN-AND-CO', material: 'm6', symbolId: 'p-jar' },
-	{ id: 'idle-15', title: 'Ceramic Mortar & Pestle', seller: 'TERRA-STUDIO', material: 'm2', symbolId: 'p-crate' },
-	{ id: 'idle-16', title: 'Raku Vase, one of one', seller: 'AUCTION', material: 'm1', symbolId: 'p-candle' },
-]
+/** The section the `Browse products` CTA scrolls to. */
+const CATEGORY_SECTION_ID = 'browse-categories'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -114,7 +104,9 @@ function AccountChip({ initial }: { initial: string }) {
  * Host that wires the Browse shell to the read seam.
  *
  * State machine:
- * - No query → BrowseIdle (hero + wall strips)
+ * - Idle (no term, no tag, no open product) → BrowseIdle: hero with measured
+ *   facts, wall strips from the index feed, and the browse-by-category rows
+ *   below them; the `Browse products` CTA scrolls to those rows
  * - Query loading → SkeletonGrid (shimmering placeholders)
  * - Query error → DeadSearchError (if no relays responded) or ErrorState
  * - Query empty results → EmptyStateBrowse (everything answered, none matched)
@@ -122,16 +114,25 @@ function AccountChip({ initial }: { initial: string }) {
  * - Results + `?p=` → the same grid as the split view's master pane, with the
  *   product panel in the detail pane
  *
- * Relay data comes from the read seam (ctx.stream caught-up event),
- * never fabricated.
+ * Two reads, one source each: the grid and the panel read the search stream
+ * (`useBrowseSearch`, also enabled by a tag alone — the category row's
+ * `See all →` — or by an open product alone, a bare `?p=` deep link); the idle
+ * index reads the bounded index feed (`useBrowseIndexFeed`). Relay data comes
+ * from the read seam (ctx.stream caught-up event), never fabricated.
  */
 export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 
 	const { user } = useAuth()
 
-	const searchQuery = useBrowseSearch(q, tag, 100)
+	const searchQuery = useBrowseSearch(q, tag, 100, p)
 	const result = searchQuery.data ?? null
+
+	// The idle index's own feed: one bounded stream that supplies the wall
+	// strips, the hero's measured facts and the category rows. It is the same
+	// read the grid's cards come from, so nothing here is a second source.
+	const feedQuery = useBrowseIndexFeed()
+	const feed = feedQuery.data ?? null
 
 	const detailQuery = useBrowseProductDetail(p)
 	const detail = detailQuery.data ?? null
@@ -152,6 +153,25 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 		// The open card's own click is the panel's close affordance (the selected
 		// card reads "· open"); any other card opens that product.
 		onNavigate({ q, p: p === id ? undefined : id, tag })
+	}
+
+	/**
+	 * A category row: its `See all →` browses that one category (a tag-only
+	 * read — no term is invented for it), and its cards open the product in the
+	 * split view scoped to the row's category, so the pane's master list is the
+	 * row the visitor was looking at.
+	 */
+	const handleCategorySeeAll = (category: string) => {
+		onNavigate({ q: '', p: undefined, tag: category })
+	}
+
+	const handleCategoryCardSelect = (category: string, id: string) => {
+		onNavigate({ q: '', p: id, tag: category })
+	}
+
+	/** The idle wall / hero CTA: the category section is what "Browse products" names. */
+	const handleBrowseProducts = () => {
+		document.getElementById(CATEGORY_SECTION_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 	}
 
 	const handleMenuToggle = (id: string) => {
@@ -205,28 +225,74 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	// Empty state hints — real data only
 	const EMPTY_HINTS = [{ label: 'local index empty' }]
 
-	/** Whether we're in an idle state (no query active). */
-	const isIdle = !q || q.trim() === ''
+	/**
+	 * The idle index: no term, no tag, and no open product. A `?p=` deep link
+	 * (or a strip/row click) is a *results* state, not the idle one — its
+	 * master pane is the loaded set and its detail pane is the open product.
+	 */
+	const isIdle = !q.trim() && !tag && !p
 
 	const accountSlot = accountInitial ? <AccountChip initial={accountInitial} /> : null
 
 	// Render — State machine
-	// No query → idle with wall strips
+	// No term, no tag, no open product → the idle index: hero, wall strips read
+	// from the feed, and the browse-by-category rows below them.
 	if (isIdle) {
+		// The wall shows loaded listings, split either side of the hero. Art is
+		// assigned the same way the cards assign it.
+		const wall = feedStrips(feed?.products ?? [], IDLE_WALL_LIMIT)
+		const wallSplit = Math.ceil(wall.length / 2)
+
 		return (
 			<>
 				<ProductArtMount />
 				<BrowseIdle
+					stats={feed?.stats}
 					query={q}
 					onSearchChange={handleSearchChange}
 					onSearchGo={handleSearchGo}
-					stripsAbove={IDLE_STrips_ABOVE}
-					stripsBelow={IDLE_STrips_BELOW}
+					onSelectProduct={(id) => onNavigate({ q: '', tag: undefined, p: id })}
+					onBrowseProducts={handleBrowseProducts}
+					onWhyPlebeian={onNavigateFeatured}
+					stripsAbove={wall.slice(0, wallSplit)}
+					stripsBelow={wall.slice(wallSplit)}
 					active={true}
 					onNavigateHome={() => onNavigate({ q: '', p: undefined, tag: undefined })}
 					onNavigateFeatured={onNavigateFeatured}
 					accountSlot={accountSlot}
 				/>
+
+				{/* Browse by category — the rows the `Browse products` CTA scrolls to */}
+				<div id={CATEGORY_SECTION_ID} className="max-w-[1120px] mx-auto px-4 lg:px-6 pb-12">
+					<CategoryRows isLoading={feedQuery.isLoading} isError={feedQuery.isError}>
+						{(feed?.rows ?? []).map((row) => (
+							<CategoryRow
+								key={row.category}
+								title={row.category}
+								count={row.items.length}
+								onSeeAll={() => handleCategorySeeAll(row.category)}
+							>
+								{row.items.slice(0, CATEGORY_ROW_LIMIT).map((product) => (
+									<ProductCard
+										key={product.id}
+										presentation="row"
+										id={product.id}
+										title={product.title}
+										seller={product.pubkey.slice(0, 8)}
+										sellerPubkey={product.pubkey}
+										price={product.price}
+										stockNote={typeof product.stock === 'string' ? product.stock : undefined}
+										material={materialForPubkey(product.pubkey)}
+										onSelect={(id) => handleCategoryCardSelect(row.category, id)}
+										onThreeDots={() => handleMenuToggle(product.id)}
+										onCopyLink={() => handleCopyLink(product.id)}
+										menuOpen={menuOpenId === product.id}
+									/>
+								))}
+							</CategoryRow>
+						))}
+					</CategoryRows>
+				</div>
 			</>
 		)
 	}
@@ -257,6 +323,21 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 
 	/** The panel's read state, from the detail query. */
 	const panelState: ProductDetailPanelState = detailQuery.isLoading ? 'loading' : detailQuery.isError ? 'error' : detail ? 'ready' : 'empty'
+
+	/**
+	 * Empty-state copy for a browse with no term: a tag-only browse (the
+	 * category row's `See all →`) names the category it found nothing under,
+	 * because `Nothing matched "".` is not a sentence.
+	 */
+	const emptyCopy = q.trim()
+		? {}
+		: tag
+			? {
+					headline: `Nothing listed under “${tag}” yet.`,
+					description:
+						'Every relay this market mirrors answered — none carried a listing under this category, and none are still in flight. That is the whole result, not an error.',
+				}
+			: {}
 
 	return (
 		<div className="min-h-screen bg-background">
@@ -309,7 +390,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 
 				{/* Empty marketplace — every relay answered, none matched */}
 				{!searchQuery.isLoading && result && result.products.length === 0 && !searchQuery.isError && (
-					<EmptyStateBrowse query={q} hints={EMPTY_HINTS} />
+					<EmptyStateBrowse query={q} hints={EMPTY_HINTS} {...emptyCopy} />
 				)}
 
 				{/* Results — the plain grid, or the split view when a product is open */}

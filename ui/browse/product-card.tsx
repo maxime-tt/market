@@ -8,7 +8,13 @@
 import type { FC, MouseEventHandler, PointerEventHandler, Ref, TouchEventHandler } from 'react'
 import { cn } from '../utils/cn'
 import { formatSats } from '../utils/format'
-import { ProductArt, type MaterialClass } from './art'
+import { ProductArt, type MaterialClass, type ProductSymbolId } from './art'
+
+/**
+ * The two card presentations the frames define. `grid` is the results-grid
+ * tile; `row` is the browse-by-category tile, which drops the card's top rule.
+ */
+export type CardPresentation = 'grid' | 'row'
 
 // ---------------------------------------------------------------------------
 // Context menu — floating panel
@@ -168,7 +174,16 @@ export interface ProductCardProps {
 	/** Material gradient class (.m1–.m8). */
 	material: MaterialClass
 	/** Product icon symbol (defaults to material-indexed icon). */
-	symbolId?: 'p-bowl' | 'p-bottle' | 'p-mug' | 'p-lamp' | 'p-books' | 'p-crate' | 'p-candle' | 'p-jar'
+	symbolId?: ProductSymbolId
+	/**
+	 * Card presentation:
+	 * - `grid` (default) — the results-grid tile: a `--border-strong` top rule
+	 *   above the card (frame `W8vkrHbRq6`: `.card{border-top:1px solid
+	 *   var(--border-strong)}`), a 3/2 shot and a 15px title.
+	 * - `row` — the browse-by-category tile (frame `V3PpdwmvGG`): **no top
+	 *   rule**, a 16/9 shot and a 14px title.
+	 */
+	presentation?: CardPresentation
 	/** Auction bid count — renders bid pill on the shot. */
 	bidCount?: number
 	/** Whether the product is in a saved list (heart filled). */
@@ -263,6 +278,7 @@ export const ProductCard: FC<ProductCardProps> = ({
 	stockNote,
 	material,
 	symbolId,
+	presentation = 'grid',
 	bidCount,
 	inList,
 	heartActive = inList,
@@ -317,8 +333,9 @@ export const ProductCard: FC<ProductCardProps> = ({
 			data-selected={selected}
 			className={cn(
 				'relative',
-				'border-t',
-				selected ? 'border-t-2 border-fill-ink pt-[9px]' : 'border-border-strong pt-3',
+				// `row` tiles carry no top rule (frame V3PpdwmvGG: `.card{border-top:0;
+				// padding-top:16px}`); `grid` tiles do.
+				presentation === 'row' ? 'pt-4' : selected ? 'border-t-2 border-fill-ink pt-[9px]' : 'border-t border-border-strong pt-3',
 				'cursor-pointer',
 				'hover:translate-y-[-2px]',
 				'transition-transform',
@@ -336,7 +353,7 @@ export const ProductCard: FC<ProductCardProps> = ({
 				<ProductArt
 					material={material}
 					symbolId={symbolId}
-					ratio="3/2"
+					ratio={presentation === 'row' ? '16/9' : '3/2'}
 					className={cn(
 						'size-full rounded-[6px] border border-border-default text-on-media',
 						selected && 'outline-2 outline-offset-2 outline-fill-ink',
@@ -369,7 +386,7 @@ export const ProductCard: FC<ProductCardProps> = ({
 			<h3
 				data-slot="card-title"
 				data-testid={`widget-product-card-title-${id}`}
-				className="mt-[5px] text-[15px] font-medium leading-[1.3] text-text-high"
+				className={cn('mt-[5px] font-medium leading-[1.3] text-text-high', presentation === 'row' ? 'text-[14px]' : 'text-[15px]')}
 			>
 				{title}
 				{category ? (
@@ -458,11 +475,20 @@ export const ProductCard: FC<ProductCardProps> = ({
 				</div>
 			</div>
 
-			{/* Price row — top hairline, sats left, stock note right */}
+			{/* Price row — top hairline (both frames' `.prow`: `border-top:1px solid
+			    var(--border-default)`), sats left, stock note right. The row tile
+			    tightens the margins (frame V3PpdwmvGG: `margin-top:7px;padding-top:6px`). */}
 			<div
 				data-slot="price-row"
 				data-testid={`widget-product-card-price-${id}`}
-				className={cn('mt-2.5', 'flex', 'items-center', 'justify-between')}
+				className={cn(
+					'flex',
+					'items-center',
+					'justify-between',
+					'border-t',
+					'border-border-default',
+					presentation === 'row' ? 'mt-[7px] pt-[6px]' : 'mt-2.5 pt-[9px]',
+				)}
 			>
 				{typeof price === 'number' ? (
 					<b className="text-sm">

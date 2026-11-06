@@ -90,8 +90,22 @@ describe('BrowseNav', () => {
 				onNavigateFeatured: () => {},
 			}),
 		)
-		expect(markup).toContain('href="/#featured"')
+		// `/featured` is the route the alias resolves through (the CMS address
+		// route); the old `/#featured` fragment pointed back at Browse.
+		expect(markup).toContain('href="/featured"')
 		expect(markup).toContain('widget-browse-nav-featured')
+	})
+
+	test('marks the current destination', () => {
+		const browseMarkup = renderToStaticMarkup(createElement(BrowseNav, {}))
+		expect(browseMarkup).toContain('aria-current="page"')
+		expect(browseMarkup).toContain('data-current="true"')
+
+		const featuredMarkup = renderToStaticMarkup(createElement(BrowseNav, { currentPage: 'featured' }))
+		expect(featuredMarkup).toContain('aria-current="page"')
+		// The featured state moves the marker onto the Featured link and adds the
+		// frame's ink underline.
+		expect(featuredMarkup).toContain('border-b-2 border-fill-ink')
 	})
 })
 

@@ -16,7 +16,11 @@ import { cn } from '../utils/cn'
 export interface BrowseNavProps {
 	/** Label for the Browse wordmark link. Defaults to "Plebeian Market". */
 	wordmarkLabel?: string
-	/** Current page; "browse" highlights the wordmark. */
+	/**
+	 * Which destination is current. `browse` marks the wordmark (the wordmark
+	 * *is* the Browse link); `featured` marks the `Featured` link with the
+	 * frame's active underline and moves `aria-current` onto it.
+	 */
 	currentPage?: 'browse' | 'featured'
 	/** Click handler for the wordmark link. */
 	onNavigateHome?: () => void
@@ -47,6 +51,7 @@ export interface BrowseNavProps {
  */
 export const BrowseNav: FC<BrowseNavProps> = ({
 	wordmarkLabel = 'Plebeian Market',
+	currentPage = 'browse',
 	active = true,
 	onNavigateHome,
 	onNavigateFeatured,
@@ -96,6 +101,8 @@ export const BrowseNav: FC<BrowseNavProps> = ({
 					data-status={active ? 'active' : 'inactive'}
 					data-slot="wordmark-link"
 					data-testid="widget-browse-nav-wordmark"
+					data-current={currentPage === 'browse'}
+					aria-current={currentPage === 'browse' ? 'page' : undefined}
 					className={cn(
 						'font-display',
 						'text-[20px]',
@@ -113,10 +120,19 @@ export const BrowseNav: FC<BrowseNavProps> = ({
 					{wordmarkLabel}
 				</a>
 				<a
-					href="/#featured"
+					href="/featured"
 					data-slot="featured-link"
 					data-testid="widget-browse-nav-featured"
-					className={cn('text-sm', 'font-medium', 'text-text-mid', 'hover:text-fill-ink', 'transition-colors', 'cursor-pointer')}
+					data-current={currentPage === 'featured'}
+					aria-current={currentPage === 'featured' ? 'page' : undefined}
+					className={cn(
+						'text-sm',
+						'font-medium',
+						'transition-colors',
+						'cursor-pointer',
+						// The frame's active link: ink text with a 2px ink underline.
+						currentPage === 'featured' ? 'text-text-high border-b-2 border-fill-ink pb-[3px]' : 'text-text-mid hover:text-fill-ink',
+					)}
 					onClick={handleFeaturedClick}
 					aria-label="Featured products"
 				>

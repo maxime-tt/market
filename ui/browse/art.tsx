@@ -57,7 +57,9 @@ export const SKELETON_CIRCLE_CSS = `
 `
 
 /** The product-icon symbols the sprite defines (frame ids: p-bowl … p-jar). */
-export type ProductSymbolId = 'p-bowl' | 'p-bottle' | 'p-mug' | 'p-lamp' | 'p-books' | 'p-crate' | 'p-candle' | 'p-jar'
+export const PRODUCT_SYMBOL_IDS = ['p-bowl', 'p-bottle', 'p-mug', 'p-lamp', 'p-books', 'p-crate', 'p-candle', 'p-jar'] as const
+
+export type ProductSymbolId = (typeof PRODUCT_SYMBOL_IDS)[number]
 
 // ---------------------------------------------------------------------------
 // SVG sprite symbols — verbatim from the frames
@@ -195,8 +197,8 @@ export interface ProductArtProps extends HTMLAttributes<HTMLDivElement> {
 	material: MaterialClass
 	/** Which product icon (p-bowl … p-jar). Defaults to a random pick. */
 	symbolId?: ProductSymbolId
-	/** Aspect ratio: 3/2 for product-card shot, 1/1 for strips, detail for the split-view pane. */
-	ratio?: '3/2' | '1/1' | 'detail'
+	/** Aspect ratio: 3/2 for the results-grid card, 16/9 for the category-row card, 1/1 for strips, detail for the split-view pane. */
+	ratio?: '3/2' | '16/9' | '1/1' | 'detail'
 	/** Extra classes. */
 	className?: string
 	ref?: React.Ref<HTMLDivElement>
@@ -224,7 +226,7 @@ export const ProductArt: FC<ProductArtProps> = ({ material, symbolId, ratio = '3
 				MATERIAL_CLASSES[materialIdx],
 				'relative',
 				'overflow-hidden',
-				ratio === '3/2' ? 'aspect-[3/2]' : ratio === '1/1' ? 'aspect-square' : undefined,
+				ratio === '3/2' ? 'aspect-[3/2]' : ratio === '16/9' ? 'aspect-[16/9]' : ratio === '1/1' ? 'aspect-square' : undefined,
 				'rounded-[6px]',
 				'border',
 				'border-border-default',

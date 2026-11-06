@@ -161,14 +161,26 @@ async function searchLocal(query: string, tag: string | undefined, limit: number
  * The signature and `BrowseSearchResult` return type are unchanged by the
  * switch; a RabbitHole `partial` verdict keeps its failed relays in `pending`
  * (the relay-failure state) and is never flattened into a plain result.
+ *
+ * The read is enabled by a query, a tag, or an open product:
+ * - `tag` alone is the category row's `See all →` (browse one category);
+ * - `openProductId` alone is `?p=<slug>` with nothing else on the URL — the
+ *   click-through contract's own deep link, and the state a strip/row click
+ *   lands in, where the panel's master pane is the loaded set.
+ * With none of the three there is nothing to read, so the query stays off.
  */
-export function browseSearchQueryOptions(query: string, tag?: string, limit = 100) {
+export function browseSearchQueryOptions(query: string, tag?: string, limit = 100, openProductId?: string) {
 	return queryOptions({
 		queryKey: browseKeys.search({ query, tag, limit, provider: getBrowseSearchProvider() }),
 		queryFn: async (context) => {
-			if (!query?.trim()) return { products: [], eose: [], pending: [] }
+			const term = query.trim()
+			// Nothing to read without a term, a tag, or an open product.
+			if (!term && !tag && !openProductId) return { products: [], eose: [], pending: [] }
 
-			if (getBrowseSearchProvider() === 'rabbithole') {
+			// The search service indexes *queries*; a tag-only browse (the category
+			// row's `See all →`, which carries no term) reads the local stream
+			// instead of POSTing an empty query to it.
+			if (term && getBrowseSearchProvider() === 'rabbithole') {
 				try {
 					// The tag narrows the index to that category (the `#t` source).
 					const filters = tag ? [`category_tags = "${tag}"`] : undefined
@@ -190,12 +202,12 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
 
 			return searchLocal(query, tag, limit)
 		},
-		enabled: !!query?.trim(),
+		enabled: Boolean(query?.trim()) || Boolean(tag) || Boolean(openProductId),
 	})
 }
 
-export function useBrowseSearch(query: string, tag?: string, limit?: number) {
-	return useQuery(browseSearchQueryOptions(query, tag, limit))
+export function useBrowseSearch(query: string, tag?: string, limit?: number, openProductId?: string) {
+	return useQuery(browseSearchQueryOptions(query, tag, limit, openProductId))
 }
 
 // ---------------------------------------------------------------------------
