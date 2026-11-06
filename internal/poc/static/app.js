@@ -4,7 +4,7 @@ const state = {
   view: null, wallet: null, validators: null, query: "", generation: 0,
   refreshPromise: null, maintenancePromise: null, actionKeys: new Set(), lastPresentation: "",
   readinessPromise: null, readinessNextAt: 0, readinessFailures: 0,
-  maintenanceNextAt: 0, maintenanceFailures: 0,
+  maintenanceNextAt: 0, maintenanceFailures: 0, refreshStartedAt: 0,
   bidDrafts: new Map(), expiredPrelockBids: [], auctionPayoutAvailability: new Map(),
 };
 const byId = (id) => document.getElementById(id);
@@ -15,14 +15,26 @@ const exactInteger = (value, name, minimum = 1) => {
   return number;
 };
 
+// A request that never settles must not be able to wedge the page.  Without a
+// deadline, a single stalled fetch leaves refresh() pending forever, and the
+// four-second retry loop below keeps returning that same dead promise.
+const API_TIMEOUT_MS = 15000;
 async function api(path, options = {}) {
-  const response = await fetch(path, { redirect: "error", credentials: "same-origin", ...options,
-    headers: { accept: "application/json", ...(options.body ? { "content-type": "application/json" } : {}), ...(options.headers || {}) } });
-  const type = response.headers.get("content-type")?.split(";")[0];
-  if (type !== "application/json") throw new Error(`Unexpected response type from ${path}.`);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-  return data;
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    // signal is applied after ...options so a caller cannot silently disable it.
+    const response = await fetch(path, { redirect: "error", credentials: "same-origin", ...options, signal: controller.signal,
+      headers: { accept: "application/json", ...(options.body ? { "content-type": "application/json" } : {}), ...(options.headers || {}) } });
+    const type = response.headers.get("content-type")?.split(";")[0];
+    if (type !== "application/json") throw new Error(`Unexpected response type from ${path}.`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return data;
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`${path} did not answer within ${Math.round(API_TIMEOUT_MS / 1000)}s.`);
+    throw error;
+  } finally { clearTimeout(deadline); }
 }
 function message(text, tone = "info") { const target = byId("message"); target.textContent = text; target.dataset.tone = tone; }
 function el(tag, className = "", content = "") { const node = document.createElement(tag); if (className) node.className = className; if (content) node.textContent = content; return node; }
@@ -260,7 +272,14 @@ async function runExclusiveMaintenance(capturedScope, operation) {
   return state.maintenancePromise;
 }
 async function refresh() {
-  if (state.refreshPromise) return state.refreshPromise;
+  if (state.refreshPromise) {
+    // Retry only once the pending attempt has had longer than its own deadline
+    // to finish.  Returning a stuck promise forever is what turned one slow
+    // request into a permanently dead page.
+    if (readinessNow() - (state.refreshStartedAt || 0) < API_TIMEOUT_MS + 5000) return state.refreshPromise;
+    state.refreshPromise = null;
+  }
+  state.refreshStartedAt = readinessNow();
   const generation = state.generation, capturedScope = scope();
   state.refreshPromise = (async () => {
     await refreshReadiness();
