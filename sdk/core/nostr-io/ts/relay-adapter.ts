@@ -287,9 +287,7 @@ class RelayPoolTransport implements PoolPort {
 		// Abort the EOSE wait when the caller's signal fires; with no signal the
 		// policy is "never" — the pipe must always receive a real operator.
 		const abort$ = opts?.signal
-			? new Observable<void>((s) =>
-					opts.signal!.addEventListener('abort', () => s.next(), { once: true }),
-				)
+			? new Observable<void>((s) => opts.signal!.addEventListener('abort', () => s.next(), { once: true }))
 			: NEVER
 		const eose$ = source.pipe(
 			filter((m): m is Extract<GroupReqMessage, { type: 'EOSE'; from: string }> => m.type === 'EOSE'),

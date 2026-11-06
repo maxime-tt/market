@@ -113,9 +113,7 @@ export class NDKService {
 	public startSubscriptions(): void {
 		if (!this.pool) return
 		const relays = getAppPoolRelays()
-		const adminSub = this.pool.subscribe(relays, [
-			{ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] },
-		] as FilterIn[])
+		const adminSub = this.pool.subscribe(relays, [{ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] }] as FilterIn[])
 		adminSub.events.subscribe((event) => {
 			const ts = event.created_at ?? 0
 			if (ts <= this.latestAdminEventTime) return
@@ -128,9 +126,7 @@ export class NDKService {
 			errors: adminSub.failures.pipe(rxMap((f) => new RelaySeamError(f.reason, f.message ?? ''))),
 			unsubscribe: () => adminSub.unsubscribe(),
 		}
-		const editorSub = this.pool.subscribe(relays, [
-			{ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'] },
-		] as FilterIn[])
+		const editorSub = this.pool.subscribe(relays, [{ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'] }] as FilterIn[])
 		this.editorSubscription = {
 			events: editorSub.events,
 			errors: editorSub.failures.pipe(rxMap((f) => new RelaySeamError(f.reason, f.message ?? ''))),
