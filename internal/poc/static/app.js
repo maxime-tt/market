@@ -63,6 +63,14 @@ function legacyFundingReady(config = state.config) {
     && config?.funding_mode === "custodial_reservation_v1";
 }
 function siteReady(config = state.config) { return r20RuntimeReady(config) || legacyFundingReady(config); }
+// Whether this identity can actually place a bid.  The threshold mode needs the
+// browser wallet controller; the legacy mode needs only a connected identity,
+// because its funds and reservations are server-side.  Gating the bid button on
+// the threshold controller alone left it permanently disabled on a legacy
+// network that funds bids perfectly well.
+function bidReady() {
+  return legacyFundingReady() ? Boolean(state.actor && state.signer) : Boolean(state.friday && r20RuntimeReady());
+}
 function invalidateReadinessIdentity() {
   state.generation += 1;
   // Retire the controller without discarding a tab-local private identity.
@@ -376,9 +384,18 @@ function renderWallet() {
   }
 }
 function participantStatus(auction) {
-  if (!state.actor) return { tone: "", title: "Connect to participate", detail: "A Nostr identity and browser-owned Coco wallet are required." };
+  // A settled auction has an outcome to report whether or not this visitor is
+  // connected.  Telling a passer-by to "connect to participate" on a closed
+  // auction hides the one thing the page exists to show.
+  if (auction.status !== "open") {
+    if (auction.seller === state.actor && auction.winner) return { tone: "leading", title: "Seller payout eligible", detail: "Import the certified winner payment into your Coco key." };
+    if (auction.winner && auction.winner === state.actor) return { tone: "leading", title: "You won", detail: "Consensus selected this identity. The seller receives the winning amount." };
+    return auction.winner
+      ? { tone: "leading", title: "Sold", detail: `Winning bid ${ui.formatSats(auction.high_bid)} fake sats.` }
+      : { tone: "refund", title: "Closed without a sale", detail: auction.high_bid ? "Reserve not met; the bid returns to the bidder." : "No bids were placed." };
+  }
+  if (!state.actor) return { tone: "", title: "Connect to participate", detail: legacyFundingReady() ? "A Nostr identity is required to bid." : "A Nostr identity and browser-owned Coco wallet are required." };
   if (auction.seller === state.actor) {
-    if (auction.status !== "open") return { tone: "leading", title: auction.winner ? "Seller payout eligible" : "Closed without sale", detail: auction.winner ? "Import the certified winner payment into your Coco key." : "No winner payment exists." };
     const payout = state.auctionPayoutAvailability.get(auction.id);
     if (payout === "missing") return { tone: "refund", title: "Offline bidding setup incomplete", detail: "Complete the one-time auction-scoped payout setup; no per-bid seller approval is used." };
     if (payout === "ready") return { tone: "", title: "You are the seller", detail: "The auction-scoped payout authorization lets bidders bid while you are offline." };
@@ -387,9 +404,16 @@ function participantStatus(auction) {
   const bids = Object.values(state.view?.state?.bids || {}).filter((bid) => bid.auction_id === auction.id && bid.bidder === state.actor).sort((a,b) => b.committed_at-a.committed_at);
   const latest = bids[0], leading = auction.leader_bid_id && state.view?.state?.bids?.[auction.leader_bid_id]?.bidder === state.actor;
   if (auction.status === "closed" && auction.winner === state.actor) return { tone: "leading", title: "You won", detail: "Consensus selected this identity. The seller receives the winning amount." };
-  if (latest && leading && auction.status === "open") return { tone: "leading", title: "You are leading", detail: `${ui.formatSats(auction.high_bid)} fake sats remain in the exact funded pool.` };
+  if (latest && leading && auction.status === "open") return {
+    tone: "leading", title: "You are leading",
+    detail: legacyFundingReady()
+      ? `${ui.formatSats(auction.high_bid)} fake sats are reserved against your demo balance.`
+      : `${ui.formatSats(auction.high_bid)} fake sats remain in the exact funded pool.`,
+  };
   if (latest && !leading) return { tone: "refund", title: "Outbid return pending or imported", detail: "Automatic import rechecks the certified terminal return on refresh." };
-  return { tone: "", title: "Ready to bid", detail: "The next bid uses a fresh exact threshold-funded pool." };
+  return legacyFundingReady()
+    ? { tone: "", title: "Ready to bid", detail: "The bid is funded by a committee-attested custodial reservation from your demo balance." }
+    : { tone: "", title: "Ready to bid", detail: "The next bid uses a fresh exact threshold-funded pool." };
 }
 function renderAuctions() {
   const target = byId("auctions"), all = Object.values(state.view?.state?.auctions || {}).sort((a,b) => b.created_at-a.created_at);
@@ -424,9 +448,20 @@ function renderAuctions() {
       label.append(el("span","field-help","Bid amount")); input.type="text"; input.pattern="[0-9]*"; input.autocomplete="off"; input.spellcheck=false; input.inputMode="numeric"; input.dataset.auctionBidId=auction.id; input.value=state.bidDrafts.get(draftKey) || ""; label.append(input);
       const validate = () => { const parsed = ui.bidAmount(input.value, minimum); state.bidDrafts.set(draftKey, input.value); input.setCustomValidity?.(parsed.ok ? "" : parsed.reason); input.setAttribute("aria-invalid", String(input.value !== "" && !parsed.ok)); };
       input.oninput=validate; validate();
-      const button = el("button","button button-primary","Authorize funded bid"); button.type="button"; button.disabled = minimum === null || !state.friday || !r20RuntimeReady(); button.onclick=()=>performAction(`bid:${auction.id}`,button,"Authorizing…",async()=>{const parsed=ui.bidAmount(input.value,minimum);if(!parsed.ok)throw new Error(parsed.reason);await placeBid(auction.id,parsed.amount);state.bidDrafts.delete(draftKey);});
+      const button = el("button","button button-primary","Authorize funded bid"); button.type="button"; button.disabled = minimum === null || !bidReady(); button.onclick=()=>performAction(`bid:${auction.id}`,button,"Authorizing…",async()=>{const parsed=ui.bidAmount(input.value,minimum);if(!parsed.ok)throw new Error(parsed.reason);await placeBid(auction.id,parsed.amount);state.bidDrafts.delete(draftKey);});
       if (focusedBid?.auctionId === auction.id) restoreBidFocus = input;
       actions.append(label,button);
+    }
+    if (auction.status === "open"
+      && Number(auction.end_time) <= Number(state.view?.state?.last_consensus_time || 0)) {
+      const close = el("button", "button button-secondary", "Close auction");
+      close.type = "button";
+      close.onclick = () => performAction(`close:${auction.id}`, close, "Closing…", async () => {
+        const result = await api("/api/close", { method: "POST", body: JSON.stringify({ auction_id: auction.id }) });
+        message(`Auction closed at height ${result.height}.`, "success");
+        await refresh();
+      }).catch(() => undefined);
+      actions.append(close);
     }
     if (auction.status === "open" && auction.seller === state.actor
       && state.auctionPayoutAvailability.get(auction.id) === "missing") {

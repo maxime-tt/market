@@ -261,7 +261,7 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 	// any other configuration registers no coordinator at all.
 	var demoKey *btcec.PrivateKey
 	demoPublicKey := ""
-	if manifest.Mode == "local" && manifest.ApplicationAuthority == ApplicationAuthorityLegacy &&
+	if manifest.Mode != "remote" && manifest.ApplicationAuthority == ApplicationAuthorityLegacy &&
 		os.Getenv("POC_ENABLE_LEGACY_INTERIM") == "true" && recoveryOnlyValue != "true" {
 		loaded, loadedPublic, err := loadDemoCommitteeKey(os.Getenv("POC_DEMO_NETWORK_ROOT"))
 		if err != nil {
@@ -297,7 +297,7 @@ func (server *APIServer) Handler() (http.Handler, error) {
 		// its own custodial reservation receipts.  Registered only in this exact
 		// mode and only on loopback; every request is re-validated against
 		// committed state.
-		if !server.recoveryOnly && server.manifest.Mode == "local" && server.manifest.ApplicationAuthority == ApplicationAuthorityLegacy {
+		if server.demoCommitteeKey != nil {
 			mux.HandleFunc("POST /api/demo/reservation", server.demoReservation)
 		}
 	}
