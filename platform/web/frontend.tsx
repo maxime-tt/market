@@ -7,6 +7,8 @@ import { createQueryClient } from '@platform/web/queryClient'
 import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from '@platform/web/router-utils'
 import { bootApp, bootStore } from '@platform/web/boot'
+import { THEME_PRESETS } from '@ui/theme/presets'
+import { ThemeCustomizer } from '@ui/theme/theme-customizer'
 import { ThemeMigrationWrapper } from '@ui/theme/theme-migration-wrapper'
 import { WebUiProvider } from '@platform/web/WebUiProvider'
 import { AppMonitors } from '@platform/web/app/AppMonitors'
@@ -15,6 +17,7 @@ import { AppProviders } from '@platform/web/app/AppProviders'
 import { syncEventStoresToQueryClient } from '@platform/web/eventStoreQuerySync'
 import { UpdateAvailableDialog } from '@ui/shared/update-available-dialog'
 import { useServiceWorker } from '@platform/web/app/useServiceWorker'
+import { useAppTheme } from './theme/useAppTheme'
 
 if (process.env.NODE_ENV !== 'development') {
 	console.log = () => {}
@@ -64,6 +67,7 @@ const router = createAppRouter(queryClient)
 function App() {
 	const { status, error } = useStore(bootStore)
 	const { showUpdateDialog, dismissUpdate } = useServiceWorker()
+	const { state: themeState, setTheme, theme } = useAppTheme()
 
 	const handleReload = () => {
 		window.location.reload()
@@ -99,13 +103,14 @@ function App() {
 					{/* P0b (D3/D4 contract rev 2.3 V11): mount the theme scope ONCE at the
 					    app shell so every route and overlay resolves the `.theme-new`
 					    tokens. `contents` keeps the wrapper out of the layout box tree. */}
-					<ThemeMigrationWrapper className="contents">
+					<ThemeMigrationWrapper theme={theme} className="contents">
 						<AppProviders>
 							<AppMonitors />
 							<RouterProvider router={router} />
 							<AppOverlays />
 						</AppProviders>
 						<UpdateAvailableDialog open={showUpdateDialog} onDismiss={dismissUpdate} onReload={handleReload} />
+						<ThemeCustomizer presets={THEME_PRESETS} value={themeState} onChange={setTheme} />
 					</ThemeMigrationWrapper>
 				</WebUiProvider>
 			</QueryClientProvider>

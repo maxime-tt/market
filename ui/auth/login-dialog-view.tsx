@@ -109,7 +109,7 @@ export function LoginDialogView({
 						</TabsContent>
 						<TabsContent value="extension" className="w-full max-w-full overflow-hidden">
 							<div className="space-y-4 py-4">
-								<p className="text-muted-foreground text-sm">Login using your Nostr browser extension (e.g., Alby, nos2x).</p>
+								<p className="text-text-mid text-sm">Login using your Nostr browser extension (e.g., Alby, nos2x).</p>
 								{extensionError && (
 									<Notice tone="error" title="Login Failed">
 										{extensionError}
@@ -122,7 +122,7 @@ export function LoginDialogView({
 						</TabsContent>
 					</Tabs>
 					<div className="flex items-center space-x-2">
-						<Label htmlFor="auto-login" className="flex items-center gap-2 text-muted-foreground text-sm">
+						<Label htmlFor="auto-login" className="flex items-center gap-2 text-text-mid text-sm">
 							<Checkbox
 								id="auto-login"
 								checked={autoLogin}

@@ -147,7 +147,7 @@ export function ZapButtonView({
 			variant={variant ?? 'default'}
 			size="icon"
 			className={cn(
-				'group gap-2 bg-transparent hover:bg-focus border-2 border-focus rounded text-focus hover:text-focus-foreground hover:animate-pulse',
+				'group gap-2 bg-transparent hover:bg-focus-attention border-2 border-focus-attention rounded text-focus-attention hover:text-focus-foreground hover:animate-pulse',
 				className,
 			)}
 			{...props}
@@ -180,7 +180,7 @@ export function ShareButtonView({ onPress, className, variant, ...props }: Share
 		<TooltipButton
 			variant={variant ?? 'outline'}
 			size="icon"
-			className={'border-foreground rounded border-2 bg-transparent hover:bg-foreground hover:text-background ' + className}
+			className={'border-text-high rounded border-2 bg-transparent hover:bg-text-high hover:text-bg ' + className}
 			tooltip="Share"
 			{...props}
 			onClick={onPress}
@@ -202,7 +202,7 @@ export function CommentButtonView({ icon, tooltip, onPress, onPointerDown, class
 		<TooltipButton
 			variant={variant ?? 'outline'}
 			size="icon"
-			className={'border-foreground rounded border-2 bg-transparent hover:bg-foreground hover:text-background ' + className}
+			className={'border-text-high rounded border-2 bg-transparent hover:bg-text-high hover:text-bg ' + className}
 			type="button"
 			{...props}
 			tooltip={tooltip ?? 'Comment'}

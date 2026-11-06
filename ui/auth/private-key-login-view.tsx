@@ -33,9 +33,9 @@ export interface PrivateKeyLoginViewProps {
 function Divider() {
 	return (
 		<div className="flex items-center my-4">
-			<div className="flex-grow h-px bg-muted"></div>
-			<span className="px-2 text-xs text-muted-foreground">OR</span>
-			<div className="flex-grow h-px bg-muted"></div>
+			<div className="flex-grow h-px bg-surface-sunken"></div>
+			<span className="px-2 text-xs text-text-mid">OR</span>
+			<div className="flex-grow h-px bg-surface-sunken"></div>
 		</div>
 	)
 }
@@ -79,7 +79,7 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 			<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
 				<div className="space-y-2 max-w-full">
 					<Label htmlFor="stored-password">Enter Password</Label>
-					<p className="text-sm text-muted-foreground">Enter your password to decrypt your stored private key.</p>
+					<p className="text-sm text-text-mid">Enter your password to decrypt your stored private key.</p>
 					<p className="text-sm font-medium">Pubkey: {props.storedPubkey ? `${props.storedPubkey.slice(0, 8)}...` : 'Unknown'}</p>
 					<Input
 						id="stored-password"
@@ -112,7 +112,7 @@ export function PrivateKeyLoginView(props: PrivateKeyLoginViewProps) {
 			<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
 				<div className="space-y-2 max-w-full">
 					<Label htmlFor="password">Set Password</Label>
-					<p className="text-sm text-muted-foreground">Set a password to encrypt your private key.</p>
+					<p className="text-sm text-text-mid">Set a password to encrypt your private key.</p>
 					<Input
 						id="password"
 						type="password"
