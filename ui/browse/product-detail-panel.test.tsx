@@ -6,8 +6,8 @@
  * existing pattern in ui/browse/product-card.test.tsx.
  */
 
-import { describe, expect, test } from 'bun:test'
-import { createElement } from 'react'
+import { describe, expect, mock, test } from 'bun:test'
+import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ProductDetailPanel, type ProductDetailPanelProduct } from './product-detail-panel'
 import type { MaterialClass } from './art'
@@ -211,4 +211,57 @@ describe('ProductDetailPanel', () => {
 		)
 		expect(markup).toContain('custom-pane-class')
 	})
+
+	test('renders the close affordance in the panel header, in every read state', () => {
+		for (const state of ['loading', 'empty', 'error', 'ready'] as const) {
+			const markup = renderToStaticMarkup(
+				createElement(ProductDetailPanel, {
+					state,
+					product: state === 'ready' ? makeProduct() : undefined,
+					onClose: () => {},
+				}),
+			)
+			expect(markup).toContain('data-slot="product-detail-header"')
+			expect(markup).toContain('data-slot="product-detail-close"')
+			expect(markup).toContain('aria-label="Close product"')
+		}
+	})
+
+	test('renders no close button without a callback (nothing inert)', () => {
+		const markup = renderToStaticMarkup(createElement(ProductDetailPanel, { state: 'ready', product: makeProduct() }))
+		expect(markup).not.toContain('data-slot="product-detail-close"')
+	})
+
+	test('the close button invokes the caller’s onClose', () => {
+		const onClose = mock(() => {})
+		// The component is props-only, so its own element tree is walkable: this is
+		// the wiring the server markup cannot show (handlers are not rendered).
+		const tree = ProductDetailPanel({ state: 'ready', product: makeProduct(), onClose })
+		const button = findSlot(tree, 'product-detail-close')
+
+		expect(button).toBeDefined()
+		button?.props.onClick?.()
+		expect(onClose).toHaveBeenCalledTimes(1)
+	})
 })
+
+/**
+ * The first element carrying `data-slot="<slot>"`, so a test can reach a
+ * rendered element's props (the handler) without a DOM renderer. The tree is
+ * synchronous; a function component's return type also admits a promise, which
+ * none of these components return.
+ */
+function findSlot(node: ReactNode | Promise<ReactNode>, slot: string): ReactElement<{ onClick?: () => void }> | undefined {
+	if (Array.isArray(node)) {
+		for (const child of node) {
+			const found = findSlot(child, slot)
+			if (found) return found
+		}
+		return undefined
+	}
+	if (!isValidElement(node)) return undefined
+
+	const element = node as unknown as ReactElement<{ 'data-slot'?: string; children?: ReactNode; onClick?: () => void }>
+	if (element.props['data-slot'] === slot) return element
+	return findSlot(element.props.children, slot)
+}

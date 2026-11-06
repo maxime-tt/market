@@ -7,12 +7,14 @@
  * - Search results: grid with skeleton shimmer, empty marketplace, relay indicator
  * - Relay error: expanding per-relay detail popover; dead-search error panel
  * - Tag-filtered: facet badges derived from the search
- * - Split view: a clicked card opens the product panel beside the grid, driven
+ * - Split view: a clicked card opens the product panel over the results, driven
  *   by the route's `?p=` (deep links and back/forward come for free), and the
- *   open card's own click or Escape clears it
+ *   open card's own click, the panel's close button, or Escape clears it
  *
  * The product panel's read is the single-entity `useBrowseProductDetail` (a
- * `fetch` by coordinate); the grid's read stays the search stream.
+ * `fetch` by coordinate), aimed at the relays the search hit was seen on and
+ * falling back to the app's own read context when the hit recorded none; the
+ * grid's read stays the search stream.
  */
 
 import { useEffect, useState, type ReactNode } from 'react'
@@ -232,7 +234,17 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	const feedQuery = useBrowseIndexFeed()
 	const feed = feedQuery.data ?? null
 
-	const detailQuery = useBrowseProductDetail(p)
+	/**
+	 * The open product's row in the results — the hit that opened the panel.
+	 * A RabbitHole hit carries the relays it was seen on (`relays_seen`), which
+	 * the client records on the product; the detail read goes to those relays
+	 * rather than the app's own, which is how a listing on screen stopped
+	 * resolving to "not on the relays". Read structurally, so a provider that
+	 * records none simply leaves the read on the app's context.
+	 */
+	const openProduct: (BrowseProduct & { relays?: string[] }) | undefined = result?.products.find((product) => product.id === p)
+
+	const detailQuery = useBrowseProductDetail(p, openProduct?.relays)
 	const detail = detailQuery.data ?? null
 
 	// The open product's seller, through the profile seam — the panel's own
@@ -498,7 +510,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 					(p ? (
 						<SplitView
 							className="mt-5 h-[calc(100vh-10.5rem)] min-h-[520px]"
-							master={<div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-4.5">{cards}</div>}
+							master={<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">{cards}</div>}
 							detail={
 								<ProductDetailPanel
 									state={panelState}
@@ -525,6 +537,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 											: undefined
 									}
 									menuOpen={menuOpenId === p}
+									onClose={() => onNavigate({ q, p: undefined, tag })}
 									onThreeDots={() => handleMenuToggle(p)}
 									onCopyLink={() => handleCopyLink(p)}
 									onRetry={() => void detailQuery.refetch()}

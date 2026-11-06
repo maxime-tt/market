@@ -4,7 +4,8 @@
  * Frame of record: notes/artboards/browse/frames/vnwQ7csazs__split-view-product-detail-1440.html
  * (right pane `.pane.right`).
  *
- * Structure, top to bottom: the product's art (fills the pane), the seller line
+ * Structure, top to bottom: the header row (the close button, when the caller can
+ * dismiss the panel), the product's art (fills the pane), the seller line
  * (tinted initials + seller + elided npub · location), the title row — where the
  * product tools sit **beside the title** (that placement is the frame's point) —
  * the price row (sats + stock state), the description, the spec row (ships from,
@@ -92,6 +93,12 @@ export interface ProductDetailPanelProps {
 	onCopyLink?: () => void
 	/** Callback for the menu's "Report" item. */
 	onReport?: () => void
+	/**
+	 * Callback for the panel's close button. The button renders only when
+	 * provided — the panel is then dismissible on its own, not only through the
+	 * card that opened it (or Escape, which the host also wires).
+	 */
+	onClose?: () => void
 	/** Callback for the primary "Buy with Lightning" action. */
 	onBuy?: () => void
 	/** Retry callback for the error state. */
@@ -100,6 +107,24 @@ export interface ProductDetailPanelProps {
 	className?: string
 	ref?: Ref<HTMLElement>
 }
+
+// ---------------------------------------------------------------------------
+// The panel's close glyph (the header affordance's own icon)
+// ---------------------------------------------------------------------------
+
+const CloseIcon: FC<{ className?: string }> = ({ className }) => (
+	<svg
+		viewBox="0 0 16 16"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth={1.5}
+		strokeLinecap="round"
+		aria-hidden="true"
+		className={className}
+	>
+		<path d="M4 4l8 8M12 4l-8 8" />
+	</svg>
+)
 
 // ---------------------------------------------------------------------------
 // Loading state — the pane's own shape, shimmering
@@ -326,6 +351,7 @@ export const ProductDetailPanel: FC<ProductDetailPanelProps> = ({
 	onAddToList,
 	onCopyLink,
 	onReport,
+	onClose,
 	onBuy,
 	onRetry,
 	className,
@@ -341,6 +367,21 @@ export const ProductDetailPanel: FC<ProductDetailPanelProps> = ({
 			className={cn('flex h-full min-h-0 flex-col', className)}
 			{...props}
 		>
+			{/* Header — the panel's own close affordance, in every read state */}
+			{onClose && (
+				<div data-slot="product-detail-header" className="flex flex-none items-center justify-end pb-2">
+					<button
+						type="button"
+						data-slot="product-detail-close"
+						aria-label="Close product"
+						className="size-6.5 rounded-[6px] grid place-items-center cursor-pointer border-0 text-text-mid transition-colors hover:bg-surface-sunken hover:text-text-high"
+						onClick={onClose}
+					>
+						<CloseIcon className="size-4" />
+					</button>
+				</div>
+			)}
+
 			{state === 'loading' && <PanelLoading />}
 
 			{state === 'empty' && (
