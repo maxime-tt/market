@@ -8,19 +8,27 @@
  * The panes are slots: the master keeps the results grid, the detail is the
  * caller's panel (in Browse, `ProductDetailPanel`). Props in, callbacks out.
  *
- * The detail opens with a **shift**: it slides in from the right, flush to the
- * pane's edge, and the master slides left by exactly the detail's width. The
- * results keep the width and the column count the caller gave them — nothing
- * reflows or compresses, which is what the percentage-pane layout did (a
- * `flex-basis` split resizes the master, and the grid then re-lays out its
- * columns). The motion is a transform in each pane's own compositing layer, so
- * the grid's items never re-measure.
+ * The detail opens by **shrinking** the master: the master's width goes from
+ * 100% to `100% − var(--split-detail-width)`, and the detail slides in from the
+ * right at that same width. Content reflows into the narrower pane: the results
+ * grid fits fewer fixed-width cards, and the hero's centred column — the search
+ * field with it — stays centred in the visible (left) area instead of drifting.
+ *
+ * **This reverses the split's earlier decision.** The split used to keep the
+ * master's width and slide it left by the detail's width, so nothing re-measured;
+ * the owner has since replaced that: on the live screens the shift moved the
+ * home's hero search field off-centre, and a field that moves when the panel
+ * opens is worse than a reflow. Shrinking the left view is the current rule;
+ * the fixed card width (see the results grid's track sizing) is what keeps the
+ * reflow honest — opening the panel changes how many cards fit, never how big
+ * each one is.
  *
  * The divider stays a real resize handle — pointer drag plus arrow keys — but it
- * resizes only the detail pane's width, which the master's shift follows; it
- * never resizes the master's layout. That is why the split is not built on
+ * resizes only the detail pane's width, which the master's own width follows; it
+ * never translates the master. That is why the split is not built on
  * `react-resizable-panels`: that model is two percentage panes in a row, i.e.
- * the compression this replaces.
+ * exactly the percentage split this pane model still uses, without the handle's
+ * own semantics.
  *
  * The group fills its parent, so `className` lands on the wrapper that carries
  * the height: the frame pins its split to the viewport's middle row.
@@ -62,17 +70,20 @@ export interface SplitViewProps {
 }
 
 /**
- * The split's motion, injected once like `art.tsx`'s shimmer: the master shifts
- * left by the detail's width and the detail slides in from the right. Both
- * animate `transform` only, and both fill `both` so the open state is the
- * animation's end state — with `motion-reduce:animate-none` the same end state
- * is the inline one, so a reduced-motion reader sees the open pane without the
- * slide.
+ * The split's motion, injected once like `art.tsx`'s shimmer: the master's
+ * width shrinks by the detail's width and the detail slides in from the right.
+ * Both fill `both` so the open state is the animation's end state — with
+ * `motion-reduce:animate-none` the same end state is the inline one, so a
+ * reduced-motion reader sees the open pane without the motion.
+ *
+ * The master animates `width`, not `transform`: shrinking is the layout the
+ * owner asked for (the left view reflows and the search field stays centred),
+ * so the pane genuinely gets narrower rather than being translated out of view.
  */
 const SPLIT_VIEW_CSS = `
-@keyframes split-master-shift {
-	from { transform: translateX(0); }
-	to { transform: translateX(calc(-1 * var(--split-detail-width))); }
+@keyframes split-master-shrink {
+	from { width: 100%; }
+	to { width: calc(100% - var(--split-detail-width)); }
 }
 @keyframes split-detail-in {
 	from { transform: translateX(100%); }
@@ -136,11 +147,13 @@ export const SplitView: FC<SplitViewProps> = ({
 			className={cn('relative min-h-0 overflow-hidden', className)}
 			style={{ '--split-detail-width': `${detailSize}%` } as CSSProperties}
 		>
-			{/* The master shifts as a whole; its own layout (width, columns) is untouched. */}
+			{/* The master gives the detail its width: the pane shrinks and its
+			    content reflows, so the visible left area is what carries the
+			    page's own centred columns (the hero search field included). */}
 			<div
-				data-slot="split-shift"
-				className="h-full animate-[split-master-shift_300ms_ease-out_both] motion-reduce:animate-none"
-				style={{ transform: 'translateX(calc(-1 * var(--split-detail-width)))' }}
+				data-slot="split-master-pane"
+				className="h-full animate-[split-master-shrink_300ms_ease-out_both] motion-reduce:animate-none"
+				style={{ width: 'calc(100% - var(--split-detail-width))' }}
 			>
 				<div data-slot="split-master" className="h-full min-h-0 overflow-y-auto px-6.5 pt-4">
 					{master}

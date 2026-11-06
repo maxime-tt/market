@@ -47,7 +47,8 @@ describe('ProductDetailPanel', () => {
 		expect(markup).toContain('data-slot="seller-avatar"')
 		expect(markup).toContain('AB')
 		expect(markup).toContain('abcdef01')
-		expect(markup).toContain('npub1q…7f3k · Porto')
+		expect(markup).toContain('npub1q…7f3k')
+		expect(markup).toContain('· Porto')
 		// title + the action row beside it
 		expect(markup).toContain('Handcrafted Ceramic Ball')
 		expect(markup).toContain('data-slot="product-detail-title"')
@@ -66,6 +67,21 @@ describe('ProductDetailPanel', () => {
 		// action row
 		expect(markup).toContain('Buy with Lightning')
 		expect(markup).toContain('Add to list')
+	})
+
+	test('the seller name and npub link to the seller page', () => {
+		const pubkey = 'a'.repeat(64)
+		const markup = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct({ sellerHref: `/profile/${pubkey}` }),
+				onThreeDots: () => {},
+			}),
+		)
+		// Both the display name and the elided npub are real anchors on the
+		// profile route — the same convention `ui/nostr/identity.tsx` uses.
+		expect(markup.split(`href="/profile/${pubkey}"`).length - 1).toBe(2)
+		expect(markup).toContain('<a href=')
 	})
 
 	test('the tools sit beside the title (action row placement)', () => {

@@ -5,10 +5,28 @@
  * Heart + three-dots in the text block — icon-first ghost buttons, no outline.
  */
 
-import { useState, type FC, type MouseEventHandler, type PointerEventHandler, type Ref, type TouchEventHandler } from 'react'
+import {
+	useState,
+	type FC,
+	type MouseEvent,
+	type MouseEventHandler,
+	type PointerEventHandler,
+	type Ref,
+	type TouchEventHandler,
+} from 'react'
 import { cn } from '../utils/cn'
 import { formatPriceUnit, formatSats } from '../utils/format'
+import { UiLink } from '../provider/UiProvider'
 import { ProductArt, type MaterialClass, type ProductSymbolId } from './art'
+
+/**
+ * Whether an activation should be left to the browser: modifier-clicks open the
+ * link in a new tab/window and middle-click is a native aux-click (which never
+ * reaches `onClick`), so an in-place handler must not intercept them.
+ */
+export function isModifiedActivation(event: Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'button'>): boolean {
+	return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0
+}
 
 /**
  * The two card presentations the frames define. `grid` is the results-grid
@@ -274,6 +292,18 @@ export interface ProductCardProps {
 	onReport?: () => void
 	/** Callback when the card is clicked (opens detail panel). */
 	onSelect?: (id: string) => void
+	/**
+	 * The card's real destination — the product's deep link (`?p=<id>` with the
+	 * current `q`/`tag`). Rendered as an anchor on the title with a stretched hit
+	 * area over the whole card, so hover previews, middle-click and
+	 * open-in-new-tab are the browser's normal link behaviour. A plain left click
+	 * is intercepted and routed through `onSelect` (no page load). Omit it and
+	 * the card keeps the bare `onSelect` wiring (e.g. a profile's own listing
+	 * grid, where there is no deep link to state).
+	 */
+	href?: string
+	/** The seller's profile link (`/profile/<pubkey>`), rendered as its own anchor. */
+	sellerHref?: string
 	/** Callback when the card is right-clicked (opens context menu). */
 	onContextMenu?: (e: React.MouseEvent) => void
 	/** Extra classes for the card root. */
@@ -360,6 +390,8 @@ export const ProductCard: FC<ProductCardProps> = ({
 	onCopyLink,
 	onReport,
 	onSelect,
+	href,
+	sellerHref,
 	onContextMenu,
 	className,
 	ref,
@@ -368,6 +400,18 @@ export const ProductCard: FC<ProductCardProps> = ({
 	const handleCardClick: MouseEventHandler = (e) => {
 		if ((e.target as HTMLElement).closest('[data-slot="tools"], [data-slot="context-menu"]')) return
 		onSelect?.(id)
+	}
+
+	/**
+	 * The title anchor's activation. A plain left click opens the panel in place —
+	 * the same state write `onSelect` did — while modifier-clicks fall through to
+	 * the browser, which follows the real href (new tab/window). Nothing here
+	 * navigates the current page, so the Browse shell keeps its own state flow.
+	 */
+	const handleLinkClick: MouseEventHandler<HTMLAnchorElement> = (e) => {
+		if (!onSelect || isModifiedActivation(e)) return
+		e.preventDefault()
+		onSelect(id)
 	}
 
 	const handleRightClick: MouseEventHandler = (e) => {
@@ -411,7 +455,7 @@ export const ProductCard: FC<ProductCardProps> = ({
 				'transition-transform',
 				className,
 			)}
-			onClick={handleCardClick}
+			onClick={href ? undefined : handleCardClick}
 			onContextMenu={handleRightClick}
 			onPointerDown={handleLongPressStart}
 			onPointerUp={handleLongPressEnd}
@@ -451,13 +495,26 @@ export const ProductCard: FC<ProductCardProps> = ({
 				/>
 			</div>
 
-			{/* Title */}
+			{/* Title — the card's one real anchor. Its `::after` stretches the hit
+			    area over the whole card (the standard stretched-link pattern), so the
+			    shot, title, price and whitespace all belong to the link, while the
+			    seller link and the tool buttons sit above it and stay independent. */}
 			<h3
 				data-slot="card-title"
 				data-testid={`widget-product-card-title-${id}`}
 				className={cn('mt-[5px] font-medium leading-[1.3] text-text-high', presentation === 'row' ? 'text-[14px]' : 'text-[15px]')}
 			>
-				{title}
+				{href ? (
+					<UiLink
+						href={href}
+						onClick={handleLinkClick}
+						className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+					>
+						{title}
+					</UiLink>
+				) : (
+					title
+				)}
 				{category ? (
 					<span
 						data-slot="card-category"
@@ -491,12 +548,19 @@ export const ProductCard: FC<ProductCardProps> = ({
 						aria-hidden="true"
 					/>
 				)}
-				<span data-slot="seller-name" className="truncate flex-1">
-					{sellerName ?? seller}
+				<span data-slot="seller-name" className="truncate flex-1 relative z-10">
+					{sellerHref ? (
+						<UiLink href={sellerHref} onClick={(e) => e.stopPropagation()} className="hover:underline">
+							{sellerName ?? seller}
+						</UiLink>
+					) : (
+						(sellerName ?? seller)
+					)}
 					{selected && <span data-slot="card-open-note"> · open</span>}
 				</span>
-				{/* Actions — icon-first ghost buttons, no outline */}
-				<div data-slot="tools" data-testid={`widget-product-card-tools-${id}`} className="relative flex gap-0.5 shrink-0">
+				{/* Actions — icon-first ghost buttons, no outline; above the stretched
+				    card link so their activation never opens the product. */}
+				<div data-slot="tools" data-testid={`widget-product-card-tools-${id}`} className="relative z-10 flex gap-0.5 shrink-0">
 					{onHeart && (
 						<button
 							type="button"

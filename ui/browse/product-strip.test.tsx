@@ -20,6 +20,7 @@ const STRIP_ITEM: StripItem = {
 	title: 'Handcrafted Ceramic Ball',
 	seller: 'atelier-norte',
 	material: 'm1',
+	href: '/?p=strip-1',
 }
 
 function makeStrip(opts: Partial<Parameters<typeof ProductStrip>[0]> = {}) {
@@ -43,9 +44,9 @@ describe('ProductStrip', () => {
 
 	test('renders all items', () => {
 		const items: StripItem[] = [
-			{ id: 'a', title: 'A', seller: 's1', material: 'm1' },
-			{ id: 'b', title: 'B', seller: 's2', material: 'm3' },
-			{ id: 'c', title: 'C', seller: 's3', material: 'm5' },
+			{ id: 'a', title: 'A', seller: 's1', material: 'm1', href: '/?p=a' },
+			{ id: 'b', title: 'B', seller: 's2', material: 'm3', href: '/?p=b' },
+			{ id: 'c', title: 'C', seller: 's3', material: 'm5', href: '/?p=c' },
 		]
 		const markup = renderToStaticMarkup(createElement(ProductStrip, { items }))
 		expect(markup).toContain('widget-strip-item-a')
@@ -71,6 +72,7 @@ describe('ProductStrip', () => {
 			seller: 'test',
 			material: 'm2',
 			symbolId: 'p-bowl',
+			href: '/?p=sym-1',
 		}
 		const markup = renderToStaticMarkup(createElement(ProductStrip, { items: [item] }))
 		expect(markup).toContain('widget-strip-item-sym-1')
@@ -125,8 +127,8 @@ describe('ProductStrip — the listing’s own shot', () => {
 describe('ProductStrip — the loop', () => {
 	test('the track repeats the run, so the animation has something to land on', () => {
 		const items: StripItem[] = [
-			{ id: 'a', title: 'A', seller: 's1', material: 'm1' },
-			{ id: 'b', title: 'B', seller: 's2', material: 'm2' },
+			{ id: 'a', title: 'A', seller: 's1', material: 'm1', href: '/?p=a' },
+			{ id: 'b', title: 'B', seller: 's2', material: 'm2', href: '/?p=b' },
 		]
 		const markup = renderToStaticMarkup(createElement(ProductStrip, { items }))
 		const runs = stripRunCount(items.length)
@@ -141,8 +143,8 @@ describe('ProductStrip — the loop', () => {
 
 	test('the shift is one run’s share of the track, so the loop is seamless', () => {
 		const items: StripItem[] = [
-			{ id: 'a', title: 'A', seller: 's1', material: 'm1' },
-			{ id: 'b', title: 'B', seller: 's2', material: 'm2' },
+			{ id: 'a', title: 'A', seller: 's1', material: 'm1', href: '/?p=a' },
+			{ id: 'b', title: 'B', seller: 's2', material: 'm2', href: '/?p=b' },
 		]
 		const markup = renderToStaticMarkup(createElement(ProductStrip, { items }))
 		const runs = stripRunCount(items.length)
@@ -183,10 +185,26 @@ describe('ProductStrip — the frame’s band', () => {
 		expect(markup).toContain('h-[176px]')
 	})
 
-	test('a tile is a keyboard-reachable button that reports its product', () => {
+	test('a tile is a real anchor that reports its product', () => {
 		const markup = renderToStaticMarkup(createElement(ProductStrip, makeStrip()))
-		expect(markup).toContain('role="button"')
-		expect(markup).toContain('tabindex="0"')
+		// The tile's cover link is a real href — hover previews, middle-click and
+		// open-in-new-tab are the browser's own; there is no button role or tab
+		// order on the article itself.
+		expect(markup).toContain('href="/?p=strip-1"')
 		expect(markup).toContain('data-item-id="strip-1"')
+		expect(markup).not.toContain('role="button"')
+		expect(markup).not.toContain('tabindex="0"')
+		// The duplicated runs are out of the tab order.
+		expect(markup).toContain('tabindex="-1"')
+	})
+
+	test('the hover seller is its own profile link, above the tile link', () => {
+		const item: StripItem = {
+			...STRIP_ITEM,
+			sellerHref: `/profile/${encodeURIComponent('a'.repeat(64))}`,
+		}
+		const markup = renderToStaticMarkup(createElement(ProductStrip, { items: [item] }))
+		expect(markup).toContain(`href="/profile/${'a'.repeat(64)}"`)
+		expect(markup).toContain('pointer-events-auto')
 	})
 })

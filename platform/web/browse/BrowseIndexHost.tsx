@@ -10,7 +10,16 @@
  * - Split view: a clicked card — or a home tile — opens the product panel beside
  *   the page it was clicked on, driven by the route's `?p=` (deep links and
  *   back/forward come for free); the open card's own click, the panel's close
- *   button, or Escape clears it
+ *   button, or Escape clears it. Exactly one panel is mounted in every state.
+ * - The home is progressive: the index feed publishes each stream arrival into
+ *   the query cache, so the strips, the measured stats line and the category
+ *   rows all fill in as listings land — never in one reveal at the caught-up
+ *   marker, and never gated on each other.
+ * - Every product surface is a real link: results cards, category-row cards and
+ *   strip tiles carry the product's deep link (`?p=<id>` with the current
+ *   `q`/`tag`), and every seller name links to `/profile/<pubkey>`. A plain
+ *   left click is intercepted and opens the panel in place; modifier-clicks and
+ *   middle-click behave as normal links.
  *
  * One tree, never one branch per state: the nav band and its search field are
  * rendered outside the state branch, so typing cannot unmount the focused input
@@ -82,8 +91,33 @@ interface BrowseIndexHostProps {
 const IDLE_WALL_LIMIT = 16
 const CATEGORY_ROW_LIMIT = 4
 
+/**
+ * How many of the wall's tiles sit above the hero. The wall fills the top strip
+ * first and the bottom one after it, so a streaming feed adds a tile to the end
+ * and never moves one between the strips — the split is a fixed boundary, not
+ * half of whatever has loaded so far.
+ */
+const IDLE_WALL_ABOVE = Math.ceil(IDLE_WALL_LIMIT / 2)
+
 /** The section the `Browse products` CTA scrolls to. */
 const CATEGORY_SECTION_ID = 'browse-categories'
+
+/**
+ * The results grid's track sizing.
+ *
+ * The card is a fixed 320px — the frame's own card width — and the grid sizes
+ * its tracks, never its children, so opening the panel changes **how many**
+ * cards fit and not how wide each one is. `minmax(0, 320px)` caps the track at
+ * the card width while letting it follow a viewport narrower than one card
+ * (the phone case) instead of overflowing; `justify-content: center` puts the
+ * leftover width into the side margins, which is the only thing that shrinks
+ * when the split narrows the pane.
+ */
+const RESULTS_GRID_CLASS = 'grid gap-5 mt-5'
+const RESULTS_GRID_STYLE = {
+	gridTemplateColumns: 'repeat(auto-fit, minmax(0, 320px))',
+	justifyContent: 'center',
+} as const
 
 /**
  * How many facet pills the collapsed row shows. The service caps `suggested` at
@@ -185,6 +219,10 @@ interface BrowseResultCardProps {
 	presentation?: CardPresentation
 	selected?: boolean
 	menuOpen?: boolean
+	/** The product's deep link — the card's real anchor. */
+	href: string
+	/** The seller's profile link — the card's seller-link target. */
+	sellerHref: string
 	onSelect: (id: string) => void
 	onThreeDots: () => void
 	onCopyLink: () => void
@@ -199,7 +237,17 @@ interface BrowseResultCardProps {
  * It is a component of its own because the profile read is a hook and the grid
  * maps over its products — a hook cannot be called inside that `map`.
  */
-function BrowseResultCard({ product, presentation, selected, menuOpen, onSelect, onThreeDots, onCopyLink }: BrowseResultCardProps) {
+function BrowseResultCard({
+	product,
+	presentation,
+	selected,
+	menuOpen,
+	href,
+	sellerHref,
+	onSelect,
+	onThreeDots,
+	onCopyLink,
+}: BrowseResultCardProps) {
 	const { data: profileData } = useProfile(product.pubkey)
 	const sellerName = getNormalizedProfileDisplayName(profileData?.profile) ?? undefined
 	const sellerPicture = getNormalizedProfilePicture(profileData?.profile) || undefined
@@ -213,6 +261,8 @@ function BrowseResultCard({ product, presentation, selected, menuOpen, onSelect,
 			sellerPubkey={product.pubkey}
 			sellerName={sellerName}
 			sellerPicture={sellerPicture}
+			href={href}
+			sellerHref={sellerHref}
 			image={product.image}
 			price={product.price}
 			priceCurrency={product.currency}
@@ -324,6 +374,26 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	/** The signed-in pubkey's initial, or nothing when signed out. */
 	const accountInitial = user?.pubkey ? user.pubkey.slice(0, 2).toUpperCase() : undefined
 
+	/**
+	 * A product's real deep link on this surface: the route's own `?q=`/`?tag=`
+	 * plus `p=<id>`. Passing no id is the state a click on the open card writes
+	 * (the panel closes), so that card's href is truthful too.
+	 *
+	 * The anchors use this href, so hover previews, middle-click and
+	 * open-in-new-tab land on exactly the location a plain click shows.
+	 */
+	const browseHref = (productId?: string): string => {
+		const params = new URLSearchParams()
+		if (q) params.set('q', q)
+		if (tag) params.set('tag', tag)
+		if (productId) params.set('p', productId)
+		const search = params.toString()
+		return search ? `/?${search}` : '/'
+	}
+
+	/** A seller's page — the same `/profile/<pubkey>` convention as `ui/nostr/identity.tsx`. */
+	const sellerHrefFor = (pubkey: string): string => `/profile/${encodeURIComponent(pubkey)}`
+
 	// Handlers
 	/**
 	 * The nav field's change. Emptying it returns the idle screen, where this
@@ -368,8 +438,16 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 		onNavigate({ q: '', p: undefined, tag: category })
 	}
 
-	const handleCategoryCardSelect = (category: string, id: string) => {
-		onNavigate({ q: '', p: id, tag: category })
+	/**
+	 * A category row's card opens the product **in place**, exactly like a wall
+	 * or strip tile: the state it writes is the product alone (`q` empty, no
+	 * tag), so the home stays the split's master and the panel opens beside it.
+	 * Including the row's category here was the defect — that state left the
+	 * home and routed to the category's results, which is what `See all →`
+	 * alone does.
+	 */
+	const handleCategoryCardSelect = (id: string) => {
+		onNavigate({ q: '', p: id, tag: undefined })
 	}
 
 	/** The idle wall / hero CTA: the category section is what "Browse products" names. */
@@ -488,8 +566,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	// The idle wall: the loaded listings, split either side of the hero. Each
 	// tile carries its own image, title, price and resolved seller name, and the
 	// art is assigned the same way the cards assign it.
-	const wall = isIdle ? feedStrips(wallProducts, IDLE_WALL_LIMIT, (pubkey) => wallSellerNames.get(pubkey)) : []
-	const wallSplit = Math.ceil(wall.length / 2)
+	const wall = isIdle ? feedStrips(wallProducts, IDLE_WALL_LIMIT, (pubkey) => wallSellerNames.get(pubkey), browseHref) : []
 
 	const hasResults = !searchQuery.isLoading && (result?.products.length ?? 0) > 0
 
@@ -509,6 +586,8 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 			key={product.id}
 			product={product}
 			selected={p === product.id}
+			href={browseHref(p === product.id ? undefined : product.id)}
+			sellerHref={sellerHrefFor(product.pubkey)}
 			onSelect={handleCardSelect}
 			onThreeDots={() => handleMenuToggle(product.id)}
 			onCopyLink={() => handleCopyLink(product.id)}
@@ -536,8 +615,11 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 
 	/**
 	 * The open product's panel — one element, rendered by whichever base state is
-	 * showing. `?p=` says *what is open*, never which page you are on: the home
-	 * keeps its wall, hero, strips and rows, and the results keep their grid.
+	 * showing, and by **only** that one. `?p=` says *what is open*, never which
+	 * page you are on: the home keeps its wall, hero, strips and rows, and the
+	 * results keep their grid. The two base states each own their split; a state
+	 * can never render both (the `?q=` empty + `?p=` set case used to: the home's
+	 * split and the results split both mounted, stacking two panes).
 	 */
 	const panel = p ? (
 		<ProductDetailPanel
@@ -551,6 +633,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 							sellerName: detailSellerName,
 							sellerPicture: detailSellerPicture,
 							sellerNpub: elideNpub(detail.pubkey),
+							sellerHref: sellerHrefFor(detail.pubkey),
 							location: detail.location,
 							image: detail.image,
 							price: detail.price,
@@ -596,13 +679,13 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 				onSelectProduct={(id) => onNavigate({ q: '', tag: undefined, p: id })}
 				onBrowseProducts={handleBrowseProducts}
 				onWhyPlebeian={onNavigateFeatured}
-				stripsAbove={wall.slice(0, wallSplit)}
-				stripsBelow={wall.slice(wallSplit)}
+				stripsAbove={wall.slice(0, IDLE_WALL_ABOVE)}
+				stripsBelow={wall.slice(IDLE_WALL_ABOVE)}
 			/>
 
 			{/* Browse by category — the rows the `Browse products` CTA scrolls to */}
 			<div id={CATEGORY_SECTION_ID} className="max-w-[1120px] mx-auto px-4 lg:px-6 pb-12">
-				<CategoryRows isLoading={feedQuery.isLoading} isError={feedQuery.isError}>
+				<CategoryRows isLoading={feedQuery.isLoading && !feed} isError={feedQuery.isError && !feed}>
 					{(feed?.rows ?? []).map((row) => (
 						<CategoryRow
 							key={row.category}
@@ -615,7 +698,9 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 									key={product.id}
 									product={product}
 									presentation="row"
-									onSelect={(id) => handleCategoryCardSelect(row.category, id)}
+									href={browseHref(p === product.id ? undefined : product.id)}
+									sellerHref={sellerHrefFor(product.pubkey)}
+									onSelect={handleCategoryCardSelect}
 									onThreeDots={() => handleMenuToggle(product.id)}
 									onCopyLink={() => handleCopyLink(product.id)}
 									menuOpen={menuOpenId === product.id}
@@ -658,79 +743,92 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 					homeBody
 				)
 			) : (
-				<main className="max-w-[1120px] mx-auto px-4 lg:px-6 py-4">
-					{/* Relay indicator — under the search area */}
-					{relayIndicator}
+				<>
+					<main className="max-w-[1120px] mx-auto px-4 lg:px-6 py-4">
+						{/* Relay indicator — under the search area */}
+						{relayIndicator}
 
-					{/* Facet pills — the service's own market-scoped counts and filters */}
-					{facets.length > 0 && (
-						<div
-							data-slot="browse-facets"
-							className={
-								facetsExpanded ? 'mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1' : 'mt-3 flex flex-wrap items-center gap-2'
-							}
-						>
-							{visibleFacets.map((facet) => (
-								<TagFilterBadge
-									key={`${facet.field}:${facet.value}`}
-									label={facet.value}
-									count={facet.count}
-									active={tag === facet.value}
-									onToggle={() => onNavigate({ q, p: undefined, tag: tag === facet.value ? undefined : facet.value })}
-								/>
-							))}
-							{facets.length > FACET_PILL_LIMIT && (
-								<button
-									type="button"
-									data-slot="browse-facets-more"
-									data-testid="widget-browse-facets-more"
-									aria-expanded={facetsExpanded}
-									className="h-7 shrink-0 px-3 rounded-full border border-border-default text-xs text-text-mid cursor-pointer transition-colors hover:text-text-high"
-									onClick={() => setFacetsExpanded((prev) => !prev)}
-								>
-									{facetsExpanded ? 'less' : 'more'}
-								</button>
-							)}
-						</div>
-					)}
+						{/* Facet pills — the service's own market-scoped counts and filters */}
+						{facets.length > 0 && (
+							<div
+								data-slot="browse-facets"
+								className={
+									facetsExpanded
+										? 'mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1'
+										: 'mt-3 flex flex-wrap items-center gap-2'
+								}
+							>
+								{visibleFacets.map((facet) => (
+									<TagFilterBadge
+										key={`${facet.field}:${facet.value}`}
+										label={facet.value}
+										count={facet.count}
+										active={tag === facet.value}
+										onToggle={() => onNavigate({ q, p: undefined, tag: tag === facet.value ? undefined : facet.value })}
+									/>
+								))}
+								{facets.length > FACET_PILL_LIMIT && (
+									<button
+										type="button"
+										data-slot="browse-facets-more"
+										data-testid="widget-browse-facets-more"
+										aria-expanded={facetsExpanded}
+										className="h-7 shrink-0 px-3 rounded-full border border-border-default text-xs text-text-mid cursor-pointer transition-colors hover:text-text-high"
+										onClick={() => setFacetsExpanded((prev) => !prev)}
+									>
+										{facetsExpanded ? 'less' : 'more'}
+									</button>
+								)}
+							</div>
+						)}
 
-					{/* Loading state — skeleton grid */}
-					{searchQuery.isLoading && <SkeletonGrid rows={8} columns={3} />}
+						{/* Loading state — skeleton grid */}
+						{searchQuery.isLoading && <SkeletonGrid rows={8} columns={3} />}
 
-					{/* Error state — dead search (all relays failed) */}
-					{searchQuery.isError && respondedCount === 0 && (
-						<DeadSearchError
-							totalRelays={totalRelays}
-							pendingCount={pendingRelays.length}
-							message="All relays failed. Check your connection and try again."
-							onRetry={() => handleSearchGo()}
-						/>
-					)}
+						{/* Error state — dead search (all relays failed) */}
+						{searchQuery.isError && respondedCount === 0 && (
+							<DeadSearchError
+								totalRelays={totalRelays}
+								pendingCount={pendingRelays.length}
+								message="All relays failed. Check your connection and try again."
+								onRetry={() => handleSearchGo()}
+							/>
+						)}
 
-					{searchQuery.isError && respondedCount > 0 && <EmptyStateBrowse query={q} headline="The search errored." hints={EMPTY_HINTS} />}
+						{searchQuery.isError && respondedCount > 0 && <EmptyStateBrowse query={q} headline="The search errored." hints={EMPTY_HINTS} />}
 
-					{/* Empty marketplace — every relay answered, none matched */}
-					{!searchQuery.isLoading && result && result.products.length === 0 && !searchQuery.isError && (
-						<EmptyStateBrowse query={q} hints={EMPTY_HINTS} {...emptyCopy} />
-					)}
+						{/* Empty marketplace — every relay answered, none matched */}
+						{!searchQuery.isLoading && result && result.products.length === 0 && !searchQuery.isError && (
+							<EmptyStateBrowse query={q} hints={EMPTY_HINTS} {...emptyCopy} />
+						)}
 
-					{/* Results — the plain grid. The split view is rendered outside this
+						{/* Results — the plain grid. The split view is rendered outside this
 					    container (below) so both of its panes reach the viewport edges;
 					    with a product open the same grid becomes its master pane. */}
-					{hasResults && !p && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">{cards}</div>}
-				</main>
-			)}
+						{hasResults && !panel && (
+							<div data-slot="results-grid" className={RESULTS_GRID_CLASS} style={RESULTS_GRID_STYLE}>
+								{cards}
+							</div>
+						)}
+					</main>
 
-			{/* The split is full-bleed: the owner's deliberate deviation from the
-			    frame's 56px side margins, so both panes take the page's full width.
-			    Nothing else on this screen leaves the container above. It renders
-			    the same `panel` element the home's own split renders. */}
-			{hasResults && p && (
-				<SplitView
-					className="mt-5 h-[calc(100vh-10.5rem)] min-h-[520px]"
-					master={<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">{cards}</div>}
-					detail={panel}
-				/>
+					{/* The split is full-bleed: the owner's deliberate deviation from the
+					    frame's 56px side margins, so both panes take the page's full
+					    width. It lives inside this branch — not beside the branch — so
+					    exactly one base state owns the panel: the home's split above, or
+					    this one, never both. */}
+					{hasResults && panel && (
+						<SplitView
+							className="mt-5 h-[calc(100vh-10.5rem)] min-h-[520px]"
+							master={
+								<div data-slot="results-grid" className={RESULTS_GRID_CLASS} style={RESULTS_GRID_STYLE}>
+									{cards}
+								</div>
+							}
+							detail={panel}
+						/>
+					)}
+				</>
 			)}
 
 			{/* Inject shimmer keyframes into DOM (art module CSS) */}

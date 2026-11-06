@@ -79,6 +79,30 @@ describe('ProductCard', () => {
 		expect(markup).toContain('Unique Product Title')
 	})
 
+	test('renders the card as a real link when href is given', () => {
+		const pubkey = 'a'.repeat(64)
+		const markup = renderToStaticMarkup(
+			createElement(ProductCard, makeCard({ id: 'c8', href: '/?q=ceramic&p=c8', sellerHref: `/profile/${pubkey}`, onThreeDots: () => {} })),
+		)
+
+		// The title is the anchor; a stretched hit area makes the whole card the
+		// link without nesting the tool buttons inside it.
+		expect(markup).toContain('href="/?q=ceramic&amp;p=c8"')
+		expect(markup).toContain(`href="/profile/${pubkey}"`)
+		expect(markup).toContain('after:absolute')
+		// The seller link and the tools stay independent (above the stretched link).
+		expect(markup).toContain('data-slot="tools"')
+		expect(markup).toContain('relative z-10')
+		// No button role on the card itself; its controls remain buttons.
+		expect(markup).not.toContain('role="button"')
+		expect(markup).toContain('<button')
+	})
+
+	test('renders no link when the caller has no deep link', () => {
+		const markup = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c8b' })))
+		expect(markup).not.toContain('href="/?')
+	})
+
 	test('renders seller name text', () => {
 		const markup = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'c8', seller: 'Unique Seller Name' })))
 		expect(markup).toContain('Unique Seller Name')
@@ -213,6 +237,7 @@ describe('ProductStrip', () => {
 			seller: 'Seller A',
 			material: 'm1' as MaterialClass,
 			symbolId: 'p-bowl' as StripItem['symbolId'],
+			href: '/?p=item-1',
 			...opts,
 		}
 	}
