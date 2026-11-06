@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	cmtbytes "github.com/cometbft/cometbft/libs/bytes"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	jsonrpctypes "github.com/cometbft/cometbft/rpc/jsonrpc/types"
@@ -43,6 +44,7 @@ type NodeStatus struct {
 	CatchingUp            bool   `json:"catching_up,omitempty"`
 	CanonicalCommitHeight int64  `json:"canonical_commit_height,omitempty"`
 	CommitSignatures      int    `json:"commit_signatures,omitempty"`
+	ObservedSignature     bool   `json:"observed_signature,omitempty"`
 	Observation           string `json:"observation,omitempty"`
 }
 
@@ -62,6 +64,10 @@ type APIServer struct {
 	// exact pre-existing payment recovery remains on the separately guarded
 	// loopback Friday authority service.
 	recoveryOnly      bool
+	// Legacy loopback demo only: the committee key that signs custodial
+	// reservation receipts in the absence of a deployed coordinator.
+	demoCommitteeKey          *btcec.PrivateKey
+	demoCommitteePublicKey    string
 	runtimeReadyProbe func(context.Context) bool
 	healthPinsSHA256  string
 	observerNodeID    string
@@ -77,6 +83,30 @@ const browserReleasePinsPath = "/etc/plebeian-auctions-friday/browser-r20-pins.j
 // marker proves an application verdict; a timeout, refused connection or
 // ambiguous broadcast does not carry it and must stay a 503.
 const applicationRejectionLogMarker = "broadcast error on transaction validation:"
+
+// Funding mode names published to the browser.  They mirror the on-chain
+// FundingMode values so the client cannot invent one the application rejects.
+const (
+	browserFundingThreshold = "threshold_sigall_v1"
+	browserFundingLegacy    = "custodial_reservation_v1"
+	browserFundingNone      = ""
+)
+
+// legacyFundingMode names the funding mode this site can actually serve.  A
+// threshold network serves the threshold mode; a legacy network serves the
+// custodial reservation mode, but only when its faucet is enabled, because
+// without a faucet no bidder can obtain value to reserve.  Otherwise the site
+// publishes no mode and the browser keeps its controls closed.
+func legacyFundingMode(thresholdRoute, legacyInterim bool) string {
+	switch {
+	case thresholdRoute:
+		return browserFundingThreshold
+	case legacyInterim:
+		return browserFundingLegacy
+	default:
+		return browserFundingNone
+	}
+}
 
 type BrowserReleasePinsV1 struct {
 	Schema                  string `json:"schema"`
@@ -226,8 +256,25 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 			return nil, err
 		}
 	}
+	// A loopback legacy demo signs its own custodial reservation receipts.  The
+	// key is loaded here, once, and only for the exact mode that can serve them;
+	// any other configuration registers no coordinator at all.
+	var demoKey *btcec.PrivateKey
+	demoPublicKey := ""
+	if manifest.Mode == "local" && manifest.ApplicationAuthority == ApplicationAuthorityLegacy &&
+		os.Getenv("POC_ENABLE_LEGACY_INTERIM") == "true" && recoveryOnlyValue != "true" {
+		loaded, loadedPublic, err := loadDemoCommitteeKey(os.Getenv("POC_DEMO_NETWORK_ROOT"))
+		if err != nil {
+			return nil, err
+		}
+		demoKey, demoPublicKey = loaded, loadedPublic
+		if demoPublicKey != manifest.CommitteePublicKey {
+			return nil, errors.New("demo committee key does not match the network committee public key")
+		}
+	}
 	return &APIServer{observerNodeID: observerNodeID, manifest: manifest, clients: clients, offline: offline, cashu: proxy,
 		legacyInterim:         os.Getenv("POC_ENABLE_LEGACY_INTERIM") == "true",
+		demoCommitteeKey:      demoKey, demoCommitteePublicKey: demoPublicKey,
 		browserThresholdReady: browserReady, browserReleasePins: browserPins,
 		recoveryOnly: recoveryOnlyValue == "true", healthPinsSHA256: os.Getenv("POC_FRIDAY_HEALTH_PINS_SHA256")}, nil
 }
@@ -246,6 +293,13 @@ func (server *APIServer) Handler() (http.Handler, error) {
 		mux.HandleFunc("POST /api/interim/faucet", server.recoveryOnlyMutation)
 	} else {
 		mux.HandleFunc("POST /api/interim/faucet", server.faucet)
+		// A loopback legacy demo has no deployed coordinator, so the site signs
+		// its own custodial reservation receipts.  Registered only in this exact
+		// mode and only on loopback; every request is re-validated against
+		// committed state.
+		if !server.recoveryOnly && server.manifest.Mode == "local" && server.manifest.ApplicationAuthority == ApplicationAuthorityLegacy {
+			mux.HandleFunc("POST /api/demo/reservation", server.demoReservation)
+		}
 	}
 	if server.manifest.Schema == "PlebeianAuctionsPOCNetworkV4" {
 		// The V4 threshold route has a different custody and authorization
@@ -343,6 +397,12 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 		"default_auction_seconds": 600,
 		"shared_application_key":  !thresholdRoute,
 		"threshold_custody":       thresholdRoute,
+		// The legacy loopback demo (PlebeianAuctionsPOCNetworkV2) is a distinct,
+		// honest funding mode: faucet-issued notes plus a committee-attested
+		// custodial reservation.  The browser needs to be told which funding mode
+		// it may actually use instead of assuming the threshold one, otherwise
+		// every control is disabled on a network that demonstrably works.
+		"funding_mode": legacyFundingMode(thresholdRoute, server.legacyInterim),
 		"fips_transport":          thresholdRoute,
 		// This remains false until the two-phase client-held payment signer and
 		// admission service are installed. The browser must never fall back to a
@@ -521,9 +581,31 @@ func (server *APIServer) nodeStatus(ctx context.Context, index int, client *rpch
 			for _, signature := range commit.Commit.Signatures {
 				if signature.BlockIDFlag == cmttypes.BlockIDFlagCommit {
 					view.CommitSignatures++
+					if strings.EqualFold(hex.EncodeToString(signature.ValidatorAddress), view.ValidatorAddress) {
+						view.ObservedSignature = true
+					}
 				}
 			}
+			// Describe what was actually examined.  The browser decides between
+			// "signed" and "unknown" from this string, so leaving it empty here
+			// made every local validator render as unknown/offline even though
+			// this branch directly queried its own node and read its commit.
+			switch {
+			case view.ObservedSignature:
+				view.Observation = "canonical commit signature observed via direct validator RPC"
+			case view.CommitSignatures > 0:
+				// The node answered and the commit exists, but this validator's
+				// signature is not in it.  That is a real absence, not an unknown.
+				view.Observation = "canonical commit evaluated; signature absent for this slot"
+				view.Error = fmt.Sprintf("validator signature absent from canonical commit %d", commitHeight)
+			default:
+				view.Observation = "canonical commit evaluated; no signatures present"
+			}
+		} else {
+			view.Observation = "node reachable; canonical commit unavailable"
 		}
+	} else {
+		view.Observation = "node reachable; no canonical commit yet"
 	}
 	return view
 }

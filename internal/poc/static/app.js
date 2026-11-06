@@ -41,6 +41,16 @@ function r20RuntimeReady(config = state.config) {
   return config?.threshold_custody === true && config.browser_threshold_wallet_ready === true
     && config.browser_threshold_admission_ready === true && config.recovery_only === false;
 }
+// A legacy loopback network (custodial reservations over faucet-issued notes)
+// publishes funding_mode "custodial_reservation_v1".  It is a real, distinct
+// funding model, not a threshold fallback, and it must never be allowed to
+// masquerade as threshold custody.  Its controls stay open exactly when the
+// server says that is the mode it serves.
+function legacyFundingReady(config = state.config) {
+  return config?.threshold_custody !== true && config?.recovery_only === false
+    && config?.funding_mode === "custodial_reservation_v1";
+}
+function siteReady(config = state.config) { return r20RuntimeReady(config) || legacyFundingReady(config); }
 function invalidateReadinessIdentity() {
   state.generation += 1;
   // Retire the controller without discarding a tab-local private identity.
@@ -68,23 +78,35 @@ function validateReadinessPins(pins) {
 async function refreshReadiness() {
   if (state.readinessPromise) return state.readinessPromise;
   const now = readinessNow();
-  if (now < state.readinessNextAt) return r20RuntimeReady() && Boolean(state.releasePins);
+  if (now < state.readinessNextAt) return siteReady();
   state.readinessPromise = (async () => {
     const abort = new AbortController(); let timer;
-    const wasReady = r20RuntimeReady();
+    const wasReady = siteReady();
     try {
+      // The pins endpoint answers 503 on any network that does not serve the
+      // threshold browser wallet, so it must not be able to fail the whole
+      // readiness check.  Fetch it tolerantly and decide from the mode below.
       const [config, pins] = await Promise.race([
-        Promise.all([api("/api/config", { signal: abort.signal }), api("/api/browser-release-pins", { signal: abort.signal })]),
+        Promise.all([
+          api("/api/config", { signal: abort.signal }),
+          api("/api/browser-release-pins", { signal: abort.signal }).catch(() => null),
+        ]),
         new Promise((_, reject) => { timer = setTimeout(() => { abort.abort(); reject(new Error("Runtime readiness check timed out.")); }, 8000); }),
       ]);
-      validateReadinessPins(pins);
-      const runtimePins = r20Pins({ ...config, fake_funding_policy_digest: config?.fake_funding_policy?.digest });
-      if (JSON.stringify(runtimePins) !== JSON.stringify(r20Pins(pins))) throw readinessIdentityError();
+      // A legacy loopback network has no threshold browser wallet, therefore no
+      // release pins to compare: its identity is the chain and funding mode it
+      // publishes.  Requiring pins here disabled every control on a network that
+      // works, which is exactly the failure this mode distinction removes.
+      if (!legacyFundingReady(config)) {
+        validateReadinessPins(pins);
+        const runtimePins = r20Pins({ ...config, fake_funding_policy_digest: config?.fake_funding_policy?.digest });
+        if (JSON.stringify(runtimePins) !== JSON.stringify(r20Pins(pins))) throw readinessIdentityError();
+      }
       const identityChanged = state.releasePins && JSON.stringify(r20Pins(state.releasePins)) !== JSON.stringify(r20Pins(pins));
-      const ready = r20RuntimeReady(config);
+      const ready = siteReady(config);
       if (identityChanged) invalidateReadinessIdentity();
       else if (wasReady && !ready) state.maintenanceNextAt = 0;
-      state.config = config; state.releasePins = pins;
+      state.config = config; state.releasePins = legacyFundingReady(config) ? null : pins;
       // Valid false can be backend warmup, not a transport failure. Keep two
       // observations inside its continuity window, even after slow collection.
       // Start-based spacing caps request rate without adding response latency.
@@ -109,6 +131,12 @@ async function refreshReadiness() {
 function requireR20Ready() {
   if (!r20RuntimeReady() || !state.releasePins) throw new Error("The reviewed R20 browser wallet and admission path is not active. Refresh or retry after runtime recovery.");
 }
+function requireSiteReady() {
+  // Called before the actor is assigned, so it must not depend on state.actor.
+  // A legacy network is ready on its published funding mode alone.
+  if (legacyFundingReady()) return;
+  requireR20Ready();
+}
 
 async function connectFridayController(signer) {
   await refreshReadiness(); requireR20Ready();
@@ -117,8 +145,12 @@ async function connectFridayController(signer) {
   return window.plebeianFridayR20Connect({ signer, pins: r20Pins(state.releasePins) });
 }
 async function installSigner(signer, mode) {
-  await refreshReadiness(); requireR20Ready();
+  await refreshReadiness(); requireSiteReady();
   disconnect();
+  // disconnect() bumps state.generation, so the generation must be captured
+  // AFTER it.  Capturing before made the guard below always true and the
+  // function returned before ever assigning the actor, so connecting silently
+  // did nothing.
   const generation = state.generation;
   const actor = await signer.getPublicKey();
   // NIP-07 getPublicKey is an explicit permission boundary in common browser
@@ -130,11 +162,13 @@ async function installSigner(signer, mode) {
     getPublicKey: async () => actor,
     signEvent: (event) => signer.signEvent(event),
   });
-  const friday = await connectFridayController(sessionSigner);
+  // A legacy network has no browser Coco wallet or admission service, so there
+  // is nothing to connect.  pretend otherwise would fake a controller.
+  const friday = r20RuntimeReady() ? await connectFridayController(sessionSigner) : null;
   if (generation !== state.generation) return;
   state.actor = actor; state.signer = sessionSigner; state.identityMode = mode; state.friday = friday; state.wallet = null;
   byId("actor").textContent = `${mode} · ${short(actor)}`;
-  const pending = await friday.pendingFakeFunding();
+  const pending = friday ? await friday.pendingFakeFunding() : [];
   if (generation !== state.generation) return;
   if (pending) {
     byId("faucet-amount").value = String(pending.amount);
@@ -167,12 +201,16 @@ async function sign(kind, tags, content) {
   return state.signer.signEvent({ kind, created_at: Math.floor(Date.now() / 1000), tags, content: JSON.stringify(content) });
 }
 function updateControls() {
-  const connectReady = Boolean(state.releasePins && r20RuntimeReady());
-  const ready = Boolean(state.actor && state.friday && connectReady);
+  const legacyReady = legacyFundingReady();
+  const thresholdReady = Boolean(state.releasePins && r20RuntimeReady());
+  const connectReady = thresholdReady || legacyReady;
+  // Threshold needs the browser wallet controller; the legacy mode needs only a
+  // connected identity, because its funds and reservations are server-side.
+  const ready = Boolean(state.actor && (state.friday || legacyReady) && connectReady);
   byId("login").disabled = !connectReady;
   byId("demo-login").disabled = !connectReady;
   byId("faucet").disabled = !ready;
-  byId("process-payments").disabled = !ready;
+  byId("process-payments").disabled = !thresholdReady;
   byId("disconnect").disabled = !state.signer;
   byId("create-submit").disabled = !ready;
   const policy = state.config?.fake_funding_policy;
@@ -409,9 +447,22 @@ async function performAction(key, button, pendingLabel, action) {
   finally { state.actionKeys.delete(key); if(button){button.textContent=prior;updateControls();} }
 }
 async function placeBid(auctionId, amount) {
-  requireR20Ready(); if(!state.friday) throw new Error("Connect a signer first.");
+  const legacy = legacyFundingReady();
+  if (!legacy) { requireR20Ready(); if(!state.friday) throw new Error("Connect a signer first."); }
+  else if (!state.actor || !state.signer) throw new Error("Connect a signer first.");
   const auction=state.view?.state?.auctions?.[auctionId]; if(!auction||auction.status!=="open") throw new Error("Auction is not open in committed state.");
   const leader=auction.leader_bid_id?state.view?.state?.bids?.[auction.leader_bid_id]:null; if(leader?.bidder===state.actor) throw new Error("Own raises remain fail-closed until full-pool key continuity is proven.");
+  if (legacy) {
+    // Legacy mode: ask the demo coordinator for a committee-signed custodial
+    // reservation receipt, then commit the signed bid carrying it.  This is the
+    // same funding path the automated journey exercises end to end.
+    const replaces = leader?.reservation_id || "";
+    const receipt = await api("/api/demo/reservation", { method: "POST", body: JSON.stringify({ auction_id: auctionId, bidder: state.actor, amount, replaces_reservation_id: replaces }) });
+    const signed = await sign(28641, [["e", auctionId]], { auction_id: auctionId, amount, reservation: receipt });
+    const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
+    message(`Bid committed at height ${result.height} (custodial reservation).`, "success");
+    await refresh(); return;
+  }
   const maximumEnd=Number(auction.original_end_time)+1800;
   const result=await state.friday.placeBid({auctionId,bidAmount:amount,fullPoolAmount:amount,reservedPoolAmount:amount,replacesBidId:auction.leader_bid_id||"",locktime:maximumEnd+900});
   message(result.status==="seller_plan_pending"
@@ -445,6 +496,19 @@ byId("demo-login").onclick=()=>connectDemo().catch((error)=>message(error.messag
 byId("refresh").onclick=()=>refresh().catch(()=>undefined);
 byId("auction-search").oninput=(event)=>{state.query=event.target.value;renderAuctions();};
 byId("faucet").onclick=(event)=>performAction("fund",event.currentTarget,"Funding…",async()=>{
+  if (legacyFundingReady()) {
+    // Legacy network: the server faucet issues a signed fake-sat note to this
+    // actor.  It is a closed-loop ledger credit, not a Cashu token, and the UI
+    // says so.  The amount is fixed by the network policy, so the input is only
+    // validated, not requested.
+    if (!state.actor) throw new Error("Connect a signer first.");
+    const amount = exactInteger(byId("faucet-amount").value, "Faucet amount", 1);
+    const policy = state.config?.fake_funding_policy;
+    if (policy && amount > policy.max_per_request) throw new Error(`The faucet issues at most ${ui.formatSats(policy.max_per_request)} per request.`);
+    const result = await api("/api/interim/faucet", { method: "POST", body: JSON.stringify({ actor: state.actor }) });
+    message(`Fake sats credited in the demo ledger at height ${result.height}.`, "success");
+    byId("faucet-amount").value = ""; await refresh(); return;
+  }
   requireR20Ready(); if(!state.friday) throw new Error("Connect a signer first.");
   const policy=state.friday.fundingPolicy(), parsed=ui.fundingAmount(byId("faucet-amount").value,policy.maxPerRequest); if(!parsed.ok) throw new Error(parsed.reason);
   const pending=await state.friday.pendingFakeFunding(); if(pending&&(pending.amount!==parsed.amount||pending.policyDigest!==policy.digest)) throw new Error(`Unresolved funding ${short(pending.operationId)} must retry its original amount and policy.`);
@@ -452,10 +516,23 @@ byId("faucet").onclick=(event)=>performAction("fund",event.currentTarget,"Fundin
 }).catch(()=>undefined);
 byId("process-payments").onclick=(event)=>performAction("maintenance",event.currentTarget,"Importing…",servicePayments).catch(()=>undefined);
 byId("create-form").onsubmit=(event)=>{event.preventDefault();return performAction("create",byId("create-submit"),"Signing…",async()=>{
-  requireR20Ready(); if(!state.friday) throw new Error("Connect a signer first.");
+  const legacy = legacyFundingReady();
+  if (legacy) { if (!state.actor || !state.signer) throw new Error("Connect a signer first."); }
+  else { requireR20Ready(); if(!state.friday) throw new Error("Connect a signer first."); }
   const duration=exactInteger(byId("duration").value,"Duration",3),starting=exactInteger(byId("starting").value,"Starting bid"),increment=exactInteger(byId("increment").value,"Minimum increment"),reserve=byId("reserve").value.trim()===""?0:exactInteger(byId("reserve").value,"Reserve",0);
   const image=ui.imageURL(byId("image").value); if(!image.ok) throw new Error(image.reason);
-  if(duration>3600) throw new Error("Duration may not exceed 3,600 seconds."); const sellerPaymentPublicKey=await state.friday.sellerPaymentPublicKey();
+  if(duration>3600) throw new Error("Duration may not exceed 3,600 seconds.");
+  if (legacy) {
+    // Legacy mode: no seller Coco payment key exists on this network, so the
+    // listing carries only the custodial reservation funding mode.
+    const id=`auction-${Date.now()}`;
+    const signed=await sign(28640,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:"custodial_reservation_v1"});
+    const result=await api("/api/event",{method:"POST",body:JSON.stringify(signed)});
+    await refresh();
+    message(`Auction committed at height ${result.height} in legacy fake-sat mode (custodial reservations).`,"success");
+    byId("create-form").reset(); return;
+  }
+  const sellerPaymentPublicKey=await state.friday.sellerPaymentPublicKey();
   const id=`auction-${Date.now()}`; const signed=await sign(28640,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:"threshold_sigall_v1",seller_coco_payment_public_key:sellerPaymentPublicKey});
   const result=await api("/api/event",{method:"POST",body:JSON.stringify(signed)});
   const committed=await refreshCommittedAuction(id,result.height);

@@ -12,7 +12,7 @@
   function countdown(endTime, nowSeconds = Math.floor(Date.now() / 1000)) {
     if (!Number.isSafeInteger(endTime) || endTime <= 0 || !Number.isFinite(nowSeconds)) return { ended: false, label: "Time unknown" };
     const remaining = endTime - nowSeconds;
-    if (remaining <= 0) return { ended: true, label: "Ended · awaiting committed close" };
+    if (remaining <= 0) return { ended: true, label: "Ended" };
     const hours = Math.floor(remaining / 3600), minutes = Math.floor((remaining % 3600) / 60), seconds = remaining % 60;
     return { ended: false, label: hours > 0 ? `${hours}h ${minutes}m remaining` : `${minutes}m ${String(seconds).padStart(2, "0")}s remaining` };
   }
@@ -57,9 +57,23 @@
   }
   function scopeKey(actor, deployment) { return actor && deployment ? `${deployment}\u0000${actor}` : ""; }
   function validatorEvidence(validator) {
-    const observed = String(validator?.observation || "").includes("canonical commit signature observed");
-    if (!observed) return { state: "unknown", label: "Signature unknown", detail: validator?.online ? "RPC reachable · signature not evaluated" : "RPC unavailable · signature unknown" };
-    return validator.online ? { state: "observed", label: "Signed commit", detail: `Commit ${formatSats(validator.canonical_commit_height)}` } : { state: "absent", label: "Signature absent", detail: "No signature in observed commit" };
+    // Prefer the explicit boolean: the server now states whether this slot's
+    // signature was actually found in the commit it read.  The string match is
+    // kept as a fallback for older payloads.
+    const signed = validator?.observed_signature === true
+      || String(validator?.observation || "").includes("canonical commit signature observed");
+    if (!validator?.online) return { state: "unknown", label: "Unreachable", detail: "RPC unavailable · state unknown" };
+    if (!signed) {
+      // Reachable but no signature in the commit it read is a real absence, not
+      // an unknown.  Saying "unknown" here made healthy local validators render
+      // as offline.
+      const evaluated = String(validator?.observation || "").includes("signature absent")
+        || String(validator?.observation || "").includes("no signatures present");
+      return evaluated
+        ? { state: "absent", label: "Signature absent", detail: "No signature in the observed commit" }
+        : { state: "unknown", label: "Signature unknown", detail: "RPC reachable · signature not evaluated" };
+    }
+    return { state: "observed", label: "Signed commit", detail: `Commit ${formatSats(validator.canonical_commit_height)}` };
   }
   return { formatSats, formatTime, countdown, minimumBid, filterAuctions, fundingAmount, bidAmount, imageURL, scopeKey, validatorEvidence };
 });
