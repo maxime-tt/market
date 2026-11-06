@@ -17,11 +17,11 @@
 
 import type { FC, Ref } from 'react'
 import { cn } from '../utils/cn'
-import { formatSats } from '../utils/format'
+import { formatPriceUnit, formatSats } from '../utils/format'
 import { EmptyState } from '../shared/empty-state'
 import { ErrorState } from '../shared/error-state'
-import { ProductArt, SKELETON_SHIMMER_CSS, type MaterialClass, type ProductSymbolId } from './art'
-import { HeartIcon, ProductContextMenu, ThreeDotsIcon } from './product-card'
+import { SKELETON_SHIMMER_CSS, type MaterialClass, type ProductSymbolId } from './art'
+import { HeartIcon, ListingImage, ProductContextMenu, ThreeDotsIcon } from './product-card'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -41,12 +41,24 @@ export interface ProductDetailPanelProduct {
 	title: string
 	/** Seller display name — the pubkey prefix when no profile name is known. */
 	seller: string
+	/** The seller's resolved profile display name; `seller` is the fallback. */
+	sellerName?: string
+	/** The seller's resolved profile picture; the initials disc is the fallback. */
+	sellerPicture?: string
 	/** Elided seller npub, e.g. `npub1q…7f3k`. */
 	sellerNpub?: string
 	/** Seller location from the listing's `location` tag, e.g. `Porto`. */
 	location?: string
+	/** The listing's first `image` tag, when it carries one — the shot, with art as the fallback. */
+	image?: string
 	/** Price in sats. */
 	price?: number
+	/** The listing's own price unit (`price` tag's third element); `SATS`/absent spell as `sats`. */
+	currency?: string
+	/** The amount as the app's display path resolved it; the raw `price` is the fallback. */
+	priceLabel?: string
+	/** The unit for `priceLabel`; `currency` is the fallback. */
+	priceUnit?: string
 	/** Stock note, e.g. `76 in stock`, rendered as the price row's state. */
 	stockNote?: string
 	/** Description (`content`). */
@@ -154,9 +166,11 @@ const PanelContent: FC<{
 
 	return (
 		<>
-			{/* Shot — fills the pane; the studio object grows into the frame */}
-			<ProductArt
+			{/* Shot — the listing's own image, else the studio art that fills the pane */}
+			<ListingImage
 				data-slot="product-detail-art"
+				image={product.image}
+				alt={product.title}
 				material={product.material}
 				symbolId={product.symbolId}
 				ratio="detail"
@@ -169,15 +183,25 @@ const PanelContent: FC<{
 					data-slot="product-detail-seller"
 					className="flex items-center gap-[13px] text-[11px] uppercase tracking-[0.13em] text-text-mid"
 				>
-					<span
-						data-slot="seller-avatar"
-						className="size-[38px] flex-none grid place-items-center rounded-full bg-fill-ink text-on-fill-ink text-[13px] font-semibold leading-none tracking-[0.02em]"
-						aria-label={`${product.seller} avatar`}
-					>
-						{initials}
-					</span>
+					{product.sellerPicture ? (
+						<img
+							data-slot="seller-avatar"
+							src={product.sellerPicture}
+							alt=""
+							loading="lazy"
+							className="size-[38px] flex-none rounded-full object-cover"
+						/>
+					) : (
+						<span
+							data-slot="seller-avatar"
+							className="size-[38px] flex-none grid place-items-center rounded-full bg-fill-ink text-on-fill-ink text-[13px] font-semibold leading-none tracking-[0.02em]"
+							aria-label={`${product.seller} avatar`}
+						>
+							{initials}
+						</span>
+					)}
 					<span data-slot="seller-who" className="flex flex-col gap-[3px]">
-						<b className="font-medium text-text-high">{product.seller}</b>
+						<b className="font-medium text-text-high">{product.sellerName ?? product.seller}</b>
 						{sellerMeta && <em className="text-[10.5px] not-italic tracking-[0.1em]">{sellerMeta}</em>}
 					</span>
 				</div>
@@ -233,11 +257,13 @@ const PanelContent: FC<{
 					)}
 				</div>
 
-				{/* Price row — sats left, stock state right */}
+				{/* Price row — the listing's own amount and unit, stock state right */}
 				<div data-slot="product-detail-price" className="mt-3 flex items-baseline gap-3 pb-3 border-b border-border-default tabular-nums">
 					<b className="text-2xl font-medium leading-none">
-						{product.price === undefined ? '—' : formatSats(product.price)}{' '}
-						{product.price !== undefined && <small className="text-[13px] font-normal text-text-mid">sats</small>}
+						{product.price === undefined ? '—' : (product.priceLabel ?? formatSats(product.price))}{' '}
+						{product.price !== undefined && (
+							<small className="text-[13px] font-normal text-text-mid">{product.priceUnit ?? formatPriceUnit(product.currency)}</small>
+						)}
 					</b>
 					{product.stockNote && (
 						<span data-slot="product-detail-stock" className="ml-auto text-[11px] uppercase tracking-[0.08em] text-text-mid">

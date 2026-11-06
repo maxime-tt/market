@@ -152,6 +152,7 @@ mock.module('@platform/web/readContext', () => ({
 }))
 
 import {
+	browseFacetsQueryOptions,
 	browseProductDetailQueryOptions,
 	browseSearchQueryOptions,
 	configureBrowseSearch,
@@ -532,5 +533,87 @@ describe('browse product detail read', () => {
 
 	test('the relays are part of the query key, so a different set is a different read', () => {
 		expect(browseProductDetailQueryOptions('mug', ['wss://a']).queryKey).not.toEqual(browseProductDetailQueryOptions('mug').queryKey)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Filters and facets — the tag-only browse and the unfiltered facet probe
+// ---------------------------------------------------------------------------
+
+describe('browse filters and facets', () => {
+	test('a tag-only browse is a filter-only request the provider answers', async () => {
+		configureBrowseSearch({ provider: 'rabbithole' })
+		let sentBody: Record<string, unknown> | null = null
+		stubFetch(async (_url, init) => {
+			sentBody = JSON.parse((init as RequestInit).body as string)
+			return ndjsonResponse([
+				JSON.stringify({ type: 'search', candidateCount: 1, hits: [] }),
+				JSON.stringify({ type: 'event', event: rhEvent }),
+				rhOutcome('complete', ['wss://a'], []),
+			])
+		})
+
+		// No term — the category row's `See all →`. The index answers filters
+		// alone, so this is no longer special-cased to the local stream.
+		const result = await runQueryFn('', 'pottery')
+		expect(sentBody).toMatchObject({ q: '', filters: ['category_tags = "pottery"'] })
+		expect(result.products.map((p) => p.id)).toEqual(['rh-mug'])
+		expect(localStreamCalls).toBe(0)
+	})
+
+	test("a facet's own filter is sent verbatim, not re-derived from the tag", async () => {
+		configureBrowseSearch({ provider: 'rabbithole' })
+		let sentBody: Record<string, unknown> | null = null
+		stubFetch(async (_url, init) => {
+			sentBody = JSON.parse((init as RequestInit).body as string)
+			return ndjsonResponse([JSON.stringify({ type: 'search', candidateCount: 0, hits: [] }), rhOutcome('complete', [], [])])
+		})
+
+		const options = browseSearchQueryOptions('', 'EUR', 100, undefined, 'currency = "EUR"')
+		await options.queryFn!({ signal: new AbortController().signal } as Parameters<NonNullable<typeof options.queryFn>>[0])
+
+		expect(sentBody).toMatchObject({ q: '', filters: ['currency = "EUR"'] })
+	})
+
+	test('the facet probe reads the unfiltered, index-only suggestion list', async () => {
+		configureBrowseSearch({ provider: 'rabbithole' })
+		let sentBody: Record<string, unknown> | null = null
+		stubFetch(async (_url, init) => {
+			sentBody = JSON.parse((init as RequestInit).body as string)
+			return ndjsonResponse([
+				JSON.stringify({
+					type: 'search',
+					query: 'mug',
+					candidateCount: 120,
+					hits: [],
+					suggested: [
+						{ field: 'category_tags', value: 'pottery', count: 120 },
+						{ field: 'currency', value: 'USD', count: 61, filter: 'currency = "USD"' },
+					],
+				}),
+			])
+		})
+
+		const options = browseFacetsQueryOptions('mug', true)
+		const facets = await options.queryFn!({ signal: new AbortController().signal } as Parameters<NonNullable<typeof options.queryFn>>[0])
+
+		// The probe carries the term but no filter — selecting a filter must not
+		// rotate the pill set it feeds.
+		expect(sentBody).toMatchObject({ q: 'mug', indexOnly: true, limit: 1 })
+		expect((sentBody as Record<string, unknown> | null)?.filters).toBeUndefined()
+		expect(facets).toEqual([
+			{ field: 'category_tags', value: 'pottery', count: 120, coverage: undefined, filter: undefined },
+			{ field: 'currency', value: 'USD', count: 61, coverage: undefined, filter: 'currency = "USD"' },
+		])
+	})
+
+	test('the local provider states no facets rather than counting its window', async () => {
+		stubFetch(async () => {
+			throw new Error('the local provider must not fetch')
+		})
+		const options = browseFacetsQueryOptions('mug', true)
+		expect(await options.queryFn!({ signal: new AbortController().signal } as Parameters<NonNullable<typeof options.queryFn>>[0])).toEqual(
+			[],
+		)
 	})
 })

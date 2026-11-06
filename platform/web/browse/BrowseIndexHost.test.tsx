@@ -13,7 +13,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { BrowseProduct, BrowseProductDetail, BrowseSearchResult } from './browseProductMap'
+import type { BrowseFacet, BrowseProduct, BrowseProductDetail, BrowseSearchResult } from './browseProductMap'
 import type { BrowseIndexFeed } from './browseIndexFeed'
 
 const PUBKEY_A = 'a'.repeat(64)
@@ -22,6 +22,9 @@ const PUBKEY_B = 'b'.repeat(64)
 let searchData: BrowseSearchResult | null = null
 let searchLoading = false
 let searchError = false
+let facetsData: BrowseFacet[] | null = null
+let facetsEnabled = false
+let facetsQueryArg = ''
 let detailData: BrowseProductDetail | null = null
 let detailLoading = false
 let detailError = false
@@ -34,6 +37,33 @@ mock.module('@platform/web/browse/browseQuery', () => ({
 		detailReadArgs = { id, relays }
 		return { data: detailData, isLoading: detailLoading, isError: detailError, refetch: () => {} }
 	},
+	// The facet probe is a read of its own; stubbed here so the host's pill
+	// derivation is what the test asserts, not the provider round trip. It also
+	// records whether the host asked for it, and with what.
+	useBrowseFacets: (query: string, enabled: boolean) => {
+		facetsEnabled = enabled
+		facetsQueryArg = query
+		return { data: facetsData, isLoading: false, isError: false }
+	},
+}))
+
+// The seller-identity seam and the price-display path are reads too; stubbed so
+// the host renders the props-only card without a QueryClient or NDK behind it.
+let profileName: string | null = null
+let profilePicture = ''
+
+mock.module('@platform/web/profiles/profileQuery', () => ({
+	useProfile: () => ({ data: profileName || profilePicture ? { profile: { display_name: profileName, picture: profilePicture } } : null }),
+	getNormalizedProfileDisplayName: (profile: { display_name?: string | null } | null | undefined) => profile?.display_name ?? null,
+	getNormalizedProfilePicture: (profile: { picture?: string } | null | undefined) => profile?.picture ?? '',
+}))
+
+mock.module('@platform/web/products/PriceDisplayHost', () => ({
+	usePriceDisplay: () => ({
+		price: { isBitcoinCurrency: false, satsValue: null, fiatValue: null },
+		isLoading: false,
+		selectedCurrency: 'USD',
+	}),
 }))
 
 // The idle index feed is a read of its own; it is stubbed here for the same
@@ -113,11 +143,11 @@ const DETAIL: BrowseProductDetail = {
 	shipping: [{ costSats: 2400 }],
 }
 
-function renderHost(options: { q?: string; p?: string } = {}) {
+function renderHost(options: { q?: string; p?: string; tag?: string } = {}) {
 	return renderToStaticMarkup(
 		createElement(BrowseIndexHost, {
 			q: options.q ?? 'ceramic',
-			tag: undefined,
+			tag: options.tag,
 			p: options.p,
 			onNavigate: () => {},
 			onNavigateFeatured: () => {},
@@ -130,12 +160,17 @@ beforeEach(() => {
 	searchData = RESULTS
 	searchLoading = false
 	searchError = false
+	facetsData = null
+	facetsEnabled = false
+	facetsQueryArg = ''
 	detailData = DETAIL
 	detailLoading = false
 	detailError = false
 	feedData = null
 	feedLoading = false
 	feedError = false
+	profileName = null
+	profilePicture = ''
 })
 
 describe('BrowseIndexHost split view', () => {
@@ -314,5 +349,133 @@ describe('BrowseIndexHost idle index', () => {
 		feedLoading = true
 		const markup = renderHost({ q: '', p: undefined })
 		expect(markup).toContain('data-slot="skeleton-card"')
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Facet pills — the server's own counts, stable across filter selection
+// ---------------------------------------------------------------------------
+
+const SUGGESTED: BrowseFacet[] = [
+	{ field: 'category_tags', value: 'pottery', count: 120, coverage: 0.3, filter: 'category_tags = "pottery"' },
+	{ field: 'category_tags', value: 'ceramics', count: 94, filter: 'category_tags = "ceramics"' },
+	{ field: 'currency', value: 'USD', count: 61, filter: 'currency = "USD"' },
+]
+
+describe('BrowseIndexHost facet pills', () => {
+	test("renders the probe's market counts, not a count of the loaded window", () => {
+		facetsData = SUGGESTED
+		const markup = renderHost()
+
+		// Two products loaded, but the pill states the market count (120).
+		expect(markup).toContain('data-testid="widget-tag-badge-pottery"')
+		expect(markup).toContain('120')
+		expect(markup).toContain('data-testid="widget-tag-badge-USD"')
+		expect(markup).toContain('61')
+	})
+
+	test('asks the unfiltered probe for the pills on a results state', () => {
+		facetsData = SUGGESTED
+		renderHost({ q: 'ceramic' })
+		expect(facetsEnabled).toBe(true)
+		expect(facetsQueryArg).toBe('ceramic')
+
+		// No term and no tag: the idle index, not a results state — no probe.
+		renderHost({ q: '' })
+		expect(facetsEnabled).toBe(false)
+	})
+
+	test('keeps the pill list on the unfiltered probe while a filter is selected', () => {
+		// A filtered search answers with its own, rotated facet list — the host
+		// must not use it for the pills.
+		searchData = {
+			...RESULTS,
+			suggested: [{ field: 'category_tags', value: 'rotated-away', count: 3 }],
+		}
+		facetsData = SUGGESTED
+
+		const markup = renderHost({ tag: 'pottery' })
+
+		expect(markup).toContain('data-testid="widget-tag-badge-pottery"')
+		expect(markup).toContain('data-testid="widget-tag-badge-ceramics"')
+		// The rotated set never renders.
+		expect(markup).not.toContain('widget-tag-badge-rotated-away')
+	})
+
+	test('reveals the rest of the list from a real control, capped at six pills', () => {
+		const eight: BrowseFacet[] = Array.from({ length: 8 }, (_, i) => ({
+			field: 'category_tags',
+			value: `cat-${i + 1}`,
+			count: 100 - i,
+			filter: `category_tags = "cat-${i + 1}"`,
+		}))
+		facetsData = eight
+
+		const markup = renderHost()
+
+		// Collapsed: the first six pills plus a real button to reveal the rest.
+		expect(markup).toContain('data-testid="widget-tag-badge-cat-6"')
+		expect(markup).not.toContain('data-testid="widget-tag-badge-cat-7"')
+		expect(markup).toContain('data-testid="widget-browse-facets-more"')
+		expect(markup).toContain('aria-expanded="false"')
+		expect(markup).not.toContain('>more</span>')
+	})
+
+	test('shows no pills when the source states no facets', () => {
+		facetsData = null
+		const markup = renderHost()
+		expect(markup).not.toContain('data-slot="browse-facets"')
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Seller identity — the profile seam, with the pubkey fallback
+// ---------------------------------------------------------------------------
+
+describe('BrowseIndexHost seller identity', () => {
+	test('renders the resolved seller name and picture when the profile resolves', () => {
+		profileName = 'Porto Ceramics'
+		profilePicture = 'https://example.test/avatar.png'
+
+		const markup = renderHost()
+		expect(markup).toContain('Porto Ceramics')
+		expect(markup).toContain('src="https://example.test/avatar.png"')
+	})
+
+	test('falls back to the pubkey prefix and the tinted disc when no profile resolves', () => {
+		const markup = renderHost()
+		expect(markup).toContain('aaaaaaaa')
+		expect(markup).toContain('data-slot="seller-avatar"')
+		expect(markup).toContain('avatar-tint-')
+	})
+})
+
+// ---------------------------------------------------------------------------
+// The listing's own image and price unit reach the card
+// ---------------------------------------------------------------------------
+
+describe('BrowseIndexHost listing truth', () => {
+	test("renders the listing's image tag as the shot, with art only as the fallback", () => {
+		searchData = {
+			...RESULTS,
+			products: [{ ...RESULTS.products[0], image: 'https://example.test/mug.png' }, RESULTS.products[1]],
+		}
+
+		const markup = renderHost()
+		expect(markup).toContain('src="https://example.test/mug.png"')
+		// The imageless listing keeps the deterministic art tile.
+		expect(markup).toContain('widget-product-art-')
+	})
+
+	test('renders a fiat listing in its own unit, never as sats', () => {
+		searchData = {
+			...RESULTS,
+			products: [{ ...RESULTS.products[0], price: 53, currency: 'USD', image: undefined }, RESULTS.products[1]],
+		}
+
+		const markup = renderHost()
+		expect(markup).toContain('53.00')
+		expect(markup).toContain('USD')
+		expect(markup).not.toContain('53 sats')
 	})
 })

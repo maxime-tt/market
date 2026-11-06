@@ -23,7 +23,7 @@
  * downstream state (skeleton, empty, relay-failed, tag-filtered) are unchanged.
  */
 
-import { queryOptions, useQuery } from '@tanstack/react-query'
+import { queryOptions, useQuery, keepPreviousData } from '@tanstack/react-query'
 import { applesauceIo, getReadContext, type NostrFilter } from '../readContext'
 import type { EventFilter } from '@sdk/core/event-store/filter'
 import type { CaughtUpInfo } from '@sdk/core/event-store/read'
@@ -33,7 +33,14 @@ import { isValidHexKey } from '@sdk/core/utils/utils'
 import { filterBlacklistedEvents } from '@sdk/config/blacklist'
 import { buildProductListFilter, isProductListed } from '@sdk/commerce/discovery'
 // Shared shapes and the canonical kind-30402 mappers (also used by the client).
-import { mapProduct, mapProductDetail, type BrowseProduct, type BrowseProductDetail, type BrowseSearchResult } from './browseProductMap'
+import {
+	mapProduct,
+	mapProductDetail,
+	type BrowseFacet,
+	type BrowseProduct,
+	type BrowseProductDetail,
+	type BrowseSearchResult,
+} from './browseProductMap'
 // Canonical read model: sdk/commerce/discovery/productReadModel.ts
 import { getProductCategories, getProductSummary, getProductTitle } from '@sdk/commerce/discovery'
 import { rabbitholeSearch } from './rabbitholeClient'
@@ -48,8 +55,10 @@ export type { BrowseProduct, BrowseProductDetail, BrowseSearchResult }
 export const browseKeys = {
 	all: ['browse'] as const,
 	/** Stream filter for kind-30402 products matching a query/tag (per provider). */
-	search: (filters: { query: string; tag?: string; limit?: number; provider: BrowseSearchProvider }) =>
+	search: (filters: { query: string; tag?: string; filter?: string; limit?: number; provider: BrowseSearchProvider }) =>
 		[...browseKeys.all, 'search', filters] as const,
+	/** The unfiltered facet probe: the term's own market-scoped facet list. */
+	facets: (filters: { query: string; provider: BrowseSearchProvider }) => [...browseKeys.all, 'facets', filters] as const,
 	/** Single product detail by event id (fetch, not stream), scoped to the relays it was seen on. */
 	detail: (id: string, relays?: readonly string[]) => [...browseKeys.all, 'detail', id, relays ?? null] as const,
 	/** A seller's own listings (the seller-profile screen's list stream). */
@@ -171,24 +180,30 @@ async function searchLocal(query: string, tag: string | undefined, limit: number
  *   click-through contract's own deep link, and the state a strip/row click
  *   lands in, where the panel's master pane is the loaded set.
  * With none of the three there is nothing to read, so the query stays off.
+ *
+ * `filter` is a facet's own filter string (from the search frame's `suggested`),
+ * sent verbatim in place of the tag-derived `category_tags = "…"` — so a pill
+ * sends the exact filter the service proposed for it, not a re-derivation.
  */
-export function browseSearchQueryOptions(query: string, tag?: string, limit = 100, openProductId?: string) {
+export function browseSearchQueryOptions(query: string, tag?: string, limit = 100, openProductId?: string, filter?: string) {
 	return queryOptions({
-		queryKey: browseKeys.search({ query, tag, limit, provider: getBrowseSearchProvider() }),
+		queryKey: browseKeys.search({ query, tag, filter, limit, provider: getBrowseSearchProvider() }),
 		queryFn: async (context) => {
 			const term = query.trim()
-			// Nothing to read without a term, a tag, or an open product.
-			if (!term && !tag && !openProductId) return { products: [], eose: [], pending: [] }
+			// Nothing to read without a term, a tag, a filter, or an open product.
+			if (!term && !tag && !filter && !openProductId) return { products: [], eose: [], pending: [] }
 
-			// The search service indexes *queries*; a tag-only browse (the category
-			// row's `See all →`, which carries no term) reads the local stream
-			// instead of POSTing an empty query to it.
-			if (term && getBrowseSearchProvider() === 'rabbithole') {
+			// The search service indexes queries *and* filters: a tag-only browse
+			// (the category row's `See all →`, which carries no term) is a
+			// filter-only request the index answers, so it goes to the provider
+			// too rather than being special-cased to the local stream.
+			if ((term || tag || filter) && getBrowseSearchProvider() === 'rabbithole') {
 				try {
-					// The tag narrows the index to that category (the `#t` source).
-					const filters = tag ? [`category_tags = "${tag}"`] : undefined
+					// The facet's own filter when one is given, else the tag as the
+					// category filter (the `#t` source).
+					const filters = filter ? [filter] : tag ? [`category_tags = "${tag}"`] : undefined
 					return await rabbitholeSearch(
-						{ q: query, limit, filters },
+						{ q: term, limit, filters },
 						{
 							signal: context.signal,
 							baseUrl: getBrowseSearchBaseUrl(),
@@ -205,12 +220,49 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
 
 			return searchLocal(query, tag, limit)
 		},
-		enabled: Boolean(query?.trim()) || Boolean(tag) || Boolean(openProductId),
+		enabled: Boolean(query?.trim()) || Boolean(tag) || Boolean(filter) || Boolean(openProductId),
 	})
 }
 
-export function useBrowseSearch(query: string, tag?: string, limit?: number, openProductId?: string) {
-	return useQuery(browseSearchQueryOptions(query, tag, limit, openProductId))
+export function useBrowseSearch(query: string, tag?: string, limit?: number, openProductId?: string, filter?: string) {
+	return useQuery(browseSearchQueryOptions(query, tag, limit, openProductId, filter))
+}
+
+// ---------------------------------------------------------------------------
+// Facets — the service's own market-scoped counts (the pill source)
+// ---------------------------------------------------------------------------
+
+/**
+ * The facet probe: the same term with **no filter**, read from the service's
+ * index only (`indexOnly`), so the pill list a filtered browse shows cannot
+ * rotate as the visitor selects one of its own pills.
+ *
+ * Only the RabbitHole provider states facets; the local stream indexes none, so
+ * it resolves to an empty list rather than to a client-side count of the loaded
+ * window (which is what the pills used to show, and which is not a market
+ * count). `enabled` is the host's "this is a results state" flag — the idle
+ * index asks for no facets.
+ */
+export function browseFacetsQueryOptions(query: string, enabled: boolean) {
+	return queryOptions({
+		queryKey: browseKeys.facets({ query, provider: getBrowseSearchProvider() }),
+		queryFn: async (context): Promise<BrowseFacet[]> => {
+			if (getBrowseSearchProvider() !== 'rabbithole') return []
+			const result = await rabbitholeSearch(
+				{ q: query.trim(), limit: 1, indexOnly: true },
+				{ signal: context.signal, baseUrl: getBrowseSearchBaseUrl() },
+			)
+			return result.suggested ?? []
+		},
+		enabled: enabled && getBrowseSearchProvider() === 'rabbithole',
+		// Keep the last facet list while the term changes: the pills must not
+		// blink out (or briefly show another scope) mid-read.
+		placeholderData: keepPreviousData,
+	})
+}
+
+export function useBrowseFacets(query: string, enabled: boolean) {
+	return useQuery(browseFacetsQueryOptions(query, enabled))
 }
 
 // ---------------------------------------------------------------------------

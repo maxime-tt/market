@@ -37,6 +37,7 @@ const RESULTS: BrowseSearchResult = { products: [PRODUCT], eose: ['wss://local']
 mock.module('@platform/web/browse/browseQuery', () => ({
 	useBrowseSearch: () => ({ data: RESULTS, isLoading: false, isError: false }),
 	useBrowseProductDetail: () => ({ data: DETAIL, isLoading: false, isError: false, refetch: () => {} }),
+	useBrowseFacets: () => ({ data: null, isLoading: false, isError: false }),
 }))
 
 mock.module('@platform/web/browse/browseIndexFeed', () => ({
@@ -50,6 +51,22 @@ mock.module('@platform/web/auth/authStore', () => ({
 
 mock.module('@platform/web/utils/clipboard', () => ({
 	copyToClipboard: async () => {},
+}))
+
+// The seller-identity seam and the price-display path are reads too; stubbed so
+// the host builds its cards and panel without a QueryClient or NDK behind it.
+mock.module('@platform/web/profiles/profileQuery', () => ({
+	useProfile: () => ({ data: null }),
+	getNormalizedProfileDisplayName: () => null,
+	getNormalizedProfilePicture: () => '',
+}))
+
+mock.module('@platform/web/products/PriceDisplayHost', () => ({
+	usePriceDisplay: () => ({
+		price: { isBitcoinCurrency: false, satsValue: null, fiatValue: null },
+		isLoading: false,
+		selectedCurrency: 'USD',
+	}),
 }))
 
 // The split is a pass-through here: it records the detail element the host
