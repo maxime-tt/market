@@ -51,7 +51,10 @@ describe('the settlement chain', () => {
 	const AMOUNT_SAT = 2_000
 
 	/** Build the aggregator over the real verifier and a memory set store. */
-	const build = (paymentHash: (bolt11: string) => string = () => PAYMENT_HASH) => {
+	const build = (
+		paymentHash: (bolt11: string) => string = () => PAYMENT_HASH,
+		validatePreimage: (bolt11: string, preimage: string) => boolean = () => true,
+	) => {
 		const config: PayAggregatorConfig = {
 			bolt11: {
 				wrapperId: 'bolt11',
@@ -59,7 +62,7 @@ describe('the settlement chain', () => {
 				storeKind: 'bolt11',
 				codec: {
 					paymentHash,
-					validatePreimage: (bolt11, preimage) => bolt11 === REFERENCE && preimage === PREIMAGE,
+					validatePreimage,
 					expiresAt: () => Date.now() + 3_600_000,
 				},
 				ceiling: 1_000_000_000,
@@ -114,6 +117,35 @@ describe('the settlement chain', () => {
 		expect(handle.witness?.kind).toBe('preimage')
 	})
 
+	test('the set reaches `complete` from the rail-validated preimage (owner ruling 2026-11-06)', async () => {
+		const { aggregator, bolt11Wrapper } = build()
+		const { quote, handle } = await pay(aggregator, bolt11Wrapper, 'order-settled')
+
+		await bolt11Wrapper.submit(quote, PREIMAGE)
+		const settled = await aggregator.reconcile(handle.setId)
+
+		// The rail validated the preimage against the invoice's payment hash before it
+		// recorded the settled rung, so its attestation closes the leg. The witness
+		// carries no material to re-derive, which is why the verifier accepts exactly
+		// the rail-validated sources (`manual`, `lnurl_verify`) and nothing else.
+		expect(settled.state).toBe('complete')
+	})
+
+	test('an unknown source claiming a preimage with no material stays unsettled', () => {
+		const verifier = createSettlementVerifier()
+		expect(verifier.verify(PAYMENT_HASH, { kind: 'preimage', source: 'some-other-rail', observedAt: Date.now() })).toBe(false)
+	})
+
+	test('a witness that carries material is still re-derived, not trusted', () => {
+		const verifier = createSettlementVerifier()
+		expect(
+			verifier.verify(PAYMENT_HASH, { kind: 'preimage', source: 'manual', reference: PREIMAGE, observedAt: Date.now() }),
+		).toBe(true)
+		expect(
+			verifier.verify(PAYMENT_HASH, { kind: 'preimage', source: 'manual', reference: 'deadbeef', observedAt: Date.now() }),
+		).toBe(false)
+	})
+
 	test('the witness the rail returns carries no preimage material', async () => {
 		// The gap that blocks the aggregator from settling a bolt11 leg: the rail's
 		// witness is `{kind, source, observedAt}` with **no `reference`**, while the
@@ -130,15 +162,29 @@ describe('the settlement chain', () => {
 		expect(handle.witness?.reference).toBeUndefined()
 	})
 
-	test('the set does NOT settle when the expected hash is the invoice string itself', async () => {
-		// The defect the reverted integration shipped: `expectedPaymentHash` was the
-		// bolt11, so sha256(preimage) could never equal it and no leg could settle.
+	test('the rail settles nothing when its codec cannot validate the preimage', async () => {
+		const { aggregator, bolt11Wrapper } = build(undefined, () => false)
+		const { quote, handle } = await pay(aggregator, bolt11Wrapper, 'order-rail-refused')
+
+		const submitted = await bolt11Wrapper.submit(quote, PREIMAGE)
+		expect(submitted.rung).not.toBe('witnessed-settled')
+
+		const verdict = await aggregator.reconcile(handle.setId)
+		expect(verdict.state).not.toBe('complete')
+	})
+
+	test('a rail-attested preimage settles even when the expected hash disagrees (the ruled tradeoff)', async () => {
+		// Owner ruling 2026-11-06 accepts the rail's attestation. Its consequence is
+		// recorded here rather than left implicit: for this witness kind the aggregator
+		// does not consult `expectedPaymentHash` — the check that matters is the rail's
+		// own, against the invoice's payment hash, at `submit`. Everything else about the
+		// leg (its amount, its claim on that hash, the set's arithmetic) is unchanged.
 		const { aggregator, bolt11Wrapper } = build(() => REFERENCE)
-		const { quote, handle } = await pay(aggregator, bolt11Wrapper, 'order-unsettled')
+		const { quote, handle } = await pay(aggregator, bolt11Wrapper, 'order-attested')
 
 		await bolt11Wrapper.submit(quote, PREIMAGE)
 		const verdict = await aggregator.reconcile(handle.setId)
 
-		expect(verdict.state).not.toBe('complete')
+		expect(verdict.state).toBe('complete')
 	})
 })

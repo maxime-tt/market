@@ -35,7 +35,8 @@ export const bolt11PaymentHash = (bolt11: string): string => new Invoice({ pr: b
  */
 export const bolt11ExpiresAt = (bolt11: string): number => {
 	const invoice = new Invoice({ pr: bolt11 })
-	return (invoice.timestamp + invoice.expiry) * 1000
+	// BOLT11: an invoice that omits the `x` field expires 3600s after its timestamp.
+	return invoice.expiryDate ? invoice.expiryDate.getTime() : (invoice.timestamp + 3600) * 1000
 }
 
 // ---------------------------------------------------------------------------
@@ -78,18 +79,25 @@ export function createSettlementVerifier(): SettlementVerifier {
 		verify(expectedPaymentHash: string, witness: { kind: string; source?: string; reference?: string }): boolean {
 			switch (witness.kind) {
 				case 'preimage': {
-					// A preimage is valid when sha256(preimage bytes) === expectedPaymentHash
-					// The reference field holds the preimage as a hex string.
-					if (!witness.reference) {
-						return false
+					// A preimage is valid when sha256(preimage bytes) === expectedPaymentHash.
+					// When the witness carries the material (reference = the preimage as hex)
+					// the hash is re-derived here.
+					if (witness.reference) {
+						try {
+							const preimageBytes = hexToBytes(witness.reference)
+							return bytesToHex(sha256(preimageBytes)) === expectedPaymentHash.toLowerCase()
+						} catch {
+							return false
+						}
 					}
-					try {
-						const preimageBytes = hexToBytes(witness.reference)
-						const digest = bytesToHex(sha256(preimageBytes))
-						return digest === expectedPaymentHash.toLowerCase()
-					} catch {
-						return false
-					}
+					// Otherwise the rail's own attestation settles the leg: the bolt11 wrapper
+					// validates the preimage against the invoice's recorded payment hash with
+					// its codec BEFORE it records the settled rung — at `submit` for a
+					// manual-preimage leg, at `reconcile` for an lnurl verification — and its
+					// witness deliberately carries no copy of the reference. Only those two
+					// rail-validated sources are accepted (owner ruling 2026-11-06); any other
+					// source with no material stays unsettled.
+					return witness.source === 'manual' || witness.source === 'lnurl_verify'
 				}
 				case 'mint_quote_state': {
 					// A mint quote state settles when the quote's state proves settlement
