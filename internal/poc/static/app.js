@@ -27,7 +27,14 @@ async function api(path, options = {}) {
     const response = await fetch(path, { redirect: "error", credentials: "same-origin", ...options, signal: controller.signal,
       headers: { accept: "application/json", ...(options.body ? { "content-type": "application/json" } : {}), ...(options.headers || {}) } });
     const type = response.headers.get("content-type")?.split(";")[0];
-    if (type !== "application/json") throw new Error(`Unexpected response type from ${path}.`);
+    if (type !== "application/json") {
+      // A non-JSON body means the reverse proxy answered instead of the app --
+      // in practice a 502/504 while the demo is restarting. Report the status,
+      // not a content type the reader cannot act on.
+      throw new Error(response.status >= 500
+        ? `${path} answered ${response.status}; the demo backend is unavailable or restarting.`
+        : `${path} answered ${response.status} ${response.statusText || ""} with ${type || "no content type"}.`.trim());
+    }
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
     return data;
@@ -513,7 +520,11 @@ async function placeBid(auctionId, amount) {
     // Legacy mode: ask the demo coordinator for a committee-signed custodial
     // reservation receipt, then commit the signed bid carrying it.  This is the
     // same funding path the automated journey exercises end to end.
-    const replaces = leader?.reservation_id || "";
+    // A replacement may only be declared when this same bidder is replacing
+    // their OWN reservation (model.go:1168-1177 requires an exact match, and ""
+    // for a cross-bidder outbid).  Sending the leader's reservation here made
+    // every outbid of somebody else's bid fail.
+    const replaces = leader && leader.bidder === state.actor ? (leader.reservation_id || "") : "";
     const receipt = await api("/api/demo/reservation", { method: "POST", body: JSON.stringify({ auction_id: auctionId, bidder: state.actor, amount, replaces_reservation_id: replaces }) });
     const signed = await sign(28641, [["e", auctionId]], { auction_id: auctionId, amount, reservation: receipt });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
