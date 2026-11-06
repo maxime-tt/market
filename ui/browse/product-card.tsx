@@ -175,6 +175,12 @@ export interface ProductCardProps {
 	inList?: boolean
 	/** Heart icon is active/filled. */
 	heartActive?: boolean
+	/**
+	 * The card whose detail panel is open (frame `.card.sel`): a 2px ink rule in
+	 * place of the 1px hairline, an ink outline on the shot, and an "· open"
+	 * note on the seller line.
+	 */
+	selected?: boolean
 	/** Context menu open state. */
 	menuOpen?: boolean
 	/** Callback when heart is toggled. */
@@ -197,12 +203,16 @@ export interface ProductCardProps {
 }
 
 // ---------------------------------------------------------------------------
-// Heart icon — ghost icon button, icon-first
+// Tool icons — ghost icon buttons, icon-first
+//
+// Exported because the split-view detail panel reuses the same product tools
+// (a heart and a three-dots) beside its title; the icons are one implementation
+// shared by the card and the panel.
 // ---------------------------------------------------------------------------
 
-const HeartIcon: FC<{ active?: boolean }> = ({ active }) => (
+export const HeartIcon: FC<{ active?: boolean; className?: string }> = ({ active, className }) => (
 	<svg
-		className="size-3.5"
+		className={cn('size-3.5', className)}
 		viewBox="0 0 24 24"
 		fill={active ? 'currentColor' : 'none'}
 		stroke="currentColor"
@@ -219,8 +229,8 @@ const HeartIcon: FC<{ active?: boolean }> = ({ active }) => (
 // Three-dots icon — ghost icon button, icon-first
 // ---------------------------------------------------------------------------
 
-const ThreeDotsIcon: FC<{ open?: boolean }> = ({ open }) => (
-	<svg className="size-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+export const ThreeDotsIcon: FC<{ open?: boolean; className?: string }> = ({ open, className }) => (
+	<svg className={cn('size-3.5', className)} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 		<circle cx="12" cy="5" r="1.7" />
 		<circle cx="12" cy="12" r="1.7" />
 		<circle cx="12" cy="19" r="1.7" />
@@ -256,6 +266,7 @@ export const ProductCard: FC<ProductCardProps> = ({
 	bidCount,
 	inList,
 	heartActive = inList,
+	selected = false,
 	menuOpen = false,
 	onHeart,
 	onThreeDots,
@@ -303,11 +314,11 @@ export const ProductCard: FC<ProductCardProps> = ({
 			ref={ref}
 			data-slot="product-card"
 			data-testid={`widget-product-card-${id}`}
+			data-selected={selected}
 			className={cn(
 				'relative',
 				'border-t',
-				'border-border-strong',
-				'pt-3',
+				selected ? 'border-t-2 border-fill-ink pt-[9px]' : 'border-border-strong pt-3',
 				'cursor-pointer',
 				'hover:translate-y-[-2px]',
 				'transition-transform',
@@ -326,7 +337,10 @@ export const ProductCard: FC<ProductCardProps> = ({
 					material={material}
 					symbolId={symbolId}
 					ratio="3/2"
-					className="size-full rounded-[6px] border border-border-default text-on-media"
+					className={cn(
+						'size-full rounded-[6px] border border-border-default text-on-media',
+						selected && 'outline-2 outline-offset-2 outline-fill-ink',
+					)}
 				/>
 
 				{/* Bid pill — auctions */}
@@ -383,6 +397,7 @@ export const ProductCard: FC<ProductCardProps> = ({
 				/>
 				<span data-slot="seller-name" className="truncate flex-1">
 					{seller}
+					{selected && <span data-slot="card-open-note"> · open</span>}
 				</span>
 				{/* Actions — icon-first ghost buttons, no outline */}
 				<div data-slot="tools" data-testid={`widget-product-card-tools-${id}`} className="relative flex gap-0.5 shrink-0">
