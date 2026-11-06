@@ -12,9 +12,10 @@ import {
 	setAppSettings,
 } from '../runtime'
 import { getEventHandler } from '../EventHandler'
-import type { PublicAppConfig } from '@sdk/config/instance-config'
+import type { PublicAppConfigWithBrowseSearch } from '@platform/browseSearchConfig'
 import { PUBLIC_CONFIG_SCHEMA_VERSION } from '@sdk/core/publicConfig'
 import { AppSettingsSchema } from '@sdk/config/schemas/app'
+import { resolveBrowseSearchSettings } from './browseSearch'
 import type { BunRoutes } from './types'
 
 interface BootstrapSetupRequest {
@@ -32,7 +33,7 @@ export const configRoutes: BunRoutes = {
 		GET: () => {
 			const appSettings = getAppSettings()
 			const stage = determineStage()
-			const config: PublicAppConfig = {
+			const config: PublicAppConfigWithBrowseSearch = {
 				schemaVersion: PUBLIC_CONFIG_SCHEMA_VERSION,
 				...getInstanceConfig(),
 				appRelay: RELAY_URL as string,
@@ -44,6 +45,10 @@ export const configRoutes: BunRoutes = {
 				needsSetup: !appSettings,
 				serverReady: isEventHandlerReady(),
 				externalZapRelaysEnabled: stage === 'production' || (stage === 'development' && process.env.LOCAL_RELAY_ONLY !== 'true'),
+				// Read from the SERVER's environment: the client cannot see the server's
+				// loopback, so the host resolves the provider and the base it must post to.
+				// Unset resolves to `local` — the pre-existing behaviour.
+				browseSearch: resolveBrowseSearchSettings(),
 			}
 			return Response.json(config)
 		},
