@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { OrderDetailComponent } from '@platform/web/orders/OrderDetailComponent'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { useOrderById } from '@platform/web/orders/ordersQuery'
 import { Card, CardContent } from '@ui/primitives/card'
 import { Skeleton } from '@ui/primitives/skeleton'

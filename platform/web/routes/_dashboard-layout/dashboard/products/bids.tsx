@@ -37,7 +37,7 @@ import {
 	getBidSellerPubkey,
 	useAuctionBidsByBidder,
 } from '@platform/web/auctions/auctionsQuery'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { useQueries } from '@tanstack/react-query'

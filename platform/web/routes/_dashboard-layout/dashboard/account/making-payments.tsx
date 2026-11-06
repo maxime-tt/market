@@ -19,7 +19,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ChevronDownIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshCwIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/making-payments')({

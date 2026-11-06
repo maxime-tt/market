@@ -31,7 +31,7 @@ import {
 	type RichPaymentDetail,
 } from '@platform/web/payments/paymentQuery'
 import { getProductId, getProductTitle, useProductsByPubkey } from '@platform/web/products/productQuery'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { createFileRoute } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { ClipboardIcon, GlobeIcon, PackageIcon, PlusIcon, StarIcon, StoreIcon, TrashIcon, ZapIcon } from 'lucide-react'

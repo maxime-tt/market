@@ -31,8 +31,8 @@ import {
 	useUserRole,
 } from '@platform/web/app-settings/appSettingsQuery'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
-import { npubToHex } from '@platform/web/routes/setup'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
+import { npubToHex } from '@platform/web/app/pubkeyCodec'
 import { createFileRoute } from '@tanstack/react-router'
 import { ArrowDown, ArrowUp, Globe, Shield, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'

@@ -11,6 +11,7 @@ import { authActions, getActiveSignerCapability } from '@platform/web/auth/authS
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
+import { formatPubkeyForDisplay, npubToHex } from '@platform/web/app/pubkeyCodec'
 import { useForm, useStore } from '@tanstack/react-form'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
@@ -18,36 +19,6 @@ import { nip19 } from 'nostr-tools'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
-
-function npubToHex(pk: string): string {
-	if (pk.startsWith('npub1')) {
-		const { type, data } = nip19.decode(pk)
-		if (type === 'npub') return data as string
-		throw new Error('Invalid npub')
-	} else if (/^[0-9a-f]{64}$/i.test(pk)) {
-		return pk.toLowerCase()
-	}
-	throw new Error('Invalid public key: must be npub or 64 hex chars')
-}
-
-function hexToNpub(pk: string): string {
-	if (pk.startsWith('npub1')) {
-		return pk
-	} else if (/^[0-9a-f]{64}$/i.test(pk)) {
-		return nip19.npubEncode(pk)
-	}
-	throw new Error('Invalid public key: must be npub or 64 hex chars')
-}
-
-function formatPubkeyForDisplay(pk: string): string {
-	try {
-		return hexToNpub(pk)
-	} catch (e) {
-		return pk // Return as-is if invalid
-	}
-}
-
-export { npubToHex, hexToNpub, formatPubkeyForDisplay }
 
 export const Route = createFileRoute('/setup')({
 	component: SetupRoute,

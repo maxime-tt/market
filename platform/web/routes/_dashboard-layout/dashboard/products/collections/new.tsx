@@ -1,6 +1,6 @@
 import { CollectionFormContent } from '@platform/web/collections/NewCollectionContent'
 import { collectionFormActions } from '@platform/web/collections/collectionFormStore'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect } from 'react'
 

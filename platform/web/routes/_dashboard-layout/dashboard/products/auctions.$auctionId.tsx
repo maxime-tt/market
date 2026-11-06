@@ -79,7 +79,7 @@ import {
 	usePrivateAuctionClaimForOrder,
 } from '@platform/web/auctions/auctionsQuery'
 import { type OrderWithRelatedEvents, useOrderById } from '@platform/web/orders/ordersQuery'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'

@@ -2,7 +2,7 @@ import { type ConversationItemData, ConversationListItemHost } from '@platform/w
 import { authStore } from '@platform/web/auth/authStore'
 import { readMarks } from '@platform/web/notifications'
 import { useConversationsList } from '@platform/web/messaging/messagesQuery'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { LoadingState } from '@ui/shared/loading-state'
 import { createFileRoute, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'

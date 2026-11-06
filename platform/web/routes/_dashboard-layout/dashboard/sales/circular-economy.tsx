@@ -6,7 +6,7 @@ import { deriveInitialSharesFromStored } from '@platform/web/v4v/splits'
 import { authStore } from '@platform/web/auth/authStore'
 import { useV4VManager } from '@platform/web/v4v/useV4VManager'
 import { useV4VShares } from '@platform/web/v4v/v4vQuery'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useMemo } from 'react'
@@ -14,7 +14,7 @@ import { useMemo } from 'react'
 // Sales-only emoji animation styles. Imported here (at the call site) rather
 // than inside the agnostic V4VManager so the component stays free of
 // product-specific styling.
-import '@platform/web/routes/_dashboard-layout/dashboard/sales/emoji-animations.css'
+import '@platform/web/v4v/emoji-animations.css'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/circular-economy')({
 	component: CircularEconomyComponent,

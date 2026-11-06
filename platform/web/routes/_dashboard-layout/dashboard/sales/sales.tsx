@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { readMarks } from '@platform/web/notifications'
 import { useOrdersBySeller } from '@platform/web/orders/ordersQuery'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { filterAndSortOrderListings } from '@sdk/commerce/orders'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'

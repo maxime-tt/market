@@ -32,13 +32,8 @@ export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
 })
 
-// Custom hook to manage dashboard title using uiStore
-export function useDashboardTitle(title: string) {
-	React.useEffect(() => {
-		uiActions.setDashboardTitle(title)
-		return () => uiActions.setDashboardTitle('') // Reset to default on unmount
-	}, [title])
-}
+// Custom hook to manage dashboard title using uiStore lives in `platform/web/app/dashboardTitle.ts`:
+// a route module is composition only, and 30 dashboard routes import that hook.
 
 // Component to show when user is not authenticated
 function LoginPrompt() {

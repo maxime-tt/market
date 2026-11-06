@@ -1,6 +1,6 @@
 import { PageHeader } from '@ui/layout/page-header'
 import { RelayManagerHost } from '@platform/web/relays/RelayManagerHost'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { createFileRoute } from '@tanstack/react-router'
 import { Globe } from 'lucide-react'
 
