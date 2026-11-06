@@ -31,7 +31,7 @@ import {
 	getShippingWeightLimits,
 	useShippingOptionsByPubkey,
 } from '@platform/web/shipping/shippingQuery'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { createFileRoute } from '@tanstack/react-router'
 

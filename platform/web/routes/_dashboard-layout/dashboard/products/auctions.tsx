@@ -17,7 +17,7 @@ import {
 	useAuctionSettlementsForList,
 } from '@platform/web/auctions/auctionsQuery'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { parseSettlementEvent } from '@sdk/commerce/auctions/schemas/settlementEvents'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'

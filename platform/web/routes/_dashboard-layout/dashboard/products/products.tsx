@@ -20,7 +20,7 @@ import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 /** The product read model's own event type, derived so no NDK type name is written here. */
 type DashboardProduct = NonNullable<Awaited<ReturnType<typeof fetchProductSmart>>>
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'

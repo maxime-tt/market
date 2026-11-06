@@ -2,7 +2,7 @@ import { CollectionFormContent } from '@platform/web/collections/CollectionFormC
 import { authStore } from '@platform/web/auth/authStore'
 import { collectionFormActions } from '@platform/web/collections/collectionFormStore'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@platform/web/collections/collectionQuery'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'

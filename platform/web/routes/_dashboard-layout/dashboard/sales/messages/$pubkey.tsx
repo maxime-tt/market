@@ -10,7 +10,7 @@ import { sendChatMessage, useConversationMessages } from '@platform/web/messagin
 import { useOrdersBySeller } from '@platform/web/orders/ordersQuery'
 import { messageKeys } from '@sdk/core/query/queryKeyFactory'
 import { getSellerPubkey } from '@platform/web/orders/orderDetailHelpers'
-import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { useProfileName } from '@platform/web/profiles/profileQuery'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
