@@ -1,0 +1,28 @@
+[Unit]
+Description=Plebeian auctions Slice 1 relay (nak serve, loopback transport)
+Documentation=file:///home/admin_maxime/work/auctions-simplify/SLICE-1-RELAY-BRIEF.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# USER unit (systemctl --user).  Install to ~/.config/systemd/user/ and enable
+# with `systemctl --user enable --now plebeian-auctions-relay.service`.  It is
+# deliberately NOT installed system-wide and does not touch the running
+# auctions-mvp-demo.service.
+WorkingDirectory=%h/work/auctions-simplify
+Environment=RELAY_HOST=127.0.0.1
+Environment=RELAY_PORT=7777
+ExecStart=%h/work/auctions-simplify/deploy/relay/run-relay.sh
+Restart=always
+RestartSec=2s
+# The relay is in-memory and disposable: on stop, everything it held is gone, and
+# that is fine -- the chain is the durable record.  Keep it light.
+MemoryMax=128M
+TasksMax=64
+NoNewPrivileges=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+
+[Install]
+WantedBy=default.target

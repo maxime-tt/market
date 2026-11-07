@@ -844,6 +844,42 @@ func decodeBody(request *http.Request, target any) error {
 	return requireEOF(decoder)
 }
 
+// BroadcastOutcome is the commit result of one transaction, in the shape the
+// relay observer needs and nothing more.  It is the transport-free projection of
+// CometBFT's broadcast_tx_commit result that both the HTTP handler and the
+// observer agree on.
+type BroadcastOutcome struct {
+	Height      int64
+	CheckCode   uint32
+	DeliverCode uint32
+	TxHash      string
+}
+
+// BroadcastRawEvent submits an already-encoded transaction to the first healthy
+// CometBFT node, exactly as POST /api/event does.  It exists so the relay
+// observer reuses the same node selection and the same result interpretation as
+// the HTTP path: one admission route, two transports.  It performs no
+// application-level validation of its own; CheckTx does that.
+func (server *APIServer) BroadcastRawEvent(ctx context.Context, raw []byte) (BroadcastOutcome, error) {
+	client, err := server.firstHealthyClient(ctx)
+	if err != nil {
+		return BroadcastOutcome{}, err
+	}
+	result, err := client.BroadcastTxCommit(ctx, cmttypes.Tx(raw))
+	if err != nil {
+		if rejected, ok := applicationRejectionLog(err); ok {
+			return BroadcastOutcome{}, fmt.Errorf("application rejected transaction: %s", rejected)
+		}
+		return BroadcastOutcome{}, fmt.Errorf("broadcast failed: %w", err)
+	}
+	return BroadcastOutcome{
+		Height:      result.Height,
+		CheckCode:   result.CheckTx.Code,
+		DeliverCode: result.TxResult.Code,
+		TxHash:      strings.ToUpper(hex.EncodeToString(result.Hash)),
+	}, nil
+}
+
 func writeError(response http.ResponseWriter, status int, err error) {
 	if err == nil {
 		err = errors.New("unknown error")

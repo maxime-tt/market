@@ -394,6 +394,15 @@ func RunSite(ctx context.Context, root, listen string) error {
 	if err := waitForValidators(ctx, api, wanted, 35*time.Second); err != nil {
 		return err
 	}
+	// The relay transport is opt-in through POC_RELAY_URL.  Started only after
+	// the validators are reachable, because an observer that cannot broadcast is
+	// just a reader; when the variable is unset this is a no-op and POST
+	// /api/event remains the only admission route, exactly as before.
+	stopObserver, err := startRelayObserverIfConfigured(ctx, api)
+	if err != nil {
+		return err
+	}
+	defer stopObserver()
 	handler, err := api.Handler()
 	if err != nil {
 		return err
@@ -525,6 +534,13 @@ func RunLocalDemo(ctx context.Context, root, listen, committeePublicKey string) 
 	if err := waitForValidators(ctx, api, 4, 35*time.Second); err != nil {
 		return err
 	}
+	// Opt-in relay transport, same contract as RunSite: unset POC_RELAY_URL means
+	// no observer and unchanged behaviour.
+	stopObserver, err := startRelayObserverIfConfigured(ctx, api)
+	if err != nil {
+		return err
+	}
+	defer stopObserver()
 	handler, err := api.Handler()
 	if err != nil {
 		return err

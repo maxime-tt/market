@@ -56,6 +56,14 @@ func SignNostrEvent(privateKey *btcec.PrivateKey, createdAt int64, kind int, tag
 	if privateKey == nil {
 		return SignedEvent{}, errors.New("private key is required")
 	}
+	// NIP-01 hashes the tags array; an absent array is [], never null.  A nil Go
+	// slice marshals to JSON null, which third-party verifiers (nak, go-nostr)
+	// reject as a non-canonical event even though our own serializer computed a
+	// self-consistent id.  Normalising to an empty slice keeps the event valid
+	// across every NIP-01 implementation on the relay.
+	if tags == nil {
+		tags = [][]string{}
+	}
 	event := SignedEvent{
 		PubKey:    hex.EncodeToString(schnorr.SerializePubKey(privateKey.PubKey())),
 		CreatedAt: createdAt,
