@@ -10719,6 +10719,26 @@ ${e}}` : `{${i.join(",")}}`;
     locked() {
       return this.read("locked", []);
     }
+    readLockedBids() {
+      const raw = this.storage.get("lockedBids");
+      if (!raw)
+        return {};
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return {};
+      }
+    }
+    recordLockedBid(bidId, proofs) {
+      if (!bidId || !proofs.length)
+        return;
+      const bids = this.readLockedBids();
+      bids[bidId] = proofs;
+      this.storage.set("lockedBids", JSON.stringify(bids));
+    }
+    lockedForBid(bidId) {
+      return this.readLockedBids()[bidId] ?? [];
+    }
     balance() {
       return this.spendable().reduce((total, proof) => total + Number(proof.amount), 0);
     }
@@ -10784,8 +10804,44 @@ ${e}}` : `{${i.join(",")}}`;
         refundPublicKey,
         amount,
         mintUrl: this.mintUrl,
-        proofs: bindings
+        proofs: bindings,
+        lockedProofs: send
       };
+    }
+    async refundBid(bidId, event, endpoint = "/api/demo/mint-refund") {
+      const proofs = this.lockedForBid(bidId);
+      if (!proofs.length) {
+        throw new Error("this browser holds no locked proofs for that bid");
+      }
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          bid_id: bidId,
+          proofs: proofs.map((proof) => ({
+            amount: Number(proof.amount),
+            id: proof.id,
+            secret: proof.secret,
+            C: proof.C,
+            dleq: proof.dleq
+          })),
+          event
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `refund failed (HTTP ${response.status})`);
+      }
+      const fresh = data.proofs ?? [];
+      if (!fresh.length)
+        throw new Error("the coordinator returned no refund proofs");
+      const spent = new Set(proofs.map((proof) => proof.secret));
+      this.storage.set("locked", JSON.stringify(this.locked().filter((proof) => !spent.has(proof.secret))));
+      const bids = this.readLockedBids();
+      delete bids[bidId];
+      this.storage.set("lockedBids", JSON.stringify(bids));
+      this.storage.set("spendable", JSON.stringify([...this.spendable(), ...fresh]));
+      return { amount: fresh.reduce((total, proof) => total + Number(proof.amount), 0) };
     }
     lockedUntil() {
       const raw = this.storage.get("lockedUntil");
@@ -10802,6 +10858,7 @@ ${e}}` : `{${i.join(",")}}`;
       const released = locked.reduce((total, proof) => total + Number(proof.amount), 0);
       this.storage.set("spendable", JSON.stringify([...this.spendable(), ...locked]));
       this.storage.set("locked", JSON.stringify([]));
+      this.storage.set("lockedBids", JSON.stringify({}));
       this.storage.set("lockedUntil", "0");
       return { released, reclaimableAt: 0 };
     }

@@ -39,10 +39,10 @@ const (
 	// Cashu proofs at the mint to a NUT-11 P2PK condition, and the receipt
 	// carries the proof references the mint can be asked about (NUT-07).
 	// It is the first funding mode whose backing is not a signed IOU.
-	FundingModeCashuLock = "cashu_lock_v1"
-	ApplicationAuthorityLegacy      = "legacy_ed25519_v1"
-	ApplicationAuthorityFrostCashu  = "frost_cashu_v4"
-	frostLegacyNotePublicPinDomain  = "PLEBEIAN_FRIDAY_DISABLED_LEGACY_NOTE_AUTHORITY_V1"
+	FundingModeCashuLock           = "cashu_lock_v1"
+	ApplicationAuthorityLegacy     = "legacy_ed25519_v1"
+	ApplicationAuthorityFrostCashu = "frost_cashu_v4"
+	frostLegacyNotePublicPinDomain = "PLEBEIAN_FRIDAY_DISABLED_LEGACY_NOTE_AUTHORITY_V1"
 
 	// EmergencyRecoverySeconds is measured from the maximum possible auction
 	// end, not the current end.  The cooperative committee stops new MAIN
@@ -282,22 +282,22 @@ type Auction struct {
 }
 
 type State struct {
-	Schema                  string                            `json:"schema"`
-	ApplicationAuthority    string                            `json:"application_authority"`
-	AuthNetworkID           string                            `json:"auth_network_id"`
-	ChainID                 string                            `json:"chain_id"`
-	Height                  int64                             `json:"height"`
-	MintURL                 string                            `json:"mint_url"`
-	MintPublicKey           string                            `json:"mint_public_key"`
-	CashuMintURL            string                            `json:"cashu_mint_url"`
-	CommitteePublicKey      string                            `json:"committee_public_key"`
-	Issued                  map[string]bool                   `json:"issued"`
-	Notes                   map[string]Note                   `json:"notes"`
-	Auctions                map[string]Auction                `json:"auctions"`
-	Bids                    map[string]Bid                    `json:"bids"`
-	Locks                   map[string]Lock                   `json:"locks"`
-	Operations              map[string]bool                   `json:"operations"`
-	CashuLocks              map[string]CashuLockReceipt       `json:"cashu_locks"`
+	Schema               string                      `json:"schema"`
+	ApplicationAuthority string                      `json:"application_authority"`
+	AuthNetworkID        string                      `json:"auth_network_id"`
+	ChainID              string                      `json:"chain_id"`
+	Height               int64                       `json:"height"`
+	MintURL              string                      `json:"mint_url"`
+	MintPublicKey        string                      `json:"mint_public_key"`
+	CashuMintURL         string                      `json:"cashu_mint_url"`
+	CommitteePublicKey   string                      `json:"committee_public_key"`
+	Issued               map[string]bool             `json:"issued"`
+	Notes                map[string]Note             `json:"notes"`
+	Auctions             map[string]Auction          `json:"auctions"`
+	Bids                 map[string]Bid              `json:"bids"`
+	Locks                map[string]Lock             `json:"locks"`
+	Operations           map[string]bool             `json:"operations"`
+	CashuLocks           map[string]CashuLockReceipt `json:"cashu_locks"`
 	// CashuProofUses maps a proof reference (the x coordinate of Y) to the
 	// token digest of the bid that committed it. This is the deterministic,
 	// consensus-enforced half of mint-backed funding: one proof can never fund
@@ -307,7 +307,7 @@ type State struct {
 	// an existing chain impossible to replay. Omitted while empty, a chain that
 	// never used mint-backed funding hashes exactly as it did before this field
 	// existed.
-	CashuProofUses map[string]string `json:"cashu_proof_uses,omitempty"`
+	CashuProofUses          map[string]string                 `json:"cashu_proof_uses,omitempty"`
 	CustodyReservations     map[string]CustodyReservation     `json:"custody_reservations"`
 	IntegratedFundings      map[string]IntegratedFunding      `json:"integrated_fundings"`
 	IntegratedProofUses     map[string]string                 `json:"integrated_proof_uses"`
@@ -832,6 +832,23 @@ func ValidateForMempool(prior State, tx Transaction, policy Policy, mintSeed []b
 			return errors.New("auction has not ended")
 		}
 		return nil
+	}
+	// A mint-backed bid is refunded by the cooperative mint swap, which returns
+	// the bidder's own proofs. The legacy KindRefund path issues a signed IOU
+	// note instead, so admitting it for a cashu-backed bid would pay the bidder
+	// twice: once in fresh mint proofs and once in a note, while the mint proofs
+	// are still theirs. applyRefund cannot be changed -- it runs inside the
+	// deterministic transition and replaying committed blocks through a new rule
+	// would fork the chain -- so the refusal lives here, in local admission.
+	// This is an honest-node property, not a consensus guarantee; the mint
+	// remains the backstop against spending the same proof twice.
+	if tx.Type == "event" && tx.Event != nil && tx.Event.Kind == KindRefund {
+		var content refundContent
+		if err := decodeStrictContent(tx.Event.Content, &content); err == nil {
+			if bid, ok := prior.Bids[content.BidID]; ok && bid.CashuTokenSHA256 != "" {
+				return errors.New("legacy refund refused: bid is mint-backed (cashu_token_sha256 set); the cooperative mint swap returns the proofs, so a legacy note would double-credit the bidder")
+			}
+		}
 	}
 	// CheckTx has no proposed block timestamp. Use only the last committed
 	// consensus time for advisory admission; a client-controlled Nostr timestamp

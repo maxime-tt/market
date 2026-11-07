@@ -81,6 +81,10 @@ type APIServer struct {
 	runtimeReadyProbe      func(context.Context) bool
 	healthPinsSHA256       string
 	observerNodeID         string
+	// demoStateSnapshot, when set, replaces the ABCI state query. Production
+	// leaves it nil and reads committed state through the node; tests use it to
+	// drive the coordinator without a live CometBFT cluster.
+	demoStateSnapshot func(context.Context) (State, error)
 }
 
 const browserReleasePinsPath = "/etc/plebeian-auctions-friday/browser-r20-pins.json"
@@ -320,6 +324,7 @@ func (server *APIServer) Handler() (http.Handler, error) {
 		if server.demoCommitteeKey != nil {
 			mux.HandleFunc("POST /api/demo/reservation", server.demoReservation)
 			mux.HandleFunc("POST /api/demo/mint-lock", server.demoMintLock)
+			mux.HandleFunc("POST /api/demo/mint-refund", server.demoMintRefund)
 		}
 	}
 	if server.manifest.Schema == "PlebeianAuctionsPOCNetworkV4" {

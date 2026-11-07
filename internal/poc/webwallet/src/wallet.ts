@@ -64,6 +64,12 @@ export interface BidFunding {
    */
   proofs: Array<{ amount: number; id: string; Y: string; C: string;
                   dleq: { e: string; s: string; r: string } }>;
+  /**
+   * The exact proofs that were locked, kept in memory so the browser can hand
+   * them to the cooperative refund endpoint later. They are already in
+   * `locked` storage; this is the bid association, not a second copy.
+   */
+  lockedProofs: Proof[];
 }
 
 /**
@@ -127,6 +133,30 @@ export class BidderWallet {
   /** Proofs already locked to the committee for a bid. */
   locked(): Proof[] {
     return this.read("locked", []);
+  }
+
+  /** The bid id -> locked proofs association, so a refund can name its bid. */
+  private readLockedBids(): Record<string, Proof[]> {
+    const raw = this.storage.get("lockedBids");
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw) as Record<string, Proof[]>;
+    } catch {
+      return {};
+    }
+  }
+
+  /** Records which locked proofs back a committed bid. */
+  recordLockedBid(bidId: string, proofs: Proof[]): void {
+    if (!bidId || !proofs.length) return;
+    const bids = this.readLockedBids();
+    bids[bidId] = proofs;
+    this.storage.set("lockedBids", JSON.stringify(bids));
+  }
+
+  /** The proofs this browser locked for one bid, or an empty list. */
+  lockedForBid(bidId: string): Proof[] {
+    return this.readLockedBids()[bidId] ?? [];
   }
 
   // cashu-ts carries Proof.amount as a string, so these must coerce: `0 + "128"`
@@ -239,7 +269,54 @@ export class BidderWallet {
       amount,
       mintUrl: this.mintUrl,
       proofs: bindings,
+      lockedProofs: send,
     };
+  }
+
+  /**
+   * Claims a displaced bid's locked proofs through the coordinator's
+   * cooperative swap. The signed KindRefund event authorizes the request; the
+   * coordinator verifies it against committed state and the mint, swaps the
+   * proofs to this bidder's own Nostr key, and returns fresh proofs. They are
+   * imported into `spendable` and the old proofs leave `locked`.
+   *
+   * The event is NOT submitted to consensus: a legacy KindRefund for a
+   * mint-backed bid is refused at admission precisely because it would issue a
+   * second, note-shaped payout for the same value.
+   */
+  async refundBid(bidId: string, event: unknown, endpoint = "/api/demo/mint-refund"): Promise<{ amount: number }> {
+    const proofs = this.lockedForBid(bidId);
+    if (!proofs.length) {
+      throw new Error("this browser holds no locked proofs for that bid");
+    }
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        bid_id: bidId,
+        proofs: proofs.map((proof) => ({
+          amount: Number(proof.amount), id: proof.id, secret: proof.secret, C: proof.C,
+          dleq: proof.dleq,
+        })),
+        event,
+      }),
+    });
+    const data = (await response.json().catch(() => ({}))) as { proofs?: Proof[]; error?: string };
+    if (!response.ok) {
+      throw new Error(data.error || `refund failed (HTTP ${response.status})`);
+    }
+    const fresh = data.proofs ?? [];
+    if (!fresh.length) throw new Error("the coordinator returned no refund proofs");
+
+    // Remove exactly the proofs that were swapped, and only that bid's
+    // association. A raise may have locked more proofs since; those stay.
+    const spent = new Set(proofs.map((proof) => proof.secret));
+    this.storage.set("locked", JSON.stringify(this.locked().filter((proof) => !spent.has(proof.secret))));
+    const bids = this.readLockedBids();
+    delete bids[bidId];
+    this.storage.set("lockedBids", JSON.stringify(bids));
+    this.storage.set("spendable", JSON.stringify([...this.spendable(), ...fresh]));
+    return { amount: fresh.reduce((total, proof) => total + Number(proof.amount), 0) };
   }
 
   /** When the currently locked proofs become reclaimable by the bidder. */
@@ -272,6 +349,7 @@ export class BidderWallet {
     const released = locked.reduce((total, proof) => total + Number(proof.amount), 0);
     this.storage.set("spendable", JSON.stringify([...this.spendable(), ...locked]));
     this.storage.set("locked", JSON.stringify([]));
+    this.storage.set("lockedBids", JSON.stringify({}));
     this.storage.set("lockedUntil", "0");
     return { released, reclaimableAt: 0 };
   }

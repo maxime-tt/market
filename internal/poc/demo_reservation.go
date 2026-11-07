@@ -67,6 +67,9 @@ func loadDemoCommitteeKey(root string) (*btcec.PrivateKey, string, error) {
 // query the /api/state handler serves, so the coordinator reasons about exactly
 // what consensus has accepted rather than a cached copy.
 func (server *APIServer) demoCommittedState(ctx context.Context) (State, error) {
+	if server.demoStateSnapshot != nil {
+		return server.demoStateSnapshot(ctx)
+	}
 	client, err := server.firstHealthyClient(ctx)
 	if err != nil {
 		return State{}, err

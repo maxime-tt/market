@@ -6,6 +6,7 @@ const state = {
   readinessPromise: null, readinessNextAt: 0, readinessFailures: 0,
   maintenanceNextAt: 0, maintenanceFailures: 0, refreshStartedAt: 0,
   bidDrafts: new Map(), expiredPrelockBids: [], auctionPayoutAvailability: new Map(),
+  refundAttempts: new Map(),
 };
 const byId = (id) => document.getElementById(id);
 const short = (value) => value ? `${value.slice(0, 8)}…${value.slice(-6)}` : "—";
@@ -333,6 +334,43 @@ async function runExclusiveMaintenance(capturedScope, operation) {
     .finally(() => { state.maintenancePromise = null; });
   return state.maintenancePromise;
 }
+// Claims every displaced bid this browser still holds proofs for. The
+// coordinator swaps the locked proofs back to this bidder's own Nostr key and
+// returns fresh ones, which the wallet imports. The signed KindRefund event is
+// the authorization for that request; it is deliberately NOT posted to
+// /api/event, where a legacy refund of a mint-backed bid is refused.
+async function claimRefunds({ manual = false } = {}) {
+  if (!state.actor || !state.signer || !mintBackedAvailable()) return { claimed: 0, amount: 0 };
+  const wallet = bidderWallet();
+  const bids = Object.values(state.view?.state?.bids || {});
+  const locks = state.view?.state?.locks || {};
+  let claimed = 0, amount = 0;
+  for (const bid of bids) {
+    if (bid.bidder !== state.actor) continue;
+    const lock = locks[bid.id];
+    if (!lock || lock.status !== "refundable") continue;
+    if (!wallet.lockedForBid(bid.id).length) continue;
+    const last = state.refundAttempts.get(bid.id) || 0;
+    if (!manual && Date.now() - last < 15000) continue;
+    state.refundAttempts.set(bid.id, Date.now());
+    try {
+      const event = await sign(28642, [["e", bid.auction_id]], { bid_id: bid.id });
+      const result = await wallet.refundBid(bid.id, event);
+      claimed += 1; amount += result.amount;
+      state.refundAttempts.delete(bid.id);
+    } catch (error) {
+      // A transient mint or coordinator failure is retried on a later refresh;
+      // a manual attempt always reports why it failed.
+      if (manual) message(`Refund for ${short(bid.id)} failed: ${error.message}`, "warning");
+    }
+  }
+  if (claimed) {
+    message(`Claimed ${claimed} outbid refund(s): ${amount} sats returned to this wallet.`, "success");
+    await renderWalletBalance();
+  }
+  return { claimed, amount };
+}
+
 async function refresh() {
   if (state.refreshPromise) {
     // Retry only once the pending attempt has had longer than its own deadline
@@ -377,6 +415,13 @@ async function refresh() {
         }
       }));
     } else state.wallet = null;
+    // A displaced bidder's browser claims its own refund automatically. This
+    // runs after committed state is read, so it only acts on a lock consensus
+    // has actually marked refundable.
+    if (state.actor && state.signer && mintBackedAvailable()) {
+      await claimRefunds();
+      if (generation !== state.generation || capturedScope !== scope()) return;
+    }
     render();
   })().catch((error) => { message(error.message, "error"); throw error; }).finally(() => { state.refreshPromise = null; });
   return state.refreshPromise;
@@ -591,6 +636,9 @@ async function placeBid(auctionId, amount) {
       proof_state_refs: funding.proofStateRefs, proofs: funding.proofs }) });
     const signed = await sign(28641, [["e", auctionId]], { auction_id: auctionId, amount, cashu_lock: receipt });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
+    // Bind the proofs this browser just locked to the committed bid id, so a
+    // later displacement can hand exactly this set to the refund endpoint.
+    wallet.recordLockedBid(signed.id, funding.lockedProofs);
     message(`Bid committed at height ${result.height} (mint-backed lock, proofs held by this browser).`, "success");
     await refresh(); await renderWalletBalance(); return;
   }
@@ -640,7 +688,11 @@ byId("login").onclick=()=>connect().catch((error)=>message(error.message,"error"
 byId("disconnect").onclick=()=>{disconnect();render();message("Disconnected. Reconnect to recover returns and payouts.");};
 byId("demo-login").onclick=()=>connectDemo().catch((error)=>message(error.message,"error"));
 byId("refresh").onclick=()=>refresh().catch(()=>undefined);
-byId("wallet-release").onclick=()=>performAction("wallet-release",byId("wallet-release"),"Reclaiming…",async()=>{
+byId("wallet-release").onclick=()=>performAction("wallet-release",byId("wallet-release"),"Claiming…",async()=>{
+  // First try the cooperative refund for any bid this browser was displaced
+  // from. That returns the proofs immediately, without waiting for locktime.
+  const claimed = await claimRefunds({ manual: true });
+  if (claimed.claimed > 0) return;
   const wallet = bidderWallet();
   const outcome = wallet.reclaimLocked();
   if (outcome.released > 0) {
