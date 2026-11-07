@@ -33,6 +33,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -48,6 +49,9 @@ type demoMintLockBody struct {
 	RefundPublicKey string   `json:"refund_public_key"`
 	TokenSHA256     string   `json:"token_sha256"`
 	ProofStateRefs  []string `json:"proof_state_refs"`
+	// The proofs themselves, each with its DLEQ. Without these the amount is an
+	// assertion; with them it is arithmetic.
+	Proofs []MintProofBinding `json:"proofs"`
 }
 
 // demoMintLockMargin is how long after the auction ends the committee lock stays
@@ -162,11 +166,50 @@ func (server *APIServer) demoMintLock(response http.ResponseWriter, request *htt
 	// not exist, or are already spent, would be the coordinator asserting
 	// something untrue -- which is precisely the failure this mode exists to
 	// remove.
-	if err := VerifyProofsIssuedByMint(server.demoMintIssuance, receipt.ProofStateRefs); err != nil {
+	// Prove the backing before signing anything. NUT-07 cannot establish that a
+	// proof exists -- it answers UNSPENT for points never issued -- so the sum of
+	// independently verified DLEQ proofs is what carries weight. A receipt signed
+	// over arithmetic that does not add up is the coordinator attesting to
+	// something false, which is the failure this mode exists to remove.
+	if len(body.Proofs) == 0 {
+		writeError(response, http.StatusBadRequest, errors.New("demo mint lock requires the proofs themselves, with their DLEQ proofs, not only references"))
+		return
+	}
+	if len(body.Proofs) != len(body.ProofStateRefs) {
+		writeError(response, http.StatusBadRequest, errors.New("demo mint lock proof set and reference set must be the same size"))
+		return
+	}
+	keyset, err := server.demoMintKeyset.Keyset(body.Proofs[0].KeysetID)
+	if err != nil {
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return
 	}
-	if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt, server.demoMintIssuance); err != nil {
+	verified, err := VerifiedBacking(body.Proofs, keyset)
+	if err != nil {
+		writeError(response, http.StatusUnprocessableEntity, err)
+		return
+	}
+	if verified < body.Amount {
+		writeError(response, http.StatusUnprocessableEntity,
+			fmt.Errorf("the proofs prove %d sats of backing, less than the %d claimed", verified, body.Amount))
+		return
+	}
+	// The references the receipt binds must be exactly the points that verified,
+	// or the receipt would attest to a set it did not check.
+	verifiedRefs := make([]string, 0, len(body.Proofs))
+	for _, proof := range body.Proofs {
+		verifiedRefs = append(verifiedRefs, proof.Y)
+	}
+	sort.Strings(verifiedRefs)
+	if strings.Join(verifiedRefs, ",") != strings.Join(ordered, ",") {
+		writeError(response, http.StatusBadRequest, errors.New("demo mint lock references do not match the verified proofs"))
+		return
+	}
+	// DLEQ has already proven these points were signed by the mint for these
+	// amounts, which is a positive statement. The issuance canary existed only to
+	// detect that NUT-07 cannot make one, so it is not passed here: NUT-07's
+	// remaining job is the narrower "is it still unspent".
+	if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt, nil); err != nil {
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return
 	}

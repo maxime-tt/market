@@ -568,7 +568,7 @@ async function placeBid(auctionId, amount) {
     const receipt = await api("/api/demo/mint-lock", { method: "POST", body: JSON.stringify({
       auction_id: auctionId, bidder: state.actor, amount, locktime,
       refund_public_key: funding.refundPublicKey, token_sha256: funding.tokenSha256,
-      proof_state_refs: funding.proofStateRefs }) });
+      proof_state_refs: funding.proofStateRefs, proofs: funding.proofs }) });
     const signed = await sign(28641, [["e", auctionId]], { auction_id: auctionId, amount, cashu_lock: receipt });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
     message(`Bid committed at height ${result.height} (mint-backed lock, proofs held by this browser).`, "success");

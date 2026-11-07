@@ -65,6 +65,8 @@ type APIServer struct {
 	// receipt names. NUT-07 alone cannot: it answers UNSPENT for points it has
 	// never issued.
 	demoMintIssuance MintIssuanceChecker
+	// Publishes the keys a proof's DLEQ must verify against.
+	demoMintKeyset *MintKeySetFetcher
 	legacyInterim bool
 	// Explicit activation is combined with current runtime readiness for UI
 	// flags and direct R20 broadcasts. Authority/mint retain their own checks.
@@ -297,6 +299,7 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 		demoCommitteeKey:      demoKey, demoCommitteePublicKey: demoPublicKey,
 		demoMintChecker:       NewHTTPMintStateChecker(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
 		demoMintIssuance:      NewHTTPMintIssuanceChecker(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
+		demoMintKeyset:        NewMintKeySetFetcher(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
 		browserThresholdReady: browserReady, browserReleasePins: browserPins,
 		recoveryOnly: recoveryOnlyValue == "true", healthPinsSHA256: os.Getenv("POC_FRIDAY_HEALTH_PINS_SHA256")}, nil
 }

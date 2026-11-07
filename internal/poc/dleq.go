@@ -38,9 +38,16 @@ package poc
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 )
@@ -69,6 +76,94 @@ var (
 	errDLEQKeyset   = errors.New("Cashu proof names a keyset or amount the mint does not publish")
 	errDLEQNoProof  = errors.New("Cashu proof carries no DLEQ proof")
 )
+
+// MintKeySetFetcher loads the mint's published per-amount signing keys (NUT-01,
+// served by /v1/keys) and caches them, because NUT-12 verification needs the key
+// for a proof's amount and that key changes only when the mint rotates a keyset.
+//
+// A fetch failure must never be read as "nothing to verify": it returns an error
+// and the caller refuses. That is why this is a separate type rather than another
+// method on the state checker.
+type MintKeySetFetcher struct {
+	Client  *http.Client
+	MintURL string
+
+	mu      sync.Mutex
+	cached  map[string]*MintKeySet
+	fetched time.Time
+}
+
+// mintKeysCacheTTL is short enough that a rotated keyset is picked up, long
+// enough that a burst of bids does not re-fetch per transaction.
+const mintKeysCacheTTL = 10 * time.Minute
+
+func NewMintKeySetFetcher(mintURL string, timeout time.Duration) *MintKeySetFetcher {
+	return &MintKeySetFetcher{Client: &http.Client{Timeout: timeout}, MintURL: strings.TrimRight(mintURL, "/")}
+}
+
+// Keyset returns the published keys for one keyset id, fetching if needed.
+func (fetcher *MintKeySetFetcher) Keyset(keysetID string) (*MintKeySet, error) {
+	if fetcher == nil || fetcher.Client == nil || fetcher.MintURL == "" {
+		return nil, errors.New("no mint keyset fetcher is configured")
+	}
+	fetcher.mu.Lock()
+	defer fetcher.mu.Unlock()
+	if fetcher.cached == nil || time.Since(fetcher.fetched) > mintKeysCacheTTL {
+		loaded, err := fetcher.fetch()
+		if err != nil {
+			return nil, err
+		}
+		fetcher.cached, fetcher.fetched = loaded, time.Now()
+	}
+	keyset, ok := fetcher.cached[keysetID]
+	if !ok || keyset == nil {
+		return nil, fmt.Errorf("%w: keyset %q", errDLEQKeyset, keysetID)
+	}
+	return keyset, nil
+}
+
+func (fetcher *MintKeySetFetcher) fetch() (map[string]*MintKeySet, error) {
+	response, err := fetcher.Client.Get(fetcher.MintURL + "/v1/keys")
+	if err != nil {
+		return nil, fmt.Errorf("mint keyset request failed: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("mint keyset returned status %d", response.StatusCode)
+	}
+	var document mintKeysResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&document); err != nil {
+		return nil, fmt.Errorf("mint keyset response is not a NUT-01 document: %w", err)
+	}
+	if len(document.Keysets) == 0 {
+		return nil, errors.New("mint published no keysets, so no proof can be verified")
+	}
+	sets := make(map[string]*MintKeySet, len(document.Keysets))
+	for _, entry := range document.Keysets {
+		set := &MintKeySet{ID: entry.ID, Unit: entry.Unit, Keys: map[int64]*btcec.PublicKey{}}
+		for amount, encoded := range entry.Keys {
+			// Mints publish a key for every power of two up to and including
+			// 2^63, which does not fit in an int64. Skip the ones we cannot
+			// represent rather than failing the whole fetch: a bid amount is
+			// bounded by policy, so an unusable denomination is not an error.
+			value, parseErr := strconv.ParseInt(amount, 10, 64)
+			if parseErr != nil || value <= 0 {
+				continue
+			}
+			decoded, decodeErr := hex.DecodeString(encoded)
+			if decodeErr != nil {
+				return nil, fmt.Errorf("mint published an unparseable key for amount %s", amount)
+			}
+			key, keyErr := btcec.ParsePubKey(decoded)
+			if keyErr != nil {
+				return nil, fmt.Errorf("mint published an invalid key for amount %s", amount)
+			}
+			set.Keys[value] = key
+		}
+		sets[entry.ID] = set
+	}
+	return sets, nil
+}
 
 // MintKeySet is the public signing key material the mint publishes (NUT-01/09).
 type MintKeySet struct {

@@ -10763,14 +10763,25 @@ ${e}}` : `{${i.join(",")}}`;
       });
       this.storage.set("spendable", JSON.stringify(keep ?? []));
       this.storage.set("locked", JSON.stringify([...this.locked(), ...send]));
-      const refs = send.map((proof) => Bt(new TextEncoder().encode(proof.secret)).toHex(true)).sort();
+      const bindings = send.map((proof) => ({
+        amount: Number(proof.amount),
+        id: proof.id,
+        Y: Bt(new TextEncoder().encode(proof.secret)).toHex(true),
+        C: proof.C,
+        dleq: { e: proof.dleq.e, s: proof.dleq.s, r: proof.dleq.r }
+      }));
+      if (bindings.some((b) => !b.dleq.e || !b.dleq.s || !b.dleq.r)) {
+        throw new Error("the mint returned no DLEQ proof, so the locked value cannot be proven");
+      }
+      const refs = bindings.map((b) => b.Y).sort();
       const tokenSha256 = await sha256Hex(JSON.stringify(ua(send)));
       return {
         proofStateRefs: refs,
         tokenSha256,
         refundPublicKey,
         amount,
-        mintUrl: this.mintUrl
+        mintUrl: this.mintUrl,
+        proofs: bindings
       };
     }
     async lockedProofStates() {

@@ -56,6 +56,14 @@ export interface BidFunding {
   refundPublicKey: string;
   amount: number;
   mintUrl: string;
+  /**
+   * Each locked proof with its DLEQ proof. This is what makes the amount
+   * provable rather than asserted: it lets the engine check, with no mint call,
+   * that the mint signed this exact point for this exact amount. It still
+   * carries nothing that can spend it.
+   */
+  proofs: Array<{ amount: number; id: string; Y: string; C: string;
+                  dleq: { e: string; s: string; r: string } }>;
 }
 
 /**
@@ -199,9 +207,17 @@ export class BidderWallet {
     // released by an explicit refund, never silently dropped.
     this.storage.set("locked", JSON.stringify([...this.locked(), ...send]));
 
-    const refs = send
-      .map((proof) => hashToCurve(new TextEncoder().encode(proof.secret)).toHex(true))
-      .sort();
+    const bindings = send.map((proof) => ({
+      amount: Number(proof.amount),
+      id: proof.id,
+      Y: hashToCurve(new TextEncoder().encode(proof.secret)).toHex(true),
+      C: proof.C,
+      dleq: { e: proof.dleq!.e, s: proof.dleq!.s, r: proof.dleq!.r },
+    }));
+    if (bindings.some((b) => !b.dleq.e || !b.dleq.s || !b.dleq.r)) {
+      throw new Error("the mint returned no DLEQ proof, so the locked value cannot be proven");
+    }
+    const refs = bindings.map((b) => b.Y).sort();
     const tokenSha256 = await sha256Hex(JSON.stringify(serializeProofs(send)));
 
     return {
@@ -210,6 +226,7 @@ export class BidderWallet {
       refundPublicKey,
       amount,
       mintUrl: this.mintUrl,
+      proofs: bindings,
     };
   }
 
