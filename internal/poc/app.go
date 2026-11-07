@@ -132,7 +132,7 @@ func newApplicationWithAuthority(chainID string, policy Policy, mintSeed []byte,
 		return nil, err
 	}
 	return &Application{state: state, hash: hash, policy: policy, mintSeed: append([]byte(nil), mintSeed...),
-		statePath: statePath, mintChecker: NewHTTPMintStateChecker(cashuMintURL, mintCheckTimeout)}, nil
+		statePath: statePath, mintChecker: NewHTTPMintStateChecker(mintTransportOrigin(cashuMintURL), mintCheckTimeout)}, nil
 }
 
 // SetMintChecker replaces the admission-time mint checker. Tests inject a fake;

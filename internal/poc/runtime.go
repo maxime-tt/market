@@ -73,13 +73,16 @@ func RunCLI(arguments []string) error {
 	case "init":
 		flags := flag.NewFlagSet("init", flag.ContinueOnError)
 		home := flags.String("home", "", "new POC network directory")
+		committeePublicKey := flags.String("committee-public-key", "", "optional even-Y threshold public key for a fresh isolated network")
+		mintURL := flags.String("test-mint-url", TestMintURL, "test-mint endpoint recorded in consensus state")
+		cashuMintURL := flags.String("cashu-mint-url", CashuMintURL, "Cashu mint identity recorded in consensus state; must be reachable by whoever funds a bid")
 		if err := flags.Parse(arguments[1:]); err != nil {
 			return err
 		}
 		if *home == "" || flags.NArg() != 0 {
 			return errors.New("init requires --home and no positional arguments")
 		}
-		manifest, err := InitLocalNetwork(*home, DefaultPolicy())
+		manifest, err := InitLocalNetworkWithEndpoints(*home, DefaultPolicy(), *committeePublicKey, *mintURL, *cashuMintURL)
 		if err != nil {
 			return err
 		}
@@ -430,7 +433,7 @@ func RunSite(ctx context.Context, root, listen string) error {
 type validatorProcess struct {
 	slot int
 	cmd  *exec.Cmd
-	log  *os.File
+	log  *rotatingLog
 	done chan error
 }
 
@@ -483,13 +486,16 @@ func RunLocalDemo(ctx context.Context, root, listen, committeePublicKey string) 
 	if err != nil {
 		return err
 	}
-	logsDir := filepath.Join(root, "logs")
+	logsDir := demoLogDirectory(root)
 	if err := os.MkdirAll(logsDir, 0o700); err != nil {
 		return err
 	}
+	// Bounded, because four validators with no ceiling fill the disk overnight
+	// and the demo is meant to be left running.  See logrotate.go.
+	limits := logLimitsFromEnv(os.Getenv)
 	supervisor := &localSupervisor{processes: map[int]*validatorProcess{}}
 	for slot := 1; slot <= 4; slot++ {
-		logFile, err := os.OpenFile(filepath.Join(logsDir, "validator-"+strconv.Itoa(slot)+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+		logFile, err := openRotatingLog(filepath.Join(logsDir, "validator-"+strconv.Itoa(slot)+".log"), limits)
 		if err != nil {
 			supervisor.stopAll()
 			return err

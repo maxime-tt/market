@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -39,6 +40,23 @@ import (
 // CheckTx runs per transaction, so a slow mint must degrade to a refusal rather
 // than to an unbounded mempool stall.
 const mintCheckTimeout = 4 * time.Second
+
+// mintTransportOrigin maps the mint identity that consensus state records to
+// the origin this process can actually reach.
+//
+// They are deliberately separate. The identity must be something a bidder's
+// browser can also reach, because the bidder mints and locks their own proofs
+// against it; on a public deployment that is the public HTTPS origin. This
+// process does not have to hairpin through the public internet to ask the same
+// mint a question, so the transport is pinned to the local origin instead. The
+// mapping is one-way and one-to-one, and both sides are configured, not
+// inferred.
+func mintTransportOrigin(identity string) string {
+	if local := os.Getenv("POC_MINT_LOCAL_ORIGIN"); local != "" {
+		return local
+	}
+	return identity
+}
 
 // MintProofState is a NUT-07 proof state.
 type MintProofState string

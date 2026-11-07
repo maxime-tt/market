@@ -54,6 +54,13 @@ type APIServer struct {
 	clients       []*rpchttp.HTTP
 	offline       func(int) error
 	cashu         *httputil.ReverseProxy
+	// mintProxy maps the mint identity recorded in consensus state onto the
+	// origin this host can reach, so a browser can mint against the same mint
+	// the validators reason about without either side being told a half-truth.
+	mintProxy http.Handler
+	// The same checker the application uses for admission, so the coordinator
+	// cannot sign a receipt over proofs the engine would then refuse.
+	demoMintChecker MintStateChecker
 	legacyInterim bool
 	// Explicit activation is combined with current runtime readiness for UI
 	// flags and direct R20 broadcasts. Authority/mint retain their own checks.
@@ -245,6 +252,14 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 	if err != nil || coordinator.Scheme != "http" || coordinator.Hostname() != "127.0.0.1" {
 		return nil, errors.New("Cashu coordinator must be an explicit loopback HTTP origin")
 	}
+	mintOrigin, err := url.Parse(mintTransportOrigin(manifest.CashuMintURL))
+	if err != nil {
+		return nil, fmt.Errorf("mint transport origin is invalid: %w", err)
+	}
+	mintProxy := httputil.NewSingleHostReverseProxy(mintOrigin)
+	mintProxy.ErrorHandler = func(response http.ResponseWriter, _ *http.Request, proxyErr error) {
+		writeError(response, http.StatusServiceUnavailable, fmt.Errorf("Cashu mint unavailable: %w", proxyErr))
+	}
 	proxy := httputil.NewSingleHostReverseProxy(coordinator)
 	proxy.ErrorHandler = func(response http.ResponseWriter, _ *http.Request, proxyErr error) {
 		writeError(response, http.StatusServiceUnavailable, fmt.Errorf("Cashu coordinator unavailable: %w", proxyErr))
@@ -273,9 +288,10 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 			return nil, errors.New("demo committee key does not match the network committee public key")
 		}
 	}
-	return &APIServer{observerNodeID: observerNodeID, manifest: manifest, clients: clients, offline: offline, cashu: proxy,
+	return &APIServer{observerNodeID: observerNodeID, manifest: manifest, clients: clients, offline: offline, cashu: proxy, mintProxy: mintProxy,
 		legacyInterim:         os.Getenv("POC_ENABLE_LEGACY_INTERIM") == "true",
 		demoCommitteeKey:      demoKey, demoCommitteePublicKey: demoPublicKey,
+		demoMintChecker:       NewHTTPMintStateChecker(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
 		browserThresholdReady: browserReady, browserReleasePins: browserPins,
 		recoveryOnly: recoveryOnlyValue == "true", healthPinsSHA256: os.Getenv("POC_FRIDAY_HEALTH_PINS_SHA256")}, nil
 }
@@ -300,6 +316,7 @@ func (server *APIServer) Handler() (http.Handler, error) {
 		// committed state.
 		if server.demoCommitteeKey != nil {
 			mux.HandleFunc("POST /api/demo/reservation", server.demoReservation)
+			mux.HandleFunc("POST /api/demo/mint-lock", server.demoMintLock)
 		}
 	}
 	if server.manifest.Schema == "PlebeianAuctionsPOCNetworkV4" {
@@ -307,6 +324,7 @@ func (server *APIServer) Handler() (http.Handler, error) {
 		// contract.  Disabling the buttons in browser JavaScript is not a
 		// security boundary: direct clients must not be able to reach the
 		// Wednesday shared-key coordinator through the Friday site.
+		mux.Handle("/api/mint/", http.StripPrefix("/api/mint", server.mintProxy))
 		mux.HandleFunc("/api/cashu/", func(response http.ResponseWriter, _ *http.Request) {
 			writeError(response, http.StatusGone, errors.New("Friday threshold wallet API is not installed; Wednesday custody fallback is disabled"))
 		})
@@ -380,9 +398,17 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 	fundingPolicy := r20FakeFundingPolicy(server.manifest.Policy)
 	pinsReady := server.browserPinsReady()
 	ready := pinsReady && server.browserRuntimeReady(request.Context())
+	// On a deployment that also serves mint-backed funding the honest description
+	// is not the custodial one, so say what the engine actually does now.
+	mintBacked := server.demoMintChecker != nil && server.demoCommitteeKey != nil
 	paymentAttestation := "validators verify the coordinator reservation signature; they do not independently inspect Cashu bearer proofs"
 	walletAuthority := "custodial Coco v2 wallet against a Nutshell FakeWallet mint"
 	bidFunding := "application-level custodial reservation; not a mint-enforced lock"
+	if mintBacked {
+		paymentAttestation = "a mint-backed bid's proof references are checked against the mint (NUT-07) before admission, and consensus refuses any reference already bound to another bid; the mint enforces non-double-spend at settlement"
+		walletAuthority = "bidder-held NUT-11 P2PK proofs in the browser; the server never holds a bearer proof"
+		bidFunding = "bidder-held NUT-11 lock to the committee, or an attested custodial reservation on auctions that ask for one"
+	}
 	if thresholdRoute {
 		paymentAttestation = "validators verify a domain-separated 3-of-4 FROST admission over public proof references and exact package digests; bearer proofs stay off-chain"
 		walletAuthority = "client-authorized NUT-11 proof pools with participant-local policy checks and durable exact mint recovery"
@@ -404,6 +430,12 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 		// it may actually use instead of assuming the threshold one, otherwise
 		// every control is disabled on a network that demonstrably works.
 		"funding_mode": legacyFundingMode(thresholdRoute, server.legacyInterim),
+		// True when this deployment can serve a bid whose backing is real proofs
+		// the mint will answer questions about, rather than a pure attestation.
+		"mint_backed_funding": server.demoMintChecker != nil && server.demoCommitteeKey != nil,
+		// Where a browser reaches that mint. Same-origin, so the page needs no
+		// cross-origin exception and the mint identity stays one value.
+		"browser_mint_path": "/api/mint",
 		"fips_transport":          thresholdRoute,
 		// This remains false until the two-phase client-held payment signer and
 		// admission service are installed. The browser must never fall back to a

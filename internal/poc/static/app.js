@@ -70,6 +70,30 @@ function legacyFundingReady(config = state.config) {
     && config?.funding_mode === "custodial_reservation_v1";
 }
 function siteReady(config = state.config) { return r20RuntimeReady(config) || legacyFundingReady(config); }
+// Mint-backed funding: the bidder holds real proofs and the mint is asked about
+// them. Available independently of the threshold route, and only when the
+// deployment actually serves it.
+function mintBackedAvailable(config = state.config) { return config?.mint_backed_funding === true; }
+// The mint the browser talks to is the same origin that serves this page, so
+// there is no cross-origin exception and no second identity for one mint.
+function browserMintUrl(config = state.config) {
+  return new URL(config?.browser_mint_path || "/api/mint", window.location.origin).toString().replace(/\/+$/, "");
+}
+function bidderWallet() {
+  if (!window.PlebeianWallet) throw new Error("The wallet bundle did not load; reload the page.");
+  if (!state.actor) throw new Error("Connect an identity first.");
+  return new window.PlebeianWallet.BidderWallet(
+    browserMintUrl(), window.PlebeianWallet.browserStorage(`plebeian-wallet:${state.actor}`));
+}
+async function renderWalletBalance() {
+  const output = byId("wallet-balance");
+  if (!output) return;
+  if (!state.actor || !window.PlebeianWallet) { output.textContent = "No wallet yet."; return; }
+  try {
+    const wallet = bidderWallet();
+    output.textContent = `Wallet holds ${wallet.balance()} spendable and ${wallet.lockedBalance()} locked (bidder-held proofs).`;
+  } catch (error) { output.textContent = error.message; }
+}
 // Whether this identity can actually place a bid.  The threshold mode needs the
 // browser wallet controller; the legacy mode needs only a connected identity,
 // because its funds and reservations are server-side.  Gating the bid button on
@@ -240,6 +264,14 @@ function updateControls() {
   byId("process-payments").disabled = !thresholdReady;
   byId("disconnect").disabled = !state.signer;
   byId("create-submit").disabled = !ready;
+  // Minting needs a connected identity and a deployment that actually serves a
+  // mint this browser can reach.
+  byId("wallet-mint").disabled = !(ready && mintBackedAvailable());
+  const fundingSelect = byId("funding-mode");
+  if (fundingSelect && !mintBackedAvailable()) {
+    fundingSelect.value = "custodial_reservation_v1";
+    [...fundingSelect.options].forEach((option) => { if (option.value === "cashu_lock_v1") option.disabled = true; });
+  }
   const policy = state.config?.fake_funding_policy;
   if (policy) {
     byId("faucet-amount").max = String(policy.max_per_request);
@@ -502,7 +534,7 @@ function renderValidators() {
   byId("validator-summary").textContent = `${validators.filter((v)=>v.online).length}/4 signatures observed · canonical commit ${heights.length ? Math.max(...heights) : "—"}`;
   for (const validator of validators) { const evidence=ui.validatorEvidence(validator), card=el("article",`validator ${evidence.state==='observed'?"online":"offline"}`), heading=el("strong"); heading.append(document.createTextNode(`V${validator.slot}`),el("i","dot")); card.append(heading,el("span","",evidence.label),el("small","",evidence.detail),el("small","",`node ${short(validator.node_id)}`),el("small","",`app ${short(validator.app_hash)}`)); target.append(card); }
 }
-function render() { updateControls(); renderWallet(); renderAuctions(); renderValidators(); }
+function render() { updateControls(); renderWallet(); renderAuctions(); renderValidators(); renderWalletBalance().catch(()=>undefined); }
 
 async function performAction(key, button, pendingLabel, action) {
   if (state.actionKeys.has(key)) return;
@@ -515,7 +547,27 @@ async function placeBid(auctionId, amount) {
   if (!legacy) { requireR20Ready(); if(!state.friday) throw new Error("Connect a signer first."); }
   else if (!state.actor || !state.signer) throw new Error("Connect a signer first.");
   const auction=state.view?.state?.auctions?.[auctionId]; if(!auction||auction.status!=="open") throw new Error("Auction is not open in committed state.");
-  const leader=auction.leader_bid_id?state.view?.state?.bids?.[auction.leader_bid_id]:null; if(leader?.bidder===state.actor) throw new Error("Own raises remain fail-closed until full-pool key continuity is proven.");
+  const leader=auction.leader_bid_id?state.view?.state?.bids?.[auction.leader_bid_id]:null;
+  // A mint-backed raise is a fresh lock of fresh proofs, not a replacement of a
+  // prior reservation, so the own-raise restriction does not apply to it.
+  if(auction.funding_mode!=="cashu_lock_v1" && leader?.bidder===state.actor) throw new Error("Own raises remain fail-closed until full-pool key continuity is proven.");
+  if (legacy && auction.funding_mode === "cashu_lock_v1") {
+    // The bidder locks their OWN proofs to the committee, keeps them, and sends
+    // only references. The coordinator cannot invent value here: it confirms the
+    // references with the mint before it signs anything.
+    const wallet = bidderWallet();
+    const locktime = Number(auction.end_time) + 600;
+    const refundPublicKey = window.PlebeianWallet.refundPublicKeyFromNostr(state.actor);
+    const funding = await wallet.lockForBid(amount, state.config.committee_public_key, refundPublicKey, locktime, (step)=>message(step));
+    const receipt = await api("/api/demo/mint-lock", { method: "POST", body: JSON.stringify({
+      auction_id: auctionId, bidder: state.actor, amount, locktime,
+      refund_public_key: funding.refundPublicKey, token_sha256: funding.tokenSha256,
+      proof_state_refs: funding.proofStateRefs }) });
+    const signed = await sign(28641, [["e", auctionId]], { auction_id: auctionId, amount, cashu_lock: receipt });
+    const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
+    message(`Bid committed at height ${result.height} (mint-backed lock, proofs held by this browser).`, "success");
+    await refresh(); await renderWalletBalance(); return;
+  }
   if (legacy) {
     // Legacy mode: ask the demo coordinator for a committee-signed custodial
     // reservation receipt, then commit the signed bid carrying it.  This is the
@@ -562,6 +614,13 @@ byId("login").onclick=()=>connect().catch((error)=>message(error.message,"error"
 byId("disconnect").onclick=()=>{disconnect();render();message("Disconnected. Reconnect to recover returns and payouts.");};
 byId("demo-login").onclick=()=>connectDemo().catch((error)=>message(error.message,"error"));
 byId("refresh").onclick=()=>refresh().catch(()=>undefined);
+byId("wallet-mint").onclick=()=>performAction("wallet-mint",byId("wallet-mint"),"Minting…",async()=>{
+  const amount = Math.floor(Number(byId("wallet-amount").value));
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a whole number of sats to mint.");
+  const balance = await bidderWallet().mint(amount, (step)=>message(step));
+  message(`Minted ${amount} real proofs from the demo mint. Wallet holds ${balance} sats.`, "success");
+  await renderWalletBalance();
+});
 byId("auction-search").oninput=(event)=>{state.query=event.target.value;renderAuctions();};
 byId("faucet").onclick=(event)=>performAction("fund",event.currentTarget,"Funding…",async()=>{
   if (legacyFundingReady()) {
@@ -594,7 +653,8 @@ byId("create-form").onsubmit=(event)=>{event.preventDefault();return performActi
     // Legacy mode: no seller Coco payment key exists on this network, so the
     // listing carries only the custodial reservation funding mode.
     const id=`auction-${Date.now()}`;
-    const signed=await sign(28640,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:"custodial_reservation_v1"});
+    const chosenMode = byId("funding-mode")?.value || "custodial_reservation_v1";
+    const signed=await sign(28640,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:chosenMode});
     const result=await api("/api/event",{method:"POST",body:JSON.stringify(signed)});
     await refresh();
     message(`Auction committed at height ${result.height} in legacy fake-sat mode (custodial reservations).`,"success");

@@ -433,6 +433,23 @@ func InitLocalNetworkWithCommittee(root string, policy Policy, committeePublicKe
 	return initLocalNetwork(root, policy, committeePublicKey)
 }
 
+// InitLocalNetworkWithEndpoints creates the loopback network while recording a
+// mint identity that something other than this host can reach. A browser wallet
+// must mint against the same mint identity consensus state names, so on a public
+// demo that identity is the public origin, not the loopback address.
+func InitLocalNetworkWithEndpoints(root string, policy Policy, committeePublicKey, mintURL, cashuMintURL string) (NetworkManifest, error) {
+	if committeePublicKey != "" && !validCompressedPublicKey(committeePublicKey) {
+		return NetworkManifest{}, errors.New("threshold committee public key must be a compressed secp256k1 key")
+	}
+	if _, err := url.Parse(mintURL); err != nil {
+		return NetworkManifest{}, fmt.Errorf("mint url is invalid: %w", err)
+	}
+	if _, err := url.Parse(cashuMintURL); err != nil {
+		return NetworkManifest{}, fmt.Errorf("cashu mint url is invalid: %w", err)
+	}
+	return initLocalNetworkWithEndpoints(root, policy, committeePublicKey, mintURL, cashuMintURL)
+}
+
 func initLocalNetwork(root string, policy Policy, suppliedCommitteePublicKey string) (NetworkManifest, error) {
 	return initLocalNetworkWithEndpoints(root, policy, suppliedCommitteePublicKey, TestMintURL, CashuMintURL)
 }

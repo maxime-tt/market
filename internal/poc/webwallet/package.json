@@ -1,0 +1,15 @@
+{
+  "name": "plebeian-auctions-browser-wallet",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Bidder-side Cashu wallet: mints and locks the bidder's own proofs.",
+  "scripts": {
+    "build": "bun build src/browser.ts --target=browser --format=iife --outfile=../static/wallet.js",
+    "test": "bun run test_wallet.ts"
+  },
+  "dependencies": {
+    "@cashu/cashu-ts": "4.13.0",
+    "@noble/curves": "^2.4.0"
+  }
+}
