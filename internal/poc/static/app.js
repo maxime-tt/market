@@ -97,7 +97,12 @@ async function renderWalletBalance() {
   if (!state.actor || !window.PlebeianWallet) { output.textContent = "No wallet yet."; return; }
   try {
     const wallet = bidderWallet();
-    output.textContent = `Wallet holds ${wallet.balance()} spendable and ${wallet.lockedBalance()} locked (bidder-held proofs).`;
+    const locked = wallet.lockedBalance();
+    const until = wallet.lockedUntil();
+    const when = locked > 0 && until > Math.floor(Date.now() / 1000)
+      ? `\nLocked proofs are reclaimable from ${new Date(until * 1000).toLocaleTimeString()}; until then the committee can spend them and this wallet cannot.`
+      : "";
+    output.textContent = `Wallet holds ${wallet.balance()} spendable and ${locked} locked (bidder-held proofs).${when}`;
   } catch (error) { output.textContent = error.message; }
 }
 // Whether this identity can actually place a bid.  The threshold mode needs the
@@ -273,6 +278,10 @@ function updateControls() {
   // Minting needs a connected identity and a deployment that actually serves a
   // mint this browser can reach.
   byId("wallet-mint").disabled = !(ready && mintBackedAvailable());
+  // Only meaningful when something is actually locked, and it is the escape
+  // hatch a failed bid otherwise leaves the bidder without.
+  try { byId("wallet-release").disabled = !ready || bidderWallet().lockedBalance() <= 0; }
+  catch { byId("wallet-release").disabled = true; }
   const fundingSelect = byId("funding-mode");
   if (fundingSelect && !mintBackedAvailable()) {
     fundingSelect.value = "custodial_reservation_v1";
@@ -620,6 +629,18 @@ byId("login").onclick=()=>connect().catch((error)=>message(error.message,"error"
 byId("disconnect").onclick=()=>{disconnect();render();message("Disconnected. Reconnect to recover returns and payouts.");};
 byId("demo-login").onclick=()=>connectDemo().catch((error)=>message(error.message,"error"));
 byId("refresh").onclick=()=>refresh().catch(()=>undefined);
+byId("wallet-release").onclick=()=>performAction("wallet-release",byId("wallet-release"),"Reclaiming…",async()=>{
+  const wallet = bidderWallet();
+  const outcome = wallet.reclaimLocked();
+  if (outcome.released > 0) {
+    message(`Reclaimed ${outcome.released} sats back to spendable.`, "success");
+  } else {
+    // Not a failure: the NUT-11 lock gives the committee sole spending authority
+    // until the locktime, so the bidder genuinely cannot move these yet.
+    message(`Locked proofs become reclaimable at ${new Date(outcome.reclaimableAt * 1000).toLocaleTimeString()}. Until then the committee, not this wallet, can spend them.`, "warning");
+  }
+  await renderWalletBalance();
+});
 byId("wallet-mint").onclick=()=>performAction("wallet-mint",byId("wallet-mint"),"Minting…",async()=>{
   const amount = Math.floor(Number(byId("wallet-amount").value));
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a whole number of sats to mint.");

@@ -10750,10 +10750,12 @@ ${e}}` : `{${i.join(",")}}`;
     async lockForBid(amount, committeePublicKey, refundPublicKey, locktime, onProgress) {
       const proofs = this.spendable();
       if (!proofs.length) {
-        throw new Error("the wallet holds no proofs; mint some first");
+        const locked = this.lockedBalance();
+        throw new Error(locked > 0 ? `all ${locked} sats are locked to a previous bid; release them first, or mint more` : "the wallet holds no proofs; mint some first");
       }
       if (this.balance() < amount) {
-        throw new Error(`the wallet holds ${this.balance()} sats, less than the ${amount} needed`);
+        const locked = this.lockedBalance();
+        throw new Error(`the wallet holds ${this.balance()} spendable sats${locked > 0 ? ` and ${locked} locked` : ""}, less than the ${amount} needed`);
       }
       await this.ensureLoaded();
       onProgress?.("locking proofs to the committee");
@@ -10783,6 +10785,15 @@ ${e}}` : `{${i.join(",")}}`;
         mintUrl: this.mintUrl,
         proofs: bindings
       };
+    }
+    releaseLocked() {
+      const locked = this.locked();
+      if (!locked.length)
+        return 0;
+      const released = locked.reduce((total, proof) => total + Number(proof.amount), 0);
+      this.storage.set("spendable", JSON.stringify([...this.spendable(), ...locked]));
+      this.storage.set("locked", JSON.stringify([]));
+      return released;
     }
     async lockedProofStates() {
       const locked = this.locked();

@@ -185,10 +185,18 @@ export class BidderWallet {
   ): Promise<BidFunding> {
     const proofs = this.spendable();
     if (!proofs.length) {
-      throw new Error("the wallet holds no proofs; mint some first");
+      // Say what is actually true. A wallet whose proofs are all locked is not
+      // an empty wallet, and telling the bidder to mint more when a previous
+      // bid is sitting on their whole balance sends them to spend again for no
+      // reason.
+      const locked = this.lockedBalance();
+      throw new Error(locked > 0
+        ? `all ${locked} sats are locked to a previous bid; release them first, or mint more`
+        : "the wallet holds no proofs; mint some first");
     }
     if (this.balance() < amount) {
-      throw new Error(`the wallet holds ${this.balance()} sats, less than the ${amount} needed`);
+      const locked = this.lockedBalance();
+      throw new Error(`the wallet holds ${this.balance()} spendable sats${locked > 0 ? ` and ${locked} locked` : ""}, less than the ${amount} needed`);
     }
 
     await this.ensureLoaded();
@@ -204,8 +212,12 @@ export class BidderWallet {
 
     this.storage.set("spendable", JSON.stringify(keep ?? []));
     // Locked proofs accumulate: a raise locks more, and older locks are only
-    // released by an explicit refund, never silently dropped.
+    // released by an explicit reclaim, never silently dropped. The locktime is
+    // recorded because the proofs are NOT spendable by the bidder until it
+    // passes -- the NUT-11 lock gives the committee sole spending authority
+    // before then, which is the point of the lock.
     this.storage.set("locked", JSON.stringify([...this.locked(), ...send]));
+    this.storage.set("lockedUntil", String(locktime));
 
     const bindings = send.map((proof) => ({
       amount: Number(proof.amount),
@@ -228,6 +240,40 @@ export class BidderWallet {
       mintUrl: this.mintUrl,
       proofs: bindings,
     };
+  }
+
+  /** When the currently locked proofs become reclaimable by the bidder. */
+  lockedUntil(): number {
+    const raw = this.storage.get("lockedUntil");
+    return raw ? Number(raw) : 0;
+  }
+
+  /**
+   * Reclaims locked proofs once their locktime has passed.
+   *
+   * This is a REAL constraint, not a formality: a NUT-11 P2PK lock gives the
+   * committee sole spending authority until the locktime, so before then the
+   * bidder genuinely cannot move these proofs and no wallet code can change
+   * that. An earlier version of this method moved them to "spendable"
+   * unconditionally, which was a lie -- the next lock would then have failed at
+   * the mint instead, with a much worse message.
+   *
+   * It exists because a bid can fail AFTER the proofs are locked (the engine
+   * refuses it, the auction closes, the tab is closed mid-flight) and nothing
+   * else returns them.
+   */
+  reclaimLocked(): { released: number; reclaimableAt: number } {
+    const locked = this.locked();
+    if (!locked.length) return { released: 0, reclaimableAt: 0 };
+    const reclaimableAt = this.lockedUntil();
+    if (reclaimableAt > 0 && Math.floor(Date.now() / 1000) < reclaimableAt) {
+      return { released: 0, reclaimableAt };
+    }
+    const released = locked.reduce((total, proof) => total + Number(proof.amount), 0);
+    this.storage.set("spendable", JSON.stringify([...this.spendable(), ...locked]));
+    this.storage.set("locked", JSON.stringify([]));
+    this.storage.set("lockedUntil", "0");
+    return { released, reclaimableAt: 0 };
   }
 
   /** Asks the mint directly whether the locked proofs are still unspent. */

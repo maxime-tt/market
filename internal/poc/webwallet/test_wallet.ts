@@ -69,6 +69,37 @@ check("the locked proofs carry a P2PK condition for the committee",
     (lockedSecret[1] as { data: string }).data.slice(2) === committeePub.slice(2),
   JSON.stringify(lockedSecret).slice(0, 110));
 
+// A failed bid must not strand the bidder's whole balance. Before this, the
+// first lock moved everything to `locked` and every later bid reported "holds no
+// proofs" while the funds sat there.
+const beforeRelease = wallet.balance();
+const lockedBefore = wallet.lockedBalance();
+const early = wallet.reclaimLocked();
+check("locked proofs are NOT reclaimable before the locktime",
+  early.released === 0 && early.reclaimableAt > Math.floor(Date.now() / 1000),
+  `reclaimable at ${early.reclaimableAt}`);
+check("and the balance is untouched by that attempt", wallet.balance() === beforeRelease,
+  `${wallet.balance()} spendable, ${wallet.lockedBalance()} locked`);
+
+// Past the locktime the bidder really can move them, because the NUT-11 lock
+// named them as a refund key from that moment.
+await wallet.lockForBid(1, committeePub, refundPub, Math.floor(Date.now() / 1000) + 1);
+await new Promise((r) => setTimeout(r, 2200));
+const late = wallet.reclaimLocked();
+check("past the locktime everything is reclaimed",
+  late.released === wallet.lockedBalance() + late.released && wallet.lockedBalance() === 0,
+  `${late.released} sats reclaimed, ${wallet.balance()} spendable`);
+check("nothing remains locked", wallet.lockedBalance() === 0, `${wallet.lockedBalance()} locked`);
+
+// And the message a locked-out bidder sees must describe their real position.
+const stranded = new BidderWallet(MINT, memoryStorage());
+await stranded.mint(64, () => {});
+await stranded.lockForBid(64, committeePub, refundPub, locktime);
+let message = "";
+try { await stranded.lockForBid(16, committeePub, refundPub, locktime); } catch (e) { message = (e as Error).message; }
+check("a fully-locked wallet says so instead of 'mint some first'",
+  message.includes("locked") && !message.includes("mint some first"), message);
+
 const failed = results.filter(([, ok]) => !ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 if (failed.length) {
