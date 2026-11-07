@@ -85,6 +85,11 @@ type APIServer struct {
 	// leaves it nil and reads committed state through the node; tests use it to
 	// drive the coordinator without a live CometBFT cluster.
 	demoStateSnapshot func(context.Context) (State, error)
+	// demoSettlements parks a settlement payout until the seller's browser
+	// fetches it. The caller is the winner, so the seller is not in the
+	// request; the proofs are P2PK-locked to the seller's committed key, which
+	// is what makes publishing them safe.
+	demoSettlements settlementStore
 }
 
 const browserReleasePinsPath = "/etc/plebeian-auctions-friday/browser-r20-pins.json"
@@ -325,6 +330,10 @@ func (server *APIServer) Handler() (http.Handler, error) {
 			mux.HandleFunc("POST /api/demo/reservation", server.demoReservation)
 			mux.HandleFunc("POST /api/demo/mint-lock", server.demoMintLock)
 			mux.HandleFunc("POST /api/demo/mint-refund", server.demoMintRefund)
+			mux.HandleFunc("POST /api/demo/mint-settle", server.demoMintSettle)
+			// The seller is not the caller of the settlement swap, so the
+			// payout is fetched separately by the seller's own browser.
+			mux.HandleFunc("GET /api/demo/settlement/{auction_id}", server.demoSettlement)
 		}
 	}
 	if server.manifest.Schema == "PlebeianAuctionsPOCNetworkV4" {
@@ -348,6 +357,10 @@ func (server *APIServer) Handler() (http.Handler, error) {
 		mux.HandleFunc("POST /api/close", server.closeAuction)
 		mux.HandleFunc("POST /api/admin/offline", server.offlineValidator)
 	}
+	// The tabbed lab is a separate page so the dense demo at "/" stays intact.
+	mux.HandleFunc("GET /lab", func(response http.ResponseWriter, request *http.Request) {
+		http.Redirect(response, request, "/lab.html", http.StatusFound)
+	})
 	mux.Handle("/", http.FileServer(http.FS(assets)))
 	return securityHeaders(mux, connectSources(server.manifest.CashuMintURL)), nil
 }

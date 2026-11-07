@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101418">
+  <title>Plebeian Auctions — Lab</title>
+  <link rel="stylesheet" href="/lab.css">
+</head>
+<body>
+  <header class="lab-header">
+    <div class="lab-brand"><span class="wordmark">Plebeian</span><span class="lab-badge">LAB</span><span class="lab-sub">seller · three bidders · monitor</span></div>
+    <nav class="lab-nav" aria-label="Lab navigation">
+      <a href="/">Full demo</a>
+      <button id="honesty-toggle" class="link-button" type="button" aria-expanded="false" aria-controls="honesty">What is real here?</button>
+    </nav>
+  </header>
+
+  <section id="honesty" class="honesty" hidden aria-labelledby="honesty-title">
+    <h2 id="honesty-title">What this build actually does</h2>
+    <ul>
+      <li><strong>Mint and bid work.</strong> A bidder mints fake sats from the demo mint, locks them to the committee key with NUT-11, and commits a Nostr-signed bid carrying only proof references.</li>
+      <li><strong>Refund is implemented but still being finished.</strong> When a bid is displaced, the bidder's browser can ask the coordinator to swap the locked proofs back to the bidder's own wallet key. Treat it as under test, not as a guarantee.</li>
+      <li><strong>Seller settlement is not in this build.</strong> A closed auction records a winner; no value has moved to the seller here.</li>
+      <li><strong>The sats are worthless.</strong> The mint is a FakeWallet mint. Nothing here is redeemable.</li>
+      <li><strong>The committee is one key, not FROST.</strong> Four CometBFT validators run on one host, with no FIPS transport. One operator controls all of them. This is not production and not a compliance claim.</li>
+      <li><strong>The monitor is a commit timeline, not a block explorer.</strong> The API exposes consensus timestamps for auctions and bids, not the height each event landed in. The page says so where it matters instead of inventing block contents.</li>
+    </ul>
+    <p class="fine">The full, denser demo with its own disclosure remains at <a href="/">/</a>.</p>
+  </section>
+
+  <nav class="tabs" role="tablist" aria-label="Lab sections">
+    <button class="tab" role="tab" id="tab-seller" data-tab="seller" aria-controls="panel-seller" aria-selected="true">Seller</button>
+    <button class="tab" role="tab" id="tab-bidder-1" data-tab="bidder" data-slot="1" aria-controls="panel-bidder" aria-selected="false">Bidder 1</button>
+    <button class="tab" role="tab" id="tab-bidder-2" data-tab="bidder" data-slot="2" aria-controls="panel-bidder" aria-selected="false">Bidder 2</button>
+    <button class="tab" role="tab" id="tab-bidder-3" data-tab="bidder" data-slot="3" aria-controls="panel-bidder" aria-selected="false">Bidder 3</button>
+    <button class="tab" role="tab" id="tab-monitor" data-tab="monitor" aria-controls="panel-monitor" aria-selected="false">Monitor</button>
+  </nav>
+
+  <main class="lab-main">
+    <section id="panel-seller" class="panel" role="tabpanel" aria-labelledby="tab-seller">
+      <div class="panel-head">
+        <div><p class="eyebrow">SELLER</p><h1>List an auction</h1><p class="sub">One click fills a plausible listing. The seller signs a kind 28640 event; the auction exists only after consensus commits it.</p></div>
+        <div class="identity-card">
+          <span class="label">Seller identity</span>
+          <code id="seller-actor">creating…</code>
+          <button id="seller-new" class="button ghost" type="button">New identity</button>
+        </div>
+      </div>
+
+      <form id="create-form" class="card form">
+        <div class="form-head">
+          <h2>New listing</h2>
+          <button id="randomize" class="button ghost" type="button">Randomize listing</button>
+        </div>
+        <label>Title <input id="title" maxlength="120" required></label>
+        <label>Description <textarea id="description" maxlength="2000" rows="3"></textarea></label>
+        <div class="form-row">
+          <label>Duration (seconds) <input id="duration" type="number" min="3" max="3600" value="300" required></label>
+          <label>Starting bid <input id="starting" type="number" min="1" value="100" required></label>
+        </div>
+        <div class="form-row">
+          <label>Minimum increment <input id="increment" type="number" min="1" value="10" required></label>
+          <label>Reserve (0 = none) <input id="reserve" type="number" min="0" value="0"></label>
+        </div>
+        <p class="fine">Funding mode is fixed to <code>cashu_lock_v1</code>: bidders hold their own NUT-11 proofs. No seller payout key is registered in this build.</p>
+        <button id="create-submit" class="button primary" type="submit">Sign and create auction</button>
+      </form>
+
+      <div class="card">
+        <div class="card-head"><h2>Your auctions</h2><span id="seller-summary" class="sub">—</span></div>
+        <div id="seller-auctions" class="list"><p class="empty">No auctions from this identity yet.</p></div>
+        <p class="fine">Payout state is reported from committed state only. Settlement is not implemented in this build, so a closed auction with a winner does not mean the seller was paid.</p>
+      </div>
+    </section>
+
+    <section id="panel-bidder" class="panel" role="tabpanel" aria-labelledby="tab-bidder-1" hidden>
+      <div class="panel-head">
+        <div><p class="eyebrow">BIDDER</p><h1 id="bidder-title">Bidder 1</h1><p class="sub">This tab has its own Nostr identity and its own browser wallet. The other bidder tabs cannot see or spend them.</p></div>
+        <div class="identity-card">
+          <span class="label">Bidder identity</span>
+          <code id="bidder-actor">creating…</code>
+          <button id="bidder-new" class="button ghost" type="button">New identity</button>
+        </div>
+      </div>
+
+      <div class="balance-row">
+        <div class="stat"><span>Spendable</span><strong id="bidder-spendable">—</strong><small>fake sats</small></div>
+        <div class="stat"><span>Locked in bids</span><strong id="bidder-locked">—</strong><small>fake sats</small></div>
+        <div class="stat"><span>Wallet key</span><code id="bidder-wallet-key">—</code><small>refund owner</small></div>
+      </div>
+
+      <div class="card inline-card">
+        <label class="inline-label">Mint <input id="bidder-mint-amount" type="number" min="1" value="500" inputmode="numeric"></label>
+        <button id="bidder-mint" class="button primary" type="button">Mint fake sats</button>
+        <button id="bidder-claim" class="button ghost" type="button">Claim refunds</button>
+        <span id="bidder-status" class="status" role="status" aria-live="polite"></span>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Open auctions</h2><span id="bidder-auction-summary" class="sub">—</span></div>
+        <div id="bidder-auctions" class="list"><p class="empty">Loading committed auctions…</p></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Your positions</h2><span class="sub">committed bids and their lock state</span></div>
+        <div id="bidder-positions" class="list"><p class="empty">No bids from this identity yet.</p></div>
+      </div>
+    </section>
+
+    <section id="panel-monitor" class="panel" role="tabpanel" aria-labelledby="tab-monitor" hidden>
+      <div class="panel-head">
+        <div><p class="eyebrow">MONITOR</p><h1>Validators and commit timeline</h1><p class="sub">Four validators, one host. The cards below are read from each node's own RPC; the timeline is derived from committed application state.</p></div>
+        <div class="monitor-meta"><span>App height</span><strong id="monitor-height">—</strong><span>App hash</span><code id="monitor-apphash">—</code></div>
+      </div>
+
+      <div id="monitor-validators" class="validator-grid"><p class="empty">Loading validators…</p></div>
+
+      <div class="card">
+        <div class="card-head"><h2>Commit timeline</h2><span id="monitor-log-summary" class="sub">—</span></div>
+        <p class="fine" id="monitor-note">The API exposes consensus timestamps for auctions and bids, not the block height each event landed in. Entries are grouped by consensus second; the height above is the current app height, not a per-event height. Refund and close times are not recorded per event, so lock state is shown separately rather than given a fabricated timestamp.</p>
+        <div id="monitor-log" class="timeline"><p class="empty">No committed events yet.</p></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Lock states</h2><span class="sub">current, not historical</span></div>
+        <div id="monitor-locks" class="list"><p class="empty">No locks in committed state.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="/wallet.js"></script>
+  <script src="/demo-signer.js"></script>
+  <script src="/ui-helpers.js"></script>
+  <script src="/lab.js"></script>
+</body>
+</html>
