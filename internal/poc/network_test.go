@@ -306,10 +306,24 @@ func TestCustomRemoteOptionsAcceptPublicHTTPSCashuIdentityButRejectConflictingEn
 	if err != nil || manifest.CashuMintURL != public.CashuMintURL {
 		t.Fatalf("public HTTPS Cashu identity was rejected: manifest=%+v err=%v", manifest, err)
 	}
+	// A public HTTPS identity may be a hostname. Requiring an IP literal conflated
+	// the identity with its addressing and made the intended deployment -- a
+	// browser-reachable mint -- impossible, since a browser reaches names. What
+	// still matters is that the identity is one unambiguous credential-free
+	// origin, which is what the receipt is bound to.
+	byName, err := InitRemoteNetworkWithCommitteeAndOptions(filepath.Join(t.TempDir(), "network"), DefaultPolicy(), hosts, committee,
+		RemoteNetworkOptions{P2PPort: 27656, RPCPort: 27657, MintURL: TestMintURL, CashuMintURL: "https://mint.example.com"})
+	if err != nil || byName.CashuMintURL != "https://mint.example.com" {
+		t.Fatalf("public HTTPS identity by hostname was rejected: manifest=%+v err=%v", byName, err)
+	}
+
 	for name, options := range map[string]RemoteNetworkOptions{
 		"same ports":             {P2PPort: 27656, RPCPort: 27656, MintURL: TestMintURL, CashuMintURL: CashuMintURL},
-		"request selected host":  {P2PPort: 27656, RPCPort: 27657, MintURL: TestMintURL, CashuMintURL: "https://mint.example.com"},
-		"private HTTPS identity": {P2PPort: 27656, RPCPort: 27657, MintURL: TestMintURL, CashuMintURL: "https://127.0.0.1"},
+		"plain HTTP by name":          {P2PPort: 27656, RPCPort: 27657, MintURL: TestMintURL, CashuMintURL: "http://mint.example.com"},
+		"plain HTTP with a port 443": {P2PPort: 27656, RPCPort: 27657, MintURL: TestMintURL, CashuMintURL: "http://mint.example.com:443"},
+		"identity with a path":   {P2PPort: 27656, RPCPort: 27657, MintURL: TestMintURL, CashuMintURL: "https://mint.example.com/api/mint"},
+		"identity with a query":  {P2PPort: 27656, RPCPort: 27657, MintURL: TestMintURL, CashuMintURL: "https://mint.example.com?v=1"},
+		"identity with creds":    {P2PPort: 27656, RPCPort: 27657, MintURL: TestMintURL, CashuMintURL: "https://user:pass@mint.example.com"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := InitRemoteNetworkWithCommitteeAndOptions(filepath.Join(t.TempDir(), "network"), DefaultPolicy(), hosts, committee, options)

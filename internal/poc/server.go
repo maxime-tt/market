@@ -61,6 +61,10 @@ type APIServer struct {
 	// The same checker the application uses for admission, so the coordinator
 	// cannot sign a receipt over proofs the engine would then refuse.
 	demoMintChecker MintStateChecker
+	// Establishes whether the mint really holds records for the references a
+	// receipt names. NUT-07 alone cannot: it answers UNSPENT for points it has
+	// never issued.
+	demoMintIssuance MintIssuanceChecker
 	legacyInterim bool
 	// Explicit activation is combined with current runtime readiness for UI
 	// flags and direct R20 broadcasts. Authority/mint retain their own checks.
@@ -292,6 +296,7 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 		legacyInterim:         os.Getenv("POC_ENABLE_LEGACY_INTERIM") == "true",
 		demoCommitteeKey:      demoKey, demoCommitteePublicKey: demoPublicKey,
 		demoMintChecker:       NewHTTPMintStateChecker(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
+		demoMintIssuance:      NewHTTPMintIssuanceChecker(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
 		browserThresholdReady: browserReady, browserReleasePins: browserPins,
 		recoveryOnly: recoveryOnlyValue == "true", healthPinsSHA256: os.Getenv("POC_FRIDAY_HEALTH_PINS_SHA256")}, nil
 }

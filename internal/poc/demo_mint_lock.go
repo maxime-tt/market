@@ -162,7 +162,11 @@ func (server *APIServer) demoMintLock(response http.ResponseWriter, request *htt
 	// not exist, or are already spent, would be the coordinator asserting
 	// something untrue -- which is precisely the failure this mode exists to
 	// remove.
-	if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
+	if err := VerifyProofsIssuedByMint(server.demoMintIssuance, receipt.ProofStateRefs); err != nil {
+		writeError(response, http.StatusUnprocessableEntity, err)
+		return
+	}
+	if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt, server.demoMintIssuance); err != nil {
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return
 	}

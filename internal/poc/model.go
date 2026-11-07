@@ -352,8 +352,9 @@ func validateFakeMoneyEndpoint(raw string, expectedPath string) error {
 
 // validateCashuMintIdentity validates the canonical receipt identity, not the
 // server's transport address. Local/lab networks retain the private HTTP form;
-// the Friday browser flow uses one public HTTPS IP origin which is mapped to a
-// separately pinned private FIPS transport by the authority/proxy.
+// a public deployment records the HTTPS origin a bidder's browser will actually
+// reach, which may be an IP literal or a hostname. The transport is separately
+// pinned, so the identity only has to be unambiguous and credential-free.
 func validateCashuMintIdentity(raw string) error {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "" || parsed.Opaque != "" || strings.Contains(raw, ProductionURL) {
@@ -365,10 +366,15 @@ func validateCashuMintIdentity(raw string) error {
 	if parsed.Scheme != "https" || parsed.Hostname() == "" || (parsed.Port() != "" && parsed.Port() != "443") {
 		return errors.New("Cashu mint identity must use private HTTP or public HTTPS")
 	}
-	ip := net.ParseIP(parsed.Hostname())
-	if ip == nil || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
-		return errors.New("public Cashu HTTPS identity must use a public IP literal")
-	}
+	// The host is deliberately not constrained beyond the origin checks above.
+	// An earlier rule required a public IP literal and refused any hostname,
+	// which conflated the mint's identity with its addressing: a mint reached by
+	// name over verified TLS is not less well identified than one reached by
+	// address, and a name is what a certificate can actually attest. It also made
+	// the intended deployment impossible, because a bidder's browser has to reach
+	// this origin and browsers reach names. The identity still has to be one
+	// credential-free origin with no path or query, which is what the receipt is
+	// bound to; that is the property worth enforcing.
 	return nil
 }
 

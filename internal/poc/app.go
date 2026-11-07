@@ -37,6 +37,9 @@ type Application struct {
 	// mintChecker is used only by CheckTx. It is deliberately not consulted by
 	// ApplyTransaction, which runs inside consensus and must stay deterministic.
 	mintChecker MintStateChecker
+	// Establishes whether the mint really holds records for a reference. NUT-07
+	// alone cannot, because it answers UNSPENT for points it never issued.
+	mintIssuance MintIssuanceChecker
 }
 
 var _ abci.Application = (*Application)(nil)
@@ -132,7 +135,8 @@ func newApplicationWithAuthority(chainID string, policy Policy, mintSeed []byte,
 		return nil, err
 	}
 	return &Application{state: state, hash: hash, policy: policy, mintSeed: append([]byte(nil), mintSeed...),
-		statePath: statePath, mintChecker: NewHTTPMintStateChecker(mintTransportOrigin(cashuMintURL), mintCheckTimeout)}, nil
+		statePath: statePath, mintChecker: NewHTTPMintStateChecker(mintTransportOrigin(cashuMintURL), mintCheckTimeout),
+		mintIssuance: NewHTTPMintIssuanceChecker(mintTransportOrigin(cashuMintURL), mintCheckTimeout)}, nil
 }
 
 // SetMintChecker replaces the admission-time mint checker. Tests inject a fake;
@@ -141,6 +145,13 @@ func (app *Application) SetMintChecker(checker MintStateChecker) {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 	app.mintChecker = checker
+}
+
+// SetMintIssuanceChecker replaces the issuance checker. Tests inject a fake.
+func (app *Application) SetMintIssuanceChecker(checker MintIssuanceChecker) {
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	app.mintIssuance = checker
 }
 
 // verifyMintBackedFunding asks the mint whether a Cashu-lock bid's proofs are
@@ -154,8 +165,9 @@ func (app *Application) verifyMintBackedFunding(tx Transaction) error {
 	}
 	app.mu.RLock()
 	checker := app.mintChecker
+	issuance := app.mintIssuance
 	app.mu.RUnlock()
-	return VerifyCashuLockProofsAtMint(checker, *receipt)
+	return VerifyCashuLockProofsAtMint(checker, *receipt, issuance)
 }
 
 func (app *Application) Info(context.Context, *abci.InfoRequest) (*abci.InfoResponse, error) {

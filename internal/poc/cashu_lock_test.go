@@ -22,6 +22,33 @@ type fakeMint struct {
 	calls  int
 }
 
+// fakeIssuance is a mint that keeps per-proof records: it refuses to vouch for
+// a canary point it cannot have issued. Tests that want the open-world behaviour
+// use openWorldIssuance instead.
+type fakeIssuance struct {
+	known map[string]bool
+	err   error
+}
+
+func (fake *fakeIssuance) IssuedProofs(refs []string) (map[string]bool, error) {
+	if fake.err != nil {
+		return nil, fake.err
+	}
+	answer := map[string]bool{}
+	for _, ref := range refs {
+		answer[ref] = fake.known == nil || fake.known[ref]
+	}
+	return answer, nil
+}
+
+// openWorldIssuance models a mint that answers UNSPENT for points it never
+// issued, which is what Nutshell 0.19.2 does. It must refuse every bid.
+type openWorldIssuance struct{}
+
+func (openWorldIssuance) IssuedProofs([]string) (map[string]bool, error) {
+	return nil, errors.New("this mint answers for proofs it has never seen, so it cannot confirm that any proof was issued")
+}
+
 func (fake *fakeMint) ProofStates(refs []string) (map[string]MintProofState, error) {
 	fake.calls++
 	if fake.err != nil {
@@ -200,6 +227,7 @@ func TestCheckTxRefusesCashuLockWhenMintSaysSpent(t *testing.T) {
 
 	// The mint confirms the proofs are unspent: admitted.
 	app.SetMintChecker(&fakeMint{states: map[string]MintProofState{refs[0]: MintProofUnspent}})
+	app.SetMintIssuanceChecker(&fakeIssuance{})
 	if response := checkTx(t, app, event); response.Code != abci.CodeTypeOK {
 		t.Fatalf("unspent proofs refused: %s", response.Log)
 	}
@@ -228,6 +256,7 @@ func TestCheckTxFailsClosedWhenTheMintCannotBeAsked(t *testing.T) {
 	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt})
 
 	app.SetMintChecker(&fakeMint{err: errors.New("connection refused")})
+	app.SetMintIssuanceChecker(&fakeIssuance{})
 	response := checkTx(t, app, event)
 	if response.Code == abci.CodeTypeOK || !strings.Contains(response.Log, "could not be verified at the mint") {
 		t.Fatalf("unreachable mint response = %+v, want a fail-closed refusal", response)
@@ -235,6 +264,7 @@ func TestCheckTxFailsClosedWhenTheMintCannotBeAsked(t *testing.T) {
 
 	// A mint that answers for only some references is not a pass either.
 	app.SetMintChecker(&partialMint{})
+	app.SetMintIssuanceChecker(&fakeIssuance{})
 	if response := checkTx(t, app, event); response.Code == abci.CodeTypeOK {
 		t.Fatal("a partial mint answer was treated as a pass")
 	}
@@ -277,5 +307,64 @@ func TestNonMintBackedAuctionRejectsCashuLock(t *testing.T) {
 	_, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, DefaultPolicy(), seed)
 	if err == nil || !strings.Contains(err.Error(), "only a mint-backed auction") {
 		t.Fatalf("cashu lock on a custodial auction error = %v", err)
+	}
+}
+
+// NUT-07 defines UNSPENT as "the mint has no record of it being pending or
+// spent", so an invented point is indistinguishable from a genuine one when the
+// mint is open-world. Verified against Nutshell 0.19.2, which answers UNSPENT
+// for arbitrary compressed points. This test pins the consequence: a
+// reference-only receipt must be refused against such a mint, or the whole
+// funding mode could be satisfied by naming points that hold no value.
+func TestOpenWorldMintCannotVouchForIssuance(t *testing.T) {
+	t.Parallel()
+	refs := testProofRefs(t, testPrivateKey(t))
+
+	openWorld := NewHTTPMintStateChecker("http://127.0.0.1:1", mintCheckTimeout)
+	_ = openWorld // the points below are the subject, not an HTTP call
+
+	if err := VerifyProofsIssuedByMint(openWorldIssuance{}, refs); err == nil {
+		t.Fatal("an open-world mint was accepted as proof of issuance")
+	}
+
+	// A mint that keeps per-proof records is accepted.
+	if err := VerifyProofsIssuedByMint(&fakeIssuance{}, refs); err != nil {
+		t.Fatalf("a per-proof-record mint was refused: %v", err)
+	}
+
+	// A mint whose records do not contain the reference is refused.
+	known := map[string]bool{}
+	if err := VerifyProofsIssuedByMint(&fakeIssuance{known: known}, refs); err == nil {
+		t.Fatal("a reference the mint has no record of was accepted")
+	}
+
+	// And an unanswerable question is a refusal, never a pass.
+	if err := VerifyProofsIssuedByMint(&fakeIssuance{err: errors.New("mint down")}, refs); err == nil {
+		t.Fatal("an unanswerable issuance question was treated as a pass")
+	}
+	if err := VerifyProofsIssuedByMint(nil, refs); err == nil {
+		t.Fatal("a missing issuance checker was treated as a pass")
+	}
+}
+
+func TestCheckTxRefusesBidAgainstOpenWorldMint(t *testing.T) {
+	t.Parallel()
+	state, seed, committee := cashuLockFixture(t)
+	app := applicationFor(t, state, seed, committee)
+	bidder := testPrivateKey(t)
+	refs := testProofRefs(t, testPrivateKey(t))
+	receipt := testCashuLockReceipt(t, committee, "mint-backed", actorForKey(bidder), 120,
+		"op-open-world", strings.Repeat("a", 64), 1_700, refs)
+	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt})
+
+	// The mint claims the proofs are unspent -- but claims that for anything.
+	app.SetMintChecker(&fakeMint{states: map[string]MintProofState{refs[0]: MintProofUnspent}})
+	app.SetMintIssuanceChecker(openWorldIssuance{})
+	response := checkTx(t, app, event)
+	if response.Code == abci.CodeTypeOK {
+		t.Fatal("a bid was admitted against a mint that cannot vouch for issuance")
+	}
+	if !strings.Contains(response.Log, "never seen") {
+		t.Fatalf("refusal reason = %q, want the open-world explanation", response.Log)
 	}
 }
