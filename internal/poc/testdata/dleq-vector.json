@@ -1,0 +1,32 @@
+{
+  "mint": "https://mint.playday.it",
+  "keyset_id": "00e8839167216bc1",
+  "keys": {
+    "32": "021cbeca367a74d342a09257a6092edeb334171391964f1bb18fa3eed1216906ee",
+    "64": "0351741f01b0bfd5a023211869d91b842fb3fa797727c1c11d526b6ddc76c2180e"
+  },
+  "bindings": [
+    {
+      "amount": 64,
+      "id": "00e8839167216bc1",
+      "Y": "02fad0f1a2cb2486d0c607bec2c1c56535c2d5793efff54c8dd6e04b86979ea61d",
+      "C": "02eae1f450d8821b7e61316607fee23c7a6922ee966a4c34d9a4c40bd10e222ff7",
+      "dleq": {
+        "e": "59a1b13ac0526654e5914c7bdd52c87ba929a8d3ca88d5c89d61c406a02ceac6",
+        "s": "7d5fecf874d5e743a356903b6d846cd311312efa9edea815fe0ae979f725c6c2",
+        "r": "ced8022566814761034fa7b26660f964f39fd01a1b03cd8532a849eef2b61bed"
+      }
+    },
+    {
+      "amount": 32,
+      "id": "00e8839167216bc1",
+      "Y": "02792f8314b62817d04e1270632fa564bee0643279da21b5bc0e6b899696af1010",
+      "C": "0334ba3b9552151912a2a78799f1a770f2153769cf789b5e9a88ca287f53e29391",
+      "dleq": {
+        "e": "e0e0a3aea4d90a98d439e767fda3f169531d18f7a76d2599df55eea0e1334544",
+        "s": "d96908305e9b71653585b99bca3e02a56b254222ed21d71b0277918c19391ac8",
+        "r": "db3cb02b79f0d4b91e99779720ca70af9178cb13bab9255265f06cee90cd25c8"
+      }
+    }
+  ]
+}
