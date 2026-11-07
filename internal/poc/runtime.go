@@ -534,6 +534,17 @@ func RunLocalDemo(ctx context.Context, root, listen, committeePublicKey string) 
 	if err := waitForValidators(ctx, api, 4, 35*time.Second); err != nil {
 		return err
 	}
+	// Retention is the only lever in this slice: the 1s empty-block interval is
+	// fixed by the owner's ruling.  The pruner fails soft, so a pruning error
+	// can never take the demo down.
+	policy, err := prunePolicyFromEnv(os.Getenv)
+	if err != nil {
+		return err
+	}
+	if policy.enabled {
+		fmt.Fprintf(os.Stdout, "POC_PRUNE retention_blocks=%d floor_blocks=%d interval=%s\n", policy.retainBlocks, pruneFloorBlocks, pruneInterval)
+		newBlockPruner(policy).run(ctx, manifest)
+	}
 	// Opt-in relay transport, same contract as RunSite: unset POC_RELAY_URL means
 	// no observer and unchanged behaviour.
 	stopObserver, err := startRelayObserverIfConfigured(ctx, api)

@@ -30,7 +30,14 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 )
 
-var localPorts = [4][2]int{{28656, 28657}, {28756, 28757}, {28856, 28857}, {28956, 28957}}
+// Each slot gets p2p, RPC and a loopback-only privileged gRPC port.  The
+// privileged listener is what lets the pruner call SetBlockRetainHeight.
+var localPorts = [4][3]int{
+	{28656, 28657, 28658},
+	{28756, 28757, 28758},
+	{28856, 28857, 28858},
+	{28956, 28957, 28958},
+}
 
 type ValidatorManifest struct {
 	Slot             int    `json:"slot"`
@@ -40,6 +47,9 @@ type ValidatorManifest struct {
 	P2PListen        string `json:"p2p_listen"`
 	P2PExternal      string `json:"p2p_external,omitempty"`
 	RPCListen        string `json:"rpc_listen"`
+	// GRPCListen is the loopback-only privileged gRPC listener.  It is empty
+	// for remote networks, which keep the privileged server disabled.
+	GRPCListen string `json:"grpc_listen,omitempty"`
 }
 
 type NetworkManifest struct {
@@ -542,6 +552,7 @@ func initLocalNetworkWithEndpoints(root string, policy Policy, suppliedCommittee
 			ValidatorAddress: strings.ToUpper(hex.EncodeToString(publicKey.Address())),
 			P2PListen:        fmt.Sprintf("tcp://127.0.0.1:%d", localPorts[index][0]),
 			RPCListen:        fmt.Sprintf("tcp://127.0.0.1:%d", localPorts[index][1]),
+			GRPCListen:       fmt.Sprintf("tcp://127.0.0.1:%d", localPorts[index][2]),
 		})
 	}
 	empty, err := NewStateWithEndpoints(chainID, ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey), committeePublicKey, mintURL, cashuMintURL)
@@ -780,6 +791,19 @@ func runValidatorNode(ctx context.Context, root string, slot int, predecessorSea
 	if err != nil {
 		return err
 	}
+	// Local networks opt into retention; remote/Friday networks keep the
+	// pre-slice behaviour of retaining every block.  The application retain
+	// height is half of CometBFT's min(application, companion) rule, so it must
+	// be set here for the pruning service to have any effect.
+	if manifest.Mode != "remote" {
+		policy, policyErr := prunePolicyFromEnv(os.Getenv)
+		if policyErr != nil {
+			return policyErr
+		}
+		if policy.enabled {
+			application.SetRetainBlocks(policy.retainBlocks)
+		}
+	}
 	node, err := cmtnode.NewNode(ctx, config, pv, nodeKey, proxy.NewLocalClientCreator(application), cmtnode.DefaultGenesisDocProviderFunc(config), cmtcfg.DefaultDBProvider, cmtnode.DefaultMetricsProvider(config.Instrumentation), log.NewTMJSONLogger(log.NewSyncWriter(os.Stdout)))
 	if err != nil {
 		return err
@@ -818,8 +842,22 @@ func validatorConfig(networkRoot, nodeRoot string, manifest NetworkManifest, val
 	config.GRPC.VersionService.Enabled = false
 	config.GRPC.BlockService.Enabled = false
 	config.GRPC.BlockResultsService.Enabled = false
+	// CometBFT v1.0.0 has no time-based pruning: [storage.pruning] only sets
+	// how often the pruner runs, and the blockstore shrinks only when a
+	// privileged client calls SetBlockRetainHeight.  Without this listener the
+	// 1s empty-block chain grows without bound (~10 KB/block, ~86k blocks/day).
+	// The listener is loopback-only and exposes the pruning service alone; the
+	// other gRPC services stay disabled.
 	config.GRPC.Privileged.ListenAddress = ""
 	config.GRPC.Privileged.PruningService.Enabled = false
+	if grpcListen := localGRPCListen(manifest, validator); grpcListen != "" {
+		config.GRPC.Privileged.ListenAddress = grpcListen
+		config.GRPC.Privileged.PruningService.Enabled = true
+		// The pruner only honours the companion retain height when this is
+		// enabled; otherwise findMinBlockRetainHeight() ignores it and the
+		// application retain height (0 by default) pins pruning at zero.
+		config.Storage.Pruning.DataCompanion.Enabled = true
+	}
 	config.P2P.ListenAddress = validator.P2PListen
 	config.P2P.ExternalAddress = validator.P2PExternal
 	config.P2P.Seeds = ""
@@ -839,6 +877,20 @@ func validatorConfig(networkRoot, nodeRoot string, manifest NetworkManifest, val
 	config.Instrumentation.Prometheus = false
 	config.Instrumentation.PrometheusListenAddr = ""
 	return config
+}
+
+// localGRPCListen returns the loopback privileged gRPC address for a local
+// validator.  Manifests written before this slice have no grpc_listen field;
+// backfilling it in memory keeps an existing demo root working after a deploy
+// without rewriting operator-owned files.  Remote networks never get one.
+func localGRPCListen(manifest NetworkManifest, validator ValidatorManifest) string {
+	if validator.GRPCListen != "" {
+		return validator.GRPCListen
+	}
+	if manifest.Mode == "remote" || validator.Slot < 1 || validator.Slot > len(localPorts) {
+		return ""
+	}
+	return fmt.Sprintf("tcp://127.0.0.1:%d", localPorts[validator.Slot-1][2])
 }
 
 func persistentPeers(manifest NetworkManifest, self int) string {
@@ -872,9 +924,12 @@ func loadCommitteeSeed(root, expectedPublic string) ([]byte, error) {
 }
 
 func reserveLocalPorts(manifest NetworkManifest, webListen string) ([]net.Listener, error) {
-	addresses := make([]string, 0, 9)
+	addresses := make([]string, 0, 13)
 	for _, validator := range manifest.Validators {
 		addresses = append(addresses, strings.TrimPrefix(validator.P2PListen, "tcp://"), strings.TrimPrefix(validator.RPCListen, "tcp://"))
+		if grpcListen := localGRPCListen(manifest, validator); grpcListen != "" {
+			addresses = append(addresses, strings.TrimPrefix(grpcListen, "tcp://"))
+		}
 	}
 	addresses = append(addresses, webListen)
 	listeners := make([]net.Listener, 0, len(addresses))

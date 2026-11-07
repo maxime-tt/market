@@ -37,6 +37,23 @@ type Application struct {
 	// mintChecker is used only by CheckTx. It is deliberately not consulted by
 	// ApplyTransaction, which runs inside consensus and must stay deterministic.
 	mintChecker MintStateChecker
+	// retainBlocks is the application retain height window reported in
+	// Commit.  It is not part of state, the app hash or any validation: it only
+	// tells CometBFT how far back the application still needs block data.
+	// Zero keeps every block (the pre-pruning behaviour).
+	retainBlocks int64
+}
+
+// SetRetainBlocks configures the application retain height window.  CometBFT
+// prunes to min(application, companion) retain height, so a non-zero value
+// here is required for the pruning service to have any effect.
+func (app *Application) SetRetainBlocks(blocks int64) {
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	if blocks < 0 {
+		blocks = 0
+	}
+	app.retainBlocks = blocks
 }
 
 var _ abci.Application = (*Application)(nil)
@@ -353,7 +370,16 @@ func (app *Application) Commit(context.Context, *abci.CommitRequest) (*abci.Comm
 	app.state = app.pending.state
 	app.hash = app.pending.hash
 	app.pending = nil
-	return &abci.CommitResponse{}, nil
+	response := &abci.CommitResponse{}
+	// RetainHeight is advisory metadata for CometBFT's pruner, not consensus
+	// data: it is not hashed and does not enter the state.  The application
+	// reads only the latest commit, so the window is pure retention.
+	if app.retainBlocks > 0 {
+		if target := app.state.Height - app.retainBlocks; target > 0 {
+			response.RetainHeight = target
+		}
+	}
+	return response, nil
 }
 
 func (app *Application) Query(_ context.Context, request *abci.QueryRequest) (*abci.QueryResponse, error) {
