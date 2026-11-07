@@ -10765,6 +10765,7 @@ ${e}}` : `{${i.join(",")}}`;
       });
       this.storage.set("spendable", JSON.stringify(keep ?? []));
       this.storage.set("locked", JSON.stringify([...this.locked(), ...send]));
+      this.storage.set("lockedUntil", String(locktime));
       const bindings = send.map((proof) => ({
         amount: Number(proof.amount),
         id: proof.id,
@@ -10786,14 +10787,23 @@ ${e}}` : `{${i.join(",")}}`;
         proofs: bindings
       };
     }
-    releaseLocked() {
+    lockedUntil() {
+      const raw = this.storage.get("lockedUntil");
+      return raw ? Number(raw) : 0;
+    }
+    reclaimLocked() {
       const locked = this.locked();
       if (!locked.length)
-        return 0;
+        return { released: 0, reclaimableAt: 0 };
+      const reclaimableAt = this.lockedUntil();
+      if (reclaimableAt > 0 && Math.floor(Date.now() / 1000) < reclaimableAt) {
+        return { released: 0, reclaimableAt };
+      }
       const released = locked.reduce((total, proof) => total + Number(proof.amount), 0);
       this.storage.set("spendable", JSON.stringify([...this.spendable(), ...locked]));
       this.storage.set("locked", JSON.stringify([]));
-      return released;
+      this.storage.set("lockedUntil", "0");
+      return { released, reclaimableAt: 0 };
     }
     async lockedProofStates() {
       const locked = this.locked();

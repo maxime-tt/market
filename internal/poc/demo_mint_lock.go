@@ -28,9 +28,9 @@ package poc
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"encoding/hex"
 	"net/http"
 	"sort"
 	"strings"
@@ -206,10 +206,10 @@ func (server *APIServer) demoMintLock(response http.ResponseWriter, request *htt
 		return
 	}
 	// DLEQ has already proven these points were signed by the mint for these
-	// amounts, which is a positive statement. The issuance canary existed only to
-	// detect that NUT-07 cannot make one, so it is not passed here: NUT-07's
-	// remaining job is the narrower "is it still unspent".
-	if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt, nil); err != nil {
+	// amounts, which is a positive statement. NUT-07's remaining job is the
+	// narrower "is it still unspent"; it cannot prove issuance, because a real
+	// mint answers UNSPENT for points it never issued.
+	if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return
 	}

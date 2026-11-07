@@ -1,7 +1,6 @@
 package poc
 
 import (
-	"log"
 	"context"
 	"crypto/sha256"
 	"embed"
@@ -11,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -50,10 +50,10 @@ type NodeStatus struct {
 }
 
 type APIServer struct {
-	manifest      NetworkManifest
-	clients       []*rpchttp.HTTP
-	offline       func(int) error
-	cashu         *httputil.ReverseProxy
+	manifest NetworkManifest
+	clients  []*rpchttp.HTTP
+	offline  func(int) error
+	cashu    *httputil.ReverseProxy
 	// mintProxy maps the mint identity recorded in consensus state onto the
 	// origin this host can reach, so a browser can mint against the same mint
 	// the validators reason about without either side being told a half-truth.
@@ -61,13 +61,9 @@ type APIServer struct {
 	// The same checker the application uses for admission, so the coordinator
 	// cannot sign a receipt over proofs the engine would then refuse.
 	demoMintChecker MintStateChecker
-	// Establishes whether the mint really holds records for the references a
-	// receipt names. NUT-07 alone cannot: it answers UNSPENT for points it has
-	// never issued.
-	demoMintIssuance MintIssuanceChecker
 	// Publishes the keys a proof's DLEQ must verify against.
 	demoMintKeyset *MintKeySetFetcher
-	legacyInterim bool
+	legacyInterim  bool
 	// Explicit activation is combined with current runtime readiness for UI
 	// flags and direct R20 broadcasts. Authority/mint retain their own checks.
 	browserThresholdReady bool
@@ -77,14 +73,14 @@ type APIServer struct {
 	// Server-enforced public rollback boundary. It blocks every site mutation;
 	// exact pre-existing payment recovery remains on the separately guarded
 	// loopback Friday authority service.
-	recoveryOnly      bool
+	recoveryOnly bool
 	// Legacy loopback demo only: the committee key that signs custodial
 	// reservation receipts in the absence of a deployed coordinator.
-	demoCommitteeKey          *btcec.PrivateKey
-	demoCommitteePublicKey    string
-	runtimeReadyProbe func(context.Context) bool
-	healthPinsSHA256  string
-	observerNodeID    string
+	demoCommitteeKey       *btcec.PrivateKey
+	demoCommitteePublicKey string
+	runtimeReadyProbe      func(context.Context) bool
+	healthPinsSHA256       string
+	observerNodeID         string
 }
 
 const browserReleasePinsPath = "/etc/plebeian-auctions-friday/browser-r20-pins.json"
@@ -295,10 +291,9 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 		}
 	}
 	return &APIServer{observerNodeID: observerNodeID, manifest: manifest, clients: clients, offline: offline, cashu: proxy, mintProxy: mintProxy,
-		legacyInterim:         os.Getenv("POC_ENABLE_LEGACY_INTERIM") == "true",
-		demoCommitteeKey:      demoKey, demoCommitteePublicKey: demoPublicKey,
+		legacyInterim:    os.Getenv("POC_ENABLE_LEGACY_INTERIM") == "true",
+		demoCommitteeKey: demoKey, demoCommitteePublicKey: demoPublicKey,
 		demoMintChecker:       NewHTTPMintStateChecker(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
-		demoMintIssuance:      NewHTTPMintIssuanceChecker(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
 		demoMintKeyset:        NewMintKeySetFetcher(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
 		browserThresholdReady: browserReady, browserReleasePins: browserPins,
 		recoveryOnly: recoveryOnlyValue == "true", healthPinsSHA256: os.Getenv("POC_FRIDAY_HEALTH_PINS_SHA256")}, nil
@@ -468,7 +463,7 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 		// the mint will answer questions about, rather than a pure attestation.
 		"mint_backed_funding": server.demoMintChecker != nil && server.demoCommitteeKey != nil,
 
-		"fips_transport":          thresholdRoute,
+		"fips_transport": thresholdRoute,
 		// This remains false until the two-phase client-held payment signer and
 		// admission service are installed. The browser must never fall back to a
 		// shared-key reservation while labelling the result as threshold funded.

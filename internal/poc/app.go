@@ -37,9 +37,6 @@ type Application struct {
 	// mintChecker is used only by CheckTx. It is deliberately not consulted by
 	// ApplyTransaction, which runs inside consensus and must stay deterministic.
 	mintChecker MintStateChecker
-	// Establishes whether the mint really holds records for a reference. NUT-07
-	// alone cannot, because it answers UNSPENT for points it never issued.
-	mintIssuance MintIssuanceChecker
 }
 
 var _ abci.Application = (*Application)(nil)
@@ -135,8 +132,7 @@ func newApplicationWithAuthority(chainID string, policy Policy, mintSeed []byte,
 		return nil, err
 	}
 	return &Application{state: state, hash: hash, policy: policy, mintSeed: append([]byte(nil), mintSeed...),
-		statePath: statePath, mintChecker: NewHTTPMintStateChecker(mintTransportOrigin(cashuMintURL), mintCheckTimeout),
-		mintIssuance: NewHTTPMintIssuanceChecker(mintTransportOrigin(cashuMintURL), mintCheckTimeout)}, nil
+		statePath: statePath, mintChecker: NewHTTPMintStateChecker(mintTransportOrigin(cashuMintURL), mintCheckTimeout)}, nil
 }
 
 // SetMintChecker replaces the admission-time mint checker. Tests inject a fake;
@@ -147,17 +143,16 @@ func (app *Application) SetMintChecker(checker MintStateChecker) {
 	app.mintChecker = checker
 }
 
-// SetMintIssuanceChecker replaces the issuance checker. Tests inject a fake.
-func (app *Application) SetMintIssuanceChecker(checker MintIssuanceChecker) {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	app.mintIssuance = checker
-}
-
 // verifyMintBackedFunding asks the mint whether a Cashu-lock bid's proofs are
 // currently unspent. CheckTx is local and outside consensus, so this is the one
 // place a network call is allowed -- see mintclient.go for why it cannot live in
 // ApplyTransaction. It fails closed: an unreachable mint refuses the bid.
+//
+// There is deliberately no issuance check here. A real mint answers UNSPENT for
+// points it never issued, so NUT-07 cannot prove issuance; DLEQ against the
+// mint's published keyset is the value proof, and the coordinator verifies it
+// before signing the receipt. NUT-07's remaining job is the narrower "has this
+// proof already been spent".
 func (app *Application) verifyMintBackedFunding(tx Transaction) error {
 	receipt, err := CashuLockReceiptOf(tx)
 	if err != nil || receipt == nil {
@@ -165,9 +160,8 @@ func (app *Application) verifyMintBackedFunding(tx Transaction) error {
 	}
 	app.mu.RLock()
 	checker := app.mintChecker
-	issuance := app.mintIssuance
 	app.mu.RUnlock()
-	return VerifyCashuLockProofsAtMint(checker, *receipt, issuance)
+	return VerifyCashuLockProofsAtMint(checker, *receipt)
 }
 
 func (app *Application) Info(context.Context, *abci.InfoRequest) (*abci.InfoResponse, error) {
