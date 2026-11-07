@@ -346,12 +346,38 @@ func (server *APIServer) Handler() (http.Handler, error) {
 		mux.HandleFunc("POST /api/admin/offline", server.offlineValidator)
 	}
 	mux.Handle("/", http.FileServer(http.FS(assets)))
-	return securityHeaders(mux), nil
+	return securityHeaders(mux, connectSources(server.manifest.CashuMintURL)), nil
 }
 
-func securityHeaders(next http.Handler) http.Handler {
+// connectSources returns the extra origins the page is allowed to reach.
+//
+// It is exactly one: the Cashu mint identity recorded in consensus state. The
+// page's own code never needed to leave its origin before, so connect-src 'self'
+// was correct -- and it silently blocked the browser wallet the moment the
+// bidder started minting their own proofs, because a CSP denial and a CORS
+// denial look identical from JavaScript ("Failed to fetch"). The mint has to be
+// reachable by the browser or the whole bidder-held design is impossible, so it
+// is named here, one origin, rather than widened to a scheme or a wildcard.
+func connectSources(cashuMintURL string) []string {
+	parsed, err := url.Parse(cashuMintURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return nil
+	}
+	// A loopback mint is reached same-origin through the local site, so 'self'
+	// already covers it and naming it again would only add noise.
+	if parsed.Hostname() == "127.0.0.1" || parsed.Hostname() == "localhost" || parsed.Hostname() == "::1" {
+		return nil
+	}
+	return []string{parsed.Scheme + "://" + parsed.Host}
+}
+
+func securityHeaders(next http.Handler, mintOrigins []string) http.Handler {
+	connect := "'self'"
+	for _, origin := range mintOrigins {
+		connect += " " + origin
+	}
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		response.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: https:; frame-ancestors 'none'")
+		response.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src "+connect+"; img-src 'self' data: https:; frame-ancestors 'none'")
 		response.Header().Set("Referrer-Policy", "no-referrer")
 		response.Header().Set("X-Content-Type-Options", "nosniff")
 		response.Header().Set("X-Frame-Options", "DENY")
@@ -438,9 +464,7 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 		// True when this deployment can serve a bid whose backing is real proofs
 		// the mint will answer questions about, rather than a pure attestation.
 		"mint_backed_funding": server.demoMintChecker != nil && server.demoCommitteeKey != nil,
-		// Where a browser reaches that mint. Same-origin, so the page needs no
-		// cross-origin exception and the mint identity stays one value.
-		"browser_mint_path": "/api/mint",
+
 		"fips_transport":          thresholdRoute,
 		// This remains false until the two-phase client-held payment signer and
 		// admission service are installed. The browser must never fall back to a

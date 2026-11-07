@@ -77,6 +77,12 @@ function mintBackedAvailable(config = state.config) { return config?.mint_backed
 // The mint the browser talks to is the same origin that serves this page, so
 // there is no cross-origin exception and no second identity for one mint.
 function browserMintUrl(config = state.config) {
+  // The mint IDENTITY recorded in consensus state, which is the origin the
+  // receipt is bound to. It must be an absolute origin a browser can reach, so
+  // a relative path would be a different mint identity and the receipt would be
+  // refused. Absolute first, and only fall back to a same-origin path if the
+  // deployment publishes nothing better.
+  if (config?.cashu_mint_url) return String(config.cashu_mint_url).replace(/\/+$/, "");
   return new URL(config?.browser_mint_path || "/api/mint", window.location.origin).toString().replace(/\/+$/, "");
 }
 function bidderWallet() {
