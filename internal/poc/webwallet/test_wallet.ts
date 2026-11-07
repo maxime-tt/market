@@ -1,7 +1,7 @@
 // Drives the browser wallet against the real local mint, outside a browser.
 // Proves the wallet logic before any of it is bundled or wired into the page.
 import { readFileSync } from "node:fs";
-import { BidderWallet, memoryStorage, refundPublicKeyFromNostr } from "./src/wallet";
+import { BidderWallet, memoryStorage, refundClaimMessage } from "./src/wallet";
 
 const MINT = process.env.MINT_URL ?? "http://127.0.0.1:3338";
 const NET = process.env.NET_ROOT!;
@@ -20,21 +20,30 @@ const secp = await import("@noble/curves/secp256k1.js");
 // The bidder's Nostr identity, standing in for the page's demo signer.
 const bidderSecret = createHash("sha256").update("test-bidder").digest();
 const bidderXOnly = Buffer.from(secp.schnorr.getPublicKey(bidderSecret)).toString("hex");
-const refundPub = refundPublicKeyFromNostr(bidderXOnly);
 
-const wallet = new BidderWallet(MINT, memoryStorage());
+const storage = memoryStorage();
+const wallet = new BidderWallet(MINT, storage);
+const refundPub = wallet.spendPublicKey();
 console.log(`mint      : ${MINT}`);
 console.log(`committee : ${committeePub}`);
-console.log(`refund    : ${refundPub} (from Nostr key ${bidderXOnly.slice(0, 16)}…)\n`);
+console.log(`refund    : ${refundPub} (wallet spend key; Nostr key ${bidderXOnly.slice(0, 16)}…)\n`);
 
-check("refund key is the Nostr key in compressed form", refundPub === `02${bidderXOnly}`,
+check("the refund key is a compressed wallet spend key", /^0[23][0-9a-f]{64}$/.test(refundPub),
   refundPub.slice(0, 20));
+check("the refund key is NOT derived from the Nostr identity", refundPub.slice(2) !== bidderXOnly,
+  "independent key");
+check("the spend key is persisted in wallet storage", storage.get("spendKey") !== null,
+  `${(storage.get("spendKey") ?? "").length} hex chars`);
+check("a second wallet over the same storage reuses the spend key",
+  new BidderWallet(MINT, storage).spendPublicKey() === refundPub, "stable");
+check("a fresh wallet gets a different spend key",
+  new BidderWallet(MINT, memoryStorage()).spendPublicKey() !== refundPub, "independent");
 
 const balance = await wallet.mint(256, (state) => console.log(`   … ${state}`));
 check("minted real proofs from the mint", balance === 256, `${balance} sats`);
 
 const locktime = Math.floor(Date.now() / 1000) + 3600;
-const funding = await wallet.lockForBid(128, committeePub, refundPub, locktime, (s) =>
+const funding = await wallet.lockForBid(128, committeePub, locktime, (s) =>
   console.log(`   … ${s}`));
 
 check("locked proofs to the committee", funding.proofStateRefs.length > 0,
@@ -68,6 +77,20 @@ check("the locked proofs carry a P2PK condition for the committee",
   Array.isArray(lockedSecret) && lockedSecret[0] === "P2PK" &&
     (lockedSecret[1] as { data: string }).data.slice(2) === committeePub.slice(2),
   JSON.stringify(lockedSecret).slice(0, 110));
+check("the lock names the wallet spend key as its refund key",
+  (lockedSecret[1] as { tags: string[][] }).tags.some((tag) => tag[0] === "refund" && tag[1] === refundPub),
+  JSON.stringify((lockedSecret[1] as { tags: string[][] }).tags));
+check("the funding record carries the spend key that owns the proofs",
+  funding.spendPublicKey === refundPub, funding.spendPublicKey.slice(0, 20));
+
+// The claim message is what the coordinator verifies; it must bind the bid id
+// and the output keys, and be stable across calls.
+const claimMessage = new TextDecoder().decode(refundClaimMessage("bid-1", [refundPub, refundPub]));
+check("the refund claim message binds the bid id and output keys",
+  claimMessage === `PlebeianAuctionsCashuRefundClaimV1\nbid_id=bid-1\noutputs=${refundPub},${refundPub}`,
+  claimMessage.replace(/\n/g, " | "));
+check("the claim message differs for a different bid",
+  new TextDecoder().decode(refundClaimMessage("bid-2", [refundPub])) !== claimMessage, "bound to the bid");
 
 // A failed bid must not strand the bidder's whole balance. Before this, the
 // first lock moved everything to `locked` and every later bid reported "holds no
@@ -83,7 +106,7 @@ check("and the balance is untouched by that attempt", wallet.balance() === befor
 
 // Past the locktime the bidder really can move them, because the NUT-11 lock
 // named them as a refund key from that moment.
-await wallet.lockForBid(1, committeePub, refundPub, Math.floor(Date.now() / 1000) + 1);
+await wallet.lockForBid(1, committeePub, Math.floor(Date.now() / 1000) + 1);
 await new Promise((r) => setTimeout(r, 2200));
 const late = wallet.reclaimLocked();
 check("past the locktime everything is reclaimed",
@@ -94,9 +117,9 @@ check("nothing remains locked", wallet.lockedBalance() === 0, `${wallet.lockedBa
 // And the message a locked-out bidder sees must describe their real position.
 const stranded = new BidderWallet(MINT, memoryStorage());
 await stranded.mint(64, () => {});
-await stranded.lockForBid(64, committeePub, refundPub, locktime);
+await stranded.lockForBid(64, committeePub, locktime);
 let message = "";
-try { await stranded.lockForBid(16, committeePub, refundPub, locktime); } catch (e) { message = (e as Error).message; }
+try { await stranded.lockForBid(16, committeePub, locktime); } catch (e) { message = (e as Error).message; }
 check("a fully-locked wallet says so instead of 'mint some first'",
   message.includes("locked") && !message.includes("mint some first"), message);
 

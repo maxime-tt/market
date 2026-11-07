@@ -335,9 +335,10 @@ async function runExclusiveMaintenance(capturedScope, operation) {
   return state.maintenancePromise;
 }
 // Claims every displaced bid this browser still holds proofs for. The
-// coordinator swaps the locked proofs back to this bidder's own Nostr key and
+// coordinator swaps the locked proofs back to this wallet's own spend key and
 // returns fresh ones, which the wallet imports. The signed KindRefund event is
-// the authorization for that request; it is deliberately NOT posted to
+// the authorization for that request and the wallet spend-key signature proves
+// ownership of the returned value; the event is deliberately NOT posted to
 // /api/event, where a legacy refund of a mint-backed bid is refused.
 async function claimRefunds({ manual = false } = {}) {
   if (!state.actor || !state.signer || !mintBackedAvailable()) return { claimed: 0, amount: 0 };
@@ -628,8 +629,10 @@ async function placeBid(auctionId, amount) {
       throw new Error("The coordinator did not publish the locktime policy (max_total_extension_seconds, emergency_recovery_seconds); refusing to lock with a guessed margin.");
     }
     const locktime = Number(auction.original_end_time) + maxTotalExtension + emergencyRecovery;
-    const refundPublicKey = window.PlebeianWallet.refundPublicKeyFromNostr(state.actor);
-    const funding = await wallet.lockForBid(amount, state.config.committee_public_key, refundPublicKey, locktime, (step)=>message(step));
+    // The refund key is the wallet's own spend key, not the Nostr identity: the
+    // Nostr key authorizes, the wallet owns value, and a NIP-07 signer cannot
+    // produce a Cashu signature. The lock names a key this wallet can spend.
+    const funding = await wallet.lockForBid(amount, state.config.committee_public_key, locktime, (step)=>message(step));
     const receipt = await api("/api/demo/mint-lock", { method: "POST", body: JSON.stringify({
       auction_id: auctionId, bidder: state.actor, amount, locktime,
       refund_public_key: funding.refundPublicKey, token_sha256: funding.tokenSha256,
@@ -638,7 +641,7 @@ async function placeBid(auctionId, amount) {
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
     // Bind the proofs this browser just locked to the committed bid id, so a
     // later displacement can hand exactly this set to the refund endpoint.
-    wallet.recordLockedBid(signed.id, funding.lockedProofs);
+    wallet.recordLockedBid(signed.id, funding.lockedProofs, funding.spendPublicKey);
     message(`Bid committed at height ${result.height} (mint-backed lock, proofs held by this browser).`, "success");
     await refresh(); await renderWalletBalance(); return;
   }

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	abci "github.com/cometbft/cometbft/abci/types"
 )
 
@@ -169,6 +170,64 @@ func refundEvent(t *testing.T, key *btcec.PrivateKey, bidID string) SignedEvent 
 	return testEvent(t, key, 1_003, KindRefund, refundContent{BidID: bidID})
 }
 
+// walletClaim is the wallet half of a refund request: a spend key the wallet
+// owns (never derived from the Nostr key) and a signature over the claim
+// message binding the bid id and the output keys.
+type walletClaim struct {
+	key       *btcec.PrivateKey
+	publicKey string
+}
+
+func newWalletClaim(t *testing.T) walletClaim {
+	t.Helper()
+	key := testPrivateKey(t)
+	return walletClaim{key: key, publicKey: hex.EncodeToString(key.PubKey().SerializeCompressed())}
+}
+
+// signClaim builds the body fields a browser wallet sends: one output key per
+// proof, all the wallet spend key, and a BIP-340 signature over the claim
+// message.
+func (claim walletClaim) signClaim(t *testing.T, bidID string, proofs []demoMintSpendProof) ([]string, string) {
+	t.Helper()
+	outputs := make([]string, len(proofs))
+	for index := range outputs {
+		outputs[index] = claim.publicKey
+	}
+	signature, err := schnorr.Sign(claim.key, sha256Sum(demoMintRefundClaimMessage(bidID, outputs)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return outputs, hex.EncodeToString(signature.Serialize())
+}
+
+// refundBody assembles a complete, valid refund request for one bid.
+func refundBody(t *testing.T, bidID string, proofs []demoMintSpendProof, event SignedEvent, claim walletClaim) demoMintRefundBody {
+	t.Helper()
+	outputs, signature := claim.signClaim(t, bidID, proofs)
+	return demoMintRefundBody{
+		BidID: bidID, Proofs: proofs, Event: event,
+		SpendPublicKey: claim.publicKey, OutputPublicKeys: outputs, SpendSignature: signature,
+	}
+}
+
+// p2pkRecipient returns the P2PK data field of a fresh proof secret.
+func p2pkRecipient(t *testing.T, secret string) string {
+	t.Helper()
+	var parsed []any
+	if err := json.Unmarshal([]byte(secret), &parsed); err != nil {
+		t.Fatalf("proof secret is not a P2PK condition: %v", err)
+	}
+	if len(parsed) != 2 || parsed[0] != "P2PK" {
+		t.Fatalf("proof secret is not a P2PK condition: %s", secret)
+	}
+	condition, ok := parsed[1].(map[string]any)
+	if !ok {
+		t.Fatalf("proof secret has no P2PK condition object: %s", secret)
+	}
+	data, _ := condition["data"].(string)
+	return data
+}
+
 func postRefund(t *testing.T, server *APIServer, body demoMintRefundBody) *httptest.ResponseRecorder {
 	t.Helper()
 	raw, err := json.Marshal(body)
@@ -208,11 +267,9 @@ func TestDemoMintRefundReturnsFreshProofs(t *testing.T) {
 	mint := newFakeSwapMint(t, amounts)
 	server := refundServer(t, state, committee, mint)
 	notesBefore := len(state.Notes)
+	claim := newWalletClaim(t)
 
-	recorder := postRefund(t, server, demoMintRefundBody{
-		BidID: bidID, Proofs: refundProofs(t, secrets, amounts, mint.keysetID),
-		Event: refundEvent(t, bidder, bidID),
-	})
+	recorder := postRefund(t, server, refundBody(t, bidID, refundProofs(t, secrets, amounts, mint.keysetID), refundEvent(t, bidder, bidID), claim))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("refund status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
@@ -227,6 +284,14 @@ func TestDemoMintRefundReturnsFreshProofs(t *testing.T) {
 	for _, proof := range response.Proofs {
 		if !validCompressedPublicKey(proof.C) || proof.Secret == "" || proof.KeysetID != mint.keysetID {
 			t.Fatalf("returned proof is malformed: %+v", proof)
+		}
+		// The value must come back to the wallet spend key, not to the Nostr
+		// identity: a Nostr-derived key is one the browser cannot sign with.
+		if recipient := p2pkRecipient(t, proof.Secret); recipient != claim.publicKey {
+			t.Fatalf("returned proof is locked to %s, want the wallet spend key %s", recipient, claim.publicKey)
+		}
+		if recipient := p2pkRecipient(t, proof.Secret); recipient == "02"+actorForKey(bidder) {
+			t.Fatal("returned proof is locked to the Nostr identity")
 		}
 		total += proof.Amount
 	}
@@ -252,10 +317,7 @@ func TestDemoMintRefundRefusesWrongBidder(t *testing.T) {
 	mint := newFakeSwapMint(t, amounts)
 	server := refundServer(t, state, committee, mint)
 
-	recorder := postRefund(t, server, demoMintRefundBody{
-		BidID: bidID, Proofs: refundProofs(t, secrets, amounts, mint.keysetID),
-		Event: refundEvent(t, testPrivateKey(t), bidID),
-	})
+	recorder := postRefund(t, server, refundBody(t, bidID, refundProofs(t, secrets, amounts, mint.keysetID), refundEvent(t, testPrivateKey(t), bidID), newWalletClaim(t)))
 	if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), "not the lock's bidder") {
 		t.Fatalf("wrong bidder response = %d %s, want 403 naming the bidder", recorder.Code, recorder.Body.String())
 	}
@@ -271,10 +333,7 @@ func TestDemoMintRefundRefusesProofSetThatDoesNotMatchReceipt(t *testing.T) {
 	server := refundServer(t, state, committee, mint)
 
 	// Same shape, different secrets: their Y points are not in the receipt.
-	recorder := postRefund(t, server, demoMintRefundBody{
-		BidID: bidID, Proofs: refundProofs(t, []string{"not-the-committed-secret-1", "not-the-committed-secret-2"}, amounts, mint.keysetID),
-		Event: refundEvent(t, bidder, bidID),
-	})
+	recorder := postRefund(t, server, refundBody(t, bidID, refundProofs(t, []string{"not-the-committed-secret-1", "not-the-committed-secret-2"}, amounts, mint.keysetID), refundEvent(t, bidder, bidID), newWalletClaim(t)))
 	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), "do not match the committed receipt") {
 		t.Fatalf("mismatched proof set response = %d %s", recorder.Code, recorder.Body.String())
 	}
@@ -294,10 +353,7 @@ func TestDemoMintRefundRefusesLockThatIsNotRefundable(t *testing.T) {
 	mint := newFakeSwapMint(t, amounts)
 	server := refundServer(t, state, committee, mint)
 
-	recorder := postRefund(t, server, demoMintRefundBody{
-		BidID: bidID, Proofs: refundProofs(t, secrets, amounts, mint.keysetID),
-		Event: refundEvent(t, bidder, bidID),
-	})
+	recorder := postRefund(t, server, refundBody(t, bidID, refundProofs(t, secrets, amounts, mint.keysetID), refundEvent(t, bidder, bidID), newWalletClaim(t)))
 	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), "not refundable") {
 		t.Fatalf("non-refundable lock response = %d %s", recorder.Code, recorder.Body.String())
 	}
@@ -313,10 +369,7 @@ func TestDemoMintRefundRefusesMissingAndUnderfundedProofs(t *testing.T) {
 	server := refundServer(t, state, committee, mint)
 
 	// Missing: one of the two committed proofs.
-	recorder := postRefund(t, server, demoMintRefundBody{
-		BidID: bidID, Proofs: refundProofs(t, secrets[:1], amounts[:1], mint.keysetID),
-		Event: refundEvent(t, bidder, bidID),
-	})
+	recorder := postRefund(t, server, refundBody(t, bidID, refundProofs(t, secrets[:1], amounts[:1], mint.keysetID), refundEvent(t, bidder, bidID), newWalletClaim(t)))
 	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), "do not match the committed receipt") {
 		t.Fatalf("missing proof response = %d %s", recorder.Code, recorder.Body.String())
 	}
@@ -326,14 +379,132 @@ func TestDemoMintRefundRefusesMissingAndUnderfundedProofs(t *testing.T) {
 	// refuse before it signs anything.
 	underfunded := refundProofs(t, secrets, amounts, mint.keysetID)
 	underfunded[0].Amount = 1
-	recorder = postRefund(t, server, demoMintRefundBody{
-		BidID: bidID, Proofs: underfunded, Event: refundEvent(t, bidder, bidID),
-	})
+	recorder = postRefund(t, server, refundBody(t, bidID, underfunded, refundEvent(t, bidder, bidID), newWalletClaim(t)))
 	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), "less than the locked") {
 		t.Fatalf("underfunded proof response = %d %s", recorder.Code, recorder.Body.String())
 	}
 	if mint.swaps != 0 {
 		t.Fatal("an underfunded proof set reached the mint")
+	}
+}
+
+// TestDemoMintRefundRefusesMissingWalletSignature pins the ownership half: a
+// valid Nostr authorization alone must not move value, because the returned
+// proofs would land on a key nobody proved they hold.
+func TestDemoMintRefundRefusesMissingWalletSignature(t *testing.T) {
+	t.Parallel()
+	state, _, committee, bidder, bidID, secrets, amounts := refundableCashuFixture(t)
+	mint := newFakeSwapMint(t, amounts)
+	server := refundServer(t, state, committee, mint)
+	claim := newWalletClaim(t)
+	proofs := refundProofs(t, secrets, amounts, mint.keysetID)
+	outputs, _ := claim.signClaim(t, bidID, proofs)
+
+	cases := map[string]struct {
+		mutate func(*demoMintRefundBody)
+		reason string
+	}{
+		"no signature": {
+			mutate: func(body *demoMintRefundBody) { body.SpendSignature = "" },
+			reason: "carries no wallet spend-key signature",
+		},
+		"no spend key": {
+			mutate: func(body *demoMintRefundBody) { body.SpendPublicKey = "" },
+			reason: "carries no wallet spend key",
+		},
+		"malformed spend key": {
+			mutate: func(body *demoMintRefundBody) { body.SpendPublicKey = "02" + strings.Repeat("0", 64) },
+			reason: "wallet spend key is not a valid compressed secp256k1 point",
+		},
+		"signature by another key": {
+			mutate: func(body *demoMintRefundBody) {
+				other := newWalletClaim(t)
+				_, signature := other.signClaim(t, bidID, proofs)
+				body.SpendSignature = signature
+			},
+			reason: "wallet spend-key signature does not verify",
+		},
+		"output key is not the spend key": {
+			mutate: func(body *demoMintRefundBody) {
+				body.OutputPublicKeys = append([]string(nil), outputs...)
+				body.OutputPublicKeys[0] = newWalletClaim(t).publicKey
+			},
+			reason: "is not locked to the wallet spend key",
+		},
+		"output list does not cover the proofs": {
+			mutate: func(body *demoMintRefundBody) { body.OutputPublicKeys = outputs[:1] },
+			reason: "output keys for",
+		},
+	}
+	for name, testCase := range cases {
+		body := refundBody(t, bidID, proofs, refundEvent(t, bidder, bidID), claim)
+		testCase.mutate(&body)
+		recorder := postRefund(t, server, body)
+		if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), testCase.reason) {
+			t.Fatalf("%s: response = %d %s, want 422 naming %q", name, recorder.Code, recorder.Body.String(), testCase.reason)
+		}
+	}
+	if mint.swaps != 0 {
+		t.Fatalf("mint saw %d swaps, want 0: an unproven claim reached the mint", mint.swaps)
+	}
+}
+
+// TestDemoMintRefundRefusesWrongNostrActorWithValidWalletSignature pins the
+// other half: a perfectly good wallet signature does not substitute for the
+// Nostr authorization, and a missing one is refused too.
+func TestDemoMintRefundRefusesWrongNostrActorWithValidWalletSignature(t *testing.T) {
+	t.Parallel()
+	state, _, committee, bidder, bidID, secrets, amounts := refundableCashuFixture(t)
+	mint := newFakeSwapMint(t, amounts)
+	server := refundServer(t, state, committee, mint)
+	proofs := refundProofs(t, secrets, amounts, mint.keysetID)
+
+	// A stranger's Nostr key, with a valid wallet claim.
+	recorder := postRefund(t, server, refundBody(t, bidID, proofs, refundEvent(t, testPrivateKey(t), bidID), newWalletClaim(t)))
+	if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), "not the lock's bidder") {
+		t.Fatalf("wrong actor response = %d %s, want 403 naming the bidder", recorder.Code, recorder.Body.String())
+	}
+
+	// No event at all.
+	body := refundBody(t, bidID, proofs, SignedEvent{}, newWalletClaim(t))
+	recorder = postRefund(t, server, body)
+	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), "not a valid Nostr event") {
+		t.Fatalf("missing event response = %d %s, want 422 naming the event", recorder.Code, recorder.Body.String())
+	}
+
+	// The bidder's own key, but the event authorizes a different bid.
+	otherBid := refundBody(t, bidID, proofs, refundEvent(t, bidder, "some-other-bid"), newWalletClaim(t))
+	recorder = postRefund(t, server, otherBid)
+	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), "names a different bid") {
+		t.Fatalf("other-bid event response = %d %s, want 422 naming the bid", recorder.Code, recorder.Body.String())
+	}
+	if mint.swaps != 0 {
+		t.Fatalf("mint saw %d swaps, want 0: an unauthorized claim reached the mint", mint.swaps)
+	}
+}
+
+// TestDemoMintRefundRefusesWrongBidID pins that the wallet signature is bound
+// to the bid id: a signature made for one bid cannot be replayed against
+// another, even by the same wallet.
+func TestDemoMintRefundRefusesWrongBidID(t *testing.T) {
+	t.Parallel()
+	state, _, committee, bidder, bidID, secrets, amounts := refundableCashuFixture(t)
+	mint := newFakeSwapMint(t, amounts)
+	server := refundServer(t, state, committee, mint)
+	claim := newWalletClaim(t)
+	proofs := refundProofs(t, secrets, amounts, mint.keysetID)
+
+	// Signed over a different bid id, then presented for this one.
+	outputs, signature := claim.signClaim(t, "another-bid", proofs)
+	recorder := postRefund(t, server, demoMintRefundBody{
+		BidID: bidID, Proofs: proofs, Event: refundEvent(t, bidder, bidID),
+		SpendPublicKey: claim.publicKey, OutputPublicKeys: outputs, SpendSignature: signature,
+	})
+	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), "does not verify over the bid id") {
+		t.Fatalf("wrong-bid signature response = %d %s, want 422 naming the bid id", recorder.Code, recorder.Body.String())
+	}
+	if mint.swaps != 0 {
+		t.Fatalf("mint saw %d swaps, want 0: a replayed claim reached the mint", mint.swaps)
 	}
 }
 

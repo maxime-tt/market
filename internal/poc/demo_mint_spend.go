@@ -65,14 +65,95 @@ type demoMintSpentProof struct {
 	DLEQ     *MintDLEQProof `json:"dleq,omitempty"`
 }
 
-// demoMintRefundBody is the browser's request. The signed KindRefund event is
-// the authorization: it identifies the bid and proves the caller holds the bidder's
-// Nostr key. It is never submitted to consensus (a legacy refund of a
-// mint-backed bid is refused at admission, see ValidateForMempool).
+// demoMintRefundBody is the browser's request. It carries two independent
+// proofs, and both are required:
+//
+//   - the signed KindRefund event is the AUTHORIZATION: it names the bid and
+//     proves the caller holds the bidder's Nostr key. It is never submitted to
+//     consensus (a legacy refund of a mint-backed bid is refused at admission,
+//     see ValidateForMempool).
+//   - SpendSignature is OWNERSHIP: a BIP-340 signature by the wallet's own
+//     Cashu spend key over demoMintRefundClaimMessage, binding the bid id and
+//     the exact output pubkeys. The Nostr identity authorizes; the wallet owns
+//     value and owns its own spend key. The two are linked by this
+//     authorization, never by deriving one key from the other.
 type demoMintRefundBody struct {
 	BidID  string               `json:"bid_id"`
 	Proofs []demoMintSpendProof `json:"proofs"`
 	Event  SignedEvent          `json:"event"`
+	// SpendPublicKey is the wallet spend key, compressed. The returned proofs
+	// are locked to it.
+	SpendPublicKey string `json:"spend_public_key"`
+	// OutputPublicKeys is one compressed key per submitted proof, in proof
+	// order. The coordinator builds the same list itself and refuses any
+	// difference, so the signature binds exactly the outputs it creates.
+	OutputPublicKeys []string `json:"output_public_keys"`
+	// SpendSignature is the hex BIP-340 signature over the claim message.
+	SpendSignature string `json:"spend_signature"`
+}
+
+// demoMintRefundClaimMessage is the deterministic message a refund claim signs
+// with the wallet spend key. The browser builds the same bytes
+// (refundClaimMessage in webwallet/src/wallet.ts); the two must not drift, or
+// every genuine claim is refused.
+func demoMintRefundClaimMessage(bidID string, outputPublicKeys []string) []byte {
+	outputs := append([]string(nil), outputPublicKeys...)
+	sort.Strings(outputs)
+	return []byte("PlebeianAuctionsCashuRefundClaimV1\nbid_id=" + bidID + "\noutputs=" + strings.Join(outputs, ","))
+}
+
+// demoMintVerifyRefundClaim checks the wallet spend-key half of a refund: the
+// key is a real compressed point, the output list is exactly one key per proof
+// and all of them are that key, and the signature verifies over the claim
+// message. It returns the spend key so the caller locks the outputs to it.
+func demoMintVerifyRefundClaim(body demoMintRefundBody) (string, error) {
+	if body.SpendPublicKey == "" {
+		return "", errors.New("refund claim carries no wallet spend key")
+	}
+	if !validCompressedPublicKey(body.SpendPublicKey) {
+		return "", errors.New("refund claim wallet spend key is not a valid compressed secp256k1 point")
+	}
+	if len(body.OutputPublicKeys) != len(body.Proofs) {
+		return "", fmt.Errorf("refund claim names %d output keys for %d proofs", len(body.OutputPublicKeys), len(body.Proofs))
+	}
+	for index, key := range body.OutputPublicKeys {
+		if key != body.SpendPublicKey {
+			return "", fmt.Errorf("refund claim output %d is not locked to the wallet spend key", index)
+		}
+	}
+	if body.SpendSignature == "" {
+		return "", errors.New("refund claim carries no wallet spend-key signature")
+	}
+	if !validLowerHex(body.SpendSignature, 64) {
+		return "", errors.New("refund claim wallet spend-key signature is not a 64-byte hex Schnorr signature")
+	}
+	// schnorr.ParsePubKey takes the 32-byte x-only form, so the compressed key
+	// is parsed as a curve point and then lifted to its BIP-340 x-only form.
+	// Passing the 33-byte compressed encoding straight in is refused.
+	point, err := btcec.ParsePubKey(mustHex(body.SpendPublicKey))
+	if err != nil {
+		return "", errors.New("refund claim wallet spend key is not a valid compressed secp256k1 point")
+	}
+	spendKey, err := schnorr.ParsePubKey(schnorr.SerializePubKey(point))
+	if err != nil {
+		return "", errors.New("refund claim wallet spend key is not a valid compressed secp256k1 point")
+	}
+	signature, err := schnorr.ParseSignature(mustHex(body.SpendSignature))
+	if err != nil {
+		return "", errors.New("refund claim wallet spend-key signature is malformed")
+	}
+	message := demoMintRefundClaimMessage(body.BidID, body.OutputPublicKeys)
+	if !signature.Verify(sha256Sum(message), spendKey) {
+		return "", errors.New("refund claim wallet spend-key signature does not verify over the bid id and output keys")
+	}
+	return body.SpendPublicKey, nil
+}
+
+// sha256Sum is the BIP-340 message digest: the claim message is hashed once so
+// the signature covers a fixed 32-byte message.
+func sha256Sum(message []byte) []byte {
+	digest := sha256.Sum256(message)
+	return digest[:]
 }
 
 // demoMintRefundResponse returns the fresh proofs to the bidder's browser.
@@ -175,10 +256,13 @@ func demoMintVerifyProofSet(receipt CashuLockReceipt, proofs []demoMintSpendProo
 
 // demoMintCooperativeSpend performs the one swap both terminal modes share.
 //
-// It builds outputs P2PK-locked to `02||recipient` with no locktime, signs the
-// NUT-11 SIG_INPUTS witness with the committee key over each input secret, and
-// posts /v1/swap to the mint's transport origin. It returns the unblinded fresh
-// proofs; it does not persist them.
+// It builds outputs P2PK-locked to the recipient's compressed key with no
+// locktime, signs the NUT-11 SIG_INPUTS witness with the committee key over
+// each input secret, and posts /v1/swap to the mint's transport origin. It
+// returns the unblinded fresh proofs; it does not persist them.
+//
+// The recipient is a Cashu spend key, not a Nostr identity: the value must come
+// back to a key its owner can actually sign with.
 func (server *APIServer) demoMintCooperativeSpend(ctx context.Context, proofs []demoMintSpendProof, recipient string) ([]demoMintSpentProof, error) {
 	if server.demoCommitteeKey == nil {
 		return nil, errors.New("cooperative spend has no committee key")
@@ -186,8 +270,8 @@ func (server *APIServer) demoMintCooperativeSpend(ctx context.Context, proofs []
 	if server.demoMintKeyset == nil {
 		return nil, errors.New("cooperative spend has no mint keyset")
 	}
-	if !validActor(recipient) {
-		return nil, errors.New("cooperative spend recipient is not a Nostr public key")
+	if !validCompressedPublicKey(recipient) {
+		return nil, errors.New("cooperative spend recipient is not a compressed secp256k1 public key")
 	}
 	if len(proofs) == 0 || len(proofs) > MaxInputs {
 		return nil, errors.New("cooperative spend requires a bounded nonempty proof set")
@@ -313,10 +397,12 @@ func (server *APIServer) demoMintCooperativeSpend(ctx context.Context, proofs []
 }
 
 // demoMintP2PKSecret builds the NUT-11 secret cashu-ts's P2PKBuilder emits for
-// a single main pubkey with SIG_INPUTS and no locktime.
+// a single main pubkey with SIG_INPUTS and no locktime. The recipient is a
+// compressed secp256k1 key, used verbatim: a wallet spend key may be odd-Y, so
+// it must not be re-encoded as `02||x`.
 func demoMintP2PKSecret(recipient string) (string, error) {
-	if !validActor(recipient) {
-		return "", errors.New("P2PK recipient is not a Nostr public key")
+	if !validCompressedPublicKey(recipient) {
+		return "", errors.New("P2PK recipient is not a compressed secp256k1 public key")
 	}
 	nonceBytes := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, nonceBytes); err != nil {
@@ -326,7 +412,7 @@ func demoMintP2PKSecret(recipient string) (string, error) {
 		"P2PK",
 		map[string]any{
 			"nonce": hex.EncodeToString(nonceBytes),
-			"data":  "02" + recipient,
+			"data":  recipient,
 			"tags":  [][]string{{"sigflag", "SIG_INPUTS"}},
 		},
 	}
@@ -398,9 +484,11 @@ type mintSwapResponse struct {
 	} `json:"signatures"`
 }
 
-// demoMintRefund returns a displaced bidder's locked proofs to their own Nostr
-// key. The signed KindRefund event authorizes it; committed state and the mint
-// decide whether it is allowed.
+// demoMintRefund returns a displaced bidder's locked proofs to their own wallet
+// spend key. Two checks must both pass: the signed KindRefund event authorizes
+// the request (it names the bid and proves the caller holds the bidder's Nostr
+// key), and a signature by the wallet spend key proves ownership of the value
+// being returned. Committed state and the mint decide whether it is allowed.
 func (server *APIServer) demoMintRefund(response http.ResponseWriter, request *http.Request) {
 	if !server.legacyInterim || server.manifest.ApplicationAuthority != ApplicationAuthorityLegacy {
 		writeError(response, http.StatusNotFound, errors.New("demo mint-refund coordinator is available only on a legacy loopback network"))
@@ -444,6 +532,17 @@ func (server *APIServer) demoMintRefund(response http.ResponseWriter, request *h
 	}
 	if content.BidID != body.BidID {
 		writeError(response, http.StatusUnprocessableEntity, errors.New("refund authorization names a different bid"))
+		return
+	}
+
+	// (a2) The wallet spend key is the ownership half. It is a key the wallet
+	// generated and holds, never one derived from the Nostr identity, and the
+	// signature binds this bid id and the exact output keys. A valid Nostr
+	// authorization without it proves who is asking, not that the returned
+	// value lands somewhere they can spend.
+	spendPublicKey, err := demoMintVerifyRefundClaim(body)
+	if err != nil {
+		writeError(response, http.StatusUnprocessableEntity, err)
 		return
 	}
 
@@ -500,7 +599,7 @@ func (server *APIServer) demoMintRefund(response http.ResponseWriter, request *h
 	// own, longer deadline.
 	swapCtx, swapCancel := context.WithTimeout(request.Context(), demoMintSwapTimeout)
 	defer swapCancel()
-	fresh, err := server.demoMintCooperativeSpend(swapCtx, body.Proofs, bidder)
+	fresh, err := server.demoMintCooperativeSpend(swapCtx, body.Proofs, spendPublicKey)
 	if err != nil {
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return

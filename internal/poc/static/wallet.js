@@ -10670,11 +10670,30 @@ ${e}}` : `{${i.join(",")}}`;
       set: (key, value) => window.localStorage.setItem(`${namespace}:${key}`, value)
     };
   }
-  function refundPublicKeyFromNostr(nostrPubkeyHex) {
-    if (!/^[0-9a-f]{64}$/.test(nostrPubkeyHex)) {
-      throw new Error("Nostr public key must be 64 lowercase hex characters");
+  function refundClaimMessage(bidId, outputPublicKeys) {
+    if (!bidId)
+      throw new Error("a refund claim must name a bid");
+    const outputs = [...outputPublicKeys].sort();
+    for (const key of outputs) {
+      if (!/^0[23][0-9a-f]{64}$/.test(key)) {
+        throw new Error("refund claim output keys must be compressed secp256k1 points");
+      }
     }
-    return `02${nostrPubkeyHex}`;
+    return new TextEncoder().encode(`PlebeianAuctionsCashuRefundClaimV1
+bid_id=${bidId}
+outputs=${outputs.join(",")}`);
+  }
+  function hexToBytes3(hex) {
+    if (!/^(?:[0-9a-f]{2})+$/.test(hex))
+      throw new Error("expected lowercase hex");
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let index = 0;index < bytes.length; index++) {
+      bytes[index] = parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+    }
+    return bytes;
+  }
+  function bytesToHex3(bytes) {
+    return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
   }
   function xOnly(compressedHex) {
     if (!/^0[23][0-9a-f]{64}$/.test(compressedHex)) {
@@ -10719,6 +10738,20 @@ ${e}}` : `{${i.join(",")}}`;
     locked() {
       return this.read("locked", []);
     }
+    spendSecretKey() {
+      const stored = this.storage.get("spendKey");
+      if (stored) {
+        if (!/^[0-9a-f]{64}$/.test(stored))
+          throw new Error("the stored wallet spend key is malformed");
+        return hexToBytes3(stored);
+      }
+      const { secretKey } = schnorr.keygen();
+      this.storage.set("spendKey", bytesToHex3(secretKey));
+      return secretKey;
+    }
+    spendPublicKey() {
+      return `02${bytesToHex3(schnorr.getPublicKey(this.spendSecretKey()))}`;
+    }
     readLockedBids() {
       const raw = this.storage.get("lockedBids");
       if (!raw)
@@ -10729,15 +10762,15 @@ ${e}}` : `{${i.join(",")}}`;
         return {};
       }
     }
-    recordLockedBid(bidId, proofs) {
+    recordLockedBid(bidId, proofs, spendPublicKey = this.spendPublicKey()) {
       if (!bidId || !proofs.length)
         return;
       const bids = this.readLockedBids();
-      bids[bidId] = proofs;
+      bids[bidId] = { proofs, spendPublicKey };
       this.storage.set("lockedBids", JSON.stringify(bids));
     }
     lockedForBid(bidId) {
-      return this.readLockedBids()[bidId] ?? [];
+      return this.readLockedBids()[bidId]?.proofs ?? [];
     }
     balance() {
       return this.spendable().reduce((total, proof) => total + Number(proof.amount), 0);
@@ -10767,7 +10800,8 @@ ${e}}` : `{${i.join(",")}}`;
       this.storage.set("spendable", JSON.stringify([...this.spendable(), ...proofs]));
       return this.balance();
     }
-    async lockForBid(amount, committeePublicKey, refundPublicKey, locktime, onProgress) {
+    async lockForBid(amount, committeePublicKey, locktime, onProgress) {
+      const refundPublicKey = this.spendPublicKey();
       const proofs = this.spendable();
       if (!proofs.length) {
         const locked = this.lockedBalance();
@@ -10805,14 +10839,22 @@ ${e}}` : `{${i.join(",")}}`;
         amount,
         mintUrl: this.mintUrl,
         proofs: bindings,
-        lockedProofs: send
+        lockedProofs: send,
+        spendPublicKey: refundPublicKey
       };
     }
     async refundBid(bidId, event, endpoint = "/api/demo/mint-refund") {
-      const proofs = this.lockedForBid(bidId);
+      const locked = this.readLockedBids()[bidId];
+      const proofs = locked?.proofs ?? [];
       if (!proofs.length) {
         throw new Error("this browser holds no locked proofs for that bid");
       }
+      const spendPublicKey = locked.spendPublicKey;
+      if (spendPublicKey !== this.spendPublicKey()) {
+        throw new Error("the wallet spend key changed since this bid was locked, so it cannot claim the refund");
+      }
+      const outputPublicKeys = proofs.map(() => spendPublicKey);
+      const signature = bytesToHex3(schnorr.sign(refundClaimMessage(bidId, outputPublicKeys), this.spendSecretKey()));
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -10825,7 +10867,10 @@ ${e}}` : `{${i.join(",")}}`;
             C: proof.C,
             dleq: proof.dleq
           })),
-          event
+          event,
+          spend_public_key: spendPublicKey,
+          output_public_keys: outputPublicKeys,
+          spend_signature: signature
         })
       });
       const data = await response.json().catch(() => ({}));
@@ -10879,5 +10924,5 @@ ${e}}` : `{${i.join(",")}}`;
   }
 
   // src/browser.ts
-  window.PlebeianWallet = { BidderWallet, browserStorage, memoryStorage, refundPublicKeyFromNostr };
+  window.PlebeianWallet = { BidderWallet, browserStorage, memoryStorage, refundClaimMessage };
 })();

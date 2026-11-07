@@ -11,9 +11,13 @@
 // server can only look up references the bidder already controls and confirm
 // them with the mint, and the value stays with the bidder until settlement.
 //
-// The refund key is the bidder's own Nostr key. BIP-340 x-only public keys are
-// by construction the even-Y point, so the compressed form is exactly `02||x`:
-// the same identity, in the encoding the receipt wants.
+// The Nostr identity is the AUTHORIZATION layer; this wallet owns its value.
+// The refund key is a wallet-owned Cashu spend key, generated here and kept in
+// wallet storage, never derived from the Nostr key. A NIP-07 signer exposes no
+// raw Schnorr primitive, so a key derived from the Nostr identity would hand
+// back proofs nobody could spend. The two layers are linked by an
+// authorization: the signed KindRefund event names the bid, and a signature by
+// the wallet spend key proves the returned value belongs to this wallet.
 
 import {
   Wallet,
@@ -23,6 +27,7 @@ import {
   serializeProofs,
   type Proof,
 } from "@cashu/cashu-ts";
+import { schnorr } from "@noble/curves/secp256k1.js";
 
 /** A storage shim so the same code runs in a browser and under a test runner. */
 export interface WalletStorage {
@@ -70,18 +75,48 @@ export interface BidFunding {
    * `locked` storage; this is the bid association, not a second copy.
    */
   lockedProofs: Proof[];
+  /** The wallet spend key these proofs are locked to, compressed. */
+  spendPublicKey: string;
+}
+
+/** One bid's locked proofs and the wallet spend key that owns them. */
+export interface LockedBid {
+  proofs: Proof[];
+  spendPublicKey: string;
 }
 
 /**
- * The bidder's Nostr identity doubles as the Cashu refund key, so a losing bid
- * can only be reclaimed by the bidder and never by the coordinator.
+ * The deterministic message a refund claim signs with the wallet spend key.
+ *
+ * It binds the bid id and the exact output pubkeys the coordinator will lock
+ * the returned proofs to, so a signature cannot be replayed against another
+ * bid or redirected to another key. The Go coordinator builds the same bytes
+ * (demoMintRefundClaimMessage) and refuses any mismatch.
  */
-export function refundPublicKeyFromNostr(nostrPubkeyHex: string): string {
-  if (!/^[0-9a-f]{64}$/.test(nostrPubkeyHex)) {
-    throw new Error("Nostr public key must be 64 lowercase hex characters");
+export function refundClaimMessage(bidId: string, outputPublicKeys: string[]): Uint8Array {
+  if (!bidId) throw new Error("a refund claim must name a bid");
+  const outputs = [...outputPublicKeys].sort();
+  for (const key of outputs) {
+    if (!/^0[23][0-9a-f]{64}$/.test(key)) {
+      throw new Error("refund claim output keys must be compressed secp256k1 points");
+    }
   }
-  // BIP-340 mandates an even-Y key, so the compressed encoding is 02||x.
-  return `02${nostrPubkeyHex}`;
+  return new TextEncoder().encode(
+    `PlebeianAuctionsCashuRefundClaimV1\nbid_id=${bidId}\noutputs=${outputs.join(",")}`,
+  );
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  if (!/^(?:[0-9a-f]{2})+$/.test(hex)) throw new Error("expected lowercase hex");
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let index = 0; index < bytes.length; index++) {
+    bytes[index] = parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function xOnly(compressedHex: string): string {
@@ -135,28 +170,59 @@ export class BidderWallet {
     return this.read("locked", []);
   }
 
+  /**
+   * The wallet's own Cashu spend key, generated once and persisted.
+   *
+   * This is the key the refund path locks returned proofs to and signs claims
+   * with. It is deliberately NOT the Nostr key: the Nostr identity authorizes,
+   * the wallet owns value, and a NIP-07 signer cannot produce a Cashu
+   * signature anyway.
+   */
+  private spendSecretKey(): Uint8Array {
+    const stored = this.storage.get("spendKey");
+    if (stored) {
+      if (!/^[0-9a-f]{64}$/.test(stored)) throw new Error("the stored wallet spend key is malformed");
+      return hexToBytes(stored);
+    }
+    const { secretKey } = schnorr.keygen();
+    this.storage.set("spendKey", bytesToHex(secretKey));
+    return secretKey;
+  }
+
+  /**
+   * The wallet spend public key, compressed (33 bytes, 02/03 prefixed).
+   *
+   * schnorr.getPublicKey returns the 32-byte BIP-340 x-only form, which is the
+   * even-Y point. The Cashu lock and the coordinator both want the compressed
+   * encoding, so the even-Y prefix is restored here rather than assumed
+   * downstream.
+   */
+  spendPublicKey(): string {
+    return `02${bytesToHex(schnorr.getPublicKey(this.spendSecretKey()))}`;
+  }
+
   /** The bid id -> locked proofs association, so a refund can name its bid. */
-  private readLockedBids(): Record<string, Proof[]> {
+  private readLockedBids(): Record<string, LockedBid> {
     const raw = this.storage.get("lockedBids");
     if (!raw) return {};
     try {
-      return JSON.parse(raw) as Record<string, Proof[]>;
+      return JSON.parse(raw) as Record<string, LockedBid>;
     } catch {
       return {};
     }
   }
 
-  /** Records which locked proofs back a committed bid. */
-  recordLockedBid(bidId: string, proofs: Proof[]): void {
+  /** Records which locked proofs back a committed bid, and the key owning them. */
+  recordLockedBid(bidId: string, proofs: Proof[], spendPublicKey = this.spendPublicKey()): void {
     if (!bidId || !proofs.length) return;
     const bids = this.readLockedBids();
-    bids[bidId] = proofs;
+    bids[bidId] = { proofs, spendPublicKey };
     this.storage.set("lockedBids", JSON.stringify(bids));
   }
 
   /** The proofs this browser locked for one bid, or an empty list. */
   lockedForBid(bidId: string): Proof[] {
-    return this.readLockedBids()[bidId] ?? [];
+    return this.readLockedBids()[bidId]?.proofs ?? [];
   }
 
   // cashu-ts carries Proof.amount as a string, so these must coerce: `0 + "128"`
@@ -205,14 +271,17 @@ export class BidderWallet {
   /**
    * Locks `amount` of the bidder's own proofs to the committee, keeping the
    * refund key. The proofs never leave this wallet.
+   *
+   * The refund key is this wallet's own spend key, so the lock names a key the
+   * wallet can actually sign with. It is never derived from the Nostr identity.
    */
   async lockForBid(
     amount: number,
     committeePublicKey: string,
-    refundPublicKey: string,
     locktime: number,
     onProgress?: (state: string) => void,
   ): Promise<BidFunding> {
+    const refundPublicKey = this.spendPublicKey();
     const proofs = this.spendable();
     if (!proofs.length) {
       // Say what is actually true. A wallet whose proofs are all locked is not
@@ -270,25 +339,45 @@ export class BidderWallet {
       mintUrl: this.mintUrl,
       proofs: bindings,
       lockedProofs: send,
+      spendPublicKey: refundPublicKey,
     };
   }
 
   /**
    * Claims a displaced bid's locked proofs through the coordinator's
-   * cooperative swap. The signed KindRefund event authorizes the request; the
-   * coordinator verifies it against committed state and the mint, swaps the
-   * proofs to this bidder's own Nostr key, and returns fresh proofs. They are
-   * imported into `spendable` and the old proofs leave `locked`.
+   * cooperative swap.
+   *
+   * Two independent proofs travel with the request. The signed KindRefund
+   * event is the AUTHORIZATION: it names the bid and proves the caller holds
+   * the bidder's Nostr key. The wallet spend-key signature is OWNERSHIP: it
+   * covers the bid id and the exact output pubkeys the coordinator will lock
+   * the returned proofs to, so the value comes back to a key this wallet can
+   * spend. The coordinator verifies both and locks the fresh proofs to the
+   * wallet spend key. They are imported into `spendable` and the old proofs
+   * leave `locked`.
    *
    * The event is NOT submitted to consensus: a legacy KindRefund for a
    * mint-backed bid is refused at admission precisely because it would issue a
    * second, note-shaped payout for the same value.
    */
   async refundBid(bidId: string, event: unknown, endpoint = "/api/demo/mint-refund"): Promise<{ amount: number }> {
-    const proofs = this.lockedForBid(bidId);
+    const locked = this.readLockedBids()[bidId];
+    const proofs = locked?.proofs ?? [];
     if (!proofs.length) {
       throw new Error("this browser holds no locked proofs for that bid");
     }
+    // The key that owns the returned value is the one the lock named. A wallet
+    // whose spend key changed cannot prove ownership of that lock, and must
+    // not pretend otherwise.
+    const spendPublicKey = locked.spendPublicKey;
+    if (spendPublicKey !== this.spendPublicKey()) {
+      throw new Error("the wallet spend key changed since this bid was locked, so it cannot claim the refund");
+    }
+    // One output per locked proof, each locked to the wallet spend key. The
+    // coordinator builds the same list from the submitted proofs, so the
+    // signature binds exactly the outputs it will create.
+    const outputPublicKeys = proofs.map(() => spendPublicKey);
+    const signature = bytesToHex(schnorr.sign(refundClaimMessage(bidId, outputPublicKeys), this.spendSecretKey()));
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -299,6 +388,9 @@ export class BidderWallet {
           dleq: proof.dleq,
         })),
         event,
+        spend_public_key: spendPublicKey,
+        output_public_keys: outputPublicKeys,
+        spend_signature: signature,
       }),
     });
     const data = (await response.json().catch(() => ({}))) as { proofs?: Proof[]; error?: string };
