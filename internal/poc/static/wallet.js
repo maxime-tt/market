@@ -10683,6 +10683,19 @@ ${e}}` : `{${i.join(",")}}`;
 bid_id=${bidId}
 outputs=${outputs.join(",")}`);
   }
+  function settleClaimMessage(auctionId, proofRefs) {
+    if (!auctionId)
+      throw new Error("a settlement claim must name an auction");
+    const refs = [...proofRefs].sort();
+    for (const ref of refs) {
+      if (!/^0[23][0-9a-f]{64}$/.test(ref)) {
+        throw new Error("settlement claim proof references must be compressed secp256k1 points");
+      }
+    }
+    return new TextEncoder().encode(`PlebeianAuctionsCashuSettleClaimV1
+auction_id=${auctionId}
+proofs=${refs.join(",")}`);
+  }
   function hexToBytes3(hex) {
     if (!/^(?:[0-9a-f]{2})+$/.test(hex))
       throw new Error("expected lowercase hex");
@@ -10766,12 +10779,19 @@ outputs=${outputs.join(",")}`);
         return {};
       }
     }
-    recordLockedBid(bidId, proofs, spendPublicKey = this.spendPublicKey()) {
+    recordLockedBid(bidId, proofs, spendPublicKey = this.spendPublicKey(), auctionId) {
       if (!bidId || !proofs.length)
         return;
       const bids = this.readLockedBids();
-      bids[bidId] = { proofs, spendPublicKey };
+      bids[bidId] = { proofs, spendPublicKey, ...auctionId ? { auctionId } : {} };
       this.storage.set("lockedBids", JSON.stringify(bids));
+    }
+    lockedBidForAuction(auctionId) {
+      for (const [bidId, locked] of Object.entries(this.readLockedBids())) {
+        if (locked.auctionId === auctionId)
+          return { bidId, locked };
+      }
+      return null;
     }
     lockedForBid(bidId) {
       return this.readLockedBids()[bidId]?.proofs ?? [];
@@ -10894,6 +10914,72 @@ outputs=${outputs.join(",")}`);
       this.storage.set("lockedBids", JSON.stringify(bids));
       this.storage.set("spendable", JSON.stringify([...this.spendable(), ...fresh]));
       return { amount: fresh.reduce((total, proof) => total + Number(proof.amount), 0) };
+    }
+    async settleAuction(auctionId, event, endpoint = "/api/demo/mint-settle") {
+      const found = this.lockedBidForAuction(auctionId);
+      if (!found) {
+        throw new Error("this browser holds no locked proofs for that auction");
+      }
+      const { bidId, locked } = found;
+      const proofs = locked.proofs ?? [];
+      if (!proofs.length) {
+        throw new Error("this browser holds no locked proofs for that auction");
+      }
+      if (locked.spendPublicKey !== this.spendPublicKey()) {
+        throw new Error("the wallet spend key changed since this bid was locked, so it cannot settle");
+      }
+      const refs = proofs.map((proof) => Bt(new TextEncoder().encode(proof.secret)).toHex(true)).sort();
+      const signature = bytesToHex3(schnorr.sign(await sha256Bytes(settleClaimMessage(auctionId, refs)), this.spendSecretKey()));
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          auction_id: auctionId,
+          proofs: proofs.map((proof) => ({
+            amount: Number(proof.amount),
+            id: proof.id,
+            secret: proof.secret,
+            C: proof.C,
+            dleq: proof.dleq
+          })),
+          event,
+          spend_signature: signature
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `settlement failed (HTTP ${response.status})`);
+      }
+      const payout = data.proofs ?? [];
+      if (!payout.length)
+        throw new Error("the coordinator returned no settlement proofs");
+      const spent = new Set(proofs.map((proof) => proof.secret));
+      this.storage.set("locked", JSON.stringify(this.locked().filter((proof) => !spent.has(proof.secret))));
+      const bids = this.readLockedBids();
+      delete bids[bidId];
+      this.storage.set("lockedBids", JSON.stringify(bids));
+      return {
+        amount: payout.reduce((total, proof) => total + Number(proof.amount), 0),
+        tokenSha256: await sha256Hex(JSON.stringify(ua(payout)))
+      };
+    }
+    async importSettlement(auctionId, endpoint = `/api/demo/settlement/${encodeURIComponent(auctionId)}`) {
+      const response = await fetch(endpoint, { headers: { accept: "application/json" } });
+      if (response.status === 404)
+        return { amount: 0, imported: false };
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `settlement import failed (HTTP ${response.status})`);
+      }
+      const fresh = data.proofs ?? [];
+      if (!fresh.length)
+        return { amount: 0, imported: false };
+      const known = new Set(this.spendable().map((proof) => proof.secret));
+      const added = fresh.filter((proof) => !known.has(proof.secret));
+      if (!added.length)
+        return { amount: 0, imported: false };
+      this.storage.set("spendable", JSON.stringify([...this.spendable(), ...added]));
+      return { amount: added.reduce((total, proof) => total + Number(proof.amount), 0), imported: true };
     }
     lockedUntil() {
       const raw = this.storage.get("lockedUntil");

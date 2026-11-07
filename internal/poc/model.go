@@ -21,10 +21,15 @@ import (
 )
 
 const (
-	TxVersion        = 1
-	KindCreate       = 28640
-	KindBid          = 28641
-	KindRefund       = 28642
+	TxVersion  = 1
+	KindCreate = 28640
+	KindBid    = 28641
+	KindRefund = 28642
+	// KindSettle is the winner's record that the cooperative settlement swap
+	// happened. It moves no value: the mint swap is the money, this event is
+	// only the mirror. A settlement that never commits still leaves the seller
+	// holding proofs locked to their own key.
+	KindSettle       = 28643
 	KindFundingAbort = 28650
 	MaxTxBytes       = 64 * 1024
 	MaxInputs        = 32
@@ -256,6 +261,12 @@ type Lock struct {
 	Amount       int64  `json:"amount"`
 	Status       string `json:"status"`
 	OutputNoteID string `json:"output_note_id,omitempty"`
+	// CashuPayoutTokenSHA256 is the winner's record of the fresh proofs the
+	// settlement swap produced. Consensus cannot verify it -- the proofs are
+	// P2PK-locked to the seller's key and only the seller can spend them -- so
+	// it is a record, not a proof. It is omitempty so every pre-existing lock
+	// replays byte-identically.
+	CashuPayoutTokenSHA256 string `json:"cashu_payout_token_sha256,omitempty"`
 }
 
 type Auction struct {
@@ -714,6 +725,15 @@ type refundContent struct {
 	BidID string `json:"bid_id"`
 }
 
+// settleContent is the winner's record of a completed settlement swap. It
+// names the auction and the winning bid, and carries the digest of the fresh
+// proofs the coordinator returned. Nothing here moves value.
+type settleContent struct {
+	AuctionID         string `json:"auction_id"`
+	BidID             string `json:"bid_id"`
+	PayoutTokenSHA256 string `json:"payout_token_sha256"`
+}
+
 func ApplyTransaction(prior State, tx Transaction, consensusSeconds int64, policy Policy, mintSeed []byte) (State, error) {
 	if err := policy.Validate(); err != nil {
 		return State{}, err
@@ -915,9 +935,19 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 		if fundingMode == FundingModeThresholdSigAll && content.SellerCocoPaymentPublicKey == "" {
 			return errors.New("threshold auction requires the seller Coco payment key")
 		}
+		// A mint-backed auction may commit the seller's WALLET spend key here
+		// too: it is the destination the settlement swap locks the winning
+		// proofs to, and the seller's own signature on this create event is
+		// what authorizes it. The key must be a real compressed point and must
+		// not be the seller's Nostr identity -- the Nostr key authorizes, the
+		// wallet key owns value, and one is never derived from the other.
+		// This is an acceptance RELAXATION (a field that was refused is now
+		// accepted), so replaying committed history cannot fork.
 		if content.SellerCocoPaymentPublicKey != "" &&
-			(fundingMode != FundingModeThresholdSigAll || !validCompressedPublicKey(content.SellerCocoPaymentPublicKey) || content.SellerCocoPaymentPublicKey[2:] == actor) {
-			return errors.New("direct Coco seller payment key is invalid or used outside a threshold auction")
+			((fundingMode != FundingModeThresholdSigAll && fundingMode != FundingModeCashuLock) ||
+				!validCompressedPublicKey(content.SellerCocoPaymentPublicKey) ||
+				content.SellerCocoPaymentPublicKey[2:] == actor) {
+			return errors.New("seller payment key is invalid, is the seller's Nostr identity, or is used outside a threshold or mint-backed auction")
 		}
 		increment := content.MinIncrement
 		if increment == 0 {
@@ -945,6 +975,14 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 			return err
 		}
 		if err := applyRefund(state, actor, event.ID, content.BidID, privateKey); err != nil {
+			return err
+		}
+	case KindSettle:
+		var content settleContent
+		if err := decodeStrictContent(event.Content, &content); err != nil {
+			return err
+		}
+		if err := applySettle(state, actor, content); err != nil {
 			return err
 		}
 	default:
@@ -1791,6 +1829,48 @@ func applyRefund(state *State, actor, eventID, bidID string, privateKey ed25519.
 	lock.Status = "refunded"
 	lock.OutputNoteID = note.ID
 	state.Locks[bidID] = lock
+	return nil
+}
+
+// applySettle records that the winning lock was paid out. It is the mirror of
+// the mint swap, never the swap itself: it issues no note, moves no value, and
+// its absence cannot cost anyone their money. The proofs the coordinator
+// produced are P2PK-locked to the seller's committed wallet key, so the seller
+// keeps them whether or not this event ever commits.
+//
+// It is deliberately narrow: only the winner, only a closed cashu_lock_v1
+// auction, only the winning lock, and only from winner_selected. A lock that is
+// already paid is refused rather than silently re-recorded.
+func applySettle(state *State, actor string, content settleContent) error {
+	auction, ok := state.Auctions[content.AuctionID]
+	if !ok {
+		return errors.New("settlement names an unknown auction")
+	}
+	if auction.Status != "closed" {
+		return errors.New("settlement requires a closed auction")
+	}
+	if auction.Winner == "" || auction.Winner != actor {
+		return errors.New("settlement signer is not the auction winner")
+	}
+	if auction.FundingMode != FundingModeCashuLock {
+		return errors.New("settlement requires a mint-backed auction")
+	}
+	if content.BidID == "" || content.BidID != auction.LeaderBidID {
+		return errors.New("settlement does not name the winning bid")
+	}
+	if !validLowerHex(content.PayoutTokenSHA256, sha256.Size) {
+		return errors.New("settlement payout token digest is not a sha256 digest")
+	}
+	lock, ok := state.Locks[content.BidID]
+	if !ok || lock.AuctionID != auction.ID || lock.Bidder != actor {
+		return errors.New("settlement lock is missing or owned by another signer")
+	}
+	if lock.Status != "winner_selected" {
+		return fmt.Errorf("winning lock is %q, not winner_selected", lock.Status)
+	}
+	lock.Status = "paid"
+	lock.CashuPayoutTokenSHA256 = content.PayoutTokenSHA256
+	state.Locks[content.BidID] = lock
 	return nil
 }
 

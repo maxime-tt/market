@@ -6,7 +6,7 @@ const state = {
   readinessPromise: null, readinessNextAt: 0, readinessFailures: 0,
   maintenanceNextAt: 0, maintenanceFailures: 0, refreshStartedAt: 0,
   bidDrafts: new Map(), expiredPrelockBids: [], auctionPayoutAvailability: new Map(),
-  refundAttempts: new Map(),
+  refundAttempts: new Map(), settlementAttempts: new Map(),
 };
 const byId = (id) => document.getElementById(id);
 const short = (value) => value ? `${value.slice(0, 8)}…${value.slice(-6)}` : "—";
@@ -372,6 +372,90 @@ async function claimRefunds({ manual = false } = {}) {
   return { claimed, amount };
 }
 
+// The winner's half of settlement. When this browser's own lock is
+// winner_selected, it hands the proofs to the coordinator, which swaps them to
+// the SELLER's committed wallet key, and then records the outcome as a
+// KindSettle event. The swap is the money; the event is only the mirror, so a
+// failed post is reported and retried on a later refresh, never treated as a
+// lost payment.
+//
+// Two events, deliberately: the authorization event is signed before the swap
+// and is never committed (exactly like KindRefund), because the payout digest
+// it would have to carry does not exist until the swap returns. The record
+// event carries that digest and is the one posted to /api/event.
+async function settleWonAuctions({ manual = false } = {}) {
+  if (!state.actor || !state.signer || !mintBackedAvailable()) return { settled: 0, amount: 0 };
+  const wallet = bidderWallet();
+  const auctions = Object.values(state.view?.state?.auctions || {});
+  const locks = state.view?.state?.locks || {};
+  let settled = 0, amount = 0;
+  for (const auction of auctions) {
+    if (auction.status !== "closed" || auction.winner !== state.actor) continue;
+    if (auction.funding_mode !== "cashu_lock_v1") continue;
+    const lock = locks[auction.leader_bid_id];
+    if (!lock || lock.status !== "winner_selected") continue;
+    if (!wallet.lockedForBid(auction.leader_bid_id).length) continue;
+    const last = state.settlementAttempts.get(auction.id) || 0;
+    if (!manual && Date.now() - last < 15000) continue;
+    state.settlementAttempts.set(auction.id, Date.now());
+    try {
+      const authorization = await sign(28643, [["e", auction.id]], { auction_id: auction.id, bid_id: auction.leader_bid_id });
+      const result = await wallet.settleAuction(auction.id, authorization);
+      settled += 1; amount += result.amount;
+      state.settlementAttempts.delete(auction.id);
+      try {
+        const record = await sign(28643, [["e", auction.id]], {
+          auction_id: auction.id, bid_id: auction.leader_bid_id, payout_token_sha256: result.tokenSha256,
+        });
+        await api("/api/event", { method: "POST", body: JSON.stringify(record) });
+      } catch (error) {
+        // The seller already holds the proofs; only the chain record is missing.
+        message(`Settlement for ${short(auction.id)} paid the seller, but the record did not commit: ${error.message}`, "warning");
+      }
+    } catch (error) {
+      if (manual) message(`Settlement for ${short(auction.id)} failed: ${error.message}`, "warning");
+    }
+  }
+  if (settled) {
+    message(`Settled ${settled} won auction(s): ${amount} sats paid to the seller's wallet.`, "success");
+    await renderWalletBalance();
+  }
+  return { settled, amount };
+}
+
+// The seller's half: fetch any payout a settlement swap parked for this
+// auction and import it. The endpoint is unauthenticated because the proofs are
+// P2PK-locked to this wallet's spend key; a wallet without the key can download
+// them and still cannot spend them.
+async function importSettlements({ manual = false } = {}) {
+  if (!state.actor || !state.signer || !mintBackedAvailable()) return { imported: 0, amount: 0 };
+  const wallet = bidderWallet();
+  const auctions = Object.values(state.view?.state?.auctions || {});
+  let imported = 0, amount = 0;
+  for (const auction of auctions) {
+    if (auction.seller !== state.actor || auction.status !== "closed" || !auction.winner) continue;
+    if (auction.funding_mode !== "cashu_lock_v1") continue;
+    const key = `import:${auction.id}`;
+    const last = state.settlementAttempts.get(key) || 0;
+    if (!manual && Date.now() - last < 15000) continue;
+    state.settlementAttempts.set(key, Date.now());
+    try {
+      const result = await wallet.importSettlement(auction.id);
+      if (result.imported) {
+        imported += 1; amount += result.amount;
+        state.settlementAttempts.delete(key);
+      }
+    } catch (error) {
+      if (manual) message(`Payout import for ${short(auction.id)} failed: ${error.message}`, "warning");
+    }
+  }
+  if (imported) {
+    message(`Imported ${imported} seller payout(s): ${amount} sats into this wallet.`, "success");
+    await renderWalletBalance();
+  }
+  return { imported, amount };
+}
+
 async function refresh() {
   if (state.refreshPromise) {
     // Retry only once the pending attempt has had longer than its own deadline
@@ -421,6 +505,13 @@ async function refresh() {
     // has actually marked refundable.
     if (state.actor && state.signer && mintBackedAvailable()) {
       await claimRefunds();
+      if (generation !== state.generation || capturedScope !== scope()) return;
+      // A winner pays the seller; a seller imports what a winner paid. Both run
+      // after committed state is read, so neither acts on a lock consensus has
+      // not marked terminal.
+      await settleWonAuctions();
+      if (generation !== state.generation || capturedScope !== scope()) return;
+      await importSettlements();
       if (generation !== state.generation || capturedScope !== scope()) return;
     }
     render();
@@ -641,7 +732,7 @@ async function placeBid(auctionId, amount) {
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
     // Bind the proofs this browser just locked to the committed bid id, so a
     // later displacement can hand exactly this set to the refund endpoint.
-    wallet.recordLockedBid(signed.id, funding.lockedProofs, funding.spendPublicKey);
+    wallet.recordLockedBid(signed.id, funding.lockedProofs, funding.spendPublicKey, auctionId);
     message(`Bid committed at height ${result.height} (mint-backed lock, proofs held by this browser).`, "success");
     await refresh(); await renderWalletBalance(); return;
   }
@@ -747,7 +838,12 @@ byId("create-form").onsubmit=(event)=>{event.preventDefault();return performActi
     // listing carries only the custodial reservation funding mode.
     const id=`auction-${Date.now()}`;
     const chosenMode = byId("funding-mode")?.value || "custodial_reservation_v1";
-    const signed=await sign(28640,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:chosenMode});
+    // A mint-backed auction commits the seller's WALLET spend key as the
+    // settlement destination. It is the seller's own signature on this create
+    // event that authorizes it, and it is never the Nostr identity: the Nostr
+    // key authorizes, the wallet key owns value.
+    const payoutKey = chosenMode === "cashu_lock_v1" ? bidderWallet().spendPublicKey() : undefined;
+    const signed=await sign(28640,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:chosenMode,...(payoutKey?{seller_coco_payment_public_key:payoutKey}:{})});
     const result=await api("/api/event",{method:"POST",body:JSON.stringify(signed)});
     await refresh();
     message(`Auction committed at height ${result.height} in legacy fake-sat mode (custodial reservations).`,"success");

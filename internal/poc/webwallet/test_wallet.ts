@@ -1,7 +1,8 @@
 // Drives the browser wallet against the real local mint, outside a browser.
 // Proves the wallet logic before any of it is bundled or wired into the page.
 import { readFileSync } from "node:fs";
-import { BidderWallet, memoryStorage, refundClaimMessage } from "./src/wallet";
+import { BidderWallet, memoryStorage, refundClaimMessage, settleClaimMessage } from "./src/wallet";
+import { Wallet, P2PKBuilder } from "@cashu/cashu-ts";
 
 const MINT = process.env.MINT_URL ?? "http://127.0.0.1:3338";
 const NET = process.env.NET_ROOT!;
@@ -122,6 +123,86 @@ let message = "";
 try { await stranded.lockForBid(16, committeePub, locktime); } catch (e) { message = (e as Error).message; }
 check("a fully-locked wallet says so instead of 'mint some first'",
   message.includes("locked") && !message.includes("mint some first"), message);
+
+// --- Settlement -------------------------------------------------------------
+// The winner hands the locked proofs to the coordinator, which swaps them to
+// the SELLER's committed wallet key. The seller then fetches and spends them.
+// The coordinator is faked here; the mint is real, so the P2PK witness path the
+// seller needs is exercised for real.
+const settleMessage = new TextDecoder().decode(settleClaimMessage("auction-1", [refundPub, refundPub]));
+check("the settlement claim message binds the auction id and proof set",
+  settleMessage === `PlebeianAuctionsCashuSettleClaimV1\nauction_id=auction-1\nproofs=${refundPub},${refundPub}`,
+  settleMessage.replace(/\n/g, " | "));
+check("the settlement claim message differs for a different auction",
+  new TextDecoder().decode(settleClaimMessage("auction-2", [refundPub])) !== settleMessage, "bound to the auction");
+
+// A seller wallet with its own spend key, and a payout locked to it exactly the
+// way the coordinator builds one: a P2PK output, SIG_INPUTS, no locktime.
+const sellerStorage = memoryStorage();
+const seller = new BidderWallet(MINT, sellerStorage);
+await seller.mint(64, () => {});
+const sellerPub = seller.spendPublicKey();
+const rawMint = new Wallet(MINT);
+await rawMint.loadMint();
+const { send: payout } = await rawMint.send(64, seller.spendable(), {}, {
+  send: { type: "p2pk", options: new P2PKBuilder().addMainPubkey(sellerPub.slice(2)).toOptions() },
+});
+sellerStorage.set("spendable", "[]");
+check("the payout is P2PK-locked to the seller's wallet key",
+  payout.length > 0 && (JSON.parse(payout[0].secret as unknown as string) as { data: string }[])[1].data === sellerPub,
+  `${payout.length} proofs`);
+
+const coordinator = Bun.serve({
+  port: 0,
+  fetch(request) {
+    const url = new URL(request.url);
+    if (request.method === "POST" && url.pathname === "/api/demo/mint-settle") {
+      return request.json().then((body: { auction_id?: string; spend_signature?: string; proofs?: unknown[] }) => {
+        if (!body.auction_id || !body.spend_signature || !body.proofs?.length) {
+          return Response.json({ error: "incomplete settlement request" }, { status: 422 });
+        }
+        return Response.json({ proofs: payout });
+      });
+    }
+    if (request.method === "GET" && url.pathname === "/api/demo/settlement/auction-1") {
+      return Response.json({ proofs: payout });
+    }
+    return Response.json({ error: "no settlement payout is stored for that auction" }, { status: 404 });
+  },
+});
+const coordinatorUrl = `http://127.0.0.1:${coordinator.port}`;
+
+const imported = await seller.importSettlement("auction-1", `${coordinatorUrl}/api/demo/settlement/auction-1`);
+check("the seller imports the payout into spendable", imported.imported && imported.amount === 64,
+  `${imported.amount} sats`);
+const again = await seller.importSettlement("auction-1", `${coordinatorUrl}/api/demo/settlement/auction-1`);
+check("importing the same payout twice does not duplicate it", !again.imported && seller.balance() === 64,
+  `${seller.balance()} sats spendable`);
+const missing = await seller.importSettlement("auction-2", `${coordinatorUrl}/api/demo/settlement/auction-2`);
+check("an auction with no payout yet imports nothing", !missing.imported && missing.amount === 0, "404 handled");
+
+// The real test: the seller can SPEND what they received. These proofs are
+// P2PK-locked to the seller's key, so the mint refuses the swap unless the
+// wallet signs a NUT-11 witness first.
+let spendError = "";
+try {
+  const relocked = await seller.lockForBid(64, committeePub, locktime);
+  check("the seller can spend the payout it received (P2PK witness path)",
+    relocked.proofStateRefs.length > 0, `${relocked.proofStateRefs.length} references`);
+} catch (error) {
+  spendError = (error as Error).message;
+  check("the seller can spend the payout it received (P2PK witness path)", false, spendError);
+}
+
+// The winner's side: the wallet builds the claim, posts it, and clears the
+// locked bid without importing the payout (it belongs to the seller).
+wallet.recordLockedBid("bid-1", funding.lockedProofs, funding.spendPublicKey, "auction-1");
+const settled = await wallet.settleAuction("auction-1", { kind: 28643 }, `${coordinatorUrl}/api/demo/mint-settle`);
+check("the winner's settlement returns the payout digest and amount",
+  settled.amount === 64 && /^[0-9a-f]{64}$/.test(settled.tokenSha256),
+  `${settled.amount} sats, ${settled.tokenSha256.slice(0, 16)}`);
+check("the winner does not keep the seller's payout", wallet.lockedForBid("bid-1").length === 0, "association cleared");
+coordinator.stop(true);
 
 const failed = results.filter(([, ok]) => !ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

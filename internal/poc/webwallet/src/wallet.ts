@@ -84,6 +84,8 @@ export interface BidFunding {
 export interface LockedBid {
   proofs: Proof[];
   spendPublicKey: string;
+  /** The auction the bid belongs to, so a settlement can find its lock. */
+  auctionId?: string;
 }
 
 /**
@@ -104,6 +106,28 @@ export function refundClaimMessage(bidId: string, outputPublicKeys: string[]): U
   }
   return new TextEncoder().encode(
     `PlebeianAuctionsCashuRefundClaimV1\nbid_id=${bidId}\noutputs=${outputs.join(",")}`,
+  );
+}
+
+/**
+ * The deterministic message a settlement claim signs with the wallet spend key.
+ *
+ * It binds the auction id and the exact input proof set (sorted Y references),
+ * which is what the signer owns. Unlike the refund claim it does not name the
+ * output keys: the destination is the seller's payout key committed in the
+ * create event, so the winner has no say in it. The Go coordinator builds the
+ * same bytes (demoMintSettleClaimMessage) and refuses any mismatch.
+ */
+export function settleClaimMessage(auctionId: string, proofRefs: string[]): Uint8Array {
+  if (!auctionId) throw new Error("a settlement claim must name an auction");
+  const refs = [...proofRefs].sort();
+  for (const ref of refs) {
+    if (!/^0[23][0-9a-f]{64}$/.test(ref)) {
+      throw new Error("settlement claim proof references must be compressed secp256k1 points");
+    }
+  }
+  return new TextEncoder().encode(
+    `PlebeianAuctionsCashuSettleClaimV1\nauction_id=${auctionId}\nproofs=${refs.join(",")}`,
   );
 }
 
@@ -229,11 +253,19 @@ export class BidderWallet {
   }
 
   /** Records which locked proofs back a committed bid, and the key owning them. */
-  recordLockedBid(bidId: string, proofs: Proof[], spendPublicKey = this.spendPublicKey()): void {
+  recordLockedBid(bidId: string, proofs: Proof[], spendPublicKey = this.spendPublicKey(), auctionId?: string): void {
     if (!bidId || !proofs.length) return;
     const bids = this.readLockedBids();
-    bids[bidId] = { proofs, spendPublicKey };
+    bids[bidId] = { proofs, spendPublicKey, ...(auctionId ? { auctionId } : {}) };
     this.storage.set("lockedBids", JSON.stringify(bids));
+  }
+
+  /** The bid this browser locked proofs for in one auction, if any. */
+  private lockedBidForAuction(auctionId: string): { bidId: string; locked: LockedBid } | null {
+    for (const [bidId, locked] of Object.entries(this.readLockedBids())) {
+      if (locked.auctionId === auctionId) return { bidId, locked };
+    }
+    return null;
   }
 
   /** The proofs this browser locked for one bid, or an empty list. */
@@ -437,6 +469,97 @@ export class BidderWallet {
     this.storage.set("lockedBids", JSON.stringify(bids));
     this.storage.set("spendable", JSON.stringify([...this.spendable(), ...fresh]));
     return { amount: fresh.reduce((total, proof) => total + Number(proof.amount), 0) };
+  }
+
+  /**
+   * The winner's half of settlement: hands the winning lock's proofs to the
+   * coordinator, which swaps them to the SELLER's committed wallet key.
+   *
+   * The signed KindSettle event is the AUTHORIZATION (it names the auction and
+   * proves the caller holds the winner's Nostr key). The wallet spend-key
+   * signature is OWNERSHIP: it covers the auction id and the exact input proof
+   * set, and the coordinator verifies it against the key the lock was created
+   * with. The message is hashed once, exactly like the refund claim.
+   *
+   * The fresh proofs do NOT come back to this wallet -- they are locked to the
+   * seller. This returns the payout digest so the caller can record it in the
+   * KindSettle event.
+   */
+  async settleAuction(auctionId: string, event: unknown, endpoint = "/api/demo/mint-settle"): Promise<{ amount: number; tokenSha256: string }> {
+    const found = this.lockedBidForAuction(auctionId);
+    if (!found) {
+      throw new Error("this browser holds no locked proofs for that auction");
+    }
+    const { bidId, locked } = found;
+    const proofs = locked.proofs ?? [];
+    if (!proofs.length) {
+      throw new Error("this browser holds no locked proofs for that auction");
+    }
+    if (locked.spendPublicKey !== this.spendPublicKey()) {
+      throw new Error("the wallet spend key changed since this bid was locked, so it cannot settle");
+    }
+    const refs = proofs
+      .map((proof) => hashToCurve(new TextEncoder().encode(proof.secret)).toHex(true))
+      .sort();
+    const signature = bytesToHex(schnorr.sign(await sha256Bytes(settleClaimMessage(auctionId, refs)), this.spendSecretKey()));
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        auction_id: auctionId,
+        proofs: proofs.map((proof) => ({
+          amount: Number(proof.amount), id: proof.id, secret: proof.secret, C: proof.C,
+          dleq: proof.dleq,
+        })),
+        event,
+        spend_signature: signature,
+      }),
+    });
+    const data = (await response.json().catch(() => ({}))) as { proofs?: Proof[]; error?: string };
+    if (!response.ok) {
+      throw new Error(data.error || `settlement failed (HTTP ${response.status})`);
+    }
+    const payout = data.proofs ?? [];
+    if (!payout.length) throw new Error("the coordinator returned no settlement proofs");
+
+    // The winning proofs are spent; the payout belongs to the seller, so it is
+    // deliberately not imported here.
+    const spent = new Set(proofs.map((proof) => proof.secret));
+    this.storage.set("locked", JSON.stringify(this.locked().filter((proof) => !spent.has(proof.secret))));
+    const bids = this.readLockedBids();
+    delete bids[bidId];
+    this.storage.set("lockedBids", JSON.stringify(bids));
+    return {
+      amount: payout.reduce((total, proof) => total + Number(proof.amount), 0),
+      tokenSha256: await sha256Hex(JSON.stringify(serializeProofs(payout))),
+    };
+  }
+
+  /**
+   * The seller's half: fetches the payout a settlement swap produced and puts
+   * it in `spendable`.
+   *
+   * The endpoint is unauthenticated because the proofs are P2PK-locked to this
+   * wallet's spend key -- the lock is the access control, and a wallet that
+   * does not hold the key cannot spend what it downloads. Returns 0 when no
+   * payout is stored yet, which is the normal state before the winner settles.
+   */
+  async importSettlement(auctionId: string, endpoint = `/api/demo/settlement/${encodeURIComponent(auctionId)}`): Promise<{ amount: number; imported: boolean }> {
+    const response = await fetch(endpoint, { headers: { accept: "application/json" } });
+    if (response.status === 404) return { amount: 0, imported: false };
+    const data = (await response.json().catch(() => ({}))) as { proofs?: Proof[]; error?: string };
+    if (!response.ok) {
+      throw new Error(data.error || `settlement import failed (HTTP ${response.status})`);
+    }
+    const fresh = data.proofs ?? [];
+    if (!fresh.length) return { amount: 0, imported: false };
+    // Deduplicate by secret: a refresh may fetch the same payout twice, and a
+    // duplicated proof would make the next swap fail at the mint.
+    const known = new Set(this.spendable().map((proof) => proof.secret));
+    const added = fresh.filter((proof) => !known.has(proof.secret));
+    if (!added.length) return { amount: 0, imported: false };
+    this.storage.set("spendable", JSON.stringify([...this.spendable(), ...added]));
+    return { amount: added.reduce((total, proof) => total + Number(proof.amount), 0), imported: true };
   }
 
   /** When the currently locked proofs become reclaimable by the bidder. */

@@ -10,10 +10,17 @@ package poc
 // imported by the beneficiary's own wallet. The coordinator persists neither
 // the old proofs nor the new ones.
 //
-// Refund (this slice) and settlement (the next one) differ only in which
-// committed state fact authorizes the spend and which Nostr key the outputs are
-// locked to. Everything else -- proof-set binding, NUT-07, witness signing,
-// swap, unblinding -- lives here once so the two modes cannot drift.
+// Refund and settlement differ only in which committed state fact authorizes
+// the spend and which key the outputs are locked to. Everything else --
+// proof-set binding, NUT-07, witness signing, swap, unblinding -- lives here
+// once so the two modes cannot drift.
+//
+// Settlement has one extra problem the refund does not: the caller is the
+// WINNER's browser, and the beneficiary is the SELLER, who is not in the
+// request. The fresh proofs are therefore parked in a small server-side store
+// keyed by auction id and fetched by the seller's own browser. That is safe to
+// publish: every proof is P2PK-locked to the seller's committed wallet key, so
+// holding the bytes confers no ability to spend them.
 
 import (
 	"bytes"
@@ -30,6 +37,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -605,4 +613,276 @@ func (server *APIServer) demoMintRefund(response http.ResponseWriter, request *h
 		return
 	}
 	writeJSON(response, http.StatusOK, demoMintRefundResponse{Proofs: fresh})
+}
+
+// demoMintSettleBody is the winner's settlement request. It names the auction
+// rather than the bid: the winning bid is committed state (auction.LeaderBidID),
+// so the caller cannot point the swap at a different lock.
+//
+// There is no spend_public_key field, unlike the refund. The key that must sign
+// is the one the lock was created with -- receipt.RefundPublicKey -- and taking
+// it from committed state means the caller cannot substitute a key of their own.
+type demoMintSettleBody struct {
+	AuctionID string               `json:"auction_id"`
+	Proofs    []demoMintSpendProof `json:"proofs"`
+	Event     SignedEvent          `json:"event"`
+	// SpendSignature is the hex BIP-340 signature by the wallet spend key that
+	// owns the lock, over the hashed claim message.
+	SpendSignature string `json:"spend_signature"`
+}
+
+// demoMintSettleClaimMessage is the deterministic message a settlement claim
+// signs with the wallet spend key. It binds the auction id and the exact input
+// proof set, which is what the signer owns.
+//
+// It deliberately does NOT bind the output keys, unlike the refund claim: the
+// destination is the seller's payout key committed in the create event, so the
+// coordinator cannot redirect it without contradicting committed state, and the
+// winner has no business naming it.
+func demoMintSettleClaimMessage(auctionID string, proofRefs []string) []byte {
+	refs := append([]string(nil), proofRefs...)
+	sort.Strings(refs)
+	return []byte("PlebeianAuctionsCashuSettleClaimV1\nauction_id=" + auctionID + "\nproofs=" + strings.Join(refs, ","))
+}
+
+// demoMintVerifySettleClaim checks the ownership half of a settlement: the
+// signature must verify, over the hashed claim message, against the wallet
+// spend key the committed receipt names. A valid Nostr authorization alone
+// proves who is asking, not that they hold the value being spent.
+func demoMintVerifySettleClaim(body demoMintSettleBody, receipt CashuLockReceipt) error {
+	if body.SpendSignature == "" {
+		return errors.New("settlement claim carries no wallet spend-key signature")
+	}
+	if !validLowerHex(body.SpendSignature, 64) {
+		return errors.New("settlement claim wallet spend-key signature is not a 64-byte hex Schnorr signature")
+	}
+	if !validCompressedPublicKey(receipt.RefundPublicKey) {
+		return errors.New("committed receipt carries no valid wallet spend key")
+	}
+	point, err := btcec.ParsePubKey(mustHex(receipt.RefundPublicKey))
+	if err != nil {
+		return errors.New("committed receipt carries no valid wallet spend key")
+	}
+	spendKey, err := schnorr.ParsePubKey(schnorr.SerializePubKey(point))
+	if err != nil {
+		return errors.New("committed receipt carries no valid wallet spend key")
+	}
+	signature, err := schnorr.ParseSignature(mustHex(body.SpendSignature))
+	if err != nil {
+		return errors.New("settlement claim wallet spend-key signature is malformed")
+	}
+	refs := make([]string, 0, len(body.Proofs))
+	for index, proof := range body.Proofs {
+		reference, err := demoMintProofY(proof.Secret)
+		if err != nil {
+			return fmt.Errorf("proof %d: %w", index, err)
+		}
+		refs = append(refs, reference)
+	}
+	if !signature.Verify(sha256Sum(demoMintSettleClaimMessage(body.AuctionID, refs)), spendKey) {
+		return errors.New("settlement claim wallet spend-key signature does not verify over the auction id and proof set")
+	}
+	return nil
+}
+
+// settlementStore holds the fresh proofs a settlement swap produced until the
+// seller's browser fetches them. It is durable across requests, not across a
+// process restart: the proofs are P2PK-locked to the seller's key, so a restart
+// between the swap and the fetch loses them. That window is one request wide
+// and is the honest cost of not giving the coordinator custody.
+type settlementStore struct {
+	mu        sync.Mutex
+	byAuction map[string][]demoMintSpentProof
+}
+
+func (store *settlementStore) put(auctionID string, proofs []demoMintSpentProof) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.byAuction == nil {
+		store.byAuction = map[string][]demoMintSpentProof{}
+	}
+	store.byAuction[auctionID] = proofs
+}
+
+func (store *settlementStore) get(auctionID string) ([]demoMintSpentProof, bool) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	proofs, ok := store.byAuction[auctionID]
+	return proofs, ok
+}
+
+// demoMintSettle is the winner's half of settlement: the winner hands over the
+// locked proofs, the coordinator verifies them against committed state, signs
+// the NUT-11 witness with the committee key, and swaps them to the SELLER's
+// committed wallet key. The winner never receives the value and cannot redirect
+// it.
+func (server *APIServer) demoMintSettle(response http.ResponseWriter, request *http.Request) {
+	if !server.legacyInterim || server.manifest.ApplicationAuthority != ApplicationAuthorityLegacy {
+		writeError(response, http.StatusNotFound, errors.New("demo mint-settle coordinator is available only on a legacy loopback network"))
+		return
+	}
+	if server.demoCommitteeKey == nil {
+		writeError(response, http.StatusServiceUnavailable, errors.New("demo mint-settle coordinator has no committee key"))
+		return
+	}
+	if server.demoMintChecker == nil || server.demoMintKeyset == nil {
+		writeError(response, http.StatusServiceUnavailable, errors.New("demo mint-settle coordinator has no mint"))
+		return
+	}
+	var body demoMintSettleBody
+	if err := decodeBody(request, &body); err != nil {
+		writeError(response, http.StatusBadRequest, err)
+		return
+	}
+	if !validIdentifier(body.AuctionID) {
+		writeError(response, http.StatusBadRequest, errors.New("demo mint settlement requires a valid auction id"))
+		return
+	}
+
+	// (a) The event is the authorization: a valid signature, the settle kind,
+	// and content naming this auction, so an authorization for one auction
+	// cannot be replayed against another.
+	bidder, err := VerifyNostrEvent(body.Event)
+	if err != nil {
+		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("settlement authorization is not a valid Nostr event: %w", err))
+		return
+	}
+	if body.Event.Kind != KindSettle {
+		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("settlement authorization must be a KindSettle (%d) event", KindSettle))
+		return
+	}
+	var content settleContent
+	if err := decodeStrictContent(body.Event.Content, &content); err != nil {
+		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("settlement authorization content is invalid: %w", err))
+		return
+	}
+	if content.AuctionID != body.AuctionID {
+		writeError(response, http.StatusUnprocessableEntity, errors.New("settlement authorization names a different auction"))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(request.Context(), 4*time.Second)
+	defer cancel()
+	snapshot, err := server.demoCommittedState(ctx)
+	if err != nil {
+		writeError(response, http.StatusServiceUnavailable, err)
+		return
+	}
+
+	// (b) Committed state must say this auction is closed and this signer won.
+	auction, exists := snapshot.Auctions[body.AuctionID]
+	if !exists {
+		writeError(response, http.StatusNotFound, errors.New("auction not found in committed state"))
+		return
+	}
+	if auction.Status != "closed" {
+		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("auction is %q, not closed", auction.Status))
+		return
+	}
+	if auction.Winner == "" || auction.Winner != bidder {
+		writeError(response, http.StatusForbidden, errors.New("settlement signer is not the auction winner"))
+		return
+	}
+	if auction.FundingMode != FundingModeCashuLock {
+		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("auction funding mode %q has no cooperative settlement", auction.FundingMode))
+		return
+	}
+	// The destination is committed, not chosen by the caller. Without it there
+	// is nowhere to send the value, and guessing would be worse than refusing.
+	if !validCompressedPublicKey(auction.SellerCocoPaymentPublicKey) {
+		writeError(response, http.StatusUnprocessableEntity, errors.New("auction committed no seller wallet payout key, so there is nowhere to settle"))
+		return
+	}
+
+	// (c) The winning lock must be the one close selected, and still unpaid.
+	lock, exists := snapshot.Locks[auction.LeaderBidID]
+	if !exists {
+		writeError(response, http.StatusUnprocessableEntity, errors.New("winning bid lock is missing from committed state"))
+		return
+	}
+	if lock.Bidder != bidder {
+		writeError(response, http.StatusForbidden, errors.New("winning lock belongs to another bidder"))
+		return
+	}
+	if lock.Status != "winner_selected" {
+		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("winning lock is %q, not winner_selected", lock.Status))
+		return
+	}
+	bid, exists := snapshot.Bids[auction.LeaderBidID]
+	if !exists || bid.CashuTokenSHA256 == "" {
+		writeError(response, http.StatusUnprocessableEntity, errors.New("winning bid is not mint-backed, so it has no cooperative settlement"))
+		return
+	}
+	receipt, exists := snapshot.CashuLocks[bid.CashuTokenSHA256]
+	if !exists {
+		writeError(response, http.StatusUnprocessableEntity, errors.New("committed receipt for the winning bid is missing"))
+		return
+	}
+
+	// A retry after a lost response must not look like a double spend. The
+	// proofs are already locked to the seller, so returning them again is safe
+	// and is the only honest answer once the mint has seen the swap.
+	if stored, ok := server.demoSettlements.get(body.AuctionID); ok {
+		writeJSON(response, http.StatusOK, demoMintRefundResponse{Proofs: stored})
+		return
+	}
+
+	// (d) The submitted material must be exactly the committed proof set and
+	// must cover the winning amount.
+	if err := demoMintVerifyProofSet(receipt, body.Proofs, lock.Amount); err != nil {
+		writeError(response, http.StatusUnprocessableEntity, err)
+		return
+	}
+
+	// (e) The mint must still see every proof as UNSPENT. Fail closed: a SPENT
+	// proof means the settlement already happened or the winner reclaimed.
+	if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
+		writeError(response, http.StatusUnprocessableEntity, err)
+		return
+	}
+
+	// (f) Ownership: the wallet spend key that created the lock must sign the
+	// claim. Checked last because it needs the committed receipt.
+	if err := demoMintVerifySettleClaim(body, receipt); err != nil {
+		writeError(response, http.StatusUnprocessableEntity, err)
+		return
+	}
+
+	swapCtx, swapCancel := context.WithTimeout(request.Context(), demoMintSwapTimeout)
+	defer swapCancel()
+	fresh, err := server.demoMintCooperativeSpend(swapCtx, body.Proofs, auction.SellerCocoPaymentPublicKey)
+	if err != nil {
+		writeError(response, http.StatusUnprocessableEntity, err)
+		return
+	}
+	// Park the payout for the seller. Publishing these bytes is safe: each
+	// proof's secret is a P2PK condition naming the seller's wallet key, so
+	// only that key can produce the NUT-11 witness the mint requires. Nobody
+	// else -- not the winner, not the coordinator, not another reader of this
+	// endpoint -- can spend them.
+	server.demoSettlements.put(body.AuctionID, fresh)
+	writeJSON(response, http.StatusOK, demoMintRefundResponse{Proofs: fresh})
+}
+
+// demoSettlement serves the payout a settlement swap produced, so the seller's
+// browser can import it. It is unauthenticated on purpose: the proofs are
+// P2PK-locked to the seller's committed wallet key, so the response is
+// worthless to anyone else. There is no signature to check that would add
+// anything -- the lock is the access control.
+func (server *APIServer) demoSettlement(response http.ResponseWriter, request *http.Request) {
+	if !server.legacyInterim || server.manifest.ApplicationAuthority != ApplicationAuthorityLegacy {
+		writeError(response, http.StatusNotFound, errors.New("demo settlement store is available only on a legacy loopback network"))
+		return
+	}
+	auctionID := request.PathValue("auction_id")
+	if !validIdentifier(auctionID) {
+		writeError(response, http.StatusBadRequest, errors.New("settlement lookup requires a valid auction id"))
+		return
+	}
+	proofs, ok := server.demoSettlements.get(auctionID)
+	if !ok {
+		writeError(response, http.StatusNotFound, errors.New("no settlement payout is stored for that auction"))
+		return
+	}
+	writeJSON(response, http.StatusOK, demoMintRefundResponse{Proofs: proofs})
 }
