@@ -185,18 +185,19 @@ func TestCashuLockReceiptBindsBid(t *testing.T) {
 	}
 	seller := testPrivateKey(t)
 	bidder := testPrivateKey(t)
-	create := testEvent(t, seller, 1_000, KindCreate, createContent{AuctionID: "cashu-auction", Title: "Cashu item", Duration: 3, StartingBid: 100})
+	create := testEvent(t, seller, 1_000, KindCreate, createContent{AuctionID: "cashu-auction", Title: "Cashu item", Duration: 3, StartingBid: 100, FundingMode: FundingModeCashuLock})
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &create}, 1_000, DefaultPolicy(), seed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	markLegacyAuction(&state, "cashu-auction")
+
 	refund := testPrivateKey(t)
 	receipt := CashuLockReceipt{
 		Schema: "PlebeianAuctionsPOCCashuLockV1", MintURL: CashuMintURL, AuctionID: "cashu-auction",
 		Bidder: actorForKey(bidder), Amount: 120, OperationID: "cashu-lock-operation-1",
 		TokenSHA256: strings.Repeat("a", 64), CommitteePublicKey: hex.EncodeToString(committee.PubKey().SerializeCompressed()),
 		RefundPublicKey: hex.EncodeToString(refund.PubKey().SerializeCompressed()), Locktime: 1_003,
+		ProofStateRefs: testProofRefs(t, refund, seller),
 	}
 	digest := cashuReceiptDigest(receipt)
 	signature, err := schnorr.Sign(committee, digest[:])
@@ -225,12 +226,12 @@ func TestCashuLockReceiptBindsBid(t *testing.T) {
 		t.Fatal("consensus state did not retain the verified public Cashu receipt")
 	}
 
-	secondCreate := testEvent(t, seller, 1_002, KindCreate, createContent{AuctionID: "cashu-auction-2", Title: "Second item", Duration: 3, StartingBid: 100})
+	secondCreate := testEvent(t, seller, 1_002, KindCreate, createContent{AuctionID: "cashu-auction-2", Title: "Second item", Duration: 3, StartingBid: 100, FundingMode: FundingModeCashuLock})
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &secondCreate}, 1_002, DefaultPolicy(), seed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	markLegacyAuction(&state, "cashu-auction-2")
+
 	replayed := receipt
 	replayed.AuctionID = "cashu-auction-2"
 	replayed.OperationID = "cashu-lock-operation-2"
@@ -1548,6 +1549,19 @@ func testReservationReceipt(t *testing.T, committee *btcec.PrivateKey, auctionID
 	}
 	receipt.Signature = hex.EncodeToString(signature.Serialize())
 	return receipt
+}
+
+// testProofRefs builds a canonical (sorted, unique) NUT-07 proof-reference set
+// from private keys. These are compressed Y points: public, non-bearer, and
+// exactly what the mint-backed funding path binds and de-duplicates.
+func testProofRefs(t *testing.T, keys ...*btcec.PrivateKey) []string {
+	t.Helper()
+	refs := make([]string, 0, len(keys))
+	for _, key := range keys {
+		refs = append(refs, hex.EncodeToString(key.PubKey().SerializeCompressed()))
+	}
+	sort.Strings(refs)
+	return refs
 }
 
 func markLegacyAuction(state *State, id string) {

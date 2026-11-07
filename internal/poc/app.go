@@ -34,6 +34,9 @@ type Application struct {
 	policy    Policy
 	mintSeed  []byte
 	statePath string
+	// mintChecker is used only by CheckTx. It is deliberately not consulted by
+	// ApplyTransaction, which runs inside consensus and must stay deterministic.
+	mintChecker MintStateChecker
 }
 
 var _ abci.Application = (*Application)(nil)
@@ -128,7 +131,31 @@ func newApplicationWithAuthority(chainID string, policy Policy, mintSeed []byte,
 	if err != nil {
 		return nil, err
 	}
-	return &Application{state: state, hash: hash, policy: policy, mintSeed: append([]byte(nil), mintSeed...), statePath: statePath}, nil
+	return &Application{state: state, hash: hash, policy: policy, mintSeed: append([]byte(nil), mintSeed...),
+		statePath: statePath, mintChecker: NewHTTPMintStateChecker(cashuMintURL, mintCheckTimeout)}, nil
+}
+
+// SetMintChecker replaces the admission-time mint checker. Tests inject a fake;
+// production uses the HTTP NUT-07 client built from the network's mint URL.
+func (app *Application) SetMintChecker(checker MintStateChecker) {
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	app.mintChecker = checker
+}
+
+// verifyMintBackedFunding asks the mint whether a Cashu-lock bid's proofs are
+// currently unspent. CheckTx is local and outside consensus, so this is the one
+// place a network call is allowed -- see mintclient.go for why it cannot live in
+// ApplyTransaction. It fails closed: an unreachable mint refuses the bid.
+func (app *Application) verifyMintBackedFunding(tx Transaction) error {
+	receipt, err := CashuLockReceiptOf(tx)
+	if err != nil || receipt == nil {
+		return err
+	}
+	app.mu.RLock()
+	checker := app.mintChecker
+	app.mu.RUnlock()
+	return VerifyCashuLockProofsAtMint(checker, *receipt)
 }
 
 func (app *Application) Info(context.Context, *abci.InfoRequest) (*abci.InfoResponse, error) {
@@ -156,6 +183,11 @@ func (app *Application) CheckTx(_ context.Context, request *abci.CheckTxRequest)
 		state := app.state
 		app.mu.RUnlock()
 		err = ValidateForMempool(state, tx, app.policy, app.mintSeed)
+		if err == nil {
+			// Admission-time only. The deterministic state transition repeats
+			// every check it can make without the network.
+			err = app.verifyMintBackedFunding(tx)
+		}
 	}
 	if err != nil {
 		return invalidTx(err), nil

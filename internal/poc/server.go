@@ -1,6 +1,7 @@
 package poc
 
 import (
+	"log"
 	"context"
 	"crypto/sha256"
 	"embed"
@@ -683,6 +684,9 @@ func (server *APIServer) broadcast(response http.ResponseWriter, request *http.R
 			writeError(response, http.StatusUnprocessableEntity, errors.New(rejected))
 			return
 		}
+		// An unclassified broadcast error is an operator problem, not a user
+		// problem: without the raw text there is nothing to diagnose from.
+		log.Printf("unclassified broadcast error: %v", err)
 		writeError(response, http.StatusServiceUnavailable, errors.New("consensus transaction outcome unavailable"))
 		return
 	}

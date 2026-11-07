@@ -35,6 +35,11 @@ const (
 	FundingModeLegacy               = "legacy"
 	FundingModeCustodialReservation = "custodial_reservation_v1"
 	FundingModeThresholdSigAll      = "threshold_sigall_v1"
+	// FundingModeCashuLock is the mint-backed route: the bidder locks real
+	// Cashu proofs at the mint to a NUT-11 P2PK condition, and the receipt
+	// carries the proof references the mint can be asked about (NUT-07).
+	// It is the first funding mode whose backing is not a signed IOU.
+	FundingModeCashuLock = "cashu_lock_v1"
 	ApplicationAuthorityLegacy      = "legacy_ed25519_v1"
 	ApplicationAuthorityFrostCashu  = "frost_cashu_v4"
 	frostLegacyNotePublicPinDomain  = "PLEBEIAN_FRIDAY_DISABLED_LEGACY_NOTE_AUTHORITY_V1"
@@ -236,7 +241,11 @@ type CashuLockReceipt struct {
 	CommitteePublicKey string `json:"committee_public_key"`
 	RefundPublicKey    string `json:"refund_public_key"`
 	Locktime           int64  `json:"locktime"`
-	Signature          string `json:"signature"`
+	// ProofStateRefs are the NUT-07 references (compressed Y points) of the
+	// proofs backing this bid. They are public, non-bearer material: a Y point
+	// lets anyone ask the mint about the proof but lets nobody spend it.
+	ProofStateRefs []string `json:"proof_state_refs,omitempty"`
+	Signature      string   `json:"signature"`
 }
 
 type Lock struct {
@@ -289,6 +298,16 @@ type State struct {
 	Locks                   map[string]Lock                   `json:"locks"`
 	Operations              map[string]bool                   `json:"operations"`
 	CashuLocks              map[string]CashuLockReceipt       `json:"cashu_locks"`
+	// CashuProofUses maps a proof reference (the x coordinate of Y) to the
+	// token digest of the bid that committed it. This is the deterministic,
+	// consensus-enforced half of mint-backed funding: one proof can never fund
+	// two bids, no matter what any mint or coordinator says.
+	// omitempty matters: CanonicalHash is a hash of the whole marshalled state,
+	// so a field that is always emitted would change every state's hash and make
+	// an existing chain impossible to replay. Omitted while empty, a chain that
+	// never used mint-backed funding hashes exactly as it did before this field
+	// existed.
+	CashuProofUses map[string]string `json:"cashu_proof_uses,omitempty"`
 	CustodyReservations     map[string]CustodyReservation     `json:"custody_reservations"`
 	IntegratedFundings      map[string]IntegratedFunding      `json:"integrated_fundings"`
 	IntegratedProofUses     map[string]string                 `json:"integrated_proof_uses"`
@@ -393,6 +412,7 @@ func newStateWithAuthority(chainID string, mintPublic ed25519.PublicKey, committ
 		Locks:                   map[string]Lock{},
 		Operations:              map[string]bool{},
 		CashuLocks:              map[string]CashuLockReceipt{},
+		CashuProofUses:          map[string]string{},
 		CustodyReservations:     map[string]CustodyReservation{},
 		IntegratedFundings:      map[string]IntegratedFunding{},
 		IntegratedProofUses:     map[string]string{},
@@ -464,6 +484,27 @@ func DeriveFrostCashuLegacyNotePublicPin(pins FundingAbortPinsV1) (ed25519.Publi
 	return append(ed25519.PublicKey(nil), digest[:]...), nil
 }
 
+// ensureMaps restores any map this application writes to. Two ways a map
+// arrives nil: a state persisted before the field existed, and Clone's
+// marshal/unmarshal round-trip, which drops an empty map whose field is tagged
+// omitempty. Assigning into a nil map is a panic, and inside ApplyTransaction a
+// panic is a chain halt rather than a rejected transaction, so both paths must
+// be closed here rather than at each assignment site.
+func (s *State) ensureMaps() {
+	if s.CustodyReservations == nil {
+		s.CustodyReservations = map[string]CustodyReservation{}
+	}
+	if s.IntegratedFundings == nil {
+		s.IntegratedFundings = map[string]IntegratedFunding{}
+	}
+	if s.IntegratedProofUses == nil {
+		s.IntegratedProofUses = map[string]string{}
+	}
+	if s.CashuProofUses == nil {
+		s.CashuProofUses = map[string]string{}
+	}
+}
+
 func normalizeState(state *State, policy Policy) error {
 	if state.Schema != "PlebeianAuctionsPOCStateV2" && state.Schema != "PlebeianAuctionsPOCStateV3" &&
 		state.Schema != "PlebeianAuctionsPOCStateV4" && state.Schema != "PlebeianAuctionsPOCStateV5" &&
@@ -481,15 +522,7 @@ func normalizeState(state *State, policy Policy) error {
 	if state.AuthNetworkID == "" {
 		state.AuthNetworkID = state.ChainID
 	}
-	if state.CustodyReservations == nil {
-		state.CustodyReservations = map[string]CustodyReservation{}
-	}
-	if state.IntegratedFundings == nil {
-		state.IntegratedFundings = map[string]IntegratedFunding{}
-	}
-	if state.IntegratedProofUses == nil {
-		state.IntegratedProofUses = map[string]string{}
-	}
+	state.ensureMaps()
 	normalizedProofUses := make(map[string]string, len(state.IntegratedProofUses))
 	for proofStateRef, operationID := range state.IntegratedProofUses {
 		key := proofStateRef
@@ -528,7 +561,8 @@ func normalizeState(state *State, policy Policy) error {
 		if auction.FundingMode == "" {
 			auction.FundingMode = FundingModeLegacy
 		}
-		if auction.FundingMode != FundingModeLegacy && auction.FundingMode != FundingModeCustodialReservation && auction.FundingMode != FundingModeThresholdSigAll {
+		if auction.FundingMode != FundingModeLegacy && auction.FundingMode != FundingModeCustodialReservation &&
+			auction.FundingMode != FundingModeThresholdSigAll && auction.FundingMode != FundingModeCashuLock {
 			return errors.New("persisted auction funding mode is unsupported")
 		}
 		if auction.OriginalEndTime == 0 {
@@ -551,6 +585,7 @@ func (s State) Clone() (State, error) {
 	if err := json.Unmarshal(raw, &cloned); err != nil {
 		return State{}, err
 	}
+	cloned.ensureMaps()
 	return cloned, nil
 }
 
@@ -850,7 +885,8 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 		if fundingMode == "" {
 			fundingMode = FundingModeCustodialReservation
 		}
-		if fundingMode != FundingModeCustodialReservation && fundingMode != FundingModeThresholdSigAll {
+		if fundingMode != FundingModeCustodialReservation && fundingMode != FundingModeThresholdSigAll &&
+			fundingMode != FundingModeCashuLock {
 			return errors.New("auction funding mode is unsupported")
 		}
 		if fundingMode == FundingModeThresholdSigAll && content.SellerCocoPaymentPublicKey == "" {
@@ -959,6 +995,15 @@ func applyBid(state *State, actor, eventID string, committedAt int64, content bi
 	}
 	if auction.FundingMode == FundingModeThresholdSigAll && content.Reservation != nil {
 		return errors.New("threshold auction cannot mix in custodial reservations")
+	}
+	if auction.FundingMode == FundingModeCashuLock && content.CashuLock == nil {
+		return errors.New("mint-backed auction requires a Cashu lock")
+	}
+	// Without this a mint-backed auction would accept a custodial reservation
+	// and quietly fall back to attested funding, which is the whole thing the
+	// mode exists to stop.
+	if auction.FundingMode != FundingModeCashuLock && content.CashuLock != nil {
+		return errors.New("only a mint-backed auction accepts a Cashu lock")
 	}
 	if content.IntegratedFunding != nil {
 		if err := verifyIntegratedFundingReceipt(*state, actor, committedAt, content, *content.IntegratedFunding, policy); err != nil {
@@ -1094,6 +1139,9 @@ func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, co
 		bid.CashuTokenSHA256 = content.CashuLock.TokenSHA256
 		bid.CashuLockOperation = content.CashuLock.OperationID
 		state.CashuLocks[content.CashuLock.TokenSHA256] = *content.CashuLock
+		for _, proofStateRef := range content.CashuLock.ProofStateRefs {
+			state.CashuProofUses[proofStateRef[2:]] = content.CashuLock.TokenSHA256
+		}
 	}
 	if content.Reservation != nil {
 		bid.ReservationID = content.Reservation.ReservationID
@@ -1552,6 +1600,26 @@ func verifyCashuLockReceipt(state State, actor string, content bidContent, recei
 	if _, exists := state.CashuLocks[receipt.TokenSHA256]; exists {
 		return errors.New("Cashu lock token was already committed")
 	}
+	// The proof set must be a bounded, canonically ordered, unique set of
+	// compressed points, and no proof may already be committed to another bid.
+	// This is the deterministic half of the guarantee: it holds on every
+	// validator without asking anyone, so one proof cannot fund two bids even
+	// if the mint is unreachable or a proposer smuggles the transaction past
+	// CheckTx.
+	if len(receipt.ProofStateRefs) == 0 || len(receipt.ProofStateRefs) > MaxInputs {
+		return errors.New("Cashu lock receipt must bind a bounded nonempty proof set")
+	}
+	seenProof := map[string]bool{}
+	for index, proofStateRef := range receipt.ProofStateRefs {
+		if !validCompressedPublicKey(proofStateRef) || seenProof[proofStateRef[2:]] ||
+			(index > 0 && receipt.ProofStateRefs[index-1] >= proofStateRef) {
+			return errors.New("Cashu lock proof references must be sorted, unique compressed points")
+		}
+		seenProof[proofStateRef[2:]] = true
+		if state.CashuProofUses[proofStateRef[2:]] != "" {
+			return errors.New("Cashu lock proof was already committed to another bid")
+		}
+	}
 	publicBytes, _ := hex.DecodeString(receipt.CommitteePublicKey)
 	publicKey, err := btcec.ParsePubKey(publicBytes)
 	if err != nil {
@@ -1570,7 +1638,7 @@ func cashuReceiptDigest(receipt CashuLockReceipt) [32]byte {
 	material, _ := json.Marshal([]any{
 		receipt.Schema, receipt.MintURL, receipt.AuctionID, receipt.Bidder, receipt.Amount,
 		receipt.OperationID, receipt.TokenSHA256, receipt.CommitteePublicKey,
-		receipt.RefundPublicKey, receipt.Locktime,
+		receipt.RefundPublicKey, receipt.Locktime, receipt.ProofStateRefs,
 	})
 	return sha256.Sum256(material)
 }
@@ -1735,6 +1803,19 @@ func verifyNote(state State, note Note) error {
 
 func noteMessage(state State, note Note) string {
 	return fmt.Sprintf("plebeian-test-mint-v1|%s|%s|%s|%d", state.ChainID, note.ID, note.Owner, note.Amount)
+}
+
+// CashuLockReceiptOf returns the Cashu lock receipt carried by a bid
+// transaction, or nil when the transaction is not a Cashu-lock bid.
+func CashuLockReceiptOf(tx Transaction) (*CashuLockReceipt, error) {
+	if tx.Event == nil || tx.Event.Kind != KindBid {
+		return nil, nil
+	}
+	var content bidContent
+	if err := decodeStrictContent(tx.Event.Content, &content); err != nil {
+		return nil, err
+	}
+	return content.CashuLock, nil
 }
 
 func decodeStrictContent(raw string, target any) error {
