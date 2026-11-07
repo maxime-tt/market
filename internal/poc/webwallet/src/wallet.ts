@@ -25,6 +25,7 @@ import {
   P2PKBuilder,
   hashToCurve,
   serializeProofs,
+  signP2PKProofs,
   type Proof,
 } from "@cashu/cashu-ts";
 import { schnorr } from "@noble/curves/secp256k1.js";
@@ -129,6 +130,21 @@ function xOnly(compressedHex: string): string {
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * The claim message hashed once, as the coordinator's verifier expects.
+ *
+ * The Go side verifies over sha256(message) (demoMintRefundClaimMessage +
+ * sha256Sum in internal/poc/demo_mint_spend.go), and every other signature in
+ * this codebase is over a 32-byte digest too. Signing the raw message instead
+ * makes the two sides disagree on the signed bytes, and the coordinator then
+ * refuses every genuine claim with "does not verify over the bid id and output
+ * keys" -- which is exactly what happened before this helper existed.
+ */
+async function sha256Bytes(value: Uint8Array): Promise<Uint8Array> {
+  const digest = await crypto.subtle.digest("SHA-256", value);
+  return new Uint8Array(digest);
 }
 
 export class BidderWallet {
@@ -300,12 +316,24 @@ export class BidderWallet {
 
     await this.ensureLoaded();
     onProgress?.("locking proofs to the committee");
+    // Proofs handed back by a refund are P2PK-locked to THIS wallet's spend key,
+    // so spending them needs a NUT-11 witness over the input. cashu-ts does not
+    // produce one on its own, and the mint refuses the swap with "Witness is
+    // missing for p2pk signature" -- a refund would return money the bidder can
+    // never reuse. Sign the ones that are ours before selecting.
+    const spendKeyHex = bytesToHex(this.spendSecretKey());
+    const ownSuffix = this.spendPublicKey().slice(2);
+    const spendable = proofs.map((proof) => (
+      String(proof.secret).includes(ownSuffix)
+        ? signP2PKProofs([proof], spendKeyHex)[0]
+        : proof
+    ));
     const builder = new P2PKBuilder()
       .addMainPubkey(xOnly(committeePublicKey))
       .addRefundPubkey(xOnly(refundPublicKey))
       .lockUntil(locktime);
 
-    const { send, keep } = await this.wallet.send(amount, proofs, {}, {
+    const { send, keep } = await this.wallet.send(amount, spendable, {}, {
       send: { type: "p2pk", options: builder.toOptions() },
     });
 
@@ -377,7 +405,7 @@ export class BidderWallet {
     // coordinator builds the same list from the submitted proofs, so the
     // signature binds exactly the outputs it will create.
     const outputPublicKeys = proofs.map(() => spendPublicKey);
-    const signature = bytesToHex(schnorr.sign(refundClaimMessage(bidId, outputPublicKeys), this.spendSecretKey()));
+    const signature = bytesToHex(schnorr.sign(await sha256Bytes(refundClaimMessage(bidId, outputPublicKeys)), this.spendSecretKey()));
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },

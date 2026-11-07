@@ -10705,6 +10705,10 @@ outputs=${outputs.join(",")}`);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
     return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
   }
+  async function sha256Bytes(value) {
+    const digest = await crypto.subtle.digest("SHA-256", value);
+    return new Uint8Array(digest);
+  }
 
   class BidderWallet {
     wallet;
@@ -10813,8 +10817,11 @@ outputs=${outputs.join(",")}`);
       }
       await this.ensureLoaded();
       onProgress?.("locking proofs to the committee");
+      const spendKeyHex = bytesToHex3(this.spendSecretKey());
+      const ownSuffix = this.spendPublicKey().slice(2);
+      const spendable = proofs.map((proof) => String(proof.secret).includes(ownSuffix) ? Vn([proof], spendKeyHex)[0] : proof);
       const builder = new Fo().addMainPubkey(xOnly(committeePublicKey)).addRefundPubkey(xOnly(refundPublicKey)).lockUntil(locktime);
-      const { send, keep } = await this.wallet.send(amount, proofs, {}, {
+      const { send, keep } = await this.wallet.send(amount, spendable, {}, {
         send: { type: "p2pk", options: builder.toOptions() }
       });
       this.storage.set("spendable", JSON.stringify(keep ?? []));
@@ -10854,7 +10861,7 @@ outputs=${outputs.join(",")}`);
         throw new Error("the wallet spend key changed since this bid was locked, so it cannot claim the refund");
       }
       const outputPublicKeys = proofs.map(() => spendPublicKey);
-      const signature = bytesToHex3(schnorr.sign(refundClaimMessage(bidId, outputPublicKeys), this.spendSecretKey()));
+      const signature = bytesToHex3(schnorr.sign(await sha256Bytes(refundClaimMessage(bidId, outputPublicKeys)), this.spendSecretKey()));
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
