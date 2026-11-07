@@ -52,9 +52,14 @@ func TestFridayPhoneUIHasPermanentDisclosuresAndNoVisibleRemoteFaultControl(t *t
 	indexResponse := httptest.NewRecorder()
 	handler.ServeHTTP(indexResponse, indexRequest)
 	body := indexResponse.Body.String()
+	// The disclosures must describe THIS build. Two strings here previously read
+	// "3-of-4 FROST admission" and "Participant-local policy over FIPS
+	// transport"; neither is true -- the committee is one secp256k1 key and there
+	// is no FIPS code path at all. A test that pins a false claim is worse than no
+	// test, because it makes correcting the page look like a regression.
 	for _, required := range []string{
-		`name="viewport"`, `Worthless fake sats only`, `3-of-4 FROST admission`,
-		`Participant-local policy over FIPS transport`, `not production or federal FIPS compliance`,
+		`name="viewport"`, `Worthless fake sats only`, `Single committee key, not FROST`,
+		`Four validators on one host, no FIPS`, `not production or federal FIPS compliance`,
 		`id="description"`, `id="image"`, `id="increment"`, `id="faucet-amount"`,
 		`id="process-payments"`, `type="module" src="/app-bootstrap.js"`,
 	} {
