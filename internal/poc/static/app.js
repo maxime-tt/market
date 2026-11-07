@@ -571,7 +571,18 @@ async function placeBid(auctionId, amount) {
     // only references. The coordinator cannot invent value here: it confirms the
     // references with the mint before it signs anything.
     const wallet = bidderWallet();
-    const locktime = Number(auction.end_time) + 600;
+    // The lock must outlive every reachable auction end. Anti-sniping extensions
+    // can push the end to original_end + max_total_extension, and consensus
+    // requires the lock to add emergency_recovery on top (model.go:1318), so the
+    // margin comes from /api/config rather than a hardcoded constant. A short
+    // lock lets an extension outlive it, the bidder reclaims, and the leading
+    // bid loses its backing.
+    const maxTotalExtension = Number(state.config?.max_total_extension_seconds);
+    const emergencyRecovery = Number(state.config?.emergency_recovery_seconds);
+    if (!Number.isSafeInteger(maxTotalExtension) || !Number.isSafeInteger(emergencyRecovery) || maxTotalExtension < 0 || emergencyRecovery < 0) {
+      throw new Error("The coordinator did not publish the locktime policy (max_total_extension_seconds, emergency_recovery_seconds); refusing to lock with a guessed margin.");
+    }
+    const locktime = Number(auction.original_end_time) + maxTotalExtension + emergencyRecovery;
     const refundPublicKey = window.PlebeianWallet.refundPublicKeyFromNostr(state.actor);
     const funding = await wallet.lockForBid(amount, state.config.committee_public_key, refundPublicKey, locktime, (step)=>message(step));
     const receipt = await api("/api/demo/mint-lock", { method: "POST", body: JSON.stringify({

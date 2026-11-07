@@ -54,10 +54,14 @@ type demoMintLockBody struct {
 	Proofs []MintProofBinding `json:"proofs"`
 }
 
-// demoMintLockMargin is how long after the auction ends the committee lock stays
-// valid. It must sit inside the window the application enforces
-// (model.go:1546 allows end .. end+3600).
-const demoMintLockMargin = 600
+// demoMintExpectedLocktime is the locktime a mint-backed bid must carry: the
+// maximum reachable end (original_end + MaxTotalExtension) plus the recovery
+// window consensus reserves after it (EmergencyRecoverySeconds). It is the same
+// composition the V4 rule enforces at model.go:1318; keeping one named helper
+// here means the coordinator and its test cannot drift from that rule.
+func demoMintExpectedLocktime(auction Auction, policy Policy) int64 {
+	return auction.OriginalEndTime + policy.MaxTotalExtension + EmergencyRecoverySeconds
+}
 
 func (server *APIServer) demoMintLock(response http.ResponseWriter, request *http.Request) {
 	if !server.legacyInterim || server.manifest.ApplicationAuthority != ApplicationAuthorityLegacy {
@@ -135,8 +139,17 @@ func (server *APIServer) demoMintLock(response http.ResponseWriter, request *htt
 		writeError(response, http.StatusUnprocessableEntity, errors.New("a seller cannot fund against their own auction"))
 		return
 	}
-	if body.Locktime < auction.EndTime || body.Locktime > auction.EndTime+3_600 {
-		writeError(response, http.StatusUnprocessableEntity, errors.New("mint lock locktime is outside the auction settlement window"))
+	// The lock must outlive every reachable auction end, not just the current
+	// one: anti-sniping extensions can push EndTime to OriginalEndTime +
+	// MaxTotalExtension, and consensus additionally reserves EmergencyRecoverySeconds
+	// after that (model.go:1318). A lock built from the current EndTime can expire
+	// while the auction is still open, so the bidder reclaims and the leading bid
+	// loses its backing. This is an off-chain coordinator check, so requiring the
+	// exact composition is safe -- it never replays through consensus validation.
+	expectedLocktime := demoMintExpectedLocktime(auction, server.manifest.Policy)
+	if body.Locktime != expectedLocktime {
+		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("mint lock locktime %d does not match the required policy locktime %d (original_end_time %d + max_total_extension %d + emergency_recovery %d)",
+			body.Locktime, expectedLocktime, auction.OriginalEndTime, server.manifest.Policy.MaxTotalExtension, EmergencyRecoverySeconds))
 		return
 	}
 	// Sign only what consensus would accept: a reference already committed to

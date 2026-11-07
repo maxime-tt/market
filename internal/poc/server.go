@@ -451,8 +451,16 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 		"committee_public_key":    server.manifest.CommitteePublicKey,
 		"faucet_amount":           server.manifest.Policy.FaucetAmount,
 		"default_auction_seconds": 600,
-		"shared_application_key":  !thresholdRoute,
-		"threshold_custody":       thresholdRoute,
+		// The browser must build a NUT-11 locktime that outlives every reachable
+		// auction end, otherwise an anti-sniping extension can push the auction
+		// past the lock and the leading bid loses its backing. The end can reach
+		// original_end + MaxTotalExtension, and the lock must additionally cover
+		// the recovery window consensus already requires (model.go:1318), so the
+		// page is told the two policy numbers instead of hardcoding a margin.
+		"max_total_extension_seconds": server.manifest.Policy.MaxTotalExtension,
+		"emergency_recovery_seconds":  EmergencyRecoverySeconds,
+		"shared_application_key":      !thresholdRoute,
+		"threshold_custody":           thresholdRoute,
 		// The legacy loopback demo (PlebeianAuctionsPOCNetworkV2) is a distinct,
 		// honest funding mode: faucet-issued notes plus a committee-attested
 		// custodial reservation.  The browser needs to be told which funding mode
