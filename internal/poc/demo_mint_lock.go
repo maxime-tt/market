@@ -49,6 +49,11 @@ type demoMintLockBody struct {
 	RefundPublicKey string   `json:"refund_public_key"`
 	TokenSHA256     string   `json:"token_sha256"`
 	ProofStateRefs  []string `json:"proof_state_refs"`
+	// FundingMode names the mint-backed route the lock was built for:
+	// cashu_lock_v1 (the single-key P2PK witness) or cashu_sigall_v1 (the 2-of-2
+	// SIG_ALL lock). It is optional for the legacy cashu_lock_v1 path, whose
+	// receipt stays byte-identical when the field is absent.
+	FundingMode string `json:"funding_mode,omitempty"`
 	// The proofs themselves, each with its DLEQ. Without these the amount is an
 	// assertion; with them it is arithmetic.
 	Proofs []MintProofBinding `json:"proofs"`
@@ -131,9 +136,24 @@ func (server *APIServer) demoMintLock(response http.ResponseWriter, request *htt
 		writeError(response, http.StatusUnprocessableEntity, errors.New("auction is not open"))
 		return
 	}
-	if auction.FundingMode != FundingModeCashuLock {
+	if auction.FundingMode != FundingModeCashuLock && auction.FundingMode != FundingModeCashuSigAll {
 		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("auction funding mode %q does not accept a mint lock", auction.FundingMode))
 		return
+	}
+	// The receipt must record the mode its auction uses. A cashu_sigall_v1
+	// auction requires an explicit sigall lock; a cashu_lock_v1 auction keeps
+	// the byte-identical legacy receipt when the field is absent.
+	fundingMode := body.FundingMode
+	if auction.FundingMode == FundingModeCashuSigAll {
+		if fundingMode != FundingModeCashuSigAll {
+			writeError(response, http.StatusUnprocessableEntity, errors.New("sigall auction requires a cashu_sigall_v1 lock"))
+			return
+		}
+	} else {
+		if fundingMode != "" && fundingMode != FundingModeCashuLock {
+			writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("mint lock funding mode %q does not match the auction", fundingMode))
+			return
+		}
 	}
 	if auction.Seller == body.Bidder {
 		writeError(response, http.StatusUnprocessableEntity, errors.New("a seller cannot fund against their own auction"))
@@ -172,6 +192,7 @@ func (server *APIServer) demoMintLock(response http.ResponseWriter, request *htt
 		CommitteePublicKey: server.demoCommitteePublicKey,
 		RefundPublicKey:    body.RefundPublicKey,
 		Locktime:           body.Locktime,
+		FundingMode:        fundingMode,
 		ProofStateRefs:     body.ProofStateRefs,
 	}
 

@@ -292,8 +292,9 @@ func demoMintVerifyProofSet(receipt CashuLockReceipt, proofs []demoMintSpendProo
 // The recipient is a Cashu spend key, not a Nostr identity: the value must come
 // back to a key its owner can actually sign with.
 func (server *APIServer) demoMintCooperativeSpend(ctx context.Context, proofs []demoMintSpendProof, recipient string) ([]demoMintSpentProof, error) {
-	if server.demoCommitteeKey == nil {
-		return nil, errors.New("cooperative spend has no committee key")
+	signer, err := server.committeeSigner()
+	if err != nil {
+		return nil, err
 	}
 	if server.demoMintKeyset == nil {
 		return nil, errors.New("cooperative spend has no mint keyset")
@@ -352,11 +353,15 @@ func (server *APIServer) demoMintCooperativeSpend(ctx context.Context, proofs []
 		// NUT-11 signs the SHA-256 of the secret: BIP-340 takes a 32-byte
 		// message, and cashu-ts and Nutshell both hash the secret first.
 		digest := sha256.Sum256([]byte(proof.Secret))
-		signature, err := schnorr.Sign(server.demoCommitteeKey, digest[:])
+		// The committee's half of the spend goes through the port, which is
+		// the one place a committee spend signature is produced. Today it is a
+		// single local key; a FROST aggregate will replace it behind the same
+		// call without changing the mint's view.
+		signature, err := signer.SignDigest(digest[:])
 		if err != nil {
 			return nil, fmt.Errorf("cooperative spend witness signing failed: %w", err)
 		}
-		witness, err := json.Marshal(map[string][]string{"signatures": {hex.EncodeToString(signature.Serialize())}})
+		witness, err := json.Marshal(map[string][]string{"signatures": {hex.EncodeToString(signature)}})
 		if err != nil {
 			return nil, err
 		}
@@ -930,7 +935,7 @@ func (server *APIServer) demoMintSettle(response http.ResponseWriter, request *h
 		writeError(response, http.StatusForbidden, errors.New("settlement signer is not the auction winner"))
 		return
 	}
-	if auction.FundingMode != FundingModeCashuLock {
+	if auction.FundingMode != FundingModeCashuLock && auction.FundingMode != FundingModeCashuSigAll {
 		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("auction funding mode %q has no cooperative settlement", auction.FundingMode))
 		return
 	}

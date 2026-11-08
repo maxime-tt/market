@@ -29,6 +29,18 @@ import {
   type Proof,
 } from "@cashu/cashu-ts";
 import { schnorr } from "@noble/curves/secp256k1.js";
+import {
+  SIGALL_DEPOSIT_SCHEMA,
+  SIGALL_TEMPLATES_SCHEMA,
+  buildP2PKOutputSecret,
+  randomBlindingHex,
+  signDigest,
+  sigAllTemplateDigest,
+  type SigAllBidCommitment,
+  type SigAllDepositReceipt,
+  type SigAllDepositTemplates,
+  type SigAllSignedTemplate,
+} from "./sigall";
 
 /** A storage shim so the same code runs in a browser and under a test runner. */
 export interface WalletStorage {
@@ -444,6 +456,204 @@ export class BidderWallet {
       lockedProofs: send,
       spendPublicKey: refundPublicKey,
     };
+  }
+
+  /**
+   * Locks `amount` of the bidder's own proofs to a 2-of-2 SIG_ALL condition:
+   * main keys [this wallet's spend key, the committee], n_sigs = 2,
+   * sigflag = SIG_ALL, with this wallet's spend key as the single refund key.
+   *
+   * This is the lock shape the SIG_ALL route replaces cashu_lock_v1 with. The
+   * difference that matters: a SIG_ALL spend signature covers the whole
+   * transaction, so the coordinator's power is exactly "submit one of the two
+   * outcomes this wallet pre-authorized" -- it cannot redirect the money. The
+   * returned BidFunding is the same shape as lockForBid, so the existing lock
+   * receipt, refs, DLEQ and locked-proofs plumbing is reused unchanged; only
+   * the funding_mode the page posts differs.
+   */
+  async lockForBidSigAll(
+    amount: number,
+    committeePublicKey: string,
+    locktime: number,
+    onProgress?: (state: string) => void,
+  ): Promise<BidFunding & { fundingMode: string }> {
+    const refundPublicKey = this.spendPublicKey();
+    const proofs = this.spendable();
+    if (!proofs.length) {
+      const locked = this.lockedBalance();
+      throw new Error(locked > 0
+        ? `all ${locked} sats are locked to a previous bid; release them first, or mint more`
+        : "the wallet holds no proofs; mint some first");
+    }
+    if (this.balance() < amount) {
+      const locked = this.lockedBalance();
+      throw new Error(`the wallet holds ${this.balance()} spendable sats${locked > 0 ? ` and ${locked} locked` : ""}, less than the ${amount} needed`);
+    }
+
+    await this.ensureLoaded();
+    onProgress?.("locking proofs to the bidder and the committee (SIG_ALL)");
+    // Same refund-handling nuance as lockForBid: a proof handed back by an
+    // earlier refund is P2PK-locked to this wallet's spend key, so it must be
+    // witnessed before the mint will accept it as an input again.
+    const spendKeyHex = bytesToHex(this.spendSecretKey());
+    const ownSuffix = this.spendPublicKey().slice(2);
+    const spendable = proofs.map((proof) => (
+      String(proof.secret).includes(ownSuffix)
+        ? signP2PKProofs([proof], spendKeyHex)[0]
+        : proof
+    ));
+    // main key set [bidder, committee], n_sigs = 2, sigflag = SIG_ALL; refund
+    // [bidder], n_sigs = 1. cashu-ts emits the canonical NUT-11 secret:
+    // data = first main key (bidder), pubkeys = the rest (committee).
+    const builder = new P2PKBuilder()
+      .addMainPubkey(xOnly(this.spendPublicKey()))
+      .addMainPubkey(xOnly(committeePublicKey))
+      .requireMainSignatures(2)
+      .addRefundPubkey(xOnly(refundPublicKey))
+      .requireRefundSignatures(1)
+      .sigAll()
+      .lockUntil(locktime);
+
+    const { send, keep } = await this.wallet.send(amount, spendable, {}, {
+      send: { type: "p2pk", options: builder.toOptions() },
+    });
+
+    this.storage.set("spendable", JSON.stringify(keep ?? []));
+    this.storage.set("locked", JSON.stringify([...this.locked(), ...send]));
+    this.storage.set("lockedUntil", String(locktime));
+
+    const bindings = send.map((proof) => ({
+      amount: Number(proof.amount),
+      id: proof.id,
+      Y: hashToCurve(new TextEncoder().encode(proof.secret)).toHex(true),
+      C: proof.C,
+      dleq: { e: proof.dleq!.e, s: proof.dleq!.s, r: proof.dleq!.r },
+    }));
+    if (bindings.some((b) => !b.dleq.e || !b.dleq.s || !b.dleq.r)) {
+      throw new Error("the mint returned no DLEQ proof, so the locked value cannot be proven");
+    }
+    const refs = bindings.map((b) => b.Y).sort();
+    const tokenSha256 = await sha256Hex(JSON.stringify(serializeProofs(send)));
+
+    return {
+      proofStateRefs: refs,
+      tokenSha256,
+      refundPublicKey,
+      amount,
+      mintUrl: this.mintUrl,
+      proofs: bindings,
+      lockedProofs: send,
+      spendPublicKey: refundPublicKey,
+      fundingMode: "cashu_sigall_v1",
+    };
+  }
+
+  /**
+   * Builds the two exact outcome transactions for the locked proofs and signs
+   * both with this wallet's spend key: `settle` pays the auction's committed
+   * seller payout key, `refund` returns to this wallet's own refund key. Both
+   * conserve the locked amount exactly.
+   *
+   * The result is the off-chain deposit payload (it carries the bearer C values
+   * and the output openings), which the coordinator verifies and stores under a
+   * deposit id. Only the compact digests and signatures go on chain.
+   */
+  async buildOutcomeTemplates(
+    auction: { id: string; seller_coco_payment_public_key: string },
+    funding: BidFunding,
+  ): Promise<SigAllDepositTemplates> {
+    if (!auction?.id) throw new Error("outcome templates must name an auction");
+    const sellerKey = auction.seller_coco_payment_public_key;
+    if (!/^0[23][0-9a-f]{64}$/.test(sellerKey)) {
+      throw new Error("the auction committed no seller payout key, so settle has no destination");
+    }
+    if (!funding.lockedProofs.length) {
+      throw new Error("outcome templates need the locked proofs");
+    }
+    const spendKey = this.spendSecretKey();
+    const build = (recipient: string): SigAllSignedTemplate => {
+      const inputs = funding.lockedProofs.map((proof) => ({
+        amount: Number(proof.amount),
+        id: proof.id,
+        secret: String(proof.secret),
+        C: String(proof.C),
+      }));
+      const outputs = funding.lockedProofs.map((proof) => {
+        const nonce = randomBlindingHex().slice(0, 32);
+        return {
+          amount: Number(proof.amount),
+          id: proof.id,
+          secret: buildP2PKOutputSecret(recipient, nonce),
+          r: randomBlindingHex(),
+        };
+      });
+      const unsigned: SigAllSignedTemplate = { inputs, outputs, digest: "", bidder_signature: "" };
+      const digest = sigAllTemplateDigest(unsigned);
+      return { inputs, outputs, digest, bidder_signature: signDigest(digest, spendKey) };
+    };
+    return { settle: build(sellerKey), refund: build(this.spendPublicKey()) };
+  }
+
+  /**
+   * The compact on-chain commitment: the two digests and the bidder's
+   * signatures, plus the coordinator's signed deposit receipt. This is what the
+   * bid content publishes alongside the (off-chain) deposit.
+   */
+  outcomeTemplateCommitment(
+    deposit: { deposit_id: string; settle_digest: string; refund_digest: string; signer: string; signature: string },
+    templates: SigAllDepositTemplates,
+    auctionId: string,
+    bidder: string,
+  ): SigAllBidCommitment {
+    if (templates.settle.digest !== deposit.settle_digest || templates.refund.digest !== deposit.refund_digest) {
+      throw new Error("the deposit receipt digests do not match the signed templates");
+    }
+    return {
+      outcome_templates: {
+        schema: SIGALL_TEMPLATES_SCHEMA,
+        deposit_id: deposit.deposit_id,
+        settle: { digest: templates.settle.digest, bidder_signature: templates.settle.bidder_signature },
+        refund: { digest: templates.refund.digest, bidder_signature: templates.refund.bidder_signature },
+      },
+      sigall_deposit: {
+        schema: SIGALL_DEPOSIT_SCHEMA,
+        deposit_id: deposit.deposit_id,
+        auction_id: auctionId,
+        bidder,
+        settle_digest: deposit.settle_digest,
+        refund_digest: deposit.refund_digest,
+        signer: deposit.signer,
+        signature: deposit.signature,
+      },
+    };
+  }
+
+  /**
+   * Builds the outcome templates and posts them to the coordinator's deposit
+   * endpoint, returning the on-chain commitment the bid will carry. The
+   * endpoint stores the bearer templates and returns the signed deposit receipt;
+   * this method never stores the templates on chain.
+   */
+  async depositOutcomeTemplates(
+    auction: { id: string; seller_coco_payment_public_key: string },
+    funding: BidFunding,
+    bidder: string,
+    endpoint = "/api/demo/sigall-deposit",
+  ): Promise<SigAllBidCommitment> {
+    const templates = await this.buildOutcomeTemplates(auction, funding);
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ auction_id: auction.id, bidder, templates }),
+    });
+    const data = (await response.json().catch(() => ({}))) as Partial<SigAllDepositReceipt> & { error?: string };
+    if (!response.ok) {
+      throw new Error(data.error || `sigall deposit failed (HTTP ${response.status})`);
+    }
+    if (!data.deposit_id || !data.settle_digest || !data.refund_digest || !data.signer || !data.signature) {
+      throw new Error("the coordinator returned an incomplete sigall deposit receipt");
+    }
+    return this.outcomeTemplateCommitment(data as SigAllDepositReceipt, templates, auction.id, bidder);
   }
 
   /**

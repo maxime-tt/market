@@ -51,7 +51,15 @@ const (
 	// Cashu proofs at the mint to a NUT-11 P2PK condition, and the receipt
 	// carries the proof references the mint can be asked about (NUT-07).
 	// It is the first funding mode whose backing is not a signed IOU.
-	FundingModeCashuLock           = "cashu_lock_v1"
+	FundingModeCashuLock = "cashu_lock_v1"
+	// FundingModeCashuSigAll is the SIG_ALL route: the bidder locks real Cashu
+	// proofs to a 2-of-2 NUT-11 condition (bidder + committee) with
+	// sigflag=SIG_ALL, so a spend must be signed by both and the signature
+	// covers the whole transaction. The coordinator may then submit only one of
+	// the two outcomes the bidder pre-authorized. It is mint-backed exactly
+	// like cashu_lock_v1 and must not be confused with the Friday
+	// threshold_sigall_v1 mode or the FROST/Comet pipeline.
+	FundingModeCashuSigAll         = "cashu_sigall_v1"
 	ApplicationAuthorityLegacy     = "legacy_ed25519_v1"
 	ApplicationAuthorityFrostCashu = "frost_cashu_v4"
 	frostLegacyNotePublicPinDomain = "PLEBEIAN_FRIDAY_DISABLED_LEGACY_NOTE_AUTHORITY_V1"
@@ -134,8 +142,12 @@ type Bid struct {
 	CashuLockOperation  string   `json:"cashu_lock_operation,omitempty"`
 	ReservationID       string   `json:"reservation_id,omitempty"`
 	IntegratedFundingID string   `json:"integrated_funding_id,omitempty"`
-	ReplacesBidID       string   `json:"replaces_bid_id,omitempty"`
-	CommittedAt         int64    `json:"committed_at"`
+	// SigAllDepositID names the off-chain bearer deposit a cashu_sigall_v1
+	// bid's outcome templates refer to. It is omitempty so a bid for any other
+	// funding path replays byte-identically.
+	SigAllDepositID string `json:"sigall_deposit_id,omitempty"`
+	ReplacesBidID   string `json:"replaces_bid_id,omitempty"`
+	CommittedAt     int64  `json:"committed_at"`
 }
 
 // IntegratedFundingReceipt is the non-bearer, consensus-visible admission
@@ -253,6 +265,11 @@ type CashuLockReceipt struct {
 	CommitteePublicKey string `json:"committee_public_key"`
 	RefundPublicKey    string `json:"refund_public_key"`
 	Locktime           int64  `json:"locktime"`
+	// FundingMode records which mint-backed route issued the receipt:
+	// cashu_lock_v1 (single-key P2PK witness) or cashu_sigall_v1 (2-of-2
+	// SIG_ALL lock). It is omitempty so every pre-existing receipt replays
+	// byte-identically; the digest commits it only when it is non-empty.
+	FundingMode string `json:"funding_mode,omitempty"`
 	// ProofStateRefs are the NUT-07 references (compressed Y points) of the
 	// proofs backing this bid. They are public, non-bearer material: a Y point
 	// lets anyone ask the mint about the proof but lets nobody spend it.
@@ -281,6 +298,10 @@ type Lock struct {
 	// committed before this field existed, replays byte-identically.
 	SettleAuthorization string `json:"settle_authorization,omitempty"`
 	RefundAuthorization string `json:"refund_authorization,omitempty"`
+	// SigAllDepositID names the off-chain bearer deposit a cashu_sigall_v1
+	// lock's outcome templates refer to, so the coordinator's sweeper can find
+	// the pre-authorized transaction. It is omitempty like the fields above.
+	SigAllDepositID string `json:"sigall_deposit_id,omitempty"`
 }
 
 type Auction struct {
@@ -593,7 +614,8 @@ func normalizeState(state *State, policy Policy) error {
 			auction.FundingMode = FundingModeLegacy
 		}
 		if auction.FundingMode != FundingModeLegacy && auction.FundingMode != FundingModeCustodialReservation &&
-			auction.FundingMode != FundingModeThresholdSigAll && auction.FundingMode != FundingModeCashuLock {
+			auction.FundingMode != FundingModeThresholdSigAll && auction.FundingMode != FundingModeCashuLock &&
+			auction.FundingMode != FundingModeCashuSigAll {
 			return errors.New("persisted auction funding mode is unsupported")
 		}
 		if auction.OriginalEndTime == 0 {
@@ -737,6 +759,14 @@ type bidContent struct {
 	// over the settle and refund consent messages, published with the bid so
 	// the coordinator can act at close without the bidder online.
 	OutcomeAuthorizations *bidOutcomeAuthorizations `json:"outcome_authorizations,omitempty"`
+	// OutcomeTemplates is the SIG_ALL route's compact on-chain commitment: the
+	// deposit id and, for each outcome, the transaction digest and the bidder's
+	// signature over it. It is present only on a cashu_sigall_v1 bid.
+	OutcomeTemplates *sigAllOutcomeTemplates `json:"outcome_templates,omitempty"`
+	// SigAllDeposit is the coordinator's signed, non-bearer deposit receipt. It
+	// binds the deposit digests, the auction and the bidder so admission can
+	// verify the deposit_id without the off-chain bearer template.
+	SigAllDeposit *sigAllDepositReceipt `json:"sigall_deposit,omitempty"`
 }
 
 // bidOutcomeAuthorizations is the bid content the bidder's wallet publishes
@@ -919,7 +949,19 @@ func ValidateForMempool(prior State, tx Transaction, policy Policy, mintSeed []b
 	if tx.Type == "event" && tx.Event != nil && tx.Event.Kind == KindBid {
 		var content bidContent
 		if err := decodeStrictContent(tx.Event.Content, &content); err == nil && content.CashuLock != nil {
-			if err := verifyBidOutcomeAuthorizations(content); err != nil {
+			// A cashu_sigall_v1 bid authorizes the two exact outcomes with
+			// SIG_ALL transaction templates, not with wallet-spend-key consent
+			// signatures, so it is admitted by the deadline-digest rule
+			// instead. This is a local-admission (CheckTx) rule like the one
+			// below: a deterministic transition stores whatever the bid
+			// carries, and a lock with no usable authorization simply cannot
+			// be resolved, so admitting such a bid is never a settlement
+			// hazard.
+			if auction, known := prior.Auctions[content.AuctionID]; known && auction.FundingMode == FundingModeCashuSigAll {
+				if err := verifySigAllBidAdmission(prior, tx.Event.PubKey, auction, content); err != nil {
+					return err
+				}
+			} else if err := verifyBidOutcomeAuthorizations(content); err != nil {
 				return err
 			}
 		}
@@ -983,7 +1025,7 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 			fundingMode = FundingModeCustodialReservation
 		}
 		if fundingMode != FundingModeCustodialReservation && fundingMode != FundingModeThresholdSigAll &&
-			fundingMode != FundingModeCashuLock {
+			fundingMode != FundingModeCashuLock && fundingMode != FundingModeCashuSigAll {
 			return errors.New("auction funding mode is unsupported")
 		}
 		if fundingMode == FundingModeThresholdSigAll && content.SellerCocoPaymentPublicKey == "" {
@@ -998,7 +1040,7 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 		// This is an acceptance RELAXATION (a field that was refused is now
 		// accepted), so replaying committed history cannot fork.
 		if content.SellerCocoPaymentPublicKey != "" &&
-			((fundingMode != FundingModeThresholdSigAll && fundingMode != FundingModeCashuLock) ||
+			((fundingMode != FundingModeThresholdSigAll && fundingMode != FundingModeCashuLock && fundingMode != FundingModeCashuSigAll) ||
 				!validCompressedPublicKey(content.SellerCocoPaymentPublicKey) ||
 				content.SellerCocoPaymentPublicKey[2:] == actor) {
 			return errors.New("seller payment key is invalid, is the seller's Nostr identity, or is used outside a threshold or mint-backed auction")
@@ -1119,13 +1161,13 @@ func applyBid(state *State, actor, eventID string, committedAt int64, content bi
 	if auction.FundingMode == FundingModeThresholdSigAll && content.Reservation != nil {
 		return errors.New("threshold auction cannot mix in custodial reservations")
 	}
-	if auction.FundingMode == FundingModeCashuLock && content.CashuLock == nil {
+	if (auction.FundingMode == FundingModeCashuLock || auction.FundingMode == FundingModeCashuSigAll) && content.CashuLock == nil {
 		return errors.New("mint-backed auction requires a Cashu lock")
 	}
 	// Without this a mint-backed auction would accept a custodial reservation
 	// and quietly fall back to attested funding, which is the whole thing the
 	// mode exists to stop.
-	if auction.FundingMode != FundingModeCashuLock && content.CashuLock != nil {
+	if auction.FundingMode != FundingModeCashuLock && auction.FundingMode != FundingModeCashuSigAll && content.CashuLock != nil {
 		return errors.New("only a mint-backed auction accepts a Cashu lock")
 	}
 	if content.IntegratedFunding != nil {
@@ -1160,6 +1202,11 @@ func applyBid(state *State, actor, eventID string, committedAt int64, content bi
 	if content.CashuLock != nil {
 		if err := verifyCashuLockReceipt(*state, actor, content, *content.CashuLock); err != nil {
 			return err
+		}
+		if auction.FundingMode == FundingModeCashuSigAll {
+			if err := verifySigAllBidAdmission(*state, actor, auction, content); err != nil {
+				return err
+			}
 		}
 		return applyAcceptedBid(state, actor, eventID, committedAt, content, nil, policy)
 	}
@@ -1261,6 +1308,9 @@ func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, co
 	if content.CashuLock != nil {
 		bid.CashuTokenSHA256 = content.CashuLock.TokenSHA256
 		bid.CashuLockOperation = content.CashuLock.OperationID
+		if content.SigAllDeposit != nil {
+			bid.SigAllDepositID = content.SigAllDeposit.DepositID
+		}
 		state.CashuLocks[content.CashuLock.TokenSHA256] = *content.CashuLock
 		for _, proofStateRef := range content.CashuLock.ProofStateRefs {
 			state.CashuProofUses[proofStateRef[2:]] = content.CashuLock.TokenSHA256
@@ -1305,6 +1355,9 @@ func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, co
 	if content.CashuLock != nil && content.OutcomeAuthorizations != nil {
 		lock.SettleAuthorization = content.OutcomeAuthorizations.SettleSpendSignature
 		lock.RefundAuthorization = content.OutcomeAuthorizations.RefundSpendSignature
+	}
+	if content.SigAllDeposit != nil {
+		lock.SigAllDepositID = content.SigAllDeposit.DepositID
 	}
 	state.Locks[eventID] = lock
 	auction.LeaderBidID = eventID
@@ -1726,6 +1779,17 @@ func verifyCashuLockReceipt(state State, actor string, content bidContent, recei
 	if receipt.Locktime < auction.EndTime || receipt.Locktime > auction.EndTime+3_600 {
 		return errors.New("Cashu lock receipt locktime is outside the auction settlement window")
 	}
+	// The receipt must carry the mode its auction uses, so a plain
+	// cashu_lock_v1 receipt can never fund a cashu_sigall_v1 auction (whose
+	// admission requires the SIG_ALL outcome templates) and vice versa. The
+	// check is additive: a legacy receipt with no recorded mode still funds a
+	// cashu_lock_v1 auction, so committed history replays unchanged.
+	if auction.FundingMode == FundingModeCashuSigAll && receipt.FundingMode != FundingModeCashuSigAll {
+		return errors.New("sigall auction requires a cashu_sigall_v1 lock receipt")
+	}
+	if auction.FundingMode == FundingModeCashuLock && receipt.FundingMode != "" && receipt.FundingMode != FundingModeCashuLock {
+		return errors.New("mint-backed auction lock receipt names a different funding mode")
+	}
 	if !validOperationID(receipt.OperationID) || !validLowerHex(receipt.TokenSHA256, sha256.Size) || !validLowerHex(receipt.Signature, schnorr.SignatureSize) {
 		return errors.New("Cashu lock receipt identifiers or signature shape are invalid")
 	}
@@ -1767,11 +1831,19 @@ func verifyCashuLockReceipt(state State, actor string, content bidContent, recei
 }
 
 func cashuReceiptDigest(receipt CashuLockReceipt) [32]byte {
-	material, _ := json.Marshal([]any{
+	fields := []any{
 		receipt.Schema, receipt.MintURL, receipt.AuctionID, receipt.Bidder, receipt.Amount,
 		receipt.OperationID, receipt.TokenSHA256, receipt.CommitteePublicKey,
 		receipt.RefundPublicKey, receipt.Locktime, receipt.ProofStateRefs,
-	})
+	}
+	// A receipt that records a funding mode commits it too, so the mode cannot
+	// be swapped out from under a signature. The append is conditional so a
+	// cashu_lock_v1 receipt (mode "") keeps the byte-identical digest it had
+	// before this field existed.
+	if receipt.FundingMode != "" {
+		fields = append(fields, receipt.FundingMode)
+	}
+	material, _ := json.Marshal(fields)
 	return sha256.Sum256(material)
 }
 
@@ -2001,7 +2073,7 @@ func applyOutcomeRecord(state *State, actor string, content outcomeContent) erro
 		if auction.Status != "closed" {
 			return errors.New("settle outcome requires a closed auction")
 		}
-		if auction.FundingMode != FundingModeCashuLock {
+		if auction.FundingMode != FundingModeCashuLock && auction.FundingMode != FundingModeCashuSigAll {
 			return errors.New("settle outcome requires a mint-backed auction")
 		}
 		if content.BidID != auction.LeaderBidID {

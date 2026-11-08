@@ -79,9 +79,14 @@ type APIServer struct {
 	// reservation receipts in the absence of a deployed coordinator.
 	demoCommitteeKey       *btcec.PrivateKey
 	demoCommitteePublicKey string
-	runtimeReadyProbe      func(context.Context) bool
-	healthPinsSHA256       string
-	observerNodeID         string
+	// demoCommitteeSigner is the FROST seam. When nil the coordinator signs
+	// spend witnesses with demoCommitteeKey through the local single-key port;
+	// a test or a future threshold deployment can inject an aggregate behind
+	// the same interface.
+	demoCommitteeSigner CommitteeSigner
+	runtimeReadyProbe   func(context.Context) bool
+	healthPinsSHA256    string
+	observerNodeID      string
 	// demoStateSnapshot, when set, replaces the ABCI state query. Production
 	// leaves it nil and reads committed state through the node; tests use it to
 	// drive the coordinator without a live CometBFT cluster.
