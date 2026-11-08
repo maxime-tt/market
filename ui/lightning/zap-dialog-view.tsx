@@ -195,7 +195,7 @@ export function ZapDialogView({
 									Continue to payment
 								</Button>
 							</div>
-							<div className="mt-2 text-muted-foreground text-xs">{zapMethodHint(support, hasNwc)}</div>
+							<div className="mt-2 text-text-mid text-xs">{zapMethodHint(support, hasNwc)}</div>
 						</div>
 					</div>
 				)}
@@ -206,13 +206,13 @@ export function ZapDialogView({
 							<p className="font-medium text-sm">
 								Amount: <span className="font-bold">{numericAmount ?? '0'} sats</span>
 							</p>
-							{effectiveZapMessage && <p className="mt-1 text-muted-foreground text-sm">Message: "{effectiveZapMessage}"</p>}
+							{effectiveZapMessage && <p className="mt-1 text-text-mid text-sm">Message: "{effectiveZapMessage}"</p>}
 						</div>
 
 						{support.hasNip57 ? (
 							<div className="w-full overflow-hidden">{renderPaymentProcessor()}</div>
 						) : (
-							<div className="py-8 text-muted-foreground text-center">
+							<div className="py-8 text-text-mid text-center">
 								<p>Lightning zap method unavailable</p>
 								<p className="text-sm">This user does not advertise a NIP-57 zap endpoint.</p>
 							</div>

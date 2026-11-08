@@ -28,7 +28,7 @@ interface MigrationProgressDialogProps {
 function StepIcon({ status }: { status: MigrationStep['status'] }) {
 	switch (status) {
 		case 'pending':
-			return <Circle className="w-5 h-5 text-muted-foreground" />
+			return <Circle className="w-5 h-5 text-text-mid" />
 		case 'active':
 			return <Spinner className="size-5 text-fill-accent" />
 		case 'complete':
@@ -41,7 +41,7 @@ function StepIcon({ status }: { status: MigrationStep['status'] }) {
 function RelayStatusIcon({ status }: { status: RelayStatus['status'] }) {
 	switch (status) {
 		case 'pending':
-			return <Spinner className="text-muted-foreground" />
+			return <Spinner className="text-text-mid" />
 		case 'success':
 			return <CheckCircle2 className="w-4 h-4 text-success" />
 		case 'error':
@@ -91,9 +91,9 @@ export function MigrationProgressDialog({ open, steps, relayStatuses, error, onR
 										<span
 											className={cn(
 												'text-sm',
-												step.status === 'pending' && 'text-muted-foreground',
+												step.status === 'pending' && 'text-text-mid',
 												step.status === 'active' && 'text-text-high font-medium',
-												step.status === 'complete' && 'text-muted-foreground',
+												step.status === 'complete' && 'text-text-mid',
 												step.status === 'error' && 'text-error',
 											)}
 										>
@@ -107,18 +107,18 @@ export function MigrationProgressDialog({ open, steps, relayStatuses, error, onR
 						{/* Relay Status (shown during publishing) */}
 						{isPublishing && relayStatuses.length > 0 && (
 							<div className="border rounded-md p-3 space-y-2">
-								<div className="text-xs text-muted-foreground font-medium">Relay Status</div>
+								<div className="text-xs text-text-mid font-medium">Relay Status</div>
 								<div className="space-y-1.5 max-h-32 overflow-y-auto">
 									{relayStatuses.map((relay) => (
 										<div key={relay.url} className="flex items-center gap-2 text-xs">
 											<RelayStatusIcon status={relay.status} />
-											<span className="truncate text-muted-foreground">{relay.url.replace('wss://', '')}</span>
+											<span className="truncate text-text-mid">{relay.url.replace('wss://', '')}</span>
 										</div>
 									))}
 								</div>
 								<div className="pt-2">
 									<Progress value={progressPercent} className="h-1.5" />
-									<div className="text-xs text-muted-foreground mt-1 text-center">
+									<div className="text-xs text-text-mid mt-1 text-center">
 										{completedRelays} of {totalRelays} relays
 									</div>
 								</div>
