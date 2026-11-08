@@ -518,8 +518,22 @@ export class BidderWallet {
     // One output per locked proof, each locked to the wallet spend key. The
     // coordinator builds the same list from the submitted proofs, so the
     // signature binds exactly the outputs it will create.
+    //
+    // The claim is the frozen V2 message: it binds the auction id, the
+    // committed proof references and the output keys. The retired V1 bound the
+    // bid event id, which is a hash of the content that would carry the
+    // signature and so cannot be signed here. The coordinator verifies V2 for
+    // both this live claim and the bidder's bid-time authorization, so a V1
+    // signature is refused.
+    const auctionId = locked.auctionId;
+    if (!auctionId) {
+      throw new Error("this wallet holds no auction id for that bid's lock, so it cannot sign the V2 refund claim");
+    }
+    const proofRefs = proofs
+      .map((proof) => hashToCurve(new TextEncoder().encode(proof.secret)).toHex(true))
+      .sort();
     const outputPublicKeys = proofs.map(() => spendPublicKey);
-    const signature = bytesToHex(schnorr.sign(await sha256Bytes(refundClaimMessage(bidId, outputPublicKeys)), this.spendSecretKey()));
+    const signature = bytesToHex(schnorr.sign(await sha256Bytes(refundClaimMessageV2(auctionId, proofRefs, outputPublicKeys)), this.spendSecretKey()));
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },

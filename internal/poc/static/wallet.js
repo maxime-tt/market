@@ -10711,7 +10711,10 @@ proofs=${refs.join(",")}`);
         throw new Error("refund claim output keys must be compressed secp256k1 points");
       }
     }
-    return new TextEncoder().encode(`PlebeianAuctionsCashuRefundClaimV2\nauction_id=${auctionId}\nproofs=${refs.join(",")}\noutputs=${outputs.join(",")}`);
+    return new TextEncoder().encode(`PlebeianAuctionsCashuRefundClaimV2
+auction_id=${auctionId}
+proofs=${refs.join(",")}
+outputs=${outputs.join(",")}`);
   }
   function hexToBytes3(hex) {
     if (!/^(?:[0-9a-f]{2})+$/.test(hex))
@@ -10919,8 +10922,13 @@ proofs=${refs.join(",")}`);
       if (spendPublicKey !== this.spendPublicKey()) {
         throw new Error("the wallet spend key changed since this bid was locked, so it cannot claim the refund");
       }
+      const auctionId = locked.auctionId;
+      if (!auctionId) {
+        throw new Error("this wallet holds no auction id for that bid's lock, so it cannot sign the V2 refund claim");
+      }
+      const proofRefs = proofs.map((proof) => Bt(new TextEncoder().encode(proof.secret)).toHex(true)).sort();
       const outputPublicKeys = proofs.map(() => spendPublicKey);
-      const signature = bytesToHex3(schnorr.sign(await sha256Bytes(refundClaimMessage(bidId, outputPublicKeys)), this.spendSecretKey()));
+      const signature = bytesToHex3(schnorr.sign(await sha256Bytes(refundClaimMessageV2(auctionId, proofRefs, outputPublicKeys)), this.spendSecretKey()));
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
