@@ -9,6 +9,61 @@
 (function lab() {
   "use strict";
 
+  // ---- console capture ----------------------------------------------------
+  // A tester's report is only actionable with the page's own state beside it.
+  // This keeps a bounded ring buffer of what the console actually said, so a
+  // feedback note can carry the errors that led to it. It never leaves the
+  // page except when a tester presses "Send note", and it is capped so a long
+  // session cannot bloat a note past the server's limit.
+  const CONSOLE_LIMIT = 200;
+  const CONSOLE_TEXT_LIMIT = 600;
+  const consoleBuffer = [];
+  let consoleInstalled = false;
+
+  function installConsoleCapture() {
+    if (consoleInstalled) return;
+    consoleInstalled = true;
+    for (const level of ["log", "info", "warn", "error", "debug"]) {
+      const original = console[level]?.bind(console);
+      if (!original) continue;
+      console[level] = (...args) => {
+        try {
+          const text = args
+            .map((value) => {
+              if (typeof value === "string") return value;
+              if (value instanceof Error) return `${value.name}: ${value.message}`;
+              try { return JSON.stringify(value); } catch { return String(value); }
+            })
+            .join(" ");
+          consoleBuffer.push({ at: Date.now(), level, text: text.slice(0, CONSOLE_TEXT_LIMIT) });
+          if (consoleBuffer.length > CONSOLE_LIMIT) consoleBuffer.shift();
+        } catch {
+          // Capture must never break the page it is observing.
+        }
+        original(...args);
+      };
+    }
+    window.addEventListener("error", (event) => {
+      consoleBuffer.push({
+        at: Date.now(),
+        level: "error",
+        text: `uncaught: ${event.message} at ${event.filename || "?"}:${event.lineno || 0}`.slice(0, CONSOLE_TEXT_LIMIT),
+      });
+      if (consoleBuffer.length > CONSOLE_LIMIT) consoleBuffer.shift();
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      const reason = event.reason instanceof Error ? event.reason.message : String(event.reason);
+      consoleBuffer.push({
+        at: Date.now(),
+        level: "error",
+        text: `unhandled rejection: ${reason}`.slice(0, CONSOLE_TEXT_LIMIT),
+      });
+      if (consoleBuffer.length > CONSOLE_LIMIT) consoleBuffer.shift();
+    });
+  }
+
+  installConsoleCapture();
+
   const ui = window.PlebeianUI;
   const PREFIX = "plebeian-lab:v1";
   const API_TIMEOUT_MS = 15000;
@@ -965,6 +1020,42 @@
     $("feedback-open").setAttribute("aria-expanded", "false");
   }
 
+  // What the page knows about itself: the protocol in force and what the
+  // console actually said. Attached to the note so a report is actionable
+  // without a second round trip asking the tester to reproduce it.
+  function captureContext() {
+    const config = state.config || {};
+    const view = state.view || {};
+    const validators = Array.isArray(state.validators?.validators) ? state.validators.validators : [];
+    const auctions = Array.isArray(view.auctions) ? view.auctions : [];
+    const open = auctions.filter((auction) => auction.state === "open").length;
+    return {
+      page: {
+        url: window.location.href,
+        title: document.title,
+        tab: feedbackTab(),
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        user_agent: navigator.userAgent,
+        captured_at: new Date().toISOString(),
+      },
+      auction: {
+        chain_id: config.chain_id ?? null,
+        app_height: view.height ?? null,
+        funding_mode_selected: $("funding-mode")?.value ?? null,
+        funding_mode_deployment: config.funding_mode ?? null,
+        mint_url: config.cashu_mint_url ?? config.mint_url ?? null,
+        committee_public_key: config.committee_public_key ?? null,
+        max_total_extension_seconds: config.max_total_extension_seconds ?? null,
+        emergency_recovery_seconds: config.emergency_recovery_seconds ?? null,
+        auctions_open: open,
+        auctions_total: auctions.length,
+        validators_online: validators.filter((validator) => validator.online).length,
+        validators_total: validators.length,
+      },
+      console: consoleBuffer.slice(-40),
+    };
+  }
+
   async function sendFeedback() {
     const text = $("feedback-text").value.trim();
     if (!text) {
@@ -976,15 +1067,21 @@
     setFeedbackStatus("Signing…");
     try {
       if (!feedbackIdentity) feedbackIdentity = await ensureIdentity("feedback");
+      const context = captureContext();
+      // The note stays human-readable: the tester's words first, then the
+      // machine context as a compact JSON block. A relay query therefore
+      // carries the same detail as the durable copy, and the server bounds
+      // the total so one report cannot fill the disk.
+      const content = `${text}\n\n--- page context ---\n${JSON.stringify(context)}`.slice(0, 3900);
       const event = await feedbackIdentity.signer.signEvent({
         kind: 1,
         created_at: Math.floor(Date.now() / 1000),
         tags: [["t", "auctions-lab-feedback"], ["client", "plebeian-lab"]],
-        content: text,
+        content,
       });
       const reply = await api("/api/feedback", {
         method: "POST",
-        body: JSON.stringify({ event, tab: feedbackTab() }),
+        body: JSON.stringify({ event, tab: feedbackTab(), context }),
       });
       $("feedback-text").value = "";
       setFeedbackStatus(reply.relay_sent

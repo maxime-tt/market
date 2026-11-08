@@ -36,17 +36,27 @@ type feedbackRequest struct {
 	// Tab is the lab tab the note was written from, e.g. "seller" or "bidder-2".
 	// It is advisory context, not authority: the signed event is the record.
 	Tab string `json:"tab,omitempty"`
+	// Context is the page's own report: protocol in force, app height, the
+	// console ring buffer. It is advisory too, and bounded so a tester cannot
+	// fill the disk with one note. It also rides inside the signed note, so a
+	// relay query carries the same detail.
+	Context json.RawMessage `json:"context,omitempty"`
 }
+
+// feedbackMaxContext bounds the structured context. The page sends a small
+// object; the limit exists so a hand-crafted request cannot write megabytes.
+const feedbackMaxContext = 32 * 1024
 
 // feedbackRecord is what lands on disk: the note as signed, plus what the
 // server could observe about its arrival.
 type feedbackRecord struct {
-	ReceivedAt int64       `json:"received_at"`
-	Remote     string      `json:"remote,omitempty"`
-	Tab        string      `json:"tab,omitempty"`
-	Event      SignedEvent `json:"event"`
-	RelaySent  bool        `json:"relay_sent"`
-	RelayError string      `json:"relay_error,omitempty"`
+	ReceivedAt int64           `json:"received_at"`
+	Remote     string          `json:"remote,omitempty"`
+	Tab        string          `json:"tab,omitempty"`
+	Context    json.RawMessage `json:"context,omitempty"`
+	Event      SignedEvent     `json:"event"`
+	RelaySent  bool            `json:"relay_sent"`
+	RelayError string          `json:"relay_error,omitempty"`
 }
 
 // feedbackWriteMu serialises appends so two notes arriving together cannot
@@ -95,11 +105,20 @@ func (server *APIServer) feedback(response http.ResponseWriter, request *http.Re
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return
 	}
+	if len(body.Context) > feedbackMaxContext {
+		writeError(response, http.StatusUnprocessableEntity, errors.New("feedback context is larger than the limit"))
+		return
+	}
+	if len(body.Context) > 0 && !json.Valid(body.Context) {
+		writeError(response, http.StatusUnprocessableEntity, errors.New("feedback context is not valid JSON"))
+		return
+	}
 
 	record := feedbackRecord{
 		ReceivedAt: time.Now().Unix(),
 		Remote:     request.RemoteAddr,
 		Tab:        strings.TrimSpace(body.Tab),
+		Context:    body.Context,
 		Event:      event,
 	}
 	if relayErr := publishFeedbackToRelay(request.Context(), event); relayErr != nil {

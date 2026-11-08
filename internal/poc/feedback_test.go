@@ -19,9 +19,9 @@ const feedbackTestKey = "0000000000000000000000000000000000000000000000000000000
 
 // postFeedback drives the real handler with a JSON body and returns the
 // recorder so a test can assert the status and the stored line.
-func postFeedback(t *testing.T, event SignedEvent, tab string) *httptest.ResponseRecorder {
+func postFeedback(t *testing.T, event SignedEvent, tab string, context json.RawMessage) *httptest.ResponseRecorder {
 	t.Helper()
-	body, err := json.Marshal(feedbackRequest{Event: event, Tab: tab})
+	body, err := json.Marshal(feedbackRequest{Event: event, Tab: tab, Context: context})
 	if err != nil {
 		t.Fatalf("marshal request: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestFeedbackNoteIsStoredAndVerified(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("POC_DEMO_NETWORK_ROOT", root)
 
-	recorder := postFeedback(t, signedFeedback(t, "the raise-bid button is confusing"), "bidder-2")
+	recorder := postFeedback(t, signedFeedback(t, "the raise-bid button is confusing"), "bidder-2", json.RawMessage(`{"auction":{"chain_id":"c","app_height":7},"console":[]}`))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("valid note answered %d: %s", recorder.Code, recorder.Body.String())
 	}
@@ -88,6 +88,20 @@ func TestFeedbackNoteIsStoredAndVerified(t *testing.T) {
 	if record.Event.Kind != KindFeedback {
 		t.Fatalf("stored kind = %d, want %d", record.Event.Kind, KindFeedback)
 	}
+	// The page's own context is kept beside the note so an operator does not
+	// have to ask the tester to reproduce the state.
+	var context struct {
+		Auction struct {
+			ChainID   string `json:"chain_id"`
+			AppHeight int    `json:"app_height"`
+		} `json:"auction"`
+	}
+	if err := json.Unmarshal(record.Context, &context); err != nil {
+		t.Fatalf("stored context is not JSON: %v", err)
+	}
+	if context.Auction.ChainID != "c" || context.Auction.AppHeight != 7 {
+		t.Fatalf("stored context = %+v", context)
+	}
 
 	// An operator can read the notes back, newest first.
 	notes := httptest.NewRecorder()
@@ -120,24 +134,39 @@ func TestFeedbackRefusesMislabeledAndForgedNotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign bid: %v", err)
 	}
-	if recorder := postFeedback(t, bid, "bidder-1"); recorder.Code != http.StatusUnprocessableEntity {
+	if recorder := postFeedback(t, bid, "bidder-1", nil); recorder.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("non-feedback kind answered %d, want 422", recorder.Code)
 	}
 
 	// Empty content is not a report.
 	empty := signedFeedback(t, "   ")
-	if recorder := postFeedback(t, empty, "seller"); recorder.Code != http.StatusUnprocessableEntity {
+	if recorder := postFeedback(t, empty, "seller", nil); recorder.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("empty note answered %d, want 422", recorder.Code)
 	}
 
 	// A signature that does not match the claimed author is refused.
 	forged := signedFeedback(t, "pretending to be someone else")
 	forged.Sig = strings.Repeat("0", len(forged.Sig))
-	if recorder := postFeedback(t, forged, "seller"); recorder.Code != http.StatusUnprocessableEntity {
+	if recorder := postFeedback(t, forged, "seller", nil); recorder.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("forged note answered %d, want 422", recorder.Code)
 	}
 
 	if _, err := os.Stat(filepath.Join(os.Getenv("POC_DEMO_NETWORK_ROOT"), feedbackFilename)); !os.IsNotExist(err) {
 		t.Fatalf("refused notes must not be stored, stat error = %v", err)
+	}
+}
+
+// TestFeedbackRefusesOversizedContext keeps the durable copy bounded: a page
+// sends a small object, and a hand-crafted request must not be able to write
+// megabytes into one line.
+func TestFeedbackRefusesOversizedContext(t *testing.T) {
+	t.Setenv("POC_DEMO_NETWORK_ROOT", t.TempDir())
+	huge := json.RawMessage(`"` + strings.Repeat("x", feedbackMaxContext+1) + `"`)
+	recorder := postFeedback(t, signedFeedback(t, "too much context"), "seller", huge)
+	if recorder.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("oversized context answered %d, want 422", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "larger than the limit") {
+		t.Fatalf("refusal must name the limit, got %s", recorder.Body.String())
 	}
 }
