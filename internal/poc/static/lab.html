@@ -20,8 +20,8 @@
     <h2 id="honesty-title">What this build actually does</h2>
     <ul>
       <li><strong>Mint and bid work.</strong> A bidder mints fake sats from the demo mint, locks them to the committee key with NUT-11, and commits a Nostr-signed bid carrying only proof references.</li>
-      <li><strong>Refund is implemented but still being finished.</strong> When a bid is displaced, the bidder's browser can ask the coordinator to swap the locked proofs back to the bidder's own wallet key. Treat it as under test, not as a guarantee.</li>
-      <li><strong>Seller settlement is not in this build.</strong> A closed auction records a winner; no value has moved to the seller here.</li>
+      <li><strong>Refund works at the moment of being outbid.</strong> When a bid is displaced, the bidder's browser asks the coordinator to swap the locked proofs back to the bidder's own wallet key, and the returned proofs are spendable again. Verified end to end against the live mint.</li>
+      <li><strong>Seller settlement works at close.</strong> The seller commits a wallet payout key when listing. At close the winner's browser cooperatively spends the locked proofs and the payout lands on that key, so the seller can spend it. Verified end to end against the live mint.</li>
       <li><strong>The sats are worthless.</strong> The mint is a FakeWallet mint. Nothing here is redeemable.</li>
       <li><strong>The committee is one key, not FROST.</strong> Four CometBFT validators run on one host, with no FIPS transport. One operator controls all of them. This is not production and not a compliance claim.</li>
       <li><strong>The monitor is a commit timeline, not a block explorer.</strong> The API exposes consensus timestamps for auctions and bids, not the height each event landed in. The page says so where it matters instead of inventing block contents.</li>

@@ -415,10 +415,10 @@
       let payout;
       if (auction.status === "open") {
         payout = auction.high_bid > 0
-          ? `Leading bid ${sats(auction.high_bid)}. Payout is not available until close and settlement, and settlement is not in this build.`
-          : "No bids yet. Payout is not available until close and settlement, and settlement is not in this build.";
+          ? `Leading bid ${sats(auction.high_bid)}. Payout is released when the auction closes and the winner settles.`
+          : "No bids yet. Payout is released when the auction closes and the winner settles.";
       } else if (auction.winner) {
-        payout = `Closed with winner ${short(auction.winner)} at ${sats(auction.high_bid)}. No value has moved to the seller in this build.`;
+        payout = `Closed with winner ${short(auction.winner)} at ${sats(auction.high_bid)}. Settlement pays the seller's committed wallet key.`;
       } else {
         payout = "Closed without a sale. No payout is due.";
       }
