@@ -1025,9 +1025,9 @@
   // without a second round trip asking the tester to reproduce it.
   function captureContext() {
     const config = state.config || {};
-    const view = state.view || {};
+    const view = state.view?.state || {};
     const validators = Array.isArray(state.validators?.validators) ? state.validators.validators : [];
-    const auctions = Array.isArray(view.auctions) ? view.auctions : [];
+    const auctions = Object.values(view.auctions || {});
     const open = auctions.filter((auction) => auction.state === "open").length;
     return {
       page: {
