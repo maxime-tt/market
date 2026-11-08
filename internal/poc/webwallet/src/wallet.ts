@@ -131,6 +131,49 @@ export function settleClaimMessage(auctionId: string, proofRefs: string[]): Uint
   );
 }
 
+/**
+ * The deterministic message a PRE-AUTHORIZED refund consent signs with the
+ * wallet spend key (V2).
+ *
+ * The old V1 (refundClaimMessage) bound the bid event id, which does not exist
+ * yet when the bid is being signed, so it could only be signed while a refund
+ * was already in progress -- a live signature. V2 binds only what is known at
+ * bid time: the auction, the exact input proof set, and the one output key per
+ * proof the returned proofs will be locked to. Both the live refund and the
+ * pre-authorized refund use it. Keep this byte-for-byte aligned with
+ * bidOutcomeRefundClaimMessageV2 in internal/poc/model.go.
+ */
+export function refundClaimMessageV2(auctionId: string, proofRefs: string[], outputPublicKeys: string[]): Uint8Array {
+  if (!auctionId) throw new Error("a refund claim must name an auction");
+  const refs = [...proofRefs].sort();
+  for (const ref of refs) {
+    if (!/^0[23][0-9a-f]{64}$/.test(ref)) {
+      throw new Error("refund claim proof references must be compressed secp256k1 points");
+    }
+  }
+  const outputs = [...outputPublicKeys].sort();
+  for (const key of outputs) {
+    if (!/^0[23][0-9a-f]{64}$/.test(key)) {
+      throw new Error("refund claim output keys must be compressed secp256k1 points");
+    }
+  }
+  return new TextEncoder().encode(
+    `PlebeianAuctionsCashuRefundClaimV2\nauction_id=${auctionId}\nproofs=${refs.join(",")}\noutputs=${outputs.join(",")}`,
+  );
+}
+
+/**
+ * The bid content the wallet publishes alongside a mint-backed lock: the settle
+ * and refund consent signatures the coordinator stores so it can act at close
+ * without this wallet online. Shape matches outcome_authorizations in
+ * internal/poc/model.go and the coordinator's admission verifier.
+ */
+export interface OutcomeAuthorizations {
+  schema: string;
+  settle_spend_signature: string;
+  refund_spend_signature: string;
+}
+
 function hexToBytes(hex: string): Uint8Array {
   if (!/^(?:[0-9a-f]{2})+$/.test(hex)) throw new Error("expected lowercase hex");
   const bytes = new Uint8Array(hex.length / 2);
@@ -400,6 +443,45 @@ export class BidderWallet {
       proofs: bindings,
       lockedProofs: send,
       spendPublicKey: refundPublicKey,
+    };
+  }
+
+  /**
+   * Pre-signs the two outcome consents the coordinator will need after the
+   * bidder has gone offline: the settle consent (winner pays the seller) and
+   * the V2 refund consent (displaced bidder gets the proofs back).
+   *
+   * Both are signed by the wallet spend key the lock commits as the refund key,
+   * over the exact messages the coordinator verifies -- the settle message over
+   * the auction and the sorted proof references, and the V2 refund message over
+   * the auction, the references, and one output key per proof (the wallet spend
+   * key itself, the only key this wallet can spend a returned proof with).
+   *
+   * The result is published with the bid so the bidder never has to be online
+   * again. It is consent, not custody: the committee key could already spend the
+   * lock alone during the window, so this removes liveness, not trust.
+   */
+  async preauthorizeOutcome(auctionId: string, proofStateRefs: string[], lockedProofs: Proof[]): Promise<OutcomeAuthorizations> {
+    if (!auctionId) throw new Error("outcome authorizations must name an auction");
+    const refs = [...proofStateRefs].sort();
+    for (const ref of refs) {
+      if (!/^0[23][0-9a-f]{64}$/.test(ref)) {
+        throw new Error("outcome authorization proof references must be compressed secp256k1 points");
+      }
+    }
+    // One output per locked proof, all the wallet spend key, matching what the
+    // coordinator reconstructs from the receipt's proof references.
+    if (lockedProofs.length !== refs.length) {
+      throw new Error("outcome authorizations need one locked proof per proof reference");
+    }
+    const outputs = refs.map(() => this.spendPublicKey());
+    const spendKey = this.spendSecretKey();
+    const settleSignature = bytesToHex(schnorr.sign(await sha256Bytes(settleClaimMessage(auctionId, refs)), spendKey));
+    const refundSignature = bytesToHex(schnorr.sign(await sha256Bytes(refundClaimMessageV2(auctionId, refs, outputs)), spendKey));
+    return {
+      schema: "PlebeianAuctionsPOCBidOutcomesV1",
+      settle_spend_signature: settleSignature,
+      refund_spend_signature: refundSignature,
     };
   }
 

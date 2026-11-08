@@ -724,11 +724,17 @@ async function placeBid(auctionId, amount) {
     // Nostr key authorizes, the wallet owns value, and a NIP-07 signer cannot
     // produce a Cashu signature. The lock names a key this wallet can spend.
     const funding = await wallet.lockForBid(amount, state.config.committee_public_key, locktime, (step)=>message(step));
+    // Pre-sign the settle and refund consents now, while the wallet is present,
+    // and publish them with the bid so the coordinator can act at close without
+    // this browser online. The coordinator refuses a mint-backed bid without
+    // them (it would reintroduce the liveness this removes).
+    message("Pre-signing the outcome authorizations…");
+    const outcomeAuthorizations = await wallet.preauthorizeOutcome(auctionId, funding.proofStateRefs, funding.lockedProofs);
     const receipt = await api("/api/demo/mint-lock", { method: "POST", body: JSON.stringify({
       auction_id: auctionId, bidder: state.actor, amount, locktime,
       refund_public_key: funding.refundPublicKey, token_sha256: funding.tokenSha256,
       proof_state_refs: funding.proofStateRefs, proofs: funding.proofs }) });
-    const signed = await sign(28641, [["e", auctionId]], { auction_id: auctionId, amount, cashu_lock: receipt });
+    const signed = await sign(28641, [["e", auctionId]], { auction_id: auctionId, amount, cashu_lock: receipt, outcome_authorizations: outcomeAuthorizations });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
     // Bind the proofs this browser just locked to the committed bid id, so a
     // later displacement can hand exactly this set to the refund endpoint.

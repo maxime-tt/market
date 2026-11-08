@@ -29,7 +29,14 @@ const (
 	// happened. It moves no value: the mint swap is the money, this event is
 	// only the mirror. A settlement that never commits still leaves the seller
 	// holding proofs locked to their own key.
-	KindSettle       = 28643
+	KindSettle = 28643
+	// KindOutcome is the coordinator's own committed record that a mint-backed
+	// lock reached its terminal outcome. It is posted only by the application
+	// authority (the network's single secp256k1 committee key today), never by a
+	// browser, and it carries the bidder's pre-published outcome authorization
+	// as its warrant. It moves no value: the mint swap is the money, this event
+	// is only the mirror, exactly like KindSettle.
+	KindOutcome      = 28645
 	KindFundingAbort = 28650
 	MaxTxBytes       = 64 * 1024
 	MaxInputs        = 32
@@ -75,7 +82,7 @@ func DefaultPolicy() Policy {
 	return Policy{
 		FaucetAmount: 10_000, FaucetCap: 50_000, MinBidIncrement: 100,
 		MinDurationSeconds: 3, MaxDurationSeconds: 3_600, EventSkewSeconds: 300,
-		LateBidWindow: 180, LateBidExtension: 180, MaxTotalExtension: 1_800,
+		LateBidWindow: 30, LateBidExtension: 30, MaxTotalExtension: 1_800,
 		ReceiptTTLSeconds: 300,
 	}
 }
@@ -267,6 +274,13 @@ type Lock struct {
 	// it is a record, not a proof. It is omitempty so every pre-existing lock
 	// replays byte-identically.
 	CashuPayoutTokenSHA256 string `json:"cashu_payout_token_sha256,omitempty"`
+	// SettleAuthorization and RefundAuthorization are the bidder's wallet
+	// spend-key pre-signatures, published with the bid and stored here so the
+	// coordinator can settle or refund later without the bidder online. Both
+	// are omitempty: a lock for any non-mint-backed funding path, or one
+	// committed before this field existed, replays byte-identically.
+	SettleAuthorization string `json:"settle_authorization,omitempty"`
+	RefundAuthorization string `json:"refund_authorization,omitempty"`
 }
 
 type Auction struct {
@@ -719,6 +733,31 @@ type bidContent struct {
 	CashuLock         *CashuLockReceipt          `json:"cashu_lock,omitempty"`
 	Reservation       *CustodyReservationReceipt `json:"reservation,omitempty"`
 	IntegratedFunding *IntegratedFundingReceipt  `json:"integrated_funding,omitempty"`
+	// OutcomeAuthorizations are the bidder's wallet spend-key pre-signatures
+	// over the settle and refund consent messages, published with the bid so
+	// the coordinator can act at close without the bidder online.
+	OutcomeAuthorizations *bidOutcomeAuthorizations `json:"outcome_authorizations,omitempty"`
+}
+
+// bidOutcomeAuthorizations is the bid content the bidder's wallet publishes
+// alongside a mint-backed lock. Both signatures are by the wallet spend key the
+// receipt commits as RefundPublicKey; without them the bid would reintroduce
+// the liveness requirement this bridge exists to remove.
+type bidOutcomeAuthorizations struct {
+	Schema               string `json:"schema"`
+	SettleSpendSignature string `json:"settle_spend_signature"`
+	RefundSpendSignature string `json:"refund_spend_signature"`
+}
+
+// outcomeContent is the application authority's committed record that a
+// mint-backed lock reached its terminal outcome. It issues no note and moves
+// no value.
+type outcomeContent struct {
+	Schema            string `json:"schema"`
+	AuctionID         string `json:"auction_id"`
+	BidID             string `json:"bid_id"`
+	Outcome           string `json:"outcome"`
+	PayoutTokenSHA256 string `json:"payout_token_sha256"`
 }
 
 type refundContent struct {
@@ -870,6 +909,21 @@ func ValidateForMempool(prior State, tx Transaction, policy Policy, mintSeed []b
 			}
 		}
 	}
+	// A mint-backed bid must publish both outcome authorizations with the bid.
+	// Without them the coordinator would again need the bidder online to settle
+	// or refund, which is exactly the liveness the bridge removes. This is a
+	// local-admission (CheckTx) rule, like the KindRefund double-credit refusal
+	// above: the deterministic transition stores whatever the bid carries, and a
+	// lock with no stored authorization simply cannot be resolved by
+	// applyOutcomeRecord, so admitting such a bid is never a settlement hazard.
+	if tx.Type == "event" && tx.Event != nil && tx.Event.Kind == KindBid {
+		var content bidContent
+		if err := decodeStrictContent(tx.Event.Content, &content); err == nil && content.CashuLock != nil {
+			if err := verifyBidOutcomeAuthorizations(content); err != nil {
+				return err
+			}
+		}
+	}
 	// CheckTx has no proposed block timestamp. Use only the last committed
 	// consensus time for advisory admission; a client-controlled Nostr timestamp
 	// must never decide whether a deadline has passed. PrepareProposal,
@@ -983,6 +1037,14 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 			return err
 		}
 		if err := applySettle(state, actor, content); err != nil {
+			return err
+		}
+	case KindOutcome:
+		var content outcomeContent
+		if err := decodeStrictContent(event.Content, &content); err != nil {
+			return err
+		}
+		if err := applyOutcomeRecord(state, actor, content); err != nil {
 			return err
 		}
 	default:
@@ -1235,7 +1297,16 @@ func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, co
 		}
 	}
 	state.Bids[eventID] = bid
-	state.Locks[eventID] = Lock{ID: eventID, AuctionID: auction.ID, BidID: eventID, Bidder: actor, Amount: content.Amount, Status: "locked"}
+	lock := Lock{ID: eventID, AuctionID: auction.ID, BidID: eventID, Bidder: actor, Amount: content.Amount, Status: "locked"}
+	// A mint-backed bid publishes its outcome authorizations; storing them
+	// here is what lets the coordinator sweep the lock to a terminal outcome
+	// after the bidder has gone offline. A bid without them simply stores
+	// empty strings, and applyOutcomeRecord then refuses to resolve the lock.
+	if content.CashuLock != nil && content.OutcomeAuthorizations != nil {
+		lock.SettleAuthorization = content.OutcomeAuthorizations.SettleSpendSignature
+		lock.RefundAuthorization = content.OutcomeAuthorizations.RefundSpendSignature
+	}
+	state.Locks[eventID] = lock
 	auction.LeaderBidID = eventID
 	auction.HighBid = content.Amount
 	if committedAt >= auction.EndTime-policy.LateBidWindow {
@@ -1871,6 +1942,165 @@ func applySettle(state *State, actor string, content settleContent) error {
 	lock.Status = "paid"
 	lock.CashuPayoutTokenSHA256 = content.PayoutTokenSHA256
 	state.Locks[content.BidID] = lock
+	return nil
+}
+
+// applicationAuthorityPubKey is the Nostr identity of the coordinator's own
+// key -- the network's single secp256k1 committee key today (FROST later). A
+// Nostr pubkey is the x-only form of that key, so it is the compressed
+// committee key with its parity byte dropped.
+func applicationAuthorityPubKey(state State) string {
+	if !validCompressedPublicKey(state.CommitteePublicKey) {
+		return ""
+	}
+	return state.CommitteePublicKey[2:]
+}
+
+// applyOutcomeRecord commits the coordinator's own record that a mint-backed
+// lock reached its terminal outcome. It is the mirror of the mint swap, never
+// the swap itself: it issues no IOU note and moves no value, so its absence
+// cannot cost anyone their money. The bidder's stored pre-signature is the
+// warrant; the coordinator holds no live signature and needs none.
+//
+// It is deliberately narrow. It is accepted only from the application
+// authority, and only for a lock that actually holds the authorization naming
+// the outcome it claims. The op key is outcome:<bid_id>:<outcome>, so a repeat
+// is idempotent and settle and refund are distinct terminal records.
+func applyOutcomeRecord(state *State, actor string, content outcomeContent) error {
+	if content.Schema != "PlebeianAuctionsPOCOutcomeV1" {
+		return errors.New("outcome record schema is unsupported")
+	}
+	// Only the application authority may post this kind. A bidder's browser
+	// signs its own outcome authorizations, but it never posts the outcome.
+	if actor == "" || actor != applicationAuthorityPubKey(*state) {
+		return errors.New("outcome record must be posted by the application authority")
+	}
+	if content.Outcome != "settle" && content.Outcome != "refund" {
+		return errors.New("outcome record names an unknown outcome")
+	}
+	if !validIdentifier(content.AuctionID) || !validIdentifier(content.BidID) {
+		return errors.New("outcome record names an invalid auction or bid")
+	}
+	if !validLowerHex(content.PayoutTokenSHA256, sha256.Size) {
+		return errors.New("outcome payout digest is not a sha256 digest")
+	}
+	operation := "outcome:" + content.BidID + ":" + content.Outcome
+	if state.Operations[operation] {
+		return errors.New("outcome was already committed")
+	}
+	lock, ok := state.Locks[content.BidID]
+	if !ok || lock.AuctionID != content.AuctionID {
+		return errors.New("outcome names an unknown lock")
+	}
+	switch content.Outcome {
+	case "settle":
+		auction, ok := state.Auctions[content.AuctionID]
+		if !ok {
+			return errors.New("outcome names an unknown auction")
+		}
+		if auction.Status != "closed" {
+			return errors.New("settle outcome requires a closed auction")
+		}
+		if auction.FundingMode != FundingModeCashuLock {
+			return errors.New("settle outcome requires a mint-backed auction")
+		}
+		if content.BidID != auction.LeaderBidID {
+			return errors.New("settle outcome does not name the winning bid")
+		}
+		if lock.Status != "winner_selected" {
+			return fmt.Errorf("winning lock is %q, not winner_selected", lock.Status)
+		}
+		if lock.SettleAuthorization == "" {
+			return errors.New("winning bid holds no settle authorization")
+		}
+		lock.Status = "paid"
+		lock.CashuPayoutTokenSHA256 = content.PayoutTokenSHA256
+	case "refund":
+		if lock.Status != "refundable" {
+			return fmt.Errorf("lock is %q, not refundable", lock.Status)
+		}
+		if lock.RefundAuthorization == "" {
+			return errors.New("bid holds no refund authorization")
+		}
+		lock.Status = "refunded"
+		lock.CashuPayoutTokenSHA256 = content.PayoutTokenSHA256
+	}
+	state.Locks[content.BidID] = lock
+	state.Operations[operation] = true
+	return nil
+}
+
+// bidOutcomeRefundClaimMessageV2 is the deterministic message the V2 refund
+// consent signs with the wallet spend key. It is the pre-authorizable form: the
+// old V1 bound the bid event id, which is unknowable when the bid is signed,
+// so V2 binds only what is known at bid time -- the auction, the exact input
+// proof set, and the exact output keys the returned proofs will be locked to.
+// Both the live refund and the pre-authorized refund use it. Keep this byte-for-
+// byte aligned with refundClaimMessageV2 in webwallet/src/wallet.ts.
+func bidOutcomeRefundClaimMessageV2(auctionID string, proofRefs, outputPublicKeys []string) []byte {
+	refs := append([]string(nil), proofRefs...)
+	sort.Strings(refs)
+	outputs := append([]string(nil), outputPublicKeys...)
+	sort.Strings(outputs)
+	return []byte("PlebeianAuctionsCashuRefundClaimV2\nauction_id=" + auctionID +
+		"\nproofs=" + strings.Join(refs, ",") + "\noutputs=" + strings.Join(outputs, ","))
+}
+
+// verifyBidOutcomeAuthorizations checks the wallet spend-key pre-signatures a
+// mint-backed bid publishes. Both must verify against the key the receipt
+// commits as RefundPublicKey -- the key that owns the locked value -- over the
+// exact consent messages the coordinator will later act on. A bid missing them,
+// or carrying a signature by any other key, reintroduces the liveness
+// requirement, so this is a mandatory local-admission (CheckTx) rule.
+func verifyBidOutcomeAuthorizations(content bidContent) error {
+	receipt := content.CashuLock
+	if receipt == nil {
+		return nil
+	}
+	authorization := content.OutcomeAuthorizations
+	if authorization == nil || authorization.Schema != "PlebeianAuctionsPOCBidOutcomesV1" {
+		return errors.New("mint-backed bid must publish settle and refund outcome authorizations")
+	}
+	if !validLowerHex(authorization.SettleSpendSignature, schnorr.SignatureSize) {
+		return errors.New("bid must publish a settle authorization as a 64-byte hex Schnorr signature")
+	}
+	if !validLowerHex(authorization.RefundSpendSignature, schnorr.SignatureSize) {
+		return errors.New("bid must publish a refund authorization as a 64-byte hex Schnorr signature")
+	}
+	if !validCompressedPublicKey(receipt.RefundPublicKey) {
+		return errors.New("bid outcome authorizations require the receipt's wallet spend key")
+	}
+	publicBytes, _ := hex.DecodeString(receipt.RefundPublicKey)
+	point, err := btcec.ParsePubKey(publicBytes)
+	if err != nil {
+		return errors.New("bid outcome authorizations require the receipt's wallet spend key")
+	}
+	spendKey, err := schnorr.ParsePubKey(schnorr.SerializePubKey(point))
+	if err != nil {
+		return errors.New("bid outcome authorizations require the receipt's wallet spend key")
+	}
+	settleBytes, _ := hex.DecodeString(authorization.SettleSpendSignature)
+	settleSignature, err := schnorr.ParseSignature(settleBytes)
+	if err != nil {
+		return errors.New("bid settle authorization is malformed")
+	}
+	settleDigest := sha256.Sum256(demoMintSettleClaimMessage(content.AuctionID, receipt.ProofStateRefs))
+	if !settleSignature.Verify(settleDigest[:], spendKey) {
+		return errors.New("bid settle authorization does not verify over the auction id and proof set")
+	}
+	outputs := make([]string, len(receipt.ProofStateRefs))
+	for index := range outputs {
+		outputs[index] = receipt.RefundPublicKey
+	}
+	refundBytes, _ := hex.DecodeString(authorization.RefundSpendSignature)
+	refundSignature, err := schnorr.ParseSignature(refundBytes)
+	if err != nil {
+		return errors.New("bid refund authorization is malformed")
+	}
+	refundDigest := sha256.Sum256(bidOutcomeRefundClaimMessageV2(content.AuctionID, receipt.ProofStateRefs, outputs))
+	if !refundSignature.Verify(refundDigest[:], spendKey) {
+		return errors.New("bid refund authorization does not verify over the auction id, proof set and outputs")
+	}
 	return nil
 }
 

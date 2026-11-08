@@ -33,8 +33,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -81,10 +84,11 @@ type demoMintSpentProof struct {
 //     consensus (a legacy refund of a mint-backed bid is refused at admission,
 //     see ValidateForMempool).
 //   - SpendSignature is OWNERSHIP: a BIP-340 signature by the wallet's own
-//     Cashu spend key over demoMintRefundClaimMessage, binding the bid id and
-//     the exact output pubkeys. The Nostr identity authorizes; the wallet owns
-//     value and owns its own spend key. The two are linked by this
-//     authorization, never by deriving one key from the other.
+//     Cashu spend key over the V2 refund claim message
+//     (bidOutcomeRefundClaimMessageV2), binding the auction, the committed
+//     proof set and the exact output pubkeys. The Nostr identity authorizes;
+//     the wallet owns value and owns its own spend key. The two are linked by
+//     this authorization, never by deriving one key from the other.
 type demoMintRefundBody struct {
 	BidID  string               `json:"bid_id"`
 	Proofs []demoMintSpendProof `json:"proofs"`
@@ -100,45 +104,33 @@ type demoMintRefundBody struct {
 	SpendSignature string `json:"spend_signature"`
 }
 
-// demoMintRefundClaimMessage is the deterministic message a refund claim signs
-// with the wallet spend key. The browser builds the same bytes
-// (refundClaimMessage in webwallet/src/wallet.ts); the two must not drift, or
-// every genuine claim is refused.
-func demoMintRefundClaimMessage(bidID string, outputPublicKeys []string) []byte {
-	outputs := append([]string(nil), outputPublicKeys...)
-	sort.Strings(outputs)
-	return []byte("PlebeianAuctionsCashuRefundClaimV1\nbid_id=" + bidID + "\noutputs=" + strings.Join(outputs, ","))
-}
-
-// demoMintVerifyRefundClaim checks the wallet spend-key half of a refund: the
-// key is a real compressed point, the output list is exactly one key per proof
-// and all of them are that key, and the signature verifies over the claim
-// message. It returns the spend key so the caller locks the outputs to it.
-func demoMintVerifyRefundClaim(body demoMintRefundBody) (string, error) {
-	if body.SpendPublicKey == "" {
+// demoMintVerifyRefundOwnership checks the wallet spend-key half of a refund
+// against the V2 consent message. The old V1 bound the bid event id, which is
+// unknowable when the bid -- and therefore the consent -- is signed, so V2 binds
+// only what is known at bid time. Both the live refund endpoint and the
+// coordinator's offline sweeper call this one function over the same bytes
+// (bidOutcomeRefundClaimMessageV2 in model.go), and the bidder's bid-time
+// signature is verified by the identical message, so the three cannot drift.
+//
+// outputPublicKeys are the wallet spend key repeated once per committed proof,
+// which is the only destination a refund may use.
+func demoMintVerifyRefundOwnership(auctionID string, proofRefs []string, spendPublicKey, spendSignature string) (string, error) {
+	if spendPublicKey == "" {
 		return "", errors.New("refund claim carries no wallet spend key")
 	}
-	if !validCompressedPublicKey(body.SpendPublicKey) {
+	if !validCompressedPublicKey(spendPublicKey) {
 		return "", errors.New("refund claim wallet spend key is not a valid compressed secp256k1 point")
 	}
-	if len(body.OutputPublicKeys) != len(body.Proofs) {
-		return "", fmt.Errorf("refund claim names %d output keys for %d proofs", len(body.OutputPublicKeys), len(body.Proofs))
-	}
-	for index, key := range body.OutputPublicKeys {
-		if key != body.SpendPublicKey {
-			return "", fmt.Errorf("refund claim output %d is not locked to the wallet spend key", index)
-		}
-	}
-	if body.SpendSignature == "" {
+	if spendSignature == "" {
 		return "", errors.New("refund claim carries no wallet spend-key signature")
 	}
-	if !validLowerHex(body.SpendSignature, 64) {
+	if !validLowerHex(spendSignature, 64) {
 		return "", errors.New("refund claim wallet spend-key signature is not a 64-byte hex Schnorr signature")
 	}
 	// schnorr.ParsePubKey takes the 32-byte x-only form, so the compressed key
 	// is parsed as a curve point and then lifted to its BIP-340 x-only form.
 	// Passing the 33-byte compressed encoding straight in is refused.
-	point, err := btcec.ParsePubKey(mustHex(body.SpendPublicKey))
+	point, err := btcec.ParsePubKey(mustHex(spendPublicKey))
 	if err != nil {
 		return "", errors.New("refund claim wallet spend key is not a valid compressed secp256k1 point")
 	}
@@ -146,15 +138,43 @@ func demoMintVerifyRefundClaim(body demoMintRefundBody) (string, error) {
 	if err != nil {
 		return "", errors.New("refund claim wallet spend key is not a valid compressed secp256k1 point")
 	}
-	signature, err := schnorr.ParseSignature(mustHex(body.SpendSignature))
+	signature, err := schnorr.ParseSignature(mustHex(spendSignature))
 	if err != nil {
 		return "", errors.New("refund claim wallet spend-key signature is malformed")
 	}
-	message := demoMintRefundClaimMessage(body.BidID, body.OutputPublicKeys)
-	if !signature.Verify(sha256Sum(message), spendKey) {
-		return "", errors.New("refund claim wallet spend-key signature does not verify over the bid id and output keys")
+	outputs := make([]string, len(proofRefs))
+	for index := range outputs {
+		outputs[index] = spendPublicKey
 	}
-	return body.SpendPublicKey, nil
+	message := bidOutcomeRefundClaimMessageV2(auctionID, proofRefs, outputs)
+	if !signature.Verify(sha256Sum(message), spendKey) {
+		return "", errors.New("refund claim wallet spend-key signature does not verify over the auction id, proof set and output keys")
+	}
+	return spendPublicKey, nil
+}
+
+// demoMintVerifyRefundClaim is the live endpoint's wrapper. It checks the shape
+// of the submitted output-key list -- exactly one key per committed proof, all
+// of them the wallet spend key -- and then verifies the V2 claim against
+// committed state. The committed proof references, not the caller's submitted
+// list, are what the signature binds, so a caller cannot point the claim at a
+// proof set the receipt never committed.
+func demoMintVerifyRefundClaim(body demoMintRefundBody, auctionID string, proofRefs []string) (string, error) {
+	if body.SpendPublicKey == "" {
+		return "", errors.New("refund claim carries no wallet spend key")
+	}
+	if !validCompressedPublicKey(body.SpendPublicKey) {
+		return "", errors.New("refund claim wallet spend key is not a valid compressed secp256k1 point")
+	}
+	if len(body.OutputPublicKeys) != len(proofRefs) {
+		return "", fmt.Errorf("refund claim names %d output keys for %d committed proofs", len(body.OutputPublicKeys), len(proofRefs))
+	}
+	for index, key := range body.OutputPublicKeys {
+		if key != body.SpendPublicKey {
+			return "", fmt.Errorf("refund claim output %d is not locked to the wallet spend key", index)
+		}
+	}
+	return demoMintVerifyRefundOwnership(auctionID, proofRefs, body.SpendPublicKey, body.SpendSignature)
 }
 
 // sha256Sum is the BIP-340 message digest: the claim message is hashed once so
@@ -543,16 +563,10 @@ func (server *APIServer) demoMintRefund(response http.ResponseWriter, request *h
 		return
 	}
 
-	// (a2) The wallet spend key is the ownership half. It is a key the wallet
-	// generated and holds, never one derived from the Nostr identity, and the
-	// signature binds this bid id and the exact output keys. A valid Nostr
-	// authorization without it proves who is asking, not that the returned
-	// value lands somewhere they can spend.
-	spendPublicKey, err := demoMintVerifyRefundClaim(body)
-	if err != nil {
-		writeError(response, http.StatusUnprocessableEntity, err)
-		return
-	}
+	// The wallet spend-key ownership half (a2) is verified below, once the
+	// committed receipt is known: the V2 claim binds the committed proof set,
+	// which is not caller-supplied, so it cannot be checked before the lock and
+	// receipt are read.
 
 	ctx, cancel := context.WithTimeout(request.Context(), 4*time.Second)
 	defer cancel()
@@ -589,8 +603,20 @@ func (server *APIServer) demoMintRefund(response http.ResponseWriter, request *h
 	}
 
 	// (c) and (d): the submitted material must be exactly the committed proof
-	// set, and must cover the locked amount.
+	// set, and must cover the locked amount. Checked before ownership so the
+	// signature is verified over material the receipt actually committed.
 	if err := demoMintVerifyProofSet(receipt, body.Proofs, lock.Amount); err != nil {
+		writeError(response, http.StatusUnprocessableEntity, err)
+		return
+	}
+
+	// (a2) The wallet spend key is the ownership half: a key the wallet
+	// generated and holds, never one derived from the Nostr identity. The V2
+	// claim binds the auction, the committed proof set and the exact output
+	// keys, so a valid Nostr authorization without it would prove who is asking
+	// but not that the returned value lands somewhere they can spend.
+	spendPublicKey, err := demoMintVerifyRefundClaim(body, lock.AuctionID, receipt.ProofStateRefs)
+	if err != nil {
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return
 	}
@@ -645,21 +671,24 @@ func demoMintSettleClaimMessage(auctionID string, proofRefs []string) []byte {
 	return []byte("PlebeianAuctionsCashuSettleClaimV1\nauction_id=" + auctionID + "\nproofs=" + strings.Join(refs, ","))
 }
 
-// demoMintVerifySettleClaim checks the ownership half of a settlement: the
+// demoMintVerifySettleOwnership checks the ownership half of a settlement: the
 // signature must verify, over the hashed claim message, against the wallet
-// spend key the committed receipt names. A valid Nostr authorization alone
-// proves who is asking, not that they hold the value being spent.
-func demoMintVerifySettleClaim(body demoMintSettleBody, receipt CashuLockReceipt) error {
-	if body.SpendSignature == "" {
+// spend key that owns the locked value. A valid Nostr authorization alone
+// proves who is asking, not that they hold the value being spent. The live
+// endpoint and the coordinator's offline sweeper both call this one function,
+// and the bidder's bid-time settle signature is verified by the identical
+// message (verifyBidOutcomeAuthorizations in model.go).
+func demoMintVerifySettleOwnership(auctionID string, proofRefs []string, spendPublicKey, spendSignature string) error {
+	if spendSignature == "" {
 		return errors.New("settlement claim carries no wallet spend-key signature")
 	}
-	if !validLowerHex(body.SpendSignature, 64) {
+	if !validLowerHex(spendSignature, 64) {
 		return errors.New("settlement claim wallet spend-key signature is not a 64-byte hex Schnorr signature")
 	}
-	if !validCompressedPublicKey(receipt.RefundPublicKey) {
+	if !validCompressedPublicKey(spendPublicKey) {
 		return errors.New("committed receipt carries no valid wallet spend key")
 	}
-	point, err := btcec.ParsePubKey(mustHex(receipt.RefundPublicKey))
+	point, err := btcec.ParsePubKey(mustHex(spendPublicKey))
 	if err != nil {
 		return errors.New("committed receipt carries no valid wallet spend key")
 	}
@@ -667,10 +696,20 @@ func demoMintVerifySettleClaim(body demoMintSettleBody, receipt CashuLockReceipt
 	if err != nil {
 		return errors.New("committed receipt carries no valid wallet spend key")
 	}
-	signature, err := schnorr.ParseSignature(mustHex(body.SpendSignature))
+	signature, err := schnorr.ParseSignature(mustHex(spendSignature))
 	if err != nil {
 		return errors.New("settlement claim wallet spend-key signature is malformed")
 	}
+	if !signature.Verify(sha256Sum(demoMintSettleClaimMessage(auctionID, proofRefs)), spendKey) {
+		return errors.New("settlement claim wallet spend-key signature does not verify over the auction id and proof set")
+	}
+	return nil
+}
+
+// demoMintVerifySettleClaim is the live endpoint's wrapper: it derives the
+// proof references from the submitted proofs and verifies the claim against the
+// wallet spend key the committed receipt names.
+func demoMintVerifySettleClaim(body demoMintSettleBody, receipt CashuLockReceipt) error {
 	refs := make([]string, 0, len(body.Proofs))
 	for index, proof := range body.Proofs {
 		reference, err := demoMintProofY(proof.Secret)
@@ -679,36 +718,144 @@ func demoMintVerifySettleClaim(body demoMintSettleBody, receipt CashuLockReceipt
 		}
 		refs = append(refs, reference)
 	}
-	if !signature.Verify(sha256Sum(demoMintSettleClaimMessage(body.AuctionID, refs)), spendKey) {
-		return errors.New("settlement claim wallet spend-key signature does not verify over the auction id and proof set")
-	}
-	return nil
+	return demoMintVerifySettleOwnership(body.AuctionID, refs, receipt.RefundPublicKey, body.SpendSignature)
 }
 
 // settlementStore holds the fresh proofs a settlement swap produced until the
-// seller's browser fetches them. It is durable across requests, not across a
-// process restart: the proofs are P2PK-locked to the seller's key, so a restart
-// between the swap and the fetch loses them. That window is one request wide
-// and is the honest cost of not giving the coordinator custody.
+// seller's browser fetches them. It is durable across a process restart: every
+// payout is written to <dir>/<key>.json mode 0600 and read back on a cache
+// miss, so a restart between the swap and the seller's fetch no longer loses
+// the payout. That is safe to persist: each proof's secret is a P2PK condition
+// naming the seller's own wallet key, so the bytes confer no ability to spend.
 type settlementStore struct {
-	mu        sync.Mutex
+	mu sync.Mutex
+	// dir is the durable root; empty keeps the store in memory only (tests, or
+	// a host with no configured network root). A key is a valid identifier, so
+	// filepath.Base collapses any separator and a key can never escape dir.
+	dir       string
 	byAuction map[string][]demoMintSpentProof
 }
 
-func (store *settlementStore) put(auctionID string, proofs []demoMintSpentProof) {
+func (store *settlementStore) path(key string) string {
+	return filepath.Join(store.dir, filepath.Base(key)+".json")
+}
+
+// put parks a payout under key. It writes the durable copy before returning so
+// the caller knows the payout can survive a restart; a write failure leaves the
+// in-memory copy intact and is reported to the caller to log.
+func (store *settlementStore) put(key string, proofs []demoMintSpentProof) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	if store.byAuction == nil {
 		store.byAuction = map[string][]demoMintSpentProof{}
 	}
-	store.byAuction[auctionID] = proofs
+	store.byAuction[key] = proofs
+	return store.persistLocked(key, proofs)
 }
 
-func (store *settlementStore) get(auctionID string) ([]demoMintSpentProof, bool) {
+// persistLocked writes one payout durably with the same discipline persistState
+// uses for committed state: an atomic temp-file plus rename, fsyncing the file
+// and then its directory, mode 0600.
+func (store *settlementStore) persistLocked(key string, proofs []demoMintSpentProof) error {
+	if store.dir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(store.dir, 0o700); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(proofs)
+	if err != nil {
+		return err
+	}
+	target := store.path(key)
+	temporary := target + ".tmp"
+	file, err := os.OpenFile(temporary, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(raw); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporary, target); err != nil {
+		return err
+	}
+	directory, err := os.Open(store.dir)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	return directory.Sync()
+}
+
+func (store *settlementStore) get(key string) ([]demoMintSpentProof, bool) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	proofs, ok := store.byAuction[auctionID]
-	return proofs, ok
+	if proofs, ok := store.byAuction[key]; ok {
+		return proofs, true
+	}
+	if store.dir == "" {
+		return nil, false
+	}
+	raw, err := os.ReadFile(store.path(key))
+	if err != nil {
+		return nil, false
+	}
+	var proofs []demoMintSpentProof
+	if err := json.Unmarshal(raw, &proofs); err != nil {
+		return nil, false
+	}
+	if store.byAuction == nil {
+		store.byAuction = map[string][]demoMintSpentProof{}
+	}
+	store.byAuction[key] = proofs
+	return proofs, true
+}
+
+// reload reads every durable payout back into the cache, so a fresh process
+// serves what a previous one parked. It is safe to call when dir is empty.
+func (store *settlementStore) reload() error {
+	if store.dir == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(store.dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.byAuction == nil {
+		store.byAuction = map[string][]demoMintSpentProof{}
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		key := strings.TrimSuffix(entry.Name(), ".json")
+		if !validIdentifier(key) {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(store.dir, entry.Name()))
+		if err != nil {
+			return err
+		}
+		var proofs []demoMintSpentProof
+		if err := json.Unmarshal(raw, &proofs); err != nil {
+			return err
+		}
+		store.byAuction[key] = proofs
+	}
+	return nil
 }
 
 // demoMintSettle is the winner's half of settlement: the winner hands over the
@@ -859,8 +1006,11 @@ func (server *APIServer) demoMintSettle(response http.ResponseWriter, request *h
 	// proof's secret is a P2PK condition naming the seller's wallet key, so
 	// only that key can produce the NUT-11 witness the mint requires. Nobody
 	// else -- not the winner, not the coordinator, not another reader of this
-	// endpoint -- can spend them.
-	server.demoSettlements.put(body.AuctionID, fresh)
+	// endpoint -- can spend them. The write is durable so a restart before the
+	// seller fetches does not lose the payout.
+	if err := server.demoSettlements.put(body.AuctionID, fresh); err != nil {
+		log.Printf("demo settlement payout could not be persisted: %v", err)
+	}
 	writeJSON(response, http.StatusOK, demoMintRefundResponse{Proofs: fresh})
 }
 

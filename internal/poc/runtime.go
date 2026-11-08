@@ -421,6 +421,15 @@ func RunSite(ctx context.Context, root, listen string) error {
 			fmt.Fprintf(os.Stderr, "FRIDAY_R20_CLOSE_TRIGGER|%s\n", category)
 		})
 	}
+	// The legacy demo coordinator acts alone: a background sweeper performs the
+	// one mint swap a terminal mint-backed lock needs and posts its own outcome
+	// record. It runs outside consensus and reports one fixed category per
+	// failure, exactly like the R20 close trigger above.
+	if api.demoCommitteeKey != nil {
+		go runDemoOutcomeSweeper(ctx, newDemoOutcomeSweeper(api, time.Now), func(category string) {
+			fmt.Fprintf(os.Stderr, "DEMO_OUTCOME_SWEEPER|%s\n", category)
+		})
+	}
 	serverErrors := make(chan error, 1)
 	go func() {
 		fmt.Fprintf(os.Stdout, "POC_SITE_READY http://%s chain=%s mode=%s fake_money_only=true\n", listen, manifest.ChainID, manifest.Mode)

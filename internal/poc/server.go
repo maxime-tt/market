@@ -15,6 +15,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -90,6 +91,16 @@ type APIServer struct {
 	// request; the proofs are P2PK-locked to the seller's committed key, which
 	// is what makes publishing them safe.
 	demoSettlements settlementStore
+	// demoOutcomeProofs holds the bearer proofs a bidder deposits so the
+	// coordinator's sweeper can resolve a terminal lock without the bidder
+	// online. These are secrets: they are never written to consensus and never
+	// logged, and the sweeper discards them once the outcome commits.
+	demoOutcomeProofs demoOutcomeProofStore
+	// demoOutcomePoster submits the coordinator's own KindOutcome record. It is
+	// nil in production, where the sweeper signs with the committee key and
+	// broadcasts through the node; tests inject a recorder so the sweeper is
+	// exercised without a live CometBFT cluster.
+	demoOutcomePoster func(context.Context, SignedEvent) error
 }
 
 const browserReleasePinsPath = "/etc/plebeian-auctions-friday/browser-r20-pins.json"
@@ -299,13 +310,25 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 			return nil, errors.New("demo committee key does not match the network committee public key")
 		}
 	}
-	return &APIServer{observerNodeID: observerNodeID, manifest: manifest, clients: clients, offline: offline, cashu: proxy, mintProxy: mintProxy,
+	// The durable payout store lives under the demo network root. A restart
+	// reloads every parked payout, so a settlement that completed before the
+	// seller fetched it is still served afterward.
+	settlementsDir := ""
+	if networkRoot := os.Getenv("POC_DEMO_NETWORK_ROOT"); networkRoot != "" && demoKey != nil {
+		settlementsDir = filepath.Join(networkRoot, "settlements")
+	}
+	server := &APIServer{observerNodeID: observerNodeID, manifest: manifest, clients: clients, offline: offline, cashu: proxy, mintProxy: mintProxy,
 		legacyInterim:    os.Getenv("POC_ENABLE_LEGACY_INTERIM") == "true",
 		demoCommitteeKey: demoKey, demoCommitteePublicKey: demoPublicKey,
 		demoMintChecker:       NewHTTPMintStateChecker(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
 		demoMintKeyset:        NewMintKeySetFetcher(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
 		browserThresholdReady: browserReady, browserReleasePins: browserPins,
-		recoveryOnly: recoveryOnlyValue == "true", healthPinsSHA256: os.Getenv("POC_FRIDAY_HEALTH_PINS_SHA256")}, nil
+		demoSettlements: settlementStore{dir: settlementsDir},
+		recoveryOnly:    recoveryOnlyValue == "true", healthPinsSHA256: os.Getenv("POC_FRIDAY_HEALTH_PINS_SHA256")}
+	if err := server.demoSettlements.reload(); err != nil {
+		return nil, fmt.Errorf("load demo settlement payouts: %w", err)
+	}
+	return server, nil
 }
 
 func (server *APIServer) Handler() (http.Handler, error) {
@@ -331,6 +354,10 @@ func (server *APIServer) Handler() (http.Handler, error) {
 			mux.HandleFunc("POST /api/demo/mint-lock", server.demoMintLock)
 			mux.HandleFunc("POST /api/demo/mint-refund", server.demoMintRefund)
 			mux.HandleFunc("POST /api/demo/mint-settle", server.demoMintSettle)
+			// The bidder deposits the bearer proofs beside the bid-time
+			// pre-authorization, so the sweeper can resolve the lock after they
+			// go offline.
+			mux.HandleFunc("POST /api/demo/outcome-deposit", server.demoOutcomeDeposit)
 			// The seller is not the caller of the settlement swap, so the
 			// payout is fetched separately by the seller's own browser.
 			mux.HandleFunc("GET /api/demo/settlement/{auction_id}", server.demoSettlement)

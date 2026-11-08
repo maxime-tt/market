@@ -268,6 +268,13 @@
     const locktime = locktimeFor(auction);
     setBidderStatus("Locking proofs to the committee…");
     const funding = await wallet.lockForBid(amount, state.config.committee_public_key, locktime, (step) => setBidderStatus(step));
+    // Pre-sign the settle and refund consents now, while the bidder's wallet is
+    // present, and publish them with the bid. Without them the coordinator would
+    // again need this browser online at close to settle or refund, which is the
+    // liveness this bridge removes. The coordinator refuses a mint-backed bid
+    // that omits them.
+    setBidderStatus("Pre-signing the outcome authorizations…");
+    const outcomeAuthorizations = await wallet.preauthorizeOutcome(auction.id, funding.proofStateRefs, funding.lockedProofs);
     setBidderStatus("Submitting the lock receipt…");
     const receipt = await api("/api/demo/mint-lock", {
       method: "POST",
@@ -286,6 +293,7 @@
       auction_id: auction.id,
       amount,
       cashu_lock: receipt,
+      outcome_authorizations: outcomeAuthorizations,
     });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
     wallet.recordLockedBid(signed.id, funding.lockedProofs, funding.spendPublicKey, auction.id);

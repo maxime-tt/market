@@ -10696,6 +10696,23 @@ outputs=${outputs.join(",")}`);
 auction_id=${auctionId}
 proofs=${refs.join(",")}`);
   }
+  function refundClaimMessageV2(auctionId, proofRefs, outputPublicKeys) {
+    if (!auctionId)
+      throw new Error("a refund claim must name an auction");
+    const refs = [...proofRefs].sort();
+    for (const ref of refs) {
+      if (!/^0[23][0-9a-f]{64}$/.test(ref)) {
+        throw new Error("refund claim proof references must be compressed secp256k1 points");
+      }
+    }
+    const outputs = [...outputPublicKeys].sort();
+    for (const key of outputs) {
+      if (!/^0[23][0-9a-f]{64}$/.test(key)) {
+        throw new Error("refund claim output keys must be compressed secp256k1 points");
+      }
+    }
+    return new TextEncoder().encode(`PlebeianAuctionsCashuRefundClaimV2\nauction_id=${auctionId}\nproofs=${refs.join(",")}\noutputs=${outputs.join(",")}`);
+  }
   function hexToBytes3(hex) {
     if (!/^(?:[0-9a-f]{2})+$/.test(hex))
       throw new Error("expected lowercase hex");
@@ -10870,6 +10887,28 @@ proofs=${refs.join(",")}`);
         spendPublicKey: refundPublicKey
       };
     }
+    async preauthorizeOutcome(auctionId, proofStateRefs, lockedProofs) {
+      if (!auctionId)
+        throw new Error("outcome authorizations must name an auction");
+      const refs = [...proofStateRefs].sort();
+      for (const ref of refs) {
+        if (!/^0[23][0-9a-f]{64}$/.test(ref)) {
+          throw new Error("outcome authorization proof references must be compressed secp256k1 points");
+        }
+      }
+      if (lockedProofs.length !== refs.length) {
+        throw new Error("outcome authorizations need one locked proof per proof reference");
+      }
+      const outputs = refs.map(() => this.spendPublicKey());
+      const spendKey = this.spendSecretKey();
+      const settleSignature = bytesToHex3(schnorr.sign(await sha256Bytes(settleClaimMessage(auctionId, refs)), spendKey));
+      const refundSignature = bytesToHex3(schnorr.sign(await sha256Bytes(refundClaimMessageV2(auctionId, refs, outputs)), spendKey));
+      return {
+        schema: "PlebeianAuctionsPOCBidOutcomesV1",
+        settle_spend_signature: settleSignature,
+        refund_spend_signature: refundSignature
+      };
+    }
     async refundBid(bidId, event, endpoint = "/api/demo/mint-refund") {
       const locked = this.readLockedBids()[bidId];
       const proofs = locked?.proofs ?? [];
@@ -11017,5 +11056,5 @@ proofs=${refs.join(",")}`);
   }
 
   // src/browser.ts
-  window.PlebeianWallet = { BidderWallet, browserStorage, memoryStorage, refundClaimMessage };
+  window.PlebeianWallet = { BidderWallet, browserStorage, memoryStorage, refundClaimMessage, refundClaimMessageV2 };
 })();
