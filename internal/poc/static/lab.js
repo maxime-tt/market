@@ -568,7 +568,7 @@
       } else if (status === "refunded") {
         detail = "Refunded. The coordinator reports the lock as returned; the fresh proofs are in this wallet if the claim ran here.";
       } else if (status === "winner_selected") {
-        detail = "Winner selected. Seller settlement is not implemented in this build, so no payout has moved.";
+        detail = "Winner selected. The winner's browser settles by spending the locked proofs to the seller's committed wallet key.";
       } else if (status === "paid") {
         detail = "Paid. The lock is terminal.";
       } else {
