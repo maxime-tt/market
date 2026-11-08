@@ -19,13 +19,14 @@
   <section id="honesty" class="honesty" hidden aria-labelledby="honesty-title">
     <h2 id="honesty-title">What this build actually does</h2>
     <ul>
-      <li><strong>Mint and bid work.</strong> A bidder mints fake sats from the demo mint, locks them to the committee key with NUT-11, and commits a Nostr-signed bid carrying only proof references.</li>
-      <li><strong>Refund works at the moment of being outbid.</strong> When a bid is displaced, the bidder's browser asks the coordinator to swap the locked proofs back to the bidder's own wallet key, and the returned proofs are spendable again. Verified end to end against the live mint.</li>
-      <li><strong>Seller settlement works at close.</strong> The seller commits a wallet payout key when listing. At close the winner's browser cooperatively spends the locked proofs and the payout lands on that key, so the seller can spend it. Verified end to end against the live mint.</li>
-      <li><strong>The winner has to be online to settle.</strong> The locked proofs live in the winner's browser, so at close that tab is what spends them to pay the seller. If the winner's tab is closed the money stays locked and the payout lands when that tab comes back; the chain records the outcome, the browser holds the money. Making this work with an absent winner is the threshold-key step, which is not in this build.</li>
+      <li><strong>Mint and bid work.</strong> A bidder mints fake sats from the demo mint and locks them to a 2-of-2 SIG_ALL condition (its own wallet key and the committee). A SIG_ALL signature covers the whole transaction — inputs <em>and</em> outputs — so the lock can only ever be spent as one of the exact outcomes the bidder pre-authorized, never redirected.</li>
+      <li><strong>The bidder publishes its authorizations with the bid.</strong> Before bidding, the bidder signs both outcomes (settle to the seller, refund to itself) and deposits them. The coordinator commits only the compact digests and signatures on chain; the bearer templates stay in the coordinator's store. This is what lets the bidder leave.</li>
+      <li><strong>Refund works when a bid is displaced.</strong> The coordinator submits the bidder's pre-authorized refund transaction, or parks the returned proofs for the displaced bidder to collect. Either way the money returns to the bidder's own wallet key. Verified end to end against the live mint.</li>
+      <li><strong>Seller settlement works at close, with no bidder tab open.</strong> The seller commits a wallet payout key when listing. At close the coordinator submits the winner's pre-authorized settle transaction from its stored deposit and the payout lands on that key, so the seller can spend it. Verified end to end against the live mint.</li>
+      <li><strong>The bidder holds the funds until it bids; the coordinator holds them until the outcome.</strong> The bidder's proofs are its own until it bids. Between the bid and the outcome the coordinator holds the locked proofs (they travel with the deposit so it can act alone), and under SIG_ALL it can only send them to the destination the bidder pre-authorized — the digest commitment is what makes that checkable, not a promise.</li>
       <li><strong>A late bid pushes the close out.</strong> Consensus extends the end to three minutes after any bid that lands in the last three minutes, up to thirty minutes in total (anti-snipe). So an auction asked to run for sixty seconds will usually close about three minutes after its last bid, not after sixty seconds.</li>
       <li><strong>The sats are worthless.</strong> The mint is a FakeWallet mint. Nothing here is redeemable.</li>
-      <li><strong>The committee is one key, not FROST.</strong> Four CometBFT validators run on one host, with no FIPS transport. One operator controls all of them. This is not production and not a compliance claim.</li>
+      <li><strong>The committee is one key, not FROST.</strong> Four CometBFT validators run on one host, with no FIPS transport. One operator controls all of them. The coordinator's half of each SIG_ALL spend goes through a single port today; FROST will sit behind that port, and it does not yet. This is not production and not a compliance claim.</li>
       <li><strong>The monitor is a commit timeline, not a block explorer.</strong> The API exposes consensus timestamps for auctions and bids, not the height each event landed in. The page says so where it matters instead of inventing block contents.</li>
     </ul>
     <p class="fine">The full, denser demo with its own disclosure remains at <a href="/">/</a>.</p>
@@ -65,7 +66,13 @@
           <label>Minimum increment <input id="increment" type="number" min="1" value="10" required></label>
           <label>Reserve (0 = none) <input id="reserve" type="number" min="0" value="0"></label>
         </div>
-        <p class="fine">Funding mode is fixed to <code>cashu_lock_v1</code>: bidders hold their own NUT-11 proofs, and this listing commits this tab's wallet key as the settlement destination.</p>
+        <label>Funding mode
+          <select id="funding-mode">
+            <option value="cashu_sigall_v1" selected>SIG_ALL — bidder + committee 2-of-2, pre-authorized outcomes</option>
+            <option value="cashu_lock_v1">NUT-11 lock — winner's tab settles (legacy)</option>
+          </select>
+        </label>
+        <p class="fine">This listing commits this tab's wallet key as the settlement destination. <code>cashu_sigall_v1</code> is the lab default: the bidder pre-authorizes both outcomes with the bid and can then go offline.</p>
         <button id="create-submit" class="button primary" type="submit">Sign and create auction</button>
       </form>
 
@@ -77,7 +84,7 @@
           <button id="seller-import" class="button ghost" type="button">Import payout</button>
           <span id="seller-status" class="status" role="status" aria-live="polite"></span>
         </div>
-        <p class="fine">A closed auction with a winner pays the wallet key this identity committed when listing. Keep this tab open so the winner's browser can settle at close, then import the payout here.</p>
+        <p class="fine">A closed auction with a winner pays the wallet key this identity committed when listing. The coordinator submits the settlement at close from the winner's pre-authorized outcome, so no bidder tab has to be open; import the payout here when it lands.</p>
       </div>
     </section>
 
@@ -91,6 +98,7 @@
         </div>
       </div>
 
+      <p class="fine">Your bid publishes both pre-authorized outcomes (settle to the seller, refund to you) and deposits the exact transactions behind them. Because the authorizations are on record, <strong>this tab may be closed</strong>: the coordinator will act on the outcome you pre-authorized — settling to the seller at close, or refunding you if you are displaced.</p>
       <div class="balance-row">
         <div class="stat"><span>Spendable</span><strong id="bidder-spendable">—</strong><small>fake sats</small></div>
         <div class="stat"><span>Locked in bids</span><strong id="bidder-locked">—</strong><small>fake sats</small></div>

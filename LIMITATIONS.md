@@ -271,12 +271,19 @@
   TypeScript, Go and Rust validation and a frozen public-only vector; this does
   not replace or silently reinterpret V3, and it has not yet been exercised by
   the real integrated mint/FROST/FIPS path.
-- Exact browser construction of Nutshell's SIG_ALL digest necessarily handles
-  the input proof secrets. That is a material change from the earlier
-  server-held custodial wallet and has not been activated or owner-approved as
-  the live custody boundary. The alternative—signing an opaque server-supplied
-  digest—was deliberately removed. This unresolved choice is another reason
-  the funding endpoint returns 503.
+- RESOLVED 2026-11-08 by owner decision. The earlier note read: "Exact browser
+  construction of Nutshell's SIG_ALL digest necessarily handles the input proof
+  secrets ... has not been activated or owner-approved as the live custody
+  boundary." The owner chose this shape. The bidder builds Nutshell's SIG_ALL
+  digest in the browser (it necessarily handles the input proof secrets) and
+  deposits the bearer templates so the coordinator can act alone; signing an
+  opaque server-supplied digest stays removed. The accepted digest form is
+  Nutshell 0.19.2's `secret + B_` concatenation, implemented once in Go
+  (`internal/poc/sigall.go`) and once in TypeScript
+  (`internal/poc/webwallet/src/sigall.ts`). cashu-ts's own current SIG_ALL
+  builder is refused by our mint — it inserts each input's `C` and each output's
+  amount between the secret and the `B_` — exactly as the B0 live probe recorded
+  (SLICE B0 STEP 6). The live route now runs on the `secret + B_` form.
 - The fixed authority service captures its trusted source, queue runtime and
   rollback-aware health port and provides no public terminal mutation route.
   Its source-level process lifecycle now takes a durable resolving lease under

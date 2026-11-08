@@ -1,8 +1,10 @@
 /* Plebeian Auctions lab: seller, three independent bidder tabs, monitor.
  *
- * Plain browser JavaScript, no build step. The money path is the same one the
- * full demo uses: mint -> NUT-11 lock -> /api/demo/mint-lock -> signed kind
- * 28641 -> /api/event. This page only changes how it is presented.
+ * Plain browser JavaScript, no build step. The lab defaults to the SIG_ALL
+ * money path: mint -> 2-of-2 NUT-11 SIG_ALL lock -> /api/demo/mint-lock ->
+ * build both outcome templates -> /api/demo/sigall-deposit -> signed kind
+ * 28641 carrying outcome_templates + sigall_deposit -> /api/event. The legacy
+ * cashu_lock_v1 route (winner's tab settles) is still selectable.
  */
 (function lab() {
   "use strict";
@@ -266,6 +268,9 @@
     if (!state.config?.committee_public_key) throw new Error("The committee public key is missing from /api/config.");
     const wallet = identity.wallet;
     const locktime = locktimeFor(auction);
+    if (auction.funding_mode === "cashu_sigall_v1") {
+      return placeSigAllBid(identity, auction, amount, wallet, locktime);
+    }
     setBidderStatus("Locking proofs to the committee…");
     const funding = await wallet.lockForBid(amount, state.config.committee_public_key, locktime, (step) => setBidderStatus(step));
     // Pre-sign the settle and refund consents now, while the bidder's wallet is
@@ -302,6 +307,59 @@
     await refresh();
   }
 
+  /**
+   * The SIG_ALL bid. The bidder locks 2-of-2 to itself and the committee,
+   * builds BOTH exact outcome transactions (settle to the seller's committed
+   * key, refund to its own wallet key), deposits them with the coordinator,
+   * and publishes only the compact commitment (the deposit id, the two digests,
+   * the two bidder signatures) plus the coordinator's signed deposit receipt.
+   *
+   * Because the authorizations and the bearer templates are on record, the
+   * bidder never has to be online again: the coordinator submits whichever
+   * outcome commits. This is the lab's default route.
+   */
+  async function placeSigAllBid(identity, auction, amount, wallet, locktime) {
+    setBidderStatus("Locking proofs to the bidder and the committee (SIG_ALL)…");
+    const funding = await wallet.lockForBidSigAll(amount, state.config.committee_public_key, locktime, (step) => setBidderStatus(step));
+    setBidderStatus("Submitting the SIG_ALL lock receipt…");
+    const receipt = await api("/api/demo/mint-lock", {
+      method: "POST",
+      body: JSON.stringify({
+        auction_id: auction.id,
+        bidder: identity.actor,
+        amount,
+        locktime,
+        refund_public_key: funding.refundPublicKey,
+        token_sha256: funding.tokenSha256,
+        proof_state_refs: funding.proofStateRefs,
+        proofs: funding.proofs,
+        funding_mode: "cashu_sigall_v1",
+      }),
+    });
+    // buildOutcomeTemplates + POST /api/demo/sigall-deposit in one wallet call:
+    // the coordinator verifies the two templates and returns its signed receipt.
+    setBidderStatus("Depositing the two pre-authorized outcomes…");
+    const commitment = await wallet.depositOutcomeTemplates(
+      { id: auction.id, seller_coco_payment_public_key: auction.seller_coco_payment_public_key },
+      funding,
+      identity.actor,
+      receipt,
+      "/api/demo/sigall-deposit",
+    );
+    const signed = await sign(identity, 28641, [["e", auction.id]], {
+      auction_id: auction.id,
+      amount,
+      cashu_lock: receipt,
+      outcome_templates: commitment.outcome_templates,
+      sigall_deposit: commitment.sigall_deposit,
+    });
+    const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
+    wallet.recordLockedBid(signed.id, funding.lockedProofs, funding.spendPublicKey, auction.id);
+    setBidderStatus(`SIG_ALL bid committed at height ${result.height}. This tab may be closed.`);
+    toast(`SIG_ALL bid of ${sats(amount)} committed at height ${result.height}.`, "success");
+    await refresh();
+  }
+
   async function claimRefunds(identity, manual = false) {
     if (!mintBacked()) return 0;
     const wallet = identity.wallet;
@@ -311,7 +369,11 @@
     for (const bid of bids) {
       if (bid.bidder !== identity.actor) continue;
       const lock = locks[bid.id];
-      if (!lock || lock.status !== "refundable") continue;
+      // "refundable" is the live swap; "refunded" is a payout the coordinator's
+      // sweeper already performed for an offline bidder and parked under the
+      // bid id. Both are collected through the same refund claim: the endpoint
+      // serves the parked proofs when the lock is already refunded.
+      if (!lock || (lock.status !== "refundable" && lock.status !== "refunded")) continue;
       if (!wallet.lockedForBid(bid.id).length) continue;
       try {
         const event = await sign(identity, 28642, [["e", bid.auction_id]], { bid_id: bid.id });
@@ -351,6 +413,9 @@
     let settled = 0;
     for (const auction of auctions) {
       if (auction.status !== "closed" || auction.winner !== identity.actor) continue;
+      // Only the legacy cashu_lock_v1 route needs the winner's tab to settle.
+      // A cashu_sigall_v1 lock is settled by the coordinator from the stored
+      // deposit, so this tab deliberately does nothing for it.
       if (auction.funding_mode !== "cashu_lock_v1") continue;
       const lock = locks[auction.leader_bid_id];
       if (!lock || lock.status !== "winner_selected") continue;
@@ -402,7 +467,7 @@
     let imported = 0;
     for (const auction of auctions) {
       if (auction.seller !== identity.actor || auction.status !== "closed" || !auction.winner) continue;
-      if (auction.funding_mode !== "cashu_lock_v1") continue;
+      if (auction.funding_mode !== "cashu_lock_v1" && auction.funding_mode !== "cashu_sigall_v1") continue;
       const key = `import:${auction.id}`;
       const last = state.settlementAttempts.get(key) || 0;
       if (!manual && Date.now() - last < 15000) continue;
@@ -455,9 +520,11 @@
   async function createAuction() {
     const identity = state.seller;
     if (!identity?.signer) throw new Error("The seller identity is not ready.");
-    if (!mintBacked()) throw new Error("This deployment does not serve mint-backed funding, so cashu_lock_v1 auctions cannot be created here.");
+    if (!mintBacked()) throw new Error("This deployment does not serve mint-backed funding, so mint-backed auctions cannot be created here.");
     const title = $("title").value.trim();
     if (!title) throw new Error("A title is required.");
+    const fundingMode = $("funding-mode")?.value || "cashu_sigall_v1";
+    if (fundingMode !== "cashu_sigall_v1" && fundingMode !== "cashu_lock_v1") throw new Error("Unknown funding mode.");
     const duration = Number($("duration").value);
     const starting = Number($("starting").value);
     const increment = Number($("increment").value);
@@ -476,7 +543,7 @@
       starting_bid: starting,
       min_increment: increment,
       reserve,
-      funding_mode: "cashu_lock_v1",
+      funding_mode: fundingMode,
       // The seller commits this tab's WALLET key as the settlement destination.
       // It is the seller's own signature on this create event that authorizes
       // it, and it is never the Nostr identity: the Nostr key authorizes, the
@@ -686,7 +753,9 @@
       } else if (status === "refunded") {
         detail = "Refunded. The coordinator reports the lock as returned; the fresh proofs are in this wallet if the claim ran here.";
       } else if (status === "winner_selected") {
-        detail = "Winner selected. The winner's browser settles by spending the locked proofs to the seller's committed wallet key.";
+        detail = auction?.funding_mode === "cashu_sigall_v1"
+          ? "Winner selected. The coordinator submits the settle outcome you pre-authorized; no action is needed in this tab."
+          : "Winner selected. The winner's browser settles by spending the locked proofs to the seller's committed wallet key.";
       } else if (status === "paid") {
         detail = "Paid. The lock is terminal.";
       } else {

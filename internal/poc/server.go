@@ -502,7 +502,7 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 	bidFunding := "application-level custodial reservation; not a mint-enforced lock"
 	if mintBacked {
 		paymentAttestation = "a mint-backed bid's proof references are checked against the mint (NUT-07) before admission, and consensus refuses any reference already bound to another bid; the coordinator swaps the winning lock to the seller's key at close, and the mint enforces the NUT-11 condition"
-		walletAuthority = "bidder-held NUT-11 P2PK proofs in the browser; the server never holds a bearer proof"
+		walletAuthority = "the bidder holds the funds until it bids; under cashu_sigall_v1 the coordinator then holds the locked proofs until the outcome and, because the SIG_ALL signature covers the outputs, it can send them only to the destination the bidder pre-authorized (the digest commitment is what makes that checkable); a cashu_lock_v1 bid stays in the bidder's browser until the winner's tab settles"
 		bidFunding = "bidder-held NUT-11 lock to the committee, or an attested custodial reservation on auctions that ask for one"
 	}
 	if thresholdRoute {
