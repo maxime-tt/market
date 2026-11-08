@@ -421,15 +421,11 @@ func RunSite(ctx context.Context, root, listen string) error {
 			fmt.Fprintf(os.Stderr, "FRIDAY_R20_CLOSE_TRIGGER|%s\n", category)
 		})
 	}
-	// The legacy demo coordinator acts alone: a background sweeper performs the
-	// one mint swap a terminal mint-backed lock needs and posts its own outcome
-	// record. It runs outside consensus and reports one fixed category per
-	// failure, exactly like the R20 close trigger above.
-	if api.demoCommitteeKey != nil {
-		go runDemoOutcomeSweeper(ctx, newDemoOutcomeSweeper(api, time.Now), func(category string) {
-			fmt.Fprintf(os.Stderr, "DEMO_OUTCOME_SWEEPER|%s\n", category)
-		})
-	}
+	// The legacy demo coordinator acts alone: the shared background sweeper
+	// performs the one mint swap a terminal mint-backed lock needs and posts its
+	// own outcome record. It runs outside consensus and reports one fixed
+	// category per failure, exactly like the R20 close trigger above.
+	startDemoOutcomeSweeper(ctx, api)
 	serverErrors := make(chan error, 1)
 	go func() {
 		fmt.Fprintf(os.Stdout, "POC_SITE_READY http://%s chain=%s mode=%s fake_money_only=true\n", listen, manifest.ChainID, manifest.Mode)
@@ -577,6 +573,13 @@ func RunLocalDemo(ctx context.Context, root, listen, committeePublicKey string) 
 		return err
 	}
 	defer stopObserver()
+	// The demo coordinator must act alone: the shared background sweeper
+	// performs the one mint swap a terminal mint-backed lock needs -- including
+	// a cashu_sigall_v1 lock, whose deposited template is the only transaction
+	// it may submit -- and posts its own outcome record. Without it on this
+	// path a bidder that closes its browser leaves the seller unpaid on the
+	// local demo, which is the configuration every live probe runs against.
+	startDemoOutcomeSweeper(ctx, api)
 	handler, err := api.Handler()
 	if err != nil {
 		return err

@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -403,6 +404,21 @@ func demoPayoutTokenDigest(proofs []demoMintSpentProof) (string, error) {
 	}
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:]), nil
+}
+
+// startDemoOutcomeSweeper starts the coordinator's background outcome sweeper
+// on a server path. Both the site path and the local-demo path call it: a
+// deployment where the coordinator never acts alone would leave a bidder's
+// closed browser as the only thing that can settle a lock, which is exactly
+// what this background actor exists to prevent. It is a no-op without a
+// committee key, i.e. when no mint-backed demo coordinator exists at all.
+func startDemoOutcomeSweeper(ctx context.Context, api *APIServer) {
+	if api == nil || api.demoCommitteeKey == nil {
+		return
+	}
+	go runDemoOutcomeSweeper(ctx, newDemoOutcomeSweeper(api, time.Now), func(category string) {
+		fmt.Fprintf(os.Stderr, "DEMO_OUTCOME_SWEEPER|%s\n", category)
+	})
 }
 
 // runDemoOutcomeSweeper drives Step on a fixed interval until the context ends,

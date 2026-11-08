@@ -912,3 +912,85 @@ func TestDemoSigAllDepositLiveOrderingWithoutCommittedLock(t *testing.T) {
 		}
 	}
 }
+
+// TestStartDemoOutcomeSweeperResolvesTerminalLock pins the deployment wiring, not
+// the actor: startDemoOutcomeSweeper is the one call both server paths make, and
+// this asserts that calling it really drives the loop until a terminal sigall
+// lock is resolved. The local-demo path shipped without this call, so on the
+// running demo nothing ever settled a lock with no browser open; a unit test
+// that calls Step directly (as the other sweeper tests do) cannot catch that.
+func TestStartDemoOutcomeSweeperResolvesTerminalLock(t *testing.T) {
+	t.Parallel()
+	fx := sigAllDepositFixtureState(t)
+	state := fx.state
+	auction := state.Auctions[fx.auctionID]
+	auction.Status = "closed"
+	auction.Winner = fx.bidder
+	auction.LeaderBidID = fx.bidID
+	state.Auctions[fx.auctionID] = auction
+	lock := state.Locks[fx.bidID]
+	lock.Status = "winner_selected"
+	lock.SigAllDepositID = fx.depositRec.DepositID
+	state.Locks[fx.bidID] = lock
+
+	mint := newFakeSwapMint(t, []int64{fx.receipt.Amount})
+	current := state
+	posted := make(chan outcomeContent, 4)
+	server := &APIServer{
+		manifest: NetworkManifest{
+			ChainID: "legacy", Mode: "remote", ApplicationAuthority: ApplicationAuthorityLegacy,
+			CashuMintURL: mint.server.URL, Policy: DefaultPolicy(),
+		},
+		legacyInterim:          true,
+		demoCommitteeKey:       fx.committee,
+		demoCommitteePublicKey: hex.EncodeToString(fx.committee.PubKey().SerializeCompressed()),
+		demoMintChecker:        &fakeMint{},
+		demoMintKeyset:         NewMintKeySetFetcher(mint.server.URL, 2*time.Second),
+		demoStateSnapshot:      func(context.Context) (State, error) { return current, nil },
+		demoSettlements:        settlementStore{dir: t.TempDir()},
+		demoSigAllDeposits:     sigAllDepositStore{dir: t.TempDir()},
+		demoOutcomePoster: func(_ context.Context, event SignedEvent) error {
+			var content outcomeContent
+			if err := json.Unmarshal([]byte(event.Content), &content); err != nil {
+				return err
+			}
+			posted <- content
+			return nil
+		},
+	}
+	if err := server.demoSigAllDeposits.put(sigAllStoredDeposit{Receipt: fx.depositRec, Templates: fx.templates, SettleDestination: fx.sellerKey.publicKey}); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	startDemoOutcomeSweeper(ctx, server)
+
+	select {
+	case content := <-posted:
+		if content.Outcome != "settle" || content.BidID != fx.bidID {
+			t.Fatalf("posted outcome = %+v", content)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("startDemoOutcomeSweeper never resolved the terminal sigall lock")
+	}
+	if mint.swaps != 1 {
+		t.Fatalf("mint saw %d swaps, want exactly 1", mint.swaps)
+	}
+}
+
+// TestBothServerPathsStartTheOutcomeSweeper is a source guard for the bug this
+// slice shipped with: the local-demo server path started validators, the pruner
+// and the relay observer but never the outcome sweeper, so on the running demo
+// nothing could resolve a terminal lock unless a browser called an endpoint.
+// Both server paths must go through the one shared starter.
+func TestBothServerPathsStartTheOutcomeSweeper(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("runtime.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(string(raw), "startDemoOutcomeSweeper(ctx, api)"); count < 2 {
+		t.Fatalf("runtime.go starts the outcome sweeper %d time(s), want at least 2 (site path and local-demo path)", count)
+	}
+}
