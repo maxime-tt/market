@@ -69,7 +69,12 @@ func TestFridayABCITimingBoundaries(t *testing.T) {
 	// Drive the exact extension cap through CheckTx, proposal processing, and
 	// finalization, rather than only through the state transition helper.
 	var amount int64 = 1_000
-	for index := 0; index < 12; index++ {
+	// Walk the end toward the cap by placing each bid one second before it.
+	// The step size is the policy's late-bid extension, so the number of bids
+	// needed is a function of the policy, not a constant: bound the loop
+	// generously and let the cap check decide, because what this test asserts
+	// is that the end can never pass original_end + MaxTotalExtension.
+	for index := 0; index < 400; index++ {
 		app.mu.RLock()
 		end := app.state.Auctions["cap"].EndTime
 		app.mu.RUnlock()

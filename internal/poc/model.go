@@ -82,7 +82,7 @@ func DefaultPolicy() Policy {
 	return Policy{
 		FaucetAmount: 10_000, FaucetCap: 50_000, MinBidIncrement: 100,
 		MinDurationSeconds: 3, MaxDurationSeconds: 3_600, EventSkewSeconds: 300,
-		LateBidWindow: 30, LateBidExtension: 30, MaxTotalExtension: 1_800,
+		LateBidWindow: 180, LateBidExtension: 180, MaxTotalExtension: 1_800,
 		ReceiptTTLSeconds: 300,
 	}
 }

@@ -460,6 +460,22 @@ type localSupervisor struct {
 	processes map[int]*validatorProcess
 }
 
+// localDemoPolicy is the default policy with a short anti-snipe window, for the
+// loopback demo only.
+//
+// A late bid anywhere inside the window pushes the end to bid_time +
+// LateBidExtension, so with the production default (180s) an auction asked to
+// run for sixty seconds closes about three minutes after its last bid. In a lab
+// whose point is watching a full cycle, that reads as a stuck auction rather
+// than a working one. Real auctions want the default: three minutes is the
+// right window when the auction itself runs for hours.
+func localDemoPolicy() Policy {
+	policy := DefaultPolicy()
+	policy.LateBidWindow = 30
+	policy.LateBidExtension = 30
+	return policy
+}
+
 func RunLocalDemo(ctx context.Context, root, listen, committeePublicKey string) error {
 	host, _, err := net.SplitHostPort(listen)
 	if err != nil {
@@ -475,9 +491,9 @@ func RunLocalDemo(ctx context.Context, root, listen, committeePublicKey string) 
 	}
 	if _, err := os.Stat(root); errors.Is(err, os.ErrNotExist) {
 		if committeePublicKey == "" {
-			_, err = InitLocalNetwork(root, DefaultPolicy())
+			_, err = InitLocalNetwork(root, localDemoPolicy())
 		} else {
-			_, err = InitLocalNetworkWithCommittee(root, DefaultPolicy(), committeePublicKey)
+			_, err = InitLocalNetworkWithCommittee(root, localDemoPolicy(), committeePublicKey)
 		}
 		if err != nil {
 			return err
