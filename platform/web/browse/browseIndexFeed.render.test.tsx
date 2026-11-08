@@ -22,6 +22,7 @@ import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { EventFilter } from '@sdk/core/event-store/filter'
 import type { EventStreamItem } from '@sdk/core/event-store/read'
+import type { BrowseIndexFeed } from './browseIndexFeed'
 
 // Query notifications are scheduled through a zero-delay timer by default. In
 // this file they are delivered synchronously, so `act` owns the commit and the
@@ -195,7 +196,7 @@ describe('useBrowseIndexFeed — progressive render', () => {
 		// The stream is held after its first listing: the probe must already show
 		// it (and must not show the one that has not arrived).
 		await act(async () => {
-			await when(() => (queryClient.getQueryData(KEY)?.products.length ?? 0) > 0)
+			await when(() => (queryClient.getQueryData<BrowseIndexFeed>(KEY)?.products.length ?? 0) > 0)
 		})
 		expect(container.textContent).toContain('Handcrafted Ceramic Ball')
 		expect(container.textContent).not.toContain('Ceramic Pour-Over Set')
@@ -205,7 +206,7 @@ describe('useBrowseIndexFeed — progressive render', () => {
 		// Release the marker: the rest of the read lands in the same tree.
 		gate.resolve()
 		await act(async () => {
-			await when(() => (queryClient.getQueryData(KEY)?.eose.length ?? 0) > 0)
+			await when(() => (queryClient.getQueryData<BrowseIndexFeed>(KEY)?.eose.length ?? 0) > 0)
 		})
 		expect(container.textContent).toContain('Handcrafted Ceramic Ball | Ceramic Pour-Over Set')
 	})
@@ -218,15 +219,15 @@ describe('useBrowseIndexFeed — progressive render', () => {
 			root.render(createElement(QueryClientProvider, { client: queryClient }, createElement(Probe)))
 		})
 		await act(async () => {
-			await when(() => (queryClient.getQueryData(KEY)?.products.length ?? 0) > 0)
+			await when(() => (queryClient.getQueryData<BrowseIndexFeed>(KEY)?.products.length ?? 0) > 0)
 		})
 
 		// The partial is the query's data, not a side channel: the key carries it.
-		expect(queryClient.getQueryData(KEY)?.products.map((product) => product.id)).toEqual(['ceramic-ball'])
+		expect(queryClient.getQueryData<BrowseIndexFeed>(KEY)?.products.map((product) => product.id)).toEqual(['ceramic-ball'])
 
 		gate.resolve()
 		await act(async () => {
-			await when(() => (queryClient.getQueryData(KEY)?.eose.length ?? 0) > 0)
+			await when(() => (queryClient.getQueryData<BrowseIndexFeed>(KEY)?.eose.length ?? 0) > 0)
 		})
 	})
 })
