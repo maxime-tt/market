@@ -1816,15 +1816,10 @@ func verifyCashuLockReceipt(state State, actor string, content bidContent, recei
 			return errors.New("Cashu lock proof was already committed to another bid")
 		}
 	}
-	publicBytes, _ := hex.DecodeString(receipt.CommitteePublicKey)
-	publicKey, err := btcec.ParsePubKey(publicBytes)
-	if err != nil {
-		return errors.New("Cashu committee public key is invalid")
-	}
-	signatureBytes, _ := hex.DecodeString(receipt.Signature)
-	signature, err := schnorr.ParseSignature(signatureBytes)
 	digest := cashuReceiptDigest(receipt)
-	if err != nil || !signature.Verify(digest[:], publicKey) {
+	// The application-authority signature over the receipt digest, through the
+	// one shared Schnorr check (verifyFundingSchnorr) the receipt paths all use.
+	if !verifyFundingSchnorr(receipt.Signature, digest[:], receipt.CommitteePublicKey) {
 		return errors.New("Cashu lock receipt signature is invalid")
 	}
 	return nil

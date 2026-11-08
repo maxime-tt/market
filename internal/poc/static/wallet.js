@@ -10654,6 +10654,44 @@ ${e}}` : `{${i.join(",")}}`;
     })))}`;
   }
 
+  // src/sigall.ts
+  var SIGALL_TEMPLATES_SCHEMA = "PlebeianAuctionsPOCSigAllTemplatesV1";
+  var SIGALL_DEPOSIT_SCHEMA = "PlebeianAuctionsPOCSigAllDepositV1";
+  var SIGALL_GOLDEN_BLINDED = [
+    `02${"aa".repeat(32)}`,
+    `03${"bb".repeat(32)}`
+  ];
+  function sigAllDigest(inputSecrets, blinded) {
+    return bytesToHex(sha256(utf8ToBytes(inputSecrets.join("") + blinded.join(""))));
+  }
+  function randomBlindingHex() {
+    return bytesToHex(secp256k1.utils.randomSecretKey());
+  }
+  function sigAllOutputPoint(secret, rHex) {
+    if (!/^[0-9a-f]{64}$/.test(rHex))
+      throw new Error("template output blinding factor must be 32 lowercase hex bytes");
+    const yHex = Bt(new TextEncoder().encode(secret)).toHex(true);
+    const Y = secp256k1.Point.fromHex(yHex);
+    const B_ = Y.add(secp256k1.Point.BASE.multiply(BigInt(`0x${rHex}`)));
+    return bytesToHex(B_.toBytes(true));
+  }
+  function sigAllTemplateDigest(template) {
+    return sigAllDigest(template.inputs.map((input) => input.secret), template.outputs.map((output) => sigAllOutputPoint(output.secret, output.r)));
+  }
+  function buildP2PKOutputSecret(recipient, nonce) {
+    if (!/^0[23][0-9a-f]{64}$/.test(recipient))
+      throw new Error("output recipient must be a compressed secp256k1 key");
+    if (!/^[0-9a-f]{32}$/.test(nonce))
+      throw new Error("output secret nonce must be 16 lowercase hex bytes");
+    return JSON.stringify([
+      "P2PK",
+      { nonce, data: recipient, tags: [["sigflag", "SIG_INPUTS"]] }
+    ]);
+  }
+  function signDigest(digestHex, spendSecretKey) {
+    return bytesToHex(schnorr.sign(hexToBytes(digestHex), spendSecretKey));
+  }
+
   // src/wallet.ts
   function memoryStorage() {
     const map = new Map;
@@ -10889,6 +10927,125 @@ outputs=${outputs.join(",")}`);
         lockedProofs: send,
         spendPublicKey: refundPublicKey
       };
+    }
+    async lockForBidSigAll(amount, committeePublicKey, locktime, onProgress) {
+      const refundPublicKey = this.spendPublicKey();
+      const proofs = this.spendable();
+      if (!proofs.length) {
+        const locked = this.lockedBalance();
+        throw new Error(locked > 0 ? `all ${locked} sats are locked to a previous bid; release them first, or mint more` : "the wallet holds no proofs; mint some first");
+      }
+      if (this.balance() < amount) {
+        const locked = this.lockedBalance();
+        throw new Error(`the wallet holds ${this.balance()} spendable sats${locked > 0 ? ` and ${locked} locked` : ""}, less than the ${amount} needed`);
+      }
+      await this.ensureLoaded();
+      onProgress?.("locking proofs to the bidder and the committee (SIG_ALL)");
+      const spendKeyHex = bytesToHex3(this.spendSecretKey());
+      const ownSuffix = this.spendPublicKey().slice(2);
+      const spendable = proofs.map((proof) => String(proof.secret).includes(ownSuffix) ? Vn([proof], spendKeyHex)[0] : proof);
+      const builder = new Fo().addMainPubkey(xOnly(this.spendPublicKey())).addMainPubkey(xOnly(committeePublicKey)).requireMainSignatures(2).addRefundPubkey(xOnly(refundPublicKey)).requireRefundSignatures(1).sigAll().lockUntil(locktime);
+      const { send, keep } = await this.wallet.send(amount, spendable, {}, {
+        send: { type: "p2pk", options: builder.toOptions() }
+      });
+      this.storage.set("spendable", JSON.stringify(keep ?? []));
+      this.storage.set("locked", JSON.stringify([...this.locked(), ...send]));
+      this.storage.set("lockedUntil", String(locktime));
+      const bindings = send.map((proof) => ({
+        amount: Number(proof.amount),
+        id: proof.id,
+        Y: Bt(new TextEncoder().encode(proof.secret)).toHex(true),
+        C: proof.C,
+        dleq: { e: proof.dleq.e, s: proof.dleq.s, r: proof.dleq.r }
+      }));
+      if (bindings.some((b) => !b.dleq.e || !b.dleq.s || !b.dleq.r)) {
+        throw new Error("the mint returned no DLEQ proof, so the locked value cannot be proven");
+      }
+      const refs = bindings.map((b) => b.Y).sort();
+      const tokenSha256 = await sha256Hex(JSON.stringify(ua(send)));
+      return {
+        proofStateRefs: refs,
+        tokenSha256,
+        refundPublicKey,
+        amount,
+        mintUrl: this.mintUrl,
+        proofs: bindings,
+        lockedProofs: send,
+        spendPublicKey: refundPublicKey,
+        fundingMode: "cashu_sigall_v1"
+      };
+    }
+    async buildOutcomeTemplates(auction, funding) {
+      if (!auction?.id)
+        throw new Error("outcome templates must name an auction");
+      const sellerKey = auction.seller_coco_payment_public_key;
+      if (!/^0[23][0-9a-f]{64}$/.test(sellerKey)) {
+        throw new Error("the auction committed no seller payout key, so settle has no destination");
+      }
+      if (!funding.lockedProofs.length) {
+        throw new Error("outcome templates need the locked proofs");
+      }
+      const spendKey = this.spendSecretKey();
+      const build = (recipient) => {
+        const inputs = funding.lockedProofs.map((proof) => ({
+          amount: Number(proof.amount),
+          id: proof.id,
+          secret: String(proof.secret),
+          C: String(proof.C)
+        }));
+        const outputs = funding.lockedProofs.map((proof) => {
+          const nonce = randomBlindingHex().slice(0, 32);
+          return {
+            amount: Number(proof.amount),
+            id: proof.id,
+            secret: buildP2PKOutputSecret(recipient, nonce),
+            r: randomBlindingHex()
+          };
+        });
+        const unsigned = { inputs, outputs, digest: "", bidder_signature: "" };
+        const digest = sigAllTemplateDigest(unsigned);
+        return { inputs, outputs, digest, bidder_signature: signDigest(digest, spendKey) };
+      };
+      return { settle: build(sellerKey), refund: build(this.spendPublicKey()) };
+    }
+    outcomeTemplateCommitment(deposit, templates, auctionId, bidder) {
+      if (templates.settle.digest !== deposit.settle_digest || templates.refund.digest !== deposit.refund_digest) {
+        throw new Error("the deposit receipt digests do not match the signed templates");
+      }
+      return {
+        outcome_templates: {
+          schema: SIGALL_TEMPLATES_SCHEMA,
+          deposit_id: deposit.deposit_id,
+          settle: { digest: templates.settle.digest, bidder_signature: templates.settle.bidder_signature },
+          refund: { digest: templates.refund.digest, bidder_signature: templates.refund.bidder_signature }
+        },
+        sigall_deposit: {
+          schema: SIGALL_DEPOSIT_SCHEMA,
+          deposit_id: deposit.deposit_id,
+          auction_id: auctionId,
+          bidder,
+          settle_digest: deposit.settle_digest,
+          refund_digest: deposit.refund_digest,
+          signer: deposit.signer,
+          signature: deposit.signature
+        }
+      };
+    }
+    async depositOutcomeTemplates(auction, funding, bidder, lockReceipt, endpoint = "/api/demo/sigall-deposit") {
+      const templates = await this.buildOutcomeTemplates(auction, funding);
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ auction_id: auction.id, bidder, templates, receipt: lockReceipt })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `sigall deposit failed (HTTP ${response.status})`);
+      }
+      if (!data.deposit_id || !data.settle_digest || !data.refund_digest || !data.signer || !data.signature) {
+        throw new Error("the coordinator returned an incomplete sigall deposit receipt");
+      }
+      return this.outcomeTemplateCommitment(data, templates, auction.id, bidder);
     }
     async preauthorizeOutcome(auctionId, proofStateRefs, lockedProofs) {
       if (!auctionId)

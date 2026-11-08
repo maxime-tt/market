@@ -123,6 +123,16 @@ type sigAllDepositRequest struct {
 	AuctionID string                 `json:"auction_id"`
 	Bidder    string                 `json:"bidder"`
 	Templates sigAllDepositTemplates `json:"templates"`
+	// Receipt is the coordinator's own signed cashu_sigall_v1 lock receipt, the
+	// exact object POST /api/demo/mint-lock returned to the wallet. It is public,
+	// non-bearer material (NUT-07 Y references, never a proof), so the wallet can
+	// hand it back and the coordinator verifies its OWN signature rather than
+	// trusting a committed-state lookup. That lookup cannot work on the first
+	// deposit: no lock exists until a bid commits, and a cashu_sigall_v1 bid does
+	// not commit without a deposit. When it is absent the endpoint keeps the
+	// committed-lock lookup as the fallback (a retry posted after the bid
+	// committed).
+	Receipt *CashuLockReceipt `json:"receipt,omitempty"`
 }
 
 // sigAllTemplateSignature is the compact on-chain commitment for one outcome.
@@ -369,6 +379,39 @@ func verifySigAllDeposit(receipt CashuLockReceipt, auction Auction, templates si
 		return "", "", fmt.Errorf("sigall deposit: refund %w", err)
 	}
 	return digests["settle"], digests["refund"], nil
+}
+
+// verifySigAllLockReceiptForDeposit is the coordinator's own check on the lock
+// receipt a bidder posts with a deposit, run before the receipt is used. The
+// receipt is public, non-bearer material the wallet holds from mint-lock, so the
+// coordinator verifies its OWN application-authority signature -- the exact
+// signature over cashuReceiptDigest the bid-admission path verifies, through the
+// same shared helper -- instead of trusting a committed-lock lookup that cannot
+// exist yet. It refuses, naming the rule, when the schema is not the Cashu lock
+// receipt schema, when the receipt is not a cashu_sigall_v1 lock, when it names
+// another auction or bidder, when it is not signed by this authority, or when
+// its signature does not verify.
+func verifySigAllLockReceiptForDeposit(receipt CashuLockReceipt, authority, auctionID, bidder string) error {
+	if receipt.Schema != "PlebeianAuctionsPOCCashuLockV1" {
+		return errors.New("sigall deposit: the provided receipt is not a Cashu lock receipt")
+	}
+	if receipt.FundingMode != FundingModeCashuSigAll {
+		return errors.New("sigall deposit: the provided receipt is not a cashu_sigall_v1 lock")
+	}
+	if receipt.AuctionID != auctionID {
+		return errors.New("sigall deposit: the provided receipt names a different auction")
+	}
+	if receipt.Bidder != bidder {
+		return errors.New("sigall deposit: the provided receipt names a different bidder")
+	}
+	if receipt.CommitteePublicKey != authority {
+		return errors.New("sigall deposit: the provided receipt was not signed by the application authority")
+	}
+	digest := cashuReceiptDigest(receipt)
+	if !verifyFundingSchnorr(receipt.Signature, digest[:], receipt.CommitteePublicKey) {
+		return errors.New("sigall deposit: the provided receipt signature does not verify")
+	}
+	return nil
 }
 
 // verifySigAllBidAdmission is the local-admission (CheckTx) rule for a

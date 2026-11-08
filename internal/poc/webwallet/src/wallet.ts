@@ -101,6 +101,30 @@ export interface LockedBid {
 }
 
 /**
+ * The coordinator's signed cashu_sigall_v1 lock receipt, exactly the object
+ * POST /api/demo/mint-lock returns. The wallet holds it from the lock step and
+ * posts it with the outcome templates so the coordinator can verify its OWN
+ * signature instead of looking the receipt up in committed state -- which
+ * cannot work on the first deposit, because no lock is committed until a bid
+ * commits and a cashu_sigall_v1 bid cannot commit without a deposit.
+ */
+export interface CashuLockReceipt {
+  schema: string;
+  mint_url: string;
+  auction_id: string;
+  bidder: string;
+  amount: number;
+  operation_id: string;
+  token_sha256: string;
+  committee_public_key: string;
+  refund_public_key: string;
+  locktime: number;
+  funding_mode?: string;
+  proof_state_refs?: string[];
+  signature: string;
+}
+
+/**
  * The deterministic message a refund claim signs with the wallet spend key.
  *
  * It binds the bid id and the exact output pubkeys the coordinator will lock
@@ -633,18 +657,24 @@ export class BidderWallet {
    * endpoint, returning the on-chain commitment the bid will carry. The
    * endpoint stores the bearer templates and returns the signed deposit receipt;
    * this method never stores the templates on chain.
+   *
+   * `lockReceipt` is the coordinator's signed cashu_sigall_v1 lock receipt (the
+   * object mint-lock returned). The wallet posts it with the templates so the
+   * coordinator verifies its own signature and binding instead of requiring a
+   * committed lock, which cannot exist before the bid commits.
    */
   async depositOutcomeTemplates(
     auction: { id: string; seller_coco_payment_public_key: string },
     funding: BidFunding,
     bidder: string,
+    lockReceipt: CashuLockReceipt,
     endpoint = "/api/demo/sigall-deposit",
   ): Promise<SigAllBidCommitment> {
     const templates = await this.buildOutcomeTemplates(auction, funding);
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ auction_id: auction.id, bidder, templates }),
+      body: JSON.stringify({ auction_id: auction.id, bidder, templates, receipt: lockReceipt }),
     });
     const data = (await response.json().catch(() => ({}))) as Partial<SigAllDepositReceipt> & { error?: string };
     if (!response.ok) {

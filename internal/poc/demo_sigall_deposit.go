@@ -236,13 +236,17 @@ func sigAllDepositCandidates(snapshot State, auctionID, bidder string) []CashuLo
 }
 
 // demoSigAllDeposit accepts and stores the bidder's two pre-authorized outcome
-// transactions. It looks up the caller's committed lock receipt for the auction,
-// verifies the deposit with the shared verifySigAllDeposit, stores the bearer
-// templates durably under a deterministic deposit id, and returns its own signed
-// deposit receipt. It refuses, naming the rule, when there is no sigall receipt
-// for this auction+bidder, when the auction is closed, when the auction
-// committed no seller payout key, when a rule in verifySigAllDeposit fails, or
-// when a second deposit with different digests already exists.
+// transactions. The lock receipt it verifies against comes from the request body
+// when the wallet posts it (the live ordering), and otherwise from the caller's
+// committed lock for the auction (a retry after the bid committed). It verifies
+// the deposit with the shared verifySigAllDeposit, stores the bearer templates
+// durably under a deterministic deposit id, and returns its own signed deposit
+// receipt. It refuses, naming the rule, when the posted receipt is not a
+// cashu_sigall_v1 lock for this auction and bidder signed by the authority, when
+// there is no receipt for this auction+bidder on the fallback path, when the
+// auction is closed, when the auction committed no seller payout key, when a rule
+// in verifySigAllDeposit fails, or when a second deposit with different digests
+// already exists.
 func (server *APIServer) demoSigAllDeposit(response http.ResponseWriter, request *http.Request) {
 	if !server.legacyInterim || server.manifest.ApplicationAuthority != ApplicationAuthorityLegacy {
 		writeError(response, http.StatusNotFound, errors.New("demo sigall deposit coordinator is available only on a legacy loopback network"))
@@ -279,22 +283,36 @@ func (server *APIServer) demoSigAllDeposit(response http.ResponseWriter, request
 		return
 	}
 
-	// The caller's lock receipt for this auction. A cashu_lock_v1 receipt is
-	// refused here: it carries no SIG_ALL templates.
-	candidates := sigAllDepositCandidates(snapshot, body.AuctionID, body.Bidder)
-	if len(candidates) == 0 {
-		writeError(response, http.StatusUnprocessableEntity, errors.New("sigall deposit: no lock receipt for this auction and bidder"))
-		return
-	}
+	// The lock receipt the deposit is verified against. The preferred source is
+	// the receipt the wallet posts in the body, which the coordinator verifies
+	// itself: that is the only source that exists in the live ordering, because
+	// no committed lock exists until a bid commits and a cashu_sigall_v1 bid does
+	// not commit without a deposit. A cashu_lock_v1 receipt is refused on either
+	// path: it carries no SIG_ALL templates.
 	var sigAllReceipts []CashuLockReceipt
-	for _, candidate := range candidates {
-		if candidate.FundingMode == FundingModeCashuSigAll {
-			sigAllReceipts = append(sigAllReceipts, candidate)
+	if body.Receipt != nil {
+		if err := verifySigAllLockReceiptForDeposit(*body.Receipt, server.demoCommitteePublicKey, body.AuctionID, body.Bidder); err != nil {
+			writeError(response, http.StatusUnprocessableEntity, err)
+			return
 		}
-	}
-	if len(sigAllReceipts) == 0 {
-		writeError(response, http.StatusUnprocessableEntity, errors.New("sigall deposit: lock receipt for this auction and bidder is not a cashu_sigall_v1 lock"))
-		return
+		sigAllReceipts = append(sigAllReceipts, *body.Receipt)
+	} else {
+		// Fallback: a retry posted after the bid committed, found by walking the
+		// committed locks for this auction+bidder.
+		candidates := sigAllDepositCandidates(snapshot, body.AuctionID, body.Bidder)
+		if len(candidates) == 0 {
+			writeError(response, http.StatusUnprocessableEntity, errors.New("sigall deposit: no lock receipt for this auction and bidder"))
+			return
+		}
+		for _, candidate := range candidates {
+			if candidate.FundingMode == FundingModeCashuSigAll {
+				sigAllReceipts = append(sigAllReceipts, candidate)
+			}
+		}
+		if len(sigAllReceipts) == 0 {
+			writeError(response, http.StatusUnprocessableEntity, errors.New("sigall deposit: lock receipt for this auction and bidder is not a cashu_sigall_v1 lock"))
+			return
+		}
 	}
 	if !validCompressedPublicKey(auction.SellerCocoPaymentPublicKey) {
 		writeError(response, http.StatusUnprocessableEntity, errors.New("sigall deposit: auction committed no seller payout key"))

@@ -715,3 +715,200 @@ func TestDemoOutcomeSweeperCashuLockStillCooperative(t *testing.T) {
 		t.Fatalf("cooperative settle content = %+v", content)
 	}
 }
+
+// TestDemoSigAllDepositRefusesPostedReceiptRules pins the checks the coordinator
+// runs on the lock receipt a bidder posts in the deposit body, before it is
+// used: the schema, the cashu_sigall_v1 mode, the auction and bidder binding,
+// and the application-authority signature. Each case re-signs the mutated
+// receipt where the mutation changes signed bytes, so only the rule under test
+// can be the refusal.
+func TestDemoSigAllDepositRefusesPostedReceiptRules(t *testing.T) {
+	t.Parallel()
+	fx := sigAllFixture(t)
+	wallet := newWalletClaim(t)
+	bidderKey := testPrivateKey(t)
+	bidder := actorForKey(bidderKey)
+	inputs, refs := sigAllInputs(t)
+	receipt := sigAllLockReceipt(t, fx.committee, fx.auctionID, bidder, 128, refs, wallet)
+	templates, _ := sigAllDeposit(t, fx.committee, fx.auctionID, bidder, wallet, receipt, inputs, fx.sellerKey.publicKey)
+
+	// resign re-signs a mutated receipt with the authority key, so a case whose
+	// mutation changes signed bytes still fails only on its own binding rule.
+	resign := func(candidate CashuLockReceipt) CashuLockReceipt {
+		digest := cashuReceiptDigest(candidate)
+		signature, err := schnorr.Sign(fx.committee, digest[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		candidate.Signature = hex.EncodeToString(signature.Serialize())
+		return candidate
+	}
+	withSchema := receipt
+	withSchema.Schema = "PlebeianAuctionsPOCNotACashuLock"
+	withMode := receipt
+	withMode.FundingMode = ""
+	withAuction := receipt
+	withAuction.AuctionID = "another-auction"
+	withBidder := receipt
+	withBidder.Bidder = actorForKey(testPrivateKey(t))
+	badSignature := receipt
+	badSignature.Signature = strings.Repeat("c", schnorr.SignatureSize*2)
+
+	cases := []struct {
+		name    string
+		receipt CashuLockReceipt
+		reason  string
+	}{
+		{"schema is not the Cashu lock receipt", resign(withSchema), "not a Cashu lock receipt"},
+		{"receipt is a cashu_lock_v1 lock", resign(withMode), "not a cashu_sigall_v1 lock"},
+		{"receipt names another auction", resign(withAuction), "different auction"},
+		{"receipt names another bidder", resign(withBidder), "different bidder"},
+		{"receipt signature does not verify", badSignature, "signature does not verify"},
+	}
+	server := sigAllDepositServer(t, fx.state, fx.committee, t.TempDir())
+	for _, testCase := range cases {
+		posted := testCase.receipt
+		recorder := postSigAllDeposit(t, server, sigAllDepositRequest{AuctionID: fx.auctionID, Bidder: bidder, Templates: templates, Receipt: &posted})
+		if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), testCase.reason) {
+			t.Fatalf("%s: response = %d %s, want 422 naming %q", testCase.name, recorder.Code, recorder.Body.String(), testCase.reason)
+		}
+	}
+	if _, ok := server.demoSigAllDeposits.findForAuctionBidder(fx.auctionID, bidder); ok {
+		t.Fatal("a refused receipt-carrying deposit was stored")
+	}
+
+	// The same receipt, unmutated, is accepted: the refusals above are the rules
+	// and not a blanket refusal of the body receipt.
+	good := receipt
+	if recorder := postSigAllDeposit(t, server, sigAllDepositRequest{AuctionID: fx.auctionID, Bidder: bidder, Templates: templates, Receipt: &good}); recorder.Code != http.StatusOK {
+		t.Fatalf("valid receipt-carrying deposit status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// TestDemoSigAllDepositLiveOrderingWithoutCommittedLock pins the live ordering
+// the first live end-to-end run broke on. With NO committed lock or bid for the
+// auction+bidder, a deposit that carries the authority-signed cashu_sigall_v1
+// lock receipt in its body is accepted and stored; the bid that then carries
+// outcome_templates + sigall_deposit passes the REAL admission path the live node
+// uses (ValidateForMempool then ApplyTransaction) and commits, and the sweeper
+// then resolves the committed lock through the stored pre-authorized template.
+func TestDemoSigAllDepositLiveOrderingWithoutCommittedLock(t *testing.T) {
+	t.Parallel()
+	fx := sigAllFixture(t)
+	wallet := newWalletClaim(t)
+	bidderKey := testPrivateKey(t)
+	bidder := actorForKey(bidderKey)
+	inputs, refs := sigAllInputs(t)
+	receipt := sigAllLockReceipt(t, fx.committee, fx.auctionID, bidder, 128, refs, wallet)
+	templates, _ := sigAllDeposit(t, fx.committee, fx.auctionID, bidder, wallet, receipt, inputs, fx.sellerKey.publicKey)
+
+	// The defect: nothing is committed for this auction+bidder yet, so a
+	// committed-lock lookup cannot supply the receipt.
+	if len(fx.state.Locks) != 0 || len(fx.state.Bids) != 0 {
+		t.Fatalf("fixture is not empty: locks=%d bids=%d", len(fx.state.Locks), len(fx.state.Bids))
+	}
+
+	mint := newFakeSwapMint(t, []int64{receipt.Amount})
+	current := fx.state
+	var posted []SignedEvent
+	server := &APIServer{
+		manifest: NetworkManifest{
+			ChainID: "legacy", Mode: "remote", ApplicationAuthority: ApplicationAuthorityLegacy,
+			CashuMintURL: mint.server.URL, Policy: DefaultPolicy(),
+		},
+		legacyInterim:          true,
+		demoCommitteeKey:       fx.committee,
+		demoCommitteePublicKey: hex.EncodeToString(fx.committee.PubKey().SerializeCompressed()),
+		demoMintChecker:        &fakeMint{},
+		demoMintKeyset:         NewMintKeySetFetcher(mint.server.URL, 2*time.Second),
+		demoStateSnapshot:      func(context.Context) (State, error) { return current, nil },
+		demoSettlements:        settlementStore{dir: t.TempDir()},
+		demoSigAllDeposits:     sigAllDepositStore{dir: t.TempDir()},
+		demoOutcomePoster: func(_ context.Context, event SignedEvent) error {
+			posted = append(posted, event)
+			return nil
+		},
+	}
+
+	// Step 4 of the live route: the deposit carries the receipt from mint-lock.
+	body := sigAllDepositRequest{AuctionID: fx.auctionID, Bidder: bidder, Templates: templates, Receipt: &receipt}
+	recorder := postSigAllDeposit(t, server, body)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("receipt-carrying deposit status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var depositReceipt sigAllDepositReceipt
+	if err := json.Unmarshal(recorder.Body.Bytes(), &depositReceipt); err != nil {
+		t.Fatal(err)
+	}
+	verifySigAllDepositReceiptSignature(t, depositReceipt)
+	stored, ok := server.demoSigAllDeposits.get(depositReceipt.DepositID)
+	if !ok || stored.Templates.Settle.Digest != templates.Settle.Digest || stored.Templates.Refund.Digest != templates.Refund.Digest {
+		t.Fatalf("the receipt-carrying deposit was not stored (ok=%v)", ok)
+	}
+
+	// Step 5: the bid the wallet publishes carries the compact commitment plus
+	// the coordinator's signed deposit receipt.
+	event := testEvent(t, bidderKey, 1_001, KindBid, bidContent{
+		AuctionID: fx.auctionID, Amount: 128, CashuLock: &receipt,
+		OutcomeTemplates: &sigAllOutcomeTemplates{
+			Schema: SigAllTemplatesSchema, DepositID: depositReceipt.DepositID,
+			Settle: sigAllTemplateSignature{Digest: templates.Settle.Digest, BidderSignature: templates.Settle.BidderSignature},
+			Refund: sigAllTemplateSignature{Digest: templates.Refund.Digest, BidderSignature: templates.Refund.BidderSignature},
+		},
+		SigAllDeposit: &depositReceipt,
+	})
+
+	// The real admission path the live node uses: local admission, then commit.
+	tx := Transaction{Version: TxVersion, Type: "event", Event: &event}
+	if err := ValidateForMempool(fx.state, tx, DefaultPolicy(), fx.seed); err != nil {
+		t.Fatalf("the receipt-backed sigall bid was refused by local admission: %v", err)
+	}
+	next, err := ApplyTransaction(fx.state, tx, 1_001, DefaultPolicy(), fx.seed)
+	if err != nil {
+		t.Fatalf("the receipt-backed sigall bid was refused at commit: %v", err)
+	}
+	if next.Locks[event.ID].SigAllDepositID != depositReceipt.DepositID {
+		t.Fatalf("committed lock deposit id = %q, want %q", next.Locks[event.ID].SigAllDepositID, depositReceipt.DepositID)
+	}
+
+	// The auction closes and the committed lock is the winner, so the sweeper
+	// resolves it through the stored template with no further bidder input.
+	auction := next.Auctions[fx.auctionID]
+	auction.Status = "closed"
+	auction.Winner = bidder
+	auction.LeaderBidID = event.ID
+	next.Auctions[fx.auctionID] = auction
+	lock := next.Locks[event.ID]
+	lock.Status = "winner_selected"
+	next.Locks[event.ID] = lock
+	current = next
+
+	sweeper := newDemoOutcomeSweeper(server, time.Now)
+	if err := sweeper.Step(context.Background()); err != nil {
+		t.Fatalf("sweep step: %v", err)
+	}
+	if mint.swaps != 1 {
+		t.Fatalf("mint saw %d swaps, want 1", mint.swaps)
+	}
+	if len(posted) != 1 {
+		t.Fatalf("posted %d outcome records, want 1", len(posted))
+	}
+	var outcome outcomeContent
+	if err := json.Unmarshal([]byte(posted[0].Content), &outcome); err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Outcome != "settle" || outcome.BidID != event.ID || outcome.AuctionID != fx.auctionID {
+		t.Fatalf("posted outcome = %+v", outcome)
+	}
+	// The parked payout is locked to the seller, so custody never moved to the
+	// coordinator.
+	payout, ok := server.demoSettlements.get(fx.auctionID)
+	if !ok || len(payout) == 0 {
+		t.Fatalf("the payout was not parked (ok=%v)", ok)
+	}
+	for _, proof := range payout {
+		if recipient := p2pkRecipient(t, proof.Secret); recipient != fx.sellerKey.publicKey {
+			t.Fatalf("payout is locked to %s, want the seller key", recipient)
+		}
+	}
+}
