@@ -479,7 +479,7 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 	walletAuthority := "custodial Coco v2 wallet against a Nutshell FakeWallet mint"
 	bidFunding := "application-level custodial reservation; not a mint-enforced lock"
 	if mintBacked {
-		paymentAttestation = "a mint-backed bid's proof references are checked against the mint (NUT-07) before admission, and consensus refuses any reference already bound to another bid; the mint enforces non-double-spend at settlement"
+		paymentAttestation = "a mint-backed bid's proof references are checked against the mint (NUT-07) before admission, and consensus refuses any reference already bound to another bid; the coordinator swaps the winning lock to the seller's key at close, and the mint enforces the NUT-11 condition"
 		walletAuthority = "bidder-held NUT-11 P2PK proofs in the browser; the server never holds a bearer proof"
 		bidFunding = "bidder-held NUT-11 lock to the committee, or an attested custodial reservation on auctions that ask for one"
 	}
