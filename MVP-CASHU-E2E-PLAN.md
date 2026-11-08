@@ -1,6 +1,6 @@
 # MVP: real Cashu sats, end to end, no FROST
 
-Branch `maxime/auctions-mvp-simplify`, HEAD `5edc0b0ce` (working tree dirty, see S0).
+Branch `maxime/auctions-mvp-simplify`, HEAD `f340b1192`. S0–S4 are shipped, committed, deployed and exercised end to end against the live demo: mint-backed bid admission, outbid cooperative refund, seller settlement, and the honesty strings. The "Deliberately not in this MVP" scope below is unchanged.
 
 ## The MVP in one paragraph
 
@@ -45,13 +45,17 @@ swaps at the mint. Four CometBFT validators, deterministic state, no FROST anywh
 
 ### S0 — Make the current tree the baseline
 
-- [ ] Commit the working-tree canary removal as one commit.
-- [ ] Rebuild the bundle: `cd internal/poc/webwallet && /home/admin_maxime/.bun/bin/bun build src/browser.ts --target=browser --format=iife --outfile=../static/wallet.js`.
-- [ ] Do **not** touch `model.go`, consensus validation, or the Caddyfile.
-- [ ] Accept: `export PATH="$HOME/.local/go/bin:$PATH"; GOWORK=off GOTOOLCHAIN=local go build ./...` and `go test ./internal/poc/` green; `grep -c lockedUntil internal/poc/static/wallet.js` ≥ 1; in the browser, Mint 500 → balance 500, no `wallet.lockedUntil is not a function`, Reclaim reports a real locktime instead of throwing.
+**Shipped.** The canary removal is committed; the bundle was rebuilt and `grep -c lockedUntil internal/poc/static/wallet.js` = 5.
+
+- [x] Commit the working-tree canary removal as one commit.
+- [x] Rebuild the bundle: `cd internal/poc/webwallet && /home/admin_maxime/.bun/bin/bun build src/browser.ts --target=browser --format=iife --outfile=../static/wallet.js`.
+- [x] Do **not** touch `model.go`, consensus validation, or the Caddyfile.
+- [x] Accept: `export PATH="$HOME/.local/go/bin:$PATH"; GOWORK=off GOTOOLCHAIN=local go build ./...` and `go test ./internal/poc/` green; `grep -c lockedUntil internal/poc/static/wallet.js` ≥ 1; in the browser, Mint 500 → balance 500, no `wallet.lockedUntil is not a function`, Reclaim reports a real locktime instead of throwing.
 - [ ] Rollback: `git checkout --` the five Go files and `internal/poc/static/wallet.js`.
 
 ### S1 — The locktime rule
+
+**Shipped.** The rule lives in `demo_mint_lock.go` (`expectedLocktime = OriginalEndTime + MaxTotalExtension + EmergencyRecoverySeconds`); live mint-backed bids put `locktime = original_end_time + 2700`.
 
 `static/app.js:574` uses `end_time + 600`, but `end_time` can be pushed to
 `original_end_time + 1800` (`model.go:1186-1195`), so a lock can expire while the
@@ -59,69 +63,85 @@ auction is still live: the bidder reclaims and the leading bid has no backing. S
 the committee keeps its authority after locktime (audit addendum C), a short locktime
 buys the bidder nothing and costs the auction its collateral.
 
-- [ ] `app.js:574` → `original_end_time + max_total_extension + emergency_recovery`,
+- [x] `app.js:574` → `original_end_time + max_total_extension + emergency_recovery`,
   read from `/api/config` (add `max_total_extension_seconds` and
   `emergency_recovery_seconds` in `server.go:451-487`), not hardcoded.
-- [ ] `demo_mint_lock.go:138` → require exactly
+- [x] `demo_mint_lock.go:138` → require exactly
   `OriginalEndTime + Policy.MaxTotalExtension + EmergencyRecoverySeconds`, matching
   the V4 rule at `model.go:1318`. This is off-chain, so tightening is safe.
-- [ ] Leave `model.go:1600` alone: `[end_time, end_time+3600]` already admits
+- [x] Leave `model.go:1600` alone: `[end_time, end_time+3600]` already admits
   `original_end+2700` for every reachable `end_time`.
-- [ ] Accept: place a bid; in `/api/state` the `cashu_locks[...].locktime` equals
+- [x] Accept: place a bid; in `/api/state` the `cashu_locks[...].locktime` equals
   `original_end_time + 2700`; after a late-bid extension, `locktime - end_time` is
   still ≥ 900.
 - [ ] Rollback: revert the two files; old receipts stay valid (the window only widened).
 
 ### S2 — Refund at the moment of being outbid
 
-- [ ] New `internal/poc/demo_mint_spend.go`, route `POST /api/demo/mint-refund`
+**Shipped.** Live proof: `e2e_refund_swap` 12/12 PASS, exit 0 — bid with published outcome authorizations admitted, B outbids A, A's lock `refundable`, A claims the cooperative swap, the returned proofs are SPENDable at the mint.
+
+- [x] New `internal/poc/demo_mint_spend.go`, route `POST /api/demo/mint-refund`
   next to `server.go:327`, legacy-loopback gated like `demoMintLock`.
-- [ ] `model.go` `applyRefund`: if the bid has `CashuTokenSHA256 != ""`, set
+- [x] `model.go` `applyRefund`: if the bid has `CashuTokenSHA256 != ""`, set
   `lock.Status = "refunded"` and issue **no** note. Closes the double-credit bug.
-- [ ] `app.js`: after `refresh()`, for each own bid whose lock is `refundable` and
+- [x] `app.js`: after `refresh()`, for each own bid whose lock is `refundable` and
   whose proofs are still in `localStorage.locked`, call the endpoint, import the
   returned proofs into `spendable`, then submit the signed `KindRefund` event.
-- [ ] Accept: A bids 100, B bids 200. Within one refresh A's spendable balance is
+- [x] Accept: A bids 100, B bids 200. Within one refresh A's spendable balance is
   back to its pre-bid value, `/api/state` shows A's lock `refunded`, the mint reports
   A's old `Y`s `SPENT` and the new ones `UNSPENT`, and A's wallet can spend them.
 - [ ] Rollback: remove the route and file, revert the `applyRefund` branch; locks
   already `refunded` stay refunded, no value moves back.
 ### S3 — Seller settlement at close
 
-- [ ] Same file, `POST /api/demo/mint-settle`. `applyClose` (`model.go:1724-1731`)
+**Shipped.** Live proof: `e2e_settlement_live` 13/13 PASS, exit 0 — winner settles, the lock is `paid`, the seller imports the payout and "SELLER CAN SPEND THE PAYOUT (real spend at the mint)".
+
+- [x] Same file, `POST /api/demo/mint-settle`. `applyClose` (`model.go:1724-1731`)
   stays as is; the money move is off-chain, the state change is a new event.
-- [ ] Add `KindSettle = 28643` (`model.go:25-27`) and a `case` in `applyEvent`
+- [x] Add `KindSettle = 28643` (`model.go:25-27`) and a `case` in `applyEvent`
   (`model.go:925`) that only accepts a `cashu_lock_v1` winner lock in
   `winner_selected` and sets `lock.Status = "paid"`. New `Lock` field
   `CashuPayoutTokenSHA256 string \`json:"cashu_payout_token_sha256,omitempty"\``.
-- [ ] `app.js`: the winner's browser calls the endpoint on refresh when it sees its
+- [x] `app.js`: the winner's browser calls the endpoint on refresh when it sees its
   own lock `winner_selected`, then submits the signed `KindSettle` event.
-- [ ] Accept: A wins at 100; A refreshes; the seller's wallet shows +100 spendable;
+- [x] Accept: A wins at 100; A refreshes; the seller's wallet shows +100 spendable;
   mint: A's old `Y`s `SPENT`, seller's new proofs `UNSPENT`; `/api/state` lock `paid`.
 - [ ] Rollback: remove route, kind and case. A `paid` lock is terminal; do not
   attempt to reverse a completed swap.
 ### S4 — Say only what is true
 
-- [ ] `index.html:20` "certified outbid returns" → "outbid returns, paid the moment
+**Shipped** in `f340b1192`: the served `index.html` and `/api/config` `payment_attestation` now match the build.
+
+- [x] `index.html:20` "certified outbid returns" → "outbid returns, paid the moment
   you are displaced" (true only after S2).
-- [ ] `index.html:34` "The browser automatically imports certified terminal returns
+- [x] `index.html:34` "The browser automatically imports certified terminal returns
   when available." → "When you are outbid, this browser swaps your locked proofs back
   to your own key and imports them." (after S2).
-- [ ] `index.html:52` "New auctions register one bounded payout authorization when
+- [x] `index.html:52` "New auctions register one bounded payout authorization when
   created, so bidders do not need later seller approval." → delete. It describes the
   R20 path, which this deployment does not run (`browser_threshold_*_ready: false`).
-- [ ] `/api/config` `payment_attestation` (`server.go:442`): drop "the mint enforces
+- [x] `/api/config` `payment_attestation` (`server.go:442`): drop "the mint enforces
   non-double-spend at settlement" until S3 lands, then say "the coordinator swaps the
   winning lock to the seller's key at close; the mint enforces the NUT-11 condition".
   `bid_funding` (`server.go:444`): drop "or an attested custodial reservation on
   auctions that ask for one" once no live auction uses it.
-- [ ] The DLEQ sentence: keep "the mint returned no DLEQ proof, so the locked value
+- [x] The DLEQ sentence: keep "the mint returned no DLEQ proof, so the locked value
   cannot be proven" (`wallet.ts:230`) — it is true — but stop implying admission
   re-checks it. Admission checks NUT-07 only; DLEQ is checked by the coordinator
   before it signs (`demo_mint_lock.go:187`).
-- [ ] Accept: `curl -s https://auctions.playday.it/api/config | grep -i attestation`
+- [x] Accept: `curl -s https://auctions.playday.it/api/config | grep -i attestation`
   matches the new text; no page string promises a mechanism that is not in the build.
 - [ ] Rollback: revert the strings; they carry no state.
+
+### Shipped outside this slice list (the bridge)
+
+The bidder now **publishes its outcome authorizations with the bid** (`e0bf1b2e7`): admission
+hard-requires the bid-time refund+settle authorizations, and the coordinator verifies the
+terminal claim against the frozen V2 message (`demo_mint_spend.go`). `refundBid` in the browser
+wallet was moved to the same V2 claim (`edc4de234`).
+
+**Still open, deliberately:** the outcome sweeper cannot settle a real lock on its own, because
+that needs the bidder's bearer proofs deposited with the server, which the server never holds.
 
 ## The cooperative spend (one primitive, two modes)
 
