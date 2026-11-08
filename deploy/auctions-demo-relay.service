@@ -1,0 +1,12 @@
+[Unit]
+Description=Plebeian Auctions demo Nostr relay (nak serve, loopback, in-memory)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/admin_maxime/.local/bin/nak serve --hostname 127.0.0.1 --port 7777
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
