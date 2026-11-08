@@ -136,16 +136,20 @@ func demoOutcomeTargets(state State) []demoOutcomeTarget {
 	for _, lock := range state.Locks {
 		switch lock.Status {
 		case "winner_selected":
-			if lock.SettleAuthorization == "" {
+			// A sigall lock is resolvable once its deposit is named; a cashu_lock
+			// lock needs the wallet-spend-key settle authorization as before.
+			if lock.SettleAuthorization == "" && lock.SigAllDepositID == "" {
 				continue
 			}
 			auction, ok := state.Auctions[lock.AuctionID]
-			if !ok || auction.Status != "closed" || auction.FundingMode != FundingModeCashuLock || auction.LeaderBidID != lock.BidID {
+			if !ok || auction.Status != "closed" ||
+				(auction.FundingMode != FundingModeCashuLock && auction.FundingMode != FundingModeCashuSigAll) ||
+				auction.LeaderBidID != lock.BidID {
 				continue
 			}
 			targets = append(targets, demoOutcomeTarget{bidID: lock.BidID, outcome: "settle"})
 		case "refundable":
-			if lock.RefundAuthorization == "" {
+			if lock.RefundAuthorization == "" && lock.SigAllDepositID == "" {
 				continue
 			}
 			targets = append(targets, demoOutcomeTarget{bidID: lock.BidID, outcome: "refund"})
@@ -183,10 +187,13 @@ func (sweeper *demoOutcomeSweeper) Step(ctx context.Context) error {
 		}
 		proofs, haveProofs := sweeper.server.demoOutcomeProofs.get(target.bidID)
 		parkKey := demoOutcomeParkKey(lock, target.outcome)
-		if _, parked := sweeper.server.demoSettlements.get(parkKey); !haveProofs && !parked {
+		if _, parked := sweeper.server.demoSettlements.get(parkKey); !haveProofs && !parked && lock.SigAllDepositID == "" {
 			// Nothing to act on yet: the bidder has not deposited the bearer
 			// proofs and no payout was produced on an earlier attempt. Not an
-			// error -- it is the expected state until one of those arrives.
+			// error -- it is the expected state until one of those arrives. A
+			// sigall lock is different: it names its deposit, so it always
+			// proceeds to resolve, which refuses (deterministically) when the
+			// deposit it names is not stored.
 			continue
 		}
 		if err := sweeper.resolve(ctx, state, lock, target.outcome, proofs); err != nil {
@@ -226,31 +233,58 @@ func (sweeper *demoOutcomeSweeper) resolve(ctx context.Context, state State, loc
 	if !ok {
 		return fmt.Errorf("%w: committed receipt is missing", errDemoOutcomePermanent)
 	}
-	// The stored authorization must be a signature by the lock's own wallet
-	// spend key over the consent message for this exact committed proof set, so
-	// the coordinator never acts on a lock whose authorization names a different
-	// outcome or a different proof set.
+	// A cashu_sigall_v1 lock is authorized by the templates the bidder deposited;
+	// the coordinator submits exactly one of them and constructs nothing. A
+	// cashu_lock_v1 lock is authorized by the wallet-spend-key consent signature
+	// stored on the lock, over the consent message for this exact committed proof
+	// set, so the coordinator never acts on a lock whose authorization names a
+	// different outcome or a different proof set.
+	sigAll := receipt.FundingMode == FundingModeCashuSigAll
 	var recipient string
-	switch outcome {
-	case "settle":
-		auction, ok := state.Auctions[lock.AuctionID]
-		if !ok {
-			return fmt.Errorf("%w: settle names no auction", errDemoOutcomePermanent)
+	if sigAll {
+		if lock.SigAllDepositID == "" {
+			return fmt.Errorf("%w: sigall lock names no deposit", errDemoOutcomePermanent)
 		}
-		if err := demoMintVerifySettleOwnership(lock.AuctionID, receipt.ProofStateRefs, receipt.RefundPublicKey, lock.SettleAuthorization); err != nil {
-			return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+		switch outcome {
+		case "settle":
+			auction, ok := state.Auctions[lock.AuctionID]
+			if !ok {
+				return fmt.Errorf("%w: settle names no auction", errDemoOutcomePermanent)
+			}
+			recipient = auction.SellerCocoPaymentPublicKey
+			if !validCompressedPublicKey(recipient) {
+				return fmt.Errorf("%w: auction committed no seller wallet payout key", errDemoOutcomePermanent)
+			}
+		case "refund":
+			recipient = receipt.RefundPublicKey
+			if !validCompressedPublicKey(recipient) {
+				return fmt.Errorf("%w: receipt committed no wallet spend key", errDemoOutcomePermanent)
+			}
+		default:
+			return fmt.Errorf("%w: unknown outcome %q", errDemoOutcomePermanent, outcome)
 		}
-		recipient = auction.SellerCocoPaymentPublicKey
-		if !validCompressedPublicKey(recipient) {
-			return fmt.Errorf("%w: auction committed no seller wallet payout key", errDemoOutcomePermanent)
+	} else {
+		switch outcome {
+		case "settle":
+			auction, ok := state.Auctions[lock.AuctionID]
+			if !ok {
+				return fmt.Errorf("%w: settle names no auction", errDemoOutcomePermanent)
+			}
+			if err := demoMintVerifySettleOwnership(lock.AuctionID, receipt.ProofStateRefs, receipt.RefundPublicKey, lock.SettleAuthorization); err != nil {
+				return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+			}
+			recipient = auction.SellerCocoPaymentPublicKey
+			if !validCompressedPublicKey(recipient) {
+				return fmt.Errorf("%w: auction committed no seller wallet payout key", errDemoOutcomePermanent)
+			}
+		case "refund":
+			if _, err := demoMintVerifyRefundOwnership(lock.AuctionID, receipt.ProofStateRefs, receipt.RefundPublicKey, lock.RefundAuthorization); err != nil {
+				return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+			}
+			recipient = receipt.RefundPublicKey
+		default:
+			return fmt.Errorf("%w: unknown outcome %q", errDemoOutcomePermanent, outcome)
 		}
-	case "refund":
-		if _, err := demoMintVerifyRefundOwnership(lock.AuctionID, receipt.ProofStateRefs, receipt.RefundPublicKey, lock.RefundAuthorization); err != nil {
-			return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
-		}
-		recipient = receipt.RefundPublicKey
-	default:
-		return fmt.Errorf("%w: unknown outcome %q", errDemoOutcomePermanent, outcome)
 	}
 
 	parkKey := demoOutcomeParkKey(lock, outcome)
@@ -266,19 +300,40 @@ func (sweeper *demoOutcomeSweeper) resolve(ctx context.Context, state State, loc
 		return sweeper.postOutcome(ctx, lock, outcome, digest)
 	}
 
-	// First attempt: the bearer proofs must be exactly the committed set and
-	// must cover the lock. This also rejects a deposit that does not match.
-	if err := demoMintVerifyProofSet(receipt, proofs, lock.Amount); err != nil {
-		return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
-	}
-	// The mint must still see every proof as unspent. Fail closed: a spent proof
-	// outside our own durable payout means the value already moved elsewhere.
-	if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
-		return err
-	}
-	fresh, err := server.demoMintCooperativeSpend(ctx, proofs, recipient)
-	if err != nil {
-		return err
+	var fresh []demoMintSpentProof
+	var err error
+	if sigAll {
+		// The bearer templates are the only source of the transaction; a missing
+		// deposit is a deterministic refusal, not a retry.
+		deposit, ok := server.demoSigAllDeposits.get(lock.SigAllDepositID)
+		if !ok {
+			return fmt.Errorf("%w: no stored deposit for the sigall lock", errDemoOutcomePermanent)
+		}
+		// The mint must still see every proof as unspent. Fail closed: a spent
+		// proof outside our own durable payout means the value already moved.
+		if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
+			return err
+		}
+		fresh, err = server.demoMintSigAllSpend(ctx, receipt, deposit, outcome)
+		if err != nil {
+			return err
+		}
+	} else {
+		// First attempt: the bearer proofs must be exactly the committed set and
+		// must cover the lock. This also rejects a deposit that does not match.
+		if err := demoMintVerifyProofSet(receipt, proofs, lock.Amount); err != nil {
+			return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+		}
+		// The mint must still see every proof as unspent. Fail closed: a spent
+		// proof outside our own durable payout means the value already moved
+		// elsewhere.
+		if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
+			return err
+		}
+		fresh, err = server.demoMintCooperativeSpend(ctx, proofs, recipient)
+		if err != nil {
+			return err
+		}
 	}
 	digest, err := demoPayoutTokenDigest(fresh)
 	if err != nil {

@@ -2082,7 +2082,12 @@ func applyOutcomeRecord(state *State, actor string, content outcomeContent) erro
 		if lock.Status != "winner_selected" {
 			return fmt.Errorf("winning lock is %q, not winner_selected", lock.Status)
 		}
-		if lock.SettleAuthorization == "" {
+		// A cashu_lock_v1 lock is authorized by the bidder's wallet spend-key
+		// consent signature; a cashu_sigall_v1 lock is authorized by the
+		// SIG_ALL outcome templates the bidder deposited at bid time, so the
+		// deposited id stands in for that signature. In both cases a lock with
+		// neither cannot be resolved.
+		if lock.SettleAuthorization == "" && lock.SigAllDepositID == "" {
 			return errors.New("winning bid holds no settle authorization")
 		}
 		lock.Status = "paid"
@@ -2091,7 +2096,7 @@ func applyOutcomeRecord(state *State, actor string, content outcomeContent) erro
 		if lock.Status != "refundable" {
 			return fmt.Errorf("lock is %q, not refundable", lock.Status)
 		}
-		if lock.RefundAuthorization == "" {
+		if lock.RefundAuthorization == "" && lock.SigAllDepositID == "" {
 			return errors.New("bid holds no refund authorization")
 		}
 		lock.Status = "refunded"
