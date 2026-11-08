@@ -17,7 +17,6 @@ import { orders } from './libraries/orders'
 import { products } from './libraries/products'
 import { settings } from './libraries/settings'
 import { storefront } from './libraries/storefront'
-import { theme } from './libraries/theme'
 import { shared } from './libraries/shared'
 import { wallet } from './libraries/wallet'
 import { browse } from './libraries/browse'
@@ -62,7 +61,6 @@ export const libraries: WidgetLibrary[] = [
 	settings,
 	shared,
 	storefront,
-	theme,
 	wallet,
 	browse,
 	wrappers,

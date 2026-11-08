@@ -26,9 +26,6 @@ is not a `ui/` component (ADR-0007 §1b).
   widget needs data, pass a literal.
 - New libraries are registered in `libraries.ts` and get a Playwright spec.
 - Keep the harness dependency-free beyond what the repo already installs.
-- Scope: this catalogue covers `ui/` components. A component relocated whole
-  into `platform/web/<feature>/` is out of scope and owes no entry or spec here;
-  it owes both only if later promoted to `ui/` (ADR-0007 §2c relaxation).
 
 ## Layout
 

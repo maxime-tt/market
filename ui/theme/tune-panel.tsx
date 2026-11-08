@@ -25,10 +25,10 @@ export interface TunePanelProps {
  */
 export function TunePanel({ value, onChange, onReset, onSurprise, onExport, className }: TunePanelProps) {
 	return (
-		<section data-slot="tune-panel" className={cn('rounded-xl border bg-surface-raised p-4 text-text-high shadow-sm', className)}>
+		<section data-slot="tune-panel" className={cn('rounded-xl border bg-card p-4 text-card-foreground shadow-sm', className)}>
 			<header className="mb-3">
 				<h2 className="text-sm font-semibold">Make it yours</h2>
-				<p className="text-xs text-text-mid">Small changes, big personality</p>
+				<p className="text-xs text-muted-foreground">Small changes, big personality</p>
 			</header>
 
 			<div className="grid gap-3 sm:grid-cols-2">
@@ -38,7 +38,7 @@ export function TunePanel({ value, onChange, onReset, onSurprise, onExport, clas
 						<div key={control.key} className="block">
 							<div className="flex items-center justify-between text-xs font-medium">
 								<label htmlFor={id}>{control.label}</label>
-								<span className="text-text-mid tabular-nums">{value[control.key]}</span>
+								<span className="text-muted-foreground tabular-nums">{value[control.key]}</span>
 							</div>
 							<input
 								id={id}
@@ -51,7 +51,7 @@ export function TunePanel({ value, onChange, onReset, onSurprise, onExport, clas
 								onChange={(event) => onChange({ ...value, [control.key]: Number(event.target.value) })}
 								className="mt-1 w-full accent-primary"
 							/>
-							<div className="flex justify-between text-[10px] text-text-mid">
+							<div className="flex justify-between text-[10px] text-muted-foreground">
 								<span>{control.ends[0]}</span>
 								<span>{control.ends[1]}</span>
 							</div>

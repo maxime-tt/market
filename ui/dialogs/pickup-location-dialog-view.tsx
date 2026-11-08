@@ -141,14 +141,14 @@ export function PickupLocationDialogView({
 							{locations.map((location, index) => (
 								<div key={index} className="p-2 bg-surface-sunken rounded-md">
 									<p className="font-medium text-text-high">{location.name}</p>
-									<p className="text-text-mid text-xs">{location.address}</p>
+									<p className="text-muted-foreground text-xs">{location.address}</p>
 								</div>
 							))}
 						</div>
 					)}
 
 					{!hasMultipleLocations && locations[0] && (
-						<div className="text-sm text-text-mid">
+						<div className="text-sm text-muted-foreground">
 							<p className="font-medium text-text-high mb-1">{locations[0].name}</p>
 							<p>{locations[0].address}</p>
 						</div>
@@ -160,11 +160,13 @@ export function PickupLocationDialogView({
 								<Spinner className="w-8 h-8" />
 							</div>
 						) : error ? (
-							<div className="h-full w-full flex items-center justify-center bg-surface-sunken text-text-mid text-sm">{error}</div>
+							<div className="h-full w-full flex items-center justify-center bg-surface-sunken text-muted-foreground text-sm">{error}</div>
 						) : geocodedLocations.length > 0 ? (
 							<div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
 						) : (
-							<div className="h-full w-full flex items-center justify-center bg-surface-sunken text-text-mid text-sm">Loading map...</div>
+							<div className="h-full w-full flex items-center justify-center bg-surface-sunken text-muted-foreground text-sm">
+								Loading map...
+							</div>
 						)}
 					</div>
 				</div>
