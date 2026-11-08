@@ -535,3 +535,44 @@ func TestCheckTxRefusesLegacyRefundOfMintBackedBid(t *testing.T) {
 		}
 	}
 }
+
+// TestDemoMintRefundServesAPayoutTheSweeperAlreadyReturned pins the offline
+// collection path. When the background sweeper refunds a displaced lock while
+// the bidder is away it parks the payout under the bid id and commits the
+// outcome; the bidder's later claim must collect that payout rather than ask
+// for a second swap, which the mint would refuse because the inputs are spent.
+func TestDemoMintRefundServesAPayoutTheSweeperAlreadyReturned(t *testing.T) {
+	t.Parallel()
+	state, _, committee, bidder, bidID, secrets, amounts := refundableCashuFixture(t)
+	lock := state.Locks[bidID]
+	lock.Status = "refunded"
+	state.Locks[bidID] = lock
+	mint := newFakeSwapMint(t, amounts)
+	server := refundServer(t, state, committee, mint)
+	server.demoSettlements = settlementStore{dir: t.TempDir()}
+	parked := make([]demoMintSpentProof, 0, len(amounts))
+	for index, amount := range amounts {
+		parked = append(parked, demoMintSpentProof{
+			Amount: amount, KeysetID: mint.keysetID, Secret: secrets[index],
+			C: hex.EncodeToString(testPrivateKey(t).PubKey().SerializeCompressed()),
+		})
+	}
+	if err := server.demoSettlements.put(bidID, parked); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := postRefund(t, server, refundBody(t, refundTestAuction, bidID, refundProofs(t, secrets, amounts, mint.keysetID), refundEvent(t, bidder, bidID), newWalletClaim(t)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("collecting a swept refund response = %d %s", recorder.Code, recorder.Body.String())
+	}
+	var response demoMintRefundResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Proofs) != len(parked) {
+		t.Fatalf("returned %d proofs, want the %d parked ones", len(response.Proofs), len(parked))
+	}
+	if mint.swaps != 0 {
+		t.Fatalf("collecting a swept refund caused %d mint swap(s), want 0", mint.swaps)
+	}
+}

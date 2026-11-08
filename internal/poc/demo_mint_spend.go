@@ -803,6 +803,17 @@ func (server *APIServer) demoMintRefund(response http.ResponseWriter, request *h
 		writeError(response, http.StatusForbidden, errors.New("refund authorization signer is not the lock's bidder"))
 		return
 	}
+	// A refund the coordinator already performed -- the background sweeper acts
+	// when the bidder is offline -- is parked under the bid id. The bidder
+	// collects it later; the authorization above is the same one this endpoint
+	// would require, and the parked proofs are P2PK-locked to the bidder's own
+	// committed refund key, so handing them over returns nothing the caller
+	// does not already own. Swapping again is impossible anyway: those inputs
+	// are spent at the mint.
+	if parked, ok := server.demoSettlements.get(body.BidID); ok && lock.Status == "refunded" {
+		writeJSON(response, http.StatusOK, demoMintRefundResponse{Proofs: parked})
+		return
+	}
 	if lock.Status != "refundable" {
 		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("bid lock is %q, not refundable", lock.Status))
 		return
