@@ -107,8 +107,14 @@
         <label class="inline-label">Mint <input id="bidder-mint-amount" type="number" min="1" value="500" inputmode="numeric"></label>
         <button id="bidder-mint" class="button primary" type="button">Mint fake sats</button>
         <button id="bidder-claim" class="button ghost" type="button">Claim refunds</button>
+        <button id="bidder-claim-all" class="button ghost" type="button">Claim all</button>
         <button id="bidder-settle" class="button ghost" type="button">Settle won auction</button>
         <span id="bidder-status" class="status" role="status" aria-live="polite"></span>
+      </div>
+
+      <div class="card inline-card" id="bidder-refund-note" hidden>
+        <p id="bidder-refund-text" class="fine"></p>
+        <button id="bidder-claim-inline" class="button primary" type="button">Claim refund</button>
       </div>
 
       <div class="card">

@@ -352,6 +352,20 @@ export class BidderWallet {
     return this.readLockedBids()[bidId]?.proofs ?? [];
   }
 
+  /**
+   * The bid ids this browser still holds locked proofs for, and the auction
+   * each belongs to. The page needs this to tell "you still have money tied up
+   * in a bid" from "your wallet is simply empty", which are different problems
+   * for the person using it.
+   */
+  lockedBidIds(): Array<{ bidId: string; auctionId?: string; amount: number }> {
+    return Object.entries(this.readLockedBids()).map(([bidId, locked]) => ({
+      bidId,
+      ...(locked.auctionId ? { auctionId: locked.auctionId } : {}),
+      amount: (locked.proofs ?? []).reduce((total, proof) => total + Number(proof.amount), 0),
+    }));
+  }
+
   // cashu-ts carries Proof.amount as a string, so these must coerce: `0 + "128"`
   // is "0128", and a balance that silently becomes a string breaks every
   // comparison against it.

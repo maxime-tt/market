@@ -449,6 +449,43 @@
   }
 
   /**
+   * The two operations that make a bidder's money usable again, in one place.
+   *
+   * A bidder whose bid was displaced has proofs that consensus says are
+   * refundable but that its own wallet still counts as locked. Claiming is a
+   * separate step from the outcome: the coordinator may have already returned
+   * the proofs (and parked them), and the wallet only stops counting them as
+   * locked once the collection succeeds. Running "claim all" then "settle"
+   * covers both halves so a person does not have to know which applies.
+   */
+  async function claimAndSettle(identity) {
+    const claimed = await claimRefunds(identity, false);
+    const settled = await settleWins(identity, false);
+    renderBidder();
+    return { claimed, settled };
+  }
+
+  /**
+   * Whether this identity still has money tied up in a bid, and whether the
+   * coordinator has already returned it. A person who was outbid and wants to
+   * bid again needs to know which of the two it is: "still competing" cannot be
+   * released early (a bidder may not exit its own bid), "already returned"
+   * only needs collecting.
+   */
+  function outstandingLocks(identity) {
+    const locks = state.view?.state?.locks || {};
+    let active = 0;
+    let collectable = 0;
+    for (const { bidId } of identity.wallet.lockedBidIds()) {
+      const lock = locks[bidId];
+      const status = lock?.status;
+      if (status === "refundable" || status === "refunded") collectable += 1;
+      else active += 1;
+    }
+    return { active, collectable };
+  }
+
+  /**
    * The winner's half of settlement. When this tab's own lock is
    * `winner_selected`, it hands the proofs to the coordinator, which swaps them
    * to the SELLER's committed wallet key, and then records the outcome as a kind
@@ -710,11 +747,51 @@
     $("bidder-mint").disabled = state.busy.has("mint") || !mintBacked();
     $("bidder-claim").disabled = state.busy.has("claim") || !mintBacked();
     $("bidder-settle").disabled = state.busy.has("settle") || !mintBacked();
-    renderBidderAuctions(identity);
+    // "Claim all" is only offered when the coordinator has actually returned
+    // something: a disabled control that does nothing is worse than none.
+    const outstanding = outstandingLocks(identity);
+    $("bidder-claim-all").disabled = state.busy.has("claim-all") || !mintBacked() || outstanding.collectable === 0;
+    $("bidder-claim-all").title = outstanding.collectable === 0
+      ? "Nothing has been returned to this wallet yet."
+      : `${outstanding.collectable} returned bid(s) waiting to be collected.`;
+    renderBidderRefundNote(identity, outstanding);
+    renderBidderAuctions(identity, { spendable, locked });
     renderBidderPositions(identity);
   }
 
-  function renderBidderAuctions(identity) {
+  /**
+   * Next to the money controls, say what the bidder's situation actually is.
+   * The person hitting "funds are not refreshing" needs to be told which of the
+   * two situations they are in, because only one of them is collectable: a bid
+   * still in the running cannot be released early (a bidder may not exit its own
+   * bid), while a displaced bid's money is already theirs to claim.
+   */
+  function renderBidderRefundNote(identity, outstanding) {
+    const note = $("bidder-refund-note");
+    const text = $("bidder-refund-text");
+    const button = $("bidder-claim-inline");
+    if (!mintBacked()) {
+      note.hidden = true;
+      return;
+    }
+    if (outstanding.collectable > 0) {
+      note.hidden = false;
+      text.textContent = `${sats(identity.wallet.lockedBalance())} is held for ${outstanding.collectable} bid(s) the coordinator has already returned. Claim it to make it spendable again.`;
+      button.hidden = false;
+      button.disabled = state.busy.has("claim-all");
+      return;
+    }
+    if (outstanding.active > 0) {
+      note.hidden = false;
+      text.textContent = `${sats(identity.wallet.lockedBalance())} is locked in ${outstanding.active} live bid(s). That money cannot be released early — only being outbid, or the post-locktime refund, returns it. Mint more to raise your position.`;
+      button.hidden = true;
+      return;
+    }
+    note.hidden = true;
+  }
+
+  function renderBidderAuctions(identity, balances = { spendable: 0, locked: 0 }) {
+    const { spendable = 0, locked = 0 } = balances;
     const target = $("bidder-auctions");
     const active = document.activeElement;
     if (active && active.closest && active.closest("#bidder-auctions") && active.tagName === "INPUT") {
@@ -755,8 +832,20 @@
       const button = el("button", "button primary", "Bid");
       button.type = "button";
       const own = auction.seller === identity.actor;
-      button.disabled = own || minimum === null || !mintBacked() || state.busy.has(`bid:${auction.id}`);
+      // The bid button must refuse when the wallet cannot cover the amount on
+      // screen, and say which remedy applies. A bidder whose money was already
+      // returned is told to claim it; one whose money is still in a live bid is
+      // told the truth -- that commitment cannot be released early.
+      const affordable = spendable >= (minimum ?? 0);
+      button.disabled = own || minimum === null || !mintBacked() || !affordable || state.busy.has(`bid:${auction.id}`);
       if (own) button.textContent = "Your auction";
+      else if (!affordable) button.textContent = "Not enough sats";
+      if (!own && !affordable && minimum !== null) {
+        const outstanding = outstandingLocks(identity);
+        row.append(el("p", "fine", outstanding.collectable > 0
+          ? `This wallet holds ${sats(spendable)} spendable and ${sats(locked)} already returned. Claim it first, or mint more.`
+          : `This wallet holds ${sats(spendable)} spendable and ${sats(locked)} locked in live bids. That commitment cannot be released early; mint more to raise your position.`));
+      }
       button.onclick = async () => {
         const parsed = ui.bidAmount(input.value, minimum);
         if (!parsed.ok) { toast(parsed.reason, "error"); return; }
@@ -817,7 +906,12 @@
         detail = "Locked to the committee. The bidder holds the proofs but cannot spend them until the lock resolves.";
       }
       row.append(el("p", "fine", detail));
-      if (status === "refundable" && identity.wallet.lockedForBid(bid.id).length) {
+      // "refunded" means the coordinator already returned the money and parked
+      // it; the wallet still counts those proofs as locked until this claim runs,
+      // so both states need the same control. Offering it only for "refundable"
+      // is what left a returned bid looking like it was still holding funds.
+      const awaitingCollection = (status === "refundable" || status === "refunded") && identity.wallet.lockedForBid(bid.id).length;
+      if (awaitingCollection) {
         const claim = el("button", "button ghost", "Claim refund");
         claim.type = "button";
         claim.disabled = state.busy.has(`claim:${bid.id}`);
@@ -1164,6 +1258,27 @@
         renderBidder();
       }
     });
+    const claimAll = async (button) => {
+      if (state.busy.has("claim-all")) return;
+      state.busy.add("claim-all");
+      const previous = button.textContent;
+      button.disabled = true;
+      button.textContent = "Claiming…";
+      try {
+        const { claimed } = await claimAndSettle(currentBidder());
+        if (claimed) toast(`Claimed ${claimed} returned bid(s) into this wallet.`, "success");
+        else setBidderStatus("Nothing has been returned to this wallet yet.");
+      } catch (error) {
+        toast(error.message, "error");
+        setBidderStatus(error.message);
+      } finally {
+        state.busy.delete("claim-all");
+        button.textContent = previous;
+        renderBidder();
+      }
+    };
+    $("bidder-claim-all").addEventListener("click", () => claimAll($("bidder-claim-all")));
+    $("bidder-claim-inline").addEventListener("click", () => claimAll($("bidder-claim-inline")));
     $("bidder-settle").addEventListener("click", async () => {
       if (state.busy.has("settle")) return;
       state.busy.add("settle");

@@ -10854,6 +10854,13 @@ outputs=${outputs.join(",")}`);
     lockedForBid(bidId) {
       return this.readLockedBids()[bidId]?.proofs ?? [];
     }
+    lockedBidIds() {
+      return Object.entries(this.readLockedBids()).map(([bidId, locked]) => ({
+        bidId,
+        ...locked.auctionId ? { auctionId: locked.auctionId } : {},
+        amount: (locked.proofs ?? []).reduce((total, proof) => total + Number(proof.amount), 0)
+      }));
+    }
     balance() {
       return this.spendable().reduce((total, proof) => total + Number(proof.amount), 0);
     }
