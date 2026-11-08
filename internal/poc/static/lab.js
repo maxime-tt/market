@@ -26,6 +26,7 @@
     },
     busy: new Set(),
     drafts: new Map(),
+    settlementAttempts: new Map(),
     lastRefresh: 0,
     refreshPromise: null,
   };
@@ -287,7 +288,7 @@
       cashu_lock: receipt,
     });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
-    wallet.recordLockedBid(signed.id, funding.lockedProofs, funding.spendPublicKey);
+    wallet.recordLockedBid(signed.id, funding.lockedProofs, funding.spendPublicKey, auction.id);
     setBidderStatus(`Bid committed at height ${result.height}.`);
     toast(`Bid of ${sats(amount)} committed at height ${result.height}.`, "success");
     await refresh();
@@ -320,6 +321,98 @@
       setBidderStatus("No refundable bid with locally held proofs was found.");
     }
     return claimed;
+  }
+
+  /**
+   * The winner's half of settlement. When this tab's own lock is
+   * `winner_selected`, it hands the proofs to the coordinator, which swaps them
+   * to the SELLER's committed wallet key, and then records the outcome as a kind
+   * 28643 event. The swap is the money; the event is only the record, so a
+   * failed post is reported and retried on a later refresh, never treated as a
+   * lost payment.
+   *
+   * Two events, deliberately: the authorization event is signed before the swap
+   * and is never committed (exactly like a refund), because the payout digest it
+   * would have to carry does not exist until the swap returns.
+   */
+  async function settleWins(identity, manual = false) {
+    if (!mintBacked()) return 0;
+    const wallet = identity.wallet;
+    const auctions = Object.values(state.view?.state?.auctions || {});
+    const locks = state.view?.state?.locks || {};
+    let settled = 0;
+    for (const auction of auctions) {
+      if (auction.status !== "closed" || auction.winner !== identity.actor) continue;
+      if (auction.funding_mode !== "cashu_lock_v1") continue;
+      const lock = locks[auction.leader_bid_id];
+      if (!lock || lock.status !== "winner_selected") continue;
+      if (!wallet.lockedForBid(auction.leader_bid_id).length) continue;
+      const last = state.settlementAttempts.get(auction.id) || 0;
+      if (!manual && Date.now() - last < 15000) continue;
+      state.settlementAttempts.set(auction.id, Date.now());
+      try {
+        const authorization = await sign(identity, 28643, [["e", auction.id]], { auction_id: auction.id, bid_id: auction.leader_bid_id });
+        const result = await wallet.settleAuction(auction.id, authorization);
+        settled += 1;
+        state.settlementAttempts.delete(auction.id);
+        try {
+          const record = await sign(identity, 28643, [["e", auction.id]], {
+            auction_id: auction.id,
+            bid_id: auction.leader_bid_id,
+            payout_token_sha256: result.tokenSha256,
+          });
+          await api("/api/event", { method: "POST", body: JSON.stringify(record) });
+        } catch (error) {
+          if (manual) toast(`Settled ${sats(result.amount)} to the seller, but the record did not commit: ${error.message}`, "error");
+        }
+        if (manual) toast(`Settled ${short(auction.id)}: ${sats(result.amount)} fake sats paid to the seller's wallet.`, "success");
+      } catch (error) {
+        if (manual) toast(`Settlement for ${short(auction.id)} failed: ${error.message}`, "error");
+      }
+    }
+    if (settled) {
+      setBidderStatus(`Settled ${settled} won auction(s).`);
+      renderBidder();
+    } else if (manual) {
+      setBidderStatus("No won auction with locally held proofs is ready to settle.");
+    }
+    return settled;
+  }
+
+  /**
+   * The seller's half: fetch any payout a settlement swap parked for this
+   * auction and put it in this wallet's spendable balance.
+   *
+   * The endpoint is unauthenticated because the proofs are P2PK-locked to this
+   * wallet's spend key -- the lock is the access control, and a wallet without
+   * the key can download what it cannot spend.
+   */
+  async function importPayouts(identity, manual = false) {
+    if (!mintBacked()) return 0;
+    const wallet = identity.wallet;
+    const auctions = Object.values(state.view?.state?.auctions || {});
+    let imported = 0;
+    for (const auction of auctions) {
+      if (auction.seller !== identity.actor || auction.status !== "closed" || !auction.winner) continue;
+      if (auction.funding_mode !== "cashu_lock_v1") continue;
+      const key = `import:${auction.id}`;
+      const last = state.settlementAttempts.get(key) || 0;
+      if (!manual && Date.now() - last < 15000) continue;
+      state.settlementAttempts.set(key, Date.now());
+      try {
+        const result = await wallet.importSettlement(auction.id);
+        if (result.imported) {
+          imported += 1;
+          state.settlementAttempts.delete(key);
+          if (manual) toast(`Imported ${sats(result.amount)} fake sats of seller payout.`, "success");
+        }
+      } catch (error) {
+        if (manual) toast(`Payout import for ${short(auction.id)} failed: ${error.message}`, "error");
+      }
+    }
+    if (imported) renderSeller();
+    else if (manual) setSellerStatus("No settlement payout is waiting for this identity's wallet.");
+    return imported;
   }
 
   /* ------------------------------------------------------------------ *
@@ -376,6 +469,11 @@
       min_increment: increment,
       reserve,
       funding_mode: "cashu_lock_v1",
+      // The seller commits this tab's WALLET key as the settlement destination.
+      // It is the seller's own signature on this create event that authorizes
+      // it, and it is never the Nostr identity: the Nostr key authorizes, the
+      // wallet key owns value.
+      ...(mintBacked() ? { seller_coco_payment_public_key: identity.wallet.spendPublicKey() } : {}),
     });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
     toast(`Auction committed at height ${result.height}.`, "success");
@@ -397,6 +495,12 @@
     const target = $("seller-auctions");
     target.replaceChildren();
     $("seller-summary").textContent = `${auctions.length} auction(s) from this identity`;
+    try {
+      $("seller-payout-balance").textContent = sats(state.seller.wallet.balance());
+    } catch (error) {
+      // The seller wallet is not loaded yet; the next refresh fills this in.
+    }
+    $("seller-import").disabled = state.busy.has("import") || !mintBacked();
     if (!auctions.length) {
       target.append(el("p", "empty", "No auctions from this identity yet. Create one above."));
       return;
@@ -438,6 +542,11 @@
     if (node) node.textContent = text;
   }
 
+  function setSellerStatus(text) {
+    const node = $("seller-status");
+    if (node) node.textContent = text;
+  }
+
   function renderIdentities() {
     $("seller-actor").textContent = state.seller.actor ? short(state.seller.actor) : "creating…";
     $("seller-actor").title = state.seller.actor || "";
@@ -470,6 +579,7 @@
     $("bidder-wallet-key").title = walletKey;
     $("bidder-mint").disabled = state.busy.has("mint") || !mintBacked();
     $("bidder-claim").disabled = state.busy.has("claim") || !mintBacked();
+    $("bidder-settle").disabled = state.busy.has("settle") || !mintBacked();
     renderBidderAuctions(identity);
     renderBidderPositions(identity);
   }
@@ -721,7 +831,16 @@
       renderMonitor();
       if (mintBacked()) {
         const identity = currentBidder();
-        if (identity?.actor) await claimRefunds(identity, false);
+        if (identity?.actor) {
+          // A displaced bidder's tab claims its own refund; a winning tab pays
+          // the seller. Both act only on state consensus has already marked
+          // terminal, and both are throttled so a 3s refresh cannot spam the
+          // coordinator.
+          await claimRefunds(identity, false);
+          await settleWins(identity, false);
+        }
+        // The seller's tab picks up whatever a winner's swap parked for it.
+        if (state.seller?.actor) await importPayouts(state.seller, false);
       }
     })().catch((error) => {
       toast(error.message, "error");
@@ -799,6 +918,32 @@
       } finally {
         state.busy.delete("claim");
         renderBidder();
+      }
+    });
+    $("bidder-settle").addEventListener("click", async () => {
+      if (state.busy.has("settle")) return;
+      state.busy.add("settle");
+      $("bidder-settle").disabled = true;
+      try {
+        await settleWins(currentBidder(), true);
+      } catch (error) {
+        toast(error.message, "error");
+      } finally {
+        state.busy.delete("settle");
+        renderBidder();
+      }
+    });
+    $("seller-import").addEventListener("click", async () => {
+      if (state.busy.has("import")) return;
+      state.busy.add("import");
+      $("seller-import").disabled = true;
+      try {
+        await importPayouts(state.seller, true);
+      } catch (error) {
+        toast(error.message, "error");
+      } finally {
+        state.busy.delete("import");
+        renderSeller();
       }
     });
   }

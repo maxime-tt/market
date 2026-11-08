@@ -63,14 +63,19 @@
           <label>Minimum increment <input id="increment" type="number" min="1" value="10" required></label>
           <label>Reserve (0 = none) <input id="reserve" type="number" min="0" value="0"></label>
         </div>
-        <p class="fine">Funding mode is fixed to <code>cashu_lock_v1</code>: bidders hold their own NUT-11 proofs. No seller payout key is registered in this build.</p>
+        <p class="fine">Funding mode is fixed to <code>cashu_lock_v1</code>: bidders hold their own NUT-11 proofs, and this listing commits this tab's wallet key as the settlement destination.</p>
         <button id="create-submit" class="button primary" type="submit">Sign and create auction</button>
       </form>
 
       <div class="card">
         <div class="card-head"><h2>Your auctions</h2><span id="seller-summary" class="sub">—</span></div>
         <div id="seller-auctions" class="list"><p class="empty">No auctions from this identity yet.</p></div>
-        <p class="fine">Payout state is reported from committed state only. Settlement is not implemented in this build, so a closed auction with a winner does not mean the seller was paid.</p>
+        <div class="card inline-card">
+          <label class="inline-label">Payouts received <strong id="seller-payout-balance">—</strong></label>
+          <button id="seller-import" class="button ghost" type="button">Import payout</button>
+          <span id="seller-status" class="status" role="status" aria-live="polite"></span>
+        </div>
+        <p class="fine">A closed auction with a winner pays the wallet key this identity committed when listing. Keep this tab open so the winner's browser can settle at close, then import the payout here.</p>
       </div>
     </section>
 
@@ -94,6 +99,7 @@
         <label class="inline-label">Mint <input id="bidder-mint-amount" type="number" min="1" value="500" inputmode="numeric"></label>
         <button id="bidder-mint" class="button primary" type="button">Mint fake sats</button>
         <button id="bidder-claim" class="button ghost" type="button">Claim refunds</button>
+        <button id="bidder-settle" class="button ghost" type="button">Settle won auction</button>
         <span id="bidder-status" class="status" role="status" aria-live="polite"></span>
       </div>
 
