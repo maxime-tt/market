@@ -463,3 +463,33 @@ func TestDemoOutcomeDepositStoresProofs(t *testing.T) {
 		t.Fatalf("deposit was not stored: present=%v count=%d", ok, len(stored))
 	}
 }
+
+// TestDemoOutcomeSweeperQuarantinesProofSpentElsewhere pins the terminal case:
+// the mint has already settled a committed proof outside our own durable
+// payout, so the value is gone and no retry can change it. The sweeper must
+// quarantine the target instead of looping forever on DEMO_OUTCOME_UNRESOLVED,
+// and it must not attempt a swap.
+func TestDemoOutcomeSweeperQuarantinesProofSpentElsewhere(t *testing.T) {
+	t.Parallel()
+	fixture := newOutcomeSweepFixture(t, true, false)
+	fixture.mint = newFakeSwapMint(t, fixture.amounts)
+	current := fixture.state
+	var posted []SignedEvent
+	server := outcomeSweepServer(t, fixture, &current, &posted, t.TempDir())
+	server.demoOutcomeProofs.put(fixture.settleBidID, refundProofs(t, fixture.secrets, fixture.amounts, fixture.mint.keysetID))
+	bid := current.Bids[fixture.settleBidID]
+	receipt := current.CashuLocks[bid.CashuTokenSHA256]
+	server.demoMintChecker = &fakeMint{states: map[string]MintProofState{receipt.ProofStateRefs[0]: MintProofSpent}}
+	sweeper := newDemoOutcomeSweeper(server, time.Now)
+
+	err := sweeper.Step(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "PERMANENT_REJECTION_QUARANTINED") {
+		t.Fatalf("spent-elsewhere sweep error = %v, want a quarantine", err)
+	}
+	if fixture.mint.swaps != 0 || len(posted) != 0 {
+		t.Fatalf("sweeper acted on a spent proof: swaps=%d posted=%d", fixture.mint.swaps, len(posted))
+	}
+	if !sweeper.quarantined[fixture.settleBidID+":settle"] {
+		t.Fatal("the spent-elsewhere target was not quarantined")
+	}
+}

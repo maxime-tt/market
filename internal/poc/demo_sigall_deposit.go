@@ -380,7 +380,9 @@ func (server *APIServer) demoSigAllDeposit(response http.ResponseWriter, request
 // pre-authorized template for the committed outcome, never a freshly-built
 // transaction, and returns a named refusal when no deposit is stored. A settle
 // parks the payout for the seller under the auction id, exactly as the
-// cooperative settlement does; a refund returns the proofs to the caller.
+// cooperative settlement does; a refund parks the payout under the bid id and
+// returns the proofs to the caller, so the sweeper can post the refund outcome
+// that marks the lock refunded.
 func (server *APIServer) demoSigAllOutcome(response http.ResponseWriter, request *http.Request, lock Lock, receipt CashuLockReceipt, outcome string) {
 	if lock.SigAllDepositID == "" {
 		writeError(response, http.StatusUnprocessableEntity, errors.New("sigall outcome requires a deposited template, and the lock names none"))
@@ -409,6 +411,16 @@ func (server *APIServer) demoSigAllOutcome(response http.ResponseWriter, request
 		// seller's committed key, so publishing the bytes is safe.
 		if err := server.demoSettlements.put(lock.AuctionID, fresh); err != nil {
 			log.Printf("demo settlement payout could not be persisted: %v", err)
+		}
+	} else {
+		// Park the refund under the bid id -- the sweeper's own refund park
+		// key -- so the sweeper posts the refund outcome that marks the lock
+		// refunded, instead of looping forever on a proof this swap just
+		// spent. The bidder's cooperative refund endpoint serves the parked
+		// payout afterward. Without this the lock stayed `refundable` while
+		// its proofs were already SPENT at the mint.
+		if err := server.demoSettlements.put(demoOutcomeParkKey(lock, outcome), fresh); err != nil {
+			log.Printf("demo refund payout could not be persisted: %v", err)
 		}
 	}
 	writeJSON(response, http.StatusOK, demoMintRefundResponse{Proofs: fresh})

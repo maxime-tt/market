@@ -994,3 +994,89 @@ func TestBothServerPathsStartTheOutcomeSweeper(t *testing.T) {
 		t.Fatalf("runtime.go starts the outcome sweeper %d time(s), want at least 2 (site path and local-demo path)", count)
 	}
 }
+
+// TestDemoSigAllRefundParksOutcomeForSweeper pins the cooperative sigall refund
+// path end to end: the refund branch spends the pre-authorized template, parks
+// the payout under the bid id (the sweeper's refund park key), and the sweeper
+// then posts the refund outcome that consensus turns into `refunded` -- all
+// without a second swap. Before this the endpoint spent the proofs but never
+// parked or recorded anything, so the lock stayed `refundable` while its proofs
+// were already SPENT at the mint.
+func TestDemoSigAllRefundParksOutcomeForSweeper(t *testing.T) {
+	t.Parallel()
+	fx := sigAllDepositFixtureState(t)
+	state := fx.state
+	lock := state.Locks[fx.bidID]
+	lock.Status = "refundable"
+	lock.SigAllDepositID = fx.depositRec.DepositID
+	lock.RefundAuthorization = ""
+	state.Locks[fx.bidID] = lock
+
+	mint := newFakeSwapMint(t, []int64{fx.receipt.Amount})
+	current := state
+	var posted []SignedEvent
+	server := &APIServer{
+		manifest: NetworkManifest{
+			ChainID: "legacy", Mode: "remote", ApplicationAuthority: ApplicationAuthorityLegacy,
+			CashuMintURL: mint.server.URL, Policy: DefaultPolicy(),
+		},
+		legacyInterim:          true,
+		demoCommitteeKey:       fx.committee,
+		demoCommitteePublicKey: hex.EncodeToString(fx.committee.PubKey().SerializeCompressed()),
+		demoMintChecker:        &fakeMint{},
+		demoMintKeyset:         NewMintKeySetFetcher(mint.server.URL, 2*time.Second),
+		demoStateSnapshot:      func(context.Context) (State, error) { return current, nil },
+		demoSettlements:        settlementStore{dir: t.TempDir()},
+		demoSigAllDeposits:     sigAllDepositStore{dir: t.TempDir()},
+		demoOutcomePoster:      func(_ context.Context, event SignedEvent) error { posted = append(posted, event); return nil },
+	}
+	if err := server.demoSigAllDeposits.put(sigAllStoredDeposit{Receipt: fx.depositRec, Templates: fx.templates, SettleDestination: fx.sellerKey.publicKey}); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/demo/sigall-refund", nil)
+	server.demoSigAllOutcome(recorder, request, lock, fx.receipt, "refund")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("sigall refund status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if mint.swaps != 1 {
+		t.Fatalf("mint saw %d swaps, want 1", mint.swaps)
+	}
+	stored, ok := server.demoSettlements.get(fx.bidID)
+	if !ok || len(stored) != len(fx.templates.Refund.Outputs) {
+		t.Fatalf("refund payout not parked under the bid id: present=%v n=%d", ok, len(stored))
+	}
+	for _, proof := range stored {
+		if recipient := p2pkRecipient(t, proof.Secret); recipient != fx.receipt.RefundPublicKey {
+			t.Fatalf("refund payout is locked to %s, want the bidder refund key", recipient)
+		}
+	}
+
+	// The sweeper resolves the refundable lock from the parked payout: it posts
+	// the refund outcome and swaps nothing.
+	sweeper := newDemoOutcomeSweeper(server, time.Now)
+	if err := sweeper.Step(context.Background()); err != nil {
+		t.Fatalf("sweep step after refund: %v", err)
+	}
+	if mint.swaps != 1 {
+		t.Fatalf("sweeper swapped a second time: %d", mint.swaps)
+	}
+	if len(posted) != 1 {
+		t.Fatalf("posted %d outcome records, want 1", len(posted))
+	}
+	var content outcomeContent
+	if err := json.Unmarshal([]byte(posted[0].Content), &content); err != nil {
+		t.Fatal(err)
+	}
+	if content.Outcome != "refund" || content.BidID != fx.bidID {
+		t.Fatalf("posted refund content = %+v", content)
+	}
+	refunded, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &posted[0]}, posted[0].CreatedAt, DefaultPolicy(), fx.seed)
+	if err != nil {
+		t.Fatalf("consensus refused the sigall refund outcome: %v", err)
+	}
+	if refunded.Locks[fx.bidID].Status != "refunded" {
+		t.Fatalf("refunded lock status = %q, want refunded", refunded.Locks[fx.bidID].Status)
+	}
+}

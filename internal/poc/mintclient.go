@@ -67,6 +67,30 @@ const (
 	MintProofPending MintProofState = "PENDING"
 )
 
+// ErrMintProofSpent and ErrMintProofPending let a caller of
+// VerifyCashuLockProofsAtMint tell a terminal double-spend from a transient
+// in-flight one. SPENT is final -- the value already moved and no retry can
+// change a settled mint -- so a sweeper must not loop on it. PENDING means
+// another spend of the same proof is still in flight and may yet resolve, so a
+// retry is worth scheduling.
+var (
+	ErrMintProofSpent   = errors.New("mint proof is spent")
+	ErrMintProofPending = errors.New("mint proof is pending")
+)
+
+// mintProofStateError classifies a non-spendable proof state so the failure
+// carries a sentinel a caller can match, not only a message.
+func mintProofStateError(state MintProofState) error {
+	switch state {
+	case MintProofSpent:
+		return ErrMintProofSpent
+	case MintProofPending:
+		return ErrMintProofPending
+	default:
+		return fmt.Errorf("unrecognized mint proof state %q", state)
+	}
+}
+
 // MintStateChecker reports the NUT-07 state of a set of proof references (Y
 // values). Implementations must return an entry for every requested reference;
 // a missing entry is treated as a failure to verify rather than as "fine".
@@ -179,7 +203,7 @@ func VerifyCashuLockProofsAtMint(checker MintStateChecker, receipt CashuLockRece
 			return errors.New("mint did not answer for a Cashu lock proof reference")
 		}
 		if state != MintProofUnspent {
-			return fmt.Errorf("Cashu lock proof is %s at the mint, not spendable", state)
+			return fmt.Errorf("Cashu lock proof is %s at the mint, not spendable: %w", state, mintProofStateError(state))
 		}
 	}
 	return nil

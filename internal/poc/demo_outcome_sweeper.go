@@ -313,6 +313,13 @@ func (sweeper *demoOutcomeSweeper) resolve(ctx context.Context, state State, loc
 		// The mint must still see every proof as unspent. Fail closed: a spent
 		// proof outside our own durable payout means the value already moved.
 		if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
+			if errors.Is(err, ErrMintProofSpent) {
+				// A proof the mint has settled is not retryable: the value
+				// already moved somewhere that is not our durable payout, and
+				// no number of retries can change that. Quarantine it instead
+				// of looping forever on DEMO_OUTCOME_UNRESOLVED.
+				return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+			}
 			return err
 		}
 		fresh, err = server.demoMintSigAllSpend(ctx, receipt, deposit, outcome)
@@ -329,6 +336,11 @@ func (sweeper *demoOutcomeSweeper) resolve(ctx context.Context, state State, loc
 		// proof outside our own durable payout means the value already moved
 		// elsewhere.
 		if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
+			if errors.Is(err, ErrMintProofSpent) {
+				// Terminal: the mint settled this proof and it is not our
+				// parked payout, so the value is gone. Retrying cannot fix it.
+				return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+			}
 			return err
 		}
 		fresh, err = server.demoMintCooperativeSpend(ctx, proofs, recipient)
