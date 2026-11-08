@@ -241,10 +241,11 @@ func TestDemoSigAllDepositRefusesEachRule(t *testing.T) {
 	}
 }
 
-// TestDemoSigAllDepositRefusesSecondDifferentDeposit pins the second-deposit
-// rule: once a deposit for an auction+bidder is stored, another deposit whose
-// digests differ is refused.
-func TestDemoSigAllDepositRefusesSecondDifferentDeposit(t *testing.T) {
+// TestDemoSigAllDepositAcceptsASecondLeg pins the leg rule: a bidder raising a
+// position adds a leg, so a second, independently built deposit for the same
+// auction+bidder is stored beside the first under its own id. Replaying one leg
+// derives that leg's id again, so it overwrites itself instead of accumulating.
+func TestDemoSigAllDepositAcceptsASecondLeg(t *testing.T) {
 	t.Parallel()
 	fx := sigAllDepositFixtureState(t)
 	server := sigAllDepositServer(t, fx.state, fx.committee, t.TempDir())
@@ -254,14 +255,30 @@ func TestDemoSigAllDepositRefusesSecondDifferentDeposit(t *testing.T) {
 	}
 
 	// A second, independently built deposit over the same refs has different
-	// digests (fresh output openings), so it is a different deposit.
+	// digests (fresh output openings), so it is a different leg.
 	second, _ := sigAllDeposit(t, fx.committee, fx.auctionID, fx.bidder, fx.wallet, fx.receipt, fx.inputs, fx.sellerKey.publicKey)
 	if second.Settle.Digest == fx.templates.Settle.Digest {
-		t.Fatal("the two deposits share a digest; the test cannot exercise the rule")
+		t.Fatal("the two deposits share a digest; the test cannot exercise the leg rule")
 	}
-	recorder := postSigAllDeposit(t, server, sigAllDepositRequest{AuctionID: fx.auctionID, Bidder: fx.bidder, Templates: second})
-	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), "different deposit") {
-		t.Fatalf("second-deposit response = %d %s, want 422 naming the different deposit", recorder.Code, recorder.Body.String())
+	if recorder := postSigAllDeposit(t, server, sigAllDepositRequest{AuctionID: fx.auctionID, Bidder: fx.bidder, Templates: second}); recorder.Code != http.StatusOK {
+		t.Fatalf("second-leg deposit status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	ids := map[string]bool{}
+	for _, deposit := range server.demoSigAllDeposits.listForAuctionBidder(fx.auctionID, fx.bidder) {
+		ids[deposit.Receipt.DepositID] = true
+	}
+	if len(ids) != 2 {
+		t.Fatalf("deposit ids for the auction+bidder = %v, want two distinct ids (one per leg)", ids)
+	}
+
+	// A retry of the first leg derives the same id and overwrites it, so the
+	// store keeps two deposits rather than growing a third.
+	if recorder := postSigAllDeposit(t, server, sigAllDepositRequest{AuctionID: fx.auctionID, Bidder: fx.bidder, Templates: fx.templates}); recorder.Code != http.StatusOK {
+		t.Fatalf("first-leg retry status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if stored := server.demoSigAllDeposits.listForAuctionBidder(fx.auctionID, fx.bidder); len(stored) != 2 {
+		t.Fatalf("after an idempotent retry the store holds %d deposits, want 2", len(stored))
 	}
 }
 
@@ -305,7 +322,7 @@ func TestSigAllDepositStoreSurvivesReopen(t *testing.T) {
 	if recovered.SettleDestination != deposit.SettleDestination {
 		t.Fatalf("recovered settle destination = %q", recovered.SettleDestination)
 	}
-	if _, ok := second.findForAuctionBidder("reopen-auction", "reopen-bidder"); !ok {
+	if len(second.listForAuctionBidder("reopen-auction", "reopen-bidder")) == 0 {
 		t.Fatal("reloaded store could not find the deposit by auction+bidder")
 	}
 
@@ -773,7 +790,7 @@ func TestDemoSigAllDepositRefusesPostedReceiptRules(t *testing.T) {
 			t.Fatalf("%s: response = %d %s, want 422 naming %q", testCase.name, recorder.Code, recorder.Body.String(), testCase.reason)
 		}
 	}
-	if _, ok := server.demoSigAllDeposits.findForAuctionBidder(fx.auctionID, bidder); ok {
+	if len(server.demoSigAllDeposits.listForAuctionBidder(fx.auctionID, bidder)) != 0 {
 		t.Fatal("a refused receipt-carrying deposit was stored")
 	}
 

@@ -145,18 +145,19 @@ func (store *sigAllDepositStore) get(key string) (sigAllStoredDeposit, bool) {
 	return deposit, true
 }
 
-// findForAuctionBidder returns the deposit already stored for one auction and
-// bidder, if any, so a second deposit for the same auction+bidder can be
-// refused when its digests differ.
-func (store *sigAllDepositStore) findForAuctionBidder(auctionID, bidder string) (sigAllStoredDeposit, bool) {
+// listForAuctionBidder returns every deposit stored for one auction and bidder.
+// A bidder holds one deposit per committed leg, so the answer is a set, not a
+// single entry.
+func (store *sigAllDepositStore) listForAuctionBidder(auctionID, bidder string) []sigAllStoredDeposit {
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	var deposits []sigAllStoredDeposit
 	for _, deposit := range store.byID {
 		if deposit.Receipt.AuctionID == auctionID && deposit.Receipt.Bidder == bidder {
-			return deposit, true
+			deposits = append(deposits, deposit)
 		}
 	}
-	return sigAllStoredDeposit{}, false
+	return deposits
 }
 
 // reload reads every durable deposit back into the cache, so a fresh process
@@ -244,9 +245,9 @@ func sigAllDepositCandidates(snapshot State, auctionID, bidder string) []CashuLo
 // receipt. It refuses, naming the rule, when the posted receipt is not a
 // cashu_sigall_v1 lock for this auction and bidder signed by the authority, when
 // there is no receipt for this auction+bidder on the fallback path, when the
-// auction is closed, when the auction committed no seller payout key, when a rule
-// in verifySigAllDeposit fails, or when a second deposit with different digests
-// already exists.
+// auction is closed, when the auction committed no seller payout key, or when a
+// rule in verifySigAllDeposit fails. A bidder's second, distinct deposit for the
+// same auction is a second leg and is stored beside the first.
 func (server *APIServer) demoSigAllDeposit(response http.ResponseWriter, request *http.Request) {
 	if !server.legacyInterim || server.manifest.ApplicationAuthority != ApplicationAuthorityLegacy {
 		writeError(response, http.StatusNotFound, errors.New("demo sigall deposit coordinator is available only on a legacy loopback network"))
@@ -337,15 +338,15 @@ func (server *APIServer) demoSigAllDeposit(response http.ResponseWriter, request
 		return
 	}
 
-	// Refuse a second deposit for the same auction+bidder whose digests differ;
-	// an identical retry derives the same id and is idempotent.
+	// A bidder may hold more than one deposit for the same auction: every
+	// mint-backed bid is a leg whose amount is a delta on the bidder's existing
+	// position, so raising a position adds a leg with its own lock, its own
+	// templates and therefore its own deposit. The id is derived from the
+	// digests, so a retry of one leg overwrites itself idempotently while a
+	// different leg is stored beside it. Which deposit a lock uses is never a
+	// search: the bid event carries the deposit id signed here, and the lock
+	// commits it as sigall_deposit_id.
 	depositID := sigAllDepositID(body.AuctionID, body.Bidder, settleDigest, refundDigest)
-	if existing, ok := server.demoSigAllDeposits.findForAuctionBidder(body.AuctionID, body.Bidder); ok {
-		if existing.Receipt.SettleDigest != settleDigest || existing.Receipt.RefundDigest != refundDigest {
-			writeError(response, http.StatusUnprocessableEntity, errors.New("sigall deposit: a different deposit for this auction and bidder is already stored"))
-			return
-		}
-	}
 
 	receipt := sigAllDepositReceipt{
 		Schema:       SigAllDepositReceiptSchema,
