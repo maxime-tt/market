@@ -78,9 +78,9 @@ export function DecryptPasswordDialogView({ open, onDecrypt, onLogout }: Decrypt
 					</Button>
 
 					<div className="relative flex items-center py-2">
-						<div className="flex-grow border-t border-surface-sunken"></div>
-						<span className="flex-shrink-0 mx-4 text-xs text-text-mid">OR</span>
-						<div className="flex-grow border-t border-surface-sunken"></div>
+						<div className="flex-grow border-t border-muted"></div>
+						<span className="flex-shrink-0 mx-4 text-xs text-muted-foreground">OR</span>
+						<div className="flex-grow border-t border-muted"></div>
 					</div>
 
 					<Button
@@ -94,7 +94,7 @@ export function DecryptPasswordDialogView({ open, onDecrypt, onLogout }: Decrypt
 						Remove Stored Key & Logout
 					</Button>
 
-					<p className="text-xs text-text-mid text-center mt-2">
+					<p className="text-xs text-muted-foreground text-center mt-2">
 						This will delete your encrypted private key from this device. You will need your password or a new key to log in again.
 					</p>
 				</div>

@@ -7,11 +7,6 @@ Per ADR-0007 §1e, the widget book is the enforcement test for the component
 boundary: **it may import `ui/` and `sdk/` only.** If a component needs
 `platform/` or `src/` to render, it is not a `ui/` component.
 
-Per ADR-0007 §2c (V10 relaxation, extended to *relocated* origins 2026-11-06),
-a component relocated whole into `platform/web/<feature>/` is outside this
-catalogue's scope and owes no entry or spec here. It owes both only if it is
-later promoted back into `ui/`.
-
 ## Run
 
 ```bash
@@ -37,7 +32,7 @@ interpreter.
 
 ## Current libraries
 
-Each library maps to a taxonomy directory (or component family). The count
+Eighteen libraries, one per taxonomy directory (or component family). The count
 is entries, not components: an entry is one _state worth seeing_, so a component
 with a meaningful second state has two.
 
@@ -61,7 +56,6 @@ with a meaningful second state has two.
 | `nostr`     | `NpubDisplay`, `VerifiedBadge`, `FeaturedUserCard`, `PubkeyField`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `layout`    | `PageHeader`, `MobilePageHeader`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `nav`       | `SidebarNav` (projected from `DASHBOARD_NAV` through `resolveNavView`) and `BackButton`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `theme`     | `ThemeCustomizer` (launcher + preset picker + `TunePanel` + portable theme record)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ### Dialogs stay closed at rest
 

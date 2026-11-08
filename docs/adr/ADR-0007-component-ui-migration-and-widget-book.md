@@ -258,7 +258,7 @@ In order to keep the work of each PR over time, every migrated or created compon
 1. **Standardization:** It must adhere to the API contracts and prop standards defined in its parent subdirectory's AGENTS.md and the root `ui/AGENTS.md`.
 2. **Test Coverage:** It must have corresponding test coverage in the automated widget book harness, verifying its different behaviors, variants, and appearances.
 
-**Relaxation (2026-10-27, D3/D4 contract rev 2.3; extended to _relocated_ origins 2026-11-06, `d7-s2-debt-widgetbook-85`).** The widget-book/test obligation applies only to components that remain in the `ui/` tree. A retired legacy component in a fused per-cluster commit owes no new widget-book entry or test. A component **relocated whole** into `platform/web/<feature>/` owes no new widget-book entry or test either: the catalogue scans `ui/` only, so a relocated file never reaches it and its absence is not a gap. A cluster file owes one test file plus N widget entries (one per exported component); a deletion owes nothing new; a promotion owes both. A relocated component that is later **promoted** to `ui/` owes both at that point.
+**Relaxation (2026-10-27, D3/D4 contract rev 2.3).** The widget-book/test obligation applies only to components that remain in the `ui/` tree. A retired legacy component in a fused per-cluster commit owes no new widget-book entry or test; a cluster file owes one test file plus N widget entries (one per exported component); a deletion owes nothing new; a promotion owes both.
 
 **Note:** PR 1 (foundation) contains no migrated components, so the §2c
 compliance gate does not apply. Coverage begins with the first migration PR
