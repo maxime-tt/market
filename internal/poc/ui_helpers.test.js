@@ -61,14 +61,10 @@ test("validator RPC reachability is never presented as a signature", () => {
     observation: "canonical commit signature observed via validator 1 loopback RPC" }).state, "observed");
 });
 
-test("deployable UI is R20-only and contains no preset business values", () => {
-  const html = fs.readFileSync(path.join(__dirname, "static/index.html"), "utf8");
+test("the shipped browser app is R20-only and contains no preset business values", () => {
+  // The page that held these inputs has been removed; the app script is what is
+  // still served, so the assertions below are about app.js and the deploy config.
   const app = fs.readFileSync(path.join(__dirname, "static/app.js"), "utf8");
-  for (const id of ["faucet-amount", "title", "duration", "starting", "increment", "reserve"]) {
-    const input = html.match(new RegExp(`<input id="${id}"[^>]*>`))?.[0] || "";
-    assert.ok(input, `missing input ${id}`); assert.doesNotMatch(input, /\bvalue=/);
-  }
-  assert.match(html, /3-of-4 FROST admission/);
   assert.match(app, /window\.plebeianFridayR20Connect/);
   assert.match(app, /state\.friday\.fundFake\(parsed\.amount\)/);
   assert.match(app, /importAvailable\(\)/);

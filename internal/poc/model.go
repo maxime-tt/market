@@ -1101,9 +1101,22 @@ func applyBid(state *State, actor, eventID string, committedAt int64, content bi
 	if !ok {
 		return errors.New("auction is not open")
 	}
+	// Auction.HighBid is the leading position, so the uniform admission rule is
+	// one comparison: the bidder's RESULTING position must be at least the
+	// leading position plus the increment. That covers both a bidder below the
+	// leader (it must clear the leader) and the leader raising its own position
+	// (it must raise by the increment, so no dust legs).
 	minimum := auction.StartingBid
 	if auction.LeaderBidID != "" {
 		minimum = auction.HighBid + auction.MinIncrement
+	}
+	// A bid's amount is the delta it locks: the resulting position is the
+	// bidder's existing position plus that delta. A bid that replaces a prior
+	// commitment instead states its resulting position outright, exactly as
+	// that route always has.
+	resulting := content.Amount
+	if bidIsLeg(content) {
+		resulting = bidderPosition(state, content.AuctionID, actor) + content.Amount
 	}
 	rejectionReason := ""
 	var rejectionError error
@@ -1114,8 +1127,8 @@ func applyBid(state *State, actor, eventID string, committedAt int64, content bi
 		rejectionReason, rejectionError = "seller_self_bid", errors.New("seller cannot bid on own auction")
 	case committedAt >= auction.EndTime:
 		rejectionReason, rejectionError = "late", errors.New("bid is late")
-	case content.Amount < minimum:
-		rejectionReason, rejectionError = "below_minimum", errors.New("bid does not satisfy the starting price and minimum increment")
+	case resulting < minimum:
+		rejectionReason, rejectionError = "below_minimum", errors.New("bid does not satisfy the minimum increment over the leading position")
 	case content.IntegratedFunding != nil && content.ReplacesBidID != auction.LeaderBidID:
 		rejectionReason, rejectionError = "stale_leader", errors.New("integrated bid replacement does not match the committed leader")
 	}
@@ -1278,30 +1291,97 @@ func applyRejectedIntegratedFunding(state *State, actor, eventID string, committ
 	return nil
 }
 
-func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, content bidContent, inputs []string, policy Policy) error {
-	auction := state.Auctions[content.AuctionID]
-	previousBidID := auction.LeaderBidID
-	if auction.LeaderBidID != "" {
-		previous := state.Locks[auction.LeaderBidID]
-		if previous.Status != "locked" {
-			return errors.New("previous leader lock is not spendable")
+// bidderPosition returns what a bidder currently holds in an auction: the sum
+// of the amounts of its committed legs, where a leg is a committed bid whose
+// lock is still held. Positions are derived from committed state -- there is no
+// stored position record -- and a leg that has been outbid is refundable and so
+// no longer part of the bidder's live position.
+func bidderPosition(state *State, auctionID, bidder string) int64 {
+	var total int64
+	for _, lock := range state.Locks {
+		if lock.AuctionID == auctionID && lock.Bidder == bidder && lock.Status == "locked" {
+			total += lock.Amount
 		}
-		previous.Status = "refundable"
-		state.Locks[auction.LeaderBidID] = previous
-		previousBid := state.Bids[auction.LeaderBidID]
-		if previousBid.IntegratedFundingID != "" {
-			funding := state.IntegratedFundings[previousBid.IntegratedFundingID]
-			if previousBid.Bidder == actor {
+	}
+	return total
+}
+
+// bidIsLeg reports whether a bid adds an additional leg to the bidder's
+// existing position rather than stating a new absolute position. Only a bid
+// carrying its own route's explicit replacement evidence -- a custodial own
+// raise naming the leader's reservation, or an integrated full-pool
+// replacement naming the leader's bid -- keeps the absolute semantics those
+// routes have always had; every other bid, including every mint-backed bid, is
+// a leg whose amount is a delta. Keying on route evidence rather than a bare
+// ReplacesBidID is deliberate: a mint-backed bid must never be able to release
+// its own legs by asserting a replacement it has no mechanism to perform.
+func bidIsLeg(content bidContent) bool {
+	if content.Reservation != nil && content.Reservation.ReplacesReservationID != "" {
+		return false
+	}
+	if content.IntegratedFunding != nil && content.ReplacesBidID != "" {
+		return false
+	}
+	return true
+}
+
+// displaceLeaderPosition returns every locked leg of the auction's current
+// leading position to "refundable" and releases the funding each leg carried.
+// A position is the unit that wins, so when it loses the lead the whole
+// position is returned at once -- every leg, not just the last one. It is never
+// called for a raise by the leader itself, so a bidder cannot exit its own bid.
+func displaceLeaderPosition(state *State, auction Auction, replacementBidder string) error {
+	leaderBid, ok := state.Bids[auction.LeaderBidID]
+	if !ok {
+		return errors.New("previous leader bid is missing from state")
+	}
+	displaced := false
+	for id, lock := range state.Locks {
+		if lock.AuctionID != auction.ID || lock.Bidder != leaderBid.Bidder || lock.Status != "locked" {
+			continue
+		}
+		displaced = true
+		lock.Status = "refundable"
+		state.Locks[id] = lock
+		bid := state.Bids[id]
+		if bid.IntegratedFundingID != "" {
+			funding := state.IntegratedFundings[bid.IntegratedFundingID]
+			if bid.Bidder == replacementBidder {
 				funding.Status = "superseded"
 			} else {
 				funding.Status = "outbid_return_entitled"
 			}
 			state.IntegratedFundings[funding.ID] = funding
 		}
-		if previousBid.ReservationID != "" {
-			reservation := state.CustodyReservations[previousBid.ReservationID]
+		if bid.ReservationID != "" {
+			reservation := state.CustodyReservations[bid.ReservationID]
 			reservation.Status = "release_entitled"
 			state.CustodyReservations[reservation.ID] = reservation
+		}
+	}
+	if !displaced {
+		return errors.New("previous leader lock is not spendable")
+	}
+	return nil
+}
+
+func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, content bidContent, inputs []string, policy Policy) error {
+	auction := state.Auctions[content.AuctionID]
+	previousBidID := auction.LeaderBidID
+	// An own raise that is an additional leg leaves the raiser's existing legs
+	// untouched: a bidder can never exit its own bid. Any other bid that takes
+	// the lead returns the WHOLE previous position -- every leg of the previous
+	// leader -- because a position is the unit that wins and so the unit that is
+	// returned.
+	if previousBidID != "" {
+		previousBid, ok := state.Bids[previousBidID]
+		if !ok {
+			return errors.New("previous leader bid is missing from state")
+		}
+		if previousBid.Bidder == actor && bidIsLeg(content) {
+			previousBidID = ""
+		} else if err := displaceLeaderPosition(state, auction, actor); err != nil {
+			return err
 		}
 	}
 	bid := Bid{ID: eventID, AuctionID: auction.ID, Bidder: actor, Amount: content.Amount, InputNoteIDs: append([]string(nil), inputs...), ReplacesBidID: previousBidID, CommittedAt: committedAt}
@@ -1361,7 +1441,10 @@ func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, co
 	}
 	state.Locks[eventID] = lock
 	auction.LeaderBidID = eventID
-	auction.HighBid = content.Amount
+	// HighBid is the leading position: the sum of every locked leg the new
+	// leader holds after this bid, resolved from committed state rather than
+	// assumed to be this one lock.
+	auction.HighBid = bidderPosition(state, auction.ID, actor)
 	if committedAt >= auction.EndTime-policy.LateBidWindow {
 		candidate := committedAt + policy.LateBidExtension
 		capEnd := auction.OriginalEndTime + policy.MaxTotalExtension
@@ -1886,65 +1969,89 @@ func applyClose(state *State, auctionID string, now int64, privateKey ed25519.Pr
 	auction.Status = "closed"
 	auction.ClosedAt = now
 	if auction.LeaderBidID != "" {
-		lock := state.Locks[auction.LeaderBidID]
-		if lock.Status != "locked" {
+		leaderBid, ok := state.Bids[auction.LeaderBidID]
+		if !ok {
+			return errors.New("winner bid is missing from state")
+		}
+		leaderLock, ok := state.Locks[auction.LeaderBidID]
+		if !ok || leaderLock.Status != "locked" {
 			return errors.New("winner lock is not locked")
 		}
-		winningBid := state.Bids[auction.LeaderBidID]
-		if auction.Reserve == 0 || lock.Amount >= auction.Reserve {
-			if winningBid.IntegratedFundingID != "" {
-				funding := state.IntegratedFundings[winningBid.IntegratedFundingID]
-				funding.Status = "payout_entitled"
-				state.IntegratedFundings[funding.ID] = funding
-				lock.Status = "winner_selected"
-				auction.Winner = lock.Bidder
-				state.Locks[auction.LeaderBidID] = lock
-				state.Operations[operation] = true
-				state.Auctions[auctionID] = auction
-				return nil
+		// The winner is the bidder holding the leading position: every locked
+		// leg of that position is selected together, and the reserve is
+		// compared against the position total, not one leg.
+		var legs []string
+		var positionTotal int64
+		for id, lock := range state.Locks {
+			if lock.AuctionID != auction.ID || lock.Bidder != leaderBid.Bidder || lock.Status != "locked" {
+				continue
 			}
-			if winningBid.ReservationID != "" {
-				reservation := state.CustodyReservations[winningBid.ReservationID]
-				reservation.Status = "payout_entitled"
-				state.CustodyReservations[reservation.ID] = reservation
-				lock.Status = "winner_selected"
-				auction.Winner = lock.Bidder
-				state.Locks[auction.LeaderBidID] = lock
-				state.Operations[operation] = true
-				state.Auctions[auctionID] = auction
-				return nil
+			legs = append(legs, id)
+			positionTotal += lock.Amount
+		}
+		sort.Strings(legs)
+		if len(legs) == 0 {
+			return errors.New("winner position has no locked leg")
+		}
+		if auction.Reserve == 0 || positionTotal >= auction.Reserve {
+			auction.Winner = leaderBid.Bidder
+			var legacyLegs []string
+			for _, id := range legs {
+				lock := state.Locks[id]
+				legBid := state.Bids[id]
+				switch {
+				case legBid.IntegratedFundingID != "":
+					funding := state.IntegratedFundings[legBid.IntegratedFundingID]
+					funding.Status = "payout_entitled"
+					state.IntegratedFundings[funding.ID] = funding
+					lock.Status = "winner_selected"
+				case legBid.ReservationID != "":
+					reservation := state.CustodyReservations[legBid.ReservationID]
+					reservation.Status = "payout_entitled"
+					state.CustodyReservations[reservation.ID] = reservation
+					lock.Status = "winner_selected"
+				case legBid.CashuTokenSHA256 != "":
+					lock.Status = "winner_selected"
+				default:
+					legacyLegs = append(legacyLegs, id)
+					continue
+				}
+				state.Locks[id] = lock
 			}
-			if winningBid.CashuTokenSHA256 != "" {
-				lock.Status = "winner_selected"
-				auction.Winner = lock.Bidder
-				state.Locks[auction.LeaderBidID] = lock
-				state.Operations[operation] = true
-				state.Auctions[auctionID] = auction
-				return nil
+			if len(legacyLegs) > 0 {
+				// The legacy interim-note route pays the seller one note for
+				// the whole winning position.
+				note, err := issueNote(*state, privateKey, operation, "seller-payout", auction.Seller, positionTotal)
+				if err != nil {
+					return err
+				}
+				state.Notes[note.ID] = note
+				auction.PaymentNoteID = note.ID
+				for _, id := range legacyLegs {
+					lock := state.Locks[id]
+					lock.Status = "paid"
+					lock.OutputNoteID = note.ID
+					state.Locks[id] = lock
+				}
 			}
-			note, err := issueNote(*state, privateKey, operation, "seller-payout", auction.Seller, lock.Amount)
-			if err != nil {
-				return err
-			}
-			state.Notes[note.ID] = note
-			lock.Status = "paid"
-			lock.OutputNoteID = note.ID
-			auction.Winner = lock.Bidder
-			auction.PaymentNoteID = note.ID
 		} else {
-			lock.Status = "refundable"
-			if winningBid.IntegratedFundingID != "" {
-				funding := state.IntegratedFundings[winningBid.IntegratedFundingID]
-				funding.Status = "release_entitled"
-				state.IntegratedFundings[funding.ID] = funding
-			}
-			if winningBid.ReservationID != "" {
-				reservation := state.CustodyReservations[winningBid.ReservationID]
-				reservation.Status = "release_entitled"
-				state.CustodyReservations[reservation.ID] = reservation
+			for _, id := range legs {
+				lock := state.Locks[id]
+				lock.Status = "refundable"
+				state.Locks[id] = lock
+				legBid := state.Bids[id]
+				if legBid.IntegratedFundingID != "" {
+					funding := state.IntegratedFundings[legBid.IntegratedFundingID]
+					funding.Status = "release_entitled"
+					state.IntegratedFundings[funding.ID] = funding
+				}
+				if legBid.ReservationID != "" {
+					reservation := state.CustodyReservations[legBid.ReservationID]
+					reservation.Status = "release_entitled"
+					state.CustodyReservations[reservation.ID] = reservation
+				}
 			}
 		}
-		state.Locks[auction.LeaderBidID] = lock
 	}
 	state.Operations[operation] = true
 	state.Auctions[auctionID] = auction
@@ -2071,7 +2178,11 @@ func applyOutcomeRecord(state *State, actor string, content outcomeContent) erro
 		if auction.FundingMode != FundingModeCashuLock && auction.FundingMode != FundingModeCashuSigAll {
 			return errors.New("settle outcome requires a mint-backed auction")
 		}
-		if content.BidID != auction.LeaderBidID {
+		// The winner is the bidder holding the leading position, so any leg of
+		// that position may be settled; a leg that belongs to nobody's position
+		// is refused. This is what lets a multi-leg winner settle every leg
+		// rather than only the one that last established the lead.
+		if auction.Winner == "" || lock.Bidder != auction.Winner {
 			return errors.New("settle outcome does not name the winning bid")
 		}
 		if lock.Status != "winner_selected" {

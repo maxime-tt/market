@@ -40,7 +40,12 @@ func TestRemoteOfflineControlIsNotReachable(t *testing.T) {
 	}
 }
 
-func TestFridayPhoneUIHasPermanentDisclosuresAndNoVisibleRemoteFaultControl(t *testing.T) {
+// The dense Friday page is gone: the lab is the demo and the site root hands off
+// to it. What must still hold is that the browser bundles that page loaded are
+// served and ordered correctly, and that the phone layout CSS survives. A test
+// that pinned the removed page's markup would only make its removal look like a
+// regression.
+func TestFridayBrowserBundlesAreServedAndOrdered(t *testing.T) {
 	t.Parallel()
 	server := &APIServer{manifest: NetworkManifest{ChainID: "friday", Mode: "remote"}, offline: nil}
 	handler, err := server.Handler()
@@ -48,25 +53,6 @@ func TestFridayPhoneUIHasPermanentDisclosuresAndNoVisibleRemoteFaultControl(t *t
 		t.Fatal(err)
 	}
 
-	indexRequest := httptest.NewRequest(http.MethodGet, "/", nil)
-	indexResponse := httptest.NewRecorder()
-	handler.ServeHTTP(indexResponse, indexRequest)
-	body := indexResponse.Body.String()
-	// The disclosures must describe THIS build. Two strings here previously read
-	// "3-of-4 FROST admission" and "Participant-local policy over FIPS
-	// transport"; neither is true -- the committee is one secp256k1 key and there
-	// is no FIPS code path at all. A test that pins a false claim is worse than no
-	// test, because it makes correcting the page look like a regression.
-	for _, required := range []string{
-		`name="viewport"`, `Worthless fake sats only`, `Single committee key, not FROST`,
-		`Four validators on one host, no FIPS`, `not production or federal FIPS compliance`,
-		`id="description"`, `id="image"`, `id="increment"`, `id="faucet-amount"`,
-		`id="process-payments"`, `type="module" src="/app-bootstrap.js"`,
-	} {
-		if !strings.Contains(body, required) {
-			t.Fatalf("Friday index is missing %q", required)
-		}
-	}
 	browserRequest := httptest.NewRequest(http.MethodGet, "/friday-browser.js", nil)
 	browserResponse := httptest.NewRecorder()
 	handler.ServeHTTP(browserResponse, browserRequest)
@@ -83,7 +69,7 @@ func TestFridayPhoneUIHasPermanentDisclosuresAndNoVisibleRemoteFaultControl(t *t
 		!strings.Contains(browserResponse.Body.String(), "plebeianCreateDemoSigner") {
 		t.Fatalf("Friday ES-module bootstrap is absent or does not order the browser bundle before the app")
 	}
-	if csp := indexResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "img-src 'self' data: https:") {
+	if csp := browserResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "img-src 'self' data: https:") {
 		t.Fatalf("Friday HTTPS item images are not bounded by the expected CSP: %q", csp)
 	}
 

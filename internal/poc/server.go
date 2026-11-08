@@ -406,9 +406,15 @@ func (server *APIServer) Handler() (http.Handler, error) {
 		mux.HandleFunc("POST /api/close", server.closeAuction)
 		mux.HandleFunc("POST /api/admin/offline", server.offlineValidator)
 	}
-	// The tabbed lab is a separate page so the dense demo at "/" stays intact.
+	// The tabbed lab is the demo now: the site root hands off to it, so there is
+	// one create flow in one place instead of two pages offering different
+	// routes. A temporary redirect, not a permanent one, so this can be undone
+	// without every browser remembering it.
 	mux.HandleFunc("GET /lab", func(response http.ResponseWriter, request *http.Request) {
 		http.Redirect(response, request, "/lab.html", http.StatusFound)
+	})
+	mux.HandleFunc("GET /{$}", func(response http.ResponseWriter, request *http.Request) {
+		http.Redirect(response, request, "/lab.html", http.StatusTemporaryRedirect)
 	})
 	mux.Handle("/", http.FileServer(http.FS(assets)))
 	return securityHeaders(mux, connectSources(server.manifest.CashuMintURL)), nil

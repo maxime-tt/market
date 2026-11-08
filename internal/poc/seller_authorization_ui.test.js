@@ -105,15 +105,13 @@ async function fixture({ auctionSeller = actor, bidStatus = 'admitted', rejectAu
 }
 
 test('seller approval controls and service loop are absent from the shipped UI', () => {
-  const html = fs.readFileSync(path.join(__dirname, 'static/index.html'), 'utf8');
+  // The dense page that carried these controls has been removed; app.js is what
+  // remains shipped, so the legacy strings must not reappear there.
   const app = fs.readFileSync(path.join(__dirname, 'static/app.js'), 'utf8');
   for (const removed of ['Enable bid-plan approvals for this auction', 'Stop bid-plan approvals',
     'stop-seller-approvals', 'seller-approval-status', 'serviceSellerApprovals']) {
-    assert.equal(html.includes(removed), false, `${removed} remains in index.html`);
     assert.equal(app.includes(removed), false, `${removed} remains in app.js`);
   }
-  assert.match(html, /New auctions register one bounded payout authorization/);
-  assert.match(html, /Import available returns & payouts/);
 });
 
 test('auction creation registers one exact auction-scoped authorization and never services seller plans', async () => {
