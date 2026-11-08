@@ -755,7 +755,7 @@
       ? "Nothing has been returned to this wallet yet."
       : `${outstanding.collectable} returned bid(s) waiting to be collected.`;
     renderBidderRefundNote(identity, outstanding);
-    renderBidderAuctions(identity, { spendable, locked });
+    renderBidderAuctions(identity);
     renderBidderPositions(identity);
   }
 
@@ -790,8 +790,21 @@
     note.hidden = true;
   }
 
-  function renderBidderAuctions(identity, balances = { spendable: 0, locked: 0 }) {
-    const { spendable = 0, locked = 0 } = balances;
+  function renderBidderAuctions(identity) {
+    // Read the balances here rather than accept them. The one-second countdown
+    // tick re-renders this list to move the "remaining" text, and a caller that
+    // passed no balances made the bid button judge affordability against zero,
+    // so it flapped between "Bid" and "Not enough sats" once a second while the
+    // three-second refresh flipped it back.
+    let spendable = 0;
+    let locked = 0;
+    try {
+      spendable = identity.wallet.balance();
+      locked = identity.wallet.lockedBalance();
+    } catch {
+      // A wallet that cannot be read is reported by renderBidder; here the bid
+      // controls simply stay unaffordable rather than guessing a number.
+    }
     const target = $("bidder-auctions");
     const active = document.activeElement;
     if (active && active.closest && active.closest("#bidder-auctions") && active.tagName === "INPUT") {
