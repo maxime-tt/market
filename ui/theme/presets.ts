@@ -2,11 +2,13 @@ import type { ThemeTokens } from '@ui/theme/theme-migration-wrapper'
 import type { TuneSettings } from '@ui/theme/tune'
 
 /**
- * Demo presets for the widget book. Each preset is one token record — colours,
- * fonts, and the six tune dimensions. The CMS will store the same shape.
+ * Theme presets shared by the widget book and the app shell. Each preset is one
+ * token record — colours, fonts, and the six tune dimensions. The CMS will
+ * store the same shape.
  *
- * Fonts are loaded by `widget-book/index.html` from Google Fonts. Licensing is
- * a production decision; the harness only needs representative families.
+ * Fonts are declared in the presets and loaded by each host: `widget-book/index.html`
+ * for the catalogue, `platform/web/app/index.html` for the app. Licensing is a
+ * production decision; the harness only needs representative families.
  *
  * Two layers are carried per preset, deliberately mirrored:
  *   • the semantic keys (`--background`, `--card`, `--primary`, …) that the

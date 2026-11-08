@@ -86,7 +86,7 @@ export function NostrConnectQRView({
 						</svg>
 					</div>
 					<p className="text-sm text-success font-medium">Connected successfully!</p>
-					<p className="text-sm text-muted-foreground">Logging you in...</p>
+					<p className="text-sm text-text-mid">Logging you in...</p>
 				</div>
 			) : connectionUrl ? (
 				<>

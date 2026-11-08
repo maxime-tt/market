@@ -9,7 +9,7 @@ import { surpriseTune, tuneTokens, type TuneSettings } from '@ui/theme/tune'
 import { TunePanel } from '@ui/theme/tune-panel'
 
 import { resolveLibraries } from './libraries'
-import { THEME_PRESETS } from './theme-presets'
+import { THEME_PRESETS } from '@ui/theme/presets'
 
 /**
  * Selection precedence: `?library=` in the URL, then the server's launch-time

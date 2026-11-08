@@ -62,7 +62,7 @@ export function WalletSetupGuide() {
 							<div className="flex items-start justify-between">
 								<div>
 									<CardTitle className="text-lg">{wallet.name}</CardTitle>
-									<p className="text-xs text-muted-foreground mt-1">{wallet.type}</p>
+									<p className="text-xs text-text-mid mt-1">{wallet.type}</p>
 								</div>
 								<ZapIcon className="w-5 h-5 text-warning" />
 							</div>
@@ -75,7 +75,7 @@ export function WalletSetupGuide() {
 									{wallet.features.map((feature, index) => (
 										<li key={index} className="flex items-start gap-2">
 											<span className="text-success mt-0.5">✓</span>
-											<span className="text-muted-foreground">{feature}</span>
+											<span className="text-text-mid">{feature}</span>
 										</li>
 									))}
 								</ul>
@@ -95,7 +95,7 @@ export function WalletSetupGuide() {
 				<CardHeader>
 					<CardTitle className="text-base">What happens next?</CardTitle>
 				</CardHeader>
-				<CardContent className="space-y-3 text-sm text-muted-foreground">
+				<CardContent className="space-y-3 text-sm text-text-mid">
 					<div className="flex gap-3">
 						<span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-fill-accent text-on-fill-accent text-xs font-bold">
 							1

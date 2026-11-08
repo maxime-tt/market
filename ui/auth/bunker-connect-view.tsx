@@ -55,9 +55,7 @@ export function BunkerConnectView({
 		<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
 			<div className="space-y-2 max-w-full">
 				<Label htmlFor="bunker-url">Bunker URL</Label>
-				<p className="text-sm text-muted-foreground">
-					Paste your bunker:// connection string from your remote signer (e.g., nsec.app, Amber).
-				</p>
+				<p className="text-sm text-text-mid">Paste your bunker:// connection string from your remote signer (e.g., nsec.app, Amber).</p>
 				<div className="flex gap-2 max-w-full min-w-0">
 					<Input
 						id="bunker-url"
@@ -94,9 +92,9 @@ export function BunkerConnectView({
 					</Notice>
 				)}
 				{authUrl && (
-					<div className="rounded-md border bg-muted/50 p-3 text-sm space-y-2" data-testid="bunker-auth-challenge">
-						<p className="text-muted-foreground">Your signer needs browser approval before this connection can finish.</p>
-						<p className="text-xs text-muted-foreground break-all">{authUrl}</p>
+					<div className="rounded-md border bg-surface-sunken/50 p-3 text-sm space-y-2" data-testid="bunker-auth-challenge">
+						<p className="text-text-mid">Your signer needs browser approval before this connection can finish.</p>
+						<p className="text-xs text-text-mid break-all">{authUrl}</p>
 						<Button asChild variant="outline" size="sm">
 							<a href={authUrl} target="_blank" rel="noreferrer" data-testid="bunker-auth-url-link">
 								<ExternalLink className="h-4 w-4" />
@@ -118,9 +116,9 @@ export function BunkerConnectView({
 				)}
 			</Button>
 
-			<div className="mt-4 p-3 bg-muted rounded-lg">
+			<div className="mt-4 p-3 bg-surface-sunken rounded-lg">
 				<h4 className="text-sm font-medium mb-2">How to get a bunker URL:</h4>
-				<ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+				<ol className="text-sm text-text-mid space-y-1 list-decimal list-inside">
 					<li>Open your remote signer app (nsec.app, Amber, etc.)</li>
 					<li>Generate or copy your bunker connection string</li>
 					<li>Paste it into the field above or scan the QR code</li>

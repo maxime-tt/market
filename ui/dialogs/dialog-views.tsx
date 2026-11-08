@@ -23,7 +23,7 @@ export function NSFWConfirmationDialogView({ open, onConfirm, onCancel }: NSFWCo
 					<DialogDescription>You are about to enable viewing of adult and sensitive content.</DialogDescription>
 				</DialogHeader>
 
-				<div className="py-4 space-y-3 text-sm text-muted-foreground">
+				<div className="py-4 space-y-3 text-sm text-text-mid">
 					<p>This marketplace may contain products that include:</p>
 					<ul className="list-disc pl-5 space-y-1">
 						<li>Adult/NSFW content</li>
