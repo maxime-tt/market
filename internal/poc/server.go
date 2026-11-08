@@ -356,6 +356,8 @@ func (server *APIServer) Handler() (http.Handler, error) {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/config", server.config)
+	mux.HandleFunc("GET /api/feedback", server.feedbackNotes)
+	mux.HandleFunc("POST /api/feedback", server.feedback)
 	mux.HandleFunc("GET /api/browser-release-pins", server.browserPins)
 	mux.HandleFunc("GET /api/state", server.state)
 	mux.HandleFunc("GET /api/validators", server.validators)

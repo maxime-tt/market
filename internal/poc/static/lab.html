@@ -143,6 +143,20 @@
     </section>
   </main>
 
+  <button id="feedback-open" class="feedback-fab" type="button" aria-expanded="false" aria-controls="feedback-panel">Feedback</button>
+  <section id="feedback-panel" class="feedback-panel" aria-labelledby="feedback-title" hidden>
+    <div class="card-head">
+      <h2 id="feedback-title">Send feedback</h2>
+      <button id="feedback-close" class="link-button" type="button">Close</button>
+    </div>
+    <p class="fine">Published as a signed kind 1 note to the demo relay and kept in a durable file beside the network root. It is signed by this page's own feedback key, not by your seller or bidder identity, and it never touches the auction chain.</p>
+    <textarea id="feedback-text" rows="4" maxlength="2000" placeholder="What worked, what broke, what confused you?"></textarea>
+    <div class="feedback-row">
+      <span id="feedback-status" class="fine" role="status" aria-live="polite"></span>
+      <button id="feedback-send" class="button primary" type="button">Send note</button>
+    </div>
+  </section>
+
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="/wallet.js"></script>

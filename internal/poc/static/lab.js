@@ -939,10 +939,80 @@
     if (tab === "monitor") renderMonitor();
   }
 
+  // ---- feedback -----------------------------------------------------------
+  // A tester's report is a signed kind 1 note, never a chain transaction: it
+  // cannot affect an auction, no validator orders it, and it carries no wallet
+  // authority. It is signed by a page-local key of its own rather than by the
+  // seller or bidder identity, so a report can never be mistaken for consent.
+  let feedbackIdentity = null;
+
+  function feedbackTab() {
+    return state.tab === "seller" ? "seller" : `bidder-${state.slot}`;
+  }
+
+  function setFeedbackStatus(text) {
+    $("feedback-status").textContent = text;
+  }
+
+  function openFeedback() {
+    $("feedback-panel").hidden = false;
+    $("feedback-open").setAttribute("aria-expanded", "true");
+    $("feedback-text").focus();
+  }
+
+  function closeFeedback() {
+    $("feedback-panel").hidden = true;
+    $("feedback-open").setAttribute("aria-expanded", "false");
+  }
+
+  async function sendFeedback() {
+    const text = $("feedback-text").value.trim();
+    if (!text) {
+      setFeedbackStatus("Write something first.");
+      return;
+    }
+    const button = $("feedback-send");
+    button.disabled = true;
+    setFeedbackStatus("Signing…");
+    try {
+      if (!feedbackIdentity) feedbackIdentity = await ensureIdentity("feedback");
+      const event = await feedbackIdentity.signer.signEvent({
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["t", "auctions-lab-feedback"], ["client", "plebeian-lab"]],
+        content: text,
+      });
+      const reply = await api("/api/feedback", {
+        method: "POST",
+        body: JSON.stringify({ event, tab: feedbackTab() }),
+      });
+      $("feedback-text").value = "";
+      setFeedbackStatus(reply.relay_sent
+        ? `Sent as ${short(reply.id)} and published to the relay.`
+        : `Kept on the server as ${short(reply.id)}; the relay was unavailable.`);
+      toast("Feedback sent.", "success");
+    } catch (error) {
+      setFeedbackStatus(error.message);
+      toast(`Feedback failed: ${error.message}`, "error");
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   function wire() {
     for (const button of document.querySelectorAll(".tab")) {
       button.addEventListener("click", () => selectTab(button.dataset.tab, button.dataset.slot ? Number(button.dataset.slot) : undefined));
     }
+    $("feedback-open").addEventListener("click", () => {
+      if ($("feedback-panel").hidden) openFeedback();
+      else closeFeedback();
+    });
+    $("feedback-close").addEventListener("click", closeFeedback);
+    $("feedback-send").addEventListener("click", sendFeedback);
+    $("feedback-text").addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeFeedback();
+      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) sendFeedback();
+    });
     $("honesty-toggle").addEventListener("click", () => {
       const panel = $("honesty");
       panel.hidden = !panel.hidden;
