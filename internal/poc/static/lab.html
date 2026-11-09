@@ -23,7 +23,7 @@
       <li><strong>Refund works when a bid is displaced.</strong> The coordinator submits the bidder's pre-authorized refund transaction, or parks the returned proofs for the displaced bidder to collect. Either way the money returns to the bidder's own wallet key. Verified end to end against the live mint.</li>
       <li><strong>Seller settlement works at close, with no bidder tab open.</strong> The seller commits a wallet payout key when listing. At close the coordinator submits the winner's pre-authorized settle transaction from its stored deposit and the payout lands on that key, so the seller can spend it. Verified end to end against the live mint.</li>
       <li><strong>The bidder holds the funds until it bids; the coordinator holds them until the outcome.</strong> The bidder's proofs are its own until it bids. Between the bid and the outcome the coordinator holds the locked proofs (they travel with the deposit so it can act alone), and under SIG_ALL it can only send them to the destination the bidder pre-authorized — the digest commitment is what makes that checkable, not a promise.</li>
-      <li><strong>A late bid pushes the close out.</strong> Consensus extends the end to three minutes after any bid that lands in the last three minutes, up to thirty minutes in total (anti-snipe). So an auction asked to run for sixty seconds will usually close about three minutes after its last bid, not after sixty seconds.</li>
+      <li><strong>A late bid can push the close out, and the auction chooses by how much.</strong> Each auction sets its own late-bid window, extension and total extension cap — the network policy is only the ceiling. A bid inside the window pushes the end out by the auction's extension, never past its own cap. A window of zero disables anti-sniping and the auction closes exactly at its duration. An auction that sets nothing keeps the network defaults, so the pre-existing behaviour is unchanged.</li>
       <li><strong>The sats are worthless.</strong> The mint is a FakeWallet mint. Nothing here is redeemable.</li>
       <li><strong>The committee is one key, not FROST.</strong> Four CometBFT validators run on one host, with no FIPS transport. One operator controls all of them. The coordinator's half of each SIG_ALL spend goes through a single port today; FROST will sit behind that port, and it does not yet. This is not production and not a compliance claim.</li>
       <li><strong>The monitor is a commit timeline, not a block explorer.</strong> The API exposes consensus timestamps for auctions and bids, not the height each event landed in. The page says so where it matters instead of inventing block contents.</li>
@@ -64,6 +64,15 @@
           <label>Minimum increment <input id="increment" type="number" min="1" value="10" required></label>
           <label>Reserve (0 = none) <input id="reserve" type="number" min="0" value="0"></label>
         </div>
+        <div class="form-row">
+          <label>Late-bid window (s) <input id="late-bid-window" type="number" min="0" inputmode="numeric"></label>
+          <label>Late-bid extension (s) <input id="late-bid-extension" type="number" min="0" inputmode="numeric"></label>
+        </div>
+        <div class="form-row">
+          <label>Max total extension (s) <input id="max-total-extension" type="number" min="0" inputmode="numeric"></label>
+          <label>Locktime (s, empty = floor) <input id="locktime" type="number" min="0" inputmode="numeric"></label>
+        </div>
+        <p class="fine">Anti-snipe, per auction: a bid inside the late-bid window pushes the close out by the extension, never past the max total extension. A window of <code>0</code> disables anti-sniping. The locktime is the mint-lock floor a bid must carry; leave it empty to use the auction's derived floor. An empty field takes the network policy's value, so a listing that ignores these keeps today's behaviour. The network policy is the ceiling — a value above it is refused by name.</p>
         <label>Funding mode
           <select id="funding-mode">
             <option value="cashu_sigall_v1" selected>SIG_ALL — bidder + committee 2-of-2, pre-authorized outcomes</option>

@@ -9,54 +9,65 @@ import (
 	"testing"
 )
 
-// TestDemoMintLocktimeIsTheMaximumEndRecoveryPolicy pins the S1 rule: the
-// coordinator's off-chain locktime check must require the exact composition
-// original_end + max_total_extension + emergency_recovery, and refuse anything
-// just below or just above it. A short lock was the live bug: an anti-sniping
-// extension could push the auction end past the lock, the bidder reclaimed,
-// and the leading bid lost its backing. A longer lock is refused too, so the
-// composition cannot silently drift from the V4 rule at model.go:1318.
-func TestDemoMintLocktimeIsTheMaximumEndRecoveryPolicy(t *testing.T) {
+// TestDemoMintLocktimeUsesTheAuctionFloorNotAPolicyConstant pins the S1/Slice-D
+// rule: the coordinator's off-chain locktime check requires a lock at or above
+// the AUCTION's floor (its own cumulative extension cap, not the network
+// ceiling) and within the policy band. The floor is the composition
+// original_end + the AUCTION's max_total_extension + emergency_recovery. A
+// short lock was the live bug: an anti-sniping extension could push the
+// auction end past the lock, the bidder reclaimed, and the leading bid lost
+// its backing. The refusal must name the auction's floor.
+func TestDemoMintLocktimeUsesTheAuctionFloorNotAPolicyConstant(t *testing.T) {
 	t.Parallel()
 	policy := DefaultPolicy()
-	// A live-shaped auction: EndTime already carries one anti-sniping extension,
-	// so EndTime != OriginalEndTime exactly as on the chain.
 	originalEnd := int64(10_000)
+	// A live-shaped auction that chose its OWN, shorter cumulative extension
+	// cap than the network ceiling, and whose EndTime already carries one
+	// anti-sniping extension, so EndTime != OriginalEndTime as on the chain.
 	auction := Auction{
 		ID: "locktime-auction", FundingMode: FundingModeCashuLock, Status: "open",
-		OriginalEndTime: originalEnd, EndTime: originalEnd + policy.LateBidExtension,
+		OriginalEndTime: originalEnd, EndTime: originalEnd + 60,
+		LateBidWindow: 30, LateBidExtension: 60, MaxTotalExtension: 60,
 	}
 
-	expected := demoMintExpectedLocktime(auction, policy)
-	if expected != originalEnd+policy.MaxTotalExtension+EmergencyRecoverySeconds {
-		t.Fatalf("expected locktime %d, want original_end+max_total_extension+emergency_recovery %d",
-			expected, originalEnd+policy.MaxTotalExtension+EmergencyRecoverySeconds)
+	floor := demoMintExpectedLocktime(auction)
+	if floor != auctionRequiredLocktime(auction) {
+		t.Fatalf("demoMintExpectedLocktime=%d, auctionRequiredLocktime=%d", floor, auctionRequiredLocktime(auction))
 	}
-	// The old build used end_time + 600, which on this auction would be well
-	// below the maximum reachable end. The rule must reject that exact value.
-	if oldBuggy := auction.EndTime + 600; oldBuggy >= expected {
-		t.Fatalf("test auction no longer models the bug: end_time+600=%d is not below the required %d", oldBuggy, expected)
+	if want := originalEnd + 60 + EmergencyRecoverySeconds; floor != want {
+		t.Fatalf("floor=%d, want the auction's own cap composition %d", floor, want)
+	}
+	// The floor must come from the AUCTION's cap, not the network ceiling: the
+	// old build composed it from the policy constant and would demand far more.
+	policyConstant := originalEnd + policy.MaxTotalExtension + EmergencyRecoverySeconds
+	if floor >= policyConstant {
+		t.Fatalf("auction floor %d did not drop below the policy-constant locktime %d", floor, policyConstant)
 	}
 
-	// The predicate the coordinator runs: exact equality with the composition.
-	accepts := func(locktime int64) bool { return locktime == demoMintExpectedLocktime(auction, policy) }
-	if !accepts(expected) {
-		t.Fatalf("locktime %d (exact composition) was refused", expected)
+	// The predicate the coordinator runs: at or above the auction's floor and
+	// within the policy band, never an exact equality with a policy constant.
+	accepts := func(locktime int64) bool {
+		return locktime >= demoMintExpectedLocktime(auction) && locktime <= demoMintExpectedLocktime(auction)+policy.MaxTotalExtension
 	}
-	if accepts(expected - 1) {
-		t.Fatalf("locktime %d (one second below the composition) was accepted", expected-1)
+	if !accepts(floor) {
+		t.Fatalf("locktime %d (exactly the auction floor) was refused", floor)
 	}
-	if accepts(expected + 1) {
-		t.Fatalf("locktime %d (one second above the composition) was accepted", expected+1)
+	if !accepts(floor + 120) {
+		t.Fatalf("locktime %d (above the auction floor, within the band) was refused", floor+120)
+	}
+	if accepts(floor - 1) {
+		t.Fatalf("locktime %d (one second below the auction floor) was accepted", floor-1)
 	}
 	if accepts(auction.EndTime + 600) {
 		t.Fatalf("the old end_time+600 locktime %d was accepted", auction.EndTime+600)
 	}
-
-	// The composition must match the consensus V4 rule byte for byte, so the
-	// coordinator cannot demand a value consensus would call a different policy.
-	if expected != auction.OriginalEndTime+policy.MaxTotalExtension+EmergencyRecoverySeconds {
-		t.Fatal("coordinator locktime no longer matches the model.go:1318 composition")
+	if accepts(floor + policy.MaxTotalExtension + 1) {
+		t.Fatalf("locktime %d (above the policy band ceiling) was accepted", floor+policy.MaxTotalExtension+1)
+	}
+	// The old build demanded the network-ceiling locktime exactly; that value
+	// sits at the top of the band and must still be accepted, not refused.
+	if !accepts(policyConstant) {
+		t.Fatalf("the network-ceiling locktime %d is outside the band and would be refused", policyConstant)
 	}
 }
 

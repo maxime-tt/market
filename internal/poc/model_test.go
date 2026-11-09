@@ -1613,3 +1613,233 @@ func onlySpendableNote(t *testing.T, state State, actor string) Note {
 	}
 	return view.Wallet.Notes[0]
 }
+
+// int64Ptr is a helper for the optional per-auction timing fields of a create
+// event: a nil pointer means "omit, take the policy default", so the tests must
+// be able to pass an explicit zero.
+func int64Ptr(value int64) *int64 { return &value }
+
+// newSliceDTimingState builds a genesis state for one per-auction timing test.
+// The caller passes the same committee key it signs reservation receipts with,
+// so the committed state and the receipts agree on the committee.
+func newSliceDTimingState(t *testing.T, chainID string, committee *btcec.PrivateKey, seedByte byte) State {
+	t.Helper()
+	seed := make([]byte, ed25519.SeedSize)
+	seed[0] = seedByte
+	state, err := NewState(chainID, ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey), hex.EncodeToString(committee.PubKey().SerializeCompressed()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return state
+}
+
+// TestCreateAppliesPerAuctionTimingDefaults pins rule 1: an auction that says
+// nothing about its anti-snipe timing takes the network policy's value, so it
+// behaves exactly as it did before the per-auction fields existed. It also pins
+// the derived required_locktime: original_end + the (defaulted) max extension +
+// the recovery window.
+func TestCreateAppliesPerAuctionTimingDefaults(t *testing.T) {
+	t.Parallel()
+	seed := make([]byte, ed25519.SeedSize)
+	seed[0] = 101
+	state := newSliceDTimingState(t, "slice-d-defaults", testPrivateKey(t), seed[0])
+	policy := DefaultPolicy()
+	seller := testPrivateKey(t)
+	create := testEvent(t, seller, 1_000, KindCreate, createContent{AuctionID: "defaults", Title: "Defaults", Duration: 600, StartingBid: 1_000})
+	next, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &create}, 1_000, policy, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auction := next.Auctions["defaults"]
+	if auction.LateBidWindow != policy.LateBidWindow || auction.LateBidExtension != policy.LateBidExtension || auction.MaxTotalExtension != policy.MaxTotalExtension {
+		t.Fatalf("omitted timing did not take the policy defaults: %+v", auction)
+	}
+	if want := int64(1_600) + policy.MaxTotalExtension + EmergencyRecoverySeconds; auction.RequiredLocktime != want {
+		t.Fatalf("required_locktime=%d, want derived floor %d", auction.RequiredLocktime, want)
+	}
+	if want := auctionRequiredLocktime(auction); auction.RequiredLocktime != want {
+		t.Fatalf("required_locktime=%d, want auctionRequiredLocktime %d", auction.RequiredLocktime, want)
+	}
+	// The new per-auction values must be visible on the auction object itself
+	// (JSON tags), so a client reads the floor instead of recomputing it.
+	raw, err := json.Marshal(auction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{`"late_bid_window_seconds"`, `"late_bid_extension_seconds"`, `"max_total_extension_seconds"`, `"required_locktime"`} {
+		if !strings.Contains(string(raw), key) {
+			t.Fatalf("auction JSON is missing %s: %s", key, raw)
+		}
+	}
+}
+
+// TestCreateRefusesTimingAboveNetworkCeiling pins rule 2: the policy is the
+// ceiling. Each field is bounded by the matching policy value, a value above it
+// is refused, and the refusal names the ceiling.
+func TestCreateRefusesTimingAboveNetworkCeiling(t *testing.T) {
+	t.Parallel()
+	seed := make([]byte, ed25519.SeedSize)
+	seed[0] = 102
+	state := newSliceDTimingState(t, "slice-d-ceiling", testPrivateKey(t), seed[0])
+	policy := DefaultPolicy()
+	seller := testPrivateKey(t)
+	cases := []struct {
+		name    string
+		content createContent
+		ceiling string
+	}{
+		{"window", createContent{AuctionID: "ceil-window", Title: "Ceiling", Duration: 600, StartingBid: 1_000,
+			LateBidWindowSeconds: int64Ptr(policy.LateBidWindow + 1)}, fmt.Sprintf("ceiling %d", policy.LateBidWindow)},
+		{"extension", createContent{AuctionID: "ceil-extension", Title: "Ceiling", Duration: 600, StartingBid: 1_000,
+			LateBidExtensionSeconds: int64Ptr(policy.LateBidExtension + 1)}, fmt.Sprintf("ceiling %d", policy.LateBidExtension)},
+		{"maxtotal", createContent{AuctionID: "ceil-maxtotal", Title: "Ceiling", Duration: 600, StartingBid: 1_000,
+			MaxTotalExtensionSeconds: int64Ptr(policy.MaxTotalExtension + 1)}, fmt.Sprintf("ceiling %d", policy.MaxTotalExtension)},
+		{"negative", createContent{AuctionID: "ceil-negative", Title: "Ceiling", Duration: 600, StartingBid: 1_000,
+			LateBidWindowSeconds: int64Ptr(-1)}, "ceiling"},
+	}
+	for _, testCase := range cases {
+		event := testEvent(t, seller, 1_000, KindCreate, testCase.content)
+		_, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_000, policy, seed)
+		if err == nil || !strings.Contains(err.Error(), "ceiling") {
+			t.Fatalf("%s: error=%v, want a refusal naming the ceiling", testCase.name, err)
+		}
+	}
+}
+
+// TestCreateRefusesExtensionAboveOwnCap pins rule 3: one late bid can never
+// push the end past the auction's own cumulative extension cap.
+func TestCreateRefusesExtensionAboveOwnCap(t *testing.T) {
+	t.Parallel()
+	seed := make([]byte, ed25519.SeedSize)
+	seed[0] = 103
+	state := newSliceDTimingState(t, "slice-d-cap", testPrivateKey(t), seed[0])
+	policy := DefaultPolicy()
+	seller := testPrivateKey(t)
+	create := testEvent(t, seller, 1_000, KindCreate, createContent{AuctionID: "cap", Title: "Cap", Duration: 600, StartingBid: 1_000,
+		LateBidExtensionSeconds: int64Ptr(120), MaxTotalExtensionSeconds: int64Ptr(60)})
+	_, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &create}, 1_000, policy, seed)
+	if err == nil || !strings.Contains(err.Error(), "max_total_extension") {
+		t.Fatalf("error=%v, want a refusal naming max_total_extension", err)
+	}
+}
+
+// TestZeroWindowDisablesAntiSniping pins rule 4: window==0 means no bid extends
+// the end, and the auction closes exactly at end_time.
+func TestZeroWindowDisablesAntiSniping(t *testing.T) {
+	t.Parallel()
+	seed := make([]byte, ed25519.SeedSize)
+	seed[0] = 104
+	policy := DefaultPolicy()
+	committee := testPrivateKey(t)
+	seller := testPrivateKey(t)
+	state := newSliceDTimingState(t, "slice-d-window0", committee, seed[0])
+	create := testEvent(t, seller, 1_000, KindCreate, createContent{AuctionID: "window0", Title: "No anti-snipe", Duration: 600, StartingBid: 1_000,
+		LateBidWindowSeconds: int64Ptr(0)})
+	state, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &create}, 1_000, policy, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Auctions["window0"].LateBidWindow != 0 {
+		t.Fatalf("window0 auction LateBidWindow=%d, want 0", state.Auctions["window0"].LateBidWindow)
+	}
+	// A bid committed one second before the end is inside any positive window,
+	// yet must not move the end when the auction chose window==0.
+	bidder := testPrivateKey(t)
+	receipt := testReservationReceipt(t, committee, "window0", actorForKey(bidder), 1_000, "window0-bid", "", 1_599+policy.ReceiptTTLSeconds)
+	bid := testEvent(t, bidder, 1_599, KindBid, bidContent{AuctionID: "window0", Amount: 1_000, Reservation: &receipt})
+	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &bid}, 1_599, policy, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auction := state.Auctions["window0"]; auction.EndTime != 1_600 || auction.ExtensionCount != 0 {
+		t.Fatalf("window==0 extended the auction: EndTime=%d ExtensionCount=%d", auction.EndTime, auction.ExtensionCount)
+	}
+}
+
+// TestLateBidExtendsWithinAuctionOwnCap pins rule 6: the extension reads the
+// AUCTION's window/extension/cap, not the network policy. A late bid extends the
+// end, and a second late bid is clamped at the auction's own cumulative cap.
+func TestLateBidExtendsWithinAuctionOwnCap(t *testing.T) {
+	t.Parallel()
+	seed := make([]byte, ed25519.SeedSize)
+	seed[0] = 105
+	policy := DefaultPolicy()
+	committee := testPrivateKey(t)
+	seller := testPrivateKey(t)
+	state := newSliceDTimingState(t, "slice-d-extend", committee, seed[0])
+	create := testEvent(t, seller, 1_000, KindCreate, createContent{AuctionID: "extend", Title: "Extend", Duration: 600, StartingBid: 1_000,
+		LateBidWindowSeconds: int64Ptr(30), LateBidExtensionSeconds: int64Ptr(60), MaxTotalExtensionSeconds: int64Ptr(90)})
+	state, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &create}, 1_000, policy, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auction := state.Auctions["extend"]; auction.EndTime != 1_600 || auction.RequiredLocktime != 1_600+90+EmergencyRecoverySeconds {
+		t.Fatalf("create committed timing=%+v, want end 1600 and floor %d", auction, 1_600+90+EmergencyRecoverySeconds)
+	}
+
+	firstBidder := testPrivateKey(t)
+	firstReceipt := testReservationReceipt(t, committee, "extend", actorForKey(firstBidder), 1_000, "extend-first", "", 1_599+policy.ReceiptTTLSeconds)
+	first := testEvent(t, firstBidder, 1_599, KindBid, bidContent{AuctionID: "extend", Amount: 1_000, Reservation: &firstReceipt})
+	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &first}, 1_599, policy, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// candidate = 1599 + 60 = 1659, inside capEnd = 1600 + 90 = 1690.
+	if auction := state.Auctions["extend"]; auction.EndTime != 1_659 || auction.ExtensionCount != 1 {
+		t.Fatalf("first late bid: EndTime=%d ExtensionCount=%d, want 1659/1", auction.EndTime, auction.ExtensionCount)
+	}
+
+	secondBidder := testPrivateKey(t)
+	secondReceipt := testReservationReceipt(t, committee, "extend", actorForKey(secondBidder), 1_200, "extend-second", "", 1_658+policy.ReceiptTTLSeconds)
+	second := testEvent(t, secondBidder, 1_658, KindBid, bidContent{AuctionID: "extend", Amount: 1_200, Reservation: &secondReceipt})
+	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &second}, 1_658, policy, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// candidate = 1658 + 60 = 1718 would exceed capEnd 1690, so it is clamped.
+	if auction := state.Auctions["extend"]; auction.EndTime != 1_690 || auction.ExtensionCount != 2 {
+		t.Fatalf("second late bid: EndTime=%d ExtensionCount=%d, want the auction's own cap 1690/2", auction.EndTime, auction.ExtensionCount)
+	}
+}
+
+// TestCreateRefusesLocktimeBelowDerivedFloor pins rule 5: a supplied
+// locktime_seconds must sit at or above the derived floor; shorter is refused
+// naming the floor. It must also sit within floor + the policy ceiling.
+func TestCreateRefusesLocktimeBelowDerivedFloor(t *testing.T) {
+	t.Parallel()
+	seed := make([]byte, ed25519.SeedSize)
+	seed[0] = 106
+	state := newSliceDTimingState(t, "slice-d-floor", testPrivateKey(t), seed[0])
+	policy := DefaultPolicy()
+	seller := testPrivateKey(t)
+	// end = 1000 + 600 = 1600; the default cap is 1800, so floor = 4300.
+	const floor = int64(1_600 + 1_800 + 900)
+	if want := int64(1_600) + policy.MaxTotalExtension + EmergencyRecoverySeconds; floor != want {
+		t.Fatalf("test floor %d no longer matches the default policy composition %d", floor, want)
+	}
+
+	below := testEvent(t, seller, 1_000, KindCreate, createContent{AuctionID: "floor-below", Title: "Floor", Duration: 600, StartingBid: 1_000,
+		LocktimeSeconds: int64Ptr(floor - 1)})
+	_, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &below}, 1_000, policy, seed)
+	if err == nil || !strings.Contains(err.Error(), "floor") || !strings.Contains(err.Error(), fmt.Sprintf("%d", floor)) {
+		t.Fatalf("below-floor error=%v, want a refusal naming the floor %d", err, floor)
+	}
+
+	// Exactly the floor is accepted; omitted means exactly the floor, which the
+	// default test above already pins.
+	atFloor := testEvent(t, seller, 1_000, KindCreate, createContent{AuctionID: "floor-at", Title: "Floor", Duration: 600, StartingBid: 1_000,
+		LocktimeSeconds: int64Ptr(floor)})
+	next, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &atFloor}, 1_000, policy, seed)
+	if err != nil {
+		t.Fatalf("locktime at the floor %d was refused: %v", floor, err)
+	}
+	if got := next.Auctions["floor-at"].RequiredLocktime; got != floor {
+		t.Fatalf("required_locktime=%d, want the derived floor %d", got, floor)
+	}
+
+	aboveBand := testEvent(t, seller, 1_000, KindCreate, createContent{AuctionID: "floor-above", Title: "Floor", Duration: 600, StartingBid: 1_000,
+		LocktimeSeconds: int64Ptr(floor + policy.MaxTotalExtension + 1)})
+	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &aboveBand}, 1_000, policy, seed); err == nil || !strings.Contains(err.Error(), "ceiling") {
+		t.Fatalf("above-band error=%v, want a refusal naming the ceiling", err)
+	}
+}

@@ -325,6 +325,27 @@ type Auction struct {
 	Winner                     string `json:"winner,omitempty"`
 	ClosedAt                   int64  `json:"closed_at,omitempty"`
 	PaymentNoteID              string `json:"payment_note_id,omitempty"`
+	// The auction chooses its own anti-snipe timing, exactly as it already
+	// chooses duration and min increment; the network policy is only the
+	// CEILING enforced at create. LateBidWindow == 0 disables anti-sniping:
+	// no bid extends the end and the auction closes exactly at EndTime.
+	LateBidWindow     int64 `json:"late_bid_window_seconds"`
+	LateBidExtension  int64 `json:"late_bid_extension_seconds"`
+	MaxTotalExtension int64 `json:"max_total_extension_seconds"`
+	// RequiredLocktime is DERIVED, read-only: the locktime a bid's mint lock
+	// must carry. It is the maximum reachable end (OriginalEndTime +
+	// MaxTotalExtension) plus the recovery window consensus reserves after it.
+	// It is exposed so a client reads the floor instead of recomputing it.
+	RequiredLocktime int64 `json:"required_locktime"`
+}
+
+// auctionRequiredLocktime is the single derivation every call site uses: the
+// locktime a mint-backed bid must carry so it outlives the worst-case auction
+// end (original_end + this auction's own cumulative extension cap) plus the
+// recovery window consensus reserves after that end. EmergencyRecoverySeconds
+// stays a package constant: it is not an auction choice.
+func auctionRequiredLocktime(auction Auction) int64 {
+	return auction.OriginalEndTime + auction.MaxTotalExtension + EmergencyRecoverySeconds
 }
 
 type State struct {
@@ -745,6 +766,16 @@ type createContent struct {
 	Reserve                    int64  `json:"reserve"`
 	FundingMode                string `json:"funding_mode,omitempty"`
 	SellerCocoPaymentPublicKey string `json:"seller_coco_payment_public_key,omitempty"`
+	// The auction's own anti-snipe timing. Each is OPTIONAL (a pointer): nil
+	// means "omit, take the network policy's value", which is exactly the
+	// pre-existing behaviour. A present 0 is a deliberate choice -- a zero
+	// window disables anti-sniping. The network policy bounds each at create.
+	LateBidWindowSeconds     *int64 `json:"late_bid_window_seconds,omitempty"`
+	LateBidExtensionSeconds  *int64 `json:"late_bid_extension_seconds,omitempty"`
+	MaxTotalExtensionSeconds *int64 `json:"max_total_extension_seconds,omitempty"`
+	// LocktimeSeconds is the explicit final locktime a bid's mint lock must
+	// carry. Omitted means exactly the derived floor.
+	LocktimeSeconds *int64 `json:"locktime_seconds,omitempty"`
 }
 
 type bidContent struct {
@@ -1049,14 +1080,60 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 		if increment == 0 {
 			increment = policy.MinBidIncrement
 		}
+		// The auction chooses its own anti-snipe timing; the network policy is
+		// only the CEILING. An omitted field takes the policy's value, so an
+		// auction that says nothing behaves exactly as today. An explicit zero
+		// window is a deliberate choice: no bid extends the end.
+		lateBidWindow := policy.LateBidWindow
+		if content.LateBidWindowSeconds != nil {
+			lateBidWindow = *content.LateBidWindowSeconds
+		}
+		if lateBidWindow < 0 || lateBidWindow > policy.LateBidWindow {
+			return fmt.Errorf("auction late_bid_window_seconds %d is outside the network ceiling %d", lateBidWindow, policy.LateBidWindow)
+		}
+		lateBidExtension := policy.LateBidExtension
+		if content.LateBidExtensionSeconds != nil {
+			lateBidExtension = *content.LateBidExtensionSeconds
+		}
+		if lateBidExtension < 0 || lateBidExtension > policy.LateBidExtension {
+			return fmt.Errorf("auction late_bid_extension_seconds %d is outside the network ceiling %d", lateBidExtension, policy.LateBidExtension)
+		}
+		maxTotalExtension := policy.MaxTotalExtension
+		if content.MaxTotalExtensionSeconds != nil {
+			maxTotalExtension = *content.MaxTotalExtensionSeconds
+		}
+		if maxTotalExtension < 0 || maxTotalExtension > policy.MaxTotalExtension {
+			return fmt.Errorf("auction max_total_extension_seconds %d is outside the network ceiling %d", maxTotalExtension, policy.MaxTotalExtension)
+		}
+		// Internal coherence: one late bid can never push the end past the
+		// auction's own cumulative cap.
+		if lateBidExtension > maxTotalExtension {
+			return fmt.Errorf("auction late_bid_extension_seconds %d exceeds its own max_total_extension_seconds %d", lateBidExtension, maxTotalExtension)
+		}
 		end := now + content.Duration
-		state.Auctions[content.AuctionID] = Auction{
+		auction := Auction{
 			ID: content.AuctionID, Seller: actor, Title: strings.TrimSpace(content.Title),
 			Description: strings.TrimSpace(content.Description), ImageURL: strings.TrimSpace(content.ImageURL),
 			FundingMode: fundingMode, SellerCocoPaymentPublicKey: content.SellerCocoPaymentPublicKey,
 			StartingBid: content.StartingBid, MinIncrement: increment, Reserve: content.Reserve,
 			CreatedAt: now, OriginalEndTime: end, EndTime: end, Status: "open",
+			LateBidWindow: lateBidWindow, LateBidExtension: lateBidExtension, MaxTotalExtension: maxTotalExtension,
 		}
+		// The locktime floor is derived, never stored from the request. A
+		// supplied locktime_seconds must sit at or above it (a shorter lock can
+		// expire while the auction is still open) and within the policy band.
+		floor := auctionRequiredLocktime(auction)
+		auction.RequiredLocktime = floor
+		if content.LocktimeSeconds != nil {
+			locktime := *content.LocktimeSeconds
+			if locktime < floor {
+				return fmt.Errorf("auction locktime_seconds %d is below the required locktime floor %d", locktime, floor)
+			}
+			if locktime > floor+policy.MaxTotalExtension {
+				return fmt.Errorf("auction locktime_seconds %d exceeds the permitted ceiling %d", locktime, floor+policy.MaxTotalExtension)
+			}
+		}
+		state.Auctions[content.AuctionID] = auction
 	case KindBid:
 		var content bidContent
 		if err := decodeStrictContent(event.Content, &content); err != nil {
@@ -1445,9 +1522,12 @@ func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, co
 	// leader holds after this bid, resolved from committed state rather than
 	// assumed to be this one lock.
 	auction.HighBid = bidderPosition(state, auction.ID, actor)
-	if committedAt >= auction.EndTime-policy.LateBidWindow {
-		candidate := committedAt + policy.LateBidExtension
-		capEnd := auction.OriginalEndTime + policy.MaxTotalExtension
+	// The extension reads the AUCTION's own anti-snipe timing, not the network
+	// policy: window==0 means no anti-sniping, so no bid extends the end and
+	// the auction closes exactly at EndTime.
+	if auction.LateBidWindow > 0 && committedAt >= auction.EndTime-auction.LateBidWindow {
+		candidate := committedAt + auction.LateBidExtension
+		capEnd := auction.OriginalEndTime + auction.MaxTotalExtension
 		if candidate > capEnd {
 			candidate = capEnd
 		}
@@ -1577,8 +1657,17 @@ func verifyIntegratedFundingReceipt(state State, actor string, committedAt int64
 		(!validCompressedPublicKey(auction.SellerCocoPaymentPublicKey) || auction.SellerCocoPaymentPublicKey[2:] == auction.Seller) {
 		return errors.New("integrated V4 funding auction lacks a distinct direct Coco seller payment key")
 	}
-	if auction.OriginalEndTime > (1<<63-1)-policy.MaxTotalExtension-EmergencyRecoverySeconds || receipt.Locktime != auction.OriginalEndTime+policy.MaxTotalExtension+EmergencyRecoverySeconds {
+	// The locktime floor is the AUCTION's, derived from its own cumulative
+	// extension cap, not the network policy's. Consensus accepts a lock at or
+	// above that floor and within the policy band; the old exact-equality
+	// against a policy constant would reject an auction that chose a shorter
+	// cap than the network ceiling.
+	if auction.OriginalEndTime > (1<<63-1)-auction.MaxTotalExtension-EmergencyRecoverySeconds {
 		return errors.New("integrated funding locktime does not use the selected maximum-end recovery policy")
+	}
+	floor := auctionRequiredLocktime(auction)
+	if receipt.Locktime < floor || receipt.Locktime > floor+policy.MaxTotalExtension {
+		return fmt.Errorf("integrated funding locktime %d is outside the auction locktime band [%d, %d]", receipt.Locktime, floor, floor+policy.MaxTotalExtension)
 	}
 	if len(receipt.ProofStateRefs) == 0 || len(receipt.ProofStateRefs) > MaxInputs {
 		return errors.New("integrated funding proof pool is empty or unbounded")

@@ -299,14 +299,72 @@
 
   function mintBacked() { return state.config?.mint_backed_funding === true; }
 
+  /**
+   * The locktime a bid's mint lock must carry, read from the AUCTION.
+   *
+   * The auction chooses its own anti-snipe cap, so the lock floor is
+   * original_end_time + the AUCTION's `max_total_extension_seconds` + the
+   * network's emergency recovery window. The network's
+   * `state.config.max_total_extension_seconds` is deliberately NOT used: it is
+   * the CEILING on what an auction may pick, not the value this auction picked.
+   * When the coordinator publishes the derived floor as `required_locktime`,
+   * that value is authoritative and is used directly.
+   *
+   * If the auction publishes neither the derived floor nor its own cap, refuse.
+   * A guessed margin could expire before the auction can close and leave a
+   * winning bid with no backing.
+   */
   function locktimeFor(auction) {
-    const maxTotalExtension = Number(state.config?.max_total_extension_seconds);
+    const published = Number(auction?.required_locktime);
+    if (Number.isSafeInteger(published) && published > 0) return published;
+    const originalEndTime = Number(auction?.original_end_time);
+    const maxTotalExtension = Number(auction?.max_total_extension_seconds);
     const emergencyRecovery = Number(state.config?.emergency_recovery_seconds);
-    if (!Number.isSafeInteger(maxTotalExtension) || !Number.isSafeInteger(emergencyRecovery)
-      || maxTotalExtension < 0 || emergencyRecovery < 0) {
-      throw new Error("The coordinator did not publish the locktime policy; refusing to lock with a guessed margin.");
+    if (!Number.isSafeInteger(originalEndTime) || !Number.isSafeInteger(maxTotalExtension)
+      || !Number.isSafeInteger(emergencyRecovery)
+      || originalEndTime < 0 || maxTotalExtension < 0 || emergencyRecovery < 0) {
+      throw new Error("The auction did not publish its locktime floor; refusing to lock with a guessed margin.");
     }
-    return Number(auction.original_end_time) + maxTotalExtension + emergencyRecovery;
+    return originalEndTime + maxTotalExtension + emergencyRecovery;
+  }
+
+  /**
+   * Reads one optional whole-number field. An empty field returns null, which
+   * means "omit from the create event" -- the Go side then applies the network
+   * policy's own value, which is exactly the pre-existing behaviour. An empty
+   * field is never sent as 0, because 0 is a meaningful choice for the
+   * window (disable anti-sniping) and must be a deliberate one.
+   */
+  function optionalInt(raw) {
+    const text = (raw ?? "").trim();
+    if (text === "") return null;
+    const value = Number(text);
+    return Number.isSafeInteger(value) ? value : NaN;
+  }
+
+  /**
+   * Pre-fills the per-auction timing fields from the coordinator's published
+   * policy, so a seller who ignores them sees the value their auction will
+   * receive and can lower it. A field the coordinator does not publish is left
+   * empty, which omits it from the create event -- the Go side then applies the
+   * same policy default, so an empty field is never a guessed value.
+   *
+   * The locktime is always left empty: omitted means the auction's derived
+   * floor, which is the canonical default.
+   */
+  function applyTimingDefaults() {
+    const policy = state.config || {};
+    const setIfPublished = (id, raw) => {
+      const node = $(id);
+      if (!node) return;
+      if (raw === null || raw === undefined || raw === "") { node.value = ""; return; }
+      const value = Number(raw);
+      node.value = Number.isSafeInteger(value) && value >= 0 ? String(value) : "";
+    };
+    setIfPublished("late-bid-window", policy.late_bid_window_seconds);
+    setIfPublished("late-bid-extension", policy.late_bid_extension_seconds);
+    setIfPublished("max-total-extension", policy.max_total_extension_seconds);
+    if ($("locktime")) $("locktime").value = "";
   }
 
   async function mint(identity, amount) {
@@ -625,6 +683,16 @@
       if (!Number.isSafeInteger(value) || value < min) throw new Error(`${name} must be a whole number of at least ${min}.`);
     }
     if (duration > 3600) throw new Error("Duration may not exceed 3,600 seconds.");
+    // Per-auction timing. An empty field is omitted, so the Go side applies the
+    // network policy's own value; a value the seller typed is sent and the
+    // coordinator refuses one above its ceiling, naming the ceiling.
+    const lateBidWindow = optionalInt($("late-bid-window")?.value);
+    const lateBidExtension = optionalInt($("late-bid-extension")?.value);
+    const maxTotalExtension = optionalInt($("max-total-extension")?.value);
+    const locktime = optionalInt($("locktime")?.value);
+    for (const [name, value] of [["Late-bid window", lateBidWindow], ["Late-bid extension", lateBidExtension], ["Max total extension", maxTotalExtension], ["Locktime", locktime]]) {
+      if (value !== null && (!Number.isSafeInteger(value) || value < 0)) throw new Error(`${name} must be a whole number of at least 0, or left empty.`);
+    }
     const id = `auction-${Date.now()}`;
     const signed = await sign(identity, 28640, [["t", "plebeian-auctions-poc"], ["auction", id]], {
       auction_id: id,
@@ -636,6 +704,10 @@
       min_increment: increment,
       reserve,
       funding_mode: fundingMode,
+      ...(lateBidWindow !== null ? { late_bid_window_seconds: lateBidWindow } : {}),
+      ...(lateBidExtension !== null ? { late_bid_extension_seconds: lateBidExtension } : {}),
+      ...(maxTotalExtension !== null ? { max_total_extension_seconds: maxTotalExtension } : {}),
+      ...(locktime !== null ? { locktime_seconds: locktime } : {}),
       // The seller commits this tab's WALLET key as the settlement destination.
       // It is the seller's own signature on this create event that authorizes
       // it, and it is never the Nostr identity: the Nostr key authorizes, the
@@ -649,6 +721,7 @@
     $("starting").value = "100";
     $("increment").value = "10";
     $("reserve").value = "0";
+    applyTimingDefaults();
     await refresh();
   }
 
@@ -790,6 +863,32 @@
     note.hidden = true;
   }
 
+  /**
+   * A terse, honest line about this auction's OWN timing policy, for the
+   * bidder. It says only what the auction actually published: the window and
+   * extension are read from the auction, and the lock floor is shown only when
+   * the coordinator derived and published one. An unpublished value is omitted
+   * rather than guessed.
+   */
+  function auctionTimingNote(auction) {
+    const parts = [];
+    const rawWindow = auction?.late_bid_window_seconds;
+    const rawExtension = auction?.late_bid_extension_seconds;
+    if (rawWindow !== null && rawWindow !== undefined && rawExtension !== null && rawExtension !== undefined) {
+      const window = Number(rawWindow);
+      const extension = Number(rawExtension);
+      if (Number.isSafeInteger(window) && Number.isSafeInteger(extension) && window >= 0 && extension >= 0) {
+        parts.push(window > 0 ? `anti-snipe: ${window}s window, +${extension}s` : "no anti-snipe");
+      }
+    }
+    const rawLocktime = auction?.required_locktime;
+    if (rawLocktime !== null && rawLocktime !== undefined) {
+      const locktime = Number(rawLocktime);
+      if (Number.isSafeInteger(locktime) && locktime > 0) parts.push(`bid lock until ${ui.formatTime(locktime)}`);
+    }
+    return parts.join(" · ");
+  }
+
   function renderBidderAuctions(identity) {
     // Read the balances here rather than accept them. The one-second countdown
     // tick re-renders this list to move the "remaining" text, and a caller that
@@ -835,6 +934,8 @@
       if (auction.description) row.append(el("p", "meta", auction.description));
       const minimum = ui.minimumBid(auction);
       row.append(el("p", "meta", `High bid ${sats(auction.high_bid)} · minimum next bid ${minimum === null ? "—" : sats(minimum)} · ends ${ui.formatTime(auction.end_time)}`));
+      const timing = auctionTimingNote(auction);
+      if (timing) row.append(el("p", "fine", timing));
       const line = el("div", "bid-line");
       const label = el("label", "", "Bid amount");
       const input = document.createElement("input");
@@ -1346,6 +1447,7 @@
     } catch (error) {
       toast(`Could not read /api/config: ${error.message}`, "error");
     }
+    applyTimingDefaults();
     try {
       await Promise.all([
         installIdentity("seller"),

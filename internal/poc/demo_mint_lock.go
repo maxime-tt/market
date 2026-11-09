@@ -59,13 +59,15 @@ type demoMintLockBody struct {
 	Proofs []MintProofBinding `json:"proofs"`
 }
 
-// demoMintExpectedLocktime is the locktime a mint-backed bid must carry: the
-// maximum reachable end (original_end + MaxTotalExtension) plus the recovery
-// window consensus reserves after it (EmergencyRecoverySeconds). It is the same
-// composition the V4 rule enforces at model.go:1318; keeping one named helper
-// here means the coordinator and its test cannot drift from that rule.
-func demoMintExpectedLocktime(auction Auction, policy Policy) int64 {
-	return auction.OriginalEndTime + policy.MaxTotalExtension + EmergencyRecoverySeconds
+// demoMintExpectedLocktime is the floor a mint-backed bid's locktime must sit
+// at or above: the maximum reachable end (original_end + THIS AUCTION's own
+// cumulative extension cap) plus the recovery window consensus reserves after
+// it (EmergencyRecoverySeconds). It delegates to the model's single derivation
+// so the coordinator and the consensus V4 rule cannot drift apart. The network
+// policy is only the ceiling on what an auction may pick, so it is not an
+// input here.
+func demoMintExpectedLocktime(auction Auction) int64 {
+	return auctionRequiredLocktime(auction)
 }
 
 func (server *APIServer) demoMintLock(response http.ResponseWriter, request *http.Request) {
@@ -160,16 +162,18 @@ func (server *APIServer) demoMintLock(response http.ResponseWriter, request *htt
 		return
 	}
 	// The lock must outlive every reachable auction end, not just the current
-	// one: anti-sniping extensions can push EndTime to OriginalEndTime +
-	// MaxTotalExtension, and consensus additionally reserves EmergencyRecoverySeconds
-	// after that (model.go:1318). A lock built from the current EndTime can expire
-	// while the auction is still open, so the bidder reclaims and the leading bid
-	// loses its backing. This is an off-chain coordinator check, so requiring the
-	// exact composition is safe -- it never replays through consensus validation.
-	expectedLocktime := demoMintExpectedLocktime(auction, server.manifest.Policy)
-	if body.Locktime != expectedLocktime {
-		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("mint lock locktime %d does not match the required policy locktime %d (original_end_time %d + max_total_extension %d + emergency_recovery %d)",
-			body.Locktime, expectedLocktime, auction.OriginalEndTime, server.manifest.Policy.MaxTotalExtension, EmergencyRecoverySeconds))
+	// one: anti-sniping extensions can push EndTime to OriginalEndTime + this
+	// auction's own MaxTotalExtension, and consensus additionally reserves
+	// EmergencyRecoverySeconds after that. A lock built from the current
+	// EndTime can expire while the auction is still open, so the bidder
+	// reclaims and the leading bid loses its backing. The auction's floor is
+	// the minimum; a slightly longer lock is fine and is accepted, within the
+	// policy band. This is an off-chain coordinator check, so the band never
+	// replays through consensus validation.
+	floor := demoMintExpectedLocktime(auction)
+	if body.Locktime < floor || body.Locktime > floor+server.manifest.Policy.MaxTotalExtension {
+		writeError(response, http.StatusUnprocessableEntity, fmt.Errorf("mint lock locktime %d is outside the auction locktime band [%d, %d] (auction floor %d = original_end_time %d + max_total_extension %d + emergency_recovery %d)",
+			body.Locktime, floor, floor+server.manifest.Policy.MaxTotalExtension, floor, auction.OriginalEndTime, auction.MaxTotalExtension, EmergencyRecoverySeconds))
 		return
 	}
 	// Sign only what consensus would accept: a reference already committed to
