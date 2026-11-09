@@ -571,4 +571,62 @@ describe('rabbitholeSearch — the search frame', () => {
 			code: 'bad-request',
 		})
 	})
+
+	test('returns products in the INDEX order, not the order the relays delivered them', async () => {
+		// The live defect: the `search` frame is relevance-ordered, but products
+		// were pushed as `event` frames arrived, so the rendered list was the
+		// relays' race. Measured on a live query: the index's first hit came back
+		// eighth because its relay answered last.
+		const hitOrder = ['e3', 'e1', 'e2'] // the index's ranking, best first
+		const arrivalOrder = ['e2', 'e3', 'e1'] // what the relays happened to send
+
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({
+							type: 'search',
+							candidateCount: 3,
+							hits: hitOrder.map((event_id) => ({
+								coordinate: `30402:${PUBKEY}:${event_id}`,
+								event_id,
+								relays_seen: ['wss://nos.lol'],
+							})),
+						}),
+						...arrivalOrder.map((id) => JSON.stringify({ type: 'event', event: productEvent(id, `Item ${id}`) })),
+						outcomeFrame('complete', ['wss://nos.lol'], []),
+					]),
+				),
+			},
+		)
+
+		expect(result.products.map((p) => p.eventId)).toEqual(hitOrder)
+		// and the relay correlation still rides along on the reordered list
+		expect(result.products.map((p) => p.relays)).toEqual([['wss://nos.lol'], ['wss://nos.lol'], ['wss://nos.lol']])
+	})
+
+	test('keeps a streamed listing the index did not rank, after the ranked ones', async () => {
+		// A relay can deliver an event no hit named. It is real data, so it is
+		// kept — but unranked, so it must not jump ahead of the service's ranking.
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({
+							type: 'search',
+							candidateCount: 2,
+							hits: [{ coordinate: `30402:${PUBKEY}:e1`, event_id: 'e1', relays_seen: ['wss://nos.lol'] }],
+						}),
+						JSON.stringify({ type: 'event', event: productEvent('stray', 'Unranked Item') }),
+						JSON.stringify({ type: 'event', event: productEvent('e1', 'Ranked Item') }),
+						outcomeFrame('complete', ['wss://nos.lol'], []),
+					]),
+				),
+			},
+		)
+
+		expect(result.products.map((p) => p.eventId)).toEqual(['e1', 'stray'])
+	})
 })

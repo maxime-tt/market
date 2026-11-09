@@ -347,6 +347,12 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	let suggested: BrowseFacet[] = []
 	const relaysByEventId = new Map<string, string[]>()
 	const relaysByCoordinate = new Map<string, string[]>()
+	// The index's hit order IS the service's relevance order, and the `event`
+	// frames arrive in whatever order the relays happen to answer. The rank is
+	// captured here so the UI can render the service's order rather than the
+	// relay's — without it the best match can land tenth because a slow relay
+	// delivered its payload last.
+	const hitRank = new Map<string, number>()
 
 	const dispatchLine = (line: string): void => {
 		let frame: RabbitHoleFrame
@@ -373,7 +379,11 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 						filter: suggestion.filter,
 					}),
 				)
-				for (const hit of frame.hits ?? []) {
+				for (const [rank, hit] of (frame.hits ?? []).entries()) {
+					// Rank by position in the service's own hit list. Keyed on
+					// `event_id` only — see `orderByHitRank` for why the coordinate
+					// is not usable as a ranking key.
+					if (hit.event_id && !hitRank.has(hit.event_id)) hitRank.set(hit.event_id, rank)
 					if (!hit.relays_seen || hit.relays_seen.length === 0) continue
 					if (hit.event_id) relaysByEventId.set(hit.event_id, [...hit.relays_seen])
 					if (hit.coordinate) relaysByCoordinate.set(hit.coordinate, [...hit.relays_seen])
@@ -456,14 +466,21 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 		await reader.cancel().catch(() => {})
 	}
 
+	// Carry the service's own ranking to the caller. The `search` frame is ordered
+	// by relevance; the `event` frames are ordered by whichever relay answered
+	// first. Sorting by the captured rank is what makes the list the service's
+	// answer rather than the relays' race. A product the index did not rank keeps
+	// its arrival position after the ranked ones.
+	const ranked = orderByHitRank(products, hitRank)
+
 	// `indexOnly` returns only the `search` frame and never an `outcome` (the
 	// service never dials a relay), so an empty stream there is valid, not
 	// truncated. Every other stream MUST end in its `outcome` frame.
 	if (!outcome) {
-		if (ctx.indexOnly) return { products, eose: [], pending: [], suggested }
+		if (ctx.indexOnly) return { products: ranked, eose: [], pending: [], suggested }
 		throw new RabbitHoleError('truncated', 'RabbitHole: stream ended without an outcome frame')
 	}
-	return toBrowseSearchResult(outcome, products, relayOrder, relayState, suggested)
+	return toBrowseSearchResult(outcome, ranked, relayOrder, relayState, suggested)
 }
 
 /**
@@ -508,4 +525,35 @@ function orderBySeen(relays: string[], relayOrder: string[]): string[] {
 		return index === -1 ? relayOrder.length : index
 	}
 	return [...relays].sort((a, b) => rank(a) - rank(b))
+}
+
+/**
+ * Order the delivered products by the index's own hit order.
+ *
+ * The `search` frame is relevance-ordered; the `event` frames are not. Without
+ * this the rendered list is the order relays answered in, which buries the best
+ * match wherever a slow relay put it (measured on a live query: the index's
+ * first hit arrived eighth).
+ *
+ * Correlation is by `event_id` alone — the hit's `event_id` is the delivered
+ * event's `id` (measured 20/20 on a live response). The coordinate fallback used
+ * for the relay lookup is deliberately NOT used here: the index slugs a hit's
+ * `coordinate` with title-derived text rather than the canonical
+ * `30402:<pubkey>:<d>`, and a `BrowseProduct.id` is the `d` identifier only when
+ * one is present, so a coordinate key could rank the wrong product. Ranking
+ * nothing is better than ranking the wrong thing.
+ *
+ * A product no hit names was streamed but never ranked; it keeps its arrival
+ * order after everything ranked, rather than being dropped — it is real data,
+ * just unranked.
+ */
+function orderByHitRank(products: BrowseProduct[], hitRank: Map<string, number>): BrowseProduct[] {
+	if (hitRank.size === 0) return products
+	const UNRANKED = Number.MAX_SAFE_INTEGER
+	// Decorate with the arrival index so the sort is stable for ties and for
+	// unranked products, which Array.prototype.sort is not required to preserve.
+	return products
+		.map((product, arrival) => ({ product, arrival, rank: hitRank.get(product.eventId) ?? UNRANKED }))
+		.sort((a, b) => a.rank - b.rank || a.arrival - b.arrival)
+		.map((entry) => entry.product)
 }
