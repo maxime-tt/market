@@ -806,11 +806,16 @@
       // controls simply stay unaffordable rather than guessing a number.
     }
     const target = $("bidder-auctions");
+    // Re-render even while the bidder is typing, then put the focus and caret
+    // back. An early return here froze the row instead: after a successful bid
+    // the button stayed "Bidding…" and disabled and the amounts stayed stale,
+    // because clicking Bid does not move focus off the amount field on a touch
+    // device — so the bidder could not place a second bid at all.
     const active = document.activeElement;
-    if (active && active.closest && active.closest("#bidder-auctions") && active.tagName === "INPUT") {
-      // Do not replace an input the bidder is typing into on the 3s refresh.
-      return;
-    }
+    const typingIn = active && active.closest && active.closest("#bidder-auctions") && active.tagName === "INPUT" ? active : null;
+    const caret = typingIn
+      ? { key: typingIn.dataset.auctionId, start: typingIn.selectionStart, end: typingIn.selectionEnd }
+      : null;
     const auctions = Object.values(state.view?.state?.auctions || {})
       .filter((auction) => auction.status === "open")
       .sort((a, b) => a.end_time - b.end_time);
@@ -879,6 +884,19 @@
       line.append(label, button);
       row.append(line);
       target.append(row);
+    }
+    // Put the caret back where it was, so a refresh (or the re-render after a
+    // bid) never interrupts someone mid-number.
+    if (caret) {
+      const again = target.querySelector(`input[data-auction-id="${caret.key}"]`);
+      if (again) {
+        again.focus();
+        try {
+          again.setSelectionRange(caret.start, caret.end);
+        } catch {
+          // A non-text input has no selection; focus is enough.
+        }
+      }
     }
   }
 
