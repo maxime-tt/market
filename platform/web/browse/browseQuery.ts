@@ -33,10 +33,13 @@ import { isValidHexKey } from '@sdk/core/utils/utils'
 import { getCoordsFromATag, isValidATag, type AddressableEventCoordinate } from '@sdk/core/utils/coords'
 import { filterBlacklistedEvents } from '@sdk/config/blacklist'
 import { buildProductListFilter, isProductListed } from '@sdk/commerce/discovery'
+import { parseProductAddress, prepareProductFamilyCatalog } from '@sdk/commerce/discovery'
 // Shared shapes and the canonical kind-30402 mappers (also used by the client).
 import {
 	collapseProductFamilyEvents,
 	mapProductDetail,
+	mapProductFamilyChildren,
+	type BrowseFamilyChildren,
 	type BrowseFacet,
 	type BrowseProduct,
 	type BrowseProductDetail,
@@ -62,6 +65,8 @@ export const browseKeys = {
 	facets: (filters: { query: string; provider: BrowseSearchProvider }) => [...browseKeys.all, 'facets', filters] as const,
 	/** Single product detail by event id (fetch, not stream), scoped to the relays it was seen on. */
 	detail: (id: string, relays?: readonly string[]) => [...browseKeys.all, 'detail', id, relays ?? null] as const,
+	/** A family's child options by parent coordinate (fetch, not stream). */
+	familyChildren: (parentAddress: string, relays?: readonly string[]) => [...browseKeys.all, 'family-children', parentAddress, relays ?? null] as const,
 	/** A seller's own listings (the seller-profile screen's list stream). */
 	sellerListings: (pubkey: string, limit: number) => [...browseKeys.all, 'seller-listings', pubkey, limit] as const,
 } as const
@@ -372,6 +377,56 @@ async function fetchFromRelays(filters: EventFilter[], relays: string[]): Promis
 
 export function useBrowseProductDetail(id: string | undefined, relays?: readonly string[]) {
 	return useQuery(browseProductDetailQueryOptions(id, relays))
+}
+
+// ---------------------------------------------------------------------------
+// Family children — the open family's options (fetch, single family)
+// ---------------------------------------------------------------------------
+
+/** The bounded read size for one family's option list. */
+const FAMILY_CHILDREN_LIMIT = 200
+
+/**
+ * Read a product family's children — its options — by the parent coordinate.
+ *
+ * `fetch`, not `stream`: this is a single-entity/detail read (one family's own
+ * options, whose identity the panel already knows), not a list/live surface,
+ * and holding a live subscription per open family is not warranted
+ * (`sdk/AGENTS.md`, read API doctrine). The children filter is the products
+ * module's own (`buildProductListFilter` with `parentAddress`) — one mechanism,
+ * not a second filter builder — and the parent is read alongside it only so the
+ * SDK can build the family container `resolveProductVariation` resolves a
+ * selection against. Every child is mapped through the shared results mapper
+ * (`mapProductFamilyChildren`), so an option in the panel is the same
+ * `BrowseProduct` a list row for that child would be.
+ *
+ * The relays the parent's search hit was seen on are reused when recorded;
+ * otherwise the app's own read context answers.
+ */
+export function browseFamilyChildrenQueryOptions(parentAddress: string | undefined, relays?: readonly string[]) {
+	const relayTargets = relays && relays.length > 0 ? [...relays] : undefined
+	return queryOptions({
+		queryKey: browseKeys.familyChildren(parentAddress ?? '', relayTargets),
+		queryFn: async (): Promise<BrowseFamilyChildren | null> => {
+			if (!parentAddress) return null
+			const coordinate = parseProductAddress(parentAddress)
+			if (!coordinate) return null
+			// Bounded single-family detail read: the parent plus its child options.
+			const filters: EventFilter[] = [
+				{ kinds: [30402], authors: [coordinate.pubkey], '#d': [coordinate.dTag] },
+				buildProductListFilter({ limit: FAMILY_CHILDREN_LIMIT, parentAddress }),
+			]
+			const events = relayTargets ? await fetchFromRelays(filters, relayTargets) : await getReadContext().fetch(filters)
+			const family = prepareProductFamilyCatalog(events).families.find((candidate) => candidate.address === parentAddress)
+			if (!family) return null
+			return { family, children: mapProductFamilyChildren(family) }
+		},
+		enabled: Boolean(parentAddress),
+	})
+}
+
+export function useBrowseFamilyChildren(parentAddress: string | undefined, relays?: readonly string[]) {
+	return useQuery(browseFamilyChildrenQueryOptions(parentAddress, relays))
 }
 
 // ---------------------------------------------------------------------------

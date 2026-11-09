@@ -34,6 +34,28 @@ export interface ProductDetailShipping {
 	costSats: number
 }
 
+/**
+ * One option (a `type=variation` child) a family offers. Carries the fields the
+ * panel swaps in when it is selected, so a family panel shows THAT option's
+ * price, stock and image rather than the parent's.
+ */
+export interface ProductDetailOption {
+	/** The variation's `d` tag — the value `onSelectOption` reports. */
+	dTag: string
+	/** The option label (the variation's `spec` label), never the `d` tag when a label exists. */
+	label: string
+	/** Whether the option is currently purchasable; an out-of-stock option is shown as UNAVAILABLE, not removed. */
+	available: boolean
+	/** The option's own price; the product's price is the fallback. */
+	price?: number
+	/** The option's price unit (`price` tag's third element); the product's unit is the fallback. */
+	currency?: string
+	/** The option's own first image; the product's image is the fallback. */
+	image?: string
+	/** The option's own stock note; the product's note is shown only when no option is selected. */
+	stockNote?: string
+}
+
 /** The product the detail pane renders. */
 export interface ProductDetailPanelProduct {
 	/** Product id (the kind-30402 `d` tag). */
@@ -64,6 +86,13 @@ export interface ProductDetailPanelProduct {
 	priceUnit?: string
 	/** Stock note, e.g. `76 in stock`, rendered as the price row's state. */
 	stockNote?: string
+	/**
+	 * The family's lowest option price. With `priceMax`, a family panel states a
+	 * range until an option is selected, when the option's own price replaces it.
+	 */
+	priceMin?: number
+	/** The family's highest option price. */
+	priceMax?: number
 	/** Description (`content`). */
 	description?: string
 	/** Shipping options on the listing. */
@@ -84,6 +113,22 @@ export interface ProductDetailPanelProps {
 	state?: ProductDetailPanelState
 	/** The product; required for `ready`. */
 	product?: ProductDetailPanelProduct
+	/**
+	 * The family's options, when the panel is showing a family. Every non-hidden
+	 * option is offered — an out-of-stock one is shown as UNAVAILABLE, never
+	 * removed — so a buyer can see that their size exists but is sold out.
+	 * Absent for a simple listing.
+	 */
+	options?: readonly ProductDetailOption[]
+	/**
+	 * The d-tag of the option rendered as selected. Nothing is marked when it is
+	 * absent or names no option: the panel never falls back to another option —
+	 * the host resolves the initial and explicit selection with the SDK, and a
+	 * selection that has disappeared must show as none, not as a sibling.
+	 */
+	selectedOptionDTag?: string
+	/** Callback when the buyer picks an option. The picker's options render inert without it. */
+	onSelectOption?: (dTag: string) => void
 	/** Context menu open state (the three-dots button). */
 	menuOpen?: boolean
 	/** Callback for the heart. The tool renders only when provided. */
@@ -157,21 +202,41 @@ const PanelLoading: FC = () => (
 const PanelContent: FC<{
 	product: ProductDetailPanelProduct
 	menuOpen: boolean
+	options?: readonly ProductDetailOption[]
+	selectedOptionDTag?: string
+	onSelectOption?: (dTag: string) => void
 	onHeart?: () => void
 	onThreeDots?: () => void
 	onAddToList?: () => void
 	onCopyLink?: () => void
 	onReport?: () => void
 	onBuy?: () => void
-}> = ({ product, menuOpen, onHeart, onThreeDots, onAddToList, onCopyLink, onReport, onBuy }) => {
+}> = ({ product, menuOpen, options, selectedOptionDTag, onSelectOption, onHeart, onThreeDots, onAddToList, onCopyLink, onReport, onBuy }) => {
 	const initials = product.seller.slice(0, 2).toUpperCase()
+
+	// The selected option, if any. Matched by d-tag only — never a positional or
+	// "first available" fallback: the host owns the default and the explicit
+	// selection, and a selection that disappeared must show as nothing selected.
+	const activeOption = options && selectedOptionDTag ? options.find((option) => option.dTag === selectedOptionDTag) : undefined
+
+	// The option's own price/stock/image win; the parent's fields are the
+	// fallback (the gallery is explicitly inherited when the variation has none).
+	const optionPrice = typeof activeOption?.price === 'number' ? activeOption.price : undefined
+	const shownPrice = optionPrice ?? product.price
+	const shownUnit = optionPrice !== undefined ? formatPriceUnit(activeOption?.currency ?? product.currency) : (product.priceUnit ?? formatPriceUnit(product.currency))
+	const familyRange =
+		optionPrice === undefined && typeof product.priceMin === 'number' && typeof product.priceMax === 'number' && product.priceMin !== product.priceMax
+			? { min: product.priceMin, max: product.priceMax }
+			: null
+	const shownImage = activeOption?.image ?? product.image
+	const shownStock = activeOption ? activeOption.stockNote : product.stockNote
 
 	return (
 		<>
-			{/* Shot — the listing's own image, else the studio art that fills the pane */}
+			{/* Shot — the selected option's own image, the listing's image, else the studio art that fills the pane */}
 			<ListingImage
 				data-slot="product-detail-art"
-				image={product.image}
+				image={shownImage}
 				alt={product.title}
 				material={product.material}
 				symbolId={product.symbolId}
@@ -280,20 +345,68 @@ const PanelContent: FC<{
 					)}
 				</div>
 
-				{/* Price row — the listing's own amount and unit, stock state right */}
+				{/* Price row — the selected option's price, else the family range, else the listing's own amount and unit */}
 				<div data-slot="product-detail-price" className="mt-3 flex items-baseline gap-3 pb-3 border-b border-border-default tabular-nums">
 					<b className="text-2xl font-medium leading-none">
-						{product.price === undefined ? '—' : (product.priceLabel ?? formatSats(product.price))}{' '}
-						{product.price !== undefined && (
-							<small className="text-[13px] font-normal text-text-mid">{product.priceUnit ?? formatPriceUnit(product.currency)}</small>
+						{familyRange ? (
+							<>
+								{formatSats(familyRange.min)} – {formatSats(familyRange.max)}{' '}
+								<small className="text-[13px] font-normal text-text-mid">{product.priceUnit ?? formatPriceUnit(product.currency)}</small>
+							</>
+						) : shownPrice === undefined ? (
+							'—'
+						) : (
+							<>
+								{optionPrice !== undefined ? formatSats(shownPrice) : (product.priceLabel ?? formatSats(shownPrice))}{' '}
+								<small className="text-[13px] font-normal text-text-mid">{shownUnit}</small>
+							</>
 						)}
 					</b>
-					{product.stockNote && (
+					{shownStock && (
 						<span data-slot="product-detail-stock" className="ml-auto text-[11px] uppercase tracking-[0.08em] text-text-mid">
-							{product.stockNote}
+							{shownStock}
 						</span>
 					)}
 				</div>
+
+				{/* Option picker — every non-hidden variation, out-of-stock shown as UNAVAILABLE rather than removed */}
+				{options && options.length > 0 && (
+					<div data-slot="product-detail-options" className="mt-3">
+						<div className="text-[10.5px] uppercase tracking-[0.1em] text-text-mid">Options</div>
+						<div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Product options">
+							{options.map((option) => {
+								const isSelected = option.dTag === activeOption?.dTag
+								return (
+									<button
+										key={option.dTag}
+										type="button"
+										data-slot="product-detail-option"
+										data-testid={`widget-product-detail-option-${option.dTag}`}
+										data-selected={isSelected}
+										data-available={option.available}
+										aria-pressed={isSelected}
+										disabled={!option.available || !onSelectOption}
+										onClick={option.available && onSelectOption ? () => onSelectOption(option.dTag) : undefined}
+										className={cn(
+											'inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition-colors',
+											option.available ? 'cursor-pointer' : 'cursor-not-allowed opacity-60',
+											isSelected
+												? 'border-fill-ink bg-surface-sunken text-text-high'
+												: 'border-border-default text-text-mid hover:text-text-high',
+										)}
+									>
+										<span data-slot="option-label">{option.label}</span>
+										{!option.available && (
+											<span data-slot="option-unavailable" className="text-[10px] uppercase tracking-[0.08em]">
+												Unavailable
+											</span>
+										)}
+									</button>
+								)
+							})}
+						</div>
+					</div>
+				)}
 
 				{/* Description */}
 				{product.description && (
@@ -368,6 +481,9 @@ const PanelContent: FC<{
 export const ProductDetailPanel: FC<ProductDetailPanelProps> = ({
 	state = 'ready',
 	product,
+	options,
+	selectedOptionDTag,
+	onSelectOption,
 	menuOpen = false,
 	onHeart,
 	onThreeDots,
@@ -430,6 +546,9 @@ export const ProductDetailPanel: FC<ProductDetailPanelProps> = ({
 				<PanelContent
 					product={product}
 					menuOpen={menuOpen}
+					options={options}
+					selectedOptionDTag={selectedOptionDTag}
+					onSelectOption={onSelectOption}
 					onHeart={onHeart}
 					onThreeDots={onThreeDots}
 					onAddToList={onAddToList}

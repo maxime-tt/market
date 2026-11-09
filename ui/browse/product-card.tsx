@@ -278,6 +278,13 @@ export interface ProductCardProps {
 	priceMax?: number
 	/** The distinct option axes (spec keys) the family varies over, first-seen order. */
 	specKeys?: string[]
+	/**
+	 * Which side of a product family this row is. A `parent` (a `type=variable`
+	 * container) is not itself purchasable, and it carries NO card-level action:
+	 * the card opens the details page, where the option picker comes before the
+	 * purchase can complete. A `variation` row shows its own option label.
+	 */
+	familyRole?: 'parent' | 'variation'
 	/** Stock note, e.g. "76 in stock", "12 left", "40 in stock", "1 of 3". */
 	stockNote?: string
 	/** Material gradient class (.m1–.m8). */
@@ -408,6 +415,7 @@ export const ProductCard: FC<ProductCardProps> = ({
 	priceMin,
 	priceMax,
 	specKeys,
+	familyRole,
 	stockNote,
 	material,
 	symbolId,
@@ -693,8 +701,9 @@ export const ProductCard: FC<ProductCardProps> = ({
 				{stockNote && <small className="text-xs text-text-mid">{stockNote}</small>}
 			</div>
 
-			{/* Family options — the option count and the axes it varies over. Static
-			    in this slice; the interactive option picker is a follow-up. */}
+			{/* Family options as INFORMATION, not as an action: the count and the axes
+			    tell a buyer this product has choices, and the card itself opens the
+			    details page where the picker and the purchase live. */}
 			{(typeof variantCount === 'number' && variantCount > 0) || variantLabel ? (
 				<div
 					data-slot="card-options"
@@ -727,6 +736,15 @@ export const ProductCard: FC<ProductCardProps> = ({
 						)}
 				</div>
 			) : null}
+
+			{/* NO purchase action on a browse card, and no separate options button
+			    either. Owner's ruling: a buy button on the browse page is the old
+			    Plebeian UX and it does not work — almost nobody adds to cart from a
+			    grid tile without opening the product, so the card's job is to lead to
+			    the DETAILS page, which is the purchase surface. The option count and
+			    the axes above are the family signal; the picker and the purchase both
+			    live in the panel. Do not re-add a card-level buy or "view options"
+			    control. */}
 		</article>
 	)
 }

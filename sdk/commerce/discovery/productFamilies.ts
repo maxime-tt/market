@@ -161,7 +161,12 @@ export function isProductHidden(event: ProductFamilyEvent | null): boolean {
 	return event?.tags.find((tag) => tag[0] === 'visibility')?.[1] === 'hidden'
 }
 
-function getVariationDTag(event: ProductFamilyEvent | null): string {
+/**
+ * A variation's own `d` tag — the identity the panel holds when an option is
+ * selected, and the value `resolveProductVariation` matches on. Empty when the
+ * event carries none, so a caller cannot mistake a missing key for a real one.
+ */
+export function getVariationDTag(event: ProductFamilyEvent | null): string {
 	return event?.tags.find((tag) => tag[0] === 'd')?.[1] ?? ''
 }
 

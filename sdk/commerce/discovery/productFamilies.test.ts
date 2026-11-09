@@ -15,6 +15,7 @@ import {
 	prepareProductFamilyCatalog,
 	resolveProductVariation,
 } from './productFamilies'
+import { buildProductListFilter } from './productRead'
 
 const seller = 'a'.repeat(64)
 const other = 'b'.repeat(64)
@@ -44,6 +45,18 @@ const readPrice = (event: Raw) => {
 	const tag = event.tags.find((t) => t[0] === 'price')
 	return tag ? { amount: Number(tag[1]), currency: tag[2] } : null
 }
+
+describe('parent-address filter', () => {
+	test('buildProductListFilter maps a parent address to a `#a` tag filter', () => {
+		expect(buildProductListFilter({ limit: 25, parentAddress })).toEqual({
+			kinds: [30402],
+			limit: 25,
+			'#a': [parentAddress],
+		})
+		// Without a parent address the filter is unchanged — no stray `#a`.
+		expect(buildProductListFilter({ limit: 25 })).toEqual({ kinds: [30402], limit: 25 })
+	})
+})
 
 describe('event type and address', () => {
 	test('reads the type tag, defaulting to simple', () => {

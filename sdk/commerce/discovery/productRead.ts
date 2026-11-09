@@ -10,6 +10,13 @@ export interface ProductListQuery {
 	tag?: string
 	until?: number
 	author?: string
+	/**
+	 * A product family's parent coordinate. A `type=variation` child names its
+	 * parent with an `a` tag, so this maps to a `#a` filter and narrows the read
+	 * to that family's own children (its options) — one mechanism, not a second
+	 * filter builder.
+	 */
+	parentAddress?: string
 }
 
 export function buildProductListFilter(query: ProductListQuery): EventFilter {
@@ -19,6 +26,7 @@ export function buildProductListFilter(query: ProductListQuery): EventFilter {
 		...(query.author && { authors: [query.author] }),
 		...(query.until && { until: query.until }),
 		...(query.tag && { '#t': [query.tag] }),
+		...(query.parentAddress && { '#a': [query.parentAddress] }),
 	}
 }
 

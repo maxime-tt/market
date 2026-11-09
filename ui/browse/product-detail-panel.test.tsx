@@ -9,7 +9,7 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ProductDetailPanel, type ProductDetailPanelProduct } from './product-detail-panel'
+import { ProductDetailPanel, type ProductDetailOption, type ProductDetailPanelProduct } from './product-detail-panel'
 import type { MaterialClass } from './art'
 
 function makeProduct(opts: Partial<ProductDetailPanelProduct> = {}): ProductDetailPanelProduct {
@@ -258,6 +258,157 @@ describe('ProductDetailPanel', () => {
 		expect(button).toBeDefined()
 		button?.props.onClick?.()
 		expect(onClose).toHaveBeenCalledTimes(1)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Option picker — a family's variations, per-option price/stock/images
+// ---------------------------------------------------------------------------
+
+function makeOption(opts: Partial<ProductDetailOption> = {}): ProductDetailOption {
+	return {
+		dTag: 'trail-runner-42',
+		label: '42',
+		available: true,
+		price: 120,
+		currency: 'SATS',
+		stockNote: '2 in stock',
+		...opts,
+	}
+}
+
+describe('ProductDetailPanel option picker', () => {
+	test('offers every variation, marking an out-of-stock one UNAVAILABLE rather than removing it', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct({ title: 'Trail Runner' }),
+				options: [makeOption(), makeOption({ dTag: 'trail-runner-43', label: '43', available: false, stockNote: undefined })],
+				onSelectOption: () => {},
+			}),
+		)
+
+		expect(markup).toContain('data-slot="product-detail-options"')
+		// Both options are offered — the sold-out size is not removed.
+		expect(markup).toContain('data-testid="widget-product-detail-option-trail-runner-42"')
+		expect(markup).toContain('data-testid="widget-product-detail-option-trail-runner-43"')
+		// The unavailable one states it, and is inert.
+		expect(markup).toContain('data-available="false"')
+		expect(markup).toContain('Unavailable')
+	})
+
+	test('uses the variation’s spec label, never the d-tag', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct(),
+				// The label is what a buyer reads; the d-tag is only the key.
+				options: [makeOption({ dTag: 'trail-runner-42', label: '42' })],
+				onSelectOption: () => {},
+			}),
+		)
+		expect(markup).toContain('<span data-slot="option-label">42</span>')
+		expect(markup).not.toContain('trail-runner-42</span>')
+	})
+
+	test('marks the selected option selected', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct(),
+				options: [makeOption({ dTag: 'trail-runner-42' }), makeOption({ dTag: 'trail-runner-43', label: '43' })],
+				selectedOptionDTag: 'trail-runner-43',
+				onSelectOption: () => {},
+			}),
+		)
+		const selected = markup.slice(markup.indexOf('widget-product-detail-option-trail-runner-43'))
+		expect(selected).toContain('data-selected="true"')
+		expect(selected).toContain('aria-pressed="true"')
+		// The other option is not selected.
+		const other = markup.slice(markup.indexOf('widget-product-detail-option-trail-runner-42'))
+		expect(other).toContain('data-selected="false"')
+	})
+
+	test('shows the selected variation’s price and stock, replacing the family range', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct({ title: 'Trail Runner', price: 100, priceMin: 100, priceMax: 150, stockNote: 'parent stock' }),
+				options: [makeOption({ price: 120, stockNote: '2 in stock' })],
+				selectedOptionDTag: 'trail-runner-42',
+				onSelectOption: () => {},
+			}),
+		)
+		// The option's amount/stock win; the range is gone once an option is chosen.
+		expect(markup).toContain('120')
+		expect(markup).toContain('2 in stock')
+		expect(markup).not.toContain('100 – 150')
+		expect(markup).not.toContain('parent stock')
+	})
+
+	test('shows the selected variation’s image, inheriting the parent gallery when it has none', () => {
+		const withImage = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct({ image: 'https://example.test/parent.png' }),
+				options: [makeOption({ image: 'https://example.test/forty-two.png' })],
+				selectedOptionDTag: 'trail-runner-42',
+				onSelectOption: () => {},
+			}),
+		)
+		expect(withImage).toContain('src="https://example.test/forty-two.png"')
+		expect(withImage).not.toContain('src="https://example.test/parent.png"')
+
+		const withoutImage = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct({ image: 'https://example.test/parent.png' }),
+				options: [makeOption({ image: undefined })],
+				selectedOptionDTag: 'trail-runner-42',
+				onSelectOption: () => {},
+			}),
+		)
+		expect(withoutImage).toContain('src="https://example.test/parent.png"')
+	})
+
+	test('an explicit selection that is gone marks nothing selected — never a sibling', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct({ price: 100, priceMin: 100, priceMax: 150 }),
+				options: [makeOption({ dTag: 'trail-runner-42' }), makeOption({ dTag: 'trail-runner-43', label: '43' })],
+				// The buyer's choice, which has since disappeared from the family.
+				selectedOptionDTag: 'trail-runner-gone',
+				onSelectOption: () => {},
+			}),
+		)
+		// No option silently becomes the selection…
+		expect(markup).not.toContain('data-selected="true"')
+		// …and the panel states the family range rather than adopting a sibling's price.
+		expect(markup).toContain('100 – 150')
+	})
+
+	test('an available option is interactive, an unavailable one is disabled', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductDetailPanel, {
+				state: 'ready',
+				product: makeProduct(),
+				options: [
+					makeOption({ dTag: 'trail-runner-42', available: true }),
+					makeOption({ dTag: 'trail-runner-43', label: '43', available: false, stockNote: undefined }),
+				],
+				onSelectOption: () => {},
+			}),
+		)
+		const available = markup.slice(
+			markup.indexOf('data-testid="widget-product-detail-option-trail-runner-42"'),
+			markup.indexOf('data-testid="widget-product-detail-option-trail-runner-43"'),
+		)
+		// The available option carries no `disabled` — it can be picked.
+		expect(available).not.toContain('disabled')
+		// The unavailable one is inert.
+		const unavailable = markup.slice(markup.indexOf('data-testid="widget-product-detail-option-trail-runner-43"'))
+		expect(unavailable).toContain('disabled')
 	})
 })
 

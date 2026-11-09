@@ -35,6 +35,7 @@ export {
 	getProductFamilyImages,
 	getProductFamilyPriceRange,
 	getProductFamilySpecKeys,
+	getVariationDTag,
 	getVariationLabel,
 	getVariationParentAddress,
 	getVariationSpecs,

@@ -26,6 +26,7 @@ import {
 	getProductShippingOptions,
 	getProductStock,
 	getProductTitle,
+	getVariationDTag,
 	getVariationLabel,
 	getVariationParentAddress,
 	groupProductSearchResultsByFamily,
@@ -326,6 +327,53 @@ export function collapseProductFamilyEvents(events: readonly NostrEventLike[]): 
 			return mapProductWithFamily(event, family)
 		})
 		.filter((product): product is BrowseProduct => product !== undefined)
+}
+
+// ---------------------------------------------------------------------------
+// Family children — a family's options, for the detail panel's picker
+// ---------------------------------------------------------------------------
+
+/**
+ * One option a family offers: its identity (the variation's `d` tag), the label
+ * a buyer reads, whether it is currently purchasable, and the child mapped
+ * through the shared mapper so a panel row and a list row are the same object.
+ */
+export interface BrowseFamilyChild {
+	/** The variation's `d` tag — the value the picker reports and the selection key. */
+	dTag: string
+	/** The option label (the variation's `spec` label), never the `d` tag when a label exists. */
+	label: string
+	/** Whether the option is currently purchasable, by the SDK stock rule. */
+	available: boolean
+	/** The child mapped through the shared results mapper — identical to a list row for the same event. */
+	product: BrowseProduct
+}
+
+/** A family's options plus the SDK family container a selection resolves against. */
+export interface BrowseFamilyChildren {
+	/** The SDK family container `resolveProductVariation` resolves a selection against. */
+	family: ProductFamily<NostrEventLike>
+	/** The family's options, in the SDK's display order (available-filtering is NOT applied). */
+	children: BrowseFamilyChild[]
+}
+
+/**
+ * Map a family's option list for the detail panel.
+ *
+ * Every child goes through the SAME per-event mapper a results row uses
+ * ({@link mapProduct} → `mapProductWithFamily`), so an option in the panel and
+ * the same child in a list cannot disagree on price, stock, image or label. The
+ * list is NOT collapsed to one row — unlike a browse result, every option must
+ * survive — and the SDK's own `variations` list (hidden excluded, labels and
+ * availability resolved, sorted) is the source of order and flags.
+ */
+export function mapProductFamilyChildren(family: ProductFamily<NostrEventLike>): BrowseFamilyChild[] {
+	return family.variations
+		.map((variation) => {
+			const product = mapProduct(variation.product)
+			return product ? { dTag: getVariationDTag(variation.product), label: variation.label, available: variation.available, product } : undefined
+		})
+		.filter((child): child is BrowseFamilyChild => child !== undefined)
 }
 
 // ---------------------------------------------------------------------------

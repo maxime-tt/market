@@ -43,10 +43,11 @@ import { EmptyStateBrowse } from '@ui/browse/empty-state-browse'
 import { ProductArtMount, SKELETON_SHIMMER_CSS } from '@ui/browse/art'
 import { RelayIndicator, DeadSearchError, TagFilterBadge } from '@ui/browse/relay-error'
 import { SplitView } from '@ui/browse/split-view'
-import { ProductDetailPanel, type ProductDetailPanelState } from '@ui/browse/product-detail-panel'
+import { ProductDetailPanel, type ProductDetailOption, type ProductDetailPanelState } from '@ui/browse/product-detail-panel'
 import { formatPriceUnit } from '@ui/utils/format'
-import { useBrowseSearch, useBrowseFacets, useBrowseProductDetail } from '@platform/web/browse/browseQuery'
-import { materialForPubkey, type BrowseFacet, type BrowseProduct } from '@platform/web/browse/browseProductMap'
+import { useBrowseSearch, useBrowseFacets, useBrowseProductDetail, useBrowseFamilyChildren } from '@platform/web/browse/browseQuery'
+import { materialForPubkey, readProductPrice, type BrowseFacet, type BrowseProduct } from '@platform/web/browse/browseProductMap'
+import { getProductFamilyPriceRange, getVariationDTag, resolveProductVariation } from '@sdk/commerce/discovery'
 import { feedStrips, useBrowseIndexFeed } from '@platform/web/browse/browseIndexFeed'
 import {
 	getNormalizedProfileDisplayName,
@@ -274,6 +275,7 @@ function BrowseResultCard({
 			variantCount={product.variantCount}
 			availableVariantCount={product.availableVariantCount}
 			specKeys={product.specKeys}
+			familyRole={product.familyRole}
 			stockNote={typeof product.stock === 'string' ? product.stock : undefined}
 			material={materialForPubkey(product.pubkey)}
 			presentation={presentation}
@@ -323,6 +325,11 @@ function BrowseResultCard({
 export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 	const [facetsExpanded, setFacetsExpanded] = useState(false)
+	// The open family's selected option, by the variation's `d` tag. Held here
+	// (not in the URL) so picking an option is a state change inside the open
+	// panel, never a navigation. `undefined` means "no explicit choice", which
+	// the SDK resolves to the first available variation.
+	const [selectedVariant, setSelectedVariant] = useState<string | undefined>(undefined)
 
 	/** The nav field's input and the hero's — the two ends of the handoff. */
 	const navSearchInput = useRef<HTMLInputElement>(null)
@@ -376,6 +383,46 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	const detailSellerName = getNormalizedProfileDisplayName(detailProfile.data?.profile) ?? undefined
 	const detailSellerPicture = getNormalizedProfilePicture(detailProfile.data?.profile) || undefined
 	const detailPrice = useListingPriceDisplay(detail?.price, detail?.currency)
+
+	/**
+	 * The open product's family, when it is a family container. A `parent` row
+	 * already states its family address; a deep link that is not in the search
+	 * window falls back to the parent's own coordinate from the detail read. The
+	 * children read confirms family-ness — a simple listing builds no family and
+	 * so renders no picker.
+	 */
+	const detailCoordinate = detail && detail.pubkey && detail.id ? `30402:${detail.pubkey}:${detail.id}` : undefined
+	const familyAddress =
+		openProduct && openProduct.familyRole !== 'parent' ? undefined : (openProduct?.familyAddress ?? detailCoordinate)
+
+	const familyQuery = useBrowseFamilyChildren(familyAddress, openProduct?.relays)
+	const family = familyQuery.data?.family ?? null
+	const familyChildren = familyQuery.data?.children ?? []
+	// Resolve the selection with the SDK: an explicit d-tag that has since left
+	// the family resolves to null (no silent fallback); no explicit choice
+	// resolves to the first AVAILABLE variation, else the first.
+	const selectedVariation = family ? resolveProductVariation(family, selectedVariant) : null
+	const selectedOptionDTag = selectedVariation ? getVariationDTag(selectedVariation.product) : undefined
+	const familyPriceRange = family ? getProductFamilyPriceRange(family, readProductPrice) : null
+
+	/** The picker's options — every non-hidden variation, out-of-stock included. */
+	const panelOptions: ProductDetailOption[] | undefined =
+		familyChildren.length > 0
+			? familyChildren.map((child) => ({
+					dTag: child.dTag,
+					label: child.label,
+					available: child.available,
+					price: child.product.price,
+					currency: child.product.currency,
+					image: child.product.image,
+					stockNote: typeof child.product.stock === 'string' ? child.product.stock : undefined,
+				}))
+			: undefined
+
+	// A new open product starts with no explicit option choice.
+	useEffect(() => {
+		setSelectedVariant(undefined)
+	}, [p])
 
 	/** The signed-in pubkey's initial, or nothing when signed out. */
 	const accountInitial = user?.pubkey ? user.pubkey.slice(0, 2).toUpperCase() : undefined
@@ -646,6 +693,8 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 							currency: detail.currency,
 							priceLabel: detailPrice?.label,
 							priceUnit: detailPrice?.unit,
+							priceMin: familyPriceRange?.min,
+							priceMax: familyPriceRange?.max,
 							stockNote: typeof detail.stock === 'string' ? detail.stock : undefined,
 							description: detail.description || undefined,
 							shipping: detail.shipping,
@@ -654,6 +703,9 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 					: undefined
 			}
 			menuOpen={menuOpenId === p}
+			options={panelOptions}
+			selectedOptionDTag={selectedOptionDTag}
+			onSelectOption={(dTag) => setSelectedVariant(dTag)}
 			onClose={() => onNavigate({ q, p: undefined, tag })}
 			onThreeDots={() => handleMenuToggle(p)}
 			onCopyLink={() => handleCopyLink(p)}

@@ -13,8 +13,11 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { BrowseFacet, BrowseProduct, BrowseProductDetail, BrowseSearchResult } from './browseProductMap'
+import type { BrowseFacet, BrowseFamilyChildren, BrowseProduct, BrowseProductDetail, BrowseSearchResult } from './browseProductMap'
 import type { BrowseIndexFeed } from './browseIndexFeed'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { prepareProductFamilyCatalog } from '@sdk/commerce/discovery'
+import { mapProductFamilyChildren } from './browseProductMap'
 
 const PUBKEY_A = 'a'.repeat(64)
 const PUBKEY_B = 'b'.repeat(64)
@@ -30,12 +33,21 @@ let detailLoading = false
 let detailError = false
 /** The arguments the host handed the detail read (id and the hit's relays). */
 let detailReadArgs: { id?: string; relays?: readonly string[] } | null = null
+/** The family-children read's data, and the arguments the host handed it. */
+let familyChildrenData: BrowseFamilyChildren | null = null
+let familyReadArgs: { parentAddress?: string; relays?: readonly string[] } | null = null
 
 mock.module('@platform/web/browse/browseQuery', () => ({
 	useBrowseSearch: () => ({ data: searchData, isLoading: searchLoading, isError: searchError }),
 	useBrowseProductDetail: (id?: string, relays?: readonly string[]) => {
 		detailReadArgs = { id, relays }
 		return { data: detailData, isLoading: detailLoading, isError: detailError, refetch: () => {} }
+	},
+	// The family's children read — a family's options for the picker. Stubbed
+	// here so the host's selection wiring is what the test asserts.
+	useBrowseFamilyChildren: (parentAddress?: string, relays?: readonly string[]) => {
+		familyReadArgs = { parentAddress, relays }
+		return { data: familyChildrenData, isLoading: false, isError: false }
 	},
 	// The facet probe is a read of its own; stubbed here so the host's pill
 	// derivation is what the test asserts, not the provider round trip. It also
@@ -152,6 +164,30 @@ const DETAIL: BrowseProductDetail = {
 	shipping: [{ costSats: 2400 }],
 }
 
+// A family's children, built through the real SDK family rules and the shared
+// mapper so the host test asserts wiring, not a hand-built shape.
+const FAMILY_ADDRESS = `30402:${PUBKEY_A}:trail-runner`
+
+function familyEvent(dTag: string, tags: string[][], kindId: string): NostrEventLike {
+	return { id: kindId, pubkey: PUBKEY_A, kind: 30402, created_at: 1_700_000_000, content: '', tags: [['d', dTag], ...tags] }
+}
+
+const FAMILY_CHILDREN_DATA: BrowseFamilyChildren = (() => {
+	const parent = familyEvent('trail-runner', [['type', 'variable'], ['title', 'Trail Runner'], ['price', '100', 'SATS']], 'evt-trail-runner')
+	const child42 = familyEvent(
+		'trail-runner-42',
+		[['type', 'variation'], ['a', FAMILY_ADDRESS], ['spec', 'size', '42'], ['price', '120', 'SATS'], ['stock', '2']],
+		'evt-child-42',
+	)
+	const child43 = familyEvent(
+		'trail-runner-43',
+		[['type', 'variation'], ['a', FAMILY_ADDRESS], ['spec', 'size', '43'], ['price', '120', 'SATS'], ['stock', '0']],
+		'evt-child-43',
+	)
+	const family = prepareProductFamilyCatalog([parent, child42, child43]).families[0]
+	return { family, children: mapProductFamilyChildren(family) }
+})()
+
 function renderHost(options: { q?: string; p?: string; tag?: string } = {}) {
 	return renderToStaticMarkup(
 		createElement(BrowseIndexHost, {
@@ -166,6 +202,8 @@ function renderHost(options: { q?: string; p?: string; tag?: string } = {}) {
 
 beforeEach(() => {
 	detailReadArgs = null
+	familyChildrenData = null
+	familyReadArgs = null
 	searchData = RESULTS
 	searchLoading = false
 	searchError = false
@@ -694,5 +732,59 @@ describe('BrowseIndexHost relay indicator', () => {
 		expect(markup).toContain('2')
 		// …and it does not disappear when every relay answered.
 		expect(markup).toContain('data-testid="widget-relay-indicator"')
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Family options — the open panel's picker, wired to the children read
+// ---------------------------------------------------------------------------
+
+describe('BrowseIndexHost family options', () => {
+	const FAMILY_PRODUCT: BrowseProduct = {
+		id: 'trail-runner',
+		eventId: 'evt-trail-runner',
+		pubkey: PUBKEY_A,
+		title: 'Trail Runner',
+		categories: [],
+		familyRole: 'parent',
+		familyAddress: FAMILY_ADDRESS,
+		variantCount: 2,
+		availableVariantCount: 1,
+	}
+
+	const FAMILY_DETAIL: BrowseProductDetail = {
+		id: 'trail-runner',
+		eventId: 'evt-trail-runner',
+		pubkey: PUBKEY_A,
+		title: 'Trail Runner',
+		categories: [],
+		description: 'A trail runner in several sizes.',
+		shipping: [],
+	}
+
+	test('the open family’s panel offers its options, defaulting to the first available', () => {
+		searchData = { ...RESULTS, products: [FAMILY_PRODUCT] }
+		detailData = FAMILY_DETAIL
+		familyChildrenData = FAMILY_CHILDREN_DATA
+
+		const markup = renderHost({ q: 'trail', p: 'trail-runner' })
+
+		// The children read was aimed at the family's own parent coordinate.
+		expect(familyReadArgs?.parentAddress).toBe(FAMILY_ADDRESS)
+		// Both variations are offered, with the sold-out one still present.
+		expect(markup).toContain('data-slot="product-detail-options"')
+		expect(markup).toContain('widget-product-detail-option-trail-runner-42')
+		expect(markup).toContain('widget-product-detail-option-trail-runner-43')
+		expect(markup).toContain('Unavailable')
+
+		// The initial selection is the first AVAILABLE variation (42, not 43).
+		const option42 = markup.slice(markup.indexOf('widget-product-detail-option-trail-runner-42'))
+		expect(option42).toContain('data-selected="true"')
+	})
+
+	test('a simple product opens no family read and renders no picker', () => {
+		renderHost({ q: 'ceramic', p: 'ceramic-ball' })
+
+		expect(familyReadArgs?.parentAddress).toBeUndefined()
 	})
 })

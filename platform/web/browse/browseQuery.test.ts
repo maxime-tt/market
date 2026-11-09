@@ -124,6 +124,85 @@ const duplicateUrns: NostrEventLike[] = [
 	},
 ]
 
+/**
+ * A product family: a `type=variable` parent plus its `type=variation`
+ * children. Kept out of `localEvents`/`detailEvents` so the other reads are
+ * unchanged; the children read resolves the parent by `#d` and the children by
+ * `#a`.
+ */
+const FAMILY_READ_PUBKEY = 'b'.repeat(64)
+const FAMILY_READ_ADDRESS = `30402:${FAMILY_READ_PUBKEY}:trail-runner`
+
+const familyReadParentEvent: NostrEventLike = {
+	id: 'family-parent',
+	pubkey: FAMILY_READ_PUBKEY,
+	kind: 30402,
+	created_at: 1_700_000_000,
+	content: 'A trail runner in several sizes.',
+	tags: [
+		['d', 'trail-runner'],
+		['type', 'variable'],
+		['title', 'Trail Runner'],
+		['price', '100', 'SATS'],
+		['image', 'https://example.test/parent.png'],
+	],
+}
+
+const familyChildEvents: NostrEventLike[] = [
+	{
+		id: 'family-child-42',
+		pubkey: FAMILY_READ_PUBKEY,
+		kind: 30402,
+		created_at: 1_700_000_000,
+		content: '',
+		tags: [
+			['d', 'trail-runner-42'],
+			['type', 'variation'],
+			['a', FAMILY_READ_ADDRESS],
+			['spec', 'size', '42'],
+			['title', 'Trail Runner 42'],
+			['price', '120', 'SATS'],
+			['stock', '2'],
+			['image', 'https://example.test/forty-two.png'],
+		],
+	},
+	{
+		id: 'family-child-43',
+		pubkey: FAMILY_READ_PUBKEY,
+		kind: 30402,
+		created_at: 1_700_000_000,
+		content: '',
+		tags: [
+			['d', 'trail-runner-43'],
+			['type', 'variation'],
+			['a', FAMILY_READ_ADDRESS],
+			['spec', 'size', '43'],
+			['title', 'Trail Runner 43'],
+			['price', '120', 'SATS'],
+			['stock', '0'],
+		],
+	},
+	{
+		// Hidden: the family rules drop it, so it must never reach the picker.
+		id: 'family-child-hidden',
+		pubkey: FAMILY_READ_PUBKEY,
+		kind: 30402,
+		created_at: 1_700_000_000,
+		content: '',
+		tags: [
+			['d', 'trail-runner-hidden'],
+			['type', 'variation'],
+			['a', FAMILY_READ_ADDRESS],
+			['spec', 'size', '99'],
+			['title', 'Trail Runner 99'],
+			['stock', '1'],
+			['visibility', 'hidden'],
+		],
+	},
+]
+
+const familyReadEvents: NostrEventLike[] = [familyReadParentEvent, ...familyChildEvents]
+
 let localStreamCalls = 0
 /** The filters the last stream was opened with (asserted by the seller-listings tests). */
 let lastStreamFilters: readonly EventFilter[] = []
@@ -142,9 +221,13 @@ let relayFetchError: Error | null = null
 /** Resolve the canned backlog by the ids/coordinates a filter set asks for. */
 function eventsForFilters(filters: readonly EventFilter[]): NostrEventLike[] {
 	const wanted = filters.flatMap((filter) => [...(filter.ids ?? []), ...(filter['#d'] ?? [])])
-	if (wanted.length === 0) return []
-	return [...localEvents, ...detailEvents, ...duplicateUrns].filter(
-		(event) => wanted.includes(event.id) || event.tags.some((tag) => tag[0] === 'd' && wanted.includes(tag[1])),
+	const wantedParents = filters.flatMap((filter) => filter['#a'] ?? [])
+	if (wanted.length === 0 && wantedParents.length === 0) return []
+	return [...localEvents, ...detailEvents, ...duplicateUrns, ...familyReadEvents].filter(
+		(event) =>
+			wanted.includes(event.id) ||
+			event.tags.some((tag) => tag[0] === 'd' && wanted.includes(tag[1])) ||
+			event.tags.some((tag) => tag[0] === 'a' && wantedParents.includes(tag[1])),
 	)
 }
 
@@ -182,6 +265,7 @@ mock.module('@platform/web/readContext', () => ({
 
 import {
 	browseFacetsQueryOptions,
+	browseFamilyChildrenQueryOptions,
 	browseProductDetailQueryOptions,
 	browseSearchQueryOptions,
 	configureBrowseSearch,
@@ -190,6 +274,7 @@ import {
 	resetBrowseSearchConfig,
 	type BrowseSearchResult,
 } from './browseQuery'
+import { mapProduct } from './browseProductMap'
 
 // ---------------------------------------------------------------------------
 // The RabbitHole global-fetch stub
@@ -666,6 +751,59 @@ describe('browse product detail read', () => {
 
 	test('the relays are part of the query key, so a different set is a different read', () => {
 		expect(browseProductDetailQueryOptions('mug', ['wss://a']).queryKey).not.toEqual(browseProductDetailQueryOptions('mug').queryKey)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Family children — the open family's options (fetch, single family)
+// ---------------------------------------------------------------------------
+
+async function runFamilyChildrenQueryFn(parentAddress?: string, relays?: readonly string[]) {
+	const options = browseFamilyChildrenQueryOptions(parentAddress, relays)
+	return await options.queryFn!({} as Parameters<NonNullable<typeof options.queryFn>>[0])
+}
+
+describe('browse family children read', () => {
+	test('reads the family with one parent filter and one `#a` children filter', async () => {
+		fetchedFilters.length = 0
+		const before = localStreamCalls
+
+		await runFamilyChildrenQueryFn(FAMILY_READ_ADDRESS)
+
+		expect(fetchedFilters).toHaveLength(1)
+		const filters = fetchedFilters[0]
+		// The parent by coordinate, the children by the family's parent address.
+		expect(filters).toContainEqual({ kinds: [30402], authors: [FAMILY_READ_PUBKEY], '#d': ['trail-runner'] })
+		expect(filters).toContainEqual({ kinds: [30402], limit: 200, '#a': [FAMILY_READ_ADDRESS] })
+		// A detail read, not a list: the stream is never opened for it.
+		expect(localStreamCalls).toBe(before)
+	})
+
+	test('maps every non-hidden child through the shared results mapper', async () => {
+		const result = await runFamilyChildrenQueryFn(FAMILY_READ_ADDRESS)
+
+		expect(result?.family.address).toBe(FAMILY_READ_ADDRESS)
+		// Hidden children are dropped by the family rules; the rest are offered.
+		expect(result?.children.map((child) => child.dTag)).toEqual(['trail-runner-42', 'trail-runner-43'])
+
+		// The panel row for a child IS the shared mapper's output for that event,
+		// so it cannot disagree with the same child rendered in a list.
+		expect(result?.children[0]?.product).toEqual(mapProduct(familyChildEvents[0]))
+		expect(result?.children[0]?.product.variantLabel).toBe('42')
+		// The label is the variation's spec label, never the d-tag.
+		expect(result?.children[0]?.label).toBe('42')
+	})
+
+	test('carries each option’s availability, including out-of-stock', async () => {
+		const result = await runFamilyChildrenQueryFn(FAMILY_READ_ADDRESS)
+		const byTag = new Map((result?.children ?? []).map((child) => [child.dTag, child]))
+		expect(byTag.get('trail-runner-42')?.available).toBe(true)
+		expect(byTag.get('trail-runner-43')?.available).toBe(false)
+	})
+
+	test('an absent or malformed address reads nothing rather than a placeholder family', async () => {
+		expect(await runFamilyChildrenQueryFn(undefined)).toBeNull()
+		expect(await runFamilyChildrenQueryFn('not-a-coordinate')).toBeNull()
 	})
 })
 

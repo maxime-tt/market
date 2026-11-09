@@ -276,6 +276,57 @@ describe('ProductStrip', () => {
 // ProductCard — family presentation (price range, options)
 // ---------------------------------------------------------------------------
 
+describe('ProductCard has no card-level action', () => {
+	// Owner's ruling: a buy button on the browse page is the old Plebeian UX and it does
+	// not work — almost nobody buys from a grid tile without opening the product. The
+	// card's job is to lead to the DETAILS page, which is the purchase surface. So a card
+	// states no purchase action and no options action; the option count and axes are the
+	// family signal, and the picker plus the purchase both live in the panel.
+	const FORBIDDEN = ['>Buy<', 'add to cart', 'Add to Cart', 'View options', 'Pick options', 'Choose options']
+
+	test('a family container renders no purchase control and no options button', () => {
+		const markup = renderToStaticMarkup(
+			createElement(
+				ProductCard,
+				makeCard({ id: 'fam', familyRole: 'parent', variantCount: 3, specKeys: ['size'], href: '/?p=fam', onSelect: () => {} }),
+			),
+		)
+		for (const forbidden of FORBIDDEN) expect(markup).not.toContain(forbidden)
+		expect(markup).not.toContain('card-buy')
+		expect(markup).not.toContain('card-view-options')
+	})
+
+	test('a simple listing renders no purchase control either — one rule, not two', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductCard, makeCard({ id: 'simple', href: '/?p=simple', onSelect: () => {} })),
+		)
+		for (const forbidden of FORBIDDEN) expect(markup).not.toContain(forbidden)
+	})
+
+	test('the card still leads to the details page — that is where the purchase happens', () => {
+		const markup = renderToStaticMarkup(
+			createElement(
+				ProductCard,
+				makeCard({ id: 'fam', familyRole: 'parent', variantCount: 3, specKeys: ['size'], href: '/?p=fam', onSelect: () => {} }),
+			),
+		)
+		expect(markup).toContain('href="/?p=fam"')
+	})
+
+	test('the option count and axes remain as INFORMATION, which is the family signal', () => {
+		const markup = renderToStaticMarkup(
+			createElement(
+				ProductCard,
+				makeCard({ id: 'fam', familyRole: 'parent', variantCount: 3, specKeys: ['size', 'colour'], href: '/?p=fam' }),
+			),
+		)
+		expect(markup).toContain('data-testid="widget-product-card-options-fam"')
+		expect(markup).toContain('3 options')
+		expect(markup).toContain('size')
+		expect(markup).toContain('colour')
+	})
+})
+
 describe('ProductCard family presentation', () => {
 	test('renders the price RANGE when the family’s options differ in price', () => {
 		const markup = renderToStaticMarkup(

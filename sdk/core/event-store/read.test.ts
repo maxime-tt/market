@@ -103,6 +103,21 @@ describe('product reads', () => {
 		expect(result).toHaveLength(1)
 	})
 
+	test('a parent address narrows the read to that family’s children by `#a`', async () => {
+		const parentAddress = '30402:' + 'a'.repeat(64) + ':shoe'
+		const context = createContext([
+			event({ tags: [['d', 'shoe-42'], ['a', parentAddress]] }),
+			event({ tags: [['d', 'unrelated']] }),
+		])
+
+		const result = await readProductListWorkflow(context, { limit: 50, parentAddress })
+
+		// One filter, one mechanism: the family's parent coordinate rides in `#a`.
+		expect(context.requests[0]).toEqual([{ kinds: [30402], limit: 50, '#a': [parentAddress] }])
+		// The child that names the parent is the only event the filter keeps.
+		expect(result.map((e) => e.id)).toHaveLength(1)
+	})
+
 	test('isProductListed separates hidden, out-of-stock and pre-order listings', () => {
 		const hidden = { tags: [['visibility', 'hidden']] }
 		const soldOut = { tags: [['stock', '0']] }

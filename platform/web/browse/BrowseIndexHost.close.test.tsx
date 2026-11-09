@@ -37,6 +37,7 @@ const RESULTS: BrowseSearchResult = { products: [PRODUCT], eose: ['wss://local']
 mock.module('@platform/web/browse/browseQuery', () => ({
 	useBrowseSearch: () => ({ data: RESULTS, isLoading: false, isError: false }),
 	useBrowseProductDetail: () => ({ data: DETAIL, isLoading: false, isError: false, refetch: () => {} }),
+	useBrowseFamilyChildren: () => ({ data: null, isLoading: false, isError: false }),
 	useBrowseFacets: () => ({ data: null, isLoading: false, isError: false }),
 }))
 
