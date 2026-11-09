@@ -91,7 +91,16 @@ interface RabbitHoleDroppedFrame {
 interface RabbitHoleOutcome {
 	relaysQueried: string[]
 	relaysAnswered: string[]
-	relaysFailed: string[]
+	/**
+	 * NOT a `string[]`, however much the name suggests it. The service states each
+	 * failure as an OBJECT — `{ relay, reason }` — and declaring it as a string
+	 * array here is what let the mistake compile: the array flowed into the seam's
+	 * `pending: string[]`, BrowseIndexHost wrapped each entry as
+	 * `{ relay: <entry>, status }`, and the relay popover rendered the object as a
+	 * React child. That is a crash (React error #31), and it took a click on the
+	 * "pending" chip to reach it. Type the wire, not the wish.
+	 */
+	relaysFailed: Array<{ relay: string; reason?: string }>
 	deadlineHit?: boolean
 	eventsDelivered?: number
 	eventsDeduped?: number
@@ -494,7 +503,13 @@ function toBrowseSearchResult(
 
 	if (verdict) {
 		eose = [...verdict.relaysAnswered]
-		pending = [...verdict.relaysFailed]
+		// Flattened to relay URLs: the seam's `pending` is the relay-failure STATE
+		// (what the indicator renders), not the failure report. The reason is not
+		// lost — the service keeps it — but it has nowhere to ride in this shape,
+		// so it is dropped here rather than smuggled through as an object.
+		pending = (verdict.relaysFailed ?? []).map((failure) =>
+			typeof failure === 'string' ? failure : failure.relay,
+		)
 	} else {
 		eose = []
 		pending = []

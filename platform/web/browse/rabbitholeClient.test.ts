@@ -37,6 +37,13 @@ function productEvent(id: string, title: string): NostrEventLike {
 	}
 }
 
+/**
+ * The outcome frame as the SERVICE actually sends it. `relaysFailed` is an array
+ * of `{ relay, reason }` OBJECTS, not relay strings — a helper that emitted plain
+ * strings made the client's wrong `string[]` declaration look correct, and the
+ * mistake only surfaced as a React crash when a reader clicked the relay
+ * indicator's "pending" chip. Test the wire, not the wish.
+ */
 function outcomeFrame(status: 'complete' | 'partial', answered: string[], failed: string[]): string {
 	return JSON.stringify({
 		type: 'outcome',
@@ -44,7 +51,7 @@ function outcomeFrame(status: 'complete' | 'partial', answered: string[], failed
 		outcome: {
 			relaysQueried: [...answered, ...failed],
 			relaysAnswered: answered,
-			relaysFailed: failed,
+			relaysFailed: failed.map((relay) => ({ relay, reason: 'socket error' })),
 			deadlineHit: status === 'partial',
 			eventsDelivered: 1,
 			eventsDeduped: 0,
@@ -118,6 +125,33 @@ describe('rabbitholeSearch — the streamed response', () => {
 		expect(result.pending).toEqual(['wss://b', 'wss://c'])
 		// The non-negotiable: a partial set is never a plain complete-shaped result.
 		expect(result.pending.length).toBeGreaterThan(0)
+	})
+
+	test('flattens the service\'s failure OBJECTS to relay URLs — the crash this pins', async () => {
+		// The wire states `relaysFailed: [{ relay, reason }]`. Assigning that to a
+		// `string[]` compiled, then flowed into the indicator, which wrapped each
+		// entry as `{ relay: <entry>, status }` and rendered the object as a React
+		// child — React error #31, whole page replaced by the error boundary, one
+		// click on "pending" away. Every entry here must be a STRING.
+		const result = await rabbitholeSearch(
+			{ q: 'ceramic mug' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({ type: 'search', candidateCount: 1, hits: [] }),
+						outcomeFrame('partial', ['wss://a'], ['wss://b']),
+					]),
+				),
+			},
+		)
+
+		expect(result.pending).toEqual(['wss://b'])
+		for (const entry of result.pending) {
+			expect(typeof entry).toBe('string')
+		}
+		// And the shape the indicator is built from — the one that crashed.
+		const relayDetails = result.pending.map((relay) => ({ relay, status: 'pending' as const }))
+		expect(relayDetails[0]?.relay).toBe('wss://b')
 	})
 
 	test('deduplicates events by id (a relay re-sends the same payload)', async () => {
