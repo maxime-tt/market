@@ -27,7 +27,7 @@
 
 import { PickupLocationDialog } from '@ui/dialogs/pickup-location-dialog'
 import { ShareProfileDialog } from '@platform/web/profiles/ShareProfileDialog'
-import { EntityActionsMenu } from '@platform/web/permissions/EntityActionsMenu'
+import { EntityActionsMenu } from '@ui/permissions/entity-actions-menu'
 import { SellerProfileView } from '@ui/browse/seller-profile'
 import { ProductCard } from '@ui/browse/product-card'
 import { RelayIndicator } from '@ui/browse/relay-error'

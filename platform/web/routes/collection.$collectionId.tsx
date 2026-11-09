@@ -1,4 +1,4 @@
-import { EntityActionsMenu } from '@platform/web/permissions/EntityActionsMenu'
+import { EntityActionsMenu } from '@ui/permissions/entity-actions-menu'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
 import { Button } from '@ui/wrappers/button'

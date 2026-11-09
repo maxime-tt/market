@@ -10,9 +10,12 @@ import { DividerBlock, SpacerBlock } from '@ui/storefront/blocks/SpacingBlocks'
 import { ProductGridBlock } from '@ui/storefront/blocks/ProductGridBlock'
 import { FeaturedProductBlock } from '@ui/storefront/blocks/FeaturedProductBlock'
 import { ProfileHeaderBlock } from '@ui/storefront/blocks/ProfileHeaderBlock'
+import { ThemePaletteStrip, ThemeSwatchGrid, ThemeStudio, ThemeTunePanel } from '@ui/storefront/ThemePickerField'
 import { ProductCardView } from '@ui/products/product-card-view'
 import type { ProductReadEvent } from '@sdk/commerce/discovery'
 import { STOREFRONT_TUNE_DEFAULTS, type StorefrontBlock, type StorefrontPage } from '@sdk/commerce/storefront/storefrontPage'
+import { STOREFRONT_THEME_LIST } from '@sdk/config/storefront/storefrontThemes'
+import { useState } from 'react'
 import type { ProductCardViewEvent } from '@ui/products/product-card-view'
 import type { WidgetLibrary } from '../libraries'
 
@@ -154,6 +157,26 @@ const slots: StorefrontDataSlots = {
 			isLoading={false}
 		/>
 	),
+}
+
+/** The layout the picker entries start on: the registry's first declared theme. */
+const STUDIO_THEME = STOREFRONT_THEME_LIST[0]
+
+/**
+ * `ThemeStudio` keeps no state of its own — the caller owns the three values —
+ * so the demo holds them locally, mirroring the setup wizard's control.
+ */
+function ThemeStudioDemo() {
+	const [value, setValue] = useState({
+		theme: STUDIO_THEME.id,
+		palette: STUDIO_THEME.palettes[0].key,
+		tune: { ...STUDIO_THEME.tune },
+	})
+	return (
+		<div className="max-w-md">
+			<ThemeStudio {...value} onChange={setValue} />
+		</div>
+	)
 }
 
 export const storefront: WidgetLibrary = {
@@ -484,6 +507,34 @@ export const storefront: WidgetLibrary = {
 					</Editing>
 				)
 			},
+		},
+		{
+			name: 'ThemeSwatchGrid',
+			render: () => (
+				<div className="max-w-md">
+					<ThemeSwatchGrid value={STUDIO_THEME.id} onChange={() => {}} />
+				</div>
+			),
+		},
+		{
+			name: 'ThemePaletteStrip',
+			render: () => (
+				<div className="max-w-md">
+					<ThemePaletteStrip themeId={STUDIO_THEME.id} value={STUDIO_THEME.palettes[0].key} onChange={() => {}} />
+				</div>
+			),
+		},
+		{
+			name: 'ThemeTunePanel',
+			render: () => (
+				<div className="max-w-md">
+					<ThemeTunePanel themeId={STUDIO_THEME.id} onChange={() => {}} />
+				</div>
+			),
+		},
+		{
+			name: 'ThemeStudio',
+			render: () => <ThemeStudioDemo />,
 		},
 	],
 }

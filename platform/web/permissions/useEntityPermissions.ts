@@ -1,28 +1,8 @@
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { useUserRole } from '@platform/web/app-settings/appSettingsQuery'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import type { EntityPermissions } from '@ui/permissions/entity-permissions'
 import { useMemo } from 'react'
-
-export interface EntityPermissions {
-	// User role information
-	userRole: 'owner' | 'admin' | 'editor' | 'user'
-	currentUserPubkey: string | undefined
-
-	// Entity ownership
-	isEntityOwner: boolean
-
-	// Permissions
-	canEdit: boolean
-	canDelete: boolean
-	canBlacklist: boolean
-	canSetFeatured: boolean
-	/** ADR-0009: may mark/unmark test listings (editors UNION admins, + owner). */
-	canManageTestLabel: boolean
-	canAddToCart: boolean
-
-	// Loading state
-	isLoading: boolean
-}
 
 /**
  * Hook to determine user permissions for a specific entity (product, collection, profile)

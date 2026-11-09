@@ -1,6 +1,6 @@
 import { AuctionCardHost as AuctionCard } from '@platform/web/auctions/AuctionCardHost'
 import { getAuctionBidderStatus } from '@platform/web/auctions/auctionBidderStatus'
-import { InvalidAuctionBidBlock } from '@platform/web/auctions/InvalidAuctionNotice'
+import { InvalidAuctionBidBlock } from '@ui/auction/invalid-auction-notice'
 import { Media } from '@ui/shared/media'
 import { LoadingState } from '@ui/shared/loading-state'
 import { AuctionFiltersView } from '@ui/auction/auction-list-views'

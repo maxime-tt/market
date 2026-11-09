@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { inspectAuctionAdmission } from '@sdk/commerce/auctions/schemas/auctionAdmission'
 import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import type {
 	AuctionAntiSnipeWindowMinutesPreset,
@@ -31,6 +32,7 @@ import {
 	type AuctionBidderViewProps,
 } from '@ui/auction/auction-bidder-views'
 import { AuctionCardView } from '@ui/auction/auction-card-view'
+import { InvalidAuctionBidBlock, InvalidAuctionNotice } from '@ui/auction/invalid-auction-notice'
 import { AuctionTimelineChartView } from '@ui/auction/auction-timeline-chart-view'
 import { AuctionActivityRow } from '@ui/auction/auction-overview-views'
 import {
@@ -586,6 +588,22 @@ function AuctionTabViewDemo() {
 		</div>
 	)
 }
+
+/**
+ * A kind-30408 event with none of AUCTIONS.md §4.1's required tags. It is
+ * malformed by construction, which is what the two notice entries render; the
+ * admission is derived through the same gate the feed uses, so the entry can
+ * never disagree with the parser.
+ */
+const MALFORMED_AUCTION: NostrEventLike = {
+	id: 'f'.repeat(64),
+	pubkey: 'd943e96d0c7828b0e0c2b2d1f0a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c782',
+	kind: 30408,
+	created_at: 1_767_225_600,
+	content: '',
+	tags: [],
+}
+const MALFORMED_ADMISSION = inspectAuctionAdmission(MALFORMED_AUCTION)
 
 export const auction: WidgetLibrary = {
 	name: 'auction',
@@ -1360,6 +1378,26 @@ export const auction: WidgetLibrary = {
 					/>
 				</div>
 			),
+		},
+		{
+			name: 'InvalidAuctionNotice',
+			render: () => (
+				<div className="max-w-md">
+					<InvalidAuctionNotice event={MALFORMED_AUCTION} />
+				</div>
+			),
+		},
+		{
+			name: 'InvalidAuctionBidBlock',
+			render: () => (
+				<div className="max-w-md">
+					<InvalidAuctionBidBlock admission={MALFORMED_ADMISSION} />
+				</div>
+			),
+		},
+		{
+			name: 'InvalidAuctionBidBlockCompact',
+			render: () => <InvalidAuctionBidBlock admission={MALFORMED_ADMISSION} compact />,
 		},
 	],
 }

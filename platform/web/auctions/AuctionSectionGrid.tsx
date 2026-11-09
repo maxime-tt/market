@@ -1,6 +1,6 @@
 import { AuctionCardHost as AuctionCard } from '@platform/web/auctions/AuctionCardHost'
 import { getAuctionBidderStatus } from '@platform/web/auctions/auctionBidderStatus'
-import { InvalidAuctionBidBlock } from '@platform/web/auctions/InvalidAuctionNotice'
+import { InvalidAuctionBidBlock } from '@ui/auction/invalid-auction-notice'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { cn } from '@ui/utils/cn'
 import { getAuctionRootEventId } from '@platform/web/auctions/auctionsQuery'

@@ -1,6 +1,6 @@
 import { AuctionClaimDialog } from '@platform/web/auctions/AuctionClaimDialog'
 import { Media } from '@ui/shared/media'
-import { InvalidAuctionNotice } from '@platform/web/auctions/InvalidAuctionNotice'
+import { InvalidAuctionNotice } from '@ui/auction/invalid-auction-notice'
 import { TestListingNoticeHost as TestListingNotice } from '@platform/web/config/testListingNoticeHost'
 import { TestLabelButton } from '@platform/web/curation/TestLabelButton'
 import { AUCTION_KIND } from '@sdk/commerce/auctions/constants'

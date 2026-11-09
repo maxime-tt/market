@@ -13,7 +13,7 @@ import { cn } from '@ui/utils/cn'
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { storefrontBlockSlots } from './StorefrontBlockSlots'
-import { ThemeStudio } from './fields/ThemePickerField'
+import { ThemeStudio } from '@ui/storefront/ThemePickerField'
 
 /**
  * The two-step page setup wizard: choose a template, then choose a theme.

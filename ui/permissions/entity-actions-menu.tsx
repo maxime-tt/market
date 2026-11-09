@@ -6,7 +6,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@ui/primitives/dropdown-menu'
-import type { EntityPermissions } from '@platform/web/permissions/useEntityPermissions'
+import type { EntityPermissions } from './entity-permissions'
 import { Ban, Edit, FlaskConical, MoreVertical, Star, StarOff } from 'lucide-react'
 
 export interface EntityActionsMenuProps {

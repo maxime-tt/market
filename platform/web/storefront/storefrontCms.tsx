@@ -11,7 +11,7 @@ import { StorefrontBlockView, StorefrontRoot } from '@ui/storefront'
 import { usePuck, type Config, type Data } from '@puckeditor/core'
 import { storefrontBlockSlots } from './StorefrontBlockSlots'
 import { CollectionPickerField, ProductPickerField } from './fields/ItemPickerField'
-import { ThemePaletteStrip, ThemeSwatchGrid, ThemeTunePanel } from './fields/ThemePickerField'
+import { ThemePaletteStrip, ThemeSwatchGrid, ThemeTunePanel } from '@ui/storefront/ThemePickerField'
 
 /**
  * The CMS component registry: what the Puck editor can put on a page.

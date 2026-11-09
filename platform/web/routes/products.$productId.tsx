@@ -1,4 +1,4 @@
-import { EntityActionsMenu } from '@platform/web/permissions/EntityActionsMenu'
+import { EntityActionsMenu } from '@ui/permissions/entity-actions-menu'
 import { ImageCarousel } from '@ui/shared/image-carousel'
 import { ImageViewerModal } from '@ui/shared/image-viewer-modal'
 import { ItemGrid } from '@ui/shared/item-grid'

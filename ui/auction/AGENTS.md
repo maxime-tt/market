@@ -43,6 +43,11 @@ never acquire it.
   activity summary, with the "N New" highlight) and `AuctionSortSelect` (the
   list's ordering control — it lives here because a route may not import
   `@ui/primitives/*`, so the option list arrives as props).
+- `invalid-auction-notice` — the spec-validity pair: `InvalidAuctionNotice` (a
+  badge that opens the reason dialog for a malformed kind-30408 event) and
+  `InvalidAuctionBidBlock` (the bid panel's refusal, either as the full block or
+  a compact pill). Both read the `AuctionAdmission` their caller already
+  resolved, so the notice and the bid gate can never disagree with the parser.
 - `auction-list-views` — the dashboard list row: `AuctionTopBidBox` (the top-bid
   panel, including the settlement-details disclosure) and `AuctionListItemView`
   (the card frame, thumbnail, identity block and activity summary). Host-owned

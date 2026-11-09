@@ -75,6 +75,9 @@ test('renders the auction library', async ({ page }) => {
 		'BidderPanelNotStarted',
 		'BidderRulesDialog',
 		'BidderConfirmDialog',
+		'InvalidAuctionNotice',
+		'InvalidAuctionBidBlock',
+		'InvalidAuctionBidBlockCompact',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}

@@ -14,6 +14,7 @@ import { nav } from './libraries/nav'
 import { migration } from './libraries/migration'
 import { nostr } from './libraries/nostr'
 import { orders } from './libraries/orders'
+import { permissions } from './libraries/permissions'
 import { products } from './libraries/products'
 import { settings } from './libraries/settings'
 import { storefront } from './libraries/storefront'
@@ -57,6 +58,7 @@ export const libraries: WidgetLibrary[] = [
 	migration,
 	nostr,
 	orders,
+	permissions,
 	products,
 	settings,
 	shared,

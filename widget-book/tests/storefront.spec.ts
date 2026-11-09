@@ -40,6 +40,10 @@ test('renders the storefront library', async ({ page }) => {
 		'ProfileHeaderBlockBanner',
 		'ProfileHeaderBlockLoading',
 		'StorefrontBlockViewCanvas',
+		'ThemeSwatchGrid',
+		'ThemePaletteStrip',
+		'ThemeTunePanel',
+		'ThemeStudio',
 	]) {
 		await expect(page.getByTestId(`widget-${widget}`)).toBeVisible()
 	}
