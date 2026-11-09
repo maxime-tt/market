@@ -28,3 +28,31 @@ export {
 export type { ProductReadEvent } from './productReadModel'
 export { buildProductListFilter, excludeDeletedProducts, isProductListed, readProductListWorkflow } from './productRead'
 export type { ProductListingVisibility, ProductListQuery } from './productRead'
+export {
+	findProductFamily,
+	getProductAddress,
+	getProductEventType,
+	getProductFamilyImages,
+	getProductFamilyPriceRange,
+	getProductFamilySpecKeys,
+	getVariationLabel,
+	getVariationParentAddress,
+	getVariationSpecs,
+	groupProductSearchResultsByFamily,
+	isProductHidden,
+	parseProductAddress,
+	prepareProductFamilyCatalog,
+	resolveProductVariation,
+} from './productFamilies'
+export type {
+	ParsedProductAddress,
+	ProductCatalogItem,
+	ProductEventType,
+	ProductFamily,
+	ProductFamilyCatalog,
+	ProductFamilyCatalogOptions,
+	ProductFamilyEvent,
+	ProductFamilyPrice,
+	ProductFamilyVariation,
+	VariationSpec,
+} from './productFamilies'
