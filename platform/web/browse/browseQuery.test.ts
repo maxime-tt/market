@@ -405,6 +405,19 @@ describe('browse search provider switch', () => {
 		await runQueryFn('mug', 'pottery')
 		expect(sentBody).toMatchObject({ q: 'mug', filters: ['category_tags = "pottery"'] })
 	})
+
+	test('the local stream collapses a family to ONE row, preferring the parent', async () => {
+		// The parent is last in arrival order; the collapse must still pick it
+		// over its three children, and the term filter is unchanged (child titles
+		// match the query too).
+		extraStreamEvents = familyEvents()
+
+		const result = await runQueryFn('trail runner')
+		expect(result.products).toHaveLength(1)
+		expect(result.products[0]?.id).toBe('trail-runner')
+		expect(result.products[0]?.familyRole).toBe('parent')
+		expect(result.products[0]?.variantCount).toBe(3)
+	})
 })
 
 // ---------------------------------------------------------------------------
@@ -422,6 +435,52 @@ function listingEvent(id: string, extraTags: string[][] = []): NostrEventLike {
 		content: '',
 		tags: [['d', id], ['title', `Listing ${id}`], ['price', '2100', 'SATS'], ['stock', '3'], ...extraTags],
 	}
+}
+
+const FAMILY_PUBKEY = 'b'.repeat(64)
+const FAMILY_ADDRESS = `30402:${FAMILY_PUBKEY}:trail-runner`
+
+/** A `type=variable` parent, in stock so the seller `purchasable` read keeps it. */
+function familyParentEvent(): NostrEventLike {
+	return {
+		id: 'family-parent',
+		pubkey: FAMILY_PUBKEY,
+		kind: 30402,
+		created_at: 1_700_000_000,
+		content: '',
+		tags: [
+			['d', 'trail-runner'],
+			['type', 'variable'],
+			['title', 'Trail Runner'],
+			['price', '100', 'SATS'],
+			['stock', '5'],
+		],
+	}
+}
+
+/** A `type=variation` child of the parent above. */
+function familyChildEvent(size: number): NostrEventLike {
+	return {
+		id: `family-child-${size}`,
+		pubkey: FAMILY_PUBKEY,
+		kind: 30402,
+		created_at: 1_700_000_000,
+		content: '',
+		tags: [
+			['d', `trail-runner-${size}`],
+			['type', 'variation'],
+			['a', FAMILY_ADDRESS],
+			['spec', 'size', String(size)],
+			['title', `Trail Runner ${size}`],
+			['price', '100', 'SATS'],
+			['stock', '2'],
+		],
+	}
+}
+
+/** The three children plus the parent, in child-first order. */
+function familyEvents(): NostrEventLike[] {
+	return [familyChildEvent(42), familyChildEvent(43), familyChildEvent(44), familyParentEvent()]
 }
 
 describe('seller listings read', () => {
@@ -481,6 +540,15 @@ describe('seller listings read', () => {
 
 		const result = await fetchSellerListings('b'.repeat(64))
 		expect(result.listings.map((listing) => listing.id)).toEqual(['live'])
+	})
+
+	test('collapses a seller’s family to ONE row, preferring the parent', async () => {
+		extraStreamEvents = familyEvents()
+
+		const result = await fetchSellerListings('b'.repeat(64))
+		expect(result.listings).toHaveLength(1)
+		expect(result.listings[0]?.id).toBe('trail-runner')
+		expect(result.listings[0]?.variantCount).toBe(3)
 	})
 })
 

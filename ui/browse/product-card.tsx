@@ -34,6 +34,13 @@ export function isModifiedActivation(event: Pick<MouseEvent, 'metaKey' | 'ctrlKe
  */
 export type CardPresentation = 'grid' | 'row'
 
+/**
+ * How many option axes a family card lists before collapsing the rest into
+ * "+N more". A family can vary over one or two axes, but a large one must not
+ * push the card apart.
+ */
+const OPTION_AXIS_LIMIT = 4
+
 // ---------------------------------------------------------------------------
 // Context menu — floating panel
 // ---------------------------------------------------------------------------
@@ -251,6 +258,26 @@ export interface ProductCardProps {
 	priceLabel?: string
 	/** The unit for `priceLabel`; `priceCurrency` is the fallback. */
 	priceUnit?: string
+	// -----------------------------------------------------------------------
+	// Family presentation — set only for a product-family row. A plain listing
+	// leaves all of these undefined and renders exactly as before.
+	// -----------------------------------------------------------------------
+	/** A variation row's own option label, e.g. `42` or `size: 42 / color: red`. */
+	variantLabel?: string
+	/** How many options the family offers — rendered as the option count. */
+	variantCount?: number
+	/**
+	 * How many options are currently purchasable. `0` means "unknown" here, not
+	 * "sold out": most real listings carry no `stock` tag, which the stock rule
+	 * reads as out of stock. Only shown when some but not all are in stock.
+	 */
+	availableVariantCount?: number
+	/** The family's lowest option price. With `priceMax`, renders a price range. */
+	priceMin?: number
+	/** The family's highest option price. */
+	priceMax?: number
+	/** The distinct option axes (spec keys) the family varies over, first-seen order. */
+	specKeys?: string[]
 	/** Stock note, e.g. "76 in stock", "12 left", "40 in stock", "1 of 3". */
 	stockNote?: string
 	/** Material gradient class (.m1–.m8). */
@@ -375,6 +402,12 @@ export const ProductCard: FC<ProductCardProps> = ({
 	priceCurrency,
 	priceLabel,
 	priceUnit,
+	variantLabel,
+	variantCount,
+	availableVariantCount,
+	priceMin,
+	priceMax,
+	specKeys,
 	stockNote,
 	material,
 	symbolId,
@@ -438,6 +471,15 @@ export const ProductCard: FC<ProductCardProps> = ({
 	// Seller avatar tint — uses .m1–.m8 avatar-tint-* classes from art module
 	const avatarTint = sellerPubkey ? parseInt(sellerPubkey, 16) % 3 : 0
 	const avatarTintClass = `avatar-tint-${avatarTint}`
+
+	// Family presentation. A range exists only when both bounds are supplied;
+	// min === max is a single price, never a one-value range.
+	const priceRange = typeof priceMin === 'number' && typeof priceMax === 'number' ? { min: priceMin, max: priceMax } : null
+	const shownPrice = priceRange ? priceRange.min : price
+	const priceUnitLabel = priceUnit ?? formatPriceUnit(priceCurrency)
+	const optionAxes = specKeys ?? []
+	const shownAxes = optionAxes.slice(0, OPTION_AXIS_LIMIT)
+	const hiddenAxisCount = optionAxes.length - shownAxes.length
 
 	return (
 		<article
@@ -633,16 +675,58 @@ export const ProductCard: FC<ProductCardProps> = ({
 					presentation === 'row' ? 'mt-[7px] pt-[6px]' : 'mt-2.5 pt-[9px]',
 				)}
 			>
-				{typeof price === 'number' ? (
+				{priceRange && priceRange.min !== priceRange.max ? (
+					// A family whose options differ in price states the RANGE, not the
+					// parent's single price: "12 – 18 EUR".
 					<b className="text-sm">
-						{priceLabel ?? formatSats(price)}{' '}
-						<small className="font-normal text-text-mid">{priceUnit ?? formatPriceUnit(priceCurrency)}</small>
+						{formatSats(priceRange.min)} – {formatSats(priceRange.max)}{' '}
+						<small className="font-normal text-text-mid">{priceUnitLabel}</small>
+					</b>
+				) : typeof shownPrice === 'number' ? (
+					<b className="text-sm">
+						{priceRange ? formatSats(shownPrice) : priceLabel ?? formatSats(shownPrice)}{' '}
+						<small className="font-normal text-text-mid">{priceUnitLabel}</small>
 					</b>
 				) : (
 					<span />
 				)}
 				{stockNote && <small className="text-xs text-text-mid">{stockNote}</small>}
 			</div>
+
+			{/* Family options — the option count and the axes it varies over. Static
+			    in this slice; the interactive option picker is a follow-up. */}
+			{(typeof variantCount === 'number' && variantCount > 0) || variantLabel ? (
+				<div
+					data-slot="card-options"
+					data-testid={`widget-product-card-options-${id}`}
+					className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-text-mid"
+				>
+					{variantLabel && (
+						<span data-slot="variant-label" className="rounded-xs bg-surface-sunken px-1.5 py-px text-text-high">
+							{variantLabel}
+						</span>
+					)}
+					{typeof variantCount === 'number' && variantCount > 0 && (
+						<>
+							<span data-slot="variant-count">{variantCount} options</span>
+							{shownAxes.map((axis) => (
+								<span key={axis} data-slot="variant-axis" className="rounded-xs bg-surface-sunken px-1.5 py-px">
+									{axis}
+								</span>
+							))}
+							{hiddenAxisCount > 0 && <span data-slot="variant-more">+{hiddenAxisCount} more</span>}
+						</>
+					)}
+					{/* A stockless family reads as 0 available — that is the stock rule's
+					    "unknown", so only a partial real count is worth showing. */}
+					{typeof variantCount === 'number' &&
+						typeof availableVariantCount === 'number' &&
+						availableVariantCount > 0 &&
+						availableVariantCount < variantCount && (
+							<span data-slot="variant-available">{availableVariantCount} in stock</span>
+						)}
+				</div>
+			) : null}
 		</article>
 	)
 }

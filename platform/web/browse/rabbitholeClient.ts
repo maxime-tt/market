@@ -26,8 +26,7 @@
  * breakdown) — never in `eose`, and never dropped.
  */
 
-import { mapProduct, type BrowseFacet, type BrowseProduct, type BrowseSearchResult } from './browseProductMap'
-import { getProductCoordinates } from '@sdk/commerce/discovery'
+import { collapseProductFamilyEvents, type BrowseFacet, type BrowseProduct, type BrowseSearchResult } from './browseProductMap'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 // ---------------------------------------------------------------------------
@@ -331,7 +330,10 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 		relayState.set(relay, state)
 	}
 
-	const products: BrowseProduct[] = []
+	// The delivered events are collected raw and collapsed to one row per
+	// family only after the stream ends — the group/relay correlation needs the
+	// whole set, and a BrowseProduct no longer carries the tags to group by.
+	const deliveredEvents: NostrEventLike[] = []
 	const seenEventIds = new Set<string>()
 	let outcome: RabbitHoleOutcomeFrame | null = null
 	let lineBuffer = ''
@@ -386,15 +388,7 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 				const event = frame.event
 				if (event && event.id && !seenEventIds.has(event.id)) {
 					seenEventIds.add(event.id)
-					const product = mapProduct(event)
-					if (product) {
-						// The listing's own relays, from its index hit — correlated
-						// by `event_id` (exact), with the hit's coordinate as a
-						// fallback for a provider that omits `event_id`. Never the
-						// search-level fan-out set.
-						const relays = relaysByEventId.get(event.id) ?? relaysByCoordinate.get(getProductCoordinates(event))
-						products.push(relays ? { ...product, relays } : product)
-					}
+					deliveredEvents.push(event)
 				}
 				break
 			}
@@ -455,6 +449,18 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	} finally {
 		await reader.cancel().catch(() => {})
 	}
+
+	// Collapse on the RAW events before mapping: one row per product family,
+	// preferring the parent. Then attach each row's own relays, from its index
+	// hit — correlated by `event_id` (exact), with the hit's canonical
+	// coordinate as a fallback for a provider that omits `event_id`. Never the
+	// search-level fan-out set. The collapse itself is presentation grouping,
+	// not a second ranking pass.
+	const products: BrowseProduct[] = collapseProductFamilyEvents(deliveredEvents).map((product) => {
+		const relays =
+			relaysByEventId.get(product.eventId) ?? relaysByCoordinate.get(`30402:${product.pubkey}:${product.id}`)
+		return relays ? { ...product, relays } : product
+	})
 
 	// `indexOnly` returns only the `search` frame and never an `outcome` (the
 	// service never dials a relay), so an empty stream there is valid, not

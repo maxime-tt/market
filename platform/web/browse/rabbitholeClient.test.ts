@@ -136,6 +136,59 @@ describe('rabbitholeSearch — the streamed response', () => {
 		)
 		expect(result.products.map((p) => p.id)).toEqual(['e1'])
 	})
+
+	test('collapses a delivered family to ONE row, preferring the parent', async () => {
+		const address = `30402:${PUBKEY}:trail-runner`
+		const parent: NostrEventLike = {
+			id: 'family-parent',
+			pubkey: PUBKEY,
+			kind: 30402,
+			created_at: 1_700_000_000,
+			content: 'family body',
+			tags: [
+				['d', 'trail-runner'],
+				['type', 'variable'],
+				['title', 'Trail Runner'],
+				['price', '100', 'SATS'],
+			],
+		}
+		const child = (size: number): NostrEventLike => ({
+			id: `family-child-${size}`,
+			pubkey: PUBKEY,
+			kind: 30402,
+			created_at: 1_700_000_000,
+			content: '',
+			tags: [
+				['d', `trail-runner-${size}`],
+				['type', 'variation'],
+				['a', address],
+				['spec', 'size', String(size)],
+				['title', `Trail Runner ${size}`],
+				['price', '100', 'SATS'],
+			],
+		})
+
+		const result = await rabbitholeSearch(
+			{ q: 'trail runner' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({ type: 'search', candidateCount: 4, hits: [] }),
+						JSON.stringify({ type: 'event', event: child(42) }),
+						JSON.stringify({ type: 'event', event: child(43) }),
+						JSON.stringify({ type: 'event', event: child(44) }),
+						JSON.stringify({ type: 'event', event: parent }),
+						outcomeFrame('complete', ['wss://a'], []),
+					]),
+				),
+			},
+		)
+
+		expect(result.products).toHaveLength(1)
+		expect(result.products[0]?.id).toBe('trail-runner')
+		expect(result.products[0]?.familyRole).toBe('parent')
+		expect(result.products[0]?.variantCount).toBe(3)
+	})
 })
 
 // ---------------------------------------------------------------------------

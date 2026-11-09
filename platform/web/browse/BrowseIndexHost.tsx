@@ -268,6 +268,12 @@ function BrowseResultCard({
 			priceCurrency={product.currency}
 			priceLabel={price?.label}
 			priceUnit={price?.unit}
+			priceMin={product.priceMin}
+			priceMax={product.priceMax}
+			variantLabel={product.variantLabel}
+			variantCount={product.variantCount}
+			availableVariantCount={product.availableVariantCount}
+			specKeys={product.specKeys}
 			stockNote={typeof product.stock === 'string' ? product.stock : undefined}
 			material={materialForPubkey(product.pubkey)}
 			presentation={presentation}

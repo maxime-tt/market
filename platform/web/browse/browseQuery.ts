@@ -35,7 +35,7 @@ import { filterBlacklistedEvents } from '@sdk/config/blacklist'
 import { buildProductListFilter, isProductListed } from '@sdk/commerce/discovery'
 // Shared shapes and the canonical kind-30402 mappers (also used by the client).
 import {
-	mapProduct,
+	collapseProductFamilyEvents,
 	mapProductDetail,
 	type BrowseFacet,
 	type BrowseProduct,
@@ -137,22 +137,23 @@ async function searchLocal(query: string, tag: string | undefined, limit: number
 	}
 
 	const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
-	const products: BrowseProduct[] = []
+	const matched: NostrEventLike[] = []
 	let caughtUpInfo: CaughtUpInfo | null = null
 	for await (const item of ctx.stream([filter])) {
 		if (item.type === 'event') {
-			const product = mapProduct(item.event)
-			if (product) {
-				const haystack =
-					`${getProductTitle(item.event)} ${getProductSummary(item.event) ?? ''} ${(getProductCategories(item.event) ?? []).flat().join(' ')}`.toLowerCase()
-				if (terms.every((term) => haystack.includes(term))) products.push(product)
-			}
+			const haystack =
+				`${getProductTitle(item.event)} ${getProductSummary(item.event) ?? ''} ${(getProductCategories(item.event) ?? []).flat().join(' ')}`.toLowerCase()
+			if (terms.every((term) => haystack.includes(term))) matched.push(item.event)
 		}
 		if (item.type === 'caught-up') {
 			caughtUpInfo = item.info
 			break
 		}
 	}
+	// Collapse each product family to ONE row before mapping. The term filter
+	// above is unchanged — the collapse is presentation grouping on what the
+	// query already matched, not a second ranking pass.
+	const products = collapseProductFamilyEvents(matched)
 	return { products, eose: caughtUpInfo?.eose ?? [], pending: caughtUpInfo?.pending ?? [] }
 }
 
@@ -413,10 +414,11 @@ export async function fetchSellerListings(pubkey: string, limit = 50): Promise<S
 	// A listing its author deleted never surfaces, exactly as in the products
 	// module's own list read.
 	const live = await excludeDeleted(context, events)
-	const listings = filterBlacklistedEvents(live)
-		.filter((event) => isProductListed(event, 'purchasable'))
-		.map(mapProduct)
-		.filter((product): product is BrowseProduct => product !== undefined)
+	// Collapse each product family to ONE row (preferring the parent) before
+	// mapping — presentation grouping, not a second stock or ranking filter.
+	const listings = collapseProductFamilyEvents(
+		filterBlacklistedEvents(live).filter((event) => isProductListed(event, 'purchasable')),
+	)
 
 	return { listings, eose: caughtUpInfo?.eose ?? [], pending: caughtUpInfo?.pending ?? [] }
 }

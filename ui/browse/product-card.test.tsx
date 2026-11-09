@@ -271,3 +271,64 @@ describe('ProductStrip', () => {
 		expect(markup).toContain('custom-strip-class')
 	})
 })
+
+// ---------------------------------------------------------------------------
+// ProductCard — family presentation (price range, options)
+// ---------------------------------------------------------------------------
+
+describe('ProductCard family presentation', () => {
+	test('renders the price RANGE when the family’s options differ in price', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductCard, makeCard({ id: 'f1', priceMin: 12, priceMax: 18, priceCurrency: 'EUR' })),
+		)
+		expect(markup).toContain('widget-product-card-price-f1')
+		expect(markup).toContain('12 – 18')
+		expect(markup).toContain('EUR')
+	})
+
+	test('renders the single amount when the family’s options share one price', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductCard, makeCard({ id: 'f2', priceMin: 15, priceMax: 15, priceCurrency: 'USD' })),
+		)
+		expect(markup).toContain('15')
+		expect(markup).toContain('USD')
+		// min === max is a single price, not a one-value range.
+		expect(markup).not.toContain('–')
+	})
+
+	test('renders the option count and its axes', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductCard, makeCard({ id: 'f3', variantCount: 12, specKeys: ['size', 'color'] })),
+		)
+		expect(markup).toContain('widget-product-card-options-f3')
+		expect(markup).toContain('12 options')
+		expect(markup).toContain('size')
+		expect(markup).toContain('color')
+	})
+
+	test('caps a large option list and says how many more there are', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductCard, makeCard({ id: 'f4', variantCount: 40, specKeys: ['a', 'b', 'c', 'd', 'e', 'f'] })),
+		)
+		expect(markup).toContain('40 options')
+		expect(markup).toContain('+2 more')
+	})
+
+	test('renders a variation row’s own option label', () => {
+		const markup = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'f5', variantLabel: '42' })))
+		expect(markup).toContain('widget-product-card-options-f5')
+		expect(markup).toContain('42')
+	})
+
+	test('renders a stockless family’s price range (regression guard)', () => {
+		// No stock tag anywhere, so the family reads as unavailable — but the
+		// range must still render (the price rule falls back to all variations).
+		const markup = renderToStaticMarkup(
+			createElement(ProductCard, makeCard({ id: 'f6', variantCount: 3, priceMin: 12, priceMax: 18, priceCurrency: 'EUR' })),
+		)
+		expect(markup).toContain('3 options')
+		expect(markup).toContain('12 – 18')
+		// A stockless family reports 0 available; it must not claim "sold out".
+		expect(markup).not.toContain('in stock')
+	})
+})

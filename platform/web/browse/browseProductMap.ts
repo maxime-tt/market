@@ -12,8 +12,12 @@
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 // Canonical read model: sdk/commerce/discovery/productReadModel.ts
 import {
+	getProductAddress,
 	getProductCategories,
 	getProductDescription,
+	getProductEventType,
+	getProductFamilyPriceRange,
+	getProductFamilySpecKeys,
 	getProductImages,
 	getProductPrice,
 	getProductId,
@@ -22,7 +26,14 @@ import {
 	getProductShippingOptions,
 	getProductStock,
 	getProductTitle,
+	getVariationLabel,
+	getVariationParentAddress,
+	groupProductSearchResultsByFamily,
+	isProductHidden,
+	isProductInStock,
 } from '@sdk/commerce/discovery'
+// The family container the injected SDK aggregators read from.
+import type { ProductFamily, ProductFamilyVariation } from '@sdk/commerce/discovery'
 import { PRODUCT_SYMBOL_IDS, type MaterialClass, type ProductSymbolId } from '@ui/browse/art'
 
 // ---------------------------------------------------------------------------
@@ -58,6 +69,31 @@ export interface BrowseProduct {
 	 * not any one listing's relays).
 	 */
 	relays?: string[]
+	// -----------------------------------------------------------------------
+	// Family fields — present only when the row is part of a product family
+	// (a `type=variable` parent or a `type=variation` child). A plain listing
+	// carries none of these, so a family-oblivious renderer is unaffected.
+	// -----------------------------------------------------------------------
+	/** The parent coordinate this row's family lives at, when the row is a family. */
+	familyAddress?: string
+	/** Which side of the family this row is. */
+	familyRole?: 'parent' | 'variation'
+	/** A variation row's own option label, e.g. `42` or `size: 42 / color: red`. */
+	variantLabel?: string
+	/** How many options (non-hidden variations) the family offers. */
+	variantCount?: number
+	/**
+	 * How many of those options are currently purchasable. `isProductInStock`
+	 * reads a missing `stock` tag as sold out, and most of the real market
+	 * carries none, so a renderer must treat `0` as "unknown", not "sold out".
+	 */
+	availableVariantCount?: number
+	/** The family's lowest option price, from the family price range. */
+	priceMin?: number
+	/** The family's highest option price, from the family price range. */
+	priceMax?: number
+	/** The distinct option axes (`spec` keys) the family varies over, first-seen order. */
+	specKeys?: string[]
 }
 
 /**
@@ -108,13 +144,10 @@ export interface BrowseSearchResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Map a kind-30402 NostrEventLike into a BrowseProduct using the canonical
- * discovery read model (sdk/commerce/discovery/productReadModel.ts).
- * Exactly as ui/products/product-card-view.tsx does: getProductId,
- * getProductTitle, getProductPrice, getProductImages, getProductStock,
- * getProductCategories — each over ProductReadEvent.
+ * The shared, family-oblivious field mapping — one mapper, so the parent and
+ * the plain-listing path can never drift on title/price/stock/images.
  */
-export function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
+function mapProductFields(event: NostrEventLike): BrowseProduct | undefined {
 	const title = getProductTitle(event)
 	const priceTag = getProductPrice(event)
 	const price = priceTag ? Number(priceTag[1]) || undefined : undefined
@@ -144,6 +177,155 @@ export function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
 		categories,
 		location: location || undefined,
 	}
+}
+
+/**
+ * Map a kind-30402 NostrEventLike into a BrowseProduct using the canonical
+ * discovery read model (sdk/commerce/discovery/productReadModel.ts).
+ * Exactly as ui/products/product-card-view.tsx does: getProductId,
+ * getProductTitle, getProductPrice, getProductImages, getProductStock,
+ * getProductCategories — each over ProductReadEvent.
+ *
+ * This is the family-oblivious case of {@link mapProductWithFamily}: a plain
+ * listing carries no family fields.
+ */
+export function mapProduct(event: NostrEventLike): BrowseProduct | undefined {
+	return mapProductWithFamily(event, null)
+}
+
+/**
+ * The price reader `getProductFamilyPriceRange` injects. One reader, on the
+ * same `getProductPrice` call the shared mapper already makes — so the SDK's
+ * range aggregation and the card's single price can never parse the tag two
+ * different ways. A listing with no price tag (or a non-numeric amount) reads
+ * as `null` and is skipped by the aggregator.
+ *
+ * The currency falls back to the empty string when the tag omits it (the
+ * historical sats listing); that keeps a stockless, unit-less family's range
+ * real instead of dropping it to `null`.
+ */
+export function readProductPrice(event: NostrEventLike): { amount: number; currency: string } | null {
+	const tag = getProductPrice(event)
+	if (!tag) return null
+	const amount = Number(tag[1])
+	if (!Number.isFinite(amount)) return null
+	return { amount, currency: tag[2] ?? '' }
+}
+
+/**
+ * One ProductFamily per variable parent present in the result set, built from
+ * the rows themselves — the parent plus the variations that are actually here.
+ *
+ * Deliberately NOT `prepareProductFamilyCatalog(...).items`: that projection is
+ * availability-filtered (`isProductInStock`), and measured on the real market
+ * 82.5% of listings carry no `stock` tag (which reads as sold out), so routing
+ * a browse/search surface through it would drop most of the market. The family
+ * container here holds every non-hidden variation present, whatever its stock;
+ * the availability rule is only consulted for `availableVariantCount`.
+ */
+function familiesInResult(events: readonly NostrEventLike[]): Map<string, ProductFamily<NostrEventLike>> {
+	const parents = new Map<string, NostrEventLike>()
+	for (const event of events) {
+		if (getProductEventType(event) !== 'variable') continue
+		const address = getProductAddress(event)
+		if (address) parents.set(address, event)
+	}
+
+	const childrenByParent = new Map<string, NostrEventLike[]>()
+	for (const event of events) {
+		if (getProductEventType(event) !== 'variation') continue
+		// The SDK's linking rule: only an unambiguous same-author `a` tag links,
+		// and only to a parent that is actually here.
+		const parentAddress = getVariationParentAddress(event)
+		if (!parentAddress || !parents.has(parentAddress)) continue
+		const children = childrenByParent.get(parentAddress) ?? []
+		children.push(event)
+		childrenByParent.set(parentAddress, children)
+	}
+
+	const families = new Map<string, ProductFamily<NostrEventLike>>()
+	for (const [address, parent] of parents) {
+		const variations: ProductFamilyVariation<NostrEventLike>[] = (childrenByParent.get(address) ?? [])
+			.filter((child) => !isProductHidden(child))
+			.map((child) => ({
+				product: child,
+				address: getProductAddress(child) ?? address,
+				label: getVariationLabel(child),
+				available: isProductInStock(child),
+			}))
+		families.set(address, {
+			parent,
+			address,
+			variations,
+			availableVariations: variations.filter((variation) => variation.available),
+		})
+	}
+	return families
+}
+
+/**
+ * Map a raw event plus its family (or `null`) into a BrowseProduct.
+ *
+ * The shared fields are {@link mapProductFields}'s — one mapping, no drift. The
+ * family fields are added only where they mean something:
+ * - a `variation` states its own role and label, even when its family is absent
+ *   from the result set (the option is still showable on its own);
+ * - a `variable` parent states the family aggregates only when variations are
+ *   actually present (a childless variable parent is a simple product, exactly
+ *   as the SDK treats it).
+ */
+export function mapProductWithFamily(event: NostrEventLike, family: ProductFamily<NostrEventLike> | null): BrowseProduct | undefined {
+	const product = mapProductFields(event)
+	if (!product) return undefined
+
+	const type = getProductEventType(event)
+
+	if (type === 'variation') {
+		product.familyRole = 'variation'
+		product.variantLabel = getVariationLabel(event)
+	} else if (type === 'variable' && family && family.variations.length > 0) {
+		product.familyRole = 'parent'
+		product.familyAddress = family.address
+		product.variantCount = family.variations.length
+		product.availableVariantCount = family.availableVariations.length
+		product.specKeys = getProductFamilySpecKeys(family)
+
+		// The range falls back to ALL variations when none is available, so a
+		// stockless family still advertises its price (the availability rule
+		// never gates the price). Its stated unit fills in only when the parent
+		// states none of its own.
+		const range = getProductFamilyPriceRange(family, readProductPrice)
+		if (range) {
+			product.priceMin = range.min
+			product.priceMax = range.max
+			if (!product.currency && range.currency) product.currency = range.currency
+		}
+	}
+
+	return product
+}
+
+/**
+ * Collapse a browse/search result list to one row per family, then map.
+ *
+ * The collapse runs on the RAW events, before mapping: a BrowseProduct no
+ * longer carries the `type`/`a` tags the grouping needs. `groupProductSearch-
+ * ResultsByFamily` is the family-aware collapse the SDK provides for search —
+ * it only GROUPS (no stock or visibility filter, order preserved), unlike the
+ * availability-filtered shop-catalogue projection.
+ *
+ * This is presentation grouping, not a second ranking pass: a family is one row
+ * because its options are one product, not because anything re-scored the list.
+ */
+export function collapseProductFamilyEvents(events: readonly NostrEventLike[]): BrowseProduct[] {
+	const families = familiesInResult(events)
+	return groupProductSearchResultsByFamily(events)
+		.map((event) => {
+			const address = getProductEventType(event) === 'variable' ? getProductAddress(event) : null
+			const family = address ? families.get(address) ?? null : null
+			return mapProductWithFamily(event, family)
+		})
+		.filter((product): product is BrowseProduct => product !== undefined)
 }
 
 // ---------------------------------------------------------------------------
