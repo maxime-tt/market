@@ -24,6 +24,7 @@
  */
 
 import { queryOptions, useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useCallback, useSyncExternalStore } from 'react'
 import { applesauceIo, getReadContext, type NostrFilter } from '../readContext'
 import type { EventFilter } from '@sdk/core/event-store/filter'
 import type { CaughtUpInfo } from '@sdk/core/event-store/read'
@@ -47,7 +48,7 @@ import {
 } from './browseProductMap'
 // Canonical read model: sdk/commerce/discovery/productReadModel.ts
 import { getProductCategories, getProductSummary, getProductTitle } from '@sdk/commerce/discovery'
-import { rabbitholeSearch } from './rabbitholeClient'
+import { rabbitholeSearch, RabbitHoleError } from './rabbitholeClient'
 
 // Re-exported so existing consumers (`BrowseIndexHost`) keep their imports.
 export type { BrowseProduct, BrowseProductDetail, BrowseSearchResult }
@@ -125,6 +126,107 @@ export function resetBrowseSearchConfig(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Progressive delivery — what a still-running read has delivered so far
+// ---------------------------------------------------------------------------
+
+/**
+ * A snapshot of a search read that is STILL RUNNING: the products the provider
+ * has handed over so far, plus the relay counts it can honestly state.
+ *
+ * `complete` is the literal `false` so a consumer cannot treat one of these as
+ * a verdict; the verdict is `BrowseSearchResult`, which is what the query
+ * resolves with. A snapshot exists for exactly one reason: the read takes
+ * seconds (measured fan-outs of 0.26–4.9 s), and a visitor should see the first
+ * cards at ~200 ms instead of a skeleton until the last relay answers.
+ */
+export interface BrowseSearchProgress {
+	/** Products delivered so far, mapped exactly as the settled result maps them (family rows withheld — see the client). */
+	products: BrowseProduct[]
+	/** Raw event frames the read has accepted so far. */
+	eventsDelivered: number
+	/** Relays that have answered so far. */
+	relaysAnswered: string[]
+	/** Every relay the read has seen so far. */
+	relaysSeen: string[]
+	/** Always `false`: a snapshot from a running read is never a verdict. */
+	complete: false
+}
+
+/** What a read that has not delivered anything yet says — a stable identity, so `useSyncExternalStore` sees no change. */
+const EMPTY_PROGRESS: BrowseSearchProgress = { products: [], eventsDelivered: 0, relaysAnswered: [], relaysSeen: [], complete: false }
+
+/** How many reads keep a snapshot. A key is only created by a running read and is evicted oldest-first. */
+const PROGRESS_ENTRY_LIMIT = 8
+
+const progressByKey = new Map<string, BrowseSearchProgress>()
+const progressListeners = new Map<string, Set<() => void>>()
+
+/** The store key: the query key itself, so a snapshot and its read are the same identity. */
+function progressKey(queryKey: readonly unknown[]): string {
+	return JSON.stringify(queryKey)
+}
+
+/** Record one snapshot and wake its subscribers. Module-private: only a read publishes. */
+function publishBrowseSearchProgress(key: string, progress: BrowseSearchProgress): void {
+	// Re-insert so the map's insertion order is recency and eviction drops the
+	// stalest read, never the one still streaming.
+	progressByKey.delete(key)
+	progressByKey.set(key, progress)
+	while (progressByKey.size > PROGRESS_ENTRY_LIMIT) {
+		const oldest = progressByKey.keys().next().value
+		if (oldest === undefined) break
+		progressByKey.delete(oldest)
+	}
+	for (const listener of progressListeners.get(key) ?? []) listener()
+}
+
+/** The current snapshot for a query key, or `null` when that read has said nothing yet. */
+export function getBrowseSearchProgress(queryKey: readonly unknown[]): BrowseSearchProgress | null {
+	return getProgressByKey(progressKey(queryKey))
+}
+
+/** Subscribe to a query key's snapshots. Returns the unsubscribe. */
+export function subscribeBrowseSearchProgress(queryKey: readonly unknown[], listener: () => void): () => void {
+	return subscribeProgressByKey(progressKey(queryKey), listener)
+}
+
+function getProgressByKey(key: string): BrowseSearchProgress | null {
+	const snapshot = progressByKey.get(key)
+	return snapshot && (snapshot.eventsDelivered > 0 || snapshot.relaysSeen.length > 0) ? snapshot : null
+}
+
+function subscribeProgressByKey(key: string, listener: () => void): () => void {
+	let listeners = progressListeners.get(key)
+	if (!listeners) {
+		listeners = new Set()
+		progressListeners.set(key, listeners)
+	}
+	listeners.add(listener)
+	return () => {
+		const current = progressListeners.get(key)
+		if (!current) return
+		current.delete(listener)
+		if (current.size === 0) progressListeners.delete(key)
+	}
+}
+
+/**
+ * Subscribe a component to a read's progressive snapshots.
+ *
+ * `null` until the read has actually delivered something. The settled result
+ * (the query's own `data`) always wins over a snapshot when both exist: a
+ * snapshot is a partial, and the caller must never render one as final.
+ */
+export function useBrowseSearchProgress(queryKey: readonly unknown[]): BrowseSearchProgress | null {
+	// The key's STRING is the subscription identity: the array is rebuilt every
+	// render, and resubscribing on every render would churn the store.
+	const key = progressKey(queryKey)
+	const subscribe = useCallback((listener: () => void) => subscribeProgressByKey(key, listener), [key])
+	const getSnapshot = useCallback(() => getProgressByKey(key), [key])
+	return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+// ---------------------------------------------------------------------------
 // Search — local provider (the SDK event-store stream)
 // ---------------------------------------------------------------------------
 
@@ -193,8 +295,10 @@ async function searchLocal(query: string, tag: string | undefined, limit: number
  * sends the exact filter the service proposed for it, not a re-derivation.
  */
 export function browseSearchQueryOptions(query: string, tag?: string, limit = 100, openProductId?: string, filter?: string) {
+	const queryKey = browseKeys.search({ query, tag, filter, limit, provider: getBrowseSearchProvider() })
+	const progressStoreKey = JSON.stringify(queryKey)
 	return queryOptions({
-		queryKey: browseKeys.search({ query, tag, filter, limit, provider: getBrowseSearchProvider() }),
+		queryKey,
 		queryFn: async (context) => {
 			const term = query.trim()
 			// Nothing to read without a term, a tag, a filter, or an open product.
@@ -205,6 +309,10 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
 			// filter-only request the index answers, so it goes to the provider
 			// too rather than being special-cased to the local stream.
 			if ((term || tag || filter) && getBrowseSearchProvider() === 'rabbithole') {
+				// A fresh read for this key starts from nothing: the previous
+				// snapshot belonged to the previous read and must not linger into
+				// this one (a retry after a timeout, typically).
+				publishBrowseSearchProgress(progressStoreKey, EMPTY_PROGRESS)
 				try {
 					// The facet's own filter when one is given, else the tag as the
 					// category filter (the `#t` source).
@@ -214,12 +322,49 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
 						{
 							signal: context.signal,
 							baseUrl: getBrowseSearchBaseUrl(),
+							// The read hands over what it has as it arrives. The
+							// snapshot is published under this read's own query key,
+							// so a different search can never see it.
+							onProducts: (products, stats) =>
+								publishBrowseSearchProgress(progressStoreKey, {
+									products: [...products],
+									eventsDelivered: stats.eventsDelivered,
+									relaysAnswered: stats.relaysAnswered,
+									relaysSeen: stats.relaysSeen,
+									complete: false,
+								}),
 						},
 					)
 				} catch (err) {
 					// A caller abort (react-query cancel) is not a provider failure —
 					// propagate it so the query is cancelled, not retried locally.
 					if (err instanceof DOMException && err.name === 'AbortError') throw err
+					// A read that was CUT while under way (its deadline tripped, or
+					// its stream ended without an outcome) is not a provider
+					// outage: it delivered real products and reached no verdict.
+					// Report it as incomplete — falling back here is what made an
+					// 8 s RabbitHole read render the local stream's unrelated
+					// "6 relays responded with 0 products" on the live page.
+					if (err instanceof RabbitHoleError && (err.code === 'timeout' || err.code === 'truncated')) {
+						const partial = err.partial
+						const answered = partial?.relaysAnswered ?? []
+						const products = partial?.products ?? []
+						publishBrowseSearchProgress(progressStoreKey, {
+							products,
+							eventsDelivered: partial?.eventsDelivered ?? 0,
+							relaysAnswered: answered,
+							relaysSeen: partial?.relaysSeen ?? [],
+							complete: false,
+						})
+						return {
+							products,
+							eose: answered,
+							// Everything seen but unanswered is the honest pending set —
+							// the same relay-failure vocabulary a `partial` verdict uses.
+							pending: (partial?.relaysSeen ?? []).filter((relay) => !answered.includes(relay)),
+							incomplete: { reason: err.code, eventsDelivered: partial?.eventsDelivered ?? 0 },
+						}
+					}
 					// The provider is down or failed — fall back to the local stream.
 					console.warn('[browse] RabbitHole search failed, falling back to the local stream:', err instanceof Error ? err.message : err)
 				}
@@ -231,8 +376,18 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
 	})
 }
 
+/**
+ * The browse search, as the host consumes it: the settled query plus the
+ * progressive snapshot of the same read.
+ *
+ * `progress` is `null` until the provider has delivered something and is only
+ * meaningful while `data` is absent — `data` is the verdict and always wins.
+ */
 export function useBrowseSearch(query: string, tag?: string, limit?: number, openProductId?: string, filter?: string) {
-	return useQuery(browseSearchQueryOptions(query, tag, limit, openProductId, filter))
+	const options = browseSearchQueryOptions(query, tag, limit, openProductId, filter)
+	const queryResult = useQuery(options)
+	const progress = useBrowseSearchProgress(options.queryKey)
+	return { ...queryResult, progress }
 }
 
 // ---------------------------------------------------------------------------

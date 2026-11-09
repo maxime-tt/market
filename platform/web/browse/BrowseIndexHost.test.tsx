@@ -25,6 +25,9 @@ const PUBKEY_B = 'b'.repeat(64)
 let searchData: BrowseSearchResult | null = null
 let searchLoading = false
 let searchError = false
+/** The still-running read's snapshot: the products delivered so far (null once nothing has arrived). */
+let searchProgress: { products: BrowseProduct[]; eventsDelivered: number; relaysAnswered: string[]; relaysSeen: string[]; complete: false } | null =
+	null
 let facetsData: BrowseFacet[] | null = null
 let facetsEnabled = false
 let facetsQueryArg = ''
@@ -38,7 +41,7 @@ let familyChildrenData: BrowseFamilyChildren | null = null
 let familyReadArgs: { parentAddress?: string; relays?: readonly string[] } | null = null
 
 mock.module('@platform/web/browse/browseQuery', () => ({
-	useBrowseSearch: () => ({ data: searchData, isLoading: searchLoading, isError: searchError }),
+	useBrowseSearch: () => ({ data: searchData, isLoading: searchLoading, isError: searchError, progress: searchProgress }),
 	useBrowseProductDetail: (id?: string, relays?: readonly string[]) => {
 		detailReadArgs = { id, relays }
 		return { data: detailData, isLoading: detailLoading, isError: detailError, refetch: () => {} }
@@ -207,6 +210,7 @@ beforeEach(() => {
 	searchData = RESULTS
 	searchLoading = false
 	searchError = false
+	searchProgress = null
 	facetsData = null
 	facetsEnabled = false
 	facetsQueryArg = ''
@@ -786,5 +790,49 @@ describe('BrowseIndexHost family options', () => {
 		renderHost({ q: 'ceramic', p: 'ceramic-ball' })
 
 		expect(familyReadArgs?.parentAddress).toBeUndefined()
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Streaming results — the read paints as it arrives
+// ---------------------------------------------------------------------------
+
+describe('BrowseIndexHost streaming results', () => {
+	test('renders the products delivered so far while the read is still running', () => {
+		searchData = null
+		searchLoading = true
+		searchProgress = {
+			products: [CERAMIC_BALL],
+			eventsDelivered: 1,
+			relaysAnswered: ['wss://a'],
+			relaysSeen: ['wss://a', 'wss://b'],
+			complete: false,
+		}
+
+		const markup = renderHost()
+
+		// A card is on screen before the read has resolved.
+		expect(markup).toContain('data-testid="widget-product-card-ceramic-ball"')
+		// …and the indicator is in flight, with the counts it actually has.
+		expect(markup).toContain('data-state="fetching"')
+		expect(markup).toContain('1 of 2 relays responded')
+		expect(markup).toContain('so far')
+		// Never the verdict sentence over a read that has not finished.
+		expect(markup).not.toContain('responded with')
+	})
+
+	test('a read that stopped without a verdict says so, and never states a count as the answer', () => {
+		searchData = { products: [CERAMIC_BALL], eose: ['wss://a'], pending: ['wss://b'], incomplete: { reason: 'timeout', eventsDelivered: 1 } }
+		searchLoading = false
+		searchProgress = null
+
+		const markup = renderHost()
+
+		// The products that arrived are kept…
+		expect(markup).toContain('data-testid="widget-product-card-ceramic-ball"')
+		// …and the indicator reports the interruption, not a verdict.
+		expect(markup).toContain('data-state="incomplete"')
+		expect(markup).toContain('Search incomplete')
+		expect(markup).not.toContain('responded with')
 	})
 })

@@ -350,6 +350,15 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 
 	const searchQuery = useBrowseSearch(q, tag, 100, p, activeFilter)
 	const result = searchQuery.data ?? null
+	/**
+	 * What a still-running read has delivered so far. The settled result always
+	 * wins: `progress` is a partial (its `complete` is literally `false`) and is
+	 * only used while `data` is absent — which is exactly the window in which the
+	 * UI used to show a skeleton for seconds.
+	 */
+	const progress = searchQuery.progress ?? null
+	const products: BrowseProduct[] = result ? result.products : progress?.products ?? []
+	const isStreamingProducts = !result && products.length > 0
 
 	// The idle index's own feed: one bounded stream that supplies the wall
 	// strips, the hero's measured facts and the category rows. It is the same
@@ -372,7 +381,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	 * resolving to "not on the relays". Read structurally, so a provider that
 	 * records none simply leaves the read on the app's context.
 	 */
-	const openProduct: (BrowseProduct & { relays?: string[] }) | undefined = result?.products.find((product) => product.id === p)
+	const openProduct: (BrowseProduct & { relays?: string[] }) | undefined = products.find((product) => product.id === p)
 
 	const detailQuery = useBrowseProductDetail(p, openProduct?.relays)
 	const detail = detailQuery.data ?? null
@@ -530,9 +539,14 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 		return () => window.removeEventListener('keydown', onKeyDown)
 	}, [p, q, tag, onNavigate])
 
-	// Relay state — derived from the read seam's eose/pending arrays
-	const eoseRelays = result?.eose ?? []
-	const pendingRelays = result?.pending ?? []
+	// Relay state — the settled read's eose/pending arrays, or the running
+	// read's own relay frames while it is still going. Both are the same
+	// vocabulary (answered / not answered), so the indicator's in-flight counts
+	// are the read's counts, not a placeholder.
+	const eoseRelays = result ? result.eose : progress?.relaysAnswered ?? []
+	const pendingRelays = result
+		? result.pending
+		: (progress?.relaysSeen ?? []).filter((relay) => !(progress?.relaysAnswered ?? []).includes(relay))
 	const totalRelays = eoseRelays.length + pendingRelays.length
 	const respondedCount = eoseRelays.length
 	const relayDetails: Array<{ relay: string; status: 'responded' | 'pending' }> = [
@@ -621,20 +635,27 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	// art is assigned the same way the cards assign it.
 	const wall = isIdle ? feedStrips(wallProducts, IDLE_WALL_LIMIT, (pubkey) => wallSellerNames.get(pubkey), browseHref) : []
 
-	const hasResults = !searchQuery.isLoading && (result?.products.length ?? 0) > 0
+	const hasResults = products.length > 0
 
-	// Relay indicator — always present, with the read's own fetching state
+	// Relay indicator — always present, with the read's own fetching state.
+	// `loading` covers the whole streamed read (react-query's isLoading is true
+	// until the query resolves), so the verdict wording cannot appear while
+	// products are still arriving; `incomplete` covers a read that stopped
+	// without a verdict.
 	const relayIndicator = (
 		<RelayIndicator
 			responded={respondedCount}
-			totalProducts={result?.products.length ?? 0}
+			totalProducts={products.length}
 			relays={relayDetails}
 			loading={searchQuery.isLoading}
+			incomplete={Boolean(result?.incomplete)}
 		/>
 	)
 
-	// The result cards — the grid's children in both layouts
-	const cards: ReactNode = (result?.products ?? []).map((product) => (
+	// The result cards — the grid's children in both layouts. While the read is
+	// still running these are the products delivered so far; the settled result
+	// replaces the list wholesale when it lands.
+	const cards: ReactNode = products.map((product) => (
 		<BrowseResultCard
 			key={product.id}
 			product={product}
@@ -840,8 +861,9 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 							</div>
 						)}
 
-						{/* Loading state — skeleton grid */}
-						{searchQuery.isLoading && <SkeletonGrid rows={8} columns={3} />}
+						{/* Loading state — skeleton grid only when nothing has arrived
+						    yet: once cards stream in, they ARE the loading state. */}
+						{searchQuery.isLoading && !isStreamingProducts && <SkeletonGrid rows={8} columns={3} />}
 
 						{/* Error state — dead search (all relays failed) */}
 						{searchQuery.isError && respondedCount === 0 && (
@@ -855,8 +877,10 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 
 						{searchQuery.isError && respondedCount > 0 && <EmptyStateBrowse query={q} headline="The search errored." hints={EMPTY_HINTS} />}
 
-						{/* Empty marketplace — every relay answered, none matched */}
-						{!searchQuery.isLoading && result && result.products.length === 0 && !searchQuery.isError && (
+						{/* Empty marketplace — every relay answered, none matched. A read
+						    that stopped early (`incomplete`) has no verdict, so it never
+						    renders this: "nothing matched" would be a claim it cannot make. */}
+						{!searchQuery.isLoading && result && result.products.length === 0 && !result.incomplete && !searchQuery.isError && (
 							<EmptyStateBrowse query={q} hints={EMPTY_HINTS} {...emptyCopy} />
 						)}
 

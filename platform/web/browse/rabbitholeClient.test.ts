@@ -12,7 +12,15 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
-import { clampRabbitHoleLimit, rabbitholeSearch, RabbitHoleError, RABBITHOLE_LIMITS } from './rabbitholeClient'
+import {
+	clampRabbitHoleLimit,
+	rabbitholeSearch,
+	RabbitHoleError,
+	RABBITHOLE_DEFAULT_TIMEOUT_MS,
+	RABBITHOLE_LIMITS,
+	RABBITHOLE_SERVICE_TOTAL_DEADLINE_MS,
+	RABBITHOLE_TIMEOUT_HEADROOM_MS,
+} from './rabbitholeClient'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -657,5 +665,229 @@ describe('rabbitholeSearch — the search frame', () => {
 		await expect(rabbitholeSearch({ q: '   ' }, { fetchImpl: fetchReturning(ndjsonResponse([])) })).rejects.toMatchObject({
 			code: 'bad-request',
 		})
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Progressive delivery — products handed over as they arrive
+// ---------------------------------------------------------------------------
+
+/** A stream whose later frames wait for the test: each enqueue is one read(). */
+function gatedResponse(before: string[], after: string[]): { response: Response; open: () => void } {
+	const encoder = new TextEncoder()
+	let openGate: () => void = () => {}
+	const gate = new Promise<void>((resolve) => {
+		openGate = resolve
+	})
+	const body = new ReadableStream<Uint8Array>({
+		async start(controller) {
+			for (const line of before) controller.enqueue(encoder.encode(`${line}\n`))
+			await gate
+			for (const line of after) controller.enqueue(encoder.encode(`${line}\n`))
+			controller.close()
+		},
+	})
+	return { response: new Response(body), open: () => openGate() }
+}
+
+describe('rabbitholeSearch — progressive delivery', () => {
+	test('hands each arrival to onProducts before the outcome frame is read', async () => {
+		// The outcome frame does not exist on the wire until the callback has
+		// fired: a client that collected everything and mapped it after the read
+		// would deadlock here instead of passing.
+		const stream = gatedResponse(
+			[
+				JSON.stringify({ type: 'search', candidateCount: 2, hits: [] }),
+				JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'querying' }),
+				JSON.stringify({ type: 'event', event: productEvent('e1', 'Mug One') }),
+				JSON.stringify({ type: 'event', event: productEvent('e2', 'Mug Two') }),
+			],
+			[
+				JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'answered' }),
+				outcomeFrame('complete', ['wss://a'], []),
+			],
+		)
+
+		const snapshots: Array<{ ids: string[]; eventsDelivered: number; complete: boolean }> = []
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(stream.response),
+				onProducts: (products, stats) => {
+					snapshots.push({ ids: products.map((product) => product.id), eventsDelivered: stats.eventsDelivered, complete: stats.complete })
+					if (products.length === 2) stream.open()
+				},
+			},
+		)
+
+		expect(snapshots.length).toBeGreaterThan(0)
+		// A snapshot is never a verdict, by type and by value.
+		expect(snapshots.every((snapshot) => snapshot.complete === false)).toBe(true)
+		// The first snapshot could state only what had arrived; the last one
+		// states both products, before the read resolved.
+		expect(snapshots[snapshots.length - 1]!.ids).toEqual(['e1', 'e2'])
+		// And the settled result is the same two products.
+		expect(result.products.map((product) => product.id)).toEqual(['e1', 'e2'])
+	})
+
+	test('a streamed product is the settled product — same mapper, same relays', async () => {
+		const event = productEvent('e1', 'Ceramic Mug')
+		const streamed: Array<unknown> = []
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({
+							type: 'search',
+							candidateCount: 1,
+							hits: [{ coordinate: `30402:${PUBKEY}:e1`, event_id: 'e1', relays_seen: ['wss://nos.lol'] }],
+						}),
+						JSON.stringify({ type: 'event', event }),
+						outcomeFrame('complete', ['wss://nos.lol'], []),
+					]),
+				),
+				onProducts: (products) => {
+					if (products.length > 0) streamed.push(products[0])
+				},
+			},
+		)
+
+		expect(streamed.length).toBeGreaterThan(0)
+		// Deep equality, not "looks the same": one mapping function feeds both.
+		expect(streamed[streamed.length - 1]).toEqual(result.products[0])
+		expect(result.products[0]?.relays).toEqual(['wss://nos.lol'])
+	})
+
+	test('withholds family rows from snapshots — a family is stated once, when settled', async () => {
+		const address = `30402:${PUBKEY}:trail-runner`
+		const parent: NostrEventLike = {
+			id: 'family-parent',
+			pubkey: PUBKEY,
+			kind: 30402,
+			created_at: 1_700_000_000,
+			content: '',
+			tags: [
+				['d', 'trail-runner'],
+				['type', 'variable'],
+				['title', 'Trail Runner'],
+				['price', '100', 'SATS'],
+			],
+		}
+		const child = (size: number): NostrEventLike => ({
+			id: `family-child-${size}`,
+			pubkey: PUBKEY,
+			kind: 30402,
+			created_at: 1_700_000_000,
+			content: '',
+			tags: [
+				['d', `trail-runner-${size}`],
+				['type', 'variation'],
+				['a', address],
+				['spec', 'size', String(size)],
+				['title', `Trail Runner ${size}`],
+				['price', '100', 'SATS'],
+			],
+		})
+
+		const snapshots: string[][] = []
+		const result = await rabbitholeSearch(
+			{ q: 'trail runner' },
+			{
+				fetchImpl: fetchReturning(
+					ndjsonResponse([
+						JSON.stringify({ type: 'search', candidateCount: 4, hits: [] }),
+						JSON.stringify({ type: 'event', event: child(42) }),
+						JSON.stringify({ type: 'event', event: child(43) }),
+						JSON.stringify({ type: 'event', event: parent }),
+						JSON.stringify({ type: 'event', event: productEvent('plain-mug', 'Plain Mug') }),
+						outcomeFrame('complete', ['wss://a'], []),
+					]),
+				),
+				onProducts: (products) => snapshots.push(products.map((product) => product.id)),
+			},
+		)
+
+		// No snapshot ever states a family row: not the first child (which would
+		// later be replaced by the parent), not two children, not a half family.
+		expect(snapshots.length).toBeGreaterThan(0)
+		for (const ids of snapshots) expect(ids).toEqual(ids.filter((id) => id === 'plain-mug'))
+		// The non-family listing streams as it lands.
+		expect(snapshots.some((ids) => ids.includes('plain-mug'))).toBe(true)
+		// The family is stated exactly once, in the settled result.
+		expect(result.products.map((product) => product.id).sort()).toEqual(['plain-mug', 'trail-runner'])
+		expect(result.products.find((product) => product.id === 'trail-runner')?.variantCount).toBe(2)
+	})
+
+	test('the settled result is identical whether or not a callback is passed', async () => {
+		const lines = [
+			JSON.stringify({ type: 'search', candidateCount: 1, hits: [] }),
+			JSON.stringify({ type: 'event', event: productEvent('e1', 'Mug') }),
+			JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'answered' }),
+			outcomeFrame('partial', ['wss://a'], ['wss://b']),
+		]
+		const withCallback = await rabbitholeSearch(
+			{ q: 'mug' },
+			{ fetchImpl: fetchReturning(ndjsonResponse(lines)), onProducts: () => {} },
+		)
+		const withoutCallback = await rabbitholeSearch({ q: 'mug' }, { fetchImpl: fetchReturning(ndjsonResponse(lines)) })
+
+		expect(withCallback).toEqual(withoutCallback)
+		expect(withCallback.pending).toEqual(['wss://b'])
+		expect(withCallback.incomplete).toBeUndefined()
+	})
+
+	test('a truncated read keeps what arrived on the error, for the caller to report as incomplete', async () => {
+		const body = new ReadableStream<Uint8Array>({
+			start(controller) {
+				const encoder = new TextEncoder()
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'search', candidateCount: 1, hits: [] })}\n`))
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'event', event: productEvent('e1', 'Mug') })}\n`))
+				controller.close() // no outcome frame
+			},
+		})
+
+		const error = (await rabbitholeSearch({ q: 'mug' }, { fetchImpl: fetchReturning(new Response(body)) }).catch(
+			(caught: unknown) => caught,
+		)) as RabbitHoleError
+
+		expect(error).toBeInstanceOf(RabbitHoleError)
+		expect(error.code).toBe('truncated')
+		// The products are real and must survive the cut.
+		expect(error.partial?.products.map((product) => product.id)).toEqual(['e1'])
+		expect(error.partial?.eventsDelivered).toBe(1)
+	})
+
+	test('a read that outlives its deadline keeps what arrived too', async () => {
+		const body = new ReadableStream<Uint8Array>({
+			start(controller) {
+				const encoder = new TextEncoder()
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'search', candidateCount: 1, hits: [] })}\n`))
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'event', event: productEvent('e1', 'Mug') })}\n`))
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'answered' })}\n`))
+				// Never closes: the next read hangs until the deadline cancels it.
+			},
+		})
+
+		const error = (await rabbitholeSearch(
+			{ q: 'mug' },
+			{ fetchImpl: fetchReturning(new Response(body)), timeoutMs: 40 },
+		).catch((caught: unknown) => caught)) as RabbitHoleError
+
+		expect(error.code).toBe('timeout')
+		expect(error.partial?.products.map((product) => product.id)).toEqual(['e1'])
+		expect(error.partial?.relaysAnswered).toEqual(['wss://a'])
+	})
+
+	test('the client deadline outlasts the service’s own total deadline', () => {
+		// The defect this pins: the client gave up at 8 s on a service whose
+		// config allows 12 s (total_deadline_ms), so every search with one slow
+		// relay was cut off mid-stream by construction. The two numbers live in
+		// two repositories; this is the only place they meet.
+		expect(RABBITHOLE_SERVICE_TOTAL_DEADLINE_MS).toBe(12_000)
+		expect(RABBITHOLE_TIMEOUT_HEADROOM_MS).toBeGreaterThan(0)
+		expect(RABBITHOLE_DEFAULT_TIMEOUT_MS).toBe(RABBITHOLE_SERVICE_TOTAL_DEADLINE_MS + RABBITHOLE_TIMEOUT_HEADROOM_MS)
+		expect(RABBITHOLE_DEFAULT_TIMEOUT_MS).toBeGreaterThan(RABBITHOLE_SERVICE_TOTAL_DEADLINE_MS)
+		expect(RABBITHOLE_DEFAULT_TIMEOUT_MS).toBe(15_000)
 	})
 })

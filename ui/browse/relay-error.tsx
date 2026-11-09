@@ -42,6 +42,14 @@ export interface RelayIndicatorProps {
 	 */
 	loading?: boolean
 	/**
+	 * The read stopped before it reached a verdict (its deadline tripped, or the
+	 * stream ended without one). The products are what ARRIVED, not an answer,
+	 * so the indicator states the interruption and never the verdict sentence —
+	 * "N relays responded with M products" is unreachable from here by
+	 * construction, not by convention.
+	 */
+	incomplete?: boolean
+	/**
 	 * What the count counts. The results grid leaves it at `products`; the
 	 * seller profile reads `products from this seller`, so the sentence stays
 	 * true about the read it summarises.
@@ -86,7 +94,9 @@ export interface TagFilterBadgeProps {
  * products" is a **verdict**, and a verdict is only true once the read has
  * finished — so while `loading` the line states the search as in flight
  * ("Searching relays…", or "2 of 5 relays responded · 12 products so far"), and
- * a zero-verdict is never printed about a query still running. Once the counts
+ * a zero-verdict is never printed about a query still running. A read that
+ * stopped before its verdict (`incomplete`) states the interruption instead;
+ * the verdict sentence is not reachable from either branch. Once the counts
  * are known they stay on screen; the per-relay breakdown (which relay answered,
  * which is pending) is behind the expand chip.
  *
@@ -98,6 +108,7 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({
 	totalProducts,
 	relays = [],
 	loading = false,
+	incomplete = false,
 	productsLabel = 'products',
 	className,
 }) => {
@@ -115,7 +126,7 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({
 		<div
 			data-slot="relay-indicator"
 			data-testid="widget-relay-indicator"
-			data-state={loading ? 'fetching' : 'settled'}
+			data-state={loading ? 'fetching' : incomplete ? 'incomplete' : 'settled'}
 			className={cn(
 				'flex',
 				'items-center',
@@ -143,6 +154,10 @@ export const RelayIndicator: FC<RelayIndicatorProps> = ({
 					<span data-slot="relay-fetching">
 						{responded} of {totalRelays} relay{totalRelays === 1 ? '' : 's'} responded ·{' '}
 						<b className="font-normal text-text-high">{products}</b> {productsLabel} so far
+					</span>
+				) : incomplete ? (
+					<span data-slot="relay-incomplete">
+						Search incomplete — <b className="font-normal text-text-high">{products}</b> {productsLabel} received before the read stopped
 					</span>
 				) : totalRelays === 0 ? (
 					<span data-slot="relay-unreported">Relay detail unavailable for this search</span>

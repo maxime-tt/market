@@ -270,6 +270,7 @@ import {
 	browseSearchQueryOptions,
 	configureBrowseSearch,
 	fetchSellerListings,
+	getBrowseSearchProgress,
 	getBrowseSearchProvider,
 	resetBrowseSearchConfig,
 	type BrowseSearchResult,
@@ -886,5 +887,114 @@ describe('browse filters and facets', () => {
 		expect(await options.queryFn!({ signal: new AbortController().signal } as Parameters<NonNullable<typeof options.queryFn>>[0])).toEqual(
 			[],
 		)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Progressive delivery — the read hands its products over while it runs
+// ---------------------------------------------------------------------------
+
+/** Poll until the read's own async loop has published what the test waits for. */
+async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
+	const started = Date.now()
+	while (!predicate()) {
+		if (Date.now() - started > timeoutMs) throw new Error('timed out waiting for the search read')
+		await new Promise((resolve) => setTimeout(resolve, 1))
+	}
+}
+
+describe('progressive browse search', () => {
+	test('publishes products while the read is still running, then the settled result replaces them', async () => {
+		configureBrowseSearch({ provider: 'rabbithole' })
+		const key = browseSearchQueryOptions('ceramic mug', undefined, 100).queryKey
+
+		const encoder = new TextEncoder()
+		let openGate: () => void = () => {}
+		const gate = new Promise<void>((resolve) => {
+			openGate = resolve
+		})
+		const body = new ReadableStream<Uint8Array>({
+			async start(controller) {
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'search', candidateCount: 1, hits: [] })}\n`))
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'querying' })}\n`))
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'event', event: rhEvent })}\n`))
+				// The outcome waits for the test: the snapshot must be readable
+				// while this promise is unsettled, which is the whole point.
+				await gate
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'answered' })}\n`))
+				controller.enqueue(encoder.encode(`${rhOutcome('complete', ['wss://a'], [])}\n`))
+				controller.close()
+			},
+		})
+		stubFetch(async () => new Response(body))
+
+		const pending = runQueryFn('ceramic mug')
+		await waitFor(() => (getBrowseSearchProgress(key)?.products.length ?? 0) === 1)
+
+		const snapshot = getBrowseSearchProgress(key)
+		expect(snapshot?.products.map((product) => product.id)).toEqual(['rh-mug'])
+		// A snapshot is never a verdict, and it does not settle the read.
+		expect(snapshot?.complete).toBe(false)
+		// The provider answered, so the local stream was never consulted.
+		expect(localStreamCalls).toBe(0)
+
+		openGate()
+		const result = await pending
+		expect(result.products.map((product) => product.id)).toEqual(['rh-mug'])
+		expect(result.incomplete).toBeUndefined()
+	})
+
+	test('a snapshot is scoped to its own query key — another search never sees it', async () => {
+		configureBrowseSearch({ provider: 'rabbithole' })
+		const mugKey = browseSearchQueryOptions('ceramic mug', undefined, 100).queryKey
+		const teaKey = browseSearchQueryOptions('tea pot', undefined, 100).queryKey
+
+		stubFetch(async () =>
+			ndjsonResponse([JSON.stringify({ type: 'search', candidateCount: 1, hits: [] }), JSON.stringify({ type: 'event', event: rhEvent }), rhOutcome('complete', [], [])]),
+		)
+		await runQueryFn('ceramic mug')
+
+		expect(getBrowseSearchProgress(mugKey)?.products.map((product) => product.id)).toEqual(['rh-mug'])
+		expect(getBrowseSearchProgress(teaKey)).toBeNull()
+	})
+
+	test('a truncated read is incomplete — it never falls back to the local verdict', async () => {
+		configureBrowseSearch({ provider: 'rabbithole' })
+		stubFetch(async () =>
+			ndjsonResponse([
+				JSON.stringify({ type: 'search', candidateCount: 1, hits: [] }),
+				JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'answered' }),
+				JSON.stringify({ type: 'relay', relay: 'wss://b', state: 'querying' }),
+				JSON.stringify({ type: 'event', event: rhEvent }),
+				// The stream ends without its outcome frame — the deadline or the
+				// connection cut it. Everything above is real; the set is not whole.
+			]),
+		)
+
+		const result = await runQueryFn('ceramic mug')
+
+		// The arrived products are kept, and the read says it did not finish.
+		expect(result.products.map((product) => product.id)).toEqual(['rh-mug'])
+		expect(result.incomplete).toEqual({ reason: 'truncated', eventsDelivered: 1 })
+		// The relays that had answered, and the one still in flight, are the
+		// honest eose/pending — not a flattened "complete" shape.
+		expect(result.eose).toEqual(['wss://a'])
+		expect(result.pending).toEqual(['wss://b'])
+		// The disguise this kills: the local stream's unrelated verdict.
+		expect(localStreamCalls).toBe(0)
+		// The product the local stream would have contributed is not here.
+		expect(result.products.map((product) => product.id)).not.toContain('local-mug')
+	})
+
+	test('a read cut before it delivered anything is still incomplete, not an empty search', async () => {
+		configureBrowseSearch({ provider: 'rabbithole' })
+		// The 8050 ms / 300-byte shape: the search frame arrived, nothing else did.
+		stubFetch(async () => ndjsonResponse([JSON.stringify({ type: 'search', candidateCount: 0, hits: [] })]))
+
+		const result = await runQueryFn('ceramic mug')
+
+		expect(result.products).toEqual([])
+		expect(result.incomplete).toEqual({ reason: 'truncated', eventsDelivered: 0 })
+		expect(localStreamCalls).toBe(0)
 	})
 })

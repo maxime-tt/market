@@ -102,6 +102,46 @@ describe('RelayIndicator', () => {
 		expect(markup).toContain('data-state="fetching"')
 	})
 
+	test('while products are still streaming it states the counts so far, never a verdict', () => {
+		const relays: RelayDetail[] = [
+			{ relay: 'wss://r1.example', status: 'responded' },
+			{ relay: 'wss://r2.example', status: 'responded' },
+			{ relay: 'wss://r3.example', status: 'pending' },
+		]
+		const markup = renderToStaticMarkup(createElement(RelayIndicator, { responded: 2, totalProducts: 12, relays, loading: true }))
+
+		expect(markup).toContain('data-state="fetching"')
+		expect(markup).toContain('2 of 3 relays responded')
+		expect(markup).toContain('12')
+		expect(markup).toContain('so far')
+		// The verdict sentence is unreachable while the read is running.
+		expect(markup).not.toContain('responded with')
+	})
+
+	test('an incomplete read states the interruption, never the verdict sentence', () => {
+		const relays: RelayDetail[] = [
+			{ relay: 'wss://r1.example', status: 'responded' },
+			{ relay: 'wss://r2.example', status: 'pending' },
+		]
+		const markup = renderToStaticMarkup(
+			createElement(RelayIndicator, { responded: 1, totalProducts: 31, relays, incomplete: true }),
+		)
+
+		expect(markup).toContain('data-state="incomplete"')
+		expect(markup).toContain('Search incomplete')
+		expect(markup).toContain('31')
+		// "N relays responded with M products" is a verdict, and this read has none.
+		expect(markup).not.toContain('responded with')
+	})
+
+	test('an incomplete read that received nothing does not print a zero verdict either', () => {
+		const markup = renderToStaticMarkup(createElement(RelayIndicator, { responded: 0, totalProducts: 0, incomplete: true }))
+
+		expect(markup).toContain('Search incomplete')
+		expect(markup).not.toContain('0 relays responded')
+		expect(markup).not.toContain('responded with')
+	})
+
 	test('states missing relay detail rather than a zero count', () => {
 		const markup = renderToStaticMarkup(createElement(RelayIndicator, { responded: 0, totalProducts: 0 }))
 

@@ -138,6 +138,27 @@ export interface BrowseSearchResult {
 	 * host then shows no pills rather than counting its loaded window.
 	 */
 	suggested?: BrowseFacet[]
+	/**
+	 * Present ONLY when the read stopped before it reached a verdict (its
+	 * deadline tripped, or the stream ended without an `outcome` frame). The
+	 * products are then what arrived, not a complete answer, so no surface may
+	 * summarise them as "N relays responded with M products" — that sentence is
+	 * a verdict, and a read that did not finish has none.
+	 *
+	 * It is deliberately a field rather than a thrown error: a read that
+	 * delivered 31 products and then stalled has something worth keeping, and
+	 * discarding it (or replacing it with a different provider's answer) is how
+	 * a slow relay came to look like a settled empty search.
+	 */
+	incomplete?: BrowseSearchIncomplete
+}
+
+/** Why a search result is not a verdict, plus what had arrived when it stopped. */
+export interface BrowseSearchIncomplete {
+	/** `timeout` — the read's deadline tripped; `truncated` — the stream ended without its `outcome` frame. */
+	reason: 'timeout' | 'truncated'
+	/** Raw `event` frames the read had accepted before it stopped. */
+	eventsDelivered: number
 }
 
 // ---------------------------------------------------------------------------
@@ -304,6 +325,22 @@ export function mapProductWithFamily(event: NostrEventLike, family: ProductFamil
 	}
 
 	return product
+}
+
+/**
+ * Whether an event participates in a product family (a `type=variable` parent
+ * or a `type=variation` child).
+ *
+ * A family row is not a final answer until the read has settled: while the
+ * stream is still arriving, the parent may not have been delivered yet, so the
+ * row the collapse states for those children is provisional (the first child
+ * becomes the row, and is replaced by the parent when it lands). A progressive
+ * read therefore withholds family rows from its partial snapshots and states
+ * them only in the settled result — see `readRabbitHoleStream`.
+ */
+export function isProductFamilyEvent(event: NostrEventLike): boolean {
+	const type = getProductEventType(event)
+	return type === 'variable' || type === 'variation'
 }
 
 /**

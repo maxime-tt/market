@@ -26,7 +26,13 @@
  * breakdown) — never in `eose`, and never dropped.
  */
 
-import { collapseProductFamilyEvents, type BrowseFacet, type BrowseProduct, type BrowseSearchResult } from './browseProductMap'
+import {
+	collapseProductFamilyEvents,
+	isProductFamilyEvent,
+	type BrowseFacet,
+	type BrowseProduct,
+	type BrowseSearchResult,
+} from './browseProductMap'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 // ---------------------------------------------------------------------------
@@ -161,11 +167,78 @@ export const RABBITHOLE_LIMITS = {
 	maxLimit: 100,
 } as const
 
-/** The service's own relay dial timeout is 8000 ms; a stalled stream beyond that is ours to cut. */
-export const RABBITHOLE_DEFAULT_TIMEOUT_MS = 8000
+/**
+ * The SERVICE's own worst-case budget, mirrored here. NOT settable from this
+ * side: it is read from `rabbithole/config/rabbithole.config.json` → `fetch`:
+ *
+ *   per_relay_timeout_ms: 6000   one hanging relay may burn 6 s
+ *   total_deadline_ms:    12000  the service stops the fan-out at 12 s, and only
+ *                                THEN sends its `outcome` frame
+ *
+ * The two numbers live in two repositories with nothing else tying them
+ * together, so they are restated here with their source and the client's
+ * default is derived from them (asserted in `rabbitholeClient.test.ts`). If the
+ * service's config moves, this constant moves with it — the test fails instead
+ * of the client silently cutting reads off again.
+ */
+export const RABBITHOLE_SERVICE_TOTAL_DEADLINE_MS = 12_000
+
+/** Headroom over the service's deadline for the proxy hop between this client and the service. */
+export const RABBITHOLE_TIMEOUT_HEADROOM_MS = 3_000
+
+/**
+ * The client's whole-request deadline: the service's 12 s total deadline plus
+ * 3 s of proxy headroom = 15 s.
+ *
+ * MEASURED, and the reason this is not 8000 ms any more — the two deadlines
+ * were INVERTED. The client gave up at 8 s on a service allowed 12 s, so every
+ * search with one slow relay was cut off mid-stream by construction, not by
+ * the service being slow. On the live page the results request ran 8,010 ms and
+ * the client aborted it — `AbortError: The user aborted a request` surfaced on
+ * the response-body read while the upstream was still streaming — while a warm
+ * identical request returned 75 KB in 0.8–1.2 s, and the service's own outcome
+ * frames reported `elapsedMs` 715 / 778 / 1119 with `deadlineHit: false` once a
+ * bad relay failed fast instead of hanging. The slowness is one relay spending
+ * its 6 s per-relay budget, inside a budget the client was refusing to wait for.
+ *
+ * A read that still misses this deadline is reported as incomplete with
+ * everything that arrived (see {@link RabbitHoleError.partial}), never as a
+ * verdict and never by substituting the local stream's answer.
+ */
+export const RABBITHOLE_DEFAULT_TIMEOUT_MS = RABBITHOLE_SERVICE_TOTAL_DEADLINE_MS + RABBITHOLE_TIMEOUT_HEADROOM_MS
 
 /** The loopback API (the service binds to loopback; public exposure is a reverse-proxy decision for the owner). */
 export const RABBITHOLE_DEFAULT_BASE = 'http://127.0.0.1:7711'
+
+/**
+ * A snapshot of a read that is still running.
+ *
+ * `complete` is typed as the literal `false`, not `boolean`: a caller cannot
+ * present a streamed snapshot as a verdict without a type error. The verified
+ * result is the one `rabbitholeSearch` resolves with, never one of these.
+ */
+export interface RabbitHoleStreamStats {
+	/** Raw `event` frames accepted so far, before the family collapse. */
+	eventsDelivered: number
+	/** Relays that have answered so far, first-seen wire order. */
+	relaysAnswered: string[]
+	/** Every relay the read has seen a `relay` frame for so far (`querying`/`answered`/`failed`). */
+	relaysSeen: string[]
+	/** Always `false`: this snapshot is not a verdict. */
+	complete: false
+}
+
+/** What a read had delivered when it stopped before its verdict. */
+export interface RabbitHolePartialResult {
+	/** Products mapped exactly as the settled result maps them (same mapper, same collapse rules). */
+	products: BrowseProduct[]
+	/** Raw `event` frames accepted before the read stopped. */
+	eventsDelivered: number
+	/** Relays that had answered. */
+	relaysAnswered: string[]
+	/** Every relay seen on the wire (the not-answered ones are the honest `pending`). */
+	relaysSeen: string[]
+}
 
 export interface RabbitHoleSearchOptions {
 	/** The `fetch` to use (stubbed in tests). Defaults to the global fetch. */
@@ -176,6 +249,21 @@ export interface RabbitHoleSearchOptions {
 	signal?: AbortSignal
 	/** API base, e.g. `http://127.0.0.1:7711`. Defaults to {@link RABBITHOLE_DEFAULT_BASE}. */
 	baseUrl?: string
+	/**
+	 * Called with the products delivered SO FAR after each chunk that changed
+	 * anything — before the `outcome` frame, so the caller can render as the
+	 * stream arrives instead of waiting for the read to settle.
+	 *
+	 * The products come from the same mapper and family collapse the settled
+	 * result uses, so a streamed card and the settled card for the same event
+	 * cannot disagree. Two honest limits:
+	 *  - family rows are WITHHELD from snapshots (a family's row can still
+	 *    change identity while its parent is in flight, so a partial states no
+	 *    family at all; the settled result states it);
+	 *  - the list can only GROW in row count, but its contents are still
+	 *    provisional — `stats.complete` is `false`, always.
+	 */
+	onProducts?: (products: readonly BrowseProduct[], stats: RabbitHoleStreamStats) => void
 }
 
 /**
@@ -185,6 +273,13 @@ export interface RabbitHoleSearchOptions {
 export class RabbitHoleError extends Error {
 	/** A machine-readable code: `bad-request`, `http`, `stream-error`, `timeout`, `truncated`. */
 	readonly code: 'bad-request' | 'http' | 'stream-error' | 'timeout' | 'truncated'
+	/**
+	 * What the read had delivered when it stopped — set for `timeout` and
+	 * `truncated` only, because those are reads that were UNDER WAY and lost
+	 * their result to the cut. A caller must report them as incomplete rather
+	 * than substituting another provider's answer.
+	 */
+	partial?: RabbitHolePartialResult
 	constructor(code: RabbitHoleError['code'], message: string) {
 		super(message)
 		this.name = 'RabbitHoleError'
@@ -240,6 +335,12 @@ export function clampRabbitHoleLimit(limit: number | undefined): number {
  * local stream: a bad request, an HTTP-level failure, a mid-stream `error`
  * frame, a timeout, or a stream that ends without its `outcome` frame. A caller
  * abort (react-query cancel) is re-thrown as-is, not treated as a fallback.
+ *
+ * A `timeout` or `truncated` rejection carries `err.partial` — the products the
+ * read had already delivered. Those are the two codes that mean "a read was
+ * under way and got cut", so the caller must report them as incomplete: it has
+ * real products, and substituting the local stream's unrelated verdict for them
+ * is exactly how a slow relay came to look like a finished empty search.
  */
 export async function rabbitholeSearch(
 	request: RabbitHoleSearchRequest,
@@ -291,7 +392,13 @@ export async function rabbitholeSearch(
 			throw new RabbitHoleError('http', `RabbitHole: HTTP ${response.status}${detail ? ` — ${detail}` : ''}`)
 		}
 
-		return await readRabbitHoleStream(response, { timeoutMs, callerSignal, deadline, indexOnly: Boolean(request.indexOnly) })
+		return await readRabbitHoleStream(response, {
+			timeoutMs,
+			callerSignal,
+			deadline,
+			indexOnly: Boolean(request.indexOnly),
+			onProducts: options.onProducts,
+		})
 	} finally {
 		clearTimeout(timeoutId)
 		callerSignal?.removeEventListener('abort', onCallerAbort)
@@ -312,6 +419,8 @@ interface StreamReadContext {
 	deadline: AbortController
 	/** `indexOnly` streams return only the `search` frame and never an `outcome`. */
 	indexOnly: boolean
+	/** Progressive delivery — see {@link RabbitHoleSearchOptions.onProducts}. */
+	onProducts?: RabbitHoleSearchOptions['onProducts']
 }
 
 /** One completed body read: a chunk, or the end of the stream. */
@@ -342,6 +451,7 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	// The delivered events are collected raw and collapsed to one row per
 	// family only after the stream ends — the group/relay correlation needs the
 	// whole set, and a BrowseProduct no longer carries the tags to group by.
+	// Progressive snapshots re-run the SAME collapse over what has arrived.
 	const deliveredEvents: NostrEventLike[] = []
 	const seenEventIds = new Set<string>()
 	let outcome: RabbitHoleOutcomeFrame | null = null
@@ -358,6 +468,59 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	let suggested: BrowseFacet[] = []
 	const relaysByEventId = new Map<string, string[]>()
 	const relaysByCoordinate = new Map<string, string[]>()
+
+	/** Relays that have answered so far, in first-seen wire order. */
+	const relaysAnswered = (): string[] => relayOrder.filter((relay) => relayState.get(relay) === 'answered')
+
+	/**
+	 * Map delivered events to rows — ONE function for both the progressive
+	 * snapshots and the settled result, so a streamed card and the settled card
+	 * for the same event cannot disagree (same collapse, same mapper, same
+	 * per-listing relays from the `search` frame's hits).
+	 */
+	const toProducts = (events: readonly NostrEventLike[]): BrowseProduct[] =>
+		collapseProductFamilyEvents(events).map((product) => {
+			const relays =
+				relaysByEventId.get(product.eventId) ?? relaysByCoordinate.get(`30402:${product.pubkey}:${product.id}`)
+			return relays ? { ...product, relays } : product
+		})
+
+	/**
+	 * The rows a partial may honestly state: everything EXCEPT family rows.
+	 * A family's row is not stable until its parent has been delivered — the
+	 * collapse promotes the first child into the family row and then swaps it
+	 * for the parent — so a partial states no family at all rather than
+	 * flashing a child card that collapses into a parent card a frame later.
+	 * The settled result states every family once.
+	 */
+	const toStreamedProducts = (): BrowseProduct[] => toProducts(deliveredEvents.filter((event) => !isProductFamilyEvent(event)))
+
+	// Set by any frame that changes what a snapshot would say; flushed once per
+	// chunk so a batch of frames costs one collapse, not one per frame.
+	let progressDirty = false
+	const emitProgress = (): void => {
+		if (!progressDirty || !ctx.onProducts) return
+		progressDirty = false
+		ctx.onProducts(toStreamedProducts(), {
+			eventsDelivered: deliveredEvents.length,
+			relaysAnswered: relaysAnswered(),
+			relaysSeen: [...relayOrder],
+			complete: false,
+		})
+	}
+
+	/**
+	 * What to hand back with a read that stopped early. This is the SETTLED
+	 * mapping (families included) over what arrived: the read is over, so a
+	 * family row is as final as it will ever get, and the caller must show it
+	 * as incomplete rather than discard it.
+	 */
+	const partialResult = (): RabbitHolePartialResult => ({
+		products: toProducts(deliveredEvents),
+		eventsDelivered: deliveredEvents.length,
+		relaysAnswered: relaysAnswered(),
+		relaysSeen: [...relayOrder],
+	})
 
 	const dispatchLine = (line: string): void => {
 		let frame: RabbitHoleFrame
@@ -391,6 +554,7 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 				}
 				break
 			case 'relay':
+				if (relayState.get(frame.relay) !== frame.state) progressDirty = true
 				noteRelay(frame.relay, frame.state)
 				break
 			case 'event': {
@@ -398,6 +562,7 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 				if (event && event.id && !seenEventIds.has(event.id)) {
 					seenEventIds.add(event.id)
 					deliveredEvents.push(event)
+					progressDirty = true
 				}
 				break
 			}
@@ -441,6 +606,7 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 				const tail = lineBuffer.replace(/\r$/, '').trim()
 				lineBuffer = ''
 				if (tail.length > 0) dispatchLine(tail)
+				emitProgress()
 				break
 			}
 			lineBuffer += decoder.decode(chunk.value ?? new Uint8Array(0), { stream: true })
@@ -452,9 +618,21 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 				const line = segment.replace(/\r$/, '').trim()
 				if (line.length > 0) dispatchLine(line)
 			}
+			// Hand everything this chunk delivered to the caller BEFORE the
+			// `outcome` frame is acted on, so the UI paints on arrival.
+			emitProgress()
 			// The `outcome` frame is always last; stop reading once it arrived.
 			if (outcome) break
 		}
+	} catch (err) {
+		// A read that was UNDER WAY and lost its result to the cut (deadline,
+		// connection) keeps what it had. The caller reports it as incomplete —
+		// never as a settled count, and never by substituting another
+		// provider's answer.
+		if (err instanceof RabbitHoleError && (err.code === 'timeout' || err.code === 'truncated') && !err.partial) {
+			err.partial = partialResult()
+		}
+		throw err
 	} finally {
 		await reader.cancel().catch(() => {})
 	}
@@ -464,19 +642,18 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	// hit — correlated by `event_id` (exact), with the hit's canonical
 	// coordinate as a fallback for a provider that omits `event_id`. Never the
 	// search-level fan-out set. The collapse itself is presentation grouping,
-	// not a second ranking pass.
-	const products: BrowseProduct[] = collapseProductFamilyEvents(deliveredEvents).map((product) => {
-		const relays =
-			relaysByEventId.get(product.eventId) ?? relaysByCoordinate.get(`30402:${product.pubkey}:${product.id}`)
-		return relays ? { ...product, relays } : product
-	})
+	// not a second ranking pass. (The progressive snapshots ran this same
+	// function; only the family withholding differs.)
+	const products: BrowseProduct[] = toProducts(deliveredEvents)
 
 	// `indexOnly` returns only the `search` frame and never an `outcome` (the
 	// service never dials a relay), so an empty stream there is valid, not
 	// truncated. Every other stream MUST end in its `outcome` frame.
 	if (!outcome) {
 		if (ctx.indexOnly) return { products, eose: [], pending: [], suggested }
-		throw new RabbitHoleError('truncated', 'RabbitHole: stream ended without an outcome frame')
+		const truncated = new RabbitHoleError('truncated', 'RabbitHole: stream ended without an outcome frame')
+		truncated.partial = partialResult()
+		throw truncated
 	}
 	return toBrowseSearchResult(outcome, products, relayOrder, relayState, suggested)
 }
