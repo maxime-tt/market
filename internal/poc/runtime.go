@@ -76,13 +76,23 @@ func RunCLI(arguments []string) error {
 		committeePublicKey := flags.String("committee-public-key", "", "optional even-Y threshold public key for a fresh isolated network")
 		mintURL := flags.String("test-mint-url", TestMintURL, "test-mint endpoint recorded in consensus state")
 		cashuMintURL := flags.String("cashu-mint-url", CashuMintURL, "Cashu mint identity recorded in consensus state; must be reachable by whoever funds a bid")
+		demoPolicy := flags.Bool("demo-policy", false, "write the demo policy instead of the production default: the short anti-snipe ceilings an auction may choose within")
 		if err := flags.Parse(arguments[1:]); err != nil {
 			return err
 		}
 		if *home == "" || flags.NArg() != 0 {
 			return errors.New("init requires --home and no positional arguments")
 		}
-		manifest, err := InitLocalNetworkWithEndpoints(*home, DefaultPolicy(), *committeePublicKey, *mintURL, *cashuMintURL)
+		// The policy a network is initialized with is the ceiling every auction
+		// chooses within, and the value an auction that states nothing gets. The
+		// default is the production value; the demo asks for this flag
+		// explicitly, because initializing without it silently hands the demo a
+		// three-minute anti-snipe window it never asked for.
+		policy := DefaultPolicy()
+		if *demoPolicy {
+			policy = localDemoPolicy()
+		}
+		manifest, err := InitLocalNetworkWithEndpoints(*home, policy, *committeePublicKey, *mintURL, *cashuMintURL)
 		if err != nil {
 			return err
 		}
