@@ -221,11 +221,7 @@ type Bid struct {
 	CashuLockOperation  string   `json:"cashu_lock_operation,omitempty"`
 	ReservationID       string   `json:"reservation_id,omitempty"`
 	IntegratedFundingID string   `json:"integrated_funding_id,omitempty"`
-	// SigAllDepositID names the off-chain bearer deposit a cashu_sigall_v1
-	// bid's outcome templates refer to. It is omitempty so a bid for any other
-	// funding path replays byte-identically.
-	SigAllDepositID string `json:"sigall_deposit_id,omitempty"`
-	ReplacesBidID   string `json:"replaces_bid_id,omitempty"`
+	ReplacesBidID       string   `json:"replaces_bid_id,omitempty"`
 	CommittedAt     int64  `json:"committed_at"`
 }
 
@@ -377,10 +373,6 @@ type Lock struct {
 	// committed before this field existed, replays byte-identically.
 	SettleAuthorization string `json:"settle_authorization,omitempty"`
 	RefundAuthorization string `json:"refund_authorization,omitempty"`
-	// SigAllDepositID names the off-chain bearer deposit a cashu_sigall_v1
-	// lock's outcome templates refer to, so the coordinator's sweeper can find
-	// the pre-authorized transaction. It is omitempty like the fields above.
-	SigAllDepositID string `json:"sigall_deposit_id,omitempty"`
 }
 
 type Auction struct {
@@ -869,14 +861,6 @@ type bidContent struct {
 	// over the settle and refund consent messages, published with the bid so
 	// the coordinator can act at close without the bidder online.
 	OutcomeAuthorizations *bidOutcomeAuthorizations `json:"outcome_authorizations,omitempty"`
-	// OutcomeTemplates is the SIG_ALL route's compact on-chain commitment: the
-	// deposit id and, for each outcome, the transaction digest and the bidder's
-	// signature over it. It is present only on a cashu_sigall_v1 bid.
-	OutcomeTemplates *sigAllOutcomeTemplates `json:"outcome_templates,omitempty"`
-	// SigAllDeposit is the coordinator's signed, non-bearer deposit receipt. It
-	// binds the deposit digests, the auction and the bidder so admission can
-	// verify the deposit_id without the off-chain bearer template.
-	SigAllDeposit *sigAllDepositReceipt `json:"sigall_deposit,omitempty"`
 	// Proofs are the bearer proofs backing this bid, carried IN the committed
 	// transaction so every validator verifies their DLEQ and their sum inside
 	// consensus rather than trusting one party's attestation that the bid is
@@ -1069,20 +1053,23 @@ func ValidateForMempool(prior State, tx Transaction, policy Policy, mintSeed []b
 	if tx.Type == "event" && tx.Event != nil && tx.Event.Kind == KindBid {
 		var content bidContent
 		if err := decodeStrictContent(tx.Event.Content, &content); err == nil && content.CashuLock != nil {
-			// A cashu_sigall_v1 bid authorizes the two exact outcomes with
-			// SIG_ALL transaction templates, not with wallet-spend-key consent
-			// signatures, so it is admitted by the deadline-digest rule
-			// instead. This is a local-admission (CheckTx) rule like the one
-			// below: a deterministic transition stores whatever the bid
-			// carries, and a lock with no usable authorization simply cannot
-			// be resolved, so admitting such a bid is never a settlement
-			// hazard.
-			if auction, known := prior.Auctions[content.AuctionID]; known && auction.FundingMode == FundingModeCashuSigAll {
-				if err := verifySigAllBidAdmission(prior, tx.Event.PubKey, auction, content); err != nil {
+			// A cashu_sigall_v1 bid carries its proofs and is authorized
+			// inside consensus by the strict 2-of-2 SIG_ALL lock parse
+			// (verifyBidProofs, run by ApplyTransaction below), not by
+			// wallet-spend-key consent signatures, so it does not need the
+			// outcome-authorization rule. Every other mint-backed bid
+			// publishes both outcome authorizations; without them the
+			// coordinator would again need the bidder online to settle or
+			// refund, which is exactly the liveness the bridge removes. This
+			// is a local-admission (CheckTx) rule like the KindRefund
+			// double-credit refusal above: the deterministic transition
+			// stores whatever the bid carries, and a lock with no usable
+			// authorization simply cannot be resolved by applyOutcomeRecord,
+			// so admitting such a bid is never a settlement hazard.
+			if auction, known := prior.Auctions[content.AuctionID]; !known || auction.FundingMode != FundingModeCashuSigAll {
+				if err := verifyBidOutcomeAuthorizations(content); err != nil {
 					return err
 				}
-			} else if err := verifyBidOutcomeAuthorizations(content); err != nil {
-				return err
 			}
 		}
 	}
@@ -1382,11 +1369,6 @@ func applyBid(state *State, actor, eventID string, committedAt int64, content bi
 		if err := verifyCashuLockReceipt(*state, actor, content, *content.CashuLock); err != nil {
 			return err
 		}
-		if auction.FundingMode == FundingModeCashuSigAll {
-			if err := verifySigAllBidAdmission(*state, actor, auction, content); err != nil {
-				return err
-			}
-		}
 		// The proof set, when the bid carries one, is verified inside
 		// consensus here: every validator re-derives the DLEQ and the sum from
 		// the transaction's own contents, so no single party attests that the
@@ -1561,9 +1543,6 @@ func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, co
 	if content.CashuLock != nil {
 		bid.CashuTokenSHA256 = content.CashuLock.TokenSHA256
 		bid.CashuLockOperation = content.CashuLock.OperationID
-		if content.SigAllDeposit != nil {
-			bid.SigAllDepositID = content.SigAllDeposit.DepositID
-		}
 		state.CashuLocks[content.CashuLock.TokenSHA256] = *content.CashuLock
 		for _, proofStateRef := range content.CashuLock.ProofStateRefs {
 			state.CashuProofUses[proofStateRef[2:]] = content.CashuLock.TokenSHA256
@@ -1608,9 +1587,6 @@ func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, co
 	if content.CashuLock != nil && content.OutcomeAuthorizations != nil {
 		lock.SettleAuthorization = content.OutcomeAuthorizations.SettleSpendSignature
 		lock.RefundAuthorization = content.OutcomeAuthorizations.RefundSpendSignature
-	}
-	if content.SigAllDeposit != nil {
-		lock.SigAllDepositID = content.SigAllDeposit.DepositID
 	}
 	state.Locks[eventID] = lock
 	auction.LeaderBidID = eventID
@@ -2486,11 +2462,8 @@ func applyOutcomeRecord(state *State, actor string, content outcomeContent) erro
 			return fmt.Errorf("winning lock is %q, not winner_selected", lock.Status)
 		}
 		// A cashu_lock_v1 lock is authorized by the bidder's wallet spend-key
-		// consent signature; a cashu_sigall_v1 lock is authorized by the
-		// SIG_ALL outcome templates the bidder deposited at bid time, so the
-		// deposited id stands in for that signature. In both cases a lock with
-		// neither cannot be resolved.
-		if lock.SettleAuthorization == "" && lock.SigAllDepositID == "" {
+		// consent signature; a lock with none cannot be resolved.
+		if lock.SettleAuthorization == "" {
 			return errors.New("winning bid holds no settle authorization")
 		}
 		lock.Status = "paid"
@@ -2499,7 +2472,7 @@ func applyOutcomeRecord(state *State, actor string, content outcomeContent) erro
 		if lock.Status != "refundable" {
 			return fmt.Errorf("lock is %q, not refundable", lock.Status)
 		}
-		if lock.RefundAuthorization == "" && lock.SigAllDepositID == "" {
+		if lock.RefundAuthorization == "" {
 			return errors.New("bid holds no refund authorization")
 		}
 		lock.Status = "refunded"

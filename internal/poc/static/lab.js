@@ -2,9 +2,8 @@
  *
  * Plain browser JavaScript, no build step. The lab defaults to the SIG_ALL
  * money path: mint -> 2-of-2 NUT-11 SIG_ALL lock -> /api/demo/mint-lock ->
- * build both outcome templates -> /api/demo/sigall-deposit -> signed kind
- * 28641 carrying outcome_templates + sigall_deposit -> /api/event. The legacy
- * cashu_lock_v1 route (winner's tab settles) is still selectable.
+ * signed kind 28641 carrying the lock -> /api/event. The legacy cashu_lock_v1
+ * route (winner's tab settles) is still selectable.
  */
 (function lab() {
   "use strict";
@@ -422,14 +421,8 @@
 
   /**
    * The SIG_ALL bid. The bidder locks 2-of-2 to itself and the committee,
-   * builds BOTH exact outcome transactions (settle to the seller's committed
-   * key, refund to its own wallet key), deposits them with the coordinator,
-   * and publishes only the compact commitment (the deposit id, the two digests,
-   * the two bidder signatures) plus the coordinator's signed deposit receipt.
-   *
-   * Because the authorizations and the bearer templates are on record, the
-   * bidder never has to be online again: the coordinator submits whichever
-   * outcome commits. This is the lab's default route.
+   * fetches the coordinator's lock receipt, and publishes the signed bid
+   * carrying that lock. This is the lab's default route.
    */
   async function placeSigAllBid(identity, auction, amount, wallet, locktime) {
     setBidderStatus("Locking proofs to the bidder and the committee (SIG_ALL)…");
@@ -449,22 +442,10 @@
         funding_mode: "cashu_sigall_v1",
       }),
     });
-    // buildOutcomeTemplates + POST /api/demo/sigall-deposit in one wallet call:
-    // the coordinator verifies the two templates and returns its signed receipt.
-    setBidderStatus("Depositing the two pre-authorized outcomes…");
-    const commitment = await wallet.depositOutcomeTemplates(
-      { id: auction.id, seller_coco_payment_public_key: auction.seller_coco_payment_public_key },
-      funding,
-      identity.actor,
-      receipt,
-      "/api/demo/sigall-deposit",
-    );
     const signed = await sign(identity, 28641, [["e", auction.id]], {
       auction_id: auction.id,
       amount,
       cashu_lock: receipt,
-      outcome_templates: commitment.outcome_templates,
-      sigall_deposit: commitment.sigall_deposit,
     });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
     wallet.recordLockedBid(signed.id, funding.lockedProofs, funding.spendPublicKey, auction.id);

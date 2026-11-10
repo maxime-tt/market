@@ -301,7 +301,7 @@ func TestPositionSingleLegRegression(t *testing.T) {
 		t.Parallel()
 		fx := sigAllFixture(t)
 		bidder := testPrivateKey(t)
-		event, _, _ := buildSigAllBid(t, fx, bidder, 128)
+		event, _ := buildSigAllBid(t, fx, bidder, 128)
 
 		next, err := ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, DefaultPolicy(), fx.seed)
 		if err != nil {

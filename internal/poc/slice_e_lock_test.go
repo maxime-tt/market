@@ -218,16 +218,8 @@ func TestSliceERule7SigAllBidWithProofsCommitsEndToEnd(t *testing.T) {
 		}
 		sort.Strings(refs)
 		receipt := testCarriedProofReceipt(t, committee, fx.auctionID, actorForKey(bidder), 128, required, wallet.publicKey, refs, FundingModeCashuSigAll)
-		inputs, _ := sigAllInputs(t)
-		templates, deposit := sigAllDeposit(t, committee, fx.auctionID, actorForKey(bidder), wallet, receipt, inputs, fx.sellerKey.publicKey)
 		return bidContent{
 			AuctionID: fx.auctionID, Amount: 128, CashuLock: &receipt, Proofs: proofs,
-			OutcomeTemplates: &sigAllOutcomeTemplates{
-				Schema: SigAllTemplatesSchema, DepositID: deposit.DepositID,
-				Settle: sigAllTemplateSignature{Digest: templates.Settle.Digest, BidderSignature: templates.Settle.BidderSignature},
-				Refund: sigAllTemplateSignature{Digest: templates.Refund.Digest, BidderSignature: templates.Refund.BidderSignature},
-			},
-			SigAllDeposit: &deposit,
 		}
 	}
 

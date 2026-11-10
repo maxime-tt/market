@@ -101,11 +101,6 @@ type APIServer struct {
 	// online. These are secrets: they are never written to consensus and never
 	// logged, and the sweeper discards them once the outcome commits.
 	demoOutcomeProofs demoOutcomeProofStore
-	// demoSigAllDeposits holds the bidder's pre-authorized SIG_ALL outcome
-	// templates. They carry the locked proofs' secret and C, so this is the one
-	// place the coordinator holds spendable material between bid and outcome; it
-	// is durable so a deposit survives a restart.
-	demoSigAllDeposits sigAllDepositStore
 	// demoOutcomePoster submits the coordinator's own KindOutcome record. It is
 	// nil in production, where the sweeper signs with the committee key and
 	// broadcasts through the node; tests inject a recorder so the sweeper is
@@ -324,10 +319,8 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 	// reloads every parked payout, so a settlement that completed before the
 	// seller fetched it is still served afterward.
 	settlementsDir := ""
-	sigAllDepositsDir := ""
 	if networkRoot := os.Getenv("POC_DEMO_NETWORK_ROOT"); networkRoot != "" && demoKey != nil {
 		settlementsDir = filepath.Join(networkRoot, "settlements")
-		sigAllDepositsDir = filepath.Join(networkRoot, "sigall-deposits")
 	}
 	server := &APIServer{observerNodeID: observerNodeID, manifest: manifest, clients: clients, offline: offline, cashu: proxy, mintProxy: mintProxy,
 		legacyInterim:    os.Getenv("POC_ENABLE_LEGACY_INTERIM") == "true",
@@ -336,15 +329,9 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 		demoMintKeyset:        NewMintKeySetFetcher(mintTransportOrigin(manifest.CashuMintURL), mintCheckTimeout),
 		browserThresholdReady: browserReady, browserReleasePins: browserPins,
 		demoSettlements:    settlementStore{dir: settlementsDir},
-		demoSigAllDeposits: sigAllDepositStore{dir: sigAllDepositsDir},
 		recoveryOnly:       recoveryOnlyValue == "true", healthPinsSHA256: os.Getenv("POC_FRIDAY_HEALTH_PINS_SHA256")}
 	if err := server.demoSettlements.reload(); err != nil {
 		return nil, fmt.Errorf("load demo settlement payouts: %w", err)
-	}
-	// Reload the durable SIG_ALL deposits so a restart between bid and outcome
-	// still serves the pre-authorized templates the sweeper needs.
-	if err := server.demoSigAllDeposits.reload(); err != nil {
-		return nil, fmt.Errorf("load demo sigall deposits: %w", err)
 	}
 	return server, nil
 }
@@ -378,10 +365,6 @@ func (server *APIServer) Handler() (http.Handler, error) {
 			// pre-authorization, so the sweeper can resolve the lock after they
 			// go offline.
 			mux.HandleFunc("POST /api/demo/outcome-deposit", server.demoOutcomeDeposit)
-			// The bidder deposits the two exact SIG_ALL outcome transactions at
-			// bid time; the coordinator verifies them, stores the bearer
-			// templates durably and returns its own signed deposit receipt.
-			mux.HandleFunc("POST /api/demo/sigall-deposit", server.demoSigAllDeposit)
 			// The seller is not the caller of the settlement swap, so the
 			// payout is fetched separately by the seller's own browser.
 			mux.HandleFunc("GET /api/demo/settlement/{auction_id}", server.demoSettlement)

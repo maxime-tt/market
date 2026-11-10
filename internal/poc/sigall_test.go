@@ -3,7 +3,6 @@ package poc
 import (
 	"crypto/ed25519"
 	"encoding/hex"
-	"encoding/json"
 	"sort"
 	"strings"
 	"testing"
@@ -12,8 +11,8 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
 
-// sigAllTestKeyset is a placeholder keyset id for the template proofs. The
-// coordinator only requires it to be non-empty at deposit time.
+// sigAllTestKeyset is a placeholder keyset id for the lock receipt's proof
+// references. The coordinator only requires it to be non-empty.
 const sigAllTestKeyset = "00e8839167216bc1"
 
 // TestSigAllDigestMatchesGoldenVector pins the frozen (§3) SIG_ALL digest
@@ -99,109 +98,33 @@ func sigAllLockReceipt(t *testing.T, committee *btcec.PrivateKey, auctionID, bid
 	return receipt
 }
 
-// sigAllInputs builds two 64-sat bearer inputs and their committed NUT-07
-// references (sorted).
-func sigAllInputs(t *testing.T) ([]sigAllTemplateInput, []string) {
+// sigAllProofRefs builds the two committed NUT-07 references (sorted) the lock
+// receipt binds.
+func sigAllProofRefs(t *testing.T) []string {
 	t.Helper()
-	inputs := make([]sigAllTemplateInput, 0, 2)
 	refs := make([]string, 0, 2)
 	for index := 0; index < 2; index++ {
-		secretKey := testPrivateKey(t)
-		secret := hex.EncodeToString(secretKey.Serialize())
+		secret := hex.EncodeToString(testPrivateKey(t).Serialize())
 		reference, err := demoMintProofY(secret)
 		if err != nil {
 			t.Fatal(err)
 		}
-		inputs = append(inputs, sigAllTemplateInput{
-			Amount: 64, ID: sigAllTestKeyset, Secret: secret,
-			C: hex.EncodeToString(testPrivateKey(t).PubKey().SerializeCompressed()),
-		})
 		refs = append(refs, reference)
 	}
 	sort.Strings(refs)
-	return inputs, refs
+	return refs
 }
 
-// sigAllOutputSecret builds the P2PK output secret a template locks its fresh
-// proof to, with the recipient's compressed key as the condition's data.
-func sigAllOutputSecret(t *testing.T, recipient string) string {
-	t.Helper()
-	secret := []any{"P2PK", map[string]any{
-		"nonce": hex.EncodeToString(testPrivateKey(t).Serialize()),
-		"data":  recipient,
-		"tags":  [][]string{{"sigflag", "SIG_INPUTS"}},
-	}}
-	encoded, err := json.Marshal(secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(encoded)
-}
-
-// sigAllSignedTemplate builds one exact outcome transaction and the bidder's
-// signature over its SIG_ALL digest.
-func sigAllBuildSignedTemplate(t *testing.T, wallet walletClaim, inputs []sigAllTemplateInput, recipient string, amount int64) sigAllSignedTemplate {
-	t.Helper()
-	template := sigAllSignedTemplate{
-		Inputs: inputs,
-		Outputs: []sigAllTemplateOutput{{
-			Amount: amount, ID: sigAllTestKeyset,
-			Secret: sigAllOutputSecret(t, recipient),
-			R:      hex.EncodeToString(testPrivateKey(t).Serialize()),
-		}},
-	}
-	digest, err := sigAllTemplateDigest(template)
-	if err != nil {
-		t.Fatal(err)
-	}
-	template.Digest = digest
-	signature, err := schnorr.Sign(wallet.key, mustHex(digest))
-	if err != nil {
-		t.Fatal(err)
-	}
-	template.BidderSignature = hex.EncodeToString(signature.Serialize())
-	return template
-}
-
-// sigAllDeposit builds the two signed outcome templates and the deposit receipt
-// that binds them to the auction and the bidder.
-func sigAllDeposit(t *testing.T, committee *btcec.PrivateKey, auctionID, bidder string, wallet walletClaim, receipt CashuLockReceipt, inputs []sigAllTemplateInput, sellerRecipient string) (sigAllDepositTemplates, sigAllDepositReceipt) {
-	t.Helper()
-	settle := sigAllBuildSignedTemplate(t, wallet, inputs, sellerRecipient, receipt.Amount)
-	refund := sigAllBuildSignedTemplate(t, wallet, inputs, wallet.publicKey, receipt.Amount)
-	templates := sigAllDepositTemplates{Settle: settle, Refund: refund}
-	deposit := sigAllDepositReceipt{
-		Schema: SigAllDepositReceiptSchema, DepositID: "dep-sigall-1", AuctionID: auctionID, Bidder: bidder,
-		SettleDigest: settle.Digest, RefundDigest: refund.Digest,
-		Signer: hex.EncodeToString(committee.PubKey().SerializeCompressed()),
-	}
-	digest := sigAllDepositReceiptDigest(deposit)
-	signature, err := schnorr.Sign(committee, digest[:])
-	if err != nil {
-		t.Fatal(err)
-	}
-	deposit.Signature = hex.EncodeToString(signature.Serialize())
-	return templates, deposit
-}
-
-// buildSigAllBid returns a fully authorized cashu_sigall_v1 bid plus the lock
-// receipt it commits.
-func buildSigAllBid(t *testing.T, fx sigAllFixtureState, bidder *btcec.PrivateKey, amount int64) (SignedEvent, CashuLockReceipt, *sigAllDepositReceipt) {
+// buildSigAllBid returns a committed cashu_sigall_v1 bid plus the lock receipt
+// it commits. The bid carries the lock and, when a pinned mint policy is in
+// play, its own proofs; here the lock alone is enough to exercise admission.
+func buildSigAllBid(t *testing.T, fx sigAllFixtureState, bidder *btcec.PrivateKey, amount int64) (SignedEvent, CashuLockReceipt) {
 	t.Helper()
 	wallet := newWalletClaim(t)
-	inputs, refs := sigAllInputs(t)
+	refs := sigAllProofRefs(t)
 	receipt := sigAllLockReceipt(t, fx.committee, fx.auctionID, actorForKey(bidder), amount, refs, wallet)
-	templates, deposit := sigAllDeposit(t, fx.committee, fx.auctionID, actorForKey(bidder), wallet, receipt, inputs, fx.sellerKey.publicKey)
-	content := bidContent{
-		AuctionID: fx.auctionID, Amount: amount, CashuLock: &receipt,
-		OutcomeTemplates: &sigAllOutcomeTemplates{
-			Schema: SigAllTemplatesSchema, DepositID: deposit.DepositID,
-			Settle: sigAllTemplateSignature{Digest: templates.Settle.Digest, BidderSignature: templates.Settle.BidderSignature},
-			Refund: sigAllTemplateSignature{Digest: templates.Refund.Digest, BidderSignature: templates.Refund.BidderSignature},
-		},
-		SigAllDeposit: &deposit,
-	}
-	return testEvent(t, bidder, 1_001, KindBid, content), receipt, &deposit
+	content := bidContent{AuctionID: fx.auctionID, Amount: amount, CashuLock: &receipt}
+	return testEvent(t, bidder, 1_001, KindBid, content), receipt
 }
 
 // TestSigAllReceiptCommitsTwoKeyConditionAndMode pins the wave-1 receipt shape:
@@ -211,19 +134,13 @@ func TestSigAllReceiptCommitsTwoKeyConditionAndMode(t *testing.T) {
 	t.Parallel()
 	fx := sigAllFixture(t)
 	bidder := testPrivateKey(t)
-	event, _, _ := buildSigAllBid(t, fx, bidder, 128)
+	event, _ := buildSigAllBid(t, fx, bidder, 128)
 
 	next, err := ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, DefaultPolicy(), fx.seed)
 	if err != nil {
 		t.Fatalf("valid sigall bid: %v", err)
 	}
 	bid := next.Bids[event.ID]
-	if bid.SigAllDepositID != "dep-sigall-1" {
-		t.Fatalf("committed bid deposit id = %q, want dep-sigall-1", bid.SigAllDepositID)
-	}
-	if next.Locks[event.ID].SigAllDepositID != "dep-sigall-1" {
-		t.Fatalf("committed lock deposit id = %q, want dep-sigall-1", next.Locks[event.ID].SigAllDepositID)
-	}
 	receipt, ok := next.CashuLocks[bid.CashuTokenSHA256]
 	if !ok {
 		t.Fatal("committed sigall bid stored no lock receipt")
@@ -233,90 +150,6 @@ func TestSigAllReceiptCommitsTwoKeyConditionAndMode(t *testing.T) {
 	}
 	if receipt.CommitteePublicKey == "" || receipt.RefundPublicKey == "" {
 		t.Fatal("receipt did not record both the committee key and the wallet spend key")
-	}
-}
-
-// TestSigAllAdmissionRefusals pins the local-admission rule: a sigall bid with
-// no templates, with a mismatched digest, with a deposit naming another auction
-// and with a deposit whose signature does not verify are all refused.
-func TestSigAllAdmissionRefusals(t *testing.T) {
-	t.Parallel()
-	fx := sigAllFixture(t)
-	bidder := testPrivateKey(t)
-	policy := DefaultPolicy()
-	valid, _, _ := buildSigAllBid(t, fx, bidder, 128)
-	if err := ValidateForMempool(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &valid}, policy, fx.seed); err != nil {
-		t.Fatalf("a fully authorized sigall bid was refused: %v", err)
-	}
-	var content bidContent
-	if err := decodeStrictContent(valid.Content, &content); err != nil {
-		t.Fatal(err)
-	}
-	build := func(mutate func(*bidContent)) SignedEvent {
-		clone := deepCopyBidContent(content)
-		mutate(&clone)
-		return testEvent(t, bidder, 1_001, KindBid, clone)
-	}
-
-	cases := map[string]struct {
-		event  SignedEvent
-		reason string
-	}{
-		"no templates": {build(func(c *bidContent) { c.OutcomeTemplates = nil }), "outcome_templates"},
-		"mismatched digest": {build(func(c *bidContent) {
-			c.OutcomeTemplates.Settle.Digest = strings.Repeat("b", 64)
-		}), "does not match the stored deposit"},
-		"deposit names another auction": {build(func(c *bidContent) { c.SigAllDeposit.AuctionID = "another-auction" }), "different auction"},
-		"deposit signature does not verify": {build(func(c *bidContent) {
-			c.SigAllDeposit.Signature = strings.Repeat("c", 128)
-		}), "signature does not verify"},
-	}
-	for name, testCase := range cases {
-		err := ValidateForMempool(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &testCase.event}, policy, fx.seed)
-		if err == nil || !strings.Contains(err.Error(), testCase.reason) {
-			t.Fatalf("%s: error = %v, want one naming %q", name, err, testCase.reason)
-		}
-	}
-}
-
-// TestSigAllDepositRules names each of the five deposit rules the coordinator
-// enforces before storing a deposit.
-func TestSigAllDepositRules(t *testing.T) {
-	t.Parallel()
-	fx := sigAllFixture(t)
-	auction := fx.state.Auctions[fx.auctionID]
-	bidder := testPrivateKey(t)
-	wallet := newWalletClaim(t)
-	inputs, refs := sigAllInputs(t)
-	receipt := sigAllLockReceipt(t, fx.committee, fx.auctionID, actorForKey(bidder), 128, refs, wallet)
-	templates, _ := sigAllDeposit(t, fx.committee, fx.auctionID, actorForKey(bidder), wallet, receipt, inputs, fx.sellerKey.publicKey)
-
-	if settle, refund, err := verifySigAllDeposit(receipt, auction, templates); err != nil {
-		t.Fatalf("a valid deposit was refused: %v (settle %s refund %s)", err, settle, refund)
-	}
-
-	otherSecret := sigAllOutputSecret(t, hex.EncodeToString(testPrivateKey(t).PubKey().SerializeCompressed()))
-	cases := map[string]struct {
-		mutate func(*sigAllDepositTemplates)
-		reason string
-	}{
-		"outputs do not conserve": {func(d *sigAllDepositTemplates) { d.Settle.Outputs[0].Amount = 129 }, "conserve"},
-		"settle not seller key":   {func(d *sigAllDepositTemplates) { d.Settle.Outputs[0].Secret = otherSecret }, "seller payout key"},
-		"refund not wallet key":   {func(d *sigAllDepositTemplates) { d.Refund.Outputs[0].Secret = otherSecret }, "wallet spend key"},
-		"bidder signature": {func(d *sigAllDepositTemplates) {
-			d.Settle.BidderSignature = strings.Repeat("d", 128)
-		}, "does not verify"},
-		"input refs": {func(d *sigAllDepositTemplates) {
-			d.Refund.Inputs[0].Secret = hex.EncodeToString(testPrivateKey(t).Serialize())
-		}, "input references"},
-	}
-	for name, testCase := range cases {
-		clone := deepCopyTemplates(templates)
-		testCase.mutate(&clone)
-		_, _, err := verifySigAllDeposit(receipt, auction, clone)
-		if err == nil || !strings.Contains(err.Error(), testCase.reason) {
-			t.Fatalf("%s: error = %v, want one naming %q", name, err, testCase.reason)
-		}
 	}
 }
 
@@ -340,17 +173,10 @@ func TestCashuLockModeIsUnaffected(t *testing.T) {
 		!strings.Contains(err.Error(), "outcome authorizations") {
 		t.Fatalf("cashu_lock_v1 admission error = %v, want the authorization rule", err)
 	}
-	// With them, it commits and stores no sigall deposit id.
+	// With them, it commits.
 	authorized := authorizedBidEvent(t, committee, bidder, "mint-backed", 120, 1_001, "op-plain", strings.Repeat("a", 64), refs, wallet)
-	next, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &authorized}, 1_001, policy, seed)
-	if err != nil {
+	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &authorized}, 1_001, policy, seed); err != nil {
 		t.Fatalf("authorized cashu_lock_v1 bid: %v", err)
-	}
-	if next.Bids[authorized.ID].SigAllDepositID != "" {
-		t.Fatal("a cashu_lock_v1 bid recorded a sigall deposit id")
-	}
-	if next.Locks[authorized.ID].SigAllDepositID != "" {
-		t.Fatal("a cashu_lock_v1 lock recorded a sigall deposit id")
 	}
 }
 
@@ -387,31 +213,4 @@ func TestCommitteeSignerPort(t *testing.T) {
 	if _, err := NewLocalCommitteeSigner(nil); err == nil {
 		t.Fatal("the port accepted a nil committee key")
 	}
-}
-
-// deepCopyBidContent round-trips a bid content through JSON so a mutation in one
-// test case cannot leak into the shared fixture. Every field is JSON-tagged.
-func deepCopyBidContent(content bidContent) bidContent {
-	raw, err := json.Marshal(content)
-	if err != nil {
-		panic(err)
-	}
-	var clone bidContent
-	if err := json.Unmarshal(raw, &clone); err != nil {
-		panic(err)
-	}
-	return clone
-}
-
-// deepCopyTemplates does the same for the deposit templates.
-func deepCopyTemplates(templates sigAllDepositTemplates) sigAllDepositTemplates {
-	raw, err := json.Marshal(templates)
-	if err != nil {
-		panic(err)
-	}
-	var clone sigAllDepositTemplates
-	if err := json.Unmarshal(raw, &clone); err != nil {
-		panic(err)
-	}
-	return clone
 }
