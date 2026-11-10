@@ -323,6 +323,10 @@ refining; with `truncated: false` it does not.
 5. **`suggested` is kept alongside `buckets` for one release** so the app can be switched without a
    flag day; removing it is a follow-up task, not part of this plan.
 6. **Open question for the owner:** should choosing a seller bucket navigate to the seller's page, or
-   narrow the current search in place? The plan implements **narrow in place** (adds to the query),
-   because it keeps one mechanism — but a seller page is a reasonable alternative for a seller bucket
-   specifically, and the owner raised both.
+   narrow the current search in place?
+
+   **DECIDED by the owner (2026-11-10): narrow in place.** A seller bucket adds its value to the query
+   exactly like a tag bucket — one mechanism for both, which is also why `Bucket` carries a single
+   `value` for either kind. The owner's reason for deferring the alternative: hyperlink-based
+   navigation would let the browser's Back button undo a search refinement, which is worth having
+   later, but it is a separate change and not this one.
