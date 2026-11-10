@@ -357,7 +357,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	 * UI used to show a skeleton for seconds.
 	 */
 	const progress = searchQuery.progress ?? null
-	const products: BrowseProduct[] = result ? result.products : progress?.products ?? []
+	const products: BrowseProduct[] = result ? result.products : (progress?.products ?? [])
 	const isStreamingProducts = !result && products.length > 0
 
 	// The idle index's own feed: one bounded stream that supplies the wall
@@ -401,8 +401,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	 * so renders no picker.
 	 */
 	const detailCoordinate = detail && detail.pubkey && detail.id ? `30402:${detail.pubkey}:${detail.id}` : undefined
-	const familyAddress =
-		openProduct && openProduct.familyRole !== 'parent' ? undefined : (openProduct?.familyAddress ?? detailCoordinate)
+	const familyAddress = openProduct && openProduct.familyRole !== 'parent' ? undefined : (openProduct?.familyAddress ?? detailCoordinate)
 
 	const familyQuery = useBrowseFamilyChildren(familyAddress, openProduct?.relays)
 	const family = familyQuery.data?.family ?? null
@@ -543,7 +542,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	// read's own relay frames while it is still going. Both are the same
 	// vocabulary (answered / not answered), so the indicator's in-flight counts
 	// are the read's counts, not a placeholder.
-	const eoseRelays = result ? result.eose : progress?.relaysAnswered ?? []
+	const eoseRelays = result ? result.eose : (progress?.relaysAnswered ?? [])
 	const pendingRelays = result
 		? result.pending
 		: (progress?.relaysSeen ?? []).filter((relay) => !(progress?.relaysAnswered ?? []).includes(relay))

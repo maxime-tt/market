@@ -950,7 +950,11 @@ describe('progressive browse search', () => {
 		const teaKey = browseSearchQueryOptions('tea pot', undefined, 100).queryKey
 
 		stubFetch(async () =>
-			ndjsonResponse([JSON.stringify({ type: 'search', candidateCount: 1, hits: [] }), JSON.stringify({ type: 'event', event: rhEvent }), rhOutcome('complete', [], [])]),
+			ndjsonResponse([
+				JSON.stringify({ type: 'search', candidateCount: 1, hits: [] }),
+				JSON.stringify({ type: 'event', event: rhEvent }),
+				rhOutcome('complete', [], []),
+			]),
 		)
 		await runQueryFn('ceramic mug')
 

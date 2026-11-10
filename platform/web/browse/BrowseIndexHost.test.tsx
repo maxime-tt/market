@@ -26,8 +26,13 @@ let searchData: BrowseSearchResult | null = null
 let searchLoading = false
 let searchError = false
 /** The still-running read's snapshot: the products delivered so far (null once nothing has arrived). */
-let searchProgress: { products: BrowseProduct[]; eventsDelivered: number; relaysAnswered: string[]; relaysSeen: string[]; complete: false } | null =
-	null
+let searchProgress: {
+	products: BrowseProduct[]
+	eventsDelivered: number
+	relaysAnswered: string[]
+	relaysSeen: string[]
+	complete: false
+} | null = null
 let facetsData: BrowseFacet[] | null = null
 let facetsEnabled = false
 let facetsQueryArg = ''
@@ -176,15 +181,35 @@ function familyEvent(dTag: string, tags: string[][], kindId: string): NostrEvent
 }
 
 const FAMILY_CHILDREN_DATA: BrowseFamilyChildren = (() => {
-	const parent = familyEvent('trail-runner', [['type', 'variable'], ['title', 'Trail Runner'], ['price', '100', 'SATS']], 'evt-trail-runner')
+	const parent = familyEvent(
+		'trail-runner',
+		[
+			['type', 'variable'],
+			['title', 'Trail Runner'],
+			['price', '100', 'SATS'],
+		],
+		'evt-trail-runner',
+	)
 	const child42 = familyEvent(
 		'trail-runner-42',
-		[['type', 'variation'], ['a', FAMILY_ADDRESS], ['spec', 'size', '42'], ['price', '120', 'SATS'], ['stock', '2']],
+		[
+			['type', 'variation'],
+			['a', FAMILY_ADDRESS],
+			['spec', 'size', '42'],
+			['price', '120', 'SATS'],
+			['stock', '2'],
+		],
 		'evt-child-42',
 	)
 	const child43 = familyEvent(
 		'trail-runner-43',
-		[['type', 'variation'], ['a', FAMILY_ADDRESS], ['spec', 'size', '43'], ['price', '120', 'SATS'], ['stock', '0']],
+		[
+			['type', 'variation'],
+			['a', FAMILY_ADDRESS],
+			['spec', 'size', '43'],
+			['price', '120', 'SATS'],
+			['stock', '0'],
+		],
 		'evt-child-43',
 	)
 	const family = prepareProductFamilyCatalog([parent, child42, child43]).families[0]
@@ -824,7 +849,12 @@ describe('BrowseIndexHost streaming results', () => {
 	})
 
 	test('a read that stopped without a verdict says so, and never states a count as the answer', () => {
-		searchData = { products: [CERAMIC_BALL], eose: ['wss://a'], pending: ['wss://b'], incomplete: { reason: 'timeout', eventsDelivered: 1 } }
+		searchData = {
+			products: [CERAMIC_BALL],
+			eose: ['wss://a'],
+			pending: ['wss://b'],
+			incomplete: { reason: 'timeout', eventsDelivered: 1 },
+		}
 		searchLoading = false
 		searchProgress = null
 

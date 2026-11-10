@@ -297,9 +297,7 @@ describe('ProductCard has no card-level action', () => {
 	})
 
 	test('a simple listing renders no purchase control either — one rule, not two', () => {
-		const markup = renderToStaticMarkup(
-			createElement(ProductCard, makeCard({ id: 'simple', href: '/?p=simple', onSelect: () => {} })),
-		)
+		const markup = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'simple', href: '/?p=simple', onSelect: () => {} })))
 		for (const forbidden of FORBIDDEN) expect(markup).not.toContain(forbidden)
 	})
 
@@ -348,9 +346,7 @@ describe('ProductCard family presentation', () => {
 	})
 
 	test('renders the option count and its axes', () => {
-		const markup = renderToStaticMarkup(
-			createElement(ProductCard, makeCard({ id: 'f3', variantCount: 12, specKeys: ['size', 'color'] })),
-		)
+		const markup = renderToStaticMarkup(createElement(ProductCard, makeCard({ id: 'f3', variantCount: 12, specKeys: ['size', 'color'] })))
 		expect(markup).toContain('widget-product-card-options-f3')
 		expect(markup).toContain('12 options')
 		expect(markup).toContain('size')

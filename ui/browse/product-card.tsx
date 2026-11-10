@@ -692,7 +692,7 @@ export const ProductCard: FC<ProductCardProps> = ({
 					</b>
 				) : typeof shownPrice === 'number' ? (
 					<b className="text-sm">
-						{priceRange ? formatSats(shownPrice) : priceLabel ?? formatSats(shownPrice)}{' '}
+						{priceRange ? formatSats(shownPrice) : (priceLabel ?? formatSats(shownPrice))}{' '}
 						<small className="font-normal text-text-mid">{priceUnitLabel}</small>
 					</b>
 				) : (
@@ -731,9 +731,7 @@ export const ProductCard: FC<ProductCardProps> = ({
 					{typeof variantCount === 'number' &&
 						typeof availableVariantCount === 'number' &&
 						availableVariantCount > 0 &&
-						availableVariantCount < variantCount && (
-							<span data-slot="variant-available">{availableVariantCount} in stock</span>
-						)}
+						availableVariantCount < variantCount && <span data-slot="variant-available">{availableVariantCount} in stock</span>}
 				</div>
 			) : null}
 

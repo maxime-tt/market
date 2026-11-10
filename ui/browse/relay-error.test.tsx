@@ -123,9 +123,7 @@ describe('RelayIndicator', () => {
 			{ relay: 'wss://r1.example', status: 'responded' },
 			{ relay: 'wss://r2.example', status: 'pending' },
 		]
-		const markup = renderToStaticMarkup(
-			createElement(RelayIndicator, { responded: 1, totalProducts: 31, relays, incomplete: true }),
-		)
+		const markup = renderToStaticMarkup(createElement(RelayIndicator, { responded: 1, totalProducts: 31, relays, incomplete: true }))
 
 		expect(markup).toContain('data-state="incomplete"')
 		expect(markup).toContain('Search incomplete')

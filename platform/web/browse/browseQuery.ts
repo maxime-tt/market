@@ -67,7 +67,8 @@ export const browseKeys = {
 	/** Single product detail by event id (fetch, not stream), scoped to the relays it was seen on. */
 	detail: (id: string, relays?: readonly string[]) => [...browseKeys.all, 'detail', id, relays ?? null] as const,
 	/** A family's child options by parent coordinate (fetch, not stream). */
-	familyChildren: (parentAddress: string, relays?: readonly string[]) => [...browseKeys.all, 'family-children', parentAddress, relays ?? null] as const,
+	familyChildren: (parentAddress: string, relays?: readonly string[]) =>
+		[...browseKeys.all, 'family-children', parentAddress, relays ?? null] as const,
 	/** A seller's own listings (the seller-profile screen's list stream). */
 	sellerListings: (pubkey: string, limit: number) => [...browseKeys.all, 'seller-listings', pubkey, limit] as const,
 } as const
@@ -626,9 +627,7 @@ export async function fetchSellerListings(pubkey: string, limit = 50): Promise<S
 	const live = await excludeDeleted(context, events)
 	// Collapse each product family to ONE row (preferring the parent) before
 	// mapping — presentation grouping, not a second stock or ranking filter.
-	const listings = collapseProductFamilyEvents(
-		filterBlacklistedEvents(live).filter((event) => isProductListed(event, 'purchasable')),
-	)
+	const listings = collapseProductFamilyEvents(filterBlacklistedEvents(live).filter((event) => isProductListed(event, 'purchasable')))
 
 	return { listings, eose: caughtUpInfo?.eose ?? [], pending: caughtUpInfo?.pending ?? [] }
 }

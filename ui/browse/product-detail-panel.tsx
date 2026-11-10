@@ -211,7 +211,19 @@ const PanelContent: FC<{
 	onCopyLink?: () => void
 	onReport?: () => void
 	onBuy?: () => void
-}> = ({ product, menuOpen, options, selectedOptionDTag, onSelectOption, onHeart, onThreeDots, onAddToList, onCopyLink, onReport, onBuy }) => {
+}> = ({
+	product,
+	menuOpen,
+	options,
+	selectedOptionDTag,
+	onSelectOption,
+	onHeart,
+	onThreeDots,
+	onAddToList,
+	onCopyLink,
+	onReport,
+	onBuy,
+}) => {
 	const initials = product.seller.slice(0, 2).toUpperCase()
 
 	// The selected option, if any. Matched by d-tag only — never a positional or
@@ -223,9 +235,15 @@ const PanelContent: FC<{
 	// fallback (the gallery is explicitly inherited when the variation has none).
 	const optionPrice = typeof activeOption?.price === 'number' ? activeOption.price : undefined
 	const shownPrice = optionPrice ?? product.price
-	const shownUnit = optionPrice !== undefined ? formatPriceUnit(activeOption?.currency ?? product.currency) : (product.priceUnit ?? formatPriceUnit(product.currency))
+	const shownUnit =
+		optionPrice !== undefined
+			? formatPriceUnit(activeOption?.currency ?? product.currency)
+			: (product.priceUnit ?? formatPriceUnit(product.currency))
 	const familyRange =
-		optionPrice === undefined && typeof product.priceMin === 'number' && typeof product.priceMax === 'number' && product.priceMin !== product.priceMax
+		optionPrice === undefined &&
+		typeof product.priceMin === 'number' &&
+		typeof product.priceMax === 'number' &&
+		product.priceMin !== product.priceMax
 			? { min: product.priceMin, max: product.priceMax }
 			: null
 	const shownImage = activeOption?.image ?? product.image

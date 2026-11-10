@@ -480,8 +480,7 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	 */
 	const toProducts = (events: readonly NostrEventLike[]): BrowseProduct[] =>
 		collapseProductFamilyEvents(events).map((product) => {
-			const relays =
-				relaysByEventId.get(product.eventId) ?? relaysByCoordinate.get(`30402:${product.pubkey}:${product.id}`)
+			const relays = relaysByEventId.get(product.eventId) ?? relaysByCoordinate.get(`30402:${product.pubkey}:${product.id}`)
 			return relays ? { ...product, relays } : product
 		})
 
@@ -684,9 +683,7 @@ function toBrowseSearchResult(
 		// (what the indicator renders), not the failure report. The reason is not
 		// lost — the service keeps it — but it has nowhere to ride in this shape,
 		// so it is dropped here rather than smuggled through as an object.
-		pending = (verdict.relaysFailed ?? []).map((failure) =>
-			typeof failure === 'string' ? failure : failure.relay,
-		)
+		pending = (verdict.relaysFailed ?? []).map((failure) => (typeof failure === 'string' ? failure : failure.relay))
 	} else {
 		eose = []
 		pending = []

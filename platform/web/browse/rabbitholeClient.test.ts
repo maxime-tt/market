@@ -135,7 +135,7 @@ describe('rabbitholeSearch — the streamed response', () => {
 		expect(result.pending.length).toBeGreaterThan(0)
 	})
 
-	test('flattens the service\'s failure OBJECTS to relay URLs — the crash this pins', async () => {
+	test("flattens the service's failure OBJECTS to relay URLs — the crash this pins", async () => {
 		// The wire states `relaysFailed: [{ relay, reason }]`. Assigning that to a
 		// `string[]` compiled, then flowed into the indicator, which wrapped each
 		// entry as `{ relay: <entry>, status }` and rendered the object as a React
@@ -702,10 +702,7 @@ describe('rabbitholeSearch — progressive delivery', () => {
 				JSON.stringify({ type: 'event', event: productEvent('e1', 'Mug One') }),
 				JSON.stringify({ type: 'event', event: productEvent('e2', 'Mug Two') }),
 			],
-			[
-				JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'answered' }),
-				outcomeFrame('complete', ['wss://a'], []),
-			],
+			[JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'answered' }), outcomeFrame('complete', ['wss://a'], [])],
 		)
 
 		const snapshots: Array<{ ids: string[]; eventsDelivered: number; complete: boolean }> = []
@@ -826,10 +823,7 @@ describe('rabbitholeSearch — progressive delivery', () => {
 			JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'answered' }),
 			outcomeFrame('partial', ['wss://a'], ['wss://b']),
 		]
-		const withCallback = await rabbitholeSearch(
-			{ q: 'mug' },
-			{ fetchImpl: fetchReturning(ndjsonResponse(lines)), onProducts: () => {} },
-		)
+		const withCallback = await rabbitholeSearch({ q: 'mug' }, { fetchImpl: fetchReturning(ndjsonResponse(lines)), onProducts: () => {} })
 		const withoutCallback = await rabbitholeSearch({ q: 'mug' }, { fetchImpl: fetchReturning(ndjsonResponse(lines)) })
 
 		expect(withCallback).toEqual(withoutCallback)
@@ -869,10 +863,9 @@ describe('rabbitholeSearch — progressive delivery', () => {
 			},
 		})
 
-		const error = (await rabbitholeSearch(
-			{ q: 'mug' },
-			{ fetchImpl: fetchReturning(new Response(body)), timeoutMs: 40 },
-		).catch((caught: unknown) => caught)) as RabbitHoleError
+		const error = (await rabbitholeSearch({ q: 'mug' }, { fetchImpl: fetchReturning(new Response(body)), timeoutMs: 40 }).catch(
+			(caught: unknown) => caught,
+		)) as RabbitHoleError
 
 		expect(error.code).toBe('timeout')
 		expect(error.partial?.products.map((product) => product.id)).toEqual(['e1'])

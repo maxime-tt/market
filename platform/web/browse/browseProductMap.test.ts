@@ -139,8 +139,14 @@ describe('family mapper and collapse', () => {
 	test('the mapper carries the family fields for a parent', () => {
 		const parent = familyParent([['price', '100', 'USD']])
 		const rows = collapseProductFamilyEvents([
-			child('shoe-42', '42', [['price', '100', 'USD'], ['stock', '2']]),
-			child('shoe-43', '43', [['price', '120', 'USD'], ['stock', '1']]),
+			child('shoe-42', '42', [
+				['price', '100', 'USD'],
+				['stock', '2'],
+			]),
+			child('shoe-43', '43', [
+				['price', '120', 'USD'],
+				['stock', '1'],
+			]),
 			parent,
 		])
 
@@ -168,7 +174,12 @@ describe('family mapper and collapse', () => {
 	})
 
 	test('leaves the family fields absent for a simple listing', () => {
-		const product = mapProduct(listing('mug', [['title', 'Mug'], ['price', '5', 'SATS']]))
+		const product = mapProduct(
+			listing('mug', [
+				['title', 'Mug'],
+				['price', '5', 'SATS'],
+			]),
+		)
 		expect(product?.familyRole).toBeUndefined()
 		expect(product?.familyAddress).toBeUndefined()
 		expect(product?.variantLabel).toBeUndefined()
@@ -214,8 +225,14 @@ describe('family mapper and collapse', () => {
 
 	test('leaves non-family listings untouched', () => {
 		const rows = collapseProductFamilyEvents([
-			listing('hat', [['title', 'Hat'], ['price', '9', 'SATS']]),
-			listing('belt', [['title', 'Belt'], ['price', '12', 'SATS']]),
+			listing('hat', [
+				['title', 'Hat'],
+				['price', '9', 'SATS'],
+			]),
+			listing('belt', [
+				['title', 'Belt'],
+				['price', '12', 'SATS'],
+			]),
 		])
 		expect(rows.map((row) => row.id)).toEqual(['hat', 'belt'])
 	})

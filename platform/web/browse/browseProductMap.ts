@@ -360,7 +360,7 @@ export function collapseProductFamilyEvents(events: readonly NostrEventLike[]): 
 	return groupProductSearchResultsByFamily(events)
 		.map((event) => {
 			const address = getProductEventType(event) === 'variable' ? getProductAddress(event) : null
-			const family = address ? families.get(address) ?? null : null
+			const family = address ? (families.get(address) ?? null) : null
 			return mapProductWithFamily(event, family)
 		})
 		.filter((product): product is BrowseProduct => product !== undefined)
@@ -408,7 +408,9 @@ export function mapProductFamilyChildren(family: ProductFamily<NostrEventLike>):
 	return family.variations
 		.map((variation) => {
 			const product = mapProduct(variation.product)
-			return product ? { dTag: getVariationDTag(variation.product), label: variation.label, available: variation.available, product } : undefined
+			return product
+				? { dTag: getVariationDTag(variation.product), label: variation.label, available: variation.available, product }
+				: undefined
 		})
 		.filter((child): child is BrowseFamilyChild => child !== undefined)
 }
