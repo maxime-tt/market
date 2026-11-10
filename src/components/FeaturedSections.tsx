@@ -1,7 +1,7 @@
 import { CollectionCard } from '@/components/CollectionCard'
 import { FeaturedUserCard } from '@/components/FeaturedUserCard'
 import { ItemGrid } from '@/components/ItemGrid'
-import { ProductCard } from '@/components/ui/browse/product-card'
+import { ProductCard } from '@/components/ProductCard'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { collectionByATagQueryOptions } from '@/queries/collections'
