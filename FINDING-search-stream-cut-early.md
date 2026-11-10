@@ -17,7 +17,35 @@ On `https://market-e2e.playday.it/?q=bitcoin` (a large result set — `candidate
 - The grid, however, is complete and correct-looking (368 cards), and the bucket line rendered with
   the right numbers. So the *frame* path works; it is the *stream completion* that is lost.
 
-## Measured — the service is NOT the cause
+## THE DEFECT IS INTERMITTENT, AND IT TRACKS THE FAN-OUT'S SPEED
+
+This is the most important thing learned since the first draft, and it changes the shape of the
+question. The same query, same code, run repeatedly:
+
+| path | runs | wall | outcome frame | ended with |
+|---|---|---|---|---|
+| direct service | 4 | **8.26–8.29 s** | **YES ×4** | clean |
+| through the app proxy | 4 | **8.29–8.37 s** | **YES ×4** | clean |
+| direct service | earlier | 11.58 · 12.73 · 13.02 s | YES | clean |
+| the app in a browser | the report | **11.77 s** | **NO — cut** | clean FIN |
+| adversary's runs | — | **12001 / 12007 / 12001 ms** | **NO — cut** | clean FIN |
+
+**It is not deterministic.** Eight consecutive runs just now — four direct, four through the proxy —
+all completed in ~8.3 s with an outcome. The cut appears on runs that drag on, and the measured cut
+points cluster at **~12.0 s ending with a clean FIN, not an RST** — a boundary, not a breakage.
+
+**Leading hypothesis, NOT confirmed:** when the fan-out is slow enough to reach a ~12 s bound, the
+stream is closed before the `outcome` frame is written, and the client then correctly reports an
+incomplete read. The client is right; the missing verdict is the defect.
+
+**What does not yet fit and must be explained before this is accepted:** the service's config sets
+`total_deadline_ms: 12000`, yet the runs at 12.73 s and 13.02 s **did** emit an outcome with
+`deadlineHit: false`. So either that deadline is not the ~12 s boundary measured, or a second bound
+applies. **The code path that closes the stream without writing the outcome has not been shown** —
+until it is, this is a hypothesis. The reconciliation to test: two relays failing in sequence at
+`per_relay_timeout_ms: 6000` would reach ~12 s with the total deadline never firing.
+
+## Measured — the service terminates correctly on the fast path
 
 The identical request made directly, with no app in the path:
 
@@ -51,11 +79,13 @@ investigation should settle rather than assume.
 
 ## Hypotheses, in the order I would test them
 
-1. **The app's proxy for `/api/browse-search/search`.** The browser POSTs to the app's own origin and
-   the app forwards to the service. A proxy hop can impose its own timeout, buffer, or connection
-   reuse, and a 13 s streaming response is exactly what a default proxy timeout is most likely to
-   cut. **Test:** log/probe the proxy's own boundary, and compare its timeout config to the 15 s
-   client bound.
+1. **~~The app's proxy for `/api/browse-search/search`.~~ RULED OUT.** Read at
+   `platform/server/http/browseSearch.ts:93-126`: `proxyBrowseSearchRequest` awaits
+   `fetch(target, { method, headers, body: await request.arrayBuffer() })` with **no `signal`, no
+   `AbortSignal.timeout`, no `setTimeout`, no idle bound and no buffering**. Confirmed from outside
+   as well — four runs through the public proxy endpoint all completed in 8.29–8.37 s with an
+   outcome. (Kept for the record rather than deleted: it was the leading hypothesis and it was
+   wrong.)
 2. **React Query re-keying or cancellation mid-stream.** `browseQuery.ts` builds the query key from
    `{query, limit, provider}` and publishes progress under `JSON.stringify(queryKey)`. If anything
    changes the key while the stream is running — a facet probe landing, a state update, a re-render
