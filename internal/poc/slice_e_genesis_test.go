@@ -91,6 +91,55 @@ func TestLoadKeysetKeysFile(t *testing.T) {
 	}
 }
 
+// TestPinnedKeysetAcceptsAmountsBeyondInt64 pins the fix for the real-mint
+// genesis input: a standard Cashu mint's /keys object carries the amount 2^63
+// as its top entry, which does not fit an int64. The keyset id and keys must
+// both come from that object, so the validation must accept a positive decimal
+// amount of any width rather than failing the init. The amount is recorded but
+// is unreachable through keysetKeyForAmount (a proof amount is an int64), which
+// is unchanged.
+func TestPinnedKeysetAcceptsAmountsBeyondInt64(t *testing.T) {
+	t.Parallel()
+	mint := newTestPinnedMint(t, 64)
+	key := mint.policy(t).KeysetKeys["64"]
+	policy := mint.policy(t)
+	policy.KeysetKeys["9223372036854775808"] = key // 2^63, the mint's top amount
+
+	if err := policy.Validate(); err != nil {
+		t.Fatalf("a keyset carrying the mint's own 2^63 amount was refused: %v", err)
+	}
+	if _, ok := policy.keysetKeyForAmount(64); !ok {
+		t.Fatal("a representable amount stopped resolving once 2^63 was present")
+	}
+
+	// The operator input path (the mint's /keys object) must round-trip too.
+	body, err := json.Marshal(policy.KeysetKeys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "keyset.json")
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	keys, err := loadKeysetKeysFile(path)
+	if err != nil {
+		t.Fatalf("loadKeysetKeysFile refused the mint's own /keys object: %v", err)
+	}
+	if keys["9223372036854775808"] != key {
+		t.Fatalf("the 2^63 key did not round-trip: %q", keys["9223372036854775808"])
+	}
+
+	// Shape refusals are unchanged: non-positive or non-decimal amounts still
+	// fail closed.
+	for _, bad := range []string{"0", "-64", "", "6.4", "64x", "-0"} {
+		broken := mint.policy(t)
+		broken.KeysetKeys[bad] = key
+		if err := broken.Validate(); err == nil {
+			t.Fatalf("a pinned keyset accepted the amount %q", bad)
+		}
+	}
+}
+
 // TestPinnedPolicyJSONOmitsWhenUnpinned pins the omitempty contract: an
 // unpinned policy serializes byte-identically to the pre-existing shape, and a
 // pinned one round-trips.

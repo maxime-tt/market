@@ -130,15 +130,45 @@ func (p Policy) validatePinnedKeyset() error {
 		return errors.New("invalid explicit POC policy: pinned mint keyset requires both a keyset id and its per-amount keys")
 	}
 	for amount, encoded := range p.KeysetKeys {
-		value, err := strconv.ParseInt(amount, 10, 64)
-		if err != nil || value <= 0 {
+		if !pinnedAmountIsPositive(amount) {
 			return fmt.Errorf("invalid explicit POC policy: pinned mint key amount %q is not a positive decimal", amount)
 		}
 		if !validCompressedPublicKey(encoded) {
-			return fmt.Errorf("invalid explicit POC policy: pinned mint key for amount %d is not a compressed secp256k1 point", value)
+			return fmt.Errorf("invalid explicit POC policy: pinned mint key for amount %s is not a compressed secp256k1 point", amount)
 		}
 	}
 	return nil
+}
+
+// pinnedAmountIsPositive reports whether a pinned amount key is a positive
+// decimal integer of any width. It cannot use strconv.ParseInt: a real Cashu
+// mint pins amounts up to 2^63, which does not fit an int64, and the intended
+// genesis input is the mint's own /keys object. Such an amount is recorded but
+// is unreachable through keysetKeyForAmount, because a proof's amount is an
+// int64, so the check is about the shape of the key, not its magnitude. The
+// grammar matches strconv.ParseInt base 10 (an optional single sign, then
+// digits) so no previously valid keyset is newly refused.
+func pinnedAmountIsPositive(amount string) bool {
+	digits := amount
+	if digits != "" && (digits[0] == '+' || digits[0] == '-') {
+		if digits[0] == '-' {
+			return false
+		}
+		digits = digits[1:]
+	}
+	if digits == "" {
+		return false
+	}
+	nonzero := false
+	for i := 0; i < len(digits); i++ {
+		if digits[i] < '0' || digits[i] > '9' {
+			return false
+		}
+		if digits[i] != '0' {
+			nonzero = true
+		}
+	}
+	return nonzero
 }
 
 // Equal reports whether two policies are identical, including the pinned mint
