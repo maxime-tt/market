@@ -10655,8 +10655,6 @@ ${e}}` : `{${i.join(",")}}`;
   }
 
   // src/sigall.ts
-  var SIGALL_TEMPLATES_SCHEMA = "PlebeianAuctionsPOCSigAllTemplatesV1";
-  var SIGALL_DEPOSIT_SCHEMA = "PlebeianAuctionsPOCSigAllDepositV1";
   var SIGALL_GOLDEN_BLINDED = [
     `02${"aa".repeat(32)}`,
     `03${"bb".repeat(32)}`
@@ -10981,6 +10979,53 @@ outputs=${outputs.join(",")}`);
         spendPublicKey: refundPublicKey,
         fundingMode: "cashu_sigall_v1"
       };
+    }
+    async buildOutcomeTemplates(auction, funding) {
+      if (!auction?.id)
+        throw new Error("outcome templates must name an auction");
+      const sellerKey = auction.seller_coco_payment_public_key;
+      if (!/^0[23][0-9a-f]{64}$/.test(sellerKey)) {
+        throw new Error("the auction committed no seller payout key, so settle has no destination");
+      }
+      if (!funding.lockedProofs.length) {
+        throw new Error("outcome templates need the locked proofs");
+      }
+      const spendKey = this.spendSecretKey();
+      const build = (recipient) => {
+        const inputs = funding.lockedProofs.map((proof) => ({
+          amount: Number(proof.amount),
+          id: proof.id,
+          secret: String(proof.secret),
+          C: String(proof.C)
+        }));
+        const outputs = funding.lockedProofs.map((proof) => {
+          const nonce = randomBlindingHex().slice(0, 32);
+          return {
+            amount: Number(proof.amount),
+            id: proof.id,
+            secret: buildP2PKOutputSecret(recipient, nonce),
+            r: randomBlindingHex()
+          };
+        });
+        const unsigned = { inputs, outputs, digest: "", bidder_signature: "" };
+        const digest = sigAllTemplateDigest(unsigned);
+        return { inputs, outputs, digest, bidder_signature: signDigest(digest, spendKey) };
+      };
+      return { settle: build(sellerKey), refund: build(this.spendPublicKey()) };
+    }
+    async sigAllBidMaterial(auction, funding) {
+      if (!funding.lockedProofs.length) {
+        throw new Error("a sigall bid must carry the locked proofs it commits");
+      }
+      const proofs = funding.lockedProofs.map((proof) => ({
+        amount: Number(proof.amount),
+        id: proof.id,
+        secret: String(proof.secret),
+        C: String(proof.C),
+        dleq: proof.dleq ? { e: proof.dleq.e, s: proof.dleq.s, r: proof.dleq.r } : undefined
+      }));
+      const outcome_templates = await this.buildOutcomeTemplates(auction, funding);
+      return { proofs, outcome_templates };
     }
     async preauthorizeOutcome(auctionId, proofStateRefs, lockedProofs) {
       if (!auctionId)

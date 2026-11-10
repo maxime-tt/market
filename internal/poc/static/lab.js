@@ -442,10 +442,19 @@
         funding_mode: "cashu_sigall_v1",
       }),
     });
+    setBidderStatus("Pre-signing the settlement and refund outcomes…");
+    // The bid must carry, IN its committed content, the bearer proofs and the
+    // two pre-signed SIG_ALL outcome transactions. Consensus re-derives each
+    // template's digest from these exact proof secrets and verifies the
+    // signature, so the coordinator can settle or refund with this tab closed.
+    // Without them the bid commits under rule 7 but can never settle or refund.
+    const material = await wallet.sigAllBidMaterial(auction, funding);
     const signed = await sign(identity, 28641, [["e", auction.id]], {
       auction_id: auction.id,
       amount,
       cashu_lock: receipt,
+      proofs: material.proofs,
+      outcome_templates: material.outcome_templates,
     });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
     wallet.recordLockedBid(signed.id, funding.lockedProofs, funding.spendPublicKey, auction.id);

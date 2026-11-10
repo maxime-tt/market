@@ -30,14 +30,10 @@ import {
 } from "@cashu/cashu-ts";
 import { schnorr } from "@noble/curves/secp256k1.js";
 import {
-  SIGALL_DEPOSIT_SCHEMA,
-  SIGALL_TEMPLATES_SCHEMA,
   buildP2PKOutputSecret,
   randomBlindingHex,
   signDigest,
   sigAllTemplateDigest,
-  type SigAllBidCommitment,
-  type SigAllDepositReceipt,
   type SigAllDepositTemplates,
   type SigAllSignedTemplate,
 } from "./sigall";
@@ -92,6 +88,21 @@ export interface BidFunding {
   spendPublicKey: string;
 }
 
+/**
+ * One bearer proof as it travels inside the committed bid content (json
+ * `proofs`). This is the exact field set of Go's `demoMintSpendProof`. The
+ * secret is published because the proof is locked 2-of-2 SIG_ALL and is
+ * unspendable without the committee's signature, and consensus needs it to
+ * re-derive each outcome template's SIG_ALL digest and to verify DLEQ.
+ */
+export interface SigAllBidProof {
+  amount: number;
+  id: string;
+  secret: string;
+  C: string;
+  dleq?: { e: string; s: string; r: string };
+}
+
 /** One bid's locked proofs and the wallet spend key that owns them. */
 export interface LockedBid {
   proofs: Proof[];
@@ -102,11 +113,10 @@ export interface LockedBid {
 
 /**
  * The coordinator's signed cashu_sigall_v1 lock receipt, exactly the object
- * POST /api/demo/mint-lock returns. The wallet holds it from the lock step and
- * posts it with the outcome templates so the coordinator can verify its OWN
- * signature instead of looking the receipt up in committed state -- which
- * cannot work on the first deposit, because no lock is committed until a bid
- * commits and a cashu_sigall_v1 bid cannot commit without a deposit.
+ * POST /api/demo/mint-lock returns. The bid carries it as its `cashu_lock`, and
+ * consensus verifies the coordinator's signature over it; its RefundPublicKey is
+ * the wallet spend key the committed refund template must pay, and its
+ * ProofStateRefs are the references the committed proofs must match.
  */
 export interface CashuLockReceipt {
   schema: string;
@@ -592,9 +602,12 @@ export class BidderWallet {
    * seller payout key, `refund` returns to this wallet's own refund key. Both
    * conserve the locked amount exactly.
    *
-   * The result is the off-chain deposit payload (it carries the bearer C values
-   * and the output openings), which the coordinator verifies and stores under a
-   * deposit id. Only the compact digests and signatures go on chain.
+   * The result travels INSIDE the committed bid content (json
+   * `outcome_templates`), the exact shape of Go's `sigAllDepositTemplates`
+   * carrier. Consensus (verifySigAllBidTemplates) re-derives each template's
+   * digest, re-checks its inputs against the bid's committed proofs, checks each
+   * destination and verifies the bidder's signature, so the coordinator can
+   * submit one of these two transactions at close and construct nothing itself.
    */
   async buildOutcomeTemplates(
     auction: { id: string; seller_coco_payment_public_key: string },
@@ -633,71 +646,34 @@ export class BidderWallet {
   }
 
   /**
-   * The compact on-chain commitment: the two digests and the bidder's
-   * signatures, plus the coordinator's signed deposit receipt. This is what the
-   * bid content publishes alongside the (off-chain) deposit.
-   */
-  outcomeTemplateCommitment(
-    deposit: { deposit_id: string; settle_digest: string; refund_digest: string; signer: string; signature: string },
-    templates: SigAllDepositTemplates,
-    auctionId: string,
-    bidder: string,
-  ): SigAllBidCommitment {
-    if (templates.settle.digest !== deposit.settle_digest || templates.refund.digest !== deposit.refund_digest) {
-      throw new Error("the deposit receipt digests do not match the signed templates");
-    }
-    return {
-      outcome_templates: {
-        schema: SIGALL_TEMPLATES_SCHEMA,
-        deposit_id: deposit.deposit_id,
-        settle: { digest: templates.settle.digest, bidder_signature: templates.settle.bidder_signature },
-        refund: { digest: templates.refund.digest, bidder_signature: templates.refund.bidder_signature },
-      },
-      sigall_deposit: {
-        schema: SIGALL_DEPOSIT_SCHEMA,
-        deposit_id: deposit.deposit_id,
-        auction_id: auctionId,
-        bidder,
-        settle_digest: deposit.settle_digest,
-        refund_digest: deposit.refund_digest,
-        signer: deposit.signer,
-        signature: deposit.signature,
-      },
-    };
-  }
-
-  /**
-   * Builds the outcome templates and posts them to the coordinator's deposit
-   * endpoint, returning the on-chain commitment the bid will carry. The
-   * endpoint stores the bearer templates and returns the signed deposit receipt;
-   * this method never stores the templates on chain.
+   * The on-chain bid material a cashu_sigall_v1 bid must carry: the bearer
+   * proofs AND the two pre-signed outcome templates.
    *
-   * `lockReceipt` is the coordinator's signed cashu_sigall_v1 lock receipt (the
-   * object mint-lock returned). The wallet posts it with the templates so the
-   * coordinator verifies its own signature and binding instead of requiring a
-   * committed lock, which cannot exist before the bid commits.
+   * The proofs are the committed proofs themselves -- INCLUDING their secrets,
+   * because consensus re-derives each template's SIG_ALL digest from the input
+   * secrets and re-checks DLEQ and the sum. They are deliberately NOT the
+   * reference-only bindings posted to /api/demo/mint-lock: that body refuses
+   * unknown fields, so the lock request can only carry {amount,id,Y,C,dleq}.
+   *
+   * Proofs and template inputs are built from the same locked-proof list in the
+   * same order, which is what rule (b) of verifySigAllBidTemplates requires.
    */
-  async depositOutcomeTemplates(
+  async sigAllBidMaterial(
     auction: { id: string; seller_coco_payment_public_key: string },
     funding: BidFunding,
-    bidder: string,
-    lockReceipt: CashuLockReceipt,
-    endpoint = "/api/demo/sigall-deposit",
-  ): Promise<SigAllBidCommitment> {
-    const templates = await this.buildOutcomeTemplates(auction, funding);
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ auction_id: auction.id, bidder, templates, receipt: lockReceipt }),
-    });
-    const data = (await response.json().catch(() => ({}))) as Partial<SigAllDepositReceipt> & { error?: string };
-    if (!response.ok) {
-      throw new Error(data.error || `sigall deposit failed (HTTP ${response.status})`);
+  ): Promise<{ proofs: SigAllBidProof[]; outcome_templates: SigAllDepositTemplates }> {
+    if (!funding.lockedProofs.length) {
+      throw new Error("a sigall bid must carry the locked proofs it commits");
     }
-    if (!data.deposit_id || !data.settle_digest || !data.refund_digest || !data.signer || !data.signature) {
-      throw new Error("the coordinator returned an incomplete sigall deposit receipt");
-    }
-    return this.outcomeTemplateCommitment(data as SigAllDepositReceipt, templates, auction.id, bidder);
+    const proofs = funding.lockedProofs.map((proof) => ({
+      amount: Number(proof.amount),
+      id: proof.id,
+      secret: String(proof.secret),
+      C: String(proof.C),
+      dleq: proof.dleq ? { e: proof.dleq.e, s: proof.dleq.s, r: proof.dleq.r } : undefined,
+    }));
+    const outcome_templates = await this.buildOutcomeTemplates(auction, funding);
+    return { proofs, outcome_templates };
   }
 
   /**

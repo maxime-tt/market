@@ -23,7 +23,6 @@ import { bytesToHex, hexToBytes, utf8ToBytes } from "@noble/hashes/utils.js";
 import { hashToCurve } from "@cashu/cashu-ts";
 
 export const SIGALL_TEMPLATES_SCHEMA = "PlebeianAuctionsPOCSigAllTemplatesV1";
-export const SIGALL_DEPOSIT_SCHEMA = "PlebeianAuctionsPOCSigAllDepositV1";
 
 /** The shared golden vector. Keep aligned with internal/poc/sigall.go. */
 export const SIGALL_GOLDEN_INPUTS = ["sigall-golden-secret-0001", "sigall-golden-secret-0002"];
@@ -59,42 +58,17 @@ export interface SigAllSignedTemplate {
   bidder_signature: string;
 }
 
-/** The two outcome templates the wallet deposits. */
+/**
+ * The two outcome templates the wallet commits IN the bid content (json
+ * `outcome_templates`). This is the exact shape of Go's `sigAllDepositTemplates`
+ * carrier, which is why the name is kept: the FULL signed templates travel on
+ * chain, not a compact commitment. Consensus (verifySigAllBidTemplates)
+ * re-derives each digest and re-checks the bidder's signature, so the
+ * coordinator can submit one of these two transactions with the bidder offline.
+ */
 export interface SigAllDepositTemplates {
   settle: SigAllSignedTemplate;
   refund: SigAllSignedTemplate;
-}
-
-/** The compact on-chain commitment for one outcome. */
-export interface SigAllTemplateSignature {
-  digest: string;
-  bidder_signature: string;
-}
-
-/** The public, compact on-chain bid content. */
-export interface SigAllOutcomeTemplates {
-  schema: string;
-  deposit_id: string;
-  settle: SigAllTemplateSignature;
-  refund: SigAllTemplateSignature;
-}
-
-/** The coordinator's signed, non-bearer deposit receipt. */
-export interface SigAllDepositReceipt {
-  schema: string;
-  deposit_id: string;
-  auction_id: string;
-  bidder: string;
-  settle_digest: string;
-  refund_digest: string;
-  signer: string;
-  signature: string;
-}
-
-/** The two artifacts a sigall bid publishes. */
-export interface SigAllBidCommitment {
-  outcome_templates: SigAllOutcomeTemplates;
-  sigall_deposit: SigAllDepositReceipt;
 }
 
 /** Nutshell's SIG_ALL message, hashed once. */
@@ -132,14 +106,6 @@ export function buildP2PKOutputSecret(recipient: string, nonce: string): string 
     "P2PK",
     { nonce, data: recipient, tags: [["sigflag", "SIG_INPUTS"]] },
   ]);
-}
-
-/** The digest the coordinator signs over its deposit receipt. */
-export function sigAllDepositReceiptDigest(receipt: SigAllDepositReceipt): string {
-  return bytesToHex(sha256(utf8ToBytes(JSON.stringify([
-    receipt.schema, receipt.deposit_id, receipt.auction_id, receipt.bidder,
-    receipt.settle_digest, receipt.refund_digest, receipt.signer,
-  ]))));
 }
 
 /** Sign a template digest with the wallet spend key (BIP-340). */
