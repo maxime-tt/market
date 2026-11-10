@@ -657,9 +657,19 @@ func (server *APIServer) demoMintRefund(response http.ResponseWriter, request *h
 	// own, longer deadline.
 	swapCtx, swapCancel := context.WithTimeout(request.Context(), demoMintSwapTimeout)
 	defer swapCancel()
-	fresh, err := server.demoMintCooperativeSpend(swapCtx, body.Proofs, committeeSpendIntent{
-		Outcome: "refund", AuctionID: lock.AuctionID, BidID: body.BidID, Recipient: spendPublicKey,
-	})
+	var fresh []demoMintSpentProof
+	intent := committeeSpendIntent{Outcome: "refund", AuctionID: lock.AuctionID, BidID: body.BidID, Recipient: spendPublicKey}
+	if receipt.FundingMode == FundingModeCashuSigAll {
+		// A 2-of-2 SIG_ALL lock cannot be spent by the committee's signature
+		// alone: the mint requires the bidder's pre-signed half too. Submit the
+		// bidder's committed refund template and add the committee's signature,
+		// exactly as the sweeper does. The destination is the receipt's own
+		// committed refund key -- the bidder pinned it when it signed.
+		intent.Recipient = receipt.RefundPublicKey
+		fresh, err = server.demoMintSigAllSpend(swapCtx, receipt, intent)
+	} else {
+		fresh, err = server.demoMintCooperativeSpend(swapCtx, body.Proofs, intent)
+	}
 	if err != nil {
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return
@@ -1023,9 +1033,16 @@ func (server *APIServer) demoMintSettle(response http.ResponseWriter, request *h
 
 	swapCtx, swapCancel := context.WithTimeout(request.Context(), demoMintSwapTimeout)
 	defer swapCancel()
-	fresh, err := server.demoMintCooperativeSpend(swapCtx, body.Proofs, committeeSpendIntent{
-		Outcome: "settle", AuctionID: body.AuctionID, BidID: auction.LeaderBidID, Recipient: auction.SellerCocoPaymentPublicKey,
-	})
+	var fresh []demoMintSpentProof
+	intent := committeeSpendIntent{Outcome: "settle", AuctionID: body.AuctionID, BidID: auction.LeaderBidID, Recipient: auction.SellerCocoPaymentPublicKey}
+	if receipt.FundingMode == FundingModeCashuSigAll {
+		// A 2-of-2 SIG_ALL lock is settled by submitting the winner's committed,
+		// pre-signed settle template plus the committee's half, not by the
+		// single-signature cooperative path (which the mint refuses: n_sigs 2).
+		fresh, err = server.demoMintSigAllSpend(swapCtx, receipt, intent)
+	} else {
+		fresh, err = server.demoMintCooperativeSpend(swapCtx, body.Proofs, intent)
+	}
 	if err != nil {
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return
