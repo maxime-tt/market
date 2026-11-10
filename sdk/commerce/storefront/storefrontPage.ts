@@ -210,6 +210,47 @@ export const ImageBlockSchema = z.object({
 	}),
 })
 
+export const ProductRowBlockSchema = z.object({
+	type: z.literal('ProductRow'),
+	props: z.object({
+		...blockBase,
+		/** The product d-tags, in the exact order the author placed them. Each is resolved against the author's own listings. */
+		productDTags: z.array(dTagRef).min(1).max(STOREFRONT_LIMITS.maxProductsPerGrid).default([]),
+	}),
+})
+
+export const SearchBlockSchema = z.object({
+	type: z.literal('Search'),
+	props: z.object({
+		...blockBase,
+		/** Placeholder text shown when the query is empty. */
+		placeholder: shortText.default('Search products'),
+		/** CSS width — controls the pill's constrained width. */
+		size: z.enum(['sm', 'md', 'lg']).default('md'),
+	}),
+})
+
+export const CategoriesBlockSchema = z.object({
+	type: z.literal('Categories'),
+	props: z.object({
+		...blockBase,
+		/** Author-ordered category names. Each entry maps to a platform product category.
+		 * Order is preserved in rendering so the author can curate the display sequence. */
+		categories: z
+			.array(
+				z.object({
+					/** Display label shown to visitors. */
+					label: shortText,
+					/** Platform category key — the identifier the host resolves into an in-app path. */
+					key: z.string().min(1).max(100),
+				}),
+			)
+			.max(30)
+			.default([]),
+		title: shortText.default(''),
+	}),
+})
+
 export const DividerBlockSchema = z.object({
 	type: z.literal('Divider'),
 	props: z.object({ ...blockBase }),
@@ -233,6 +274,9 @@ export const StorefrontBlockSchema = z.discriminatedUnion('type', [
 	TextBlockSchema,
 	ProductGridBlockSchema,
 	FeaturedProductBlockSchema,
+	ProductRowBlockSchema,
+	SearchBlockSchema,
+	CategoriesBlockSchema,
 	LinkListBlockSchema,
 	ImageBlockSchema,
 	DividerBlockSchema,
@@ -250,6 +294,9 @@ export const STOREFRONT_BLOCK_TYPES = [
 	'FeaturedProduct',
 	'LinkList',
 	'Image',
+	'ProductRow',
+	'Search',
+	'Categories',
 	'Divider',
 	'Spacer',
 ] as const satisfies readonly StorefrontBlockType[]

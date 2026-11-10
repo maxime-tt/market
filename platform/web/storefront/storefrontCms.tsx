@@ -142,9 +142,10 @@ function ThemeLayoutField({ value, readOnly }: { value?: StorefrontThemeId; read
 export const storefrontCmsConfig: Config = {
 	categories: {
 		identity: { title: 'Identity', components: ['ProfileHeader', 'Hero'] },
-		content: { title: 'Content', components: ['Text', 'Image', 'LinkList'] },
-		commerce: { title: 'Products', components: ['ProductGrid', 'FeaturedProduct'] },
+		content: { title: 'Content', components: ['Text', 'Image', 'LinkList', 'Search'] },
+		commerce: { title: 'Products', components: ['ProductGrid', 'FeaturedProduct', 'ProductRow'] },
 		layout: { title: 'Layout', components: ['Divider', 'Spacer'] },
+		browse: { title: 'Browse', components: ['Categories'] },
 	},
 
 	root: {
@@ -394,6 +395,59 @@ export const storefrontCmsConfig: Config = {
 			},
 			defaultProps: { size: 'md' },
 			render: renderBlock('Spacer'),
+		},
+
+		ProductRow: {
+			label: 'Product row',
+			fields: {
+				productDTags: {
+					type: 'array',
+					label: 'Products (ordered)',
+					max: 60,
+					getItemSummary: (item: string) => item || 'Product',
+					defaultItemProps: { id: '' },
+				},
+			},
+			defaultProps: { productDTags: [] },
+			render: renderBlock('ProductRow'),
+		},
+
+		Search: {
+			label: 'Search field',
+			fields: {
+				placeholder: { type: 'text', label: 'Placeholder text', placeholder: 'Search products' },
+				size: {
+					type: 'select',
+					label: 'Width',
+					options: [
+						{ label: 'Small', value: 'sm' },
+						{ label: 'Medium', value: 'md' },
+						{ label: 'Large', value: 'lg' },
+					],
+				},
+			},
+			defaultProps: { placeholder: 'Search products', size: 'md' },
+			render: renderBlock('Search'),
+		},
+
+		Categories: {
+			label: 'Categories',
+			fields: {
+				title: { type: 'text', label: 'Section title' },
+				categories: {
+					type: 'array',
+					label: 'Categories (ordered)',
+					max: 30,
+					getItemSummary: (item: { label?: string }) => item?.label || 'Category',
+					arrayFields: {
+						label: { type: 'text', label: 'Label' },
+						key: { type: 'text', label: 'Category key' },
+					},
+					defaultItemProps: { label: 'Category', key: '' },
+				},
+			},
+			defaultProps: { title: '', categories: [] },
+			render: renderBlock('Categories'),
 		},
 	},
 }

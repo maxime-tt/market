@@ -6,9 +6,11 @@ import {
 	FeaturedProductBlock,
 	ProfileHeaderBlock,
 	ProductGridBlock,
+	ProductRowBlock,
 	type FeaturedProductBlockProps,
 	type ProfileHeaderBlockProps,
 	type ProductGridBlockProps,
+	type ProductRowBlockProps,
 	type StorefrontDataSlots,
 	type StorefrontProfileData,
 } from '@ui/storefront'
@@ -17,11 +19,11 @@ import { useStorefrontContext } from '@ui/storefront/StorefrontContext'
 
 /**
  * The platform's data-bound slot map for the storefront renderer (batch 2's
- * `StorefrontDataSlots` seam). `ui/` is props-only, so the three data-bound
+ * `StorefrontDataSlots` seam). `ui/` is props-only, so the four data-bound
  * block types resolve their reads here, over the existing platform queries:
  *
- *   ProductGrid / FeaturedProduct → `productsByPubkeyQueryOptions` (kind 30402)
- *   ProfileHeader                 → `useProfile` (kind 0) + NIP-05 validation
+ *   ProductGrid / FeaturedProduct / ProductRow → `productsByPubkeyQueryOptions` (kind 30402)
+ *   ProfileHeader                              → `useProfile` (kind 0) + NIP-05 validation
  *
  * Author anchoring is the fork's security property, preserved by construction:
  * every slot takes the pubkey from `useStorefrontContext()` — the value
@@ -29,7 +31,8 @@ import { useStorefrontContext } from '@ui/storefront/StorefrontContext'
  * page document. The `StorefrontPage` schema has no field that could name
  * another pubkey, so a page can only ever point its product references at the
  * author's own listing set (the `productsByPubkey` read is relay-scoped to
- * `authors: [pubkey]`, and `FeaturedProduct` matches a `d` tag within that set).
+ * `authors: [pubkey]`, and `FeaturedProduct`/`ProductRow` match `d` tags
+ * within that set).
  *
  * A missing or erroring read degrades to the props-only view's empty/error
  * state — a slot never throws its query failure into the page.
@@ -58,6 +61,21 @@ function FeaturedProductSlot(props: FeaturedProductBlockProps) {
 
 	return (
 		<FeaturedProductBlock
+			{...props}
+			products={products ?? null}
+			isLoading={isLoading}
+			isError={isError}
+			renderProduct={(product) => <ProductCardHost product={product as NDKEvent} />}
+		/>
+	)
+}
+
+function ProductRowSlot(props: ProductRowBlockProps) {
+	const { pubkey } = useStorefrontContext()
+	const { data: products, isLoading, isError } = useQuery(productsByPubkeyQueryOptions(pubkey))
+
+	return (
+		<ProductRowBlock
 			{...props}
 			products={products ?? null}
 			isLoading={isLoading}
@@ -108,4 +126,5 @@ export const storefrontBlockSlots: StorefrontDataSlots = {
 	ProductGrid: (props) => <ProductGridSlot {...props} />,
 	FeaturedProduct: (props) => <FeaturedProductSlot {...props} />,
 	ProfileHeader: (props) => <ProfileHeaderSlot {...props} />,
+	ProductRow: (props) => <ProductRowSlot {...props} />,
 }

@@ -370,3 +370,187 @@ describe('round trip', () => {
 		expect(reparsed.page).toEqual(validated.page)
 	})
 })
+
+describe('new blocks — ProductRow, Search, Categories', () => {
+	test('ProductRow accepts an ordered list of product d-tags', () => {
+		const raw = documentWith([
+			block('ProductRow', { productDTags: ['prod-a', 'prod-b'] }),
+		])
+		const page = parseStorefrontPage(raw)
+		expect(page.droppedBlocks).toBe(0)
+		expect(page.page?.content).toHaveLength(1)
+		const block = page.page?.content[0]
+		expect(block?.type).toBe('ProductRow')
+		if (block?.type === 'ProductRow') {
+			expect(block.props.productDTags).toEqual(['prod-a', 'prod-b'])
+		}
+	})
+
+	test('ProductRow with empty array is valid but fails closed at render', () => {
+		const raw = documentWith([block('ProductRow', { productDTags: [] })])
+		const page = parseStorefrontPage(raw)
+		expect(page.droppedBlocks).toBe(0)
+		expect(page.page?.content[0].props.productDTags).toEqual([])
+	})
+
+	test('ProductRow enforces min 1 product for validation', () => {
+		const page = {
+			...createEmptyStorefrontPage(),
+			enabled: true,
+			content: [block('ProductRow', { productDTags: [] })] as StorefrontPage['content'],
+		}
+		const result = validateStorefrontPageForPublish(page)
+		// Empty array fails the min(1) constraint on the array
+		expect(result.ok).toBe(false)
+	})
+
+	test('Search accepts placeholder and size', () => {
+		const raw = documentWith([
+			block('Search', { placeholder: 'Find items', size: 'lg' }),
+		])
+		const page = parseStorefrontPage(raw)
+		expect(page.droppedBlocks).toBe(0)
+		const block = page.page?.content[0]
+		expect(block?.type).toBe('Search')
+		if (block?.type === 'Search') {
+			expect(block.props.placeholder).toBe('Find items')
+			expect(block.props.size).toBe('lg')
+		}
+	})
+
+	test('Search defaults to md size and generic placeholder', () => {
+		const raw = documentWith([block('Search', {})])
+		const page = parseStorefrontPage(raw)
+		expect(page.droppedBlocks).toBe(0)
+		const block = page.page?.content[0]
+		expect(block?.type).toBe('Search')
+		if (block?.type === 'Search') {
+			expect(block.props.placeholder).toBe('Search products')
+			expect(block.props.size).toBe('md')
+		}
+	})
+
+	test('Categories accepts author-ordered list with labels', () => {
+		const raw = documentWith([
+			block('Categories', {
+				title: 'Shop by',
+				categories: [
+					{ label: 'Bitcoin', key: 'bitcoin' },
+					{ label: 'Health', key: 'health' },
+				],
+			}),
+		])
+		const page = parseStorefrontPage(raw)
+		expect(page.droppedBlocks).toBe(0)
+		const block = page.page?.content[0]
+		expect(block?.type).toBe('Categories')
+		if (block?.type === 'Categories') {
+			expect(block.props.categories).toHaveLength(2)
+			expect(block.props.categories[0].label).toBe('Bitcoin')
+			expect(block.props.categories[0].key).toBe('bitcoin')
+		}
+	})
+
+	test('Categories with empty list is valid', () => {
+		const raw = documentWith([block('Categories', { title: 'Browse', categories: [] })])
+		const page = parseStorefrontPage(raw)
+		expect(page.droppedBlocks).toBe(0)
+		expect(page.page?.content[0].props.title).toBe('Browse')
+		expect(page.page?.content[0].props.categories).toEqual([])
+	})
+
+	test('Categories enforces max 30 entries', () => {
+		const page = {
+			...createEmptyStorefrontPage(),
+			enabled: true,
+			content: [
+				{
+					type: 'Categories',
+					props: {
+						id: 'cat-1',
+						title: 'Browse',
+						categories: Array.from({ length: 31 }, (_, i) => ({
+							label: `Cat ${i}`,
+							key: `key-${i}`,
+						})),
+					},
+				} as StorefrontPage['content'][number],
+			],
+		}
+		const result = validateStorefrontPageForPublish(page)
+		expect(result.ok).toBe(false)
+	})
+
+	test('round trip preserves ProductRow order', () => {
+		const page = {
+			...createEmptyStorefrontPage(),
+			enabled: true,
+			content: [
+				block('ProductRow', { productDTags: ['z-first', 'a-second', 'm-middle'] }) as never,
+			],
+		}
+		const validated = validateStorefrontPageForPublish(page)
+		expect(validated.ok).toBe(true)
+		if (!validated.ok) return
+		const reparsed = parseStorefrontPage(JSON.stringify(validated.page))
+		expect(reparsed.droppedBlocks).toBe(0)
+		expect(reparsed.page?.content).toHaveLength(1)
+		const block = reparsed.page?.content[0]
+		expect(block?.type).toBe('ProductRow')
+		if (block?.type === 'ProductRow') {
+			expect(block.props.productDTags).toEqual(['z-first', 'a-second', 'm-middle'])
+		}
+	})
+
+	test('round trip preserves Categories order', () => {
+		const page = {
+			...createEmptyStorefrontPage(),
+			enabled: true,
+			content: [
+				block('Categories', {
+					title: 'Categories',
+					categories: [{ label: 'Zebra', key: 'zebra' }, { label: 'Apple', key: 'apple' }],
+				}) as never,
+			],
+		}
+		const validated = validateStorefrontPageForPublish(page)
+		expect(validated.ok).toBe(true)
+		if (!validated.ok) return
+		const reparsed = parseStorefrontPage(JSON.stringify(validated.page))
+		expect(reparsed.droppedBlocks).toBe(0)
+		expect(reparsed.page?.content).toHaveLength(1)
+		const block = reparsed.page?.content[0]
+		expect(block?.type).toBe('Categories')
+		if (block?.type === 'Categories') {
+			expect(block.props.categories[0].label).toBe('Zebra')
+			expect(block.props.categories[1].label).toBe('Apple')
+		}
+	})
+
+	test('ProductRow productDTags are bounded by maxProductsPerGrid', () => {
+		const page = {
+			...createEmptyStorefrontPage(),
+			enabled: true,
+			content: [
+				{
+					type: 'ProductRow',
+					props: {
+						id: 'pr-1',
+						productDTags: Array.from({ length: STOREFRONT_LIMITS.maxProductsPerGrid + 1 }, (_, i) => `p-${i}`),
+					},
+				} as StorefrontPage['content'][number],
+			],
+		}
+		const result = validateStorefrontPageForPublish(page)
+		expect(result.ok).toBe(false)
+	})
+
+	test('unknown block type is dropped, not rejected', () => {
+		const raw = documentWith([
+			{ type: 'UnknownBlock', props: { id: 'x' } },
+		])
+		const page = parseStorefrontPage(raw)
+		expect(page.droppedBlocks).toBe(1)
+		expect(page.page?.content).toHaveLength(0)
+	})
+})

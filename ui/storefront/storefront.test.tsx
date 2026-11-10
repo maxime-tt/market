@@ -15,6 +15,9 @@ import { DividerBlock, SpacerBlock } from './blocks/SpacingBlocks'
 import { ProductGridBlock } from './blocks/ProductGridBlock'
 import { FeaturedProductBlock } from './blocks/FeaturedProductBlock'
 import { ProfileHeaderBlock } from './blocks/ProfileHeaderBlock'
+import { ProductRowBlock } from './blocks/ProductRowBlock'
+import { SearchBlock } from './blocks/SearchBlock'
+import { CategoriesBlock } from './blocks/CategoriesBlock'
 
 const AUTHOR = 'a'.repeat(64)
 
@@ -558,5 +561,204 @@ describe('ProfileHeaderBlock (props-only view)', () => {
 			}),
 		)
 		expect(editing).toContain('Your profile appears here')
+	})
+})
+
+// ===========================================================================
+// New blocks — ProductRow, Search, Categories (batch 4)
+// ===========================================================================
+
+describe('ProductRowBlock (props-only view)', () => {
+	const productMug: ProductReadEvent = { ...product, event_id: 'mug' } as ProductReadEvent
+	const productPlate: ProductReadEvent = { ...secondProduct, event_id: 'plate' } as ProductReadEvent
+
+	test('renders products in author-specified order', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductRowBlock, {
+				productDTags: ['plate', 'mug'],
+				products: [productMug, productPlate],
+				isLoading: false,
+				isError: false,
+				renderProduct,
+			}),
+		)
+		// 'plate' comes first in productDTags, so its card should appear first
+		expect(markup).toContain('card-plate')
+		const plateIdx = markup.indexOf('card-plate')
+		const mugIdx = markup.indexOf('card-mug')
+		expect(plateIdx).toBeLessThan(mugIdx)
+	})
+
+	test('skips products that no longer exist', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductRowBlock, {
+				productDTags: ['nonexistent', 'mug'],
+				products: [productMug],
+				isLoading: false,
+				isError: false,
+				renderProduct,
+			}),
+		)
+		expect(markup).toContain('card-mug')
+		expect(markup).not.toContain('card-nonexistent')
+	})
+
+	test('renders loading state when data is pending', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductRowBlock, {
+				productDTags: ['mug'],
+				products: null,
+				isLoading: true,
+				isError: false,
+				renderProduct,
+			}),
+		)
+		expect(markup).toContain('Loading')
+	})
+
+	test('renders error state on query failure', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductRowBlock, {
+				productDTags: ['mug'],
+				products: null,
+				isLoading: false,
+				isError: true,
+				renderProduct,
+			}),
+		)
+		expect(markup).toContain('could not be loaded')
+	})
+
+	test('renders nothing for visitors when no products are selected', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ProductRowBlock, {
+				productDTags: [],
+				products: null,
+				isLoading: false,
+				isError: false,
+				renderProduct,
+			}),
+		)
+		expect(markup).toBe('')
+	})
+
+	test('in editor mode shows hint when no products selected', () => {
+		const markup = renderToStaticMarkup(
+			createElement(StorefrontProvider, {
+				value: { pubkey: AUTHOR, isEditing: true },
+				children: createElement(ProductRowBlock, {
+					productDTags: [],
+					products: null,
+					isLoading: false,
+					isError: false,
+					renderProduct,
+				}),
+			}),
+		)
+		expect(markup).toContain('Add products to show them in a row')
+	})
+})
+
+describe('SearchBlock (props-only view)', () => {
+	test('renders with default placeholder', () => {
+		const markup = renderToStaticMarkup(
+			createElement(SearchBlock, {
+				placeholder: 'Search products',
+				size: 'md',
+				query: '',
+				onChange: () => {},
+			}),
+		)
+		expect(markup).toContain('Search products')
+		expect(markup).toContain('widget-search-field')
+	})
+
+	test('renders custom placeholder', () => {
+		const markup = renderToStaticMarkup(
+			createElement(SearchBlock, {
+				placeholder: 'Find what you need',
+				size: 'lg',
+				query: 'bitcoin',
+				onChange: () => {},
+			}),
+		)
+		expect(markup).toContain('Find what you need')
+	})
+
+	test('reflects current query value', () => {
+		const markup = renderToStaticMarkup(
+			createElement(SearchBlock, {
+				placeholder: 'Search',
+				size: 'md',
+				query: 'test',
+				onChange: () => {},
+			}),
+		)
+		expect(markup).toContain('test')
+	})
+
+	test('does not crash with empty query', () => {
+		const markup = renderToStaticMarkup(
+			createElement(SearchBlock, {
+				placeholder: 'Search',
+				size: 'sm',
+				query: '',
+				onChange: () => {},
+			}),
+		)
+		expect(markup).not.toBeNull()
+	})
+})
+
+describe('CategoriesBlock (props-only view)', () => {
+	test('renders category labels as pills', () => {
+		const markup = renderToStaticMarkup(
+			createElement(CategoriesBlock, {
+				categories: [
+					{ label: 'Bitcoin', key: 'bitcoin' },
+					{ label: 'Health', key: 'health' },
+				],
+				title: 'Browse',
+				categoryToPath: (key: string) => `/browse/${key}`,
+			}),
+		)
+		expect(markup).toContain('Bitcoin')
+		expect(markup).toContain('Health')
+		expect(markup).toContain('/browse/bitcoin')
+		expect(markup).toContain('/browse/health')
+	})
+
+	test('renders empty categories gracefully', () => {
+		const markup = renderToStaticMarkup(
+			createElement(CategoriesBlock, {
+				categories: [],
+				title: 'Browse',
+				categoryToPath: (key: string) => `/browse/${key}`,
+			}),
+		)
+		expect(markup).toContain('Browse')
+		expect(markup).not.toContain('rounded-full')
+	})
+
+	test('renders custom title', () => {
+		const markup = renderToStaticMarkup(
+			createElement(CategoriesBlock, {
+				categories: [{ label: 'Cat', key: 'cat' }],
+				title: 'Shop by category',
+				categoryToPath: (key: string) => `/browse/${key}`,
+			}),
+		)
+		expect(markup).toContain('Shop by category')
+	})
+
+	test('passes path from resolver, not hardcoded', () => {
+		const markup = renderToStaticMarkup(
+			createElement(CategoriesBlock, {
+				categories: [{ label: 'Cat', key: 'my-cat' }],
+				title: 'Browse',
+				categoryToPath: (key: string) => `/browse/${key}`,
+			}),
+		)
+		expect(markup).toContain('/browse/my-cat')
 	})
 })

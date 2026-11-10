@@ -14,6 +14,9 @@ import { ProductGridBlock, type ProductGridBlockProps } from './blocks/ProductGr
 import { ProfileHeaderBlock, type ProfileHeaderBlockProps } from './blocks/ProfileHeaderBlock'
 import { TextBlock } from './blocks/TextBlock'
 import { DividerBlock, SpacerBlock } from './blocks/SpacingBlocks'
+import { ProductRowBlock, type ProductRowBlockProps, type ProductRowBlockViewProps } from './blocks/ProductRowBlock'
+import { SearchBlock, type SearchBlockProps } from './blocks/SearchBlock'
+import { CategoriesBlock, type CategoriesBlockProps } from './blocks/CategoriesBlock'
 
 /**
  * Turns a validated page document into elements.
@@ -48,6 +51,7 @@ export interface StorefrontDataSlots {
 	ProductGrid?: (props: ProductGridBlockProps) => ReactNode
 	FeaturedProduct?: (props: FeaturedProductBlockProps) => ReactNode
 	ProfileHeader?: (props: ProfileHeaderBlockProps) => ReactNode
+	ProductRow?: (props: ProductRowBlockProps) => ReactNode
 }
 
 /**
@@ -124,8 +128,22 @@ export function StorefrontBlockView({ block, slots }: { block: StorefrontBlock; 
 			return <ImageBlock {...block.props} />
 		case 'Divider':
 			return <DividerBlock />
-		case 'Spacer':
-			return <SpacerBlock {...block.props} />
+		case 'ProductRow':
+			return slots?.ProductRow ? (
+				slots.ProductRow(block.props)
+			) : (
+				<ProductRowBlock {...block.props} products={null} isLoading={false} isError={false} renderProduct={() => null} />
+			)
+		case 'Search':
+			return <SearchBlock {...block.props} query="" onChange={() => {}} />
+		case 'Categories':
+			return (
+				<CategoriesBlock
+					categories={block.props.categories}
+					title={block.props.title}
+					categoryToPath={(key: string) => `?tag=${key}`}
+				/>
+			)
 		default: {
 			// Unreachable while the switch matches the union. The assignment
 			// makes that a compile-time guarantee; the `null` keeps a page that
