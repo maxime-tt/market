@@ -410,6 +410,7 @@
       auction_id: auction.id,
       amount,
       cashu_lock: receipt,
+      proofs: wallet.bidProofs(funding),
       outcome_authorizations: outcomeAuthorizations,
     });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });

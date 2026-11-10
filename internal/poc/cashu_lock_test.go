@@ -132,12 +132,12 @@ func TestCashuLockProofRefsMustBeCanonical(t *testing.T) {
 func TestCashuLockProofCannotFundTwoBids(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := cashuLockFixture(t)
-	policy := DefaultPolicy()
-	refs := testProofRefs(t, testPrivateKey(t), testPrivateKey(t))
+	proofs, refs := backedProofs(t, 64, 56)
+	policy := backedPolicy(64, 56)
 
 	first := testPrivateKey(t)
 	firstReceipt := testCashuLockReceipt(t, committee, "mint-backed", actorForKey(first), 120, "op-first", strings.Repeat("a", 64), 1_700, refs)
-	firstEvent := testEvent(t, first, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &firstReceipt})
+	firstEvent := testEvent(t, first, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &firstReceipt, Proofs: proofs})
 	committed, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &firstEvent}, 1_001, policy, seed)
 	if err != nil {
 		t.Fatalf("first mint-backed bid: %v", err)
@@ -162,13 +162,13 @@ func TestCashuLockProofCannotFundTwoBids(t *testing.T) {
 
 // applicationFor builds a live Application whose committed state already holds
 // the mint-backed auction, so CheckTx can be driven end to end.
-func applicationFor(t *testing.T, state State, seed []byte, committee *btcec.PrivateKey) *Application {
+func applicationFor(t *testing.T, state State, seed []byte, committee *btcec.PrivateKey, policy Policy) *Application {
 	t.Helper()
 	statePath := filepath.Join(t.TempDir(), "state.json")
 	if err := persistState(statePath, state); err != nil {
 		t.Fatal(err)
 	}
-	app, err := NewApplication("cashu-lock-fixture", DefaultPolicy(), seed,
+	app, err := NewApplication("cashu-lock-fixture", policy, seed,
 		hex.EncodeToString(committee.PubKey().SerializeCompressed()), statePath)
 	if err != nil {
 		t.Fatal(err)
@@ -192,13 +192,14 @@ func checkTx(t *testing.T, app *Application, event SignedEvent) *abci.CheckTxRes
 func TestCheckTxRefusesCashuLockWhenMintSaysSpent(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := cashuLockFixture(t)
-	app := applicationFor(t, state, seed, committee)
 	bidder := testPrivateKey(t)
-	refs := testProofRefs(t, testPrivateKey(t))
+	proofs, refs := backedProofs(t, 120)
+	policy := backedPolicy(120)
+	app := applicationFor(t, state, seed, committee, policy)
 	wallet := newWalletClaim(t)
 	receipt := outcomeReceipt(t, committee, "mint-backed", actorForKey(bidder), 120, "op-spent", strings.Repeat("a", 64), 1_700, refs, wallet.key)
 	authorization := testOutcomeAuthorizations(t, "mint-backed", refs, wallet)
-	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization})
+	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs})
 
 	// The mint confirms the proofs are unspent: admitted.
 	app.SetMintChecker(&fakeMint{states: map[string]MintProofState{refs[0]: MintProofUnspent}})
@@ -223,13 +224,14 @@ func TestCheckTxRefusesCashuLockWhenMintSaysSpent(t *testing.T) {
 func TestCheckTxFailsClosedWhenTheMintCannotBeAsked(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := cashuLockFixture(t)
-	app := applicationFor(t, state, seed, committee)
 	bidder := testPrivateKey(t)
-	refs := testProofRefs(t, testPrivateKey(t))
+	proofs, refs := backedProofs(t, 120)
+	policy := backedPolicy(120)
+	app := applicationFor(t, state, seed, committee, policy)
 	wallet := newWalletClaim(t)
 	receipt := outcomeReceipt(t, committee, "mint-backed", actorForKey(bidder), 120, "op-unreachable", strings.Repeat("a", 64), 1_700, refs, wallet.key)
 	authorization := testOutcomeAuthorizations(t, "mint-backed", refs, wallet)
-	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization})
+	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs})
 
 	app.SetMintChecker(&fakeMint{err: errors.New("connection refused")})
 	response := checkTx(t, app, event)
@@ -295,14 +297,15 @@ func TestNonMintBackedAuctionRejectsCashuLock(t *testing.T) {
 func TestOpenWorldMintAdmitsGenuineMintBackedBid(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := cashuLockFixture(t)
-	app := applicationFor(t, state, seed, committee)
 	bidder := testPrivateKey(t)
-	refs := testProofRefs(t, testPrivateKey(t))
+	proofs, refs := backedProofs(t, 120)
+	policy := backedPolicy(120)
+	app := applicationFor(t, state, seed, committee, policy)
 	wallet := newWalletClaim(t)
 	receipt := outcomeReceipt(t, committee, "mint-backed", actorForKey(bidder), 120,
 		"op-open-world", strings.Repeat("a", 64), 1_700, refs, wallet.key)
 	authorization := testOutcomeAuthorizations(t, "mint-backed", refs, wallet)
-	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization})
+	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs})
 
 	// fakeMint answers UNSPENT for every reference, including ones it has never
 	// seen: exactly the open-world behaviour that used to refuse every bid.

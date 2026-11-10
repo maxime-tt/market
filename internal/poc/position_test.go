@@ -23,11 +23,11 @@ func positionTokenDigest(operation string) string {
 func cashuLeg(t *testing.T, committee *btcec.PrivateKey, auctionID string, bidder *btcec.PrivateKey, amount, createdAt int64, operation string) SignedEvent {
 	t.Helper()
 	wallet := newWalletClaim(t)
-	refs := testProofRefs(t, testPrivateKey(t))
+	proofs, refs := backedProofs(t, amount)
 	receipt := outcomeReceipt(t, committee, auctionID, actorForKey(bidder), amount, operation, positionTokenDigest(operation), 1_700, refs, wallet.key)
 	authorization := testOutcomeAuthorizations(t, auctionID, refs, wallet)
 	return testEvent(t, bidder, createdAt, KindBid, bidContent{
-		AuctionID: auctionID, Amount: amount, CashuLock: &receipt, OutcomeAuthorizations: &authorization,
+		AuctionID: auctionID, Amount: amount, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs,
 	})
 }
 
@@ -57,7 +57,7 @@ func positionFixture(t *testing.T, reserve int64) (State, []byte, *btcec.Private
 
 func applyPositionLeg(t *testing.T, state State, seed []byte, event SignedEvent, at int64) State {
 	t.Helper()
-	next, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, at, DefaultPolicy(), seed)
+	next, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, at, policyPinningBidProofs(t, event), seed)
 	if err != nil {
 		t.Fatalf("apply leg at %d: %v", at, err)
 	}
@@ -250,12 +250,12 @@ func TestPositionMintBidCannotExitByAssertingReplacement(t *testing.T) {
 	state = applyPositionLeg(t, state, seed, leg1, 1_001)
 
 	wallet := newWalletClaim(t)
-	refs := testProofRefs(t, testPrivateKey(t))
+	proofs, refs := backedProofs(t, 128)
 	receipt := outcomeReceipt(t, committee, "position-auction", actorForKey(bidder), 128, "op-leg-2", positionTokenDigest("op-leg-2"), 1_700, refs, wallet.key)
 	authorization := testOutcomeAuthorizations(t, "position-auction", refs, wallet)
 	sneaky := testEvent(t, bidder, 1_002, KindBid, bidContent{
 		AuctionID: "position-auction", Amount: 128, ReplacesBidID: leg1.ID,
-		CashuLock: &receipt, OutcomeAuthorizations: &authorization,
+		CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs,
 	})
 	state = applyPositionLeg(t, state, seed, sneaky, 1_002)
 
@@ -276,11 +276,10 @@ func TestPositionSingleLegRegression(t *testing.T) {
 		t.Parallel()
 		state, seed, committee := cashuLockFixture(t)
 		bidder := testPrivateKey(t)
-		refs := testProofRefs(t, testPrivateKey(t))
 		wallet := newWalletClaim(t)
-		event := authorizedBidEvent(t, committee, bidder, "mint-backed", 128, 1_001, "op-regress", strings.Repeat("a", 64), refs, wallet)
+		event, eventPolicy := authorizedBidEvent(t, committee, bidder, "mint-backed", 128, 1_001, "op-regress", strings.Repeat("a", 64), wallet)
 
-		next, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, DefaultPolicy(), seed)
+		next, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, eventPolicy, seed)
 		if err != nil {
 			t.Fatalf("single cashu_lock_v1 bid: %v", err)
 		}

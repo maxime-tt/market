@@ -192,12 +192,13 @@ func TestCashuLockReceiptBindsBid(t *testing.T) {
 	}
 
 	refund := testPrivateKey(t)
+	proofs, refs := backedProofs(t, 64, 56)
 	receipt := CashuLockReceipt{
 		Schema: "PlebeianAuctionsPOCCashuLockV1", MintURL: CashuMintURL, AuctionID: "cashu-auction",
 		Bidder: actorForKey(bidder), Amount: 120, OperationID: "cashu-lock-operation-1",
 		TokenSHA256: strings.Repeat("a", 64), CommitteePublicKey: hex.EncodeToString(committee.PubKey().SerializeCompressed()),
 		RefundPublicKey: hex.EncodeToString(refund.PubKey().SerializeCompressed()), Locktime: 1_003,
-		ProofStateRefs: testProofRefs(t, refund, seller),
+		ProofStateRefs: refs,
 	}
 	digest := cashuReceiptDigest(receipt)
 	signature, err := schnorr.Sign(committee, digest[:])
@@ -213,8 +214,8 @@ func TestCashuLockReceiptBindsBid(t *testing.T) {
 		t.Fatalf("mutated Cashu receipt error = %v, want signature rejection", err)
 	}
 
-	validEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "cashu-auction", Amount: 120, CashuLock: &receipt})
-	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &validEvent}, 1_001, DefaultPolicy(), seed)
+	validEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "cashu-auction", Amount: 120, CashuLock: &receipt, Proofs: proofs})
+	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &validEvent}, 1_001, backedPolicy(64, 56), seed)
 	if err != nil {
 		t.Fatalf("valid Cashu bid: %v", err)
 	}

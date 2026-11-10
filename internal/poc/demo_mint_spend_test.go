@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -103,31 +102,23 @@ func refundableCashuFixture(t *testing.T) (State, []byte, *btcec.PrivateKey, *bt
 	t.Helper()
 	state, seed, committee := cashuLockFixture(t)
 	bidderA := testPrivateKey(t)
-	secrets := []string{"refund-secret-one", "refund-secret-two"}
-	amounts := []int64{64, 64}
-	refs := make([]string, 0, len(secrets))
-	for _, secret := range secrets {
-		reference, err := demoMintProofY(secret)
-		if err != nil {
-			t.Fatal(err)
-		}
-		refs = append(refs, reference)
-	}
-	sort.Strings(refs)
+	proofsA, refsA := backedProofs(t, 64, 64)
+	secrets := secretsOf(proofsA)
+	amounts := amountsOf(proofsA)
 	receiptA := testCashuLockReceipt(t, committee, "mint-backed", actorForKey(bidderA), 128,
-		"op-refund-a", strings.Repeat("a", 64), 1_700, refs)
-	eventA := testEvent(t, bidderA, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 128, CashuLock: &receiptA})
-	state, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &eventA}, 1_001, DefaultPolicy(), seed)
+		"op-refund-a", strings.Repeat("a", 64), 1_700, refsA)
+	eventA := testEvent(t, bidderA, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 128, CashuLock: &receiptA, Proofs: proofsA})
+	state, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &eventA}, 1_001, backedPolicy(64), seed)
 	if err != nil {
 		t.Fatalf("bid A: %v", err)
 	}
 
 	bidderB := testPrivateKey(t)
-	refsB := testProofRefs(t, testPrivateKey(t))
+	proofsB, refsB := backedProofs(t, 300)
 	receiptB := testCashuLockReceipt(t, committee, "mint-backed", actorForKey(bidderB), 300,
 		"op-refund-b", strings.Repeat("b", 64), 1_800, refsB)
-	eventB := testEvent(t, bidderB, 1_002, KindBid, bidContent{AuctionID: "mint-backed", Amount: 300, CashuLock: &receiptB})
-	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &eventB}, 1_002, DefaultPolicy(), seed)
+	eventB := testEvent(t, bidderB, 1_002, KindBid, bidContent{AuctionID: "mint-backed", Amount: 300, CashuLock: &receiptB, Proofs: proofsB})
+	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &eventB}, 1_002, backedPolicy(300), seed)
 	if err != nil {
 		t.Fatalf("bid B: %v", err)
 	}
@@ -522,7 +513,7 @@ func TestDemoMintRefundRefusesWrongAuction(t *testing.T) {
 func TestCheckTxRefusesLegacyRefundOfMintBackedBid(t *testing.T) {
 	t.Parallel()
 	state, seed, committee, bidder, bidID, _, _ := refundableCashuFixture(t)
-	app := applicationFor(t, state, seed, committee)
+	app := applicationFor(t, state, seed, committee, DefaultPolicy())
 
 	event := testEvent(t, bidder, 1_003, KindRefund, refundContent{BidID: bidID})
 	response := checkTx(t, app, event)

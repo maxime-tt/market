@@ -234,8 +234,8 @@ func TestCashuLockModeIsUnaffected(t *testing.T) {
 		t.Fatalf("cashu_lock_v1 admission error = %v, want the authorization rule", err)
 	}
 	// With them, it commits.
-	authorized := authorizedBidEvent(t, committee, bidder, "mint-backed", 120, 1_001, "op-plain", strings.Repeat("a", 64), refs, wallet)
-	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &authorized}, 1_001, policy, seed); err != nil {
+	authorized, authPolicy := authorizedBidEvent(t, committee, bidder, "mint-backed", 120, 1_001, "op-plain", strings.Repeat("a", 64), wallet)
+	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &authorized}, 1_001, authPolicy, seed); err != nil {
 		t.Fatalf("authorized cashu_lock_v1 bid: %v", err)
 	}
 }

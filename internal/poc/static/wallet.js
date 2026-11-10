@@ -11013,17 +11013,20 @@ outputs=${outputs.join(",")}`);
       };
       return { settle: build(sellerKey), refund: build(this.spendPublicKey()) };
     }
-    async sigAllBidMaterial(auction, funding) {
+    bidProofs(funding) {
       if (!funding.lockedProofs.length) {
-        throw new Error("a sigall bid must carry the locked proofs it commits");
+        throw new Error("a bid must carry the locked proofs it commits");
       }
-      const proofs = funding.lockedProofs.map((proof) => ({
+      return funding.lockedProofs.map((proof) => ({
         amount: Number(proof.amount),
         id: proof.id,
         secret: String(proof.secret),
         C: String(proof.C),
         dleq: proof.dleq ? { e: proof.dleq.e, s: proof.dleq.s, r: proof.dleq.r } : undefined
       }));
+    }
+    async sigAllBidMaterial(auction, funding) {
+      const proofs = this.bidProofs(funding);
       const outcome_templates = await this.buildOutcomeTemplates(auction, funding);
       return { proofs, outcome_templates };
     }

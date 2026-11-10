@@ -1421,10 +1421,11 @@ func applyBid(state *State, actor, eventID string, committedAt int64, content bi
 		if err := verifyCashuLockReceipt(*state, actor, content, *content.CashuLock); err != nil {
 			return err
 		}
-		// The proof set, when the bid carries one, is verified inside
-		// consensus here: every validator re-derives the DLEQ and the sum from
-		// the transaction's own contents, so no single party attests that the
-		// bid is funded.
+		// The bid's carried proof set is verified inside consensus here:
+		// every validator re-derives the DLEQ and the sum from the
+		// transaction's own contents, so no single party attests that the
+		// bid is funded. The proofs are MANDATORY for every mint-backed
+		// route: a bid with only references is refused by name.
 		if err := verifyBidProofs(auction, content, policy); err != nil {
 			return err
 		}
@@ -2138,16 +2139,25 @@ func verifyCashuLockReceipt(state State, actor string, content bidContent, recei
 }
 
 // verifyBidProofs checks a bid's carried proof set inside consensus: rules 2-6
-// of the escrow-synthesis brief. A bid with no proofs returns immediately and
-// behaves exactly as before, so a chain that predates the field replays
-// unchanged. When proofs are present every validator re-derives the DLEQ and
-// the sum from the transaction itself; rule 1 (the auction is open and the
-// bidder is not the seller) is enforced earlier in applyBid, and rule 6 (the
-// reuse guard) is the EXISTING one in verifyCashuLockReceipt, which the proof
-// set is bound to by requiring it to be exactly the receipt's references.
+// of the escrow-synthesis brief. Every mint-backed bid MUST carry a nonempty
+// proof set: the whole point of the synthesis is that no single party attests a
+// bid is funded, so a bid that carries only references -- no proofs for a
+// validator to re-derive -- is refused by name rather than admitted on anyone's
+// word. There is no legacy or proofs-less shape: the owner refused a
+// backwards-compatibility path, and admitting one would leave the property
+// described rather than held. When proofs are present every validator
+// re-derives the DLEQ and the sum from the transaction itself; rule 1 (the
+// auction is open and the bidder is not the seller) is enforced earlier in
+// applyBid, and rule 6 (the reuse guard) is the EXISTING one in
+// verifyCashuLockReceipt, which the proof set is bound to by requiring it to be
+// exactly the receipt's references.
 func verifyBidProofs(auction Auction, content bidContent, policy Policy) error {
+	// No early return for an empty proof set: that is the hole this rule
+	// closes. A mint-backed bid with references but no proofs is refused by
+	// name, because consensus has nothing to verify and the funding would rest
+	// on a single party's attestation.
 	if len(content.Proofs) == 0 {
-		return nil
+		return errors.New("mint-backed bid carries no proofs: a bid is admitted only when its proofs are verified inside consensus")
 	}
 	if content.CashuLock == nil {
 		return errors.New("a bid that carries proofs must also carry the Cashu lock they back")
@@ -2471,6 +2481,40 @@ func applicationAuthorityPubKey(state State) string {
 	return state.CommitteePublicKey[2:]
 }
 
+// lockOutcomeAuthorized reports whether a lock holds a warrant for the named
+// terminal outcome. A cashu_lock_v1 lock is warranted by the wallet-spend-key
+// consent signature (lock.SettleAuthorization / lock.RefundAuthorization); a
+// cashu_sigall_v1 lock is warranted by the bidder's pre-signed SIG_ALL template
+// committed in the bid, which consensus already verified at admission. The two
+// are distinct: the consent fields are empty for a sigall lock, so requiring
+// them there would refuse a legitimately resolvable outcome and leave a lock
+// unresolved after its value had already moved at the mint.
+func lockOutcomeAuthorized(state *State, bidID, outcome string) bool {
+	if lock, ok := state.Locks[bidID]; ok {
+		switch outcome {
+		case "settle":
+			if lock.SettleAuthorization != "" {
+				return true
+			}
+		case "refund":
+			if lock.RefundAuthorization != "" {
+				return true
+			}
+		}
+	}
+	bid, ok := state.Bids[bidID]
+	if !ok || bid.OutcomeTemplates == nil {
+		return false
+	}
+	switch outcome {
+	case "settle":
+		return bid.OutcomeTemplates.Settle.BidderSignature != ""
+	case "refund":
+		return bid.OutcomeTemplates.Refund.BidderSignature != ""
+	}
+	return false
+}
+
 // applyOutcomeRecord commits the coordinator's own record that a mint-backed
 // lock reached its terminal outcome. It is the mirror of the mint swap, never
 // the swap itself: it issues no IOU note and moves no value, so its absence
@@ -2530,8 +2574,10 @@ func applyOutcomeRecord(state *State, actor string, content outcomeContent) erro
 			return fmt.Errorf("winning lock is %q, not winner_selected", lock.Status)
 		}
 		// A cashu_lock_v1 lock is authorized by the bidder's wallet spend-key
-		// consent signature; a lock with none cannot be resolved.
-		if lock.SettleAuthorization == "" {
+		// consent signature; a cashu_sigall_v1 lock is authorized by the
+		// bidder's pre-signed outcome template committed in the bid. A lock with
+		// neither cannot be resolved.
+		if !lockOutcomeAuthorized(state, content.BidID, "settle") {
 			return errors.New("winning bid holds no settle authorization")
 		}
 		lock.Status = "paid"
@@ -2540,7 +2586,7 @@ func applyOutcomeRecord(state *State, actor string, content outcomeContent) erro
 		if lock.Status != "refundable" {
 			return fmt.Errorf("lock is %q, not refundable", lock.Status)
 		}
-		if lock.RefundAuthorization == "" {
+		if !lockOutcomeAuthorized(state, content.BidID, "refund") {
 			return errors.New("bid holds no refund authorization")
 		}
 		lock.Status = "refunded"

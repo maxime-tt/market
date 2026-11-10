@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sort"
 	"strings"
 	"testing"
 
@@ -65,21 +64,13 @@ func settleableCashuFixture(t *testing.T) (State, []byte, *btcec.PrivateKey, *bt
 
 	bidder := testPrivateKey(t)
 	bidderWallet := newWalletClaim(t)
-	secrets := []string{"settle-secret-one", "settle-secret-two"}
-	amounts := []int64{64, 64}
-	refs := make([]string, 0, len(secrets))
-	for _, secret := range secrets {
-		reference, err := demoMintProofY(secret)
-		if err != nil {
-			t.Fatal(err)
-		}
-		refs = append(refs, reference)
-	}
-	sort.Strings(refs)
+	proofs, refs := backedProofs(t, 64, 64)
+	secrets := secretsOf(proofs)
+	amounts := amountsOf(proofs)
 	receipt := settleReceipt(t, committee, "settle-auction", actorForKey(bidder), 128,
 		"op-settle", strings.Repeat("c", 64), 1_700, refs, bidderWallet.key)
-	bid := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "settle-auction", Amount: 128, CashuLock: &receipt})
-	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &bid}, 1_001, DefaultPolicy(), seed)
+	bid := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "settle-auction", Amount: 128, CashuLock: &receipt, Proofs: proofs})
+	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &bid}, 1_001, backedPolicy(64), seed)
 	if err != nil {
 		t.Fatalf("bid: %v", err)
 	}

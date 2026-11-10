@@ -646,14 +646,33 @@ export class BidderWallet {
   }
 
   /**
+   * The bearer proofs a mint-backed bid commits, in the shape consensus
+   * verifies: {amount, id, secret, C, dleq}. This is the same construction
+   * sigAllBidMaterial uses for its template inputs; cashu_lock_v1 uses it
+   * directly, because a proof-less mint-backed bid is now refused by name
+   * (verifyBidProofs requires a nonempty proof set for every mint-backed route).
+   *
+   * The secrets travel because consensus re-derives each reference and checks
+   * DLEQ and the sum from the proofs themselves. They carry nothing that can
+   * spend a proof: the lock is P2PK/SIG_ALL to the committee, so the value is
+   * unspendable without the committee's signature.
+   */
+  bidProofs(funding: BidFunding): SigAllBidProof[] {
+    if (!funding.lockedProofs.length) {
+      throw new Error("a bid must carry the locked proofs it commits");
+    }
+    return funding.lockedProofs.map((proof) => ({
+      amount: Number(proof.amount),
+      id: proof.id,
+      secret: String(proof.secret),
+      C: String(proof.C),
+      dleq: proof.dleq ? { e: proof.dleq.e, s: proof.dleq.s, r: proof.dleq.r } : undefined,
+    }));
+  }
+
+  /**
    * The on-chain bid material a cashu_sigall_v1 bid must carry: the bearer
    * proofs AND the two pre-signed outcome templates.
-   *
-   * The proofs are the committed proofs themselves -- INCLUDING their secrets,
-   * because consensus re-derives each template's SIG_ALL digest from the input
-   * secrets and re-checks DLEQ and the sum. They are deliberately NOT the
-   * reference-only bindings posted to /api/demo/mint-lock: that body refuses
-   * unknown fields, so the lock request can only carry {amount,id,Y,C,dleq}.
    *
    * Proofs and template inputs are built from the same locked-proof list in the
    * same order, which is what rule (b) of verifySigAllBidTemplates requires.
@@ -662,16 +681,7 @@ export class BidderWallet {
     auction: { id: string; seller_coco_payment_public_key: string },
     funding: BidFunding,
   ): Promise<{ proofs: SigAllBidProof[]; outcome_templates: SigAllDepositTemplates }> {
-    if (!funding.lockedProofs.length) {
-      throw new Error("a sigall bid must carry the locked proofs it commits");
-    }
-    const proofs = funding.lockedProofs.map((proof) => ({
-      amount: Number(proof.amount),
-      id: proof.id,
-      secret: String(proof.secret),
-      C: String(proof.C),
-      dleq: proof.dleq ? { e: proof.dleq.e, s: proof.dleq.s, r: proof.dleq.r } : undefined,
-    }));
+    const proofs = this.bidProofs(funding);
     const outcome_templates = await this.buildOutcomeTemplates(auction, funding);
     return { proofs, outcome_templates };
   }

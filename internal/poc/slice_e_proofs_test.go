@@ -391,10 +391,11 @@ func TestCarriedProofsMustBeTheReceiptReferences(t *testing.T) {
 	}
 }
 
-// TestBidWithoutProofsStillAdmits is the back-compat guard: the field is
-// optional, so a pre-existing mint-backed bid with no carried proofs still
-// commits exactly as before.
-func TestBidWithoutProofsStillAdmits(t *testing.T) {
+// TestBidWithoutProofsIsRefused is the inverse of the old back-compat guard:
+// the field is MANDATORY, so a mint-backed bid that carries only references --
+// no proofs for consensus to re-derive -- is refused by name. There is no
+// proofs-less shape that is admitted, legacy or otherwise.
+func TestBidWithoutProofsIsRefused(t *testing.T) {
 	t.Parallel()
 	fx := newCarriedProofFixture(t)
 	_, refs := fx.mintProofs(t, 64, 64)
@@ -402,8 +403,12 @@ func TestBidWithoutProofsStillAdmits(t *testing.T) {
 	refundKey := hex.EncodeToString(testPrivateKey(t).PubKey().SerializeCompressed())
 	receipt := testCarriedProofReceipt(t, fx.committee, fx.auctionID, actorForKey(fx.bidder), 128, auction.EndTime+100, refundKey, refs, "")
 	content := bidContent{AuctionID: fx.auctionID, Amount: 128, CashuLock: &receipt}
-	if _, err := fx.apply(t, fx.bidder, content); err != nil {
-		t.Fatalf("a bid without carried proofs was refused: %v", err)
+	_, err := fx.apply(t, fx.bidder, content)
+	if err == nil {
+		t.Fatal("a proof-less mint-backed bid was admitted; the proofs must be mandatory")
+	}
+	if !strings.Contains(err.Error(), "mint-backed bid carries no proofs") {
+		t.Fatalf("proof-less bid error = %v, want a refusal naming the missing proofs", err)
 	}
 }
 
