@@ -61,6 +61,27 @@ interface RabbitHoleSuggestion {
 	filter?: string
 }
 
+/**
+ * A bucket as the SERVICE states it: a narrowing option derived from the full
+ * result set's own documents, across tags and sellers. The structural twin of
+ * `ui/browse/search-buckets.tsx`'s `Bucket` — that one is the presentation type,
+ * this one is the wire.
+ *
+ * NOT a facet. A facet is the engine's own count over a candidate superset and
+ * over-reports (measured on `q=bitcoin`: 1197 against a true 1100 for `bitcoin`,
+ * 242 against 199 for `clothing`). `count` here is counted over the documents the
+ * scan actually read, so it is the number to render.
+ */
+export interface RabbitHoleBucket {
+	dimension: 'label_tags' | 'category_tags' | 'seller'
+	/** What choosing the bucket adds to the query — a tag, or a seller's pubkey. */
+	value: string
+	count: number
+	share: number
+	/** Present for a seller bucket: the display name, when the service knows one. */
+	label?: string
+}
+
 interface RabbitHoleSearchFrame {
 	type: 'search'
 	configHash?: string
@@ -68,6 +89,14 @@ interface RabbitHoleSearchFrame {
 	candidateCount?: number
 	hits?: RabbitHoleHit[]
 	suggested?: RabbitHoleSuggestion[]
+	buckets?: RabbitHoleBucket[]
+	/**
+	 * True when the full-set scan could not read the whole set. A caller must
+	 * DISCLOSE this rather than present the buckets as describing everything.
+	 */
+	truncated?: boolean
+	/** How many documents the scan actually reached — the "first N" a disclosure names. */
+	scanned?: number
 	searchTimeMs?: number
 	candidatesWithHints?: number
 }
@@ -142,6 +171,80 @@ const FRAME_TYPES: readonly string[] = ['search', 'relay', 'event', 'dropped', '
 function isRabbitHoleFrame(value: unknown): value is RabbitHoleFrame {
 	if (typeof value !== 'object' || value === null || !('type' in value) || typeof value.type !== 'string') return false
 	return FRAME_TYPES.includes(value.type)
+}
+
+// ---------------------------------------------------------------------------
+// The index hit, restated as the event shape the shared mapper reads
+// ---------------------------------------------------------------------------
+
+/**
+ * The `d` tag inside a listing coordinate (`30402:<pubkey>:<d>`).
+ *
+ * The index documents carry the real `d` tag — the coordinate is built from it
+ * at ingestion — but the hit projects only the coordinate. Splitting on the two
+ * leading colons (not `split(':')`) keeps a `d` that itself contains a colon
+ * intact, which is the same rule `getProductAddress` obeys.
+ *
+ * An empty `d` returns `undefined` so the listing is treated as one published
+ * without a `d` tag: the mapper then falls back to the event id, exactly as it
+ * does for the real event.
+ */
+function coordinateDTag(coordinate: string | undefined): string | undefined {
+	if (!coordinate) return undefined
+	const first = coordinate.indexOf(':')
+	const second = coordinate.indexOf(':', first + 1)
+	if (first === -1 || second === -1) return undefined
+	if (coordinate.slice(0, first) !== '30402') return undefined
+	return coordinate.slice(second + 1) || undefined
+}
+
+/**
+ * A slim index hit restated as a kind-30402 event.
+ *
+ * WHY this exists rather than a second, hit-shaped mapper: the `search` frame
+ * is the only frame that arrives before any relay answers, and the grid must
+ * paint from it. Two mappers would be free to drift, and a card painted from
+ * the index would then contradict the same card painted from its relay event —
+ * the exact disagreement this restatement rules out. So the hit is turned into
+ * the input the ONE mapper (`mapProduct`, via the settled path's own
+ * `collapseProductFamilyEvents`) already understands, and nothing else maps a
+ * hit.
+ *
+ * Deliberately ABSENT, never invented: any field the index does not carry
+ * (`stock`, `location`, the image URL — the hit states only `has_image`). They
+ * stay absent on the painted card and are filled in when the real event lands;
+ * fabricating them would be a claim the settled card then has to retract.
+ *
+ * A hit with no `event_id` or no `pubkey` is not paintable: it could not be
+ * correlated with the event that later enriches it, so it would paint a card
+ * that the settled read cannot account for.
+ */
+function indexHitToEvent(hit: RabbitHoleHit): NostrEventLike | undefined {
+	if (!hit.event_id || !hit.pubkey) return undefined
+
+	const tags: string[][] = []
+	const dTag = coordinateDTag(hit.coordinate)
+	if (dTag) tags.push(['d', dTag])
+	if (hit.title) tags.push(['title', hit.title])
+	if (typeof hit.price_amount === 'number') {
+		// The price tag's third element is the unit. A null currency states
+		// none — the same shape as a listing whose tag omits it — so the card
+		// never labels a fiat amount "sats".
+		tags.push(hit.currency ? ['price', String(hit.price_amount), hit.currency] : ['price', String(hit.price_amount)])
+	}
+	// The seller's own `t` tags, which is what the mapper reads into
+	// `categories`. The index's `all_tags` also carries labeller tags, which
+	// the event-painted card would not have — so they stay out of the card.
+	for (const category of hit.category_tags ?? []) tags.push(['t', category])
+
+	return {
+		id: hit.event_id,
+		pubkey: hit.pubkey,
+		kind: 30402,
+		created_at: hit.created_at ?? 0,
+		content: '',
+		tags,
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -254,12 +357,21 @@ export interface RabbitHoleSearchOptions {
 	 * anything — before the `outcome` frame, so the caller can render as the
 	 * stream arrives instead of waiting for the read to settle.
 	 *
+	 * The FIRST call is normally the `search` frame alone: the index hits are
+	 * restated as events and mapped through the same mapper, so the grid paints
+	 * at index time (tens of milliseconds) with `eventsDelivered: 0` and no
+	 * relay having answered. The relay payloads that follow replace those rows
+	 * in place, id for id, and fill in what a slim hit cannot state (stock,
+	 * location, the image URL).
+	 *
 	 * The products come from the same mapper and family collapse the settled
 	 * result uses, so a streamed card and the settled card for the same event
 	 * cannot disagree. Two honest limits:
 	 *  - family rows are WITHHELD from snapshots (a family's row can still
 	 *    change identity while its parent is in flight, so a partial states no
-	 *    family at all; the settled result states it);
+	 *    family at all; the settled result states it) — and a slim hit cannot
+	 *    say whether its listing is part of a family at all, so an index-painted
+	 *    card may be replaced by its family's row once the events land;
 	 *  - the list can only GROW in row count, but its contents are still
 	 *    provisional — `stats.complete` is `false`, always.
 	 */
@@ -453,6 +565,10 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	// whole set, and a BrowseProduct no longer carries the tags to group by.
 	// Progressive snapshots re-run the SAME collapse over what has arrived.
 	const deliveredEvents: NostrEventLike[] = []
+	// The `search` frame's hits, restated as events so they go through the SAME
+	// mapper and collapse as the delivered payloads. They are collected BEFORE
+	// any relay answers, which is what lets the grid paint at index time.
+	const indexEvents: NostrEventLike[] = []
 	const seenEventIds = new Set<string>()
 	let outcome: RabbitHoleOutcomeFrame | null = null
 	let lineBuffer = ''
@@ -462,10 +578,23 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	//   - by `event_id` — the exact correlation; the hit's `event_id` is the
 	//     delivered event's `id` (measured 20/20 on a live response);
 	//   - by `coordinate` — a fallback for a provider that omits `event_id`.
-	//     The hit's `coordinate` is NOT the listing's canonical address (the
-	//     index slugs it with title-derived text), so it only ever matches a
-	//     provider that states the canonical `30402:<pubkey>:<d>` form.
+	//     The service builds this coordinate from the listing's own `d` tag
+	//     (`derivePointer`, ingestion), so it IS the canonical
+	//     `30402:<pubkey>:<d>` form — which is how the hit is restated as an
+	//     event. `event_id` is still preferred: a provider that slugs the
+	//     coordinate would match nothing here, and only the id is exact.
 	let suggested: BrowseFacet[] = []
+	/**
+	 * The frame's own buckets and truncation flag, carried out to the settled
+	 * result. Without this the service computes them and the app never sees them
+	 * — the whole feature dies at the seam with nothing erroring.
+	 */
+	// Named for the frame, NOT `truncated`: the block below declares its own
+	// `const truncated` (the stream-error), and a same-named outer binding would
+	// be in the temporal dead zone at the `indexOnly` return inside that block.
+	let frameBuckets: RabbitHoleBucket[] | undefined
+	let frameTruncated: boolean | undefined
+	let frameScanned: number | undefined
 	const relaysByEventId = new Map<string, string[]>()
 	const relaysByCoordinate = new Map<string, string[]>()
 
@@ -486,6 +615,48 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 		})
 
 	/**
+	 * The events a card may be painted from: the index frame's rows FIRST, in
+	 * the index's own ranking order, each one replaced IN PLACE by its delivered
+	 * payload as that arrives; payloads the index did not name are appended.
+	 *
+	 * WHY in place rather than appended: the index order is the ranking the
+	 * visitor is reading. A card that moved when its event landed would look
+	 * like a different product, and one that was appended would push the ranked
+	 * rows down the grid.
+	 */
+	const paintedEvents = (): readonly NostrEventLike[] => {
+		if (indexEvents.length === 0) return deliveredEvents
+		const deliveredById = new Map(deliveredEvents.map((event) => [event.id, event]))
+		const placed = new Set<string>()
+		const events: NostrEventLike[] = []
+		for (const indexEvent of indexEvents) {
+			const delivered = deliveredById.get(indexEvent.id)
+			if (delivered) {
+				// The full payload wins on every field the slim hit could not
+				// state, and keeps the row's position.
+				events.push(delivered)
+				placed.add(delivered.id)
+			} else {
+				events.push(indexEvent)
+			}
+		}
+		for (const event of deliveredEvents) if (!placed.has(event.id)) events.push(event)
+		return events
+	}
+
+	/**
+	 * The events the SETTLED result states.
+	 *
+	 * A caller that did not opt into progressive delivery (`onProducts`) gets
+	 * exactly what it got before the index painted anything: the delivered
+	 * payloads only. A caller that DID opt in keeps the rows it was shown —
+	 * dropping an index row at the moment the read settles would make a card
+	 * disappear from under the visitor's cursor, which is the gating this
+	 * removes, merely moved to the end of the stream.
+	 */
+	const settledEvents = (): readonly NostrEventLike[] => (ctx.onProducts ? paintedEvents() : deliveredEvents)
+
+	/**
 	 * The rows a partial may honestly state: everything EXCEPT family rows.
 	 * A family's row is not stable until its parent has been delivered — the
 	 * collapse promotes the first child into the family row and then swaps it
@@ -493,7 +664,8 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	 * flashing a child card that collapses into a parent card a frame later.
 	 * The settled result states every family once.
 	 */
-	const toStreamedProducts = (): BrowseProduct[] => toProducts(deliveredEvents.filter((event) => !isProductFamilyEvent(event)))
+	const toStreamedProducts = (): BrowseProduct[] =>
+		toProducts(paintedEvents().filter((event) => !isProductFamilyEvent(event)))
 
 	// Set by any frame that changes what a snapshot would say; flushed once per
 	// chunk so a batch of frames costs one collapse, not one per frame.
@@ -516,7 +688,7 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	 * as incomplete rather than discard it.
 	 */
 	const partialResult = (): RabbitHolePartialResult => ({
-		products: toProducts(deliveredEvents),
+		products: toProducts(settledEvents()),
 		eventsDelivered: deliveredEvents.length,
 		relaysAnswered: relaysAnswered(),
 		relaysSeen: [...relayOrder],
@@ -534,9 +706,18 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 
 		switch (frame.type) {
 			case 'search':
-				// The index hits are the fast first paint; the canonical product
-				// data is the `event` frames that follow. Hits whose event never
-				// arrives are not products.
+				// The index hits are the fast first paint: they carry every
+				// field a card shows, so they are restated as events and run
+				// through the SAME mapper the delivered payloads use. The relay
+				// events that follow then ENRICH these rows — same id, richer
+				// payload — instead of gating the grid on the fan-out.
+				// The frame's buckets and truncation flag, taken as stated. Nothing is
+				// re-derived here: the service counted them over the full set's own
+				// documents, and a second derivation at this layer could disagree
+				// with the number the service already committed to.
+				frameBuckets = frame.buckets
+				frameTruncated = frame.truncated
+				frameScanned = frame.scanned
 				// The wire's suggestion shape restated as the seam's own facet type.
 				suggested = (frame.suggested ?? []).map(
 					(suggestion): BrowseFacet => ({
@@ -548,10 +729,16 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 					}),
 				)
 				for (const hit of frame.hits ?? []) {
+					const indexEvent = indexHitToEvent(hit)
+					if (indexEvent) indexEvents.push(indexEvent)
 					if (!hit.relays_seen || hit.relays_seen.length === 0) continue
 					if (hit.event_id) relaysByEventId.set(hit.event_id, [...hit.relays_seen])
 					if (hit.coordinate) relaysByCoordinate.set(hit.coordinate, [...hit.relays_seen])
 				}
+				// Painted even when it is the only frame the read ever delivers
+				// — a visitor sees the index's answer without waiting for a
+				// relay to answer at all.
+				if (indexEvents.length > 0) progressDirty = true
 				break
 			case 'relay':
 				if (relayState.get(frame.relay) !== frame.state) progressDirty = true
@@ -644,18 +831,31 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	// search-level fan-out set. The collapse itself is presentation grouping,
 	// not a second ranking pass. (The progressive snapshots ran this same
 	// function; only the family withholding differs.)
-	const products: BrowseProduct[] = toProducts(deliveredEvents)
+	const products: BrowseProduct[] = toProducts(settledEvents())
 
 	// `indexOnly` returns only the `search` frame and never an `outcome` (the
 	// service never dials a relay), so an empty stream there is valid, not
 	// truncated. Every other stream MUST end in its `outcome` frame.
 	if (!outcome) {
-		if (ctx.indexOnly) return { products, eose: [], pending: [], suggested }
+		if (ctx.indexOnly)
+			return {
+				products,
+				eose: [],
+				pending: [],
+				suggested,
+				buckets: frameBuckets,
+				truncated: frameTruncated,
+				scanned: frameScanned,
+			}
 		const truncated = new RabbitHoleError('truncated', 'RabbitHole: stream ended without an outcome frame')
 		truncated.partial = partialResult()
 		throw truncated
 	}
-	return toBrowseSearchResult(outcome, products, relayOrder, relayState, suggested)
+	return toBrowseSearchResult(outcome, products, relayOrder, relayState, suggested, {
+		buckets: frameBuckets,
+		truncated: frameTruncated,
+		scanned: frameScanned,
+	})
 }
 
 /**
@@ -673,6 +873,7 @@ function toBrowseSearchResult(
 	relayOrder: string[],
 	relayState: Map<string, RabbitHoleRelayState>,
 	suggested: BrowseFacet[],
+	frame: { buckets?: RabbitHoleBucket[]; truncated?: boolean; scanned?: number },
 ): BrowseSearchResult {
 	const verdict = outcome.outcome
 	let eose: string[]
@@ -696,7 +897,15 @@ function toBrowseSearchResult(
 		}
 	}
 
-	return { products, eose: orderBySeen(eose, relayOrder), pending: orderBySeen(pending, relayOrder), suggested }
+	return {
+		products,
+		eose: orderBySeen(eose, relayOrder),
+		pending: orderBySeen(pending, relayOrder),
+		suggested,
+		buckets: frame.buckets,
+		truncated: frame.truncated,
+		scanned: frame.scanned,
+	}
 }
 
 /** Order a relay list by first-seen wire order; relays not seen on a `relay` frame keep their relative order at the end. */

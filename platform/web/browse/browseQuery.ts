@@ -140,7 +140,12 @@ export function resetBrowseSearchConfig(): void {
  * cards at ~200 ms instead of a skeleton until the last relay answers.
  */
 export interface BrowseSearchProgress {
-	/** Products delivered so far, mapped exactly as the settled result maps them (family rows withheld — see the client). */
+	/**
+	 * Products delivered so far, mapped exactly as the settled result maps them
+	 * (family rows withheld — see the client). At index time these are the
+	 * `search` frame's own rows, painted before any relay has answered; the
+	 * relay payloads then replace them in place, id for id.
+	 */
 	products: BrowseProduct[]
 	/** Raw event frames the read has accepted so far. */
 	eventsDelivered: number
@@ -192,7 +197,15 @@ export function subscribeBrowseSearchProgress(queryKey: readonly unknown[], list
 
 function getProgressByKey(key: string): BrowseSearchProgress | null {
 	const snapshot = progressByKey.get(key)
-	return snapshot && (snapshot.eventsDelivered > 0 || snapshot.relaysSeen.length > 0) ? snapshot : null
+	// A snapshot WITH ROWS is a snapshot, even before a single event frame has
+	// arrived. The index frame paints the grid first, and at that moment
+	// `eventsDelivered` is 0 and no relay has been heard from — a rule keyed on
+	// those two alone would hide the paint and leave the grid empty until the
+	// fan-out answered, which is exactly the gating this snapshot exists to
+	// remove. The empty snapshot still reports `null`, so "said nothing yet" and
+	// "nothing to show" stay the same state.
+	const hasContent = snapshot !== undefined && (snapshot.products.length > 0 || snapshot.eventsDelivered > 0 || snapshot.relaysSeen.length > 0)
+	return hasContent ? snapshot : null
 }
 
 function subscribeProgressByKey(key: string, listener: () => void): () => void {

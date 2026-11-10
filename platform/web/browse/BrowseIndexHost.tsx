@@ -6,7 +6,9 @@
  * - Idle: full-bleed wall strips above and below the hero
  * - Search results: grid with skeleton shimmer, empty marketplace, relay indicator
  * - Relay error: expanding per-relay detail popover; dead-search error panel
- * - Tag-filtered: facet badges derived from the search
+ * - Tag-filtered: the bucket line — tags and sellers, each ADDING its value to
+ *   the query; when the index scan was capped, one line disclosing it and the
+ *   way past it.
  * - Split view: a clicked card — or a home tile — opens the product panel beside
  *   the page it was clicked on, driven by the route's `?p=` (deep links and
  *   back/forward come for free); the open card's own click, the panel's close
@@ -42,6 +44,7 @@ import { SkeletonGrid } from '@ui/browse/skeleton-grid'
 import { EmptyStateBrowse } from '@ui/browse/empty-state-browse'
 import { ProductArtMount, SKELETON_SHIMMER_CSS } from '@ui/browse/art'
 import { RelayIndicator, DeadSearchError, TagFilterBadge } from '@ui/browse/relay-error'
+import { SearchBucketLine, ScanTruncationNotice, isBucketActive, type Bucket } from '@ui/browse/search-buckets'
 import { SplitView } from '@ui/browse/split-view'
 import { ProductDetailPanel, type ProductDetailOption, type ProductDetailPanelState } from '@ui/browse/product-detail-panel'
 import { formatPriceUnit } from '@ui/utils/format'
@@ -119,11 +122,32 @@ const RESULTS_GRID_STYLE = {
 } as const
 
 /**
- * How many facet pills the collapsed row shows. The service caps `suggested` at
+ * How many facet pills the fallback row shows. The service caps `suggested` at
  * eight, so the "more" control reveals at most two more — this cap is display,
  * not a claim about the market.
+ *
+ * The row itself is a fallback: see `BucketFrameFields` below.
  */
 const FACET_PILL_LIMIT = 6
+
+/**
+ * The `search` frame's bucket fields, read structurally.
+ *
+ * `BrowseSearchResult` is being widened to carry `buckets` and `truncated` by the
+ * client's own change; this host only needs the two optional fields, and reading
+ * them this way says exactly what it reads instead of asserting a shape the type
+ * does not carry yet. Delete the cast once the type states them.
+ *
+ * `scanned` is the reach the scan actually got to (the "first N" the buckets
+ * describe); `candidateCount` is what the index said the set was. They differ
+ * only when the scan was capped, which is the case the disclosure exists for.
+ */
+interface BucketFrameFields {
+	buckets?: readonly Bucket[]
+	truncated?: boolean
+	scanned?: number
+	candidateCount?: number
+}
 
 // ---------------------------------------------------------------------------
 // Scroll — the one place the page listens to it
@@ -325,9 +349,12 @@ function BrowseResultCard({
  * index — the Health/Pharma pills on a Bitcoin page), and the second field a
  * tag could be suggested from.
  *
- * The facet pills are the service's own `suggested` list — real market counts —
- * read through `useBrowseFacets`, the unfiltered index probe, so selecting one
- * of its pills cannot rotate the set it was chosen from.
+ * The bucket line is the service's own derivation over the documents it scanned
+ * — tags and sellers alike, each with the count measured over the set itself —
+ * and choosing one ADDS its value to the term. There is no tag filter:
+ * `suggested` facet pills remain only as a one-release fallback for a frame that
+ * carries no buckets, because a facet count is computed over a candidate
+ * superset and over-reports what the set actually holds.
  */
 export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
@@ -565,6 +592,54 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 	// from under the person who just picked one.
 	const facets: BrowseFacet[] = facetsQuery.data ?? []
 	const visibleFacets = facetsExpanded ? facets : facets.slice(0, FACET_PILL_LIMIT)
+
+	// Buckets — the narrowing options the service derived from the documents its
+	// scan read. Unlike a facet pill's count, a bucket's count is measured over
+	// the set itself (the facet is computed over a candidate superset and
+	// over-reports by up to 22%), so this line is what the grid's own numbers
+	// agree with. Read structurally; see `BucketFrameFields`.
+	const frame = result as unknown as BucketFrameFields | null
+	const frameBuckets: readonly Bucket[] = frame?.buckets ?? []
+	const scanTruncated = frame?.truncated === true
+
+	// A seller bucket narrows by its pubkey but must SHOW the name — resolved
+	// through the same batched profile read the cards use (`useProfileNames`,
+	// which is `getNormalizedProfileDisplayName` over each profile), so the pill
+	// and the card for that seller cannot disagree about who they are. The read
+	// is unconditional: hooks cannot be called inside a branch.
+	const bucketSellerPubkeys = frameBuckets.filter((bucket) => bucket.dimension === 'seller').map((bucket) => bucket.value)
+	const bucketSellerNames = useProfileNames(bucketSellerPubkeys)
+	const bucketsWithNames: Bucket[] = frameBuckets.map((bucket) =>
+		bucket.dimension === 'seller' && !bucket.label ? { ...bucket, label: bucketSellerNames.get(bucket.value) } : bucket,
+	)
+
+	/**
+	 * A bucket narrows **in place**: its value is added to the term, never
+	 * substituted for it, so choosing one keeps the search the person was in.
+	 *
+	 * An already-active value is a no-op rather than a toggle. Removing a word
+	 * from a free-text query is the field's job, and a pill that deletes text is
+	 * a second mechanism — the same reason there is no tag filter here at all.
+	 */
+	const handleNarrow = (value: string) => {
+		if (isBucketActive(q, value)) return
+		const term = q.trim()
+		onNavigate({ q: term ? `${term} ${value}` : value, p: undefined })
+	}
+
+	// The disclosure is NOT conditioned on the buckets: a capped scan with no
+	// surviving buckets still has to say so, or a person reads silence as
+	// completeness.
+	const truncationNotice = (
+		<ScanTruncationNotice
+			truncated={scanTruncated}
+			scanned={frame?.scanned}
+			total={frame?.candidateCount}
+			// The way past the cap is a narrower query, so the affordance is the
+			// field itself — the nav one, which is mounted in every state.
+			onRefine={() => navSearchInput.current?.focus()}
+		/>
+	)
 
 	// Empty state hints — real data only
 	const EMPTY_HINTS = [{ label: 'local index empty' }]
@@ -831,8 +906,18 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 						{/* Relay indicator — under the search area */}
 						{relayIndicator}
 
-						{/* Facet pills — the service's own market-scoped counts and filters */}
-						{facets.length > 0 && (
+						{/* The bucket line — tags and sellers, narrowing in place. It
+						    replaces the facet pills whenever the service sends buckets;
+						    the pills below are the one-release fallback for a frame
+						    that carries only `suggested`. */}
+						<div data-slot="browse-buckets">
+							<SearchBucketLine buckets={bucketsWithNames} query={q} onNarrow={handleNarrow} />
+							{truncationNotice}
+						</div>
+
+						{/* Facet pills — the fallback row, kept while the service still
+						    sends `suggested` alongside the buckets. */}
+						{frameBuckets.length === 0 && facets.length > 0 && (
 							<div
 								data-slot="browse-facets"
 								className={

@@ -125,6 +125,24 @@ export interface BrowseFacet {
  * verdict carries its failed relays in `pending` (the relay-failure state) and
  * is never flattened into a plain result.
  */
+/**
+ * A narrowing option, as it crosses the seam: the service's own bucket shape,
+ * restated here so the read layer can carry it without importing from the UI.
+ *
+ * NOT a facet. A facet is the engine's own count, computed over a candidate
+ * superset, and it over-reports — measured on `q=bitcoin`, 1197 against a true
+ * 1100 for `bitcoin` and 242 against 199 for `clothing`. `count` is counted over
+ * the documents the scan read, so it is the number a renderer may show.
+ */
+export interface BrowseBucket {
+	dimension: 'label_tags' | 'category_tags' | 'seller'
+	/** What choosing this adds to the query — a tag, or a seller's pubkey. */
+	value: string
+	count: number
+	share: number
+	label?: string
+}
+
 export interface BrowseSearchResult {
 	/** Filtered products from the stream. */
 	products: BrowseProduct[]
@@ -138,6 +156,19 @@ export interface BrowseSearchResult {
 	 * host then shows no pills rather than counting its loaded window.
 	 */
 	suggested?: BrowseFacet[]
+	/**
+	 * Narrowing options the service derived from the FULL result set's own
+	 * documents — tags and sellers alike. Present only when the service states
+	 * them; the local stream has no full set to scan, so it sends none.
+	 */
+	buckets?: BrowseBucket[]
+	/**
+	 * True when the full-set scan could not read the whole set. A renderer must
+	 * DISCLOSE this rather than present the buckets as describing everything.
+	 */
+	truncated?: boolean
+	/** How many documents the scan reached — the "first N" a disclosure names. */
+	scanned?: number
 	/**
 	 * Present ONLY when the read stopped before it reached a verdict (its
 	 * deadline tripped, or the stream ended without an `outcome` frame). The

@@ -191,11 +191,10 @@ const FAMILY_CHILDREN_DATA: BrowseFamilyChildren = (() => {
 	return { family, children: mapProductFamilyChildren(family) }
 })()
 
-function renderHost(options: { q?: string; p?: string; tag?: string } = {}) {
+function renderHost(options: { q?: string; p?: string } = {}) {
 	return renderToStaticMarkup(
 		createElement(BrowseIndexHost, {
 			q: options.q ?? 'ceramic',
-			tag: options.tag,
 			p: options.p,
 			onNavigate: () => {},
 			onNavigateFeatured: () => {},
@@ -527,7 +526,7 @@ describe('BrowseIndexHost facet pills', () => {
 		expect(facetsEnabled).toBe(true)
 		expect(facetsQueryArg).toBe('ceramic')
 
-		// No term and no tag: the idle index, not a results state — no probe.
+		// No term: the idle index, not a results state — no probe.
 		renderHost({ q: '' })
 		expect(facetsEnabled).toBe(false)
 	})
@@ -541,7 +540,7 @@ describe('BrowseIndexHost facet pills', () => {
 		}
 		facetsData = SUGGESTED
 
-		const markup = renderHost({ tag: 'pottery' })
+		const markup = renderHost({ q: 'pottery' })
 
 		expect(markup).toContain('data-testid="widget-tag-badge-pottery"')
 		expect(markup).toContain('data-testid="widget-tag-badge-ceramics"')
@@ -664,7 +663,7 @@ describe('BrowseIndexHost search field', () => {
 	}
 
 	test('the nav band renders exactly once in every state', () => {
-		for (const state of [{ q: '' }, { q: 'ceramic' }, { q: '', p: 'ceramic-ball' }, { q: '', tag: 'pottery' }]) {
+		for (const state of [{ q: '' }, { q: 'ceramic' }, { q: '', p: 'ceramic-ball' }, { q: 'pottery' }]) {
 			const markup = renderHost(state)
 			expect(markup.split('data-testid="widget-browse-nav"').length - 1).toBe(1)
 			expect(markup.split('data-slot="search-slot"').length - 1).toBe(1)

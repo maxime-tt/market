@@ -98,11 +98,10 @@ mock.module('@ui/browse/product-card', () => ({
 
 import { BrowseIndexHost, type BrowseSearchState } from './BrowseIndexHost'
 
-function renderHost(search: { q: string; tag?: string; p?: string }, onNavigate: (state: BrowseSearchState) => void = () => {}) {
+function renderHost(search: { q: string; p?: string }, onNavigate: (state: BrowseSearchState) => void = () => {}) {
 	return renderToStaticMarkup(
 		createElement(BrowseIndexHost, {
 			q: search.q,
-			tag: search.tag,
 			p: search.p,
 			onNavigate,
 			onNavigateFeatured: () => {},
@@ -115,7 +114,7 @@ beforeEach(() => {
 })
 
 describe('BrowseIndexHost category-row card', () => {
-	test('selecting a row card writes only the product — no term, no tag', () => {
+	test('selecting a row card writes only the product — no term', () => {
 		const navigated: BrowseSearchState[] = []
 		renderHost({ q: '' }, (state) => navigated.push(state))
 
@@ -126,8 +125,10 @@ describe('BrowseIndexHost category-row card', () => {
 		expect(navigated).toHaveLength(1)
 		expect(navigated[0]?.q).toBe('')
 		expect(navigated[0]?.p).toBe('ceramic-ball')
-		// The row's category must NOT ride along: a tag flips the page to results.
-		expect(navigated[0]?.tag).toBeUndefined()
+		// The row's category must NOT ride along: a term would flip the page to
+		// results. Since the keyword change there is no tag to leak, so the term
+		// staying empty IS the assertion.
+		expect(navigated[0]?.q).toBe('')
 	})
 
 	test('the resulting state keeps the home as the split master, with exactly one panel', () => {

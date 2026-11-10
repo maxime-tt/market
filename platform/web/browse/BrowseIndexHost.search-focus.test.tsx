@@ -149,7 +149,6 @@ function Harness() {
 	const [q, setQ] = useState('')
 	return createElement(BrowseIndexHost, {
 		q,
-		tag: undefined,
 		p: undefined,
 		onNavigate: (next: { q: string }) => setQ(next.q),
 		onNavigateFeatured: () => {},

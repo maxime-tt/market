@@ -12,6 +12,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import type { BrowseProduct } from './browseProductMap'
 import {
 	clampRabbitHoleLimit,
 	rabbitholeSearch,
@@ -889,5 +890,154 @@ describe('rabbitholeSearch — progressive delivery', () => {
 		expect(RABBITHOLE_DEFAULT_TIMEOUT_MS).toBe(RABBITHOLE_SERVICE_TOTAL_DEADLINE_MS + RABBITHOLE_TIMEOUT_HEADROOM_MS)
 		expect(RABBITHOLE_DEFAULT_TIMEOUT_MS).toBeGreaterThan(RABBITHOLE_SERVICE_TOTAL_DEADLINE_MS)
 		expect(RABBITHOLE_DEFAULT_TIMEOUT_MS).toBe(15_000)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// The index frame paints the grid — before any relay event arrives
+// ---------------------------------------------------------------------------
+
+/** A `search`-frame hit as the service states it: the slim index document, no tags. */
+function indexHit(id: string, title: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+	return {
+		coordinate: `30402:${PUBKEY}:${id}`,
+		event_id: id,
+		title,
+		pubkey: PUBKEY,
+		price_amount: 2500,
+		currency: 'SATS',
+		category_tags: ['pottery'],
+		relays_seen: ['wss://nos.lol'],
+		has_image: true,
+		created_at: 1_700_000_000,
+		...overrides,
+	}
+}
+
+describe('rabbitholeSearch — the index frame paints the grid', () => {
+	test('hands the search frame’s products over BEFORE an event frame is read', async () => {
+		// The gate is the assertion: the outcome frame does not exist on the wire
+		// until the callback has already received the three index rows, so a
+		// client that waited for the relay events (or for the verdict) cannot
+		// pass this — it hangs and then trips its own deadline.
+		const stream = gatedResponse(
+			[
+				JSON.stringify({
+					type: 'search',
+					candidateCount: 3,
+					hits: [indexHit('e1', 'Index Mug'), indexHit('e2', 'Index Bowl'), indexHit('e3', 'Index Plate')],
+				}),
+			],
+			[
+				JSON.stringify({ type: 'event', event: productEvent('e1', 'Index Mug') }),
+				JSON.stringify({ type: 'event', event: productEvent('e2', 'Index Bowl') }),
+				JSON.stringify({ type: 'event', event: productEvent('e3', 'Index Plate') }),
+				outcomeFrame('complete', ['wss://nos.lol'], []),
+			],
+		)
+
+		const snapshots: Array<{ ids: string[]; eventsDelivered: number; relaysSeen: number; complete: boolean }> = []
+		const paintedBeforeAnyEvent: string[] = []
+
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(stream.response),
+				onProducts: (products, stats) => {
+					snapshots.push({
+						ids: products.map((product) => product.id),
+						eventsDelivered: stats.eventsDelivered,
+						relaysSeen: stats.relaysSeen.length,
+						complete: stats.complete,
+					})
+					if (products.length === 3 && paintedBeforeAnyEvent.length === 0) {
+						paintedBeforeAnyEvent.push(...products.map((product) => product.id))
+						stream.open()
+					}
+				},
+			},
+		)
+
+		// Three cards, painted from the index alone: no event had been read yet.
+		expect(paintedBeforeAnyEvent).toEqual(['e1', 'e2', 'e3'])
+		const first = snapshots[0]!
+		expect(first.eventsDelivered).toBe(0)
+		expect(first.relaysSeen).toBe(0)
+		// A snapshot is still never a verdict, by type and by value.
+		expect(snapshots.every((snapshot) => snapshot.complete === false)).toBe(true)
+		expect(snapshots.every((snapshot) => snapshot.ids.length === 3)).toBe(true)
+
+		// The relay events ENRICH those same rows rather than replacing the set:
+		// one card each, in the index's own order.
+		expect(result.products.map((product) => product.id)).toEqual(['e1', 'e2', 'e3'])
+	})
+
+	test('a frame-painted card and the settled card agree on everything the index states', async () => {
+		// The hard requirement, stated as an assertion: one mapper, so the two
+		// paintings of the same listing cannot disagree on the fields the index
+		// carries. Only what the slim hit cannot know may differ — and it may
+		// only FILL IN, never retract.
+		const stream = gatedResponse(
+			[JSON.stringify({ type: 'search', candidateCount: 1, hits: [indexHit('e1', 'Ceramic Mug')] })],
+			[
+				JSON.stringify({ type: 'event', event: productEvent('e1', 'Ceramic Mug') }),
+				outcomeFrame('complete', ['wss://nos.lol'], []),
+			],
+		)
+
+		const painted: BrowseProduct[] = []
+		const result = await rabbitholeSearch(
+			{ q: 'mug' },
+			{
+				fetchImpl: fetchReturning(stream.response),
+				onProducts: (products) => {
+					if (products.length > 0 && painted.length === 0) {
+						painted.push({ ...products[0]! })
+						stream.open()
+					}
+				},
+			},
+		)
+
+		const firstPaint = painted[0]!
+		const settled = result.products[0]!
+		// Every field the hit states, identical on both cards.
+		expect(firstPaint).toMatchObject({
+			id: settled.id,
+			eventId: settled.eventId,
+			pubkey: settled.pubkey,
+			title: settled.title,
+			price: settled.price,
+			currency: settled.currency,
+			categories: settled.categories,
+			relays: settled.relays,
+		})
+		expect(firstPaint).toMatchObject({ id: 'e1', eventId: 'e1', title: 'Ceramic Mug', price: 2500, currency: 'SATS', categories: ['pottery'] })
+		// What the index does not carry is ABSENT, not invented — the settled
+		// card adds it when the event lands.
+		expect(firstPaint?.stock).toBeUndefined()
+		expect(firstPaint?.location).toBeUndefined()
+		expect(settled.stock).toBe('3')
+	})
+
+	test('a caller that does not opt in sees the settled result unchanged — hits alone are not products', async () => {
+		// Requirement: the resolved shape stays what it was for a caller that
+		// never asked to paint early. `ghost` is an index hit whose event never
+		// arrives; it may be PAINTED, but it is not a product of a settled read.
+		const lines = [
+			JSON.stringify({ type: 'search', candidateCount: 2, hits: [indexHit('e1', 'Index Mug'), indexHit('ghost', 'Ghost Mug')] }),
+			JSON.stringify({ type: 'event', event: productEvent('e1', 'Index Mug') }),
+			outcomeFrame('complete', ['wss://nos.lol'], []),
+		]
+
+		const optedOut = await rabbitholeSearch({ q: 'mug' }, { fetchImpl: fetchReturning(ndjsonResponse(lines)) })
+		expect(optedOut.products.map((product) => product.id)).toEqual(['e1'])
+
+		// …while the caller that DID opt in keeps the card it was shown, so the
+		// grid does not lose a listing at the moment the read settles.
+		const optedIn = await rabbitholeSearch({ q: 'mug' }, { fetchImpl: fetchReturning(ndjsonResponse(lines)), onProducts: () => {} })
+		expect(optedIn.products.map((product) => product.id)).toEqual(['e1', 'ghost'])
+		// The verdict itself is untouched by the opt-in.
+		expect(optedIn.eose).toEqual(optedOut.eose)
 	})
 })

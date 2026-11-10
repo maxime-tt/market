@@ -907,7 +907,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void
 describe('progressive browse search', () => {
 	test('publishes products while the read is still running, then the settled result replaces them', async () => {
 		configureBrowseSearch({ provider: 'rabbithole' })
-		const key = browseSearchQueryOptions('ceramic mug', undefined, 100).queryKey
+		const key = browseSearchQueryOptions('ceramic mug', 100).queryKey
 
 		const encoder = new TextEncoder()
 		let openGate: () => void = () => {}
@@ -945,10 +945,95 @@ describe('progressive browse search', () => {
 		expect(result.incomplete).toBeUndefined()
 	})
 
+	/**
+	 * The index frame's rows, readable BEFORE the first relay event exists.
+	 *
+	 * The snapshot store is keyed on the query and only lists what the read has
+	 * handed over; a store that treats "no event yet" as "nothing to say" would
+	 * hide the index's paint and leave the grid empty until the relays answered —
+	 * the gating this removes.
+	 */
+	test('publishes the index frame’s products into the snapshot, before any event arrives', async () => {
+		configureBrowseSearch({ provider: 'rabbithole' })
+		const key = browseSearchQueryOptions('ceramic mug', 100).queryKey
+
+		const encoder = new TextEncoder()
+		let openGate: () => void = () => {}
+		const gate = new Promise<void>((resolve) => {
+			openGate = resolve
+		})
+		const body = new ReadableStream<Uint8Array>({
+			async start(controller) {
+				// The `search` frame, alone: the index's slim hits, no tags.
+				controller.enqueue(
+					encoder.encode(
+						`${JSON.stringify({
+							type: 'search',
+							candidateCount: 2,
+							hits: [
+								{
+									coordinate: `30402:${'c'.repeat(64)}:rh-mug`,
+									event_id: 'rh-mug',
+									title: 'Ceramic Mug',
+									pubkey: 'c'.repeat(64),
+									price_amount: 999,
+									currency: 'SATS',
+									category_tags: ['pottery'],
+									relays_seen: ['wss://a'],
+									has_image: true,
+									created_at: 1_700_000_000,
+								},
+								{
+									coordinate: `30402:${'c'.repeat(64)}:still-coming`,
+									event_id: 'still-coming',
+									title: 'Second Mug',
+									pubkey: 'c'.repeat(64),
+									price_amount: 1200,
+									currency: 'SATS',
+									category_tags: [],
+									relays_seen: ['wss://a'],
+									has_image: false,
+									created_at: 1_700_000_000,
+								},
+							],
+						})}\n`,
+					),
+				)
+				// Everything else waits for the test: the snapshot must be
+				// readable while the read is still open on the wire.
+				await gate
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'event', event: rhEvent })}\n`))
+				controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'relay', relay: 'wss://a', state: 'answered' })}\n`))
+				controller.enqueue(encoder.encode(`${rhOutcome('complete', ['wss://a'], [])}\n`))
+				controller.close()
+			},
+		})
+		stubFetch(async () => new Response(body))
+
+		const pending = runQueryFn('ceramic mug')
+		await waitFor(() => (getBrowseSearchProgress(key)?.products.length ?? 0) === 2)
+
+		const snapshot = getBrowseSearchProgress(key)
+		// The cards are the index's own rows, mapped through the same mapper.
+		expect(snapshot?.products.map((product) => product.id)).toEqual(['rh-mug', 'still-coming'])
+		expect(snapshot?.products[0]).toMatchObject({ title: 'Ceramic Mug', price: 999, currency: 'SATS', categories: ['pottery'] })
+		// Nothing from the relays has arrived — the snapshot says so honestly…
+		expect(snapshot?.eventsDelivered).toBe(0)
+		// …and it is still never a verdict.
+		expect(snapshot?.complete).toBe(false)
+
+		openGate()
+		const result = await pending
+		// The settled read keeps the painted rows and enriches the one whose
+		// event arrived; the other stays as the index painted it.
+		expect(result.products.map((product) => product.id)).toEqual(['rh-mug', 'still-coming'])
+		expect(result.incomplete).toBeUndefined()
+	})
+
 	test('a snapshot is scoped to its own query key — another search never sees it', async () => {
 		configureBrowseSearch({ provider: 'rabbithole' })
-		const mugKey = browseSearchQueryOptions('ceramic mug', undefined, 100).queryKey
-		const teaKey = browseSearchQueryOptions('tea pot', undefined, 100).queryKey
+		const mugKey = browseSearchQueryOptions('ceramic mug', 100).queryKey
+		const teaKey = browseSearchQueryOptions('tea pot', 100).queryKey
 
 		stubFetch(async () =>
 			ndjsonResponse([JSON.stringify({ type: 'search', candidateCount: 1, hits: [] }), JSON.stringify({ type: 'event', event: rhEvent }), rhOutcome('complete', [], [])]),

@@ -85,11 +85,10 @@ mock.module('@ui/browse/split-view', () => ({
 
 import { BrowseIndexHost, type BrowseSearchState } from './BrowseIndexHost'
 
-function renderClose(options: { q?: string; tag?: string; p?: string; onNavigate: (search: BrowseSearchState) => void }) {
+function renderClose(options: { q?: string; p?: string; onNavigate: (search: BrowseSearchState) => void }) {
 	return renderToStaticMarkup(
 		createElement(BrowseIndexHost, {
 			q: options.q ?? 'ceramic',
-			tag: options.tag,
 			p: options.p ?? 'ceramic-ball',
 			onNavigate: options.onNavigate,
 			onNavigateFeatured: () => {},
