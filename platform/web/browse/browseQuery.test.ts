@@ -316,8 +316,8 @@ function rhOutcome(status: 'complete' | 'partial', answered: string[], failed: s
 const realFetch = globalThis.fetch
 let fetchStub: typeof fetch | null = null
 
-async function runQueryFn(query: string, tag?: string, signal?: AbortSignal): Promise<BrowseSearchResult> {
-	const options = browseSearchQueryOptions(query, tag, 100)
+async function runQueryFn(query: string, signal?: AbortSignal): Promise<BrowseSearchResult> {
+	const options = browseSearchQueryOptions(query, 100)
 	return await options.queryFn!({ signal: signal ?? new AbortController().signal } as Parameters<NonNullable<typeof options.queryFn>>[0])
 }
 
@@ -476,11 +476,15 @@ describe('browse search provider switch', () => {
 			return ndjsonResponse([])
 		})
 
-		await expect(runQueryFn('ceramic mug', undefined, controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+		await expect(runQueryFn('ceramic mug', controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
 		expect(localStreamCalls).toBe(0) // an abort is not a fallback
 	})
 
-	test('the tag narrows the rabbithole request to a category filter', async () => {
+	test('a category browses as a KEYWORD — the term is sent, and no filter is', async () => {
+		// The owner's ruling: `See all →` writes its value as the term, not as a
+		// `category_tags` filter. The service searches `all_tags` alongside the
+		// title and the body, so the category's listings are still reached — and
+		// relevance ranking orders what the exact-match filter used to narrow.
 		configureBrowseSearch({ provider: 'rabbithole' })
 		let sentBody: Record<string, unknown> | null = null
 		stubFetch(async (_url, init) => {
@@ -488,8 +492,9 @@ describe('browse search provider switch', () => {
 			return ndjsonResponse([JSON.stringify({ type: 'search', candidateCount: 0, hits: [] }), rhOutcome('complete', [], [])])
 		})
 
-		await runQueryFn('mug', 'pottery')
-		expect(sentBody).toMatchObject({ q: 'mug', filters: ['category_tags = "pottery"'] })
+		await runQueryFn('pottery')
+		expect(sentBody).toMatchObject({ q: 'pottery' })
+		expect(sentBody).not.toHaveProperty('filters')
 	})
 
 	test('the local stream collapses a family to ONE row, preferring the parent', async () => {
@@ -812,28 +817,8 @@ describe('browse family children read', () => {
 // Filters and facets — the tag-only browse and the unfiltered facet probe
 // ---------------------------------------------------------------------------
 
-describe('browse filters and facets', () => {
-	test('a tag-only browse is a filter-only request the provider answers', async () => {
-		configureBrowseSearch({ provider: 'rabbithole' })
-		let sentBody: Record<string, unknown> | null = null
-		stubFetch(async (_url, init) => {
-			sentBody = JSON.parse((init as RequestInit).body as string)
-			return ndjsonResponse([
-				JSON.stringify({ type: 'search', candidateCount: 1, hits: [] }),
-				JSON.stringify({ type: 'event', event: rhEvent }),
-				rhOutcome('complete', ['wss://a'], []),
-			])
-		})
-
-		// No term — the category row's `See all →`. The index answers filters
-		// alone, so this is no longer special-cased to the local stream.
-		const result = await runQueryFn('', 'pottery')
-		expect(sentBody).toMatchObject({ q: '', filters: ['category_tags = "pottery"'] })
-		expect(result.products.map((p) => p.id)).toEqual(['rh-mug'])
-		expect(localStreamCalls).toBe(0)
-	})
-
-	test("a facet's own filter is sent verbatim, not re-derived from the tag", async () => {
+describe('browse facets — a term-only read, with no filter path at all', () => {
+	test('an empty term with no open product reads NOTHING — the state cannot exist', async () => {
 		configureBrowseSearch({ provider: 'rabbithole' })
 		let sentBody: Record<string, unknown> | null = null
 		stubFetch(async (_url, init) => {
@@ -841,10 +826,26 @@ describe('browse filters and facets', () => {
 			return ndjsonResponse([JSON.stringify({ type: 'search', candidateCount: 0, hits: [] }), rhOutcome('complete', [], [])])
 		})
 
-		const options = browseSearchQueryOptions('', 'EUR', 100, undefined, 'currency = "EUR"')
-		await options.queryFn!({ signal: new AbortController().signal } as Parameters<NonNullable<typeof options.queryFn>>[0])
+		// There is no tag-only browse any more: a category writes its value as the
+		// TERM. So `q=''` with nothing else is the idle state, and it must not
+		// reach the provider at all — an empty term is exactly what let the facet
+		// probe answer over the whole index and put Health/Pharma on a Bitcoin page.
+		const result = await runQueryFn('')
+		expect(sentBody).toBeNull()
+		expect(result.products).toEqual([])
+	})
 
-		expect(sentBody).toMatchObject({ q: '', filters: ['currency = "EUR"'] })
+	test('no request ever carries a filter — the read is the term alone', async () => {
+		configureBrowseSearch({ provider: 'rabbithole' })
+		let sentBody: Record<string, unknown> | null = null
+		stubFetch(async (_url, init) => {
+			sentBody = JSON.parse((init as RequestInit).body as string)
+			return ndjsonResponse([JSON.stringify({ type: 'search', candidateCount: 0, hits: [] }), rhOutcome('complete', [], [])])
+		})
+
+		await runQueryFn('pottery')
+		expect(sentBody).toMatchObject({ q: 'pottery' })
+		expect(sentBody).not.toHaveProperty('filters')
 	})
 
 	test('the facet probe reads the unfiltered, index-only suggestion list', async () => {

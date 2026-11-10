@@ -60,7 +60,7 @@ export type { BrowseProduct, BrowseProductDetail, BrowseSearchResult }
 export const browseKeys = {
 	all: ['browse'] as const,
 	/** Stream filter for kind-30402 products matching a query/tag (per provider). */
-	search: (filters: { query: string; tag?: string; filter?: string; limit?: number; provider: BrowseSearchProvider }) =>
+	search: (filters: { query: string; limit?: number; provider: BrowseSearchProvider }) =>
 		[...browseKeys.all, 'search', filters] as const,
 	/** The unfiltered facet probe: the term's own market-scoped facet list. */
 	facets: (filters: { query: string; provider: BrowseSearchProvider }) => [...browseKeys.all, 'facets', filters] as const,
@@ -236,12 +236,12 @@ export function useBrowseSearchProgress(queryKey: readonly unknown[]): BrowseSea
  * v1 reads a bounded kind-30402 set and matches the query locally — the interim
  * shape the plan records (`search-v2-fast-index` owns its replacement).
  */
-async function searchLocal(query: string, tag: string | undefined, limit: number): Promise<BrowseSearchResult> {
+async function searchLocal(query: string, limit: number): Promise<BrowseSearchResult> {
 	const ctx = getReadContext()
+	// No tag filter: the query is the whole read. The index's own `all_tags` is
+	// searched by the term, so a tag the seller applied is reachable as a keyword —
+	// and a filter would only narrow what relevance ranking can already order.
 	const filter: EventFilter = { kinds: [30402], limit }
-	if (tag) {
-		filter['#t'] = [tag]
-	}
 
 	const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
 	const matched: NostrEventLike[] = []
@@ -283,42 +283,39 @@ async function searchLocal(query: string, tag: string | undefined, limit: number
  * switch; a RabbitHole `partial` verdict keeps its failed relays in `pending`
  * (the relay-failure state) and is never flattened into a plain result.
  *
- * The read is enabled by a query, a tag, or an open product:
- * - `tag` alone is the category row's `See all →` (browse one category);
+ * The read is enabled by a query or an open product:
+ * - the term is the whole read. The category row's `See all →` and a facet pill
+ *   both navigate to `?q=<value>`, so a tag is browsed as a keyword rather than
+ *   as an index filter. The service searches `all_tags` alongside the title and
+ *   the body, so a seller's tag is still reachable — and relevance ranking orders
+ *   what a filter would have narrowed. Measured before the change: `q=bitcoin`
+ *   finds 1683 against the filter's 1139, `q=testosterone` 671 against 481.
  * - `openProductId` alone is `?p=<slug>` with nothing else on the URL — the
  *   click-through contract's own deep link, and the state a strip/row click
  *   lands in, where the panel's master pane is the loaded set.
- * With none of the three there is nothing to read, so the query stays off.
- *
- * `filter` is a facet's own filter string (from the search frame's `suggested`),
- * sent verbatim in place of the tag-derived `category_tags = "…"` — so a pill
- * sends the exact filter the service proposed for it, not a re-derivation.
+ * With neither there is nothing to read, so the query stays off.
  */
-export function browseSearchQueryOptions(query: string, tag?: string, limit = 100, openProductId?: string, filter?: string) {
-	const queryKey = browseKeys.search({ query, tag, filter, limit, provider: getBrowseSearchProvider() })
+export function browseSearchQueryOptions(query: string, limit = 100, openProductId?: string) {
+	const queryKey = browseKeys.search({ query, limit, provider: getBrowseSearchProvider() })
 	const progressStoreKey = JSON.stringify(queryKey)
 	return queryOptions({
 		queryKey,
 		queryFn: async (context) => {
 			const term = query.trim()
-			// Nothing to read without a term, a tag, a filter, or an open product.
-			if (!term && !tag && !filter && !openProductId) return { products: [], eose: [], pending: [] }
+			// Nothing to read without a term or an open product.
+			if (!term && !openProductId) return { products: [], eose: [], pending: [] }
 
-			// The search service indexes queries *and* filters: a tag-only browse
-			// (the category row's `See all →`, which carries no term) is a
-			// filter-only request the index answers, so it goes to the provider
-			// too rather than being special-cased to the local stream.
-			if ((term || tag || filter) && getBrowseSearchProvider() === 'rabbithole') {
+			if (term && getBrowseSearchProvider() === 'rabbithole') {
 				// A fresh read for this key starts from nothing: the previous
 				// snapshot belonged to the previous read and must not linger into
 				// this one (a retry after a timeout, typically).
 				publishBrowseSearchProgress(progressStoreKey, EMPTY_PROGRESS)
 				try {
-					// The facet's own filter when one is given, else the tag as the
-					// category filter (the `#t` source).
-					const filters = filter ? [filter] : tag ? [`category_tags = "${tag}"`] : undefined
+					// The term is the whole read. No filter: a tag browsed from a row or
+					// a pill arrives as the keyword, and the service's relevance
+					// ranking orders the result set.
 					return await rabbitholeSearch(
-						{ q: term, limit, filters },
+						{ q: term, limit },
 						{
 							signal: context.signal,
 							baseUrl: getBrowseSearchBaseUrl(),
@@ -370,9 +367,9 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
 				}
 			}
 
-			return searchLocal(query, tag, limit)
+			return searchLocal(query, limit)
 		},
-		enabled: Boolean(query?.trim()) || Boolean(tag) || Boolean(filter) || Boolean(openProductId),
+		enabled: Boolean(query?.trim()) || Boolean(openProductId),
 	})
 }
 
@@ -383,8 +380,8 @@ export function browseSearchQueryOptions(query: string, tag?: string, limit = 10
  * `progress` is `null` until the provider has delivered something and is only
  * meaningful while `data` is absent — `data` is the verdict and always wins.
  */
-export function useBrowseSearch(query: string, tag?: string, limit?: number, openProductId?: string, filter?: string) {
-	const options = browseSearchQueryOptions(query, tag, limit, openProductId, filter)
+export function useBrowseSearch(query: string, limit?: number, openProductId?: string) {
+	const options = browseSearchQueryOptions(query, limit, openProductId)
 	const queryResult = useQuery(options)
 	const progress = useBrowseSearchProgress(options.queryKey)
 	return { ...queryResult, progress }

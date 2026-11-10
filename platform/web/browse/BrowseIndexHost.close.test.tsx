@@ -110,16 +110,16 @@ describe('BrowseIndexHost panel close', () => {
 		expect(panel?.props.onClose).toBeFunction()
 		panel?.props.onClose?.()
 
-		expect(navigated).toEqual([{ q: 'ceramic', p: undefined, tag: undefined }])
+		expect(navigated).toEqual([{ q: 'ceramic', p: undefined }])
 	})
 
-	test('the close keeps the active tag, so the category browse stays put', () => {
+	test('the close keeps the active term, so the category browse stays put', () => {
 		const navigated: BrowseSearchState[] = []
-		renderClose({ q: '', tag: 'pottery', onNavigate: (search) => navigated.push(search) })
+		renderClose({ q: 'pottery', onNavigate: (search) => navigated.push(search) })
 
 		const panel = detailSlot as ReactElement<{ onClose?: () => void }> | null
 		panel?.props.onClose?.()
 
-		expect(navigated).toEqual([{ q: '', p: undefined, tag: 'pottery' }])
+		expect(navigated).toEqual([{ q: 'pottery', p: undefined }])
 	})
 })

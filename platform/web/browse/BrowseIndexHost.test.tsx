@@ -357,8 +357,9 @@ describe('BrowseIndexHost split view', () => {
 		expect(markup.split('data-slot="product-detail-panel"').length - 1).toBe(1)
 	})
 
-	test('a tag-only browse keeps the results base state, with the panel beside the grid', () => {
-		const markup = renderHost({ q: '', tag: 'pottery', p: 'ceramic-ball' })
+	test('a category browse keeps the results base state, with the panel beside the grid', () => {
+		// A category is the TERM now, so this is an ordinary results state.
+		const markup = renderHost({ q: 'pottery', p: 'ceramic-ball' })
 
 		expect(markup).not.toContain('data-testid="widget-browse-idle-ctas"')
 		expect(markup).toContain('data-slot="split-master"')
@@ -366,7 +367,7 @@ describe('BrowseIndexHost split view', () => {
 		expect(markup).toContain('data-testid="widget-product-card-ceramic-ball"')
 	})
 
-	test('renders the idle screen (no panel) when there is no term, no tag and no open product', () => {
+	test('renders the idle screen (no panel) when there is no term and no open product', () => {
 		const markup = renderHost({ q: '', p: undefined })
 		expect(markup).toContain('data-testid="widget-browse-idle-ctas"')
 		expect(markup).not.toContain('data-slot="split-master"')

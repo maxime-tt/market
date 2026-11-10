@@ -2,7 +2,7 @@
  * platform/web/browse/BrowseIndexHost.tsx — The Browse index host.
  *
  * Wires the Browse shell to real reads (relay status, search/results stream,
- * tag facets, product detail). Renders all Phase-2 states:
+ * facets, product detail). Renders all Phase-2 states:
  * - Idle: full-bleed wall strips above and below the hero
  * - Search results: grid with skeleton shimmer, empty marketplace, relay indicator
  * - Relay error: expanding per-relay detail popover; dead-search error panel
@@ -17,7 +17,7 @@
  *   marker, and never gated on each other.
  * - Every product surface is a real link: results cards, category-row cards and
  *   strip tiles carry the product's deep link (`?p=<id>` with the current
- *   `q`/`tag`), and every seller name links to `/profile/<pubkey>`. A plain
+ *   `q`), and every seller name links to `/profile/<pubkey>`. A plain
  *   left click is intercepted and opens the panel in place; modifier-clicks and
  *   middle-click behave as normal links.
  *
@@ -63,7 +63,6 @@ import { npubEncode } from 'nostr-tools/nip19'
 /** The Browse URL state the host asks the route to write back. */
 export interface BrowseSearchState {
 	q: string
-	tag?: string
 	p?: string
 }
 
@@ -73,7 +72,6 @@ export interface BrowseSearchState {
 
 interface BrowseIndexHostProps {
 	q: string
-	tag: string | undefined
 	/** The open product (the listing's kind-30402 `d` tag) from the route's `?p=`. */
 	p: string | undefined
 	onNavigate: (search: BrowseSearchState) => void
@@ -297,7 +295,7 @@ function BrowseResultCard({
  *
  * Two base states — the home, or a search's results — and one open product
  * (`?p=`) that never changes which of them you are on:
- * - Home (no term, no tag) → BrowseIdle: hero with measured facts, wall strips
+ * - Home (no term) → BrowseIdle: hero with measured facts, wall strips
  *   from the index feed, and the browse-by-category rows below them; the
  *   `Browse products` CTA scrolls to those rows
  * - Home + `?p=` → the same home as the split view's master pane, with the
@@ -313,16 +311,25 @@ function BrowseResultCard({
  * clears it and returns whichever base state was underneath.
  *
  * Two reads, one source each: the grid and the panel read the search stream
- * (`useBrowseSearch`, also enabled by a tag alone — the category row's
- * `See all →` — or by an open product alone, a bare `?p=` deep link); the home
- * reads the bounded index feed (`useBrowseIndexFeed`). Relay data comes from
- * the read seam (ctx.stream caught-up event), never fabricated.
+ * (`useBrowseSearch`, enabled by a term or by an open product alone — a bare
+ * `?p=` deep link); the home reads the bounded index feed
+ * (`useBrowseIndexFeed`). Relay data comes from the read seam (ctx.stream
+ * caught-up event), never fabricated.
+ *
+ * THERE IS NO TAG FILTER. A category row's `See all →` and a facet pill both
+ * write the value as the **keyword**, so the read is always a term. The service
+ * searches `all_tags` alongside the title and the body, so a seller's tag is
+ * still reachable as a keyword — and relevance ranking orders what an index
+ * filter used to narrow. Two things this removes: the empty-term state (which
+ * was never a sentence, and which let the facet probe answer over the whole
+ * index — the Health/Pharma pills on a Bitcoin page), and the second field a
+ * tag could be suggested from.
  *
  * The facet pills are the service's own `suggested` list — real market counts —
  * read through `useBrowseFacets`, the unfiltered index probe, so selecting one
  * of its pills cannot rotate the set it was chosen from.
  */
-export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
+export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 	const [facetsExpanded, setFacetsExpanded] = useState(false)
 	// The open family's selected option, by the variation's `d` tag. Held here
@@ -341,14 +348,12 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 
 	const { user } = useAuth()
 
-	// The facet probe: the same term with NO filter, so the pill list cannot
-	// rotate as the visitor selects one of its pills — and, because it is
-	// already loaded before a pill is clicked, the click's own filter string is
-	// known on the very first request rather than after a round trip.
-	const facetsQuery = useBrowseFacets(q, Boolean(q.trim()) || Boolean(tag))
-	const activeFilter = tag ? facetsQuery.data?.find((facet) => facet.value === tag)?.filter : undefined
+	// The facet probe: the term with NO filter, so the pill list cannot rotate as
+	// the visitor selects one of its pills. It is now always scoped, because
+	// there is no empty-term state for it to run against the whole index.
+	const facetsQuery = useBrowseFacets(q, Boolean(q.trim()))
 
-	const searchQuery = useBrowseSearch(q, tag, 100, p, activeFilter)
+	const searchQuery = useBrowseSearch(q, 100, p)
 	const result = searchQuery.data ?? null
 	/**
 	 * What a still-running read has delivered so far. The settled result always
@@ -437,9 +442,9 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	const accountInitial = user?.pubkey ? user.pubkey.slice(0, 2).toUpperCase() : undefined
 
 	/**
-	 * A product's real deep link on this surface: the route's own `?q=`/`?tag=`
-	 * plus `p=<id>`. Passing no id is the state a click on the open card writes
-	 * (the panel closes), so that card's href is truthful too.
+	 * A product's real deep link on this surface: the route's own `?q=` plus
+	 * `p=<id>`. Passing no id is the state a click on the open card writes (the
+	 * panel closes), so that card's href is truthful too.
 	 *
 	 * The anchors use this href, so hover previews, middle-click and
 	 * open-in-new-tab land on exactly the location a plain click shows.
@@ -447,7 +452,6 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	const browseHref = (productId?: string): string => {
 		const params = new URLSearchParams()
 		if (q) params.set('q', q)
-		if (tag) params.set('tag', tag)
 		if (productId) params.set('p', productId)
 		const search = params.toString()
 		return search ? `/?${search}` : '/'
@@ -464,7 +468,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	 */
 	const handleSearchChange = (value: string) => {
 		focusTarget.current = value.trim().length === 0 && !scrolled ? 'hero' : null
-		onNavigate({ q: value, p: undefined, tag })
+		onNavigate({ q: value, p: undefined })
 	}
 
 	/**
@@ -477,39 +481,40 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	 */
 	const handleHeroSearchChange = (value: string) => {
 		focusTarget.current = value.trim().length > 0 ? 'nav' : null
-		onNavigate({ q: value, p: undefined, tag })
+		onNavigate({ q: value, p: undefined })
 	}
 
 	const handleSearchGo = () => {
-		onNavigate({ q, p: undefined, tag })
+		onNavigate({ q, p: undefined })
 	}
 
 	const handleCardSelect = (id: string) => {
 		// The open card's own click is the panel's close affordance (the selected
 		// card reads "· open"); any other card opens that product.
-		onNavigate({ q, p: p === id ? undefined : id, tag })
+		onNavigate({ q, p: p === id ? undefined : id })
 	}
 
 	/**
-	 * A category row: its `See all →` browses that one category (a tag-only
-	 * read — no term is invented for it), and its cards open the product in the
-	 * split view scoped to the row's category, so the pane's master list is the
-	 * row the visitor was looking at.
+	 * A category row: its `See all →` browses that category **as a keyword**.
+	 * The value is the term, not a tag filter — the service searches `all_tags`
+	 * alongside the title and the body, so the category's listings are reached
+	 * by relevance rather than by an exact-match filter that could only narrow
+	 * them. Its cards open the product in the split view in place (below).
 	 */
 	const handleCategorySeeAll = (category: string) => {
-		onNavigate({ q: '', p: undefined, tag: category })
+		onNavigate({ q: category, p: undefined })
 	}
 
 	/**
 	 * A category row's card opens the product **in place**, exactly like a wall
-	 * or strip tile: the state it writes is the product alone (`q` empty, no
-	 * tag), so the home stays the split's master and the panel opens beside it.
+	 * or strip tile: the state it writes is the product alone (`q` empty), so the
+	 * home stays the split's master and the panel opens beside it.
 	 * Including the row's category here was the defect — that state left the
 	 * home and routed to the category's results, which is what `See all →`
 	 * alone does.
 	 */
 	const handleCategoryCardSelect = (id: string) => {
-		onNavigate({ q: '', p: id, tag: undefined })
+		onNavigate({ q: '', p: id })
 	}
 
 	/** The idle wall / hero CTA: the category section is what "Browse products" names. */
@@ -533,11 +538,11 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	useEffect(() => {
 		if (!p) return
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') onNavigate({ q, p: undefined, tag })
+			if (event.key === 'Escape') onNavigate({ q, p: undefined })
 		}
 		window.addEventListener('keydown', onKeyDown)
 		return () => window.removeEventListener('keydown', onKeyDown)
-	}, [p, q, tag, onNavigate])
+	}, [p, q, onNavigate])
 
 	// Relay state — the settled read's eose/pending arrays, or the running
 	// read's own relay frames while it is still going. Both are the same
@@ -565,13 +570,13 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	const EMPTY_HINTS = [{ label: 'local index empty' }]
 
 	/**
-	 * The idle index: no term and no tag. The open product (`?p=`) is **not**
-	 * part of this: selecting a wall/strip/row tile keeps the home page and
-	 * opens its panel beside it, and a `?p=` deep link lands on the same place —
-	 * never on an empty results grid. The results state is a *search* state, so
-	 * only a term or a tag can leave the home.
+	 * The idle index: no term. The open product (`?p=`) is **not** part of this:
+	 * selecting a wall/strip/row tile keeps the home page and opens its panel
+	 * beside it, and a `?p=` deep link lands on the same place — never on an
+	 * empty results grid. The results state is a *search* state, so only a term
+	 * can leave the home.
 	 */
-	const isIdle = !q.trim() && !tag
+	const isIdle = !q.trim()
 
 	/**
 	 * Focus handoff across the idle ↔ results change.
@@ -679,22 +684,12 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	 * Back button (which pops `?p=` off the history) and these controls on one
 	 * mechanism.
 	 */
-	const closePanel = () => onNavigate({ q, p: undefined, tag })
+	const closePanel = () => onNavigate({ q, p: undefined })
 
-	/**
-	 * Empty-state copy for a browse with no term: a tag-only browse (the
-	 * category row's `See all →`) names the category it found nothing under,
-	 * because `Nothing matched "".` is not a sentence.
-	 */
-	const emptyCopy = q.trim()
-		? {}
-		: tag
-			? {
-					headline: `Nothing listed under “${tag}” yet.`,
-					description:
-						'Every relay this market mirrors answered — none carried a listing under this category, and none are still in flight. That is the whole result, not an error.',
-				}
-			: {}
+	// There is no empty-term browse any more, so there is no "nothing under
+	// <category>" copy to write: every browse carries a term, and the grid's own
+	// empty state names it.
+	const emptyCopy = {}
 
 	/**
 	 * The open product's panel — one element, rendered by whichever base state is
@@ -764,7 +759,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 						size="hero"
 					/>
 				}
-				onSelectProduct={(id) => onNavigate({ q: '', tag: undefined, p: id })}
+				onSelectProduct={(id) => onNavigate({ q: '', p: id })}
 				onBrowseProducts={handleBrowseProducts}
 				onWhyPlebeian={onNavigateFeatured}
 				stripsAbove={wall.slice(0, IDLE_WALL_ABOVE)}
@@ -816,7 +811,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 			{/* Nav — the same element in every state */}
 			<BrowseNav
 				active={true}
-				onNavigateHome={() => onNavigate({ q: '', p: undefined, tag: undefined })}
+				onNavigateHome={() => onNavigate({ q: '', p: undefined })}
 				onNavigateFeatured={onNavigateFeatured}
 				searchSlot={navSearch}
 				accountSlot={accountSlot}
@@ -851,8 +846,16 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 										key={`${facet.field}:${facet.value}`}
 										label={facet.value}
 										count={facet.count}
-										active={tag === facet.value}
-										onToggle={() => onNavigate({ q, p: undefined, tag: tag === facet.value ? undefined : facet.value })}
+										// A pill is the term now, so "active" is the term matching it
+										// and toggling off is an empty term — the same mechanism
+										// as the search field, not a second one.
+										active={q.trim().toLowerCase() === facet.value.toLowerCase()}
+										onToggle={() =>
+											onNavigate({
+												q: q.trim().toLowerCase() === facet.value.toLowerCase() ? '' : facet.value,
+												p: undefined,
+											})
+										}
 									/>
 								))}
 								{facets.length > FACET_PILL_LIMIT && (
