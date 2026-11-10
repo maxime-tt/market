@@ -93,12 +93,16 @@ type sigAllLockCondition struct {
 //
 // The accepted shape, byte for byte:
 //
-//	["P2PK", {"nonce":<32B hex>,"data":<bidder x-only>,"tags":[
-//	    ["locktime","<n>"], ["pubkeys",<committee x-only>], ["n_sigs","2"],
-//	    ["refund",<bidder x-only>], ["sigflag","SIG_ALL"]]}]
+//	["P2PK", {"nonce":<32B hex>,"data":<bidder compressed>,"tags":[
+//	    ["locktime","<n>"], ["pubkeys",<committee compressed>], ["n_sigs","2"],
+//	    ["refund",<bidder compressed>], ["sigflag","SIG_ALL"]]}]
 //
-// bidderKey and committeeKey are the COMPRESSED keys the lock receipt commits;
-// the secret carries them in x-only form, which is how cashu-ts writes them.
+// bidderKey and committeeKey are the COMPRESSED keys the lock receipt commits,
+// and the secret carries them COMPRESSED too: that is how cashu-ts (and the
+// wallet built on it) writes a NUT-11 P2PK secret, and what the mint enforces.
+// The keys are compared to the receipt keys in x-only form, so a compressed
+// value that lifts to the same point is the same key regardless of the 0x02
+// prefix.
 func parseSigAllLock(secret, bidderKey, committeeKey string, requiredLocktime int64) error {
 	bidderX, err := xOnlyKey(bidderKey)
 	if err != nil {
@@ -131,10 +135,14 @@ func parseSigAllLock(secret, bidderKey, committeeKey string, requiredLocktime in
 	if !validLowerHex(condition.Nonce, 32) {
 		return errors.New("2-of-2 SIG_ALL lock: the condition nonce is not 32 bytes of lowercase hex")
 	}
-	if !validXOnlyKey(condition.Data) {
-		return errors.New("2-of-2 SIG_ALL lock: the first main pubkey is not a lowercase x-only secp256k1 key")
+	// The condition's first main pubkey (in `data`) is the wallet's key in the
+	// COMPRESSED form cashu-ts emits; compare its x-only coordinate to the
+	// receipt's bidder key.
+	dataX, err := xOnlyKey(condition.Data)
+	if err != nil {
+		return errors.New("2-of-2 SIG_ALL lock: the first main pubkey is not a compressed secp256k1 key")
 	}
-	if condition.Data != bidderX {
+	if dataX != bidderX {
 		return errors.New("2-of-2 SIG_ALL lock: the first main pubkey is not the bidder's key")
 	}
 	// Exactly the canonical five tags, in this order, no extras, no duplicates.
@@ -157,13 +165,15 @@ func parseSigAllLock(secret, bidderKey, committeeKey string, requiredLocktime in
 	if locktime < requiredLocktime {
 		return fmt.Errorf("2-of-2 SIG_ALL lock: locktime %d is below the auction's required locktime %d", locktime, requiredLocktime)
 	}
-	if tags[1][0] != "pubkeys" || tags[1][1] != committeeX {
+	pubkeysX, err := xOnlyKey(tags[1][1])
+	if tags[1][0] != "pubkeys" || err != nil || pubkeysX != committeeX {
 		return errors.New("2-of-2 SIG_ALL lock: the main pubkeys must be exactly [bidder, committee] in that order")
 	}
 	if tags[2][0] != "n_sigs" || tags[2][1] != "2" {
 		return errors.New("2-of-2 SIG_ALL lock: n_sigs must be 2")
 	}
-	if tags[3][0] != "refund" || tags[3][1] != bidderX {
+	refundX, err := xOnlyKey(tags[3][1])
+	if tags[3][0] != "refund" || err != nil || refundX != bidderX {
 		return errors.New("2-of-2 SIG_ALL lock: the refund pubkeys must be exactly [bidder]")
 	}
 	if tags[4][0] != "sigflag" || tags[4][1] != "SIG_ALL" {

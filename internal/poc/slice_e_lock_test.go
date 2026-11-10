@@ -26,16 +26,16 @@ func sigAllLockSecret(t *testing.T, bidderKey, committeeKey string, locktime int
 	t.Helper()
 	return sigAllLockSecretTags(t, bidderKey, committeeKey, [][]string{
 		{"locktime", strconv.FormatInt(locktime, 10)},
-		{"pubkeys", committeeKey[2:]},
+		{"pubkeys", committeeKey},
 		{"n_sigs", "2"},
-		{"refund", bidderKey[2:]},
+		{"refund", bidderKey},
 		{"sigflag", "SIG_ALL"},
 	})
 }
 
 func sigAllLockSecretTags(t *testing.T, bidderKey, committeeKey string, tags [][]string) string {
 	t.Helper()
-	return sigAllLockSecretRaw(t, hex.EncodeToString(testPrivateKey(t).Serialize()), bidderKey[2:], tags)
+	return sigAllLockSecretRaw(t, hex.EncodeToString(testPrivateKey(t).Serialize()), bidderKey, tags)
 }
 
 func sigAllLockSecretRaw(t *testing.T, nonce, data string, tags [][]string) string {
@@ -83,42 +83,42 @@ func TestSliceERule7DifferentialParserSet(t *testing.T) {
 		reasons []string
 	}{
 		{"crafted: n_sigs one", sigAllLockSecretTags(t, bidderKey, committeeKey, [][]string{
-			{"locktime", "5000"}, {"pubkeys", committeeKey[2:]}, {"n_sigs", "1"}, {"refund", bidderKey[2:]}, {"sigflag", "SIG_ALL"},
+			{"locktime", "5000"}, {"pubkeys", committeeKey}, {"n_sigs", "1"}, {"refund", bidderKey}, {"sigflag", "SIG_ALL"},
 		}), []string{"n_sigs must be 2"}},
 		{"crafted: extra pubkey", sigAllLockSecretTags(t, bidderKey, committeeKey, [][]string{
-			{"locktime", "5000"}, {"pubkeys", committeeKey[2:], bidderKey[2:]}, {"n_sigs", "2"}, {"refund", bidderKey[2:]}, {"sigflag", "SIG_ALL"},
+			{"locktime", "5000"}, {"pubkeys", committeeKey, bidderKey}, {"n_sigs", "2"}, {"refund", bidderKey}, {"sigflag", "SIG_ALL"},
 		}), []string{"exactly one value"}},
 		{"crafted: duplicated pubkeys tag", sigAllLockSecretTags(t, bidderKey, committeeKey, [][]string{
-			{"locktime", "5000"}, {"pubkeys", committeeKey[2:]}, {"pubkeys", committeeKey[2:]}, {"n_sigs", "2"}, {"refund", bidderKey[2:]}, {"sigflag", "SIG_ALL"},
+			{"locktime", "5000"}, {"pubkeys", committeeKey}, {"pubkeys", committeeKey}, {"n_sigs", "2"}, {"refund", bidderKey}, {"sigflag", "SIG_ALL"},
 		}), []string{"exactly 5"}},
 		{"crafted: extra tag", sigAllLockSecretTags(t, bidderKey, committeeKey, [][]string{
-			{"locktime", "5000"}, {"pubkeys", committeeKey[2:]}, {"n_sigs", "2"}, {"refund", bidderKey[2:]}, {"sigflag", "SIG_ALL"}, {"custom", "x"},
+			{"locktime", "5000"}, {"pubkeys", committeeKey}, {"n_sigs", "2"}, {"refund", bidderKey}, {"sigflag", "SIG_ALL"}, {"custom", "x"},
 		}), []string{"exactly 5"}},
 		{"crafted: missing sigflag", sigAllLockSecretTags(t, bidderKey, committeeKey, [][]string{
-			{"locktime", "5000"}, {"pubkeys", committeeKey[2:]}, {"n_sigs", "2"}, {"refund", bidderKey[2:]},
+			{"locktime", "5000"}, {"pubkeys", committeeKey}, {"n_sigs", "2"}, {"refund", bidderKey},
 		}), []string{"exactly 5"}},
 		{"crafted: wrong tag order", sigAllLockSecretTags(t, bidderKey, committeeKey, [][]string{
-			{"pubkeys", committeeKey[2:]}, {"locktime", "5000"}, {"n_sigs", "2"}, {"refund", bidderKey[2:]}, {"sigflag", "SIG_ALL"},
+			{"pubkeys", committeeKey}, {"locktime", "5000"}, {"n_sigs", "2"}, {"refund", bidderKey}, {"sigflag", "SIG_ALL"},
 		}), []string{"first tag must be locktime"}},
 		{"crafted: sigflag inputs", sigAllLockSecretTags(t, bidderKey, committeeKey, [][]string{
-			{"locktime", "5000"}, {"pubkeys", committeeKey[2:]}, {"n_sigs", "2"}, {"refund", bidderKey[2:]}, {"sigflag", "SIG_INPUTS"},
+			{"locktime", "5000"}, {"pubkeys", committeeKey}, {"n_sigs", "2"}, {"refund", bidderKey}, {"sigflag", "SIG_INPUTS"},
 		}), []string{"sigflag must be SIG_ALL"}},
 		{"crafted: refund is the committee", sigAllLockSecretTags(t, bidderKey, committeeKey, [][]string{
-			{"locktime", "5000"}, {"pubkeys", committeeKey[2:]}, {"n_sigs", "2"}, {"refund", committeeKey[2:]}, {"sigflag", "SIG_ALL"},
+			{"locktime", "5000"}, {"pubkeys", committeeKey}, {"n_sigs", "2"}, {"refund", committeeKey}, {"sigflag", "SIG_ALL"},
 		}), []string{"refund pubkeys must be exactly"}},
-		{"crafted: data is the committee", sigAllLockSecretRaw(t, hex.EncodeToString(testPrivateKey(t).Serialize()), committeeKey[2:], [][]string{
-			{"locktime", "5000"}, {"pubkeys", committeeKey[2:]}, {"n_sigs", "2"}, {"refund", bidderKey[2:]}, {"sigflag", "SIG_ALL"},
+		{"crafted: data is the committee", sigAllLockSecretRaw(t, hex.EncodeToString(testPrivateKey(t).Serialize()), committeeKey, [][]string{
+			{"locktime", "5000"}, {"pubkeys", committeeKey}, {"n_sigs", "2"}, {"refund", bidderKey}, {"sigflag", "SIG_ALL"},
 		}), []string{"first main pubkey is not the bidder"}},
 		{"crafted: pubkeys names a foreign key", sigAllLockSecretTags(t, bidderKey, committeeKey, [][]string{
-			{"locktime", "5000"}, {"pubkeys", bidderKey[2:]}, {"n_sigs", "2"}, {"refund", bidderKey[2:]}, {"sigflag", "SIG_ALL"},
+			{"locktime", "5000"}, {"pubkeys", bidderKey}, {"n_sigs", "2"}, {"refund", bidderKey}, {"sigflag", "SIG_ALL"},
 		}), []string{"[bidder, committee] in that order"}},
-		{"uppercase hex in data", strings.Replace(valid, bidderKey[2:], strings.ToUpper(bidderKey[2:]), 1), []string{"lowercase x-only"}},
-		{"uppercase hex in a tag", strings.Replace(valid, committeeKey[2:], strings.ToUpper(committeeKey[2:]), 1), []string{"[bidder, committee] in that order"}},
+		{"uppercase hex in data", strings.Replace(valid, bidderKey, strings.ToUpper(bidderKey), 1), []string{"compressed secp256k1 key"}},
+		{"uppercase hex in a tag", strings.Replace(valid, committeeKey, strings.ToUpper(committeeKey), 1), []string{"[bidder, committee] in that order"}},
 		{"escaped key name", strings.Replace(valid, "\"pubkeys\"", "\"\\u0070ubkeys\"", 1), []string{"not canonical"}},
 		{"whitespace padding", strings.Replace(valid, "[\"P2PK\",", "[\"P2PK\", ", 1), []string{"not canonical"}},
 		{"extra condition field", strings.Replace(valid, "\"tags\":", "\"extra\":\"x\",\"tags\":", 1), []string{"not canonical"}},
 		{"locktime below required", sigAllLockSecret(t, bidderKey, committeeKey, required-1), []string{"below the auction's required locktime"}},
-		{"not a P2PK condition", "[\"HTLC\",{\"nonce\":\"" + strings.Repeat("a", 64) + "\",\"data\":\"" + bidderKey[2:] + "\",\"tags\":[]}]", []string{"not a P2PK condition"}},
+		{"not a P2PK condition", "[\"HTLC\",{\"nonce\":\"" + strings.Repeat("a", 64) + "\",\"data\":\"" + bidderKey + "\",\"tags\":[]}]", []string{"not a P2PK condition"}},
 		{"not JSON", "not json at all", []string{"not a NUT-10 P2PK condition"}},
 		{"empty", "", []string{"not a NUT-10 P2PK condition"}},
 	}
@@ -179,7 +179,7 @@ func TestSliceERule7IsEnforcedInsideProofAdmission(t *testing.T) {
 
 	bad, err := build(func() string {
 		return sigAllLockSecretTags(t, compressed(wallet), compressed(committee), [][]string{
-			{"locktime", strconv.FormatInt(required, 10)}, {"pubkeys", compressed(committee)[2:]}, {"n_sigs", "1"}, {"refund", compressed(wallet)[2:]}, {"sigflag", "SIG_ALL"},
+			{"locktime", strconv.FormatInt(required, 10)}, {"pubkeys", compressed(committee)}, {"n_sigs", "1"}, {"refund", compressed(wallet)}, {"sigflag", "SIG_ALL"},
 		})
 	})
 	if err != nil {
