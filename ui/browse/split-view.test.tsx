@@ -40,13 +40,16 @@ describe('SplitView', () => {
 	test("panes default to the frame's 55/45 split", () => {
 		const markup = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null }))
 		// The master's share is 55, so the detail pane the shift opens is 45 wide.
-		expect(markup).toContain('--split-detail-width:45%')
-		expect(markup).toContain('width:var(--split-detail-width)')
+		expect(markup).toContain('--split-detail-size:45%')
+		// The number is the drag state; the *resolved* width is a variable in the
+		// sheet so the phone's media query can pin it to 100%.
+		expect(markup).toContain('[data-slot="split-view"] { --split-detail-width: var(--split-detail-size); }')
+		expect(markup).toContain('lg:w-[var(--split-detail-width)]')
 	})
 
 	test('honours a custom master share', () => {
 		const markup = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null, masterSize: 40 }))
-		expect(markup).toContain('--split-detail-width:60%')
+		expect(markup).toContain('--split-detail-size:60%')
 	})
 
 	test('the master shrinks and the detail slides in, both from one variable', () => {
@@ -54,7 +57,9 @@ describe('SplitView', () => {
 		// The master's width is the space the detail does not take: it reflows
 		// rather than being translated out of the viewport.
 		expect(markup).toContain('data-slot="split-master-pane"')
-		expect(markup).toContain('width:calc(100% - var(--split-detail-width))')
+		// The width lives in the sheet's `lg` block now, so the phone can keep
+		// the master at 100% (see the mobile tests below).
+		expect(markup).toContain('width: calc(100% - var(--split-detail-width));')
 		expect(markup).toContain('split-master-shrink')
 		expect(markup).toContain('split-detail-in')
 		// …and the motion is the injected keyframes, not a shift.
@@ -95,5 +100,80 @@ describe('SplitView', () => {
 	test('applies extra classes to the wrapper', () => {
 		const markup = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null, className: 'h-[640px]' }))
 		expect(markup).toContain('h-[640px]')
+	})
+
+	test('the detail is a full-width pushed view below `lg`, not a side pane', () => {
+		const markup = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null }))
+
+		// Base (phone) shape: the pane covers the split — inset on every side and
+		// the split's own width — and only gets the right-edge placement at `lg`.
+		const detail = markup.slice(markup.indexOf('data-slot="split-detail"'), markup.indexOf('data-slot="split-separator"'))
+		expect(detail).toContain('inset-0')
+		expect(detail).toContain('w-full')
+		expect(detail).toContain('lg:inset-y-0')
+		expect(detail).toContain('lg:left-auto')
+		expect(detail).toContain('lg:right-0')
+		expect(detail).toContain('lg:border-l')
+		// The right-edge placement must be unreachable below `lg`: `inset-y-0`
+		// alone would leave `right-0` off and the pane would start at x=0 with
+		// auto width… which is the pushed view. Assert the desktop shape is the
+		// only one carrying the hairline and the explicit share.
+		expect(detail).not.toMatch(/[^:]right-0/)
+
+		// The split's own width resolves to 100% below 1024px, so the master is
+		// never narrowed on a phone.
+		expect(markup).toContain('@media (max-width: 1023.98px)')
+		expect(markup).toContain('[data-slot="split-view"] { --split-detail-width: 100%; }')
+	})
+
+	test('the master keeps its whole width below `lg` and only shrinks above it', () => {
+		const markup = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null }))
+
+		// The shrink is a desktop layout, so its width and animation live behind
+		// the min-width query — never in the base rules, where it would squeeze
+		// the list on a phone.
+		const base = markup.slice(markup.indexOf('data-slot="split-master-pane"'), markup.indexOf('data-slot="split-master"'))
+		expect(base).toContain('w-full')
+		expect(base).not.toContain('animate-')
+		// Covered by the pushed view, the master must leave the tab order and the
+		// a11y tree on a phone — the split only exists with the detail open.
+		expect(base).toContain('invisible')
+		expect(base).toContain('lg:visible')
+
+		expect(markup).toContain('@media (min-width: 1024px)')
+		const desktop = markup.slice(markup.indexOf('@media (min-width: 1024px)'))
+		expect(desktop).toContain('width: calc(100% - var(--split-detail-width))')
+		expect(desktop).toContain('animation: split-master-shrink 300ms ease-out both')
+		// Reduced motion keeps the end state, as the Tailwind class did.
+		expect(markup).toContain('@media (min-width: 1024px) and (prefers-reduced-motion: reduce)')
+	})
+
+	test('the resize handle is a desktop-only affordance', () => {
+		const markup = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null }))
+		const separator = markup.slice(markup.indexOf('data-slot="split-separator"'), markup.indexOf('data-slot="split-handle"'))
+
+		// A 7px drag target must not exist on a phone: there is no divider in the
+		// pushed view, and the handle would be a mis-tap magnet.
+		expect(separator).toContain('hidden')
+		expect(separator).toContain('lg:block')
+	})
+
+	test('renders the pushed view’s back bar only when the caller can dismiss', () => {
+		const dismissible = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null, onCloseDetail: () => {} }))
+		expect(dismissible).toContain('data-slot="split-detail-back"')
+		expect(dismissible).toContain('Back')
+		// It is the phone's dismissal: the desktop split keeps the hairline × and
+		// has no back bar of its own.
+		expect(dismissible).toContain('lg:hidden')
+		// The touch floor, per the audit's other findings.
+		expect(dismissible).toContain('min-h-11')
+
+		const notDismissible = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null }))
+		expect(notDismissible).not.toContain('data-slot="split-detail-back"')
+	})
+
+	test('the pushed view replaces the panel’s hairline close, which fails the touch floor', () => {
+		const markup = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null }))
+		expect(markup).toContain('[data-slot="split-detail"] [data-slot="product-detail-header"] { display: none; }')
 	})
 })

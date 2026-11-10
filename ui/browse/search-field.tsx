@@ -69,10 +69,22 @@ export interface SearchFieldProps {
  */
 const SIZE_CLASSES = {
 	nav: {
-		root: ['h-10', 'w-[560px]', 'max-w-full', 'pl-4', 'pr-1.5', 'gap-2.5'],
+		// `w-full max-w-[560px]` — the field is fluid on a phone and only *capped* at
+		// the frame's 560px on a desktop. A hard `w-[560px]` made the field's
+		// intrinsic width the page's min-content, so the page could not go below
+		// 822px no matter the viewport; a width that responds to its container is
+		// the only shape that cannot widen the page. `min-w-0` is required too:
+		// as a flex item the field's `min-width: auto` would otherwise refuse to
+		// shrink below its own content and the cap would still push the page out.
+		root: ['h-10', 'w-full', 'max-w-[560px]', 'min-w-0', 'pl-4', 'pr-1.5', 'gap-2.5'],
 		glyph: 'size-[18px]',
 		input: 'text-sm',
-		go: 'h-8 px-4 text-[13px]',
+		// A phone nav row leaves the field ~150px, and an 82px "Search" pill took
+		// more than half of it: the input was left 9px, so a typed query showed
+		// one character. Below `sm` the pill yields its width to the input —
+		// Enter (the keyboard's own search key, see `enterKeyHint`) still submits,
+		// and the hero field, which owns its whole row, keeps its pill.
+		go: 'h-8 px-4 text-[13px] hidden sm:flex',
 		clear: 'size-[22px]',
 	},
 	hero: {
@@ -202,6 +214,7 @@ export const SearchField: FC<SearchFieldProps> = ({
 					onChange={(e) => onChange(e.target.value)}
 					onKeyDown={handleKeyDown}
 					placeholder={placeholder}
+					enterKeyHint="search"
 					className={cn(
 						'flex-1',
 						'min-w-0',

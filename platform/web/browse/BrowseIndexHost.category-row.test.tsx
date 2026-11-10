@@ -138,8 +138,9 @@ describe('BrowseIndexHost category-row card', () => {
 		expect(markup).toContain('data-testid="widget-category-rows"')
 
 		// …inside the master pane, with a single panel beside it.
-		expect(markup.split('data-slot="split-master"').length - 1).toBe(1)
-		expect(markup.split('data-slot="split-detail"').length - 1).toBe(1)
+		// Element-anchored needles: the split injects a <style> naming its slots.
+		expect(markup.split('<div data-slot="split-master"').length - 1).toBe(1)
+		expect(markup.split('<div data-slot="split-detail"').length - 1).toBe(1)
 		expect(markup.split('data-slot="product-detail-panel"').length - 1).toBe(1)
 
 		const master = markup.slice(markup.indexOf('data-slot="split-master"'), markup.indexOf('data-slot="split-detail"'))

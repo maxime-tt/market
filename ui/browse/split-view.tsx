@@ -67,6 +67,12 @@ export interface SplitViewProps {
 	/** Extra classes for the split root (the caller sets the height). */
 	className?: string
 	elementRef?: Ref<HTMLDivElement | null>
+	/**
+	 * Dismiss the detail. Below `lg` the pane is a pushed view and this is the
+	 * back bar's action — a phone needs a visible way out that is not the
+	 * desktop's 7px drag handle. Omitted, no back bar renders.
+	 */
+	onCloseDetail?: () => void
 }
 
 /**
@@ -79,8 +85,21 @@ export interface SplitViewProps {
  * The master animates `width`, not `transform`: shrinking is the layout the
  * owner asked for (the left view reflows and the search field stays centred),
  * so the pane genuinely gets narrower rather than being translated out of view.
+ *
+ * **The split is a wide-viewport layout.** Below `lg` there is no second
+ * column to fit: the detail is a *pushed* view — full width, on top of the
+ * master, with its own back bar — and the master keeps its whole width
+ * underneath. The breakpoint is 1024px: at 768 the detail pane would be 346px
+ * beside a 422px master, i.e. two scrolling columns on a touch screen, which is
+ * exactly the shape the owner rejected. `--split-detail-width` is therefore the
+ * *resolved* pane width and `--split-detail-size` is the drag state; the media
+ * query below pins the resolved width to 100% so the master is not shrunk at
+ * all on a phone. Declaring this in the sheet (not inline) matters: an inline
+ * width on the pane would beat a media query and the phone would keep the
+ * desktop split — the trap is `!important` or nothing, and nothing is wrong.
  */
 const SPLIT_VIEW_CSS = `
+[data-slot="split-view"] { --split-detail-width: var(--split-detail-size); }
 @keyframes split-master-shrink {
 	from { width: 100%; }
 	to { width: calc(100% - var(--split-detail-width)); }
@@ -88,6 +107,21 @@ const SPLIT_VIEW_CSS = `
 @keyframes split-detail-in {
 	from { transform: translateX(100%); }
 	to { transform: translateX(0); }
+}
+@media (max-width: 1023.98px) {
+	[data-slot="split-view"] { --split-detail-width: 100%; }
+	/* The pane's own 26px hairline close would sit under the back bar and is
+	   below the touch floor; on a phone the back bar is the dismissal. */
+	[data-slot="split-detail"] [data-slot="product-detail-header"] { display: none; }
+}
+@media (min-width: 1024px) {
+	[data-slot="split-master-pane"] {
+		width: calc(100% - var(--split-detail-width));
+		animation: split-master-shrink 300ms ease-out both;
+	}
+}
+@media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
+	[data-slot="split-master-pane"], [data-slot="split-detail"] { animation: none; }
 }
 `
 
@@ -99,6 +133,7 @@ export const SplitView: FC<SplitViewProps> = ({
 	minDetailSize = MIN_DETAIL_SIZE,
 	className,
 	elementRef,
+	onCloseDetail,
 }) => {
 	/** The detail pane's width, in percent of the split — the shift's own distance. */
 	const [detailSize, setDetailSize] = useState(() => 100 - masterSize)
@@ -145,31 +180,58 @@ export const SplitView: FC<SplitViewProps> = ({
 			ref={elementRef}
 			data-slot="split-view"
 			className={cn('relative min-h-0 overflow-hidden', className)}
-			style={{ '--split-detail-width': `${detailSize}%` } as CSSProperties}
+			style={{ '--split-detail-size': `${detailSize}%` } as CSSProperties}
 		>
 			{/* The master gives the detail its width: the pane shrinks and its
 			    content reflows, so the visible left area is what carries the
-			    page's own centred columns (the hero search field included). */}
-			<div
-				data-slot="split-master-pane"
-				className="h-full animate-[split-master-shrink_300ms_ease-out_both] motion-reduce:animate-none"
-				style={{ width: 'calc(100% - var(--split-detail-width))' }}
-			>
+			    page's own centred columns (the hero search field included).
+			    Its width and shrink animation live in SPLIT_VIEW_CSS below,
+			    behind the `lg` query: on a phone nothing shrinks, because the
+			    detail is pushed on top rather than placed beside it. */}
+			<div data-slot="split-master-pane" className="h-full w-full invisible lg:visible">
 				<div data-slot="split-master" className="h-full min-h-0 overflow-y-auto px-6.5 pt-4">
 					{master}
 				</div>
 			</div>
 
-			{/* The detail overlays the right edge and slides in over the master. */}
+			{/* The detail overlays the right edge and slides in over the master.
+			    Below `lg` it is the whole pane — a full-width pushed view, its
+			    own scroll, its own back bar — and above it is the frame's right
+			    share of the split, with the hairline. */}
 			<div
 				data-slot="split-detail"
-				className="absolute inset-y-0 right-0 flex min-h-0 flex-col overflow-y-auto border-l border-border-default bg-background px-6.5 pt-4 animate-[split-detail-in_300ms_ease-out_both] motion-reduce:animate-none"
-				style={{ width: 'var(--split-detail-width)' }}
+				className="absolute inset-0 z-20 flex w-full min-h-0 flex-col overflow-y-auto bg-background px-6.5 pt-4 animate-[split-detail-in_300ms_ease-out_both] motion-reduce:animate-none lg:inset-y-0 lg:left-auto lg:right-0 lg:z-0 lg:w-[var(--split-detail-width)] lg:border-l lg:border-border-default"
 			>
+				{onCloseDetail && (
+					<div data-slot="split-detail-bar" className="flex flex-none items-center pb-1 lg:hidden">
+						<button
+							type="button"
+							data-slot="split-detail-back"
+							onClick={onCloseDetail}
+							className="inline-flex min-h-11 -ml-2 items-center gap-1.5 rounded px-2 text-sm font-medium text-text-high cursor-pointer transition-colors hover:bg-surface-sunken"
+						>
+							<svg
+								viewBox="0 0 16 16"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth={1.6}
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								aria-hidden="true"
+								className="size-4"
+							>
+								<path d="M10 3 5 8l5 5" />
+							</svg>
+							Back
+						</button>
+					</div>
+				)}
 				{detail}
 			</div>
 
-			{/* The frame's hairline + pill, now the detail pane's own drag handle. */}
+			{/* The frame's hairline + pill, now the detail pane's own drag handle.
+			    Desktop only: on a phone the pane is a pushed view, so there is no
+			    divider to drag and no 7px touch target to hit by accident. */}
 			<div
 				data-slot="split-separator"
 				role="separator"
@@ -179,7 +241,7 @@ export const SplitView: FC<SplitViewProps> = ({
 				aria-valuemin={minDetailSize}
 				aria-valuemax={100 - minMasterSize}
 				tabIndex={0}
-				className="absolute inset-y-0 z-10 w-[7px] -translate-x-1/2 cursor-col-resize touch-none border-0 bg-transparent p-0"
+				className="absolute inset-y-0 z-10 hidden w-[7px] -translate-x-1/2 cursor-col-resize touch-none border-0 bg-transparent p-0 lg:block"
 				style={{ left: 'calc(100% - var(--split-detail-width))' }}
 				onPointerDown={handlePointerDown}
 				onKeyDown={handleKeyDown}

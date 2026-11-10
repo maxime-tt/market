@@ -130,6 +130,11 @@ export const BrowseNav: FC<BrowseNavProps> = ({
 						'font-medium',
 						'transition-colors',
 						'cursor-pointer',
+						// A phone's nav row cannot hold the wordmark, this link and a
+						// search field at once: the field was left 81px at 360. The link
+						// is the redundant one (the wordmark already goes to Browse), so
+						// below `sm` it yields its width to the field.
+						'hidden sm:block',
 						// The frame's active link: ink text with a 2px ink underline.
 						currentPage === 'featured' ? 'text-text-high border-b-2 border-fill-ink pb-[3px]' : 'text-text-mid hover:text-fill-ink',
 					)}
@@ -142,7 +147,15 @@ export const BrowseNav: FC<BrowseNavProps> = ({
 
 			{/* Centre: search field slot */}
 			{searchSlot && (
-				<div data-slot="search-slot" className="flex-1 flex justify-center">
+				/*
+				 * `min-w-0` is load-bearing, not cosmetic: a flex item's automatic
+				 * minimum is its content's min-content width, so without it this slot
+				 * refuses to shrink below the field inside it (560px) and the whole
+				 * page is pushed out to 822px on a phone. It must sit on the *wrapper*
+				 * — a `min-w-0` on the field alone cannot beat an ancestor that still
+				 * refuses to shrink.
+				 */
+				<div data-slot="search-slot" className="flex-1 flex justify-center min-w-0">
 					{searchSlot}
 				</div>
 			)}

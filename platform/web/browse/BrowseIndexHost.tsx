@@ -673,6 +673,15 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 	const panelState: ProductDetailPanelState = detailQuery.isLoading ? 'loading' : detailQuery.isError ? 'error' : detail ? 'ready' : 'empty'
 
 	/**
+	 * Closing the detail is a navigation, not local state: `?p=` is the only
+	 * thing that says what is open, so the panel's own close button and — below
+	 * `lg` — the pushed view's back bar both clear it. That keeps the browser's
+	 * Back button (which pops `?p=` off the history) and these controls on one
+	 * mechanism.
+	 */
+	const closePanel = () => onNavigate({ q, p: undefined, tag })
+
+	/**
 	 * Empty-state copy for a browse with no term: a tag-only browse (the
 	 * category row's `See all →`) names the category it found nothing under,
 	 * because `Nothing matched "".` is not a sentence.
@@ -727,7 +736,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 			options={panelOptions}
 			selectedOptionDTag={selectedOptionDTag}
 			onSelectOption={(dTag) => setSelectedVariant(dTag)}
-			onClose={() => onNavigate({ q, p: undefined, tag })}
+			onClose={closePanel}
 			onThreeDots={() => handleMenuToggle(p)}
 			onCopyLink={() => handleCopyLink(p)}
 			onRetry={() => void detailQuery.refetch()}
@@ -817,7 +826,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 				panel ? (
 					/* Selecting a tile on the home opens the panel beside it: the home is
 					   still the base state, and only the pane is added. */
-					<SplitView className="h-[calc(100vh-4rem)] min-h-[520px]" master={homeBody} detail={panel} />
+					<SplitView className="h-[calc(100vh-4rem)] min-h-[520px]" master={homeBody} detail={panel} onCloseDetail={closePanel} />
 				) : (
 					homeBody
 				)
@@ -908,6 +917,7 @@ export function BrowseIndexHost({ q, tag, p, onNavigate, onNavigateFeatured }: B
 								</div>
 							}
 							detail={panel}
+							onCloseDetail={closePanel}
 						/>
 					)}
 				</>

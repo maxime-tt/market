@@ -45,6 +45,26 @@ describe('BrowseNav', () => {
 		expect(markup).toContain('test-search')
 	})
 
+	test('the search slot can shrink, so nothing in it can widen the page', () => {
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { active: true, searchSlot: createElement('div', null, 'f') }))
+
+		// A flex item's automatic minimum is its content's min-content width, so
+		// without `min-w-0` this slot refuses to shrink below the search field
+		// inside it and the whole page is pushed wider than the viewport.
+		const slot = markup.slice(
+			markup.indexOf('data-slot="search-slot"'),
+			markup.indexOf('</div>', markup.indexOf('data-slot="search-slot"')),
+		)
+		expect(slot).toContain('flex-1')
+		expect(slot).toContain('min-w-0')
+	})
+
+	test('the Featured link yields its width to the field on a phone', () => {
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { active: true }))
+		const featured = markup.slice(markup.indexOf('data-slot="featured-link"'), markup.indexOf('>Featured<'))
+		expect(featured).toContain('hidden sm:block')
+	})
+
 	test('renders account slot', () => {
 		const markup = renderToStaticMarkup(
 			createElement(BrowseNav, {
@@ -210,10 +230,16 @@ describe('SearchField', () => {
 		const nav = renderToStaticMarkup(createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {} }))
 		const hero = renderToStaticMarkup(createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {}, size: 'hero' }))
 
-		// nav band: 40px tall, 560px wide, 18px glyph, no keyboard affordance
+		// nav band: 40px tall, capped at the frame's 560px, 18px glyph, no
+		// keyboard affordance
 		expect(nav).toContain('data-size="nav"')
 		expect(nav).toContain('h-10')
-		expect(nav).toContain('w-[560px]')
+		// The cap, never a hard width: a fixed 560px was the page's min-content
+		// and widened the page to 822px on a 390px phone.
+		expect(nav).not.toContain('w-[560px] max-w-full')
+		expect(nav).toContain('max-w-[560px]')
+		expect(nav).toMatch(/w-full[^"]*max-w-\[560px\]/)
+		expect(nav).toMatch(/min-w-0[^"]*pl-4/)
 		expect(nav).not.toContain('widget-search-field-kbd')
 
 		// idle hero: 70px tall, 22px glyph, the ⌘K affordance
@@ -222,6 +248,21 @@ describe('SearchField', () => {
 		expect(hero).toContain('size-[22px]')
 		expect(hero).toContain('widget-search-field-kbd')
 		expect(hero).toContain('⌘K')
+	})
+
+	test('the nav field yields the go pill to the input on a phone', () => {
+		const nav = renderToStaticMarkup(createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {} }))
+		const hero = renderToStaticMarkup(createElement(SearchField, { value: '', onChange: () => {}, onGo: () => {}, size: 'hero' }))
+
+		// A phone's nav row leaves the field ~150px; an 82px pill left the input
+		// 9px (one visible character). Below `sm` the pill is hidden and the
+		// keyboard's own search key submits — which is why the input needs
+		// `enterKeyHint`, or the phone's Enter key reads "return".
+		expect(nav).toContain('hidden sm:flex')
+		expect(nav).toContain('enterKeyHint="search"')
+		// The hero field owns its whole row, so it keeps the pill.
+		expect(hero).not.toContain('hidden sm:flex')
+		expect(hero).toContain('enterKeyHint="search"')
 	})
 
 	test('className still wins over the size table', () => {

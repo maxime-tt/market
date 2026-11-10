@@ -350,8 +350,10 @@ describe('BrowseIndexHost split view', () => {
 		// The regression: the home's split and the results split both rendered the
 		// same `panel`, so the right side showed two stacked product panes. One
 		// base state owns the panel, so exactly one of each slot may appear.
-		expect(markup.split('data-slot="split-view"').length - 1).toBe(1)
-		expect(markup.split('data-slot="split-detail"').length - 1).toBe(1)
+		// The needle is the element, not the bare slot name: the split injects a
+		// <style> that legitimately names `data-slot="split-view"` in its rules.
+		expect(markup.split('<div data-slot="split-view"').length - 1).toBe(1)
+		expect(markup.split('<div data-slot="split-detail"').length - 1).toBe(1)
 		expect(markup.split('data-slot="product-detail-panel"').length - 1).toBe(1)
 	})
 
