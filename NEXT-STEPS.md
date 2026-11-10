@@ -6,7 +6,7 @@ depend on it. Checked — the browse app (`sdk/`, `platform/`, `ui/`) references
 `category_sub` **nowhere**; they are a search-engine-side artifact only. So the constraint is already
 met on the front end, and the work below is about removing the coupling where it does exist.
 
-## 1. "See all" becomes a raw keyword search
+## 1. "See all" becomes a raw keyword search — DONE (`b29e0aa20`)
 
 **Why:** the owner's ruling. The index already searches `all_tags` alongside title and body, so the
 keyword finds more than the tag filter did — `q=testosterone` 671 vs filter 481, `q=bitcoin` 1683 vs
@@ -20,7 +20,7 @@ keyword finds more than the tag filter did — `q=testosterone` 671 vs filter 48
   `tag` is set, which is what let it answer over the whole index and put the Health/Pharma cluster on
   a Bitcoin page. With the term never empty, the probe is scoped again.
 
-## 2. Remove the taxonomy from the search index and the suggestions
+## 2. Remove the taxonomy from the search index and the suggestions — DONE (rabbithole `715462c`)
 
 **Why:** the owner's ruling — the flat list is the only list to match, and nothing downstream needs
 the hierarchy.
@@ -71,6 +71,16 @@ body. Purchases are counted at the order path. Umami covers the funnel/retention
 - Heatmaps: the owner wants these **as a starter to test**, not switched off.
 - An **opt-out control** on the home page.
 - The box has no Docker and no Postgres today — that is the deployment decision to make.
+
+## Verified live after the deploy
+
+- `?q=Bitcoin` — the pills are **NFT 392 · SATOSHOES 253 · CLOTHING 242 · SNEAKERS 198 ·
+  STREETWEAR 174 · BLACK 139**, and **no value appears twice**. Before: `HEALTH 1903` + `HEALTH
+  1866`, `PHARMA 1629` + `PHARMA 1627`.
+- The pills are **scoped to the term** now (bitcoin-adjacent), not the whole index.
+- A pill click writes **`?q=nft`** — the tag parameter is gone from the app's own navigation.
+- `?q=Bitcoin` returns **175** cards against the tag filter's 31: the keyword finds more.
+- Service-side: 12 suggestions, **zero duplicate values**, all from `all_tags`.
 
 ## Order
 
