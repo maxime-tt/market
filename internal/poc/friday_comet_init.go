@@ -642,7 +642,7 @@ func validateFridayGenesisPolicy(policy Policy) error {
 	}
 	reviewed := DefaultPolicy()
 	reviewed.FaucetAmount, reviewed.FaucetCap = policy.FaucetAmount, policy.FaucetCap
-	if policy != reviewed {
+	if !policy.Equal(reviewed) {
 		return errors.New("Friday Comet non-funding policy differs from DefaultPolicy")
 	}
 	return nil

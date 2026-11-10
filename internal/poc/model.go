@@ -84,6 +84,85 @@ type Policy struct {
 	LateBidExtension   int64 `json:"late_bid_extension_seconds"`
 	MaxTotalExtension  int64 `json:"max_total_extension_seconds"`
 	ReceiptTTLSeconds  int64 `json:"receipt_ttl_seconds"`
+	// KeysetID and KeysetKeys are the genesis-pinned mint identity: the one
+	// keyset every bid proof must name and the mint's public key for each
+	// amount. They are what lets consensus verify a proof's DLEQ without any
+	// mint call, so a bid can carry its own backing and every validator checks
+	// it rather than trusting one party's attestation. Both are OMITTED while
+	// empty: a manifest (and the app hash over the marshalled state) that never
+	// pinned a keyset must serialize exactly as it did before these fields
+	// existed. Amounts are decimal strings; keys are compressed secp256k1 hex.
+	KeysetID   string            `json:"keyset_id,omitempty"`
+	KeysetKeys map[string]string `json:"keyset_keys,omitempty"`
+}
+
+// keysetKeyForAmount is the derived convenience the brief freezes: the pinned
+// mint public key for an amount, or false when this network pinned no keyset or
+// pinned none for that amount. It never falls back to a fetched key: consensus
+// must read only what genesis pinned.
+func (p Policy) keysetKeyForAmount(amount int64) (string, bool) {
+	if amount <= 0 || len(p.KeysetKeys) == 0 {
+		return "", false
+	}
+	key, ok := p.KeysetKeys[strconv.FormatInt(amount, 10)]
+	if !ok || key == "" {
+		return "", false
+	}
+	return key, true
+}
+
+// pinnedKeysetID reports the keyset every proof must name, empty when none is
+// pinned.
+func (p Policy) pinnedKeysetID() string {
+	return p.KeysetID
+}
+
+// validatePinnedKeyset enforces that the pinned identity is either entirely
+// absent or internally consistent at genesis: a keyset id and a nonempty key
+// map that parses as compressed points, both required together. This runs at
+// init (through Policy.Validate) and again on every manifest load, so consensus
+// never starts against a half-pinned keyset.
+func (p Policy) validatePinnedKeyset() error {
+	if p.KeysetID == "" && len(p.KeysetKeys) == 0 {
+		return nil
+	}
+	if p.KeysetID == "" || len(p.KeysetKeys) == 0 {
+		return errors.New("invalid explicit POC policy: pinned mint keyset requires both a keyset id and its per-amount keys")
+	}
+	for amount, encoded := range p.KeysetKeys {
+		value, err := strconv.ParseInt(amount, 10, 64)
+		if err != nil || value <= 0 {
+			return fmt.Errorf("invalid explicit POC policy: pinned mint key amount %q is not a positive decimal", amount)
+		}
+		if !validCompressedPublicKey(encoded) {
+			return fmt.Errorf("invalid explicit POC policy: pinned mint key for amount %d is not a compressed secp256k1 point", value)
+		}
+	}
+	return nil
+}
+
+// Equal reports whether two policies are identical, including the pinned mint
+// identity maps. The maps make Policy non-comparable with ==, so genesis
+// comparisons that must pin the WHOLE struct (friday_comet_init.go) call this
+// instead of losing that property.
+func (p Policy) Equal(other Policy) bool {
+	if p.FaucetAmount != other.FaucetAmount || p.FaucetCap != other.FaucetCap ||
+		p.MinBidIncrement != other.MinBidIncrement || p.MinDurationSeconds != other.MinDurationSeconds ||
+		p.MaxDurationSeconds != other.MaxDurationSeconds || p.EventSkewSeconds != other.EventSkewSeconds ||
+		p.LateBidWindow != other.LateBidWindow || p.LateBidExtension != other.LateBidExtension ||
+		p.MaxTotalExtension != other.MaxTotalExtension || p.ReceiptTTLSeconds != other.ReceiptTTLSeconds ||
+		p.KeysetID != other.KeysetID {
+		return false
+	}
+	if len(p.KeysetKeys) != len(other.KeysetKeys) {
+		return false
+	}
+	for amount, key := range p.KeysetKeys {
+		if other.KeysetKeys[amount] != key {
+			return false
+		}
+	}
+	return true
 }
 
 func DefaultPolicy() Policy {
@@ -102,7 +181,7 @@ func (p Policy) Validate() error {
 		p.LateBidWindow <= 0 || p.LateBidExtension <= 0 || p.MaxTotalExtension < p.LateBidExtension || p.ReceiptTTLSeconds <= 0 {
 		return errors.New("invalid explicit POC policy")
 	}
-	return nil
+	return p.validatePinnedKeyset()
 }
 
 type SignedEvent struct {
@@ -798,6 +877,16 @@ type bidContent struct {
 	// binds the deposit digests, the auction and the bidder so admission can
 	// verify the deposit_id without the off-chain bearer template.
 	SigAllDeposit *sigAllDepositReceipt `json:"sigall_deposit,omitempty"`
+	// Proofs are the bearer proofs backing this bid, carried IN the committed
+	// transaction so every validator verifies their DLEQ and their sum inside
+	// consensus rather than trusting one party's attestation that the bid is
+	// funded. Each carries its amount, keyset id, secret, C and NUT-12 DLEQ;
+	// the secret is safe to publish because the proof is locked 2-of-2 SIG_ALL
+	// and is unspendable without the committee's signature. Omitted for every
+	// funding path that does not carry bearer proofs, so those bids serialize
+	// byte-identically. Type reused: demoMintSpendProof already carries exactly
+	// this field set for the mint-backed routes.
+	Proofs []demoMintSpendProof `json:"proofs,omitempty"`
 }
 
 // bidOutcomeAuthorizations is the bid content the bidder's wallet publishes
@@ -1297,6 +1386,13 @@ func applyBid(state *State, actor, eventID string, committedAt int64, content bi
 			if err := verifySigAllBidAdmission(*state, actor, auction, content); err != nil {
 				return err
 			}
+		}
+		// The proof set, when the bid carries one, is verified inside
+		// consensus here: every validator re-derives the DLEQ and the sum from
+		// the transaction's own contents, so no single party attests that the
+		// bid is funded.
+		if err := verifyBidProofs(auction, content, policy); err != nil {
+			return err
 		}
 		return applyAcceptedBid(state, actor, eventID, committedAt, content, nil, policy)
 	}
@@ -1995,6 +2091,118 @@ func verifyCashuLockReceipt(state State, actor string, content bidContent, recei
 		return errors.New("Cashu lock receipt signature is invalid")
 	}
 	return nil
+}
+
+// verifyBidProofs checks a bid's carried proof set inside consensus: rules 2-6
+// of the escrow-synthesis brief. A bid with no proofs returns immediately and
+// behaves exactly as before, so a chain that predates the field replays
+// unchanged. When proofs are present every validator re-derives the DLEQ and
+// the sum from the transaction itself; rule 1 (the auction is open and the
+// bidder is not the seller) is enforced earlier in applyBid, and rule 6 (the
+// reuse guard) is the EXISTING one in verifyCashuLockReceipt, which the proof
+// set is bound to by requiring it to be exactly the receipt's references.
+func verifyBidProofs(auction Auction, content bidContent, policy Policy) error {
+	if len(content.Proofs) == 0 {
+		return nil
+	}
+	if content.CashuLock == nil {
+		return errors.New("a bid that carries proofs must also carry the Cashu lock they back")
+	}
+	if len(content.Proofs) > MaxInputs {
+		return errors.New("bid carries more proofs than the network permits")
+	}
+	receipt := *content.CashuLock
+
+	var total int64
+	refs := make([]string, 0, len(content.Proofs))
+	seen := map[string]bool{}
+	for index, proof := range content.Proofs {
+		if proof.Amount <= 0 {
+			return fmt.Errorf("proof %d: bad proof amount: no positive amount", index)
+		}
+		if proof.Secret == "" || len(proof.Secret) > 4096 {
+			return fmt.Errorf("proof %d: a proof requires a secret", index)
+		}
+		// Rule 2: every proof must name the genesis-pinned keyset.
+		if policy.pinnedKeysetID() == "" {
+			return fmt.Errorf("proof %d: proof from unpinned keyset: the network pinned no mint keyset", index)
+		}
+		if proof.KeysetID != policy.pinnedKeysetID() {
+			return fmt.Errorf("proof %d: proof from unpinned keyset: proof names %q but the network pinned %q", index, proof.KeysetID, policy.pinnedKeysetID())
+		}
+		// Rule 3: a pinned key must exist for the proof's amount.
+		pinnedKeyHex, ok := policy.keysetKeyForAmount(proof.Amount)
+		if !ok {
+			return fmt.Errorf("proof %d: bad proof amount: the pinned keyset has no key for %d", index, proof.Amount)
+		}
+		if !validCompressedPublicKey(proof.C) {
+			return fmt.Errorf("proof %d: proof C is not a compressed secp256k1 point", index)
+		}
+		// Rule 4: the DLEQ verifies against that pinned key, through the
+		// existing verifier -- no new cryptography. Y is derived from the
+		// secret with the same hash_to_curve the mint and wallet use.
+		reference, err := demoMintProofY(proof.Secret)
+		if err != nil {
+			return fmt.Errorf("proof %d: %w", index, err)
+		}
+		pinnedKey, err := pinnedMintKeyForAmount(pinnedKeyHex)
+		if err != nil {
+			return fmt.Errorf("proof %d: %w", index, err)
+		}
+		binding := MintProofBinding{Amount: proof.Amount, KeysetID: proof.KeysetID, Y: reference, C: proof.C, DLEQ: proof.DLEQ}
+		keyset := &MintKeySet{ID: policy.pinnedKeysetID(), Unit: "sat", Keys: map[int64]*btcec.PublicKey{proof.Amount: pinnedKey}}
+		if err := VerifyProofBinding(binding, keyset); err != nil {
+			return fmt.Errorf("proof %d: proof DLEQ does not verify against the pinned mint key: %w", index, err)
+		}
+		if seen[reference[2:]] {
+			return errors.New("bid carries a duplicate proof reference")
+		}
+		seen[reference[2:]] = true
+		refs = append(refs, reference)
+		if proof.Amount > (1<<62)-total {
+			return errors.New("proof amounts overflow")
+		}
+		total += proof.Amount
+	}
+	// Rule 5: the proof amounts must sum exactly to the bid's amount.
+	if total != content.Amount {
+		return fmt.Errorf("proof amounts sum to %d, but the bid claims %d", total, content.Amount)
+	}
+	// The proof set must be exactly the references the lock receipt commits.
+	// That is what makes the existing reuse guard in verifyCashuLockReceipt
+	// cover these proofs: the receipt's references -- not a caller-supplied
+	// list -- are what was checked against CashuProofUses.
+	sort.Strings(refs)
+	expected := append([]string(nil), receipt.ProofStateRefs...)
+	sort.Strings(expected)
+	if strings.Join(refs, ",") != strings.Join(expected, ",") {
+		return errors.New("the bid's proofs are not the references its Cashu lock receipt commits")
+	}
+	// Rule 7: the lock parses as EXACTLY the 2-of-2 SIG_ALL shape. It applies
+	// to the SIG_ALL route, whose lock is the secret of each proof.
+	if auction.FundingMode == FundingModeCashuSigAll || receipt.FundingMode == FundingModeCashuSigAll {
+		required := auctionRequiredLocktime(auction)
+		for index, proof := range content.Proofs {
+			if err := parseSigAllLock(proof.Secret, receipt.RefundPublicKey, receipt.CommitteePublicKey, required); err != nil {
+				return fmt.Errorf("proof %d: %w", index, err)
+			}
+		}
+	}
+	return nil
+}
+
+// pinnedMintKeyForAmount parses a genesis-pinned compressed key. It is the only
+// key consensus may use: there is no fetch and no fallback.
+func pinnedMintKeyForAmount(encoded string) (*btcec.PublicKey, error) {
+	decoded, err := hex.DecodeString(encoded)
+	if err != nil {
+		return nil, errors.New("the pinned mint key is not hex")
+	}
+	key, err := btcec.ParsePubKey(decoded)
+	if err != nil {
+		return nil, errors.New("the pinned mint key is not a valid compressed secp256k1 point")
+	}
+	return key, nil
 }
 
 func cashuReceiptDigest(receipt CashuLockReceipt) [32]byte {

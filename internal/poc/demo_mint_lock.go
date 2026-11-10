@@ -29,13 +29,16 @@ package poc
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
 
@@ -68,6 +71,125 @@ type demoMintLockBody struct {
 // input here.
 func demoMintExpectedLocktime(auction Auction) int64 {
 	return auctionRequiredLocktime(auction)
+}
+
+// sigAllLockCondition is the NUT-10 P2PK condition body a 2-of-2 SIG_ALL lock
+// secret carries: the first main pubkey in `data`, the rest of the main keys in
+// the `pubkeys` tag, the refund keys in `refund`, and the ordering-sensitive
+// tags themselves. cashu-ts emits exactly this object with its keys in this
+// order, which is what makes a byte-for-byte canonical check possible.
+type sigAllLockCondition struct {
+	Nonce string     `json:"nonce"`
+	Data  string     `json:"data"`
+	Tags  [][]string `json:"tags"`
+}
+
+// parseSigAllLock is the strict, differential 2-of-2 SIG_ALL lock parser: rule
+// 7 of the escrow-synthesis brief. It accepts EXACTLY the one shape the wallet
+// builds and the mint enforces, and refuses every near-miss by name, because a
+// validator and the mint reading the same secret differently is the bug class
+// this exists to catch (crafted secrets, uppercase hex, duplicated key tags,
+// reordered tags, an extra pubkey, n_sigs=1 all read differently to the mint).
+//
+// The accepted shape, byte for byte:
+//
+//	["P2PK", {"nonce":<32B hex>,"data":<bidder x-only>,"tags":[
+//	    ["locktime","<n>"], ["pubkeys",<committee x-only>], ["n_sigs","2"],
+//	    ["refund",<bidder x-only>], ["sigflag","SIG_ALL"]]}]
+//
+// bidderKey and committeeKey are the COMPRESSED keys the lock receipt commits;
+// the secret carries them in x-only form, which is how cashu-ts writes them.
+func parseSigAllLock(secret, bidderKey, committeeKey string, requiredLocktime int64) error {
+	bidderX, err := xOnlyKey(bidderKey)
+	if err != nil {
+		return errors.New("2-of-2 SIG_ALL lock: the receipt's bidder key is not a compressed secp256k1 point")
+	}
+	committeeX, err := xOnlyKey(committeeKey)
+	if err != nil {
+		return errors.New("2-of-2 SIG_ALL lock: the receipt's committee key is not a compressed secp256k1 point")
+	}
+	var outer []json.RawMessage
+	if err := json.Unmarshal([]byte(secret), &outer); err != nil || len(outer) != 2 {
+		return errors.New("2-of-2 SIG_ALL lock: the secret is not a NUT-10 P2PK condition")
+	}
+	var kind string
+	if err := json.Unmarshal(outer[0], &kind); err != nil || kind != "P2PK" {
+		return errors.New("2-of-2 SIG_ALL lock: the secret is not a P2PK condition")
+	}
+	var condition sigAllLockCondition
+	if err := json.Unmarshal(outer[1], &condition); err != nil {
+		return errors.New("2-of-2 SIG_ALL lock: the condition body is malformed")
+	}
+	// Canonical form. Re-marshalling the parsed structure must reproduce the
+	// secret byte for byte: this refuses escaped, reordered or whitespace-padded
+	// secrets and any extra field, i.e. anything a naive comparison could read
+	// differently to the mint.
+	canonical, err := json.Marshal([]any{"P2PK", condition})
+	if err != nil || string(canonical) != secret {
+		return errors.New("2-of-2 SIG_ALL lock: the secret is not canonical (an escaped or reordered secret reads differently to the mint)")
+	}
+	if !validLowerHex(condition.Nonce, 32) {
+		return errors.New("2-of-2 SIG_ALL lock: the condition nonce is not 32 bytes of lowercase hex")
+	}
+	if !validXOnlyKey(condition.Data) {
+		return errors.New("2-of-2 SIG_ALL lock: the first main pubkey is not a lowercase x-only secp256k1 key")
+	}
+	if condition.Data != bidderX {
+		return errors.New("2-of-2 SIG_ALL lock: the first main pubkey is not the bidder's key")
+	}
+	// Exactly the canonical five tags, in this order, no extras, no duplicates.
+	tags := condition.Tags
+	if len(tags) != 5 {
+		return fmt.Errorf("2-of-2 SIG_ALL lock: the tag set has %d tags, exactly 5 are required", len(tags))
+	}
+	for _, tag := range tags {
+		if len(tag) != 2 {
+			return errors.New("2-of-2 SIG_ALL lock: every tag must have exactly one value")
+		}
+	}
+	if tags[0][0] != "locktime" {
+		return errors.New("2-of-2 SIG_ALL lock: the first tag must be locktime")
+	}
+	locktime, err := strconv.ParseInt(tags[0][1], 10, 64)
+	if err != nil {
+		return errors.New("2-of-2 SIG_ALL lock: the locktime tag is not a decimal integer")
+	}
+	if locktime < requiredLocktime {
+		return fmt.Errorf("2-of-2 SIG_ALL lock: locktime %d is below the auction's required locktime %d", locktime, requiredLocktime)
+	}
+	if tags[1][0] != "pubkeys" || tags[1][1] != committeeX {
+		return errors.New("2-of-2 SIG_ALL lock: the main pubkeys must be exactly [bidder, committee] in that order")
+	}
+	if tags[2][0] != "n_sigs" || tags[2][1] != "2" {
+		return errors.New("2-of-2 SIG_ALL lock: n_sigs must be 2")
+	}
+	if tags[3][0] != "refund" || tags[3][1] != bidderX {
+		return errors.New("2-of-2 SIG_ALL lock: the refund pubkeys must be exactly [bidder]")
+	}
+	if tags[4][0] != "sigflag" || tags[4][1] != "SIG_ALL" {
+		return errors.New("2-of-2 SIG_ALL lock: sigflag must be SIG_ALL")
+	}
+	return nil
+}
+
+// xOnlyKey validates a compressed key and returns its x-only (BIP-340) form,
+// exactly as cashu-ts's xOnly does: drop the 0x02/0x03 prefix.
+func xOnlyKey(compressed string) (string, error) {
+	if !validCompressedPublicKey(compressed) {
+		return "", errors.New("not a compressed secp256k1 point")
+	}
+	return compressed[2:], nil
+}
+
+// validXOnlyKey reports whether a value is 32 bytes of lowercase hex whose x
+// coordinate lifts to a point on secp256k1, so an x-only tag cannot smuggle in
+// a value the mint would reject.
+func validXOnlyKey(value string) bool {
+	if !validLowerHex(value, 32) {
+		return false
+	}
+	_, err := btcec.ParsePubKey(append([]byte{0x02}, mustHex(value)...))
+	return err == nil
 }
 
 func (server *APIServer) demoMintLock(response http.ResponseWriter, request *http.Request) {

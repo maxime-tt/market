@@ -77,6 +77,8 @@ func RunCLI(arguments []string) error {
 		mintURL := flags.String("test-mint-url", TestMintURL, "test-mint endpoint recorded in consensus state")
 		cashuMintURL := flags.String("cashu-mint-url", CashuMintURL, "Cashu mint identity recorded in consensus state; must be reachable by whoever funds a bid")
 		demoPolicy := flags.Bool("demo-policy", false, "write the demo policy instead of the production default: the short anti-snipe ceilings an auction may choose within")
+		keysetID := flags.String("keyset-id", "", "genesis-pinned mint keyset id every bid proof must name (requires --keyset-keys-file)")
+		keysetKeysFile := flags.String("keyset-keys-file", "", "JSON object mapping amount to compressed mint public key, pinned into consensus at genesis")
 		if err := flags.Parse(arguments[1:]); err != nil {
 			return err
 		}
@@ -91,6 +93,21 @@ func RunCLI(arguments []string) error {
 		policy := DefaultPolicy()
 		if *demoPolicy {
 			policy = localDemoPolicy()
+		}
+		// The pinned mint identity is written at genesis, from operator-supplied
+		// material, so every validator reads the same keyset from the manifest
+		// and consensus needs no mint call to verify a proof's DLEQ. It is
+		// optional: a network that pins none simply refuses every carried proof.
+		if *keysetID != "" || *keysetKeysFile != "" {
+			if *keysetID == "" || *keysetKeysFile == "" {
+				return errors.New("a pinned mint keyset requires both --keyset-id and --keyset-keys-file")
+			}
+			keys, err := loadKeysetKeysFile(*keysetKeysFile)
+			if err != nil {
+				return err
+			}
+			policy.KeysetID = *keysetID
+			policy.KeysetKeys = keys
 		}
 		manifest, err := InitLocalNetworkWithEndpoints(*home, policy, *committeePublicKey, *mintURL, *cashuMintURL)
 		if err != nil {
@@ -480,6 +497,30 @@ func localDemoPolicy() Policy {
 	policy.LateBidWindow = 30
 	policy.LateBidExtension = 30
 	return policy
+}
+
+// loadKeysetKeysFile reads the genesis-pinned mint keyset: a JSON object mapping
+// each amount (decimal string) to the mint's compressed public key for it. The
+// keys are validated against the policy at init, so a malformed file fails the
+// init rather than starting a network consensus cannot check against.
+func loadKeysetKeysFile(path string) (map[string]string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read pinned keyset keys: %w", err)
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	var keys map[string]string
+	if err := decoder.Decode(&keys); err != nil {
+		return nil, fmt.Errorf("pinned keyset keys must be a JSON object of amount to compressed key: %w", err)
+	}
+	if err := requireEOF(decoder); err != nil {
+		return nil, err
+	}
+	if len(keys) == 0 {
+		return nil, errors.New("pinned keyset keys file is empty")
+	}
+	return keys, nil
 }
 
 func RunLocalDemo(ctx context.Context, root, listen, committeePublicKey string) error {

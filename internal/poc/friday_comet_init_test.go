@@ -748,6 +748,13 @@ func TestFridayGenesisRejectsEveryNonFundingPolicyMutation(t *testing.T) {
 		t.Run(field.Name, func(t *testing.T) {
 			assembly := literalFridayAssembly(authority)
 			value := reflect.ValueOf(&assembly.Policy).Elem().Field(i)
+			// Only the integer policy fields carry a reviewed bound a +1
+			// mutation exercises. The genesis-pinned mint identity fields
+			// (keyset_id/keyset_keys) are strings/maps a Friday network never
+			// pins, so they are not part of this mutation set.
+			if value.Kind() != reflect.Int64 {
+				t.Skipf("%s is not an integer policy field", field.Name)
+			}
 			value.SetInt(value.Int() + 1)
 			if err := assembly.Policy.Validate(); err != nil {
 				t.Fatalf("mutation must be generically valid: %v", err)
@@ -810,7 +817,7 @@ func TestFridayGenesisFundingPolicyBoundaries(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, manifest, _, err := validateFridayCometBundle(bundle); err != nil || manifest.Policy != assembly.Policy {
+				if _, manifest, _, err := validateFridayCometBundle(bundle); err != nil || !manifest.Policy.Equal(assembly.Policy) {
 					t.Fatalf("funding pair did not roundtrip: %v", err)
 				}
 			} else {
