@@ -12,6 +12,15 @@ package poc
 // Only the spend witness routes through here for now. The lock-receipt signing
 // in demo_mint_lock.go still signs with the raw key; unifying it behind the
 // port is a later change and is noted in the wave-1 report.
+//
+// A committee spend signature is never produced on the strength of caller-
+// supplied values alone. Before either spend path calls SignDigest it runs the
+// release check (release_check.go), which re-derives from the server's own
+// committed state that the spend is authorized and its destination is the
+// committed one. The check gates the call into this port, so it applies to any
+// implementation behind it -- today's single key and a future FROST aggregate
+// alike. The check catches non-colluding faults only; it does not stop a hacked
+// majority.
 
 import (
 	"encoding/hex"

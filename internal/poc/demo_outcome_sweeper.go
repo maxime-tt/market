@@ -335,7 +335,9 @@ func (sweeper *demoOutcomeSweeper) resolve(ctx context.Context, state State, loc
 			}
 			return err
 		}
-		fresh, err = server.demoMintSigAllSpend(ctx, receipt, *templates, outcome, recipient)
+		fresh, err = server.demoMintSigAllSpend(ctx, receipt, committeeSpendIntent{
+			Outcome: outcome, AuctionID: lock.AuctionID, BidID: lock.BidID, Recipient: recipient,
+		})
 		if err != nil {
 			return err
 		}
@@ -356,7 +358,9 @@ func (sweeper *demoOutcomeSweeper) resolve(ctx context.Context, state State, loc
 			}
 			return err
 		}
-		fresh, err = server.demoMintCooperativeSpend(ctx, proofs, recipient)
+		fresh, err = server.demoMintCooperativeSpend(ctx, proofs, committeeSpendIntent{
+			Outcome: outcome, AuctionID: lock.AuctionID, BidID: lock.BidID, Recipient: recipient,
+		})
 		if err != nil {
 			return err
 		}

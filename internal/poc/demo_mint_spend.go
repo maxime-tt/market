@@ -291,19 +291,27 @@ func demoMintVerifyProofSet(receipt CashuLockReceipt, proofs []demoMintSpendProo
 //
 // The recipient is a Cashu spend key, not a Nostr identity: the value must come
 // back to a key its owner can actually sign with.
-func (server *APIServer) demoMintCooperativeSpend(ctx context.Context, proofs []demoMintSpendProof, recipient string) ([]demoMintSpentProof, error) {
-	signer, err := server.committeeSigner()
-	if err != nil {
-		return nil, err
-	}
+func (server *APIServer) demoMintCooperativeSpend(ctx context.Context, proofs []demoMintSpendProof, intent committeeSpendIntent) ([]demoMintSpentProof, error) {
 	if server.demoMintKeyset == nil {
 		return nil, errors.New("cooperative spend has no mint keyset")
 	}
-	if !validCompressedPublicKey(recipient) {
-		return nil, errors.New("cooperative spend recipient is not a compressed secp256k1 public key")
-	}
 	if len(proofs) == 0 || len(proofs) > MaxInputs {
 		return nil, errors.New("cooperative spend requires a bounded nonempty proof set")
+	}
+	// RELEASE CHECK. This is the committee signing boundary: before the port
+	// produces a signature, the server re-derives from its OWN committed state
+	// that this spend is authorized and that its destination is the committed
+	// one, and refuses by name otherwise. It catches a non-colluding fault (a
+	// stale or forged request, a substituted destination) that its own state
+	// contradicts; it does NOT stop a hacked majority, and CommitteeSigner
+	// still holds one local key, not threshold custody. See release_check.go.
+	if _, err := server.releaseCheck(ctx, intent, proofs); err != nil {
+		return nil, err
+	}
+	recipient := intent.Recipient
+	signer, err := server.committeeSigner()
+	if err != nil {
+		return nil, err
 	}
 	keysetID := proofs[0].KeysetID
 	for _, proof := range proofs {
@@ -649,7 +657,9 @@ func (server *APIServer) demoMintRefund(response http.ResponseWriter, request *h
 	// own, longer deadline.
 	swapCtx, swapCancel := context.WithTimeout(request.Context(), demoMintSwapTimeout)
 	defer swapCancel()
-	fresh, err := server.demoMintCooperativeSpend(swapCtx, body.Proofs, spendPublicKey)
+	fresh, err := server.demoMintCooperativeSpend(swapCtx, body.Proofs, committeeSpendIntent{
+		Outcome: "refund", AuctionID: lock.AuctionID, BidID: body.BidID, Recipient: spendPublicKey,
+	})
 	if err != nil {
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return
@@ -1013,7 +1023,9 @@ func (server *APIServer) demoMintSettle(response http.ResponseWriter, request *h
 
 	swapCtx, swapCancel := context.WithTimeout(request.Context(), demoMintSwapTimeout)
 	defer swapCancel()
-	fresh, err := server.demoMintCooperativeSpend(swapCtx, body.Proofs, auction.SellerCocoPaymentPublicKey)
+	fresh, err := server.demoMintCooperativeSpend(swapCtx, body.Proofs, committeeSpendIntent{
+		Outcome: "settle", AuctionID: body.AuctionID, BidID: auction.LeaderBidID, Recipient: auction.SellerCocoPaymentPublicKey,
+	})
 	if err != nil {
 		writeError(response, http.StatusUnprocessableEntity, err)
 		return
@@ -1099,9 +1111,10 @@ func sigAllTemplateInputsAreReceipt(template sigAllSignedTemplate, receipt Cashu
 // if the recomputed digest is not the committed one, if the inputs are not the
 // receipt's references, or if a destination is not the one the bidder pinned.
 //
-// The templates come from the COMMITTED BID CONTENT (the sweeper looks the bid
-// up in consensus state), never from an off-chain bearer store: the bidder's
-// pre-authorization is consensus-verifiable material now.
+// The templates come from the COMMITTED BID CONTENT, re-derived by the release
+// check against the committed auction and receipt -- never from a caller-supplied
+// copy and never from an off-chain bearer store: the bidder's pre-authorization
+// is consensus-verifiable material now.
 //
 // The witness carries both signatures over the §3 SIG_ALL digest: the bidder's
 // from the template and the committee's from the port, in the order the B0 probe
@@ -1109,13 +1122,36 @@ func sigAllTemplateInputsAreReceipt(template sigAllSignedTemplate, receipt Cashu
 // signature for the SIG_ALL route is produced. On success the mint's signatures
 // are unblinded with the template openings; the caller persists the fresh proofs
 // exactly as the cooperative path does.
-func (server *APIServer) demoMintSigAllSpend(ctx context.Context, lockReceipt CashuLockReceipt, templates sigAllDepositTemplates, outcome, recipient string) ([]demoMintSpentProof, error) {
-	signer, err := server.committeeSigner()
+func (server *APIServer) demoMintSigAllSpend(ctx context.Context, lockReceipt CashuLockReceipt, intent committeeSpendIntent) ([]demoMintSpentProof, error) {
+	if server.demoMintKeyset == nil {
+		return nil, errors.New("sigall spend has no mint keyset")
+	}
+
+	// RELEASE CHECK. This is the committee signing boundary for the SIG_ALL
+	// route: before the port produces a signature, the server re-derives from
+	// its OWN committed state that this spend is authorized, that its
+	// destination is the committed one, and that the outcome template it is
+	// about to submit is the COMMITTED one -- re-verified against the committed
+	// auction and receipt, never a caller-supplied copy. It catches a
+	// non-colluding fault; it does NOT stop a hacked majority, and
+	// CommitteeSigner still holds one local key, not threshold custody. See
+	// release_check.go.
+	release, err := server.releaseCheck(ctx, intent, nil)
 	if err != nil {
 		return nil, err
 	}
-	if server.demoMintKeyset == nil {
-		return nil, errors.New("sigall spend has no mint keyset")
+	if release.templates == nil {
+		return nil, fmt.Errorf("sigall spend has no committed %s template to submit", intent.Outcome)
+	}
+	outcome := intent.Outcome
+	recipient := intent.Recipient
+
+	// Submit the COMMITTED template the release check verified, not a copy the
+	// caller passed in.
+	templates := *release.templates
+	signer, err := server.committeeSigner()
+	if err != nil {
+		return nil, err
 	}
 
 	// Pick the committed outcome. There is no fallback and no locally-built
