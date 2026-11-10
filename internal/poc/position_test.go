@@ -301,9 +301,12 @@ func TestPositionSingleLegRegression(t *testing.T) {
 		t.Parallel()
 		fx := sigAllFixture(t)
 		bidder := testPrivateKey(t)
-		event, _ := buildSigAllBid(t, fx, bidder, 128)
+		wallet := newWalletClaim(t)
+		mint := newTestPinnedMint(t, 64)
+		policy := mint.policy(t)
+		event := sigAllBackedBid(t, fx, mint, bidder, wallet, 128)
 
-		next, err := ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, DefaultPolicy(), fx.seed)
+		next, err := ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, policy, fx.seed)
 		if err != nil {
 			t.Fatalf("single cashu_sigall_v1 bid: %v", err)
 		}
@@ -311,7 +314,7 @@ func TestPositionSingleLegRegression(t *testing.T) {
 			t.Fatalf("single-leg sigall auction = high %d leader %q, want 128 / %q",
 				next.Auctions[fx.auctionID].HighBid, next.Auctions[fx.auctionID].LeaderBidID, event.ID)
 		}
-		closed, err := ApplyTransaction(next, Transaction{Version: TxVersion, Type: "close", AuctionID: fx.auctionID}, 1_600, DefaultPolicy(), fx.seed)
+		closed, err := ApplyTransaction(next, Transaction{Version: TxVersion, Type: "close", AuctionID: fx.auctionID}, 1_600, policy, fx.seed)
 		if err != nil {
 			t.Fatalf("close: %v", err)
 		}

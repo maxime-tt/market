@@ -128,6 +128,20 @@ func (sweeper *demoOutcomeSweeper) clearBackoff(id string) {
 	delete(sweeper.retryCount, id)
 }
 
+// sigAllLockHasTemplates reports whether a lock belongs to a cashu_sigall_v1
+// committed bid that carries the bidder's pre-signed outcome templates. Such a
+// lock is resolvable by the sweeper without any deposited bearer proof: the
+// pre-authorized transactions live in the committed bid content, verified by
+// consensus at admission.
+func sigAllLockHasTemplates(state State, lock Lock) bool {
+	bid, ok := state.Bids[lock.BidID]
+	if !ok || bid.CashuTokenSHA256 == "" || bid.OutcomeTemplates == nil {
+		return false
+	}
+	receipt, ok := state.CashuLocks[bid.CashuTokenSHA256]
+	return ok && receipt.FundingMode == FundingModeCashuSigAll
+}
+
 // demoOutcomeTargets lists, deterministically, every lock that a stored
 // authorization would let the coordinator resolve. It reads only committed
 // state: a lock is listed only when its status and the auction's facts agree
@@ -137,9 +151,11 @@ func demoOutcomeTargets(state State) []demoOutcomeTarget {
 	for _, lock := range state.Locks {
 		switch lock.Status {
 		case "winner_selected":
-			// A lock is resolvable once the wallet-spend-key settle
-			// authorization for this exact proof set is committed.
-			if lock.SettleAuthorization == "" {
+			// A cashu_lock_v1 lock is resolvable once the wallet-spend-key
+			// settle authorization for this exact proof set is committed; a
+			// cashu_sigall_v1 lock is resolvable from its committed bid's own
+			// pre-signed templates.
+			if lock.SettleAuthorization == "" && !sigAllLockHasTemplates(state, lock) {
 				continue
 			}
 			auction, ok := state.Auctions[lock.AuctionID]
@@ -150,7 +166,7 @@ func demoOutcomeTargets(state State) []demoOutcomeTarget {
 			}
 			targets = append(targets, demoOutcomeTarget{bidID: lock.BidID, outcome: "settle"})
 		case "refundable":
-			if lock.RefundAuthorization == "" {
+			if lock.RefundAuthorization == "" && !sigAllLockHasTemplates(state, lock) {
 				continue
 			}
 			targets = append(targets, demoOutcomeTarget{bidID: lock.BidID, outcome: "refund"})
@@ -188,10 +204,12 @@ func (sweeper *demoOutcomeSweeper) Step(ctx context.Context) error {
 		}
 		proofs, haveProofs := sweeper.server.demoOutcomeProofs.get(target.bidID)
 		parkKey := demoOutcomeParkKey(lock, target.outcome)
-		if _, parked := sweeper.server.demoSettlements.get(parkKey); !haveProofs && !parked {
+		if _, parked := sweeper.server.demoSettlements.get(parkKey); !haveProofs && !parked && !sigAllLockHasTemplates(state, lock) {
 			// Nothing to act on yet: the bidder has not deposited the bearer
 			// proofs and no payout was produced on an earlier attempt. Not an
-			// error -- it is the expected state until one of those arrives.
+			// error -- it is the expected state until one of those arrives. A
+			// cashu_sigall_v1 lock needs neither: its pre-signed templates live
+			// in the committed bid content.
 			continue
 		}
 		if err := sweeper.resolve(ctx, state, lock, target.outcome, proofs); err != nil {
@@ -231,31 +249,55 @@ func (sweeper *demoOutcomeSweeper) resolve(ctx context.Context, state State, loc
 	if !ok {
 		return fmt.Errorf("%w: committed receipt is missing", errDemoOutcomePermanent)
 	}
-	// A cashu_lock_v1 lock is authorized by the wallet-spend-key consent
-	// signature stored on the lock, over the consent message for this exact
-	// committed proof set, so the coordinator never acts on a lock whose
+	// A cashu_sigall_v1 lock is authorized by the templates committed in its own
+	// bid content; the coordinator submits exactly one of them and constructs
+	// nothing. A cashu_lock_v1 lock is authorized by the wallet-spend-key
+	// consent signature stored on the lock, over the consent message for this
+	// exact committed proof set, so the coordinator never acts on a lock whose
 	// authorization names a different outcome or a different proof set.
+	sigAll := receipt.FundingMode == FundingModeCashuSigAll
 	var recipient string
-	switch outcome {
-	case "settle":
-		auction, ok := state.Auctions[lock.AuctionID]
-		if !ok {
-			return fmt.Errorf("%w: settle names no auction", errDemoOutcomePermanent)
+	if sigAll {
+		switch outcome {
+		case "settle":
+			auction, ok := state.Auctions[lock.AuctionID]
+			if !ok {
+				return fmt.Errorf("%w: settle names no auction", errDemoOutcomePermanent)
+			}
+			recipient = auction.SellerCocoPaymentPublicKey
+			if !validCompressedPublicKey(recipient) {
+				return fmt.Errorf("%w: auction committed no seller wallet payout key", errDemoOutcomePermanent)
+			}
+		case "refund":
+			recipient = receipt.RefundPublicKey
+			if !validCompressedPublicKey(recipient) {
+				return fmt.Errorf("%w: receipt committed no wallet spend key", errDemoOutcomePermanent)
+			}
+		default:
+			return fmt.Errorf("%w: unknown outcome %q", errDemoOutcomePermanent, outcome)
 		}
-		if err := demoMintVerifySettleOwnership(lock.AuctionID, receipt.ProofStateRefs, receipt.RefundPublicKey, lock.SettleAuthorization); err != nil {
-			return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+	} else {
+		switch outcome {
+		case "settle":
+			auction, ok := state.Auctions[lock.AuctionID]
+			if !ok {
+				return fmt.Errorf("%w: settle names no auction", errDemoOutcomePermanent)
+			}
+			if err := demoMintVerifySettleOwnership(lock.AuctionID, receipt.ProofStateRefs, receipt.RefundPublicKey, lock.SettleAuthorization); err != nil {
+				return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+			}
+			recipient = auction.SellerCocoPaymentPublicKey
+			if !validCompressedPublicKey(recipient) {
+				return fmt.Errorf("%w: auction committed no seller wallet payout key", errDemoOutcomePermanent)
+			}
+		case "refund":
+			if _, err := demoMintVerifyRefundOwnership(lock.AuctionID, receipt.ProofStateRefs, receipt.RefundPublicKey, lock.RefundAuthorization); err != nil {
+				return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+			}
+			recipient = receipt.RefundPublicKey
+		default:
+			return fmt.Errorf("%w: unknown outcome %q", errDemoOutcomePermanent, outcome)
 		}
-		recipient = auction.SellerCocoPaymentPublicKey
-		if !validCompressedPublicKey(recipient) {
-			return fmt.Errorf("%w: auction committed no seller wallet payout key", errDemoOutcomePermanent)
-		}
-	case "refund":
-		if _, err := demoMintVerifyRefundOwnership(lock.AuctionID, receipt.ProofStateRefs, receipt.RefundPublicKey, lock.RefundAuthorization); err != nil {
-			return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
-		}
-		recipient = receipt.RefundPublicKey
-	default:
-		return fmt.Errorf("%w: unknown outcome %q", errDemoOutcomePermanent, outcome)
 	}
 
 	parkKey := demoOutcomeParkKey(lock, outcome)
@@ -273,25 +315,51 @@ func (sweeper *demoOutcomeSweeper) resolve(ctx context.Context, state State, loc
 
 	var fresh []demoMintSpentProof
 	var err error
-	// The bearer proofs must be exactly the committed set and must cover the
-	// lock. This also rejects a deposit that does not match.
-	if err := demoMintVerifyProofSet(receipt, proofs, lock.Amount); err != nil {
-		return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
-	}
-	// The mint must still see every proof as unspent. Fail closed: a spent
-	// proof outside our own durable payout means the value already moved
-	// elsewhere.
-	if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
-		if errors.Is(err, ErrMintProofSpent) {
-			// Terminal: the mint settled this proof and it is not our
-			// parked payout, so the value is gone. Retrying cannot fix it.
+	if sigAll {
+		// The committed bid content is the ONLY source of the transaction; a
+		// bid that committed no templates is a deterministic refusal, not a
+		// retry.
+		templates := bid.OutcomeTemplates
+		if templates == nil {
+			return fmt.Errorf("%w: sigall bid committed no outcome templates", errDemoOutcomePermanent)
+		}
+		// The mint must still see every proof as unspent. Fail closed: a spent
+		// proof outside our own durable payout means the value already moved.
+		if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
+			if errors.Is(err, ErrMintProofSpent) {
+				// A proof the mint has settled is not retryable: the value
+				// already moved somewhere that is not our durable payout, and
+				// no number of retries can change that. Quarantine it instead
+				// of looping forever on DEMO_OUTCOME_UNRESOLVED.
+				return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+			}
+			return err
+		}
+		fresh, err = server.demoMintSigAllSpend(ctx, receipt, *templates, outcome, recipient)
+		if err != nil {
+			return err
+		}
+	} else {
+		// First attempt: the bearer proofs must be exactly the committed set and
+		// must cover the lock. This also rejects a deposit that does not match.
+		if err := demoMintVerifyProofSet(receipt, proofs, lock.Amount); err != nil {
 			return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
 		}
-		return err
-	}
-	fresh, err = server.demoMintCooperativeSpend(ctx, proofs, recipient)
-	if err != nil {
-		return err
+		// The mint must still see every proof as unspent. Fail closed: a spent
+		// proof outside our own durable payout means the value already moved
+		// elsewhere.
+		if err := VerifyCashuLockProofsAtMint(server.demoMintChecker, receipt); err != nil {
+			if errors.Is(err, ErrMintProofSpent) {
+				// Terminal: the mint settled this proof and it is not our
+				// parked payout, so the value is gone. Retrying cannot fix it.
+				return fmt.Errorf("%w: %v", errDemoOutcomePermanent, err)
+			}
+			return err
+		}
+		fresh, err = server.demoMintCooperativeSpend(ctx, proofs, recipient)
+		if err != nil {
+			return err
+		}
 	}
 	digest, err := demoPayoutTokenDigest(fresh)
 	if err != nil {

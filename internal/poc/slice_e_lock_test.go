@@ -218,8 +218,10 @@ func TestSliceERule7SigAllBidWithProofsCommitsEndToEnd(t *testing.T) {
 		}
 		sort.Strings(refs)
 		receipt := testCarriedProofReceipt(t, committee, fx.auctionID, actorForKey(bidder), 128, required, wallet.publicKey, refs, FundingModeCashuSigAll)
+		templates := sigAllSignedTemplates(t, mint.keysetID, wallet, proofs, fx.sellerKey.publicKey, 128)
 		return bidContent{
 			AuctionID: fx.auctionID, Amount: 128, CashuLock: &receipt, Proofs: proofs,
+			OutcomeTemplates: &templates,
 		}
 	}
 

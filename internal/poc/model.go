@@ -222,7 +222,13 @@ type Bid struct {
 	ReservationID       string   `json:"reservation_id,omitempty"`
 	IntegratedFundingID string   `json:"integrated_funding_id,omitempty"`
 	ReplacesBidID       string   `json:"replaces_bid_id,omitempty"`
-	CommittedAt     int64  `json:"committed_at"`
+	// OutcomeTemplates is the committed cashu_sigall_v1 bid's own carrier of
+	// the bidder's pre-signed settle and refund transactions. It lives in
+	// consensus state (verified in ApplyTransaction before it is stored) so the
+	// coordinator's offline sweeper can submit exactly the pre-authorized
+	// outcome without a separate bearer store. Omitted for every other route.
+	OutcomeTemplates *sigAllDepositTemplates `json:"outcome_templates,omitempty"`
+	CommittedAt      int64                   `json:"committed_at"`
 }
 
 // IntegratedFundingReceipt is the non-bearer, consensus-visible admission
@@ -871,6 +877,16 @@ type bidContent struct {
 	// byte-identically. Type reused: demoMintSpendProof already carries exactly
 	// this field set for the mint-backed routes.
 	Proofs []demoMintSpendProof `json:"proofs,omitempty"`
+	// OutcomeTemplates carries the bidder's two pre-signed SIG_ALL outcome
+	// transactions (settle and refund) IN the committed bid content, so a
+	// cashu_sigall_v1 bid remains settleable and refundable after the bidder
+	// goes offline. Consensus verifies them in ApplyTransaction
+	// (verifySigAllBidTemplates): the inputs are the bid's committed proofs,
+	// the destinations are the committed seller key and the receipt's wallet
+	// spend key, and each carries the bidder's signature over its own digest.
+	// Required for cashu_sigall_v1 and omitted for every other route, so those
+	// bids serialize byte-identically.
+	OutcomeTemplates *sigAllDepositTemplates `json:"outcome_templates,omitempty"`
 }
 
 // bidOutcomeAuthorizations is the bid content the bidder's wallet publishes
@@ -1070,6 +1086,12 @@ func ValidateForMempool(prior State, tx Transaction, policy Policy, mintSeed []b
 				if err := verifyBidOutcomeAuthorizations(content); err != nil {
 					return err
 				}
+			} else if err := verifySigAllBidTemplates(auction, content, *content.CashuLock, policy); err != nil {
+				// The committed bid content carries the bidder's pre-signed
+				// settle and refund templates; refuse a malformed or
+				// unauthorized one deterministically at mempool admission,
+				// exactly as ApplyTransaction will.
+				return err
 			}
 		}
 	}
@@ -1376,6 +1398,14 @@ func applyBid(state *State, actor, eventID string, committedAt int64, content bi
 		if err := verifyBidProofs(auction, content, policy); err != nil {
 			return err
 		}
+		// A cashu_sigall_v1 bid must also carry the bidder's pre-signed outcome
+		// templates, verified inside consensus here so every validator agrees
+		// before the bid commits.
+		if auction.FundingMode == FundingModeCashuSigAll || content.CashuLock.FundingMode == FundingModeCashuSigAll {
+			if err := verifySigAllBidTemplates(auction, content, *content.CashuLock, policy); err != nil {
+				return err
+			}
+		}
 		return applyAcceptedBid(state, actor, eventID, committedAt, content, nil, policy)
 	}
 	if len(content.Inputs) == 0 || len(content.Inputs) > MaxInputs {
@@ -1577,6 +1607,14 @@ func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, co
 				CommittedAt: committedAt, OriginalEndTime: auction.OriginalEndTime, CertifiedEndTime: auction.EndTime,
 			}
 		}
+	}
+	// A cashu_sigall_v1 bid carries its pre-signed outcome templates; storing
+	// them in consensus state is what lets the coordinator's offline sweeper
+	// submit exactly the pre-authorized transaction without a separate bearer
+	// store. They were verified by verifySigAllBidTemplates before reaching
+	// here.
+	if content.OutcomeTemplates != nil {
+		bid.OutcomeTemplates = content.OutcomeTemplates
 	}
 	state.Bids[eventID] = bid
 	lock := Lock{ID: eventID, AuctionID: auction.ID, BidID: eventID, Bidder: actor, Amount: content.Amount, Status: "locked"}

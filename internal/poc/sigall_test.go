@@ -3,6 +3,7 @@ package poc
 import (
 	"crypto/ed25519"
 	"encoding/hex"
+	"encoding/json"
 	"sort"
 	"strings"
 	"testing"
@@ -10,10 +11,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
-
-// sigAllTestKeyset is a placeholder keyset id for the lock receipt's proof
-// references. The coordinator only requires it to be non-empty.
-const sigAllTestKeyset = "00e8839167216bc1"
 
 // TestSigAllDigestMatchesGoldenVector pins the frozen (§3) SIG_ALL digest
 // convention against the shared vector both languages carry. If this changes,
@@ -98,13 +95,75 @@ func sigAllLockReceipt(t *testing.T, committee *btcec.PrivateKey, auctionID, bid
 	return receipt
 }
 
-// sigAllProofRefs builds the two committed NUT-07 references (sorted) the lock
-// receipt binds.
-func sigAllProofRefs(t *testing.T) []string {
+// sigAllOutputSecret builds a NUT-10 P2PK output secret locked to recipient,
+// exactly the shape the wallet's SIG_ALL templates carry.
+func sigAllOutputSecret(t *testing.T, recipient string) string {
 	t.Helper()
-	refs := make([]string, 0, 2)
+	secret := []any{"P2PK", map[string]any{
+		"nonce": hex.EncodeToString(testPrivateKey(t).Serialize()),
+		"data":  recipient,
+		"tags":  [][]string{{"sigflag", "SIG_INPUTS"}},
+	}}
+	encoded, err := json.Marshal(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(encoded)
+}
+
+// sigAllSignedTemplateFor builds one signed outcome template: the inputs it
+// spends, a single output paying `amount` to `recipient`, the derived digest and
+// the bidder's wallet-spend-key signature over it.
+func sigAllSignedTemplateFor(t *testing.T, keysetID string, wallet walletClaim, inputs []sigAllTemplateInput, recipient string, amount int64) sigAllSignedTemplate {
+	t.Helper()
+	template := sigAllSignedTemplate{
+		Inputs: inputs,
+		Outputs: []sigAllTemplateOutput{{
+			Amount: amount, ID: keysetID,
+			Secret: sigAllOutputSecret(t, recipient),
+			R:      hex.EncodeToString(testPrivateKey(t).Serialize()),
+		}},
+	}
+	digest, err := sigAllTemplateDigest(template)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template.Digest = digest
+	signature, err := schnorr.Sign(wallet.key, mustHex(digest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	template.BidderSignature = hex.EncodeToString(signature.Serialize())
+	return template
+}
+
+// sigAllSignedTemplates signs both committed outcomes for a proof set: settle to
+// the auction's committed seller key and refund to the bidder's own wallet key.
+func sigAllSignedTemplates(t *testing.T, keysetID string, wallet walletClaim, proofs []demoMintSpendProof, sellerRecipient string, amount int64) sigAllDepositTemplates {
+	t.Helper()
+	inputs := make([]sigAllTemplateInput, 0, len(proofs))
+	for _, proof := range proofs {
+		inputs = append(inputs, sigAllTemplateInput{Amount: proof.Amount, ID: proof.KeysetID, Secret: proof.Secret, C: proof.C})
+	}
+	settle := sigAllSignedTemplateFor(t, keysetID, wallet, inputs, sellerRecipient, amount)
+	refund := sigAllSignedTemplateFor(t, keysetID, wallet, inputs, wallet.publicKey, amount)
+	return sigAllDepositTemplates{Settle: settle, Refund: refund}
+}
+
+// sigAllBackedBid builds a fully-backed, consensus-valid cashu_sigall_v1 bid:
+// two 64-sat committed proofs locked exactly 2-of-2 SIG_ALL to [wallet, committee],
+// with the bid content carrying the bidder's pre-signed settle and refund
+// templates. The proofs are minted by the pinned test mint, so verifyBidProofs'
+// DLEQ check passes. The auction's required locktime is read from committed
+// state.
+func sigAllBackedBid(t *testing.T, fx sigAllFixtureState, mint testPinnedMint, bidder *btcec.PrivateKey, wallet walletClaim, amount int64) SignedEvent {
+	t.Helper()
+	required := auctionRequiredLocktime(fx.state.Auctions[fx.auctionID])
+	var proofs []demoMintSpendProof
+	var refs []string
 	for index := 0; index < 2; index++ {
-		secret := hex.EncodeToString(testPrivateKey(t).Serialize())
+		secret := sigAllLockSecret(t, wallet.publicKey, compressed(fx.committee), required)
+		proofs = append(proofs, mint.proofForSecret(t, 64, secret))
 		reference, err := demoMintProofY(secret)
 		if err != nil {
 			t.Fatal(err)
@@ -112,19 +171,13 @@ func sigAllProofRefs(t *testing.T) []string {
 		refs = append(refs, reference)
 	}
 	sort.Strings(refs)
-	return refs
-}
-
-// buildSigAllBid returns a committed cashu_sigall_v1 bid plus the lock receipt
-// it commits. The bid carries the lock and, when a pinned mint policy is in
-// play, its own proofs; here the lock alone is enough to exercise admission.
-func buildSigAllBid(t *testing.T, fx sigAllFixtureState, bidder *btcec.PrivateKey, amount int64) (SignedEvent, CashuLockReceipt) {
-	t.Helper()
-	wallet := newWalletClaim(t)
-	refs := sigAllProofRefs(t)
-	receipt := sigAllLockReceipt(t, fx.committee, fx.auctionID, actorForKey(bidder), amount, refs, wallet)
-	content := bidContent{AuctionID: fx.auctionID, Amount: amount, CashuLock: &receipt}
-	return testEvent(t, bidder, 1_001, KindBid, content), receipt
+	receipt := testCarriedProofReceipt(t, fx.committee, fx.auctionID, actorForKey(bidder), amount, required, wallet.publicKey, refs, FundingModeCashuSigAll)
+	templates := sigAllSignedTemplates(t, mint.keysetID, wallet, proofs, fx.sellerKey.publicKey, amount)
+	content := bidContent{
+		AuctionID: fx.auctionID, Amount: amount, CashuLock: &receipt, Proofs: proofs,
+		OutcomeTemplates: &templates,
+	}
+	return testEvent(t, bidder, 1_001, KindBid, content)
 }
 
 // TestSigAllReceiptCommitsTwoKeyConditionAndMode pins the wave-1 receipt shape:
@@ -134,9 +187,12 @@ func TestSigAllReceiptCommitsTwoKeyConditionAndMode(t *testing.T) {
 	t.Parallel()
 	fx := sigAllFixture(t)
 	bidder := testPrivateKey(t)
-	event, _ := buildSigAllBid(t, fx, bidder, 128)
+	wallet := newWalletClaim(t)
+	mint := newTestPinnedMint(t, 64)
+	policy := mint.policy(t)
+	event := sigAllBackedBid(t, fx, mint, bidder, wallet, 128)
 
-	next, err := ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, DefaultPolicy(), fx.seed)
+	next, err := ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, policy, fx.seed)
 	if err != nil {
 		t.Fatalf("valid sigall bid: %v", err)
 	}
@@ -150,6 +206,10 @@ func TestSigAllReceiptCommitsTwoKeyConditionAndMode(t *testing.T) {
 	}
 	if receipt.CommitteePublicKey == "" || receipt.RefundPublicKey == "" {
 		t.Fatal("receipt did not record both the committee key and the wallet spend key")
+	}
+	// The committed bid carries the bidder's pre-signed outcome templates.
+	if bid.OutcomeTemplates == nil || bid.OutcomeTemplates.Settle.Digest == "" || bid.OutcomeTemplates.Refund.BidderSignature == "" {
+		t.Fatal("committed sigall bid did not carry its pre-signed outcome templates")
 	}
 }
 
