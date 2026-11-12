@@ -4,6 +4,7 @@ import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
 import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
 import { StorefrontRenderer } from '@ui/storefront'
 import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
+import { parseStorefrontPage } from '@sdk/commerce/storefront'
 import { BrowseNav } from '@ui/browse/browse-nav'
 
 /**
@@ -92,7 +93,7 @@ function BrowseIndex() {
 					onNavigateHome={() => navigate({ to: '/' })}
 					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
 				/>
-				<StorefrontRenderer page={homePage} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
+				<StorefrontRenderer page={parseStorefrontPage(JSON.stringify(homePage)).page as never} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
 			</>
 		)
 	}
