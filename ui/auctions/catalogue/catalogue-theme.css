@@ -1,0 +1,158 @@
+/**
+ * The Catalogue theme preset — Layout A's light token set, rebuilt from
+ * `reference/EXTRACTION-STRUCTURE.md` (the extraction's token table, S:17–18).
+ *
+ * This is the dependency the auctions programme was said to need: the earlier
+ * uncommitted preset worktree was never committed and no longer exists, so the
+ * values are taken from the recorded extraction rather than from memory. Light
+ * only for now — the extraction also carries the dark set (S:32) for Layout B/C,
+ * which are out of scope until the Live Show surface is un-deferred.
+ *
+ * Scoped to the catalogue surface so it cannot leak into the browse tokens.
+ */
+.cat {
+	--cat-bg: #f4ece3;
+	--cat-surface: #fffcf8;
+	--cat-surface-2: #f0e2d5;
+	--cat-ink: #1b1718;
+	--cat-muted: #6e625a;
+	--cat-line: #e2d3c4;
+	--cat-pink: #ff3eb5;
+	--cat-pink-deep: #c8157f;
+	--cat-orange: #f7931a;
+	--cat-win: #16a35a;
+	--cat-lose: #e5484d;
+	--cat-radius: 10px;
+
+	background: var(--cat-bg);
+	color: var(--cat-ink);
+	font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+	min-height: 100vh;
+}
+
+.cat__wrap {
+	max-width: 1180px;
+	margin: 0 auto;
+	padding: 28px 24px 64px;
+}
+
+.cat__banner {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 22px;
+	padding: 10px 14px;
+	border: 1px solid var(--cat-line);
+	border-radius: var(--cat-radius);
+	background: var(--cat-surface-2);
+	color: var(--cat-muted);
+	font-family: 'DM Sans', system-ui, sans-serif;
+	font-size: 13px;
+}
+
+.cat__banner b {
+	color: var(--cat-ink);
+	font-weight: 600;
+}
+
+.cat__head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 18px;
+}
+
+.cat__title {
+	font-size: 40px;
+	line-height: 1.05;
+	letter-spacing: -0.01em;
+	margin: 0;
+}
+
+.cat__sub {
+	color: var(--cat-muted);
+	font-family: 'DM Sans', system-ui, sans-serif;
+	font-size: 13px;
+}
+
+.cat__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 18px;
+}
+
+.cat__card {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 14px;
+	background: var(--cat-surface);
+	border: 1px solid var(--cat-line);
+	border-radius: var(--cat-radius);
+	text-decoration: none;
+	color: inherit;
+}
+
+.cat__shot {
+	aspect-ratio: 16/10;
+	border-radius: 8px;
+	background: linear-gradient(160deg, var(--cat-surface-2), var(--cat-bg));
+	border: 1px solid var(--cat-line);
+	overflow: hidden;
+}
+
+.cat__shot img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.cat__lot {
+	font-family: 'DM Sans', system-ui, sans-serif;
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--cat-muted);
+}
+
+.cat__card-title {
+	font-size: 20px;
+	line-height: 1.2;
+	margin: 0;
+}
+
+.cat__meta {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 10px;
+	margin-top: auto;
+	padding-top: 10px;
+	border-top: 1px solid var(--cat-line);
+	font-family: 'DM Sans', system-ui, sans-serif;
+	font-size: 13px;
+}
+
+.cat__price {
+	font-weight: 600;
+	color: var(--cat-ink);
+}
+
+.cat__timer {
+	color: var(--cat-pink-deep);
+	font-variant-numeric: tabular-nums;
+}
+
+.cat__state {
+	color: var(--cat-muted);
+	font-size: 12px;
+}
+
+.cat__empty {
+	padding: 48px 0;
+	text-align: center;
+	color: var(--cat-muted);
+	font-family: 'DM Sans', system-ui, sans-serif;
+}

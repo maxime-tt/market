@@ -8,6 +8,7 @@ import { zapPurchaseRoutes } from './http/zapPurchase'
 import { PORT } from './runtime'
 import { websocketHandler } from './websocket'
 import type { BunRoutes } from './http/types'
+import { buildAuctionsProtocolRoutes } from './http/auctionsProtocol'
 
 /**
  * Compose the Bun HTTP/WebSocket server. Routes are merged from each
@@ -40,6 +41,8 @@ export function buildServer({ indexHtml }: BuildServerOptions): Server<undefined
 		// Browse search proxy — mounted only when the instance selects the
 		// `rabbithole` provider; an empty record (nothing mounted) by default.
 		...buildBrowseSearchRoutes(),
+		// Auctions backend read surface (loopback demo on this box).
+		...buildAuctionsProtocolRoutes(),
 		// Product pages get og: meta tags server-rendered into the initial
 		// HTML (issue #459) — must beat the catch-all below.
 		...ogRoutes(indexHtml),

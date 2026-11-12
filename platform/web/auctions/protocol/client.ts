@@ -52,6 +52,8 @@ export interface CommittedAuction {
 	late_bid_extension_seconds?: number
 	max_total_extension_seconds?: number
 	status?: string
+	/** The lot's image, committed from the create content. */
+	image_url?: string
 }
 
 export interface CommittedBid {
