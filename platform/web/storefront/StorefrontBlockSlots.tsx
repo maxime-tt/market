@@ -2,6 +2,7 @@ import { ProductCardHost } from '@platform/web/products/ProductCardHost'
 import { nip05ValidationQueryOptions, getNormalizedProfileDisplayName, useProfile } from '@platform/web/profiles/profileQuery'
 import { productsByPubkeyQueryOptions } from '@platform/web/products/productQuery'
 import type { NDKEvent } from '@platform/web/readContext'
+import { getReadContext } from '@platform/web/readContext'
 import {
 	CategoriesBlock,
 	FeaturedProductBlock,
@@ -76,14 +77,30 @@ function FeaturedProductSlot(props: FeaturedProductBlockProps) {
 	)
 }
 
+/**
+ * The hand-picked product row.
+ *
+ * The block stores explicit `d` tags of listings the editor chose, and a home
+ * page is authored by the app key — which owns no listings. Resolving the row
+ * against the author's own set would therefore always be empty, so the read is
+ * the explicit addresses themselves: one `#d` query for exactly the tags in the
+ * document. The page can only show what the editor named, which is the property
+ * that matters; it is not a free-form query.
+ */
 function ProductRowSlot(props: ProductRowBlockProps) {
-	const { pubkey } = useStorefrontContext()
-	const { data: products, isLoading, isError } = useQuery(productsByPubkeyQueryOptions(pubkey))
+	const { data, isLoading, isError } = useQuery({
+		queryKey: ['storefront', 'product-row', props.productDTags.join(',')],
+		enabled: props.productDTags.length > 0,
+		queryFn: async () => {
+			const context = getReadContext()
+			return await context.fetch([{ kinds: [30402], '#d': props.productDTags }])
+		},
+	})
 
 	return (
 		<ProductRowBlock
 			{...props}
-			products={products ?? null}
+			products={(data ?? null) as never}
 			isLoading={isLoading}
 			isError={isError}
 			renderProduct={(product) => <ProductCardHost product={product as NDKEvent} />}
