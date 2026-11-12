@@ -111,19 +111,14 @@ export function ProductRowPicker({
       </div>
       {selected && (() => {
         const picked = results.find((p) => coordinateOf(p) === selected);
-        if (!picked) return null;
-        const pubkey = picked.pubkey;
-        const content = picked.title || 'Untitled';
-        const image = picked.image;
-        const price = picked.price ? `${picked.price} ${picked.currency ?? 'sats'}` : null;
         return (
           <div className="p-4 border border-gray-300 rounded-md">
             <h3 className="font-medium text-sm mb-2">Selected Product</h3>
             <div className="flex gap-3">
               <div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden">
-                {image ? (
+                {picked?.image ? (
                   <img
-                    src={image}
+                    src={picked.image}
                     alt="Selected"
                     className="w-full h-full object-cover"
                   />
@@ -134,11 +129,29 @@ export function ProductRowPicker({
                 )}
               </div>
               <div className="flex-1">
-                <h3 className="font-medium text-sm line-clamp-2">{content}</h3>
-                <p className="text-xs text-gray-500">
-                  {pubkey.slice(0, 6)}...{pubkey.slice(-6)}
-                </p>
-                {price && <p className="text-xs text-gray-500">{price}</p>}
+                <h3 className="font-medium text-sm line-clamp-2">
+                  {picked?.title || selected}
+                </h3>
+                {/* An unresolvable coordinate stays visible and marked rather
+                    than silently rendering nothing: opening the editor must
+                    not hide a reference it cannot draw, or the author would
+                    rewrite the page without knowing what they dropped. */}
+                {picked ? (
+                  <>
+                    <p className="text-xs text-gray-500">
+                      {picked.pubkey.slice(0, 6)}...{picked.pubkey.slice(-6)}
+                    </p>
+                    {picked.price && (
+                      <p className="text-xs text-gray-500">
+                        {picked.price} {picked.currency ?? 'sats'}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    Not in the current results — search for it to confirm.
+                  </p>
+                )}
                 <p className="text-xs text-gray-500">{selected}</p>
               </div>
             </div>
