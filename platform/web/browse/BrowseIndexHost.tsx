@@ -48,6 +48,7 @@ import { SearchBucketLine, ScanTruncationNotice, isBucketActive, type Bucket } f
 import { SplitView } from '@ui/browse/split-view'
 import { ProductDetailPanel, type ProductDetailOption, type ProductDetailPanelState } from '@ui/browse/product-detail-panel'
 import { formatPriceUnit } from '@ui/utils/format'
+import { recordListingEvent } from '@platform/web/analytics/listingEvents'
 import { useBrowseSearch, useBrowseFacets, useBrowseProductDetail, useBrowseFamilyChildren } from '@platform/web/browse/browseQuery'
 import { materialForPubkey, readProductPrice, type BrowseFacet, type BrowseProduct } from '@platform/web/browse/browseProductMap'
 import { getProductFamilyPriceRange, getVariationDTag, resolveProductVariation } from '@sdk/commerce/discovery'
@@ -433,6 +434,12 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 	 * so renders no picker.
 	 */
 	const detailCoordinate = detail && detail.pubkey && detail.id ? `30402:${detail.pubkey}:${detail.id}` : undefined
+
+	// Analytics: opening a listing is one per-listing VIEW (owner ruling). Keyed
+	// on the coordinate, so re-renders and re-reads do not inflate it.
+	useEffect(() => {
+		if (detailCoordinate) recordListingEvent('listing_view', detailCoordinate)
+	}, [detailCoordinate])
 	const familyAddress =
 		openProduct && openProduct.familyRole !== 'parent' ? undefined : (openProduct?.familyAddress ?? detailCoordinate)
 

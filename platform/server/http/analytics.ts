@@ -8,6 +8,8 @@
  * and the client sends nothing.
  */
 
+import type { BunRoutes } from './types'
+
 type Env = Record<string, string | undefined>
 
 export const ANALYTICS_CONFIG_PATH = '/api/analytics'

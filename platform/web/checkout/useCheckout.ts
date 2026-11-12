@@ -17,6 +17,7 @@ import { authStore } from '@platform/web/auth/authStore'
 import { cartActions, cartStore } from '@platform/web/cart/cartStore'
 import { parseNwcUri, useWallets } from '@platform/web/config/walletStore'
 import { persistInvoicesLocally, updatePersistedInvoiceLocally } from '@platform/web/payments/invoiceStorage'
+import { recordListingEvent, listingCoordinate } from '@platform/web/analytics/listingEvents'
 import { publishOrderWorkflowWithDependencies } from '@platform/web/orders/orderPublish'
 import { publishPaymentReceipt } from '@platform/web/payments/paymentPublish'
 import { bolt11PaymentHash, getPayAggregatorInstance } from '@platform/web/payments/payAggregatorInstance'
@@ -807,6 +808,12 @@ export function useCheckout() {
 				}
 				if (orderOutcome.status === 'failed') throw new Error(orderOutcome.error)
 
+				// Analytics: a published order is per-listing PURCHASE (owner ruling).
+				// The coordinate addresses the listing; no buyer key leaves the app.
+				for (const [productId, product] of Object.entries(cartStore.state.cart.products)) {
+					const sellerPubkey = (product as { sellerPubkey?: string }).sellerPubkey
+					if (sellerPubkey) recordListingEvent('listing_purchase', listingCoordinate(productId, sellerPubkey))
+				}
 				setSpecOrderIds(orderOutcome.orderIds)
 				if (orderOutcome.paymentRequestFailures > 0) {
 					toast.warning(

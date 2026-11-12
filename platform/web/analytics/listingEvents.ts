@@ -41,6 +41,11 @@ export interface ListingEventPayload {
 	payload: { website: string; name: ListingEventName; data: { coordinate: string } }
 }
 
+/** Builds the coordinate a listing event is keyed by: `30402:<seller>:<d>`. */
+export function listingCoordinate(dTag: string, sellerPubkey: string): string {
+	return `30402:${sellerPubkey}:${dTag}`
+}
+
 export function isListingCoordinate(value: string): boolean {
 	// `30402:<64 hex>:<d>` — a `d` tag cannot contain a colon-separated pubkey,
 	// but it may be long; only the first two separators are structural.
