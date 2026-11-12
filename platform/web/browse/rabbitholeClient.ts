@@ -614,7 +614,7 @@ async function readRabbitHoleStream(response: Response, ctx: StreamReadContext):
 	 * per-listing relays from the `search` frame's hits).
 	 */
 	const toProducts = (events: readonly NostrEventLike[]): BrowseProduct[] =>
-		collapseProductFamilyEvents(events).map((product) => {
+		collapseProductFamilyEvents(dedupeByCoordinate(events)).map((product) => {
 			const relays =
 				relaysByEventId.get(product.eventId) ?? relaysByCoordinate.get(`30402:${product.pubkey}:${product.id}`)
 			return relays ? { ...product, relays } : product
@@ -954,6 +954,37 @@ function orderBySeen(relays: string[], relayOrder: string[]): string[] {
  * order after everything ranked, rather than being dropped — it is real data,
  * just unranked.
  */
+/**
+ * One row per addressable listing.
+ *
+ * The index frame and the relay payloads are two views of the same listings, and
+ * the painted list deliberately appends delivered payloads the index did not
+ * name. The same address can therefore arrive twice — a newer version from one
+ * relay, an older from another — and without this the grid shows a listing twice
+ * while the indicator counts two products. Newest `created_at` wins and the
+ * first-seen position is kept, so a card does not jump when its twin lands.
+ */
+export function dedupeByCoordinate(events: readonly NostrEventLike[]): readonly NostrEventLike[] {
+	if (events.length < 2) return events
+	const chosen = new Map<string, NostrEventLike>()
+	const order: string[] = []
+	for (const event of events) {
+		// A listing with no `d` tag has no address to share, so it cannot be a
+		// duplicate of anything: its own event id is the key, which keeps every
+		// such row (the fixtures and the un-addressable edge case both land here).
+		const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+		const key = dTag ? `30402:${event.pubkey}:${dTag}` : `id:${event.id}`
+		const existing = chosen.get(key)
+		if (!existing) {
+			chosen.set(key, event)
+			order.push(key)
+			continue
+		}
+		if ((event.created_at ?? 0) > (existing.created_at ?? 0)) chosen.set(key, event)
+	}
+	return order.map((key) => chosen.get(key) as NostrEventLike)
+}
+
 function orderByHitRank(products: BrowseProduct[], hitRank: Map<string, number>): BrowseProduct[] {
 	if (hitRank.size === 0) return products
 	const UNRANKED = Number.MAX_SAFE_INTEGER
