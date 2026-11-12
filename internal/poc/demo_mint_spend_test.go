@@ -107,7 +107,7 @@ func refundableCashuFixture(t *testing.T) (State, []byte, *btcec.PrivateKey, *bt
 	amounts := amountsOf(proofsA)
 	receiptA := testCashuLockReceipt(t, committee, "mint-backed", actorForKey(bidderA), 128,
 		"op-refund-a", strings.Repeat("a", 64), 1_700, refsA)
-	eventA := testEvent(t, bidderA, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 128, CashuLock: &receiptA, Proofs: proofsA})
+	eventA := testEvent(t, bidderA, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 128, CashuLock: &receiptA, Proofs: proofsA}, bidRootTag(t, state, "mint-backed"))
 	state, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &eventA}, 1_001, backedPolicy(64), seed)
 	if err != nil {
 		t.Fatalf("bid A: %v", err)
@@ -117,7 +117,7 @@ func refundableCashuFixture(t *testing.T) (State, []byte, *btcec.PrivateKey, *bt
 	proofsB, refsB := backedProofs(t, 300)
 	receiptB := testCashuLockReceipt(t, committee, "mint-backed", actorForKey(bidderB), 300,
 		"op-refund-b", strings.Repeat("b", 64), 1_800, refsB)
-	eventB := testEvent(t, bidderB, 1_002, KindBid, bidContent{AuctionID: "mint-backed", Amount: 300, CashuLock: &receiptB, Proofs: proofsB})
+	eventB := testEvent(t, bidderB, 1_002, KindBid, bidContent{AuctionID: "mint-backed", Amount: 300, CashuLock: &receiptB, Proofs: proofsB}, bidRootTag(t, state, "mint-backed"))
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &eventB}, 1_002, backedPolicy(300), seed)
 	if err != nil {
 		t.Fatalf("bid B: %v", err)

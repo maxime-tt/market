@@ -20,7 +20,7 @@ func positionTokenDigest(operation string) string {
 
 // cashuLeg builds one fully authorized cashu_lock_v1 bid whose committed lock
 // amount is the leg's delta.
-func cashuLeg(t *testing.T, committee *btcec.PrivateKey, auctionID string, bidder *btcec.PrivateKey, amount, createdAt int64, operation string) SignedEvent {
+func cashuLeg(t *testing.T, committee *btcec.PrivateKey, auctionID, root string, bidder *btcec.PrivateKey, amount, createdAt int64, operation string) SignedEvent {
 	t.Helper()
 	wallet := newWalletClaim(t)
 	proofs, refs := backedProofs(t, amount)
@@ -28,7 +28,7 @@ func cashuLeg(t *testing.T, committee *btcec.PrivateKey, auctionID string, bidde
 	authorization := testOutcomeAuthorizations(t, auctionID, refs, wallet)
 	return testEvent(t, bidder, createdAt, KindBid, bidContent{
 		AuctionID: auctionID, Amount: amount, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs,
-	})
+	}, []string{"e", root})
 }
 
 // positionFixture commits a mint-backed auction with a chosen reserve and the
@@ -74,13 +74,13 @@ func TestPositionOwnRaiseAddsLegAndHighBidIsPositionTotal(t *testing.T) {
 	bidder := testPrivateKey(t)
 	actor := actorForKey(bidder)
 
-	leg1 := cashuLeg(t, committee, "position-auction", bidder, 128, 1_001, "op-leg-1")
+	leg1 := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, bidder, 128, 1_001, "op-leg-1")
 	state = applyPositionLeg(t, state, seed, leg1, 1_001)
 	if state.Auctions["position-auction"].HighBid != 128 {
 		t.Fatalf("first leg HighBid = %d, want 128", state.Auctions["position-auction"].HighBid)
 	}
 
-	leg2 := cashuLeg(t, committee, "position-auction", bidder, 128, 1_002, "op-leg-2")
+	leg2 := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, bidder, 128, 1_002, "op-leg-2")
 	state = applyPositionLeg(t, state, seed, leg2, 1_002)
 
 	auction := state.Auctions["position-auction"]
@@ -105,9 +105,9 @@ func TestPositionRaiseBelowIncrementIsRefused(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := positionFixture(t, 0)
 	bidder := testPrivateKey(t)
-	state = applyPositionLeg(t, state, seed, cashuLeg(t, committee, "position-auction", bidder, 128, 1_001, "op-leg-1"), 1_001)
+	state = applyPositionLeg(t, state, seed, cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, bidder, 128, 1_001, "op-leg-1"), 1_001)
 
-	dust := cashuLeg(t, committee, "position-auction", bidder, 99, 1_002, "op-leg-dust")
+	dust := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, bidder, 99, 1_002, "op-leg-dust")
 	_, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &dust}, 1_002, DefaultPolicy(), seed)
 	if err == nil || !strings.Contains(err.Error(), "minimum increment over the leading position") {
 		t.Fatalf("dust raise error = %v, want the named increment rule", err)
@@ -121,10 +121,10 @@ func TestPositionNonLeaderMustClearLeader(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := positionFixture(t, 0)
 	holder := testPrivateKey(t)
-	state = applyPositionLeg(t, state, seed, cashuLeg(t, committee, "position-auction", holder, 128, 1_001, "op-leader-leg"), 1_001)
+	state = applyPositionLeg(t, state, seed, cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, holder, 128, 1_001, "op-leader-leg"), 1_001)
 
 	challenger := testPrivateKey(t)
-	short := cashuLeg(t, committee, "position-auction", challenger, 150, 1_002, "op-short")
+	short := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, challenger, 150, 1_002, "op-short")
 	_, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &short}, 1_002, DefaultPolicy(), seed)
 	if err == nil || !strings.Contains(err.Error(), "minimum increment over the leading position") {
 		t.Fatalf("short challenger error = %v, want the named increment rule", err)
@@ -138,11 +138,11 @@ func TestPositionOutbidReturnsEveryLeg(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := positionFixture(t, 0)
 	holder := testPrivateKey(t)
-	state = applyPositionLeg(t, state, seed, cashuLeg(t, committee, "position-auction", holder, 128, 1_001, "op-hold-1"), 1_001)
-	state = applyPositionLeg(t, state, seed, cashuLeg(t, committee, "position-auction", holder, 128, 1_002, "op-hold-2"), 1_002)
+	state = applyPositionLeg(t, state, seed, cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, holder, 128, 1_001, "op-hold-1"), 1_001)
+	state = applyPositionLeg(t, state, seed, cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, holder, 128, 1_002, "op-hold-2"), 1_002)
 
 	challenger := testPrivateKey(t)
-	outbid := cashuLeg(t, committee, "position-auction", challenger, 400, 1_003, "op-outbid")
+	outbid := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, challenger, 400, 1_003, "op-outbid")
 	state = applyPositionLeg(t, state, seed, outbid, 1_003)
 
 	for _, bid := range state.Bids {
@@ -168,9 +168,9 @@ func TestPositionCloseSelectsEveryLegAndReserveUsesTotal(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := positionFixture(t, 200)
 	winner := testPrivateKey(t)
-	leg1 := cashuLeg(t, committee, "position-auction", winner, 128, 1_001, "op-win-1")
+	leg1 := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, winner, 128, 1_001, "op-win-1")
 	state = applyPositionLeg(t, state, seed, leg1, 1_001)
-	leg2 := cashuLeg(t, committee, "position-auction", winner, 128, 1_002, "op-win-2")
+	leg2 := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, winner, 128, 1_002, "op-win-2")
 	state = applyPositionLeg(t, state, seed, leg2, 1_002)
 
 	if state.Auctions["position-auction"].HighBid != 256 || state.Locks[leg1.ID].Amount >= 200 {
@@ -200,13 +200,13 @@ func TestPositionOutcomeSettlesEveryWinningLeg(t *testing.T) {
 	state, seed, committee := positionFixture(t, 0)
 
 	winner := testPrivateKey(t)
-	state = applyPositionLeg(t, state, seed, cashuLeg(t, committee, "position-auction", winner, 128, 1_001, "op-a-1"), 1_001)
+	state = applyPositionLeg(t, state, seed, cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, winner, 128, 1_001, "op-a-1"), 1_001)
 	rival := testPrivateKey(t)
-	rivalLeg := cashuLeg(t, committee, "position-auction", rival, 400, 1_002, "op-b-1")
+	rivalLeg := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, rival, 400, 1_002, "op-b-1")
 	state = applyPositionLeg(t, state, seed, rivalLeg, 1_002)
-	firstLeg := cashuLeg(t, committee, "position-auction", winner, 500, 1_003, "op-a-2")
+	firstLeg := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, winner, 500, 1_003, "op-a-2")
 	state = applyPositionLeg(t, state, seed, firstLeg, 1_003)
-	secondLeg := cashuLeg(t, committee, "position-auction", winner, 128, 1_004, "op-a-3")
+	secondLeg := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, winner, 128, 1_004, "op-a-3")
 	state = applyPositionLeg(t, state, seed, secondLeg, 1_004)
 
 	closed, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "close", AuctionID: "position-auction"}, 1_600, DefaultPolicy(), seed)
@@ -246,7 +246,7 @@ func TestPositionMintBidCannotExitByAssertingReplacement(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := positionFixture(t, 0)
 	bidder := testPrivateKey(t)
-	leg1 := cashuLeg(t, committee, "position-auction", bidder, 128, 1_001, "op-leg-1")
+	leg1 := cashuLeg(t, committee, "position-auction", state.Auctions["position-auction"].RootEventID, bidder, 128, 1_001, "op-leg-1")
 	state = applyPositionLeg(t, state, seed, leg1, 1_001)
 
 	wallet := newWalletClaim(t)
@@ -256,7 +256,7 @@ func TestPositionMintBidCannotExitByAssertingReplacement(t *testing.T) {
 	sneaky := testEvent(t, bidder, 1_002, KindBid, bidContent{
 		AuctionID: "position-auction", Amount: 128, ReplacesBidID: leg1.ID,
 		CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs,
-	})
+	}, bidRootTag(t, state, "position-auction"))
 	state = applyPositionLeg(t, state, seed, sneaky, 1_002)
 
 	if state.Locks[leg1.ID].Status != "locked" {

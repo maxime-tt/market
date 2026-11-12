@@ -339,7 +339,7 @@ func TestCashuLockOutcomeAuthorizationsRoundTripKeepsLockFieldsStable(t *testing
 	plainBidder := testPrivateKey(t)
 	plainProofs, plainRefs := backedProofs(t, 120)
 	receipt := testCashuLockReceipt(t, plainCommittee, "mint-backed", actorForKey(plainBidder), 120, "op-plain", strings.Repeat("c", 64), 1_700, plainRefs)
-	plainEvent := testEvent(t, plainBidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, Proofs: plainProofs})
+	plainEvent := testEvent(t, plainBidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, Proofs: plainProofs}, bidRootTag(t, plainState, "mint-backed"))
 	plain, err := ApplyTransaction(plainState, Transaction{Version: TxVersion, Type: "event", Event: &plainEvent}, 1_001, backedPolicy(120), plainSeed)
 	if err != nil {
 		t.Fatalf("plain bid: %v", err)

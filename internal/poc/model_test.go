@@ -92,16 +92,16 @@ func TestPaymentVerticalSlice(t *testing.T) {
 	markLegacyAuction(&state, "auction-1")
 
 	noteA := onlySpendableNote(t, state, bidderA)
-	bidA := testEvent(t, bidderAKey, 1_001, KindBid, bidContent{AuctionID: "auction-1", Amount: 120, Inputs: []string{noteA.ID}})
+	bidA := testEvent(t, bidderAKey, 1_001, KindBid, bidContent{AuctionID: "auction-1", Amount: 120, Inputs: []string{noteA.ID}}, bidRootTag(t, state, "auction-1"))
 	apply(Transaction{Version: TxVersion, Type: "event", Event: &bidA}, 1_001)
 
-	invalid := testEvent(t, bidderAKey, 1_001, KindBid, bidContent{AuctionID: "auction-1", Amount: 220, Inputs: []string{noteA.ID}})
+	invalid := testEvent(t, bidderAKey, 1_001, KindBid, bidContent{AuctionID: "auction-1", Amount: 220, Inputs: []string{noteA.ID}}, bidRootTag(t, state, "auction-1"))
 	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &invalid}, 1_001, policy, seed); err == nil || !strings.Contains(err.Error(), "spent") {
 		t.Fatalf("spent-note bid error = %v, want spent-input rejection", err)
 	}
 
 	noteB := onlySpendableNote(t, state, bidderB)
-	bidB := testEvent(t, bidderBKey, 1_002, KindBid, bidContent{AuctionID: "auction-1", Amount: 220, Inputs: []string{noteB.ID}})
+	bidB := testEvent(t, bidderBKey, 1_002, KindBid, bidContent{AuctionID: "auction-1", Amount: 220, Inputs: []string{noteB.ID}}, bidRootTag(t, state, "auction-1"))
 	apply(Transaction{Version: TxVersion, Type: "event", Event: &bidB}, 1_002)
 	apply(Transaction{Version: TxVersion, Type: "close", AuctionID: "auction-1"}, 1_182)
 
@@ -209,12 +209,12 @@ func TestCashuLockReceiptBindsBid(t *testing.T) {
 
 	invalid := receipt
 	invalid.TokenSHA256 = strings.Repeat("b", 64)
-	invalidEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "cashu-auction", Amount: 120, CashuLock: &invalid})
+	invalidEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "cashu-auction", Amount: 120, CashuLock: &invalid}, bidRootTag(t, state, "cashu-auction"))
 	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &invalidEvent}, 1_001, DefaultPolicy(), seed); err == nil || !strings.Contains(err.Error(), "signature") {
 		t.Fatalf("mutated Cashu receipt error = %v, want signature rejection", err)
 	}
 
-	validEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "cashu-auction", Amount: 120, CashuLock: &receipt, Proofs: proofs})
+	validEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "cashu-auction", Amount: 120, CashuLock: &receipt, Proofs: proofs}, bidRootTag(t, state, "cashu-auction"))
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &validEvent}, 1_001, backedPolicy(64, 56), seed)
 	if err != nil {
 		t.Fatalf("valid Cashu bid: %v", err)
@@ -243,7 +243,7 @@ func TestCashuLockReceiptBindsBid(t *testing.T) {
 		t.Fatal(err)
 	}
 	replayed.Signature = hex.EncodeToString(replayedSignature.Serialize())
-	replayEvent := testEvent(t, bidder, 1_003, KindBid, bidContent{AuctionID: "cashu-auction-2", Amount: 120, CashuLock: &replayed})
+	replayEvent := testEvent(t, bidder, 1_003, KindBid, bidContent{AuctionID: "cashu-auction-2", Amount: 120, CashuLock: &replayed}, bidRootTag(t, state, "cashu-auction-2"))
 	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &replayEvent}, 1_003, DefaultPolicy(), seed); err == nil || !strings.Contains(err.Error(), "already committed") {
 		t.Fatalf("cross-auction Cashu proof replay error = %v, want global token-digest rejection", err)
 	}
@@ -285,7 +285,7 @@ func TestFridayCustodyReservationsUseCommittedTimeAndCreateEntitlements(t *testi
 
 	place := func(key *btcec.PrivateKey, eventTime, blockTime, amount int64, id, replaces string) SignedEvent {
 		receipt := testReservationReceipt(t, committee, "friday", actorForKey(key), amount, id, replaces, blockTime+policy.ReceiptTTLSeconds)
-		event := testEvent(t, key, eventTime, KindBid, bidContent{AuctionID: "friday", Amount: amount, Reservation: &receipt})
+		event := testEvent(t, key, eventTime, KindBid, bidContent{AuctionID: "friday", Amount: amount, Reservation: &receipt}, bidRootTag(t, state, "friday"))
 		if err := apply(event, blockTime); err != nil {
 			t.Fatalf("place %s at %d: %v", id, blockTime, err)
 		}
@@ -362,7 +362,7 @@ func TestFridayDeadlineIncrementReplacementAndExtensionCap(t *testing.T) {
 		at := state.Auctions["cap"].EndTime - 1
 		id := fmt.Sprintf("cap-reservation-%02d", index)
 		receipt := testReservationReceipt(t, committee, "cap", actorForKey(key), int64(1_000+index*100), id, "", at+policy.ReceiptTTLSeconds)
-		event := testEvent(t, key, at, KindBid, bidContent{AuctionID: "cap", Amount: int64(1_000 + index*100), Reservation: &receipt})
+		event := testEvent(t, key, at, KindBid, bidContent{AuctionID: "cap", Amount: int64(1_000 + index*100), Reservation: &receipt}, bidRootTag(t, state, "cap"))
 		state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, at, policy, seed)
 		if err != nil {
 			t.Fatalf("cap bid %d: %v", index, err)
@@ -376,14 +376,14 @@ func TestFridayDeadlineIncrementReplacementAndExtensionCap(t *testing.T) {
 	leader := state.Bids[state.Auctions["cap"].LeaderBidID]
 	tooSmallKey := testPrivateKey(t)
 	tooSmallReceipt := testReservationReceipt(t, committee, "cap", actorForKey(tooSmallKey), leader.Amount+99, "too-small", "", 3_100+policy.ReceiptTTLSeconds)
-	tooSmall := testEvent(t, tooSmallKey, 3_099, KindBid, bidContent{AuctionID: "cap", Amount: leader.Amount + 99, Reservation: &tooSmallReceipt})
+	tooSmall := testEvent(t, tooSmallKey, 3_099, KindBid, bidContent{AuctionID: "cap", Amount: leader.Amount + 99, Reservation: &tooSmallReceipt}, bidRootTag(t, state, "cap"))
 	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &tooSmall}, 3_099, policy, seed); err == nil || !strings.Contains(err.Error(), "minimum increment") {
 		t.Fatalf("small increment error=%v", err)
 	}
 
 	deadlineKey := testPrivateKey(t)
 	deadlineReceipt := testReservationReceipt(t, committee, "cap", actorForKey(deadlineKey), leader.Amount+100, "at-deadline", "", 3_100+policy.ReceiptTTLSeconds)
-	atDeadline := testEvent(t, deadlineKey, 3_099, KindBid, bidContent{AuctionID: "cap", Amount: leader.Amount + 100, Reservation: &deadlineReceipt})
+	atDeadline := testEvent(t, deadlineKey, 3_099, KindBid, bidContent{AuctionID: "cap", Amount: leader.Amount + 100, Reservation: &deadlineReceipt}, bidRootTag(t, state, "cap"))
 	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &atDeadline}, 3_100, policy, seed); err == nil || !strings.Contains(err.Error(), "late") {
 		t.Fatalf("deadline bid error=%v", err)
 	}
@@ -421,36 +421,36 @@ func TestFridayOwnRaiseInvalidBidsAndReservationReplay(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	legacyFunded := testEvent(t, bidder, 1_050, KindBid, bidContent{AuctionID: "raise", Amount: 1_000, Inputs: []string{"legacy-note"}})
+	legacyFunded := testEvent(t, bidder, 1_050, KindBid, bidContent{AuctionID: "raise", Amount: 1_000, Inputs: []string{"legacy-note"}}, bidRootTag(t, state, "raise"))
 	if err := apply(legacyFunded, 1_050); err == nil || !strings.Contains(err.Error(), "requires a custodial reservation") {
 		t.Fatalf("Friday legacy funding error=%v", err)
 	}
 
 	sellerReceipt := testReservationReceipt(t, committee, "raise", actorForKey(seller), 1_000, "seller-self", "", 1_400)
-	sellerBid := testEvent(t, seller, 1_100, KindBid, bidContent{AuctionID: "raise", Amount: 1_000, Reservation: &sellerReceipt})
+	sellerBid := testEvent(t, seller, 1_100, KindBid, bidContent{AuctionID: "raise", Amount: 1_000, Reservation: &sellerReceipt}, bidRootTag(t, state, "raise"))
 	if err := apply(sellerBid, 1_100); err == nil || !strings.Contains(err.Error(), "seller cannot bid") {
 		t.Fatalf("seller self-bid error=%v", err)
 	}
 
 	firstReceipt := testReservationReceipt(t, committee, "raise", actorForKey(bidder), 1_000, "raise-first", "", 1_401)
-	first := testEvent(t, bidder, 1_101, KindBid, bidContent{AuctionID: "raise", Amount: 1_000, Reservation: &firstReceipt})
+	first := testEvent(t, bidder, 1_101, KindBid, bidContent{AuctionID: "raise", Amount: 1_000, Reservation: &firstReceipt}, bidRootTag(t, state, "raise"))
 	if err := apply(first, 1_101); err != nil {
 		t.Fatal(err)
 	}
 	equalReceipt := testReservationReceipt(t, committee, "raise", actorForKey(other), 1_000, "equal", "", 1_402)
-	equal := testEvent(t, other, 1_102, KindBid, bidContent{AuctionID: "raise", Amount: 1_000, Reservation: &equalReceipt})
+	equal := testEvent(t, other, 1_102, KindBid, bidContent{AuctionID: "raise", Amount: 1_000, Reservation: &equalReceipt}, bidRootTag(t, state, "raise"))
 	if err := apply(equal, 1_102); err == nil || !strings.Contains(err.Error(), "minimum increment") {
 		t.Fatalf("equal bid error=%v", err)
 	}
 
 	wrongReplacement := testReservationReceipt(t, committee, "raise", actorForKey(bidder), 2_000, "raise-wrong", "", 1_403)
-	wrongRaise := testEvent(t, bidder, 1_103, KindBid, bidContent{AuctionID: "raise", Amount: 2_000, Reservation: &wrongReplacement})
+	wrongRaise := testEvent(t, bidder, 1_103, KindBid, bidContent{AuctionID: "raise", Amount: 2_000, Reservation: &wrongReplacement}, bidRootTag(t, state, "raise"))
 	if err := apply(wrongRaise, 1_103); err == nil || !strings.Contains(err.Error(), "replacement") {
 		t.Fatalf("unbound own raise error=%v", err)
 	}
 
 	raiseReceipt := testReservationReceipt(t, committee, "raise", actorForKey(bidder), 2_000, "raise-second", "raise-first", 1_404)
-	raise := testEvent(t, bidder, 1_104, KindBid, bidContent{AuctionID: "raise", Amount: 2_000, Reservation: &raiseReceipt})
+	raise := testEvent(t, bidder, 1_104, KindBid, bidContent{AuctionID: "raise", Amount: 2_000, Reservation: &raiseReceipt}, bidRootTag(t, state, "raise"))
 	if err := apply(raise, 1_104); err != nil {
 		t.Fatal(err)
 	}
@@ -459,7 +459,7 @@ func TestFridayOwnRaiseInvalidBidsAndReservationReplay(t *testing.T) {
 	}
 
 	replayReceipt := testReservationReceipt(t, committee, "replay", actorForKey(other), 1_000, "raise-second", "", 1_405)
-	replay := testEvent(t, other, 1_105, KindBid, bidContent{AuctionID: "replay", Amount: 1_000, Reservation: &replayReceipt})
+	replay := testEvent(t, other, 1_105, KindBid, bidContent{AuctionID: "replay", Amount: 1_000, Reservation: &replayReceipt}, bidRootTag(t, state, "replay"))
 	if err := apply(replay, 1_105); err == nil || !strings.Contains(err.Error(), "already committed") {
 		t.Fatalf("cross-auction reservation replay error=%v", err)
 	}
@@ -485,7 +485,7 @@ func TestFridayReserveUnmetAndNoBidCloseWithoutSale(t *testing.T) {
 		}
 	}
 	receipt := testReservationReceipt(t, committee, "reserve-unmet", actorForKey(bidder), 3_000, "below-reserve", "", 2_400)
-	bid := testEvent(t, bidder, 2_100, KindBid, bidContent{AuctionID: "reserve-unmet", Amount: 3_000, Reservation: &receipt})
+	bid := testEvent(t, bidder, 2_100, KindBid, bidContent{AuctionID: "reserve-unmet", Amount: 3_000, Reservation: &receipt}, bidRootTag(t, state, "reserve-unmet"))
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &bid}, 2_100, policy, seed)
 	if err != nil {
 		t.Fatal(err)
@@ -521,16 +521,16 @@ func TestFridayOwnRaiseVersusOutbidUsesDeterministicCommitOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	firstReceipt := testReservationReceipt(t, committee, "race", actorForKey(leader), 1_000, "race-first", "", 3_300)
-	first := testEvent(t, leader, 3_001, KindBid, bidContent{AuctionID: "race", Amount: 1_000, Reservation: &firstReceipt})
+	first := testEvent(t, leader, 3_001, KindBid, bidContent{AuctionID: "race", Amount: 1_000, Reservation: &firstReceipt}, bidRootTag(t, state, "race"))
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &first}, 3_001, policy, seed)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	raiseReceipt := testReservationReceipt(t, committee, "race", actorForKey(leader), 1_500, "race-raise", "race-first", 3_302)
-	raise := testEvent(t, leader, 3_002, KindBid, bidContent{AuctionID: "race", Amount: 1_500, Reservation: &raiseReceipt})
+	raise := testEvent(t, leader, 3_002, KindBid, bidContent{AuctionID: "race", Amount: 1_500, Reservation: &raiseReceipt}, bidRootTag(t, state, "race"))
 	outbidReceipt := testReservationReceipt(t, committee, "race", actorForKey(challenger), 2_000, "race-outbid", "", 3_302)
-	outbid := testEvent(t, challenger, 3_002, KindBid, bidContent{AuctionID: "race", Amount: 2_000, Reservation: &outbidReceipt})
+	outbid := testEvent(t, challenger, 3_002, KindBid, bidContent{AuctionID: "race", Amount: 2_000, Reservation: &outbidReceipt}, bidRootTag(t, state, "race"))
 
 	outbidFirst, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &outbid}, 3_002, policy, seed)
 	if err != nil {
@@ -599,19 +599,19 @@ func TestIntegratedThresholdFundingOwnRaiseOutbidAndGlobalProofExclusion(t *test
 	proofD := hex.EncodeToString(testPrivateKey(t).PubKey().SerializeCompressed())
 
 	staleReceipt := testIntegratedFundingReceipt(t, committee, leader, leaderPayment, "integrated-a", "", 1_000, 1_000, "funding-a-stale", []string{proofA}, 13_300, 10_000)
-	stale := testEvent(t, leader, 10_001, KindBid, bidContent{AuctionID: "integrated-a", Amount: 1_000, IntegratedFunding: &staleReceipt})
+	stale := testEvent(t, leader, 10_001, KindBid, bidContent{AuctionID: "integrated-a", Amount: 1_000, IntegratedFunding: &staleReceipt}, bidRootTag(t, state, "integrated-a"))
 	if err := apply(stale, 10_001); err == nil || !strings.Contains(err.Error(), "expired") {
 		t.Fatalf("stale funding attestation error=%v", err)
 	}
 
 	firstReceipt := testIntegratedFundingReceipt(t, committee, leader, leaderPayment, "integrated-a", "", 1_000, 1_000, "funding-a-1", []string{proofA, proofB}, 13_300, 10_301)
-	first := testEvent(t, leader, 10_001, KindBid, bidContent{AuctionID: "integrated-a", Amount: 1_000, IntegratedFunding: &firstReceipt})
+	first := testEvent(t, leader, 10_001, KindBid, bidContent{AuctionID: "integrated-a", Amount: 1_000, IntegratedFunding: &firstReceipt}, bidRootTag(t, state, "integrated-a"))
 	if err := apply(first, 10_001); err != nil {
 		t.Fatal(err)
 	}
 
 	reusedReceipt := testIntegratedFundingReceipt(t, committee, challenger, challengerPayment, "integrated-b", "", 1_000, 1_000, "funding-b-reuse", []string{proofA}, 13_300, 10_302)
-	reused := testEvent(t, challenger, 10_002, KindBid, bidContent{AuctionID: "integrated-b", Amount: 1_000, IntegratedFunding: &reusedReceipt})
+	reused := testEvent(t, challenger, 10_002, KindBid, bidContent{AuctionID: "integrated-b", Amount: 1_000, IntegratedFunding: &reusedReceipt}, bidRootTag(t, state, "integrated-b"))
 	if err := apply(reused, 10_002); err == nil || !strings.Contains(err.Error(), "already allocated") {
 		t.Fatalf("cross-auction proof reuse error=%v", err)
 	}
@@ -620,18 +620,18 @@ func TestIntegratedThresholdFundingOwnRaiseOutbidAndGlobalProofExclusion(t *test
 		aliasedProofA = "03" + proofA[2:]
 	}
 	aliasedReceipt := testIntegratedFundingReceipt(t, committee, challenger, challengerPayment, "integrated-b", "", 1_000, 1_000, "funding-b-alias", []string{aliasedProofA}, 13_300, 10_302)
-	aliased := testEvent(t, challenger, 10_002, KindBid, bidContent{AuctionID: "integrated-b", Amount: 1_000, IntegratedFunding: &aliasedReceipt})
+	aliased := testEvent(t, challenger, 10_002, KindBid, bidContent{AuctionID: "integrated-b", Amount: 1_000, IntegratedFunding: &aliasedReceipt}, bidRootTag(t, state, "integrated-b"))
 	if err := apply(aliased, 10_002); err == nil || !strings.Contains(err.Error(), "already allocated") {
 		t.Fatalf("cross-auction proof-Y parity alias error=%v", err)
 	}
 	wrongReplacementReceipt := testIntegratedFundingReceipt(t, committee, leader, leaderPayment, "integrated-a", "", 2_000, 2_000, "funding-a-wrong-replacement", []string{proofA, proofB, proofC}, 13_300, 10_303)
-	wrongReplacement := testEvent(t, leader, 10_003, KindBid, bidContent{AuctionID: "integrated-a", Amount: 2_000, ReplacesBidID: first.ID, IntegratedFunding: &wrongReplacementReceipt})
+	wrongReplacement := testEvent(t, leader, 10_003, KindBid, bidContent{AuctionID: "integrated-a", Amount: 2_000, ReplacesBidID: first.ID, IntegratedFunding: &wrongReplacementReceipt}, bidRootTag(t, state, "integrated-a"))
 	if err := apply(wrongReplacement, 10_003); err == nil || !strings.Contains(err.Error(), "does not bind") {
 		t.Fatalf("replacement-bound receipt error=%v", err)
 	}
 
 	raiseReceipt := testIntegratedFundingReceipt(t, committee, leader, leaderPayment, "integrated-a", first.ID, 2_000, 2_000, "funding-a-raise", []string{proofA, proofB, proofC}, 13_300, 10_303)
-	raise := testEvent(t, leader, 10_003, KindBid, bidContent{AuctionID: "integrated-a", Amount: 2_000, ReplacesBidID: first.ID, IntegratedFunding: &raiseReceipt})
+	raise := testEvent(t, leader, 10_003, KindBid, bidContent{AuctionID: "integrated-a", Amount: 2_000, ReplacesBidID: first.ID, IntegratedFunding: &raiseReceipt}, bidRootTag(t, state, "integrated-a"))
 	if err := apply(raise, 10_003); err != nil {
 		t.Fatal(err)
 	}
@@ -640,7 +640,7 @@ func TestIntegratedThresholdFundingOwnRaiseOutbidAndGlobalProofExclusion(t *test
 	}
 
 	outbidReceipt := testIntegratedFundingReceipt(t, committee, challenger, challengerPayment, "integrated-a", raise.ID, 2_500, 2_500, "funding-a-outbid", []string{proofD}, 13_300, 10_304)
-	outbid := testEvent(t, challenger, 10_004, KindBid, bidContent{AuctionID: "integrated-a", Amount: 2_500, ReplacesBidID: raise.ID, IntegratedFunding: &outbidReceipt})
+	outbid := testEvent(t, challenger, 10_004, KindBid, bidContent{AuctionID: "integrated-a", Amount: 2_500, ReplacesBidID: raise.ID, IntegratedFunding: &outbidReceipt}, bidRootTag(t, state, "integrated-a"))
 	if err := apply(outbid, 10_004); err != nil {
 		t.Fatal(err)
 	}
@@ -1295,9 +1295,12 @@ func TestIntegratedFundingV4NostrAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 	state.AuthNetworkID, state.ChainID = receipt.AuthNetworkID, receipt.ChainID
+	// A bid binds to the auction root (e = auction_root_event_id); these V4
+	// fixtures are direct applyBid callers, so they supply the root explicitly.
+	v4Root := strings.Repeat("a", 64)
 	state.Auctions[receipt.AuctionID] = Auction{ID: receipt.AuctionID, Seller: strings.Repeat("f", 64),
 		FundingMode: FundingModeThresholdSigAll, SellerCocoPaymentPublicKey: hex.EncodeToString(sellerPayment.PubKey().SerializeCompressed()),
-		OriginalEndTime: originalEnd, EndTime: originalEnd, Status: "open"}
+		OriginalEndTime: originalEnd, EndTime: originalEnd, Status: "open", RootEventID: v4Root}
 	contentBid := bidContent{AuctionID: receipt.AuctionID, Amount: receipt.BidAmount, IntegratedFunding: &receipt}
 	if err := verifyIntegratedFundingReceipt(state, actorForKey(actor), receipt.AttestedAt, contentBid, receipt, DefaultPolicy()); err != nil {
 		t.Fatalf("V4 receipt rejected: %v", err)
@@ -1309,7 +1312,7 @@ func TestIntegratedFundingV4NostrAuthorization(t *testing.T) {
 	auction.Status = "closed"
 	state.Auctions[receipt.AuctionID] = auction
 	rejectedEventID := strings.Repeat("9", 64)
-	if err := applyBid(&state, actorForKey(actor), rejectedEventID, receipt.AttestedAt, contentBid, DefaultPolicy(), nil); err != nil {
+	if err := applyBid(&state, actorForKey(actor), rejectedEventID, receipt.AttestedAt, contentBid, [][]string{{"e", v4Root}}, DefaultPolicy(), nil); err != nil {
 		t.Fatalf("valid V4 rejected-return transition failed: %v", err)
 	}
 	rejected := state.IntegratedFundings[receipt.FundingOperationID]
@@ -1329,9 +1332,9 @@ func TestIntegratedFundingV4NostrAuthorization(t *testing.T) {
 	expiredState.AuthNetworkID, expiredState.ChainID = receipt.AuthNetworkID, receipt.ChainID
 	expiredState.Auctions[receipt.AuctionID] = Auction{ID: receipt.AuctionID, Seller: strings.Repeat("f", 64),
 		FundingMode: FundingModeThresholdSigAll, SellerCocoPaymentPublicKey: hex.EncodeToString(sellerPayment.PubKey().SerializeCompressed()),
-		OriginalEndTime: originalEnd, EndTime: originalEnd, Status: "open"}
+		OriginalEndTime: originalEnd, EndTime: originalEnd, Status: "open", RootEventID: v4Root}
 	expiredEventID := strings.Repeat("8", 64)
-	if err := applyBid(&expiredState, actorForKey(actor), expiredEventID, receipt.ExpiresAt+1, contentBid, DefaultPolicy(), nil); err != nil {
+	if err := applyBid(&expiredState, actorForKey(actor), expiredEventID, receipt.ExpiresAt+1, contentBid, [][]string{{"e", v4Root}}, DefaultPolicy(), nil); err != nil {
 		t.Fatalf("expired authenticated V4 receipt did not commit its return entitlement: %v", err)
 	}
 	expiredFunding := expiredState.IntegratedFundings[receipt.FundingOperationID]
@@ -1349,9 +1352,9 @@ func TestIntegratedFundingV4NostrAuthorization(t *testing.T) {
 	expiredAndLateState.AuthNetworkID, expiredAndLateState.ChainID = receipt.AuthNetworkID, receipt.ChainID
 	expiredAndLateState.Auctions[receipt.AuctionID] = Auction{ID: receipt.AuctionID, Seller: strings.Repeat("f", 64),
 		FundingMode: FundingModeThresholdSigAll, SellerCocoPaymentPublicKey: hex.EncodeToString(sellerPayment.PubKey().SerializeCompressed()),
-		OriginalEndTime: originalEnd, EndTime: receipt.ExpiresAt, Status: "open"}
+		OriginalEndTime: originalEnd, EndTime: receipt.ExpiresAt, Status: "open", RootEventID: v4Root}
 	expiredAndLateEventID := strings.Repeat("6", 64)
-	if err := applyBid(&expiredAndLateState, actorForKey(actor), expiredAndLateEventID, receipt.ExpiresAt+1, contentBid, DefaultPolicy(), nil); err != nil {
+	if err := applyBid(&expiredAndLateState, actorForKey(actor), expiredAndLateEventID, receipt.ExpiresAt+1, contentBid, [][]string{{"e", v4Root}}, DefaultPolicy(), nil); err != nil {
 		t.Fatalf("late plus expired V4 funding did not commit one canonical return: %v", err)
 	}
 	expiredAndLate := expiredAndLateState.IntegratedFundings[receipt.FundingOperationID]
@@ -1371,7 +1374,7 @@ func TestIntegratedFundingV4NostrAuthorization(t *testing.T) {
 	malformedReceipt.CommitteeSignature = strings.Repeat("0", schnorr.SignatureSize*2)
 	malformedBid := contentBid
 	malformedBid.IntegratedFunding = &malformedReceipt
-	if err := applyBid(&malformedState, actorForKey(actor), strings.Repeat("7", 64), receipt.ExpiresAt+1, malformedBid, DefaultPolicy(), nil); err == nil {
+	if err := applyBid(&malformedState, actorForKey(actor), strings.Repeat("7", 64), receipt.ExpiresAt+1, malformedBid, [][]string{{"e", v4Root}}, DefaultPolicy(), nil); err == nil {
 		t.Fatal("malformed expired V4 receipt obtained return authority")
 	}
 	if len(malformedState.IntegratedFundings) != 0 || len(malformedState.IntegratedProofUses) != 0 {
@@ -1590,6 +1593,18 @@ func testEvenPrivateKey(t *testing.T) *btcec.PrivateKey {
 	}
 }
 
+// bidRootTag returns the mandatory root-binding tag for a bid on auctionID in
+// state: applyBid now enforces e = auction_root_event_id inside the
+// deterministic transition, so every bid test must carry a correct binding.
+func bidRootTag(t *testing.T, state State, auctionID string) []string {
+	t.Helper()
+	auction, ok := state.Auctions[auctionID]
+	if !ok || auction.RootEventID == "" {
+		t.Fatalf("bidRootTag: no committed root for auction %q", auctionID)
+	}
+	return []string{"e", auction.RootEventID}
+}
+
 func testEvent(t *testing.T, key *btcec.PrivateKey, createdAt int64, kind int, content any, tags ...[]string) SignedEvent {
 	t.Helper()
 	raw, err := json.Marshal(content)
@@ -1751,7 +1766,7 @@ func TestZeroWindowDisablesAntiSniping(t *testing.T) {
 	// yet must not move the end when the auction chose window==0.
 	bidder := testPrivateKey(t)
 	receipt := testReservationReceipt(t, committee, "window0", actorForKey(bidder), 1_000, "window0-bid", "", 1_599+policy.ReceiptTTLSeconds)
-	bid := testEvent(t, bidder, 1_599, KindBid, bidContent{AuctionID: "window0", Amount: 1_000, Reservation: &receipt})
+	bid := testEvent(t, bidder, 1_599, KindBid, bidContent{AuctionID: "window0", Amount: 1_000, Reservation: &receipt}, bidRootTag(t, state, "window0"))
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &bid}, 1_599, policy, seed)
 	if err != nil {
 		t.Fatal(err)
@@ -1784,7 +1799,7 @@ func TestLateBidExtendsWithinAuctionOwnCap(t *testing.T) {
 
 	firstBidder := testPrivateKey(t)
 	firstReceipt := testReservationReceipt(t, committee, "extend", actorForKey(firstBidder), 1_000, "extend-first", "", 1_599+policy.ReceiptTTLSeconds)
-	first := testEvent(t, firstBidder, 1_599, KindBid, bidContent{AuctionID: "extend", Amount: 1_000, Reservation: &firstReceipt})
+	first := testEvent(t, firstBidder, 1_599, KindBid, bidContent{AuctionID: "extend", Amount: 1_000, Reservation: &firstReceipt}, bidRootTag(t, state, "extend"))
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &first}, 1_599, policy, seed)
 	if err != nil {
 		t.Fatal(err)
@@ -1796,7 +1811,7 @@ func TestLateBidExtendsWithinAuctionOwnCap(t *testing.T) {
 
 	secondBidder := testPrivateKey(t)
 	secondReceipt := testReservationReceipt(t, committee, "extend", actorForKey(secondBidder), 1_200, "extend-second", "", 1_658+policy.ReceiptTTLSeconds)
-	second := testEvent(t, secondBidder, 1_658, KindBid, bidContent{AuctionID: "extend", Amount: 1_200, Reservation: &secondReceipt})
+	second := testEvent(t, secondBidder, 1_658, KindBid, bidContent{AuctionID: "extend", Amount: 1_200, Reservation: &secondReceipt}, bidRootTag(t, state, "extend"))
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &second}, 1_658, policy, seed)
 	if err != nil {
 		t.Fatal(err)

@@ -183,7 +183,7 @@ func sigAllBackedBid(t *testing.T, fx sigAllFixtureState, mint testPinnedMint, b
 		AuctionID: fx.auctionID, Amount: amount, CashuLock: &receipt, Proofs: proofs,
 		OutcomeTemplates: &templates,
 	}
-	return testEvent(t, bidder, 1_001, KindBid, content)
+	return testEvent(t, bidder, 1_001, KindBid, content, bidRootTag(t, fx.state, fx.auctionID))
 }
 
 // TestSigAllReceiptCommitsTwoKeyConditionAndMode pins the wave-1 receipt shape:

@@ -69,7 +69,7 @@ func settleableCashuFixture(t *testing.T) (State, []byte, *btcec.PrivateKey, *bt
 	amounts := amountsOf(proofs)
 	receipt := settleReceipt(t, committee, "settle-auction", actorForKey(bidder), 128,
 		"op-settle", strings.Repeat("c", 64), 1_700, refs, bidderWallet.key)
-	bid := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "settle-auction", Amount: 128, CashuLock: &receipt, Proofs: proofs})
+	bid := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "settle-auction", Amount: 128, CashuLock: &receipt, Proofs: proofs}, bidRootTag(t, state, "settle-auction"))
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &bid}, 1_001, backedPolicy(64), seed)
 	if err != nil {
 		t.Fatalf("bid: %v", err)

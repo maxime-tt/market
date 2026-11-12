@@ -1253,21 +1253,13 @@ func ValidateForMempool(prior State, tx Transaction, policy Policy, mintSeed []b
 			}
 		}
 	}
-	// Every bid MUST bind to the auction root: its e tag must equal the
-	// auction's auction_root_event_id. This is what makes a display edit
-	// non-destructive -- the bids never referenced a version, only the root.
-	// It is a local-admission (CheckTx) rule, like the refund double-credit
-	// refusal below: the decision makes the allow-list and the root binding a
-	// client- and validator-side property, not a relay one.
-	if tx.Type == "event" && tx.Event != nil && tx.Event.Kind == KindBid {
-		var content bidContent
-		if err := decodeStrictContent(tx.Event.Content, &content); err == nil {
-			if auction, ok := prior.Auctions[content.AuctionID]; ok && auction.RootEventID != "" &&
-				firstTagValue(tx.Event.Tags, "e") != auction.RootEventID {
-				return errors.New("bid is not bound to the auction root event: the e tag must equal auction_root_event_id")
-			}
-		}
-	}
+	// The bid -> auction-root binding (e = auction_root_event_id) is NOT checked
+	// here. It is a consensus rule and lives in applyBid, inside the
+	// deterministic transition, so a Byzantine proposer cannot bypass it by
+	// putting a wrongly-rooted bid in a block. ValidateForMempool already runs
+	// the full transition at the end of this function, so admission still
+	// refuses such a bid -- but from one place, the transition, never from a
+	// second copy here that could drift.
 	// A mint-backed bid must publish both outcome authorizations with the bid.
 	// Without them the coordinator would again need the bidder online to settle
 	// or refund, which is exactly the liveness the bridge removes. This is a
@@ -1483,7 +1475,7 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 		if err := decodeStrictContent(event.Content, &content); err != nil {
 			return err
 		}
-		if err := applyBid(state, actor, event.ID, now, content, policy, privateKey); err != nil {
+		if err := applyBid(state, actor, event.ID, now, content, event.Tags, policy, privateKey); err != nil {
 			return err
 		}
 	case KindRefund:
@@ -1517,10 +1509,33 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 	return nil
 }
 
-func applyBid(state *State, actor, eventID string, committedAt int64, content bidContent, policy Policy, privateKey ed25519.PrivateKey) error {
+func applyBid(state *State, actor, eventID string, committedAt int64, content bidContent, tags [][]string, policy Policy, privateKey ed25519.PrivateKey) error {
 	auction, ok := state.Auctions[content.AuctionID]
 	if !ok {
 		return errors.New("auction is not open")
+	}
+	// Check 0: a bid binds to the auction ROOT, never to the latest display
+	// version, so it must carry e = auction_root_event_id. This is a CONSENSUS
+	// rule run by every validator here in the deterministic transition, not
+	// merely a mempool filter: ValidateForMempool / CheckTx is only local
+	// admission, and a Byzantine proposer can put a transaction in a block that
+	// never passed it. If the binding lived only in ValidateForMempool, honest
+	// validators would still apply such a bid and the property the whole edit
+	// mechanism rests on -- a display edit never detaches the bids, because the
+	// bids reference the root and not a version -- would be violable. It is
+	// checked before any state is read that a mismatched root could poison.
+	if firstTagValue(tags, "e") != auction.RootEventID {
+		return errors.New("bid is not bound to the auction root event: the e tag must equal auction_root_event_id")
+	}
+	// The coordinate convention a = 1440:<seller_pubkey>:<d>, IF a bid carries
+	// one, must match this auction. Our bids do not currently carry an a tag,
+	// so this guard is latent rather than load-bearing today, but it mirrors the
+	// optional check the stronger implementation applies and stops a client from
+	// later attaching a coordinate for a different auction.
+	if a := firstTagValue(tags, "a"); a != "" {
+		if coordinate := fmt.Sprintf("%d:%s:%s", KindCreate, auction.Seller, auction.ID); a != coordinate {
+			return errors.New("bid's a coordinate does not match the auction")
+		}
 	}
 	// Auction.HighBid is the leading position, so the uniform admission rule is
 	// one comparison: the bidder's RESULTING position must be at least the

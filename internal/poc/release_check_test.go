@@ -166,7 +166,7 @@ func TestReleaseCheckRefusesNonCommittedSigAllTemplate(t *testing.T) {
 	policy := pinned.policy(t)
 
 	content := sigAllTemplatedContent(t, fx, pinned, bidder, wallet, 128)
-	event := testEvent(t, bidder, 1_001, KindBid, content)
+	event := testEvent(t, bidder, 1_001, KindBid, content, bidRootTag(t, fx.state, fx.auctionID))
 	committed, err := ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, policy, fx.seed)
 	if err != nil {
 		t.Fatalf("valid templated sigall bid was refused: %v", err)

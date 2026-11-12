@@ -210,7 +210,7 @@ func (fx carriedProofFixture) content(t *testing.T, actor *btcec.PrivateKey, pro
 
 func (fx carriedProofFixture) apply(t *testing.T, actor *btcec.PrivateKey, content bidContent) (State, error) {
 	t.Helper()
-	event := testEvent(t, actor, 1_001, KindBid, content)
+	event := testEvent(t, actor, 1_001, KindBid, content, bidRootTag(t, fx.state, fx.auctionID))
 	return ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, fx.policy, fx.seed)
 }
 
@@ -266,7 +266,7 @@ func TestSliceERule1BidMustBeOpenAndNotTheSeller(t *testing.T) {
 	closedAuction.Status = "closed"
 	closed.Auctions[fx.auctionID] = closedAuction
 	closedContent := fx.content(t, fx.bidder, proofs, refs, 128, strings.Repeat("a", 64))
-	closedEvent := testEvent(t, fx.bidder, 1_001, KindBid, closedContent)
+	closedEvent := testEvent(t, fx.bidder, 1_001, KindBid, closedContent, bidRootTag(t, closed, fx.auctionID))
 	if _, err := ApplyTransaction(closed, Transaction{Version: TxVersion, Type: "event", Event: &closedEvent}, 1_001, fx.policy, fx.seed); err == nil || !strings.Contains(err.Error(), "auction is not open") {
 		t.Fatalf("closed-auction error = %v, want an auction-not-open refusal", err)
 	}
@@ -288,7 +288,7 @@ func TestSliceERule2ProofMustNameThePinnedKeyset(t *testing.T) {
 	unpinned := fx
 	unpinned.policy = DefaultPolicy()
 	content := fx.content(t, fx.bidder, proofs, refs, 128, strings.Repeat("a", 64))
-	event := testEvent(t, fx.bidder, 1_001, KindBid, content)
+	event := testEvent(t, fx.bidder, 1_001, KindBid, content, bidRootTag(t, unpinned.state, fx.auctionID))
 	if _, err := ApplyTransaction(unpinned.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, unpinned.policy, unpinned.seed); err == nil || !strings.Contains(err.Error(), "proof from unpinned keyset") {
 		t.Fatalf("unpinned-network error = %v, want one naming the unpinned keyset", err)
 	}
@@ -366,7 +366,7 @@ func TestSliceERule6ReusedProofReferenceIsRefused(t *testing.T) {
 	sort.Strings(allRefs)
 	other := testPrivateKey(t)
 	second := fx.content(t, other, reused, allRefs, 256, strings.Repeat("b", 64))
-	event := testEvent(t, other, 1_002, KindBid, second)
+	event := testEvent(t, other, 1_002, KindBid, second, bidRootTag(t, committed, fx.auctionID))
 	if _, err := ApplyTransaction(committed, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_002, fx.policy, fx.seed); err == nil || !strings.Contains(err.Error(), "already committed to another bid") {
 		t.Fatalf("reused-proof error = %v, want an already-committed refusal", err)
 	}

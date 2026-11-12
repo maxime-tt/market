@@ -50,7 +50,7 @@ func sigAllTemplatedContent(t *testing.T, fx sigAllFixtureState, mint testPinned
 
 func applySigAllContent(t *testing.T, fx sigAllFixtureState, policy Policy, bidder *btcec.PrivateKey, content bidContent) (State, error) {
 	t.Helper()
-	event := testEvent(t, bidder, 1_001, KindBid, content)
+	event := testEvent(t, bidder, 1_001, KindBid, content, bidRootTag(t, fx.state, fx.auctionID))
 	return ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, policy, fx.seed)
 }
 
@@ -158,7 +158,7 @@ func TestSigAllCommittedTemplatesBecomeSweepTargetable(t *testing.T) {
 	policy := pinnedMint.policy(t)
 
 	content := sigAllTemplatedContent(t, fx, pinnedMint, bidder, wallet, 128)
-	event := testEvent(t, bidder, 1_001, KindBid, content)
+	event := testEvent(t, bidder, 1_001, KindBid, content, bidRootTag(t, fx.state, fx.auctionID))
 	committed, err := ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, policy, fx.seed)
 	if err != nil {
 		t.Fatalf("a valid templated sigall bid was refused: %v", err)

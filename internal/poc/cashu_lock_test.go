@@ -90,13 +90,13 @@ func TestCashuLockAuctionAcceptsOnlyMintBackedFunding(t *testing.T) {
 	// A custodial reservation must not be accepted by a mint-backed auction:
 	// that would silently fall back to attested funding.
 	reservation := testReservationReceipt(t, committee, "mint-backed", actorForKey(bidder), 120, "res-1", "", 1_600)
-	reservationEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, Reservation: &reservation})
+	reservationEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, Reservation: &reservation}, bidRootTag(t, state, "mint-backed"))
 	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &reservationEvent}, 1_001, policy, seed); err == nil {
 		t.Fatal("mint-backed auction accepted a custodial reservation")
 	}
 
 	// A mint-backed auction with no funding path at all is refused too.
-	emptyEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120})
+	emptyEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120}, bidRootTag(t, state, "mint-backed"))
 	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &emptyEvent}, 1_001, policy, seed); err == nil {
 		t.Fatal("mint-backed auction accepted an unfunded bid")
 	}
@@ -122,7 +122,7 @@ func TestCashuLockProofRefsMustBeCanonical(t *testing.T) {
 	for _, testCase := range cases {
 		receipt := testCashuLockReceipt(t, committee, "mint-backed", actorForKey(bidder), 120, "op-"+testCase.name,
 			strings.Repeat("a", 64), 1_700, testCase.refs)
-		event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt})
+		event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt}, bidRootTag(t, state, "mint-backed"))
 		if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, policy, seed); err == nil {
 			t.Fatalf("accepted %s proof references", testCase.name)
 		}
@@ -137,7 +137,7 @@ func TestCashuLockProofCannotFundTwoBids(t *testing.T) {
 
 	first := testPrivateKey(t)
 	firstReceipt := testCashuLockReceipt(t, committee, "mint-backed", actorForKey(first), 120, "op-first", strings.Repeat("a", 64), 1_700, refs)
-	firstEvent := testEvent(t, first, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &firstReceipt, Proofs: proofs})
+	firstEvent := testEvent(t, first, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &firstReceipt, Proofs: proofs}, bidRootTag(t, state, "mint-backed"))
 	committed, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &firstEvent}, 1_001, policy, seed)
 	if err != nil {
 		t.Fatalf("first mint-backed bid: %v", err)
@@ -146,7 +146,7 @@ func TestCashuLockProofCannotFundTwoBids(t *testing.T) {
 	// A different bidder, a different token digest, the same underlying proofs.
 	second := testPrivateKey(t)
 	secondReceipt := testCashuLockReceipt(t, committee, "mint-backed", actorForKey(second), 300, "op-second", strings.Repeat("b", 64), 1_800, refs)
-	secondEvent := testEvent(t, second, 1_002, KindBid, bidContent{AuctionID: "mint-backed", Amount: 300, CashuLock: &secondReceipt})
+	secondEvent := testEvent(t, second, 1_002, KindBid, bidContent{AuctionID: "mint-backed", Amount: 300, CashuLock: &secondReceipt}, bidRootTag(t, state, "mint-backed"))
 	_, err = ApplyTransaction(committed, Transaction{Version: TxVersion, Type: "event", Event: &secondEvent}, 1_002, policy, seed)
 	if err == nil || !strings.Contains(err.Error(), "already committed to another bid") {
 		t.Fatalf("reused proofs error = %v, want a proof-reuse rejection", err)
@@ -154,7 +154,7 @@ func TestCashuLockProofCannotFundTwoBids(t *testing.T) {
 
 	// And the same bidder cannot re-bind them either.
 	ownReceipt := testCashuLockReceipt(t, committee, "mint-backed", actorForKey(first), 500, "op-own", strings.Repeat("c", 64), 1_900, refs)
-	ownEvent := testEvent(t, first, 1_003, KindBid, bidContent{AuctionID: "mint-backed", Amount: 500, CashuLock: &ownReceipt})
+	ownEvent := testEvent(t, first, 1_003, KindBid, bidContent{AuctionID: "mint-backed", Amount: 500, CashuLock: &ownReceipt}, bidRootTag(t, state, "mint-backed"))
 	if _, err := ApplyTransaction(committed, Transaction{Version: TxVersion, Type: "event", Event: &ownEvent}, 1_003, policy, seed); err == nil {
 		t.Fatal("the same bidder re-used committed proofs")
 	}
@@ -168,7 +168,7 @@ func applicationFor(t *testing.T, state State, seed []byte, committee *btcec.Pri
 	if err := persistState(statePath, state); err != nil {
 		t.Fatal(err)
 	}
-	app, err := NewApplication("cashu-lock-fixture", policy, seed,
+	app, err := NewApplication(state.ChainID, policy, seed,
 		hex.EncodeToString(committee.PubKey().SerializeCompressed()), statePath)
 	if err != nil {
 		t.Fatal(err)
@@ -279,7 +279,7 @@ func TestNonMintBackedAuctionRejectsCashuLock(t *testing.T) {
 	bidder := testPrivateKey(t)
 	refs := testProofRefs(t, testPrivateKey(t))
 	receipt := testCashuLockReceipt(t, committee, "custodial", actorForKey(bidder), 120, "op-x", strings.Repeat("a", 64), 1_700, refs)
-	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "custodial", Amount: 120, CashuLock: &receipt})
+	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "custodial", Amount: 120, CashuLock: &receipt}, bidRootTag(t, state, "custodial"))
 	_, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, DefaultPolicy(), seed)
 	if err == nil || !strings.Contains(err.Error(), "only a mint-backed auction") {
 		t.Fatalf("cashu lock on a custodial auction error = %v", err)

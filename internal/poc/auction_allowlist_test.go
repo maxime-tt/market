@@ -1,12 +1,15 @@
 package poc
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	abci "github.com/cometbft/cometbft/abci/types"
 )
 
 // auctionAllowlistState builds a genesis POC state and returns the committee key
@@ -184,7 +187,11 @@ func TestMoneyFieldEditIsRefusedByName(t *testing.T) {
 
 // TestBidMustBindToTheAuctionRoot pins root binding at admission: a bid with no
 // e tag, or with an e tag that is not the root, is refused; one bound to the
-// root is admitted.
+// root is admitted. The rule now lives in the deterministic transition
+// (applyBid), and admission reaches it because ValidateForMempool ends by
+// running the whole transition; see
+// TestBidRootBindingIsConsensusEnforcedNotJustAdmission for the block-level
+// proof that a Byzantine proposer cannot bypass it.
 func TestBidMustBindToTheAuctionRoot(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := auctionAllowlistState(t, "allowlist-bid-root", 10)
@@ -210,6 +217,79 @@ func TestBidMustBindToTheAuctionRoot(t *testing.T) {
 	}
 	if err := ValidateForMempool(state, asTx(bidFor([]string{"e", create.ID})), policy, seed); err != nil {
 		t.Fatalf("root-bound bid admission error = %v, want admission", err)
+	}
+}
+
+// TestBidRootBindingIsConsensusEnforcedNotJustAdmission is the test this fix
+// exists for. ValidateForMempool / CheckTx is only a local mempool filter; a
+// Byzantine block proposer can put a transaction in a block that never passed
+// it. The binding that makes an editable auction non-destructive (a display
+// edit never detaches the bids, because the bids reference the ROOT and not a
+// version) must therefore be a consensus rule in the deterministic transition,
+// so every honest validator refuses a wrongly-rooted bid when it re-executes
+// the block. This drives the block-level ProcessProposal path -- NOT admission
+// -- and pins that a bid with a wrong or missing e tag is rejected while a
+// correctly-rooted one is accepted.
+func TestBidRootBindingIsConsensusEnforcedNotJustAdmission(t *testing.T) {
+	t.Parallel()
+	state, seed, committee := auctionAllowlistState(t, "allowlist-consensus-root", 12)
+	policy := DefaultPolicy()
+	seller := testPrivateKey(t)
+	bidder := testPrivateKey(t)
+	create := testEvent(t, seller, 1_000, KindCreate, createContent{AuctionID: "lot", Title: "Lot", Duration: 600, StartingBid: 100})
+	state = mustApplyAllowlistEvent(t, state, seed, policy, create, 1_000)
+	root := state.Auctions["lot"].RootEventID
+
+	receipt := testReservationReceipt(t, committee, "lot", actorForKey(bidder), 100, "res-consensus", "", 1_200)
+	bid := func(tags ...[]string) SignedEvent {
+		return testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "lot", Amount: 100, Reservation: &receipt}, tags...)
+	}
+	wrongRoot := bid([]string{"e", strings.Repeat("0", 64)})
+	missingRoot := bid()
+	goodRoot := bid([]string{"e", root})
+
+	// (1) The deterministic transition itself -- the exact code FinalizeBlock
+	// and ProcessProposal run -- must refuse the bad bindings. No admission is
+	// consulted on this path.
+	for name, event := range map[string]SignedEvent{"missing e tag": missingRoot, "e is not the root": wrongRoot} {
+		if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, policy, seed); err == nil || !strings.Contains(err.Error(), "root event") {
+			t.Fatalf("%s: transition error = %v, want a root-binding refusal", name, err)
+		}
+	}
+	// The rule refuses only the binding: a correctly-rooted bid IS applied.
+	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &goodRoot}, 1_001, policy, seed); err != nil {
+		t.Fatalf("root-bound bid refused by the transition: %v", err)
+	}
+
+	// (2) End to end through a BLOCK: a proposer submits a block carrying the
+	// wrongly-rooted bid, and every honest validator re-executes it in
+	// ProcessProposal and must REJECT the proposal.
+	app := applicationFor(t, state, seed, committee, policy)
+	blockTime := time.Unix(1_001, 0)
+	badRaw, err := EncodeTransaction(Transaction{Version: TxVersion, Type: "event", Event: &wrongRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejected, err := app.ProcessProposal(context.Background(), &abci.ProcessProposalRequest{Txs: [][]byte{badRaw}, Time: blockTime})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rejected.Status != abci.PROCESS_PROPOSAL_STATUS_REJECT {
+		t.Fatalf("a block carrying a wrongly-rooted bid was ACCEPTED by ProcessProposal (status %v); the root binding is not consensus-enforced", rejected.Status)
+	}
+
+	// And a block carrying the correctly-bound bid is accepted, so the refusal
+	// is the binding, not the block.
+	goodRaw, err := EncodeTransaction(Transaction{Version: TxVersion, Type: "event", Event: &goodRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := app.ProcessProposal(context.Background(), &abci.ProcessProposalRequest{Txs: [][]byte{goodRaw}, Time: blockTime})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accepted.Status != abci.PROCESS_PROPOSAL_STATUS_ACCEPT {
+		t.Fatalf("a block carrying a correctly-rooted bid was rejected (status %v), want accept", accepted.Status)
 	}
 }
 

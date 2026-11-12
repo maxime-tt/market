@@ -226,13 +226,13 @@ func TestSliceERule7SigAllBidWithProofsCommitsEndToEnd(t *testing.T) {
 	}
 
 	good := buildContent(func() string { return sigAllLockSecret(t, wallet.publicKey, compressed(committee), required) })
-	event := testEvent(t, bidder, 1_001, KindBid, good)
+	event := testEvent(t, bidder, 1_001, KindBid, good, bidRootTag(t, fx.state, fx.auctionID))
 	if _, err := ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, policy, fx.seed); err != nil {
 		t.Fatalf("a correctly locked sigall bid with proofs was refused: %v", err)
 	}
 
 	bad := buildContent(func() string { return sigAllLockSecret(t, wallet.publicKey, compressed(committee), required-1) })
-	badEvent := testEvent(t, bidder, 1_001, KindBid, bad)
+	badEvent := testEvent(t, bidder, 1_001, KindBid, bad, bidRootTag(t, fx.state, fx.auctionID))
 	if _, err := ApplyTransaction(fx.state, Transaction{Version: TxVersion, Type: "event", Event: &badEvent}, 1_001, policy, fx.seed); err == nil || !strings.Contains(err.Error(), "below the auction's required locktime") {
 		t.Fatalf("a short-locktime sigall bid was admitted: %v", err)
 	}
