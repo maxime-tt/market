@@ -3,17 +3,23 @@ import { nip05ValidationQueryOptions, getNormalizedProfileDisplayName, useProfil
 import { productsByPubkeyQueryOptions } from '@platform/web/products/productQuery'
 import type { NDKEvent } from '@platform/web/readContext'
 import {
+	CategoriesBlock,
 	FeaturedProductBlock,
 	ProfileHeaderBlock,
 	ProductGridBlock,
 	ProductRowBlock,
+	SearchBlock,
+	type CategoriesBlockProps,
 	type FeaturedProductBlockProps,
 	type ProfileHeaderBlockProps,
 	type ProductGridBlockProps,
 	type ProductRowBlockProps,
+	type SearchBlockProps,
 	type StorefrontDataSlots,
 	type StorefrontProfileData,
 } from '@ui/storefront'
+import { useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useStorefrontContext } from '@ui/storefront/StorefrontContext'
 
@@ -121,10 +127,57 @@ function ProfileHeaderSlot(props: ProfileHeaderBlockProps) {
 	return <ProfileHeaderBlock {...props} profile={data} isLoading={isLoading} />
 }
 
+/**
+ * The `Search` block, wired to the app's own search state.
+ *
+ * The block is presentational (`ui/` is props-only); the host owns the query
+ * state and the navigation, and it navigates to the one URL the browse surface
+ * actually reads — `/?q=` — so a page cannot invent a search destination.
+ */
+function SearchSlot({ placeholder, size }: SearchBlockProps) {
+	const navigate = useNavigate()
+	const [query, setQuery] = useState('')
+	const go = () => {
+		const term = query.trim()
+		if (term.length === 0) return
+		navigate({ to: '/', search: { q: term } })
+	}
+	return (
+		<SearchBlock
+			placeholder={placeholder}
+			size={size}
+			query={query}
+			onChange={setQuery}
+			onGo={go}
+			onClear={() => setQuery('')}
+		/>
+	)
+}
+
+/**
+ * The `Categories` block. Each entry is an author-chosen label plus a key; the
+ * host resolves the key to the one browse URL a category means today — a
+ * keyword search — so the block stays flat and the taxonomy stays out of the
+ * front end.
+ */
+function CategoriesSlot({ categories, title }: CategoriesBlockProps) {
+	const navigate = useNavigate()
+	return (
+		<CategoriesBlock
+			categories={categories}
+			title={title}
+			categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`}
+			onSelect={(key: string) => navigate({ to: '/', search: { q: key } })}
+		/>
+	)
+}
+
 /** The slot map handed to `StorefrontRenderer` on the published-page mounts. */
 export const storefrontBlockSlots: StorefrontDataSlots = {
 	ProductGrid: (props) => <ProductGridSlot {...props} />,
 	FeaturedProduct: (props) => <FeaturedProductSlot {...props} />,
 	ProfileHeader: (props) => <ProfileHeaderSlot {...props} />,
 	ProductRow: (props) => <ProductRowSlot {...props} />,
+	Search: (props) => <SearchSlot {...props} />,
+	Categories: (props) => <CategoriesSlot {...props} />,
 }

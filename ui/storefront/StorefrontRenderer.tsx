@@ -11,6 +11,9 @@ import { HeroBlock } from './blocks/HeroBlock'
 import { ImageBlock } from './blocks/ImageBlock'
 import { LinkListBlock } from './blocks/LinkListBlock'
 import { ProductGridBlock, type ProductGridBlockProps } from './blocks/ProductGridBlock'
+import { ProductRowBlock, type ProductRowBlockProps } from './blocks/ProductRowBlock'
+import { SearchBlock, type SearchBlockProps } from './blocks/SearchBlock'
+import { CategoriesBlock, type CategoriesBlockProps } from './blocks/CategoriesBlock'
 import { ProfileHeaderBlock, type ProfileHeaderBlockProps } from './blocks/ProfileHeaderBlock'
 import { TextBlock } from './blocks/TextBlock'
 import { DividerBlock, SpacerBlock } from './blocks/SpacingBlocks'
@@ -48,6 +51,9 @@ export interface StorefrontDataSlots {
 	ProductGrid?: (props: ProductGridBlockProps) => ReactNode
 	FeaturedProduct?: (props: FeaturedProductBlockProps) => ReactNode
 	ProfileHeader?: (props: ProfileHeaderBlockProps) => ReactNode
+	ProductRow?: (props: ProductRowBlockProps) => ReactNode
+	Search?: (props: SearchBlockProps) => ReactNode
+	Categories?: (props: CategoriesBlockProps) => ReactNode
 }
 
 /**
@@ -126,6 +132,24 @@ export function StorefrontBlockView({ block, slots }: { block: StorefrontBlock; 
 			return <DividerBlock />
 		case 'Spacer':
 			return <SpacerBlock {...block.props} />
+		case 'ProductRow':
+			return slots?.ProductRow ? (
+				slots.ProductRow(block.props)
+			) : (
+				<ProductRowBlock {...block.props} products={null} isLoading={false} isError={false} renderProduct={() => null} />
+			)
+		case 'Search':
+			return slots?.Search ? (
+				slots.Search(block.props)
+			) : (
+				<SearchBlock {...block.props} query="" onChange={() => {}} onGo={() => {}} />
+			)
+		case 'Categories':
+			return slots?.Categories ? (
+				slots.Categories(block.props)
+			) : (
+				<CategoriesBlock {...block.props} categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`} />
+			)
 		default: {
 			// Unreachable while the switch matches the union. The assignment
 			// makes that a compile-time guarantee; the `null` keeps a page that
