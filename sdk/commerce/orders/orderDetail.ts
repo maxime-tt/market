@@ -1,4 +1,4 @@
-import type { PrivateOrderDeliveryDetails } from '../messaging/privateOrderMessage'
+import type { PrivateOrderDeliveryDetails } from './messaging/privateOrderMessage'
 import type { PaymentInvoiceData } from '../checkout'
 
 export interface ParsedOrderAddress {

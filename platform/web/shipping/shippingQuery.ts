@@ -1,4 +1,4 @@
-import { SHIPPING_STATUS } from '@sdk/commerce/messaging/orderSchema'
+import { SHIPPING_STATUS } from '@sdk/commerce/orders/messaging/orderSchema'
 import { SHIPPING_KIND } from '@sdk/config/schemas/shippingOption'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import { naddrFromAddress } from '@sdk/core/nostr/naddr'

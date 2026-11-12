@@ -1,14 +1,14 @@
 import type { Event } from 'nostr-tools'
-import { createWorkflowError, type WorkflowError } from '../../core/errors'
-import { createNip17GiftWrapsWithSigner } from '../../core/nostr/nip17'
-import { NIP59_GIFT_WRAP_KIND } from '../../core/nostr/nip59'
+import { createWorkflowError, type WorkflowError } from '../../../core/errors'
+import { createNip17GiftWrapsWithSigner } from '../../../core/nostr/nip17'
+import { NIP59_GIFT_WRAP_KIND } from '../../../core/nostr/nip59'
 import {
 	buildNip17DmRelayListFilter,
 	resolveNip17RelayTargetsFromEvents,
 	type Nip17DmRelayListEvent,
 	type Nip17DmRelayListFilter,
 	type Nip17RelayTargetsResult,
-} from '../../core/nostr/nip17Relays'
+} from '../../../core/nostr/nip17Relays'
 import { unwrapNip17OrderMessages, type UnwrappedNip17OrderMessage } from './nip17OrderRead'
 import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
 

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
 import type { OrderManagementActions } from '@sdk/commerce/orders'
-import { ORDER_STATUS } from '@sdk/commerce/messaging'
+import { ORDER_STATUS } from '@sdk/commerce/orders/messaging/orderSchema'
 import { Button } from '../primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../primitives/dialog'
 import { Input } from '../primitives/input'

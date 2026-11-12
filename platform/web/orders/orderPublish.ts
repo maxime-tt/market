@@ -4,7 +4,7 @@ import {
 	ORDER_GENERAL_KIND,
 	PAYMENT_RECEIPT_KIND,
 	ORDER_STATUS,
-} from '@sdk/commerce/messaging/orderSchema'
+} from '@sdk/commerce/orders/messaging/orderSchema'
 import { getAppNdk, publishAppEvent, type NostrEvent } from '@platform/web/ndkPublishContext'
 import { getCurrentPubkey } from '@platform/web/readContext'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
@@ -35,7 +35,7 @@ import {
 	type SellerOrderPublishPhase,
 	type SellerOrderPublishProgress,
 } from '@sdk/commerce/orders'
-import { createEncryptedPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@sdk/commerce/messaging/privateOrderMessage'
+import { createEncryptedPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@sdk/commerce/orders/messaging/privateOrderMessage'
 import { fetchProfileByIdentifier } from '@platform/web/profiles/profileQuery'
 import { getShippingEvent, getShippingService } from '@platform/web/shipping/shippingQuery'
 import type { Event } from 'nostr-tools'

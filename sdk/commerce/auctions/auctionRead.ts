@@ -25,7 +25,7 @@ import {
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
 } from '@sdk/commerce/auctions/settlement'
-import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/messaging/orderSchema'
+import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/orders/messaging/orderSchema'
 import { filterBlacklistedEvents } from '@sdk/config/blacklist'
 import { excludeDeleted, type EventFilter, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 import { toRawEvent, type NostrEventLike } from '@sdk/core/nostr/eventLike'

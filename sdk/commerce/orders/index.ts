@@ -53,3 +53,11 @@ export {
 	planSellerOrders,
 	recordSellerOrderEventPublished,
 } from './workflowContracts'
+
+// Order messaging lives with the order domain (NIP-17 DMs about an order).
+export * from './messaging/orderSchema'
+export * from './messaging/orderMessageRumor'
+export * from './messaging/privateOrderMessage'
+export * from './messaging/nip17OrderPublish'
+export * from './messaging/nip17OrderRead'
+export * from './messaging/nip17OrderTransport'

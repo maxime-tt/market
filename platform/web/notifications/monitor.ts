@@ -28,7 +28,7 @@ import {
 } from './productNotificationScopes'
 import { LIVE_ACTIVITY_KIND, LIVE_CHAT_KIND } from '@sdk/core/nostr/nip53'
 import { configStore } from '@platform/web/config/appConfigStore'
-import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/messaging/orderSchema'
+import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/orders/messaging/orderSchema'
 import { fetchAuctionBidsByBidder, fetchAuctionsByPubkey } from '@platform/web/auctions/auctionsQuery'
 import { fetchProductsByPubkey } from '@platform/web/products/productQuery'
 import {

@@ -6,7 +6,7 @@ import {
 	PAYMENT_RECEIPT_KIND,
 	SHIPPING_STATUS,
 	type OrderCreationSchema,
-} from '@sdk/commerce/messaging/orderSchema'
+} from '@sdk/commerce/orders/messaging/orderSchema'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import type { z } from 'zod'
