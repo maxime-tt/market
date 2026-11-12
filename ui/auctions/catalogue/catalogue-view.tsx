@@ -15,6 +15,8 @@ export interface CatalogueAuctionView {
 	seller: string
 	imageUrl?: string
 	startingBid: number
+	/** The backend's committed leader position, when the lot has bids. */
+	highBid?: number
 	/** Committed block time of the close, in seconds. */
 	endTime: number
 	status?: string
@@ -70,7 +72,7 @@ export function CatalogueView({ auctions, isLoading, isError, now, onSelect }: C
 							<a
 								key={auction.id}
 								className="cat__card"
-								href={`/auctions/${encodeURIComponent(auction.id)}`}
+								href={`/auctions/catalogue/${encodeURIComponent(auction.id)}`}
 								onClick={(event) => {
 									if (!onSelect) return
 									event.preventDefault()
@@ -81,7 +83,9 @@ export function CatalogueView({ auctions, isLoading, isError, now, onSelect }: C
 								<span className="cat__lot">Lot · {auction.id.slice(0, 18)}</span>
 								<h2 className="cat__card-title">{auction.title}</h2>
 								<div className="cat__meta">
-									<span className="cat__price">{auction.startingBid} sats</span>
+									<span className="cat__price">
+										{auction.highBid && auction.highBid > 0 ? auction.highBid : auction.startingBid} sats
+									</span>
 									<span className="cat__timer">{formatRemaining(auction.endTime, now)}</span>
 								</div>
 								<span className="cat__state">

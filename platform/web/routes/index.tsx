@@ -2,10 +2,9 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
 import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
-import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
 import { StorefrontRenderer } from '@ui/storefront'
 import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
-import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/storefront'
+import { HOME_PAGE } from '@platform/web/storefront/homePage'
 import { BrowseNav } from '@ui/browse/browse-nav'
 import { IntroOverlay } from '@ui/browse/intro'
 
@@ -54,44 +53,15 @@ function BrowseIndex() {
 	const [introDone, setIntroDone] = useState(false)
 
 	// The home page is CMS-produced (owner ruling): with no search state on the
-	// URL, `/` renders the app key's `home` page inside the browse chrome. The
-	// page supplies the content — a `Search` block, `ProductRow`s and
-	// `Categories` — so the composition is authored in the builder rather than
-	// hardcoded here.
+	// URL, `/` renders the CMS block set inside the browse chrome. The
+	// composition is a real page document (`HOME_PAGE`, authored in
+	// `storefront/homePage.ts`), so the same renderer that draws published pages
+	// draws the home.
 	//
 	// Any `?q=` or `?p=` state still belongs to the browse surface: a CMS page
 	// cannot answer a search, and the panel's own deep link has to keep working,
-	// so the host takes over for those states. An unpublished home page renders
-	// the CMS empty state, which is honest — not the browse fallback, which would
-	// hide the fact that nothing has been authored.
+	// so the host takes over for those states.
 	if (!q.trim() && !p) {
-		// The home composition is the CMS block set (owner ruling): a `Search`
-		// block, a hand-picked `ProductRow` and the flat `Categories` list,
-		// rendered inside the browse chrome. It is expressed as a page document
-		// so the same renderer that draws published pages draws this one — when
-		// the app key's own `home` page resolves, this constant is replaced by it
-		// and nothing else changes.
-		const homePage = {
-			version: STOREFRONT_PAGE_VERSION,
-			enabled: true,
-			root: { props: { title: '', theme: 'default' as const, palette: 'concrete' } },
-			content: [
-				{ type: 'Search' as const, props: { id: 'home-search', placeholder: 'Search the marketplace', size: 'lg' as const } },
-				{ type: 'ProductRow' as const, props: { id: 'home-row', productDTags: ['orange-flock-black-orange-edition-high-top-sneakers-ma5ond'] } },
-				{
-					type: 'Categories' as const,
-					props: {
-						id: 'home-cats',
-						title: 'Browse by category',
-						categories: [
-							{ label: 'Art', key: 'art' },
-							{ label: 'Clothing', key: 'clothing' },
-							{ label: 'Bitcoin', key: 'bitcoin' },
-						],
-					},
-				},
-			],
-		}
 		return (
 			<>
 				{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
@@ -100,7 +70,7 @@ function BrowseIndex() {
 					onNavigateHome={() => navigate({ to: '/' })}
 					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
 				/>
-				<StorefrontRenderer page={parseStorefrontPage(JSON.stringify(homePage)).page as never} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
+				<StorefrontRenderer page={HOME_PAGE} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
 			</>
 		)
 	}
