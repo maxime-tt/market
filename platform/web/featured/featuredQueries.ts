@@ -20,7 +20,7 @@ import {
 	parseFeaturedUsers,
 	readFeaturedWorkflow,
 	type FeaturedListKey,
-} from '@sdk/commerce/curation'
+} from '@sdk/core/curation'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import { createAppRelayReadContext, getAppRelaySet } from '@platform/web/readContext'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
@@ -32,7 +32,7 @@ export type {
 	FeaturedCollectionsData as FeaturedCollections,
 	FeaturedProductsData as FeaturedProducts,
 	FeaturedUsersData as FeaturedUsers,
-} from '@sdk/commerce/curation'
+} from '@sdk/core/curation'
 
 // --- DATA FETCHING FUNCTIONS ---
 

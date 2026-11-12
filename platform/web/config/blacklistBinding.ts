@@ -29,7 +29,7 @@ import {
 	isBlacklisted,
 	readBlacklistSettingsWorkflow,
 	type BlacklistSettings as SdkBlacklistSettings,
-} from '@sdk/commerce/curation'
+} from '@sdk/core/curation'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import { blacklistState } from '@sdk/config/blacklist'
 import type { BlacklistState } from '@sdk/config/blacklist'

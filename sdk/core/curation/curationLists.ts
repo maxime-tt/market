@@ -1,6 +1,6 @@
-import type { UnsignedEventData } from '../../core/publishing'
-import type { Result } from '../../core/result'
-import { failure, success } from '../../core/result'
+import type { UnsignedEventData } from '../publishing'
+import type { Result } from '../result'
+import { failure, success } from '../result'
 
 export const MUTE_LIST_KIND = 10000
 

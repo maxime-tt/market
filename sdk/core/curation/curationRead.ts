@@ -1,5 +1,5 @@
-import { readThroughStore, type EventReadContext } from '../../core/event-store/read'
-import type { NostrEventLike } from '../../core/nostr/eventLike'
+import { readThroughStore, type EventReadContext } from '../event-store/read'
+import type { NostrEventLike } from '../nostr/eventLike'
 import { CURATION_LISTS, MUTE_LIST_KIND, readCurationListItems, type CurationListKey } from './curationLists'
 
 // A type alias (not interface) so it stays assignable to relay-client filters with `#${string}` index signatures.

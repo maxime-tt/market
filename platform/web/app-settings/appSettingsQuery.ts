@@ -3,7 +3,7 @@
  * (store drain D1, slice 5).
  *
  * The framework-free reads (`readAdminSettingsWorkflow` / `readEditorSettingsWorkflow`) and the parsers
- * live in `@sdk/commerce/curation`. This file owns the react-query hooks and the live admin/editor list
+ * live in `@sdk/core/curation`. This file owns the react-query hooks and the live admin/editor list
  * subscriptions, and resolves its NDK client + app relay from `@platform/web/readContext.ts` (the file
  * that already owns the `@/lib/stores/ndk` edge) instead of `@/lib/stores/ndk`, so it adds no counted
  * `platform -> src` import. The query keys are literal-identical to the pre-drain values. The vacated
@@ -23,7 +23,7 @@ import {
 	readEditorSettingsWorkflow,
 	type AdminSettings as SdkAdminSettings,
 	type EditorSettings as SdkEditorSettings,
-} from '@sdk/commerce/curation'
+} from '@sdk/core/curation'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { createAppRelayReadContext, getAppRelayUrl } from '@platform/web/readContext'

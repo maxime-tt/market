@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import type { EventFilter } from '../../core/event-store/filter'
-import { matchesFilter } from '../../core/event-store/filter'
-import { createMemoryEventStore } from '../../core/event-store/memoryEventStore'
-import { createEventReadContext, streamFromFetch, type EventReadContext } from '../../core/event-store/read'
-import type { NostrEventLike } from '../../core/nostr/eventLike'
+import type { EventFilter } from '../event-store/filter'
+import { matchesFilter } from '../event-store/filter'
+import { createMemoryEventStore } from '../event-store/memoryEventStore'
+import { createEventReadContext, streamFromFetch, type EventReadContext } from '../event-store/read'
+import type { NostrEventLike } from '../nostr/eventLike'
 import { readVanitySettingsWorkflow } from './vanityRead'
 
 const APP = 'a'.repeat(64)

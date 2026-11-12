@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createTestPublishContext } from '../../core/testing/publishContext'
+import { createTestPublishContext } from '../testing/publishContext'
 import { buildBlacklistEventData, buildCurationListEventData, planRoleChange, readCurationListItems } from './curationLists'
 import { publishBlacklistWorkflow, publishCurationListWorkflow, publishRoleChangeWorkflow } from './curationPublish'
 

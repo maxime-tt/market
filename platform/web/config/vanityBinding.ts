@@ -33,7 +33,7 @@ import {
 	readVanitySettingsWorkflow,
 	resolveVanity,
 	type VanitySettings as SdkVanitySettings,
-} from '@sdk/commerce/curation'
+} from '@sdk/core/curation'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
 
 /** A live, reactive view of the vanity state. */
@@ -79,7 +79,7 @@ export function useVanityState(): VanityState {
 // key is literal-identical to the pre-drain value.
 
 export { getExpiredVanityForPubkey, getVanityForPubkey, isVanityAvailable, resolveVanity }
-export type { VanityEntry } from '@sdk/commerce/curation'
+export type { VanityEntry } from '@sdk/core/curation'
 
 export type VanitySettings = SdkVanitySettings<NostrEventLike>
 

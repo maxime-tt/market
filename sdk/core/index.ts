@@ -24,6 +24,7 @@ export * as bolt11Wrapper from './bolt11-wrapper'
 export * as capability from './capability'
 // notifications is flat, like event-store: its vocabulary (Notification, NotificationRule, the queue and the
 // ledger) collides with nothing already exported here, and the app composes the mechanism directly.
+export * from './curation'
 export * from './notifications'
 // state is flat too: it is the generic observable container the drain's stores are built on, and its one
 // vocabulary (StateStore, StateStoreOptions, StateError) collides with nothing already exported here.

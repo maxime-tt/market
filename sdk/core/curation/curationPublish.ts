@@ -1,6 +1,6 @@
-import type { EventPublishContext } from '../../core/ports/eventPublish'
-import type { SignedEventLike } from '../../core/ports/signer'
-import { signAndPublish } from '../../core/publishing'
+import type { EventPublishContext } from '../ports/eventPublish'
+import type { SignedEventLike } from '../ports/signer'
+import { signAndPublish } from '../publishing'
 import {
 	buildBlacklistEventData,
 	buildCurationListEventData,

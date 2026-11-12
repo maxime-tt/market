@@ -20,7 +20,7 @@ import {
 	readCurationListItems,
 	removeListItem,
 	type CurationListKey,
-} from '@sdk/commerce/curation'
+} from '@sdk/core/curation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
