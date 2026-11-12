@@ -14,7 +14,7 @@
  * throw. Nothing here logs an NWC URI or a decrypted wallet payload.
  */
 import { toast } from 'sonner'
-import type { Wallet as UserNwcWallet } from '../../../config/wallet'
+import type { Wallet as UserNwcWallet } from '../state/wallet'
 import { USER_NWC_WALLET_LIST_KIND, USER_NWC_WALLET_LIST_LABEL } from '../nwcWalletList'
 
 export interface NwcBalance {

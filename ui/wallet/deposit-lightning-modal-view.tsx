@@ -1,5 +1,5 @@
 import { Check, Copy, Loader2, Zap } from 'lucide-react'
-import type { CashuDepositStatus } from '@sdk/config/cashu'
+import type { CashuDepositStatus } from '@sdk/commerce/payments/state/cashu'
 import { getMintHostname } from '@sdk/commerce/payments/display'
 import { Button } from '../primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../primitives/dialog'

@@ -13,5 +13,5 @@
 # The two prose mentions are reworded by the S5 re-seed (wave H); the boundary
 # test's literal is permanent — it IS the sdk-side anchor of the one-way rule.
 sdk/commerce/payments/wallet/proofs.ts|A1|prose only: names @nostr-dev-kit/wallet as the dependency this structural contract removes; no import|wave-H
-sdk/config/wallet.ts|A3|prose only: describes what @nostr-dev-kit/wallet did with the NIP-47 URI before the NWCClient swap; no import|wave-H
+sdk/commerce/payments/state/wallet.ts|A3|prose only: describes what @nostr-dev-kit/wallet did with the NIP-47 URI before the NWCClient swap; no import|wave-H
 sdk/boundary.test.ts|A4|the sdk boundary guard's own FORBIDDEN_PACKAGES literal — permanent floor for the one-way rule, never rewordable|never

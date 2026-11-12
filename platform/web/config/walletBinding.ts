@@ -5,7 +5,7 @@
  * Owner ruling (2026-10-25): nostr-derived state should be REACTIVE. The wallet state IS nostr-derived — the
  * wallet list is populated from a relay query (`walletActions.setNostrWallets`, fed by
  * `fetchUserNwcWallets(ndk, pubkey)` in `src/lib/stores/ndk.ts`) — so it gets this binding. The SDK wallet
- * store (`@sdk/config/wallet`, built on `sdk/core/state`) hands a fresh value to a plain `subscribe`
+ * store (`@sdk/commerce/payments/state/wallet`, built on `sdk/core/state`) hands a fresh value to a plain `subscribe`
  * listener and returns a plain unsubscribe; `@tanstack/react-store`'s `useStore` wants a source with a
  * stable `state` and a `subscribe`. A `Store` bridges the two, exactly as
  * `platform/web/config/blacklistBinding.ts` does for the blacklist: it holds the latest state, the SDK store
@@ -20,8 +20,8 @@
  * consumers migrate to `useWalletState` lazily.
  */
 import { Store, useStore } from '@tanstack/react-store'
-import { walletState } from '@sdk/config/wallet'
-import type { WalletState } from '@sdk/config/wallet'
+import { walletState } from '@sdk/commerce/payments/state/wallet'
+import type { WalletState } from '@sdk/commerce/payments/state/wallet'
 
 /** A live, reactive view of the wallet state. */
 export interface WalletBinding {

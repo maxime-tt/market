@@ -29,7 +29,7 @@ const getWallets = mock(() => [
 	{ id: 'w-rich', name: 'Rich', nwcUri: 'nostr+wallet://rich' },
 	{ id: 'w-poor', name: 'Poor', nwcUri: 'nostr+wallet://poor' },
 ])
-mock.module('@sdk/config/wallet', () => ({
+mock.module('@sdk/commerce/payments/state/wallet', () => ({
 	walletActions: { initialize: initializeWallets, setNostrWallets, getWallets, getOrCreateNwcClient },
 	walletStore: { state: {}, setState: mock((_updater: unknown) => {}) },
 }))

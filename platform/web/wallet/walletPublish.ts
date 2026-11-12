@@ -5,7 +5,7 @@ import { publishNwcWalletListWorkflow } from '@sdk/commerce/payments'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { walletKeys } from '@sdk/core/query/queryKeyFactory'
-import type { Wallet as UserNwcWallet } from '@sdk/config/wallet' // Using Wallet directly and aliasing
+import type { Wallet as UserNwcWallet } from '@sdk/commerce/payments/state/wallet' // Using Wallet directly and aliasing
 
 /**
  * Parameters for saving the user's NWC wallet list.

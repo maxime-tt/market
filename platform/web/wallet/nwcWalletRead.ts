@@ -1,5 +1,5 @@
-import { walletActions } from '@sdk/config/wallet'
-import type { Wallet as UserNwcWallet } from '@sdk/config/wallet'
+import { walletActions } from '@sdk/commerce/payments/state/wallet'
+import type { Wallet as UserNwcWallet } from '@sdk/commerce/payments/state/wallet'
 import type { SignerCapability } from '@sdk/core/signer'
 import {
 	readNwcBalanceWorkflow,
