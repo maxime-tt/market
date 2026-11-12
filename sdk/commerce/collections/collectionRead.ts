@@ -1,6 +1,6 @@
 import type { NostrEventLike } from '../../core/nostr/eventLike'
 import { readThroughStore, type EventReadContext } from '../../core/event-store/read'
-import { CURATION_LISTS } from '../curation/curationLists'
+import { CURATION_LISTS } from '../../core/curation/curationLists'
 import { COLLECTION_EVENT_KIND } from './collectionEvent'
 
 export interface CollectionListQuery {

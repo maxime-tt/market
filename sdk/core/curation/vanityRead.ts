@@ -1,5 +1,5 @@
-import { readThroughStore, type EventReadContext } from '../../core/event-store/read'
-import type { NostrEventLike } from '../../core/nostr/eventLike'
+import { readThroughStore, type EventReadContext } from '../event-store/read'
+import type { NostrEventLike } from '../nostr/eventLike'
 import type { CurationFilter, CurationListEvent } from './curationRead'
 
 export const VANITY_REGISTRY = { kind: 30000, dTag: 'vanity-urls' } as const

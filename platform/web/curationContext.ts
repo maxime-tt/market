@@ -1,4 +1,4 @@
-import type { CurationPublishIssue } from '@sdk/commerce/curation'
+import type { CurationPublishIssue } from '@sdk/core/curation'
 import type { SignerCapability } from '@sdk/core/signer'
 import { submitAppSettingsEvent, type NdkClient } from '@platform/web/ndkPublishContext'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'

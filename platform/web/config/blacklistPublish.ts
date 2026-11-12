@@ -22,7 +22,7 @@ import {
 	resolveListOwner,
 	type NdkClient as NDK,
 } from '@platform/web/curationContext'
-import { addListItem, publishBlacklistWorkflow, removeListItem, type BlacklistData } from '@sdk/commerce/curation'
+import { addListItem, publishBlacklistWorkflow, removeListItem, type BlacklistData } from '@sdk/core/curation'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
