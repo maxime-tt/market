@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
 import { z } from 'zod'
 import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
 import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
@@ -6,6 +7,7 @@ import { StorefrontRenderer } from '@ui/storefront'
 import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
 import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/storefront'
 import { BrowseNav } from '@ui/browse/browse-nav'
+import { IntroOverlay } from '@ui/browse/intro'
 
 /**
  * Browse URL state: ?q=&p=
@@ -47,6 +49,9 @@ const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
 	const navigate = useNavigate()
+	// The intro plays over the home once per mount; it is an overlay, so the hero
+	// renders underneath from the first paint and nothing waits on it.
+	const [introDone, setIntroDone] = useState(false)
 
 	// The home page is CMS-produced (owner ruling): with no search state on the
 	// URL, `/` renders the app key's `home` page inside the browse chrome. The
@@ -89,6 +94,7 @@ function BrowseIndex() {
 		}
 		return (
 			<>
+				{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
 				<BrowseNav
 					active
 					onNavigateHome={() => navigate({ to: '/' })}
