@@ -87,10 +87,13 @@ ephemeral numbers must be renumbered on convergence; proposed mapping:
 | **outcome / verdict** | 28645 | **free regular number** |
 | funding abort | 28650 | free regular number |
 
-⚠️ **Open decision for this session:** `1442` is *chat* in this repo. Do not silently reuse it
-for refund. Propose a block, e.g. `1443` refund / `1444` settle / `1445` verdict / `1446`
-funding-abort, and record it in one place. There is already a `RelayKinds` variable
-(`chain/relayobserve.go:37`) — the natural home for a single exported kind map on this side.
+✅ **DECIDED (owner, 2026-11-12) — see `DECISION-auction-kinds-and-editable-allowlist.md` for
+the full ruling.** The allocation is fixed: **1440** create / **1441** bid / **1442** chat
+(leave it — ours) / **1443** refund / **1444** settle / **1445** outcome-verdict / **1446**
+funding-abort. The 1440 series was verified free three ways: absent from the NIPs registry
+(highest claimed 1xxx kind is 1987), absent from all 1,898 NIPs PR branches, and **0 events**
+on four public relays while the control query returned results. Record these in one exported
+map — `RelayKinds` (`chain/relayobserve.go:37`) is the natural home on this side.
 
 ### 3.2 What each validator publishes
 
@@ -173,15 +176,35 @@ change again when your implementation details move.
    edited live — re-run `go test ./...` before committing.
 2. **Introduce one exported kind map** and move `RelayKinds` onto it. No behaviour change.
    This is the single place the renumber happens.
-3. **Publish state commitments** (§3.2b). Cheapest useful publish path: it proves the
+3. **THE MAIN PORT — the editable-field allow-list.**
+   `DECISION-auction-kinds-and-editable-allowlist.md` §3–§4 specifies it in full, and the owner
+   named it *"the main piece of work we should port over"* from `upstream/auctions`
+   (`AUCTIONS.md`). Three rules: the auction root is the first 1440 event for `(seller, d)` and
+   its id is pinned; every bid binds to that root via `e`, so a later edit cannot orphan it;
+   and an update is accepted only if every immutable field is unchanged, rejected otherwise with
+   `immutable_field_changed` naming the field. Mutable: `title`, `description`, `image_url`.
+   Immutable: everything deciding what is sold, for how much, until when, and to whom it
+   settles (`starting_bid`, `min_increment`, `reserve`, `duration_seconds`, the three
+   late-bid/extension fields, `locktime_seconds`, `funding_mode`,
+   `seller_coco_payment_public_key`, and `auction_id` itself).
+   **The one genuinely new piece:** `1440` is a *regular* kind, so the relay stores every
+   version and replaces nothing. The previous implementation got "latest version wins" free
+   from an addressable kind (`30408`); here we must add it explicitly — the canonical auction
+   is the latest 1440 for `(seller, d)` by `created_at` that passes the immutable check.
+   Note the allow-list was **never** enforced by the relay, even there: `AUCTIONS.md` says
+   *"Updates changing immutable fields MUST be rejected by clients/indexers"*, so enforcement
+   is client- and validator-side in both designs.
+4. **Publish state commitments** (§3.2b). Cheapest useful publish path: it proves the
    validators can write to the relay at all, before verdicts exist.
-4. **Prove outcome determinism** from committed state, with a test. This is the precondition
+5. **Prove outcome determinism** from committed state, with a test. This is the precondition
    for publishing verdicts honestly, and the thing a reviewer should ask for first.
-5. **Publish verdict events** (§3.2a) with the anchor fields.
-6. **An e2e test**: publish a create and a bid to a relay with an observer attached, let the
+6. **Publish verdict events** (§3.2a) with the anchor fields.
+7. **An e2e test**: publish a create and a bid to a relay with an observer attached, let the
    chain commit, assert the verdict event appears on the relay with a valid signature, the
    correct roster key, and the right height/hash anchor — and that a client reading only the
-   relay can reconstruct the outcome with no node call.
+   relay can reconstruct the outcome with no node call. Extend it to edit the auction after a
+   bid: a mutable-field edit must be accepted and must not detach the bid; an immutable-field
+   edit must be rejected.
 
 ## 6. Traps — verified, do not re-learn these
 
