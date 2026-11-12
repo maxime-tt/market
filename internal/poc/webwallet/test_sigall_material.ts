@@ -14,7 +14,7 @@
 import { BidderWallet, memoryStorage } from "./src/wallet";
 import {
   SIGALL_GOLDEN_INPUTS,
-  SIGALL_GOLDEN_BLINDED,
+  SIGALL_GOLDEN_OUTPUTS,
   SIGALL_GOLDEN_DIGEST,
   SIGALL_GOLDEN_OUTPUT_POINT,
   sigAllDigest,
@@ -29,8 +29,9 @@ function check(name: string, ok: boolean, detail = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? `: ${detail}` : ""}`);
 }
 
-// (1) The frozen cross-language digest convention, byte-for-byte with Go.
-check("golden SIG_ALL digest matches sigall.go", sigAllDigest(SIGALL_GOLDEN_INPUTS, SIGALL_GOLDEN_BLINDED) === SIGALL_GOLDEN_DIGEST);
+// (1) The frozen cross-language digest convention (layout B, the current Cashu
+// spec / Nutshell >= 0.20.3 form), byte-for-byte with Go.
+check("golden SIG_ALL digest matches sigall.go", sigAllDigest(SIGALL_GOLDEN_INPUTS, SIGALL_GOLDEN_OUTPUTS) === SIGALL_GOLDEN_DIGEST);
 // The output-point vector is pinned in sigall_test.go with this exact secret
 // and blinding factor r = 11*32.
 const goldenSecret = `["P2PK",{"nonce":"${"00".repeat(16)}","data":"02${"aa".repeat(32)}","tags":[["sigflag","SIG_INPUTS"]]}]`;

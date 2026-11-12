@@ -7,15 +7,20 @@
 // exactly "submit one of the two outcomes the bidder pre-authorized", and the
 // destination is provably the one the bidder chose.
 //
-// The digest convention is Nutshell 0.19.2's SIG_ALL message and is frozen by
-// SLICE-B-WAVE1-BRIEF.md §3:
+// The digest convention is the CURRENT Cashu NUT-11 SIG_ALL message ("layout
+// B", pinned by cashubtc/nuts PR #302 on 2025-11-15) and what Nutshell >= 0.20.3
+// signs:
 //
-//	sha256( concat(input proof secrets, in order) || concat(output B_ hex, in order) )
+//	sha256( concat(input secret || input C, in order)
+//	        || concat(str(output amount) || output B_ hex, in order) )
 //
 // It is implemented once here and once in Go at internal/poc/sigall.go. cashu-ts
-// derives a DIFFERENT SIG_ALL message, so its own helper is deliberately unused.
-// Keep SIGALL_GOLDEN_* byte-for-byte aligned with sigAllGolden* in sigall.go;
-// both are pinned by tests.
+// 5.0.0-rc.4 exposes both layouts (buildP2PKSigAllMessage is this one,
+// buildLegacyP2PKSigAllMessage is the obsolete pre-#302 form); neither is called
+// -- the shared golden vector is the cross-language authority. Keep
+// SIGALL_GOLDEN_* byte-for-byte aligned with sigAllGolden* in sigall.go; both
+// are pinned by tests. A change to the digest means the mint stops accepting the
+// bids, so recompute it only deliberately.
 
 import { schnorr, secp256k1 } from "@noble/curves/secp256k1.js";
 import { sha256 } from "@noble/hashes/sha2.js";
@@ -24,13 +29,31 @@ import { hashToCurve } from "@cashu/cashu-ts";
 
 export const SIGALL_TEMPLATES_SCHEMA = "PlebeianAuctionsPOCSigAllTemplatesV1";
 
-/** The shared golden vector. Keep aligned with internal/poc/sigall.go. */
-export const SIGALL_GOLDEN_INPUTS = ["sigall-golden-secret-0001", "sigall-golden-secret-0002"];
-export const SIGALL_GOLDEN_BLINDED = [
-  `02${"aa".repeat(32)}`,
-  `03${"bb".repeat(32)}`,
+/** One input's bound fields for the SIG_ALL message. */
+export interface SigAllMessageInput {
+  secret: string;
+  C: string;
+}
+
+/** One output's bound fields for the SIG_ALL message. */
+export interface SigAllMessageOutput {
+  amount: number;
+  B_: string;
+}
+
+/**
+ * The shared golden vector, pinning LAYOUT B. Keep aligned with
+ * internal/poc/sigall.go (sigAllGoldenInputs / sigAllGoldenOutputs).
+ */
+export const SIGALL_GOLDEN_INPUTS: SigAllMessageInput[] = [
+  { secret: "sigall-golden-secret-0001", C: `02${"cc".repeat(32)}` },
+  { secret: "sigall-golden-secret-0002", C: `03${"dd".repeat(32)}` },
 ];
-export const SIGALL_GOLDEN_DIGEST = "54fe6fe064563ecd412a19c79f8c966c82b317448dd6ce1e8b8b9009d841adce";
+export const SIGALL_GOLDEN_OUTPUTS: SigAllMessageOutput[] = [
+  { amount: 1, B_: `02${"aa".repeat(32)}` },
+  { amount: 2, B_: `03${"bb".repeat(32)}` },
+];
+export const SIGALL_GOLDEN_DIGEST = "d3403843d4f3ead4a341f02476b14f140699d346054435fd38d27c294130bec3";
 /** Pins the B_ = hash_to_curve(secret) + r*G derivation for the vector above. */
 export const SIGALL_GOLDEN_OUTPUT_POINT = "0336bf38b85ee80f36950f9a05f22c0f36576118dcb30b5300b5a9f73bd41af17e";
 
@@ -71,9 +94,12 @@ export interface SigAllDepositTemplates {
   refund: SigAllSignedTemplate;
 }
 
-/** Nutshell's SIG_ALL message, hashed once. */
-export function sigAllDigest(inputSecrets: string[], blinded: string[]): string {
-  return bytesToHex(sha256(utf8ToBytes(inputSecrets.join("") + blinded.join(""))));
+/** The current NUT-11 SIG_ALL message (layout B), hashed once. */
+export function sigAllDigest(inputs: SigAllMessageInput[], outputs: SigAllMessageOutput[]): string {
+  const parts: string[] = [];
+  for (const input of inputs) parts.push(input.secret, input.C);
+  for (const output of outputs) parts.push(String(output.amount), output.B_);
+  return bytesToHex(sha256(utf8ToBytes(parts.join(""))));
 }
 
 /** A fresh 32-byte lowercase-hex blinding factor. */
@@ -90,11 +116,11 @@ export function sigAllOutputPoint(secret: string, rHex: string): string {
   return bytesToHex(B_.toBytes(true));
 }
 
-/** The (§3) digest of one exact template: input secrets then output B_ points. */
+/** The layout-B digest of one exact template: input secret+C, output amount+B_. */
 export function sigAllTemplateDigest(template: SigAllSignedTemplate): string {
   return sigAllDigest(
-    template.inputs.map((input) => input.secret),
-    template.outputs.map((output) => sigAllOutputPoint(output.secret, output.r)),
+    template.inputs.map((input) => ({ secret: input.secret, C: input.C })),
+    template.outputs.map((output) => ({ amount: output.amount, B_: sigAllOutputPoint(output.secret, output.r) })),
   );
 }
 

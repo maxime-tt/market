@@ -12,20 +12,26 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
 
-// TestSigAllDigestMatchesGoldenVector pins the frozen (§3) SIG_ALL digest
-// convention against the shared vector both languages carry. If this changes,
-// the mint stops accepting the bids, so it must not change silently.
+// TestSigAllDigestMatchesGoldenVector pins the frozen layout-B SIG_ALL digest
+// convention (the current Cashu spec / Nutshell >= 0.20.3 form) against the
+// shared vector both languages carry. A change to this digest means the wallet
+// and the coordinator disagree with the mint, and the mint stops accepting the
+// bids, so it must not change silently.
 func TestSigAllDigestMatchesGoldenVector(t *testing.T) {
 	t.Parallel()
-	got := sigAllDigest(sigAllGoldenInputs, sigAllGoldenBlinded)
+	got := sigAllDigest(sigAllGoldenInputs, sigAllGoldenOutputs)
 	if hex.EncodeToString(got[:]) != sigAllGoldenDigest {
 		t.Fatalf("sigAllDigest = %s, want the frozen golden vector %s", hex.EncodeToString(got[:]), sigAllGoldenDigest)
 	}
-	// Order matters: the secrets and the blinded points are concatenated in the
-	// order the mint receives them.
-	reordered := sigAllDigest(sigAllGoldenInputs, []string{sigAllGoldenBlinded[1], sigAllGoldenBlinded[0]})
+	// Order matters: each input's secret and C, and each output's amount and B_,
+	// are concatenated in the order the mint receives them.
+	reordered := sigAllDigest(sigAllGoldenInputs, []sigAllMessageOutput{sigAllGoldenOutputs[1], sigAllGoldenOutputs[0]})
 	if hex.EncodeToString(reordered[:]) == sigAllGoldenDigest {
 		t.Fatal("sigAllDigest ignored the output order")
+	}
+	reorderedInputs := sigAllDigest([]sigAllMessageInput{sigAllGoldenInputs[1], sigAllGoldenInputs[0]}, sigAllGoldenOutputs)
+	if hex.EncodeToString(reorderedInputs[:]) == sigAllGoldenDigest {
+		t.Fatal("sigAllDigest ignored the input order")
 	}
 	// The output-point derivation (B_ = hash_to_curve(secret) + r*G) must also
 	// agree with the TypeScript wallet, so the coordinator recomputes the exact
@@ -254,7 +260,7 @@ func TestCommitteeSignerPort(t *testing.T) {
 	if signer.PublicKey() != want {
 		t.Fatalf("port public key = %s, want %s", signer.PublicKey(), want)
 	}
-	digest := sigAllDigest(sigAllGoldenInputs, sigAllGoldenBlinded)
+	digest := sigAllDigest(sigAllGoldenInputs, sigAllGoldenOutputs)
 	signature, err := signer.SignDigest(digest[:])
 	if err != nil {
 		t.Fatal(err)

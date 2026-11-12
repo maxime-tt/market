@@ -4,15 +4,28 @@ package poc
 // outcome templates.
 //
 // The digest derivation the wallet and the coordinator must agree on byte for
-// byte stays exactly as the cross-language contract defines it:
+// byte stays exactly as the cross-language contract defines it, and it is the
+// CURRENT Cashu spec form (NUT-11 "Message aggregation for SIG_ALL", "layout
+// B", pinned by cashubtc/nuts PR #302 on 2025-11-15):
 //
-//	sha256( concat(input proof secrets, in order) || concat(output B_ hex, in order) )
+//	sha256( concat(input secret || input C, in order)
+//	        || concat(str(output amount) || output B_ hex, in order) )
+//
+// This is what Nutshell >= 0.20.3 signs (0.21.0's
+// cashu/core/nuts/nut11.py sigall_message_to_sign) and what the deployed demo
+// mint and the interoperating side both run. It is NOT the pre-#302 form
+//
+//	sha256( concat(input secrets) || concat(output B_ hex) )
+//
+// which Nutshell <= 0.20.2 signed: that legacy layout is refused by any current
+// mint, so a signature over it can never spend here.
 //
 // It is implemented once in TypeScript at internal/poc/webwallet/src/sigall.ts
-// and once here. cashu-ts derives a DIFFERENT SIG_ALL message, so its own
-// helper is deliberately not used. The two implementations share the golden
-// vector in sigAllGoldenInputs/sigAllGoldenBlinded/sigAllGoldenDigest, and both
-// are pinned by tests.
+// and once here. cashu-ts 5.0.0-rc.4 exposes both layouts (buildP2PKSigAllMessage
+// is this one, buildLegacyP2PKSigAllMessage is the obsolete one); neither is
+// called -- the shared golden vector is the cross-language authority. The two
+// implementations share sigAllGoldenInputs/sigAllGoldenOutputs/sigAllGoldenDigest,
+// and both are pinned by tests.
 //
 // Wave E2b reinstates the bidder's pre-signed outcome templates, but as
 // consensus-verifiable material: the two exact transactions the committee may
@@ -30,6 +43,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -39,30 +53,55 @@ import (
 const SigAllTemplatesSchema = "PlebeianAuctionsPOCSigAllTemplatesV1"
 
 // The shared golden vector. Keep byte-for-byte aligned with sigall.ts.
-var sigAllGoldenInputs = []string{"sigall-golden-secret-0001", "sigall-golden-secret-0002"}
-
-var sigAllGoldenBlinded = []string{
-	"02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-	"03bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+//
+// It pins LAYOUT B (the current spec form): each input's secret then its C,
+// then each output's decimal amount then its blinded point B_. A change to this
+// digest means the wallet and the coordinator disagree with the mint, and the
+// mint stops accepting the bids -- so the vector must be recomputed only
+// deliberately, never incidentally.
+var sigAllGoldenInputs = []sigAllMessageInput{
+	{Secret: "sigall-golden-secret-0001", C: "02cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+	{Secret: "sigall-golden-secret-0002", C: "03dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
 }
 
-const sigAllGoldenDigest = "54fe6fe064563ecd412a19c79f8c966c82b317448dd6ce1e8b8b9009d841adce"
+var sigAllGoldenOutputs = []sigAllMessageOutput{
+	{Amount: 1, Blinded: "02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+	{Amount: 2, Blinded: "03bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+}
+
+const sigAllGoldenDigest = "d3403843d4f3ead4a341f02476b14f140699d346054435fd38d27c294130bec3"
 
 // sigAllGoldenOutputPoint pins the B_ = hash_to_curve(secret) + r*G derivation
 // for the shared vector, so the Go coordinator recomputes the exact points the
 // TypeScript wallet signed. Cross-checked against sigall.ts's sigAllOutputPoint.
 const sigAllGoldenOutputPoint = "0336bf38b85ee80f36950f9a05f22c0f36576118dcb30b5300b5a9f73bd41af17e"
 
-// sigAllDigest is Nutshell's SIG_ALL message: the input secrets followed by the
-// output blinded points, concatenated as their wire strings and hashed once.
+// sigAllMessageInput is one proof's bound fields for the SIG_ALL message.
+type sigAllMessageInput struct {
+	Secret string
+	C      string
+}
+
+// sigAllMessageOutput is one blinded output's bound fields for the SIG_ALL
+// message: its amount (decimal string) and the blinded point B_ it will sign.
+type sigAllMessageOutput struct {
+	Amount  int64
+	Blinded string
+}
+
+// sigAllDigest is the CURRENT Cashu NUT-11 SIG_ALL message (layout B, spec
+// PR #302): for every input, its secret then its C; then for every output, its
+// amount as a decimal string then its blinded point B_. Hashed once with sha256.
 // The order the mint receives the inputs and outputs in is the order used here.
-func sigAllDigest(inputSecrets, outputBlinded []string) [32]byte {
+func sigAllDigest(inputs []sigAllMessageInput, outputs []sigAllMessageOutput) [32]byte {
 	hash := sha256.New()
-	for _, secret := range inputSecrets {
-		hash.Write([]byte(secret))
+	for _, input := range inputs {
+		hash.Write([]byte(input.Secret))
+		hash.Write([]byte(input.C))
 	}
-	for _, blinded := range outputBlinded {
-		hash.Write([]byte(blinded))
+	for _, output := range outputs {
+		hash.Write([]byte(strconv.FormatInt(output.Amount, 10)))
+		hash.Write([]byte(output.Blinded))
 	}
 	var digest [32]byte
 	copy(digest[:], hash.Sum(nil))
@@ -123,17 +162,22 @@ type sigAllDepositTemplates struct {
 	Refund sigAllSignedTemplate `json:"refund"`
 }
 
-// sigAllTemplateDigest computes the (§3) digest of one exact template: the input
-// secrets in order, then the B_ points of the outputs in order.
+// sigAllTemplateDigest computes the (layout B) digest of one exact template: for
+// every input its secret then its C, then for every output its amount then the
+// B_ point derived from the output secret and its opening. This is the message
+// the mint signs for the SIG_ALL transaction the template submits.
 func sigAllTemplateDigest(template sigAllSignedTemplate) (string, error) {
-	secrets := make([]string, 0, len(template.Inputs))
+	inputs := make([]sigAllMessageInput, 0, len(template.Inputs))
 	for index, input := range template.Inputs {
 		if input.Secret == "" || len(input.Secret) > 4096 {
 			return "", fmt.Errorf("template input %d has an invalid secret", index)
 		}
-		secrets = append(secrets, input.Secret)
+		if input.C == "" {
+			return "", fmt.Errorf("template input %d has no C point", index)
+		}
+		inputs = append(inputs, sigAllMessageInput{Secret: input.Secret, C: input.C})
 	}
-	blinded := make([]string, 0, len(template.Outputs))
+	outputs := make([]sigAllMessageOutput, 0, len(template.Outputs))
 	for index, output := range template.Outputs {
 		if output.Secret == "" || len(output.Secret) > 4096 {
 			return "", fmt.Errorf("template output %d has an invalid secret", index)
@@ -142,9 +186,9 @@ func sigAllTemplateDigest(template sigAllSignedTemplate) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("template output %d: %w", index, err)
 		}
-		blinded = append(blinded, point)
+		outputs = append(outputs, sigAllMessageOutput{Amount: output.Amount, Blinded: point})
 	}
-	digest := sigAllDigest(secrets, blinded)
+	digest := sigAllDigest(inputs, outputs)
 	return hex.EncodeToString(digest[:]), nil
 }
 

@@ -10655,12 +10655,21 @@ ${e}}` : `{${i.join(",")}}`;
   }
 
   // src/sigall.ts
-  var SIGALL_GOLDEN_BLINDED = [
-    `02${"aa".repeat(32)}`,
-    `03${"bb".repeat(32)}`
+  var SIGALL_GOLDEN_INPUTS = [
+    { secret: "sigall-golden-secret-0001", C: `02${"cc".repeat(32)}` },
+    { secret: "sigall-golden-secret-0002", C: `03${"dd".repeat(32)}` }
   ];
-  function sigAllDigest(inputSecrets, blinded) {
-    return bytesToHex(sha256(utf8ToBytes(inputSecrets.join("") + blinded.join(""))));
+  var SIGALL_GOLDEN_OUTPUTS = [
+    { amount: 1, B_: `02${"aa".repeat(32)}` },
+    { amount: 2, B_: `03${"bb".repeat(32)}` }
+  ];
+  function sigAllDigest(inputs, outputs) {
+    const parts = [];
+    for (const input of inputs)
+      parts.push(input.secret, input.C);
+    for (const output of outputs)
+      parts.push(String(output.amount), output.B_);
+    return bytesToHex(sha256(utf8ToBytes(parts.join(""))));
   }
   function randomBlindingHex() {
     return bytesToHex(secp256k1.utils.randomSecretKey());
@@ -10674,7 +10683,7 @@ ${e}}` : `{${i.join(",")}}`;
     return bytesToHex(B_.toBytes(true));
   }
   function sigAllTemplateDigest(template) {
-    return sigAllDigest(template.inputs.map((input) => input.secret), template.outputs.map((output) => sigAllOutputPoint(output.secret, output.r)));
+    return sigAllDigest(template.inputs.map((input) => ({ secret: input.secret, C: input.C })), template.outputs.map((output) => ({ amount: output.amount, B_: sigAllOutputPoint(output.secret, output.r) })));
   }
   function buildP2PKOutputSecret(recipient, nonce) {
     if (!/^0[23][0-9a-f]{64}$/.test(recipient))
