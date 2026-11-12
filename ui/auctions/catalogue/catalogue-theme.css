@@ -11,22 +11,9 @@
  * Scoped to the catalogue surface so it cannot leak into the browse tokens.
  */
 .cat {
-	--cat-bg: #f4ece3;
-	--cat-surface: #fffcf8;
-	--cat-surface-2: #f0e2d5;
-	--cat-ink: #1b1718;
-	--cat-muted: #6e625a;
-	--cat-line: #e2d3c4;
-	--cat-pink: #ff3eb5;
-	--cat-pink-deep: #c8157f;
-	--cat-orange: #f7931a;
-	--cat-win: #16a35a;
-	--cat-lose: #e5484d;
-	--cat-radius: 10px;
-
-	background: var(--cat-bg);
-	color: var(--cat-ink);
-	font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+	/* Values come from `catalogue-preset.ts` (catalogueCssVars), which carries the
+	 * extraction's citations; the stylesheet only consumes them. */
+	font-family: var(--cat-serif);
 	min-height: 100vh;
 }
 

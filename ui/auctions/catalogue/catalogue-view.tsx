@@ -1,4 +1,5 @@
 import './catalogue-theme.css'
+import { catalogueCssVars } from './catalogue-preset'
 
 /**
  * The Catalogue list, Layout A.
@@ -39,7 +40,7 @@ function formatRemaining(endTime: number, now: number): string {
 
 export function CatalogueView({ auctions, isLoading, isError, now, onSelect }: CatalogueViewProps) {
 	return (
-		<div className="cat">
+		<div className="cat" style={catalogueCssVars('light')}>
 			<div className="cat__wrap">
 				<p className="cat__banner" data-testid="catalogue-fake-money">
 					<b>Demo network.</b> Bids and balances are fake money (FAKE_MONEY_ONLY) — nothing here settles to real
