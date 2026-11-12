@@ -21,6 +21,9 @@ export { LinkListBlock, type LinkListBlockProps } from './blocks/LinkListBlock'
 export { DividerBlock, SpacerBlock, type SpacerBlockProps } from './blocks/SpacingBlocks'
 export { ProductGridBlock, type ProductGridBlockProps, type ProductGridBlockViewProps } from './blocks/ProductGridBlock'
 export { FeaturedProductBlock, type FeaturedProductBlockProps, type FeaturedProductBlockViewProps } from './blocks/FeaturedProductBlock'
+export { ProductRowBlock, type ProductRowBlockProps, type ProductRowBlockViewProps } from './blocks/ProductRowBlock'
+export { SearchBlock, type SearchBlockProps, type SearchBlockViewProps } from './blocks/SearchBlock'
+export { CategoriesBlock, type CategoriesBlockProps, type CategoriesBlockBlockProps, type CategoriesBlockViewProps } from './blocks/CategoriesBlock'
 export {
 	ProfileHeaderBlock,
 	type ProfileHeaderBlockProps,

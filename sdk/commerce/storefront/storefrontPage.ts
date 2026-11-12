@@ -227,6 +227,69 @@ export const SpacerBlockSchema = z.object({
  * The closed set. Adding a member here is the *only* way to make a new block
  * renderable, which is what keeps the renderer's switch exhaustive.
  */
+/**
+ * A row of hand-picked products.
+ *
+ * Explicit references only — the editor chose these listings and their order, so
+ * rendering is never query-driven and the row cannot drift from what was
+ * published. Each `d` tag resolves against the page author's own listing set,
+ * exactly like `ProductGrid`: the document has no field that could name another
+ * author, which is the property that keeps a page from pointing at someone
+ * else's catalogue.
+ */
+export const ProductRowBlockSchema = z.object({
+	type: z.literal('ProductRow'),
+	props: z.object({
+		...blockBase,
+		/** The product d-tags, in the exact order the author placed them. */
+		productDTags: z.array(dTagRef).min(1).max(STOREFRONT_LIMITS.maxProductsPerGrid).default([]),
+	}),
+})
+
+/**
+ * The browse search field as a page block.
+ *
+ * Presentational only: the host wires the navigation to `?q=`, so a page cannot
+ * invent a search destination the app does not have.
+ */
+export const SearchBlockSchema = z.object({
+	type: z.literal('Search'),
+	props: z.object({
+		...blockBase,
+		/** Placeholder text shown when the query is empty. */
+		placeholder: shortText.default('Search products'),
+		/** CSS width — controls the pill's constrained width. */
+		size: z.enum(['sm', 'md', 'lg']).default('md'),
+	}),
+})
+
+/**
+ * A flat, author-ordered list of categories.
+ *
+ * Flat by ruling: the taxonomy is a labeller-side tagging guide and nothing on
+ * the front end may depend on a parent/child relation, so a block names
+ * categories the way a visitor would see them and nothing about their ancestry.
+ */
+export const CategoriesBlockSchema = z.object({
+	type: z.literal('Categories'),
+	props: z.object({
+		...blockBase,
+		/** Author-ordered category names; order is preserved when rendering. */
+		categories: z
+			.array(
+				z.object({
+					/** Display label shown to visitors. */
+					label: shortText,
+					/** Platform category key — the identifier the host resolves into an in-app path. */
+					key: z.string().min(1).max(100),
+				}),
+			)
+			.max(30)
+			.default([]),
+		title: shortText.default(''),
+	}),
+})
+
 export const StorefrontBlockSchema = z.discriminatedUnion('type', [
 	ProfileHeaderBlockSchema,
 	HeroBlockSchema,
@@ -237,6 +300,9 @@ export const StorefrontBlockSchema = z.discriminatedUnion('type', [
 	ImageBlockSchema,
 	DividerBlockSchema,
 	SpacerBlockSchema,
+	ProductRowBlockSchema,
+	SearchBlockSchema,
+	CategoriesBlockSchema,
 ])
 
 export type StorefrontBlock = z.infer<typeof StorefrontBlockSchema>
