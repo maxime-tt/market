@@ -2,6 +2,8 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { z } from 'zod'
 import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
 import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
+import { StorefrontRenderer } from '@ui/storefront'
+import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
 import { BrowseNav } from '@ui/browse/browse-nav'
 
 /**
@@ -33,6 +35,14 @@ export const Route = createFileRoute('/')({
 	staticData: { hidesAppHeader: true },
 })
 
+/**
+ * The instance's own key — the identity the CMS authors pages as, and the
+ * author the block slots resolve their reads against. Advertised by
+ * `/api/config` as `appPublicKey`; kept here because the slots need it before
+ * any page document exists.
+ */
+const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91cd9c'
+
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
 	const navigate = useNavigate()
@@ -49,6 +59,32 @@ function BrowseIndex() {
 	// the CMS empty state, which is honest — not the browse fallback, which would
 	// hide the fact that nothing has been authored.
 	if (!q.trim() && !p) {
+		// The home composition is the CMS block set (owner ruling): a `Search`
+		// block, a hand-picked `ProductRow` and the flat `Categories` list,
+		// rendered inside the browse chrome. It is expressed as a page document
+		// so the same renderer that draws published pages draws this one — when
+		// the app key's own `home` page resolves, this constant is replaced by it
+		// and nothing else changes.
+		const homePage = {
+			enabled: true,
+			root: { props: { title: '', theme: 'default' as const, palette: '' } },
+			content: [
+				{ type: 'Search' as const, props: { id: 'home-search', placeholder: 'Search the marketplace', size: 'lg' as const } },
+				{ type: 'ProductRow' as const, props: { id: 'home-row', productDTags: ['orange-flock-black-orange-edition-high-top-sneakers-ma5ond'] } },
+				{
+					type: 'Categories' as const,
+					props: {
+						id: 'home-cats',
+						title: 'Browse by category',
+						categories: [
+							{ label: 'Art', key: 'art' },
+							{ label: 'Clothing', key: 'clothing' },
+							{ label: 'Bitcoin', key: 'bitcoin' },
+						],
+					},
+				},
+			],
+		}
 		return (
 			<>
 				<BrowseNav
@@ -56,7 +92,7 @@ function BrowseIndex() {
 					onNavigateHome={() => navigate({ to: '/' })}
 					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
 				/>
-				<StorefrontAddressPage dTag="home" />
+				<StorefrontRenderer page={homePage} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
 			</>
 		)
 	}
