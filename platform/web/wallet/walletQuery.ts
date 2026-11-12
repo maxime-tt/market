@@ -11,8 +11,8 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
-import { walletActions } from '@sdk/config/wallet'
-import type { Wallet as UserNwcWallet } from '@sdk/config/wallet'
+import { walletActions } from '@sdk/commerce/payments/state/wallet'
+import type { Wallet as UserNwcWallet } from '@sdk/commerce/payments/state/wallet'
 import {
 	readNwcBalanceWorkflow,
 	readNwcWalletsWorkflow,
@@ -27,7 +27,7 @@ import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createCapabilityWalletListPort } from '@platform/web/wallet/nwcWalletRead'
 
 export type { NwcBalance }
-export type { Wallet as UserNwcWallet } from '@sdk/config/wallet'
+export type { Wallet as UserNwcWallet } from '@sdk/commerce/payments/state/wallet'
 
 /** The host's relay fetch + NIP-44 self-decrypt for the wallet-list read. A3.5: the signer reads come from the active signer capability (`createCapabilityWalletListPort`, `nwcWalletRead`), not NDK's instance signer. */
 function createWalletListPort(ndk: NonNullable<ReturnType<typeof getAppNdk>>): NwcWalletListPort<NwcWalletEventLike> {

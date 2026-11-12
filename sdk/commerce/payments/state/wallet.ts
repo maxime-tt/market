@@ -27,8 +27,8 @@
  * `fetchUserNwcWallets(ndk, pubkey)`), so per the owner's ruling it gets a reactive binding,
  * `platform/web/config/walletBinding.ts`.
  */
-import { createStateStore } from '../core/state'
-import type { StateStore } from '../core/state'
+import { createStateStore } from '../../../core/state'
+import type { StateStore } from '../../../core/state'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { NWCClient } from '@getalby/sdk/nwc'

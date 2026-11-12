@@ -16,7 +16,7 @@
  *
  * `wallet` is the most recent state module: the NWC wallet state and actions, rebuilt on `sdk/core/state`
  * and repointed from `src/lib/stores/wallet.ts`. It carries no name that collides in the `@sdk` barrel, so a
- * consumer may take it by explicit path (`@sdk/config/wallet`).
+ * consumer may take it by explicit path (`@sdk/commerce/payments/state/wallet`).
  */
 export * from './blacklist'
 export * from './constants'
@@ -27,4 +27,3 @@ export * from './storefront'
 export * from './test-labels'
 export * from './ui'
 export * from './vanity'
-export * from './wallet'

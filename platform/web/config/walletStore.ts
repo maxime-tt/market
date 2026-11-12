@@ -1,9 +1,9 @@
 /**
  * platform/web/config/walletStore.ts — the platform home of the temporary bidirectional
- * `@tanstack/store` `walletStore` adapter over `@sdk/config/wallet`, plus the reactive `useWallets`
+ * `@tanstack/store` `walletStore` adapter over `@sdk/commerce/payments/state/wallet`, plus the reactive `useWallets`
  * hook.
  *
- * The wallet state and actions live in `@sdk/config/wallet` (rebuilt on `sdk/core/state`). The
+ * The wallet state and actions live in `@sdk/commerce/payments/state/wallet` (rebuilt on `sdk/core/state`). The
  * adapter IS needed, and it IS bidirectional:
  *   - `walletActions.*` — plain functions. The `export *` below re-exports them from the SDK module.
  *   - `Wallet`, `WalletState`, `NwcClient`, `parseNwcUri` — types and a helper; re-exported from the SDK.
@@ -14,7 +14,7 @@
  *     SDK's `walletState`) so there is no shadowing — this file simply adds the legacy `Store` under its
  *     original name.
  *   - `useWallets` — the React hook. It is REACTIVE (`useState` + `subscribe`) and it has three consumers
- *     that render on `wallets`/`isLoading`, so reactivity is preserved. Because `@sdk/config/wallet` is
+ *     that render on `wallets`/`isLoading`, so reactivity is preserved. Because `@sdk/commerce/payments/state/wallet` is
  *     React-free, the hook lives HERE, reading the SDK store — the same split the blacklist shim uses for
  *     its `useBlacklist`.
  *
@@ -31,12 +31,12 @@
  * rewired to the reactive binding (`platform/web/config/walletBinding.ts`, `useWalletState`); consumers
  * migrate lazily. The wallet list is nostr-derived, so per the owner's ruling it gets that binding.
  */
-export * from '@sdk/config/wallet'
+export * from '@sdk/commerce/payments/state/wallet'
 
 import { Store } from '@tanstack/store'
 import { useEffect, useState } from 'react'
-import { walletActions, walletState } from '@sdk/config/wallet'
-import type { WalletState } from '@sdk/config/wallet'
+import { walletActions, walletState } from '@sdk/commerce/payments/state/wallet'
+import type { WalletState } from '@sdk/commerce/payments/state/wallet'
 
 /**
  * The `@tanstack/store` view of the SDK wallet state. It starts at the current state and the SDK store
@@ -65,7 +65,7 @@ walletStore.setState = ((updater: (prev: WalletState) => WalletState) => {
 /**
  * React hook for consuming the wallet store. Reactive: it seeds from the SDK state and re-renders on every
  * change, exactly as the source hook did (which subscribed to the `Store`). Kept here rather than in the SDK
- * so `@sdk/config/wallet` stays React-free.
+ * so `@sdk/commerce/payments/state/wallet` stays React-free.
  */
 export const useWallets = () => {
 	const [state, setState] = useState(walletState.get())

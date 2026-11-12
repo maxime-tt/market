@@ -13,7 +13,7 @@
 import { appConfigBinding } from '@platform/web/config/appConfigBinding'
 import { getAppNdk, publishAppEvent } from '@platform/web/ndkPublishContext'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
-import { parseNwcUri } from '@sdk/config/wallet'
+import { parseNwcUri } from '@sdk/commerce/payments/state/wallet'
 import { type PaymentDetailsMethod } from '@sdk/config/constants'
 import { paymentDetailsKeys } from '@sdk/core/query/queryKeyFactory'
 import { validatePreimage } from '@sdk/commerce/payments/preimage'

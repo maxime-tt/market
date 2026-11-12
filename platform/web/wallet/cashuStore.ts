@@ -1,7 +1,7 @@
 /**
  * platform/web/wallet/cashuStore.ts — the platform home of the cashu wallet store adapter.
  *
- * The wallet state and the `cashuActions` surface live in `@sdk/config/cashu` (rebuilt on
+ * The wallet state and the `cashuActions` surface live in `@sdk/commerce/payments/state/cashu` (rebuilt on
  * `sdk/core/state`). This file is also the **assembly** for that module: the SDK cannot read the signed-in
  * identity, so `createCashuStore` takes a `getPubkey` accessor and this file supplies it — resolved **per
  * call** so an account switch is picked up rather than frozen at construction.
@@ -17,11 +17,11 @@
  * The adapter is TEMPORARY: it is deleted when the `useStore(cashuStore)` consumers are rewired to a reactive
  * binding and `walletOps.ts`/the tests stop writing the tanstack store directly.
  */
-export * from '@sdk/config/cashu'
+export * from '@sdk/commerce/payments/state/cashu'
 
 import { Store } from '@tanstack/store'
-import { createCashuStore } from '@sdk/config/cashu'
-import type { CashuState } from '@sdk/config/cashu'
+import { createCashuStore } from '@sdk/commerce/payments/state/cashu'
+import type { CashuState } from '@sdk/commerce/payments/state/cashu'
 import { authBinding } from '@platform/web/auth/authBinding'
 
 /**

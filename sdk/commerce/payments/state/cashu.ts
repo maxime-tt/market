@@ -24,23 +24,23 @@
  * storage seam, so the primitive is used in memory and the action-driven persistence is preserved verbatim.
  */
 
-import { createStateStore } from '../core/state'
-import type { StateStore } from '../core/state'
+import { createStateStore } from '../../../core/state'
+import type { StateStore } from '../../../core/state'
 import { initializeCoco, Manager, getEncodedToken, getMintQuoteAmount, getMintQuoteAvailableAmount, sumAmounts } from '@cashu/coco-core'
 import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
-import { getMintHostname } from '../commerce/payments/display'
-import { LEGACY_PENDING_TOKENS_KEY } from '../commerce/payments/wallet/legacyStorage'
-import { loadUserData, removeUserData, saveUserData, type SaveUserDataOptions } from '../commerce/payments/wallet/storage'
-import type { PendingToken } from '../commerce/payments/wallet/types'
-import { createCocoWalletSource, type CashuWalletSource } from '../commerce/payments/wallet/cashuWalletSource'
+import { getMintHostname } from '../display'
+import { LEGACY_PENDING_TOKENS_KEY } from '../wallet/legacyStorage'
+import { loadUserData, removeUserData, saveUserData, type SaveUserDataOptions } from '../wallet/storage'
+import type { PendingToken } from '../wallet/types'
+import { createCocoWalletSource, type CashuWalletSource } from '../wallet/cashuWalletSource'
 import {
 	type CocoDepositQuote,
 	DEPOSIT_CONFIRMATION_TIMEOUT_LABEL,
 	createCocoDepositQuote,
 	getDepositConfirmationTimeoutMessage,
 	toCocoDepositManager,
-} from '../commerce/payments/wallet/depositQuote'
+} from '../wallet/depositQuote'
 
 const CASHU_SEED_KEY = 'cashu_wallet_seed'
 const PENDING_TOKENS_KEY = 'cashu_pending_tokens'
