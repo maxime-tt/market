@@ -1,0 +1,149 @@
+import { ChatMessageBubble } from '@platform/web/messages/ChatMessageBubble'
+import { MessageInput } from '@platform/web/messages/MessageInput'
+import { PrivateOrderDetailsCard } from '@platform/web/orders/PrivateOrderDetailsCard'
+import { Button } from '@ui/wrappers/button'
+import { LoadingState } from '@ui/shared/loading-state'
+import { authStore } from '@platform/web/auth/authStore'
+import { readMarks } from '@platform/web/notifications'
+import { isValidHexKey, isValidNpub } from '@sdk/core/utils/utils'
+import { sendChatMessage, useConversationMessages } from '@platform/web/messaging/messagesQuery'
+import { useOrdersBySeller } from '@platform/web/orders/ordersQuery'
+import { messageKeys } from '@sdk/core/query/queryKeyFactory'
+import { getSellerPubkey } from '@platform/web/orders/orderDetailHelpers'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
+import { useProfileName } from '@platform/web/profiles/profileQuery'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { createFileRoute } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { decode } from 'nostr-tools/nip19'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
+
+export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages/$pubkey')({
+	component: ConversationDetailComponent,
+})
+
+function ConversationDetailComponent() {
+	const { pubkey: otherUserPubkey } = Route.useParams()
+	const { user: currentUser } = useStore(authStore)
+	const queryClient = useQueryClient()
+	const messagesEndRef = useRef<HTMLDivElement | null>(null)
+	const [isSending, setIsSending] = useState(false)
+	const normalizedBuyerPubkey = useMemo(() => normalizePubkeyParam(otherUserPubkey), [otherUserPubkey])
+
+	// Get the user's profile name for the title
+	const { data: userName, isLoading: isLoadingName } = useProfileName(otherUserPubkey)
+	const displayTitle = isLoadingName ? 'Messages' : userName ? userName : `${otherUserPubkey.substring(0, 8)}...`
+
+	useDashboardTitle(displayTitle)
+
+	const { data: messages, isLoading, error, refetch } = useConversationMessages(otherUserPubkey)
+	const { data: sellerOrders } = useOrdersBySeller(currentUser?.pubkey || '', { includePrivateOrderDetails: true })
+
+	const matchingBuyerOrders = useMemo(() => {
+		if (!sellerOrders || !currentUser?.pubkey || !normalizedBuyerPubkey) return []
+		return sellerOrders
+			.filter((order) => {
+				return order.order.pubkey === normalizedBuyerPubkey && getSellerPubkey(order.order) === currentUser.pubkey
+			})
+			.sort((a, b) => (b.order.created_at || 0) - (a.order.created_at || 0))
+	}, [currentUser?.pubkey, normalizedBuyerPubkey, sellerOrders])
+
+	const privateDetailOrders = useMemo(
+		() => matchingBuyerOrders.filter((order) => order.privateOrderDetails).slice(0, 3),
+		[matchingBuyerOrders],
+	)
+
+	const scrollToBottom = () => {
+		setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 0) // Use auto for instant scroll on load
+	}
+
+	useEffect(() => {
+		scrollToBottom()
+	}, [messages])
+
+	// Mark this conversation as seen when viewing it
+	useEffect(() => {
+		readMarks.markConversationSeen(otherUserPubkey)
+	}, [otherUserPubkey])
+
+	const sendMessageMutation = useMutation({
+		mutationFn: async (content: string) => {
+			setIsSending(true)
+			const sentEvent = await sendChatMessage(otherUserPubkey, content)
+			setIsSending(false)
+			if (!sentEvent) {
+				throw new Error('Failed to send message')
+			}
+			return sentEvent
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: messageKeys.conversationMessages(currentUser?.pubkey, otherUserPubkey),
+			})
+			queryClient.invalidateQueries({
+				queryKey: messageKeys.conversationsList(currentUser?.pubkey),
+			})
+			// scrollToBottom() // Let useEffect handle scroll on new messages
+		},
+		onError: (err) => {
+			setIsSending(false)
+			console.error('Error sending message:', err)
+			toast.error(`Failed to send message: ${err instanceof Error ? err.message : 'Unknown error'}`)
+		},
+	})
+
+	const handleSendMessage = async (content: string) => {
+		if (!otherUserPubkey) return
+		await sendMessageMutation.mutateAsync(content)
+	}
+
+	return (
+		<div className="flex flex-col h-full">
+			{/* Messages Area */}
+			<div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+				{isLoading && <LoadingState className="h-full" label="Loading messages…" />}
+				{error && (
+					<div className="text-center text-destructive">
+						<p>Error loading messages: {error.message}</p>
+						<Button onClick={() => refetch()} className="mt-2">
+							Try Again
+						</Button>
+					</div>
+				)}
+				{!isLoading && !error && messages && messages.length === 0 && (
+					<div className="text-center text-muted-foreground pt-10">
+						<p>No messages yet. Start the conversation!</p>
+					</div>
+				)}
+				{privateDetailOrders.length > 0 && (
+					<div className="space-y-3">
+						{privateDetailOrders.map((order) => (
+							<PrivateOrderDetailsCard key={order.order.id} order={order} currentUserPubkey={currentUser?.pubkey} compact />
+						))}
+					</div>
+				)}
+				{!isLoading &&
+					!error &&
+					messages?.map((event) => <ChatMessageBubble key={event.id} event={event} isCurrentUser={event.pubkey === currentUser?.pubkey} />)}
+				<div ref={messagesEndRef} />
+			</div>
+
+			{/* Input Area */}
+			{otherUserPubkey && (
+				<div className="flex-shrink-0 border-t bg-background">
+					<MessageInput onSendMessage={handleSendMessage} isSending={isSending} />
+				</div>
+			)}
+		</div>
+	)
+}
+
+function normalizePubkeyParam(value: string): string | null {
+	if (isValidHexKey(value)) return value
+	if (!isValidNpub(value)) return null
+
+	const { type, data } = decode(value)
+	if (type !== 'npub' || typeof data !== 'string') return null
+	return data
+}

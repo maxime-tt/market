@@ -78,7 +78,7 @@ test.describe('User Profile', () => {
 	test('profile creation publishes Kind 0 event to relay', async ({ browser }) => {
 		// Use a fresh context with devUser3 and a relay monitor
 		const { setupAuthContext } = await import('../fixtures/auth')
-		const { devUser3 } = await import('../../src/lib/fixtures')
+		const { devUser3 } = await import('../../scripts/fixtures')
 		const { RelayMonitor } = await import('../fixtures/relay-monitor')
 
 		const context = await browser.newContext()

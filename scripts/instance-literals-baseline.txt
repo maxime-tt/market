@@ -1,0 +1,48 @@
+# ADR-018 instance-literal baseline (scripts/check-instance-literals.sh).
+# Scope: platform/, sdk/ (src/ retired 2026-10-30, d7-s2/B5 J-c). Format: path|token|count.
+# Re-seeded in wave 7 (F3) when sdk/ entered scope: rows follow their files
+# into sdk/ (frozen protocol D-tags, shipped tier-3 defaults, test fixtures)
+# and the remaining slack from earlier moves is closed — the baseline now
+# equals the measured count, so any new literal fails immediately.
+# 2026-10-30 (J-c, d7-s2/B5): re-seeded to the post-shell measurement — the
+# eleven src/ rows retired with the tree (their files left in E1b; the rows
+# were stale), and the platform/sdk rows follow the 4b test relocations.
+# Baseline total now equals the measured total (84): the ratchet is tight.
+platform/server/appSettings.test.ts|plebeian-market|18
+platform/server/appSettings.ts|plebeian-market|2
+platform/server/server-bootstrap-persistence.test.ts|plebeian-market|1
+platform/web/app/index.html|Plebeian Market|1
+platform/web/layout/FooterHost.test.ts|Plebeian Market|2
+platform/web/messaging/BugReportModal.tsx|plebian2beta|2
+platform/web/messaging/bugReportQuery.ts|plebian2beta|1
+platform/web/nip89.ts|Plebeian Market|3
+platform/web/nip89.ts|plebeian.market|2
+platform/web/routes/products.$productId.tsx|Plebeian Market|2
+platform/web/routes/setup.tsx|plebeian-market|1
+sdk/commerce/accountPublish.test.ts|Plebeian Market|1
+sdk/commerce/accountPublish.test.ts|plebeian-market|1
+sdk/commerce/auctions/hd.ts|plebeian.market|1
+sdk/commerce/auctions/schemas/auctionAdmission.test.ts|plebeian.market|1
+sdk/commerce/cart/cartSnapshotPublish.ts|plebeian-market|1
+sdk/commerce/messaging/bugReportRead.test.ts|plebian2beta|3
+sdk/commerce/messaging/bugReportRead.ts|plebian2beta|1
+sdk/commerce/messaging/bugReportReadWorkflows.test.ts|plebian2beta|4
+sdk/commerce/products/ogTags.test.ts|Plebeian Market|1
+sdk/commerce/products/ogTags.ts|Plebeian Market|2
+sdk/config/app-settings.ts|Plebeian Market|1
+sdk/config/app-settings.ts|plebeian-market|1
+sdk/config/constants.ts|plebeian.market|6
+sdk/config/instance-config.test.ts|Plebeian Market|2
+sdk/config/instance-config.ts|Plebeian Market|2
+sdk/config/instance-config.ts|plebeian-market|1
+sdk/config/instance-config.ts|plebeian.market|3
+sdk/config/test-label-constants.ts|plebeian.market|1
+sdk/core/accountPublish.test.ts|Plebeian Market|1
+sdk/core/accountPublish.test.ts|plebeian-market|1
+sdk/core/ndkZapRelays.test.ts|plebeian.market|1
+sdk/core/nip89/handlerInfo.ts|Plebeian Market|1
+sdk/core/nostr/nip53.ts|plebeian.market|1
+sdk/core/relay-policy.test.ts|plebeian.market|8
+sdk/core/relays/relayListPublish.ts|plebeian-market|1
+sdk/core/relays/relayListRead.test.ts|plebeian-market|1
+sdk/core/relays/relayListReadWorkflows.test.ts|plebeian-market|1

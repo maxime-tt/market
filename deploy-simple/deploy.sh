@@ -3,7 +3,7 @@
 # Plebeian Market - Multi-Stage Deployment Script
 # =============================================================================
 #
-# Deploys to development, staging, or production environments.
+# Deploys to development, staging, auctionsdev, or production environments.
 #
 # Prerequisites (must be installed on VPS):
 #   - Bun (runtime)
@@ -16,17 +16,20 @@
 # Examples:
 #   ./deploy.sh development deployer@dev.example.com
 #   ./deploy.sh staging user@staging.example.com
+#   ./deploy.sh auctionsdev user@staging.example.com
 #   ./deploy.sh production user@prod.example.com
 #   SSH_KEY=~/.ssh/id_rsa ./deploy.sh production user@prod.example.com
 #
 # Stages:
 #   development - Development server (explicit host required)
 #   staging     - Staging server (port 3000, staging relay)
+#   auctionsdev - Auctions feature staging server (port 3002, staging relay)
 #   production  - Production server (port 3001, production relay)
 #
 # Environment Files:
 #   env/.env.development  - Development settings
 #   env/.env.staging      - Staging settings  
+#   env/.env.auctionsdev  - Auctions feature staging settings
 #   env/.env.production   - Production settings
 #
 # =============================================================================
@@ -40,9 +43,9 @@ STAGE="${1:-development}"
 TARGET="${2:-}"
 
 # Validate stage
-if [[ ! "$STAGE" =~ ^(development|staging|production)$ ]]; then
+if [[ ! "$STAGE" =~ ^(development|staging|auctionsdev|production)$ ]]; then
     echo "❌ Invalid stage: $STAGE"
-    echo "   Valid stages: development, staging, production"
+    echo "   Valid stages: development, staging, auctionsdev, production"
     exit 1
 fi
 
@@ -81,6 +84,13 @@ case "$STAGE" in
         APP_PORT="${APP_PORT:-3000}"
         PM2_APP_NAME="market-staging"
         PM2_CONTEXTVM_APP_NAME="market-contextvm-staging"
+        ;;
+    auctionsdev)
+        SSH_HOST="${SSH_HOST:-staging.plebeian.market}"
+        SSH_PORT="${SSH_PORT:-22}"
+        SSH_USER="${SSH_USER:-deployer}"
+        APP_PORT="${APP_PORT:-3002}"
+        PM2_APP_NAME="market-auctionsdev"
         ;;
     production)
         SSH_HOST="${SSH_HOST:-plebeian.market}"
@@ -176,10 +186,15 @@ trap "rm -rf $TEMP_DIR" EXIT
 
 # dist/ - pre-built static files (served by Caddy)
 cp -r "$PROJECT_DIR/dist" "$TEMP_DIR/"
-# src/ - server code for API (run by Bun/PM2)
-cp -r "$PROJECT_DIR/src" "$TEMP_DIR/"
+# the API entrypoint is platform/web/app/entry.tsx (run by Bun/PM2)
 # contextvm/ - ContextVM server code (run by Bun/PM2)
 cp -r "$PROJECT_DIR/contextvm" "$TEMP_DIR/"
+# sdk/ - shared SDK (read models + nostr client types)
+cp -r "$PROJECT_DIR/sdk" "$TEMP_DIR/"
+# ui/ - presentational kit (@ui alias)
+cp -r "$PROJECT_DIR/ui" "$TEMP_DIR/"
+# platform/ - server + host/binding layer (`@platform/server` resolves here)
+cp -r "$PROJECT_DIR/platform" "$TEMP_DIR/"
 # Dependencies
 cp "$PROJECT_DIR/package.json" "$TEMP_DIR/"
 cp "$PROJECT_DIR/bun.lock" "$TEMP_DIR/"
@@ -191,7 +206,7 @@ module.exports = {
   apps: [
     {
       name: '$PM2_APP_NAME',
-      script: 'src/index.tsx',
+      script: 'platform/web/app/entry.tsx',
       interpreter: process.env.HOME + '/.bun/bin/bun',
       cwd: '$REMOTE_APP_DIR',
       instances: 1,
@@ -288,8 +303,13 @@ echo "   ✓ Services started"
 echo ""
 echo "📦 Configuring Caddy..."
 
-# Use stage-specific Caddyfile if exists, otherwise generate one
-CADDYFILE="$SCRIPT_DIR/caddyfiles/Caddyfile.$STAGE"
+# Use stage-specific Caddyfile if exists, otherwise generate one.
+# auctionsdev shares the staging VPS Caddyfile so both hostnames stay active.
+CADDYFILE_STAGE="$STAGE"
+if [[ "$STAGE" == "auctionsdev" ]]; then
+    CADDYFILE_STAGE="staging"
+fi
+CADDYFILE="$SCRIPT_DIR/caddyfiles/Caddyfile.$CADDYFILE_STAGE"
 if [[ -f "$CADDYFILE" ]]; then
     echo "   Using $CADDYFILE"
     run_scp "$CADDYFILE" "$SSH_USER@$SSH_HOST:/tmp/Caddyfile"

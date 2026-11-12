@@ -1,0 +1,80 @@
+# NDK DIRECTION RAILS — scripts/check-ndk-direction.sh
+#
+# Format:  <tree> <kind> <count> <rule>      (whitespace-separated; '#' comments allowed)
+# kind:    production | test  (test = */__tests__/* or *.test.ts[x] / *.spec.ts[x])
+#
+# rules, and exactly what <count> means for each:
+#   zero      EFFECTIVE mention files (raw mentions minus allowlisted rows in the same
+#             tree+kind). Must be 0. No allowance mechanism beyond the comment-only
+#             allowlist. This is the sdk/ production rail (M8).
+#   allow     EFFECTIVE mention files. Must not exceed <count>; no ratchet notice
+#             (an earned, permanent comment-only mention).
+#   bridge    UNDECLARED NDK files (no valid row in ndk-bridge-ledger.txt) — M9.
+#             May only fall. A NEW platform NDK file must be declared in the same
+#             commit (declare-as-you-touch). The number is the UNDECLARED count, NOT
+#             the total, so a declared bridge does not fail the rail.
+#   ratchet   RAW mention files. May only fall; lower the baseline in the same PR.
+#
+# A `ratchet`/`bridge` row whose tree disappears would measure 0 and pass silently,
+# so every measured tree must exist (the guard exits 2 otherwise, like
+# scripts/check-src-boundary.sh:65). Re-seed or drop the row at D7.
+#
+# Seeded by MEASUREMENT at unite/1420-all tip 06cc831c (Wave G-b, 2026-10-29):
+#   grep -rl "@nostr-dev-kit" --include="*.ts" --include="*.tsx" <tree> | wc -l
+#   src 69 = 44 production + 25 test · platform 48 = web 33 production + 1 test
+#   + server 14 production · sdk 3 = 2 production + 1 test · contextvm 0 · ui 1 test
+#   (ui/ is out of the NDK direction scope: its single hit is the FORBIDDEN_PACKAGES
+#   literal in ui/boundary.test.ts, which that guard already owns.)
+#
+# NOTE (plan §2.2 delta, recorded rather than silently followed): A4-guard-reframing.md
+# §2.2 sketched `sdk test 1 allow`. This file encodes the EFFECTIVE count for `allow`
+# rows, and sdk/boundary.test.ts's own FORBIDDEN_PACKAGES literal is allowlisted in
+# ndk-mention-allowlist.txt, so the effective value is 0 (a new un-allowlisted sdk/
+# test mention should fail, not ride an inflated ceiling).
+#
+# End-state switch (owner-gated, R2a). DEFAULT OFF, deliberately: 48 legacy platform
+# NDK files are un-declared, so `complete=yes` today would be red on day one. Flip it
+# to `yes` only when EVERY platform NDK file carries a valid ndk-bridge-ledger.txt row
+# (M9 = 0) — that is the NDK-removal end-state invariant.
+complete=no
+
+sdk production 0 zero
+sdk test 0 allow
+# 2026-11-02 (d7-s2/ndk-web batch C): payments zapsQuery.ts retired its NDK types
+# (LightningZap/useZapsViaProvider widened onto @sdk/core/nostr/eventLike); the platform/web
+# production bridge row is re-seeded to the guard's measurement at this commit.
+# 2026-11-02 (d7-s2/ndk-web batch D): messaging liveChatQuery.ts, Comments.tsx and
+# LiveChatPanel.tsx retired their direct NDK event types (live chat widened onto
+# @sdk/core/nostr/eventLike; Comments sources its event type from the readContext facade);
+# the platform/web production bridge row is re-seeded to the guard's measurement at this commit.
+# 2026-11-02 (d7-s2/ndk-web batch E): shipping shippingQuery.ts widened its event types onto
+# @sdk/core/nostr/eventLike (the NDK store consumer casts the store per eventStoreQuerySync.ts
+# precedent); collections collectionQuery.ts took the facade-typed zero-type-change path
+# (structural retirement deferred with its route consumers); the platform/web production
+# bridge row is re-seeded to the guard's measurement at this commit.
+# 2026-11-03 (d7-s2/ndk-web batch F2): the five dashboard routes (products/migration-tool.tsx,
+# products/collections.tsx, products/products.tsx, products/shipping-options.tsx, account/profile.tsx)
+# dropped their direct @nostr-dev-kit/ndk type imports: the event type now comes from the
+# @platform/web/readContext facade and the profile form type is re-exported by its declared bridge
+# (profiles/profileQuery.ts). Type-only, zero type change; platform/web production falls 13 -> 8.
+# 2026-11-03 (d7-s2/ndk-web batch F1): the five public routes (index.tsx, products.index.tsx,
+# collection.$collectionId.tsx, community.index.tsx, products.$productId.tsx) dropped their direct
+# @nostr-dev-kit/ndk type imports for the @platform/web/readContext facade — the same zero-type-change
+# fallback, because each feeds NDKEvent-typed feature getters (productQuery/collectionQuery/hosts).
+# platform/web production falls 8 -> 3; the 3 remaining are the BLOCKED files (ndk/ndkEvents.ts,
+# auth/BunkerConnect.tsx, messaging/BugReportModal.tsx), which retire at client-NDK-removal only.
+platform/web production 3 bridge
+# 2026-11-02 (d7-s2/ndk-web batch B): cart persistence retired its NDK types
+# (cartPersistenceSchema.ts, cartPersistence.ts onto @sdk/core/nostr/eventLike);
+# the platform/web production bridge row is re-seeded to the guard's measurement at this commit.
+platform/web test 1 ratchet
+# 2026-10-30 (H-b kit 4b, B2 commit B — CollectionCard/FeaturedUserCard): the collection + featured-user
+# cards retired onto their D4 hosts (CollectionCardHost/FeaturedUserCardHost). CollectionCard carried the
+# kit's one src NDK literal, so the src ratchet rows are re-seeded to the guard's measurement at this
+# commit; the fall also absorbs the merged lanes' un-lowered falls the guard had been reporting
+# informationally at the 6568249c base.
+platform/server production 14 bridge
+# 2026-10-30 (J-c, d7-s2/B5): the `src production 22 ratchet` and `src test 18 ratchet`
+# rows dropped with the src/ deletion (a ratchet row whose tree is gone hard-fails;
+# dropping is the documented fix).
+contextvm production 0 zero

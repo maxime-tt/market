@@ -139,7 +139,7 @@ Before you begin, make sure you have:
 
 ### 3. Review Core Files
 
-- [ ] `src/index.tsx` - Server entry point (Bun server)
+- [ ] `platform/web/app/entry.tsx` - Server entry point (Bun server)
 - [ ] `src/frontend.tsx` - Client entry point (React app)
 - [ ] `src/lib/queryClient.ts` - React Query and NDK setup
 - [ ] `src/lib/constants.ts` - App constants and configurations

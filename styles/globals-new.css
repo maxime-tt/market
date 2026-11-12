@@ -28,107 +28,137 @@
 
 .theme-new {
 	/* ── Font tokens (semantic rename per ADR §1a) ─────────────────────── */
-	--font-body: 'IBM Plex Mono', monospace;
-	--font-header: 'reglisse', sans-serif;
+	/* Phase 0: the warm-editorial fonts are loaded from Google Fonts in
+	   platform/web/app/index.html and widget-book/index.html (DM Sans ≤4
+	   weights, Fraunces ≤4 weights, display=swap). The generic family stays
+	   so an offline/CSP'd host still renders. */
+	--font-body: 'DM Sans', sans-serif;
+	--font-header: 'Fraunces', serif;
 	--font-theylive: 'theylive', sans-serif;
 
 	/* ── Surface tokens ───────────────────────────────────────────────── */
 	--background: oklch(1 0 0);
-	--foreground: oklch(0.218 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.269 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.211 0.086 348.5);
+	--foreground: oklch(0.22 0.02 340);
+	--card: oklch(0.985 0 0);
+	--card-foreground: oklch(0.22 0.02 340);
+	--popover: oklch(0.985 0 0);
+	--popover-foreground: oklch(0.22 0.02 340);
 
 	/* ── Primary ──────────────────────────────────────────────────────── */
-	--primary: oklch(0.231 0 0);
-	--primary-hover: oklch(0.145 0 0);
-	--primary-foreground: oklch(0.985 0 0);
-	--primary-foreground-hover: oklch(0.688 0.249 348);
-	--primary-border: oklch(0.231 0 0);
+	--primary: oklch(0.688 0.249 348);
+	--primary-foreground: oklch(0.145 0 0);
+	--primary-foreground-hover: oklch(0.145 0 0);
+	--primary-border: oklch(0.688 0.249 348);
 	--primary-border-hover: oklch(0.688 0.249 348);
 
 	/* ── Secondary ────────────────────────────────────────────────────── */
 	--secondary: oklch(0.688 0.249 348);
-	--secondary-hover: oklch(0.145 0 0);
+	/* Contrast correction: the near-white label on pink measures
+	   6.58:1 with dark ink; the light variant is 12.08:1. */
 	--secondary-foreground: oklch(0.145 0 0);
-	--secondary-foreground-hover: oklch(0.688 0.249 348);
-	--secondary-border: oklch(0.688 0.249 348);
-	--secondary-border-hover: oklch(0.688 0.249 348);
 
 	/* ── Tertiary ─────────────────────────────────────────────────────── */
 	--tertiary: oklch(1 0 0);
 	--tertiary-hover: oklch(0.489 0 0);
-	--tertiary-foreground: oklch(0.231 0 0);
-	--tertiary-foreground-hover: oklch(0.985 0 0);
-	--tertiary-border: oklch(0.231 0 0);
-	--tertiary-border-hover: oklch(0.231 0 0);
 
-	/* ── Focus ────────────────────────────────────────────────────────── */
-	--focus: oklch(0.885 0.164 92.6);
-	--focus-hover: oklch(0.145 0 0);
+	/* Contrast correction: pink fill with dark ink clears 4.5:1. */
+	--focus: oklch(0.688 0.249 348);
 	--focus-foreground: oklch(0.145 0 0);
-	--focus-foreground-hover: oklch(0.854 0.162 92.6);
-	--focus-border: oklch(0.885 0.164 92.5);
-	--focus-border-hover: oklch(0.885 0.164 92.5);
+	--focus-foreground-hover: oklch(0.12 0 0);
 
 	/* ── Muted ────────────────────────────────────────────────────────── */
-	--muted: oklch(0.961 0.005 314.8);
-	--muted-foreground: oklch(0.51 0 0);
+	--muted: oklch(0.96 0.008 350);
+	--muted-foreground: oklch(0.48 0.03 340);
 
 	/* ── Accent ───────────────────────────────────────────────────────── */
-	--accent: oklch(0.92 0.008 319.4);
-	--accent-foreground: oklch(0.269 0 0);
+	--accent: oklch(0.96 0.008 350);
+	--accent-foreground: oklch(0.22 0.02 340);
 
 	/* ── Destructive ──────────────────────────────────────────────────── */
 	--destructive: oklch(0.552 0.163 24.2);
-	--destructive-foreground: oklch(0.231 0 0);
 
 	/* ── Border / Input / Ring ────────────────────────────────────────── */
-	--border: oklch(0.851 0.025 340.4);
-	--input: oklch(0.574 0.078 342.7);
-	--ring: oklch(0.688 0.249 348);
-	--radius: 0.25rem;
+	--border: oklch(0.9 0.012 340);
+	/* Contrast correction: input boundary matches --border-strong for
+	   WCAG 1.4.11 (3:1). */
+	--input: oklch(0.66 0.03 340);
+	--ring: oklch(0.58 0.15 350);
+
+	/* ── Hedgerow tune (widget-book/theme-presets.ts) — the live values ──
+	   Mirroring them here is what makes the widget-book `Hedgerow` preset
+	   equal to the live theme, and what makes a `.theme-new`-scoped tune
+	   override recompute the mirrored --shadow-*-value tokens below. */
+	--radius: 14px;
+	--shadow-scale: 0.35;
+	--glass: 0.55;
+	--gap: 1.1;
+	--grain: 0.5;
+	--handmade: 0.6;
 
 	/* ── UX-state tokens (ADR §1a) ────────────────────────────────────── */
 	/* info = blue — foreground is dark blue for WCAG AA (4.5:1) */
 	--info: oklch(0.623 0.188 259.8);
 	--info-foreground: oklch(0.237 0.059 259);
 	--info-muted: oklch(0.932 0.032 255.6);
+	--info-muted-foreground: oklch(0.237 0.059 259);
 	--info-border: oklch(0.809 0.096 251.8);
 
 	/* warning = amber/orange — foreground is dark amber for WCAG AA (4.5:1) */
 	--warning: oklch(0.769 0.165 70.1);
 	--warning-foreground: oklch(0.216 0.006 56);
 	--warning-muted: oklch(0.962 0.058 95.6);
+	--warning-muted-foreground: oklch(0.216 0.006 56);
 	--warning-border: oklch(0.879 0.153 91.6);
 
 	/* error = red — foreground is dark red for WCAG AA (4.5:1) */
 	--error: oklch(0.637 0.208 25.3);
 	--error-foreground: oklch(0.205 0.057 23.5);
 	--error-muted: oklch(0.936 0.031 17.7);
+	--error-muted-foreground: oklch(0.205 0.057 23.5);
 	--error-border: oklch(0.808 0.104 19.6);
 
 	/* success = green — foreground is dark green for WCAG AA (4.5:1) */
 	--success: oklch(0.723 0.192 149.6);
 	--success-foreground: oklch(0.266 0.063 152.9);
 	--success-muted: oklch(0.962 0.043 156.7);
+	--success-muted-foreground: oklch(0.266 0.063 152.9);
 	--success-border: oklch(0.871 0.136 154.4);
 
 	/* ── Additional custom colors ─────────────────────────────────────── */
-	--light-gray: oklch(0.94 0 0);
+	--light-gray: oklch(0.985 0 0);
 	--off-black: oklch(0.145 0 0);
-	--neo-purple: oklch(0.688 0.249 348);
 	--secondary-black: oklch(0.187 0 0);
 	--tertiary-black: oklch(0.231 0 0);
-	--neo-blue: oklch(0.743 0.154 235.1);
-	--neo-gray: oklch(0.979 0 0);
 
-	/* ── Custom radius values ─────────────────────────────────────────── */
-	--radius-sm: 2rem;
-	--radius-md: 4px;
-	--radius-lg: 8px;
-	--radius-xl: 24px;
+	/* ── Themed shadow scale (mirrored from :root) ──────────────────────
+	   Mirrored rather than inherited: custom properties resolve `var()` at the
+	   element where they are declared, so a wrapper-level `--shadow-scale`
+	   override would not recompute an inherited `--shadow-*-value`. Declaring
+	   them in the scope makes per-theme shadow retuning work. */
+	--shadow-1:
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) rgb(0 0 0 / 0.06),
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 3px) rgb(0 0 0 / 0.1);
+	--shadow-2:
+		0 calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * 4px) rgb(0 0 0 / 0.06),
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 12px) rgb(0 0 0 / 0.1);
+	--shadow-3:
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 8px) rgb(0 0 0 / 0.08),
+		0 calc(var(--shadow-scale) * 12px) calc(var(--shadow-scale) * 28px) rgb(0 0 0 / 0.14);
+	--shadow-4:
+		0 calc(var(--shadow-scale) * 8px) calc(var(--shadow-scale) * 16px) rgb(0 0 0 / 0.12),
+		0 calc(var(--shadow-scale) * 24px) calc(var(--shadow-scale) * 48px) rgb(0 0 0 / 0.18);
+	--shadow-inset: inset 0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) rgb(0 0 0 / 0.07);
+
+	--shadow-xs-value: 0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) 0 rgb(var(--shadow-tint) / 0.05);
+	--shadow-sm-value:
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 3px) 0 rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * -1px) rgb(var(--shadow-tint) / 0.1);
+	--shadow-md-value:
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 6px) calc(var(--shadow-scale) * -1px) rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * -2px) rgb(var(--shadow-tint) / 0.1);
+	--shadow-lg-value:
+		0 calc(var(--shadow-scale) * 10px) calc(var(--shadow-scale) * 15px) calc(var(--shadow-scale) * -3px) rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 6px) calc(var(--shadow-scale) * -4px) rgb(var(--shadow-tint) / 0.1);
 
 	/* ── Chart tokens ─────────────────────────────────────────────────── */
 	--chart-1: oklch(0.527 0.193 262.2);
@@ -142,93 +172,118 @@
 	--sidebar-foreground: oklch(0.985 0 0);
 	--sidebar-primary: oklch(0.527 0.193 262.2);
 	--sidebar-primary-foreground: oklch(1 0 0);
-	--sidebar-accent: oklch(0.961 0.005 314.8);
+	--sidebar-accent: oklch(0.96 0.008 350);
 	--sidebar-accent-foreground: oklch(0.269 0 0);
 	--sidebar-border: oklch(0.851 0.025 340.4);
-	--sidebar-ring: oklch(0.688 0.249 348);
+	--sidebar-ring: oklch(0.58 0.15 350);
+
+	/* ───────────────────────────────────────────────────────────────────
+	   TIER 0 + TIER 1 — the public design API, mirrored into the theme
+	   scope so the widget-book theme studio carries the full set. Values
+	   are byte-identical to the :root/.dark declarations in globals.css.
+	   Contract: runs/union-1420/TOKEN-ARCHITECTURE-DECISION.md
+	   ─────────────────────────────────────────────────────────────────── */
+	--brand-pink: oklch(0.688 0.249 348);
+
+	/* D white/pink (Phase 0). Frame source:
+	   notes/artboards/browse/frames/Glje8eeQGh__browse-idle-1440.html. */
+	--bg: oklch(1 0 0);
+	--surface-raised: oklch(0.985 0 0);
+	--surface-sunken: oklch(0.96 0.008 350);
+	--surface-hover: oklch(0.93 0.016 350);
+
+	--fill-accent: oklch(0.34 0.11 350);
+	--on-fill-accent: oklch(0.99 0 0);
+	--fill-ink: oklch(0.688 0.249 348);
+	--on-fill-ink: oklch(0.145 0 0);
+	--fill-ink-hover: oklch(0.63 0.24 348);
+
+	--text-high: oklch(0.22 0.02 340);
+	--text-mid: oklch(0.48 0.03 340);
+
+	--border-default: oklch(0.9 0.012 340);
+	--border-strong: oklch(0.66 0.03 340);
+
+	--focus-ring: oklch(0.58 0.15 350);
+	--focus-attention: oklch(0.885 0.164 92.6);
+	--on-media: oklch(1 0 0);
+
+	--radius-pill: 2rem;
+	--tilt: 0;
 }
 
 /* ── Dark mode (ancestor selector: .dark on <html> or any ancestor) ─── */
 /* Mirrors ALL custom variants — fixing the incoherence where the old .dark */
 /* omitted -hover/-border-hover tokens.                                   */
 .dark .theme-new {
-	--background: oklch(0.135 0.005 285.8);
-	--foreground: oklch(0.982 0 0);
-	--card: oklch(0.135 0.005 285.8);
-	--card-foreground: oklch(0.982 0 0);
-	--popover: oklch(0.135 0.005 285.8);
-	--popover-foreground: oklch(0.982 0 0);
+	--background: oklch(0.2 0 0);
+	--foreground: oklch(0.95 0.014 340);
+	--card: oklch(0.24 0 0);
+	--card-foreground: oklch(0.95 0.014 340);
+	--popover: oklch(0.24 0 0);
+	--popover-foreground: oklch(0.95 0.014 340);
 
-	--primary: oklch(0.982 0 0);
-	--primary-hover: oklch(0.982 0 0);
-	--primary-foreground: oklch(0.206 0.008 285.7);
-	--primary-foreground-hover: oklch(0.206 0.008 285.7);
-	--primary-border: oklch(0.982 0 0);
-	--primary-border-hover: oklch(0.982 0 0);
+	--primary: oklch(0.85 0.174 348);
+	--primary-foreground: oklch(0.12 0 0);
+	--primary-foreground-hover: oklch(0.12 0 0);
+	--primary-border: oklch(0.85 0.174 348);
+	--primary-border-hover: oklch(0.85 0.174 348);
 
-	--secondary: oklch(0.274 0.006 286);
-	--secondary-hover: oklch(0.274 0.006 286);
-	--secondary-foreground: oklch(0.982 0 0);
-	--secondary-foreground-hover: oklch(0.982 0 0);
-	--secondary-border: oklch(0.274 0.006 286);
-	--secondary-border-hover: oklch(0.274 0.006 286);
+	--secondary: oklch(0.85 0.174 348);
+	/* Contrast correction: near-white on dark pink. */
+	--secondary-foreground: oklch(0.12 0 0);
 
-	--tertiary: oklch(0.274 0.006 286);
-	--tertiary-hover: oklch(0.274 0.006 286);
-	--tertiary-foreground: oklch(0.982 0 0);
-	--tertiary-foreground-hover: oklch(0.982 0 0);
-	--tertiary-border: oklch(0.274 0.006 286);
-	--tertiary-border-hover: oklch(0.274 0.006 286);
+	--tertiary: oklch(0.2 0 0);
+	--tertiary-hover: oklch(0.24 0 0);
 
-	--focus: oklch(0.868 0.006 286.3);
-	--focus-hover: oklch(0.868 0.006 286.3);
-	--focus-foreground: oklch(0.982 0 0);
-	--focus-foreground-hover: oklch(0.982 0 0);
-	--focus-border: oklch(0.868 0.006 286.3);
-	--focus-border-hover: oklch(0.868 0.006 286.3);
+	/* Contrast correction: dark pink fill with dark ink clears 4.5:1. */
+	--focus: oklch(0.85 0.174 348);
+	--focus-foreground: oklch(0.12 0 0);
+	--focus-foreground-hover: oklch(0.12 0 0);
 
-	--muted: oklch(0.274 0.006 286);
-	--muted-foreground: oklch(0.712 0.012 286.1);
+	--muted: oklch(0.15 0.0056 350);
+	--muted-foreground: oklch(0.76 0.021 340);
 
-	--accent: oklch(0.274 0.006 286);
-	--accent-foreground: oklch(0.982 0 0);
+	--accent: oklch(0.19 0.01 350);
+	--accent-foreground: oklch(0.95 0.014 340);
 
 	--destructive: oklch(0.396 0.133 25.7);
-	--destructive-foreground: oklch(0.982 0 0);
 
-	--border: oklch(0.274 0.006 286);
-	--input: oklch(0.274 0.006 286);
-	--ring: oklch(0.868 0.006 286.3);
+	--border: oklch(0.32 0.008 340);
+	/* Contrast correction, dark mirror: --border-strong on dark bg meets 3:1. */
+	--input: oklch(0.55 0.021 340);
+	--ring: oklch(0.58 0.15 350);
 
 	/* UX-state tokens — dark mode (muted backgrounds, brighter accents) */
 	--info: oklch(0.714 0.143 254.6);
 	--info-foreground: oklch(0.237 0.059 259);
 	--info-muted: oklch(0.346 0.074 256);
+	--info-muted-foreground: oklch(0.9 0.04 256);
 	--info-border: oklch(0.428 0.091 255.7);
 
 	--warning: oklch(0.837 0.164 84.4);
 	--warning-foreground: oklch(0.216 0.006 56);
 	--warning-muted: oklch(0.286 0.064 53.8);
+	--warning-muted-foreground: oklch(0.93 0.06 90);
 	--warning-border: oklch(0.414 0.105 45.9);
 
 	--error: oklch(0.711 0.166 22.2);
 	--error-foreground: oklch(0.205 0.057 23.5);
 	--error-muted: oklch(0.271 0.101 12.1);
+	--error-muted-foreground: oklch(0.92 0.05 20);
 	--error-border: oklch(0.396 0.133 25.7);
 
 	--success: oklch(0.8 0.182 151.7);
 	--success-foreground: oklch(0.266 0.063 152.9);
-	--success-muted: oklch(0.266 0.063 152.9);
+	--success-muted: oklch(0.3 0.06 152);
+	--success-muted-foreground: oklch(0.92 0.06 156);
 	--success-border: oklch(0.448 0.108 151.3);
 
 	/* Custom colors — dark mode */
-	--light-gray: oklch(0.274 0.006 286);
-	--off-black: oklch(0.135 0.005 285.8);
-	--neo-purple: oklch(0.688 0.249 348);
+	--light-gray: oklch(0.24 0 0);
+	--off-black: oklch(0.12 0 0);
 	--secondary-black: oklch(0.187 0 0);
 	--tertiary-black: oklch(0.231 0 0);
-	--neo-blue: oklch(0.743 0.154 235.1);
-	--neo-gray: oklch(0.274 0.006 286);
 
 	/* Chart tokens — dark mode (same values, oklch handles perception) */
 	--chart-1: oklch(0.527 0.193 262.2);
@@ -238,14 +293,44 @@
 	--chart-5: oklch(0.612 0.209 6.5);
 
 	/* Sidebar tokens — dark mode */
-	--sidebar-background: oklch(0.135 0.005 285.8);
-	--sidebar-foreground: oklch(0.982 0 0);
+	--sidebar-background: oklch(0.2 0 0);
+	--sidebar-foreground: oklch(0.95 0.014 340);
 	--sidebar-primary: oklch(0.527 0.193 262.2);
 	--sidebar-primary-foreground: oklch(1 0 0);
-	--sidebar-accent: oklch(0.274 0.006 286);
-	--sidebar-accent-foreground: oklch(0.982 0 0);
-	--sidebar-border: oklch(0.274 0.006 286);
-	--sidebar-ring: oklch(0.868 0.006 286.3);
+	--sidebar-accent: oklch(0.19 0.01 350);
+	--sidebar-accent-foreground: oklch(0.95 0.014 340);
+	--sidebar-border: oklch(0.19 0.01 350);
+	--sidebar-ring: oklch(0.58 0.15 350);
+
+	/* TIER 0 + TIER 1 — dark mode (derived by rule from light). */
+	--brand-pink: oklch(0.688 0.249 348);
+
+	/* D white/pink dark mirror: scheme-stable roles keep same value;
+	   inverting roles derive: chroma ≈ −30%, surfaces elevate (lightened),
+	   text L ≈ .93–.96 (high) /.74–.78 (mid). */
+	--bg: oklch(0.2 0 0);
+	--surface-raised: oklch(0.24 0 0);
+	--surface-sunken: oklch(0.15 0.0056 350);
+	--surface-hover: oklch(0.19 0.01 350);
+
+	--fill-accent: oklch(0.34 0.11 350);
+	--on-fill-accent: oklch(0.99 0 0);
+	--fill-ink: oklch(0.85 0.174 348);
+	--on-fill-ink: oklch(0.12 0 0);
+	--fill-ink-hover: oklch(0.91 0.168 348);
+
+	--text-high: oklch(0.95 0.014 340);
+	--text-mid: oklch(0.76 0.021 340);
+
+	--border-default: oklch(0.32 0.008 340);
+	--border-strong: oklch(0.55 0.021 340);
+
+	--focus-ring: oklch(0.58 0.15 350);
+	--focus-attention: oklch(0.885 0.164 92.6);
+	--on-media: oklch(1 0 0);
+
+	--radius-pill: 2rem;
+	--tilt: 0;
 }
 
 /* ── Base resets scoped to .theme-new (ADR §1a permits @layer base) ─ */
@@ -255,4 +340,50 @@
 	.theme-new {
 		font-family: var(--font-body);
 	}
+}
+
+/* ── Expanded theme utilities (ADR-0007 §1a-bis) ─────────────────────
+   Opt-in only. With the token defaults (--glass: 0, --grain: 0,
+   --handmade: 0) these rules are visual no-ops, so adopting a utility does
+   not change the current rendering. */
+
+/* Glass — from solid surface to frosted see-through, tinted by the surface. */
+.theme-new .glass {
+	background: color-mix(in srgb, var(--card) calc(100% - var(--glass) * 78%), transparent);
+	-webkit-backdrop-filter: blur(calc(var(--glass) * 18px)) saturate(calc(100% + var(--glass) * 60%));
+	backdrop-filter: blur(calc(var(--glass) * 18px)) saturate(calc(100% + var(--glass) * 60%));
+	border-color: color-mix(in srgb, var(--foreground) calc(6% + var(--glass) * 8%), transparent);
+}
+
+/* Grain — one page-level texture overlay, never per component. The compound
+   `.theme-new.grain` selector covers the wrapper itself, which carries both
+   classes; the descendant selector covers a nested grain container. */
+.theme-new.grain,
+.theme-new .grain {
+	position: relative;
+	isolation: isolate;
+}
+
+.theme-new.grain::after,
+.theme-new .grain::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 50;
+	pointer-events: none;
+	opacity: calc(var(--grain) * 0.55);
+	mix-blend-mode: soft-light;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .4 0 0 0 1.1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Hand-made corners — gently irregular, driven by --handmade (0–1). */
+.theme-new .rounded-hand {
+	border-radius: calc(var(--radius) + var(--handmade) * 9px) calc(var(--radius) + var(--handmade) * 2px)
+		calc(var(--radius) + var(--handmade) * 11px) calc(var(--radius) + var(--handmade) * 3px) / calc(var(--radius) + var(--handmade) * 3px)
+		calc(var(--radius) + var(--handmade) * 10px) calc(var(--radius) + var(--handmade) * 2px) calc(var(--radius) + var(--handmade) * 8px);
+}
+
+/* Hand-made tilt — set --tilt on the element (−1…1) to opt in. */
+.theme-new .tilt {
+	transform: rotate(calc(var(--handmade) * var(--tilt, 0) * 1deg));
 }

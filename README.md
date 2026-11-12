@@ -118,7 +118,7 @@ export const postsQueryOptions = queryOptions({
 
 This project uses TanStack Router for file-based routing with built-in prefetching capabilities:
 
-- File-based routing: Routes are defined in the `src/routes` directory
+- File-based routing: Routes are defined in the `platform/web/routes` directory
 - Dynamic routes: Parameters in file names (e.g., `posts.$postId.tsx`)
 - Automatic route tree generation
 
@@ -150,6 +150,20 @@ const router = createRouter({
 ### .env variables
 
 Set the .env variables by copying and renaming the `.env.example` file, then set your own values for the variables.
+
+For self-hosted deployments, `INSTANCE_*` variables configure the public
+identity and service endpoints: name, display name, logo, banner, site URL,
+handler ID, public relays, trusted mints, bug relay, terms URL, support contact,
+and social links. See [`deploy-simple/README.md`](deploy-simple/README.md) for a
+complete example. Runtime precedence is:
+
+```text
+kind 31990 app-settings event -> INSTANCE_* environment variables -> shipped defaults
+```
+
+When `INSTANCE_HANDLER_ID` is configured, app-settings discovery tries that
+d-tag first and falls back to `plebeian-market-handler` for compatibility with
+existing deployments.
 
 ### Development relay
 

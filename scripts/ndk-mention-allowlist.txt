@@ -1,0 +1,17 @@
+# NDK MENTION ALLOWLIST — comment-only exemptions from the sdk/ direction rails.
+#
+# Format:  <path>|<owner>|<reason>|<reword-by>
+#
+# A row exempts a MENTION, never an import: the guard rejects a row whose file
+# carries an @nostr-dev-kit import specifier (value import, `import type`,
+# require(), dynamic import or side-effect import), so this file can never smuggle
+# a transport into sdk/. A row whose file stopped mentioning @nostr-dev-kit, or
+# whose path no longer exists, is a STALE row and fails the guard — delete it.
+#
+# Seed measured at 06cc831c: the three rows below are the only sdk/ mentions, and
+# none of them is an import (raw sdk production = 2, effective = 0 => M8).
+# The two prose mentions are reworded by the S5 re-seed (wave H); the boundary
+# test's literal is permanent — it IS the sdk-side anchor of the one-way rule.
+sdk/commerce/payments/wallet/proofs.ts|A1|prose only: names @nostr-dev-kit/wallet as the dependency this structural contract removes; no import|wave-H
+sdk/config/wallet.ts|A3|prose only: describes what @nostr-dev-kit/wallet did with the NIP-47 URI before the NWCClient swap; no import|wave-H
+sdk/boundary.test.ts|A4|the sdk boundary guard's own FORBIDDEN_PACKAGES literal — permanent floor for the one-way rule, never rewordable|never

@@ -53,7 +53,7 @@ Plebeian Market is a full-stack decentralized e-commerce marketplace built on th
 
 ### 1. File-Based Routing (TanStack Router)
 
-Routes are automatically generated from files in `/src/routes/`:
+Routes are automatically generated from files in `/platform/web/routes/`:
 
 - **Dynamic segments:** Use `$paramName` syntax (e.g., `products.$productId.tsx`)
 - **Layout routes:** Use underscore prefix (e.g., `_dashboard-layout.tsx`)

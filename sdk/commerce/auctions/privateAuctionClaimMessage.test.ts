@@ -1,0 +1,346 @@
+/**
+ * The private-auction-claim suite (money/PII-critical). The module it covers moved to
+ * `@sdk/commerce/auctions/privateAuctionClaimMessage` (Wave I, slice I-a A2 S2, 2026-10-29); this
+ * suite stays in `src/` for now (a test-only residual); the shared PII sentinel fixture moved to
+ * `@sdk/core/testing/piiSentinelFixture` in the D7-prep pass (C5/J-d), so this import is no longer
+ * a `sdk -> src` edge (debt row DR-3 retired).
+ */
+import { describe, expect, test } from 'bun:test'
+import { finalizeEvent, getPublicKey, nip44 } from 'nostr-tools'
+import type { EncryptingSigner } from '@sdk/core'
+import {
+	buildAuctionClaimPublicMarkerTags,
+	buildPrivateAuctionClaimPayload,
+	createPrivateAuctionClaimMessage,
+	createPrivateAuctionClaimMessageWithSigner,
+	decryptPrivateAuctionClaimMessage,
+	getAuctionClaimPublicMarkerFields,
+	getLegacyAuctionClaimPublicDetails,
+	privateAuctionClaimMatchesPublicMarker,
+	type AuctionClaimMessageFields,
+} from '@sdk/commerce/auctions/privateAuctionClaimMessage'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@sdk/core/testing/piiSentinelFixture'
+
+const CREATED_AT = 1_700_000_000
+const AUCTION_EVENT_ID = 'a'.repeat(64)
+const SETTLEMENT_EVENT_ID = 'b'.repeat(64)
+const ORDER_ID = 'order-123'
+
+const PII_SENTINELS = [
+	'Satoshi Nakamoto',
+	'123 Main Street',
+	'Los Angeles',
+	POSTCODE_PII_SENTINEL,
+	'United States',
+	'Apt Secret Notes',
+	'buyer@example.com',
+	'+15551234567',
+	'Leave at the citadel gate',
+]
+
+type KeyPair = {
+	privateKey: Uint8Array
+	pubkey: string
+}
+
+function keyPair(): KeyPair {
+	const privateKey = crypto.getRandomValues(new Uint8Array(32))
+	return { privateKey, pubkey: getPublicKey(privateKey) }
+}
+
+function baseFields(overrides: Partial<AuctionClaimMessageFields> = {}): AuctionClaimMessageFields {
+	const buyer = keyPair()
+	const seller = keyPair()
+	return {
+		orderId: ORDER_ID,
+		auctionCoordinates: `30408:${seller.pubkey}:auction-1`,
+		auctionEventId: AUCTION_EVENT_ID,
+		settlementEventId: SETTLEMENT_EVENT_ID,
+		buyerPubkey: buyer.pubkey,
+		sellerPubkey: seller.pubkey,
+		totalAmountSats: 21_000,
+		shippingAddress: {
+			name: 'Satoshi Nakamoto',
+			firstLineOfAddress: '123 Main Street',
+			city: 'Los Angeles',
+			zipPostcode: POSTCODE_PII_SENTINEL,
+			country: 'United States',
+			additionalInformation: 'Apt Secret Notes',
+		},
+		email: 'buyer@example.com',
+		phone: '+15551234567',
+		notes: 'Leave at the citadel gate',
+		createdAt: CREATED_AT,
+		...overrides,
+	}
+}
+
+function signerFor(privateKey: Uint8Array): EncryptingSigner {
+	// A3.3: the seam takes the SDK's `EncryptingSigner` port (plain pubkeys,
+	// raw-signature signing) — the NDK-typed stub this replaces carried the
+	// same real crypto (nip44 over the raw key, finalizeEvent signatures).
+	return {
+		getPublicKey: async () => getPublicKey(privateKey),
+		signEvent: async (event) => finalizeEvent({ ...event }, privateKey).sig,
+		encrypt: async (recipientPubkey, plaintext) => encryptForRecipient(plaintext, privateKey, recipientPubkey),
+		decrypt: async (senderPubkey, ciphertext) => decryptFromSender(ciphertext, privateKey, senderPubkey),
+		supportsNip44: async () => true,
+	}
+}
+
+function encryptForRecipient(plaintext: string, senderPrivateKey: Uint8Array, recipientPubkey: string): string {
+	const conversationKey = nip44.v2.utils.getConversationKey(senderPrivateKey, recipientPubkey)
+	return nip44.v2.encrypt(plaintext, conversationKey)
+}
+
+function decryptFromSender(ciphertext: string, recipientPrivateKey: Uint8Array, senderPubkey: string): string {
+	const conversationKey = nip44.v2.utils.getConversationKey(recipientPrivateKey, senderPubkey)
+	return nip44.v2.decrypt(ciphertext, conversationKey)
+}
+
+function expectNoPii(value: unknown): void {
+	const serialized = JSON.stringify(value)
+	for (const sentinel of PII_SENTINELS) {
+		expect(serialized).not.toContain(sentinel)
+	}
+}
+
+describe('private auction claim message', () => {
+	test('PII scan permits an unrelated hex identifier but rejects the exact plaintext postcode marker', () => {
+		expect(HEX_IDENTIFIER_WITH_POSTCODE).toHaveLength(64)
+		expect(() => expectNoPii({ id: HEX_IDENTIFIER_WITH_POSTCODE })).not.toThrow()
+		expect(() => expectNoPii({ content: POSTCODE_PII_SENTINEL })).toThrow()
+	})
+
+	test('rejects invalid auction coordinate', () => {
+		const fields = baseFields()
+
+		expect(() => buildPrivateAuctionClaimPayload({ ...fields, auctionCoordinates: `30402:${fields.sellerPubkey}:auction-1` })).toThrow(
+			'Invalid auction coordinate',
+		)
+		expect(() => buildPrivateAuctionClaimPayload({ ...fields, auctionCoordinates: `30408:${'f'.repeat(64)}:auction-1` })).toThrow(
+			'Auction coordinate seller pubkey does not match seller pubkey',
+		)
+		expect(() => buildPrivateAuctionClaimPayload({ ...fields, auctionCoordinates: `30408:${fields.sellerPubkey}:` })).toThrow(
+			'Invalid auction coordinate d tag',
+		)
+	})
+
+	test('rejects invalid buyer or seller pubkey', () => {
+		const fields = baseFields()
+
+		expect(() => buildPrivateAuctionClaimPayload({ ...fields, buyerPubkey: 'not-a-pubkey' })).toThrow('Invalid buyer pubkey')
+		expect(() =>
+			buildPrivateAuctionClaimPayload({
+				...fields,
+				sellerPubkey: 'not-a-pubkey',
+				auctionCoordinates: '30408:not-a-pubkey:auction-1',
+			}),
+		).toThrow('Invalid seller pubkey')
+	})
+
+	test('rejects invalid auction or settlement event id', () => {
+		const fields = baseFields()
+
+		expect(() => buildPrivateAuctionClaimPayload({ ...fields, auctionEventId: 'not-an-event-id' })).toThrow('Invalid auction event id')
+		expect(() => buildPrivateAuctionClaimPayload({ ...fields, settlementEventId: 'not-an-event-id' })).toThrow(
+			'Invalid settlement event id',
+		)
+	})
+
+	test('rejects invalid non-positive amount', () => {
+		const fields = baseFields()
+
+		for (const totalAmountSats of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+			expect(() => buildPrivateAuctionClaimPayload({ ...fields, totalAmountSats })).toThrow('Invalid total amount sats')
+		}
+	})
+
+	test('encrypted gift wrap decrypts for the seller with auction claim details and PII', () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+		const wrapper = keyPair()
+		const fields = baseFields({
+			buyerPubkey: buyer.pubkey,
+			sellerPubkey: seller.pubkey,
+			auctionCoordinates: `30408:${seller.pubkey}:auction-1`,
+		})
+
+		const wrapped = createPrivateAuctionClaimMessage({
+			...fields,
+			senderPrivateKey: buyer.privateKey,
+			wrapperPrivateKey: wrapper.privateKey,
+		})
+
+		expectNoPii(wrapped.giftWrap)
+
+		const decrypted = decryptPrivateAuctionClaimMessage({
+			giftWrap: wrapped.giftWrap,
+			recipientPrivateKey: seller.privateKey,
+			expectedBuyerPubkey: buyer.pubkey,
+			expectedSellerPubkey: seller.pubkey,
+			expectedOrderId: ORDER_ID,
+		})
+
+		expect(decrypted.payload.auctionCoordinates).toBe(fields.auctionCoordinates)
+		expect(decrypted.payload.auctionEventId).toBe(AUCTION_EVENT_ID)
+		expect(decrypted.payload.settlementEventId).toBe(SETTLEMENT_EVENT_ID)
+		expect(decrypted.payload.orderId).toBe(ORDER_ID)
+		expect(decrypted.payload.totalAmountSats).toBe(21_000)
+		expect(decrypted.payload.shippingAddress).toEqual(fields.shippingAddress)
+		expect(decrypted.payload.email).toBe('buyer@example.com')
+		expect(decrypted.payload.phone).toBe('+15551234567')
+		expect(decrypted.payload.notes).toBe('Leave at the citadel gate')
+	})
+
+	test('signer-backed helper creates a seller-readable private auction claim', async () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+		const fields = baseFields({
+			buyerPubkey: buyer.pubkey,
+			sellerPubkey: seller.pubkey,
+			auctionCoordinates: `30408:${seller.pubkey}:auction-1`,
+		})
+
+		const wrapped = await createPrivateAuctionClaimMessageWithSigner({
+			...fields,
+			signer: signerFor(buyer.privateKey),
+		})
+		const decrypted = decryptPrivateAuctionClaimMessage({
+			giftWrap: wrapped.giftWrap,
+			recipientPrivateKey: seller.privateKey,
+			expectedBuyerPubkey: buyer.pubkey,
+			expectedSellerPubkey: seller.pubkey,
+		})
+
+		expect(decrypted.payload.orderId).toBe(ORDER_ID)
+		expect(decrypted.payload.shippingAddress.name).toBe('Satoshi Nakamoto')
+	})
+
+	test('public auction claim marker contains no delivery or contact data', () => {
+		const fields = baseFields()
+		const tags = buildAuctionClaimPublicMarkerTags(fields)
+
+		expect(tags).toEqual([
+			['p', fields.sellerPubkey],
+			['subject', 'auction-claim'],
+			['type', '1'],
+			['order', ORDER_ID],
+			['amount', '21000'],
+			['a', fields.auctionCoordinates],
+			['e', AUCTION_EVENT_ID],
+			['e', SETTLEMENT_EVENT_ID, '', 'settlement'],
+		])
+		expectNoPii({ content: '', tags })
+	})
+
+	test('extracts canonical public marker fields for private claim matching', () => {
+		const fields = baseFields()
+		const marker = {
+			pubkey: fields.buyerPubkey,
+			tags: buildAuctionClaimPublicMarkerTags(fields),
+		}
+
+		expect(getAuctionClaimPublicMarkerFields(marker)).toEqual({
+			orderId: fields.orderId,
+			auctionCoordinates: fields.auctionCoordinates,
+			auctionEventId: fields.auctionEventId,
+			settlementEventId: fields.settlementEventId,
+			buyerPubkey: fields.buyerPubkey,
+			sellerPubkey: fields.sellerPubkey,
+			totalAmountSats: fields.totalAmountSats,
+		})
+	})
+
+	test('matches private claim payloads to public markers by canonical fields', () => {
+		const fields = baseFields()
+		const payload = buildPrivateAuctionClaimPayload(fields)
+		const marker = {
+			pubkey: fields.buyerPubkey,
+			tags: buildAuctionClaimPublicMarkerTags(fields),
+		}
+
+		expect(privateAuctionClaimMatchesPublicMarker(payload, marker)).toBe(true)
+		expect(
+			privateAuctionClaimMatchesPublicMarker(payload, {
+				...marker,
+				tags: marker.tags.map((tag) => (tag[0] === 'order' ? ['order', 'different-order'] : tag)),
+			}),
+		).toBe(false)
+		expect(
+			privateAuctionClaimMatchesPublicMarker(payload, {
+				...marker,
+				pubkey: 'f'.repeat(64),
+			}),
+		).toBe(false)
+		expect(
+			privateAuctionClaimMatchesPublicMarker(payload, {
+				...marker,
+				tags: marker.tags.map((tag) => (tag[0] === 'amount' ? ['amount', '21001'] : tag)),
+			}),
+		).toBe(false)
+	})
+
+	test('rejects public markers missing required auction claim references', () => {
+		const fields = baseFields()
+		const tags = buildAuctionClaimPublicMarkerTags(fields)
+
+		expect(getAuctionClaimPublicMarkerFields({ pubkey: fields.buyerPubkey, tags: tags.filter((tag) => tag[0] !== 'a') })).toBeNull()
+		expect(
+			getAuctionClaimPublicMarkerFields({
+				pubkey: fields.buyerPubkey,
+				tags: tags.filter((tag) => !(tag[0] === 'e' && tag[3] === 'settlement')),
+			}),
+		).toBeNull()
+		expect(
+			getAuctionClaimPublicMarkerFields({
+				pubkey: fields.buyerPubkey,
+				tags: tags.map((tag) => (tag[0] === 'subject' ? ['subject', 'not-auction-claim'] : tag)),
+			}),
+		).toBeNull()
+	})
+
+	test('extracts seller-only legacy public address and email from pre-private auction claims', () => {
+		const fields = baseFields()
+		const details = getLegacyAuctionClaimPublicDetails({
+			pubkey: fields.buyerPubkey,
+			tags: [
+				['p', fields.sellerPubkey],
+				['type', '1'],
+				['order', ORDER_ID],
+				['amount', '21000'],
+				['a', fields.auctionCoordinates],
+				['address', '  123 Main Street  '],
+				['email', '  buyer@example.com  '],
+			],
+		})
+
+		expect(details).toEqual({
+			address: '123 Main Street',
+			email: 'buyer@example.com',
+		})
+	})
+
+	test('does not use legacy public details when a private auction claim marker is present', () => {
+		const fields = baseFields()
+		const markerTags = buildAuctionClaimPublicMarkerTags(fields)
+
+		expect(
+			getLegacyAuctionClaimPublicDetails({
+				pubkey: fields.buyerPubkey,
+				tags: [...markerTags, ['address', '123 Main Street'], ['email', 'buyer@example.com']],
+			}),
+		).toBeNull()
+		expect(
+			getLegacyAuctionClaimPublicDetails({
+				pubkey: fields.buyerPubkey,
+				tags: [
+					['subject', 'auction-claim'],
+					['type', '1'],
+					['address', '123 Main Street'],
+					['email', 'buyer@example.com'],
+				],
+			}),
+		).toBeNull()
+	})
+})

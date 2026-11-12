@@ -1,4 +1,4 @@
-import type { ProductReviewSchema } from '@/lib/schemas/productReview'
+import type { ProductReviewSchema } from '@sdk/commerce/products/productReviewSchema'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import type { z } from 'zod'

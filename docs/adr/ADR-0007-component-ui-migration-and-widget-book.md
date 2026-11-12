@@ -4,6 +4,18 @@
 
 Proposed
 
+**Amendment 2026-10-20 (PR #1420 target architecture).** Component ownership
+moves from `src/components/` to `ui/`; `platform/web/` is an assembler-only
+layer that composes components and must not define them; `src/` is the legacy
+host. See §1b (structure and layer roles), §1d (import convention), §1e
+(widget book as a sibling client), and §1a-bis (dynamic theme configuration).
+Where this amendment and the original text disagree, this amendment wins.
+
+**Clarification 2026-10-24.** §2a's `Extract` "individual files" means _out of the monolith /
+not in-line_, never one component per file; cluster files are permitted and precedented, with
+per-component widget-book entries and per-library spec files unchanged. See `ui/AGENTS.md`
+§ Cluster files.
+
 ## Date
 
 2026-08-05
@@ -63,6 +75,23 @@ The app should define a new theme under a `.theme-new { ... }` class scope (in a
   :`@import 'tailwindcss'`, `@theme inline`, and `@custom-variant` remain
   defined once in `globals.css` and are not duplicated in `globals-new.css`.
 
+**1a-bis. Dynamic theme configuration (normative).**
+The migration wrapper is also the app's **dynamic theme** primitive, not only a
+one-way migration flag. `ThemeMigrationWrapper` lives in `ui/theme/` and accepts
+an optional `theme` prop: a record of CSS custom-property names to values
+(`{ '--primary': 'oklch(...)', '--card': 'oklch(...)' }`). The wrapper:
+
+1. applies the `.theme-new` class (the baseline token scope), and
+2. writes the supplied custom properties as inline styles on the wrapper
+   element, and **mirrors the same properties onto the portal host** so that
+   portalled dialogs/popovers resolve the same tokens (see Portal handling).
+
+An `applyThemeTokens(element, tokens)` helper performs the same application
+imperatively for runtime theme switching. Tokens are the only supported theme
+input — the wrapper never reads theme files, fetches CSS, or knows about any
+particular instance. This is the same mechanism ADR-0006 §3c uses for CMS
+themes: the CMS supplies the token record, the wrapper applies it.
+
 ### Portal handling
 
 Radix UI portals (used by Shadcn dialogs, popovers, tooltips) render their
@@ -85,40 +114,72 @@ manual class application needed on each portalled component. When the entire
 app is eventually wrapped, the portal container becomes redundant because all
 content — portalled or not — will be inside the global `.theme-new` scope.
 
+When a dynamic theme supplies token overrides (§1a-bis), the wrapper **must
+mirror those overrides onto the portal container as well**. Applying only the
+`theme-new` class is insufficient: portalled content would otherwise resolve
+the baseline `.theme-new` tokens while the subtree resolves the overridden
+ones — a silent theme split between the page and its dialogs.
+
 The current app styles need to be refactored and redefined within the new
 stylesheet, and this is done in the migration guide section 2b.
 
 **1b. Component Directory Structure**
 
 ```
-src/components/
-  ui/              ← Shadcn primitives (generated, unmodified)
-  ui-wrappers/     ← Wrappers around ui/ primitives with custom styling/behavior
+ui/
+  primitives/      ← Shadcn primitives (generated, unmodified)
+  wrappers/        ← Wrappers around primitives/ with custom styling/behavior
   shared/          ← General-purpose reusable components (non-domain-specific)
-  nostr/           ← Nostr-domain components (users, products, auctions, profiles)
-  layout/          ← Structural components (Header, Footer, Sidebar)
-  dialogs/         ← Dialog compositions built on ui/dialog
+  nostr/           ← Nostr-domain presentational components (users, products, auctions, profiles)
+  layout/          ← Structural components (Header, Footer, Sidebar, AppShell, PageLayout)
+  nav/             ← Navigation model types + renderers (SidebarNav, Breadcrumbs, BackButton)
+  dialogs/         ← Dialog compositions built on primitives/dialog
+  theme/           ← ThemeMigrationWrapper + dynamic theme token application
+  <feature>/       ← Feature view modules (checkout, orders, wallet, dashboard, …)
 ...More component subdirectories can be added per-feature or per specification ruleset.
+
+platform/web/      ← HOST / BINDING LAYER
+  routes/          ← TanStack file-based routes; compose ui/ components with data
+  app/             ← providers, monitors, overlays, bootstrap wiring (no components)
+
+src/               ← LEGACY HOST (pre-ADR-0021); not a migration target
 ```
+
+**Layer roles (normative).**
+
+- **`ui/` owns every component.** All new and migrated presentational
+  components live under `ui/`. This tree is the standardized component set.
+- **`platform/web/` is the host/binding layer.** Routes and `platform/web/app/`
+  may compose `ui/` components, supply data via props, and wire providers and
+  overlays. After D1/D2 this layer deliberately holds React-bound logic
+  (`auctionsQuery.ts`, 500+ L; `productPublish.ts`); thin
+  `platform/web/<feature>/*Host.tsx` modules own one behaviour each and carry
+  one behaviour test. It still must NOT define presentational components,
+  layout, or navigation markup. A route that needs new UI adds it to `ui/`
+  instead. The earlier contract/BRIEF phrase "relatively simple assembly" is
+  deleted; host/binding is a deliberate, tested layer.
+- **`src/` is the legacy host.** It is retained for compatibility during the
+  ADR-0021 split and is progressively retired; it is never the destination for
+  migrated UI.
 
 The import hierarchy applies to **new and migrated code only**. Existing
 legacy components that violate these rules are tracked as migration debt and
 will be addressed during their respective slice migrations (see §2a).
 
 For new and migrated code, components may only import from directories below
-them in the hierarchy (e.g., `ui` → `ui-wrappers` → `shared`). New UI
-components must be placed in `src/components/`. Some subdirectories might be
-allowed to perform a specific kind of business logic, such as the `nostr/`
-directory being permitted to consume **named read-only data-adapter hooks**
-from `@/queries/` (e.g., `useProfile`, `useProductTitle`, `useWotScore`) for
-display, and `dialogs/` being permitted to call **UI-only store actions**
-(`uiActions.openDialog`/`uiActions.closeDialog`) and navigation — but these
-are **narrowly-scoped exceptions from the rule and must be documented in the
-subdirectory's AGENTS.md file**. Publishing, signing, and domain store
-mutations (cart, wallet, auth, orders) are NOT permitted in any component —
-these are passed via explicit callback props. AGENTS.md files in each
-subdirectory additionally serve as the authoritative source for import rules,
-dependency hierarchies, and specific standards unique to that directory.
+them in the hierarchy (e.g., `primitives` → `wrappers` → `shared`). New UI
+components must be placed in `ui/`.
+
+**`ui/` does not own data access or the app framework.** The enforced boundary
+(`ui/boundary.test.ts`) forbids importing `@/`, `@platform/`, `@tanstack/`,
+`@nostr-dev-kit/`, `applesauce-*`, and `nostr-tools` from `ui/`. SDK type and
+workflow imports through `@sdk/` remain permitted. Data, routing state, and
+actions enter components through explicit props or through a
+platform-supplied provider context. The former `nostr/` exception for
+consuming `@/queries` hooks is **withdrawn** for `ui/`: `ui/nostr/` holds
+presentational components only, and the platform/assembler invokes data
+adapters and passes results down as props. This keeps `ui/` portable to the
+widget book and to future clients.
 
 **1c. Standardized Parameters**
 For all **migrated** components in the standardized component set, they should accept and implement the following parameters:
@@ -138,12 +199,18 @@ For all **migrated** components in the standardized component set, they should a
 Standardized parameters should apply especially to reusable components. Purpose- or feature-specific components (such as ones found in `checkout/`) should be more relaxed on these rules.
 
 **1d. Import Convention**
-Canonical alias: `@/components/{directory}/{component}`. Barrel exports per directory allowed. Routes must import UI exclusively from `src/components/`.
+Canonical alias: `@ui/{directory}/{component}` (the `@ui/*` tsconfig path maps
+to `ui/*`). Barrel exports per directory are allowed through `ui/index.ts`.
+Routes and `platform/web/` must import UI exclusively from `@ui/...`; they must
+not import `ui/primitives/**` directly. Primitives are consumed through
+`ui/wrappers/` or `ui/shared/` components.
 
 **1e. Widget Book Test Harness**
 A modular test harness (`widget-book/`) will be established to serve as a unified host for both manual browsing and automated testing.
 
-- **Architecture:** A Bun-based server serving a single application that dynamically loads component "libraries" (mapping to `ui-wrappers`, `nostr`, `shared`, etc.).
+- **Location:** `widget-book/` is a **sibling directory** at the repository root — a separate client, alongside `ui/`, `platform/`, and `sdk/`. It is not part of the platform app and has its own entry point, dev server, and test run.
+- **Architecture:** A Bun-based server serving a single application that dynamically loads component "libraries" from `ui/` (mapping to `wrappers`, `shared`, `nostr`, `layout`, `nav`, `dialogs`, and feature modules).
+- **Boundary:** The widget book may import `ui/` and `sdk/` only. It must never import `platform/` or `src/`. This is the enforcement test for §1b: a component that cannot render in the widget book is not a `ui/` component.
 - **Launch Modes:** The harness can be launched with `LIBRARY=*` for full manual review or scoped to a single library (e.g., `LIBRARY=nostr`) for focused automated testing of a specific slice.
 - **Testing Strategy:** Automated tests are written in **Playwright** spec files. Mock data and behavioral assertions are defined directly within these spec files, avoiding the need for an intermediate JSON interpreter. Tests verify rendering, interactivity, and visual consistency across variants and states.
 
@@ -151,11 +218,21 @@ A modular test harness (`widget-book/`) will be established to serve as a unifie
 
 **2a. Migration Model: Foundation + Opportunistic Slices**
 
+> **Clarification added 2026-10-24 (owner ruling).** The `Extract` strategy's "individual files"
+> has always meant _out of the monolith / not in-line_ (the contrast at line 211: "as individual
+> files **and defined in-line**"). It never meant one component per file. Cluster files — one
+> module holding several closely related presentational views of one concept — are permitted and
+> precedented (`ui/products/product-editor-tabs.tsx`, `ui/checkout/payment-views.tsx`,
+> `ui/orders/order-detail-sections.tsx`). Per-component obligations are unchanged: each exported
+> component owes its own widget-book entry and its own unit test, and the widget-book Playwright
+> spec stays one file per library. This clarification is not a new revision; it records the reading
+> the code has always followed. See `ui/AGENTS.md` § Cluster files.
+
 Slice defines a set of UI components (as individual files and defined in-line) which migrate according to the **Classification System**:
 
 - **Keep:** Components already compliant or trivially fixable. Migrate styles to tokens, enforce API contracts.
 - **Modify:** Valuable but non-compliant. Refactor to implement contracts, migrate styles, and fix structure.
-- **Extract:** Components containing trapped sub-components. Decompose into individual files in appropriate directories, then apply Keep/Modify rules to each piece.
+- **Extract:** Components containing trapped sub-components. Decompose into individual files in appropriate directories, then apply Keep/Modify rules to each piece. **"Individual files" means _out of the monolith / not in-line_ — the contrast stated at §2a line 211 — never one component per file.** Several closely related presentational views of one concept may share a cluster file (e.g. `ui/products/product-editor-tabs.tsx`, `ui/checkout/payment-views.tsx`, `ui/orders/order-detail-sections.tsx`). Every exported component of a cluster still owes its own widget-book entry and its own unit test; the Playwright spec file is per library. See `ui/AGENTS.md` § Cluster files.
 - **Replace:** Redundant or superseded components. Swap all consumers to the compliant replacement, then delete the original.
 
 For example, an inline component used in `routes/` such as `renderHomepageHero()` might be marked as **Extract** while a card redefinition in another might be marked as **Replace** (with `components/ui/card.tsx`). Each migration PR should include the extent of UI created or modified and how the updated UI fits into the classification system.
@@ -178,8 +255,10 @@ The expected outcome is a clean stylesheet containing only tokens and generic ut
 **2c. Compliance and Maintenance**
 In order to keep the work of each PR over time, every migrated or created component must satisfy the following conditions before being considered complete:
 
-1. **Standardization:** It must adhere to the API contracts and prop standards defined in its parent subdirectory's AGENTS.md and the root `src/components/AGENTS.md`.
+1. **Standardization:** It must adhere to the API contracts and prop standards defined in its parent subdirectory's AGENTS.md and the root `ui/AGENTS.md`.
 2. **Test Coverage:** It must have corresponding test coverage in the automated widget book harness, verifying its different behaviors, variants, and appearances.
+
+**Relaxation (2026-10-27, D3/D4 contract rev 2.3).** The widget-book/test obligation applies only to components that remain in the `ui/` tree. A retired legacy component in a fused per-cluster commit owes no new widget-book entry or test; a cluster file owes one test file plus N widget entries (one per exported component); a deletion owes nothing new; a promotion owes both.
 
 **Note:** PR 1 (foundation) contains no migrated components, so the §2c
 compliance gate does not apply. Coverage begins with the first migration PR
@@ -195,14 +274,14 @@ Every migrated component that enters the CMS component registry must additionall
 
 - **CMS metadata** (data contract): A declarative description of what Nostr data the component needs — e.g., "kind 30402 feed with optional `#t` filter" — attached as a sidecar file or co-located export, not embedded in the component's render logic.
 - **Puck field schema**: The set of configurable props the CMS editor exposes for this component, mapped to Puck field types (text, select, custom).
-- **Data binding interface**: The component must accept data via props (not fetch internally) when used in CMS context. The CMS runtime executes the query and passes results as props. Components in `nostr/` that fetch internally (the sanctioned exception) are used directly by routes; the CMS wrapper extracts the fetching into the query layer and passes data as props.
+- **Data binding interface**: The component must accept data via props and never fetch internally. The CMS runtime (and any route assembler) executes the query and passes results as props. There is no `nostr/` fetch exception under the `ui/` boundary (§1b).
 
 This means each CMS-eligible component has three layers:
 
 ```
-src/components/nostr/ProductCard.tsx          ← migrated, standardized (this ADR)
-src/components/cms/product-card.cms.tsx       ← CMS metadata: data contract + Puck fields (ADR-0006)
-widget-book/nostr/ProductCard.spec.ts          ← test coverage (this ADR)
+ui/nostr/ProductCard.tsx                      ← migrated, standardized (this ADR)
+ui/nostr/ProductCard.cms.tsx                  ← CMS metadata: data contract + Puck fields (ADR-0006)
+widget-book/nostr/ProductCard.spec.ts         ← test coverage (this ADR)
 ```
 
 The `.cms.tsx` sidecar is the **only** CMS-specific code. The base component is unaware of the CMS.
@@ -238,7 +317,7 @@ The CMS theme system **overrides the standard token names** (`--primary`, `--car
 
 5. **Dark mode is preserved.** CMS theme files include `.dark` variants. The `applyLocalTheme` mechanism (or its evolved equivalent) applies both light and dark token sets, scoped to the wrapper element.
 
-The existing Puck branch's `src/lib/utils/theme.ts` and `public/themes/*.css` already implement this pattern correctly. The theme files use `oklch` (matching this ADR's color standard) and define the same token names. The `applyLocalTheme` function is the right mechanism — it may be simplified during integration, but the core approach (override standard tokens on a wrapper element) stays.
+This pattern is implemented in-tree by `ui/theme/theme-migration-wrapper.tsx`: `ThemeMigrationWrapper` accepts a `theme` token record and `applyThemeTokens` applies the same properties imperatively for runtime switching (the evolved equivalent of the earlier `applyLocalTheme`). The CMS/Puck branch carries the theme files as `public/themes/*.css` using `oklch` (matching this ADR's color standard) and the same token names. The core approach — override the standard token names on a wrapper element — stays.
 
 ## Consequences
 
@@ -259,7 +338,7 @@ The existing Puck branch's `src/lib/utils/theme.ts` and `public/themes/*.css` al
 
 A suggested PR strategy is as follows:
 
-- **PR 1 - Foundation - Styles:** Defines the new `.theme-new` scoped stylesheet (`styles/globals-new.css`) and the `ThemeMigrationWrapper` component (including the portal container for portalled content), wiring it in without yet opting in any subtree. Creates new directories and AGENTS.md files where appropriate, such as `ui-wrappers`, `shared`, `nostr`, `layout`, `dialogs`, and `theme-migration`. This PR is **foundation-only** — example components from the _"Modify"_ strategy of 2a are intentionally deferred to the first migration PR (PR 3) to keep the foundation review focused. Validation of the `.theme-new` scope will come with the first migration that wraps a real component.
+- **PR 1 - Foundation - Styles:** Defines the new `.theme-new` scoped stylesheet (`styles/globals-new.css`) and the `ThemeMigrationWrapper` component in `ui/theme/` (including dynamic token application and the portal container for portalled content), wiring it in without yet opting in any subtree. Creates new directories and AGENTS.md files where appropriate, such as `ui/wrappers`, `ui/shared`, `ui/nostr`, `ui/layout`, `ui/nav`, `ui/dialogs`, and `ui/theme`. This PR is **foundation-only** — example components from the _"Modify"_ strategy of 2a are intentionally deferred to the first migration PR (PR 3) to keep the foundation review focused. Validation of the `.theme-new` scope will come with the first migration that wraps a real component.
   - **CMS cross-ref:** Creates the `cms/` directory (empty, with AGENTS.md defining CMS sidecar conventions). Does not populate it yet.
 
 - **PR 2 - Foundation - Test Harness:** Implement the test harness app that can run on modular widget libraries. Include the ability to run on all libs (LIBRARY=\*) or on specific ones only. Include the Playwright configuration to define and run tests on specific components, and provide test coverage for the existing components in the newly migrated subdirectories.

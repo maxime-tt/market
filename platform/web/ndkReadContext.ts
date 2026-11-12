@@ -1,0 +1,258 @@
+/**
+ * PRIVATE ADAPTER — do not import from a feature binding.
+ *
+ * This module is the host's NDK read adapter and owns the `platform -> src` edge to the relay
+ * client. Feature bindings import `@platform/web/readContext` instead, which re-exports the
+ * accessors they need and chooses the adapter by configuration (D1 seam `d1-neutral-seam`).
+ * Direction is one-way: `readContext.ts -> this adapter`, never the reverse.
+ */
+import { getAppRelaySet, getBugRelay, getMainRelay, ndkActions, ndkStore } from '@platform/web/ndk/ndkStore'
+import { NDKRelaySet, type NDKEvent, type NDKFilter } from '@platform/web/ndk/ndkEvents'
+import { authStore, getCurrentPubkey, getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { configActions } from '@sdk/config/app-config'
+import {
+	createApplesauceEventStore,
+	createEventReadContext,
+	streamFromFetch,
+	type EventReadContext,
+	type EventStorePort,
+} from '@sdk/core/event-store'
+import { createIndexedDbEventDatabase } from '@platform/web/indexedDbEventDatabase'
+
+/** Re-exported so Platform bindings can type their read context without a `platform -> src` edge. */
+export type { NDKEvent, NDKFilter }
+
+/**
+ * The private-auction-claim host helpers (Wave I, slice I-a A2 S2, 2026-10-29). The pure half —
+ * payload/marker construction and parsing — lives in `@sdk/commerce/auctions/
+ * privateAuctionClaimMessage`; the two ambient-signer helpers moved here verbatim from the
+ * deleted `src/lib/auctions/privateAuctionClaimMessage.ts` because they are HOST code: NIP-59
+ * private-claim encrypt/decrypt needs the raw active signer (NIP-44 encryption + event
+ * signing), which is acquired from the auth composition root's signer capability accessor
+ * (`getActiveSignerCapability`) and adapted with `asEncryptingSigner` (the `@sdk/core` interop
+ * port) — never the raw NDK signer object (post-#1252; the guard's allowlist stays empty).
+ * This file is outside the auctions guard's scanned set by design: it already owns the host's
+ * NDK adapter edge, while the auctions surface stays NDK-free.
+ */
+import { asEncryptingSigner } from '@sdk/core'
+import {
+	createPrivateAuctionClaimMessageWithSigner,
+	decryptPrivateAuctionClaimMessageWithSigner,
+	getAuctionClaimPublicMarkerFields,
+	privateAuctionClaimMatchesPublicMarker,
+	type CreatePrivateAuctionClaimMessageWithSignerParams,
+	type DecryptPrivateAuctionClaimMessageWithSignerParams,
+	type PrivateAuctionClaimGiftWrap,
+	type PrivateAuctionClaimMessage,
+} from '@sdk/commerce/auctions/privateAuctionClaimMessage'
+
+export async function createPrivateAuctionClaimMessageForActiveSigner(
+	params: Omit<CreatePrivateAuctionClaimMessageWithSignerParams, 'signer'>,
+): Promise<PrivateAuctionClaimGiftWrap> {
+	const capability = getActiveSignerCapability()
+	if (!capability) throw new Error('No active signer available for the private auction claim')
+	return createPrivateAuctionClaimMessageWithSigner({ ...params, signer: asEncryptingSigner(capability) })
+}
+
+export async function decryptPrivateAuctionClaimMessageForActiveSigner(
+	params: Omit<DecryptPrivateAuctionClaimMessageWithSignerParams, 'signer'>,
+): Promise<PrivateAuctionClaimMessage> {
+	const capability = getActiveSignerCapability()
+	if (!capability) throw new Error('No active signer available for the private auction claim')
+	return decryptPrivateAuctionClaimMessageWithSigner({ ...params, signer: asEncryptingSigner(capability) })
+}
+
+export { getAuctionClaimPublicMarkerFields, privateAuctionClaimMatchesPublicMarker }
+export type { PrivateAuctionClaimMessage }
+
+/**
+ * Re-exported so Platform bindings (the messaging reads) can read the current
+ * user without adding a new `platform -> src` edge: this file already owns the
+ * `@/lib/stores/ndk` edge.
+ */
+export { authStore, getCurrentPubkey }
+
+// The browser host is one market instance, so module scope is the instance boundary for its store.
+// Backed by the applesauce `EventStorePort` adapter; the browser host injects the IndexedDB database (contract
+// rev 2.21 decision 3). The NDK live-relay stream migration belongs to the NDK-web lane, so these contexts keep
+// the bounded NDK-fetch source for now.
+const ndkEventStore = createApplesauceEventStore<NDKEvent>({ database: createIndexedDbEventDatabase() })
+
+export function getNdkEventStore(): EventStorePort<NDKEvent> {
+	return ndkEventStore
+}
+
+/**
+ * The app-relay pinning used by the reads of app-owned lists, re-exported so a Platform binding (the
+ * featured-list subscription) can pin a live subscription to it without importing `src/` itself. The
+ * `@/lib/stores/ndk` edge already lives in this file.
+ */
+export { getAppRelaySet }
+
+/** Platform adapter: SDK read workflows fetch through the host's NDK relay policy and merge into the shared store. */
+export function createNdkReadContext(timeoutMs = 8000): EventReadContext<NDKEvent> {
+	return createEventReadContext({
+		store: ndkEventStore,
+		stream: streamFromFetch(ndkEventStore, async (filters) => {
+			const ndkFilters = filters as NDKFilter[]
+			return Array.from(await ndkActions.fetchEventsWithTimeout(ndkFilters.length === 1 ? ndkFilters[0] : ndkFilters, { timeoutMs }))
+		}),
+	})
+}
+
+/**
+ * The app's main relay URL, or undefined while the host config is still loading. Lives here (the
+ * file that already owns the `@/lib/stores/ndk` edge) so the config bindings can pin their live
+ * subscriptions without importing `src/` themselves.
+ */
+export function getAppRelayUrl(): string | undefined {
+	return getMainRelay()
+}
+
+/**
+ * Add explicit relays through the same action the migration read used before the drain (the store
+ * mirror is updated too). Lives here so the migration binding adds no `platform -> src` edge.
+ */
+export function addAppExplicitRelays(relayUrls: string[]): string[] {
+	return ndkActions.addExplicitRelay(relayUrls)
+}
+
+/**
+ * Whether the host's NDK client is ready. Lives here so the config bindings can gate a read that
+ * must fail open before the relay client exists, without importing `src/` themselves.
+ */
+export function isAppRelayReady(): boolean {
+	return !!ndkActions.getNDK()
+}
+
+/**
+ * Connect the app's relays with a timeout. Lives here so the product/collection bindings can
+ * trigger a connection without importing `src/` themselves.
+ */
+export function connectAppRelays(timeoutMs = 10000): void {
+	void ndkActions.connect(timeoutMs)
+}
+
+/**
+ * The configured explicit relay URLs from the NDK store. Lives here so the NIP-50 discovery
+ * binding can read them without importing `src/` themselves.
+ */
+export function getConfiguredRelayUrls(): string[] {
+	return ndkStore.state.explicitRelayUrls
+}
+
+/**
+ * Fetch an event by its NIP-19 naddr. The raw NDK handle stays here so the binding needs no
+ * `src/` edge.
+ */
+export async function fetchEventByNaddr(naddr: string): Promise<NDKEvent | null> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	return await ndk.fetchEvent(naddr)
+}
+
+/**
+ * Fetch an event by its event ID. The raw NDK handle stays here so the binding needs no
+ * `src/` edge.
+ */
+export async function fetchEventById(id: string): Promise<NDKEvent | null> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	return await ndk.fetchEvent(id)
+}
+
+/**
+ * Fetch events by a filter. The raw NDK handle stays here so the binding needs no
+ * `src/` edge.
+ */
+export async function fetchEventsByFilter(filter: NDKFilter): Promise<NDKEvent[]> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	const events = await ndk.fetchEvents(filter)
+	return Array.from(events)
+}
+
+/**
+ * The app's admin ∪ editor pubkeys (ADR-0009) — the authorized test-labeler set, read through the
+ * still-`src`-owned app-settings query.
+ *
+ * Editors are the day-to-day curation role and admins are curated content authorities, so both may
+ * mark / unmark test listings. The settings read stays a DYNAMIC import so the framework-free SDK
+ * read model never pulls `@/queries/app-settings` in, and so the label/auction suites' mock seam for
+ * that path still intercepts.
+ *
+ * Returns null when neither settings set could be read (relay/config not ready) — callers must treat
+ * that as "cannot determine authorization" and fail open (no labels applied, store not marked
+ * loaded).
+ */
+export const readAuthorizedLabelers = async (): Promise<string[] | null> => {
+	try {
+		const { fetchAdminSettings, fetchEditorSettings } = await import('@platform/web/app-settings/appSettingsQuery')
+		const appPubkey = configActions.getAppPublicKey()
+		const [adminSettings, editorSettings] = await Promise.all([fetchAdminSettings(appPubkey), fetchEditorSettings(appPubkey)])
+		// Both reads unavailable → authorization is undeterminable, not empty.
+		if (!adminSettings && !editorSettings) return null
+		return Array.from(new Set([...(adminSettings?.admins ?? []), ...(editorSettings?.editors ?? [])]))
+	} catch (error) {
+		console.warn('Failed to fetch authorized labelers (admin/editor settings):', error)
+		return null
+	}
+}
+
+/**
+ * Platform adapter for app-settings reads (blacklist, NIP-05/vanity registries, test labels):
+ * fetches are pinned to the instance's main relay (`getAppRelaySet`), so a stale copy on a
+ * user-added relay cannot race the canonical answer. When the relay client is not ready the fetch
+ * answers empty rather than reaching the network, mirroring the pre-drain readers.
+ */
+export function createAppRelayReadContext(timeoutMs = 8000): EventReadContext<NDKEvent> {
+	return createEventReadContext({
+		store: ndkEventStore,
+		stream: streamFromFetch(ndkEventStore, async (filters) => {
+			const ndk = ndkActions.getNDK()
+			if (!ndk) return []
+
+			const relaySet = getAppRelaySet()
+			const ndkFilters = filters as NDKFilter[]
+			return Array.from(
+				await ndkActions.fetchEventsWithTimeout(ndkFilters.length === 1 ? ndkFilters[0] : ndkFilters, {
+					timeoutMs,
+					relaySet,
+				}),
+			)
+		}),
+	})
+}
+
+/**
+ * Platform adapter for the bug-report read: fetches are pinned to the instance's bug relay
+ * (ADR-018 `bugRelay`, falling back to the main relay), so report history stays off the general
+ * relay set. The SDK read model is `readBugReportsWorkflow`; this factory only owns the host's
+ * relay policy, and the read deliberately does not merge into the shared store (so its kind-1
+ * reports never reach the general kind-1 reads).
+ */
+export function createBugRelayReadContext(timeoutMs = 8000): EventReadContext<NDKEvent> {
+	return createEventReadContext({
+		store: ndkEventStore,
+		stream: streamFromFetch(
+			ndkEventStore,
+			async (filters) => {
+				const ndk = ndkActions.getNDK()
+				if (!ndk) throw new Error('NDK not initialized')
+				const relayUrl = getBugRelay()
+				if (!relayUrl) throw new Error('App relay not configured')
+
+				const relaySet = NDKRelaySet.fromRelayUrls([relayUrl], ndk)
+				const ndkFilters = filters as NDKFilter[]
+				return Array.from(
+					await ndkActions.fetchEventsWithTimeout(ndkFilters.length === 1 ? ndkFilters[0] : ndkFilters, {
+						timeoutMs,
+						relaySet,
+						subId: 'bug-reports',
+					}),
+				)
+			},
+			{ admit: false },
+		),
+	})
+}

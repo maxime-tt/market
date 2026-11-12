@@ -738,7 +738,7 @@ export function ProductCard({
 ```typescript
 // build.ts
 await Bun.build({
-	entrypoints: ['./src/index.tsx'],
+	entrypoints: ['./platform/web/app/entry.tsx'],
 	outdir: './dist',
 	minify: NODE_ENV === 'production',
 	sourcemap: NODE_ENV !== 'production' ? 'inline' : 'none',

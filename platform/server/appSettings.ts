@@ -1,0 +1,157 @@
+import NDK, { type NDKFilter, type NDKEvent } from '@nostr-dev-kit/ndk'
+import { APP_SETTINGS_D_TAG, APP_SETTINGS_KIND, type AppSettingsEventLike } from '@sdk/config/app-settings'
+import { AppSettingsSchema, type AppSettings } from '@sdk/config/schemas/app'
+import { isValidHexKey } from '@sdk/core/utils/utils'
+
+/**
+ * Server-side app-settings resolution (b3-relocate, 2026-10-30; moved verbatim
+ * from `src/lib/appSettings.ts` — the client submit half went to
+ * `platform/web/app-settings/appSettingsSubmit.ts` and the shared event
+ * contract to `sdk/config/app-settings.ts`). `platform/server` must not import
+ * `@platform/web`, which is why the two halves live apart.
+ */
+
+/**
+ * Select the latest app-settings event that matches the expected publisher
+ * authority. The event must be kind 31990, authored by `appPubkey`, and carry
+ * one of the provided d tags in priority order (tries first tag first, etc.).
+ * Events from any other publisher (or with a different kind / d tag) are
+ * rejected — the content schema validates shape, not authority, so a spoofed
+ * event that passes the schema must still be refused here.
+ *
+ * Fallback chain example: ['custom-handler', 'plebeian-market-handler']
+ *   - First tries events with d=custom-handler (self-hosted)
+ *   - Falls back to d=plebeian-market-handler (shipped default)
+ */
+export function selectAuthoritativeAppSettingsEvent(
+	events: ReadonlyArray<AppSettingsEventLike>,
+	appPubkey: string,
+	handlerIds: string[] = [APP_SETTINGS_D_TAG],
+): AppSettingsEventLike | undefined {
+	// Try each handler ID in priority order
+	for (const handlerId of handlerIds) {
+		const candidate = events
+			.filter((e) => e.kind === APP_SETTINGS_KIND && e.pubkey === appPubkey && e.tags.some((t) => t[0] === 'd' && t[1] === handlerId))
+			.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+
+		if (candidate) return candidate
+	}
+
+	return undefined
+}
+
+/**
+ * Resolve the result of a completed app-settings relay query.
+ *
+ * `null` means the authoritative query completed and returned no candidate
+ * events. Returned-but-unusable state is indeterminate and fails closed.
+ *
+ * @param events - Candidate events from the relay
+ * @param appPubkey - Expected publisher public key
+ * @param handlerIds - d-tag fallback chain: tries first, then second, etc.
+ */
+export function resolveFetchedAppSettings(
+	events: ReadonlyArray<AppSettingsEventLike>,
+	appPubkey: string,
+	handlerIds: string[] = [APP_SETTINGS_D_TAG],
+): AppSettings | null {
+	if (events.length === 0) return null
+
+	const authoritativeEvent = selectAuthoritativeAppSettingsEvent(events, appPubkey, handlerIds)
+	if (!authoritativeEvent) {
+		throw new Error(`No authoritative app settings event from expected publisher: ${appPubkey}`)
+	}
+
+	let parsedContent: unknown
+	try {
+		parsedContent = JSON.parse(authoritativeEvent.content)
+	} catch {
+		throw new Error('Authoritative app settings contain invalid JSON')
+	}
+
+	const result = AppSettingsSchema.safeParse(parsedContent)
+	if (!result.success) {
+		throw new Error('Authoritative app settings failed schema validation')
+	}
+
+	return result.data
+}
+
+export async function fetchAppSettings(relayUrl: string, appPubkey: string, handlerIds?: string[]): Promise<AppSettings | null> {
+	const effectiveHandlerIds = handlerIds?.length ? handlerIds : [APP_SETTINGS_D_TAG]
+	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey} with handler IDs: ${effectiveHandlerIds.join(', ')}`)
+
+	// Reject a malformed app pubkey before creating an NDK instance or issuing
+	// any relay request. NDK's strict filter validation would also fail closed,
+	// but validating here gives a clear, early failure and guarantees the
+	// authors constraint is never satisfied by an unrelated publisher.
+	if (!isValidHexKey(appPubkey)) {
+		throw new Error(`Invalid app pubkey provided: ${appPubkey}`)
+	}
+
+	try {
+		// Create a fresh NDK instance for server-side initialization
+		// to avoid shared store issues with ndkActions
+		const ndk = new NDK({
+			explicitRelayUrls: [relayUrl],
+			// Server-side, one-off fetch of app-config events. AI guardrails are a
+			// dev-time educational tool and have no place here. NDK's default strict
+			// filter validation is retained (a malformed appPubkey fails closed
+			// rather than broadening the query).
+			aiGuardrails: false,
+		})
+
+		// Connect with timeout
+		try {
+			await Promise.race([
+				ndk.connect(),
+				new Promise<never>((_, reject) => setTimeout(() => reject(new Error('NDK connect timeout')), 5000)),
+			])
+		} catch (connectErr) {
+			console.warn('NDK connect warning (may still work):', connectErr)
+			// Check if we have any connected relays despite the timeout
+			const connected = ndk.pool?.connectedRelays() || []
+			if (connected.length === 0) {
+				throw new Error('No relays connected, cannot fetch app settings')
+			}
+			console.log(`Connected to ${connected.length} relays despite timeout`)
+		}
+
+		// NIP-33 parameterized replaceable events (kind 31990) are indexed by pubkey+kind+d tag.
+		// Query for all handler IDs in the fallback chain in a single filter.
+		const filter: NDKFilter = {
+			kinds: [31990],
+			authors: [appPubkey],
+			'#d': effectiveHandlerIds,
+			limit: effectiveHandlerIds.length, // Allow fetching multiple events to evaluate priority
+		}
+
+		console.log('Fetching with filter:', JSON.stringify(filter))
+
+		// Add a soft timeout so we don't hang forever if the relay is slow.
+		const fetchWithTimeout = <T>(p: Promise<T>, ms: number) =>
+			new Promise<T>((resolve, reject) => {
+				const id = setTimeout(() => reject(new Error(`fetchEvents timeout after ${ms}ms`)), ms)
+				p.then((v) => {
+					clearTimeout(id)
+					resolve(v)
+				}).catch((e) => {
+					clearTimeout(id)
+					reject(e)
+				})
+			})
+
+		const events = (await fetchWithTimeout(ndk.fetchEvents(filter), 10000)) as Set<NDKEvent>
+		const eventArray = Array.from(events)
+		console.log(`Fetch returned ${eventArray.length} events`)
+
+		if (eventArray.length === 0) {
+			console.log(`No app settings events found for pubkey: ${appPubkey}`)
+		}
+
+		return resolveFetchedAppSettings(eventArray, appPubkey, effectiveHandlerIds)
+	} catch (err) {
+		console.error('Failed to fetch app settings:', err)
+		throw err
+	}
+}

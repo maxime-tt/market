@@ -1,0 +1,163 @@
+import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@ui/primitives/sheet'
+import { authActions, authStore } from '@platform/web/auth/authStore'
+import type { ProductFormState, ProductFormTab } from '@platform/web/products/productFormStore'
+import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@platform/web/products/productFormStore'
+import { resolveProductWorkflow, type V4VSetupState } from '@sdk/commerce/products'
+import { useV4VConfiguration } from '@platform/web/v4v/v4vQuery'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useStore } from '@tanstack/react-store'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ProductFormContent } from './ProductFormContent'
+import { ProductWelcomeScreen } from './ProductWelcomeScreen'
+
+export function NewProductContent({
+	title,
+	description,
+	showWelcome = true,
+	requestedTab = null,
+}: {
+	title?: string
+	description?: string
+	showWelcome?: boolean
+	requestedTab?: ProductFormTab | null
+}) {
+	const [hasProducts, setHasProducts] = useState(false)
+	const hasBootstrappedRef = useRef(false)
+
+	// Get form state from store, including editingProductId
+	const formState = useStore(productFormStore)
+	const { editingProductId } = formState
+
+	// Get user and authentication status from auth store
+	const { user, isAuthenticated } = useStore(authStore)
+	const userPubkey = user?.pubkey ?? ''
+	const v4vQuery = useV4VConfiguration(userPubkey)
+	const { data: config } = useConfigQuery()
+	const instanceName = config?.displayName || config?.name || 'Marketplace'
+
+	const v4vState = useMemo<V4VSetupState>(() => {
+		if (editingProductId) return 'unknown'
+		if (!userPubkey) return 'loading'
+		if (v4vQuery.isLoading) return 'loading'
+
+		return v4vQuery.data?.state ?? 'unknown'
+	}, [editingProductId, userPubkey, v4vQuery.data?.state, v4vQuery.isLoading])
+
+	const workflow = useMemo(
+		() =>
+			resolveProductWorkflow({
+				mode: editingProductId ? 'edit' : 'create',
+				editingProductId,
+				v4vConfigurationState: v4vState,
+				requestedTab,
+			}),
+		[editingProductId, requestedTab, v4vState],
+	)
+
+	// Function to check if the form has been modified from its default state
+	const isFormModified = (currentState: ProductFormState) => {
+		// When editing, the form is pre-filled, so it will always appear "modified" compared to DEFAULT_FORM_STATE.
+		// If we are editing, we consider the form as needing to be shown if an ID is present.
+		if (currentState.editingProductId) return true
+
+		return (
+			currentState.name !== DEFAULT_FORM_STATE.name ||
+			currentState.description !== DEFAULT_FORM_STATE.description ||
+			currentState.price !== DEFAULT_FORM_STATE.price ||
+			currentState.quantity !== DEFAULT_FORM_STATE.quantity ||
+			currentState.specs.length > 0 ||
+			currentState.categories.length > 0 ||
+			currentState.images.length > 0 ||
+			currentState.weight !== DEFAULT_FORM_STATE.weight ||
+			currentState.dimensions !== DEFAULT_FORM_STATE.dimensions
+		)
+	}
+
+	// Check if the user has started filling in the form or is editing
+	const hasStartedFormOrIsEditing = isFormModified(formState)
+
+	const [showForm, setShowForm] = useState(hasStartedFormOrIsEditing)
+
+	useLayoutEffect(() => {
+		if (editingProductId) {
+			hasBootstrappedRef.current = true
+			return
+		}
+
+		hasBootstrappedRef.current = false
+	}, [editingProductId, userPubkey])
+
+	useLayoutEffect(() => {
+		if (editingProductId) return
+		if (hasBootstrappedRef.current) return
+		if (hasStartedFormOrIsEditing) {
+			hasBootstrappedRef.current = true
+			return
+		}
+
+		productFormActions.reset({
+			activeTab: workflow.initialTab,
+			editingProductId: null,
+		})
+
+		hasBootstrappedRef.current = true
+	}, [editingProductId, hasStartedFormOrIsEditing, workflow.initialTab])
+
+	// Check if user has products when component mounts or user changes
+	useEffect(() => {
+		const checkUserProducts = async () => {
+			if (isAuthenticated && user) {
+				const userHasExistingProducts = await authActions.userHasProducts()
+				setHasProducts(userHasExistingProducts)
+			}
+		}
+		checkUserProducts()
+	}, [isAuthenticated, user])
+
+	// Update showForm based on form modification, existing products, or if editing an existing product
+	useEffect(() => {
+		if (editingProductId) {
+			// If editing, always show the form
+			setShowForm(true)
+		} else if ((hasStartedFormOrIsEditing || hasProducts) && !showForm) {
+			setShowForm(true)
+		}
+	}, [hasStartedFormOrIsEditing, hasProducts, showForm, editingProductId])
+
+	// Default titles
+	const defaultTitle = editingProductId ? 'Edit Product' : 'Add A Product'
+	const defaultDescription = editingProductId ? 'Modify the details of your product.' : 'Create a new product to sell in your shop'
+
+	if (!showForm && showWelcome) {
+		return (
+			<SheetContent side="right" className="p-6">
+				{/* This is for Accessibility but we don't need to show it */}
+				<SheetHeader className="hidden">
+					<SheetTitle>Welcome to {instanceName}</SheetTitle>
+					<SheetDescription>Start selling your products in just a few minutes</SheetDescription>
+				</SheetHeader>
+				<ProductWelcomeScreen onGetStarted={() => setShowForm(true)} />
+			</SheetContent>
+		)
+	}
+
+	return (
+		<SheetContent
+			side="right"
+			className="flex flex-col max-h-screen overflow-hidden w-[100vw] sm:min-w-[85vw] md:min-w-[55vw] xl:min-w-[35vw] p-6"
+		>
+			<SheetHeader>
+				<SheetTitle className="text-center">{title || defaultTitle}</SheetTitle>
+				<SheetDescription className="hidden">{description || defaultDescription}</SheetDescription>
+			</SheetHeader>
+
+			<ProductFormContent workflow={workflow} />
+		</SheetContent>
+	)
+}
+
+// Export all components for reuse
+export { NameTab } from './NameTab'
+export { DetailTab, CategoryTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
+export { ProductWelcomeScreen } from './ProductWelcomeScreen'
+export { ProductFormContent } from './ProductFormContent'

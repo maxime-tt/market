@@ -39,8 +39,8 @@ Refer to `references/libraries.md` for complete dependency list and versions.
 
 Before implementing features, understand the project structure:
 
-- `/src/routes/` - File-based routing (use `$param` for dynamic segments, `_layout` prefix for layouts)
-- `/src/components/` - React components (organized by feature or in `ui/` for base components)
+- `/platform/web/routes/` - File-based routing (use `$param` for dynamic segments, `_layout` prefix for layouts)
+- `/ui/` - React components (organized by feature or in `ui/primitives/` for base components)
 - `/src/lib/stores/` - TanStack Store state management
 - `/src/queries/` - React Query hooks and query key factories
 - `/src/hooks/` - Custom React hooks for reusable logic
@@ -202,7 +202,7 @@ Read `references/nostr-integration.md` for complete Nostr patterns, event kinds,
    - Check if shadcn/ui components can be reused
 
 2. **Implement routes (if needed):**
-   - Create route files in `/src/routes/` following naming conventions
+   - Create route files in `/platform/web/routes/` following naming conventions
    - Use appropriate route types (index, dynamic, layout)
    - Run `bun run generate-routes` to update route tree
 
@@ -233,8 +233,8 @@ Read `references/nostr-integration.md` for complete Nostr patterns, event kinds,
 ### Modifying Existing Features
 
 1. **Locate relevant files:**
-   - Routes in `/src/routes/`
-   - Components in `/src/components/`
+   - Routes in `/platform/web/routes/`
+   - Components in `/ui/`
    - Stores in `/src/lib/stores/`
    - Queries in `/src/queries/`
 
@@ -258,7 +258,7 @@ Read `references/nostr-integration.md` for complete Nostr patterns, event kinds,
 
 ### Creating a New Route
 
-1. Create file in `/src/routes/` (e.g., `newpage.tsx`)
+1. Create file in `/platform/web/routes/` (e.g., `newpage.tsx`)
 2. Define route with `createFileRoute`
 3. Implement component
 4. Run `bun run generate-routes`

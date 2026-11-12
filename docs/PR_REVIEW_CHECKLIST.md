@@ -166,7 +166,7 @@ voice; this file is the pass/fail checklist.
 
 ## I. Architecture, migrations, boundaries
 
-- [ ] `src/AGENTS.md` / ADR boundaries verified, not assumed; seam imports
+- [ ] The `AGENTS.md` hierarchy / ADR boundaries verified, not assumed; seam imports
       respected; NDK footprint guard passes (127/127) with no literal
       `@nostr-dev-kit` usage added under `src/` / `contextvm/` (Wave 0); no
       NDK type leakage across migration boundaries (ADR-0002).

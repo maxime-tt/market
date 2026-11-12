@@ -1,0 +1,276 @@
+import { Button } from '@ui/wrappers/button'
+import { Media } from '@ui/shared/media'
+import { ConfirmDialog } from '@ui/shared/confirm-dialog'
+import { EntityListItem, type EntityListItemAction } from '@ui/shared/entity-list-item'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
+import { authStore } from '@platform/web/auth/authStore'
+import { collectionFormActions } from '@platform/web/collections/collectionFormStore'
+
+import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@platform/web/collections/collectionQuery'
+import { useDeleteCollectionMutation } from '@platform/web/collections/collectionPublish'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { useState, useMemo } from 'react'
+import { ChevronDown, PlusIcon, StoreIcon, Trash } from 'lucide-react'
+import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
+import { DashboardCollectionDetails, DashboardCollectionTrigger } from '@ui/dashboard/dashboard-collection-list-item'
+import { PageHeader } from '@ui/layout/page-header'
+
+function CollectionListItem({
+	collection,
+	isExpanded,
+	onToggleExpanded,
+	onEdit,
+	onDelete,
+	isDeleting,
+}: {
+	collection: NostrEventLike
+	isExpanded: boolean
+	onToggleExpanded: () => void
+	onEdit: () => void
+	onDelete: () => void
+	isDeleting: boolean
+}) {
+	const triggerContent = <DashboardCollectionTrigger collection={collection} />
+
+	const actions: EntityListItemAction[] = [
+		{
+			key: 'edit',
+			label: `Edit ${getCollectionTitle(collection)}`,
+			icon: <span className="i-edit w-5 h-5" />,
+			onClick: () => onEdit(),
+		},
+		{
+			key: 'delete',
+			label: `Delete ${getCollectionTitle(collection)}`,
+			icon: <Trash className="w-4 h-4 text-destructive" />,
+			onClick: () => onDelete(),
+			destructive: true,
+			pending: isDeleting,
+		},
+	]
+
+	return (
+		<EntityListItem
+			isOpen={isExpanded}
+			onOpenChange={onToggleExpanded}
+			trigger={triggerContent}
+			actions={actions}
+			isDeleting={isDeleting}
+			icon={<StoreIcon className="h-5 w-5 text-black" />}
+		>
+			<DashboardCollectionDetails
+				collection={collection}
+				renderImage={(url) => <Media src={url} alt="Collection header" className="w-full h-full object-cover" />}
+			/>
+		</EntityListItem>
+	)
+}
+
+export const Route = createFileRoute('/_dashboard-layout/dashboard/products/collections')({
+	component: CollectionsComponent,
+})
+
+function CollectionsComponent() {
+	const { user, isAuthenticated } = useStore(authStore)
+	const navigate = useNavigate()
+	const matchRoute = useMatchRoute()
+	const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
+	const [orderBy, setOrderBy] = useState<string>('newest')
+	const [pendingDeleteCollection, setPendingDeleteCollection] = useState<NostrEventLike | null>(null)
+	useDashboardTitle('Collections')
+
+	// Auto-animate for smooth list transitions
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
+
+	// Check if we're on a child route (editing or creating a collection)
+	const isOnChildRoute =
+		matchRoute({
+			to: '/dashboard/products/collections/$collectionId',
+			fuzzy: true,
+		}) ||
+		matchRoute({
+			to: '/dashboard/products/collections/new',
+			fuzzy: true,
+		})
+
+	// Fetch user's collections
+	const { data: collections = [], isLoading, error } = useCollectionsByPubkey(user?.pubkey || '')
+
+	// Sort collections based on orderBy
+	const sortedCollections = useMemo(() => {
+		if (!collections) return []
+		return [...collections].sort((a, b) => {
+			const timeA = a.created_at || 0
+			const timeB = b.created_at || 0
+			// For replaceable events, created_at is both creation and update time
+			if (orderBy === 'oldest' || orderBy === 'least-updated') {
+				return timeA - timeB
+			} else {
+				return timeB - timeA
+			}
+		})
+	}, [collections, orderBy])
+
+	// Delete mutation
+	const deleteMutation = useDeleteCollectionMutation()
+
+	const handleAddCollectionClick = () => {
+		collectionFormActions.reset()
+		navigate({
+			to: '/dashboard/products/collections/new',
+		})
+	}
+
+	const handleEditCollectionClick = (collection: any) => {
+		const collectionId = getCollectionId(collection)
+		navigate({
+			to: '/dashboard/products/collections/$collectionId',
+			params: { collectionId },
+		})
+	}
+
+	const handleToggleExpanded = (collectionId: string) => {
+		setExpandedCollection(expandedCollection === collectionId ? null : collectionId)
+	}
+
+	const handleDeleteCollectionClick = (collection: NostrEventLike) => {
+		setPendingDeleteCollection(collection)
+	}
+
+	if (!isAuthenticated || !user) {
+		return (
+			<div className="p-6 text-center">
+				<p>Please log in to manage your collections.</p>
+			</div>
+		)
+	}
+
+	// If we're on a child route, render the child route
+	if (isOnChildRoute) {
+		return <Outlet />
+	}
+
+	return (
+		<div>
+			<PageHeader>
+				<h1 className="text-2xl font-bold">Collections</h1>
+				<div className="flex items-center gap-4">
+					<Select value={orderBy} onValueChange={setOrderBy}>
+						<SelectTrigger className="w-48">
+							<SelectValue placeholder="Order By" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="newest">Newest First</SelectItem>
+							<SelectItem value="oldest">Oldest First</SelectItem>
+							<SelectItem value="recently-updated">Recently Updated</SelectItem>
+							<SelectItem value="least-updated">Least Recently Updated</SelectItem>
+						</SelectContent>
+					</Select>
+					<Button
+						onClick={handleAddCollectionClick}
+						data-testid="add-collection-button"
+						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					>
+						<span className="i-market w-5 h-5" />
+						Create A Collection
+					</Button>
+				</div>
+			</PageHeader>
+			<div className="space-y-6 p-4 lg:p-6">
+				<div className="lg:hidden space-y-4">
+					<Select value={orderBy} onValueChange={setOrderBy}>
+						<SelectTrigger className="w-full">
+							<SelectValue placeholder="Order By" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="newest">Newest First</SelectItem>
+							<SelectItem value="oldest">Oldest First</SelectItem>
+							<SelectItem value="recently-updated">Recently Updated</SelectItem>
+							<SelectItem value="least-updated">Least Recently Updated</SelectItem>
+						</SelectContent>
+					</Select>
+					<Button
+						onClick={handleAddCollectionClick}
+						data-testid="add-collection-button-mobile"
+						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+					>
+						<span className="i-market w-5 h-5" />
+						Create A Collection
+					</Button>
+				</div>
+
+				<div>
+					{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your collections...</div>}
+					{error && <div className="p-6 text-center text-red-600 mt-4">Failed to load collections: {error.message}</div>}
+
+					{!isLoading && !error && (
+						<>
+							{sortedCollections && sortedCollections.length > 0 ? (
+								<ul ref={animationParent} className="flex flex-col gap-4 mt-4">
+									{sortedCollections.map((collection) => {
+										const collectionId = getCollectionId(collection)
+										return (
+											<li key={collection.id} data-testid={`collection-item-${collectionId}`}>
+												<CollectionListItem
+													collection={collection}
+													isExpanded={expandedCollection === collectionId}
+													onToggleExpanded={() => handleToggleExpanded(collectionId)}
+													onEdit={() => handleEditCollectionClick(collection)}
+													onDelete={() => handleDeleteCollectionClick(collection)}
+													isDeleting={deleteMutation.isPending && deleteMutation.variables === collectionId}
+												/>
+											</li>
+										)
+									})}
+								</ul>
+							) : (
+								<div className="text-center text-gray-500 py-10">
+									<span className="i-market w-5 h-5" />
+									<h3 className="mt-2 text-lg font-semibold text-gray-700">No collections yet</h3>
+									<p className="mt-1 text-sm">
+										Collections are optional. Use them as "Categories," "Favorites," or "Coming Soon," or leave them empty. Your shop, your
+										way.
+									</p>
+									<p className="mt-1 text-sm">Click the "Create A Collection" button to create your first one.</p>
+								</div>
+							)}
+						</>
+					)}
+				</div>
+			</div>
+
+			<ConfirmDialog
+				open={pendingDeleteCollection !== null}
+				onOpenChange={(open) => {
+					if (!open && !deleteMutation.isPending) setPendingDeleteCollection(null)
+				}}
+				title="Delete collection?"
+				description={
+					pendingDeleteCollection ? `Are you sure you want to delete "${getCollectionTitle(pendingDeleteCollection)}"?` : undefined
+				}
+				confirmLabel="Delete"
+				destructive
+				isPending={deleteMutation.isPending}
+				onConfirm={() => {
+					if (pendingDeleteCollection) {
+						const collectionDTag = getCollectionId(pendingDeleteCollection)
+						if (collectionDTag) {
+							deleteMutation.mutate(collectionDTag)
+						}
+					}
+				}}
+			/>
+		</div>
+	)
+}

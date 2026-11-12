@@ -1,0 +1,112 @@
+import { expect, test, describe, beforeEach, afterEach } from 'bun:test'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { createSignerFromKey } from '@sdk/core/signer'
+import { devUser1 } from '../../../scripts/fixtures'
+import { productFormStore, productFormActions, DEFAULT_FORM_STATE } from '@platform/web/products/productFormStore'
+import {
+	fetchProduct,
+	getProductTitle,
+	getProductDescription,
+	getProductPrice,
+	getProductImages,
+} from '@platform/web/products/productQuery'
+
+const RELAY_URL = process.env.APP_RELAY_URL
+if (!RELAY_URL) {
+	throw new Error('APP_RELAY_URL is not set')
+}
+
+// Test product data
+const TEST_PRODUCT = {
+	name: 'Test Product',
+	description: 'This is a test product description',
+	price: '10000',
+	quantity: '5',
+	currency: 'SATS',
+	status: 'on-sale' as const,
+	productType: 'single' as const,
+	mainCategory: 'Bitcoin',
+	specs: [{ key: 'Weight', value: '5 kg' }],
+	images: [{ imageUrl: 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png', imageOrder: 0 }],
+	categories: [{ key: 'cat1', name: 'Bitcoin Miners', checked: true }],
+}
+
+describe('Product Publishing', () => {
+	// Set up test environment
+	beforeEach(async () => {
+		// Initialize NDK with test relay
+		ndkActions.initialize([RELAY_URL])
+		await ndkActions.connect()
+
+		// Reset product form state
+		productFormActions.reset()
+	})
+
+	afterEach(() => {
+		// Clean up
+		productFormActions.reset()
+	})
+
+	test('should publish a product and retrieve it correctly', async () => {
+		// Set up the signer with devUser1 (the SDK capability — this test no
+		// longer needs the relay-client runtime under platform/).
+		const signer = createSignerFromKey(devUser1.sk)
+
+		// A3.7: the ndk store's signer copy is retired; this test publishes through
+		// the capability above and reads the relay's public events.
+
+		// Get the NDK instance
+		const ndk = ndkActions.getNDK()
+		expect(ndk).not.toBeNull()
+
+		// Verify we're only using the local relay
+		expect(ndk!.explicitRelayUrls).toEqual([RELAY_URL])
+
+		// Set up a test product in the product form store
+		productFormStore.setState((state) => ({
+			...state,
+			...TEST_PRODUCT,
+		}))
+
+		// Publish the product
+		// A3.5: the publish form takes the signer capability now — built from the same dev key.
+		const publishResult = await productFormActions.publishProduct(createSignerFromKey(devUser1.sk), ndk!)
+		expect(typeof publishResult).toBe('string')
+
+		// Use the event ID from publishResult
+		const productId = publishResult as string
+
+		// Get all products by the user's pubkey to find our newly created product
+		const userPubkey = await signer.getPublicKey()
+		const userEvents = await ndk!.fetchEvents({
+			kinds: [30402],
+			authors: [userPubkey],
+			limit: 10,
+		})
+
+		// Find the most recent product (should be the one we just created)
+		const productEvent = Array.from(userEvents).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0]
+
+		expect(productEvent).toBeDefined()
+
+		// Fetch the product using the query functions
+		const retrievedProduct = await fetchProduct(productId)
+
+		// Verify the product data is correct
+		expect(getProductTitle(retrievedProduct)).toBe(TEST_PRODUCT.name)
+		expect(getProductDescription(retrievedProduct)).toBe(TEST_PRODUCT.description)
+
+		const priceTag = getProductPrice(retrievedProduct)
+		expect(priceTag).toBeDefined()
+		expect(priceTag?.[1]).toBe(TEST_PRODUCT.price)
+		expect(priceTag?.[2]).toBe(TEST_PRODUCT.currency)
+
+		const images = getProductImages(retrievedProduct)
+		expect(images.length).toBe(TEST_PRODUCT.images.length)
+		expect(images[0][1]).toBe(TEST_PRODUCT.images[0].imageUrl)
+
+		// Reset the product form state
+		productFormActions.reset()
+		expect(productFormStore.state).toEqual(DEFAULT_FORM_STATE)
+	})
+})

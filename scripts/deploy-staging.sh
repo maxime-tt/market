@@ -26,7 +26,8 @@ mkdir -p "$DEPLOY_DIR"
 # Copy necessary files
 cp -r dist/ "$DEPLOY_DIR/"
 cp -r public/ "$DEPLOY_DIR/"
-cp -r src/ "$DEPLOY_DIR/"
+# sdk/ ui/ platform/ - the split trees composed by the server (`@platform/server`)
+cp -r sdk/ ui/ platform/ "$DEPLOY_DIR/"
 cp package.json "$DEPLOY_DIR/"
 cp bun.lock "$DEPLOY_DIR/"
 cp tsconfig.json "$DEPLOY_DIR/"
@@ -35,7 +36,7 @@ cp tsconfig.json "$DEPLOY_DIR/"
 cat > "$DEPLOY_DIR/package-staging.json" << 'EOF'
 {
   "scripts": {
-    "start:staging": "NODE_ENV=production bun src/index.tsx"
+    "start:staging": "NODE_ENV=production bun platform/web/app/entry.tsx"
   }
 }
 EOF

@@ -1,0 +1,78 @@
+name: Package Smoke
+
+# Proves the deployment package produced by the deploy/release workflows is
+# self-contained. The app was split into `sdk/ ui/ platform/`, and both
+# `platform/web/app/entry.tsx` (-> `@platform/server`) and `contextvm/server.ts`
+# (-> `../platform/server/auction-validator`) resolve into those trees, while
+# `platform/` itself resolves `@sdk/` and `@ui/`. A deploy that copies only
+# `dist/ contextvm/` therefore dies on the VPS with
+# `Cannot find module '@platform/server'`.
+#
+# `bun build` walks and resolves the whole import graph and fails with
+# `Could not resolve: ...` on any unresolved specifier, so building the two
+# entrypoints from the packaged tree reproduces exactly the deploy failure we
+# are preventing. It does not start the server.
+#
+# `--external='*.html'` on the app entrypoint is deliberate. The entrypoint
+# (`platform/web/app/entry.tsx`) imports the SPA shell (`index.html`), whose client graph is built by
+# `bun run build.ts` with the browser target; bundling that client graph under
+# `--target=bun` fails for unrelated reasons (node-builtin imports inside
+# `debug` / `@getalby/lightning-tools`). Externalizing the html import keeps the
+# probe on the server-side graph, which is the graph that broke in production.
+#
+# `dist/` is gitignored, so it cannot be copied from a checkout. Instead we run
+# `bun run build` first, mirroring deploy.yml (whose `build` script runs
+# `generate-routes` before `build.ts`), and then package the real artifact
+# directory the way the deploy jobs do. No separate `bun run generate-routes`
+# step is needed: `platform/web/routeTree.gen.ts` is tracked in git.
+
+on:
+  pull_request:
+    branches: [main, master, auctions]
+  push:
+    branches:
+      - master
+      - auctions
+  workflow_dispatch:
+
+jobs:
+  package-smoke:
+    name: Packaged tree resolves
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build application
+        run: bun run build
+
+      - name: Create deployment package (same file set as the deploy jobs)
+        run: |
+          mkdir -p /tmp/smoke-package
+          cp -r dist contextvm sdk ui platform /tmp/smoke-package/
+          cp package.json bun.lock tsconfig.json /tmp/smoke-package/
+
+      - name: Install packaged dependencies
+        working-directory: /tmp/smoke-package
+        run: bun install --frozen-lockfile
+
+      - name: Resolve the packaged app entrypoint
+        # Fails with `Could not resolve: "@platform/server"` when the package
+        # omits the platform/ (or sdk/ ui/) trees.
+        working-directory: /tmp/smoke-package
+        run: bun build platform/web/app/entry.tsx --target=bun --outdir /tmp/smoke-app --external='*.html'
+
+      - name: Resolve the packaged ContextVM entrypoint
+        # Fails with `Could not resolve: "../platform/server/auction-validator"`
+        # when the package omits the platform/ tree.
+        working-directory: /tmp/smoke-package
+        run: bun build contextvm/server.ts --target=bun --outdir /tmp/smoke-cvm

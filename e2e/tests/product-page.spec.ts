@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures'
 import { Relay } from 'nostr-tools/relay'
 import { RELAY_URL, BASE_URL } from '../test-config'
-import { devUser1, devUser2, devUser3 } from '@/lib/fixtures'
+import { devUser1, devUser2, devUser3 } from '../../scripts/fixtures'
 import { kinds, type VerifiedEvent } from 'nostr-tools'
 import type { Locator, Page } from '@playwright/test'
 import { seedComment, seedProduct, seedReaction } from '../scenarios'
@@ -133,7 +133,7 @@ const expectReactionButtonToBeFilled = async (page: Page, expectedEmoji?: string
 	const button = getReactionButton(page)
 
 	// Check for the filled background class
-	await expect(button).toHaveClass(/bg-neo-purple/)
+	await expect(button).toHaveClass(/bg-fill-accent/)
 
 	// Check for white text (indicates filled state)
 	await expect(button).toHaveClass(/text-white/)
@@ -158,8 +158,8 @@ const expectReactionButtonToBeUnfilled = async (page: Page): Promise<void> => {
 	// Check for transparent background
 	await expect(button).toHaveClass(/bg-transparent/)
 
-	// Check for neo-purple text color (unfilled state)
-	await expect(button).toHaveClass(/text-neo-purple/)
+	// Check for the accent text color (unfilled state)
+	await expect(button).toHaveClass(/text-fill-accent/)
 
 	// Verify the icon is the outline version
 	const icon = button.locator('.i-heart')
@@ -629,7 +629,7 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 		await popover.getByRole('button', { name: '❤️' }).click()
 
 		// Verify reaction was added - check for filled state
-		await expect(commentReactionBtn).toHaveClass(/bg-neo-purple/)
+		await expect(commentReactionBtn).toHaveClass(/bg-fill-accent/)
 		// Verify the reaction chip appears on the same comment with count 1.
 		// ReactionsList uses asChildren=true here, so it renders bare buttons
 		// without the 'reactions-list' wrapper div — query the button directly.

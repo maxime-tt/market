@@ -1,11 +1,9 @@
 name: Deploy to Staging
 
 on:
-  workflow_run:
-    workflows:
-      - E2E Tests
-    types:
-      - completed
+  push:
+    branches:
+      - master
   workflow_dispatch:
 
 env:
@@ -18,7 +16,6 @@ concurrency:
 jobs:
   build:
     name: Build
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     outputs:
       release_name: ${{ steps.release.outputs.name }}
@@ -26,8 +23,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -52,6 +47,11 @@ jobs:
           cp -r dist deploy-package/
           cp -r src deploy-package/
           cp -r contextvm deploy-package/
+          # `sdk/ ui/ platform/` are the post-split trees the server composes;
+          # omitting them breaks `@platform/server` resolution at runtime.
+          cp -r sdk deploy-package/
+          cp -r ui deploy-package/
+          cp -r platform deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
 
       - name: Upload artifact
@@ -64,15 +64,12 @@ jobs:
   deploy-staging:
     name: Deploy to Staging
     needs: build
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     environment: staging
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -87,7 +84,7 @@ jobs:
             apps: [
               {
                 name: 'market-staging',
-                script: 'src/index.tsx',
+                script: 'platform/web/app/entry.tsx',
                 interpreter: process.env.HOME + '/.bun/bin/bun',
                 cwd: '/home/deployer/market-staging',
                 instances: 1,

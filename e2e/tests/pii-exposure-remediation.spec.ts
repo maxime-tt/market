@@ -4,7 +4,7 @@ import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { finalizeEvent } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { devUser1, devUser2 } from '../../scripts/fixtures'
 import { RELAY_URL } from '../test-config'
 import { queryRelayEvents } from '../utils/relay-query'
 

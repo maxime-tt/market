@@ -1,0 +1,209 @@
+# Source-boundary baseline for scripts/check-src-boundary.sh.
+#
+# src/ is transitional and will be deleted. Every import edge between src/
+# and the trees replacing it is frozen here: counts may fall, never rise.
+# Measured at a93c5f2d (PR #1420 head + strip of SDK tooling).
+#
+# Re-measured 2026-10-23 at the union merge of wt/1420-ui into unite/1420-all.
+#   platform -> src production: 406/64 -> 405/68. Imports FELL by one; files
+#     rose by four. The four are created by the root split (bb7785b3), which
+#     lifted __root.tsx's providers, monitors, overlays and redirect guards into
+#     platform/web/app/. That wiring still reaches into src/ for the module it
+#     wires, so lifting it out of a src/ tree converts same-tree, uncounted
+#     imports into counted cross-tree ones. Retires with the module map (wave-B
+#     handover, module map section).
+#   src -> ui production: 239/120 -> 241/118 - the draining direction: src/
+#     being repointed onto its destination.
+#
+# NOTE: the UI line was developed WITHOUT this guard - it entered after the PR
+# head, in the integration increments - so its edges are measured here for the
+# first time.
+#
+# One line per direction and per file kind so a failure names both the
+# direction that grew and whether production or test code grew it:
+#
+#   <from> -> <to> <production|test> <import statements> <files>
+#
+# The production and test lines are kept separate on purpose: test-only
+# imports into src/ still hold src/ in place, but they move for reasons
+# unrelated to production architecture and must be visible as such.
+#
+# When a change lowers a count, lower that line in the same commit.
+#
+# 2026-10-23 (T3.0, dashboard auctions list): the route now reaches one host
+# container instead of a dozen modules, so the INBOUND row fell 405 -> 398 and
+# is ratcheted. The two OUTBOUND rows are re-measured rather than ratcheted:
+# they are the drain, and the drain moved (241/118 -> 243/119, 160/117 ->
+# 162/118) because the lifted host reaches ui/ and sdk/ where the route used to
+# reach src/.
+#
+# 2026-10-23 (T3.1, useCheckout extraction): the checkout route no longer
+# imports the store/query/publish modules directly - it imports
+# src/feature/checkout/useCheckout, which does. Those edges were
+# platform -> src and are now src -> src, so the INBOUND row falls again,
+# 398/68 -> 388/68, and is ratcheted; the file count is unchanged because every
+# module it used to reach is still reached, one hop deeper. The OUTBOUND rows
+# are re-measured, not ratcheted: src -> sdk production 162/118 -> 165/120 and
+# src -> sdk test 8/7 -> 9/8, both from the new host module and its test
+# importing @sdk/commerce/checkout and orders directly. This is the drain
+# moving, and it is the expected shape of a src/ -> host-lift (T3.0 trap 4):
+# moving wiring out of a route converts uncounted platform -> src edges into
+# counted src -> * ones.
+
+# 2026-10-24 (route-retarget off @/components, pure-presentation rows): two
+#   routes stopped importing a legacy host component whose only job was to
+#   compute plain props for an existing (or newly extracted) pure ui view:
+#     * dashboard/index.tsx  -> OrderCardView (ui/orders/order-detail-views)
+#     * auctions.index.tsx   -> AuctionFiltersView (ui/auction/auction-list-views)
+#   Both host components deleted (route-only importers). INBOUND row falls
+#   388/68 -> 386/68. The OUTBOUND src -> ui row is re-measured, not ratcheted:
+#   deleting the two src components removes the ui/ edges they carried
+#   (243/119 -> 241/117).
+#
+# 2026-10-27 (D2 slice 14, the payment publish binding): the payment publish
+# binding leaves src/publish/payment.tsx for
+# platform/web/payments/paymentPublish.ts and the file it vacated becomes a
+# re-export shim. The two inbound edges it held (the ndkPublishContext
+# re-export of the NWC/WebLN/detail helpers, and paymentQuery's consumption of
+# them) are now platform-internal, so the INBOUND edge MEASURES 366 imports /
+# 67 files, down from 367/67. This baseline row is deliberately NOT ratcheted
+# here: the downward ratchet of every inbound row is E3's single commit, and no
+# per-slice commit hand-lowers it. So the row stays at 386/68 and the guard
+# reports the decrease until E3 lands. The OUTBOUND src -> platform row is
+# re-measured, not ratcheted: the shim's one re-export is a new counted
+# src -> platform edge (62/56 -> 63/57).
+
+# 2026-10-28 (E3, the single ratchet): this is E3's one inbound ratchet, applied
+# after slices I.1 (auth/ndk store split) and I.2 (CollectionCard host adoption)
+# landed between the D2 slice-14 note above and now. Every INBOUND row is set to
+# its measured value and may only fall from here; no per-slice commit hand-lowers
+# an inbound row (the D2 slice-14 note left platform -> src at 386/68 on purpose).
+# Measured at 71f6fb79 by `bash scripts/check-src-boundary.sh`:
+#   inbound  platform -> src production  386/68 -> 328/67
+#   inbound  platform -> src test, ui -> src (prod/test), sdk -> src (prod/test)
+#            all remain 0/0
+#   outbound re-measured (not ratcheted): src -> platform production 28/23 ->
+#            65/59, src -> platform test 22/11 -> 23/12, src -> ui production
+#            241/117 -> 226/107, src -> sdk production 165/120 -> 172/126,
+#            src -> sdk test 9/8 -> 11/10.
+# With these rows the guard reports OK and no inbound row prints (decreased):
+# baseline now equals measurement.
+
+# 2026-10-28 (E3, second pass — store drain + E1a): the collection form store
+#   left `src/lib/stores/collection.ts` for
+#   `platform/web/collections/collectionFormStore.ts`, so its three platform
+#   route consumers stopped importing `@/lib/stores/collection`: the INBOUND row
+#   falls 328/68 -> 325/67 and is ratcheted. E1a deleted 16 grep-verified
+#   zero-importer `src/` files, which moves the OUTBOUND rows again
+#   (src -> platform 65/59 -> 61/56, src -> sdk 172/126 -> 166/120); those are
+#   RE-MEASURED, not ratcheted. No INBOUND row rose.
+
+# 2026-10-29 (E3, Wave E pass — the single ratchet): every row set to the value MEASURED at
+# faaa6a82 by `bash scripts/check-src-boundary.sh`. Wave E landed the seven adapter drains
+# (vanity, blacklist, testLabels, nip05, ui, config, wallet), the NDK connection-store move
+# (W-E4), the four E1a importer-less shim deletions and the AuctionDisplayComponent leaf
+# retirement. The six INBOUND rows below are ratcheted and may only fall from here; the
+# OUTBOUND `src -> *` rows are RE-MEASURED (the drain moves them up as src/ now reaches
+# platform/ and sdk/ directly) and are never a failure. Inbound platform -> src production
+# 325/67 -> 277/65, and src -> ui production 226/107 -> 221/105, src -> sdk production
+# 166/120 -> 132/108. With these rows the guard reports OK and no INBOUND row prints
+# `(decreased)`: the baseline equals the measurement.
+
+# 2026-10-29 (E3, Wave F pass — the single ratchet): every row set to the value MEASURED by
+# `bash scripts/check-src-boundary.sh` after Wave F. W-E5b moved the auth composition root out
+# of src/ and re-pointed 23 statements from `@/lib/stores/auth` to the platform home, so the
+# INBOUND `platform -> src` row is ratcheted 277/65 -> 254/65 and may only fall from here. The
+# OUTBOUND `src -> *` rows are RE-MEASURED, not ratcheted (the drain moves them as src/ reaches
+# platform/ and sdk/ directly): src -> platform production 73/68 -> 72/69, src -> platform test
+# 23/12 -> 24/13, src -> sdk production 132/108 -> 128/106, src -> sdk test 11/10 -> 10/9;
+# src -> ui production stays 221/105. This is the single E3 ratchet for Wave F. With these rows
+# the guard reports OK and no INBOUND row prints `(decreased)`: baseline equals measurement.
+
+# 2026-10-29 (H-b kit 3, ProductCard): the product-card host left src/components/ProductCard.tsx for
+# platform/web/products/ProductCardHost.tsx. Its seven consumers re-pointed (three routes to the
+# platform-internal host; ProfilePage/InfiniteProductList/FeaturedSections/OrderDetailComponent to
+# the platform host under the measured drain, allowlist rows added and retired with their owners).
+# The kit-2 ProductCard allowlist row left with the file. src -> platform production re-measured
+# 78/73 -> 81/74; test unchanged.
+
+# 2026-10-29 (H-b kit 2, ZapButton): the zap button host left src/components/social/ZapButton.tsx
+# for platform/web/payments/ZapButtonHost.tsx. Its five consumers re-pointed (two routes to the
+# platform-internal host; ProfilePage/SocialInteractions/ProductCard to the platform host under the
+# measured drain, allowlist rows added and retired with their owners). The kit-1 ZapButton allowlist
+# row left with the file. src -> platform production re-measured 75/71 -> 78/73; test unchanged.
+
+# 2026-10-29 (H-b kit 1, ZapDialog): the zap dialog host left
+# src/components/dialogs/ZapDialog.tsx for platform/web/payments/ZapDialogHost.tsx, so its one
+# src consumer (src/components/social/ZapButton.tsx) now imports the platform host directly:
+# src -> platform production re-measured 72/69 -> 75/71 (the file was already in the measured set
+# via the Wave-H drift; the row also absorbs the pre-existing drift, which the guard had been
+# reporting informationally). OUTBOUND rows are re-measured, never ratcheted; the INBOUND
+# platform -> src row stays as measured by E3 and is ratcheted only by E3.
+
+# 2026-10-30 (H-b kit 4, B2 commit A — AvatarUser/Nip05Badge): the avatar + NIP-05 hosts retired
+# src/components/{AvatarUser,Nip05Badge}.tsx onto platform/web/profiles/userCardHosts.tsx; the three
+# platform routes re-pointed to the platform-internal host (M4 -4) and the dead Nip05Badge import
+# left the collection route. INBOUND platform -> src re-measured by the guard at this commit and
+# ratcheted to the measured value; the row also absorbs the merged lanes' un-lowered falls (the
+# guard had been reporting them informationally at the 6568249c base). OUTBOUND rows are
+# re-measured, never ratcheted; the src -> platform growth here is the drain (the retiring kits'
+# src consumers now read the platform hosts directly).
+#
+# 2026-10-30 (H-b kit 6, B2 commit D — the social cluster): the social action row + its five src
+# members (SocialInteractions, ReactionButton, CommentButton, ShareButton, ReactionsList,
+# ZapsList) and the share dialog retired onto platform/web/messaging/*Host files in one fused
+# commit; the INBOUND platform -> src row falls 238 -> 235 (the deleted members' inbound imports
+# left with them) and is ratcheted. OUTBOUND src -> platform re-measured 92/78.
+
+# 2026-10-30 (E3, Wave H/I + Checkpoint C pass — the single ratchet): every row set to the value
+# MEASURED by `bash scripts/check-src-boundary.sh` at the merged tip 789f666b. The waves drained twelve
+# `src/` hosts to platform/sdk (I-c hooks + notifications + monitors, the H-b kit chain, the H-c/H-e
+# leaves, I-a A2 S2→S3, E1b dead shims, and A3.1–A3.7 signer consolidation), so the INBOUND
+# `platform -> src` row is ratcheted 235/65 -> 230/64 and may only fall from here. The OUTBOUND `src -> *`
+# rows are RE-MEASURED, not ratcheted: src -> platform production 92/78 -> 84/72, src -> platform test
+# 32/20 (flat imports, files flat), src -> ui production 209/97 -> 185/87, src -> sdk production
+# 106/94 -> 102/91, src -> sdk test 22/20 -> 38/31 (the test row grows as the drain moves the suites'
+# mocks onto the platform/sdk homes — informational, never a gate). With these rows the guard reports
+# OK and no INBOUND row prints `(decreased)`: baseline equals measurement.
+#
+# 2026-10-30 (E3, Checkpoint C part 2 — the next single ratchet): every row set to the value MEASURED by
+# `bash scripts/check-src-boundary.sh` at the merged tip 33efacbd. This wave retired the legacy io seam
+# (C1/J-0, `src/lib/nostr/{io,io-ndk,io-applesauce,io-types}.ts` + `useSubscriptionEvents.ts`) and ten
+# importer-less/script-only src shims (L-shims), so the INBOUND `platform -> src` row is ratcheted
+# 230/64 -> 222/62 and may only fall. OUTBOUND re-measured: src -> platform production 84/72 -> 80/68,
+# src -> platform test 32/20 -> 43/26, src -> sdk production 102/91 -> 97/86, src -> sdk test 38/31 ->
+# 39/32, src -> ui production 185/87 (flat). Guard reports OK with no INBOUND `(decreased)`.
+
+# 2026-10-30 (E3, Checkpoint B4 + C2 — the next single ratchet): every row set to the value MEASURED by
+# `bash scripts/check-src-boundary.sh` at the merged tip a6239a1c. B4/I-b retired the 25 auction-family src
+# shims (their consumers re-pointed to @sdk/commerce/auctions/**) and C2/J-b retired src/feature/** plus the
+# L-payments invoiceStorage leaf, so the INBOUND `platform -> src` row is ratcheted 222/62 -> 212/61 and may
+# only fall. OUTBOUND re-measured: src -> platform production 80/68 -> 82/68, src -> ui production
+# 185/87 -> 173/82, src -> sdk production 97/86 -> 100/68, src -> sdk test 39/32 -> 170/73 (the test rows
+# grow as the auction/feature suites' mocks move onto the sdk homes — informational, never a gate). Guard
+# reports OK with no INBOUND `(decreased)`.
+# 2026-10-30 (E3 re-seed, Wave 3 close-out): measured by `bash scripts/check-src-boundary.sh` at the merged
+# tip fc83b5f5 (L-wallet 95444796, L-utils c92563a0, C3/I-PARKED fc83b5f5). Wave 3 retired the src/lib
+# wallet cluster (M1 -18) and the remaining src/lib util/schema/action shims (M1 -24) plus the three
+# AuctionBidder/AuctionCard/AuctionBidProgressDialog components, so the INBOUND `platform -> src` row is
+# ratcheted 212/61 -> 175/53 and may only fall. OUTBOUND re-measured to the same measurement: src ->
+# platform production 82/68 -> 97/77, src -> platform test 43/26 -> 46/27, src -> ui production 173/82 ->
+# 169/79, src -> sdk production 100/68 -> 76/48, src -> sdk test 170/73 -> 217/92 (the outbound rows move
+# with the drain — informational, never a gate). Guard reports OK with no `(decreased)` on any row.
+# 2026-10-30 (E3 re-seed, E1b mega-deletion — the single ratchet): measured by
+# `bash scripts/check-src-boundary.sh` at the E1b commit (base 8b97a18a, batch 3 step 2 of the
+# SIMPLIFIED D7 path). E1b git-rm'd all 57 now-importer-less src shims (24 src/queries, 12
+# src/publish, 11 src/lib/stores, plus the 10 lib leaves: cashu dleq/hashToCurve/nut7, nostr
+# eventLike/naddr, payments/proof, types/invoice, utils/productFormStorage, terms, constants/testLabels)
+# after every src test file's imports and mock.module paths were re-pointed onto the owning
+# @platform/web / @sdk modules. M1 (non-test src files) fell 68 -> 11. The INBOUND `platform -> src`
+# row is ratcheted 175/53 -> 0/0 — the inbound debt is now ZERO and may only stay there: no file
+# outside src/ imports src/ any more. OUTBOUND re-measured to the same measurement: src -> platform
+# production 97/77 -> 1/1 (only the src/index.tsx composition root remains), src -> platform test
+# 46/27 -> 135/66 and src -> sdk test 217/92 -> 250/95 (the suites' imports/mocks now name the
+# platform/sdk homes directly — drain movement, informational, never a gate), src -> ui production
+# 169/79 -> 0/0, src -> ui test 0/0 -> 1/1, src -> sdk production 76/48 -> 0/0. With these rows the
+# guard reports OK and no row prints `(decreased)`: baseline equals measurement.
+# 2026-10-30 (J-c, d7-s2/B5): src/ DELETED. All rows above retired with it;
+# the guard (TREES=ui sdk platform, DIRECTIONS=()) is deliberately vacuous until
+# post-D7 retires it outright. The historical notes remain the retirement record.

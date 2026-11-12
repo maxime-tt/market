@@ -2,18 +2,20 @@ name: NDK Footprint Guard
 
 # Prevents new @nostr-dev-kit usage while the NDK -> applesauce migration
 # (docs/adr/ADR-0002-nostr-io-migration-ndk-to-applesauce.md) is in
-# progress. New relay I/O must route through src/lib/nostr/io.ts instead.
+# progress. Scans platform/, contextvm/ and sdk/. New relay I/O must
+# route through the library-agnostic seam instead.
 
 on:
   push:
     branches:
       - main
       - master
+      - auctions
       - 'feature/**'
       - 'chore/**'
       - 'fix/**'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, auctions]
   workflow_dispatch:
 
 jobs:
@@ -23,3 +25,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check NDK footprint
         run: bash scripts/check-ndk-footprint.sh
+      - name: Check NDK direction (sdk zero + declared platform bridges)
+        run: bash scripts/check-ndk-direction.sh
+
+  auctions-surface:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check auctions NDK surface
+        run: bash scripts/check-auctions-ndk-surface.sh

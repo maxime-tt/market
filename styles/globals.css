@@ -1,10 +1,19 @@
 @import 'tailwindcss';
 
+/* Tailwind v4 auto-scans the whole project for utility candidates. `scripts/` holds shell
+   guards and tools whose *documentation comments* quote Tailwind syntax as examples (e.g.
+   scripts/check-ui-styles.sh explains that `bg-[url(/x.png)]` is not raw-palette debt) — the
+   scan promotes those examples to real utilities and the bundler then tries to resolve the
+   quoted asset, which 500s the dev server. Scripts render nothing: exclude the tree. */
+@source not '../scripts';
+
+@source '../ui';
+
 @plugin "tailwindcss-animate";
 
 @font-face {
 	font-family: 'reglisse';
-	src: url('../src/assets/fonts/Reglisse_Fill.otf') format('opentype');
+	src: url('../platform/web/app/assets/fonts/Reglisse_Fill.otf') format('opentype');
 	font-weight: 700;
 	font-style: normal;
 	font-display: swap;
@@ -13,7 +22,7 @@
 
 @font-face {
 	font-family: 'IBM Plex Mono';
-	src: url('../src/assets/fonts/IBMPlexMono-Regular.ttf') format('truetype');
+	src: url('../platform/web/app/assets/fonts/IBMPlexMono-Regular.ttf') format('truetype');
 	font-weight: 400;
 	font-style: normal;
 	font-display: swap;
@@ -21,7 +30,7 @@
 
 @font-face {
 	font-family: 'IBM Plex Mono';
-	src: url('../src/assets/fonts/IBMPlexMono-Medium.ttf') format('truetype');
+	src: url('../platform/web/app/assets/fonts/IBMPlexMono-Medium.ttf') format('truetype');
 	font-weight: 500;
 	font-style: normal;
 	font-display: swap;
@@ -29,7 +38,7 @@
 
 @font-face {
 	font-family: 'IBM Plex Mono';
-	src: url('../src/assets/fonts/IBMPlexMono-SemiBold.ttf') format('truetype');
+	src: url('../platform/web/app/assets/fonts/IBMPlexMono-SemiBold.ttf') format('truetype');
 	font-weight: 600;
 	font-style: normal;
 	font-display: swap;
@@ -37,7 +46,7 @@
 
 @font-face {
 	font-family: 'IBM Plex Mono';
-	src: url('../src/assets/fonts/IBMPlexMono-Bold.ttf') format('truetype');
+	src: url('../platform/web/app/assets/fonts/IBMPlexMono-Bold.ttf') format('truetype');
 	font-weight: 700;
 	font-style: normal;
 	font-display: swap;
@@ -45,7 +54,7 @@
 
 @font-face {
 	font-family: 'theylive';
-	src: url('../src/assets/fonts/theylive.otf') format('opentype');
+	src: url('../platform/web/app/assets/fonts/theylive.otf') format('opentype');
 	font-weight: normal;
 	font-style: normal;
 	font-display: swap;
@@ -62,6 +71,91 @@
 	--color-tertiary-black: var(--tertiary-black);
 }
 
+/* ─── Foundation scales (design Phase 0) ──────────────────────────────
+   Structural, theme-independent tokens: type, line-height, tracking, space,
+   elevation and motion. They are their own layer — deliberately NOT Tier-1
+   colour roles — so the Tier-1 budget pinned by
+   `ui/theme/token-contract.test.ts` is untouched (R8).
+   Values: the `design-foundations` craft manual §1. `@theme static` is used
+   so every variable is emitted whether or not a utility consumes it yet;
+   Phase 1 is what adopts them in components.
+   Spacing note: Tailwind's numeric spacing utilities (p-4, gap-6, …) already
+   resolve to these same values through the built-in `--spacing` base. */
+@theme static {
+	/* Type scale */
+	--text-2xs: 0.6875rem;
+	--text-xs: 0.75rem;
+	--text-sm: 0.875rem;
+	--text-md: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.25rem;
+	--text-2xl: 1.5rem;
+	--text-3xl: 2rem;
+	--text-4xl: clamp(2rem, 1.61rem + 1.74vw, 3rem);
+
+	/* Line-height + tracking */
+	--lh-tight: 1.1;
+	--lh-snug: 1.25;
+	--lh-normal: 1.5;
+	--lh-relaxed: 1.65;
+	--leading-tight: var(--lh-tight);
+	--leading-snug: var(--lh-snug);
+	--leading-normal: var(--lh-normal);
+	--leading-relaxed: var(--lh-relaxed);
+
+	--tracking-display: -0.02em;
+	--tracking-heading: -0.01em;
+	--tracking-normal: 0;
+	--tracking-wide: 0.04em;
+	--tracking-caps: 0.08em;
+
+	/* Space scale — 4px base */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.5rem;
+	--space-6: 2rem;
+	--space-7: 2.5rem;
+	--space-8: 3rem;
+	--space-9: 4rem;
+	--space-10: 5rem;
+	--space-11: 6rem;
+	--space-12: 8rem;
+
+	/* Elevation — offsets stay scaled by --shadow-scale so the theme tune
+	   (Theme Studio / Hedgerow preset) still drives depth. */
+	--shadow-1:
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) rgb(0 0 0 / 0.06),
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 3px) rgb(0 0 0 / 0.1);
+	--shadow-2:
+		0 calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * 4px) rgb(0 0 0 / 0.06),
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 12px) rgb(0 0 0 / 0.1);
+	--shadow-3:
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 8px) rgb(0 0 0 / 0.08),
+		0 calc(var(--shadow-scale) * 12px) calc(var(--shadow-scale) * 28px) rgb(0 0 0 / 0.14);
+	--shadow-4:
+		0 calc(var(--shadow-scale) * 8px) calc(var(--shadow-scale) * 16px) rgb(0 0 0 / 0.12),
+		0 calc(var(--shadow-scale) * 24px) calc(var(--shadow-scale) * 48px) rgb(0 0 0 / 0.18);
+	--shadow-inset: inset 0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) rgb(0 0 0 / 0.07);
+
+	/* Motion — Material 3 durations/easings */
+	--dur-instant: 50ms;
+	--dur-fast: 100ms;
+	--dur-base: 200ms;
+	--dur-slow: 300ms;
+	--dur-enter: 250ms;
+	--dur-exit: 150ms;
+	--dur-page: 450ms;
+
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--ease-accelerate: cubic-bezier(0.3, 0, 1, 1);
+	--ease-decelerate: cubic-bezier(0, 0, 0, 1);
+	--ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+	--ease-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+	--ease-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+
 /* Add specific styling for headings using the reglisse font */
 .font-heading {
 	font-family: var(--font-heading);
@@ -76,6 +170,15 @@
 	font-weight: normal;
 	letter-spacing: 0.1em;
 	font-synthesis: none;
+}
+
+.hide-scrollbar {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+	display: none;
 }
 
 /* Add specific sizes for different heading levels */
@@ -104,32 +207,20 @@ button {
 	--popover-foreground: #32011f;
 	/* primary */
 	--primary: #1d1d1d;
-	--primary-hover: #0a0a0a;
 	--primary-foreground: #fafafa;
 	--primary-foreground-hover: #ff3eb5;
 	--primary-border: #1d1d1d;
 	--primary-border-hover: #ff3eb5;
 	/* secondary */
 	--secondary: #ff3eb5;
-	--secondary-hover: #0a0a0a;
-	--secondary-foreground: #0a0a0a;
-	--secondary-foreground-hover: #ff3eb5;
-	--secondary-border: #ff3eb5;
-	--secondary-border-hover: #ff3eb5;
+	--secondary-foreground: #312222;
 	/* tertiary */
 	--tertiary: #ffffff;
 	--tertiary-hover: #606060;
-	--tertiary-foreground: #1d1d1d;
-	--tertiary-foreground-hover: #fafafa;
-	--tertiary-border: #1d1d1d;
-	--tertiary-border-hover: #1d1d1d;
 	/* focus */
 	--focus: #ffd53d;
-	--focus-hover: #0a0a0a;
 	--focus-foreground: #0a0a0a;
 	--focus-foreground-hover: #f4cb34;
-	--focus-border: #ffd53e;
-	--focus-border-hover: #ffd53e;
 	/* muted */
 	--muted: #f3f1f4;
 	--muted-foreground: #666666;
@@ -138,27 +229,117 @@ button {
 	--accent-foreground: #262626;
 	/* destructive */
 	--destructive: #bf4040;
-	--destructive-foreground: #1d1d1d;
+
+	/* UX-state tokens (ADR-0007 §1a) — mirrored from .theme-new so components
+	   that use them render correctly before a subtree is migrated. Values must
+	   stay in sync with styles/globals-new.css. */
+	--info: oklch(0.623 0.188 259.8);
+	--info-foreground: oklch(0.237 0.059 259);
+	--info-muted: oklch(0.932 0.032 255.6);
+	--info-muted-foreground: oklch(0.237 0.059 259);
+	--info-border: oklch(0.809 0.096 251.8);
+	--warning: oklch(0.769 0.165 70.1);
+	--warning-foreground: oklch(0.216 0.006 56);
+	--warning-muted: oklch(0.962 0.058 95.6);
+	--warning-muted-foreground: oklch(0.216 0.006 56);
+	--warning-border: oklch(0.879 0.153 91.6);
+	--error: oklch(0.637 0.208 25.3);
+	--error-foreground: oklch(0.205 0.057 23.5);
+	--error-muted: oklch(0.936 0.031 17.7);
+	--error-muted-foreground: oklch(0.205 0.057 23.5);
+	--error-border: oklch(0.808 0.104 19.6);
+	--success: oklch(0.723 0.192 149.6);
+	--success-foreground: oklch(0.266 0.063 152.9);
+	--success-muted: oklch(0.962 0.043 156.7);
+	--success-muted-foreground: oklch(0.266 0.063 152.9);
+	--success-border: oklch(0.871 0.136 154.4);
 	/* border */
 	--border: #dac8d3;
 	--input: #996685;
 	--ring: #ff3eb5;
 	--radius: 0.25rem;
 
+	/* Font roles (F4) — declared at :root so `font-body` / `font-header`
+	   resolve outside `.theme-new`; values mirror styles/globals-new.css. */
+	--font-body: 'IBM Plex Mono', monospace;
+	--font-header: 'reglisse', sans-serif;
+
 	/* Additional custom colors */
 	--light-gray: #ebebeb;
 	--off-black: #0a0a0a;
-	--neo-purple: #ff3eb5;
 	--secondary-black: #131313;
 	--tertiary-black: #1d1d1d;
-	--neo-blue: #18b9fe;
-	--neo-gray: #f8f8f8;
 
-	/* Custom radius values */
-	--radius-sm: 2rem;
-	--radius-md: 4px;
-	--radius-lg: 8px;
-	--radius-xl: 24px;
+	/* Themed shadow scale (ADR-0007 §1a-bis). Tailwind's `shadow-*` utilities
+	   resolve through these value tokens, so a theme can retune shadows without
+	   editing generated `ui/primitives`. Scale/tint mirror the Theme Studio
+	   controls. Defaults reproduce Tailwind's stock shadows. */
+	--shadow-scale: 1;
+	--shadow-tint: 0 0 0;
+	--shadow-xs-value: 0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) 0 rgb(var(--shadow-tint) / 0.05);
+	--shadow-sm-value:
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 3px) 0 rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 1px) calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * -1px) rgb(var(--shadow-tint) / 0.1);
+	--shadow-md-value:
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 6px) calc(var(--shadow-scale) * -1px) rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 2px) calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * -2px) rgb(var(--shadow-tint) / 0.1);
+	--shadow-lg-value:
+		0 calc(var(--shadow-scale) * 10px) calc(var(--shadow-scale) * 15px) calc(var(--shadow-scale) * -3px) rgb(var(--shadow-tint) / 0.1),
+		0 calc(var(--shadow-scale) * 4px) calc(var(--shadow-scale) * 6px) calc(var(--shadow-scale) * -4px) rgb(var(--shadow-tint) / 0.1);
+
+	/* Expanded theme dimensions. Defaults are visual no-ops so adopting the
+	   utilities does not change the current rendering. */
+	--glass: 0;
+	--grain: 0;
+	--gap: 1;
+	--handmade: 0;
+
+	/* ───────────────────────────────────────────────────────────────────
+	   TIER 0 — IDENTITY (scheme-stable; never consumed directly by a
+	   component — use --fill-accent / --on-fill-accent, ruling R5).
+	   TIER 1 — ROLES: the public design API. Names are NEW and must never
+	   collide with a legacy name (ruling R1a), so this block changes no
+	   rendering; the legacy declarations above remain the Tier-2
+	   compatibility tier until the migration completes (T6.5).
+	   Contract: runs/union-1420/TOKEN-ARCHITECTURE-DECISION.md
+	   ─────────────────────────────────────────────────────────────────── */
+	--brand-pink: oklch(0.688 0.249 348);
+
+	/* D white/pink (Phase 0). Frame source:
+	   notes/artboards/browse/frames/Glje8eeQGh__browse-idle-1440.html. */
+	--bg: oklch(1 0 0);
+	--surface-raised: oklch(0.985 0 0);
+	--surface-sunken: oklch(0.96 0.008 350);
+	--surface-hover: oklch(0.93 0.016 350);
+
+	--fill-accent: oklch(0.34 0.11 350);
+	--on-fill-accent: oklch(0.99 0 0);
+	--fill-ink: oklch(0.688 0.249 348);
+	--on-fill-ink: oklch(0.145 0 0);
+	--fill-ink-hover: oklch(0.63 0.24 348);
+
+	--text-high: oklch(0.22 0.02 340);
+	--text-mid: oklch(0.48 0.03 340);
+
+	--border-default: oklch(0.9 0.012 340);
+	--border-strong: oklch(0.66 0.03 340);
+
+	--focus-ring: oklch(0.58 0.15 350);
+	--focus-attention: oklch(0.885 0.164 92.6);
+
+	/* Text/icon over content the theme does not control: imagery (hero bands,
+	   carousels, product cards, the image viewer), the scrim of an overlay, and
+	   any caller-supplied surface (progress-bar). Scheme-stable by necessity —
+	   the pixels behind the text do not invert with the theme, so the ink
+	   cannot. R5's rule holds too: this is a role, never `--brand-pink`.
+	   Added under R8, paid for by deleting the dead `--neo-blue`/`--neo-gray`. */
+	--on-media: oklch(1 0 0);
+
+	--radius-pill: 2rem;
+
+	/* .tilt consumes var(--tilt, 0); declaring it keeps the fallback and the
+	   declaration in agreement (T6.0 fix F2). */
+	--tilt: 0;
 }
 
 .dark {
@@ -168,8 +349,8 @@ button {
 	--card-foreground: hsl(0 0% 98%);
 	--popover: hsl(240 10% 3.9%);
 	--popover-foreground: hsl(0 0% 98%);
-	--primary: hsl(0 0% 98%);
-	--primary-foreground: hsl(240 5.9% 10%);
+	--primary: #ff3eb5;
+	--primary-foreground: white;
 	--secondary: hsl(240 3.7% 15.9%);
 	--secondary-foreground: hsl(0 0% 98%);
 	--muted: hsl(240 3.7% 15.9%);
@@ -177,10 +358,36 @@ button {
 	--accent: hsl(240 3.7% 15.9%);
 	--accent-foreground: hsl(0 0% 98%);
 	--destructive: hsl(0 62.8% 30.6%);
-	--destructive-foreground: hsl(0 0% 98%);
+
+	/* UX-state tokens — dark mode; mirrored from .dark .theme-new. */
+	--info: oklch(0.714 0.143 254.6);
+	--info-foreground: oklch(0.237 0.059 259);
+	--info-muted: oklch(0.346 0.074 256);
+	--info-muted-foreground: oklch(0.9 0.04 256);
+	--info-border: oklch(0.428 0.091 255.7);
+	--warning: oklch(0.837 0.164 84.4);
+	--warning-foreground: oklch(0.216 0.006 56);
+	--warning-muted: oklch(0.286 0.064 53.8);
+	--warning-muted-foreground: oklch(0.93 0.06 90);
+	--warning-border: oklch(0.414 0.105 45.9);
+	--error: oklch(0.711 0.166 22.2);
+	--error-foreground: oklch(0.205 0.057 23.5);
+	--error-muted: oklch(0.271 0.101 12.1);
+	--error-muted-foreground: oklch(0.92 0.05 20);
+	--error-border: oklch(0.396 0.133 25.7);
+	--success: oklch(0.8 0.182 151.7);
+	--success-foreground: oklch(0.266 0.063 152.9);
+	--success-muted: oklch(0.3 0.06 152);
+	--success-muted-foreground: oklch(0.92 0.06 156);
+	--success-border: oklch(0.448 0.108 151.3);
 	--border: hsl(240 3.7% 15.9%);
 	--input: hsl(240 3.7% 15.9%);
 	--ring: hsl(240 4.9% 83.9%);
+
+	/* Font roles (F4) — scheme-stable; mirrors the :root declaration. */
+	--font-body: 'IBM Plex Mono', monospace;
+	--font-header: 'reglisse', sans-serif;
+
 	--chart-1: hsl(220 70% 50%);
 	--chart-2: hsl(160 60% 45%);
 	--chart-3: hsl(30 80% 55%);
@@ -194,6 +401,37 @@ button {
 	--sidebar-accent-foreground: hsl(240 4.8% 95.9%);
 	--sidebar-border: hsl(240 3.7% 15.9%);
 	--sidebar-ring: hsl(217.2 91.2% 59.8%);
+
+	/* TIER 0 + TIER 1 — dark mode. Same names as :root, dark values; the
+	   identity tokens are deliberately identical in both modes (R1/R5). */
+	--brand-pink: oklch(0.688 0.249 348);
+
+	/* D white/pink dark mirror: scheme-stable roles keep same value;
+	   inverting roles derive: chroma ≈ −30%, surfaces elevate (lightened),
+	   text L ≈ .93–.96 (high) /.74–.78 (mid). */
+	--bg: oklch(0.2 0 0);
+	--surface-raised: oklch(0.24 0 0);
+	--surface-sunken: oklch(0.15 0.0056 350);
+	--surface-hover: oklch(0.19 0.01 350);
+
+	--fill-accent: oklch(0.34 0.11 350);
+	--on-fill-accent: oklch(0.99 0 0);
+	--fill-ink: oklch(0.85 0.174 348);
+	--on-fill-ink: oklch(0.12 0 0);
+	--fill-ink-hover: oklch(0.91 0.168 348);
+
+	--text-high: oklch(0.95 0.014 340);
+	--text-mid: oklch(0.76 0.021 340);
+
+	--border-default: oklch(0.32 0.008 340);
+	--border-strong: oklch(0.55 0.021 340);
+
+	--focus-ring: oklch(0.58 0.15 350);
+	--focus-attention: oklch(0.885 0.164 92.6);
+	--on-media: oklch(1 0 0);
+
+	--radius-pill: 2rem;
+	--tilt: 0;
 }
 
 @theme inline {
@@ -208,29 +446,39 @@ button {
 	--color-primary-foreground-hover: var(--primary-foreground-hover);
 	--color-primary-border: var(--primary-border);
 	--color-primary-border-hover: var(--primary-border-hover);
+
+	/* Tier 1 roles — the public design API (TOKEN-ARCHITECTURE-DECISION §1).
+	   --brand-pink is deliberately NOT registered: Tier 0 is never consumed
+	   directly by a component (ruling R5) — use the fill/on-fill pair. */
+	--color-bg: var(--bg);
+	--color-surface-raised: var(--surface-raised);
+	--color-surface-sunken: var(--surface-sunken);
+	--color-surface-hover: var(--surface-hover);
+	--color-fill-accent: var(--fill-accent);
+	--color-on-fill-accent: var(--on-fill-accent);
+	--color-fill-ink: var(--fill-ink);
+	--color-on-fill-ink: var(--on-fill-ink);
+	--color-fill-ink-hover: var(--fill-ink-hover);
+	--color-text-high: var(--text-high);
+	--color-text-mid: var(--text-mid);
+	--color-border-default: var(--border-default);
+	--color-border-strong: var(--border-strong);
+	--color-focus-ring: var(--focus-ring);
+	--color-focus-attention: var(--focus-attention);
+	--color-on-media: var(--on-media);
+	--radius-pill: 2rem;
 	--color-secondary: var(--secondary);
 	--color-secondary-foreground: var(--secondary-foreground);
-	--color-secondary-foreground-hover: var(--secondary-foreground-hover);
-	--color-secondary-border: var(--secondary-border);
-	--color-secondary-border-hover: var(--secondary-border-hover);
 	--color-tertiary: var(--tertiary);
 	--color-tertiary-hover: var(--tertiary-hover);
-	--color-tertiary-foreground: var(--tertiary-foreground);
-	--color-tertiary-foreground-hover: var(--tertiary-foreground-hover);
-	--color-tertiary-border: var(--tertiary-border);
-	--color-tertiary-border-hover: var(--tertiary-border-hover);
 	--color-focus: var(--focus);
-	--color-focus-hover: var(--focus-hover);
 	--color-focus-foreground: var(--focus-foreground);
 	--color-focus-foreground-hover: var(--focus-foreground-hover);
-	--color-focus-border: var(--focus-border);
-	--color-focus-border-hover: var(--focus-border-hover);
 	--color-muted: var(--muted);
 	--color-muted-foreground: var(--muted-foreground);
 	--color-accent: var(--accent);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-destructive: var(--destructive);
-	--color-destructive-foreground: var(--destructive-foreground);
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
@@ -239,10 +487,17 @@ button {
 	--color-chart-3: var(--chart-3);
 	--color-chart-4: var(--chart-4);
 	--color-chart-5: var(--chart-5);
+	--radius-xs: calc(var(--radius) * 0.5);
 	--radius-sm: calc(var(--radius) - 4px);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-lg: var(--radius);
 	--radius-xl: calc(var(--radius) + 4px);
+
+	/* Themed shadow scale — value indirection (see :root for the rationale). */
+	--shadow-xs: var(--shadow-xs-value);
+	--shadow-sm: var(--shadow-sm-value);
+	--shadow-md: var(--shadow-md-value);
+	--shadow-lg: var(--shadow-lg-value);
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -252,7 +507,6 @@ button {
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar: var(--sidebar-background);
 	--color-light-gray: var(--light-gray);
-	--color-neo-purple: var(--neo-purple);
 
 	/* New utilities for the scoped .theme-new token system (ADR-0007 §1a). */
 	/* These map to the same var() names that .theme-new overrides —    */
@@ -264,21 +518,25 @@ button {
 	--color-info: var(--info);
 	--color-info-foreground: var(--info-foreground);
 	--color-info-muted: var(--info-muted);
+	--color-info-muted-foreground: var(--info-muted-foreground);
 	--color-info-border: var(--info-border);
 
 	--color-warning: var(--warning);
 	--color-warning-foreground: var(--warning-foreground);
 	--color-warning-muted: var(--warning-muted);
+	--color-warning-muted-foreground: var(--warning-muted-foreground);
 	--color-warning-border: var(--warning-border);
 
 	--color-error: var(--error);
 	--color-error-foreground: var(--error-foreground);
 	--color-error-muted: var(--error-muted);
+	--color-error-muted-foreground: var(--error-muted-foreground);
 	--color-error-border: var(--error-border);
 
 	--color-success: var(--success);
 	--color-success-foreground: var(--success-foreground);
 	--color-success-muted: var(--success-muted);
+	--color-success-muted-foreground: var(--success-muted-foreground);
 	--color-success-border: var(--success-border);
 
 	/* Font utilities (font-body, font-header) — semantic rename */
@@ -287,8 +545,6 @@ button {
 	--font-theylive: var(--font-theylive);
 
 	/* Additional color utilities for custom colors */
-	--color-neo-blue: var(--neo-blue);
-	--color-neo-gray: var(--neo-gray);
 	--color-off-black: var(--off-black);
 
 	--animate-accordion-down: accordion-down 0.2s ease-out;
@@ -365,6 +621,8 @@ button {
 	}
 
 	.bg-hero-image {
+		/* The host sets --hero-image on the band; see platform/web/app/heroBackground.ts. */
+		background-image: var(--hero-image, none);
 		background-size: cover;
 		background-position: center;
 		background-repeat: no-repeat;
@@ -576,5 +834,14 @@ button {
 	/* Custom utility classes */
 	.bg-off-black {
 		background-color: var(--off-black);
+	}
+
+	/* Custom CSS Targetting Selected ToggleGroupItems */
+	/* Target ToggleGroupItems that are currently selected (checked) */
+	button[role='radio'][aria-checked='true'][data-variant='outline'] {
+		/* Example: Override background and text color when selected */
+		border-width: 0.1rem !important;
+		background-color: color-mix(var(--fill-accent) 10%, transparent 90%);
+		border-color: var(--fill-accent) !important;
 	}
 }

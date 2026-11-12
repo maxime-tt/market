@@ -3,8 +3,8 @@ import { Relay } from 'nostr-tools/relay'
 import { finalizeEvent } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { RELAY_URL, TEST_PORT } from '../test-config'
-import { devUser1 } from '@/lib/fixtures'
-import { OG_OWNED_META_SELECTORS } from '@/lib/ogTags'
+import { devUser1 } from '../../scripts/fixtures'
+import { OG_OWNED_META_SELECTORS } from '@sdk/commerce/products/ogTags'
 import { seedProduct } from '../scenarios'
 import type { VerifiedEvent } from 'nostr-tools'
 import type { Page } from '@playwright/test'
@@ -42,9 +42,9 @@ async function interceptCdnImages(page: Page) {
  *   - Server-rendered og: meta tags survive SPA hydration (not clobbered)
  *   - Product price/currency meta tags are present in the initial HTML
  *
- * The server (src/index.tsx) intercepts /products/:productId, fetches the
+ * The server (platform/web/app/entry.tsx) intercepts /products/:productId, fetches the
  * kind 30402 event from the relay, and injects og:/twitter:/product: meta
- * tags into the initial HTML via src/lib/ogTags.ts + src/server/ogMeta.ts.
+ * tags into the initial HTML via sdk/commerce/products/ogTags.ts + platform/server/ogMeta.ts.
  * NSFW products (content-warning: nsfw) return null meta → shell served
  * untouched. Unknown/invalid IDs return null → shell served untouched.
  */

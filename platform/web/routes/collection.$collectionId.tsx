@@ -1,0 +1,270 @@
+import { EntityActionsMenu } from '@platform/web/permissions/EntityActionsMenu'
+import { ItemGrid } from '@ui/shared/item-grid'
+import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
+import { Button } from '@ui/wrappers/button'
+import { UserCardHost } from '@platform/web/profiles/userCardHosts'
+import { ZapButtonHost as ZapButton } from '@platform/web/payments/ZapButtonHost'
+import { useBreakpoint } from '@platform/web/app/useBreakpoint'
+import { useEntityPermissions } from '@platform/web/permissions/useEntityPermissions'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { uiActions, uiStore } from '@platform/web/app/uiStore'
+import { truncateText } from '@platform/web/utils/text'
+import { addToBlacklistCollections, removeFromBlacklistCollections } from '@platform/web/config/blacklistPublish'
+import { addToFeaturedCollections, removeFromFeaturedCollections } from '@platform/web/featured/featuredPublish'
+import { useBlacklistSettings } from '@platform/web/config/blacklistBinding'
+import {
+	collectionByIdQueryOptions,
+	getCollectionCoordinates,
+	getCollectionImages,
+	getCollectionSummary,
+	getCollectionTitle,
+} from '@platform/web/collections/collectionQuery'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useFeaturedCollections } from '@platform/web/featured/featuredQueries'
+import { useProductsByCollection } from '@platform/web/products/productQuery'
+import { profileByIdentifierQueryOptions, useProfileName } from '@platform/web/profiles/profileQuery'
+import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { ArrowLeft, Edit, MessageCircle, Share2 } from 'lucide-react'
+import { heroBackgroundStyle } from '@platform/web/app/heroBackground'
+import { toast } from 'sonner'
+import { TooltipButton } from '@ui/wrappers/tooltip-button'
+
+declare module '@tanstack/react-router' {
+	interface FileRoutesByPath {
+		'/collection/collectionId': {
+			loader: (params: { collectionId: string }) => { collectionId: string }
+		}
+	}
+}
+
+export const Route = createFileRoute('/collection/$collectionId')({
+	component: RouteComponent,
+	loader: ({ params: { collectionId } }) => {
+		return { collectionId }
+	},
+})
+
+function RouteComponent() {
+	const { collectionId } = Route.useLoaderData()
+	const collectionQuery = useSuspenseQuery(collectionByIdQueryOptions(collectionId))
+	const collection = collectionQuery.data
+
+	if (!collection) {
+		return (
+			<div className="flex flex-col justify-center items-center gap-4 h-[50vh]">
+				<h1 className="font-bold text-2xl">Collection Not Found</h1>
+				<p className="text-gray-600">The collection you're looking for doesn't exist.</p>
+			</div>
+		)
+	}
+
+	const pubkey = collection.pubkey
+	const { mobileMenuOpen } = useStore(uiStore)
+	const { navigation } = useStore(uiStore)
+	const navigate = useNavigate()
+	const title = getCollectionTitle(collection)
+	const summary = getCollectionSummary(collection)
+	type Params = { profileId: string }
+	const params = Route.useParams() as Params
+	const { data: name, isLoading } = useProfileName(pubkey)
+	const { data: profileData } = useSuspenseQuery(profileByIdentifierQueryOptions(pubkey))
+	const { profile, user } = profileData || {}
+	const breakpoint = useBreakpoint()
+	const isSmallScreen = breakpoint === 'sm'
+	const currentImages = getCollectionImages(collection)
+	const { data: products, isLoading: productsLoading } = useProductsByCollection(collection)
+	// Use the market image for homepage background
+	// const marketBackgroundImageUrl = '/images/market-background.jpg'
+	const marketBackgroundImageUrl = currentImages.length > 0 ? currentImages[0][1] : '/images/market-background.jpg'
+	// Background image from the current collection (falls back to the market image).
+	const queryClient = useQueryClient()
+
+	// Get app config
+	const { data: config } = useConfigQuery()
+	const appPubkey = config?.appPublicKey || ''
+
+	// Get entity permissions
+	const permissions = useEntityPermissions(pubkey)
+
+	// Get blacklist and featured status
+	const { data: blacklistSettings } = useBlacklistSettings(appPubkey)
+	const { data: featuredData } = useFeaturedCollections(appPubkey)
+
+	// Determine if this collection is blacklisted or featured
+	const collectionCoords = getCollectionCoordinates(collection)
+	const isBlacklisted = blacklistSettings?.blacklistedCollections.includes(collectionCoords) || false
+	const isFeatured = featuredData?.featuredCollections.includes(collectionCoords) || false
+
+	// Handle edit collection
+	const handleEdit = () => {
+		navigate({ to: '/dashboard/products/collections/$collectionId', params: { collectionId } })
+	}
+
+	// Handle blacklist toggle
+	const handleBlacklistToggle = async () => {
+		const ndk = ndkActions.getNDK()
+		const signer = getActiveSignerCapability()
+
+		if (!ndk || !signer) {
+			toast.error('Please connect your wallet to perform this action')
+			return
+		}
+
+		try {
+			if (isBlacklisted) {
+				await removeFromBlacklistCollections(collectionCoords, signer, ndk, appPubkey)
+				toast.success('Collection removed from blacklist')
+			} else {
+				await addToBlacklistCollections(collectionCoords, signer, ndk, appPubkey)
+				toast.success('Collection added to blacklist')
+			}
+			// Invalidate queries to refresh the UI
+			queryClient.invalidateQueries({ queryKey: ['config', 'blacklist', appPubkey] })
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to update blacklist')
+		}
+	}
+
+	// Handle featured toggle
+	const handleFeaturedToggle = async () => {
+		const ndk = ndkActions.getNDK()
+		const signer = getActiveSignerCapability()
+
+		if (!ndk || !signer) {
+			toast.error('Please connect your wallet to perform this action')
+			return
+		}
+
+		try {
+			if (isFeatured) {
+				await removeFromFeaturedCollections(collectionCoords, signer, ndk, appPubkey)
+				toast.success('Collection removed from featured items')
+			} else {
+				await addToFeaturedCollections(collectionCoords, signer, ndk, appPubkey)
+				toast.success('Collection added to featured items')
+			}
+			// Invalidate queries to refresh the UI
+			queryClient.invalidateQueries({ queryKey: ['config', 'featuredCollections', appPubkey] })
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to update featured items')
+		}
+	}
+
+	const handleBackClick = () => {
+		if (navigation.originalResultsPath) {
+			// Navigate to the original results page
+			navigate({ to: navigation.originalResultsPath })
+			// Clear all product navigation state
+			uiActions.clearProductNavigation()
+		} else {
+			// Fallback to community page if no source path
+			navigate({ to: '/community' })
+		}
+	}
+	// Handle message button
+	const handleMessageClick = () => {
+		if (user?.pubkey) {
+			uiActions.openConversation(user.pubkey)
+		}
+	}
+
+	return (
+		<div className="flex flex-col gap-4">
+			<div className="z-10 relative">
+				{!mobileMenuOpen && (
+					<Button variant="ghost" onClick={handleBackClick} className="back-button">
+						<ArrowLeft className="w-8 lg:w-4 h-8 lg:h-4" />
+						<span className="hidden sm:inline">Back to Community</span>
+					</Button>
+				)}
+				<div
+					className={`relative hero-container-small ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-black'}`}
+					style={heroBackgroundStyle(marketBackgroundImageUrl)}
+				>
+					<div className="hero-overlays">
+						<div className="z-10 absolute inset-0 bg-radial-overlay" />
+						<div className="z-10 absolute inset-0 bg-dots-overlay opacity-30" />
+					</div>
+
+					<div className="hero-content">
+						<div className="z-20 relative flex flex-col justify-center items-center lg:col-span-2 mt-16 lg:mt-0 text-white text-center">
+							<h1 className="font-heading text-2xl sm:text-left text-center">{title}</h1>
+							<div className="flex flex-col justify-center items-center lg:col-span-2 font-medium text-md text-white text-center">
+								{summary}
+							</div>
+						</div>
+					</div>
+				</div>
+				<div className="flex flex-row justify-between items-center bg-black px-4 py-2">
+					<UserCardHost pubkey={pubkey} size="md" className="[&>h2]:text-white" />
+					{!isSmallScreen && (
+						<div className="flex gap-2">
+							{user && <ZapButton event={user} />}
+							<TooltipButton
+								variant="outline"
+								size="icon"
+								tooltip="Message"
+								onClick={handleMessageClick}
+								className="bg-transparent hover:bg-background border-2 border-background rounded text-background hover:text-foreground"
+							>
+								<MessageCircle className="size-5" />
+							</TooltipButton>
+							<Button variant="secondary" size="icon">
+								<Share2 className="w-5 h-5" />
+							</Button>
+							{/* Edit button for owner */}
+							{permissions.canEdit && (
+								<Button variant="secondary" onClick={handleEdit} className="flex items-center gap-2">
+									<Edit className="w-5 h-5" />
+									<span className="hidden md:inline">Edit Collection</span>
+								</Button>
+							)}
+							{/* Entity Actions Menu for admins/editors/owners */}
+							<EntityActionsMenu
+								permissions={permissions}
+								entityType="collection"
+								entityId={collectionId}
+								entityCoords={collectionCoords}
+								isBlacklisted={isBlacklisted}
+								isFeatured={isFeatured}
+								onEdit={permissions.canEdit ? handleEdit : undefined}
+								onBlacklist={permissions.canBlacklist && !isBlacklisted ? handleBlacklistToggle : undefined}
+								onUnblacklist={permissions.canBlacklist && isBlacklisted ? handleBlacklistToggle : undefined}
+								onSetFeatured={permissions.canSetFeatured && !isFeatured ? handleFeaturedToggle : undefined}
+								onUnsetFeatured={permissions.canSetFeatured && isFeatured ? handleFeaturedToggle : undefined}
+							/>
+						</div>
+					)}
+				</div>
+
+				<div className="p-4">
+					{productsLoading ? (
+						<div className="flex flex-col justify-center items-center h-full">
+							<span className="text-xl">Loading products...</span>
+						</div>
+					) : products && products.length > 0 ? (
+						<ItemGrid
+						// title={
+						// 	<div className="flex sm:flex-row flex-col sm:items-center sm:gap-2 sm:text-left text-center">
+						// 		<span className="font-heading text-2xl">Products in collection</span>
+						// 		{/*<ProfileName pubkey={user?.pubkey || ''} className="font-heading text-2xl" />*/}
+						// 	</div>
+						// }
+						>
+							{products?.map((product) => (
+								<ProductCard key={product.id} product={product} />
+							))}
+						</ItemGrid>
+					) : (
+						<div className="flex flex-col justify-center items-center h-full">
+							<span className="font-heading text-2xl">No products found</span>
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	)
+}

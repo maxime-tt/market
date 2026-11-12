@@ -1,0 +1,205 @@
+import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { Amount, Wallet } from '@cashu/cashu-ts'
+
+// Track wallet send/swap invocations + control the send outputs so we can assert the
+// ADR-0011 Blocker 2 behaviour: the DLEQ security property lives on the
+// freshly issued P2PK swap OUTPUTS, not on the input proofs. The lock must
+// swap ALL eligible inputs (so a legacy non-DLEQ balance can still lock on a
+// grandfathered auction) and then validate OUTPUT DLEQ.
+//
+// cashu-ts v5 retired `Wallet.swap(amount, proofs, { p2pk })`; the lock now mints its fresh
+// P2PK outputs through `Wallet.send(amount, proofs, config, { send: { type: 'p2pk', options } })`,
+// so the stub patches `send` (the v5 send that always re-mints the send portion).
+let sendCalls = 0
+let nextSendResult: { send: unknown[]; keep: unknown[] } = { send: [], keep: [] }
+let originalLoadMint: typeof Wallet.prototype.loadMint | undefined
+let originalSend: typeof Wallet.prototype.send | undefined
+
+beforeEach(() => {
+	sendCalls = 0
+	nextSendResult = { send: [], keep: [] }
+	originalLoadMint = Wallet.prototype.loadMint
+	originalSend = Wallet.prototype.send
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	;(Wallet.prototype as any).loadMint = async (): Promise<void> => {}
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	;(Wallet.prototype as any).send = async (
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		_amount: unknown,
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		_proofs: unknown[],
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		_config: unknown,
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		_outputConfig: unknown,
+	): Promise<{ send: unknown[]; keep: unknown[] }> => {
+		sendCalls += 1
+		return nextSendResult
+	}
+})
+
+afterEach(() => {
+	if (originalLoadMint) Wallet.prototype.loadMint = originalLoadMint
+	if (originalSend) Wallet.prototype.send = originalSend
+	originalLoadMint = undefined
+	originalSend = undefined
+})
+
+import { cashuStore } from '@platform/web/wallet/cashuStore'
+import { walletOps } from '@platform/web/wallet/walletOps'
+import { authStore } from '@platform/web/auth/authStore'
+
+// Bun's test runtime doesn't provide localStorage by default.
+const installLocalStoragePolyfill = (): void => {
+	if (typeof globalThis.localStorage !== 'undefined') return
+	const store = new Map<string, string>()
+	;(globalThis as { localStorage: Storage }).localStorage = {
+		getItem: (key: string) => store.get(key) ?? null,
+		setItem: (key: string, value: string) => {
+			store.set(key, value)
+		},
+		removeItem: (key: string) => {
+			store.delete(key)
+		},
+		clear: () => {
+			store.clear()
+		},
+		key: (index: number) => Array.from(store.keys())[index] ?? null,
+		get length() {
+			return store.size
+		},
+	}
+}
+installLocalStoragePolyfill()
+
+const FAKE_USER_PUBKEY = 'f'.repeat(64)
+authStore.setState((s) => ({
+	...s,
+	user: { pubkey: FAKE_USER_PUBKEY } as unknown as NonNullable<typeof s.user>,
+	isAuthenticated: true,
+}))
+
+const MINT = 'https://mint.example.com'
+const LOCK_PUBKEY = '03b72fc0f74836f2066957875bc0e48c6fe734f537117c8fc80d4a365a84f31712'
+const REFUND_PUBKEY = '02b72fc0f74836f2066957875bc0e48c6fe734f537117c8fc80d4a365a84f31712'
+const LOCKTIME = 1_700_000_000
+
+interface FakeProof {
+	id: string
+	amount: Amount
+	C: string
+	secret: string
+	dleq?: unknown
+	// A helper flag to build a locked-output proof shape below.
+	Y?: string
+}
+
+/** A wallet proof with NO DLEQ metadata (a legacy/grandfathered balance). */
+const noDleqProof = (amount: number): FakeProof => ({ id: 'p', amount: Amount.from(amount), C: '02', secret: '', dleq: undefined })
+
+/**
+ * A swap-output proof locked to LOCK_PUBKEY. Secret encodes a P2PK lock to
+ * LOCK_PUBKEY (so assertAuctionBidProofsLockedToP2pk passes).
+ */
+const lockedOutputProof = (amount: number, includeDleq: boolean): FakeProof => {
+	// Encode a P2PK lock secret with data = LOCK_PUBKEY, so
+	// assertAuctionBidProofsLockedToP2pk passes (it parses the lock pubkey
+	// from the secret). see AUCTIONS.md §5.2 lock-secret format.
+	const secret = JSON.stringify(['P2PK', { nonce: `lock-${(Math.random() * 1e6) | 0}`, data: LOCK_PUBKEY, tags: [] }])
+	// Also derive the proof_y the P2PK secret would need — the assert only
+	// checks the pubkey, so a plain hex Y is fine for the count.
+	return {
+		id: '00' + 'a'.repeat(14),
+		amount: Amount.from(amount),
+		C: '02' + '7'.repeat(64),
+		secret,
+		dleq: includeDleq ? { e: 'aa', s: 'bb', r: 'cc' } : undefined,
+	}
+}
+
+const baseParams = {
+	amount: 1000,
+	locktime: LOCKTIME,
+	refundPubkey: REFUND_PUBKEY,
+	lockPubkey: LOCK_PUBKEY,
+	mint: MINT,
+}
+
+function installWallet(proofs: FakeProof[]): void {
+	const mockWallet = {
+		mints: [MINT],
+		mintBalances: { [MINT]: 10000 },
+		state: {
+			dump: () => ({ balances: { [MINT]: 10000 }, totalBalance: 10000 }),
+			getProofs: ({ mint }: { mint: string }) => (mint === MINT ? proofs : []),
+			update: async () => {},
+		},
+		publish: async () => {},
+	}
+	cashuStore.setState((s) => ({
+		...s,
+		status: 'ready',
+		walletSource: mockWallet as never,
+		pendingTokens: [],
+	}))
+}
+
+describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUTS', () => {
+	test('swaps ALL eligible inputs regardless of input DLEQ metadata (grandfathered balance can bid)', async () => {
+		// A balance whose proofs carry NO DLEQ (legacy/grandfathered). Under the
+		// old design this failed at proof selection; under Blocker 2 it is a
+		// valid swap input and the DLEQ check moves to the output.
+		const proofsWithoutDleq: FakeProof[] = [noDleqProof(2000), noDleqProof(2000)]
+		installWallet(proofsWithoutDleq)
+		// The mint returns locked outputs WITH DLEQ.
+		nextSendResult = {
+			send: [lockedOutputProof(1000, true)],
+			keep: [noDleqProof(3000)],
+		}
+
+		// DLEQ is unconditional: the lock always validates the freshly issued
+		// P2PK OUTPUT proofs, which here carry DLEQ → the lock succeeds.
+		await expect(walletOps.lockAuctionBidFunds(baseParams)).resolves.toMatchObject({ amount: 1000 })
+		// The swap WAS attempted exactly once with the full input set (no
+		// input-side DLEQ filter).
+		expect(sendCalls).toBe(1)
+	})
+
+	test('a DLEQ-required lock fails closed when the freshly issued P2PK OUTPUT proof lacks DLEQ', async () => {
+		const proofsWithoutDleq: FakeProof[] = [noDleqProof(2000)]
+		installWallet(proofsWithoutDleq)
+		// The mint returns a locked P2PK output proof WITHOUT a DLEQ proof → the
+		// output-side DLEQ requirement must fail closed (Blocker 2).
+		nextSendResult = {
+			send: [lockedOutputProof(1000, false)],
+			keep: [noDleqProof(3000)],
+		}
+
+		await expect(walletOps.lockAuctionBidFunds({ ...baseParams })).rejects.toThrow(/locked proof at index 0 lacks a NUT-12 DLEQ proof/i)
+
+		// The swap was attempted (output validation happens after swap + after
+		// the pending-token persist).
+		expect(sendCalls).toBe(1)
+	})
+
+	test('a DLEQ-required lock succeeds when the output proof carries DLEQ', async () => {
+		const proofsWithoutDleq: FakeProof[] = [noDleqProof(2000)]
+		installWallet(proofsWithoutDleq)
+		nextSendResult = {
+			send: [lockedOutputProof(1000, true)],
+			keep: [noDleqProof(3000)],
+		}
+		await expect(walletOps.lockAuctionBidFunds({ ...baseParams })).resolves.toMatchObject({
+			amount: 1000,
+		})
+		expect(sendCalls).toBe(1)
+	})
+
+	test('still fails closed when the swap returns no locked proofs (mint misbehaviour)', async () => {
+		const proofsWithoutDleq: FakeProof[] = [noDleqProof(2000)]
+		installWallet(proofsWithoutDleq)
+		nextSendResult = { send: [], keep: [] }
+		await expect(walletOps.lockAuctionBidFunds({ ...baseParams })).rejects.toThrow(/outcome is uncertain/i)
+		expect(sendCalls).toBe(1)
+	})
+})

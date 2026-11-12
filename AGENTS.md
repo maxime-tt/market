@@ -80,21 +80,67 @@ already exists.
   canonical public review context. Do not require beads sync, commits, pushes,
   or GitHub updates unless explicitly authorized.
 
-## NDK to Applesauce Wave 0
+## NDK to Applesauce (io seam retired)
 
-- New relay I/O should route through `src/lib/nostr/io.ts`.
+- All new Nostr relay I/O must route through the SDK seam `sdk/core/nostr-io`
+  (applesauce-exclusive, protected — adopt, do not edit) via the web host
+  `platform/web/sdkNostrIo.ts` (`createWebNostrIo()` / `createWebRelayPort()`).
+  See ADR-0002's 2026-10-29 amendment (R3).
+- The legacy seam (`src/lib/nostr/{io,io-ndk,io-applesauce,io-types}.ts`) is
+  retired; it is deleted, together with the `getNostrIo()` coupling in
+  `src/lib/sdkAdapters.ts`, by slice J-0. Do not add new importers of it and do
+  not route new relay I/O through it.
 - The NDK footprint guard tracks literal `@nostr-dev-kit` usage under `src/` and
   `contextvm/`.
-- NDK remains the default adapter in Wave 0.
-- Do not turn Wave 0 guidance into automatic push, merge, CI rerun, deployment,
-  or broad rewrite instructions.
+- Do not turn this guidance into automatic push, merge, CI rerun, deployment, or
+  broad rewrite instructions.
+
+## Event Validation Before Surfacing
+
+Relay data is untrusted (see Constraints). This section states what that means
+at the surface level: an event becomes an _item_ only after the repository's
+parser for its kind accepts it.
+
+- Every event kind the app renders must have a parser under `src/lib/schemas/`
+  that is the single definition of a valid item for that kind. Surfaces apply
+  that parser before the event is rendered as an item — an event that merely has
+  the right shape is not a valid item.
+- **Discovery surfaces drop what the parser rejects**: home feed, paginated
+  browse, NIP-50 search (including its seller-name expansion), collections, the
+  auction feed, and seller profiles.
+- **Direct navigation still resolves the event** (by id, by coordinate) and
+  states _which_ constraint failed. A silent disappearance, or a bare "not
+  found" for an event that exists on the relay, is not an acceptable outcome:
+  the author cannot fix what they cannot see, and a visitor cannot tell a
+  curated item from a broken one.
+- **A gated event is not interactive.** No bid, purchase, claim, or settlement
+  action may be offered on an event the parser rejects: those flows lock or move
+  funds, and every number they validate is derived from the tags the parser could
+  not read.
+- **Owner surfaces stay ungated** so the author can see the event and republish a
+  corrected version — the owner's dashboard list, its detail page, and reads
+  that build routing tables for the owner's own items. The notice travels with
+  the event there too.
+- **The gate and the notice read the same predicate**, so a badge can never
+  disagree with the reason an item is missing from a feed.
+- **Status (2026-09-19): implemented for kind 30408 (auctions)** —
+  `src/lib/schemas/auction/auctionAdmission.ts`, ADR-0009 rev 6, AUCTIONS.md §4.1
+  amendment. Other kinds are a known gap; closing it means writing the parser
+  first and gating with it, never adding a second required-tag list next to a
+  feed.
+- Tightening a parser is a user-visible change, because it reclassifies events
+  that used to render. Land the spec text, the gate, and the notice copy in the
+  same change.
 
 ## Test Isolation
 
 Tests must not make network calls to external services. The only allowed
 network dependencies are local services started in CI workflows (local
-relay via `nak serve`, local dev server on port 3333, ContextVM). All
-other external services (CDNs, Cashu mints, Lightning nodes, third-party
+relay via `nak serve`, local dev server on port 3333, local Cashu mint on
+port 3338, ContextVM). The local Cashu mint is a real nutshell mint with
+the FakeWallet backend, started by `e2e/start-local-mint.sh` (see the
+"Local Cashu Mint" section in `e2e/ARCHITECTURE.md`). All other external
+services (CDNs, remote Cashu mints, real Lightning nodes, third-party
 APIs) must be mocked or intercepted.
 
 See ADR-0005 for the full decision and established mock patterns.
@@ -106,6 +152,14 @@ See ADR-0005 for the full decision and established mock patterns.
 - `e2e/utils/lightning-mock.ts` — mocks LNURL, WebLN, and zap receipts.
 - `e2e/utils/nip46-mock.ts` — mocks NIP-46 remote signer.
 - `e2e/helpers/lnurl-mock.ts` — intercepts LNURL discovery.
+- Narrow first-party seams (e.g. `sdk/core/nostr/eventSignature.ts`) — when a
+  unit test needs to control an outcome of third-party code (signature
+  verification, encryption), route production code through a small first-party
+  module and mock that seam. Never `mock.module()` the third-party package
+  itself: bun applies module mocks process-wide for the whole test run, so
+  mocking `nostr-tools` replaced real Schnorr verification for every other
+  test file in the suite (nip59, nip17, and orders tests failed only in full
+  suite runs because of this).
 
 ### What Is Allowed
 

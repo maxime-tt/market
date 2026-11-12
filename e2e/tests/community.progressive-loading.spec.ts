@@ -1,10 +1,10 @@
 import { test, expect, type Page } from '@playwright/test'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { devUser1, devUser2 } from '../../scripts/fixtures'
 import {
 	COMMUNITY_QUERY_FIXTURE_CALLS_STORAGE_KEY_PREFIX,
 	COMMUNITY_QUERY_FIXTURE_STORAGE_KEY,
 	type CommunityQueryFixtureStep,
-} from '../../src/lib/tests/communityQueryFixtures'
+} from '../../sdk/core/query/communityQueryFixtures'
 
 type CollectionFixtureEvent = {
 	id: string

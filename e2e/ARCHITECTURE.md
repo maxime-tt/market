@@ -52,6 +52,7 @@ graph TB
 
     subgraph "Infrastructure Layer"
         NAK["nak serve<br/>(local relay)"]
+        MINT["Local Cashu mint<br/>(nutshell FakeWallet, :3338)"]
         SR["seed-relay.ts<br/>(app settings)"]
         DEV["bun dev<br/>(app server)"]
     end
@@ -75,11 +76,13 @@ graph TB
     TC --> DEV
     TC --> SC
     NAK --> SR
+    MINT -->|"APP_DEV_TEST_MINT_URL"| DEV
     SR --> DEV
     TF --> AF
     AF --> NE
     AF --> TC2
     TF --> RM
+    TF -.->|"NUT-04/NUT-05<br/>(wallet tests)"| MINT
     SC -.->|"per-fixture<br/>seeding"| TF
 ```
 
@@ -99,6 +102,14 @@ The dev server **caches `appSettings` at startup** by fetching Kind 31990 from t
 4. Tests run
 
 This is why we use `seed-relay.ts` as part of the webServer command (step 2) rather than publishing in globalSetup (step 3, too late).
+
+`seed-relay.ts` publishes both the default `plebeian-market-handler` event and
+a custom self-hosted handler event before the app starts. Regular E2E runs use
+the default handler. The self-hosted configuration spec runs separately with
+`INSTANCE_HANDLER_ID=self-hosted-test-handler` and its own app process, so its
+identity cannot affect unrelated test families. The scenario uses only the
+local relay and local app; its HTTPS fixture URLs are inert values and are not
+fetched.
 
 ```mermaid
 sequenceDiagram
@@ -126,7 +137,7 @@ All constants live in a single file imported by both the Playwright config and s
 
 ```ts
 import { getPublicKey } from 'nostr-tools/pure'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 
 export const TEST_APP_PRIVATE_KEY = 'e2e0000000000000000000000000000000000000000000000000000000000001'
 export const TEST_APP_PUBLIC_KEY = getPublicKey(hexToBytes(TEST_APP_PRIVATE_KEY))
@@ -197,6 +208,63 @@ export default defineConfig({
 	expect: { timeout: 5_000 },
 })
 ```
+
+### Local Cashu Mint: `start-local-mint.sh`
+
+The suite also runs a **real local Cashu mint** — nutshell with the
+FakeWallet backend — so wallet and auction bid-funding tests exercise
+genuine NUT-04/NUT-05 mint and melt flows instead of mocks. The
+FakeWallet backend auto-settles Lightning invoices instantly; no
+external Lightning node is involved.
+
+- **Locally**: started by the Playwright `webServer` in
+  `e2e/playwright.config.ts` (`bash e2e/start-local-mint.sh` on port
+  3338, `reuseExistingServer: true`).
+- **In CI**: `.github/workflows/e2e.yml` sets up Python 3.12, runs
+  `pip install cashu`, starts the mint with
+  `nohup bash e2e/start-local-mint.sh`, and waits for
+  `http://localhost:3338/v1/info` before continuing.
+- **Configuration**: written by `e2e/start-local-mint.sh` — fixed test
+  key `0000...0001`, zero fees, rate limit off, name
+  "Plebeian Test Mint", data dir `/tmp/cashu-mint-e2e`. Override with
+  `CASHU_MINT_PORT`, `CASHU_MINT_HOST`, or `CASHU_MINT_DIR`.
+
+The dev server receives `APP_DEV_TEST_MINT_URL=http://localhost:3338`,
+pointing the app's test wallet at the local mint.
+
+**NUT-12 DLEQ requirement (ADR-0011):** the local nutshell mint must return a
+DLEQ proof on the freshly issued outputs of a P2PK `swap` — that is what the
+DLEQ-required auction lock path validates. CI pins `cashu==0.19.2` for exactly
+this (mirroring `ci-unit.yml`); nutshell >= 0.20.x also emits version-01 keyset
+ids that `@cashu/cashu-ts` 2.9.0 cannot verify, which breaks the deposit round
+trip. `src/lib/__tests__/auctionDLEQ.mint.integration.test.ts` locks the
+DLEQ-on-swap property in CI.
+
+`e2e/tests/auction-bidding-mints.spec.ts` exercises the unconditional DLEQ path
+(ADR-0011): the lock requires a NUT-12 proof on each freshly issued output and
+the published kind-1023 carries one `dleq_proof` tag per `lock_secret`. DLEQ is
+required for every auction — there is no non-DLEQ or grandfathered cohort. The
+suite seeds a stray `dleq_required=0` tag to prove it is ignored.
+
+**Mock mint fixtures removed (ADR-0006):** `cashu-mint-mock.ts` has been
+**deleted**. It intercepted `testnut.cashu.space` with a dummy `/v1/keys` and
+a `/v1/swap` that echoed `B_` as `C_` without real signing — so it could not
+produce DLEQ-verifiable collateral, and the settlement descriptor e2e tests
+(now that DLEQ is unconditional) need a real winner. `auction-settlement.spec.ts`
+now mints and P2PK-locks **real** collateral from the local nutshell mint via
+`@cashu/cashu-ts` (`CashuWallet.swap(..., { p2pk })`), and seeds the kind-1023
+with one `dleq_proof` per `lock_secret`. `lightning-mock.ts` remains for
+non-wallet Lightning flows (zaps, LNURL).
+
+**Roadmap — CDK `fakewallet` mint for e2e (gated on cashu-ts >= v4).** CDK is
+the target for production parity (prod runs `cdk-mintd`). A ready recipe lives
+in `OpenTollGate/physical-router-test-automation` →
+`deployment-kit/scripts/bring-up-fakewallet-mint.sh` (`cdk-mintd 0.18.0`,
+`[payment_backend] backend = "fakewallet"`, sqlite). It is **blocked today**:
+CDK emits NUT-02 V2 (`01…`, 33-byte) keyset ids, and the pinned
+`@cashu/cashu-ts` 2.9.0 cannot verify them (the same reason the local nutshell
+mint is pinned to `cashu==0.19.2`). Adopt CDK here once the cashu-ts >= v4
+upgrade lands.
 
 ### Seed Relay: `seed-relay.ts`
 
@@ -803,7 +871,7 @@ Even though tests can run independently, when running the full suite we want an 
 
 ## 8. Test Utilities (Mocks)
 
-The `utils/` directory contains standalone mock implementations that simulate external systems (remote signers, Lightning payments, relay queries) without hitting real services. All mocks communicate with the local test relay via raw WebSocket or `nostr-tools`.
+The `utils/` directory contains standalone mock implementations that simulate external systems (remote signers, Lightning payments, relay queries) without hitting real services. All mocks communicate with the local test relay via raw WebSocket or `nostr-tools`. The Lightning mock still exists for non-wallet flows, but auction bid-funding tests (`e2e/tests/auction-bidding-mints.spec.ts`) exercise real NUT-04/NUT-05 flows against the local Cashu mint (see [Infrastructure Layer](#1-infrastructure-layer)) — this is deliberate.
 
 ### NIP-46 Remote Signer Mock (`utils/nip46-mock.ts`)
 
@@ -1125,6 +1193,9 @@ Key points:
 
 ## Running Tests
 
+Prerequisite (one-time): Python 3 with the nutshell mint installed —
+`pip install cashu`. Playwright starts everything else automatically.
+
 ```bash
 # Run all e2e tests (new suite)
 bun test:e2e
@@ -1146,6 +1217,23 @@ bun test:e2e -- e2e/tests/products.spec.ts
 ```
 
 > **Note**: The `bun test:e2e` scripts include `NODE_OPTIONS='--dns-result-order=ipv4first'` to work around macOS IPv4/IPv6 resolution issues (see Pitfalls section).
+
+### Local Cashu Mint
+
+Wallet and auction-bidding tests hit a **real local Cashu mint**
+(nutshell, FakeWallet backend) on port 3338 — no external mint or
+Lightning node. Playwright starts it automatically via the `webServer`
+config (`reuseExistingServer: true` reuses a mint that is already
+running). To start it manually:
+
+```bash
+bash e2e/start-local-mint.sh
+curl http://localhost:3338/v1/info # health check
+```
+
+Tests target the mint via `APP_DEV_TEST_MINT_URL=http://localhost:3338`
+(passed to the dev server by the `webServer` env in
+`playwright.config.ts`).
 
 ### Local Development Workflow
 
@@ -1237,7 +1325,7 @@ Playwright's `html` reporter produces no terminal output during the test run, ma
 
 ### NDK Outbox Model in Tests
 
-The NDK outbox model discovers and connects to additional relays beyond the explicit list, which would leak test data to public relays. The app disables outbox when `stage !== 'development'` (see `src/lib/stores/ndk.ts`). Since `NODE_ENV='test'` maps to the `'development'` stage via `determineStage()` in `src/index.tsx`, outbox is automatically disabled for test runs. The `LOCAL_RELAY_ONLY=true` env provides an additional safety layer.
+The NDK outbox model discovers and connects to additional relays beyond the explicit list, which would leak test data to public relays. The app disables outbox when `stage !== 'development'` (see `src/lib/stores/ndk.ts`). Since `NODE_ENV='test'` maps to the `'development'` stage via `determineStage()` in `platform/web/app/entry.tsx`, outbox is automatically disabled for test runs. The `LOCAL_RELAY_ONLY=true` env provides an additional safety layer.
 
 ---
 

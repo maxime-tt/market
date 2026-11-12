@@ -1,0 +1,79 @@
+import CartSheetContent from '@platform/web/cart/CartSheetContent'
+import { NewAuctionContent } from '@platform/web/auctions/NewAuctionContent'
+import { NewProductContent } from '@platform/web/products/NewProductContent'
+import { NewCollectionContent } from '@platform/web/collections/NewCollectionContent'
+import { ConversationSheetContent } from '@platform/web/messages/ConversationSheetContent'
+import { Sheet } from '@ui/primitives/sheet'
+import { useStore } from '@tanstack/react-store'
+import { uiStore } from '@platform/web/app/uiStore'
+import { useMemo, useState, useEffect } from 'react'
+
+export function SheetRegistry() {
+	const { drawers, conversationPubkey } = useStore(uiStore)
+
+	const activeDrawer = useMemo(() => {
+		if (drawers.cart) return 'cart'
+		if (drawers.createProduct) return 'createProduct'
+		if (drawers.createAuction) return 'createAuction'
+		if (drawers.createCollection) return 'createCollection'
+		if (drawers.conversation) return 'conversation'
+		return null
+	}, [drawers])
+
+	// Local state to control sheet open/close for animations
+	const [open, setOpen] = useState(!!activeDrawer)
+
+	// Sync local state with store state
+	useEffect(() => {
+		setOpen(!!activeDrawer)
+	}, [activeDrawer])
+
+	const handleOpenChange = (nextOpen: boolean) => {
+		setOpen(nextOpen)
+		if (!nextOpen && activeDrawer) {
+			// Delay closing in store until after animation (300ms slide-out duration)
+			setTimeout(() => {
+				uiStore.setState((state) => ({
+					...state,
+					drawers: {
+						...state.drawers,
+						[activeDrawer]: false,
+					},
+				}))
+			}, 300)
+		}
+	}
+
+	if (!activeDrawer) return null
+
+	const sheetConfig = {
+		cart: {
+			side: 'right' as const,
+			content: <CartSheetContent title="Your Cart" description="Review and manage your cart items" />,
+		},
+		createProduct: {
+			side: 'right' as const,
+			content: <NewProductContent title="Add A Product" description="Create a new product to sell in your shop" />,
+		},
+		createAuction: {
+			side: 'right' as const,
+			content: <NewAuctionContent title="Create Auction" description="Create a new auction listing settled with Cashu" />,
+		},
+		createCollection: {
+			side: 'right' as const,
+			content: <NewCollectionContent title="Create Collection" description="Organize your products into collections" />,
+		},
+		conversation: {
+			side: 'right' as const,
+			content: conversationPubkey ? <ConversationSheetContent pubkey={conversationPubkey} /> : null,
+		},
+	}
+
+	const config = sheetConfig[activeDrawer]
+
+	return (
+		<Sheet open={open} onOpenChange={handleOpenChange}>
+			{config.content}
+		</Sheet>
+	)
+}

@@ -1,0 +1,150 @@
+import { useState, type ReactNode } from 'react'
+import { MessageSquareText, Send } from 'lucide-react'
+import { Button } from '../primitives/button'
+import { Card } from '../primitives/card'
+import { Textarea } from '../primitives/textarea'
+import { UiLink } from '../provider/UiProvider'
+import { EmptyState } from '../shared/empty-state'
+import { ErrorState } from '../shared/error-state'
+import { LoadingState } from '../shared/loading-state'
+
+export interface MessageInputViewProps {
+	onSendMessage: (content: string) => Promise<void>
+	isSending: boolean
+	isLoggedIn: boolean
+}
+
+export function MessageInputView({ onSendMessage, isSending, isLoggedIn }: MessageInputViewProps) {
+	const [message, setMessage] = useState('')
+
+	const handleSend = async () => {
+		if (message.trim() === '') return
+		await onSendMessage(message.trim())
+		setMessage('')
+	}
+
+	return (
+		<div className="flex-wrap items-center gap-2 p-4 border-t bg-bg sticky bottom-0">
+			<div className="relative w-full">
+				<Textarea
+					value={message}
+					onChange={(e) => setMessage(e.target.value)}
+					onKeyPress={(event) => {
+						// Enter sends; Shift+Enter inserts a newline.
+						if (event.key === 'Enter' && !event.shiftKey) {
+							event.preventDefault()
+							handleSend()
+						}
+					}}
+					placeholder={isLoggedIn ? 'Type your message...' : 'Log in to send messages'}
+					className="w-full flex-grow resize-none p-2 pr-12 border rounded-lg focus:ring-2 focus:ring-focus-ring"
+					rows={1}
+					disabled={isSending || !isLoggedIn}
+				/>
+				<Button
+					onClick={handleSend}
+					disabled={isSending || !isLoggedIn || message.trim() === ''}
+					size="icon"
+					className="absolute right-2.5 top-1/2 -translate-y-1/2 h-7 w-7"
+				>
+					<Send className="w-4 h-4" />
+					<span className="sr-only">Send message</span>
+				</Button>
+			</div>
+		</div>
+	)
+}
+
+export interface ConversationListItemViewProps {
+	href: string
+	userCard: ReactNode
+	lastMessageAt: number | undefined
+	lastMessageSnippet: string
+	unseenCount: number
+	isMobile: boolean
+	/** The conversation is the one currently open. */
+	isActive: boolean
+}
+
+export function ConversationListItemView({
+	href,
+	userCard,
+	lastMessageAt,
+	lastMessageSnippet,
+	unseenCount,
+	isMobile,
+	isActive,
+}: ConversationListItemViewProps) {
+	const dateElement = lastMessageAt && (
+		<span className="text-xs text-text-mid whitespace-nowrap">{new Date(lastMessageAt * 1000).toLocaleString()}</span>
+	)
+
+	return (
+		<UiLink href={href} className={isActive ? 'block w-full bg-surface-sunken/20 rounded-lg' : 'block w-full'}>
+			<Card className="p-4 hover:bg-surface-sunken/50 transition-colors relative">
+				{unseenCount > 0 && (
+					<div className="absolute top-2 right-2 inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 text-xs font-bold text-on-fill-accent bg-fill-accent rounded-full">
+						{unseenCount > 99 ? '99+' : unseenCount}
+					</div>
+				)}
+
+				<div className="flex items-center gap-4">
+					<div className="p-2 bg-surface-sunken rounded-full">
+						<MessageSquareText className="h-6 w-6 text-text-mid" />
+					</div>
+
+					<div className="flex-1 flex flex-col gap-1">
+						<div className="flex items-center justify-between">
+							{userCard}
+							{!isMobile && dateElement}
+						</div>
+						<div className="pr-12">
+							<p className={`text-sm break-words ${unseenCount > 0 ? 'font-semibold text-text-high' : 'text-text-mid'}`}>
+								{lastMessageSnippet}
+							</p>
+						</div>
+						{isMobile && <div className="self-end mt-1">{dateElement}</div>}
+					</div>
+				</div>
+			</Card>
+		</UiLink>
+	)
+}
+
+export interface ConversationViewLayoutProps {
+	isLoading: boolean
+	errorMessage: string | null
+	onRetry: () => void
+	isEmpty: boolean
+	/** Rendered message bubbles, oldest first. */
+	messages: ReactNode
+	/** Scroll anchor kept below the last message. */
+	endRef: (node: HTMLDivElement | null) => void
+	input: ReactNode
+}
+
+export function ConversationViewLayout({
+	isLoading,
+	errorMessage,
+	onRetry,
+	isEmpty,
+	messages,
+	endRef,
+	input,
+}: ConversationViewLayoutProps) {
+	return (
+		<div className="flex flex-col h-full">
+			<div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+				{isLoading && <LoadingState label="Loading messages..." className="h-full" />}
+				{errorMessage !== null && <ErrorState title={`Error loading messages: ${errorMessage}`} onRetry={onRetry} retryLabel="Try Again" />}
+				{!isLoading && errorMessage === null && isEmpty && (
+					<EmptyState title="No messages yet. Start the conversation!" className="pt-10" />
+				)}
+				{!isLoading && errorMessage === null && messages}
+				<div ref={endRef} />
+			</div>
+
+			{input && <div className="flex-shrink-0 border-t bg-bg">{input}</div>}
+		</div>
+	)
+}

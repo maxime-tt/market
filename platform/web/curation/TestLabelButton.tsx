@@ -1,0 +1,70 @@
+import { TestLabelDialog } from '@platform/web/curation/TestLabelDialog'
+import { TEST_LABEL_PRODUCT_KIND } from '@sdk/config/test-label-constants'
+import { getATagFromCoords } from '@sdk/core/utils/coords'
+import { useUserRole } from '@platform/web/app-settings/appSettingsQuery'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useTestLabelForCoordinate } from '@platform/web/config/testLabelsBinding'
+import { useState } from 'react'
+import { TestLabelButtonView, type TestLabelDialogMode } from '@ui/dashboard/test-label-views'
+
+interface TestLabelButtonProps {
+	/** Item event kind: 30402 (product) or 30408 (auction) */
+	kind: number
+	/** Author pubkey of the item */
+	pubkey: string
+	/** Item d-tag identifier */
+	dTag: string
+	/** Noun used in button labels and copy ('Product' | 'Auction') */
+	itemLabel?: string
+	/** Optional wrapper className */
+	className?: string
+}
+
+/**
+ * Dashboard action for authorized labelers (ADR-0009): mark / unmark an item
+ * as a "test" listing via NIP-32 label events (kind 1985) and NIP-09
+ * deletion events (kind 5).
+ *
+ * - Visible only to authorized labelers — the curation role set is editors
+ *   UNION admins (plus the app owner), matching
+ *   `useEntityPermissions().canManageTestLabel`.
+ * - Opens the shared `TestLabelDialog` for both mark and unmark, so the same
+ *   flow is reachable from the public product page's `EntityActionsMenu`.
+ */
+export function TestLabelButton({ kind, pubkey, dTag, itemLabel = 'Product', className }: TestLabelButtonProps) {
+	const { data: config } = useConfigQuery()
+	const { userRole, currentUserPubkey } = useUserRole(config?.appPublicKey)
+
+	const [dialogMode, setDialogMode] = useState<TestLabelDialogMode | null>(null)
+
+	const isProduct = kind === TEST_LABEL_PRODUCT_KIND
+	const kindSlug = isProduct ? 'product' : 'auction'
+
+	const coordinate = pubkey && dTag ? getATagFromCoords({ kind, pubkey, identifier: dTag }) : ''
+	const { isLabeled } = useTestLabelForCoordinate(coordinate || undefined)
+
+	// Authorized labelers only (editors ∪ admins ∪ owner) — never regular users.
+	const isAuthorizedLabeler = userRole === 'owner' || userRole === 'admin' || userRole === 'editor'
+	if (!isAuthorizedLabeler || !currentUserPubkey || !coordinate) return null
+
+	return (
+		<>
+			<TestLabelButtonView isLabeled={isLabeled} itemLabel={itemLabel} kindSlug={kindSlug} className={className} onPress={setDialogMode} />
+
+			{dialogMode && (
+				<TestLabelDialog
+					kind={kind}
+					pubkey={pubkey}
+					dTag={dTag}
+					itemLabel={itemLabel}
+					open={true}
+					onOpenChange={(next) => {
+						if (!next) setDialogMode(null)
+					}}
+					mode={dialogMode}
+					contactPubkey={currentUserPubkey}
+				/>
+			)}
+		</>
+	)
+}

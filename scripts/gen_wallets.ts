@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
-import type { Wallet } from '@/lib/stores/wallet'
-import { saveUserNwcWallets } from '@/publish/wallet'
+import type { Wallet } from '@platform/web/config/walletStore'
+import { saveUserNwcWallets } from '@platform/web/wallet/walletPublish'
 import type { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { nip04 } from 'nostr-tools'
 import { getPublicKey } from 'nostr-tools/pure'

@@ -1,0 +1,458 @@
+import { Button } from '@ui/primitives/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import { productFormActions, productFormStore, type ProductFormTab } from '@platform/web/products/productFormStore'
+
+// Expose store/actions to e2e tests for deterministic state control
+// Only in test environments to avoid leaking internals in production
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'test') {
+	;(window as any).__productFormActions = productFormActions
+	;(window as any).__productFormStore = productFormStore
+}
+import { uiActions } from '@platform/web/app/uiStore'
+import { hasProductFormDraft } from '@platform/web/products/productFormStorage'
+import {
+	getAdjacentSellerProductTab,
+	getFirstBlockingSellerProductTab,
+	getSellerProductFormValidationIssues,
+	getSellerProductTabValidationIssues,
+	SELLER_PRODUCT_FORM_TAB_ORDER as PRODUCT_FORM_TAB_ORDER,
+	type ProductWorkflowResolution,
+} from '@sdk/commerce/products'
+import { useForm } from '@tanstack/react-form'
+import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { NameTab } from './NameTab'
+import { CategoryTab, DetailTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
+
+const PRODUCT_FORM_TAB_LABELS: Record<ProductFormTab, string> = {
+	name: 'Name',
+	detail: 'Detail',
+	spec: 'Spec',
+	category: 'Category',
+	images: 'Images',
+	shipping: 'Shipping',
+}
+
+export function ProductFormContent({
+	className = '',
+	showFooter = true,
+	productDTag,
+	productEventId,
+	workflow,
+}: {
+	className?: string
+	showFooter?: boolean
+	productDTag?: string | null
+	productEventId?: string | null
+	workflow?: ProductWorkflowResolution
+}) {
+	const [isPublishing, setIsPublishing] = useState(false)
+	const [hasDraft, setHasDraft] = useState(false)
+	const navigate = useNavigate()
+	const queryClient = useQueryClient()
+
+	// Get form state from store, including editingProductId
+	const formState = useStore(productFormStore)
+	const { activeTab, editingProductId, isDirty } = formState
+	const resolvedWorkflow: ProductWorkflowResolution = workflow ?? {
+		mode: editingProductId ? 'edit' : 'create',
+		initialTab: activeTab,
+		requiresV4VSetup: false,
+	}
+
+	const validationIssuesByTab = useMemo(
+		() =>
+			Object.fromEntries(
+				(['name', 'detail', 'spec', 'category', 'images', 'shipping'] as const).map((tab) => [
+					tab,
+					getSellerProductTabValidationIssues(formState, tab),
+				]),
+			) as Record<ProductFormTab, string[]>,
+		[formState],
+	)
+	const currentTabValidationIssues = validationIssuesByTab[activeTab]
+	const formValidationIssues = useMemo(() => getSellerProductFormValidationIssues(formState), [formState])
+
+	// Check for persisted draft on mount (for drafts from previous sessions)
+	const checkForPersistedDraft = useCallback(async () => {
+		const draftKey = productDTag || editingProductId
+		if (draftKey) {
+			const exists = await hasProductFormDraft(draftKey)
+			if (exists) {
+				setHasDraft(true)
+			}
+		}
+	}, [productDTag, editingProductId])
+
+	// Update hasDraft when isDirty changes (for immediate feedback on current session changes)
+	useEffect(() => {
+		if (editingProductId && isDirty) {
+			setHasDraft(true)
+		}
+	}, [editingProductId, isDirty])
+
+	// Store the discard function in a ref to avoid stale closures in the header action
+	const discardEditsRef = useRef<(() => Promise<void>) | null>(null)
+
+	// Update the ref whenever dependencies change
+	useEffect(() => {
+		discardEditsRef.current = async () => {
+			const draftKey = productDTag || editingProductId
+			if (!draftKey) return
+
+			// Preserve current tab state before reset
+			const currentActiveTab = formState.activeTab
+
+			await productFormActions.clearDraftForProduct(draftKey)
+
+			// If we have a productEventId, reload the product from the network using the event ID
+			// Pass the preserved tab state to avoid flicker
+			if (productEventId && productDTag) {
+				productFormActions.setEditingProductId(productDTag)
+				await productFormActions.loadProductForEdit(productEventId, {
+					preserveTabState: { activeTab: currentActiveTab },
+				})
+			} else {
+				// No product to reload, just reset but restore tabs
+				productFormActions.reset()
+				productFormActions.setActiveTab(currentActiveTab)
+			}
+
+			setHasDraft(false)
+			uiActions.clearDashboardHeaderAction()
+		}
+	}, [productDTag, editingProductId, productEventId, formState.activeTab])
+
+	// Stable callback that reads from the ref
+	const handleDiscardEdits = useCallback(() => {
+		discardEditsRef.current?.()
+	}, [])
+
+	// Check for persisted draft on mount
+	useEffect(() => {
+		checkForPersistedDraft()
+	}, [checkForPersistedDraft])
+
+	// Update dashboard header action when draft state changes
+	useEffect(() => {
+		if (editingProductId && hasDraft) {
+			uiActions.setDashboardHeaderAction({
+				label: 'Discard Edits',
+				onClick: handleDiscardEdits,
+			})
+		} else {
+			uiActions.clearDashboardHeaderAction()
+		}
+
+		// Clean up on unmount
+		return () => {
+			uiActions.clearDashboardHeaderAction()
+		}
+	}, [editingProductId, hasDraft, handleDiscardEdits])
+
+	const form = useForm({
+		defaultValues: {},
+		onSubmit: async () => {
+			try {
+				setIsPublishing(true)
+				const ndk = ndkActions.getNDK()
+				const signer = getActiveSignerCapability()
+
+				if (!ndk) {
+					toast.error('NDK not initialized')
+					setIsPublishing(false)
+					return
+				}
+				if (!signer) {
+					toast.error('You need to connect your wallet first')
+					setIsPublishing(false)
+					return
+				}
+
+				const result = await productFormActions.publishProduct(signer, ndk, queryClient)
+
+				if (result) {
+					toast.success(editingProductId ? 'Product updated successfully!' : 'Product published successfully!')
+					productFormActions.reset()
+
+					if (typeof result === 'string') {
+						document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+
+						// Navigate to product list when updating, to specific product when creating
+						if (editingProductId) {
+							navigate({ to: '/dashboard/products/products' })
+						} else {
+							navigate({ to: `/products/${result}` })
+						}
+					}
+				} else {
+					toast.error(editingProductId ? 'Failed to update product' : 'Failed to publish product')
+				}
+			} catch (error) {
+				console.error(editingProductId ? 'Error updating product:' : 'Error creating product:', error)
+				toast.error(editingProductId ? 'Failed to update product' : 'Failed to create product')
+			} finally {
+				setIsPublishing(false)
+			}
+		},
+	})
+
+	const handleTabChange = useCallback(
+		(value: string) => {
+			const targetTab = value as ProductFormTab
+			if (targetTab === activeTab) return
+
+			if (editingProductId) {
+				productFormActions.setActiveTab(targetTab)
+				return
+			}
+
+			const currentIndex = PRODUCT_FORM_TAB_ORDER.indexOf(activeTab)
+			const targetIndex = PRODUCT_FORM_TAB_ORDER.indexOf(targetTab)
+
+			if (targetIndex < currentIndex) {
+				productFormActions.setActiveTab(targetTab)
+				return
+			}
+
+			const blockingTab = getFirstBlockingSellerProductTab(formState, targetTab)
+			if (blockingTab) {
+				toast.error(`Complete ${PRODUCT_FORM_TAB_LABELS[blockingTab]} before moving to ${PRODUCT_FORM_TAB_LABELS[targetTab]}`)
+				return
+			}
+
+			productFormActions.setActiveTab(targetTab)
+		},
+		[activeTab, editingProductId, formState],
+	)
+
+	const handleNext = useCallback(() => {
+		if (currentTabValidationIssues.length > 0) return
+
+		const nextTab = getAdjacentSellerProductTab(activeTab, 'next')
+		if (nextTab) {
+			productFormActions.setActiveTab(nextTab)
+		}
+	}, [activeTab, currentTabValidationIssues])
+
+	const handleBack = useCallback(() => {
+		const previousTab = getAdjacentSellerProductTab(activeTab, 'previous')
+		if (previousTab) {
+			productFormActions.setActiveTab(previousTab)
+		}
+	}, [activeTab])
+
+	const isTabDisabled = useCallback(
+		(targetTab: ProductFormTab): boolean => {
+			if (editingProductId) return false
+			if (targetTab === activeTab) return false
+
+			const currentIndex = PRODUCT_FORM_TAB_ORDER.indexOf(activeTab)
+			const targetIndex = PRODUCT_FORM_TAB_ORDER.indexOf(targetTab)
+			if (targetIndex <= currentIndex) return false
+
+			return getFirstBlockingSellerProductTab(formState, targetTab) !== null
+		},
+		[activeTab, editingProductId, formState],
+	)
+
+	const previousTab = getAdjacentSellerProductTab(activeTab, 'previous')
+	const isCurrentTabBlocked = currentTabValidationIssues.length > 0
+	const footerValidationIssues = activeTab === 'shipping' || editingProductId ? formValidationIssues : currentTabValidationIssues
+
+	return (
+		<form
+			onSubmit={(e) => {
+				e.preventDefault()
+				e.stopPropagation()
+				form.handleSubmit()
+			}}
+			className={`flex h-full min-h-0 flex-col overflow-hidden ${className}`}
+			data-testid="product-form"
+		>
+			<div className="flex-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-200px)]">
+				{/* Single level tabs: Name, Detail, Spec, Category, Images, Shipping */}
+				<Tabs value={activeTab} onValueChange={handleTabChange} className="w-full flex flex-col flex-1 min-h-0 overflow-hidden">
+					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
+						<TabsTrigger
+							value="name"
+							disabled={isTabDisabled('name')}
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-name"
+						>
+							Name
+							<span className="ml-1 text-red-500">*</span>
+						</TabsTrigger>
+						<TabsTrigger
+							value="detail"
+							disabled={isTabDisabled('detail')}
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-detail"
+						>
+							Detail
+							<span className="ml-1 text-red-500">*</span>
+						</TabsTrigger>
+						<TabsTrigger
+							value="spec"
+							disabled={isTabDisabled('spec')}
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-spec"
+						>
+							Spec
+						</TabsTrigger>
+						<TabsTrigger
+							value="category"
+							disabled={isTabDisabled('category')}
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-category"
+						>
+							Category
+							<span className="ml-1 text-red-500">*</span>
+						</TabsTrigger>
+						<TabsTrigger
+							value="images"
+							disabled={isTabDisabled('images')}
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-images"
+						>
+							Images
+							<span className="ml-1 text-red-500">*</span>
+						</TabsTrigger>
+						<TabsTrigger
+							value="shipping"
+							disabled={isTabDisabled('shipping')}
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-shipping"
+						>
+							Shipping
+							<span className="ml-1 text-red-500">*</span>
+						</TabsTrigger>
+					</TabsList>
+
+					<div className="flex-1 overflow-y-auto min-h-0" data-testid="product-form-scroll-container">
+						<TabsContent value="name" className="mt-4">
+							<NameTab />
+						</TabsContent>
+
+						<TabsContent value="detail" className="mt-4">
+							<DetailTab />
+						</TabsContent>
+
+						<TabsContent value="spec" className="mt-4">
+							<SpecTab />
+						</TabsContent>
+
+						<TabsContent value="category" className="mt-4">
+							<CategoryTab />
+						</TabsContent>
+
+						<TabsContent value="images" className="mt-4">
+							<ImagesTab />
+						</TabsContent>
+
+						<TabsContent value="shipping" className="mt-4">
+							<ShippingTab />
+						</TabsContent>
+					</div>
+				</Tabs>
+			</div>
+
+			{showFooter && (
+				<div className="bg-white border-t pt-4 pb-4 mt-4">
+					{footerValidationIssues.length > 0 && (
+						<div
+							className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+							data-testid="product-validation-summary"
+						>
+							<ul className="list-disc list-inside space-y-1">
+								{footerValidationIssues.map((issue, i) => (
+									<li key={i}>{issue}</li>
+								))}
+							</ul>
+						</div>
+					)}
+					<div className="flex gap-2 w-full">
+						{previousTab && (
+							<Button
+								type="button"
+								variant="outline"
+								className="flex-1 gap-2 uppercase"
+								onClick={handleBack}
+								data-testid="product-back-button"
+							>
+								<span className="i-back w-6 h-6"></span>
+								Back
+							</Button>
+						)}
+
+						{activeTab === 'shipping' || editingProductId ? (
+							<form.Subscribe
+								selector={(state) => [state.canSubmit, state.isSubmitting]}
+								children={([, isSubmitting]) => {
+									const hasValidationErrors = formValidationIssues.length > 0
+									const isDisabled = isSubmitting || isPublishing || hasValidationErrors
+
+									// Check if we need V4V setup for new products
+									if (resolvedWorkflow.requiresV4VSetup && !editingProductId && !hasValidationErrors) {
+										return (
+											<Button
+												type="button"
+												variant="secondary"
+												className="flex-1 uppercase"
+												tooltip="You need to configure Value for Value (V4V) settings before publishing your first product"
+												onClick={() => {
+													const publishCallback = async () => {
+														// After V4V setup, trigger the form submission
+														form.handleSubmit()
+													}
+													uiActions.openDialog('v4v-setup', publishCallback)
+												}}
+												data-testid="product-setup-v4v-button"
+											>
+												Setup V4V First
+											</Button>
+										)
+									}
+
+									return (
+										<Button
+											type="submit"
+											variant="secondary"
+											className="flex-1 uppercase"
+											disabled={isDisabled}
+											data-testid="product-publish-button"
+										>
+											{isSubmitting || isPublishing
+												? editingProductId
+													? 'Updating...'
+													: 'Publishing...'
+												: editingProductId
+													? 'Update Product'
+													: 'Publish Product'}
+										</Button>
+									)
+								}}
+							/>
+						) : (
+							<Button
+								type="button"
+								variant="secondary"
+								className="flex-1 uppercase"
+								onClick={handleNext}
+								disabled={isCurrentTabBlocked}
+								data-testid="product-next-button"
+							>
+								Next
+							</Button>
+						)}
+					</div>
+				</div>
+			)}
+		</form>
+	)
+}

@@ -1,12 +1,20 @@
 // seed.ts
-import { devUser1, devUser2, devUser3, devUser4, devUser5, WALLETED_USER_LUD16, XPUB } from '@/lib/fixtures'
-import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
-import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
-import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
-import { ndkActions } from '@/lib/stores/ndk'
-import { createFeaturedCollectionsEvent, createFeaturedProductsEvent, createFeaturedUsersEvent } from '@/publish/featured'
-import { hexToBytes } from '@noble/hashes/utils.js'
+import { devUser1, devUser2, devUser3, devUser4, devUser5, WALLETED_USER_LUD16, XPUB } from './fixtures'
+import { CURRENCIES, PRODUCT_CATEGORIES } from '@sdk/config/constants'
+import { ORDER_STATUS, SHIPPING_STATUS } from '@sdk/commerce/messaging/orderSchema'
+import { SHIPPING_KIND } from '@sdk/config/schemas/shippingOption'
+import { ndkActions } from '@platform/web/ndk/ndkStore'
+import {
+	createFeaturedAuctionsEvent,
+	createFeaturedCollectionsEvent,
+	createFeaturedProductsEvent,
+	createFeaturedUsersEvent,
+} from '@platform/web/featured/featuredPublish'
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
+import { secp256k1 } from '@noble/curves/secp256k1.js'
+import * as nip44 from 'nostr-tools/nip44'
 import { NDKPrivateKeySigner, NDKEvent } from '@nostr-dev-kit/ndk'
+import { createSignerFromKey } from '@sdk/core/signer'
 import { getPublicKey } from 'nostr-tools/pure'
 import { faker } from '@faker-js/faker'
 import { createCollectionEvent, createProductReference, generateCollectionData } from './gen_collections'
@@ -24,12 +32,23 @@ import {
 } from './gen_orders'
 import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
+import {
+	createAuctionBidEvent,
+	createAuctionEvent,
+	createAuctionPathReleaseEvent,
+	DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS,
+	generateAuctionData,
+	type SeededBidResult,
+} from './gen_auctions'
 import { createNip15ProductEvent, generateNip15ProductData } from './gen_nip15_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generatePickupShippingData, generateShippingData } from './gen_shipping'
 import { createUserProfileEvent, generateUserProfileData } from './gen_user'
 import { createV4VSharesEvent } from './gen_v4v'
 import { createUserNwcWallets } from './gen_wallets'
+import { getAuctionXpubFromWalletKeys } from '@sdk/commerce/auctions/hd'
+import { parseNip60WalletEventContent, selectWalletKeyPair } from '@sdk/commerce/payments/wallet/nip60WalletEvent'
+import { resolveCvmServerPubkey } from '@platform/server/runtime'
 
 // Force local relay only mode to prevent connecting to public relays during seeding
 // This must be set before ndkActions.initialize() is called
@@ -78,19 +97,129 @@ const APP_PUBKEY = getPublicKey(hexToBytes(APP_PRIVATE_KEY))
 
 const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
+const QUICK_END_AUCTIONS_PER_USER = 1
+const QUICK_END_SECONDS = 120
+
+function setTagValue(tags: string[][], tagName: string, value: string) {
+	const tag = tags.find((currentTag) => currentTag[0] === tagName)
+	if (tag) {
+		tag[1] = value
+	}
+}
+
+async function ensureAuctionWalletForSeller(signer: NDKPrivateKeySigner, pubkey: string, mints: string[]): Promise<{ p2pkXpub: string }> {
+	const previousSigner = ndk.signer
+	ndk.signer = signer
+
+	try {
+		let walletEvent = Array.from(
+			await ndkActions.fetchEventsWithTimeout(
+				{
+					kinds: [17375],
+					authors: [pubkey],
+					limit: 5,
+				},
+				{ timeoutMs: 4000 },
+			),
+		).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0]
+
+		if (!walletEvent) {
+			// No relay wallet event yet. The pair is *local* material under the NIP-60 cut
+			// (`sdk/commerce/payments/wallet/walletKeys.ts` derives every auction address from it),
+			// and the kind-17375 event is now the one-way migration SOURCE that
+			// `walletKeyMigration` reads once, on the owner's first wallet use. A fresh in-memory
+			// dev relay has none, so the seed mints a pair and publishes it -- without it every
+			// seeded auction carries no `p2pk_xpub` and the bid loop below skips it, leaving the
+			// stack with auctions that cannot be bid on.
+			const walletPrivkey = bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(32)))
+			const walletP2pk = bytesToHex(secp256k1.getPublicKey(hexToBytes(walletPrivkey), true))
+			const content = JSON.stringify([
+				['privkey', walletPrivkey],
+				...mints.map((mint) => ['mint', mint]),
+				...(RELAY_URL ? [['relay', RELAY_URL]] : []),
+			])
+			const conversationKey = nip44.v2.utils.getConversationKey(hexToBytes(signer.privateKey), pubkey)
+			const event = new NDKEvent(ndk)
+			event.kind = 17375 as unknown as typeof event.kind
+			event.content = nip44.v2.encrypt(content, conversationKey)
+			event.tags = []
+			await event.sign(signer)
+			const published = await event.publish()
+			if (published.size === 0) {
+				throw new Error(`Failed to publish the NIP-60 wallet event for ${pubkey}`)
+			}
+			walletEvent = event
+		}
+		if (!walletEvent) {
+			throw new Error(`No NIP-60 wallet event for ${pubkey}`)
+		}
+
+		// Read the pair the way the app now does: open the event, parse its pair-list, and name the
+		// key rather than take whichever came first. The decryption goes through the event, which is
+		// what NDK's own wallet loader does — reaching for `signer.nip44` is not available here,
+		// because NDKPrivateKeySigner does not declare it. The signer set just above is the seller.
+		await walletEvent.decrypt()
+		const parsed = parseNip60WalletEventContent(walletEvent.content)
+		const pair = selectWalletKeyPair(parsed.pairs, undefined)
+		if (!pair) {
+			throw new Error(`Wallet event for ${pubkey} carries ${parsed.pairs.length} keys; this seed cannot choose`)
+		}
+
+		const p2pkXpub = await getAuctionXpubFromWalletKeys(pair.walletP2pk, pair.walletPrivkey)
+		return { p2pkXpub }
+	} finally {
+		ndk.signer = previousSigner
+	}
+}
+
+function getSeedCvmRelays(): string[] {
+	const appRelay = process.env.APP_RELAY_URL || 'ws://localhost:10547'
+	return [appRelay]
+}
 
 async function seedData() {
 	const PRODUCTS_PER_USER = 10
 	const SHIPPING_OPTIONS_PER_USER = 4
 	const COLLECTIONS_PER_USER = 3
 	const REVIEWS_PER_USER = 2
+	const AUCTIONS_PER_USER = 5
 	const ORDERS_PER_PAIR = 6 // Increased to demonstrate all order states
+
+	const CVM_SERVER_PUBKEY = resolveCvmServerPubkey()
+	const CVM_RELAYS = getSeedCvmRelays()
+	console.log(`Seed will route auctions to CVM path_issuer = ${CVM_SERVER_PUBKEY}`)
+	console.log(`Seed will use CVM relays = ${CVM_RELAYS.join(', ')}`)
 
 	console.log('Connecting to Nostr...')
 	console.log(ndkActions.getNDK()?.explicitRelayUrls)
 	await ndkActions.connect()
 	const productsByUser: Record<string, string[]> = {}
+	const auctionsByUser: Record<string, string[]> = {}
 	const allProductRefs: string[] = []
+	const allAuctionEvents: Array<{
+		eventId: string
+		auctionCoordinates: string
+		sellerPubkey: string
+		startAt: number
+		endAt: number
+		startingBid: number
+		bidIncrement: number
+		mint: string
+		settlementGraceSeconds: number
+	}> = []
+	const seededBidAuctionEvents: Array<{
+		eventId: string
+		auctionCoordinates: string
+		sellerPubkey: string
+		startAt: number
+		endAt: number
+		maxEndAt: number
+		startingBid: number
+		bidIncrement: number
+		mint: string
+		p2pkXpub: string
+		settlementGraceSeconds: number
+	}> = []
 	const shippingsByUser: Record<string, string[]> = {}
 	const userPubkeys: string[] = []
 	const allCollectionCoords: string[] = []
@@ -247,6 +376,160 @@ async function seedData() {
 					allProductRefs.push(productRef)
 				}
 			}
+		}
+
+		console.log(`Creating auctions for user ${pubkey.substring(0, 8)}...`)
+		auctionsByUser[pubkey] = []
+		const trustedAuctionMints = ['https://testnut.cashu.space', 'https://nofees.testnut.cashu.space']
+		const auctionWallet = await ensureAuctionWalletForSeller(signer, pubkey, trustedAuctionMints)
+		for (let j = 0; j < AUCTIONS_PER_USER; j++) {
+			const isQuickSettleAuction = j < QUICK_END_AUCTIONS_PER_USER
+			// Quick-settle fixtures want a tight settlement window so a dev can
+			// exercise the seller-publishes-1024 → loser-reclaims flow inside
+			// a single test run. Normal auctions get the realistic 2h grace
+			// (DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS) so bids and the loser
+			// reclaim countdown match what production behaviour would look like.
+			const settlementGraceSeconds = isQuickSettleAuction ? 30 : DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS
+			const auctionData = generateAuctionData({
+				sellerPubkey: pubkey,
+				pathIssuerPubkey: CVM_SERVER_PUBKEY,
+				availableShippingRefs: shippingsByUser[pubkey] || [],
+				trustedMints: trustedAuctionMints,
+				p2pkXpub: auctionWallet.p2pkXpub,
+				settlementGraceSeconds,
+			})
+
+			if (isQuickSettleAuction) {
+				const quickEndNow = Math.floor(Date.now() / 1000)
+				const quickEndAt = quickEndNow + QUICK_END_SECONDS
+				const quickStartAt = quickEndNow - 60
+				setTagValue(auctionData.tags, 'start_at', String(quickStartAt))
+				setTagValue(auctionData.tags, 'end_at', String(quickEndAt))
+				// Quick-settle auctions also have max_end_at == end_at since
+				// they run with no anti-sniping; keep the invariant intact.
+				setTagValue(auctionData.tags, 'max_end_at', String(quickEndAt))
+				setTagValue(auctionData.tags, 'title', `Quick settle auction for ${pubkey.slice(0, 8)}`)
+				setTagValue(auctionData.tags, 'summary', 'Fixture auction for settlement testing. No seeded bids.')
+				setTagValue(auctionData.tags, 'reserve', '0')
+			}
+
+			const auctionEvent = await createAuctionEvent(signer, ndk, auctionData)
+			if (!auctionEvent) continue
+
+			const auctionId = auctionData.tags.find((tag) => tag[0] === 'd')?.[1]
+			const startAt = parseInt(auctionData.tags.find((tag) => tag[0] === 'start_at')?.[1] || '0', 10)
+			const endAt = parseInt(auctionData.tags.find((tag) => tag[0] === 'end_at')?.[1] || '0', 10)
+			const startingBid = parseInt(auctionData.tags.find((tag) => tag[0] === 'starting_bid')?.[1] || '0', 10)
+			const bidIncrement = parseInt(auctionData.tags.find((tag) => tag[0] === 'bid_increment')?.[1] || '1', 10)
+			const mint = auctionData.tags.find((tag) => tag[0] === 'mint')?.[1] || 'https://nofees.testnut.cashu.space'
+
+			if (!auctionId) continue
+			const coords = `30408:${pubkey}:${auctionId}`
+			auctionsByUser[pubkey].push(coords)
+			allAuctionEvents.push({
+				eventId: auctionEvent.id,
+				auctionCoordinates: coords,
+				sellerPubkey: pubkey,
+				startAt,
+				endAt,
+				startingBid,
+				bidIncrement,
+				mint,
+				settlementGraceSeconds,
+			})
+
+			// Only seed bids on live auctions (live window, not the
+			// quick-settle fixtures which are immediately closing).
+			const isLiveForBids = !isQuickSettleAuction && endAt > Math.floor(Date.now() / 1000) + 60
+			if (isLiveForBids) {
+				const p2pkXpub = auctionData.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
+				const maxEndAt = parseInt(auctionData.tags.find((tag) => tag[0] === 'max_end_at')?.[1] || String(endAt), 10)
+				seededBidAuctionEvents.push({
+					eventId: auctionEvent.id,
+					auctionCoordinates: coords,
+					sellerPubkey: pubkey,
+					startAt,
+					endAt,
+					maxEndAt,
+					startingBid,
+					bidIncrement,
+					mint,
+					p2pkXpub,
+					settlementGraceSeconds,
+				})
+			}
+		}
+	}
+
+	console.log(`\nCreating auction bids for ${seededBidAuctionEvents.length} live auctions...`)
+	// Track each auction's highest accepted bid so we can publish a
+	// matching kind-1025 path release after the bid loop. The bid loop
+	// monotonically increments the amount, so the last successful bid
+	// is by definition the highest.
+	const highestSeededBids = new Map<
+		string,
+		{ auction: (typeof seededBidAuctionEvents)[number]; bidderUserIndex: number; bid: SeededBidResult }
+	>()
+	for (const auction of seededBidAuctionEvents) {
+		if (!auction.p2pkXpub) {
+			console.warn(`  ⚠ skipping ${auction.eventId.slice(0, 8)} — no p2pk_xpub`)
+			continue
+		}
+		const eligibleBidders = userPubkeys.map((pubkey, index) => ({ pubkey, index })).filter((u) => u.pubkey !== auction.sellerPubkey)
+		const bidsCount = faker.number.int({ min: 1, max: 4 })
+		let currentBidAmount = auction.startingBid
+
+		for (let i = 0; i < bidsCount; i++) {
+			const bidder = faker.helpers.arrayElement(eligibleBidders)
+			const bidderSigner = new NDKPrivateKeySigner(devUsers[bidder.index].sk)
+			await bidderSigner.blockUntilReady()
+
+			currentBidAmount += auction.bidIncrement * faker.number.int({ min: 1, max: 3 })
+
+			const result = await createAuctionBidEvent({
+				signer: bidderSigner,
+				ndk,
+				auctionEventId: auction.eventId,
+				auctionCoordinates: auction.auctionCoordinates,
+				sellerPubkey: auction.sellerPubkey,
+				p2pkXpub: auction.p2pkXpub,
+				cvmRelays: CVM_RELAYS,
+				bidderPrivateKeyHex: devUsers[bidder.index].sk,
+				amount: currentBidAmount,
+				mint: auction.mint,
+				endAt: auction.endAt,
+				maxEndAt: auction.maxEndAt,
+				settlementGraceSeconds: auction.settlementGraceSeconds,
+			})
+
+			if (result) {
+				const existing = highestSeededBids.get(auction.eventId)
+				if (!existing || result.amount > existing.bid.amount) {
+					highestSeededBids.set(auction.eventId, {
+						auction,
+						bidderUserIndex: bidder.index,
+						bid: result,
+					})
+				}
+			}
+		}
+	}
+
+	if (highestSeededBids.size > 0) {
+		console.log(`\nPublishing kind-1025 path releases for ${highestSeededBids.size} top seeded bids...`)
+		for (const { auction, bidderUserIndex, bid } of Array.from(highestSeededBids.values())) {
+			const bidderSigner = new NDKPrivateKeySigner(devUsers[bidderUserIndex].sk)
+			await bidderSigner.blockUntilReady()
+			await createAuctionPathReleaseEvent({
+				signer: bidderSigner,
+				ndk,
+				bidEventId: bid.bidEventId,
+				auctionCoordinate: auction.auctionCoordinates,
+				sellerPubkey: auction.sellerPubkey,
+				derivationPath: bid.derivationPath,
+				childPubkey: bid.childPubkey,
+				releaseReason: 'voluntary_late',
+			})
 		}
 	}
 
@@ -650,12 +933,19 @@ async function seedData() {
 	// Get random collection coordinates for featured collections (4 collections)
 	// Use the actual collection coordinates from seeded collections
 	const featuredCollectionCoords = allCollectionCoords.slice(0, 5)
+	const featuredAuctionCoords = allAuctionEvents.map((auction) => auction.auctionCoordinates).slice(0, 8)
 
 	try {
 		// Publish featured users
 		if (featuredUserPubkeys.length > 0) {
 			console.log(`Publishing ${featuredUserPubkeys.length} featured users...`)
-			const featuredUsersEvent = createFeaturedUsersEvent({ featuredUsers: featuredUserPubkeys }, appSigner, ndk)
+			// A3.5: the create* family takes the signer capability now; the same app key
+			// builds it (the event's own NDK sign below still uses the NDK signer).
+			const featuredUsersEvent = createFeaturedUsersEvent(
+				{ featuredUsers: featuredUserPubkeys },
+				createSignerFromKey(APP_PRIVATE_KEY!),
+				ndk,
+			)
 			await featuredUsersEvent.sign(appSigner)
 			await featuredUsersEvent.publish()
 		}
@@ -663,7 +953,11 @@ async function seedData() {
 		// Publish featured collections
 		if (featuredCollectionCoords.length > 0) {
 			console.log(`Publishing ${featuredCollectionCoords.length} featured collections...`)
-			const featuredCollectionsEvent = createFeaturedCollectionsEvent({ featuredCollections: featuredCollectionCoords }, appSigner, ndk)
+			const featuredCollectionsEvent = createFeaturedCollectionsEvent(
+				{ featuredCollections: featuredCollectionCoords },
+				createSignerFromKey(APP_PRIVATE_KEY!),
+				ndk,
+			)
 			await featuredCollectionsEvent.sign(appSigner)
 			await featuredCollectionsEvent.publish()
 		}
@@ -671,9 +965,25 @@ async function seedData() {
 		// Publish featured products
 		if (featuredProductCoords.length > 0) {
 			console.log(`Publishing ${featuredProductCoords.length} featured products...`)
-			const featuredProductsEvent = createFeaturedProductsEvent({ featuredProducts: featuredProductCoords }, appSigner, ndk)
+			const featuredProductsEvent = createFeaturedProductsEvent(
+				{ featuredProducts: featuredProductCoords },
+				createSignerFromKey(APP_PRIVATE_KEY!),
+				ndk,
+			)
 			await featuredProductsEvent.sign(appSigner)
 			await featuredProductsEvent.publish()
+		}
+
+		// Publish featured auctions
+		if (featuredAuctionCoords.length > 0) {
+			console.log(`Publishing ${featuredAuctionCoords.length} featured auctions...`)
+			const featuredAuctionsEvent = createFeaturedAuctionsEvent(
+				{ featuredAuctions: featuredAuctionCoords },
+				createSignerFromKey(APP_PRIVATE_KEY!),
+				ndk,
+			)
+			await featuredAuctionsEvent.sign(appSigner)
+			await featuredAuctionsEvent.publish()
 		}
 
 		console.log('Featured items created successfully!')
