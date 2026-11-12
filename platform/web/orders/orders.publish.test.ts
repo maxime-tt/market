@@ -183,7 +183,7 @@ mock.module('@platform/web/auth/authStore', authStoreMock)
 
 import type { CheckoutFormData } from '@platform/web/checkout/ShippingAddressForm'
 import type { SignerCapability } from '@sdk/core/signer'
-import { decryptPrivateOrderMessage } from '@sdk/commerce/messaging/privateOrderMessage'
+import { decryptPrivateOrderMessage } from '@sdk/commerce/orders/messaging/privateOrderMessage'
 import {
 	createOrder,
 	createOrderCreationEvent,

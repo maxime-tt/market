@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND, ORDER_MESSAGE_TYPE } from '../orders/orderEvents'
+import { ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND, ORDER_MESSAGE_TYPE } from '../orderEvents'
 
 // Define order kinds as specified in the spec (NIP-17 direct messages)
 export const ORDER_GENERAL_KIND = 14 // General communication

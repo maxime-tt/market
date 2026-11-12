@@ -1,6 +1,6 @@
 import { getPublicKey } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
-import type { EncryptingSigner } from '../../core/ports/encryptingSigner'
+import type { EncryptingSigner } from '../../../core/ports/encryptingSigner'
 import {
 	createNip59GiftWrap,
 	createNip59GiftWrapWithSigner,
@@ -8,7 +8,7 @@ import {
 	unwrapNip59GiftWrap,
 	unwrapNip59GiftWrapWithSigner,
 	type UnsignedRumor,
-} from '../../core/nostr/nip59'
+} from '../../../core/nostr/nip59'
 
 const GAMMA_ORDER_KIND = 16
 const GAMMA_ORDER_CREATION_TYPE = '1'

@@ -7,9 +7,9 @@ import {
 	SHIPPING_STATUS,
 	type OrderStatus,
 	type ShippingStatus,
-} from '@sdk/commerce/messaging/orderSchema'
+} from '@sdk/commerce/orders/messaging/orderSchema'
 import { NIP59_GIFT_WRAP_KIND, signerSupportsNip44 } from '@sdk/core/nostr/nip59'
-import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@sdk/commerce/messaging/privateOrderMessage'
+import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@sdk/commerce/orders/messaging/privateOrderMessage'
 import {
 	applesauceIo,
 	fetchNdkEventSet,

@@ -662,7 +662,7 @@ import {
 	ORDER_STATUS,
 	PAYMENT_RECEIPT_KIND,
 	SHIPPING_STATUS,
-} from '@sdk/commerce/messaging/orderSchema'
+} from '@sdk/commerce/orders/messaging/orderSchema'
 
 export type OrderStage = 'pending-payment' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'completed'
 export type OrderType = 'product'

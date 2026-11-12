@@ -1,6 +1,6 @@
 import type { Event } from 'nostr-tools'
-import type { EncryptingSigner } from '../../core/ports/encryptingSigner'
-import { unwrapNip59GiftWrapWithSigner } from '../../core/nostr/nip59'
+import type { EncryptingSigner } from '../../../core/ports/encryptingSigner'
+import { unwrapNip59GiftWrapWithSigner } from '../../../core/nostr/nip59'
 import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
 
 export type Nip17OrderMessageDirection = 'sent' | 'received'

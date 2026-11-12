@@ -4,7 +4,7 @@
  *
  * Moved from `src/lib/auctions/privateAuctionClaimMessage.ts` (Wave I, slice I-a A2 S2, 2026-10-29).
  * The pure half moved verbatim: only the import specifiers changed — the order tag constants come
- * from `@sdk/commerce/messaging/orderSchema` (the module the deleted `@/lib/schemas/order` shim
+ * from `@sdk/commerce/orders/messaging/orderSchema` (the module the deleted `@/lib/schemas/order` shim
  * re-exported) and the NIP-59 primitives from `@sdk/core/nostr/nip59`, both already the resolved
  * homes, so the module graph is unchanged. The two ambient-signer helpers
  * (`createPrivateAuctionClaimMessageForActiveSigner` /
@@ -16,7 +16,7 @@
  * gift wrap; the public marker tags (`buildAuctionClaimPublicMarkerTags`) must stay free of it.
  */
 import type { Event } from 'nostr-tools'
-import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/messaging/orderSchema'
+import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/orders/messaging/orderSchema'
 import type { EncryptingSigner } from '@sdk/core'
 import {
 	createNip59GiftWrap,

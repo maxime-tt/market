@@ -1,4 +1,4 @@
-import type { PrivateOrderDeliveryDetails } from '@sdk/commerce/messaging/privateOrderMessage'
+import type { PrivateOrderDeliveryDetails } from '@sdk/commerce/orders/messaging/privateOrderMessage'
 import type { OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
 import { describe, expect, test } from 'bun:test'
 import { canViewPrivateOrderDetails, getPrivateOrderDetailsRows } from './PrivateOrderDetailsCard'
