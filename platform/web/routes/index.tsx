@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { z } from 'zod'
 import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
+import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
+import { BrowseNav } from '@ui/browse/browse-nav'
 
 /**
  * Browse URL state: ?q=&p=
@@ -34,6 +36,30 @@ export const Route = createFileRoute('/')({
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
 	const navigate = useNavigate()
+
+	// The home page is CMS-produced (owner ruling): with no search state on the
+	// URL, `/` renders the app key's `home` page inside the browse chrome. The
+	// page supplies the content — a `Search` block, `ProductRow`s and
+	// `Categories` — so the composition is authored in the builder rather than
+	// hardcoded here.
+	//
+	// Any `?q=` or `?p=` state still belongs to the browse surface: a CMS page
+	// cannot answer a search, and the panel's own deep link has to keep working,
+	// so the host takes over for those states. An unpublished home page renders
+	// the CMS empty state, which is honest — not the browse fallback, which would
+	// hide the fact that nothing has been authored.
+	if (!q.trim() && !p) {
+		return (
+			<>
+				<BrowseNav
+					active
+					onNavigateHome={() => navigate({ to: '/' })}
+					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+				/>
+				<StorefrontAddressPage dTag="home" />
+			</>
+		)
+	}
 
 	return (
 		<BrowseIndexHost
