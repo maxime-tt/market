@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import { useRabbitHoleClient } from '../browse/rabbitholeClient';
-import { ProductCard } from '@ui/storefront';
-import { useStorefrontContext } from '../context/storefrontContext';
-import { useConfigQuery } from '../config/publicConfigQuery';
+import { rabbitholeSearch } from '../browse/rabbitholeClient';
+import type { BrowseProduct } from '../browse/browseProductMap';
 
 // The picker must be able to choose any marketplace listing, not just the author's.
 // Use the existing collaborate-free search client (the RabbitHole client).
@@ -14,11 +12,8 @@ export function ProductRowPicker({
   onPick: (coordinate: string) => void;
   initialCoordinate?: string;
 }) {
-  const { pubkey } = useStorefrontContext();
-  const { data: config } = useConfigQuery();
-  const { search } = useRabbitHoleClient();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<unknown[]>([]);
+  const [results, setResults] = useState<BrowseProduct[]>([]);
   const [selected, setSelected] = useState<string | null>(initialCoordinate || null);
 
   const handleSearch = async (q: string) => {
@@ -27,19 +22,27 @@ export function ProductRowPicker({
       return;
     }
     try {
-      const res = await search(q, {
-        kinds: [30402],
-        limit: 10,
-      });
-      setResults(res.events);
+      // The whole-marketplace read: no `authors` filter, so a page may
+      // reference any seller's listing. The coordinate is validated before it
+      // is stored, so the explicit reference is the only thing that crosses
+      // the author-anchoring the blocks otherwise enforce.
+      const res = await rabbitholeSearch({ q, limit: 10 });
+      setResults(res.products);
     } catch (error) {
       console.error('Search failed:', error);
       setResults([]);
     }
   };
 
-  const handlePick = (event: any) => {
-    const coordinate = `30402:${event.pubkey}:${event.tags.find(t => t[0] === 'd')?.[1]}`;
+  // A listing is referenced by its addressable coordinate, never by title, so
+  // renaming a product does not break a page that features it. A row without a
+  // `d` tag has no address and cannot be picked.
+  const coordinateOf = (product: BrowseProduct): string | null =>
+    product.id ? `30402:${product.pubkey}:${product.id}` : null;
+
+  const handlePick = (product: BrowseProduct) => {
+    const coordinate = coordinateOf(product);
+    if (!coordinate) return;
     setSelected(coordinate);
     onPick(coordinate);
   };
@@ -65,22 +68,23 @@ export function ProductRowPicker({
           </div>
         ) : (
           <ul className="divide-y divide-gray-200">
-            {results.map((event: any, index: number) => {
-              const dTag = event.tags.find((t) => t[0] === 'd')?.[1];
-              const coordinate = dTag ? `30402:${event.pubkey}:${dTag}` : null;
+            {results.map((product, index) => {
+              const image = product.image;
+              const coordinate = coordinateOf(product);
+              const price = product.price ? `${product.price} ${product.currency ?? 'sats'}` : null;
               return (
                 <li
-                  key={`${event.id}-${index}`}
+                  key={`${product.eventId}-${index}`}
                   className={`p-2 cursor-pointer hover:bg-gray-100 ${
                     coordinate === selected ? 'bg-blue-100 border-l-4 border-blue-500' : ''
                   }`}
-                  onClick={() => coordinate && handlePick(event)}
+                  onClick={() => coordinate && handlePick(product)}
                 >
                   <div className="flex gap-3">
                     <div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden">
-                      {event.tags.find((t) => t[0] === 'image')?.[1] ? (
+                      {image ? (
                         <img
-                          src={event.tags.find((t) => t[0] === 'image')?.[1]}
+                          src={image}
                           alt="Product"
                           className="w-full h-full object-cover"
                         />
@@ -91,29 +95,27 @@ export function ProductRowPicker({
                       )}
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-medium text-sm line-clamp-2">{event.content || 'Untitled'}</h3>
+                      <h3 className="font-medium text-sm line-clamp-2">{product.title || 'Untitled'}</h3>
                       <p className="text-xs text-gray-500">
-                        {event.pubkey.slice(0, 6)}...{event.pubkey.slice(-6)}
+                        {product.pubkey.slice(0, 6)}...{product.pubkey.slice(-6)}
                       </p>
-                      <p className="text-xs text-gray-500">{dTag}</p>
+                      {price && <p className="text-xs text-gray-500">{price}</p>}
+                      <p className="text-xs text-gray-500">{product.id}</p>
                     </div>
                   </div>
                 </li>
               );
             })}
           </ul>
+        )}
       </div>
       {selected && (() => {
-        const selectedEvent = results.find((e: any) => {
-          const d = e.tags.find((t) => t[0] === 'd')?.[1];
-          const coord = d ? `30402:${e.pubkey}:${d}` : null;
-          return coord === selected;
-        });
-        if (!selectedEvent) return null;
-        const dTag = selectedEvent.tags.find((t) => t[0] === 'd')?.[1];
-        const pubkey = selectedEvent.pubkey;
-        const content = selectedEvent.content || 'Untitled';
-        const image = selectedEvent.tags.find((t) => t[0] === 'image')?.[1];
+        const picked = results.find((p) => coordinateOf(p) === selected);
+        if (!picked) return null;
+        const pubkey = picked.pubkey;
+        const content = picked.title || 'Untitled';
+        const image = picked.image;
+        const price = picked.price ? `${picked.price} ${picked.currency ?? 'sats'}` : null;
         return (
           <div className="p-4 border border-gray-300 rounded-md">
             <h3 className="font-medium text-sm mb-2">Selected Product</h3>
@@ -136,7 +138,8 @@ export function ProductRowPicker({
                 <p className="text-xs text-gray-500">
                   {pubkey.slice(0, 6)}...{pubkey.slice(-6)}
                 </p>
-                <p className="text-xs text-gray-500">{dTag}</p>
+                {price && <p className="text-xs text-gray-500">{price}</p>}
+                <p className="text-xs text-gray-500">{selected}</p>
               </div>
             </div>
           </div>
