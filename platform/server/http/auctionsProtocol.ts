@@ -27,6 +27,7 @@ export const AUCTIONS_UPSTREAM_DEFAULT = 'http://127.0.0.1:8080'
 export const AUCTIONS_STATE_PATH = '/api/auctions/state'
 export const AUCTIONS_CONFIG_PATH = '/api/auctions/config'
 export const AUCTIONS_RESERVATION_PATH = '/api/auctions/reservation'
+export const AUCTIONS_EVENT_PATH = '/api/auctions/event'
 
 type Env = Record<string, string | undefined>
 
@@ -67,6 +68,19 @@ export function buildAuctionsProtocolRoutes(env: Env = process.env): BunRoutes {
 		},
 		[AUCTIONS_CONFIG_PATH]: {
 			GET: () => forward(base, '/api/config'),
+		},
+		[AUCTIONS_EVENT_PATH]: {
+			// The relay binds loopback too, and it is ephemeral: a browser cannot
+			// reach it, and an event published with nobody listening is gone. The
+			// backend's HTTP door takes the BARE signed event (no envelope — the
+			// decoder uses DisallowUnknownFields), so the body is forwarded
+			// verbatim and never wrapped.
+			POST: (request: Request) =>
+				forward(base, '/api/event', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: request.body,
+				}),
 		},
 		[AUCTIONS_RESERVATION_PATH]: {
 			// The receipt describes one auction, bidder and amount; forward the
