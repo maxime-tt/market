@@ -60,7 +60,7 @@ No existing state transition changes semantics. The new field is set during `app
 ### 3. New committed outcome record
 
 ```go
-KindOutcome = 28645
+KindOutcome = 1445
 ```
 
 ```json

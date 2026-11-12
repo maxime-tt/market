@@ -43,8 +43,8 @@ Reads:
 
 ## 2. The event kinds — and the one that fails silently
 
-`KindCreate = 28640`, `KindBid = 28641`, `KindRefund = 28642`, and the
-application-authority outcome record `28645`.
+`KindCreate = 1440`, `KindBid = 1441`, `KindRefund = 1443`, and the
+application-authority outcome record `1445`.
 
 Publishing a create as the marketplace's own `30408` listing kind is stored by
 the relay, reported as `success`, and then **never committed** — the observer
@@ -81,7 +81,7 @@ refundClaimMessage, refundClaimMessageV2 }`.
 An auction now chooses its own anti-snipe timing, exactly as it chooses duration
 and minimum increment. The network policy is only the **ceiling**.
 
-Create content (`KindCreate`, kind 28640) accepts, in addition to
+Create content (`KindCreate`, kind 1440) accepts, in addition to
 `auction_id`, `title`, `description`, `image_url`, `duration_seconds`,
 `starting_bid`, `min_increment`, `reserve`, `funding_mode` and
 `seller_coco_payment_public_key`:
@@ -142,7 +142,7 @@ At bid time, in this order:
 3. `POST /api/demo/sigall-deposit` with the two templates and that receipt. This
    stores the bearer templates durably and returns the coordinator's signed
    deposit receipt.
-4. Sign the `KindBid` (28641) event carrying `auction_id`, `amount`,
+4. Sign the `KindBid` (1441) event carrying `auction_id`, `amount`,
    `cashu_lock` (the receipt), `outcome_templates` and `sigall_deposit`, and
    publish it.
 

@@ -607,7 +607,7 @@ async function handleGlobalConservation(): Promise<Response> {
 }
 
 async function handleFaucet(request: Request): Promise<Response> {
-	const event = verifyEvent(await body(request), 28643);
+	const event = verifyEvent(await body(request), 1444);
 	const content = parseContent(event);
 	if (content.action !== "faucet" || Object.keys(content).length !== 1) throw new Error("invalid faucet request");
 	if (fridayLedger.hasPendingMutation(event.pubkey)) return json({ error: "the wallet has an unresolved payout operation" }, 409);
@@ -765,7 +765,7 @@ async function handleRefund(request: Request): Promise<Response> {
 }
 
 async function handleSettle(request: Request): Promise<Response> {
-	const event = verifyEvent(await body(request), 28645);
+	const event = verifyEvent(await body(request), 1445);
 	if (fridayLedger.hasPendingMutation(event.pubkey) || fridayFunding.pending(event.pubkey).length !== 0) throw new Error("wallet has an unresolved Friday payment or funding operation");
 	const content = parseContent(event);
 	const auctionId = content.auction_id;

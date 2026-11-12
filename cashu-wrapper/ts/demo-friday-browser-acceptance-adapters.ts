@@ -55,7 +55,7 @@ export interface DemoFridayAcceptanceSignedEventV1 {
 	id: string
 	pubkey: string
 	created_at: number
-	kind: 28640
+	kind: 1440
 	tags: string[][]
 	content: string
 	sig: string
@@ -413,7 +413,7 @@ export function createDemoFridayAuthenticatedAcceptanceConsensus(options: {
 				|| !Number.isSafeInteger(request.durationSeconds) || request.durationSeconds < 600
 				|| !Number.isSafeInteger(request.startingBid) || request.startingBid < 1 || request.minIncrement !== 100 || request.reserve !== 0
 				|| await options.sellerSigner.getPublicKey() !== request.sellerActor) fail('auction create request differs from exact acceptance policy')
-			const unsigned = { pubkey: request.sellerActor, created_at: now(), kind: 28640 as const,
+			const unsigned = { pubkey: request.sellerActor, created_at: now(), kind: 1440 as const,
 				tags: [['auction', request.auctionId]], content: JSON.stringify({ auction_id: request.auctionId,
 					title: request.auctionId, description: 'Friday FIPS/FROST Coco v2 acceptance', image_url: '',
 					duration_seconds: request.durationSeconds, starting_bid: request.startingBid,

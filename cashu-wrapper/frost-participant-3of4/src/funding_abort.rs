@@ -170,7 +170,7 @@ fn verify_signature(signature: &str, digest: &str, compressed_key: &str) -> AnyR
 
 fn validate_actor(unsigned: &CommitteeUnsigned) -> AnyResult<()> {
     let event = &unsigned.actor_abort_event;
-    if event.kind != 28650 || event.pubkey != unsigned.actor || event.created_at == 0
+    if event.kind != 1446 || event.pubkey != unsigned.actor || event.created_at == 0
         || event.created_at > unsigned.abort_expires_at || event.tags != vec![
             vec!["t".into(), "plebeian-friday-funding-abort-v1".into()],
             vec!["a".into(), unsigned.auction_id.clone()], vec!["operation".into(), unsigned.operation_id.clone()],

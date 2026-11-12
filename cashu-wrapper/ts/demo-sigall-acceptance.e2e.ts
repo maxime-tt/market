@@ -280,7 +280,7 @@ async function signBidEvent(profile: OfflineProfile, operationId: string, bidId:
 	const unsigned: DemoUnsignedEvent = {
 		pubkey: xOnly(profile.actorPrivate),
 		created_at: CREATED_AT + amount,
-		kind: 28642,
+		kind: 1443,
 		tags: [
 			['protocol', 'plebeian-auction-auth-demo'],
 			['version', '1'],

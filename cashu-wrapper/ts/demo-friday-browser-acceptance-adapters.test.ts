@@ -28,7 +28,7 @@ const key = new Uint8Array(32).fill(7), seller = bytesToHex(schnorr.getPublicKey
 const validatorsHash = 'aa'.repeat(32)
 const roster = [1, 2, 3, 4].map((slot) => ({ slot: slot as 1 | 2 | 3 | 4, address: `${slot}`.repeat(40) }))
 
-function signed(unsigned: { pubkey: string; created_at: number; kind: 28640; tags: string[][]; content: string }) {
+function signed(unsigned: { pubkey: string; created_at: number; kind: 1440; tags: string[][]; content: string }) {
 	const id = bytesToHex(sha256(utf8ToBytes(JSON.stringify([0, unsigned.pubkey, unsigned.created_at,
 		unsigned.kind, unsigned.tags, unsigned.content]))))
 	return { ...structuredClone(unsigned), id, sig: bytesToHex(schnorr.sign(hexToBytes(id), key)) }

@@ -56,7 +56,7 @@ func testOutcomeAuthorizations(t *testing.T, auctionID string, refs []string, wa
 	}
 }
 
-func authorizedBidEvent(t *testing.T, committee, bidder *btcec.PrivateKey, auctionID string, amount, createdAt int64,
+func authorizedBidEvent(t *testing.T, committee, bidder *btcec.PrivateKey, rootID, auctionID string, amount, createdAt int64,
 	operationID, tokenSHA256 string, wallet walletClaim) (SignedEvent, Policy) {
 	t.Helper()
 	proofs, refs := backedProofs(t, amount)
@@ -64,7 +64,7 @@ func authorizedBidEvent(t *testing.T, committee, bidder *btcec.PrivateKey, aucti
 	authorization := testOutcomeAuthorizations(t, auctionID, refs, wallet)
 	event := testEvent(t, bidder, createdAt, KindBid, bidContent{
 		AuctionID: auctionID, Amount: amount, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs,
-	})
+	}, []string{"e", rootID})
 	return event, backedPolicy(amount)
 }
 
@@ -81,7 +81,8 @@ func TestBidOutcomeAuthorizationsAreMandatoryAtAdmission(t *testing.T) {
 	wallet := newWalletClaim(t)
 	authorization := testOutcomeAuthorizations(t, "mint-backed", refs, wallet)
 
-	valid, validPolicy := authorizedBidEvent(t, committee, bidder, "mint-backed", 120, 1_001, "op-admit", strings.Repeat("a", 64), wallet)
+	root := state.Auctions["mint-backed"].RootEventID
+	valid, validPolicy := authorizedBidEvent(t, committee, bidder, root, "mint-backed", 120, 1_001, "op-admit", strings.Repeat("a", 64), wallet)
 	if err := ValidateForMempool(state, Transaction{Version: TxVersion, Type: "event", Event: &valid}, validPolicy, seed); err != nil {
 		t.Fatalf("a fully authorized mint-backed bid was refused: %v", err)
 	}
@@ -92,9 +93,9 @@ func TestBidOutcomeAuthorizationsAreMandatoryAtAdmission(t *testing.T) {
 		mutate(&clone)
 		return testEvent(t, bidder, 1_001, KindBid, bidContent{
 			AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &clone,
-		})
+		}, []string{"e", root})
 	}
-	missing := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt})
+	missing := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt}, []string{"e", root})
 
 	cases := map[string]struct {
 		event  SignedEvent
@@ -117,7 +118,7 @@ func TestBidOutcomeAuthorizationsAreMandatoryAtAdmission(t *testing.T) {
 	foreignAuthorization := testOutcomeAuthorizations(t, "mint-backed", refs, foreign)
 	foreignEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{
 		AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &foreignAuthorization,
-	})
+	}, []string{"e", root})
 	if err := ValidateForMempool(state, Transaction{Version: TxVersion, Type: "event", Event: &foreignEvent}, policy, seed); err == nil ||
 		!strings.Contains(err.Error(), "does not verify") {
 		t.Fatalf("a foreign-key authorization error = %v, want a verification refusal", err)
@@ -132,7 +133,7 @@ func TestBidOutcomeAuthorizationsAreMandatoryAtAdmission(t *testing.T) {
 	crossAuction.SettleSpendSignature = hex.EncodeToString(crossSignature.Serialize())
 	crossEvent := testEvent(t, bidder, 1_001, KindBid, bidContent{
 		AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &crossAuction,
-	})
+	}, []string{"e", root})
 	if err := ValidateForMempool(state, Transaction{Version: TxVersion, Type: "event", Event: &crossEvent}, policy, seed); err == nil ||
 		!strings.Contains(err.Error(), "does not verify") {
 		t.Fatalf("a cross-auction settle authorization error = %v, want a verification refusal", err)
@@ -157,10 +158,11 @@ func newOutcomeFixture(t *testing.T) outcomeFixtureState {
 	t.Helper()
 	state, seed, committee := cashuLockFixture(t)
 	auctionID := "mint-backed"
+	root := state.Auctions[auctionID].RootEventID
 
 	first := testPrivateKey(t)
 	firstWallet := newWalletClaim(t)
-	firstEvent, firstPolicy := authorizedBidEvent(t, committee, first, auctionID, 120, 1_001, "op-first", strings.Repeat("a", 64), firstWallet)
+	firstEvent, firstPolicy := authorizedBidEvent(t, committee, first, root, auctionID, 120, 1_001, "op-first", strings.Repeat("a", 64), firstWallet)
 	state, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &firstEvent}, 1_001, firstPolicy, seed)
 	if err != nil {
 		t.Fatalf("first bid: %v", err)
@@ -168,7 +170,7 @@ func newOutcomeFixture(t *testing.T) outcomeFixtureState {
 
 	second := testPrivateKey(t)
 	secondWallet := newWalletClaim(t)
-	secondEvent, secondPolicy := authorizedBidEvent(t, committee, second, auctionID, 300, 1_002, "op-second", strings.Repeat("b", 64), secondWallet)
+	secondEvent, secondPolicy := authorizedBidEvent(t, committee, second, root, auctionID, 300, 1_002, "op-second", strings.Repeat("b", 64), secondWallet)
 	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &secondEvent}, 1_002, secondPolicy, seed)
 	if err != nil {
 		t.Fatalf("second bid: %v", err)
@@ -320,7 +322,8 @@ func TestCashuLockOutcomeAuthorizationsRoundTripKeepsLockFieldsStable(t *testing
 	state, seed, committee := cashuLockFixture(t)
 	bidder := testPrivateKey(t)
 	wallet := newWalletClaim(t)
-	event, eventPolicy := authorizedBidEvent(t, committee, bidder, "mint-backed", 120, 1_001, "op-roundtrip", strings.Repeat("a", 64), wallet)
+	root := state.Auctions["mint-backed"].RootEventID
+	event, eventPolicy := authorizedBidEvent(t, committee, bidder, root, "mint-backed", 120, 1_001, "op-roundtrip", strings.Repeat("a", 64), wallet)
 	next, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, eventPolicy, seed)
 	if err != nil {
 		t.Fatalf("authorized bid: %v", err)

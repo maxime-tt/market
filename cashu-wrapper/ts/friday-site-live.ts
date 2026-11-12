@@ -44,7 +44,7 @@ async function reserveAndBid(key: Uint8Array, auctionId: string, amount: number)
 	const reservation = await post("/api/cashu/reserve", signed(key, 28644, { auction_id: auctionId, amount }, [["auction", auctionId]]));
 	pass(`reserve ${amount} from real wallet backing`, reservation.status === 200 && reservation.body.receipt?.amount === amount,
 		`HTTP ${reservation.status} ${JSON.stringify(reservation.body).slice(0, 160)}`);
-	const bid = await post("/api/event", signed(key, 28641,
+	const bid = await post("/api/event", signed(key, 1441,
 		{ auction_id: auctionId, amount, reservation: reservation.body.receipt }, [["auction", auctionId]]));
 	pass(`commit reservation-backed bid ${amount}`, bid.status === 200, `HTTP ${bid.status} ${JSON.stringify(bid.body).slice(0, 200)}`);
 	return { reservation: reservation.body.receipt, height: bid.body.height };
@@ -56,30 +56,30 @@ async function main(): Promise<void> {
 	const seller = actor(sellerKey), b = actor(bKey), c = actor(cKey), d = actor(dKey);
 
 	for (let index = 1; index <= 5; index += 1) {
-		const grant = await post("/api/cashu/faucet", signed(bKey, 28643, { action: "faucet" }, [["request", String(index)]]));
+		const grant = await post("/api/cashu/faucet", signed(bKey, 1444, { action: "faucet" }, [["request", String(index)]]));
 		pass(`B faucet grant ${index}/5`, grant.status === 200 && grant.body.grant_total === index*10_000,
 			`HTTP ${grant.status} ${JSON.stringify(grant.body).slice(0, 320)}`);
 	}
-	const capped = await post("/api/cashu/faucet", signed(bKey, 28643, { action: "faucet" }, [["request", "6"]]));
+	const capped = await post("/api/cashu/faucet", signed(bKey, 1444, { action: "faucet" }, [["request", "6"]]));
 	pass("B sixth faucet grant is refused at 50,000", capped.status === 409);
 	for (const [name, key] of [["C", cKey], ["D", dKey]] as const) {
-		const grant = await post("/api/cashu/faucet", signed(key, 28643, { action: "faucet" }));
+		const grant = await post("/api/cashu/faucet", signed(key, 1444, { action: "faucet" }));
 		pass(`${name} faucet mints 10,000 real test proofs`, grant.status === 200 && grant.body.grant_total === 10_000);
 	}
 
 	const auctionId = `friday-${Date.now()}`;
-	const created = await post("/api/event", signed(sellerKey, 28640, { auction_id: auctionId, title: "Friday proof-backed lot",
+	const created = await post("/api/event", signed(sellerKey, 1440, { auction_id: auctionId, title: "Friday proof-backed lot",
 		description: "Isolated custodial reservation acceptance", image_url: "https://example.invalid/friday.png",
 		duration_seconds: 190, starting_bid: 1_000, min_increment: 100, reserve: 0 }, [["auction", auctionId]]));
 	pass("seller creates product auction", created.status === 200 && created.body.height > 0);
 	const noSaleAuctionId = `reserve-${Date.now()}`;
-	const noSaleCreated = await post("/api/event", signed(sellerKey, 28640, { auction_id: noSaleAuctionId, title: "Friday reserve-not-met lot",
+	const noSaleCreated = await post("/api/event", signed(sellerKey, 1440, { auction_id: noSaleAuctionId, title: "Friday reserve-not-met lot",
 		description: "Real backing must return when reserve is not met", image_url: "",
 		duration_seconds: 190, starting_bid: 1_000, min_increment: 100, reserve: 5_000 }, [["auction", noSaleAuctionId]]));
 	pass("seller creates reserve 5,000 no-sale auction", noSaleCreated.status === 200 && noSaleCreated.body.height > 0);
 	await reserveAndBid(cKey, noSaleAuctionId, 3_000);
 
-	const unattested = await post("/api/event", signed(cKey, 28641,
+	const unattested = await post("/api/event", signed(cKey, 1441,
 		{ auction_id: auctionId, amount: 1_000, reservation: { schema: "PlebeianAuctionsPOCCustodyReservationV1" } }, [["auction", auctionId]]));
 	pass("unattested client funding assertion is rejected", unattested.status === 422);
 	const self = await post("/api/cashu/reserve", signed(sellerKey, 28644, { auction_id: auctionId, amount: 1_000 }, [["auction", auctionId]]));

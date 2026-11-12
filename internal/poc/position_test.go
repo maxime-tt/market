@@ -275,9 +275,10 @@ func TestPositionSingleLegRegression(t *testing.T) {
 	t.Run("cashu_lock_v1", func(t *testing.T) {
 		t.Parallel()
 		state, seed, committee := cashuLockFixture(t)
+		root := state.Auctions["mint-backed"].RootEventID
 		bidder := testPrivateKey(t)
 		wallet := newWalletClaim(t)
-		event, eventPolicy := authorizedBidEvent(t, committee, bidder, "mint-backed", 128, 1_001, "op-regress", strings.Repeat("a", 64), wallet)
+		event, eventPolicy := authorizedBidEvent(t, committee, bidder, root, "mint-backed", 128, 1_001, "op-regress", strings.Repeat("a", 64), wallet)
 
 		next, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &event}, 1_001, eventPolicy, seed)
 		if err != nil {

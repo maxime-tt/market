@@ -199,7 +199,7 @@ func TestCheckTxRefusesCashuLockWhenMintSaysSpent(t *testing.T) {
 	wallet := newWalletClaim(t)
 	receipt := outcomeReceipt(t, committee, "mint-backed", actorForKey(bidder), 120, "op-spent", strings.Repeat("a", 64), 1_700, refs, wallet.key)
 	authorization := testOutcomeAuthorizations(t, "mint-backed", refs, wallet)
-	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs})
+	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs}, []string{"e", state.Auctions["mint-backed"].RootEventID})
 
 	// The mint confirms the proofs are unspent: admitted.
 	app.SetMintChecker(&fakeMint{states: map[string]MintProofState{refs[0]: MintProofUnspent}})
@@ -231,7 +231,7 @@ func TestCheckTxFailsClosedWhenTheMintCannotBeAsked(t *testing.T) {
 	wallet := newWalletClaim(t)
 	receipt := outcomeReceipt(t, committee, "mint-backed", actorForKey(bidder), 120, "op-unreachable", strings.Repeat("a", 64), 1_700, refs, wallet.key)
 	authorization := testOutcomeAuthorizations(t, "mint-backed", refs, wallet)
-	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs})
+	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs}, []string{"e", state.Auctions["mint-backed"].RootEventID})
 
 	app.SetMintChecker(&fakeMint{err: errors.New("connection refused")})
 	response := checkTx(t, app, event)
@@ -305,7 +305,7 @@ func TestOpenWorldMintAdmitsGenuineMintBackedBid(t *testing.T) {
 	receipt := outcomeReceipt(t, committee, "mint-backed", actorForKey(bidder), 120,
 		"op-open-world", strings.Repeat("a", 64), 1_700, refs, wallet.key)
 	authorization := testOutcomeAuthorizations(t, "mint-backed", refs, wallet)
-	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs})
+	event := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt, OutcomeAuthorizations: &authorization, Proofs: proofs}, []string{"e", state.Auctions["mint-backed"].RootEventID})
 
 	// fakeMint answers UNSPENT for every reference, including ones it has never
 	// seen: exactly the open-world behaviour that used to refuse every bid.

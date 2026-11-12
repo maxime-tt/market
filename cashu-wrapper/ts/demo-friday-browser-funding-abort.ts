@@ -52,7 +52,7 @@ export interface DemoFridayBrowserAbortPreparationV1 {
 
 export interface DemoFridayBrowserAbortFinalityV1 {
 	schema: 'PLEBEIAN_FRIDAY_BROWSER_FUNDING_ABORT_FINALITY_V1'
-	/** NIP-07 kind-28650 actor authorization event. */
+	/** NIP-07 kind-1446 actor authorization event. */
 	actorAuthorizationEventId: string
 	/** Permanent consensus lifecycle identity (the canonical abort-certificate digest). */
 	lifecycleEventId: string
@@ -135,7 +135,7 @@ export interface DemoFridayBrowserAbortReturnPort {
 	importReturnExact(identity: DemoFridayBrowserOperationIdentity): Promise<DemoRecipientImportReceipt | null>
 }
 
-/** NIP-07-compatible signer narrowed to the exact kind-28650 abort event. */
+/** NIP-07-compatible signer narrowed to the exact kind-1446 abort event. */
 export interface DemoFridayBrowserAbortNostrPort {
 	getPublicKey(): Promise<string>
 	signEvent(

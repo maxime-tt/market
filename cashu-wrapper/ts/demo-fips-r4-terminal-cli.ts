@@ -167,7 +167,7 @@ async function prepareCase(options: {
 	const seller = HDKey.fromMasterSeed(randomBytes(32))
 	const auctionId = `fips-r4-${options.branch}-${Date.now()}-${options.caseIndex}`
 	try {
-		const created = await post(held.site, '/api/event', await signedEvent(sellerKey, 28640, {
+		const created = await post(held.site, '/api/event', await signedEvent(sellerKey, 1440, {
 			auction_id: auctionId, title: `R4 ${options.branch} fake-money lot`,
 			description: 'isolated no-value FIPS threshold terminal acceptance', duration_seconds: 300,
 			starting_bid: 100, min_increment: 100, reserve: options.reserve, funding_mode: 'threshold_sigall_v1',

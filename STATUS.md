@@ -843,7 +843,7 @@ not an end-to-end Nostr/Coco/FROST/FIPS demo and not a deployment candidate.
 The central fixes are now frozen through `0eb5118`. Seller payout-key binding,
 exact lost-response recovery, and deterministic rejected-bid return are durable.
 Rejected admission stores both distinct Nostr identities: the kind-28647 funding
-authorization and the kind-28641 bid committed by Comet. Terminal discovery
+authorization and the kind-1441 bid committed by Comet. Terminal discovery
 uses the latter. Independent re-review of `7c110c7` found no remaining P0/P1
 in that path. The browser bundle has been rebuilt, and the V4 site has an
 explicit default-off activation gate; enabling it never restores the Wednesday

@@ -167,7 +167,7 @@ function replacementInBlock(block: DemoParticipantBlockObservation, auctionId: s
 	const matches: ReturnType<typeof decodeTransaction>[] = []
 	for (const raw of block.transactions) {
 		const tx = decodeTransaction(raw)
-		if (tx?.event.kind !== 28641 || tx.event.id !== expectedBidId) continue
+		if (tx?.event.kind !== 1441 || tx.event.id !== expectedBidId) continue
 		matches.push(tx)
 	}
 	if (matches.length !== 1 || matches[0] === null) fail('displacement block does not contain one exact replacement bid')

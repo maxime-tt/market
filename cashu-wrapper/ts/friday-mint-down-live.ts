@@ -41,16 +41,16 @@ async function waitMarker(name: string, timeoutMs = 30_000): Promise<void> {
 async function main(): Promise<void> {
 	const run = randomUUID(), started = new Date().toISOString();
 	const sellerKey = secret(), bidderKey = secret(), seller = actor(sellerKey), bidder = actor(bidderKey);
-	const grant = await post("/api/cashu/faucet", signed(bidderKey, 28643, { action: "faucet" }));
+	const grant = await post("/api/cashu/faucet", signed(bidderKey, 1444, { action: "faucet" }));
 	pass("bidder receives 10,000 actual fake-mint proofs", grant.status === 200 && grant.body.grant_total === 10_000);
 	const auctionId = `mint-down-${Date.now()}`;
-	const created = await post("/api/event", signed(sellerKey, 28640, { auction_id: auctionId, title: "Mint-down close lot",
+	const created = await post("/api/event", signed(sellerKey, 1440, { auction_id: auctionId, title: "Mint-down close lot",
 		description: "Outbox must recover after mint outage", image_url: "", duration_seconds: 190,
 		starting_bid: 1_000, min_increment: 100, reserve: 0 }, [["auction", auctionId]]));
 	pass("seller creates isolated auction", created.status === 200);
 	const reservation = await post("/api/cashu/reserve", signed(bidderKey, 28644, { auction_id: auctionId, amount: 2_500 }, [["auction", auctionId]]));
 	pass("2,500 bid is reserved against actual backing", reservation.status === 200 && reservation.body.receipt?.amount === 2_500);
-	const bid = await post("/api/event", signed(bidderKey, 28641, { auction_id: auctionId, amount: 2_500, reservation: reservation.body.receipt }, [["auction", auctionId]]));
+	const bid = await post("/api/event", signed(bidderKey, 1441, { auction_id: auctionId, amount: 2_500, reservation: reservation.body.receipt }, [["auction", auctionId]]));
 	pass("reservation-backed bid commits", bid.status === 200, `HTTP ${bid.status} ${JSON.stringify(bid.body).slice(0, 240)}`);
 	const before = (await request("/api/validators")).body.validators as any[];
 	pass("four distinct validators sign before the fault", before.length === 4 && before.every((node) => node.online && node.commit_signatures === 4));

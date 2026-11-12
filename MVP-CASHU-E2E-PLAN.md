@@ -38,7 +38,7 @@ swaps at the mint. Four CometBFT validators, deterministic state, no FROST anywh
   `webwallet/src/wallet.ts:246,265` define it.
 - [x] **Live double-credit bug.** `applyRefund` (`model.go:1761`) never checks
   `bid.CashuTokenSHA256`, so a displaced mint-backed bidder can post `KindRefund`
-  (28642) and receive a legacy signed note for the same amount while still holding
+  (1443) and receive a legacy signed note for the same amount while still holding
   the proofs. S2 must close this.
 
 ## Slices
@@ -98,7 +98,7 @@ buys the bidder nothing and costs the auction its collateral.
 
 - [x] Same file, `POST /api/demo/mint-settle`. `applyClose` (`model.go:1724-1731`)
   stays as is; the money move is off-chain, the state change is a new event.
-- [x] Add `KindSettle = 28643` (`model.go:25-27`) and a `case` in `applyEvent`
+- [x] Add `KindSettle = 1444` (`model.go:25-27`) and a `case` in `applyEvent`
   (`model.go:925`) that only accepts a `cashu_lock_v1` winner lock in
   `winner_selected` and sets `lock.Status = "paid"`. New `Lock` field
   `CashuPayoutTokenSHA256 string \`json:"cashu_payout_token_sha256,omitempty"\``.

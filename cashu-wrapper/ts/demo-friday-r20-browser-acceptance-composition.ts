@@ -206,8 +206,8 @@ export interface DemoFridayR20PreparedAuctionV1 {
 	auctionId: string
 	sellerActor: string
 	sellerPaymentPublicKey: string
-	unsigned: { pubkey: string; created_at: number; kind: 28640; tags: string[][]; content: string }
-	signed: { id: string; pubkey: string; created_at: number; kind: 28640; tags: string[][]; content: string; sig: string }
+	unsigned: { pubkey: string; created_at: number; kind: 1440; tags: string[][]; content: string }
+	signed: { id: string; pubkey: string; created_at: number; kind: 1440; tags: string[][]; content: string; sig: string }
 }
 
 export interface DemoFridayR20BrowserRoleController {
@@ -255,7 +255,7 @@ export function createDemoFridayR20BrowserRoleController(options: {
 			if (!ID.test(auctionId)) fail('auction id is invalid')
 			const sellerPaymentPublicKey = await controller.sellerPaymentPublicKey()
 			if (!POINT.test(sellerPaymentPublicKey)) fail('seller payment key is invalid')
-			const unsigned = { pubkey: sellerActor, created_at: now(), kind: 28640 as const,
+			const unsigned = { pubkey: sellerActor, created_at: now(), kind: 1440 as const,
 				tags: [['auction', auctionId]], content: JSON.stringify({ auction_id: auctionId,
 					title: auctionId, description: 'Friday FIPS/FROST Coco v2 acceptance', image_url: '',
 					duration_seconds: DEMO_FRIDAY_R20_ACCEPTANCE_POLICY.durationSeconds,

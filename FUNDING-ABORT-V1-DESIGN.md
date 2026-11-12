@@ -20,7 +20,7 @@ Both transitions atomically claim the operation ID and sorted proof-Y set. A
 local journal, transaction absence, timeout, mempool result, or coordinator vote
 cannot create an abort.
 
-The abort certificate has a NIP-07-compatible, exact kind-28650 Nostr actor
+The abort certificate has a NIP-07-compatible, exact kind-1446 Nostr actor
 authorization and a separate committee signature domain. It
 binds the deployment/chain/genesis, auction and operation, actor, canonical mint
 and keyset, amount and sorted proof Ys, pool digest, exact two-key NUT-11 lock and

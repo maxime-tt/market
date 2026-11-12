@@ -197,7 +197,7 @@ try {
 // The winner's side: the wallet builds the claim, posts it, and clears the
 // locked bid without importing the payout (it belongs to the seller).
 wallet.recordLockedBid("bid-1", funding.lockedProofs, funding.spendPublicKey, "auction-1");
-const settled = await wallet.settleAuction("auction-1", { kind: 28643 }, `${coordinatorUrl}/api/demo/mint-settle`);
+const settled = await wallet.settleAuction("auction-1", { kind: 1444 }, `${coordinatorUrl}/api/demo/mint-settle`);
 check("the winner's settlement returns the payout digest and amount",
   settled.amount === 64 && /^[0-9a-f]{64}$/.test(settled.tokenSha256),
   `${settled.amount} sats, ${settled.tokenSha256.slice(0, 16)}`);

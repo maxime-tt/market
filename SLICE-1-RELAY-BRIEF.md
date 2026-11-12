@@ -10,8 +10,8 @@ Status: IN PROGRESS. Owner approved the slice order on 2026-11-07.
 
 - One relay process on loopback (khatru, Go, or go-nostr + a thin server). Persistence:
   in-memory or a single SQLite file. No auth, no moderation, fake-money demo.
-- One observer loop per validator: subscribe to kinds 28640 (create), 28641 (bid),
-  28642 (refund) since the last seen created_at, verify the event signature (go-nostr
+- One observer loop per validator: subscribe to kinds 1440 (create), 1441 (bid),
+  1443 (refund) since the last seen created_at, verify the event signature (go-nostr
   does this), then submit it as the existing `Transaction{Event: ...}` to CometBFT.
 - Idempotence: the chain already has `Operations[...]` keys per event id, so a duplicate
   submission is a no-op. This is what makes multi-validator observation safe.

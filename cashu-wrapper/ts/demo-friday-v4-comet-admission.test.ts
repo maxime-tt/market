@@ -48,7 +48,7 @@ function fixtureReceipt(): DemoIntegratedFundingReceiptV4 {
 
 function signedTransaction(receipt: DemoIntegratedFundingReceiptV4) {
 	const unsigned = {
-		pubkey: receipt.bidder, created_at: 1_100, kind: 28641 as const, tags: [] as string[][],
+		pubkey: receipt.bidder, created_at: 1_100, kind: 1441 as const, tags: [] as string[][],
 		content: JSON.stringify({
 			auction_id: receipt.auction_id, amount: receipt.bid_amount,
 			replaces_bid_id: receipt.replaces_bid_id, integrated_funding: receipt,

@@ -2,7 +2,7 @@
 # Start the Slice 1 auction-event relay on loopback.
 #
 # The relay is `nak serve` (fiatjaf's Nostr Army Knife): an in-memory NIP-01
-# relay used purely as transport for kinds 28640/28641/28642.  It is NOT a source
+# relay used purely as transport for kinds 1440/1441/1443.  It is NOT a source
 # of truth -- the CometBFT chain is -- so it is safe to run empty and to restart:
 # an observer catches up from the chain's per-event Operations keys, and any
 # event still held by the live relay is replayed on resubscribe.

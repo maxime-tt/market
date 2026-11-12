@@ -83,7 +83,7 @@ function exactText(value: string, label: string): string {
 }
 
 interface ExactBidEvent {
-	id: string; pubkey: string; created_at: number; kind: 28641; tags: string[][]; content: string; sig: string
+	id: string; pubkey: string; created_at: number; kind: 1441; tags: string[][]; content: string; sig: string
 }
 
 function eventId(event: Omit<ExactBidEvent, 'id' | 'sig'>): string {
@@ -105,7 +105,7 @@ function exactCommittedBid(raw: Uint8Array, expectedEventId: string): { event: E
 	const rawEvent = tx.event as Record<string, unknown>
 	if (JSON.stringify(Object.keys(rawEvent).sort()) !== JSON.stringify(['content', 'created_at', 'id', 'kind', 'pubkey', 'sig', 'tags'])
 		|| !HEX_32.test(String(rawEvent.id ?? '')) || !ACTOR.test(String(rawEvent.pubkey ?? ''))
-		|| !HEX_64.test(String(rawEvent.sig ?? '')) || rawEvent.kind !== 28641
+		|| !HEX_64.test(String(rawEvent.sig ?? '')) || rawEvent.kind !== 1441
 		|| !Number.isSafeInteger(rawEvent.created_at) || Number(rawEvent.created_at) < 1
 		|| !Array.isArray(rawEvent.tags) || rawEvent.tags.some((tag) => !Array.isArray(tag) || tag.some((entry) => typeof entry !== 'string'))
 		|| typeof rawEvent.content !== 'string') fail('committed bid event is malformed')

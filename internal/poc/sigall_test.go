@@ -225,6 +225,7 @@ func TestSigAllReceiptCommitsTwoKeyConditionAndMode(t *testing.T) {
 func TestCashuLockModeIsUnaffected(t *testing.T) {
 	t.Parallel()
 	state, seed, committee := cashuLockFixture(t)
+	root := state.Auctions["mint-backed"].RootEventID
 	bidder := testPrivateKey(t)
 	policy := DefaultPolicy()
 	refs := testProofRefs(t, testPrivateKey(t))
@@ -234,13 +235,13 @@ func TestCashuLockModeIsUnaffected(t *testing.T) {
 		t.Fatalf("a cashu_lock_v1 receipt recorded a funding mode %q", receipt.FundingMode)
 	}
 	// No outcome authorizations: still refused, exactly as before wave 1.
-	plain := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt})
+	plain := testEvent(t, bidder, 1_001, KindBid, bidContent{AuctionID: "mint-backed", Amount: 120, CashuLock: &receipt}, []string{"e", root})
 	if err := ValidateForMempool(state, Transaction{Version: TxVersion, Type: "event", Event: &plain}, policy, seed); err == nil ||
 		!strings.Contains(err.Error(), "outcome authorizations") {
 		t.Fatalf("cashu_lock_v1 admission error = %v, want the authorization rule", err)
 	}
 	// With them, it commits.
-	authorized, authPolicy := authorizedBidEvent(t, committee, bidder, "mint-backed", 120, 1_001, "op-plain", strings.Repeat("a", 64), wallet)
+	authorized, authPolicy := authorizedBidEvent(t, committee, bidder, root, "mint-backed", 120, 1_001, "op-plain", strings.Repeat("a", 64), wallet)
 	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &authorized}, 1_001, authPolicy, seed); err != nil {
 		t.Fatalf("authorized cashu_lock_v1 bid: %v", err)
 	}

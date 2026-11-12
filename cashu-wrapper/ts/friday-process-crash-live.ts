@@ -41,7 +41,7 @@ async function waitMarker(name: string, timeoutMs = 60_000): Promise<void> {
 async function main(): Promise<void> {
 	const run = randomUUID(), started = new Date().toISOString();
 	const sellerKey = secret(), bidderKey = secret(), seller = actor(sellerKey), bidder = actor(bidderKey);
-	const faucetEvent = signed(bidderKey, 28643, { action: "faucet" }, "stable-faucet-event");
+	const faucetEvent = signed(bidderKey, 1444, { action: "faucet" }, "stable-faucet-event");
 	let interrupted = false;
 	try {
 		// The browser-facing Go proxy turns a killed upstream connection into a
@@ -57,13 +57,13 @@ async function main(): Promise<void> {
 		`HTTP ${recoveredGrant.status} ${JSON.stringify(recoveredGrant.body)}`);
 
 	const auctionId = `process-crash-${Date.now()}`;
-	const created = await post("/api/event", signed(sellerKey, 28640, { auction_id: auctionId, title: "Process crash payout",
+	const created = await post("/api/event", signed(sellerKey, 1440, { auction_id: auctionId, title: "Process crash payout",
 		description: "SIGKILL boundaries over durable coordinator and Coco state", image_url: "", duration_seconds: 190,
 		starting_bid: 1_000, min_increment: 100, reserve: 0 }));
 	pass("crash auction created", created.status === 200);
 	const reservation = await post("/api/cashu/reserve", signed(bidderKey, 28644, { auction_id: auctionId, amount: 2_500 }));
 	pass("2.5k actual backing reserved", reservation.status === 200 && reservation.body.receipt?.amount === 2_500);
-	const bid = await post("/api/event", signed(bidderKey, 28641, { auction_id: auctionId, amount: 2_500, reservation: reservation.body.receipt }));
+	const bid = await post("/api/event", signed(bidderKey, 1441, { auction_id: auctionId, amount: 2_500, reservation: reservation.body.receipt }));
 	pass("reservation-backed bid committed", bid.status === 200);
 	await marker("payment-scenario-ready", JSON.stringify({ schema: "PlebeianFridayCrashScenarioV1", auction_id: auctionId, seller, bidder,
 		send_id: `send-payout-${auctionId}`, receive_id: `receive-payout-${auctionId}` })+"\n");

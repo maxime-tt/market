@@ -1,5 +1,5 @@
 // Package relay is the observer half of Slice 1: it reads signed auction events
-// (kinds 28640/28641/28642) from a Nostr relay and submits them to the chain as
+// (kinds 1440/1441/1443) from a Nostr relay and submits them to the chain as
 // the same transaction the HTTP /api/event path builds.
 //
 // The relay itself is not implemented here.  It is an external process (the
@@ -8,18 +8,18 @@
 // check.  Every time rule keeps running on committed block time, and the chain
 // stays the only source of truth.
 //
-// Known transport limitation (verified against `nak serve`, which is khatru):
-// the auction kinds 28640/28641/28642 fall inside the NIP-01 ephemeral range
-// 20000-29999, and khatru refuses an EVENT for an ephemeral kind when no live
-// subscription matches it ("mute: no one was listening for this").  Two
-// consequences for deployment:
-//   - An observer must be subscribed before producers publish.  In production the
-//     observer is always up, so this is a non-issue; tests wait for Subscribed().
-//   - The relay is not a durable buffer: an event published while NO observer is
-//     connected is dropped by nak/khatru.  That is safe here because the chain,
-//     not the relay, is the record -- but it means "restart the relay and recover
-//     everything" is false for events that were never observed.  Use a relay that
-//     persists for that, or keep an observer attached.
+// Storage: the auction kinds 1440/1441/1443 are NIP-01 REGULAR kinds
+// (1000 <= n < 10000), so a conformant relay is expected to STORE them. This is
+// why the kinds were moved out of the earlier ephemeral numbering (2864x, inside
+// the 20000-29999 range): khatru refuses an EVENT for an ephemeral kind when no
+// live subscription matches it ("mute: no one was listening for this") and does
+// not buffer it, so nothing was ever retained. Two consequences remain worth
+// stating for deployment:
+//   - A regular kind is not addressable: the relay stores every version side by
+//     side and performs no replacement. Supersession and latest-version
+//     resolution are the application's job, not the relay's.
+//   - The chain, not the relay, is still the record. An observer must be
+//     subscribed to forward an event into consensus; tests wait for Subscribed().
 package relay
 
 import (

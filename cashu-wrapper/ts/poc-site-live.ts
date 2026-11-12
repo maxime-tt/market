@@ -37,29 +37,29 @@ async function main(): Promise<void> {
 	const startedAt = new Date().toISOString(); const run = randomUUID();
 	const sellerKey = key(), loserKey = key(), winnerKey = key();
 	const seller = pubkey(sellerKey), loser = pubkey(loserKey), winner = pubkey(winnerKey);
-	const faucetA = await post("/api/cashu/faucet", event(loserKey, 28643, { action: "faucet" }));
-	const faucetB = await post("/api/cashu/faucet", event(winnerKey, 28643, { action: "faucet" }));
+	const faucetA = await post("/api/cashu/faucet", event(loserKey, 1444, { action: "faucet" }));
+	const faucetB = await post("/api/cashu/faucet", event(winnerKey, 1444, { action: "faucet" }));
 	pass("site faucet finalizes 10,000 real test proofs for both bidders", faucetA.status === 200 && faucetB.status === 200
 		&& faucetA.body.spendable === 10_000 && faucetB.body.spendable === 10_000);
 
 	const auctionId = `site-${Date.now()}`; const duration = 12;
-	const create = event(sellerKey, 28640, { auction_id: auctionId, title: "Site-wired Cashu/Comet POC", duration_seconds: duration, starting_bid: 100, reserve: 150 },
+	const create = event(sellerKey, 1440, { auction_id: auctionId, title: "Site-wired Cashu/Comet POC", duration_seconds: duration, starting_bid: 100, reserve: 150 },
 		[["t", "plebeian-auctions-poc"], ["auction", auctionId]]);
 	const created = await post("/api/event", create);
 	pass("site auction creation commits", created.status === 200 && created.body.height > 0);
 
 	const lockA = await post("/api/cashu/lock", event(loserKey, 28644, { auction_id: auctionId, amount: 120 }, [["auction", auctionId]]));
 	pass("site creates a Coco NUT-11 loser lock", lockA.status === 200 && lockA.body.receipt?.amount === 120, JSON.stringify(lockA.body).slice(0, 240));
-	const bidA = await post("/api/event", event(loserKey, 28641, { auction_id: auctionId, amount: 120, cashu_lock: lockA.body.receipt }, [["auction", auctionId]]));
+	const bidA = await post("/api/event", event(loserKey, 1441, { auction_id: auctionId, amount: 120, cashu_lock: lockA.body.receipt }, [["auction", auctionId]]));
 	pass("validators commit the coordinator-attested first lock", bidA.status === 200);
 
 	const untrusted = { ...lockA.body.receipt, amount: 170, token_sha256: "00".repeat(32), signature: "00".repeat(64) };
-	const assertion = await post("/api/event", event(winnerKey, 28641, { auction_id: auctionId, amount: 170, cashu_lock: untrusted }, [["auction", auctionId]]));
+	const assertion = await post("/api/event", event(winnerKey, 1441, { auction_id: auctionId, amount: 170, cashu_lock: untrusted }, [["auction", auctionId]]));
 	pass("validators reject a client-asserted lock without committee attestation", assertion.status === 422, String(assertion.body.error).slice(0, 120));
 
 	const lockB = await post("/api/cashu/lock", event(winnerKey, 28644, { auction_id: auctionId, amount: 180 }, [["auction", auctionId]]));
 	pass("site creates a Coco NUT-11 winner lock", lockB.status === 200 && lockB.body.receipt?.amount === 180, JSON.stringify(lockB.body).slice(0, 240));
-	const bidB = await post("/api/event", event(winnerKey, 28641, { auction_id: auctionId, amount: 180, cashu_lock: lockB.body.receipt }, [["auction", auctionId]]));
+	const bidB = await post("/api/event", event(winnerKey, 1441, { auction_id: auctionId, amount: 180, cashu_lock: lockB.body.receipt }, [["auction", auctionId]]));
 	pass("validators commit the winning mint-backed lock", bidB.status === 200);
 
 	const before = (await request("/api/validators")).body.validators as any[];
@@ -89,7 +89,7 @@ async function main(): Promise<void> {
 	pass("consensus chooses the exact 180-sat Cashu token digest", auction.winner === winner
 		&& winningBid.cashu_token_sha256 === lockB.body.receipt.token_sha256);
 
-	const settlement = await post("/api/cashu/settle", event(sellerKey, 28645, { auction_id: auctionId }, [["auction", auctionId]]));
+	const settlement = await post("/api/cashu/settle", event(sellerKey, 1445, { auction_id: auctionId }, [["auction", auctionId]]));
 	pass("site spends the consensus winner and pays seller Coco wallet", settlement.status === 200
 		&& settlement.body.state === "finalized" && settlement.body.amount === 180
 		&& settlement.body.spendable > 0 && settlement.body.spendable <= 180,

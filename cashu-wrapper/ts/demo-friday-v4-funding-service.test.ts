@@ -33,7 +33,7 @@ function receipt() {
 
 function signed(receiptValue: ReturnType<typeof receipt>) {
 	const unsigned = {
-		pubkey: receiptValue.bidder, created_at: receiptValue.attested_at, kind: 28641 as const,
+		pubkey: receiptValue.bidder, created_at: receiptValue.attested_at, kind: 1441 as const,
 		tags: [] as string[][], content: JSON.stringify({
 			auction_id: receiptValue.auction_id, amount: receiptValue.bid_amount,
 			replaces_bid_id: receiptValue.replaces_bid_id, integrated_funding: receiptValue,

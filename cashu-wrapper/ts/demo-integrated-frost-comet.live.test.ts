@@ -586,7 +586,7 @@ test('unified local Comet, independent policy, real FROST and recovered fake-min
 		const sellerPaymentPublicKey = sellerRoot.derive('m/1/2/3/4/5').publicKey
 		if (sellerPaymentPublicKey === null) throw new Error('seller payment public key is absent')
 		const auctionId = `frost-friday-${Date.now()}`
-		const create = await post('/api/event', await signedEvent(sellerPrivate, 28640, {
+		const create = await post('/api/event', await signedEvent(sellerPrivate, 1440, {
 			auction_id: auctionId, title: 'Integrated threshold fake-money lot', description: 'local fake-only evidence',
 			duration_seconds: 300, starting_bid: 100, min_increment: 100, reserve: 0,
 			funding_mode: 'threshold_sigall_v1', seller_coco_payment_public_key: bytesToHex(sellerPaymentPublicKey),

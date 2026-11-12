@@ -326,7 +326,7 @@ let offlineStore=new DemoMaintainerEncryptedSqliteStore(privateDb,privateStoreKe
 privateStoreKey.fill(0)
 const sellerKey=hexToBytes(generateSchnorrKeypair().privateKeyHex),seller=HDKey.fromMasterSeed(randomBytes(32)),actor1=hexToBytes(generateSchnorrKeypair().privateKeyHex),actor2=hexToBytes(generateSchnorrKeypair().privateKeyHex),bidder1=hexToBytes(generateSchnorrKeypair().privateKeyHex),bidder2=hexToBytes(generateSchnorrKeypair().privateKeyHex),refund1=hexToBytes(generateSchnorrKeypair().privateKeyHex),refund2=hexToBytes(generateSchnorrKeypair().privateKeyHex);
 const auctionId=`fips-friday-${Date.now()}`;
-const created=await post(site,'/api/event',await signedEvent(sellerKey,28640,{auction_id:auctionId,title:'FIPS threshold fake-money lot',description:'isolated no-value lab PLEBEIAN-FRIDAY-COMET-TRANSPORT-V1',duration_seconds:300,starting_bid:100,min_increment:100,reserve:0,funding_mode:'threshold_sigall_v1'}));
+const created=await post(site,'/api/event',await signedEvent(sellerKey,1440,{auction_id:auctionId,title:'FIPS threshold fake-money lot',description:'isolated no-value lab PLEBEIAN-FRIDAY-COMET-TRANSPORT-V1',duration_seconds:300,starting_bid:100,min_increment:100,reserve:0,funding_mode:'threshold_sigall_v1'}));
 if(created.status!==200)throw new Error(`DEMO_FIPS_DRIVER_AUCTION: ${created.status}`);
 const reader=createLoopbackCometReader(rpc);
 const state=await waitFor('auction commit',()=>reader.readCurrentState(),(value)=>value.state.auctions?.[auctionId]!==undefined);

@@ -21,7 +21,7 @@ const HEX_64 = /^[0-9a-f]{128}$/
 const COMPRESSED = /^(?:02|03)[0-9a-f]{64}$/
 const ID = /^[A-Za-z0-9_-]{1,160}$/
 const COMMITTEE_DOMAIN = utf8ToBytes('PLEBEIAN_FRIDAY_FUNDING_ABORT_COMMITTEE_V1')
-const ABORT_EVENT_KIND = 28650
+const ABORT_EVENT_KIND = 1446
 
 function refuse(message: string): never { throw new Error(`DEMO_FRIDAY_FUNDING_ABORT: ${message}`) }
 function exactKeys(value: object, expected: string[], label: string): void {

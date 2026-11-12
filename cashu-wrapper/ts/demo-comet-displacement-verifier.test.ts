@@ -71,7 +71,7 @@ function fixture() {
 	}
 	const raw = new TextEncoder().encode(JSON.stringify({
 		version: 1, type: 'event', event: {
-			id: eventId, pubkey: bidderB, kind: 28641,
+			id: eventId, pubkey: bidderB, kind: 1441,
 			content: JSON.stringify({ auction_id: 'auction', amount: 1_500, replaces_bid_id: displacedId, integrated_funding: { funding_operation_id: 'funding-new' } }),
 		},
 	}))

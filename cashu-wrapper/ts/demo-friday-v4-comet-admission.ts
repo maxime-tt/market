@@ -30,7 +30,7 @@ import {
 
 const HEX_32 = /^[0-9a-f]{64}$/
 const HEX_64 = /^[0-9a-f]{128}$/
-const BID_KIND = 28641
+const BID_KIND = 1441
 
 export interface DemoFridayPinnedGenesisIdentityV1 {
 	schema: 'PLEBEIAN_FRIDAY_PINNED_GENESIS_IDENTITY_V1'

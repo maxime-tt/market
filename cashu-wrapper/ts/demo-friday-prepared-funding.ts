@@ -49,7 +49,7 @@ export interface DemoFridayFundingAdmissionCommitV1 {
 	schema: 'PLEBEIAN_FRIDAY_FUNDING_ADMISSION_COMMIT_V1'
 	/** The replay-key identity of the distinct kind-28647 funding authorization. */
 	eventId: string
-	/** The exact kind-28641 bid event committed by Comet. */
+	/** The exact kind-1441 bid event committed by Comet. */
 	bidEventId: string
 	fundingOperationId: string
 	bundleDigest: string

@@ -153,7 +153,7 @@ async function main(): Promise<void> {
 
 		const auctionID = `cashu-comet-${Date.now()}`;
 		const duration = 15;
-		const create = nostrEvent(sellerNostr, 28640, {
+		const create = nostrEvent(sellerNostr, 1440, {
 			auction_id: auctionID, title: "Integrated Cashu/Comet POC", duration_seconds: duration,
 			starting_bid: 100, reserve: 150,
 		}, [["t", "plebeian-auctions-poc"], ["auction", auctionID]]);
@@ -187,13 +187,13 @@ async function main(): Promise<void> {
 			refund_public_key: refundB.pubkey, locktime,
 		}, committeeSecret);
 
-		const bidA = nostrEvent(bidderANostr, 28641, { auction_id: auctionID, amount: 120, cashu_lock: receiptA }, [["auction", auctionID]]);
+		const bidA = nostrEvent(bidderANostr, 1441, { auction_id: auctionID, amount: 120, cashu_lock: receiptA }, [["auction", auctionID]]);
 		const bidAResult = await event(bidA);
 		const forged = { ...receiptB, amount: 160, token_sha256: "00".repeat(32) };
-		const invalidBid = nostrEvent(bidderBNostr, 28641, { auction_id: auctionID, amount: 160, cashu_lock: forged }, [["auction", auctionID]]);
+		const invalidBid = nostrEvent(bidderBNostr, 1441, { auction_id: auctionID, amount: 160, cashu_lock: forged }, [["auction", auctionID]]);
 		const invalidResult = await post("/api/event", invalidBid);
 		assert("forged/unfunded Cashu bid is rejected by validators", invalidResult.status === 422, JSON.stringify(invalidResult.body).slice(0, 120));
-		const bidB = nostrEvent(bidderBNostr, 28641, { auction_id: auctionID, amount: 180, cashu_lock: receiptB }, [["auction", auctionID]]);
+		const bidB = nostrEvent(bidderBNostr, 1441, { auction_id: auctionID, amount: 180, cashu_lock: receiptB }, [["auction", auctionID]]);
 		const bidBResult = await event(bidB);
 
 		const before = (await request("/api/validators")).body.validators as any[];

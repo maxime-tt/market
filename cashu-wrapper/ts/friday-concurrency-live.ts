@@ -27,11 +27,11 @@ function pass(label: string, condition: boolean, detail = ""): void {
 	if (!condition) throw new Error(`${label}${detail ? `: ${detail}` : ""}`); console.log(`PASS  ${label}`);
 }
 async function faucet(key: Uint8Array): Promise<void> {
-	const result = await post("/api/cashu/faucet", signed(key, 28643, { action: "faucet" }));
+	const result = await post("/api/cashu/faucet", signed(key, 1444, { action: "faucet" }));
 	pass("real 10k faucet grant", result.status === 200 && result.body.grant_total === 10_000, JSON.stringify(result.body));
 }
 async function createAuction(seller: Uint8Array, id: string): Promise<void> {
-	const result = await post("/api/event", signed(seller, 28640, { auction_id: id, title: id, description: "Friday concurrency acceptance",
+	const result = await post("/api/event", signed(seller, 1440, { auction_id: id, title: id, description: "Friday concurrency acceptance",
 		image_url: "", duration_seconds: 600, starting_bid: 1_000, min_increment: 100, reserve: 0 }));
 	pass(`create ${id}`, result.status === 200, JSON.stringify(result.body));
 }
@@ -40,7 +40,7 @@ async function reserve(key: Uint8Array, auctionId: string, amount: number): Prom
 	return { ...(await post("/api/cashu/reserve", event)), event };
 }
 async function submitBid(key: Uint8Array, auctionId: string, amount: number, receipt: unknown): Promise<{ status: number; body: any }> {
-	return post("/api/event", signed(key, 28641, { auction_id: auctionId, amount, reservation: receipt }));
+	return post("/api/event", signed(key, 1441, { auction_id: auctionId, amount, reservation: receipt }));
 }
 
 async function main(): Promise<void> {

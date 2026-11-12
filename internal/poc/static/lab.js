@@ -2,7 +2,7 @@
  *
  * Plain browser JavaScript, no build step. The lab defaults to the SIG_ALL
  * money path: mint -> 2-of-2 NUT-11 SIG_ALL lock -> /api/demo/mint-lock ->
- * signed kind 28641 carrying the lock -> /api/event. The legacy cashu_lock_v1
+ * signed kind 1441 carrying the lock -> /api/event. The legacy cashu_lock_v1
  * route (winner's tab settles) is still selectable.
  */
 (function lab() {
@@ -406,7 +406,7 @@
         proofs: funding.proofs,
       }),
     });
-    const signed = await sign(identity, 28641, [["e", auction.id]], {
+    const signed = await sign(identity, 1441, [["e", auction.auction_root_event_id]], {
       auction_id: auction.id,
       amount,
       cashu_lock: receipt,
@@ -450,7 +450,7 @@
     // signature, so the coordinator can settle or refund with this tab closed.
     // Without them the bid commits under rule 7 but can never settle or refund.
     const material = await wallet.sigAllBidMaterial(auction, funding);
-    const signed = await sign(identity, 28641, [["e", auction.id]], {
+    const signed = await sign(identity, 1441, [["e", auction.auction_root_event_id]], {
       auction_id: auction.id,
       amount,
       cashu_lock: receipt,
@@ -480,7 +480,7 @@
       if (!lock || (lock.status !== "refundable" && lock.status !== "refunded")) continue;
       if (!wallet.lockedForBid(bid.id).length) continue;
       try {
-        const event = await sign(identity, 28642, [["e", bid.auction_id]], { bid_id: bid.id });
+        const event = await sign(identity, 1443, [["e", bid.auction_id]], { bid_id: bid.id });
         const result = await wallet.refundBid(bid.id, event);
         claimed += 1;
         if (manual) toast(`Refunded ${sats(result.amount)} fake sats to this wallet.`, "success");
@@ -538,7 +538,7 @@
    * The winner's half of settlement. When this tab's own lock is
    * `winner_selected`, it hands the proofs to the coordinator, which swaps them
    * to the SELLER's committed wallet key, and then records the outcome as a kind
-   * 28643 event. The swap is the money; the event is only the record, so a
+   * 1444 event. The swap is the money; the event is only the record, so a
    * failed post is reported and retried on a later refresh, never treated as a
    * lost payment.
    *
@@ -565,12 +565,12 @@
       if (!manual && Date.now() - last < 15000) continue;
       state.settlementAttempts.set(auction.id, Date.now());
       try {
-        const authorization = await sign(identity, 28643, [["e", auction.id]], { auction_id: auction.id, bid_id: auction.leader_bid_id });
+        const authorization = await sign(identity, 1444, [["e", auction.id]], { auction_id: auction.id, bid_id: auction.leader_bid_id });
         const result = await wallet.settleAuction(auction.id, authorization);
         settled += 1;
         state.settlementAttempts.delete(auction.id);
         try {
-          const record = await sign(identity, 28643, [["e", auction.id]], {
+          const record = await sign(identity, 1444, [["e", auction.id]], {
             auction_id: auction.id,
             bid_id: auction.leader_bid_id,
             payout_token_sha256: result.tokenSha256,
@@ -685,7 +685,7 @@
       if (value !== null && (!Number.isSafeInteger(value) || value < 0)) throw new Error(`${name} must be a whole number of at least 0, or left empty.`);
     }
     const id = `auction-${Date.now()}`;
-    const signed = await sign(identity, 28640, [["t", "plebeian-auctions-poc"], ["auction", id]], {
+    const signed = await sign(identity, 1440, [["t", "plebeian-auctions-poc"], ["auction", id]], {
       auction_id: id,
       title,
       description: $("description").value.trim(),
@@ -1042,7 +1042,7 @@
           state.busy.add(`claim:${bid.id}`);
           claim.disabled = true;
           try {
-            const event = await sign(identity, 28642, [["e", bid.auction_id]], { bid_id: bid.id });
+            const event = await sign(identity, 1443, [["e", bid.auction_id]], { bid_id: bid.id });
             const result = await identity.wallet.refundBid(bid.id, event);
             toast(`Refunded ${sats(result.amount)} fake sats.`, "success");
             await refresh();

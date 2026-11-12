@@ -355,7 +355,7 @@ async function claimRefunds({ manual = false } = {}) {
     if (!manual && Date.now() - last < 15000) continue;
     state.refundAttempts.set(bid.id, Date.now());
     try {
-      const event = await sign(28642, [["e", bid.auction_id]], { bid_id: bid.id });
+      const event = await sign(1443, [["e", bid.auction_id]], { bid_id: bid.id });
       const result = await wallet.refundBid(bid.id, event);
       claimed += 1; amount += result.amount;
       state.refundAttempts.delete(bid.id);
@@ -399,12 +399,12 @@ async function settleWonAuctions({ manual = false } = {}) {
     if (!manual && Date.now() - last < 15000) continue;
     state.settlementAttempts.set(auction.id, Date.now());
     try {
-      const authorization = await sign(28643, [["e", auction.id]], { auction_id: auction.id, bid_id: auction.leader_bid_id });
+      const authorization = await sign(1444, [["e", auction.id]], { auction_id: auction.id, bid_id: auction.leader_bid_id });
       const result = await wallet.settleAuction(auction.id, authorization);
       settled += 1; amount += result.amount;
       state.settlementAttempts.delete(auction.id);
       try {
-        const record = await sign(28643, [["e", auction.id]], {
+        const record = await sign(1444, [["e", auction.id]], {
           auction_id: auction.id, bid_id: auction.leader_bid_id, payout_token_sha256: result.tokenSha256,
         });
         await api("/api/event", { method: "POST", body: JSON.stringify(record) });
@@ -734,7 +734,7 @@ async function placeBid(auctionId, amount) {
       auction_id: auctionId, bidder: state.actor, amount, locktime,
       refund_public_key: funding.refundPublicKey, token_sha256: funding.tokenSha256,
       proof_state_refs: funding.proofStateRefs, proofs: funding.proofs }) });
-    const signed = await sign(28641, [["e", auctionId]], { auction_id: auctionId, amount, cashu_lock: receipt, outcome_authorizations: outcomeAuthorizations });
+    const signed = await sign(1441, [["e", auction.auction_root_event_id]], { auction_id: auctionId, amount, cashu_lock: receipt, outcome_authorizations: outcomeAuthorizations });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
     // Bind the proofs this browser just locked to the committed bid id, so a
     // later displacement can hand exactly this set to the refund endpoint.
@@ -752,7 +752,7 @@ async function placeBid(auctionId, amount) {
     // every outbid of somebody else's bid fail.
     const replaces = leader && leader.bidder === state.actor ? (leader.reservation_id || "") : "";
     const receipt = await api("/api/demo/reservation", { method: "POST", body: JSON.stringify({ auction_id: auctionId, bidder: state.actor, amount, replaces_reservation_id: replaces }) });
-    const signed = await sign(28641, [["e", auctionId]], { auction_id: auctionId, amount, reservation: receipt });
+    const signed = await sign(1441, [["e", auction.auction_root_event_id]], { auction_id: auctionId, amount, reservation: receipt });
     const result = await api("/api/event", { method: "POST", body: JSON.stringify(signed) });
     message(`Bid committed at height ${result.height} (custodial reservation).`, "success");
     await refresh(); return;
@@ -849,14 +849,14 @@ byId("create-form").onsubmit=(event)=>{event.preventDefault();return performActi
     // event that authorizes it, and it is never the Nostr identity: the Nostr
     // key authorizes, the wallet key owns value.
     const payoutKey = chosenMode === "cashu_lock_v1" ? bidderWallet().spendPublicKey() : undefined;
-    const signed=await sign(28640,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:chosenMode,...(payoutKey?{seller_coco_payment_public_key:payoutKey}:{})});
+    const signed=await sign(1440,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:chosenMode,...(payoutKey?{seller_coco_payment_public_key:payoutKey}:{})});
     const result=await api("/api/event",{method:"POST",body:JSON.stringify(signed)});
     await refresh();
     message(`Auction committed at height ${result.height} in legacy fake-sat mode (custodial reservations).`,"success");
     byId("create-form").reset(); return;
   }
   const sellerPaymentPublicKey=await state.friday.sellerPaymentPublicKey();
-  const id=`auction-${Date.now()}`; const signed=await sign(28640,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:"threshold_sigall_v1",seller_coco_payment_public_key:sellerPaymentPublicKey});
+  const id=`auction-${Date.now()}`; const signed=await sign(1440,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:"threshold_sigall_v1",seller_coco_payment_public_key:sellerPaymentPublicKey});
   const result=await api("/api/event",{method:"POST",body:JSON.stringify(signed)});
   const committed=await refreshCommittedAuction(id,result.height);
   if(!committed||committed.status!=="open"||committed.seller!==state.actor

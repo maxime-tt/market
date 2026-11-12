@@ -21,7 +21,7 @@ import { verifyDemoIntegratedFundingReceipt, type DemoIntegratedFundingReceiptV2
 
 const HEX_32 = /^[0-9a-f]{64}$/
 const HEX_64 = /^[0-9a-f]{128}$/
-const BID_KIND = 28641
+const BID_KIND = 1441
 const WAIT_ATTEMPTS = 120
 const WAIT_MS = 100
 

@@ -86,7 +86,7 @@ func TestFridayABCITimingBoundaries(t *testing.T) {
 		bidder := testPrivateKey(t)
 		reservationID := fmt.Sprintf("abci-cap-%02d", index)
 		receipt := testReservationReceipt(t, committee, "cap", actorForKey(bidder), amount, reservationID, "", at+policy.ReceiptTTLSeconds-1)
-		bid := testEvent(t, bidder, at, KindBid, bidContent{AuctionID: "cap", Amount: amount, Reservation: &receipt})
+		bid := testEvent(t, bidder, at, KindBid, bidContent{AuctionID: "cap", Amount: amount, Reservation: &receipt}, []string{"e", create.ID})
 		raw, encodeErr := EncodeTransaction(Transaction{Version: TxVersion, Type: "event", Event: &bid})
 		if encodeErr != nil {
 			t.Fatal(encodeErr)
@@ -106,7 +106,7 @@ func TestFridayABCITimingBoundaries(t *testing.T) {
 	}
 	capBidder := testPrivateKey(t)
 	capReceipt := testReservationReceipt(t, committee, "cap", actorForKey(capBidder), amount, "abci-at-cap", "", 3_099+policy.ReceiptTTLSeconds)
-	capBid := testEvent(t, capBidder, 3_099, KindBid, bidContent{AuctionID: "cap", Amount: amount, Reservation: &capReceipt})
+	capBid := testEvent(t, capBidder, 3_099, KindBid, bidContent{AuctionID: "cap", Amount: amount, Reservation: &capReceipt}, []string{"e", create.ID})
 	commit(Transaction{Version: TxVersion, Type: "event", Event: &capBid}, 3_099)
 	app.mu.RLock()
 	capEnd = app.state.Auctions["cap"].EndTime
@@ -120,7 +120,7 @@ func TestFridayABCITimingBoundaries(t *testing.T) {
 	// last committed time, but a proposal at the exact deadline must reject it.
 	deadlineBidder := testPrivateKey(t)
 	deadlineReceipt := testReservationReceipt(t, committee, "cap", actorForKey(deadlineBidder), amount, "abci-deadline", "", 3_099+policy.ReceiptTTLSeconds)
-	deadlineBid := testEvent(t, deadlineBidder, 3_099, KindBid, bidContent{AuctionID: "cap", Amount: amount, Reservation: &deadlineReceipt})
+	deadlineBid := testEvent(t, deadlineBidder, 3_099, KindBid, bidContent{AuctionID: "cap", Amount: amount, Reservation: &deadlineReceipt}, []string{"e", create.ID})
 	deadlineRaw, err := EncodeTransaction(Transaction{Version: TxVersion, Type: "event", Event: &deadlineBid})
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +167,7 @@ func TestFridayCheckTxNeverUsesClientTimestampAsDeadlineClock(t *testing.T) {
 	}
 	bidder := testPrivateKey(t)
 	receipt := testReservationReceipt(t, committee, "deadline", actorForKey(bidder), 1_000, "client-clock", "", 1_599)
-	event := testEvent(t, bidder, 1_300, KindBid, bidContent{AuctionID: "deadline", Amount: 1_000, Reservation: &receipt})
+	event := testEvent(t, bidder, 1_300, KindBid, bidContent{AuctionID: "deadline", Amount: 1_000, Reservation: &receipt}, []string{"e", create.ID})
 	tx := Transaction{Version: TxVersion, Type: "event", Event: &event}
 
 	state.LastConsensusTime = 1_299
@@ -175,7 +175,7 @@ func TestFridayCheckTxNeverUsesClientTimestampAsDeadlineClock(t *testing.T) {
 		t.Fatalf("client timestamp at deadline overrode last committed time: %v", err)
 	}
 	state.LastConsensusTime = 1_300
-	earlyEvent := testEvent(t, bidder, 1_299, KindBid, bidContent{AuctionID: "deadline", Amount: 1_000, Reservation: &receipt})
+	earlyEvent := testEvent(t, bidder, 1_299, KindBid, bidContent{AuctionID: "deadline", Amount: 1_000, Reservation: &receipt}, []string{"e", create.ID})
 	if err := ValidateForMempool(state, Transaction{Version: TxVersion, Type: "event", Event: &earlyEvent}, policy, seed); err == nil {
 		t.Fatal("client timestamp before deadline overrode last committed deadline")
 	}

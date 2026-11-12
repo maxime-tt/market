@@ -1590,13 +1590,17 @@ func testEvenPrivateKey(t *testing.T) *btcec.PrivateKey {
 	}
 }
 
-func testEvent(t *testing.T, key *btcec.PrivateKey, createdAt int64, kind int, content any) SignedEvent {
+func testEvent(t *testing.T, key *btcec.PrivateKey, createdAt int64, kind int, content any, tags ...[]string) SignedEvent {
 	t.Helper()
 	raw, err := json.Marshal(content)
 	if err != nil {
 		t.Fatal(err)
 	}
-	event, err := SignNostrEvent(key, createdAt, kind, nil, string(raw))
+	var eventTags [][]string
+	if len(tags) > 0 {
+		eventTags = tags
+	}
+	event, err := SignNostrEvent(key, createdAt, kind, eventTags, string(raw))
 	if err != nil {
 		t.Fatal(err)
 	}

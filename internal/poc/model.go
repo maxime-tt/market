@@ -20,29 +20,95 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
 
-const (
-	TxVersion  = 1
-	KindCreate = 28640
-	KindBid    = 28641
-	KindRefund = 28642
+// AuctionKinds is the single source of truth mapping each auction role to its
+// Nostr kind. Our kinds live in the 1440 series, which is the NIP-01 REGULAR
+// range (1000 <= n < 10000): relays are expected to STORE these events. They
+// deliberately avoid the NIP-01 ephemeral range (20000 <= n < 30000), which
+// khatru (nak serve) refuses to retain when no live subscription matches
+// ("mute: no one was listening for this") and does not buffer.
+//
+// Kind 1442 is reserved for the ChiefMonkey chat implementation and MUST NOT be
+// used for anything of ours. 1447 is our state-commitment kind.
+//
+// This is OUR OWN convention and NOT NIP-01 addressability: 1440 is a regular
+// kind, so a relay does NOT replace an older event at (kind, pubkey, d). The
+// explicit create-supersession resolution below provides that instead, under the
+// coordinate a = 1440:<seller_pubkey>:<d>.
+var AuctionKinds = map[string]int{
+	"create":           1440,
+	"bid":              1441,
+	"chat":             1442,
+	"refund":           1443,
+	"settle":           1444,
+	"outcome":          1445,
+	"funding_abort":    1446,
+	"state_commitment": 1447,
+}
+
+// The symbolic kind names every call site uses. They are DERIVED from
+// AuctionKinds so the literal numbers live in exactly one place.
+var (
+	// KindCreate is the auction create / root kind. The FIRST create event for a
+	// (seller, d) pair is the auction root; later creates are supersessions.
+	KindCreate = AuctionKinds["create"]
+	// KindBid carries a bid. Every bid MUST carry e = auction_root_event_id.
+	KindBid = AuctionKinds["bid"]
+	// KindRefund is the bidder's own refund record.
+	KindRefund = AuctionKinds["refund"]
 	// KindSettle is the winner's record that the cooperative settlement swap
 	// happened. It moves no value: the mint swap is the money, this event is
 	// only the mirror. A settlement that never commits still leaves the seller
 	// holding proofs locked to their own key.
-	KindSettle = 28643
+	KindSettle = AuctionKinds["settle"]
 	// KindOutcome is the coordinator's own committed record that a mint-backed
 	// lock reached its terminal outcome. It is posted only by the application
 	// authority (the network's single secp256k1 committee key today), never by a
 	// browser, and it carries the bidder's pre-published outcome authorization
 	// as its warrant. It moves no value: the mint swap is the money, this event
 	// is only the mirror, exactly like KindSettle.
-	KindOutcome      = 28645
-	KindFundingAbort = 28650
-	MaxTxBytes       = 64 * 1024
-	MaxInputs        = 32
-	TestMintURL      = "http://127.0.0.1:8080/test-mint"
-	CashuMintURL     = "http://127.0.0.1:3338"
-	ProductionURL    = "relay.plebeian.market"
+	KindOutcome = AuctionKinds["outcome"]
+	// KindFundingAbort is the NIP-07 actor authorization for a funding abort.
+	KindFundingAbort = AuctionKinds["funding_abort"]
+)
+
+// AuctionImmutableCreateFields are the create-payload fields frozen at the
+// auction root (the first create event for a (seller, d) pair). A later create
+// supersession that changes any of them is refused with
+// "immutable_field_changed: <field>". The names are the create-payload JSON
+// names, in the order they are checked, so a test can assert by name.
+var AuctionImmutableCreateFields = []string{
+	"auction_id",
+	"starting_bid",
+	"min_increment",
+	"reserve",
+	"duration_seconds",
+	"late_bid_window_seconds",
+	"late_bid_extension_seconds",
+	"max_total_extension_seconds",
+	"locktime_seconds",
+	"funding_mode",
+	"seller_coco_payment_public_key",
+}
+
+// AuctionMutableCreateFields may be edited freely after publish, including after
+// the first bid: display only. Everything that decides what is sold, for how
+// much, until when, and to whom it settles is immutable.
+var AuctionMutableCreateFields = []string{"title", "description", "image_url"}
+
+// IsRegularAuctionKind reports whether kind is in the NIP-01 regular range
+// (1000 <= n < 10000), which is the whole point of the 1440 series: relays are
+// expected to store regular kinds, and are not expected to store ephemeral ones.
+func IsRegularAuctionKind(kind int) bool {
+	return kind >= 1000 && kind < 10000
+}
+
+const (
+	TxVersion     = 1
+	MaxTxBytes    = 64 * 1024
+	MaxInputs     = 32
+	TestMintURL   = "http://127.0.0.1:8080/test-mint"
+	CashuMintURL  = "http://127.0.0.1:3338"
+	ProductionURL = "relay.plebeian.market"
 
 	FundingModeLegacy               = "legacy"
 	FundingModeCustodialReservation = "custodial_reservation_v1"
@@ -444,6 +510,23 @@ type Auction struct {
 	// MaxTotalExtension) plus the recovery window consensus reserves after it.
 	// It is exposed so a client reads the floor instead of recomputing it.
 	RequiredLocktime int64 `json:"required_locktime"`
+	// RootEventID is the id of the FIRST create event for (seller, d): the
+	// auction root. Every bid binds to it (e tag) and a later create version
+	// must carry e = RootEventID to be a supersession. The pin is what makes a
+	// display edit non-destructive: the bids never referenced a version, only
+	// the root.
+	RootEventID string `json:"auction_root_event_id"`
+	// VersionCreatedAt is the created_at of the create event currently supplying
+	// the display fields (the latest accepted version). The canonical auction is
+	// the LATEST create by created_at that passes the immutable check; an
+	// accepted but older version never overrides it.
+	VersionCreatedAt int64 `json:"version_created_at"`
+	// DurationSeconds and LocktimeSeconds are the ROOT's terms, kept so a
+	// supersession can be checked field-by-field against the frozen root.
+	// LocktimeSeconds is the EFFECTIVE locktime (the derived floor when the
+	// root omitted locktime_seconds).
+	DurationSeconds int64 `json:"duration_seconds"`
+	LocktimeSeconds int64 `json:"locktime_seconds"`
 }
 
 // auctionRequiredLocktime is the single derivation every call site uses: the
@@ -453,6 +536,87 @@ type Auction struct {
 // stays a package constant: it is not an auction choice.
 func auctionRequiredLocktime(auction Auction) int64 {
 	return auction.OriginalEndTime + auction.MaxTotalExtension + EmergencyRecoverySeconds
+}
+
+// firstTagValue returns the value of the FIRST tag whose name matches, or "".
+// It is how a bid's e = auction_root_event_id binding is read.
+func firstTagValue(tags [][]string, name string) string {
+	for _, tag := range tags {
+		if len(tag) >= 2 && tag[0] == name {
+			return tag[1]
+		}
+	}
+	return ""
+}
+
+// changedImmutableCreateField returns the name of the FIRST create-payload
+// immutable field whose EFFECTIVE value differs from the auction root, or "".
+// Effective values apply the same policy defaults the create path does, so a
+// supersession that merely re-states a default is not a change. The returned
+// name is one of AuctionImmutableCreateFields, in that order, so a caller can
+// report "immutable_field_changed: <field>".
+func changedImmutableCreateField(content createContent, root Auction, policy Policy) string {
+	if content.AuctionID != root.ID {
+		return "auction_id"
+	}
+	if content.StartingBid != root.StartingBid {
+		return "starting_bid"
+	}
+	increment := content.MinIncrement
+	if increment == 0 {
+		increment = policy.MinBidIncrement
+	}
+	if increment != root.MinIncrement {
+		return "min_increment"
+	}
+	if content.Reserve != root.Reserve {
+		return "reserve"
+	}
+	if content.Duration != root.DurationSeconds {
+		return "duration_seconds"
+	}
+	lateBidWindow := policy.LateBidWindow
+	if content.LateBidWindowSeconds != nil {
+		lateBidWindow = *content.LateBidWindowSeconds
+	}
+	if lateBidWindow != root.LateBidWindow {
+		return "late_bid_window_seconds"
+	}
+	lateBidExtension := policy.LateBidExtension
+	if content.LateBidExtensionSeconds != nil {
+		lateBidExtension = *content.LateBidExtensionSeconds
+	}
+	if lateBidExtension != root.LateBidExtension {
+		return "late_bid_extension_seconds"
+	}
+	maxTotalExtension := policy.MaxTotalExtension
+	if content.MaxTotalExtensionSeconds != nil {
+		maxTotalExtension = *content.MaxTotalExtensionSeconds
+	}
+	if maxTotalExtension != root.MaxTotalExtension {
+		return "max_total_extension_seconds"
+	}
+	// locktime_seconds: an omitted value means exactly the derived floor, which
+	// is a function of immutable fields only, so an omission cannot have changed
+	// it. root.LocktimeSeconds stores the effective value.
+	effectiveLocktime := auctionRequiredLocktime(root)
+	if content.LocktimeSeconds != nil {
+		effectiveLocktime = *content.LocktimeSeconds
+	}
+	if effectiveLocktime != root.LocktimeSeconds {
+		return "locktime_seconds"
+	}
+	fundingMode := content.FundingMode
+	if fundingMode == "" {
+		fundingMode = FundingModeCustodialReservation
+	}
+	if fundingMode != root.FundingMode {
+		return "funding_mode"
+	}
+	if content.SellerCocoPaymentPublicKey != root.SellerCocoPaymentPublicKey {
+		return "seller_coco_payment_public_key"
+	}
+	return ""
 }
 
 type State struct {
@@ -1089,6 +1253,21 @@ func ValidateForMempool(prior State, tx Transaction, policy Policy, mintSeed []b
 			}
 		}
 	}
+	// Every bid MUST bind to the auction root: its e tag must equal the
+	// auction's auction_root_event_id. This is what makes a display edit
+	// non-destructive -- the bids never referenced a version, only the root.
+	// It is a local-admission (CheckTx) rule, like the refund double-credit
+	// refusal below: the decision makes the allow-list and the root binding a
+	// client- and validator-side property, not a relay one.
+	if tx.Type == "event" && tx.Event != nil && tx.Event.Kind == KindBid {
+		var content bidContent
+		if err := decodeStrictContent(tx.Event.Content, &content); err == nil {
+			if auction, ok := prior.Auctions[content.AuctionID]; ok && auction.RootEventID != "" &&
+				firstTagValue(tx.Event.Tags, "e") != auction.RootEventID {
+				return errors.New("bid is not bound to the auction root event: the e tag must equal auction_root_event_id")
+			}
+		}
+	}
 	// A mint-backed bid must publish both outcome authorizations with the bid.
 	// Without them the coordinator would again need the bidder online to settle
 	// or refund, which is exactly the liveness the bridge removes. This is a
@@ -1176,8 +1355,24 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 		if content.StartingBid <= 0 || content.Reserve < 0 || content.MinIncrement < 0 {
 			return errors.New("auction amount policy is invalid")
 		}
-		if _, exists := state.Auctions[content.AuctionID]; exists {
-			return errors.New("auction already exists")
+		// Root pinning and supersession. The FIRST create event for (seller, d)
+		// is the auction root; its event id is auction_root_event_id. A later
+		// create for the same (seller, d) is accepted only as a supersession
+		// that binds to the root (e tag) and leaves every immutable field
+		// unchanged. 1440 is a REGULAR kind, so the relay does not replace the
+		// older version for us; the canonical auction is resolved below to the
+		// LATEST accepted version by created_at.
+		existing, exists := state.Auctions[content.AuctionID]
+		if exists && existing.Seller != actor {
+			return errors.New("auction id already belongs to another seller")
+		}
+		if exists {
+			if existing.RootEventID == "" || firstTagValue(event.Tags, "e") != existing.RootEventID {
+				return errors.New("auction update is not bound to the auction root event")
+			}
+			if field := changedImmutableCreateField(content, existing, policy); field != "" {
+				return fmt.Errorf("immutable_field_changed: %s", field)
+			}
 		}
 		fundingMode := content.FundingMode
 		if fundingMode == "" {
@@ -1246,12 +1441,14 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 			StartingBid: content.StartingBid, MinIncrement: increment, Reserve: content.Reserve,
 			CreatedAt: now, OriginalEndTime: end, EndTime: end, Status: "open",
 			LateBidWindow: lateBidWindow, LateBidExtension: lateBidExtension, MaxTotalExtension: maxTotalExtension,
+			DurationSeconds: content.Duration,
 		}
 		// The locktime floor is derived, never stored from the request. A
 		// supplied locktime_seconds must sit at or above it (a shorter lock can
 		// expire while the auction is still open) and within the policy band.
 		floor := auctionRequiredLocktime(auction)
 		auction.RequiredLocktime = floor
+		auction.LocktimeSeconds = floor
 		if content.LocktimeSeconds != nil {
 			locktime := *content.LocktimeSeconds
 			if locktime < floor {
@@ -1260,6 +1457,25 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 			if locktime > floor+policy.MaxTotalExtension {
 				return fmt.Errorf("auction locktime_seconds %d exceeds the permitted ceiling %d", locktime, floor+policy.MaxTotalExtension)
 			}
+			auction.LocktimeSeconds = locktime
+		}
+		if exists {
+			// Supersession. Every immutable field is proven unchanged above, so
+			// the committed lifecycle is carried forward and only the display
+			// fields and the version timestamp may differ: a display edit never
+			// detaches the bids, which bind to the root, not to a version. An
+			// accepted but OLDER version is ignored, never applied.
+			auction = existing
+			auction.Title = strings.TrimSpace(content.Title)
+			auction.Description = strings.TrimSpace(content.Description)
+			auction.ImageURL = strings.TrimSpace(content.ImageURL)
+			if event.CreatedAt < existing.VersionCreatedAt {
+				break
+			}
+			auction.VersionCreatedAt = event.CreatedAt
+		} else {
+			auction.RootEventID = event.ID
+			auction.VersionCreatedAt = event.CreatedAt
 		}
 		state.Auctions[content.AuctionID] = auction
 	case KindBid:
