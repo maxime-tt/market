@@ -332,6 +332,17 @@ export function Header() {
 						>
 							Auctions
 						</Link>
+						{/* The pplx Catalogue surface (Layout A); kept beside Auctions so the
+						    new baseline is reachable without knowing its URL. */}
+						<Link
+							to="/auctions/catalogue"
+							className="hover:text-secondary"
+							activeProps={{
+								className: 'text-secondary',
+							}}
+						>
+							Catalogue
+						</Link>
 						<Link
 							to="/community"
 							className="hover:text-secondary"

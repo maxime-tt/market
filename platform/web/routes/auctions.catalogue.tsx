@@ -31,6 +31,7 @@ function CatalogueIndex() {
 					seller: auction.seller,
 					imageUrl: auction.image_url,
 					startingBid: auction.starting_bid,
+					highBid: auction.high_bid,
 					endTime: auction.end_time,
 					status: auction.status,
 					fundingMode: auction.funding_mode,
@@ -43,7 +44,7 @@ function CatalogueIndex() {
 			isLoading={isLoading}
 			isError={isError}
 			now={data?.last_consensus_time ?? 0}
-			onSelect={(auctionId) => navigate({ to: '/auctions/$auctionId', params: { auctionId } })}
+			onSelect={(auctionId) => navigate({ to: '/auctions/catalogue/$auctionId', params: { auctionId } })}
 		/>
 	)
 }

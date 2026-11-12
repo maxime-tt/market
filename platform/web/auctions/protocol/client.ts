@@ -54,6 +54,22 @@ export interface CommittedAuction {
 	status?: string
 	/** The lot's image, committed from the create content. */
 	image_url?: string
+	/**
+	 * Fields the running demo commits that the first schema cut omitted. They are
+	 * optional so the protocol still types against an older state document, but
+	 * where present the UI must prefer them to any locally derived value:
+	 * `high_bid` is the backend's own leader position and `leader_bid_id` names
+	 * the bid it belongs to, so a displaced bidder is read as displaced rather
+	 * than re-summed from deltas (the backend returns a displaced bidder's money;
+	 * their position is genuinely 0).
+	 */
+	created_at?: number
+	closed_at?: number
+	extension_count?: number
+	reserve?: number
+	high_bid?: number
+	leader_bid_id?: string
+	winner?: string
 }
 
 export interface CommittedBid {
@@ -63,6 +79,9 @@ export interface CommittedBid {
 	/** A DELTA added to the bidder's existing position, not their new total. */
 	amount: number
 	cashu_token_sha256?: string
+	/** Committed block time of the bid; present on the demo and the only honest feed order. */
+	committed_at?: number
+	reservation_id?: string
 }
 
 export interface AuctionsState {

@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import type { AuctionsState } from './protocol/client'
+import type { AuctionsState } from '../protocol/client'
 
 /**
  * The Catalogue read, over the app's own origin.
