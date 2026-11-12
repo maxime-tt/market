@@ -27,7 +27,11 @@ once, followed by a 200 check. **Never leave it down.**
 
 ## 1. DONE AND PUSHED
 
-### 1a. CMS home page — on `fork/master` and `nostr/master` @ `958a95e21` (feat: `215867521`)
+### 1a. CMS home page — on `fork/master` and `nostr/master`
+Landed as `215867521` then merged at `958a95e21`; **advanced since** by
+`d4aba3db6` + merge `2ebb73d21` ("record listing views, intent and purchases"), so read
+`fork/master` for the tip rather than trusting the hashes here — the hash that matters is the
+one on the remote.
 16 files, 534 insertions. **NOT in the local checkout** — the local master is behind the remotes.
 - `platform/web/routes/index.tsx` — the home route renders the CMS page.
 - `ui/browse/split-view-geometry.svg` (54 lines) — **the owner's chosen durable geometry reference**:
