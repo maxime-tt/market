@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500" width="960" height="500" role="img" aria-labelledby="title desc" font-family="ui-sans-serif, system-ui, sans-serif">
+  <title id="title">Split-view geometry: fixed content column, responsive detail panel</title>
+  <desc id="desc">The master pane holds fixed-width result cards and shrinks when the detail panel opens, at 45% default panel width with a 25% minimum and 30% minimum master share; below the 1024px breakpoint the panel becomes a full-width pushed view.</desc>
+  <style>
+    .frame { fill: none; stroke: currentColor; stroke-width: 1.5; opacity: .55; }
+    .hairline { stroke: currentColor; stroke-width: 1; opacity: .35; }
+    .card { fill: none; stroke: currentColor; stroke-width: 1.25; opacity: .5; }
+    .accent { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-dasharray: 5 4; opacity: .9; }
+    .label { fill: currentColor; font-size: 13px; opacity: .85; }
+    .small { fill: currentColor; font-size: 11px; opacity: .65; }
+    .dim { stroke: currentColor; stroke-width: 1; opacity: .5; }
+  </style>
+
+  <text x="24" y="28" class="label" font-weight="600">Split view — geometry (measured from ui/browse/split-view.tsx)</text>
+
+  <!-- viewport -->
+  <rect x="24" y="48" width="912" height="330" rx="4" class="frame"/>
+  <text x="24" y="42" class="small">viewport — responsive, full-bleed (no horizontal margin)</text>
+
+  <!-- master pane: 55% of 912 = 501.6 -->
+  <rect x="24" y="76" width="501" height="254" class="frame" />
+  <text x="40" y="98" class="label">master · 55% default · min 30%</text>
+  <text x="24" y="114" class="small">gutter 26px</text>
+
+  <!-- fixed-width cards: 3 columns, each 142 wide, gap 12 -->
+  <rect x="50" y="126" width="140" height="150" class="card" rx="4"/>
+  <text x="60" y="146" class="small">card</text>
+  <text x="60" y="162" class="small">fixed width</text>
+  <rect x="202" width="140" y="126" height="150" class="card" rx="4"/>
+  <rect x="354" y="126" width="140" height="150" class="card" rx="4" />
+  <text x="24" y="300" class="small">card width is fixed: opening the panel changes how many cards fit, never how big each one is.</text>
+
+  <!-- separator + handle -->
+  <line x1="530" y1="70" x2="525" y2="330" class="hairline"/>
+  <circle cx="525" cy="200" r="7" class="hairline"/>
+  <text x="404" y="356" class="small">hairline 1px · drag hit area 7px · arrow keys ±2%</text>
+
+  <!-- detail pane: 45% ≈ 410 -->
+  <rect x="532" y="76" width="404" height="254" class="frame"/>
+  <text x="548" y="98" class="label">detail · 45% default · min 25% · max 70%</text>
+  <text x="532" y="114" class="small">gutter 26px</text>
+  <text x="548" y="140" class="small">slides in from the right, 300ms ease-out</text>
+  <text x="548" y="158" class="small">motion-reduce: no animation</text>
+
+  <!-- master shrink annotation -->
+  <line x1="24" y1="392" x2="525" y2="392" class="dim"/>
+  <text x="150" y="386" class="small">100% → 100% − var(--split-detail-width)  (shrink, never translate)</text>
+
+  <!-- responsive rule -->
+  <text x="24" y="428" class="label">below 1024px (lg):</text>
+  <text x="150" y="428" class="small">the detail becomes a full-width pushed view over the master; the master keeps 100% width.</text>
+  <text x="24" y="450" class="small">The panel's hairline close is replaced by the pushed view's back bar (touch floor).</text>
+  <text x="24" y="472" class="small">Numbers in this drawing are asserted against the component's constants by ui/browse/split-view.test.tsx.</text>
+</svg>

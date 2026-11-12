@@ -13,7 +13,7 @@ import { LinkListBlock } from './blocks/LinkListBlock'
 import { ProductGridBlock, type ProductGridBlockProps } from './blocks/ProductGridBlock'
 import { ProductRowBlock, type ProductRowBlockProps } from './blocks/ProductRowBlock'
 import { SearchBlock, type SearchBlockProps } from './blocks/SearchBlock'
-import { CategoriesBlock, type CategoriesBlockProps } from './blocks/CategoriesBlock'
+import { CategoriesBlock, type CategoriesBlockBlockProps } from './blocks/CategoriesBlock'
 import { ProfileHeaderBlock, type ProfileHeaderBlockProps } from './blocks/ProfileHeaderBlock'
 import { TextBlock } from './blocks/TextBlock'
 import { DividerBlock, SpacerBlock } from './blocks/SpacingBlocks'
@@ -53,7 +53,7 @@ export interface StorefrontDataSlots {
 	ProfileHeader?: (props: ProfileHeaderBlockProps) => ReactNode
 	ProductRow?: (props: ProductRowBlockProps) => ReactNode
 	Search?: (props: SearchBlockProps) => ReactNode
-	Categories?: (props: CategoriesBlockProps) => ReactNode
+	Categories?: (props: CategoriesBlockBlockProps) => ReactNode
 }
 
 /**
@@ -144,12 +144,16 @@ export function StorefrontBlockView({ block, slots }: { block: StorefrontBlock; 
 			) : (
 				<SearchBlock {...block.props} query="" onChange={() => {}} onGo={() => {}} />
 			)
-		case 'Categories':
+		case 'Categories': {
+			// `id` is the block's own key, not a view prop: pass the two fields
+			// the block actually renders.
+			const { categories, title } = block.props
 			return slots?.Categories ? (
 				slots.Categories(block.props)
 			) : (
-				<CategoriesBlock {...block.props} categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`} />
+				<CategoriesBlock categories={categories} title={title} categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`} />
 			)
+		}
 		default: {
 			// Unreachable while the switch matches the union. The assignment
 			// makes that a compile-time guarantee; the `null` keeps a page that

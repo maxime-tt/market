@@ -8,6 +8,7 @@ import { zapPurchaseRoutes } from './http/zapPurchase'
 import { PORT } from './runtime'
 import { websocketHandler } from './websocket'
 import type { BunRoutes } from './http/types'
+import { buildAnalyticsRoutes } from './http/analytics'
 import { buildAuctionsProtocolRoutes } from './http/auctionsProtocol'
 
 /**
@@ -43,6 +44,8 @@ export function buildServer({ indexHtml }: BuildServerOptions): Server<undefined
 		...buildBrowseSearchRoutes(),
 		// Auctions backend read surface (loopback demo on this box).
 		...buildAuctionsProtocolRoutes(),
+		// What this instance may report: page views only, environment-gated.
+		...buildAnalyticsRoutes(),
 		// Product pages get og: meta tags server-rendered into the initial
 		// HTML (issue #459) — must beat the catch-all below.
 		...ogRoutes(indexHtml),

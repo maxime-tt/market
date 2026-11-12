@@ -39,7 +39,7 @@ export interface SearchBlockViewProps extends SearchBlockProps {
  */
 export function SearchBlock({ placeholder, size, query, onChange, onGo, onClear }: SearchBlockViewProps) {
 	// Map our size tokens to the SearchField's 'nav'/'hero' sizing.
-	const fieldSize = size === 'hero' ? 'hero' : 'nav'
+	const fieldSize = size === 'lg' ? 'hero' : 'nav'
 
 	return (
 		<StorefrontSection width="narrow" className="py-6">
@@ -47,7 +47,7 @@ export function SearchBlock({ placeholder, size, query, onChange, onGo, onClear 
 				value={query}
 				placeholder={placeholder}
 				onChange={onChange}
-				onGo={onGo}
+				onGo={onGo ?? (() => {})}
 				onClear={onClear}
 				size={fieldSize}
 				className="w-full max-w-[560px] min-w-0"

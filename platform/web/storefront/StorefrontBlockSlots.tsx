@@ -10,7 +10,7 @@ import {
 	ProductGridBlock,
 	ProductRowBlock,
 	SearchBlock,
-	type CategoriesBlockProps,
+	type CategoriesBlockBlockProps,
 	type FeaturedProductBlockProps,
 	type ProfileHeaderBlockProps,
 	type ProductGridBlockProps,
@@ -177,14 +177,13 @@ function SearchSlot({ placeholder, size }: SearchBlockProps) {
  * keyword search — so the block stays flat and the taxonomy stays out of the
  * front end.
  */
-function CategoriesSlot({ categories, title }: CategoriesBlockProps) {
+function CategoriesSlot({ categories, title }: CategoriesBlockBlockProps) {
 	const navigate = useNavigate()
 	return (
 		<CategoriesBlock
 			categories={categories}
 			title={title}
 			categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`}
-			onSelect={(key: string) => navigate({ to: '/', search: { q: key } })}
 		/>
 	)
 }
