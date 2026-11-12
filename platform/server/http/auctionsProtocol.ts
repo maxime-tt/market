@@ -26,7 +26,12 @@ export const AUCTIONS_UPSTREAM_DEFAULT = 'http://127.0.0.1:8080'
 
 export const AUCTIONS_STATE_PATH = '/api/auctions/state'
 export const AUCTIONS_CONFIG_PATH = '/api/auctions/config'
-export const AUCTIONS_RESERVATION_PATH = '/api/auctions/reservation'
+/**
+ * The RESERVATION path keeps the backend's own shape (`/api/demo/reservation`),
+ * because the protocol client names that route itself. Inventing an alias made
+ * the browser path 404 while the direct-to-backend test passed.
+ */
+export const AUCTIONS_RESERVATION_PATH = '/api/demo/reservation'
 export const AUCTIONS_EVENT_PATH = '/api/auctions/event'
 
 type Env = Record<string, string | undefined>
