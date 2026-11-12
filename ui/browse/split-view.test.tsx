@@ -9,6 +9,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { SplitView } from './split-view'
@@ -175,5 +176,27 @@ describe('SplitView', () => {
 	test('the pushed view replaces the panel’s hairline close, which fails the touch floor', () => {
 		const markup = renderToStaticMarkup(createElement(SplitView, { master: null, detail: null }))
 		expect(markup).toContain('[data-slot="split-detail"] [data-slot="product-detail-header"] { display: none; }')
+	})
+})
+
+describe('split-view geometry spec', () => {
+	// The drawing is the durable reference the owner asked for: a committed sheet
+	// with the fixed content column, the responsive panel and the gaps and
+	// minimums annotated. These assertions keep it from drifting away from the
+	// component it documents — every number in the sheet is one the component
+	// holds, so changing the split has to change the drawing.
+	const spec = readFileSync(new URL('./split-view-geometry.svg', import.meta.url), 'utf8')
+
+	test('states the proportions and minimums the component enforces', () => {
+		expect(spec).toContain('master · 55% default · min 30%')
+		expect(spec).toContain('detail · 45% default · min 25% · max 70%')
+		expect(spec).toContain('gutter 26px')
+		expect(spec).toContain('hairline 1px · drag hit area 7px')
+	})
+
+	test('states the shrink and the breakpoint, not a translate', () => {
+		expect(spec).toContain('shrink, never translate')
+		expect(spec).toContain('below 1024px (lg)')
+		expect(spec).not.toContain('translate(')
 	})
 })

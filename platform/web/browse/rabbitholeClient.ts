@@ -235,6 +235,14 @@ function indexHitToEvent(hit: RabbitHoleHit): NostrEventLike | undefined {
 	// The seller's own `t` tags, which is what the mapper reads into
 	// `categories`. The index's `all_tags` also carries labeller tags, which
 	// the event-painted card would not have — so they stay out of the card.
+	//
+	// Owner ruling (2026-11-12), the ranking rule: **filters narrow, ranking
+	// orders.** A category or tag filter only removes results; the order of
+	// whatever survives is the service's own ranking and is never recomputed
+	// here. And no ordering may be derived from `all_tags` — it is the union
+	// with the seller's own vocabulary, so ranking on it would hand ranking to
+	// the sellers. If ranking on tags is ever added, the field to name is the
+	// labeller's `label_tags`, not this union.
 	for (const category of hit.category_tags ?? []) tags.push(['t', category])
 
 	return {

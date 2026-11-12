@@ -3,6 +3,7 @@ import { FooterHost } from '@platform/web/layout/FooterHost'
 import { hidesAppHeader } from '@platform/web/layout/appChrome'
 import { Header } from '@platform/web/layout/Header'
 import { Pattern } from '@ui/shared/pattern'
+import { usePageViews } from '@platform/web/analytics/usePageViews'
 import { useDocumentIdentity } from '@platform/web/app/useDocumentIdentity'
 import { useRootRedirects } from '@platform/web/app/useRootRedirects'
 import { createRootRoute, Outlet, useLocation, useMatches } from '@tanstack/react-router'
@@ -40,6 +41,8 @@ function RootLayout() {
 
 	useDocumentIdentity()
 	useRootRedirects()
+	// One page view per navigation, query string dropped (see the module).
+	usePageViews()
 
 	// Setup renders without the app chrome.
 	if (isSetupPage) {

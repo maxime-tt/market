@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
 import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
+import { shouldRenderStorefrontPage, useStorefrontAddressPage } from '@platform/web/storefront/storefrontQuery'
 import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
 import { StorefrontRenderer } from '@ui/storefront'
 import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
@@ -49,6 +50,12 @@ const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
 	const navigate = useNavigate()
+	// The app key's own `home` page, when one has been authored. Read first and
+	// unconditionally: the hook must run in every state of this route, and the
+	// published page replaces the settled composition below without changing
+	// the renderer.
+	const { data: homeResult } = useStorefrontAddressPage(APP_PUBKEY, 'home')
+	const publishedHome = shouldRenderStorefrontPage(homeResult) ? homeResult.page : null
 	// The intro plays over the home once per mount; it is an overlay, so the hero
 	// renders underneath from the first paint and nothing waits on it.
 	const [introDone, setIntroDone] = useState(false)
@@ -92,6 +99,7 @@ function BrowseIndex() {
 				},
 			],
 		}
+		const page = publishedHome ?? (parseStorefrontPage(JSON.stringify(homePage)).page as never)
 		return (
 			<>
 				{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
@@ -100,7 +108,7 @@ function BrowseIndex() {
 					onNavigateHome={() => navigate({ to: '/' })}
 					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
 				/>
-				<StorefrontRenderer page={parseStorefrontPage(JSON.stringify(homePage)).page as never} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
+				<StorefrontRenderer page={page} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
 			</>
 		)
 	}

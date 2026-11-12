@@ -139,6 +139,13 @@ function ThemeLayoutField({ value, readOnly }: { value?: StorefrontThemeId; read
 	)
 }
 
+/**
+ * The render surface Puck calls for the page root. The index signature is the
+ * honest part: Puck passes its own wrapper (`id`, `puck`, zone props), which
+ * `StorefrontRootPropsSchema` then strips — parsing is the filter, not the type.
+ */
+type RootRenderProps = { children?: React.ReactNode } & Partial<StorefrontRootProps> & Record<string, unknown>
+
 export const storefrontCmsConfig: Config = {
 	categories: {
 		identity: { title: 'Identity', components: ['ProfileHeader', 'Hero'] },
@@ -175,7 +182,10 @@ export const storefrontCmsConfig: Config = {
 		defaultProps: { title: '', theme: 'default', palette: '', tune: STOREFRONT_TUNE_DEFAULTS },
 		// The canvas wraps children in the very element the published page uses,
 		// so a background chosen here looks the same in both places.
-		render: ({ children, ...rootProps }: { children?: React.ReactNode } & Partial<StorefrontRootProps>) => {
+		// Puck hands a component its own props wrapper (`WithId<WithPuckProps<…>>`),
+		// so the parameter must also admit keys this module does not name — the
+		// schema below is what decides which ones survive.
+		render: ({ children, ...rootProps }: RootRenderProps) => {
 			// safeParse, not parse: a throw here would take the whole editor down
 			// over a root prop the author can still fix.
 			const parsed = StorefrontRootPropsSchema.safeParse(rootProps)
