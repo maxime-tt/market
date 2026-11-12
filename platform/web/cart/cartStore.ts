@@ -62,6 +62,7 @@ import type { SignerCapability } from '@sdk/core/signer'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { QueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
+import { recordListingEvent, listingCoordinate } from '@platform/web/analytics/listingEvents'
 import { Store } from '@tanstack/store'
 import { useEffect } from 'react'
 import { SHIPPING_KIND } from '@sdk/config/schemas/shippingOption'
@@ -673,6 +674,10 @@ export const cartActions = {
 			return
 		}
 		if (!Number.isFinite(amount) || amount <= 0) return
+
+		// Analytics: an add-to-cart is per-listing INTENT (owner ruling). The event
+		// carries the coordinate only — never the buyer, never the cart contents.
+		recordListingEvent('listing_intent', listingCoordinate(productId, sellerPubkey))
 
 		const existingProducts = Object.values(cartStore.state.cart.products)
 		const isNewProduct = !cartStore.state.cart.products[productId]
