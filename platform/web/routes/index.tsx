@@ -67,7 +67,7 @@ function BrowseIndex() {
 		// and nothing else changes.
 		const homePage = {
 			enabled: true,
-			root: { props: { title: '', theme: 'default' as const, palette: '' } },
+			root: { props: { title: '', theme: 'default' as const, palette: 'concrete' } },
 			content: [
 				{ type: 'Search' as const, props: { id: 'home-search', placeholder: 'Search the marketplace', size: 'lg' as const } },
 				{ type: 'ProductRow' as const, props: { id: 'home-row', productDTags: ['orange-flock-black-orange-edition-high-top-sneakers-ma5ond'] } },
