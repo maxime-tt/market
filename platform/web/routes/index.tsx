@@ -4,7 +4,7 @@ import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
 import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
 import { StorefrontRenderer } from '@ui/storefront'
 import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
-import { parseStorefrontPage } from '@sdk/commerce/storefront'
+import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/storefront'
 import { BrowseNav } from '@ui/browse/browse-nav'
 
 /**
@@ -67,6 +67,7 @@ function BrowseIndex() {
 		// the app key's own `home` page resolves, this constant is replaced by it
 		// and nothing else changes.
 		const homePage = {
+			version: STOREFRONT_PAGE_VERSION,
 			enabled: true,
 			root: { props: { title: '', theme: 'default' as const, palette: 'concrete' } },
 			content: [
