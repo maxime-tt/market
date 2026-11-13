@@ -3,12 +3,19 @@
 **Run:** `runs/2026-11-13-admin-routes` (run A) · **Role:** consolidator, one implementation plan out of four
 candidate designs plus six owner rulings · **Base:** `/home/admin_maxime/work/market`, `master`, HEAD
 `3a07e7067` · **State:** read-only. No source change, no branch, no build, no deploy. This file and
-`IMPLEMENTATION-PLAN.md` (plus `report-consolidation.md` and `report-revision-2.md`) are the only things written.
+`IMPLEMENTATION-PLAN.md` (plus `report-consolidation.md`, `report-revision-2.md` and `report-revision-3.md`) are the
+only things written.
 
 **REVISION 2 (2026-11-13, same day).** Three new owner rulings arrived after this document was first written —
 `ruling-local-pages-acl-and-legacy-routes.md` — and they invalidate specific passages below. §REVISION 2 at the
 top lists every one of them with the ruling that killed it, then the affected sections are rewritten in place.
 Where this file and that ruling disagree, **the ruling wins**; nothing below is presented as a ruling.
+
+**REVISION 3 (2026-11-13, later the same day).** `ruling-pages-widgets-and-app-relay.md` corrects one layer of
+REVISION 2 — the **widget layer** (§5.7) and the **relay split** (§5.6) — and confirms three items that had been
+leans (§R3.3). It is the newest authority in this file: §REVISION 3 lists every passage it invalidated, and where it
+and REVISION 2 disagree, this revision wins. The shell/page-store model of REVISION 2 is explicitly **not**
+re-opened.
 
 **What this document is.** The owner accepted a set of architecture rulings. They supersede parts of the four
 candidate designs (`designs/A-one-writer-per-event.md`, `designs/B-server-authoritative.md`,
@@ -39,6 +46,74 @@ reports **401** errors, and **241 of them are in files that are not the app** �
 so the relay facts collected for the first revision (`#t` on kind 30024, an `ids`-only read) are `[U]`. **Since
 REVISION 2 that does not matter**: served pages come from local storage, so no relay fact is on the site's
 critical path (ruling 1, §5.3, §5.5).
+
+---
+
+## REVISION 3 — what changed and why
+
+**Authority:** `ruling-pages-widgets-and-app-relay.md` (owner, 2026-11-13). It post-dates REVISION 2 and corrects
+**one layer** of it: pages are **web-components-focused, rendered in the browser from script-imported widget
+bundles**, and the **app's relay is not the auctions relay** — that is settled, not open. Where this revision and
+REVISION 2 disagree, this one is written to the ruling. **Everything REVISION 2 established about the *shell*
+stands and is preserved in intent**: `pageStore.ts` / `pageRender.ts` / `pageHtml.ts`, render-once-and-store,
+`#__AR_PAGE__`, and hydrate-the-same-DOM-don't-re-render-it.
+
+**Measured before writing this revision** (commands and counts in `report-revision-3.md` §2), because the ruling
+asks for a capability this document would otherwise have implied already existed:
+
+| what a widget layer needs | what the repo has | evidence |
+|---|---|---|
+| custom elements / shadow DOM | **0 occurrences** of `customElements`, `extends HTMLElement`, `attachShadow` | `grep -rlE 'customElements\|extends HTMLElement\|attachShadow' --include=*.ts --include=*.tsx . --exclude-dir=node_modules \| wc -l` → **0** **[M]** |
+| a widget-bundle build | **none**: `build.ts:138-140` derives entrypoints from `src/**.html` and there are **0** such files (`find src -name '*.html' \| wc -l` → 0 **[M]**), so `bun run build` emits no bundle today | `build.ts:138-140` **[S]** |
+| a script import of remote code | **none** in app code — no `<script src="https://…">`, no `import('https://…')`, no import map | 3 hits, all inside a captured `omp-session-*.html` artifact, none in `platform/`/`ui/`/`sdk/` **[M]** |
+
+So the widget layer is **new machinery**, and this revision prices it as such rather than describing it as a
+re-description of something present. That matters because `storefrontPage.ts:10-22` states the opposite invariant in
+so many words (see §5.7.2).
+
+### R3.1 Every invalidated passage, with the ruling that killed it
+
+| # | passage as written in REVISION 2 | invalidated by | now reads as |
+|---|---|---|---|
+| 1 | §1 one-sentence architecture: "…and may additionally **publish signed confirmations to Nostr** as a bonus that nothing in the route path depends on" — silent about where a *write* lands | ruling §5 | a write lands on the **app's own internal relay**, whose event-POST endpoint **is** the ingest path (§5.6). Nothing about "Nostr" changes for public relays; the internal relay is a different object |
+| 2 | §2 rule 4: "Nostr is a **publication target and an audit mirror**, never an input to routing and never an input to serving" | ruling §5 | still true of public relays; the **internal** relay is an input to the **write** path only — never to routing, never to serving (§5.6) |
+| 3 | §3.1 nouns — "**Four nouns, and nothing else**", where `PAGE` is a document and there is no code noun at all | ruling §3 | `PAGE` becomes the **page definition that references widgets**; `WIDGET` and `WIDGET REGISTRY` are added (§5.7) |
+| 4 | §5.5.2 table, row 2: the five data-bound blocks are "**placeholder + hydration**" and "they display *live* commerce data" — i.e. the dynamic layer is React hydration | ruling §§1–3 | the dynamic layer is **widgets**: custom elements delivered as script-imported bundles that fetch their own live data in the browser (§5.7) |
+| 5 | §5.5.2: "the stored fragment is the full page with data-bound blocks as **named, empty slots** that the client fills after hydration" | ruling §3 | the slot survives as the **mount point**; what fills it is a widget bundle, not a React slot map (§5.7.3) |
+| 6 | §5.5.2 correction box: "(b) *builds* one … What (b) genuinely buys is that a request does no rendering at all" — true, but stated without the reason the split **exists** | ruling §§1–2 | unchanged, and now **paired with the two recorded reasons** so a later reader cannot propose prerendering everything (§5.5.2) |
+| 7 | §5.5.3: "`POST /api/pages/publish` … It is deliberately the **only** way a page enters the store", and §7.1: "**One actor model, two write surfaces** (routes and pages)" | ruling §5 (there is **one** ingest endpoint, for signed app events) | **one ingest surface** — the app relay's event-POST endpoint — **dispatched by kind**: `30024` → page store, route intent → `may()` + `apply()` (§5.5.3, §5.6.3) |
+| 8 | §5.5.4 table, option **(i)**: "the app accepts the signed event directly … **no relay dependency at all** … OUR CHOICE for increment 1", with (ii) "a write-restricted app relay" marked "compatible later; not needed now" | ruling §5 | the app relay **exists** and its POST endpoint **is** the ingest path. (i) is not wrong about the *mechanism*, it is wrong about the *owner* of the endpoint (§5.6.3) |
+| 9 | §10 **O-6** "Does the app run its own relay, and is it the one the auctions use?" — open, with a lean, and the closing claim "the app's page ingest does not need a relay at all" | ruling §5 | **CLOSED**: two relays, two roles. The auctions relay is a **test placeholder for the real public relays**; the app's relay is **purely internal** (§5.6). Kept in place as history |
+| 10 | §11: "pages are **stored locally** by the app … and mirroring them to a public relay is **not built**" — reads as "no relay on the write side" | ruling §5 | pages are still stored locally; the **write** arrives through the app's internal relay, and mirroring to a **public** relay remains unbuilt (§5.6.3, §11) |
+| 11 | §12 Q7 "Does the app gain an **SSR tier** for page bodies?" — framed as one choice between render-per-request and render-at-publish | ruling §§1–2 | **re-framed and closed in substance**: the shell and the page's static content are React-rendered **once at ingest**; the dynamic content is never server-rendered. Prerendering "everything" is ruled out for a stated reason (§5.5.2) |
+| 12 | §13 diagram: "PAGE STORE … **data-bound blocks are slots, hydrated client**", and the write line "`/api/pages/publish` — verify sig → kind allowlist → parse → render → store" | ruling §§3–5 | the slot is a **widget mount point** filled by a script-imported bundle; the write line is the **app relay's event-POST endpoint**, dispatched by kind (§5.6.3, §13) |
+
+### R3.2 What this revision did **not** change
+
+- **The shell stays React.** `pageRender.ts` renders the shell and the page's **static** content to HTML once, at
+  ingest; `pageHtml.ts` composes it; the client **hydrates the same DOM** and never re-renders it. Ruling §4 names
+  this as the part that "must be preserved rather than rewritten", and it is preserved verbatim in intent.
+- **The page store is still local, and still the read path.** No relay is consulted to resolve a route or to serve a
+  bound page. `POST /api/pages/publish`'s *function* — verify, authorise by pubkey, check kind and size, parse,
+  render, store — is unchanged; only its **name and owner** move (§5.6.3).
+- **No widget is remote at serve time.** A page references a widget **by registry id**, never by URL (§5.7.2), so
+  "script import" does not become "load a script from wherever the page says".
+- Leases stay top-level-only, 404 on lapse, one binding per path, and the binding wins (§R3.3).
+- Nothing publishes to a public relay in increments 1–8, and the signed lease-confirmation ledger stays deferred (§11).
+
+### R3.3 The three confirmations, now recorded as settled rather than leaned
+
+Ruling §6 settles three things this document had been carrying as leans or inferences. They are **not** re-opened
+here; they are restated once so no later section contradicts them:
+
+1. **"Modular" means basic replaceable slots.** *"some basic slots that can be replaced is good enough to start."*
+   §10 O-7's "shell with named slots" is therefore **the whole requirement**, and no increment grows a slot system.
+2. **Sub-app sub-paths do not conflict with top-level-only leases.** Programmed routes may be arbitrarily deep;
+   **only leases** are restricted to top level (§3.4, §5.2). This was already §3.4; it is now confirmed rather than
+   inferred.
+3. **One binding per path, and the binding wins.** A re-pointed legacy path is **not** served in parallel from the
+   compiled tree (§5.2, §5.4). This was `ruling-local-pages-acl-and-legacy-routes.md:118-121`'s *lean*; it is now a
+   confirmation.
 
 ---
 
@@ -122,6 +197,11 @@ contradicts it is superseded. "From its own local page store" is REVISION 2: a p
 **never** fetched from a relay to answer a request (§5.5), because SEO, link previews and instant responses are
 the stated driver, not an optimisation.
 
+**REVISION 3 adds where a write lands, and it is the other half of the same sentence.** A write — a page, a route
+intent — arrives as a **signed Nostr event** at the **app's own internal relay**, whose event-POST endpoint *is* the
+ingest path (§5.6). The **auctions relay is not that relay**: it is a test placeholder standing in for the real
+public relays (§5.6.1). Reads never touch either relay; writes touch only the internal one, and only to be ingested.
+
 ---
 
 ## 2. The anti-pattern to avoid, measured
@@ -161,7 +241,9 @@ Second instance of the same class, the one the review found and the owner's ruli
 3. The routing table is the server's own state, loaded from disk, and served by the server.
 4. Nostr is a **publication target and an audit mirror**, never an input to routing **and never an input to
    serving**. Its only remaining role on the write side is as a possible *transport* for a signed event the
-   server then stores (§5.5).
+   server then stores (§5.6). **REVISION 3 disambiguates the transport**: the app's **internal** relay is the write
+   transport and ingest surface; a **public** relay is a publication target and nothing else. Neither is ever an
+   input to routing or serving.
 
 The consequence the owner accepted with his eyes open (`ruling-simple-routing-file.md:12-16`): **an unreadable
 table means the site is broken.** There is no degraded mode, no snapshot fallback, no stale cache story. The
@@ -176,11 +258,22 @@ superseding everything that proposed otherwise.
 
 ```
 BINDING     a path resolves to a target. Two kinds, never one row with an optional term (§3.2).
-PAGE        a page document, authored by the page's author. Kind 30024 on the wire, `d` = its identity.
+PAGE        the page DEFINITION: a document, authored by the page's author, that REFERENCES widgets by
+            registry id and carries no source of any kind (§5.7). Kind 30024 on the wire, `d` = its identity.
 PAGE STORE  the instance's LOCAL copy of the pages it serves: the document, plus what is needed to
             answer a request without a relay (§5.5). Storage format is the implementer's choice —
             ruling 1 says so explicitly ("a custom database in a more efficient way, I don't mind").
 REFERENCE   what a page block points at: a coordinate, or a list name (reserved, not built — §6).
+```
+
+**REVISION 3 adds two nouns that are not page content and not paths** — they are the widget layer, and they are
+listed separately because neither lives in the routing file or in the page document:
+
+```
+WIDGET          a custom element delivered as a script-imported bundle, built into the deploy artefact and
+                served as a static asset. It fetches its own live data in the browser (§5.7).
+WIDGET REGISTRY the instance's allowlist for widgets: id → element name → bundle path → props schema.
+                A page may only name an id that is in it (§5.7.2).
 ```
 
 There is no separate "route table event", no "claim event", no "default event", no "manifest", no sharded
@@ -189,6 +282,11 @@ the author's speech and the app still does not own it — but the **served copy*
 because a round trip per request decides whether the page can be indexed, previewed, or answered instantly. The
 routing file holds **no page content** — only what the instance has decided a path means; the page store holds
 content and nothing about paths.
+
+**A widget registry is not the "manifest" this paragraph refuses.** That refusal is about a second *routing*
+record (a sharded table of paths on a relay). The widget registry lists **code the instance already ships**, keyed
+by id, and it never names a path. The distinction is load-bearing: paths come from the routing file, code comes
+from the build artefact, and a page may reference both without owning either (§5.7.2).
 
 ### 3.2 Two binding kinds — never one row with an optional expiry
 
@@ -602,6 +700,8 @@ the rendered HTML fragment       produced once, at ingest (§5.5.2)
 its head meta                    title / description / og:* / twitter:* / canonical
 its identity                     (author, d), kind 30024, event id, created_at
 its series memberships           from ["t", …] tags, if any
+its widget ids                   the registry ids the document references, so pageHtml can emit
+                                 exactly those script imports without re-scanning (§5.7.3)
 ```
 
 **5.5.1 Storage format — OUR CHOICE, and deliberately boring.** Two shapes of file, no database, no index server:
@@ -623,66 +723,301 @@ data/pages/series/<seriesKey>/<author-hex>.json  newest-first list of {d, create
 - **This is a choice, not a ruling** — a SQLite or LMDB store would satisfy the ruling equally. It is chosen for
   the reasons above, and swapping it touches `pageStore.ts` only, because nothing else opens these paths.
 
-**5.5.2 Render-at-ingest, and the one honest split.** Following the ruling's lean (b) — *render at publish, store
-the result* — the fragment is produced when the page is stored, not per request. But the block union is not
-uniform:
+**5.5.2 Render-at-ingest, and the split that is now the design (REVISION 3).** Following the ruling's lean (b) —
+*render at publish, store the result* — the shell and the page's **static content** are rendered to HTML when the
+page is stored, not per request. The page's **dynamic** surfaces are not rendered at all, at any time, on the
+server. That split is not an optimisation we chose; it is the owner's diagnosis and it is now the binding shape.
 
-| block types (`storefrontPage.ts`) | rendered at ingest? | why |
-|---|---|---|
-| `ProfileHeader`, `Hero`, `Text`, `LinkList`, `Image`, `Divider`, `Spacer` | **yes**, fully | pure presentation of page data; no query |
-| `ProductGrid`, `FeaturedProduct`, `ProductRow`, `Search`, `Categories` | **placeholder + hydration** | they display *live* commerce data; a frozen copy would show stale prices and dead add-to-cart |
+**Why the split exists — recorded here so nobody later "fixes" it by prerendering everything.** Two reasons, both
+the owner's, both binding:
 
-So the stored fragment is the full page with data-bound blocks as **named, empty slots** that the client fills
-after hydration. This is **OUR CHOICE**, and it is the same shape as the ruling's own "replaceable regions":
-the slot is the region. A crawler sees the text, the headings, the links, the images, the meta — which is what
-SEO needs — and a human sees live products.
+> **Reason 1 — full server-side rendering fails for dynamic content.** *"this could work in theory but I would
+> perhaps point to the case of dynamic content as where its limits would show — since a full server-side rendering
+> could not dynamically update content in realtime unless it was constantly refreshing all its contents."*
+> (`ruling-pages-widgets-and-app-relay.md:7-9`). Read the failure precisely: it is not that SSR cannot produce
+> HTML, it is that a server-rendered page is **a snapshot**, and the only way to keep a snapshot current is to
+> re-render and re-send the whole thing, continuously. A page whose product prices are correct at render time and
+> wrong five minutes later is serving stale data as fact — the same defect class this run exists to delete, one
+> layer down.
 
-> **A correction to the ruling's lean, stated plainly.** The lean says (b) "gives instant responses and SEO with
-> no SSR framework migration". The *first* half is right; the second is optimistic. There is no server body
-> renderer today, so (b) *builds* one — the difference between (a) render-per-request and (b)
-> render-at-ingest is **when** it runs, not **whether** it exists. What (b) genuinely buys is that a request does
-> no rendering at all, which is what "instant" requires.
+> **Reason 2 — the efficient shape is compiled bundles served as static assets.** *"if we can compile the react or
+> other typescript into built JavaScript bundles and serve those as static pages I do think it would make things
+> more efficient"* (`:19-21`). Binding: the cost of rendering moves to **build/publish** time, and serving becomes
+> a **static asset fetch**. Rendering per request is the thing being eliminated, not merely reduced.
 
-**5.5.3 The ingest path is write-restricted.** This is the part ruling 1 calls non-negotiable, and the part the
-current system does not have (§R2.3).
+So the split, stated as a rule a future reader can test a proposal against: **anything that is a function of the
+page's own data is rendered once at ingest; anything that is a function of live network state is a widget and is
+never rendered on the server.**
+
+| block types (`storefrontPage.ts:293-306`) | at ingest | at request | why |
+|---|---|---|---|
+| `ProfileHeader`, `Hero`, `Text`, `LinkList`, `Image`, `Divider`, `Spacer` | **rendered to HTML** | served as-is | pure presentation of page data; no query, so no staleness |
+| `ProductGrid`, `FeaturedProduct`, `ProductRow`, `Search`, `Categories` | **an empty widget mount point** | a **widget** upgrades it and fetches its own live data in the browser | live commerce data: a frozen copy is a stale price and a dead add-to-cart |
+
+The 7-static/5-dynamic split is REVISION 2's and is unchanged; what changed is **what fills the slot**. It is no longer a
+React slot map resolved in the client bundle — it is a custom element delivered as a script-imported bundle (§5.7).
+The slot markup is the widget's mount point and its fallback content, so a client that fails to load the bundle
+still shows the page, minus that region.
+
+**What the crawler sees, stated plainly so the SEO claim is not overclaimed.** A crawler that runs no JavaScript
+sees the page's **static content and its head meta** — headings, text, links, images, `og:`/`twitter:`/canonical.
+It does **not** see widget output, because widget output is fetched in the browser by design. That is the honest
+boundary of the ruling's model, and it is the same boundary `storefrontPage.ts:10-22` already draws.
+
+> **A correction to the ruling's lean, retained from REVISION 2.** The lean says (b) "gives instant responses and
+> SEO with no SSR framework migration". The *first* half is right; the second is optimistic. There is no server body
+> renderer today (§5.5, measured), so (b) *builds* one — the difference between (a) render-per-request and (b)
+> render-at-ingest is **when** it runs, not **whether it exists**. What (b) genuinely buys is that a request does
+> no rendering at all, which is what "instant" requires. REVISION 3 changes nothing in this box and adds one
+> consequence: the renderer (b) builds is smaller than REVISION 2 assumed, because it never has to render a
+> dynamic surface — `pageRender.ts` renders static blocks and emits mount points.
+
+**5.5.3 The ingest path is write-restricted, and there is exactly one of it (REVISION 3).** This is the part
+ruling 1 calls non-negotiable, and the part the current system does not have (§R2.3). Ruling §5 settles **what the
+endpoint is**: the app relay's *"POST-like endpoint for nostr signed events related to the app functionality"*, and
+it *"is the app's write/ingest path"*. So the endpoint is **kind-generic** and **dispatched by kind**, which is what
+deletes the two-write-paths shape REVISION 2 had:
 
 ```
-POST /api/pages/publish        body: one signed NIP-01 event, kind 30024
+POST /api/app-events           body: one signed NIP-01 event, any kind in the app's allowlist
   1. verifyEvent(event)                                  ← the websocket.ts:30 template
-  2. tier(event.pubkey) must be app | admin | editor     ← §7.1; "no ACL" is refused here
-  3. kind allowlist: {30024} only                        ← "specific kinds"
-  4. author allowlist: the tier lookup IS the allowlist   ← "specific pubkeys"
-  5. size caps from STOREFRONT_LIMITS, checked before parse
-  6. parseStorefrontPage → refuse on any invalid block (not "drop it")
-  7. pageRender → refuse the WRITE if rendering throws
-  8. writeAtomic(page file) + series index update
-  9. 200 { stored: true, path? }  |  4xx { refused: <reason> }
+  2. level(event.pubkey) must be app | admin | editor     ← §7.1; "no ACL" is refused here
+  3. kind allowlist (below)  → else 400 'kind-not-allowed' ← "specific kinds"
+  4. author allowlist: the level lookup IS the allowlist   ← "specific pubkeys"
+  5. dispatch on kind:
+       30024  page      → size caps → parseStorefrontPage → widget ids resolve (§5.7.2)
+                          → pageRender → writeAtomic(page file) + series index
+       <route-intent>   → the intent branch: may(actor, op, path, file) → apply(mutation)   (§4.5, §7.1)
+  6. 200 { stored: true, kind, path? }  |  4xx { refused: <reason> }
 ```
 
-Two consequences that are design, not implementation detail:
+The endpoint **path name is OUR CHOICE** (the ruling says "POST-like", not `/api/app-events`); that there is
+**one** such endpoint, and that it is the app relay's, is the ruling. `POST /api/pages/publish` therefore **stops
+existing as a separate surface**: its function becomes branch 5a, and a reader must not find two ways to write a
+page. §5.6.3 says where the endpoint physically lives and what that costs.
+
+Three consequences that are design, not implementation detail:
 
 - **A page that cannot render is never stored**, which is why §3.2's "item unavailable" narrows to non-page
-  targets.
-- **Restriction is enforced on the *pubkey*, not on a submitted role.** The caller cannot claim a tier; the
-  server looks the tier up (`§7.1`), which is exactly the shape ruling 2 describes for the ACL. One actor model,
-  two write surfaces (routes and pages).
+  targets. REVISION 3 adds a second ingest refusal beside it: **a page that names a widget id found nowhere in the
+  registry is refused at ingest** (§5.7.2), for the same reason — a stored page must be a page that works.
+- **Restriction is enforced on the *pubkey*, not on a submitted role.** The caller cannot claim a tier; the server
+  looks the tier up (§7.1), which is exactly the shape ruling 2 describes for the ACL. **REVISION 3 collapses the
+  two write surfaces into one endpoint dispatched by kind**, so the actor model is evaluated once, in one handler,
+  for every kind the app accepts — a route intent cannot arrive through a laxer door than a page.
 
-**5.5.4 Transport — the ruling leaves it open; this is what we pick.** Ruling 2: writes "can find the right way
-to send those events to the app, whether it's writing to the app relay (which might only accept a specific set
-of events from specific pubkeys) or listening to public relays". Options, with the measured constraint that
-matters:
+**5.5.4 Transport — SETTLED in REVISION 3, and it is not the auctions relay.** Ruling §5 answers the question
+REVISION 2 left as a choice between "the app accepts the event directly" and "a write-restricted app relay". The
+answer is the second one, with a POST surface: **the app's own internal relay accepts signed events, and its POST
+endpoint is the ingest path.** §5.6 states the two relays and their roles; §5.6.3 states where the endpoint lives
+and what the choice costs.
 
-| option | cost | verdict |
-|---|---|---|
-| **(i) the app accepts the signed event directly** (§5.5.3) | new endpoint; the CMS must post to it as well as (or instead of) the relay | **OUR CHOICE for increment 1** — no relay dependency at all, smallest surface, and the allowlist is one function |
-| (ii) a write-restricted app relay + a server subscription | relay policy change (`main.go:84-87` currently has no author filter), a long-lived subscription, and ingest now depends on a relay being up | compatible later; not needed now |
-| (iii) listen to public relays with a filter | expense, filter drift, and the exact public-writable model the owner rejected | rejected |
-
-**What this means for the existing publish path, stated so it is not discovered late:** `publishStorefrontPage`
+**What this means for the existing publish path, restated for the new owner of the endpoint:** `publishStorefrontPage`
 publishes **only** to relays today (`platform/web/storefront/storefrontPublish.ts:81-99`, failing closed on zero
-ACKs). Under (i) the CMS must also call `/api/pages/publish`, or pages are published to Nostr and never served.
-That is a client change, it belongs with increment 3, and it is the one place where "local-first" costs a
-modification to a working path.
+ACKs). Publishing a page to the auctions relay or to a public relay does **not** put it in the page store, so the
+CMS must reach the app's ingest endpoint or the page is published and never served. That is a client change, it
+belongs with increment 3, and it is the one place where "local-first" costs a modification to a working path.
+
+---
+
+### 5.6 Two relays, two roles — settled, never conflated
+
+`ruling-pages-widgets-and-app-relay.md:65-81`, binding. The owner answered both open relay questions at once:
+
+> "Auctions relay is not the app relay — the auctions relay (the one we're running locally) is a test placeholder
+> relay for the real public relays. What we're talking about here is a relay purely for internal app use, with
+> potential exposure to the outside world but with strict limitations and ACL/data management, serving purely
+> internal app purposes and potentially a 'POST'-like endpoint for nostr signed events related to the app
+> functionality."
+
+#### 5.6.1 The auctions relay is a **test placeholder for the real public relays**
+
+**Measured, what it is today:** one khatru application deployed from this repo (`khatru.NewRelay()` at
+`deploy-simple/relay/cmd/market-relay/main.go:63`), whose write policy is kind-and-shape validation only —
+`policies.SeqEvent(policies.ValidateKind, policies.RejectEventsWithBase64Media, policies.RejectUnprefixedNostrReferences)`
+at `:84-87` and `policies.SeqRequest(policies.NoComplexFilters)` at `:89` — so **any pubkey may write** **[S]**. Its
+HTTP surface is khatru's router plus `/healthz` (`:92-96`) behind one `http.Server` (`:98-106`): **event ingest is
+WebSocket-only, and there is no POST event endpoint anywhere in it** **[S]**.
+
+**What it is for, and what that forbids.** It stands in for the real public relays in development and staging: the
+app's single relay setting points at it locally (`APP_RELAY_URL=ws://localhost:10547`, `.env.dev.example:2` →
+`platform/server/runtime.ts:19`) and at the real public relay in production
+(`APP_RELAY_URL=wss://relay.plebeian.market`, `deploy-simple/env/.env.production.example:14`). Therefore:
+
+- It is **not** the app's relay, and a page must never be written to it *as the app's store of record*.
+- A behaviour tested only against it is a behaviour tested against a **placeholder** — that is legitimate for the
+  marketplace's public data (products, orders, the auctions protocol) and **not** evidence about the real public
+  relays' policies.
+- Its **absence** of an author allowlist says nothing about the app relay's ACL, which is new and separate. REVISION
+  2's reading of `main.go:84-87` ("so the write restriction is new code") remains true and is now scoped: it is new
+  code **in the app relay**, not a change to this one.
+
+#### 5.6.2 The app's relay is **purely internal**
+
+Binding properties, from the ruling:
+
+| property | consequence for this architecture |
+|---|---|
+| **purely internal**, serving app purposes | it is not a marketplace relay and nothing at the marketplace's public addresses depends on it |
+| **strict limitations + ACL** | the allowlist is §7.1's level lookup on the event's pubkey, applied at the endpoint, not in a relay policy file |
+| **data management** | it owns retention/compaction of **app events**, which is why it may hold the signed event beside the projection rather than instead of it |
+| **may be exposed to the outside world, with those constraints** | exposure is an **option**, never a requirement; if taken, the ACL travels with it |
+| **a POST-like endpoint for signed app events** | that endpoint **is** the ingest path (§5.5.3, §5.6.3) |
+
+**Measured: no such relay exists today.** The app has exactly **one** relay pointer (`export const RELAY_URL =
+process.env.APP_RELAY_URL`, `platform/server/runtime.ts:19`) and one relay deployment, the placeholder in §5.6.1.
+So the app relay is **new deployment surface** — new process (or new endpoint), new ACL, new backup story — and the
+plan prices it rather than assuming it.
+
+**A configuration trap worth naming now.** The split requires a **second, distinctly named** setting (an ingest
+endpoint URL or an app-relay URL). Pointing `APP_RELAY_URL` at the app relay — or reusing it for both roles — would
+recreate the conflation this section exists to forbid, and it would silently move the marketplace's public data
+onto an internal ACL'd relay. `runtime.ts:19` must not be reused for this.
+
+#### 5.6.3 Where the endpoint lives — **the role is the ruling, the topology is OUR CHOICE**
+
+Two ways to honour "the app's internal relay has a POST ingest endpoint". Both satisfy the ruling; they differ in
+cost, and the choice is labelled as ours:
+
+| | (A) **in the app server process** — the Bun server implements the POST surface, and the page store and routing file are written **in the same request** | (B) **a separate internal relay process** — a relay with an HTTP event-POST handler stores the event, and the app server **projects** it by subscription |
+|---|---|---|
+| write transaction | one, synchronous: validate → project → `writeAtomic` | two: relay write, then a projection triggered asynchronously |
+| availability | the write path needs the app server only | the write path needs **both** processes up; a relay outage means "published but not served" |
+| lag | none | a projection lag, so a publish-then-fetch test is flaky by design |
+| "data management" by the relay | the relay *role* is played by the server; retention is the store's | genuinely a relay's data management, which is closest to the ruling's words |
+| new process to deploy/back up | none | one |
+
+**OUR CHOICE: (A) for everything in this plan.** Reasons, all of them about the property this run is protecting:
+one write, one transaction, no lag, and no second process on the path a publish takes. It also keeps §5.5.3's
+single evaluate-the-actor-once rule literally true. **(B) stays compatible** because the *contract* is the same —
+one signed event, POSTed, allowlisted by pubkey, ACKed or refused — so moving the surface into a separate relay
+later is a deployment change, not a redesign. What would force (B) is the owner wanting the relay independently
+reachable by other app instances; the ruling explicitly makes exposure optional, so nothing here requires it.
+
+**Where this sits against REVISION 2's option table.** REVISION 2's option (i) — "the app accepts the signed event
+directly … no relay dependency at all" — is (A) under a different description, and its *mechanism* was right. What
+it got wrong was **whose endpoint it is**: under the ruling it is the app relay's POST surface, not a standalone
+REST API that happens to accept events. Naming it correctly matters, because the relay role carries the ACL and
+data-management obligations, and a bare `/api/…` handler does not.
+
+#### 5.6.4 What the split does **not** touch
+
+- **Reads.** Zero relay reads on the resolve path and zero on the serve path (§2, §5.5). Both relays are absent
+  from every read.
+- **The routing table.** Still a file (§4), still not an event, still not in either relay.
+- **Public publication.** Mirroring a stored page to a public relay remains unbuilt (§11) and is not part of this
+  run.
+
+---
+
+### 5.7 The widget layer — pages reference widgets, never source
+
+`ruling-pages-widgets-and-app-relay.md:27-44`, binding:
+
+> "For sure page publishing should not be source code (can link a git repo) but web components focused, renderable
+> directly in the browser using script imports for widget libraries."
+
+#### 5.7.1 What a page is, and four things it is not
+
+A **page definition** is data (§3.1). Ruling §3 constrains it in four ways, and the fourth is the one that decides
+the whole design:
+
+1. **It must not contain or inline source.** No script, no JSX, no inline HTML.
+2. **It must not contain a copy of a widget.** A widget is referenced, never embedded.
+3. **It may link a git repo** — the place a widget or sub-app is built from — **as a link**. Measured toehold: the
+   document's `safeHref` already allows `https://` URLs inside a `LinkList` block
+   (`sdk/commerce/storefront/storefrontPage.ts:103`, `isSafeHref` at `:70-97`), so a repo link needs no new
+   mechanism and no new field. The server **never fetches it**, at ingest or at serve.
+4. **It must be renderable directly in the browser**, with widget libraries pulled in by **script imports**.
+
+#### 5.7.2 The collision this layer walks into, and the resolution
+
+`storefrontPage.ts:10-22` states the invariant that currently makes page documents safe, in as many words:
+
+> "Rather than sanitising attacker-controlled markup, the document is *structured data*: an ordered list of blocks
+> drawn from a closed union … There is **no raw-HTML path, no remote script or stylesheet**, and no `src`/`href`
+> that is not either `https:` or an in-app absolute path. That constraint is load-bearing and must not be relaxed
+> for convenience: this app holds wallet material, so a single `dangerouslySetInnerHTML` here would be an
+> account-draining XSS rather than a defacement."
+
+A page that names a widget **by URL** is exactly "a remote script". So the resolution is not negotiable, and it is
+also not a limitation on the owner's model — it is the same move the closed block union already makes, one level up:
+
+**A page names a widget by registry id. It never names a URL.**
+
+```
+WIDGET REGISTRY (instance-owned, built into the deploy artefact)
+  id            stable string the page document may reference          e.g. 'product-grid'
+  element       the custom element name the bundle defines             e.g. 'ar-product-grid'
+  bundle        instance-owned static asset path, content-hashed       e.g. /widgets/product-grid-<hash>.js
+  propsSchema   the schema the widget validates its own props against  (for built-ins: the existing block schema)
+```
+
+Consequences, stated as consequences:
+
+- **Adding a widget is a deploy, not a publish.** The allowlist is the instance's, so a page can only reach code the
+  operator shipped. This is *why* the owner's "link a git repo" is a **link**: the repo is provenance a reader can
+  follow, not an input the server loads.
+- **Ingest refuses an unknown widget id** (§5.5.3), so a stored page is a page whose widgets exist.
+- **The registry is not the "manifest" §3.1 refuses** — it maps ids to code, never to paths.
+- **The id-and-props encoding is OUR CHOICE.** The ruling says "script imports for widget libraries"; it does not
+  say how a document names one. This encoding is chosen because it is the only one that keeps §5.7.2's invariant.
+
+**One thing the ruling implies that this document cannot settle, so it is recorded rather than answered (§10 O-8):**
+if widget code may come from a repo someone else built, *who reviews and admits it to the registry* is a process
+question. The architecture gives it a place to happen (the registry, at build time) and no policy for it. That is
+the honest state, and it is the one place where "links a git repo" could quietly become "loads code from a repo"
+if the registry is ever populated from the document instead of from the build.
+
+#### 5.7.3 How it actually renders
+
+```
+pageStore holds:   document + static fragment + meta + the widget ids the document references
+pageHtml emits:    <head> meta
+                   the React-rendered static fragment
+                   <ar-product-grid data-widget="product-grid">  ← SSR'd fallback children (the empty state)
+                   …
+                   <script type="module" src="/widgets/product-grid-<hash>.js" defer>   ← one per referenced widget
+                   the SPA shell bundle + #__AR_PAGE__
+```
+
+- **The mount element and its fallback are server-rendered**, so a client that fails to load a bundle still sees the
+  page minus that region, and a crawler still sees the static content (§5.5.2's honest boundary).
+- **The element upgrades in place.** `customElements.define` upgrades elements already in the DOM, so the page's
+  static DOM is never touched and the mount element is never re-created. The widget takes over **its own children**
+  when it mounts; if the bundle never loads, they stay — which is what makes the SSR'd content a real fallback
+  rather than a placeholder. The "hydrate the same DOM, never re-render it" rule the shell follows therefore holds
+  one level down too, and it is why §5.5's `#__AR_PAGE__` seam does not change.
+- **The widget fetches its own live data in the browser**, after upgrade. It receives its props from the page
+  document and its author context from `#__AR_PAGE__`, and nothing else.
+- **The store never holds code.** Content is in the page store; code is in the deploy artefact; the registry id is
+  the only link between them, and it is one-directional — the store cannot add a widget by existing.
+
+**Scope of the change, so it is not overbuilt.** The five dynamic block types are the widget layer's first five
+widgets, and their documents already reference them by `type` (`storefrontPage.ts:293-306`). So the **block union
+does not change** for them: only what resolves the reference — the registry and a custom-element bundle, instead of
+`StorefrontDataSlots` (`ui/storefront/StorefrontRenderer.tsx:50`) and the React map in
+`platform/web/storefront/StorefrontBlockSlots.tsx`. A generic `Widget` block for widgets that are not built in is
+the **extension point**, added when the first such widget exists, not now — **OUR CHOICE**, and it keeps this build
+from inventing a plugin protocol.
+
+#### 5.7.4 What is new machinery, measured
+
+| piece | state today | what the layer adds |
+|---|---|---|
+| custom elements | **0** occurrences of `customElements` / `extends HTMLElement` / `attachShadow` in the tree **[M]** | every widget; a client upgrade path |
+| per-widget bundles | **none**. `build.ts:138-140` takes entrypoints from `src/**.html` and there are **0** such files **[M]**, so `bun run build` emits no bundle; production serves Bun's HTMLBundle from `platform/web/app/index.html` (`import index from './index.html'` at `platform/web/app/entry.tsx:10`, consumed at `:27`) | a widget build producing one ESM bundle per widget, content-hashed, plus a static mount |
+| remote/dynamic script loading | **none** in app code — no `<script src="https://…">`, no `import('https://…')`, no import map **[M]** | nothing: by §5.7.2 the bundles are instance-owned, so this stays zero by design |
+| component SSR | `renderToStaticMarkup` in **102** files, **all of them tests** — 94 under `ui/`, 8 under `platform/`, **0** non-test **[M]** | reuse only: it proves `ui/` components render without a DOM, which is what `pageRender.ts` needs. It is a *test* convention, not a production render path |
+
+So: the widget layer is **new machinery** on three axes (elements, bundles, registry) and **reuses** the SSR
+convention on a fourth. It must be priced as new work, not as a re-wiring of `StorefrontDataSlots`.
+
+#### 5.7.5 What does not change
+
+The page document stays a **closed union** validated at ingest; the renderer stays React for everything static; the
+client still hydrates rather than re-renders; and no page can introduce code. The only new object is a mount point
+whose filler is a bundle the operator shipped.
 
 ---
 
@@ -806,8 +1141,9 @@ may(actor, op, path, file) → Allowed(warnings[]) | Denied(reason)
   freshness window is refused** — replay protection is required precisely because there is no session, and this
   is **OUR CHOICE** (the ruling does not name a window); the window belongs on the intent event's `created_at`,
   checked for the same reason `ogMeta.ts` rejects a relay answer that is not the event it asked for.
-- **A page write and a route write use the same actor model.** §5.5.3's ingest and this function must not grow
-  two different ideas of who is calling; if they diverge, one of them is wrong.
+- **A page write and a route write are the same write.** REVISION 3: they arrive at **one** endpoint and are
+  dispatched by kind (§5.5.3, §5.6.3), so the actor is established once and `may()` sees exactly one idea of who is
+  calling. If a second write surface ever appears, one of them is wrong.
 - **A refusal is a visible state**, not a silent no-op (`ruling-acl.md:59-64`): the API returns
   `Denied(reason)`, and the management surface renders it with the reason *and* the holding tier.
 - **An editor cannot point a path at someone else's page.** The grant is authority over a path; the target must
@@ -1167,7 +1503,14 @@ admin-granted or editor-created binding can ship first; a lease that takes payme
 verified.** The plan therefore orders the verification increment **before** the lease write path (increment 6
 before 7) and does not put a payable surface on any earlier increment.
 
-### O-6 · Does the app run its own relay, and is it the one the auctions use? *(new, ruling 1's question 2)*
+### O-6 · Does the app run its own relay, and is it the one the auctions use? — **CLOSED**
+
+**Status: closed by `ruling-pages-widgets-and-app-relay.md:65-81`.** Kept as the record of why it was open. The text
+below is REVISION 2's, and **its closing claim is withdrawn**: "the app's page ingest does not need a relay at all"
+is now false — the ingest path **is** the app relay's POST endpoint (§5.6). What the ruling settles, in three lines:
+the auctions relay is a **test placeholder for the real public relays**; the app's relay is **purely internal**
+(strict limitations, ACL, data management, optionally exposed with those constraints); and its **POST-like endpoint
+for signed app events is the app's write/ingest path**. §5.6 carries the consequences, §5.6.3 the topology choice.
 
 `ruling-local-pages-acl-and-legacy-routes.md:102-105` — the owner's private-use model "implies a store with a
 write allowlist", and he offers two shapes: one instance serving both the public auctions role and the private
@@ -1185,9 +1528,11 @@ an argument against mixing them, and the cost is one more process. **Cost of the
 monitor and back up. **Cost of the alternative (one relay, two filters):** a single failure domain where a public
 write flood degrades page serving — the exact coupling ruling 1 exists to break.
 
-**But note what REVISION 2 removed from the question:** under §5.5.4's option (i), the app's page ingest does not
-need a relay at all, so this becomes a question about *deployment hygiene*, not about correctness. It does not
-block any increment.
+**But note what REVISION 2 removed from the question:** under §5.5.4's option (i), the app's page ingest did not
+need a relay at all, so this looked like deployment hygiene rather than correctness. **REVISION 3 reverses that
+reading and that is why the item is closed rather than merely leaned.** The ingest path is now the app relay's own
+POST endpoint, so the relay is on the **write** path by construction — and whether the auctions relay may double as
+it is no longer a question, because the ruling says it may not: it is a placeholder for the public relays (§5.6.1).
 
 ### O-7 · How modular is "modular"? *(new, ruling 1's question 4)*
 
@@ -1196,10 +1541,39 @@ Replaceable regions inside a compiled page (a navbar slot) versus a page shell t
 internally**.
 
 **This document adopts that lean as the direction, and nothing more.** §5.5.2 already produces one kind of slot
-for a different reason (data-bound blocks), so the vocabulary exists. But the ruling's own sequencing is explicit —
-re-pointing is routing (**this run**), modular contents are the **next** step — so **no increment here builds a
-slot system**, and increment 1 must not grow one. The only thing this run owes the next step is that re-pointing
-does not *preclude* it, which §5.2's one-guard seam already guarantees.
+for a different reason (the widget mount point), so the vocabulary exists. But the ruling's own sequencing is
+explicit — re-pointing is routing (**this run**), modular contents are the **next** step — so **no increment here
+builds a slot system**, and increment 1 must not grow one. The only thing this run owes the next step is that
+re-pointing does not *preclude* it, which §5.2's one-guard seam already guarantees.
+
+**REVISION 3 — confirmed and closed as a question.** Ruling §6 settles the depth: *"some basic slots that can be
+replaced is good enough to start."* So the requirement is **basic replaceable slots**, not a slot framework, and
+this document over-designed nothing by leaving it out. The widget layer (§5.7) is the *other* kind of replaceability
+— a page region whose implementation is a separately built bundle — and it is worth distinguishing them once:
+
+| | **slot** (O-7, next step) | **widget** (§5.7, this run's model) |
+|---|---|---|
+| replaces | content *inside* one compiled page | a *region of a published page* |
+| who owns it | the page, chosen by the author | the instance, admitted to the registry |
+| built when | at build time, with the page | separately, into its own bundle |
+
+### O-8 · Who admits a widget to the registry? *(new in REVISION 3)*
+
+The ruling permits a page to **link a git repo** "e.g. where a widget or sub-app is built from". That is a link and
+this architecture keeps it a link (§5.7.1), which means **widget code enters the instance only through the registry,
+at build time** (§5.7.2). Who reviews that code, and what evidence a widget's repo must carry before it is admitted,
+is **a process question the ruling does not answer and this document does not invent**.
+
+**Why it is recorded rather than resolved:** the failure mode is quiet. If the registry is ever populated from a
+document field, or from a URL at ingest, the model silently becomes "pages load remote code" — the one thing
+`storefrontPage.ts:10-22` says must never happen. So the open item is not "should there be a policy" but "there must
+be one before the second widget exists".
+
+**Lean (not a ruling):** a widget is admitted by a **code change to the registry module** (a diff, reviewed like any
+other code), never by a runtime registration path. **Cost of the lean:** adding a widget requires a deploy, so a
+third-party author cannot self-publish one. **Cost of the alternative** (runtime registration): the page document
+becomes a code-loading channel, and the invariant in §5.7.2 goes with it. **Not needed by any increment in this
+plan**: increments 1–8 ship zero registry entries beyond the built-ins.
 
 ---
 
@@ -1227,6 +1601,17 @@ REVISION 2 adds one clarification rather than a change: pages are **stored local
 mirroring them to a public relay is **not built** — it would be a publication feature, not a serving one, and the
 serving path never waits for it.
 
+**REVISION 3 sharpens the vocabulary, because "does not publish to Nostr" was being read as "no relay on the write
+side", which is now wrong.** Three distinct things, and the plan uses these words precisely:
+
+| | what it is | in this plan |
+|---|---|---|
+| **the app's internal relay** | the app-relay role of §5.6.2; accepts signed app events on a POST endpoint; ACL'd | **used** — it *is* the write/ingest path |
+| **a public relay** (real, or the local auctions placeholder standing in for it) | the marketplace's public data, and the publication target for announcements | **not written to** by any increment; mirroring a page there is unbuilt |
+| **the signed lease-confirmation ledger** | per-lease confirmations published publicly | **deferred** (§11's subject) |
+
+So the sentence "nothing publishes to Nostr" survives, and the sentence "the app has no relay" does not.
+
 ---
 
 ## 12. Open questions this consolidation could not close
@@ -1239,7 +1624,7 @@ serving path never waits for it.
 | Q4 | The typecheck baseline | **`[U]`** — 205 cannot be reproduced on a clean tree in this run; the dirty checkout reports **401** with **241** of them in non-app files, which is why a per-branch re-baseline is mandatory (`proposal-v2.md:619-621`) | yes, as a gate — the plan requires per-branch numbers and asserts on the sorted error list |
 | Q5 | Who signs a self-service reservation (a paid lease)? | `ruling-acl.md:36-42` open; §10 O-5 | yes, for increment 7 only |
 | Q6 | Who may re-point a **compiled-in** path — admin only, or editor too? | ruling 3 says legacy routes are re-pointable and does not name the actor; §7.1's split (admin/app yes, editor no) is **OUR INFERENCE** from "admin has full control" | no for 1–8 as written; it becomes real the first time the owner tries an editor on `/dashboard` |
-| Q7 | Does the app gain an **SSR tier** for page bodies? | ruling 1's lean (b) is render-at-publish; §5.5.2 shows that still requires a server-side renderer, so the choice decides whether the renderer lives in the server process at all | yes for increment 1 — it is the increment's spine, and the plan picks (b) with the split stated |
+| Q7 | Does the app gain an **SSR tier** for page bodies? | **RE-FRAMED by REVISION 3, and closed in substance.** The question was framed as one choice between render-per-request and render-at-publish. The ruling splits the object instead: the **shell and static content** are React-rendered once at ingest, and the **dynamic content** is never server-rendered at all (§5.5.2, §5.7). What remains is not a *tier* question but the increment-1 renderer, which this document builds | yes for increment 1 — but it no longer decides whether the app gains an SSR tier, because it does not |
 
 ---
 
@@ -1267,22 +1652,35 @@ serving path never waits for it.
                         ┌──────────────────────▼────────────────────────┐
                         │  PAGE STORE  local files at (author, d):       │  NO relay, NO indexer:
                         │  document + rendered fragment + meta          │  instant, indexable, previewable
-                        │  data-bound blocks are slots, hydrated client │
+                        │  + the widget ids the document references     │
+                        │  static content: React, rendered ONCE at      │
+                        │  ingest. Dynamic regions: an EMPTY MOUNT      │
+                        │  POINT, filled in the browser by a WIDGET     │
+                        │  (custom element, script-imported bundle)     │
                         └───────────────────────────────────────────────┘
 
-  writes:  signed event published/page intent (actor = event.pubkey)
-             └─▶ level(pubkey) ∈ {app, admin, editor} ──▶ may(actor, op, path, file)
-                    └─▶ apply(mutation) ──▶ validate ──▶ tmp+rename (.bak kept)
-             └─▶ /api/pages/publish ──▶ verify sig ──▶ kind allowlist ──▶ parse ──▶ render ──▶ store
+  writes:  ONE endpoint — the app relay's event-POST surface (§5.5.3, §5.6.3)
+             └─▶ verify sig ──▶ level(pubkey) ∈ {app, admin, editor} ──▶ dispatch on kind
+                   ├─ kind 30024 (page)      ──▶ parse ──▶ widget ids in registry? ──▶ render ──▶ store
+                   └─ kind <route intent>    ──▶ may(actor, op, path, file)
+                                                  └─▶ apply(mutation) ──▶ validate ──▶ tmp+rename (.bak)
+
+  RELAYS — two, never one:
+    auctions relay  = the LOCAL TEST PLACEHOLDER for the real public relays. Not the app's relay.
+    app relay       = purely internal, ACL + data management, optionally exposed. Its POST
+                      endpoint IS the write path above. Never read by routing or serving.
 
   NOTHING in the route path or the serve path touches: a database · a cache · an event store ·
   a relay · an indexer. Nostr is an output mirror, never an input.
 ```
 
-Four sentences that are the test of any future change:
+Five sentences that are the test of any future change:
 
 1. **If it makes a request consult the network to decide which path matched, it is wrong.**
 2. **If it makes a request consult the network to render a bound page, it is wrong.** (REVISION 2 — the SEO and
    instant-response requirement.)
 3. **If it makes a lapsed lease render something other than 404, it is wrong.**
 4. **If it writes the routing file from anything but a full copy of the routing file, it is wrong.**
+5. **If it server-renders a page's dynamic content, or gives a page a way to name a widget by URL, it is
+   wrong.** (REVISION 3 — reason 1 of §5.5.2, and the invariant of §5.7.2. A page names a widget **id**; the id
+   resolves through the instance's registry to a bundle the operator shipped.)
