@@ -205,9 +205,15 @@ reduced:
   in his design — has no role.
 - It holds no key. It collects one FROST co-signature per move and performs the mint swap.
 
-**Push is primary, pull is the fallback.** The settler pushes refunds and payouts so that
-nobody has to be online; his existing pull release (`/api/release` with the wallet's `auth`)
-stays as the fallback when the settler is behind. **Neither changes who can move funds.**
+**Push is primary, and there is no pull path for refunds.** The settler pushes refunds and
+payouts so that nobody has to be online. His `/api/release` pull release — the manual request
+for a co-signature — is **deleted**: under the 2-of-2 the bidder's half is already pre-signed,
+and the committee's half is collected automatically off committed blocks, so there is nothing
+to request. **Neither changes who can move funds.**
+
+**Consequence of deleting it, accepted:** a settler that is down at close **loses the sale**
+rather than being rescued by a page. The winner reclaims via the last-resort path (§4b) and
+the parties re-arrange. Money is never at risk, and no escrow is stuck.
 
 **Timing.** One FROST round plus one mint swap after the trigger. This must stay comfortably
 inside `settlement_safety` (§2.1).
@@ -311,7 +317,7 @@ canonical auction is the **latest accepted** version by `created_at`.
 | `settlement_safety` | **900** | replaces `LockMarginSec`'s role as a lock driver |
 | `bid_to_consensus_latency` | **15** | replaces `lockGraceSec` |
 | `MinDurationSec` | 20 | unchanged |
-| `MaxDurationSec` | 7200 | fixed lots only; anti-snipe has no cap |
+| `MaxDurationSec` | **259200** (3 days) | **raised from 7200** — a fixed lot's duration IS its life, and the lock derives from it, so the cap protects bidders from a seller-locked marathon. Staging: 3 days now, 30 days (2592000) when the demo is a testing ground no longer. |
 | `MaxTotalExtension` | **removed** | |
 | `Threshold` | 3 | FROST 3-of-4 |
 | `LockMarginSec` | **retired as a lock driver** | its only remaining meaning is the settlement safety |
@@ -354,8 +360,6 @@ under the standing rule a shape change is a wipe, and nothing committed is worth
 
 ## 14. Open items
 
-- Whether the instant refund's co-signature request stays a `/api/release` pull, or becomes a
-  relay-published request the settler picks up. (§5)
-- Whether a `fixed` lot's `durationSec` keeps `MaxDurationSec = 7200` or is raised now that the
-  anti-snipe mode has no cap at all.
 - The membership/rotation runbook (§13.4, §13.5) — separate document.
+- Whether `MaxDurationSec` moves from 3 days to the target 30 days once the demo is no longer a
+  testing ground. The value is a parameter, not a shape change.
