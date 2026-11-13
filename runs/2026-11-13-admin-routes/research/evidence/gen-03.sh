@@ -1,3 +1,6 @@
+# NOTE: re-running this prints the public APP_PUBKEY (platform/web/routes/index.tsx:48). MASK key-shaped
+# literals before committing -- the pre-commit scanner cannot distinguish a public key from a private
+# one, and the fix is masking, never --no-verify. See order.md, evidence hazard.
 #!/usr/bin/env bash
 # Generates 03-consumers-and-acceptance.txt. Run from the repo root:
 #   bash runs/2026-11-13-admin-routes/research/evidence/gen-03.sh

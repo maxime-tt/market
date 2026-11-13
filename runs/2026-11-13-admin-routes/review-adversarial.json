@@ -1,0 +1,214 @@
+{
+  "verdict": "The proposal's core anatomy holds (app-key-pinned reader, app-key-signed writes, a table that can be parsed in isolation), but two load-bearing structural claims are refuted by the current write path, one escalated decision (D3) is justified by code that does not implement it, one inference swaps a documented cause for an undocumented one, and increment 1 contains a hard internal contradiction that an executor cannot resolve without a decision. Six of seven attacks landed at least partially; only claim 1 survived essentially intact.",
+  "base_verified": {
+    "head_at_review": "b18b6fa93 (proposal/order-increment-1 last commit); worktree otherwise clean of source edits",
+    "pin_drift": "CONFIRMED no source drift: `git diff --name-only 2326938b3 HEAD` = 17 files, all under runs/ — matching the proposal's header claim. Note the four code facts were re-read at HEAD and hold.",
+    "caveat": "runs/2026-11-13-admin-routes/research/evidence/{02-target-and-gaps.sh,02-target-and-gaps.txt,03-consumers-and-acceptance.txt} are MODIFIED in the working tree (see finding F12)."
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "claim": "The registry read is hard-pinned to the app key, so a user-signed reservation is invisible (D1).",
+      "status": "CONFIRMED",
+      "severity": "none (claim survives)",
+      "measured": "grep -rn 'VANITY_REGISTRY|buildVanityRegistryFilter|vanity-urls' --include=*.ts --include=*.tsx sdk platform ui e2e",
+      "evidence": "sdk/core/curation/vanityRead.ts:21-28 buildVanityRegistryFilter (kinds, authors:[appPubkey], '#d') is the only filter constructor for the table; its two readers are readVanitySettingsWorkflow (vanityRead.ts:90-101, reached from useVanitySettings, platform/web/config/vanityBinding.ts:87-90) and ZapPurchaseManager.loadExistingRegistry (platform/server/ZapPurchaseManager.ts:219-224, also authors:[appPubkey]). No reader anywhere omits the author filter. nip05.ts:5 and curationLists.ts:8-9 reuse kind 30000 with different d-tags and are not the vanity table.",
+      "judged": "Wording nit only: 'authors: [appPubkey] is the only filter' is loose - the filter has three fields (:23-26), and '#d' is also a filter. Substance is sound."
+    },
+    {
+      "id": "F2",
+      "claim": "One name has exactly one entry, so precedence is write-time not read-time (D4); the table is rewritten wholesale by one writer.",
+      "status": "REFUTED",
+      "severity": "high",
+      "measured": "read platform/server/ZapPurchaseManager.ts:92-108,187-202,393-418; platform/server/VanityManager.ts:97-112; sdk/core/curation/vanityRead.ts:31-35,62",
+      "evidence": [
+        "publishRegistry() (ZapPurchaseManager.ts:393-406) builds tags as [['d', dTag], ...buildRegistryTags(this.registry)]; VanityManager.buildRegistryTags (:110-112) emits ONLY ['vanity', name, pubkey, validUntil]. Every purchase therefore rewrites the whole kind-30000 event from an in-memory Map of `vanity` entries and destroys every `route` tag and the `route-default` tag.",
+        "Increment rule 19 (order-increment-1.md:220-223) deliberately emits NO legacy mirror for admin routes, editor grants or permanent entries - so those entries have nothing that survives that rewrite. A paying user's purchase silently and permanently deletes an admin route and the site default. This is not a race; it is every receipt (ZapPurchaseManager.ts:202).",
+        "Two writers do exist: the receipt path (:202) and any admin via the WS re-sign proxy (websocket.ts:30-46 -> EventHandler.ts:238); EventValidator.getEventType routes d='vanity-urls' to the 'general' branch (EventValidator.ts:39-43) whose only check is adminManager.isAdmin (:85-93).",
+        "Duplicates are representable at the data layer: readVanityEntries (vanityRead.ts:31-35) maps every matching tag with no dedupe and resolveVanity (:62) takes .find - first wins silently. So 'they never coexist' is a writer convention, not a property, and the proposal's own increment adds a `duplicate-name` conflict for exactly that state (rule 10)."
+      ],
+      "judged": "D4's simplification and §2.2's 'the writer emits both for profile targets so the two never disagree' both fail against the publish path. §10 item 1 acknowledges only the ingest half (:100-104 drops expired entries); it does not notice that publishRegistry discards route tags, and its stated mitigation ('the legacy mirror keeps server state coherent') cannot work for the two entry classes rule 19 refuses to mirror."
+    },
+    {
+      "id": "F3",
+      "claim": "Existing unexpired reservations keep being honoured during a relay outage (stale-while-error), citing platform/web/storefront/storefrontQuery.ts:70-73 (D3, escalated).",
+      "status": "PARTIALLY CONFIRMED (misattributed and not delivered on the path it is invoked on)",
+      "severity": "medium-high",
+      "measured": "read storefrontQuery.ts:62-73,128-141; vanityRead.ts:90-101; sdk/core/event-store/read.ts (grep 'catch|stale' => no matches); vanityBinding.ts:120-128",
+      "evidence": [
+        "storefrontQuery.ts:70-73 is a doc comment in the kind-30024 page read. The behaviour it describes is React Query retaining the last cached page on rejection - not code in that file (the query options at :128-136 set only staleTime).",
+        "A vanity read does not take that path: it goes vanityRead.ts:96 -> readThroughStore. sdk/core/event-store/read.ts contains no error/stale retention. In a warm session useVanitySettings (vanityBinding.ts:120) supplies cache-based stale-while-error by accident; on a cold load the read rejects and $vanityName.tsx:25-27 renders LoadingState forever (the edge the proposal itself names in §3.2).",
+        "For `/`, §3.2 mandates 'a bounded fetch, not the store' - a bounded fetch has no cache, so on a relay error the same document yields inline composition, not 'keep honouring the last known-good entry'."
+      ],
+      "judged": "D3 is marked ESCALATED and its second row is attributed to production behaviour that the cited lines do not implement and that the proposal's own §3.2 contradicts for the `/` path. Either the row is a design commitment (and should say so, with the cold-start hole stated) or it is false."
+    },
+    {
+      "id": "F4",
+      "claim": "StorefrontAddressPage hard-pins the author to config?.appPublicKey (:29-31).",
+      "status": "CONFIRMED",
+      "severity": "none",
+      "evidence": "platform/web/storefront/StorefrontAddressPage.tsx:29 `export function StorefrontAddressPage({ dTag }: { dTag: string })`, :31 `const author = config?.appPublicKey ?? ''`."
+    },
+    {
+      "id": "F5",
+      "claim": "A page can only reference its own author's listings (StorefrontBlockSlots.tsx:30-46).",
+      "status": "CONFIRMED as behaviour, citation points at a comment",
+      "severity": "low",
+      "evidence": "StorefrontBlockSlots.tsx:30-46 is the module doc comment; the enforcement is :48-50 (ProductGridSlot takes pubkey from useStorefrontContext() and queries productsByPubkeyQueryOptions(pubkey)), same pattern at :65-67. StorefrontRenderer sets that context from the page event author (index.tsx:111 passes pubkey)."
+    },
+    {
+      "id": "F6",
+      "claim": "That constraint 'is almost certainly why today's home carries a single hardcoded d-tag' (D8, citing notes/DECISION-home-composition.md:164).",
+      "status": "REFUTED",
+      "severity": "medium",
+      "measured": "read notes/DECISION-home-composition.md:150-180; platform/web/routes/index.tsx:74-113",
+      "evidence": [
+        "DECISION-home-composition.md:164 is the *description* of the fallback ('one ProductRow holding a single hardcoded d-tag'), not a cause.",
+        "The same section states a different, explicit cause at :153-166: the editor publishes at d='storefront-page' as the logged-in user (storefrontPublish.ts:60), so 'publishing a page in the CMS editor can never change the home'. Its three proposed fixes (:170-175) are all about the address/signer mismatch; author-anchored listings are not mentioned.",
+        "index.tsx:87 hardcodes one d-tag and index.tsx:111 renders with pubkey={APP_PUBKEY}, so that row resolves against the app key's own listing set - i.e. it is a demo placeholder, not evidence of a constraint."
+      ],
+      "judged": "The anchoring constraint is real and does constrain an admin-authored home, but it does not explain the count of one. The proposal replaces a documented cause with an undocumented one and grades the result 'almost certainly'."
+    },
+    {
+      "id": "F7",
+      "claim": "The resolution rule (§3.1/§3.2) decides every case.",
+      "status": "REFUTED (three cases undecided, one reachable today)",
+      "severity": "high",
+      "measured": "python set comparison of the two reserved lists; ls platform/web/routes/; read routeTree.gen.ts:74-78, sellerRoute.test.tsx:40-74, EventValidator.ts:39-43",
+      "undecided_cases": [
+        {
+          "case": "A name that is a real top-level route but not on the reserved list: 'auctions' (routes/auctions.index.tsx, auctions.catalogue.tsx, auctions.$auctionId.tsx).",
+          "evidence": "Measured: both reserved lists hold 37 names, sets equal, and 'auctions' is not among them (also not: home, featured, blog). D7 asserts such a name is 'refused for every tier', but §3.1/§3.2 contain no read-side rule, nothing anywhere enumerates 'a real top-level route', and the server (§6.3 item 3) cannot derive it from platform/web/routeTree.gen.ts. Reachable: `route-default: auctions` parses (grammar ok, not reserved), resolves a page target, and `/` renders it - while `/auctions` renders the static route. One name, two meanings, no rule.",
+          "severity": "high"
+        },
+        {
+          "case": "A legacy `vanity` tag whose name fails the D7 grammar (1-2 chars, leading '_', 40 chars).",
+          "evidence": "vanityRead.ts:33-34 imposes no grammar on legacy tags; increment rule 9 (order-increment-1.md:186-189) defines legacy parsing with no name check either. Such an entry parses and resolves at /x, but serializeRouteTable (rule 18, :217-219) throws on a name that fails the grammar - so the table can be read but never written back. §3.1 has no row for it.",
+          "severity": "medium"
+        },
+        {
+          "case": "The displaced holder when shadowing happens at read time (increment rule 10, route beats legacy vanity for one name).",
+          "evidence": "D4 bullet 3 and ruling-acl.md:47-48 require the loser to be told and to keep a visible record; §3.1 records only a server-side `legacy-shadowed` conflict, and nothing surfaces it to the holder. Decided for admin reassignment, undecided for the legacy path a purchase or an old client creates.",
+          "severity": "medium"
+        },
+        {
+          "case": "Adjacent, not counted as a hole: empty string, case, single character are decided - the grammar rejects them and §3.1 step 2 falls through to the app-key page. But that fall-through is itself the C7 overlap: the naming rule constrains *routes*, not the address namespace, so a 1-char segment still resolves to whatever app-key page sits at d='x'. The rule never says the two spaces overlap and that only table-holdable names are excluded from the other.",
+          "severity": "low"
+        }
+      ],
+      "also": "D7's only defence against case 1 is asserted, not measured: routeTree.gen.ts:74-78 only declares the `/$vanityName` route, and sellerRoute.test.tsx:52-64 pins a two-segment path plus a free one-segment name - neither shows a static one-segment route outranking `$vanityName` for a colliding segment."
+    },
+    {
+      "id": "F8",
+      "claim": "§7 requirement grading does not upgrade our choices into obligations or demote obligations.",
+      "status": "PARTIALLY CONFIRMED (both directions present, plus systematic anchor drift)",
+      "severity": "medium",
+      "measured": "grep -n on runs/2026-11-13-admin-routes/order.md",
+      "errors": [
+        "SPECIFIED demoted to OUR CHOICE: R9 ('exactly one default; a second refuses or moves') is graded OUR CHOICE. order.md:80 states 'exactly one default may exist at a time' as a constraint; only 'what happens on a second one' is open. The requirement is specified, the behaviour is ours.",
+        "OUR CHOICE upgraded to SPECIFIED: R2 ('the table is one addressable event; a write rewrites it whole') is graded 'SPECIFIED by NIP-01'. NIP-01 defines addressable-event semantics; it does not specify this app's table shape. The row's own evidence is a measurement ('a newer event omitting home stops home resolving'), and D11 elsewhere concedes NIP-01 only says relays may keep the latest version.",
+        "R3/R4 graded SPECIFIED but citing code (VanityManager.ts:182-186; :6-44). The §7 header defines SPECIFIED as 'an accepted document or your verbatim ruling prints it', and both ADRs are Proposed (measured: ADR-0006:5 and ADR-019:5 both read 'Proposed'). A code regex is an implementation, not a specification - by the table's own convention these are at best implemented-our-choice.",
+        "Anchor drift into order.md, all ~+10 lines: R1 cites :50-51 but the quote is at :59-60; R8 :67-69 -> :77-79; R9 :70-71 -> :80-81; R11 :74 -> :84; R12 :78-79 -> :88-89; R17 :84-85 -> :94-95; C1 :122-132 -> :132-142; C3 :57 -> :67. Consistent with order.md being rewritten at 566b5a69a after the proposal was drafted - exactly the drift order.md:9-10 instructs the child to report."
+      ],
+      "correct_grades_spot_checked": "R8, R10, R13, R14, R15, R18, R19, R20 survive: ruling-acl.md:13-16,28-31,57-66 and order.md:88-89 do say what is quoted (modulo the wrong line numbers)."
+    },
+    {
+      "id": "F9",
+      "claim": "order-increment-1.md is executable with no further decisions.",
+      "status": "REFUTED",
+      "severity": "high",
+      "defects": [
+        {
+          "d": "Rule 9 vs rule 14 are mutually contradictory, and the type cannot express the difference.",
+          "evidence": "Rule 9 (:186-189): a legacy `validUntil === 0` 'is lapsed, not permanent'. Rule 14 (:205): routeIsLapsed = `entry.term !== 0 && entry.term < now`, which makes term 0 permanent for both tag families. Test 18 (:285-286) pins rule 9. RouteEntry (:111-122) has no field distinguishing the semantics except `source`, which rule 14 does not consult. An executor must decide - the one thing §5 of the report-back forbids.",
+          "severity": "high"
+        },
+        {
+          "d": "Exit criterion 3 is unsatisfiable by the described implementation.",
+          "evidence": "Criterion 3 (:371-372) requires `bun test --isolate sdk/config/ sdk/core/curation/` to be 'identical before and after'; step 3.2 (:326-328) runs that exact command as the after-measurement, and the new file lives in sdk/config/ and adds >=34 passing tests to it. Measured: sdk/config/ already contains instance-config.test.ts plus schemas/ and storefront/.",
+          "severity": "high"
+        },
+        {
+          "d": "Step 0 violates the frozen order's integration bound.",
+          "evidence": ":30 `git worktree add ../wt-admin-routes-inc1 1ed3d676a` cuts the increment from master; order.md:37-46 binds the run to unite/1420-all and says 'never master'. The increment does not mention the conflict.",
+          "severity": "high"
+        },
+        {
+          "d": "The increment's wire format contradicts the proposal's.",
+          "evidence": "Proposal §2.2 (:288-296) says 'the writer emits both for profile targets'; rule 19 (:220-223) emits a mirror only for profile + reservation + term>0, so an admin or editor profile route has no legacy encoding. Two artifacts under review specify different formats for the same table.",
+          "severity": "medium"
+        },
+        {
+          "d": "Every serialized paid reservation reads back as a conflict.",
+          "evidence": "Rule 19 emits a `route` tag plus a `vanity` mirror for the same name; rule 10 (:190-192) then records `legacy-shadowed` for any name carried by both families. A normally-written reservation therefore produces a conflict on the next read, and D10's dashboard 'show a conflict' would fire on the healthy state. No rule resolves it.",
+          "severity": "medium"
+        },
+        {
+          "d": "Round-trip test 28 tests less than it claims.",
+          "evidence": "Rule 17 (:214-216) sorts output by name; rule 10 preserves document order. `parse(serialize(t))` therefore deep-equals `entries` only when the fixture is already sorted. The only fixture (:229-234) is sorted, so the test passes without exercising the ordering claim.",
+          "severity": "low"
+        },
+        {
+          "d": "The '34 assertions' count is a numbering, not a count.",
+          "evidence": ":310 'That is 34 assertions minimum', but the list is 34 numbered items and #2, #19, #24, #29 each bundle two or more assertions; exit criterion 2 (:369-370) counts `pass` (test() calls) not assertions. '34 assertions' and '>=34 pass' are only compatible if each item is authored as exactly one test - which the bundled items forbid.",
+          "severity": "low"
+        }
+      ],
+      "notes": "The boundary justification at :87-88 ('sdk/config -> sdk/core is an allowed direction') is true, but only because sdk/boundary.test.ts:28-52 checks forbidden modules and sdk-escaping relative imports and nothing else - it is permission by absence of a rule, not a rule that permits it. The import itself is fine."
+    },
+    {
+      "id": "F10",
+      "claims_unverifiable_as_written": [
+        "Typecheck baseline 205 (R/§9.4, increment step 0): not re-measured here - the main tree is dirty (git status shows untracked notes/, .hermes/, bin/, infra/) exactly as the increment says, and the increment correctly forbids using it. UNVERIFIABLE without a clean worktree plus bun install.",
+        "Browse suite 168/0 isolated vs 153/15 unisolated; C12's 45 pass / 2 fail. Self-consistent with research 03:24 but not re-run.",
+        "R2 'measured: a newer event omitting home stops home resolving' - no command cited anywhere in the proposal. UNVERIFIABLE as written.",
+        "D6 'a measured search for custom-domain machinery across platform/, sdk/, ui/ finds nothing' - no command cited. UNVERIFIABLE as written.",
+        "D7 'static segments take priority over /$vanityName - routeTree.gen.ts:74-76, pinned by sellerRoute.test.tsx:52-64': neither citation shows it (see F7).",
+        "docs/adr/ADR-0006-cms-and-nostr-native-page-builder.md does not exist (measured: ls docs/adr/). The file is ADR-0006-cms-and-nostr-native-page-building.md. Cited with the wrong path at proposal.md:36 and :518 (and implicitly in R5, C8, C14). Line numbers 209/211/214 are correct for the real file, so this is a path defect only - but it makes four citations unresolvable as written.",
+        "§9.1's assertable-today mappings are scrambled: N7 'switched-off page' cites StorefrontAddressPage.test.tsx:108-115, which is the *absent coordinate* test (:108-114); N8 'zero-block' cites storefrontQuery.test.ts:271,289, where :271 is enabled:false (the switched-off case) and :289 is a missing page; the zero-block case is :275-285. N6's :117-123 ('not json') is correct."
+      ]
+    },
+    {
+      "id": "F11",
+      "section_11_corrections_audited": [
+        "C1 (522 -> 205): the artifact description is right and provably so - the committed 02 evidence recorded a HEAD that was not the pin (git show HEAD:...02.txt lines 2-3 print HEAD 1eecebd4b where the script expected 2326938b3). But C1's pointer `evidence 03:575-577` does not resolve: the committed file is 575 lines total. Correction right, evidence pointer broken.",
+        "C2 (37, not 39): CONFIRMED independently (script: 37 each, sets equal, sets identical). But `evidence 02:460` resolves only in the uncommitted worktree; committed line 460 is 'shop true'.",
+        "C3: plausible; the anchor is wrong (order.md:57 -> :67). I did not re-run the named grep, so the grep result itself is unverified by me.",
+        "C4, C5: CONFIRMED (index.tsx:57, :102, :109, :132 - `/` never reads the registry; index.tsx:48 is a hardcoded literal, not /api/config).",
+        "C6: CONFIRMED. docs/vanity-urls.md:93 says '404 page with option to return home' while $vanityName.tsx:41 falls through to the app-key page; :81 documents /api/vanity/invoice. The /api/zapPurchase half I did not re-check.",
+        "C7: CONFIRMED, and it is the origin of the undecided namespace cases in F7.",
+        "C8: CONFIRMED. ADR-0006:211 says the registry 'is currently server-side only'; ZapPurchaseManager.ts:393-418 publishes it and vanityRead.ts:96 reads it.",
+        "C9, C10: C10 is CONFIRMED (EventValidator.ts:74-83 blacklist only; :85-93 admin-only), so 'no role gate to reuse' stands. C9's zero-vanity-references claim I did not re-run.",
+        "C11: PARTIALLY WRONG. It correctly identifies that research 02 §6 assumed coexistence, but its premise 'They cannot [coexist]' is false: one event can carry two `vanity` tags with one name and the current reader silently takes the first (vanityRead.ts:31-35, :62). C11 repeats D4's error rather than correcting it.",
+        "C12: consistent with research 03:24 (applesauce-indexeddb missing, 45/2). Not re-run.",
+        "C13: the four code facts CONFIRMED. The accompanying 'measured by me and by all three axes' is contradicted by 02's committed evidence recording HEAD 1eecebd4b, and by the three dirty evidence files (F12).",
+        "C14: routeTree.gen.ts:74-78 declares only `/$vanityName` and ADR-0006:209 does describe sub-paths - CONFIRMED. The 'no notFoundComponent' half I did not verify."
+      ]
+    },
+    {
+      "id": "F12",
+      "claim": "Evidence discipline: 'Evidence files are generated by a committed script, never hand-edited' (order.md:131); every number carries its command.",
+      "status": "REFUTED",
+      "severity": "high",
+      "measured": "git status --porcelain; git diff --stat runs/2026-11-13-admin-routes/; git show HEAD:<file> | wc -l",
+      "evidence": [
+        "Three evidence files are modified in the working tree right now: 02-target-and-gaps.sh (+15/-...), 02-target-and-gaps.txt (+20), 03-consumers-and-acceptance.txt (575 committed lines -> 1200 in the worktree).",
+        "The .sh diff does not add a failing check - it removes `### base commit (expected 2326938b3):` and replaces it with `### base commit named by the order` plus a separate HEAD line, and adds a reframing note ('HEAD at generation advances as sibling children commit under runs/'). The committed .txt is what the old script printed: HEAD 1eecebd4b, i.e. axis-2 evidence was generated at a commit that is not the pin.",
+        "02's 'storefront block types: 9' was replaced in the working tree by a 12/9 split plus a `comm` diff of the three data-bound blocks - a substantive number change made after the research cited 9.",
+        "Consequence: the proposal's `evidence NN:line` anchors (e.g. C1's 03:575-577, C2's 02:460) resolve only against the uncommitted copies. Anyone reviewing the commit gets different content at those lines."
+      ],
+      "judged": "Whether this was a re-run or an edit, the artifact under review rests on files that are not the committed ones, in a run whose deliverable is 'as measured' evidence. That is the single largest process defect in the pair."
+    }
+  ],
+  "strongest_objection": "F2: the reservation writer destroys the route table. publishRegistry() (ZapPurchaseManager.ts:393-406) rewrites the whole kind-30000 event from an in-memory Map populated only from `vanity` tags (VanityManager.ts:97-112), and increment rule 19 deliberately gives admin routes and editor grants no legacy mirror - so the first paying user's purchase silently deletes every admin route and the `route-default` marker. D4's entire simplification ('one name, one entry, precedence is who may write, not which record wins') assumes one writer and a single occupancy the data layer does not have, and §2.2's 'the writer emits both' is not what the increment specifies. This breaks the model, not the prose.",
+  "strongest_reason_it_might_nevertheless_be_right": "Increment 1 is deliberately confined to a pure parser with no writer, no consumer re-pointing and no server change - and the parser's shape survives every finding above. The four pinned code facts hold, the reader really is app-key-pinned (F1), the trust story is honestly stated including the admin-list recursion and the loss of independent verifiability (D1), and §10 defers reservations to step 7 and the server validator to step 1, which is exactly where the publish-path clobber has to be fixed. An owner could accept on the grounds that the decisions are correctly identified and costed, the defects are all downstream of a writer that is not being built yet, and the alternative designs cost more without fixing anything increment 1 would ship.",
+  "counts": {
+    "attacks_attempted": 7,
+    "refuted": ["claim 2 (D4/write path)", "claim 4's inference", "claim 5 (rule not total)", "claim 7 (increment not executable)", "claim 6 partially"],
+    "confirmed": ["claim 1", "claim 4a", "claim 4b (with citation defect)"],
+    "partially_confirmed": ["claim 3", "claim 6"],
+    "undecided_resolution_cases_found": 3,
+    "increment_defects": 7,
+    "section_11_items_wrong_or_overstated": 3
+  }
+}

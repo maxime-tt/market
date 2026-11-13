@@ -1,3 +1,7 @@
+# key-shaped literals masked at commit time: the public app key (1 occurrence(s) in this
+# file) was replaced with APP_PUBKEY_MASKED. The value is a PUBLIC key, already committed in the
+# source at platform/web/routes/index.tsx:48; the pre-commit scanner matches Key = <64-hex> and
+# cannot distinguish public from private. Masking is the fix, not --no-verify.
 generated 2026-11-13T10:28:04Z
 repo /home/admin_maxime/work/market
 
@@ -209,7 +213,7 @@ export function resolveVanity(
 ===== route: home =====
 
 $ sed -n '48,60p' platform/web/routes/index.tsx
-const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91cd9c'
+const APP_PUBKEY = 'APP_PUBKEY_MASKED'
 
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
@@ -573,3 +577,628 @@ e2e/tests/theme-app-shell.spec.ts
 ===== GATE 1: typecheck baseline (measured) =====
 
 $ NODE_OPTIONS=--max-old-space-size=12288 /home/admin_maxime/.bun/bin/bun bunx tsc --noEmit | grep -c "error TS"
+tsc exit=2
+error TS lines=522
+first 3 error lines:
+contextvm/__tests__/currency-server.test.ts(28,60): error TS2345: Argument of type '() => Response' is not assignable to parameter of type 'typeof fetch'.
+contextvm/__tests__/currency-server.test.ts(66,5): error TS2322: Type '{ refresh: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>; }' is not assignable to type 'AnySchema | ZodRawShapeCompat | undefined'.
+contextvm/__tests__/currency-server.test.ts(67,5): error TS2322: Type '{ rates: z.ZodRecord<z.ZodString, z.ZodNumber>; sourcesSucceeded: z.ZodArray<z.ZodString>; sourcesFailed: z.ZodArray<z.ZodString>; fetchedAt: z.ZodNumber; cached: z.ZodBoolean; }' is not assignable to type 'AnySchema | ZodRawShapeCompat | undefined'.
+
+
+===== GATE 2: focused unit/component run on the affected files (measured) =====
+
+$ /home/admin_maxime/.bun/bin/bun test --isolate <5 files>
+(pass) curation filters > blacklist filter is the NIP-51 mute list without a d-tag [0.09ms]
+(pass) admin and editor settings > admins come from p tags in order; first admin is the owner [0.48ms]
+(pass) admin and editor settings > owner falls back to app pubkey and lastUpdated to 0 [0.11ms]
+(pass) admin and editor settings > missing editor event yields an empty list [0.16ms]
+(pass) admin and editor settings > role helpers [0.48ms]
+(pass) blacklist settings > splits p tags and product/collection a tags [0.37ms]
+(pass) blacklist settings > missing event yields an empty blacklist [0.05ms]
+(pass) blacklist settings > helpers [0.53ms]
+(pass) featured lists > products keep only 30402 coordinates in order and apply the host filter [0.45ms]
+(pass) featured lists > missing created_at falls back to the supplied clock [0.05ms]
+(pass) featured lists > collections keep only 30405 coordinates [0.18ms]
+(pass) featured lists > auctions drop malformed coordinates and filtered sellers [0.37ms]
+(pass) featured lists > users come from p tags [0.16ms]
+(pass) vanity registry > filter targets the vanity-urls list with optional limit [0.14ms]
+(pass) vanity registry > no events yields an empty registry [0.14ms]
+(pass) vanity registry > parses the newest event, lowercasing names and skipping incomplete tags [0.42ms]
+(pass) vanity registry > lookup helpers respect expiry [0.87ms]
+
+2 tests failed:
+
+ 45 pass
+ 2 fail
+ 2 errors
+ 102 expect() calls
+Ran 47 tests across 5 files. [1094.00ms]
+
+
+===== GATE 2b: per-file verdict (measured) =====
+
+$ /home/admin_maxime/.bun/bin/bun test --isolate platform/web/storefront/storefrontQuery.test.ts
+ 24 pass
+ 0 fail
+
+$ /home/admin_maxime/.bun/bin/bun test --isolate platform/web/storefront/StorefrontAddressPage.test.tsx
+error: Cannot find package 'applesauce-indexeddb' from '/home/admin_maxime/work/market/platform/web/indexedDbEventDatabase.ts'
+ 0 pass
+ 1 fail
+
+$ /home/admin_maxime/.bun/bin/bun test --isolate platform/web/routes/sellerRoute.test.tsx
+ 0 pass
+ 1 fail
+
+$ /home/admin_maxime/.bun/bin/bun test --isolate platform/web/app/routeComposition.test.ts
+ 3 pass
+ 0 fail
+
+$ /home/admin_maxime/.bun/bin/bun test --isolate sdk/core/curation/curationRead.test.ts
+ 18 pass
+ 0 fail
+
+
+===== why that file fails: missing dependency in this checkout =====
+
+$ grep -rn 'applesauce-indexeddb' platform/web/indexedDbEventDatabase.ts
+1:import { openIndexedDBEventDatabase } from 'applesauce-indexeddb'
+5: * The browser host's persistent event database (contract rev 2.21 decision 3): `applesauce-indexeddb` over
+
+$ grep -n 'applesauce-indexeddb' package.json
+71:		"applesauce-indexeddb": "^0.1.0",
+
+$ ls -d node_modules/applesauce* 2>/dev/null
+node_modules/applesauce-core
+node_modules/applesauce-relay
+node_modules/applesauce-relay-hermetic
+
+
+===== test command shapes (from package.json) =====
+
+$ grep -n 'test:unit\|test:e2e"\|test:integration\|generate-routes\|format:check\|check:ui' package.json
+9:		"generate-routes": "tsr generate",
+14:		"start": "NODE_ENV=production bun run generate-routes && bun platform/web/app/entry.tsx",
+15:		"start:local-only": "NODE_ENV=production LOCAL_RELAY_ONLY=true bun run generate-routes && bun platform/web/app/entry.tsx",
+18:		"build": "bun run generate-routes && bun run build.ts",
+19:		"build:production": "NODE_ENV=production bun run generate-routes && bun run build.ts --minify --source-map=none",
+22:		"format:check": "prettier --check .",
+28:		"check:ui-assembler": "bash scripts/check-ui-assembler.sh",
+29:		"check:ui-styles": "bash scripts/check-ui-styles.sh",
+30:		"check:ui-styles:audit": "bash scripts/check-ui-styles.sh --audit",
+31:		"test:e2e": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts",
+38:		"test:unit": "bun test --isolate $(find contextvm sdk -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort) $(find ui platform styles -type f \\( -name '*.test.ts' -o -name '*.test.tsx' \\) ! -path 'platform/web/app/ws.test.ts' ! -path 'platform/web/products/newProduct.test.ts' | sort)",
+39:		"test:unit:watch": "bun test --watch --isolate $(find contextvm sdk -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort) $(find ui platform styles -type f \\( -name '*.test.ts' -o -name '*.test.tsx' \\) ! -path 'platform/web/app/ws.test.ts' ! -path 'platform/web/products/newProduct.test.ts' | sort)",
+40:		"test:integration": "bun test $(find sdk -type f -name '*.integration.test.ts' | sort)",
+
+
+===== doctrine citations =====
+
+$ sed -n '18,31p' ui/AGENTS.md
+## Hard boundary (enforced)
+
+`ui/boundary.test.ts` fails the build if any file under `ui/` imports:
+
+- `@/…` (the legacy host)
+- `@platform/…`
+- `@tanstack/…`
+- `@nostr-dev-kit/…`
+- `applesauce-*`
+- `nostr-tools`
+- any relative path that escapes `ui/`
+
+`@sdk/…` type and workflow imports are permitted. `@ui/…` and relative imports
+inside `ui/` are permitted.
+
+$ sed -n '118,121p' ui/AGENTS.md
+3. **Callbacks for actions** — `onX` props. Never call stores, queries, or
+   mutations directly.
+4. **No data fetching.** No `fetch`, no `useQuery`, no `useStore`.
+5. **Density/variant naming** — use `variant` and `compact` consistently.
+
+$ sed -n '38,55p' sdk/AGENTS.md
+## Read API doctrine — stream-first
+
+Reads are **stream-first** (contract rev 2.21/2.22; rationale `notes/ADR-READ-SEAM-STREAMS.md`).
+
+- **`EventReadContext.stream(filters)` is the default read path.** Opening it is synchronous; events are
+  delivered asynchronously (already-stored matches replay first, live arrivals follow), ending in a
+  `{ type: 'caught-up' }` marker. The stream is the single admission point: emitted events are merged into
+  the store, so replace/delete semantics apply once.
+- **Use `stream` for anything list-based or live** — browse/home, search results, category rows, bids and
+  auction activity, comments, reactions, social feeds, order messages, notifications, live chat.
+- **`EventReadContext.fetch(filters)` is a bounded stream**, implemented _over_ `stream` (open → collect to
+  the caught-up marker → close). It is **not** a second read route and must not be the default shape. It is
+  justified **only** for a single-entity/detail read where holding a stream is not warranted — own profile,
+  seller/author profile, product or auction detail, one-off lookup by id/coordinate (fewer refresh
+  consequences, manually triggerable, avoids a held stream per entity). `fetch` does **not** admit events to
+  the store (`admit: false`), so a detail read cannot pollute a list feed.
+- **Every `fetch` carries a one-line justification comment naming the case**; reviewers flag `fetch` in any
+  list/live context.
+
+$ sed -n '7,20p' sdk/AGENTS.md
+## Placement rule
+
+Place a module by what it _is_, not by which feature first needed it:
+
+| directory     | holds                                                                                                                                                |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core/`       | protocol capability, mechanism, or shared type with **no marketplace noun**: media, relays, signer, event-store, notifications, state, ports, utils. |
+| `commerce/`   | seller/buyer flows involving listings, money, orders, capacity, or settlement.                                                                       |
+| `extensions/` | optional capability contracts and adapters.                                                                                                          |
+| `config/`     | instance/app configuration values and schemas.                                                                                                       |
+
+If a module carries a marketplace noun it is not `core/`. If it carries no
+seller/buyer flow it is not `commerce/`. If it is optional rather than required
+by the protocol surface it is `extensions/`.
+
+$ sed -n '26,32p' platform/web/routes/AGENTS.md
+## Instructions
+
+- Use route params and loaders consistently with surrounding routes.
+- Keep data fetching in query hooks or route loaders and publishing in
+  `src/publish/`; avoid embedding protocol construction in route components.
+- Preserve loading, empty, error, and stale states for relay-backed pages.
+- Update route docs only when routes are added, removed, or behavior changes.
+
+$ sed -n '83,92p' AGENTS.md
+## NDK to Applesauce (io seam retired)
+
+- All new Nostr relay I/O must route through the SDK seam `sdk/core/nostr-io`
+  (applesauce-exclusive, protected — adopt, do not edit) via the web host
+  `platform/web/sdkNostrIo.ts` (`createWebNostrIo()` / `createWebRelayPort()`).
+  See ADR-0002's 2026-10-29 amendment (R3).
+- The legacy seam (`src/lib/nostr/{io,io-ndk,io-applesauce,io-types}.ts`) is
+  retired; it is deleted, together with the `getNostrIo()` coupling in
+  `src/lib/sdkAdapters.ts`, by slice J-0. Do not add new importers of it and do
+  not route new relay I/O through it.
+
+$ sed -n '98,116p' AGENTS.md
+## Event Validation Before Surfacing
+
+Relay data is untrusted (see Constraints). This section states what that means
+at the surface level: an event becomes an _item_ only after the repository's
+parser for its kind accepts it.
+
+- Every event kind the app renders must have a parser under `src/lib/schemas/`
+  that is the single definition of a valid item for that kind. Surfaces apply
+  that parser before the event is rendered as an item — an event that merely has
+  the right shape is not a valid item.
+- **Discovery surfaces drop what the parser rejects**: home feed, paginated
+  browse, NIP-50 search (including its seller-name expansion), collections, the
+  auction feed, and seller profiles.
+- **Direct navigation still resolves the event** (by id, by coordinate) and
+  states _which_ constraint failed. A silent disappearance, or a bare "not
+  found" for an event that exists on the relay, is not an acceptable outcome:
+  the author cannot fix what they cannot see, and a visitor cannot tell a
+  curated item from a broken one.
+- **A gated event is not interactive.** No bid, purchase, claim, or settlement
+
+$ sed -n '172,189p' AGENTS.md
+## Feature Quality Gate
+
+Every feature PR must include a targeted Playwright E2E test proving the new
+functionality works, with video evidence published to the PR before it is
+considered complete. This applies to all feature work — cashu wallet, auctions,
+signer, marketplace, and any new module.
+
+Requirements:
+
+- Write a targeted spec in e2e/ covering the feature's primary user flow
+- Run with video recording enabled (video: 'on' for gate specs)
+- Video must show the feature working end-to-end
+- Publish video to the PR (CI artifact link, Blossom URL, or GitHub release)
+- Link the test code path in the PR description so others can reproduce
+- The spec must follow Test Isolation rules above (mocked mints, local relays)
+
+Docs-only PRs are exempt. Infrastructure-only PRs (CI, tooling) are exempt
+if they don't change user-facing behavior.
+
+>>> does ROOT AGENTS.md state the read-seam or ui/platform boundary rule?
+
+$ grep -n -i 'read.seam\|stream-first\|boundary' AGENTS.md
+
+
+===== HANDOVER ruling that scopes this surface =====
+
+$ sed -n '94,105p' notes/HANDOVER-CMS-INTEGRATION.md
+## 6. RULINGS 2026-11-03 (owner) — these supersede §1/§3 where they conflict
+
+1. **Pages are deployable under ANY `d`-tag, and the app router maps a path → a page event by address.**
+   Concretely: one **generic address route** resolves a kind-30024 page by `(author, d)` and renders it through
+   the ported renderer. `/featured` is simply a path that resolves to `d=featured` on the **app key**; a
+   `d=featured-<YYYY-MM-DD>` snapshot routes through the **same** mechanism with no extra machinery. Do **not**
+   hard-code a date scheme or a bespoke Featured route — the generic address lookup is the whole feature.
+2. **Keep the CMS scope small** (owner): the generic address route + the `/featured` alias + the renderer. **No
+   admin builder surface** (that is ADR-0006 use case 2 — future work).
+3. **Category rows: DEFERRED to the Browse lane** (owner accepts the lean). Not in this lane.
+4. **nsite interop: EXCLUDED** (owner accepts the lean) — dead code on the fork; no base blob-fetch primitive.
+
+
+
+===== DECISION-home-composition §7 tail =====
+
+$ tail -8 notes/DECISION-home-composition.md
+- publish the home document at the event level as the app key (a stopgap for testing, not a fix —
+  the app key is not exposed in the UI).
+
+**Not decided here.** It is a prerequisite for "author a real home document", which is an owner
+editorial call, so it is flagged rather than chosen.
+
+**Also relevant:** `/home` resolves through the `/$vanityName` route to `StorefrontAddressPage`, so
+the app key's `home` address can be *inspected* directly even while nothing can write it.
+
+
+###############################################################################
+# APPENDIX — ACL ruling folded in (2026-11-13T10:32:09Z)
+# source: runs/2026-11-13-admin-routes/ruling-acl.md
+###############################################################################
+
+
+===== the ruling =====
+
+$ wc -l runs/2026-11-13-admin-routes/ruling-acl.md
+66 runs/2026-11-13-admin-routes/ruling-acl.md
+
+$ sed -n '11,31p' runs/2026-11-13-admin-routes/ruling-acl.md
+## The three tiers, decomposed
+
+1. **Admin — full control over the app and its pages.** Not merely "can edit every route": controls
+   the app and its pages, i.e. can create, modify, remove and reassign *any* route, including one
+   held by an editor or reserved by a paying user. Also the tier that can author the **default**
+   route.
+2. **Editor — can create and publish pages to new places, and is granted specific access to specific
+   paths.** Two distinct powers, and the second is the interesting one: creation is broad, but
+   *access* is **per-path and explicitly granted**. So authority is not purely role-based — a route
+   entry carries who may touch it, and an editor's grant names paths rather than conferring a blanket
+   right.
+3. **Premium/paid — may reserve a path/domain for themselves as part of their store.** A reservation,
+   not an assignment: self-interested (their own store), **time-bounded by implication of payment**,
+   and attached to a user rather than granted by an admin.
+
+## What this resolves immediately
+
+- **The expiry problem has an answer.** The existing registry's `validUntil` is exactly the shape of a
+  paid reservation's term. So: **admin and editor routes are permanent; a reservation is a term that
+  lapses** (with renewal). The existing field is not an obstacle to be worked around — it is the
+  reservation's own semantics. *(Axis 02 was asked to enumerate expiry options; this is the ruling.)*
+
+$ sed -n '57,66p' runs/2026-11-13-admin-routes/ruling-acl.md
+## The negative paths the acceptance must now cover (added to axis 03)
+
+- an editor attempting to touch a path **not** in their grant → refused, and the refusal is a visible
+  state, not a silent no-op;
+- a premium user attempting a path already held by an admin or editor route → refused, with the
+  reason stated;
+- a reservation used after its `validUntil` → no longer resolves, and the holder is told *before* it
+  lapses;
+- an admin removing another tier's route → takes effect, and the affected holder is informed;
+- the **default** route occupied by a reservation that lapses → `/` must not blank out; it falls back.
+
+
+===== A1 (editor out-of-grant): roles carry NO path dimension =====
+
+$ sed -n '194,212p' platform/web/app-settings/appSettingsQuery.ts
+export const useUserRole = (appPubkey?: string) => {
+	const { data: adminSettings, isLoading: isLoadingAdmins } = useAdminSettings(appPubkey)
+	const { data: editorSettings, isLoading: isLoadingEditors } = useEditorSettings(appPubkey)
+	const ndk = getAppNdk()
+	const currentUserPubkey = ndk?.activeUser?.pubkey
+
+	const amIAdmin = isAdmin(adminSettings, currentUserPubkey || '')
+	const amIOwner = isOwner(adminSettings, currentUserPubkey || '')
+	const amIEditor = isEditor(editorSettings, currentUserPubkey || '')
+
+	// Determine the user's highest role
+	const userRole = getUserRoleForPubkey(adminSettings, editorSettings, currentUserPubkey || '')
+
+	return {
+		amIAdmin,
+		amIOwner,
+		amIEditor,
+		userRole,
+		isLoading: isLoadingAdmins || isLoadingEditors,
+
+>>> any path/grant dimension in the role query?
+
+$ grep -n -i 'path\|grant\|scope' platform/web/app-settings/appSettingsQuery.ts platform/web/app-settings/appSettingsPublish.ts
+platform/web/app-settings/appSettingsQuery.ts:10: * `src/queries/app-settings.tsx` path is an `export *` shim over this file until E1.
+
+>>> the only path-scoped gate in the app:
+
+$ sed -n '24,44p' platform/web/app/useRootRedirects.ts
+	const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
+
+	const { pathname } = window.location
+	const isSetupPage = location.pathname === '/setup'
+	const isAdminRoute = pathname.startsWith('/dashboard/app-settings')
+
+	useEffect(() => {
+		if (config?.needsSetup && !isSetupPage) {
+			navigate({ to: '/setup' })
+		} else if (!config?.needsSetup && isSetupPage) {
+			navigate({ to: '/' })
+		}
+	}, [config, navigate, isSetupPage])
+
+	useEffect(() => {
+		if (isLoadingAdmin) return
+		if (isAdminRoute && !amIAdmin) {
+			navigate({ to: '/dashboard' })
+		}
+	}, [isAdminRoute, amIAdmin, isLoadingAdmin, navigate])
+}
+
+>>> the house "refused" component:
+
+$ sed -n '59,70p' ui/settings/operator-settings-views.tsx
+export function SettingsAccessDenied({ header, message }: { header: SettingsPageHeaderProps; message: string }) {
+	const Icon = header.icon
+	return (
+		<div className="space-y-6 p-6">
+			<SettingsPageHeader {...header} />
+			<Card>
+				<CardContent className="p-6">
+					<div className="text-center">
+						<Icon className="mx-auto mb-4 h-16 w-16 text-text-mid" />
+						<h3 className="mb-2 text-lg font-medium">Access Denied</h3>
+						<p className="text-text-mid">{message}</p>
+					</div>
+
+>>> who uses it:
+
+$ grep -rn 'SettingsAccessDenied' --include=*.tsx platform ui | sort
+platform/web/routes/_dashboard-layout/dashboard/app-settings/blacklists.tsx:240:			<SettingsAccessDenied
+platform/web/routes/_dashboard-layout/dashboard/app-settings/blacklists.tsx:6:	SettingsAccessDenied,
+platform/web/routes/_dashboard-layout/dashboard/app-settings/featured-items.tsx:590:			<SettingsAccessDenied
+platform/web/routes/_dashboard-layout/dashboard/app-settings/featured-items.tsx:7:	SettingsAccessDenied,
+platform/web/routes/_dashboard-layout/dashboard/app-settings/team.tsx:211:			<SettingsAccessDenied
+platform/web/routes/_dashboard-layout/dashboard/app-settings/team.tsx:6:	SettingsAccessDenied,
+ui/settings/operator-settings-views.test.tsx:4:import { AddTeamMemberCard, RoleActionButtons, SettingsAccessDenied, TeamPermissionsCard, TeamRoleSection } from './operator-settings-views'
+ui/settings/operator-settings-views.test.tsx:9:			<SettingsAccessDenied header={{ icon: Shield, title: 'Team', description: 'Manage your team settings' }} message="No access." />,
+ui/settings/operator-settings-views.tsx:59:export function SettingsAccessDenied({ header, message }: { header: SettingsPageHeaderProps; message: string }) {
+
+
+===== A2 (paid request on a held path): tier-blind conflict rule =====
+
+$ sed -n '86,94p' platform/server/VanityManager.ts
+		}
+		if (this.isReservedName(key)) {
+			return `Reserved vanity name: ${key}`
+		}
+		const existing = this.registry.get(key)
+		if (existing && existing.pubkey !== pubkey && existing.validUntil > Math.floor(Date.now() / 1000)) {
+			return `Vanity name already taken: ${key}`
+		}
+		return null
+
+$ sed -n '150,166p' sdk/config/vanity.ts
+	isVanityAvailable: (vanityName: string): boolean => {
+		const normalized = vanityName.toLowerCase()
+
+		// Check reserved names
+		if (RESERVED_NAMES.has(normalized)) return false
+
+		// Check format validity
+		if (!vanityActions.isValidVanityName(normalized)) return false
+
+		const { entries } = vanityState.get()
+		const entry = entries.get(normalized)
+
+		if (!entry) return true
+
+		// Available if expired
+		return entry.validUntil < Math.floor(Date.now() / 1000)
+	},
+
+>>> does either mention admin/editor/tier?
+
+$ grep -rn -i 'admin\|editor\|tier' platform/server/VanityManager.ts sdk/config/vanity.ts
+platform/server/VanityManager.ts:2:import { ZapPurchaseManager, type PricingTier, type ZapPurchaseEntry } from './ZapPurchaseManager'
+platform/server/VanityManager.ts:7:	'admin',
+platform/server/VanityManager.ts:46:// Pricing tiers: amount in sats -> validity in days (or seconds for dev)
+platform/server/VanityManager.ts:47:export const VANITY_PRICING: Record<string, PricingTier> = {
+sdk/config/vanity.ts:52:	'admin',
+
+
+===== A3 (used after validUntil): resolution decides, warning does not =====
+
+$ sed -n '133,145p' sdk/config/vanity.ts
+	resolveVanity: (vanityName: string): VanityEntry | null => {
+		const { entries } = vanityState.get()
+		const entry = entries.get(vanityName.toLowerCase())
+
+		if (!entry) return null
+
+		// Check if expired
+		if (entry.validUntil < Math.floor(Date.now() / 1000)) {
+			return null
+		}
+
+		return entry
+	},
+
+$ sed -n '95,110p' sdk/config/vanity.ts
+	setVanity: (entries: VanityEntry[], lastUpdated?: number) => {
+		const now = Math.floor(Date.now() / 1000)
+		const entriesMap = new Map<string, VanityEntry>()
+		const pubkeyToVanity = new Map<string, string>()
+
+		for (const entry of entries) {
+			// Skip expired entries
+			if (entry.validUntil < now) {
+				continue
+			}
+
+			const normalizedName = entry.vanityName.toLowerCase()
+			entriesMap.set(normalizedName, entry)
+			pubkeyToVanity.set(entry.pubkey, normalizedName)
+		}
+
+
+$ sed -n '60,66p' sdk/core/curation/vanityRead.ts
+): VanityEntry | null {
+	if (!vanitySettings || !vanitySettings.entries || !vanityName) return null
+	const entry = vanitySettings.entries.find((e) => e.vanityName === vanityName.toLowerCase())
+	if (!entry || entry.validUntil < now) return null
+	return entry
+}
+
+
+>>> the only pre-lapse warning surface (self-serve vanity page):
+
+$ grep -n 'formatExpiration\|daysLeft\|isExpiringSoon\|isExpired' platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx | head -20
+118:	const formatExpiration = (timestamp: number) => {
+128:				daysLeft: 0,
+129:				isExpired: true,
+130:				isExpiringSoon: true,
+137:		const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
+147:			timeLeft = `${daysLeft} days`
+153:			daysLeft,
+154:			isExpired: false,
+155:			isExpiringSoon: daysLeft <= 30,
+252:										<span className="text-sm text-muted-foreground">Expires: {formatExpiration(currentVanity.validUntil).date}</span>
+253:										{formatExpiration(currentVanity.validUntil).isExpiringSoon && (
+255:												{formatExpiration(currentVanity.validUntil).timeLeft} left
+
+$ grep -n 'getExpiredVanityForPubkey' -A 8 sdk/core/curation/vanityRead.ts
+76:export function getExpiredVanityForPubkey(
+77-	vanitySettings: VanitySettings<unknown> | null | undefined,
+78-	pubkey: string,
+79-	now = nowInSeconds(),
+80-): VanityEntry[] {
+81-	if (!vanitySettings || !vanitySettings.entries || !pubkey) return []
+82-	return vanitySettings.entries.filter((e) => e.pubkey === pubkey && e.validUntil <= now)
+83-}
+84-
+
+
+===== A4 (admin removes another tier's route): no removal path exists =====
+>>> writers of the vanity registry under platform/web (kind 30000 / d=vanity-urls):
+
+$ grep -rn "vanity-urls\|VANITY_REGISTRY\|30000" --include=*.ts --include=*.tsx platform/web | grep -v test | sort
+platform/web/app-settings/appSettingsQuery.ts:126: * Fetches editor settings (kind 30000) for the app
+platform/web/app-settings/appSettingsQuery.ts:184:		staleTime: 30000, // Consider data stale after 30 seconds
+platform/web/app-settings/appSettingsQuery.ts:39: * Fetches admin settings (kind 30000) for the app
+platform/web/app-settings/appSettingsQuery.ts:98:		staleTime: 30000, // Consider data stale after 30 seconds
+platform/web/auctions/auctionsQuery.ts:173:		staleTime: 30000,
+platform/web/auctions/auctionsQuery.ts:190:		staleTime: 300000,
+platform/web/auctions/auctionsQuery.ts:198:		staleTime: 300000,
+platform/web/auth/NostrConnectQR.tsx:297:			}, 300000) // 5 minutes
+platform/web/collections/collectionQuery.ts:174:		staleTime: 300000,
+platform/web/collections/collectionQuery.ts:186:		staleTime: 300000,
+platform/web/collections/collectionQuery.ts:199:		staleTime: 300000,
+platform/web/collections/collectionQuery.ts:210:	staleTime: 30000, // Consider fresh for 30 seconds
+platform/web/config/blacklistBinding.ts:136:		staleTime: 30000, // Consider data stale after 30 seconds
+platform/web/config/nip05Binding.ts:121:		staleTime: 30000,
+platform/web/config/nip05Binding.ts:73:// Separate concern from the state bridge above: `useNip05Settings` reads the app's kind-30000
+platform/web/config/nip05Binding.ts:86: * Fetches NIP-05 registry (kind 30000 with d=nip05-names) for the app
+platform/web/config/vanityBinding.ts:124:		staleTime: 30000,
+platform/web/config/vanityBinding.ts:74:// Separate concern from the state bridge above: `useVanitySettings` reads the app's kind-30000
+platform/web/config/vanityBinding.ts:75:// `d=vanity-urls` registry from the relays. The read logic is framework-free
+platform/web/config/vanityBinding.ts:87: * Fetches vanity registry (kind 30000 with d=vanity-urls) for the app
+platform/web/featured/featuredPublish.tsx:92: * Creates a Kind 30000 featured users event (NIP-51 list)
+platform/web/featured/featuredQueries.ts:70: * Fetches featured users settings (kind 30000)
+platform/web/ndk/ndkStore.ts:207: * Use for reads of app-config events (kind 31990 handler info, kind 30000 d=admins/editors,
+platform/web/ndk/ndkStore.ts:774:		timeoutMs: number = 30000,
+platform/web/payments/mempool.ts:93:			maxDelayMs = 30000,
+platform/web/products/productQuery.ts:230:		staleTime: 300000, // Added staleTime of 5 minutes (300,000 ms)
+platform/web/products/productQuery.ts:243:		staleTime: 300000,
+platform/web/products/productQuery.ts:254:		staleTime: 30000, // Consider fresh for 30 seconds
+platform/web/products/productQuery.ts:268:		staleTime: 300000, // 5 minutes
+platform/web/products/productQuery.ts:304:		staleTime: 300000,
+platform/web/products/productQuery.ts:371:		staleTime: 300000,
+platform/web/routes/_dashboard-layout/dashboard/products/bids.tsx:211:			staleTime: 300000,
+platform/web/shipping/shippingQuery.ts:129:		staleTime: 300000, // Added staleTime of 5 minutes (300,000 ms)
+
+>>> the only writer at all is the server zap-purchase path:
+
+$ grep -rn 'VanityManager\|handleVanityEvent\|registryEventKind' --include=*.ts platform | sort
+platform/server/EventHandler.ts:25:	private vanityManager: VanityManagerImpl
+platform/server/EventHandler.ts:269:				event.kind === manager.config.registryEventKind &&
+platform/server/EventHandler.ts:334:	public getVanityManager(): VanityManagerImpl {
+platform/server/EventHandler.ts:76:		this.vanityManager = new VanityManagerImpl(this.eventSigner)
+platform/server/EventHandler.ts:7:import { VanityManagerImpl } from './VanityManager'
+platform/server/index.ts:8:export { VanityManagerImpl, VANITY_PRICING, type VanityEntry } from './VanityManager'
+platform/server/Nip05Manager.ts:49:				registryEventKind: 30000,
+platform/server/VanityManager.ts:141:	public async handleVanityEvent(event: NostrEvent): Promise<void> {
+platform/server/VanityManager.ts:61:export class VanityManagerImpl extends ZapPurchaseManager<VanityEntry> {
+platform/server/VanityManager.ts:68:				registryEventKind: 30000,
+platform/server/ZapPurchaseManager.ts:220:				kinds: [this.config.registryEventKind],
+platform/server/ZapPurchaseManager.ts:400:		event.kind = this.config.registryEventKind
+platform/server/ZapPurchaseManager.ts:55:	registryEventKind: number
+
+
+===== A5 (default held by a lapsed reservation): default is a constant today =====
+
+$ sed -n '53,58p' platform/web/routes/index.tsx
+	// The app key's own `home` page, when one has been authored. Read first and
+	// unconditionally: the hook must run in every state of this route, and the
+	// published page replaces the settled composition below without changing
+	// the renderer.
+	const { data: homeResult } = useStorefrontAddressPage(APP_PUBKEY, 'home')
+	const publishedHome = shouldRenderStorefrontPage(homeResult) ? homeResult.page : null
+
+$ sed -n '100,103p' platform/web/routes/index.tsx
+			],
+		}
+		const page = publishedHome ?? (parseStorefrontPage(JSON.stringify(homePage)).page as never)
+		return (
+
+$ grep -n 'shouldRenderStorefrontPage' platform/web/routes/index.tsx platform/web/storefront/StorefrontAddressPage.tsx platform/web/storefront/StorefrontOrProfilePage.tsx
+platform/web/routes/index.tsx:5:import { shouldRenderStorefrontPage, useStorefrontAddressPage } from '@platform/web/storefront/storefrontQuery'
+platform/web/routes/index.tsx:58:	const publishedHome = shouldRenderStorefrontPage(homeResult) ? homeResult.page : null
+platform/web/storefront/StorefrontAddressPage.tsx:7:import { shouldRenderStorefrontPage, useStorefrontAddressPage } from './storefrontQuery'
+platform/web/storefront/StorefrontAddressPage.tsx:54:	if (shouldRenderStorefrontPage(page) && page.pubkey) {
+platform/web/storefront/StorefrontOrProfilePage.tsx:8:import { shouldRenderStorefrontPage, useStorefrontPage } from './storefrontQuery'
+platform/web/storefront/StorefrontOrProfilePage.tsx:63:	if (shouldRenderStorefrontPage(storefront) && storefront.pubkey) {
+
+
+===== no 404 surface: nothing renders a notFound state =====
+
+$ grep -rn 'notFoundComponent\|notFoundMode\|defaultNotFoundComponent' --include=*.tsx --include=*.ts platform | head
+
+
+===== test files the ACL paths need — absent today (measured) =====
+
+$ test -e sdk/core/curation/routeAcl.test.ts
+ABSENT
+
+$ test -e sdk/core/curation/routeTable.test.ts
+ABSENT
+
+$ test -e platform/server/VanityManager.test.ts
+ABSENT
+
+$ test -e platform/web/routes/homeDefault.test.tsx
+ABSENT
+
+$ test -e e2e/tests/managed-routes.spec.ts
+ABSENT
+
+>>> the affected tests that DO exist:
+
+$ ls -1 sdk/core/curation/curationRead.test.ts sdk/core/curation/vanityReadWorkflows.test.ts platform/web/storefront/storefrontQuery.test.ts platform/web/storefront/StorefrontAddressPage.test.tsx platform/web/routes/sellerRoute.test.tsx platform/web/app/routeComposition.test.ts ui/nav/model.test.ts
+platform/web/app/routeComposition.test.ts
+platform/web/routes/sellerRoute.test.tsx
+platform/web/storefront/StorefrontAddressPage.test.tsx
+platform/web/storefront/storefrontQuery.test.ts
+sdk/core/curation/curationRead.test.ts
+sdk/core/curation/vanityReadWorkflows.test.ts
+ui/nav/model.test.ts
+
+>>> is there any test at all for routes/index.tsx (the default)?
+
+$ ls platform/web/routes/ | grep -i 'index'
+auctions.index.tsx
+community.index.tsx
+index.tsx
+nostr.index.tsx
+posts.index.tsx
+products.index.tsx
+
+
+===== gates re-confirmed for this appendix (measured) =====
+
+$ NODE_OPTIONS=--max-old-space-size=12288 bun bunx tsc --noEmit | grep -c "error TS"
+tsc exit=2 errorTS=522

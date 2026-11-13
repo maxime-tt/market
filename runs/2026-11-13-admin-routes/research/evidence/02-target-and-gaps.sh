@@ -1,3 +1,6 @@
+# NOTE: re-running this prints the public APP_PUBKEY (platform/web/routes/index.tsx:48). MASK key-shaped
+# literals before committing -- the pre-commit scanner cannot distinguish a public key from a private
+# one, and the fix is masking, never --no-verify. See order.md, evidence hazard.
 #!/usr/bin/env bash
 # Generates research/evidence/02-target-and-gaps.txt for run 2026-11-13-admin-routes.
 # Axis: 02-target-and-gaps. READ-ONLY against the base tree.
@@ -7,8 +10,14 @@ cd "$(dirname "$0")/../../../.." || exit 1
 ROOT=$PWD
 echo "### repo: $ROOT"
 echo "### generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-echo "### base commit (expected 2326938b3):"
+echo "### base commit named by the order (2326938b3):"
+git rev-parse 2326938b3
+echo "### HEAD at generation (advances as sibling children commit under runs/; the pin diff ABOVE is the assertion):"
 git rev-parse HEAD
+echo "### drift from the order's pin: source-tree diff (MUST be empty for the four facts to hold)"
+git diff --stat 2326938b3..HEAD -- . ':(exclude)runs/' || true
+echo "### files changed 2326938b3..HEAD (all under runs/ if the above is empty)"
+git diff --name-only 2326938b3..HEAD
 echo
 
 section() { echo; echo "================================================================"; echo "## $*"; echo "================================================================"; }
@@ -104,6 +113,8 @@ echo '--- does "home" pass? ---'
 section "10. DOCUMENTS THAT COULD SPECIFY THE REQUIREMENTS"
 echo '--- ADR statuses (Accepted vs Proposed) ---'
 for f in docs/adr/ADR-*.md; do s=$(awk '/^## Status/{getline; getline; print; exit}' "$f" | tr -d '\r'); echo "$(basename "$f"): $s"; done
+echo -n 'ADR count / Accepted count: '
+tot=0; acc=0; for f in docs/adr/ADR-*.md; do tot=$((tot+1)); s=$(awk '/^## Status/{getline; getline; print; exit}' "$f" | tr -d '\r'); case "$s" in Accepted*) acc=$((acc+1));; esac; done; echo "$tot / $acc"
 echo
 echo '--- ADR-0006 Module 3 (routing tiers + typed-target extension), the closest thing to a spec ---'
 sed -n '195,214p' docs/adr/ADR-0006-cms-and-nostr-native-page-building.md
@@ -123,7 +134,10 @@ grep -n "vanity" platform/web/routes/index.tsx || echo '(NO MATCH: `/` never rea
 section "12. COUNTS QUOTED IN THE REPORT"
 echo -n 'route files in platform/web/routes: '; ls platform/web/routes/*.tsx | wc -l
 echo -n 'files matching shouldRenderStorefrontPage (non-test): '; grep -rl "shouldRenderStorefrontPage" --include=*.ts --include=*.tsx platform sdk ui | wc -l
-echo -n 'storefront block types: '; sed -n '311,335p' sdk/commerce/storefront/storefrontPage.ts | grep -c "^\s*'"
+echo -n 'storefront block schemas in the discriminated union (order says twelve): '; sed -n '/^export const StorefrontBlockSchema = z.discriminatedUnion/,/^])/p' sdk/commerce/storefront/storefrontPage.ts | grep -c "BlockSchema,"
+echo -n 'members of STOREFRONT_BLOCK_TYPES (the props-only subset): '; sed -n '/^export const STOREFRONT_BLOCK_TYPES = \[/,/^] as const/p' sdk/commerce/storefront/storefrontPage.ts | grep -c "^\s*'"
+echo '--- the three in the union but NOT in STOREFRONT_BLOCK_TYPES (data-bound blocks) ---'
+comm -23 <(sed -n '/^export const StorefrontBlockSchema = z.discriminatedUnion/,/^])/p' sdk/commerce/storefront/storefrontPage.ts | grep -o "[A-Za-z]*BlockSchema" | sed 's/BlockSchema//' | grep -v '^Storefront$' | sort) <(sed -n '/^export const STOREFRONT_BLOCK_TYPES = \[/,/^] as const/p' sdk/commerce/storefront/storefrontPage.ts | grep -o "'[A-Za-z]*'" | tr -d "'" | sort)
 echo -n 'VanityEntry fields: '; sed -n '7,11p' sdk/core/curation/vanityRead.ts | grep -c ":\s"
 
 section "13. THE ACL RULING (runs/2026-11-13-admin-routes/ruling-acl.md) — what backs each tier in CODE"

@@ -1,7 +1,25 @@
+# key-shaped literals masked at commit time: the public app key (1 occurrence(s) in this
+# file) was replaced with APP_PUBKEY_MASKED. The value is a PUBLIC key, already committed in the
+# source at platform/web/routes/index.tsx:48; the pre-commit scanner matches Key = <64-hex> and
+# cannot distinguish public from private. Masking is the fix, not --no-verify.
 ### repo: /home/admin_maxime/work/market
-### generated: 2026-11-13T10:29:20Z
-### base commit (expected 2326938b3):
-1eecebd4b7876ded4ccc8635764eb681121522eb
+### generated: 2026-11-13T10:31:40Z
+### base commit named by the order (2326938b3):
+2326938b3af1c450813423a20ac4039696ffaec3
+### HEAD at generation (advances as sibling children commit under runs/; the pin diff ABOVE is the assertion):
+f6e681d925d0f11e4b7d0b4bb7bddff6dc6fced0
+### drift from the order's pin: source-tree diff (MUST be empty for the four facts to hold)
+### files changed 2326938b3..HEAD (all under runs/ if the above is empty)
+runs/2026-11-13-admin-routes/order.md
+runs/2026-11-13-admin-routes/research/01-current-surface.md
+runs/2026-11-13-admin-routes/research/evidence/01-current-surface.sh
+runs/2026-11-13-admin-routes/research/evidence/01-current-surface.txt
+runs/2026-11-13-admin-routes/research/evidence/02-target-and-gaps.sh
+runs/2026-11-13-admin-routes/research/evidence/02-target-and-gaps.txt
+runs/2026-11-13-admin-routes/research/evidence/03-consumers-and-acceptance.txt
+runs/2026-11-13-admin-routes/research/evidence/gen-03.sh
+runs/2026-11-13-admin-routes/research/evidence/probe02.ts
+runs/2026-11-13-admin-routes/ruling-acl.md
 
 
 ================================================================
@@ -19,7 +37,7 @@ export interface VanityEntry {
  * `/api/config` as `appPublicKey`; kept here because the slots need it before
  * any page document exists.
  */
-const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91cd9c'
+const APP_PUBKEY = 'APP_PUBKEY_MASKED'
 
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
@@ -483,6 +501,7 @@ ADR-016-zap-ndk-external-relay-isolation.md: Accepted
 ADR-018-instance-configuration-and-self-hosting.md: Proposed
 ADR-019-unified-storefront-identity-and-page-builder.md: Proposed
 ADR-add-product-workflow-boundaries.md: Proposed
+ADR count / Accepted count: 21 / 7
 
 --- ADR-0006 Module 3 (routing tiers + typed-target extension), the closest thing to a spec ---
 ### Module 3: Routing / Vanity URL Layer
@@ -563,7 +582,12 @@ docs/ops/relay-pruning.md:153:Deleting `/var/lib/market-relay/search` is not all
 ================================================================
 route files in platform/web/routes: 19
 files matching shouldRenderStorefrontPage (non-test): 5
-storefront block types: 9
+storefront block schemas in the discriminated union (order says twelve): 12
+members of STOREFRONT_BLOCK_TYPES (the props-only subset): 9
+--- the three in the union but NOT in STOREFRONT_BLOCK_TYPES (data-bound blocks) ---
+Categories
+ProductRow
+Search
 VanityEntry fields: 3
 
 ================================================================
