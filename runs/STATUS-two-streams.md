@@ -17,15 +17,15 @@ recorded only so it is not lost. Not to be opened, verified or tidied by either 
       Three findings that change the work's weight: the app key is a **server-side secret** (so the
       server is the ACL's enforcement point); the paid tier is **largely already built** as a zap
       purchase path; a **vanity dashboard surface already exists**.
-- [~] **Research axes 2 and 3 in flight** — steered onto the ACL. Freeze requirements (graded
-      SPECIFIED / SUGGESTED / OUR CHOICE) and the consumers, acceptance matrix and negative paths.
-- [x] **Composer brief written** — `composer-brief.md`. One writer, so the design is coherent; fires
-      the moment axes 2 and 3 land.
-- [ ] **Next:** the composer writes `proposal.md` + `order-increment-1.md`; the owner's redirection
-      point is `proposal.md`. Then increment 1 on its own branch, then the adversarial pass.
+- [x] **Research axes 2 and 3 complete** — `research/02-target-and-gaps.md` (36 KB) and
+      `research/03-consumers-and-acceptance.md` (43 KB), each with a committed evidence generator.
+- [x] **Composer brief written** — `composer-brief.md`. One writer, so the design stays coherent
+      rather than becoming a committee.
+- [ ] **Next:** dispatch the composer to write `proposal.md` + `order-increment-1.md`. That proposal is
+      the owner's redirection point. Then increment 1 on its own branch, then the adversarial pass.
 
-**Carried forward, not yet decided by the owner:** who *signs* a self-service reservation; self-service
-vs admin-approved; what proves entitlement and whether it fails closed or open; precedence between an
+**Carried forward, awaiting the owner:** who *signs* a self-service reservation; self-service vs
+admin-approved; what proves entitlement and whether it fails closed or open; precedence between an
 admin route, an editor grant and a reservation on the same path; lapse and renewal; whether "domain"
 means a route name or real DNS; naming rules. Plus five negative paths the acceptance must assert.
 
@@ -33,21 +33,55 @@ means a route name or real DNS; naming rules. Plus five negative paths the accep
 
 `runs/2026-11-13-auctions-ui/`
 
-- [x] **Bound frozen** — `order.md` (`6a9f9118b`). Carries the owner's own 8-item list and the binding
-      rulings (read path 100% Nostr; the chain is the consensus layer only; validators publish signed
-      verdicts to the relay; the front end never contacts a validator; regular 1xxx kinds; the frozen
+- [x] **Bound frozen** — `order.md` (`6a9f9118b`). The owner's own 8-item list plus the binding rulings
+      (read path 100% Nostr; the chain is the consensus layer only; validators publish signed verdicts
+      to the relay; the front end never contacts a validator; regular 1xxx kinds; the frozen
       1440-series allocation; retire rather than migrate).
-- [~] **Increment 1, slice B1 in flight** — the multi-relay read adapter over `1440`/`1441`/`1445`/`1447`,
-      read-only, no UI, branched off the stage-1 kind map (`0a65b4ce6`) rather than redoing it.
-- [~] **Increment 1, slice B2 in flight** — the pre-existing broken home test
-      (`BrowseIndexHost.test.tsx`, missing `@getalby/sdk/nwc`), so the home regains a regression net.
+- [x] **Increment 1, B1 — COMPLETE, verified, pushed.** `d7s2/auctions-read-adapter` @ `7f8e1275d`
+      (fork + nostr, read back from both). Two files, 1,971 insertions:
+      `platform/web/auctions/relay/arenaAuctionRead.ts` + its test. **The orchestrator re-ran the tests
+      itself: 31 pass, 0 fail, 94 expect() calls.** Read-only — no UI, no publish, no validator.
+      One independent subscription per relay, so relays can be **diffed for equivocation** instead of
+      pooled blind; the diff is exposed (`verdictDivergence`, `commitmentForks`, per-event `relays[]`
+      provenance). 1440 "latest wins" is explicit: root = earliest for `(seller, d)`; a later version
+      counts only if its `e` names that root; accepted only if all eleven frozen fields are unchanged;
+      a rejected update surfaces with the field that moved. Also proven against **real local relays**
+      (two live + one dead port): four events, a 45 ms bounded read, correct partial results and
+      health. Its report names what it could not verify: no browser, no hostile relay with real
+      signatures, no quorum (that is stage 3's business).
+- [x] **Increment 1, B2 — COMPLETE, and the premise was wrong in an instructive way.**
+      `d7s2/home-test-dep-fix` @ `8ad4127c5` (fork + nostr). **The cause was not a repo defect:**
+      `@getalby/sdk` is declared (`package.json:50`) and locked, but was simply **never installed in
+      the local tree** — a stale/incomplete install. So that branch carries **documentation and
+      evidence only, with no code change to merge.** The orchestrator then ran the frozen install in
+      the **main checkout**, where the net actually matters, and confirmed `BrowseIndexHost.test.tsx`
+      runs: **42 pass, 0 fail**.
 - [x] **Scope fence added** — the intro and every earlier-work branch are marked parked; a child
       wandering there is a scope violation.
-- [ ] **Next:** verify and push both slices; then the auction block (item 2), then stage 3 (item 3).
+- [ ] **Next:** item 2, the auction block (auctions placeable inside a page), then stage 3 — the
+      auction surfaces reading the adapter.
+
+## Premise corrections the children found, and the orchestrator verified
+
+- **The typecheck baseline is 205 on a clean tree, not 522.** The 522 in both orders was an artifact of
+  the **dirty main checkout**, which typechecks untracked scratch files and stale packages. B1 measured
+  205, B2 independently reported the same drop, and the orchestrator confirmed 205 with **0 errors in
+  the new files**. Corrected in both orders. Two related traps are recorded there: a fresh worktree with
+  no `node_modules` makes `bunx` fetch typescript@latest and report **15215** errors; symlinking the
+  main checkout's `node_modules` reports **334** because `@cashu/cashu-ts`'s `.d.ts` relative imports
+  break through the symlink. Always `bun install --frozen-lockfile` in a fresh worktree first.
+- **The browse suite needs `--isolate`.** Measured by the orchestrator: `bun test --isolate
+  platform/web/browse/` → **168 pass, 0 fail**; without it → **153 pass, 15 fail**, all in
+  `BrowseIndexHost` and `useBrowseIndexFeed`. Pre-existing cross-file state bleed, not a regression from
+  this run — and neither number may be quoted alone.
+- **`AGENTS.md` does not state the "read seam" or a `ui`/`platform` split by those names.** B1 said so
+  rather than inventing a rule, and cited the rules that do exist (`sdk/AGENTS.md:38-53`, the
+  stream-first read doctrine; `ui/AGENTS.md:18-28`, the enforced hard boundary via
+  `ui/boundary.test.ts`) to justify the placement it chose.
 
 ## Boundary between the two
 
-- Item 4 of B's list — the home's addressing gap — **belongs to A**, and is already in flight there.
+- Item 4 of B's list — the home's addressing gap — **belongs to A**, and is in flight there.
   A child in either stream that starts solving it is duplicating the other.
 - Neither stream deploys. No live unit is restarted by either.
 
@@ -57,5 +91,5 @@ means a route name or real DNS; naming rules. Plus five negative paths the accep
 tail -f /home/admin_maxime/.hermes/profiles/maxime/cache/delegation/live/<delegation-id>/task-N.log
 ```
 
-The two streams' artifacts live under `runs/2026-11-13-admin-routes/` and `runs/2026-11-13-auctions-ui/`;
+The streams' artifacts live under `runs/2026-11-13-admin-routes/` and `runs/2026-11-13-auctions-ui/`;
 their evidence files are regenerated by committed scripts, never hand-edited.

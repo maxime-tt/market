@@ -56,9 +56,20 @@ dependency order:
 - **Do not read or write** `/home/admin_maxime/work/wt-e2e` (serves a live instance),
   `/home/admin_maxime/work/auctions-simplify`, or
   `/home/admin_maxime/work/compare/plebeian-arena-auctions` (another session's, mid-rebase).
-- The typecheck baseline on **this** base is **exactly 522** errors
-  (`NODE_OPTIONS=--max-old-space-size=12288 /home/admin_maxime/.bun/bin/bun bunx tsc --noEmit`).
-  Quote the count before and after; a change that adds any is not acceptable.
+- The typecheck baseline on **this** base is **exactly 205** errors on a **clean tree**, measured by
+  the orchestrator (`NODE_OPTIONS=--max-old-space-size=12288 /home/admin_maxime/.bun/bin/bun bunx tsc --noEmit`,
+  typescript 5.9.3). Quote the count before and after; a change that adds any is not acceptable.
+  **Correction to an earlier premise in this order:** the figure 522 it previously stated was an
+  artifact of the **dirty main checkout**, which typechecks untracked scratch files and stale
+  packages — slice B1 measured 205 and B2 independently reported the same drop, and the orchestrator
+  confirmed it. Two further traps, both measured: a fresh worktree with no `node_modules` makes `bunx`
+  fetch typescript@latest and report **15215** errors; symlinking the main checkout's `node_modules`
+  reports **334** (`@cashu/cashu-ts`'s `.d.ts` relative imports break through the symlink). Run
+  `bun install --frozen-lockfile` in the worktree first.
+- **The browse test suite must be run with `--isolate`.** Measured by the orchestrator:
+  `bun test --isolate platform/web/browse/` → **168 pass, 0 fail**; without it → **153 pass, 15 fail**,
+  all in `BrowseIndexHost` and `useBrowseIndexFeed`. Pre-existing cross-file state bleed. Quote both
+  numbers, never one.
 
 ## Increment 1 — two independent slices, both now
 
