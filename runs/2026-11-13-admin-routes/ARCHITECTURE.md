@@ -1,7 +1,7 @@
 # ARCHITECTURE — admin-managed routes, consolidated from the accepted rulings
 
 **Run:** `runs/2026-11-13-admin-routes` (run A) · **Role:** consolidator, one implementation plan out of four
-candidate designs plus six owner rulings · **Base:** `/home/admin_maxime/work/market`, `master`, HEAD
+candidate designs plus the owner rulings · **Base:** `/home/admin_maxime/work/market`, `master`, HEAD
 `3a07e7067` · **State:** read-only. No source change, no branch, no build, no deploy. This file and
 `IMPLEMENTATION-PLAN.md` (plus `report-consolidation.md`, `report-revision-2.md`, `report-revision-3.md` and
 `report-revision-4.md`) are the only things written.
@@ -74,7 +74,7 @@ instance without the instance building their block. The page-composition vocabul
 
 | # | passage as written in REVISION 3 | changed by | now reads as |
 |---|---|---|---|
-| 1 | §3.1 nouns: `PAGE` "REFERENCES widgets by registry id", plus a second block adding the nouns `WIDGET` and `WIDGET REGISTRY` | ruling "reuse the EXISTING CMS widget definitions" | `PAGE` references **the existing CMS block types** (`ProductGrid`, `ProductRow`, `ProductStrips`, `Search`, `Categories`, `Hero`, `Text`, `Image`, `LinkList`, `Divider`, `Spacer`, `BrowseStats`, `BrowseFeed`, `AuctionList`, …) — real React components already in the tree and already in the CMS editor. `WIDGET` / `WIDGET REGISTRY` become a **DEFERRED** block in the same place, not a noun of the model (§3.1) |
+| 1 | §3.1 nouns: `PAGE` "REFERENCES widgets by registry id", plus a second block adding the nouns `WIDGET` and `WIDGET REGISTRY` | ruling "reuse the EXISTING CMS widget definitions" | `PAGE` references **the existing CMS block types** — the closed union at `sdk/commerce/storefront/storefrontPage.ts:293-306` (`ProfileHeader`, `Hero`, `Text`, `LinkList`, `Image`, `Divider`, `Spacer`, `ProductGrid`, `FeaturedProduct`, `ProductRow`, `Search`, `Categories`), which are React components already in the tree and already in the editor (`platform/web/storefront/storefrontCms.tsx:196`). `WIDGET` / `WIDGET REGISTRY` become a **DEFERRED** block in the same place, not a noun of the model (§3.1) |
 | 2 | §3.1 paragraph "A widget registry is not the 'manifest' this paragraph refuses" | same | replaced by a paragraph that keeps the refusal of a second routing record and says the block vocabulary is **the instance's build**, not a registry the page talks to (§3.1) |
 | 3 | §5.5 stored page, field "`its widget ids` — the registry ids the document references, so `pageHtml` can emit exactly those script imports without re-scanning" | nothing is emitted per block | **removed**. The stored page is document + fragment + meta + identity + series memberships. There is no id list because there is no per-block asset to emit (§5.5) |
 | 4 | §5.5.2 block table, row 2: the five data-bound blocks at ingest are "**an empty widget mount point**", at request "a **widget** upgrades it and fetches its own live data in the browser" | same | at ingest: a **placeholder region** carrying the block's `type`; at request: **served as-is, then filled in the browser by the existing React slot map** after hydration. No element upgrade, no bundle (§5.5.2) |
@@ -87,6 +87,7 @@ instance without the instance building their block. The page-composition vocabul
 | 11 | §13 diagram: "Dynamic regions: an EMPTY MOUNT POINT, filled in the browser by a WIDGET (custom element, script-imported bundle)"; page store "+ the widget ids the document references"; write line "`widget ids in registry?`" | same | "data-bound blocks: a PLACEHOLDER, filled in the browser by the existing React slot map **after** hydration"; no id list; dispatch is `parse → render → store` (§13) |
 | 12 | §13 invariant sentence 5: "…or gives a page a way to name a widget by URL, it is wrong" | same | "**If it server-renders a page's dynamic content, or lets a page introduce code, it is wrong.**" — the invariant without the deferred vocabulary (§13) |
 | 13 | §REVISION 3's table and §REVISION 2's tables, presenting the widget model as current | same | a **READ THIS FIRST** note added at the head of §REVISION 3 saying which of its rows are deferred and which stand; the tables stay as history (§REVISION 3) |
+| 14 | this revision's own first draft of the scope list, which put **modular sub-apps** and **list management** in an OUT column | owner correction, 2026-11-13: *"modular subapps, and list management I would both like in - but perhaps after we can get our current todo list done"* | scope is **three-way**: NOW (§R4.4 tier 1), **LATER and already committed** (tier 2 — modular sub-apps, list management), **DEFERRED** (tier 3 — the widget layer and the signed ledger). §R4.6 checks, rather than assumes, that tiers 2 leave room |
 
 **Not changed by this cut:** the relay split (§5.6), the single ingest endpoint, the ACL, leases, the routing file, the
 page store, and every served-page property (§R4.2).
@@ -164,28 +165,23 @@ yet" state when a slot is absent (`:105-136`), and it is rendered as the placeho
    `ui/storefront/StorefrontRenderer.tsx:8` (`./storefront-theme.css`) did **not** break the Bun server import
    **[M]**; the fragment carries classes and inline theme vars exactly as it does in the browser today.
 
-### R4.4 Scope of this build — what is IN, and what is explicitly OUT
+### R4.4 Scope — a **three-way** distinction, not in/out
 
 The owner's priority is explicit (`ruling-react-components-and-deferred-widgets.md:21-22`: *"focus on the routing
-functionality first"*). Stated once, so no increment has to imply it:
+functionality first"*), and on 2026-11-13 he corrected a two-way reading of it: **modular sub-apps and list management
+are IN, sequenced after the current work** — *"modular subapps, and list management I would both like in - but perhaps
+after we can get our current todo list done."* So the build has three tiers, and every section below is placed in one:
 
-| | **IN this build** | |
+| tier | what | where |
 |---|---|---|
-| 1 | the routing file — one JSON file, validator, single writer (`apply`), boot-refuses-if-bad | §4 |
-| 2 | resolution — three rungs, two binding kinds, longest-prefix, 404 default | §3.2–§3.5 |
-| 3 | the page store — local, one file per page, atomic writes, series index | §5.5 |
-| 4 | serving — the fragment from local storage, no relay, `#__AR_PAGE__`, hydrate-the-same-DOM | §5.5.2 |
-| 5 | the one ingest endpoint at the app relay's POST surface, kind-dispatched | §5.5.3, §5.6 |
-| 6 | the ACL — four levels on the signing pubkey, `may()`, `grants`, visible refusals | §7 |
-| 7 | leases — top-level only, term, 404 on lapse, no grace | §3.4, §7.4 |
-| 8 | the management surface, and the legacy registry's retirement | plan §9 |
+| **1 · NOW — the current todo list** | the routing file (one JSON file, validator, one writer, boot-refuses-if-bad); resolution (three rungs, two binding kinds, longest-prefix, 404 default); the page store (local, one file per page, atomic, series index); serving (fragment from local storage, no relay, `#__AR_PAGE__`, hydrate-the-same-DOM); the one ingest endpoint at the app relay's POST surface; the ACL (four levels on the signing pubkey, `may()`, `grants`, visible refusals); leases (top-level only, term, 404 on lapse, no grace); the management surface and the legacy registry's retirement | §3–§4, §5.5–§5.6, §7, plan §1–§9 |
+| **2 · LATER — committed, sequenced after tier 1** | **modular sub-apps**: legacy and general pages becoming modular sub-apps with their own sub-paths (browse experience, seller dashboard, buyer/orders dashboard, …). **List management**: generalising the list machinery beyond today's blacklist-and-featured-only pair, and a CMS reference meaning *"the members of the named list"* | §5.2, §10 O-7; §6 |
+| **3 · DEFERRED — needs a new reason to build** | the **widget / portability layer only**: web components, custom elements, script binding, widget compiling, a page linking a git repo as delivery, third-party widget delivery. Also **the signed lease-confirmation ledger** and honouring another instance's leases | §5.7, §R4.5; §11 |
 
-| | **OUT of this build (deferred, recorded)** | |
-|---|---|---|
-| A | **the widget / portability layer** — custom elements, per-widget bundles, `WIDGET`/`WIDGET REGISTRY`, script imports, widget compiling, a page shipping code, "link a git repo" as delivery | §5.7, §R4.5 |
-| B | **modular sub-apps** — compiled pages' contents modularised into replaceable regions; "basic slots" stays the whole requirement (O-7) | §10 O-7 |
-| C | **the signed lease-confirmation ledger**, and honouring another instance's leases | §11 |
-| D | **list management** — `list` references resolved, user-authored lists, the product picker | §6 |
+**Tier 2 is not "out", and tier 3 is not "later".** The difference is commitment and reason: tier 2 is **already
+decided** and only waits its turn — nothing has to be re-argued, and the requirement is that this architecture must not
+*preclude* it (§R4.6 verifies that it does not). Tier 3 is **declined for now with a stated consequence** and would need
+a new reason (§R4.5). Neither tier changes anything in tier 1's increments.
 
 ### R4.5 Deferred is not deleted — the distinction, and the consequence
 
@@ -205,6 +201,47 @@ later reader cannot mistake this for an omission:
 - **It is distinct from the DELETED.** The **auctions-relay-as-app-relay** conflation, the **two-write-surface** shape
   and the **`/api/pages/publish`** endpoint are deleted (§5.5.3, §5.6). The widget layer is *not* deleted: §5.7 stays
   in this document as the design of record, and O-8 stays as the process question it will raise.
+
+### R4.6 Tier 2 leaves room — checked, not assumed
+
+The owner's instruction was that the architecture must merely *leave room* for modular sub-apps and list management. Two
+specific questions decide whether it does, and both are answered from the text and the source rather than asserted:
+
+**(a) Does the programmed-prefix rung allow an arbitrarily deep sub-app path, given that only LEASES are restricted to
+top level?** **Yes, and it is stated twice, not inferred.** §3.4 restricts leases: *"A lease may be granted **only on a
+top-level path**"*, and §5.2 says *"**programmed routes may be arbitrarily deep; only *leases* are restricted to top
+level**"* (§5.2, and §R3.3 item 2 confirms it against
+`ruling-local-pages-acl-and-legacy-routes.md:115-117`). Rung 2 is *"a programmed PREFIX"* with **longest programmed
+pattern wins** (§3.3), and the file's `prefixes[].pattern` is `:param`-shaped rather than single-segment
+(`"item/:eventId"`, `"p/:npub"` — §4.2). The 3–30-character name grammar in §8.2 governs a **binding's `path`**, not a
+prefix pattern, so nothing in the model forbids `seller/orders/:orderId`. **No revision has narrowed this** — REVISION
+2 widened it (§5.2's reversal) and REVISION 3 confirmed it (§R3.3 item 2); **REVISION 4 does not touch §3.3, §3.4, or
+§5.2's ordering rule** (it only relabels §5.2's "direction of travel" paragraph as tier 2, which is a scope statement,
+not a change to the ladder).
+
+**One genuine gap, stated rather than papered over:** the model allows deep patterns but **no pattern grammar is
+specified** — segment count, allowed characters, or where a `:param` may sit. Today's only patterns are one- and
+two-segment (`item/:eventId`, `p/:npub`, `<series>:`), so the gap is invisible until a sub-app needs a three-segment
+pattern. It is a **later** addition (a validator rule plus a test), not a change to the ladder, and it must not be built
+in tier 1.
+
+**(b) Does the page definition's reference model still have room for a `list` reference?** **Yes — and here the room is
+narrower than the words suggest, so say exactly what it is.** §6 keeps the union with both variants, `{ kind: 'list';
+list: string }` *"PARSED, NOT RESOLVED"*, refused by the resolver with a counted `unsupported-reference` reason and
+rendering the block's empty state. **Neither REVISION 3 nor REVISION 4 touched §6** — the cut removed the widget layer,
+which never had anything to do with references. What has to be said plainly:
+
+- `ProductReference` **does not exist in code today** — it is this document's model
+  (`grep -rn "ProductReference" sdk/ platform/ ui/` finds only unrelated collection/product-listing tag schemas) **[M]**.
+  So "leaves room" means *nothing in the page schema or the resolver forbids it*, not *there is a dormant code path*.
+- The **code's** list machinery is closed to two keys: `CURATION_LISTS` at `sdk/core/curation/curationLists.ts:7` with
+  `CurationListKey = keyof typeof CURATION_LISTS` at `:16`, whose members are the blacklist-and-featured pair **[S]**.
+  generalising it is **real work**, which is exactly why it is tier 2 and not a switch.
+- The room is therefore one **resolver branch plus a tag/key generalisation**, and the one thing that would destroy it
+  is if `list` were dropped from the union at ingest. It is not dropped: it parses and round-trips (§6).
+
+**If either answer had been "narrowed", that would be a conflict to report.** Neither was; the only shortfall found is
+(a)'s unspecified pattern grammar, which is recorded above as later work.
 
 ---
 
@@ -434,16 +471,20 @@ PAGE        the page DEFINITION: a document, authored by the page's author, that
 PAGE STORE  the instance's LOCAL copy of the pages it serves: the document, plus what is needed to
             answer a request without a relay (§5.5). Storage format is the implementer's choice —
             ruling 1 says so explicitly ("a custom database in a more efficient way, I don't mind").
-REFERENCE   what a page block points at: a coordinate, or a list name (reserved, not built — §6).
+REFERENCE   what a page block points at: a coordinate, or a list name — LATER, committed, room kept (§6, §R4.4).
 ```
 
 **REVISION 4 — what a page references, and the vocabulary it does not have.** A page references **the block types the
-CMS already ships** — `ProductGrid`, `ProductRow`, `ProductStrips`, `Search`, `Categories`, `Hero`, `Text`, `Image`,
-`LinkList`, `Divider`, `Spacer`, `BrowseStats`, `BrowseFeed`, `AuctionList`, … — which are **React components already
-in the tree and already in the CMS editor** (`platform/web/storefront/storefrontCms.tsx:149,196` builds the editor's
-`components` map over the same union `sdk/commerce/storefront/storefrontPage.ts:293-306` closes) **[S]**. The
-composition vocabulary is therefore **ours**; a third party extending it ships a React component with the app
-(§R4.5).
+CMS already ships**, which is a *closed* set: the 12-type union at
+`sdk/commerce/storefront/storefrontPage.ts:293-306` — `ProfileHeader`, `Hero`, `Text`, `LinkList`, `Image`, `Divider`,
+`Spacer`, `ProductGrid`, `FeaturedProduct`, `ProductRow`, `Search`, `Categories` — rendered by React components already
+in the tree and registered in the editor's `components` map (`platform/web/storefront/storefrontCms.tsx:149,196`) **[S]**.
+The ruling's own list is longer and illustrative — it also names `ProductStrips`, `BrowseStats`, `BrowseFeed` and
+`AuctionList`, and **those four do not exist in the tree today** (`for n in ProductStrips BrowseStats BrowseFeed
+AuctionList; do grep -rl "'$n'" sdk/ platform/ ui/; done` → no output **[M]**). So the honest statement is: a page can
+reference **what the union already contains**; a block the union
+does not contain is *new code*, not a new document field — which is the same consequence as §R4.5, one step earlier. The
+composition vocabulary is **ours**; extending it ships a React component with the app.
 
 **DEFERRED, and not nouns of this model** (`ruling-react-components-and-deferred-widgets.md:38-45`). Listed here so the
 door is visibly open rather than silently shut, and so nothing below reads as if it were built:
@@ -778,11 +819,13 @@ would mount over the served page. The served HTML must therefore carry the decis
 place of `<Outlet/>` when it is present. That is **one guard**, not a rebuild, and it is why re-pointing does not
 depend on the modular-contents step.
 
-**The direction of travel, recorded so the plan does not build a monolith.** The ruling wants these pages to
-become "modularized and component-based pages that serve as 'sub-apps' with their sub-paths (browse experience,
-seller dashboard, buyer/orders dashboard, and more…)". That is the step *after* routing, and it is why §3.4's
-"leases are top-level only" does not constrain it: **programmed routes may be arbitrarily deep; only *leases* are
-restricted to top level** (`ruling-local-pages-acl-and-legacy-routes.md:115-117`).
+**The direction of travel, recorded so the plan does not build a monolith — and now a commitment, not a preference.**
+The ruling wants these pages to become "modularized and component-based pages that serve as 'sub-apps' with their
+sub-paths (browse experience, seller dashboard, buyer/orders dashboard, and more…)". **REVISION 4 places that in tier 2:
+LATER, and already decided** — the owner's *"modular subapps … I would both like in - but perhaps after we can get our
+current todo list done"* (§R4.4). It is sequenced after routing, and it is why §3.4's "leases are top-level only" does
+not constrain it: **programmed routes may be arbitrarily deep; only *leases* are restricted to top level** — checked
+against the ladder and the file format in §R4.6(a), not assumed.
 
 **`/` remains the case that is buildable with zero new client seam**, and still the cleanest demonstration:
 `/` is a compiled-in route today (`platform/web/routes/index.tsx:29`) that renders `useStorefrontAddressPage`
@@ -1243,10 +1286,12 @@ dynamic regions are filled by the app's **own** components — which is the mode
 
 ---
 
-## 6. The CMS reference model, and the `list` follow-up
+## 6. The CMS reference model, and the `list` reference — **LATER (tier 2)**, room kept now
 
 `ruling-d8-multipage-and-lists.md:70-80`: a way to link to **any product**, "by list"; today list management is
-only a blacklist and a featured list; **explicitly a follow-up**, but the reference model must leave room.
+only a blacklist and a featured list. **This is committed work, sequenced after the current todo list** (§R4.4 tier 2 —
+the owner: *"list management I would both like in"*), and **the reference model must leave room** — which §R4.6(b)
+checks against the source rather than assuming.
 
 - **Built now, unchanged behaviour**: the reference union has two variants.
 
@@ -1265,8 +1310,8 @@ only a blacklist and a featured list; **explicitly a follow-up**, but the refere
   `30402:<pubkey>:<d>` coordinates (`sdk/core/curation/curationLists.ts:28-38` **[S]**). Adopting the union
   **tightens** the reference rather than merely extending it (`proposal-v2.md:150-156`).
 
-- **Not built**: user-authored lists, a single general list kind, the product-picker UI. Those are the follow-up,
-  and they are marked as such wherever the plan touches the model.
+- **LATER (tier 2), and committed**: user-authored lists, a single general list kind, the product-picker UI. Those are
+  the next stage after the current todo list, and they are marked as such wherever the plan touches the model (§R4.4).
 
 ---
 
@@ -1764,9 +1809,11 @@ internally**.
 
 **This document adopts that lean as the direction, and nothing more.** §5.5.2 already produces one kind of region for a
 different reason (the placeholder a data-bound block renders into), so the vocabulary exists without a slot system.
-But the ruling's own sequencing is explicit — re-pointing is routing (**this run**), modular contents are the **next**
-step — so **no increment here builds a slot system**, and increment 1 must not grow one. The only thing this run owes
-the next step is that re-pointing does not *preclude* it, which §5.2's one-guard seam already guarantees.
+But the ruling's own sequencing is explicit — re-pointing is routing (**this run**), modular contents are the
+**next** step — so **no increment here builds a slot system**, and increment 1 must not grow one. The only thing this
+run owes the next step is that re-pointing does not *preclude* it, which §5.2's one-guard seam already guarantees.
+**REVISION 4: that next step is tier 2 — LATER and committed** (§R4.4), so this is a *sequencing* constraint, not a
+"not wanted" one.
 
 **REVISION 3 — confirmed and closed as a question.** Ruling §6 settles the depth: *"some basic slots that can be
 replaced is good enough to start."* So the requirement is **basic replaceable slots**, not a slot framework, and
@@ -1803,7 +1850,7 @@ plan**: increments 1–8 ship zero registry entries beyond the built-ins.
 
 ---
 
-## 11. The signed lease-confirmation ledger — BUILD LATER, explicitly out of scope
+## 11. The signed lease-confirmation ledger — **tier 3: DEFERRED**, not in this build
 
 `ruling-resolution-and-signed-ledger.md:56-68` and `ruling-app-authority-and-portable-leases.md:72-98`.
 

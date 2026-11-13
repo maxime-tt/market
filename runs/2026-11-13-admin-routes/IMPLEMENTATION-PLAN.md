@@ -24,6 +24,8 @@ plan — the web-component/widget-bundle work of REVISION 3 — and restores the
 has: **React components, the existing block types**. Increments keep their positions; **increment 9 is deferred, not
 deleted**; the **render mechanism at ingest is named and priced** because REVISION 3 left it implied.
 
+### R4.1 Every passage this scope cut changed
+
 | # | passage as written in REVISION 3 | changed by | now reads as |
 |---|---|---|---|
 | 1 | §1.1 file list, **15 new files**, including `widgetRegistry.ts` + `widgetRegistry.test.ts` | the scope cut | **13 new files** — the registry module and its test are removed. `pageRender.ts` is described as *static blocks → HTML; data-bound blocks → a placeholder* (§1.1) |
@@ -38,7 +40,23 @@ deleted**; the **render mechanism at ingest is named and priced** because REVISI
 | 10 | §11 **R-4** "the widget layer is new machinery …" as a live risk | same | relabelled **R-4 (DEFERRED)** — a risk of the deferred layer, not of this build; `R-1` absorbs what is actually at risk now, which is the renderer's mechanism and the boundary guard (§11) |
 | 11 | §12 rows "who admits a widget to the registry" and "a generic `Widget` block" | same | both marked **deferred with the layer**, and §12 gains the **scope list** (§12) |
 
-### R4.2 What this plan did **not** change
+### R4.2 Scope — three tiers, and two of them are not this plan
+
+The owner corrected a two-way reading of the scope in the same sitting: **modular sub-apps and list management are IN,
+sequenced after the current work** — *"modular subapps, and list management I would both like in - but perhaps after we
+can get our current todo list done."* So:
+
+| tier | what | in this plan? |
+|---|---|---|
+| **1 · NOW** | increments 1–8: the routing file, the page store, serving, the one ingest endpoint, the ACL, leases, the series index, the management surface | **yes — these are the plan** |
+| **2 · LATER, committed** | **modular sub-apps** (modular pages with their own sub-paths: browse, seller dashboard, buyer/orders) and **list management** (generalise lists beyond blacklist/featured; a CMS reference meaning "the members of the named list") | **no increments are added**; the architecture must **leave room**, and `ARCHITECTURE.md` §R4.6 checks that it does rather than asserting it |
+| **3 · DEFERRED** | the widget/portability layer (custom elements, script binding, widget compiling, git-repo delivery) and the signed ledger | **no** — and §9b / §11 are the deferred record |
+
+**Nothing in tier 2 appears in an increment.** The only obligation this plan carries for it is that no increment
+*precludes* it: deep programmed prefixes stay legal (only leases are top-level, `ARCHITECTURE.md` §3.4/§5.2), and the
+`list` reference stays in the union as parsed-and-refused (`ARCHITECTURE.md` §6, checked in §R4.6(b)).
+
+### R4.3 What this plan did **not** change
 
 - **The serve path.** Render once at ingest, store the fragment, hydrate the SAME DOM, data-bound blocks fetch their
   own data after hydration. Unchanged, and now *shorter*: one less client mechanism (§1.4.2).
@@ -46,7 +64,7 @@ deleted**; the **render mechanism at ingest is named and priced** because REVISI
   Increments 1–8 keep their positions, files and exit criteria except the rows tabled above.
 - **Increment 1 is still the proof increment**, and it is still the only increment that builds a renderer.
 
-### R4.3 What renders the fragment at ingest, and what it costs
+### R4.4 What renders the fragment at ingest, and what it costs
 
 `pageRender.ts` calls **`renderToStaticMarkup` from `react-dom/server`** over `ui/storefront`'s components, **once, at
 ingest, inside the Bun server process**. Measured at `fee719957`, commands in `report-revision-4.md` §2:
@@ -66,6 +84,9 @@ with no `window`/`document` (probe: 1054 chars). Costs, all four:
 ---
 
 ## REVISION 3 — what changed and why
+
+> **READ THIS FIRST (added by REVISION 4).** The **widget layer** rows of this revision — 1, 2, 10, 11, 12 below, and
+> §9b — are **DEFERRED**. The **relay/one-endpoint** rows (4, 5, 6, 7, 8, 9) stand. The tables are kept as history.
 
 **Authority:** `ruling-pages-widgets-and-app-relay.md` (owner, 2026-11-13). It corrects **one layer** of this plan —
 the page's **dynamic** layer becomes widgets delivered as script-imported bundles, and the **write path** becomes the
@@ -235,16 +256,15 @@ once, each of which the current code fails:
 
 ### 1.1 Files
 
-**New (15):**
+**New (13):**
 
 ```
 platform/server/routes/routeFile.ts             the file: load / validate / serialize / writeAtomic / lookup / prefixMatch
 platform/server/routes/resolve.ts               the three-rung ladder + the two binding kinds (pure, no I/O)
 platform/server/routes/pageStore.ts             the local page store: put / get / series index / writeAtomic
-platform/server/routes/pageRender.ts            static blocks → HTML fragment + head meta; dynamic blocks → a mount point
-platform/server/routes/pageHtml.ts              compose <head> + fragment + mount points + SPA bootstrap + `#__AR_PAGE__`
-platform/server/routes/widgetRegistry.ts        id → { element, bundle, propsSchema }; increment 1 seeds the 5
-                                                built-in dynamic blocks with `bundle: null` (REVISION 3, §1.4.2)
+platform/server/routes/pageRender.ts            static blocks → HTML fragment + head meta; data-bound blocks → a
+                                                placeholder (renderToStaticMarkup, §R4.4)
+platform/server/routes/pageHtml.ts              compose <head> + fragment + SPA bootstrap + `#__AR_PAGE__`
 platform/server/http/appEvents.ts               POST /api/app-events — the ONE ingest surface: verify → level → kind
                                                 dispatch → (page: parse/render/store | intent: may/apply)
 platform/server/routes/routeFile.test.ts
@@ -252,14 +272,14 @@ platform/server/routes/resolve.test.ts
 platform/server/routes/pageStore.test.ts
 platform/server/routes/pageRender.test.ts
 platform/server/routes/pageHtml.test.ts         (merge into pageStore.test.ts if it earns nothing alone)
-platform/server/routes/widgetRegistry.test.ts   unknown id refused; the 5 built-ins resolve; bundle lookup is static
 platform/server/routes/pagesHttp.test.ts        the write restriction, end to end
 sdk/config/routeNames.ts                        RESERVED_NAMES (37) + NAME_PATTERN + the RESERVED\COMPILED_IN split
 ```
 
-That is **15 new files**: 7 production modules, 7 test modules, 1 shared config module. Counted from the list, not
+That is **13 new files**: 6 production modules, 6 test modules, 1 shared config module. Counted from the list, not
 estimated. If a test file collapses into another, say which and why — do not silently drop a criterion. **REVISION 3
-added `widgetRegistry.ts` and its test** (13 → 15) and renamed `http/pages.ts` to `http/appEvents.ts` (§1.5).
+took this to 15 by adding `widgetRegistry.ts` and its test; REVISION 4 returns it to 13** because the widget layer is
+deferred (§R4.2), and keeps the REVISION 3 rename `http/pages.ts` → `http/appEvents.ts` (§1.5).
 
 **New (data / fixture):**
 
@@ -352,34 +372,52 @@ data/pages/series/<key>/<author>.json [{ d, createdAt, eventId }]  newest-first,
 - **`data/pages/` is created on first successful ingest** and never auto-created empty at boot — an empty store
   is a valid state, a missing store is not an error.
 
-**1.4.2 What is rendered at ingest, and what is not.** `pageRender.ts` runs `StorefrontRenderer` under
-`react-dom/server` (measured: `react-dom` 19 is already a dependency, `package.json:92` **[M]**) over the document
-with an **empty slot map**, and returns an HTML fragment. The split is by block type, and it is now **the binding
-shape**, not an implementation convenience:
+**1.4.2 What is rendered at ingest, and what is not.** `pageRender.ts` calls **`renderToStaticMarkup` from
+`react-dom/server`** (measured: `react-dom` 19.2.6 is already a dependency, `package.json:92` **[M]**) over
+`ui/storefront`'s components with **no slot map**, and returns an HTML fragment. The split is by block type, and it is
+now **the binding shape**, not an implementation convenience:
 
 | block types | at ingest | at request |
 |---|---|---|
 | `ProfileHeader`, `Hero`, `Text`, `LinkList`, `Image`, `Divider`, `Spacer` | rendered to HTML | served as-is |
-| `ProductGrid`, `FeaturedProduct`, `ProductRow`, `Search`, `Categories` | a **widget mount point** — `<ar-product-grid data-widget="product-grid">` with the SSR'd empty state as its children | served as-is; a widget bundle upgrades it in the browser and fetches its own data |
+| `ProductGrid`, `FeaturedProduct`, `ProductRow`, `Search`, `Categories` | a **placeholder region** carrying the block's `type`, with the block's own "no data yet" view as its content | served as-is; the **existing React slot map** fills it in the browser **after hydration** and fetches its own data |
 
 **Why the split exists, recorded beside the design so nobody "fixes" it later** (`ARCHITECTURE.md` §5.5.2, ruling
 §§1–2): a fully server-rendered page is a **snapshot**, and the only way to keep a snapshot live is to re-render and
 re-send the whole page continuously — which fails exactly on dynamic content. And the efficient shape is **built JS
-bundles served as static assets**, so the cost of rendering moves to build/ingest time. Both reasons are the owner's;
-an increment that prerenders a dynamic block is failing the ruling, not optimising.
+served as static assets**, so the cost of rendering moves to build/ingest time. Both reasons are the owner's; an
+increment that prerenders a data-bound block is failing the ruling, not optimising.
 
-**REVISION 3: in increment 1 every registry entry has `bundle: null`.** The five built-ins resolve to a mount point
-with **no** script import, so nothing changes for the client in this increment and the existing
-`StorefrontBlockSlots.tsx` hydration still fills those regions. The mount point, the registry and the ingest check
-are introduced here so that increment 9 has nothing structural left to add — it fills `bundle`, emits the script
-import, and writes the custom element (§9b).
+**REVISION 4 replaced REVISION 3's registry paragraph here.** There is **no registry, no `bundle`, no script import**:
+`pageRender` renders the five data-bound blocks with no slot map, which is a supported path rather than a special case
+— `ui/storefront/StorefrontRenderer.tsx:103-166` falls back to each block's props-only view when its slot is absent
+(`:105-136`) **[S]** — and the fragment is filled by `StorefrontBlockSlots.tsx`'s map
+(`platform/web/storefront/StorefrontBlockSlots.tsx:192`), which is what the published page already uses today
+(`platform/web/storefront/StorefrontAddressPage.tsx:55`) **[S]**. **Increment 1 therefore changes no client
+behaviour**; it only starts *emitting* the HTML those components hydrate.
 
-The slot names come from the registry, whose entries for the built-ins carry the same block `type` the document
-already uses (`storefrontPage.ts:293-306`), so **the page document does not change** in this increment. The serve
-path does not invent a second renderer for data blocks and does not freeze prices into HTML — and it now also never
-renders them at all. **The 7/5 split is OUR CHOICE**, recorded because a reader will ask why the page is not "fully
-static": because a storefront with stale prices is worse than one that mounts five live regions, and because the
-ruling makes the alternative a failure rather than a preference.
+**The hydration obligation, stated as an exit criterion because it is the one place this can silently go wrong.**
+The server renders the five data-bound regions **slot-less** (the empty state), while the client's slot passes
+`isLoading` from its query (`StorefrontBlockSlots.tsx:50,56` → `ui/storefront/blocks/ProductGridBlock.tsx:90`). If the
+client's **first** commit renders the slot map, React 19 sees a mismatch there and re-renders those subtrees — the DOM a
+person sees then differs from the DOM the crawler got, which is this run's rule 2 failing one level down. So the
+`#__AR_PAGE__` seam must apply the live slot map **after** hydration, and **E10b** asserts the DOM is unchanged across
+it.
+
+**What the renderer costs, and the one guard it trips.** One module, no dependency, no build step (Bun transpiles the
+TSX at import). But `platform/boundary.test.ts:83-88` asserts that no module under `platform/server/` imports `react`,
+`react-dom*` or `@ui/*` — exactly what `pageRender.ts` needs. **OUR CHOICE:** keep the module at
+`platform/server/routes/pageRender.ts` and add **one named allowlist entry** to that guard with the reason written at
+it (the module renders React **to a string with no DOM**, which is what 102 test files already do). The alternative —
+moving it outside `platform/server/` — is one file in a new directory. Either way the guard is amended or satisfied
+**in the same commit**; an increment that fails `bun test --isolate platform/boundary.test.ts` fails E12, loudly.
+
+The block `type` the placeholder carries is the same `type` the document already uses (`storefrontPage.ts:293-306`), so
+**the page document does not change** in this increment. The serve path does not invent a second renderer for data
+blocks and does not freeze prices into HTML — and it never renders their live content at all. **The 7/5 split is OUR
+CHOICE**, recorded because a reader will ask why the page is not "fully static": because a storefront with stale prices
+is worse than one that mounts five live regions, and because the ruling makes the alternative a failure rather than a
+preference.
 
 **1.4.3 How a request is answered.**
 
@@ -391,13 +429,13 @@ GET /x  →  routeFile.lookup('x') → binding{ target: { type:'page', author, d
 ```
 
 `pageHtml.compose` emits a complete document: `<head>` with `title`, `description`, `og:*`, `twitter:*`,
-`<link rel="canonical">`; then the rendered fragment with its widget mount points; then one
-`<script type="module" src="/widgets/<id>-<hash>.js">` per **referenced** widget (none in increment 1, since every
-`bundle` is `null`); then the SPA bootstrap and a `#__AR_PAGE__` JSON payload naming `(author, d)` so the client can
-hydrate the same page rather than re-resolving the route. **A crawler that runs no JavaScript sees the page's static
-content and its meta; a browser sees the same page, then becomes the app.** This is the SEO/instant requirement
-satisfied structurally, not by an optimisation — and **the boundary is honest**: the crawler does not see widget
-output, because widget output is fetched in the browser by design (`ARCHITECTURE.md` §5.5.2).
+`<link rel="canonical">`; then the rendered fragment with its placeholder regions; then the SPA bootstrap and a
+`#__AR_PAGE__` JSON payload naming `(author, d)` so the client can hydrate the same page rather than re-resolving the
+route. **REVISION 4: no block emits a `<script>`** — there is no per-block asset, and the SPA bundle is the only
+script (§R4.2). **A crawler that runs no JavaScript sees the page's static content and its meta; a browser sees the same
+page, then becomes the app.** This is the SEO/instant requirement satisfied structurally, not by an optimisation — and
+**the boundary is honest**: the crawler does not see the five data-bound blocks' live content, because that is fetched
+in the browser by design, so it sees their empty state (`ARCHITECTURE.md` §5.5.2).
 
 **1.4.4 What a missing page does.** In increment 1 a binding is hand-edited, so a binding to a page that was never
 stored is possible: it answers **500 with a named error** (`binding-target-missing`), **not** 404 and **not** "item
@@ -427,9 +465,8 @@ POST /api/app-events        body: { event: <signed NIP-01 event> }
        30024 page:
          4a size caps, from STOREFRONT_LIMITS  → 400 'too-large'   (checked BEFORE parse)
          4b parseStorefrontPage(content)       → 400 'invalid-page: <pointer>'
-         4c widget ids resolve in the registry → 400 'unknown-widget: <id>'   (REVISION 3)
-         4d pageRender(document)               → 400 'render-failed: <message>'
-         4e pageStore.put({ document, html, meta, author, d, eventId, createdAt, series, widgets })
+         4c pageRender(document)               → 400 'render-failed: <message>'
+         4d pageStore.put({ document, html, meta, author, d, eventId, createdAt, series })
   5  200 { stored: true, kind: 30024, author, d, eventId }
 ```
 
@@ -437,11 +474,11 @@ POST /api/app-events        body: { event: <signed NIP-01 event> }
   can assert — the server reads the level from its own managers (`ARCHITECTURE.md` §7.1). This is ruling 2's actor
   model applied to the one endpoint, and it is why the increment still has **no `may()`**: `may()` is about *paths*,
   and the page store does not own paths.
-- **A failed render refuses the write.** This is what lets `ARCHITECTURE.md` §3.2 narrow "item unavailable" to
-  non-page targets: a page in the store is, by construction, a page that renders.
-- **An unknown widget id refuses the write** (4c), for the same reason and by the same discipline: a stored page is
-  a page whose dynamic regions can actually mount. In increment 1 the registry holds the five built-ins, so this
-  refuses only ids the instance never shipped.
+- **A failed render refuses the write, and it is the only structural refusal on a page.** This is what lets
+  `ARCHITECTURE.md` §3.2 narrow "item unavailable" to non-page targets: a page in the store is, by construction, a page
+  that renders. **REVISION 4 removed REVISION 3's second check** ("every registry id resolves"), because with the widget
+  layer deferred there is nothing to resolve against — the block union the parser enforces is the whole vocabulary
+  (§R4.2).
 - **Replay**: the event's `created_at` must be within a freshness window (**OUR CHOICE**, see §11 R-2). A stale
   signed event is refused rather than stored twice.
 - **`d` comes from the event's `d` tag**, never from the request body — the same "the server builds the record,
@@ -485,9 +522,10 @@ is already allowed and used (`platform/server/http/config.ts:17` imports `@sdk/c
 | E5b | **a compiled-in name in the file loads with a warning** | fixture with `"path":"dashboard"` | exit **0**, stderr/log carries `compiled-in-path`, and `dashboard` serves the bound page. **REVISION 2: this replaced the old E5 refusal** |
 | E6 | a lease on a subpath refuses to boot | fixture with `"meaning":"lease","path":"shop/x"` | exit non-zero |
 | E7 | atomic write leaves a backup | `bun test --isolate platform/server/routes/routeFile.test.ts platform/server/routes/pageStore.test.ts` | after `writeAtomic`, `.bak` holds the previous bytes; a simulated failure mid-write leaves the original intact |
-| E8 | nothing reads the network in the route or serve path | `grep -nE "fetch\(|ndk|Relay" platform/server/routes/routeFile.ts platform/server/routes/resolve.ts platform/server/routes/pageStore.ts platform/server/routes/pageRender.ts platform/server/routes/pageHtml.ts platform/server/routes/widgetRegistry.ts platform/server/http/appEvents.ts` | **0 hits** — REVISION 3 added the registry and the ingest handler to this grep, because the ingest must not read a relay either |
-| E9 | the ingest refuses what it must | `bun test --isolate platform/server/routes/pagesHttp.test.ts` | bad signature → 400; `none`-level pubkey → 403; kind ≠ 30024 → 400; over-cap → 400 and **no file written**; invalid block → 400 and **no file written**; **unknown widget id → 400 `unknown-widget` and no file written** (REVISION 3) |
+| E8 | nothing reads the network in the route or serve path | `grep -nE "fetch\(|ndk|Relay" platform/server/routes/routeFile.ts platform/server/routes/resolve.ts platform/server/routes/pageStore.ts platform/server/routes/pageRender.ts platform/server/routes/pageHtml.ts platform/server/http/appEvents.ts` | **0 hits** — REVISION 4 dropped `widgetRegistry.ts` from this list (the module no longer exists) and keeps the ingest handler in it, because the ingest must not read a relay either |
+| E9 | the ingest refuses what it must | `bun test --isolate platform/server/routes/pagesHttp.test.ts` | bad signature → 400; `none`-level pubkey → 403; kind ≠ 30024 → 400; over-cap → 400 and **no file written**; invalid block → 400 and **no file written**; **a document that fails to render → 400 `render-failed` and no file written**. REVISION 4 removed the `unknown-widget` row — there is no registry |
 | E10 | a stored page is served byte-identically twice | `curl localhost:3100/x \| sha256sum` twice | identical, and the second request opens no socket (assert with the E2 mock) |
+| E10b | **hydration does not rewrite the served DOM** *(REVISION 4)* | Playwright over a served page with one `ProductGrid`: capture `document.querySelector('[data-ar-block="ProductGrid"]')`'s `innerHTML` before and after hydration | the placeholder's **identity and position are unchanged** and no hydration-mismatch error is logged. REVISION 4's renderer emits the blocks slot-less, so this is the criterion that proves the client's slot map is applied **after** hydration rather than during it (§1.4.2) |
 | E11 | typecheck list identical | the §0.1 command, before and after | `diff` of the sorted lists **empty**; count recorded from the branch, never carried |
 | E12 | boundaries and format | `bun test --isolate sdk/boundary.test.ts platform/boundary.test.ts ui/boundary.test.ts`; `bun run format:check` | pass |
 | E13 | the diff is the diff | `git status --porcelain` | exactly the files in §1.1. `routeTree.gen.ts` and `ui/storefront/` untouched |
@@ -514,8 +552,9 @@ payload again, which is exactly what the ruling rejected.
   in-process. What the increment still never does is **ask a relay anything** — no read, no subscription, no
   mirroring — and it never touches the **auctions** relay, which is a placeholder for the public ones and not the
   app's relay.
-- **No widget bundle is built or served.** The registry exists and holds the five built-ins with `bundle: null`, so
-  the page's dynamic regions are mount points with no script import yet (increment 9 fills them).
+- **No widget layer at all** — no custom element, no per-block bundle, no registry, no script import, no widget
+  compiling. The page's dynamic regions are the app's **own React components**, filled by the existing slot map after
+  hydration. The whole layer is deferred with its consequence recorded (`ARCHITECTURE.md` §5.7, §R4.5).
 - No removal of `VanityManager`/`ZapPurchaseManager` — they keep running unchanged, and the CMS still publishes
   to relays as before (so "published" and "served" diverge until increment 3 — stated in §1.5).
 - Nothing deployed; no live unit restarted.
@@ -553,19 +592,10 @@ payload again, which is exactly what the ruling rejected.
         └───────────────────────────┘   └───────────────────────────────────┘
 ```
 
-**REVISION 3 adds one box, and it is off the critical track:**
-
-```
-        ┌──────────────────────────────────────────────────────────────┐
-        │ 9  widget layer: bundles + mount points + registry entries     │  needs 1 and 3
-        │    (custom elements, script-imported, content-hashed)          │  parallel with 2/4/5
-        └──────────────────────────────────────────────────────────────┘
-```
-
-It is drawn separately rather than in the tree because **nothing depends on it and it depends on nothing but 1 and
-3** — a page is correct and served without it (the mount point is simply empty), and it is the only increment that
-touches `public/widgets/`, `scripts/build-widgets.ts` and `platform/web/widgets/`. Treating it as a leaf is what
-stops it being used as a reason to delay the proof increment.
+**REVISION 4 removes the ninth box entirely, and the graph above is the whole plan.** REVISION 3 added a leaf box for
+the widget layer; that layer is deferred (`ARCHITECTURE.md` §R4.5), so **nothing in this plan emits a bundle, builds a
+custom element, or serves a per-block asset**. Tier 2 (modular sub-apps, list management) is not drawn either, because
+it adds no increment here — it is later work that this ladder already admits (`ARCHITECTURE.md` §R4.4, §R4.6).
 
 ### 2.1 The order, with each increment's real dependency
 
@@ -579,7 +609,7 @@ stops it being used as a reason to delay the proof increment.
 | **6** | zap receipt verification | — (independent of 1–5) | it is a *payment* change on the existing vanity path |
 | **7** | lease purchase (paid) | 2, 4, **6** | a lease needs the validator's lease shape, the ACL's actor, and a verified receipt |
 | **8** | management surface | 4, 7, 5 | it reads and writes through all three |
-| **9** | widget layer: bundles, mount points, registry entries | 1, 3 | needs the mount point emitted by 1 and a served page from 3 to observe. **Nothing depends on it** |
+| ~~9~~ | ~~widget layer: bundles, mount points, registry entries~~ | — | **DEFERRED** (`ARCHITECTURE.md` §R4.5). No increment here depends on it and it depends on nothing. Kept as a struck row so a reader who saw REVISION 3 knows it moved rather than vanished |
 
 ### 2.2 What the owner asked for — parallel tracks
 
@@ -588,13 +618,11 @@ stops it being used as a reason to delay the proof increment.
 - **Track I (routing core):** 1 → 2 → 4 → 8. Sequential **because of one file**: 1, 2 and 4 all modify
   `platform/server/routes/routeFile.ts`, and `apply(mutation)` is the single writer. Parallelising inside this
   track means two agents editing one function — that is the lost-update problem this run exists to delete.
-- **Track II (surface):** 3 → 5 → 8, with **9 alongside 3**. **3, 5 and 9 can start as soon as 1 lands**, in
-  parallel with 2 and 4, because they touch **different files**: 3 touches `platform/web/routes/index.tsx`,
-  `platform/web/routes/$vanityName.tsx` and reads `routeFile.lookup`; 5 touches a new
-  `platform/server/routes/series.ts` and a client query; 9 touches only `platform/web/widgets/`,
-  `scripts/build-widgets.ts` and `public/widgets/`, plus three one-line server changes (`widgetRegistry.ts`'s
-  `bundle` values, `pageHtml.ts`'s script tags, `static.ts`'s `/widgets/` mount). None of the three writes the
-  routing file.
+- **Track II (surface):** 3 → 5 → 8. **3 and 5 can start as soon as 1 lands**, in parallel with 2 and 4, because they
+  touch **different files**: 3 touches `platform/web/routes/index.tsx`, `platform/web/routes/$vanityName.tsx` and reads
+  `routeFile.lookup`; 5 touches a new `platform/server/routes/series.ts` and a client query. Neither writes the routing
+  file. **REVISION 4 removed increment 9 from this track** — the widget layer is deferred, so `public/widgets/`,
+  `scripts/build-widgets.ts` and `platform/web/widgets/` are not touched by anything here.
 - **Track III (payments):** 6, then 7. **6 is fully independent of everything else** and can run from day one —
   it is the increment that closes the free-lease hole (`ARCHITECTURE.md` §10 O-5), it touches only
   `platform/server/ZapPurchaseManager.ts`, and it is the longest-lead item, so starting it first is the cheapest
@@ -721,8 +749,10 @@ one, it must.
 | S10 | **a page published through the CMS is served** | publish from the CMS, then `curl -s localhost:3100/<its path> \| grep -c '<marker>'` | the marker, **and** the relay ACK still happened (both destinations). REVISION 2: without the second call in `storefrontPublish.ts`, this returns 404 and the increment ships a page that nobody can see |
 
 **NOT:** no series (increment 5), no grants or ACL (increment 4), no management UI, no lease, no removal of
-`VanityManager`, **no modularisation of any compiled-in page** — re-pointing is routing, and the ruling puts modular
-contents in the *next* step. **The registry keeps running and keeps being read by the dashboard/account surface**
+`VanityManager`, **no modularisation of any compiled-in page** — re-pointing is routing, and modular contents are
+**tier 2: later and committed** (`ARCHITECTURE.md` §R4.4), not part of this increment. Nothing here precludes them:
+programmed prefixes may be arbitrarily deep, only leases are top-level (§R4.6(a)). **The registry keeps running and
+keeps being read by the dashboard/account surface**
 (`platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx`) — deleting it is increment 8, and only
 after the routing file is the only thing that resolves.
 
@@ -830,7 +860,8 @@ existing caller compiles and behaves identically. **[S]** and it is the one-para
 | R8 | **the series answer needs no network** | `grep -nE "fetch\(|Relay|ndk" platform/server/routes/series.ts`; plus the E2 throwing mock around a `/featured` resolve | **0 hits**, and the resolve succeeds with the network forbidden. **REVISION 2 deleted R8's old "measure `#t` on the deployment relay"** |
 | R9 | the index is rebuilt from stored pages, not from the request path | `bun test --isolate platform/server/routes/series.test.ts` | after `scripts/backfill-series-index.ts`, `/featured` answers without any store write |
 
-**NOT:** no series *management* UI (increment 8 may add a picker), no `list` reference (follow-up), **no inventing
+**NOT:** no series *management* UI (increment 8 may add a picker), **no `list` reference resolution** — that is tier 2,
+later and committed (`ARCHITECTURE.md` §6, §R4.4), and nothing here narrows it — **no inventing
 series tags** — the backfill script only indexes pages that already carry a `t` tag in their stored document — and
 no auto-derivation of a series from a `d` prefix: the membership tag is declared explicitly by the author, because
 a `featured-<date>` naming convention that silently joins a series would let any dated page become `/featured`
@@ -960,7 +991,15 @@ DELETED/DEMOTED (see below)
 
 ---
 
-## 9b. Increment 9 — the widget layer: bundles, mount points, and the registry's first real entries *(REVISION 3)*
+## 9b. Increment 9 — the widget layer — **DEFERRED (REVISION 4); not built by this plan**
+
+> **STATUS: DEFERRED.** `ruling-react-components-and-deferred-widgets.md` rules page composition stays on **React
+> components and the CMS's existing block types**, *"to avoid script binding and widget compiling"*. **No increment in
+> this plan builds any part of §9b**, its exit criteria **W1–W13 are not run**, and increment 1 no longer creates a
+> registry or seeds it. The section is kept in full as the **design of record** — what the layer would take, what it
+> would emit, and the invariant it would have to respect — so that if it is ever required it is a build, not a
+> re-derivation. The consequence of deferring is `ARCHITECTURE.md` §R4.5: *a third party cannot ship a page into the
+> instance without the instance building their block.*
 
 **Goal:** a page's **dynamic** regions stop being a React slot map inside the SPA bundle and become what the ruling
 says they are — **custom elements delivered as script-imported bundles** that fetch their own live data in the
@@ -1089,7 +1128,19 @@ old R-1 is not mitigated, it is removed**, which is the best outcome a risk can 
 `StorefrontPage` document into HTML, and **nothing in the server does that today**: `ogMeta.ts` injects meta into a
 shell it fetches from itself (`platform/server/ogMeta.ts:198-215`), and `react-dom/server` appears only in test
 files (`grep -rl renderToStaticMarkup --include=*.ts --include=*.tsx . --exclude-dir=node_modules | wc -l` → 102
-files; with `| grep -v '\.test\.'` → 0 **[M]**). Three ways this bites:
+files; with `| grep -v '\.test\.'` → 0 **[M]**). **REVISION 4 names the mechanism (that gap is not left implied):**
+`renderToStaticMarkup` from `react-dom/server`, one new module, already a dependency, no build step — and it was
+**measured working** on the real `ui/storefront` components in a Bun process with no `window` or `document` (§R4.4,
+`report-revision-4.md` §2.3). What that leaves as genuine risk is narrower and it is item 0 below.
+
+0. **The boundary guard forbids the import, by name.** `platform/boundary.test.ts:83-88` rejects any specifier matching
+   `/^(?:@platform\/web|react(?:-dom)?(?:\/|$)|@ui\/)/` under `platform/server/` — i.e. `react-dom/server` and
+   `@ui/storefront/*`, the two imports `pageRender.ts` exists to make. The plan's choice is **one allowlist entry with
+   the reason at the guard** (§1.4.2); the failure if it is forgotten is E12 failing loudly, which is the good kind.
+   The **bad** kind is the opposite: an allowlist entry written wide enough that a *browser-only* import could ride in
+   with it. The entry names **one file**, not a directory.
+
+Three ways this bites:
 
 1. **A client-only import reaches the server.** Measured, the renderer's own directory is clean (`ui/storefront/`
    has no `localStorage`, NDK or `window` outside a comment **[M]**), but `StorefrontRenderer` renders *slots*
@@ -1124,7 +1175,12 @@ two. **This is OUR CHOICE, not a ruling**, and the cost of being wrong is asymme
 client, too loose widens a replay window — so it is a named constant in one module, not a literal scattered
 through handlers.
 
-### R-4 — the widget layer is new machinery with zero precedent in this tree, and it touches a security invariant
+### R-4 — the widget layer is new machinery with zero precedent in this tree, and it touches a security invariant — *(DEFERRED, kept as the risk of the deferred layer)*
+
+> **REVISION 4: this risk is not live in this build.** The widget layer is deferred (§9b, `ARCHITECTURE.md` §R4.5), so
+> nothing here builds it. It is kept because it is the risk that must be re-read **before** the layer is ever built, and
+> because its core warning — *the registry must never become a runtime registration path* — is the rule that keeps a page
+> document from becoming a code-loading channel.
 
 **Added by REVISION 3, and it is a risk rather than a task because of *where* it lands.** Measured: **0** custom
 elements, **0** remote script loads, and **0** per-widget bundles exist today (`ARCHITECTURE.md` §5.7.4's table). So
@@ -1166,12 +1222,17 @@ its drift test regenerates rather than comparing to a hand-typed list (V1, V11).
 
 ## 12. What this plan does not reach, and where it is recorded
 
-| item | where | why out |
+**Scope in three tiers** (§R4.2): **tier 1 NOW** is increments 1–8, i.e. everything above this section. **Tier 2 LATER,
+committed** is modular sub-apps and list management — sequenced after this todo list, no increments here, architecture
+must leave room and `ARCHITECTURE.md` §R4.6 checks that it does. **Tier 3 DEFERRED** is the widget/portability layer and
+the signed ledger. The rows below are the record, with the tier named in each.
+
+| item | where | why not in this plan |
 |---|---|---|
 | the signed lease-confirmation ledger; honouring another instance's leases | `ARCHITECTURE.md` §11 | **BUILD LATER** by ruling (`ruling-resolution-and-signed-ledger.md:56-68`); the file leaves `instance.pubkey: null` and per-lease `leaseId` so it is an addition, not a migration |
-| the `list` reference | `ARCHITECTURE.md` §6 | **marked follow-up** (`ruling-d8-multipage-and-lists.md:70-80`); the union variant is parsed and refused so the follow-up is a resolver branch |
+| the `list` reference resolved, user-authored lists, the product picker | `ARCHITECTURE.md` §6 | **TIER 2 — LATER and committed** (`ruling-d8-multipage-and-lists.md:70-80`, owner 2026-11-13: *"list management I would both like in"*). The union variant is parsed and refused, so the later work is a resolver branch plus a tag/key generalisation, not a schema change (`ARCHITECTURE.md` §R4.6(b)) |
 | nutzap as a payment rail | this file §7 "NOT" | custody, mint egress, a separate ADR (`AGENTS.md:63-64`); not asked for in this run |
-| **modularising** a compiled-in page (replaceable regions, sub-app sub-paths) | `ARCHITECTURE.md` §5.2, O-7 | ruling 3 sequences it as the **next step** after routing. Re-pointing is in this plan; modular contents are not. **The old row here said `/dashboard` reassignment "is 30 files, a layout, a nav model and an admin gate … no ruling requires it" — that was wrong and is withdrawn**: reassignment needs one `__root.tsx` seam, and ruling 3 requires it |
+| **modularising** a compiled-in page (replaceable regions, sub-app sub-paths: browse, seller dashboard, buyer/orders) | `ARCHITECTURE.md` §5.2, O-7, §R4.6(a) | **TIER 2 — LATER and committed** (owner 2026-11-13: *"modular subapps … I would both like in"*). **Sequencing, not scope**: re-pointing is in this plan, modular contents come after it. The ladder already allows it — programmed prefixes may be arbitrarily deep, only leases are top-level (`ARCHITECTURE.md` §3.4, §5.2) — so no increment here has to change. **The old row here said `/dashboard` reassignment "is 30 files, a layout, a nav model and an admin gate … no ruling requires it" — that was wrong and is withdrawn**: reassignment needs one `__root.tsx` seam, and ruling 3 requires it |
 | a grace window on lease expiry | `ARCHITECTURE.md` §7.4 | OUR CHOICE not to add one; one comparison if the owner says otherwise |
 | subpaths published by a leaseholder | `ARCHITECTURE.md` §10 O-2 | needs the one surviving precedence ruling |
 | custom DNS domains | `ruling-acl.md:52-53` | the example is a path; this plan does paths only |
