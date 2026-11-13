@@ -1,0 +1,12 @@
+# B2 evidence 1 — the failure BEFORE, on the base checkout (unmodified f6e681d92)
+$ cd /home/admin_maxime/work/market && git rev-parse --short HEAD  # dirty only in runs/ and untracked notes
+6a9f9118b
+
+$ bun test platform/web/browse/BrowseIndexHost.test.tsx
+error: Script not found "test"
+
+$ ls node_modules/@getalby/   # in the base checkout
+lightning-tools
+
+$ ls -ld node_modules/@getalby   # install timestamp
+drwxr-xr-x 3 admin_maxime admin_maxime 29 Oct 16 18:14 /home/admin_maxime/work/market/node_modules/@getalby

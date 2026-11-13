@@ -1,0 +1,28 @@
+# B2 evidence 3 — the fix and the test result
+
+$ bun install --frozen-lockfile   # in the worktree, lockfile untouched
+  +670 packages installed [2.11s]
+$ ls node_modules/@getalby/ ; node -p app version
+lightning-tools
+sdk
+8.0.3
+$ ls node_modules/@getalby/sdk/dist/esm/nwc.js
+node_modules/@getalby/sdk/dist/esm/nwc.js
+
+$ bun test platform/web/browse/BrowseIndexHost.test.tsx
+
+ 42 pass
+ 0 fail
+ 158 expect() calls
+Ran 42 tests across 1 file. [1293.00ms]
+
+$ bun test --isolate platform/web/browse/     # the gate battery form
+
+ 168 pass
+ 0 fail
+ 496 expect() calls
+Ran 168 tests across 11 files. [4.36s]
+
+# for contrast, WITHOUT --isolate (mock.module leaks between files):
+$ bun test platform/web/browse/
+  -> 153 pass / 15 fail (BrowseIndexHost cases; every other file green)

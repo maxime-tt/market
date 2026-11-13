@@ -1,0 +1,24 @@
+# B2 evidence 2 — the dependency is DECLARED and LOCKED, and the registry artifact has the ./nwc export
+
+$ grep -n getalby package.json
+49:		"@getalby/lightning-tools": "^8.1.1",
+50:		"@getalby/sdk": "8.0.3",
+
+$ grep -n "@getalby/sdk" bun.lock
+14:        "@getalby/sdk": "8.0.3",
+175:    "@getalby/sdk": ["@getalby/sdk@8.0.3", "", { "dependencies": { "@getalby/lightning-tools": "^8.1.1", "nostr-tools": "^2.23.3" } }, "sha512-vPEogAWwLHbL55COeXrRN7yRBXMDGDxX1M2A+o3Lqw60FFng6fa9FK9sw8ptdILMD1dQZq8FzPXuabQ7seoDBA=="],
+
+$ curl -s https://registry.npmjs.org/@getalby/sdk/8.0.3 | jq .exports
+{".": "...", "./nwc": {"types": "./dist/types/nwc.d.ts", "import": "./dist/esm/nwc.js", "require": "./dist/cjs/nwc.cjs"}, "./oauth": "...", "./utils": "...", "./webln": "...", "./lnclient": "..."}
+
+# who introduced the declaration, and when
+$ git show -s --format="%h %ad %s" --date=iso 51d3c3c21
+51d3c3c21 2026-10-19 16:13:44 +0000 sdk: take the three payment-rail modules in as source (W1.2)
+$ git show 51d3c3c21 -- package.json | grep getalby
++		"@getalby/sdk": "8.0.3",
+
+# the base checkout's node_modules predates that commit
+$ ls -ld node_modules/@getalby   # base checkout
+drwxr-xr-x 3 admin_maxime admin_maxime 29 Oct 16 18:14 /home/admin_maxime/work/market/node_modules/@getalby
+$ ls node_modules/@getalby/     # base checkout
+lightning-tools

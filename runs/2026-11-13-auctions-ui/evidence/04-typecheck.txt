@@ -1,0 +1,33 @@
+# B2 evidence 4 — typecheck, before and after
+
+# BEFORE — the base checkout (/home/admin_maxime/work/market), as the work order defines the baseline:
+$ NODE_OPTIONS=--max-old-space-size=12288 bun bunx tsc --noEmit | grep -c "error TS"
+  522        # matches the work order's stated baseline exactly
+$ grep -n getalby <output>
+86:node_modules/@getalby/lightning-tools/dist/types/index.d.ts(1,38): error TS2307: Cannot find module '@webbtc/webln-types' or its corresponding type declarations.
+87:node_modules/@getalby/lightning-tools/dist/types/index.d.ts(2,52): error TS2307: Cannot find module '@webbtc/webln-types' or its corresponding type declarations.
+319:platform/web/payments/paymentPublish.ts(21,27): error TS2307: Cannot find module '@getalby/sdk/nwc' or its corresponding type declarations.
+575:sdk/commerce/payments/state/wallet.ts(34,27): error TS2307: Cannot find module '@getalby/sdk/nwc' or its corresponding type declarations.
+612:sdk/core/nwc-wrapper/ts/session.ts(16,27): error TS2307: Cannot find module '@getalby/sdk/nwc' or its corresponding type declarations.
+
+# AFTER — clean worktree at the same commit f6e681d92, node_modules installed from the committed lockfile:
+$ NODE_OPTIONS=--max-old-space-size=12288 bun bunx tsc --noEmit | grep -c "error TS"
+205
+$ grep -n getalby <output>
+81:node_modules/@getalby/lightning-tools/dist/types/index.d.ts(1,38): error TS2307: Cannot find module '@webbtc/webln-types' or its corresponding type declarations.
+82:node_modules/@getalby/lightning-tools/dist/types/index.d.ts(2,52): error TS2307: Cannot find module '@webbtc/webln-types' or its corresponding type declarations.
+
+# The 517-line drop is NOT all this fix. Decomposition of the base's 522 (measured by set-differencing the two outputs):
+#   193  error lines are in files that exist ONLY in the dirty base checkout and are not in git at all:
+#        notes/pr-1226-orderdetail-descriptor-view.tsx (72), runs/union-1420/handover-2026-10-26/b4e-wip-new/sdk-config-cashu.ts (43),
+#        src/components/ui/browse/product-card.tsx (23), runs/pr-1289/* (31+), src/ (the whole tree is untracked)
+#   134  error lines are on tracked files but vanish once node_modules is installed from bun.lock (stale packages):
+#        @cashu/cashu-ts too old (no Amount/Mint/Wallet exports: 33), applesauce-signers absent (9),
+#        @getalby/sdk/nwc absent (3), implicit-any fallout (10+), @types/debug absent (3)...
+#     3  of those 134 are exactly "Cannot find module '@getalby/sdk/nwc'" -> 0 after.
+#   +10  appear only in the fresh install, all inside node_modules declaration files (@types/debug absent,
+#        applesauce-relay-hermetic/dist/*.js absent) -- i.e. the fresh install has its own two gaps, not the repo's.
+
+# Full outputs kept at:
+#   /home/admin_maxime/.hermes/profiles/maxime/cache/scratch/tsc-base-before.txt  (522 lines)
+#   /home/admin_maxime/.hermes/profiles/maxime/cache/scratch/tsc-wt-after.txt    (205 lines)

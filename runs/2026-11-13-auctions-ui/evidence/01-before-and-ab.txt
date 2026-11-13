@@ -1,0 +1,16 @@
+# B2 evidence 1 — the failure, and the controlled A/B that isolates it
+# worktree: /home/admin_maxime/work/wt-home-test @ f6e681d92, deps installed from the committed lockfile
+
+$ git rev-parse --short HEAD
+f6e681d92
+
+$ mv node_modules/@getalby/sdk <hold>   # ONE removed package, nothing else
+$ bun test platform/web/browse/BrowseIndexHost.test.tsx
+  -> error: Cannot find module '@getalby/sdk/nwc' from '<wt>/sdk/commerce/payments/state/wallet.ts'
+  -> 0 pass / 1 fail / 1 error
+
+$ mv <hold> node_modules/@getalby/sdk   # restored
+$ bun test platform/web/browse/BrowseIndexHost.test.tsx
+  -> 42 pass / 0 fail / 158 expect() calls
+
+# => the single cause is the presence of node_modules/@getalby/sdk. Nothing else in the tree moved.
