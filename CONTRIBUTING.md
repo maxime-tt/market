@@ -45,19 +45,22 @@ strictly type-clean. Consult the current status for actual outcomes.
 ## Build the embedded browser and Go site
 
 ```sh
-(cd cashu-wrapper/ts && bun build poc-friday-browser-entry.ts \
-  --target=browser --minify --outfile=../../internal/poc/static/friday-browser.js)
 mkdir -p bin
 GOWORK=off GOTOOLCHAIN=local go build -mod=readonly -trimpath \
   -o bin/plebeian-auctions-poc .
 ./bin/plebeian-auctions-poc version
 ```
 
-`internal/poc/static/friday-browser.js` is intentionally tracked because Go
-embeds it. Rebuild and review it alongside TypeScript changes. Other generated
-runtime bundles, executables, caches and dependency directories must not be
-committed. The Go CLI includes legacy/local demo modes: starting the site
-alone does **not** create the current threshold browser topology.
+Other generated runtime bundles, executables, caches and dependency
+directories must not be committed. The Go CLI includes legacy/local demo modes:
+starting the site alone does **not** create the current threshold browser
+topology.
+
+The Friday browser bundle (`internal/poc/static/friday-browser.js`) was removed
+because it belonged to an abandoned tier that no shipped page loads. Its build
+step and the `poc-friday-browser-entry.ts` source remain under
+`cashu-wrapper/ts/` for the wholesale retirement slice; do not reintroduce the
+bundle into `internal/poc/static/`.
 
 ## Additional isolated fake-sat integration
 

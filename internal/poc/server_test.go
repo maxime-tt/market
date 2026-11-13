@@ -40,12 +40,11 @@ func TestRemoteOfflineControlIsNotReachable(t *testing.T) {
 	}
 }
 
-// The dense Friday page is gone: the lab is the demo and the site root hands off
-// to it. What must still hold is that the browser bundles that page loaded are
-// served and ordered correctly, and that the phone layout CSS survives. A test
-// that pinned the removed page's markup would only make its removal look like a
-// regression.
-func TestFridayBrowserBundlesAreServedAndOrdered(t *testing.T) {
+// The dense Friday page and its browser bundle are gone: the lab is the demo
+// and the site root hands off to it. What must still hold is that the phone
+// layout CSS survives. A test that pinned the removed page's markup or its
+// bundle would only make its removal look like a regression.
+func TestPhoneLayoutCSSSurvives(t *testing.T) {
 	t.Parallel()
 	server := &APIServer{manifest: NetworkManifest{ChainID: "friday", Mode: "remote"}, offline: nil}
 	handler, err := server.Handler()
@@ -53,31 +52,11 @@ func TestFridayBrowserBundlesAreServedAndOrdered(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	browserRequest := httptest.NewRequest(http.MethodGet, "/friday-browser.js", nil)
-	browserResponse := httptest.NewRecorder()
-	handler.ServeHTTP(browserResponse, browserRequest)
-	if browserResponse.Code != http.StatusOK || !strings.Contains(browserResponse.Body.String(), "plebeianFridayConnect") {
-		t.Fatalf("Friday Coco v2 browser bundle is absent or not served")
-	}
-	bootstrapRequest := httptest.NewRequest(http.MethodGet, "/app-bootstrap.js", nil)
-	bootstrapResponse := httptest.NewRecorder()
-	handler.ServeHTTP(bootstrapResponse, bootstrapRequest)
-	if bootstrapResponse.Code != http.StatusOK ||
-		!strings.Contains(bootstrapResponse.Body.String(), `import "/friday-browser.js";`) ||
-		!strings.Contains(bootstrapResponse.Body.String(), `import "/app.js";`) ||
-		strings.Contains(bootstrapResponse.Body.String(), `import "/demo-signer.js";`) ||
-		!strings.Contains(browserResponse.Body.String(), "plebeianCreateDemoSigner") {
-		t.Fatalf("Friday ES-module bootstrap is absent or does not order the browser bundle before the app")
-	}
-	if csp := browserResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "img-src 'self' data: https:") {
-		t.Fatalf("Friday HTTPS item images are not bounded by the expected CSP: %q", csp)
-	}
-
 	cssRequest := httptest.NewRequest(http.MethodGet, "/styles.css", nil)
 	cssResponse := httptest.NewRecorder()
 	handler.ServeHTTP(cssResponse, cssRequest)
 	if cssResponse.Code != http.StatusOK || !strings.Contains(cssResponse.Body.String(), "@media(max-width:560px)") || !strings.Contains(cssResponse.Body.String(), "padding:.72rem 1rem") {
-		t.Fatalf("Friday phone layout/touch target CSS is absent")
+		t.Fatalf("phone layout/touch target CSS is absent")
 	}
 }
 
