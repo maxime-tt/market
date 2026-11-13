@@ -125,6 +125,13 @@ written into the base's source tree**:
   use `bunx`.
 - Conservation, never green: quote counts before and after any move.
 - No secrets, no keys — describe identity material, never reproduce it.
+- **Evidence capture hazard, met once already.** The pre-commit secret scanner blocks a staged file
+  containing `Key = '<64-hex>'`, which cannot distinguish a **public** key from a private one — it
+  blocked the first evidence files on `const APP_PUBKEY = '…'`, a value already committed on master
+  at `platform/web/routes/index.tsx:48`. Generators should **mask key-shaped literals** in captured
+  output (keep the surrounding text, replace the hex with a placeholder and say so) so the hook keeps
+  meaning something. Do not reach for `--no-verify` as a habit: if a real secret is ever captured,
+  the blocked file must be regenerated with it absent, not bypassed.
 
 ## Stop conditions
 

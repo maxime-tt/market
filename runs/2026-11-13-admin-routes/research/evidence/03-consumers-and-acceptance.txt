@@ -1,0 +1,575 @@
+generated 2026-11-13T10:28:04Z
+repo /home/admin_maxime/work/market
+
+
+===== base identity =====
+
+$ git rev-parse HEAD
+aaab6ef515f84467ae238dafe07dd267c3097e43
+
+$ git log --oneline -1
+aaab6ef51 run(admin-routes): freeze the work order for the custom-route unblocker
+
+$ git status --porcelain --untracked-files=no | head -5
+
+
+===== consumers: every reader of a resolved route (grep) =====
+
+$ grep -rn 'resolveVanity\|VANITY_REGISTRY\|vanityStore\|vanityBinding\|useStorefrontAddressPage\|StorefrontAddressPage\|shouldRenderStorefrontPage\|useStorefrontPage' --include=*.ts --include=*.tsx platform sdk ui | sort
+platform/server/VanityManager.ts:145:	public resolveVanity(vanityName: string): VanityEntry | null {
+platform/server/VanityManager.ts:167:		return this.resolveVanity(vanityName)
+platform/web/app/useVanitySync.ts:1:import { vanityActions } from '@platform/web/config/vanityStore'
+platform/web/app/useVanitySync.ts:2:import { useVanitySettings } from '@platform/web/config/vanityBinding'
+platform/web/config/vanityBinding.ts:17: * the temporary `vanityStore` adapter in `src/lib/stores/vanity.ts` — so consumers migrate to `useVanityState`
+platform/web/config/vanityBinding.ts:2: * platform/web/config/vanityBinding.ts — the React binding: bridge the SDK vanity state into the house
+platform/web/config/vanityBinding.ts:34:	resolveVanity,
+platform/web/config/vanityBinding.ts:65:export const vanityBinding: VanityBinding = createVanityBinding()
+platform/web/config/vanityBinding.ts:69:	return useStore(vanityBinding.store)
+platform/web/config/vanityBinding.ts:81:export { getExpiredVanityForPubkey, getVanityForPubkey, isVanityAvailable, resolveVanity }
+platform/web/config/vanityStore.ts:10: * The READ path (`useStore(vanityStore, selector)` in `platform/web/routes/$vanityName.tsx`) and the
+platform/web/config/vanityStore.ts:14: * (`platform/web/config/vanityBinding.ts`, `useVanityState`).
+platform/web/config/vanityStore.ts:24: * pushes every change into it, so `useStore(vanityStore, selector)` and `vanityStore.state` render the
+platform/web/config/vanityStore.ts:27:export const vanityStore = new Store<VanityState>(vanityState.get())
+platform/web/config/vanityStore.ts:28:vanityState.subscribe((state) => vanityStore.setState(() => state))
+platform/web/config/vanityStore.ts:2: * platform/web/config/vanityStore.ts — the platform home of the temporary vanity `@tanstack/store`
+platform/web/routes/$vanityName.tsx:15:	const isLoaded = useStore(vanityStore, (s) => s.isLoaded)
+platform/web/routes/$vanityName.tsx:16:	const lastUpdated = useStore(vanityStore, (s) => s.lastUpdated)
+platform/web/routes/$vanityName.tsx:1:import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
+platform/web/routes/$vanityName.tsx:20:		const entry = vanityActions.resolveVanity(vanityName)
+platform/web/routes/$vanityName.tsx:41:	return <StorefrontAddressPage dTag={vanityName} />
+platform/web/routes/$vanityName.tsx:4:import { vanityActions, vanityStore } from '@platform/web/config/vanityStore'
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:13:import { useVanitySettings, getVanityForPubkey, getExpiredVanityForPubkey } from '@platform/web/config/vanityBinding'
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:14:import { vanityActions } from '@platform/web/config/vanityStore'
+platform/web/routes/index.tsx:57:	const { data: homeResult } = useStorefrontAddressPage(APP_PUBKEY, 'home')
+platform/web/routes/index.tsx:58:	const publishedHome = shouldRenderStorefrontPage(homeResult) ? homeResult.page : null
+platform/web/routes/index.tsx:5:import { shouldRenderStorefrontPage, useStorefrontAddressPage } from '@platform/web/storefront/storefrontQuery'
+platform/web/routes/index.tsx:6:import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
+platform/web/storefront/StorefrontAddressPage.test.tsx:64:let StorefrontAddressPage: (typeof import('./StorefrontAddressPage'))['StorefrontAddressPage']
+platform/web/storefront/StorefrontAddressPage.test.tsx:69:	;({ StorefrontAddressPage } = await import('./StorefrontAddressPage'))
+platform/web/storefront/StorefrontAddressPage.test.tsx:96:	return renderToStaticMarkup(createElement(QueryClientProvider, { client: queryClient }, createElement(StorefrontAddressPage, { dTag })))
+platform/web/storefront/StorefrontAddressPage.test.tsx:99:describe('StorefrontAddressPage', () => {
+platform/web/storefront/StorefrontAddressPage.tsx:29:export function StorefrontAddressPage({ dTag }: { dTag: string }) {
+platform/web/storefront/StorefrontAddressPage.tsx:33:	const { data: page, isLoading: isLoadingPage, isError, refetch } = useStorefrontAddressPage(hasAddress ? author : undefined, dTag)
+platform/web/storefront/StorefrontAddressPage.tsx:54:	if (shouldRenderStorefrontPage(page) && page.pubkey) {
+platform/web/storefront/StorefrontAddressPage.tsx:7:import { shouldRenderStorefrontPage, useStorefrontAddressPage } from './storefrontQuery'
+platform/web/storefront/StorefrontBuilder.tsx:20:import { getVanityForPubkey, useVanitySettings } from '@platform/web/config/vanityBinding'
+platform/web/storefront/StorefrontBuilder.tsx:41:import { usePublishStorefrontPage, useStorefrontPage } from './storefrontQuery'
+platform/web/storefront/StorefrontBuilder.tsx:89:	const { data: published, isLoading } = useStorefrontPage(pubkey)
+platform/web/storefront/StorefrontOrProfilePage.tsx:42:	const { data: storefront, isLoading: isLoadingStorefront } = useStorefrontPage(pubkey)
+platform/web/storefront/StorefrontOrProfilePage.tsx:63:	if (shouldRenderStorefrontPage(storefront) && storefront.pubkey) {
+platform/web/storefront/StorefrontOrProfilePage.tsx:8:import { shouldRenderStorefrontPage, useStorefrontPage } from './storefrontQuery'
+platform/web/storefront/storefrontQuery.test.ts:256:describe('shouldRenderStorefrontPage', () => {
+platform/web/storefront/storefrontQuery.test.ts:259:		expect(shouldRenderStorefrontPage(await fetchStorefrontPage(AUTHOR))).toBe(true)
+platform/web/storefront/storefrontQuery.test.ts:271:		expect(shouldRenderStorefrontPage(await fetchStorefrontPage(AUTHOR))).toBe(false)
+platform/web/storefront/storefrontQuery.test.ts:285:		expect(shouldRenderStorefrontPage(await fetchStorefrontPage(AUTHOR))).toBe(false)
+platform/web/storefront/storefrontQuery.test.ts:289:		expect(shouldRenderStorefrontPage(undefined)).toBe(false)
+platform/web/storefront/storefrontQuery.test.ts:57:let shouldRenderStorefrontPage: (typeof import('./storefrontQuery'))['shouldRenderStorefrontPage']
+platform/web/storefront/storefrontQuery.test.ts:62:	;({ fetchStorefrontPage, shouldRenderStorefrontPage, storefrontAddressPageQueryOptions } = await import('./storefrontQuery'))
+platform/web/storefront/storefrontQuery.ts:115:export function useStorefrontPage(pubkey: string | undefined) {
+platform/web/storefront/storefrontQuery.ts:139:export function useStorefrontAddressPage(pubkey: string | undefined, dTag: string) {
+platform/web/storefront/storefrontQuery.ts:150:export function shouldRenderStorefrontPage(result: StorefrontPageResult | undefined): result is StorefrontPageResult & {
+sdk/config/vanity.ts:133:	resolveVanity: (vanityName: string): VanityEntry | null => {
+sdk/config/vanity.ts:193:		return vanityActions.resolveVanity(vanityName)
+sdk/config/vanity.ts:45: * (`platform/web/config/vanityBinding.ts`) or seed it. Reactivation is the host's: this module holds no React
+sdk/core/curation/curationRead.test.ts:272:		expect(resolveVanity(settings, 'Alice', NOW)?.pubkey).toBe(ALICE)
+sdk/core/curation/curationRead.test.ts:273:		expect(resolveVanity(settings, 'old', NOW)).toBeNull()
+sdk/core/curation/curationRead.test.ts:274:		expect(resolveVanity(settings, 'edge', NOW)?.pubkey).toBe(BOB)
+sdk/core/curation/curationRead.test.ts:275:		expect(resolveVanity(undefined, 'alice', NOW)).toBeNull()
+sdk/core/curation/curationRead.test.ts:27:	resolveVanity,
+sdk/core/curation/index.ts:68:	resolveVanity,
+sdk/core/curation/index.ts:69:	VANITY_REGISTRY,
+sdk/core/curation/vanityRead.ts:23:		kinds: [VANITY_REGISTRY.kind],
+sdk/core/curation/vanityRead.ts:25:		'#d': [VANITY_REGISTRY.dTag],
+sdk/core/curation/vanityRead.ts:56:export function resolveVanity(
+sdk/core/curation/vanityRead.ts:5:export const VANITY_REGISTRY = { kind: 30000, dTag: 'vanity-urls' } as const
+
+
+===== storage of vanilla config: sdk/config/vanity.ts RESERVED_NAMES + resolveVanity =====
+
+$ grep -n 'RESERVED_NAMES = \|^\s*resolveVanity\|isVanityAvailable:\|isValidVanityName:' sdk/config/vanity.ts
+51:const RESERVED_NAMES = new Set([
+133:	resolveVanity: (vanityName: string): VanityEntry | null => {
+150:	isVanityAvailable: (vanityName: string): boolean => {
+171:	isValidVanityName: (name: string): boolean => {
+
+$ sed -n '50,90p' sdk/config/vanity.ts
+// Reserved names that cannot be registered (should match server)
+const RESERVED_NAMES = new Set([
+	'admin',
+	'api',
+	'dashboard',
+	'products',
+	'product',
+	'profile',
+	'checkout',
+	'setup',
+	'community',
+	'posts',
+	'post',
+	'nostr',
+	'search',
+	'collection',
+	'collections',
+	'settings',
+	'support',
+	'help',
+	'about',
+	'terms',
+	'privacy',
+	'login',
+	'logout',
+	'register',
+	'signup',
+	'signin',
+	'account',
+	'user',
+	'users',
+	'app',
+	'static',
+	'assets',
+	'images',
+	'public',
+	'favicon',
+	'robots',
+	'sitemap',
+])
+
+
+
+===== the registry read (kind / d-tag / tag shape / expiry) =====
+
+$ sed -n '1,40p' sdk/core/curation/vanityRead.ts
+import { readThroughStore, type EventReadContext } from '../event-store/read'
+import type { NostrEventLike } from '../nostr/eventLike'
+import type { CurationFilter, CurationListEvent } from './curationRead'
+
+export const VANITY_REGISTRY = { kind: 30000, dTag: 'vanity-urls' } as const
+
+export interface VanityEntry {
+	vanityName: string
+	pubkey: string
+	validUntil: number
+}
+
+export interface VanitySettings<E = CurationListEvent> {
+	entries: VanityEntry[]
+	lastUpdated: number
+	event: E | null
+}
+
+const nowInSeconds = () => Math.floor(Date.now() / 1000)
+
+export function buildVanityRegistryFilter(appPubkey: string, limit?: number): CurationFilter {
+	return {
+		kinds: [VANITY_REGISTRY.kind],
+		authors: [appPubkey],
+		'#d': [VANITY_REGISTRY.dTag],
+		...(limit !== undefined && { limit }),
+	}
+}
+
+/** `["vanity", name, pubkey, validUntil]` tags; names are lowercased. */
+export function readVanityEntries(tags: string[][]): VanityEntry[] {
+	return tags
+		.filter((tag) => tag[0] === 'vanity' && tag[1] && tag[2] && tag[3])
+		.map((tag) => ({ vanityName: tag[1].toLowerCase(), pubkey: tag[2], validUntil: parseInt(tag[3]) || 0 }))
+}
+
+/** Parses the newest registry event; no events yields an empty registry. */
+export function parseVanitySettings<E extends CurationListEvent>(events: readonly E[]): VanitySettings<E> {
+	if (events.length === 0) return { entries: [], lastUpdated: 0, event: null }
+	const latestEvent = [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+
+$ sed -n '44,66p' sdk/core/curation/vanityRead.ts
+export function isVanityAvailable(
+	vanitySettings: VanitySettings<unknown> | null | undefined,
+	vanityName: string,
+	now = nowInSeconds(),
+): boolean {
+	if (!vanityName) return false
+	if (!vanitySettings || !vanitySettings.entries) return true
+	const existing = vanitySettings.entries.find((e) => e.vanityName === vanityName.toLowerCase())
+	if (!existing) return true
+	return existing.validUntil < now
+}
+
+export function resolveVanity(
+	vanitySettings: VanitySettings<unknown> | null | undefined,
+	vanityName: string,
+	now = nowInSeconds(),
+): VanityEntry | null {
+	if (!vanitySettings || !vanitySettings.entries || !vanityName) return null
+	const entry = vanitySettings.entries.find((e) => e.vanityName === vanityName.toLowerCase())
+	if (!entry || entry.validUntil < now) return null
+	return entry
+}
+
+
+
+===== route: home =====
+
+$ sed -n '48,60p' platform/web/routes/index.tsx
+const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91cd9c'
+
+function BrowseIndex() {
+	const { q, p } = Route.useSearch()
+	const navigate = useNavigate()
+	// The app key's own `home` page, when one has been authored. Read first and
+	// unconditionally: the hook must run in every state of this route, and the
+	// published page replaces the settled composition below without changing
+	// the renderer.
+	const { data: homeResult } = useStorefrontAddressPage(APP_PUBKEY, 'home')
+	const publishedHome = shouldRenderStorefrontPage(homeResult) ? homeResult.page : null
+	// The intro plays over the home once per mount; it is an overlay, so the hero
+	// renders underneath from the first paint and nothing waits on it.
+
+$ sed -n '100,114p' platform/web/routes/index.tsx
+			],
+		}
+		const page = publishedHome ?? (parseStorefrontPage(JSON.stringify(homePage)).page as never)
+		return (
+			<>
+				{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
+				<BrowseNav
+					active
+					onNavigateHome={() => navigate({ to: '/' })}
+					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+				/>
+				<StorefrontRenderer page={page} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
+			</>
+		)
+	}
+
+
+===== route: vanity =====
+
+$ sed -n 9,42p "platform/web/routes/\$vanityName.tsx"
+export const Route = createFileRoute('/$vanityName')({
+	component: VanityRouteComponent,
+})
+
+function VanityRouteComponent() {
+	const { vanityName } = Route.useParams()
+	const isLoaded = useStore(vanityStore, (s) => s.isLoaded)
+	const lastUpdated = useStore(vanityStore, (s) => s.lastUpdated)
+
+	// Resolve vanity URL to pubkey
+	const resolvedPubkey = useMemo(() => {
+		const entry = vanityActions.resolveVanity(vanityName)
+		return entry?.pubkey ?? null
+	}, [vanityName, isLoaded, lastUpdated])
+
+	// Loading state while store syncs
+	if (!isLoaded) {
+		return <LoadingState className="min-h-screen" label="Loading…" />
+	}
+
+	// Vanity URL resolved - render the storefront page (or the standard profile fallback)
+	if (resolvedPubkey) {
+		return <StorefrontOrProfilePage profileId={resolvedPubkey} />
+	}
+
+	// Vanity resolution found nothing: the SAME segment is then a generic page
+	// address on the app key (owner ruling, HANDOVER-CMS-INTEGRATION §6.1 — the
+	// app router maps a path to a page event by address). The segment is handed
+	// over verbatim as the `d` tag: `/featured` and `/featured-2026-11-03` take
+	// this identical path, with no date or prefix special-casing anywhere. An
+	// explicitly registered vanity name keeps precedence, which is why the
+	// lookup order is vanity first, app-key page second.
+	return <StorefrontAddressPage dTag={vanityName} />
+}
+
+
+===== route: profile =====
+
+$ cat "platform/web/routes/profile.\$profileId.tsx"
+import { StorefrontOrProfilePage } from '@platform/web/storefront/StorefrontOrProfilePage'
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/profile/$profileId')({
+	component: RouteComponent,
+})
+
+function RouteComponent() {
+	const { profileId } = Route.useParams()
+	return <StorefrontOrProfilePage profileId={profileId} />
+}
+
+
+===== component: StorefrontAddressPage =====
+
+$ sed -n '29,68p' platform/web/storefront/StorefrontAddressPage.tsx
+export function StorefrontAddressPage({ dTag }: { dTag: string }) {
+	const { data: config, isLoading: isLoadingConfig } = useConfigQuery()
+	const author = config?.appPublicKey ?? ''
+	const hasAddress = isValidHexKey(author) && dTag.length > 0
+	const { data: page, isLoading: isLoadingPage, isError, refetch } = useStorefrontAddressPage(hasAddress ? author : undefined, dTag)
+
+	// The config read gates the page read (the query stays disabled without a
+	// valid author), so the two loads are strictly sequential: wait for the
+	// config first, then for the page.
+	if (isLoadingConfig || (hasAddress && isLoadingPage)) {
+		return <LoadingState className="min-h-screen" label="Loading…" />
+	}
+
+	if (isError) {
+		return (
+			<ErrorState
+				className="min-h-screen"
+				title="This page could not be loaded"
+				message="The relay holding this page did not respond. Trying again may help."
+				onRetry={() => void refetch()}
+				retryTestId="storefront-address-retry"
+			/>
+		)
+	}
+
+	if (shouldRenderStorefrontPage(page) && page.pubkey) {
+		return <StorefrontRenderer page={page.page} pubkey={page.pubkey} slots={storefrontBlockSlots} />
+	}
+
+	// Absent, disabled, zero-block and unparseable pages all land here: a
+	// deliberate, token-clean empty state, never a blank page or an error.
+	return (
+		<EmptyState
+			className="min-h-screen"
+			data-testid="storefront-address-empty"
+			title="Nothing published yet"
+			description="No page has been published at this address."
+		/>
+	)
+}
+
+
+===== component: StorefrontOrProfilePage =====
+
+$ sed -n '26,68p' platform/web/storefront/StorefrontOrProfilePage.tsx
+export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
+	const { user } = useStore(authStore)
+	const isDraftPreview = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('preview') === 'draft'
+	// npub, nprofile and NIP-05 identifiers all have to become a hex pubkey
+	// before a page can be addressed. Hex skips the lookup; everything else
+	// borrows the profile query `ProfilePage` is about to run anyway, so the
+	// resolution costs no extra relay round trip.
+	const needsResolution = !isValidHexKey(profileId)
+	const profileOptions = profileByIdentifierQueryOptions(profileId)
+	const { data: profileData, isLoading: isResolvingProfile } = useQuery({
+		...profileOptions,
+		enabled: profileOptions.enabled && needsResolution,
+	})
+
+	const pubkey = needsResolution ? (profileData?.user?.pubkey ?? '') : profileId
+
+	const { data: storefront, isLoading: isLoadingStorefront } = useStorefrontPage(pubkey)
+	const isAuthorPreview = isDraftPreview && isValidHexKey(pubkey) && user?.pubkey === pubkey
+	const previewPage = isAuthorPreview ? (loadStorefrontDraft(pubkey) ?? storefront?.page ?? null) : null
+
+	// The preview URL is intentionally local to the signed-in author: it reads
+	// their validated local draft (or their stored page when no draft exists),
+	// without publishing or exposing that draft to other visitors.
+	if (previewPage && previewPage.content.length > 0) {
+		return <StorefrontRenderer page={previewPage} pubkey={pubkey} slots={storefrontBlockSlots} />
+	}
+
+	// Both queries are in flight concurrently, so this waits on the slower of
+	// two requests that would have happened regardless. Deciding before they
+	// settle would flash the profile page and then replace it, which reads as a
+	// bug to the visitor and undoes the author's first impression.
+	const isDeciding = (needsResolution && isResolvingProfile) || (pubkey.length > 0 && isLoadingStorefront)
+
+	if (isDeciding) {
+		return <LoadingState className="min-h-screen" label="Loading…" />
+	}
+
+	if (shouldRenderStorefrontPage(storefront) && storefront.pubkey) {
+		return <StorefrontRenderer page={storefront.page} pubkey={storefront.pubkey} slots={storefrontBlockSlots} />
+	}
+
+	return <ProfilePage profileId={profileId} />
+}
+
+
+===== storefrontQuery.ts: the render predicate and the address read =====
+
+$ sed -n '75,102p' platform/web/storefront/storefrontQuery.ts
+export async function fetchStorefrontPage(pubkey: string, dTag: string = STOREFRONT_PAGE_D_TAG): Promise<StorefrontPageResult> {
+	if (!isValidHexKey(pubkey) || dTag.length === 0) return EMPTY_RESULT
+
+	// Read-seam justification (ADR-READ-SEAM-STREAMS §8): a single mounted page is a
+	// single-entity/detail read — one addressable coordinate (author, kind, `d`) — so a
+	// bounded `fetch` is the doctrine-sanctioned class here, not a stream.
+	const events = await getReadContext().fetch([
+		{
+			kinds: [STOREFRONT_PAGE_KIND],
+			authors: [pubkey],
+			'#d': [dTag],
+		},
+	])
+
+	// Defence in depth: a relay may answer a filter with events that do not
+	// match it. Author and `d` decide the address, so re-check both rather than
+	// rendering whatever came back.
+	const addressed = events.filter(
+		(event) =>
+			event.kind === STOREFRONT_PAGE_KIND && event.pubkey === pubkey && event.tags.some((tag) => tag[0] === 'd' && tag[1] === dTag),
+	)
+
+	const event = selectReplaceable(addressed)
+	if (!event) return EMPTY_RESULT
+
+	const parsed = parseStorefrontPage(event.content)
+	return { event, pubkey: event.pubkey, ...parsed }
+}
+
+$ sed -n '128,154p' platform/web/storefront/storefrontQuery.ts
+export const storefrontAddressPageQueryOptions = (pubkey: string, dTag: string) =>
+	queryOptions({
+		queryKey: [...storefrontKeys.all, 'address', pubkey, dTag] as const,
+		queryFn: () => fetchStorefrontPage(pubkey, dTag),
+		enabled: isValidHexKey(pubkey) && dTag.length > 0,
+		// Same cadence as the profile page read: pages change rarely and sit on
+		// the critical path of the address route.
+		staleTime: 2 * 60 * 1000,
+	})
+
+/** One addressable page by `(author, d)`. Resolve the author (e.g. the app key) first. */
+export function useStorefrontAddressPage(pubkey: string | undefined, dTag: string) {
+	return useQuery(storefrontAddressPageQueryOptions(pubkey ?? '', dTag))
+}
+
+/**
+ * True when this author's page should replace the default profile view.
+ *
+ * Both conditions matter: the document must have parsed, and the author must
+ * have switched it on. A page that parsed to zero surviving blocks is also
+ * refused — an empty page is worse for a visitor than the profile they expected.
+ */
+export function shouldRenderStorefrontPage(result: StorefrontPageResult | undefined): result is StorefrontPageResult & {
+	page: StorefrontPage
+} {
+	return Boolean(result?.page?.enabled && result.page.content.length > 0)
+}
+
+
+===== producer: builder live href from vanity lookup =====
+
+$ sed -n '89,102p' platform/web/storefront/StorefrontBuilder.tsx
+	const { data: published, isLoading } = useStorefrontPage(pubkey)
+	const publish = usePublishStorefrontPage()
+
+	// The claimed name (if any) is bought on separate dashboard pages today — see
+	// ADR-019 — but the builder is where an author actually needs to know it: it
+	// decides what "View live page" points at and whether to nudge an author who
+	// has never claimed a name at all.
+	const { data: config } = useConfigQuery()
+	const { data: vanitySettings } = useVanitySettings(config?.appPublicKey)
+	const { data: nip05Settings } = useNip05Settings(config?.appPublicKey)
+	const vanityEntry = useMemo(() => getVanityForPubkey(vanitySettings, pubkey), [vanitySettings, pubkey])
+	const nip05Entry = useMemo(() => getNip05ForPubkey(nip05Settings, pubkey), [nip05Settings, pubkey])
+	const liveHref = vanityEntry ? `/${vanityEntry.vanityName}?preview=draft` : `/profile/${pubkey}?preview=draft`
+
+
+
+===== admin gate is a literal path prefix =====
+
+$ grep -n 'isAdminRoute\|amIAdmin\|navigate({ to:' platform/web/app/useRootRedirects.ts
+24:	const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
+28:	const isAdminRoute = pathname.startsWith('/dashboard/app-settings')
+32:			navigate({ to: '/setup' })
+34:			navigate({ to: '/' })
+40:		if (isAdminRoute && !amIAdmin) {
+41:			navigate({ to: '/dashboard' })
+43:	}, [isAdminRoute, amIAdmin, isLoadingAdmin, navigate])
+
+
+===== dashboard nav table (where a management page registers) =====
+
+$ sed -n '161,178p' ui/nav/model.ts
+	{
+		title: 'APP SETTINGS',
+		adminOnly: true,
+		items: [
+			item('/dashboard/app-settings/app-miscelleneous', '⚙️', 'App Miscellaneous', {
+				adminOnly: true,
+				fullBleed: true,
+				hidesPageTitle: true,
+			}),
+			item('/dashboard/app-settings/team', '👥', 'Team', { adminOnly: true, fullBleed: true, hidesPageTitle: true }),
+			item('/dashboard/app-settings/blacklists', '🚫', 'Blacklists', { adminOnly: true, fullBleed: true, hidesPageTitle: true }),
+			item('/dashboard/app-settings/featured-items', '⭐', 'Featured Items', {
+				adminOnly: true,
+				fullBleed: true,
+				hidesPageTitle: true,
+			}),
+		],
+	},
+
+$ sed -n '43,46p' ui/nav/model.test.ts
+	['/dashboard/app-settings/app-miscelleneous', '⚙️', 'App Miscellaneous'],
+	['/dashboard/app-settings/team', '👥', 'Team'],
+	['/dashboard/app-settings/blacklists', '🚫', 'Blacklists'],
+	['/dashboard/app-settings/featured-items', '⭐', 'Featured Items'],
+
+
+===== server-side registry owner (write side, not a render resolver) =====
+
+$ grep -rn 'VanityManager' --include=*.ts --include=*.tsx platform | grep -v 'platform/server/VanityManager.ts'
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:15:import { VANITY_PRICING } from '@platform/server/VanityManager'
+platform/server/EventHandler.ts:7:import { VanityManagerImpl } from './VanityManager'
+platform/server/EventHandler.ts:25:	private vanityManager: VanityManagerImpl
+platform/server/EventHandler.ts:76:		this.vanityManager = new VanityManagerImpl(this.eventSigner)
+platform/server/EventHandler.ts:334:	public getVanityManager(): VanityManagerImpl {
+platform/server/index.ts:8:export { VanityManagerImpl, VANITY_PRICING, type VanityEntry } from './VanityManager'
+
+
+===== hardcoded route-name literals =====
+
+$ grep -n "'featured'\|'home'" platform/web/routes/index.tsx
+57:	const { data: homeResult } = useStorefrontAddressPage(APP_PUBKEY, 'home')
+109:					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+132:			onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+
+
+===== reserved-name collision check: is 'home' or 'featured' reserved? =====
+
+$ grep -c "'home'" sdk/config/vanity.ts; grep -c "'featured'" sdk/config/vanity.ts
+0
+0
+
+
+===== tests: candidate files (unit + component) =====
+
+$ ls -1 sdk/core/curation/*.test.ts platform/web/storefront/*.test.ts* platform/web/routes/*.test.tsx platform/web/app/routeComposition.test.ts ui/nav/model.test.ts platform/boundary.test.ts sdk/boundary.test.ts ui/boundary.test.ts
+platform/boundary.test.ts
+platform/web/app/routeComposition.test.ts
+platform/web/routes/sellerRoute.test.tsx
+platform/web/storefront/ProductRowPicker.test.tsx
+platform/web/storefront/StorefrontAddressPage.test.tsx
+platform/web/storefront/storefrontQuery.test.ts
+sdk/boundary.test.ts
+sdk/core/curation/blacklistReadWorkflows.test.ts
+sdk/core/curation/curationRead.test.ts
+sdk/core/curation/curation.test.ts
+sdk/core/curation/featuredReadWorkflows.test.ts
+sdk/core/curation/vanityReadWorkflows.test.ts
+ui/boundary.test.ts
+ui/nav/model.test.ts
+
+
+===== tests: e2e specs touching the resolved-route surface =====
+
+$ grep -rln "goto('/')\|storefront\|app-settings" e2e/tests | sort
+e2e/tests/app-settings.spec.ts
+e2e/tests/auction-bidding-mints.spec.ts
+e2e/tests/auth.spec.ts
+e2e/tests/navigation.spec.ts
+e2e/tests/products.spec.ts
+e2e/tests/self-hosted-config.spec.ts
+e2e/tests/storefront-page-builder.spec.ts
+e2e/tests/test-labels-admin-confirmation.spec.ts
+e2e/tests/theme-app-shell.spec.ts
+
+
+===== GATE 1: typecheck baseline (measured) =====
+
+$ NODE_OPTIONS=--max-old-space-size=12288 /home/admin_maxime/.bun/bin/bun bunx tsc --noEmit | grep -c "error TS"

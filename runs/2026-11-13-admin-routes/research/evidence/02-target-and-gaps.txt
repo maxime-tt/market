@@ -1,0 +1,686 @@
+### repo: /home/admin_maxime/work/market
+### generated: 2026-11-13T10:29:20Z
+### base commit (expected 2326938b3):
+1eecebd4b7876ded4ccc8635764eb681121522eb
+
+
+================================================================
+## 1. THE FOUR PINNED FACTS (order.md lines 41-44)
+================================================================
+--- sdk/core/curation/vanityRead.ts:5 and :7-11 ---
+export const VANITY_REGISTRY = { kind: 30000, dTag: 'vanity-urls' } as const
+
+export interface VanityEntry {
+	vanityName: string
+	pubkey: string
+	validUntil: number
+}
+--- platform/web/routes/index.tsx:45-58 (APP_PUBKEY + home read) ---
+ * `/api/config` as `appPublicKey`; kept here because the slots need it before
+ * any page document exists.
+ */
+const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91cd9c'
+
+function BrowseIndex() {
+	const { q, p } = Route.useSearch()
+	const navigate = useNavigate()
+	// The app key's own `home` page, when one has been authored. Read first and
+	// unconditionally: the hook must run in every state of this route, and the
+	// published page replaces the settled composition below without changing
+	// the renderer.
+	const { data: homeResult } = useStorefrontAddressPage(APP_PUBKEY, 'home')
+	const publishedHome = shouldRenderStorefrontPage(homeResult) ? homeResult.page : null
+--- platform/web/storefront/storefrontPublish.ts:59-61 ---
+	const validated = validation.page
+	const tags: string[][] = [['d', STOREFRONT_PAGE_D_TAG]]
+
+
+================================================================
+## 2. THE REGISTRY: kind, d-tag, tag shape, addressable semantics
+================================================================
+--- vanilla registry constant and tag parser (vanityRead.ts:5,30-35) ---
+export const VANITY_REGISTRY = { kind: 30000, dTag: 'vanity-urls' } as const
+/** `["vanity", name, pubkey, validUntil]` tags; names are lowercased. */
+export function readVanityEntries(tags: string[][]): VanityEntry[] {
+	return tags
+		.filter((tag) => tag[0] === 'vanity' && tag[1] && tag[2] && tag[3])
+		.map((tag) => ({ vanityName: tag[1].toLowerCase(), pubkey: tag[2], validUntil: parseInt(tag[3]) || 0 }))
+}
+--- filter construction (authors hard-pinned to appPubkey) vanityRead.ts:21-28 ---
+export function buildVanityRegistryFilter(appPubkey: string, limit?: number): CurationFilter {
+	return {
+		kinds: [VANITY_REGISTRY.kind],
+		authors: [appPubkey],
+		'#d': [VANITY_REGISTRY.dTag],
+		...(limit !== undefined && { limit }),
+	}
+}
+--- expiry predicates (vanityRead.ts:44-83) ---
+export function isVanityAvailable(
+	vanitySettings: VanitySettings<unknown> | null | undefined,
+	vanityName: string,
+	now = nowInSeconds(),
+): boolean {
+	if (!vanityName) return false
+	if (!vanitySettings || !vanitySettings.entries) return true
+	const existing = vanitySettings.entries.find((e) => e.vanityName === vanityName.toLowerCase())
+	if (!existing) return true
+	return existing.validUntil < now
+}
+
+export function resolveVanity(
+	vanitySettings: VanitySettings<unknown> | null | undefined,
+	vanityName: string,
+	now = nowInSeconds(),
+): VanityEntry | null {
+	if (!vanitySettings || !vanitySettings.entries || !vanityName) return null
+	const entry = vanitySettings.entries.find((e) => e.vanityName === vanityName.toLowerCase())
+	if (!entry || entry.validUntil < now) return null
+	return entry
+}
+
+export function getVanityForPubkey(
+	vanitySettings: VanitySettings<unknown> | null | undefined,
+	pubkey: string,
+	now = nowInSeconds(),
+): VanityEntry | null {
+	if (!vanitySettings || !vanitySettings.entries || !pubkey) return null
+	return vanitySettings.entries.find((e) => e.pubkey === pubkey && e.validUntil > now) || null
+}
+
+export function getExpiredVanityForPubkey(
+	vanitySettings: VanitySettings<unknown> | null | undefined,
+	pubkey: string,
+	now = nowInSeconds(),
+): VanityEntry[] {
+	if (!vanitySettings || !vanitySettings.entries || !pubkey) return []
+	return vanitySettings.entries.filter((e) => e.pubkey === pubkey && e.validUntil <= now)
+}
+--- kind-30000 addressable rule, NIP-01 verbatim ---
+(NIP-01 fetched over the network; see 02-target-and-gaps.md for the quoted text)
+
+================================================================
+## 3. EXPIRY MEASUREMENT — the real functions run against synthetic tags
+================================================================
+(probe source: research/evidence/probe02.ts)
+VANITY_REGISTRY = {"kind":30000,"dTag":"vanity-urls"}
+now = 1800000000
+{"label":"validUntil in the future (2030)","entriesParsed":1,"entries":[{"vanityName":"home","pubkey":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","validUntil":1900000000}],"resolveVanity":{"vanityName":"home","pubkey":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","validUntil":1900000000},"isAvailable":false}
+{"label":"validUntil = 0 (the \"no expiry\" idiom)","entriesParsed":1,"entries":[{"vanityName":"home","pubkey":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","validUntil":0}],"resolveVanity":null,"isAvailable":true}
+{"label":"validUntil = empty string","entriesParsed":0,"entries":[],"resolveVanity":null,"isAvailable":true}
+{"label":"tag with only 3 elements (no validUntil)","entriesParsed":0,"entries":[],"resolveVanity":null,"isAvailable":true}
+{"label":"non-numeric validUntil","entriesParsed":1,"entries":[{"vanityName":"home","pubkey":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","validUntil":0}],"resolveVanity":null,"isAvailable":true}
+{"label":"negative validUntil","entriesParsed":1,"entries":[{"vanityName":"home","pubkey":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","validUntil":-1}],"resolveVanity":null,"isAvailable":true}
+whole-event-replacement check: {"entries":["shop"],"homeStillResolves":false}
+--- exit: 0 ---
+
+================================================================
+## 4. WHAT MAKES A PAGE RENDERABLE vs REFUSED
+================================================================
+--- shouldRenderStorefrontPage (storefrontQuery.ts:143-154) ---
+/**
+ * True when this author's page should replace the default profile view.
+ *
+ * Both conditions matter: the document must have parsed, and the author must
+ * have switched it on. A page that parsed to zero surviving blocks is also
+ * refused — an empty page is worse for a visitor than the profile they expected.
+ */
+export function shouldRenderStorefrontPage(result: StorefrontPageResult | undefined): result is StorefrontPageResult & {
+	page: StorefrontPage
+} {
+	return Boolean(result?.page?.enabled && result.page.content.length > 0)
+}
+--- version gate (storefrontPage.ts:590-602) ---
+	const doc = json as Record<string, unknown>
+
+	// The version gate stays strict and total: an incompatible document shape
+	// cannot be salvaged field-by-field the way a bad block or a bad root prop
+	// can, since the whole schema could have moved out from under it.
+	if (doc.version !== STOREFRONT_PAGE_VERSION) {
+		return { page: null, droppedBlocks: 0, error: 'Page document does not match the expected format' }
+	}
+
+	// A non-boolean `enabled` falls back to `false` (the safer reading) rather
+	// than failing the document — an ambiguous "should this replace the
+	// profile page" value must not resolve to "yes".
+	const enabled = doc.enabled === true
+--- kind/d/version constants (storefrontPage.ts:31-37) ---
+/** Addressable kind carrying a storefront page document. See ADR-019. */
+export const STOREFRONT_PAGE_KIND = 30024
+
+/** `d` tag identifying the single storefront page belonging to a pubkey. */
+export const STOREFRONT_PAGE_D_TAG = 'storefront-page'
+
+/** Document schema version. Bumped only on a breaking shape change. */
+export const STOREFRONT_PAGE_VERSION = 1
+--- every consumer of shouldRenderStorefrontPage (scoped: platform sdk ui) ---
+platform/web/storefront/StorefrontAddressPage.tsx:7:import { shouldRenderStorefrontPage, useStorefrontAddressPage } from './storefrontQuery'
+platform/web/storefront/StorefrontAddressPage.tsx:54:	if (shouldRenderStorefrontPage(page) && page.pubkey) {
+platform/web/storefront/StorefrontOrProfilePage.tsx:8:import { shouldRenderStorefrontPage, useStorefrontPage } from './storefrontQuery'
+platform/web/storefront/StorefrontOrProfilePage.tsx:63:	if (shouldRenderStorefrontPage(storefront) && storefront.pubkey) {
+platform/web/storefront/storefrontQuery.test.ts:57:let shouldRenderStorefrontPage: (typeof import('./storefrontQuery'))['shouldRenderStorefrontPage']
+platform/web/storefront/storefrontQuery.test.ts:62:	;({ fetchStorefrontPage, shouldRenderStorefrontPage, storefrontAddressPageQueryOptions } = await import('./storefrontQuery'))
+platform/web/storefront/storefrontQuery.test.ts:256:describe('shouldRenderStorefrontPage', () => {
+platform/web/storefront/storefrontQuery.test.ts:259:		expect(shouldRenderStorefrontPage(await fetchStorefrontPage(AUTHOR))).toBe(true)
+platform/web/storefront/storefrontQuery.test.ts:271:		expect(shouldRenderStorefrontPage(await fetchStorefrontPage(AUTHOR))).toBe(false)
+platform/web/storefront/storefrontQuery.test.ts:285:		expect(shouldRenderStorefrontPage(await fetchStorefrontPage(AUTHOR))).toBe(false)
+platform/web/storefront/storefrontQuery.test.ts:289:		expect(shouldRenderStorefrontPage(undefined)).toBe(false)
+platform/web/storefront/storefrontQuery.ts:150:export function shouldRenderStorefrontPage(result: StorefrontPageResult | undefined): result is StorefrontPageResult & {
+platform/web/routes/index.tsx:5:import { shouldRenderStorefrontPage, useStorefrontAddressPage } from '@platform/web/storefront/storefrontQuery'
+platform/web/routes/index.tsx:58:	const publishedHome = shouldRenderStorefrontPage(homeResult) ? homeResult.page : null
+
+================================================================
+## 5. TARGET TYPES: what a route can point at TODAY
+================================================================
+--- the ONLY resolution point: platform/web/routes/$vanityName.tsx (full) ---
+     1	import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
+     2	import { StorefrontOrProfilePage } from '@platform/web/storefront/StorefrontOrProfilePage'
+     3	import { LoadingState } from '@ui/shared/loading-state'
+     4	import { vanityActions, vanityStore } from '@platform/web/config/vanityStore'
+     5	import { createFileRoute } from '@tanstack/react-router'
+     6	import { useMemo } from 'react'
+     7	import { useStore } from '@tanstack/react-store'
+     8	
+     9	export const Route = createFileRoute('/$vanityName')({
+    10		component: VanityRouteComponent,
+    11	})
+    12	
+    13	function VanityRouteComponent() {
+    14		const { vanityName } = Route.useParams()
+    15		const isLoaded = useStore(vanityStore, (s) => s.isLoaded)
+    16		const lastUpdated = useStore(vanityStore, (s) => s.lastUpdated)
+    17	
+    18		// Resolve vanity URL to pubkey
+    19		const resolvedPubkey = useMemo(() => {
+    20			const entry = vanityActions.resolveVanity(vanityName)
+    21			return entry?.pubkey ?? null
+    22		}, [vanityName, isLoaded, lastUpdated])
+    23	
+    24		// Loading state while store syncs
+    25		if (!isLoaded) {
+    26			return <LoadingState className="min-h-screen" label="Loading…" />
+    27		}
+    28	
+    29		// Vanity URL resolved - render the storefront page (or the standard profile fallback)
+    30		if (resolvedPubkey) {
+    31			return <StorefrontOrProfilePage profileId={resolvedPubkey} />
+    32		}
+    33	
+    34		// Vanity resolution found nothing: the SAME segment is then a generic page
+    35		// address on the app key (owner ruling, HANDOVER-CMS-INTEGRATION §6.1 — the
+    36		// app router maps a path to a page event by address). The segment is handed
+    37		// over verbatim as the `d` tag: `/featured` and `/featured-2026-11-03` take
+    38		// this identical path, with no date or prefix special-casing anywhere. An
+    39		// explicitly registered vanity name keeps precedence, which is why the
+    40		// lookup order is vanity first, app-key page second.
+    41		return <StorefrontAddressPage dTag={vanityName} />
+    42	}
+
+--- profile/pubkey render path: StorefrontOrProfilePage (signature + fallback) ---
+export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
+	const { user } = useStore(authStore)
+	if (shouldRenderStorefrontPage(storefront) && storefront.pubkey) {
+		return <StorefrontRenderer page={storefront.page} pubkey={storefront.pubkey} slots={storefrontBlockSlots} />
+	}
+
+	return <ProfilePage profileId={profileId} />
+
+--- storefront address render path: StorefrontAddressPage (author is HARD-PINNED to config.appPublicKey) ---
+export function StorefrontAddressPage({ dTag }: { dTag: string }) {
+	const { data: config, isLoading: isLoadingConfig } = useConfigQuery()
+	const author = config?.appPublicKey ?? ''
+	const hasAddress = isValidHexKey(author) && dTag.length > 0
+	const { data: page, isLoading: isLoadingPage, isError, refetch } = useStorefrontAddressPage(hasAddress ? author : undefined, dTag)
+
+--- listing render path: the product route takes a d-tag or event id, NOT a route target ---
+/**
+ * React Query options for smart product fetching (handles both event IDs and d-tags)
+ * @param id The product identifier (either event ID or d-tag)
+ * @param sellerPubkey Optional seller pubkey (required when id is a d-tag)
+ * @returns Query options object
+ */
+export const productSmartQueryOptions = (id: string, sellerPubkey?: string) =>
+	queryOptions({
+		queryKey: sellerPubkey ? [...productKeys.details(id), sellerPubkey] : productKeys.details(id),
+		queryFn: () => fetchProductSmart(id, sellerPubkey),
+		staleTime: 300000,
+		enabled: isEventId(id) || !!sellerPubkey, // Only enable if we have enough info to fetch
+	})
+--- and no route renders a listing from a name ---
+(no route/) consumer of productSmartQueryOptions
+
+--- external URL: any redirect machinery in the router? ---
+(none found in platform/web)
+--- safe href policy for links INSIDE a page (https or in-app only) storefrontPage.ts:59-70 ---
+/**
+ * True for values safe to place in an `href`.
+ *
+ * Two forms are allowed and nothing else:
+ *   - an in-app absolute path (`/products/abc`) — note the explicit rejection of
+ *     `//evil.example`, which is protocol-relative and would leave the app;
+ *   - an absolute `https:` URL.
+ *
+ * `javascript:`, `data:`, `blob:`, `vbscript:`, `file:` and bare `http:` all
+ * fail.
+ */
+
+================================================================
+## 6. BLOCK-RENDER AUTHOR ANCHORING (why a page can only show its own author's listings)
+================================================================
+--- StorefrontBlockSlots.tsx doc comment ---
+ * block types resolve their reads here, over the existing platform queries:
+ *
+ *   ProductGrid / FeaturedProduct / ProductRow → `productsByPubkeyQueryOptions` (kind 30402)
+ *   ProfileHeader                              → `useProfile` (kind 0) + NIP-05 validation
+ *
+ * Author anchoring is the fork's security property, preserved by construction:
+ * every slot takes the pubkey from `useStorefrontContext()` — the value
+ * `StorefrontRenderer` sets from the *page event's* author — and never from the
+ * page document. The `StorefrontPage` schema has no field that could name
+ * another pubkey, so a page can only ever point its product references at the
+ * author's own listing set (the `productsByPubkey` read is relay-scoped to
+ * `authors: [pubkey]`, and `FeaturedProduct`/`ProductRow` match `d` tags
+ * within that set).
+ *
+ * A missing or erroring read degrades to the props-only view's empty/error
+ * state — a slot never throws its query failure into the page.
+ */
+
+================================================================
+## 7. WRITE / TRUST PATH
+================================================================
+--- who signs the registry: server-side app key (EventSigner) ---
+
+	constructor(appPrivateKey: string) {
+		this.appPrivateKey = appPrivateKey
+		this.privateBytes = new Uint8Array(Buffer.from(appPrivateKey, 'hex'))
+		this.appPubkey = getPublicKey(this.privateBytes)
+	}
+
+	public signEvent(event: NostrEvent): NostrEvent {
+		const unsignedEvent: UnsignedEvent = {
+			kind: event.kind as number,
+			created_at: event.created_at,
+			tags: event.tags,
+			content: event.content,
+			pubkey: this.appPubkey,
+		}
+
+		return finalizeEvent(unsignedEvent, this.privateBytes)
+	}
+
+	public getAppPubkey(): string {
+		return this.appPubkey
+	}
+
+--- the WebSocket submit path: verify sig -> validate -> RESIGN AS APP KEY ---
+			if (Array.isArray(data) && data[0] === 'EVENT' && data[1].sig) {
+				console.log('Processing EVENT message')
+
+				// Check if EventHandler is ready
+				if (!isEventHandlerReady()) {
+					const errorResponse = ['OK', data[1].id, false, 'error: Server initializing, please try again']
+					ws.send(JSON.stringify(errorResponse))
+					return
+				}
+
+				if (!verifyEvent(data[1] as Event)) {
+					ws.send(JSON.stringify(['OK', data[1].id, false, 'error: Unable to verify event signature']))
+					return
+				}
+
+				let resignedEvent
+				try {
+					resignedEvent = getEventHandler().handleEvent(data[1])
+				} catch (handleError) {
+					console.error('Error in handleEvent:', handleError)
+					ws.send(JSON.stringify(['OK', data[1].id, false, `error: Handler error: ${handleError}`]))
+					return
+				}
+
+				if (resignedEvent) {
+					const relay = await Relay.connect(RELAY_URL as string)
+					await relay.publish(resignedEvent as Event)
+
+
+--- the validator: general events require admin, NOT editor ---
+	private getEventType(event: NostrEvent): string {
+		if (event.kind === 31990 && event.content.includes('"name":')) {
+			return 'setup'
+		}
+		if (event.kind === 30000) {
+			const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+			if (dTag === 'admins') return 'adminList'
+			if (dTag === 'editors') return 'editorList'
+		}
+		if (event.kind === 10000) {
+			return 'blacklist'
+		}
+		return 'general'
+	}
+	private validateBlacklistEvent(event: NostrEvent): EventValidationResult {
+		if (!this.adminManager.isAdmin(event.pubkey) && !this.editorManager.isEditor(event.pubkey)) {
+			return {
+				isValid: false,
+				reason: 'Blacklist event rejected: not from admin or editor',
+			}
+		}
+
+		return { isValid: true }
+	}
+
+	private validateGeneralEvent(event: NostrEvent): EventValidationResult {
+		if (!this.adminManager.isAdmin(event.pubkey)) {
+			return {
+				isValid: false,
+				reason: 'General event rejected: not from admin',
+			}
+		}
+
+		return { isValid: true }
+	}
+}
+
+--- the client-side list publish resolves owner but signs with the USER signer ---
+export function createAppSettingsPublishContext(ndk: NdkClient, signer: SignerCapability) {
+	return createSignerPublishContext(signer, (event) => submitAppSettingsEvent(event))
+}
+
+/** Lists live under the app pubkey; without one, fall back to the signer's own pubkey. */
+export async function resolveListOwner(signer: SignerCapability, appPubkey?: string): Promise<string> {
+	const currentUserPubkey = await signer.getPublicKey()
+	if (!currentUserPubkey) {
+		throw new Error('Unable to get current user pubkey')
+	}
+	return appPubkey || currentUserPubkey
+}
+
+--- role lists live at kind 30000 with d=admins / d=editors ---
+	admins: { kind: 30000, dTag: 'admins', itemTag: 'p' },
+	editors: { kind: 30000, dTag: 'editors', itemTag: 'p' },
+	featuredProducts: { kind: 30405, dTag: 'featured_products', itemTag: 'a', itemKind: 30402 },
+	featuredCollections: { kind: 30003, dTag: 'featured_collections', itemTag: 'a', itemKind: 30405 },
+	featuredAuctions: { kind: 30409, dTag: 'featured_auctions', itemTag: 'a', itemKind: 30408 },
+	featuredUsers: { kind: 30000, dTag: 'featured_users', itemTag: 'p' },
+
+================================================================
+## 8. ADMIN/EDITOR GATING AS IT IS
+================================================================
+108:export const useAmIAdmin = (appPubkey?: string) => {
+109-	const { data: adminSettings, isLoading } = useAdminSettings(appPubkey)
+110-	const ndk = getAppNdk()
+111-	const currentUserPubkey = ndk?.activeUser?.pubkey
+112-
+113-	const amIAdmin = isAdmin(adminSettings, currentUserPubkey || '')
+114-	const amIOwner = isOwner(adminSettings, currentUserPubkey || '')
+115-
+116-	return {
+117-		amIAdmin,
+118-		amIOwner,
+119-		isLoading,
+120-		adminSettings,
+121-		currentUserPubkey,
+122-	}
+123-}
+124-
+--- isAdmin / isOwner / isEditor predicates ---
+export function isAdmin(adminSettings: AdminSettings<unknown> | null | undefined, pubkey: string): boolean {
+	if (!adminSettings || !pubkey) return false
+	return adminSettings.admins.includes(pubkey)
+}
+
+export function isOwner(adminSettings: AdminSettings<unknown> | null | undefined, pubkey: string): boolean {
+	if (!adminSettings || !pubkey) return false
+	return adminSettings.owner === pubkey
+}
+
+export function isEditor(editorSettings: EditorSettings<unknown> | null | undefined, pubkey: string): boolean {
+	if (!editorSettings || !pubkey) return false
+	return editorSettings.editors.includes(pubkey)
+}
+
+================================================================
+## 9. RESERVED NAMES AND NAME GRAMMAR (a route named 'home' must be legal)
+================================================================
+--- reserved name count ---
+39
+--- is "home" reserved? ---
+NOT in RESERVED_NAMES
+--- name grammar (VanityManager.ts:182-186) ---
+	private isValidVanityName(name: string): boolean {
+		// Allow alphanumeric, hyphens, underscores, 3-30 characters
+		const regex = /^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/
+		return regex.test(name.toLowerCase())
+	}
+--- does "home" pass? ---
+home true
+featured true
+shop true
+h false
+
+================================================================
+## 10. DOCUMENTS THAT COULD SPECIFY THE REQUIREMENTS
+================================================================
+--- ADR statuses (Accepted vs Proposed) ---
+ADR-0001-hierarchical-agents-md-and-adr-docs.md: Accepted
+ADR-0002-nostr-io-migration-ndk-to-applesauce.md: Accepted
+ADR-0003-auctions-comprehensive-validation-protocol.md: Proposed (amended 2026-08-10 per ADR-0004; amended 2026-08-21 for per-bid d-tag + observed_at recovery)
+ADR-0004-auction-settlement-descriptor.md: Proposed (amended)
+ADR-0005-no-external-service-dependencies-in-tests.md: Proposed
+ADR-0006-cms-and-nostr-native-page-building.md: Proposed
+ADR-0006-local-cashu-mint-for-e2e-tests.md: Proposed
+ADR-0007-component-ui-migration-and-widget-book.md: Proposed
+ADR-0008-direct-lightning-bid-funding.md: Proposed
+ADR-0009-test-listing-labels-via-nip-32.md: Accepted (rev 6 — browsing-only gating + inspectability toggle + the discovery/curation surface taxonomy + spec-validity admission as the taxonomy's second rule; products on `master`, auctions on `auctions` — both implemented)
+ADR-0010-cashu-wallet-deps-recovery-sync.md: **Proposed — conditional adoption**
+ADR-0011-bid-time-collateral-verification-via-nut12-dleq.md: Accepted
+ADR-0012-bid-validity-selection-and-winner-derivation.md: Accepted (2026-09-17) by c03rad0r (maintainer). This ADR amends AUCTIONS.md and
+ADR-0021-three-part-sdk-ui-platform-architecture.md: Proposed — branch `auctions`
+ADR-013-nip17-order-message-transport.md: Proposed
+ADR-014-nip17-order-transport-migration.md: Proposed
+ADR-015-production-safe-ndk-filters-and-stable-kind-0-fetching.md: Accepted
+ADR-016-zap-ndk-external-relay-isolation.md: Accepted
+ADR-018-instance-configuration-and-self-hosting.md: Proposed
+ADR-019-unified-storefront-identity-and-page-builder.md: Proposed
+ADR-add-product-workflow-boundaries.md: Proposed
+
+--- ADR-0006 Module 3 (routing tiers + typed-target extension), the closest thing to a spec ---
+### Module 3: Routing / Vanity URL Layer
+
+Maps URL paths to page-definition events. Extends the existing vanity URL system.
+
+**Existing infrastructure.** The app already has a vanity URL system (`VanityManager`, `ZapPurchaseManager`, `$vanityName.tsx` catch-all route, kind 30000 registry with `d=vanity-urls`). Currently, vanity URLs resolve to user profiles. The CMS extends this: vanity URLs can now also resolve to **page-definition events**.
+
+**Three tiers of routing authority:**
+
+| Tier           | Who controls                  | Example                                 | Signed by                 |
+| -------------- | ----------------------------- | --------------------------------------- | ------------------------- |
+| App-reserved   | Hardcoded app routes          | `/setup`, `/checkout`, `/admin`         | N/A (code)                |
+| Admin-assigned | Admins via dashboard          | `/`, `/products`, `/summer-sale`        | App pubkey                |
+| Seller-owned   | Merchants via vanity purchase | `/alice-store`, `/alice-store/featured` | Seller pubkey + app proof |
+
+**Seller-owned routes.** Sellers purchase a vanity URL (e.g., `alice-store`) via the existing Lightning zap mechanism. They own the entire sub-path space underneath it (`/alice-store/`, `/alice-store/featured`, `/alice-store/clearance`). Sub-pages are page-definition events published by the seller, referencing their vanity URL as a namespace.
+
+**App-signed proof for interoperability.** The existing vanity registry (kind 30000, `d=vanity-urls`) is currently server-side only. For interoperability and data resilience, the app should sign a proof event that a vanity URL has been assigned to a specific pubkey for a specific purpose. This proof event lives on relays and can be verified by any client — not just the Plebeian Market server. This means:
+
+- The registry event (kind 30000) is already app-signed and published to relays. This is the existing behavior.
+- The extension: the registry event should be extended (or a companion event introduced) to record the **routing target type** — i.e., "this vanity URL resolves to a page-definition event (kind `<TBD>`) with `d` tag `electronics-landing`" rather than only "resolves to pubkey X's profile."
+
+--- ADR-0006 Module 4 publishing gate (who may author) ---
+| -------- | ---------------------- | ------------------------------------------- | --------------------------------------- |
+| Identity | Who can publish        | Role check (admin / merchant / whitelisted) | kind 30000 role lists                   |
+| Rate     | How often              | Per-pubkey cooldown                         | None yet (sub-ADR)                      |
+| Cost     | What proof is required | Lightning payment (NIP-57 zap receipt)      | `ZapPurchaseManager` + `zapPurchase.ts` |
+
+**Alternatives to payment.** The cost gate can be satisfied by:
+
+- Lightning payment (default — reuses existing zap infrastructure)
+- Proof-of-work (NIP-13) — for environments without Lightning
+
+--- notes/DECISION-home-composition.md §7 (the blocker) ---
+## 7. Blocker found while writing the test plan — the home is not authorable
+
+Verified 2026-11-13, on master:
+
+- The **home** reads the **app key's** kind-30024 document with **`d = 'home'`**
+  (`platform/web/routes/index.tsx:57` — `useStorefrontAddressPage(APP_PUBKEY, 'home')`).
+- The **editor** (`StorefrontBuilder`, mounted at
+  `platform/web/routes/_dashboard-layout/dashboard/account/profile-page.tsx`) publishes kind-30024
+  with **`d = 'storefront-page'`** (`platform/web/storefront/storefrontPublish.ts:60`) as the
+  **logged-in user**.
+
+**The addresses do not meet, and the signer is not the app key.** So publishing a page in the CMS
+editor can never change the home, which is why the home still renders only its inline fallback — a
+`Search` block, one `ProductRow` holding **a single hardcoded d-tag**, and three category links.
+
+**Consequence for Option C:** the new live blocks are useless for the home until the home can
+actually be authored. Fix one of:
+
+- let the editor target the app key's `home` address (an admin-scoped editor, or an explicit address
+  selector), or
+- change the home's addressing to `storefront-page` so the existing editor reaches it (simpler, but
+  collides with per-user profile pages using the same address), or
+- publish the home document at the event level as the app key (a stopgap for testing, not a fix —
+  the app key is not exposed in the UI).
+
+**Not decided here.** It is a prerequisite for "author a real home document", which is an owner
+editorial call, so it is flagged rather than chosen.
+
+**Also relevant:** `/home` resolves through the `/$vanityName` route to `StorefrontAddressPage`, so
+the app key's `home` address can be *inspected* directly even while nothing can write it.
+
+================================================================
+## 11. NEGATIVE SEARCH: does ANY document specify a default-route flag?
+================================================================
+docs/ops/relay-pruning.md:153:Deleting `/var/lib/market-relay/search` is not allowed by default.
+
+--- does `/` ever consult the vanity registry? ---
+109:					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+132:			onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+
+================================================================
+## 12. COUNTS QUOTED IN THE REPORT
+================================================================
+route files in platform/web/routes: 19
+files matching shouldRenderStorefrontPage (non-test): 5
+storefront block types: 9
+VanityEntry fields: 3
+
+================================================================
+## 13. THE ACL RULING (runs/2026-11-13-admin-routes/ruling-acl.md) — what backs each tier in CODE
+================================================================
+--- tier 1 ADMIN: role predicate + the validator allowing admins a general write ---
+export function isAdmin(adminSettings: AdminSettings<unknown> | null | undefined, pubkey: string): boolean {
+	if (!adminSettings || !pubkey) return false
+	return adminSettings.admins.includes(pubkey)
+}
+--- tier 2 EDITOR: role predicate, and the ONLY event class an editor may write (kind 10000) ---
+export function isEditor(editorSettings: EditorSettings<unknown> | null | undefined, pubkey: string): boolean {
+	if (!editorSettings || !pubkey) return false
+	return editorSettings.editors.includes(pubkey)
+}
+	private validateBlacklistEvent(event: NostrEvent): EventValidationResult {
+		if (!this.adminManager.isAdmin(event.pubkey) && !this.editorManager.isEditor(event.pubkey)) {
+			return {
+				isValid: false,
+				reason: 'Blacklist event rejected: not from admin or editor',
+			}
+		}
+
+		return { isValid: true }
+	}
+--- is there ANY per-path editor grant in the codebase? ---
+platform/web/auctions/auctionPublishBid.ts:87:// `AuctionPathGrantResponse`, `openAuctionPathOracleClient`,
+platform/web/auctions/auctionPublishBid.ts:88:// `requestAuctionPathGrant` — all removed. They belonged to the v1
+platform/web/routes/_dashboard-layout.tsx:138:	// Back control comes from the model's rules, not a per-path table.
+platform/server/buildServer.ts:59:	// Bun's `serve` route record carries per-path generic typing
+sdk/commerce/auctions/auctionP2pk.test.ts:10:	verifyAuctionPathGrant,
+sdk/commerce/auctions/auctionP2pk.test.ts:54:	test('verifyAuctionPathGrant accepts valid grants and rejects tampered ones', () => {
+sdk/commerce/auctions/auctionP2pk.test.ts:64:			verifyAuctionPathGrant({
+sdk/commerce/auctions/auctionP2pk.test.ts:75:			verifyAuctionPathGrant({
+sdk/commerce/auctions/auctionP2pk.test.ts:86:			verifyAuctionPathGrant({
+sdk/commerce/auctions/auctionP2pk.test.ts:98:			verifyAuctionPathGrant({
+sdk/commerce/auctions/auctionP2pk.ts:96:export interface AuctionPathGrantVerificationInput {
+sdk/commerce/auctions/auctionP2pk.ts:111:export const verifyAuctionPathGrant = (input: AuctionPathGrantVerificationInput): void => {
+sdk/commerce/payments/wallet/auctionFunds.ts:487:	 * verifyAuctionPathGrant) that this pubkey was derived from the
+ui/nav/model.ts:9: * It replaces five hardcoded per-path tables that used to live in
+--- tier 3 PREMIUM/RESERVATION: the purchase mechanism that exists (zap -> registry entry) ---
+67:				zapLabel: 'vanity-register',
+68:				registryEventKind: 30000,
+69:				registryDTag: 'vanity-urls',
+--- reservations are user-initiated today: the dashboard purchase entry point ---
+18:import { LightningPaymentProcessor } from '@platform/web/payments/LightningPaymentProcessor'
+21:import { purchaseVanityForPubkey } from '@platform/web/payments/zapPurchase'
+184:			const { pr, invoiceId } = await purchaseVanityForPubkey(
+383:								<LightningPaymentProcessor
+--- is there ANY DNS-domain reservation anywhere? ---
+(NO MATCH: no DNS/domain reservation concept in code)
+--- the ruling itself ---
+# Ruling — the ACL for routes and pages (2026-11-13)
+
+Owner's words, verbatim, because this is the answer to the run's trust question and it binds the
+design:
+
+> "the 'ACL' between admins, editors and regular (premium/paid) users, will be such that admins have
+> full control over the app and its pages, editors will be able to create and publish pages to new
+> places and will be granted specific access to specific paths, and then premium/paid users will be
+> able to reserve a path/domain for themselves as part of their store."
+
+## The three tiers, decomposed
+
+1. **Admin — full control over the app and its pages.** Not merely "can edit every route": controls
+   the app and its pages, i.e. can create, modify, remove and reassign *any* route, including one
+   held by an editor or reserved by a paying user. Also the tier that can author the **default**
+   route.
+2. **Editor — can create and publish pages to new places, and is granted specific access to specific
+   paths.** Two distinct powers, and the second is the interesting one: creation is broad, but
+   *access* is **per-path and explicitly granted**. So authority is not purely role-based — a route
+   entry carries who may touch it, and an editor's grant names paths rather than conferring a blanket
+   right.
+3. **Premium/paid — may reserve a path/domain for themselves as part of their store.** A reservation,
+   not an assignment: self-interested (their own store), **time-bounded by implication of payment**,
+   and attached to a user rather than granted by an admin.
+
+## What this resolves immediately
+
+- **The expiry problem has an answer.** The existing registry's `validUntil` is exactly the shape of a
+  paid reservation's term. So: **admin and editor routes are permanent; a reservation is a term that
+  lapses** (with renewal). The existing field is not an obstacle to be worked around — it is the
+  reservation's own semantics. *(Axis 02 was asked to enumerate expiry options; this is the ruling.)*
+- **The trust question stops being open.** The registry is authored by the app key today; the tiers
+  above say *who is allowed to cause a change*, not yet *who signs it*. That remains a design choice
+  and is the next thing to settle (below).
+
+## What it leaves open — settle in the proposal, each with a lean
+
+1. **Who signs a self-service reservation.** A paying user reserving a path is not the app key, and
+   the registry is app-key authored. Options: the app key signs on the user's behalf after checking
+   entitlement (simple, but the app key becomes an authority that can rewrite any entry); or a
+   separate user-authored reservation event the app key *acknowledges* (more honest, more moving
+   parts). State the lean and what each gives up.
+2. **Is a reservation self-service or admin-approved?** "Will be able to" reads as self-service, but
+   nothing says the grant is automatic. Say which, and whether an admin can veto or reclaim.
+3. **What proves entitlement.** Whatever decides "this user has paid for this path" — and what
+   happens when that evidence is unavailable. Fails closed or fails open is a decision, not a default.
+4. **Conflict precedence.** An admin route, an editor grant and a reservation can name the same path.
+   Which wins, and is the loser told? Admin-full-control implies admin wins; the other two need a rule.
+5. **Lapse and renewal.** When a reservation expires: does the name free immediately, is there a grace
+   window, and can someone else take it in the gap? A paying user losing a storefront path with no
+   notice is the failure mode to design against.
+6. **What "path/domain" means.** A route name in this app (`/home`), or an actual DNS domain? The
+   example given is a path. Do not assume the wider reading; state the narrower one used and flag it.
+7. **Naming rules and collisions.** Case (the existing registry lowercases names), permitted
+   characters, reserved words, and collision with real routes and profile names.
+
+## The negative paths the acceptance must now cover (added to axis 03)
+
+- an editor attempting to touch a path **not** in their grant → refused, and the refusal is a visible
+  state, not a silent no-op;
+- a premium user attempting a path already held by an admin or editor route → refused, with the
+  reason stated;
+- a reservation used after its `validUntil` → no longer resolves, and the holder is told *before* it
+  lapses;
+- an admin removing another tier's route → takes effect, and the affected holder is informed;
+- the **default** route occupied by a reservation that lapses → `/` must not blank out; it falls back.
+
+### END
