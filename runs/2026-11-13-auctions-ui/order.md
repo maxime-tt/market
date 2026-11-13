@@ -53,6 +53,12 @@ dependency order:
 - Specimen: `/home/admin_maxime/work/market` at `f6e681d92` (master), plus **stage 1 already done** on
   `d7s2/auctions-1440-kinds` @ `0a65b4ce6` (the kind map + anchor parsers). Stage 2 builds on stage 1 —
   branch from it, do not re-do it.
+- **The integration target is `unite/1420-all` — never `master`.** Same evidence as the sibling order:
+  the repo's own notes name it the integration branch, every `d7s2/*` branch is cut off it, PR #1420 is
+  the union PR, and the union tip is `d4aba3db6` on fork, nostr and origin. Measured: `d7s2/auctions-1440-kinds`
+  = union + 23, `d7s2/auctions-read-adapter` = union + 24, `d7s2/home-test-dep-fix` = union + 31 — **all
+  of them sit on top of the union tip**, so nothing needs rebasing; only the merge target was ever
+  wrong. (`master` is union + 33, all run/docs commits.)
 - **Do not read or write** `/home/admin_maxime/work/wt-e2e` (serves a live instance),
   `/home/admin_maxime/work/auctions-simplify`, or
   `/home/admin_maxime/work/compare/plebeian-arena-auctions` (another session's, mid-rebase).

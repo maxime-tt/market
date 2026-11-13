@@ -34,6 +34,16 @@ precisely enough to execute without re-deriving anything.
 - Specimen: `/home/admin_maxime/work/market`, branch `master`, pinned at **`2326938b3`**
   (chosen because it carries the app's routes, storefront and CMS code, plus the decision documents
   this run answers).
+- **The integration target is `unite/1420-all` — never `master`.** The repo's own notes name it the
+  integration branch (`notes/MERGE-NDK-STRUCTURAL.md:4` "Integration worktree: `wt-union-1420` (branch
+  `unite/1420-all`, clean)"; `notes/HANDOVER-CMS-INTEGRATION.md:6-7` "Base: the current `unite/1420-all`
+  tip … create `wt-cms` — branch `d7s2/cms` off `unite/1420-all`"), every `d7s2/*` feature branch is cut
+  off it, and `notes/POST-D7-BACKLOG.md:51` records "PR #1420 has never seen D7" — PR #1420 is the union
+  PR. Measured: the union tip is `d4aba3db6` on fork, nostr **and** origin (identical), `wt-union-1420`
+  already holds it clean, and every line of work here sits **on top of** that tip (`master` = union + 33,
+  all of them run/docs commits; union-ahead-of-it = 0). So merging into `master` would never reach the
+  PR. *(The PR's own head/base could not be queried — `gh` is unauthenticated in this checkout — so the
+  identification rests on the repo's notes, the branch name and the measured ancestry.)*
 - **Do not read or write** `/home/admin_maxime/work/wt-e2e` (serves a live instance),
   `/home/admin_maxime/work/auctions-simplify`, or `/home/admin_maxime/work/compare/plebeian-arena-auctions`
   (another session's, mid-rebase).

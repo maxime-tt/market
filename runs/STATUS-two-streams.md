@@ -79,6 +79,23 @@ means a route name or real DNS; naming rules. Plus five negative paths the accep
   stream-first read doctrine; `ui/AGENTS.md:18-28`, the enforced hard boundary via
   `ui/boundary.test.ts`) to justify the placement it chose.
 
+## The integration target — corrected
+
+**`unite/1420-all`, never `master`.** The repo's own notes name it the integration branch
+(`notes/MERGE-NDK-STRUCTURAL.md:4`, `notes/HANDOVER-CMS-INTEGRATION.md:6-7`), every `d7s2/*` feature
+branch is cut off it, and `notes/POST-D7-BACKLOG.md:51` records "PR #1420 has never seen D7" — PR #1420
+is the union PR. The `wt-union-1420` worktree already holds `unite/1420-all` clean, and the tip is
+`d4aba3db6` on fork, nostr and origin alike.
+
+Measured ancestry, which is the reassuring part: **every line of this work sits on top of that tip** —
+`d7s2/auctions-1440-kinds` = union + 23, `d7s2/auctions-read-adapter` = union + 24,
+`d7s2/home-test-dep-fix` = union + 31, `master` = union + 33 (all run/docs commits). Union-ahead-of-any-
+of-them = 0. **So nothing needs rebasing; only the merge target was ever wrong.** Merging into `master`
+would never have reached the PR, because `master` is itself just a line sitting on top of the union.
+
+`gh` is unauthenticated in this checkout, so the PR's own head and base could not be queried; the
+identification rests on the repo's notes, the branch name and the measured ancestry.
+
 ## Boundary between the two
 
 - Item 4 of B's list — the home's addressing gap — **belongs to A**, and is in flight there.
