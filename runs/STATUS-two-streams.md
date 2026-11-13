@@ -96,6 +96,14 @@ would never have reached the PR, because `master` is itself just a line sitting 
 `gh` is unauthenticated in this checkout, so the PR's own head and base could not be queried; the
 identification rests on the repo's notes, the branch name and the measured ancestry.
 
+## The merge plan — decided
+
+**Option 1: merge the whole chain into `unite/1420-all` once the parts are ready and tested** (owner,
+2026-11-13). Not piecemeal, and never into `master`. So the PR receives one coherent auctions increment
+rather than three partial ones. Sequenced: stage 1 (kind map) → stage 2 (read adapter, verified) →
+item 2 (the auction block) → item 3 (the auction surfaces on `1440`) → then the chain merges to the
+union and the PR picks it up. Nothing merges until the parts are tested; nothing deploys.
+
 ## Boundary between the two
 
 - Item 4 of B's list — the home's addressing gap — **belongs to A**, and is in flight there.
