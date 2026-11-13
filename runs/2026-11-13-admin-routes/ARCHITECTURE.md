@@ -3,7 +3,12 @@
 **Run:** `runs/2026-11-13-admin-routes` (run A) · **Role:** consolidator, one implementation plan out of four
 candidate designs plus six owner rulings · **Base:** `/home/admin_maxime/work/market`, `master`, HEAD
 `3a07e7067` · **State:** read-only. No source change, no branch, no build, no deploy. This file and
-`IMPLEMENTATION-PLAN.md` (plus `report-consolidation.md`) are the only things written.
+`IMPLEMENTATION-PLAN.md` (plus `report-consolidation.md` and `report-revision-2.md`) are the only things written.
+
+**REVISION 2 (2026-11-13, same day).** Three new owner rulings arrived after this document was first written —
+`ruling-local-pages-acl-and-legacy-routes.md` — and they invalidate specific passages below. §REVISION 2 at the
+top lists every one of them with the ruling that killed it, then the affected sections are rewritten in place.
+Where this file and that ruling disagree, **the ruling wins**; nothing below is presented as a ruling.
 
 **What this document is.** The owner accepted a set of architecture rulings. They supersede parts of the four
 candidate designs (`designs/A-one-writer-per-event.md`, `designs/B-server-authoritative.md`,
@@ -31,19 +36,91 @@ reports **401** errors, and **241 of them are in files that are not the app** �
 `order.md:132-134` warns about, and the reason `proposal-v2.md:619-621` refuses to carry a number between branches.
 **205 is therefore `[U]` for me**; the plan requires a per-branch re-baseline and asserts on the sorted error
 **list**, not the count. I did not run the test suites (read-only base, no branch). I did not reach a live relay,
-so every claim about relay indexing (`#t` on kind 30024, an `ids`-only read) is `[U]`, and the plan phrases its
-evidence commands so that a relay-dependent rung is **never** on the site's critical path.
+so the relay facts collected for the first revision (`#t` on kind 30024, an `ids`-only read) are `[U]`. **Since
+REVISION 2 that does not matter**: served pages come from local storage, so no relay fact is on the site's
+critical path (ruling 1, §5.3, §5.5).
+
+---
+
+## REVISION 2 — what changed and why
+
+**Authority:** `ruling-local-pages-acl-and-legacy-routes.md` (owner, 2026-11-13) answers the three raises in
+`report-consolidation.md` §5. It post-dates every ruling this document was built on, so where the two disagree,
+**this file is rewritten to match it**. Three of its clauses **reverse** text written below; one **closes** the
+document's only architectural open question.
+
+### R2.1 Every invalidated passage, with the ruling that killed it
+
+| # | passage as originally written | invalidated by | now reads as |
+|---|---|---|---|
+| 1 | Header, "What I could not measure": every relay-indexing claim is `[U]`, and "the plan phrases its evidence commands so that a relay-dependent rung is **never** on the site's critical path" | ruling 1 (local pages) | no rung is relay-dependent **at all**. A bound page is served from local storage, so the unmeasured relay facts stop gating anything (§5.3, §5.4) |
+| 2 | §1, the one-sentence architecture: "serves the resulting page or a 404" — silent about *where the page comes from* | ruling 1 | "serves the resulting page **from local storage** or a 404" |
+| 3 | §2, the rule "No route resolution, and no path-authorized decision, may perform a network call **to decide what this instance serves**" | ruling 1 | the prohibition **widens**: no network call to **serve a bound page** either. SEO and instant response are the driver, so this is a requirement, not an optimisation |
+| 4 | §3.1 nouns: "PAGE … A page **lives on relays**, authored by its author" | ruling 1 | a **PAGE STORE** becomes the fourth noun; a page is still authored by its author, but the **served copy is local** |
+| 5 | §3.3: "A relay outage therefore degrades a **page**, never a **route**" | ruling 1 | a relay outage degrades **nothing**. A page that is stored is served; only *new publishes* can fail |
+| 6 | §4.3: "**Page content.** No page bodies. **Pages stay on relays**, authored by their author." | ruling 1 | page bodies live in the page store. The routing file still holds no content, but for a new reason: it holds *meaning*, the store holds *content* |
+| 7 | §5.1: "Compiled-in pages … The ladder **does not apply** to them: they are rungs **above** the ladder, matched by the router" | ruling 3 (legacy re-pointing) | a compiled-in path **is** a rung-1 target. The routing tree may bind it (§5.2, §5.4) |
+| 8 | §5.2 in full — "`/dashboard` … stands the application surface … **A binding on `dashboard` is refused by the validator** … If the owner wants the dashboard itself reassignable, that is a different, larger change … **It is not in this plan**" | ruling 3 | **REVERSED.** `/dashboard` is re-pointable **now**, by the routing table, **without** modularising the page first |
+| 9 | §5.3 series membership read as a relay query `{kinds:[30024], '#t':[…]}` at request time, and its `[U]` gate on `#t` indexing | ruling 1 | membership is resolved from the **local series index** maintained at ingest; the relay is not consulted |
+| 10 | §5.4: "**Compiled-in route matches first.** … **This is settled and non-negotiable**" | ruling 3 | a **binding on a compiled-in path wins**; the compiled-in route is the *default*, not the ceiling |
+| 11 | §7 heading "The ACL — **three tiers**, enforced server-side", and the `premium / paid` row inside the tier table | ruling 2 (pubkey ACL) | **four levels**: `app` → `admin/owner` → `editor` → no ACL. `premium/paid` is **not a tier**; it is a *lease* — a path right, not authority |
+| 12 | §7.1 `may(actor, …)` — no `app` branch, and `actor` itself unestablished | ruling 2 | a five-branch function with `app` at the top; `actor` **is** the signing pubkey. **No NIP-98** |
+| 13 | §8.3 table: COMPILED_IN — "a binding on one is **refused** and the refusal is explained as 'app-owned'"; consequence 2 — "the file becomes invalid on load and **the site refuses to boot**" | ruling 3 | **ALLOW with a warning.** A collision is a warning at load and `warning: 'compiled-in-path'` on the write. Never a boot refusal |
+| 14 | §9.2, row on `designs/B-server-authoritative.md:357-382` — NIP-98 "**NOT ADOPTED, and not superseded by a ruling** … **§10 flags this as an open decision**" | ruling 2 | NIP-98 is **unnecessary**. The credential is a signed Nostr event; the tier is a pubkey lookup |
+| 15 | §9.3, row on `designs/C-ownership-domain.md:248-265` — "The actor is settled in §10 as **an open decision**" | ruling 2 | the actor is **settled** (§7.1) |
+| 16 | §9.5, row on `designs/COMPARISON.md:161` X3 — "adopt NIP-98 … **not settled by any ruling**" | ruling 2 | settled, and settled **against** NIP-98 |
+| 17 | §10 **O-1 "Who does the server think you are? (the ACL's actor)"** in full, including the NIP-98 cost comparison | ruling 2 | **CLOSED** (§7.1). Kept in place as history, marked CLOSED |
+| 18 | §12 Q1 — "Is `auctions` supposed to be reassignable?" | ruling 3 | **answered: yes.** Compiled-in paths are re-pointable and `auctions` is not a special case |
+| 19 | §12 Q2 — "Does the owner want `/dashboard` itself reroutable, or a path of his choosing?" | ruling 3 | **answered: the former.** It was the example all along, not a misreading |
+| 20 | §12 Q3 — "Does `#t` work on kind 30024 on this deployment's relay?" | ruling 1 | **demoted, not answered**: R3 no longer depends on it (§5.3) |
+| 21 | §13 diagram — `compiled-in routes (the app's own)` drawn **above** the routing file, and `PAGE … fetched AFTER routing … relay may be down` | rulings 1 + 3 | the file is consulted **before** the compiled-in tree; the page box becomes the local store |
+| 22 | §7.1 "Roles are read from the existing managers" — correct, but the list it enumerates is the three-tier one | ruling 2 | same two managers, four levels. `app` is the app pubkey, not a third set |
+| 23 | §2 rule 3, and §11 "**Nothing in increments 1–8 publishes to Nostr**" — read as "Nostr is not involved anywhere" | ruling 1 | still true, but the sharper statement is: Nostr is **not on the read path**, and the page store's ingest is local-first. Whether a publish is also mirrored to a public relay is an implementation choice (§5.5) |
+
+### R2.2 What the three rulings did **not** change
+
+Listed deliberately, so this revision is not read as a rewrite:
+
+- **The routing table is still a single file** (`ruling-simple-routing-file.md:5-18`), with no fallback and no
+  degraded mode. A page store is not a second routing table: the file holds **what a path means**, the store
+  holds **content**.
+- **Two binding kinds, never one row with an optional term** (§3.2), and **lease expiry → 404**.
+- **Leases are top-level only and carry their subpaths** (§3.4). The one surviving precedence question —
+  admin binding vs a leaseholder's subpath (O-2) — is still open and still not needed by this plan.
+- **The ladder is still three rungs**, and a lapsed lease still **stops** at rung 1 rather than falling through.
+- **Nothing publishes to Nostr on the read path**, and the signed lease-confirmation ledger stays deferred (§11).
+
+### R2.3 The thing this revision adds that no ruling specified
+
+A **writer** for the page store, with an allowlist. Ruling 1 requires that any ingest path be
+**write-restricted** (specific pubkeys, specific kinds) and names the relay's out-of-memory errors as the symptom
+of the model being rejected. Measured, the relay this app talks to has **no author allowlist at all**:
+
+```
+$ sed -n '84,90p' deploy-simple/relay/cmd/market-relay/main.go
+relay.OnEvent = policies.SeqEvent(
+        policies.ValidateKind,
+        policies.RejectEventsWithBase64Media,
+        policies.RejectUnprefixedNostrReferences,
+)
+relay.OnRequest = policies.SeqRequest(policies.NoComplexFilters)
+```
+
+Kind-and-shape validation only — any pubkey may write (`main.go:84-87`) **[S]**. So the write restriction is
+**new code**, and it is the reason increment 1 changes shape (`IMPLEMENTATION-PLAN.md` §1).
 
 ---
 
 ## 1. The one-sentence architecture
 
 **The instance is its own authority: it holds a single server-side routing file, resolves every request against
-that file with no network call, serves the resulting page or a 404, and may additionally publish signed
-confirmations to Nostr as a bonus that nothing in the route path depends on.**
+that file with no network call, serves the resulting page *from its own local page store* or a 404, and may
+additionally publish signed confirmations to Nostr as a bonus that nothing in the route path depends on.**
 
 That sentence is the whole thing. Everything below is its consequence, and everything in the four designs that
-contradicts it is superseded.
+contradicts it is superseded. "From its own local page store" is REVISION 2: a page at a set route is
+**never** fetched from a relay to answer a request (§5.5), because SEO, link previews and instant responses are
+the stated driver, not an optimisation.
 
 ---
 
@@ -77,8 +154,14 @@ Second instance of the same class, the one the review found and the owner's ruli
 
 1. No route resolution, and no path-authorized decision, may perform a network call **to decide what this
    instance serves**.
-2. The routing table is the server's own state, loaded from disk, and served by the server.
-3. Nostr is a **publication target and an audit mirror**, never an input to routing.
+2. **No request for a bound page may perform a network call to serve it.** REVISION 2, ruling 1: the page is
+   read from local storage, so a relay outage cannot produce a "page unavailable" state. This is the SEO,
+   preview and instant-response requirement, and it is why the page store is increment 1's core rather than an
+   optimisation.
+3. The routing table is the server's own state, loaded from disk, and served by the server.
+4. Nostr is a **publication target and an audit mirror**, never an input to routing **and never an input to
+   serving**. Its only remaining role on the write side is as a possible *transport* for a signed event the
+   server then stores (§5.5).
 
 The consequence the owner accepted with his eyes open (`ruling-simple-routing-file.md:12-16`): **an unreadable
 table means the site is broken.** There is no degraded mode, no snapshot fallback, no stale cache story. The
@@ -89,18 +172,23 @@ superseding everything that proposed otherwise.
 
 ## 3. The model
 
-### 3.1 Three nouns, and nothing else
+### 3.1 Four nouns, and nothing else
 
 ```
 BINDING     a path resolves to a target. Two kinds, never one row with an optional term (§3.2).
-PAGE        a kind-30024 addressable event, authored by the page's author, `d` = the page's identity.
+PAGE        a page document, authored by the page's author. Kind 30024 on the wire, `d` = its identity.
+PAGE STORE  the instance's LOCAL copy of the pages it serves: the document, plus what is needed to
+            answer a request without a relay (§5.5). Storage format is the implementer's choice —
+            ruling 1 says so explicitly ("a custom database in a more efficient way, I don't mind").
 REFERENCE   what a page block points at: a coordinate, or a list name (reserved, not built — §6).
 ```
 
 There is no separate "route table event", no "claim event", no "default event", no "manifest", no sharded
-projection, no event-store, no database. A binding lives in the routing file (§4). A page lives on relays,
-authored by its author, because the page is the author's speech and the app does not own it. The routing file
-holds **no page content** — only what the instance has decided a path means.
+projection, no event-store, no database for *routing*. A binding lives in the routing file (§4). A page is still
+the author's speech and the app still does not own it — but the **served copy** is local (REVISION 2, ruling 1),
+because a round trip per request decides whether the page can be indexed, previewed, or answered instantly. The
+routing file holds **no page content** — only what the instance has decided a path means; the page store holds
+content and nothing about paths.
 
 ### 3.2 Two binding kinds — never one row with an optional expiry
 
@@ -124,8 +212,15 @@ Two behaviours that must **not** share a code path, per `ruling-resolution-and-s
 
 - **lease expired / lease terminated → 404.** Not the admin's previous binding, not the app-key page, not a
   fallback page. The space is gone.
-- **binding resolved, page not renderable → the page's own honest state** ("item unavailable"), **still HTTP
-  200** for the route. Routing succeeded; the content is missing. Different failure, different error.
+- **binding resolved, its target not renderable → the page's own honest state** ("item unavailable"), **still
+  HTTP 200** for the route. Routing succeeded; the content is missing. Different failure, different error.
+
+**REVISION 2 changes who can be in that second state.** A bound *page* can no longer become unrenderable at
+request time, because the store refuses an invalid page at **ingest** (`pageRender` must succeed before the
+write commits, `IMPLEMENTATION-PLAN.md` §1.5). So "item unavailable" survives only where the route's *target is
+not a page* — a prefix route whose page then looks up an object that has gone. That is a narrowing, not a
+relaxation: the pre-revision design accepted an unbounded set of request-time failures that the local store
+converts into a write-time refusal.
 
 ### 3.3 The resolution ladder — exactly three rungs
 
@@ -149,10 +244,12 @@ that fits. **No bare top-level catch-all (`/:id`)**: it competes with every prog
 
 **Why this ladder survives the thing that killed every candidate's version of it.** Every design made a *page
 read* a rung. `proposal-v2.md:269-275` makes "oldest page at this `d` wins" a resolution rule, which needs the
-relay to answer "what is at this path" — the anti-pattern. Under this ladder, the relay is only ever consulted
-*after* routing has already decided **which page** answers, i.e. given an `(author, d)` the server already knew.
-A relay outage therefore degrades a **page**, never a **route**. That is the difference between this ladder and
-`proposal-v2.md:235-257`.
+relay to answer "what is at this path" — the anti-pattern. Here, routing decides **which page** answers, from
+`(author, d)` the server already knew, and then the **local page store** supplies it. REVISION 2 sharpened this
+past the original text: it is not merely that the relay is consulted *after* routing — it is not consulted at
+all. A relay outage therefore degrades **nothing**: a stored page is served, and only *new publishes* can fail.
+That is the difference between this ladder and `proposal-v2.md:235-257`, and it is the difference between the
+pre-revision text and this one.
 
 ### 3.4 Leases are top-level paths only, and subpaths die with the parent
 
@@ -169,8 +266,9 @@ of the lease write path's path-shaped logic:
 ```
 can this lease be granted?
   name is a valid top-level path name (grammar §8.2)
-  AND name is not in the reserved set (§8.3)
-  AND name is not a real compiled-in segment (§8.3)
+  AND name is not in RESERVED \ COMPILED_IN (§8.3)       ← the URL space and un-handed-out names
+  AND name is not COMPILED_IN (§8.3)                     ← REVISION 2: a lease may not take a
+                                                            compiled-in path; admin/app may (§7.1)
   AND no live binding exists at `name` (admin or in-term lease)
   AND no live lease exists at any ANCESTOR of `name`   ← because the ancestor's lease carries `name`
 ```
@@ -275,8 +373,11 @@ property. One encoder/decoder pair, exhaustively switched.
 
 ### 4.3 What the file deliberately cannot express
 
-- **Page content.** No page bodies. Pages stay on relays, authored by their author.
-- **A binding on a reserved or compiled-in name** (§8.2–§8.3) — the validator refuses the whole file.
+- **Page content.** No page bodies. They live in the **page store** (§5.5), not in the routing file and — since
+  REVISION 2 — not on a relay either, as far as serving is concerned.
+- **A binding on a reserved name** (§8.2–§8.3) — the validator refuses the whole file.
+- **A binding on a compiled-in name** — **allowed, with a warning** (REVISION 2, ruling 3). See §8.3: what was a
+  refusal is now a warning, and the file loads.
 - **Two bindings on one path.** Refused by the validator.
 - **A lease on a subpath.** Refused by the validator.
 
@@ -340,7 +441,8 @@ exactly one writer: the server.
 Three kinds of programmed route exist, and names must be distinguishable:
 
 1. **Compiled-in pages** — the routes the React router already owns (`/dashboard`, `/auctions`, `/checkout`, …).
-   §8.1 lists them. The ladder does not apply to them: they are rungs *above* the ladder, matched by the router.
+   §8.1 lists them. **REVISION 2**: the ladder applies to them like any other path. A compiled-in page is what
+   rung 1 resolves to **when no binding exists**, and an admin binding on it supersedes it (§5.2, §8.3).
 2. **Compiled-in parameterised prefixes** — `/profile/:profileId`, `/products/:productId`, `/posts/:postId`,
    `/auctions/:auctionId`, `/collection/:collectionId` (`platform/web/routeTree.gen.ts` **[M]**, §8.1). These
    are already rung 2 and stay exactly as they are.
@@ -362,46 +464,71 @@ Three kinds of programmed route exist, and names must be distinguishable:
 | `/dashboard` also carries a **client-side admin gate** | `platform/web/app/useRootRedirects.ts:28` `isAdminRoute = pathname.startsWith('/dashboard/app-settings')` and `:40-42` navigates to `/dashboard` |
 | the layout owns its own **chrome and nav** | `platform/web/routes/_dashboard-layout.tsx:31` `createFileRoute('/_dashboard-layout')`, `:5` `DASHBOARD_NAV`, `:232` `<SidebarNav`; `ui/nav/model.ts:142` registers the vanity page in that nav |
 
-So rerouting `/dashboard` to "a new dashboard page" means one of two things, and **the ruling decides which**:
+**REVISION 2 — the ruling decides, and it reverses this section.** The text that stood here said a binding on
+`dashboard` is refused, and that making the dashboard reassignable was "a different, larger change … not in this
+plan". `ruling-local-pages-acl-and-legacy-routes.md:64-89` says the opposite in as many words:
 
-- **Not** "delete or shadow the compiled-in dashboard". The dashboard is an application surface (30 routes, a
-  layout, a sidebar, a nav model, an admin gate). No routing file can carry it, and the routing file does not
-  try.
-- **Yes**: a page at a path the admin chooses, with `/dashboard` still the application surface. **Is that
-  satisfying the owner?** It is what the ruling *can* mean without a rebuild: what the owner is asking for is
-  that the front-of-site surface stops being privileged and becomes a path. `/dashboard` is behind a login, so it
-  is the example, not the target.
+> "the compiled-in routes will have to be superceded by pages that are placed in the new routing system's
+> routing tree. I wouldn't CMS-rebuild all those pages but would still consider their contents modular … So short
+> answer: legacy routes will need to be superceded and re-pointed by the routing tree to the specific pages."
 
-**The one part of the example that is buildable exactly as asked, and the plan builds it: `/`.** `/` is a
-compiled-in route today (`platform/web/routes/index.tsx:29-40` `createFileRoute('/')`) that renders
-`useStorefrontAddressPage(APP_PUBKEY, 'home')` at `:57` and falls back to a hardcoded inline page at `:81-101`.
-After increment 3, `/` renders **the default binding's** page — authored by anyone, resolved from the file. The
-owner's `/dashboard` example becomes "any path including `/` renders what the table says", which is R4.
+So:
 
-**`/dashboard` specifically, after this architecture**: it stays the application surface. **A binding on
-`dashboard` is refused by the validator**, because `dashboard` is a compiled-in segment (§8.3). That is a
-deliberate refusal, not an oversight, and the management surface must say so — "this name is the app's own page;
-it cannot be reassigned by the routing table" — rather than failing silently. **If the owner wants the dashboard
-itself reassignable, that is a different, larger change**: the 30 dashboard files would have to move behind a
-binding, the layout re-mounted, and the nav model re-derived. **It is not in this plan, and nothing in this plan
-depends on it.**
+- **A binding on `dashboard` is accepted**, not refused. The validator warns (`compiled-in-path`) and the file
+  loads (§8.3).
+- **Routing supersedes the compiled-in route.** Rung 1 is consulted for every path including the compiled-in
+  ones; a live binding is served, and the compiled route is what answers *only when no binding exists* (§5.4).
+- **One binding per path, and the binding wins.** The legacy URL is **not** served in parallel — otherwise the
+  same URL has two meanings, which is the class of bug this run exists to delete. This is the lean stated in
+  `ruling-local-pages-acl-and-legacy-routes.md:118-121`; it is a lean, so it is labelled one, but the alternative
+  is incoherent and no increment is built for it.
+- **No modularisation is a precondition.** Re-pointing a legacy path is a **routing** act and it lands first.
+  Turning the page's *contents* modular — "replacing a navigation bar or otherwise for a dashboard section" —
+  is the **next** step by the ruling's own sequencing, and the plan must be able to re-point without it.
+
+**What this does *not* require, and the one thing it does.** It does **not** require touching the 31 files under
+`platform/web/routes/_dashboard-layout/` (measured, §5.2 table), moving the layout, or re-deriving
+`ui/nav/model.ts`. The page is served **instead of** the compiled tree, at the HTTP layer. The one real piece of
+work is the client seam: the SPA bundle still boots at that URL and TanStack's generated route tree still
+contains `path: '/dashboard'` (`platform/web/routeTree.gen.ts:725` **[M]**), so on hydration the compiled route
+would mount over the served page. The served HTML must therefore carry the decision — the same
+`#__AR_PAGE__` payload §5.5 defines — and `platform/web/routes/__root.tsx:25-31` must render that payload in
+place of `<Outlet/>` when it is present. That is **one guard**, not a rebuild, and it is why re-pointing does not
+depend on the modular-contents step.
+
+**The direction of travel, recorded so the plan does not build a monolith.** The ruling wants these pages to
+become "modularized and component-based pages that serve as 'sub-apps' with their sub-paths (browse experience,
+seller dashboard, buyer/orders dashboard, and more…)". That is the step *after* routing, and it is why §3.4's
+"leases are top-level only" does not constrain it: **programmed routes may be arbitrarily deep; only *leases* are
+restricted to top level** (`ruling-local-pages-acl-and-legacy-routes.md:115-117`).
+
+**`/` remains the case that is buildable with zero new client seam**, and still the cleanest demonstration:
+`/` is a compiled-in route today (`platform/web/routes/index.tsx:29`) that renders `useStorefrontAddressPage`
+for the app key's `home` page and falls back to an inline composition (`:81-101`). After increment 3, `/` renders
+**the default binding's** page, from the page store. R4 is unchanged; what changed is that `/` is no longer the
+*only* path where the table beats the router.
 
 ### 5.3 R3 — the series path, and its honest limit
 
 `/featured` is a **programmed** path whose target is `{ type: 'series', series: 'featured' }`. Routing therefore
-resolves `/featured` with no network call; the **series membership** is a page-level fact.
+resolves `/featured` with no network call; the **series membership** is a fact the page store already holds.
 
 - **Membership is declared on the page**: `["t", "featured"]` (single-letter tag; the repo's filter type already
-  supports `#t`, `sdk/core/event-store/filter.ts:10-11` **[S]**).
+  supports `#t`, `sdk/core/event-store/filter.ts:10` **[S]**) — and it is recorded in the **local series index**
+  at ingest (`IMPLEMENTATION-PLAN.md` §1.5). REVISION 2: the request-time query is gone. `ruling 1` forbids the
+  round trip, and it also makes R3 *faster and more reliable* than the pre-revision design, which was gated on an
+  unmeasured relay property.
 - **Ordering**: newest by `created_at`, ties broken by lexicographically lowest `id` — the repo's existing,
   already-tested rule (`sdk/core/event-store/mergeRules.ts:24` **[S]**, `selectReplaceable` at
-  `platform/web/storefront/storefrontQuery.ts:44`, applied at `:97`).
-- **Author-scoped**: the query is `{ kinds: [30024], '#t': ['featured'], authors: [<series owner>] }`. Without
-  the `authors` filter, any user publishing a page tagged `t=featured` becomes `/featured` — a name takeover by
-  hashtag. **Who the series owner is** is part of the series binding (`target.author`), not inferred.
-- **When the newest member is unusable** (switched off, unparseable, zero blocks): walk the window to the next
+  `platform/web/storefront/storefrontQuery.ts:44`, applied at `:97`). Unchanged; the same comparator runs over
+  the local index.
+- **Author-scoped**: the index entry is keyed `(seriesKey, author)`. Without the author dimension, any user
+  publishing a page tagged `t=featured` becomes `/featured` — a name takeover by hashtag. **Who the series owner
+  is** is part of the series binding (`target.author`), not inferred.
+- **When the newest member is unusable** (switched off, unparseable, zero blocks): walk the index to the next
   newest usable member. `shouldRenderStorefrontPage`
-  (`platform/web/storefront/storefrontQuery.ts:150-154`) already states the predicate.
+  (`platform/web/storefront/storefrontQuery.ts:150-154`) already states the predicate — and since a stored page
+  is validated at ingest, "unparseable" can only mean a page stored by an older build.
 
 **The honest limit** (`designs/C-ownership-domain.md:676-680` is right about this and the ruling does not
 overturn it): "newest" is an author-asserted timestamp, so a backdated page could win a series. Mitigation is
@@ -409,33 +536,153 @@ overturn it): "newest" is an author-asserted timestamp, so a backdated page coul
 backdating is a self-attack by the only person who can publish into the series. Recorded as **accept**, not
 solved.
 
-**`[U]`**: whether this deployment's relay indexes `#t` on kind 30024. `#t` is used in production for other kinds
-(`sdk/commerce/discovery/productRead.ts:28`) but I could not reach a relay. The plan's increment for R3 is
-therefore gated on **one live measurement against the instance's own relay**, and if it fails the fallback is the
-server-side series index the routing file could grow — **deliberately not designed here**, since designing it now
-would be designing for an unmeasured failure.
+**The `[U]` that used to sit here is retired, not answered.** Whether this deployment's relay indexes `#t` on
+kind 30024 no longer matters to R3, because the request never reaches a relay: the series index is built when a
+page is ingested (`IMPLEMENTATION-PLAN.md` §1.5). The measurement would now only matter for a *backfill* of pages
+published before this increment — and a backfill is a one-off migration script, not a resolution path. Recorded
+so nobody re-opens the gate.
 
 ### 5.4 Where the routing decision crosses the boundary
 
 This is the piece every candidate fumbled, and it is worth stating plainly because it decides the thing they
 fought over.
 
-- **Compiled-in route matches first.** `/dashboard` → the app's dashboard. `/auctions` → the app's auctions.
-  These never consult the routing file. **This is settled and non-negotiable**: the router owns its own paths
-  (making it the source of truth for a server that cannot see it is exactly the "server cannot derive the router
-  table" hole `review-adversarial.json` F7 case 1 records).
-- **`/$vanityName` is rung 1.** With `proposal-v2.md:235-257`'s "trusted authors, oldest wins" replaced by the
-  routing file: `/x` consults the file for `x`. A binding → its target. **No binding → 404** (rung 3), *not* "an
-  app-key page at `d=x`" and *not* "the oldest page anybody published at `d=x`".
+- **The routing file is consulted first, for every path.** **REVISION 2, ruling 3**: this is the reversal. A live
+  binding on `/dashboard` is served, and the compiled-in dashboard answers only when no binding exists. The
+  router owns its own paths by *default*, not by right — which is the owner's whole point ("anyone should be able
+  to reroute the pages of the app").
+- **Compiled-in routes are rung 1's fallback within the same rung**, not a tier above it: exact binding → else
+  the compiled-in page or prefix → else 404. That ordering matters more than it looks, because it is what makes
+  the compiled-in set a *warning* rather than a *refusal* (§8.3).
+- **`/$vanityName` is the last rung-1 candidate.** With `proposal-v2.md:235-257`'s "trusted authors, oldest wins"
+  replaced by the routing file: `/x` consults the file for `x`. A binding → its target. **No binding → 404**
+  (rung 3), *not* "an app-key page at `d=x`" and *not* "the oldest page anybody published at `d=x`".
 - **The server URL space stays fixed.** `/api/*`, `/images/*`, `/manifest.json`, `/sw.js`, `/favicon.ico`
   (`platform/server/http/static.ts:43-48`, `platform/server/http/config.ts:31-32`) are matched by the Bun server
   before the SPA catch-all (`platform/server/buildServer.ts:37-54`). A table binding on `api` or `images` would
   be dead — and the reserved list already refuses them (`'api'`, `'images'`, `'assets'`, `'static'`, `'public'`
-  **[M]**), which is what §8.3 makes a checked invariant rather than a hope.
+  **[M]**), which is what §8.3 makes a checked invariant rather than a hope. **REVISION 2 does not change this**:
+  routing beats the *router*, not the *server's own endpoints*.
 
 **Why the client cannot be the enforcer.** `ruling-resolution-and-signed-ledger.md:8-20`: the server resolves
 and serves; the only "client-side" choice is *which instance you use at all* (self-hosting). A client-side
 allowlist, a client-side oldest-wins rule, or a per-user preference are all superseded.
+
+### 5.5 The page store — what is stored, and how a request is answered (REVISION 2, new)
+
+`ruling-local-pages-acl-and-legacy-routes.md:20-37`, binding: *"no relay round trip for served data such as
+pages … The pages can equally be stored in different formats in a custom database in a more efficient way, I
+don't mind … since that also decides on the page being able service search engines / SEO, page previews etc. It
+must have instant responses."*
+
+**Measured, what exists today.** The server renders **no page body at all**. `platform/server/buildServer.ts:36-54`
+composes config, zap, nip05, static, browse-search, auctions, analytics and og routes, then a `'/*'` catch-all
+that returns the SPA shell. The only server-rendered HTML enrichment is `og` meta injected into a shell it fetches
+from itself (`platform/server/http/og.ts:28-31` → `sdk/commerce/products/ogTags.ts:182-207`), which builds a
+`<meta>` block and never a body. `platform/server/ogMeta.ts:198-215` shows the one server-side lookup pattern in
+the repo: a single `ids:`-filtered read, signature-verified, 2.5 s budget, `null` on failure **[S]**. So:
+
+- **SEO machinery exists for meta, not for content.** That is the toehold the ruling names, and it is exactly a
+  toehold: it proves the server can emit crawler-visible `<head>`, not that it can emit a page.
+- **A server-side body renderer is new work.** `StorefrontRenderer` is a client component (`ui/storefront/
+  StorefrontRenderer.tsx`), and `react-dom/server` appears **only in test files** today
+  (`grep -rl renderToStaticMarkup --include=*.ts --include=*.tsx . --exclude-dir=node_modules | wc -l` → **102**
+  files; `| grep -v '\.test\.'` → **0** **[M]**). The good news, measured: `ui/storefront/` imports no
+  NDK, no `localStorage` and no `window` outside a comment (`grep -nE 'localStorage|ndk|window\.' ui/storefront/*.tsx`
+  → 1 hit, a comment), so the renderer is not structurally hostile to a server render.
+
+**What a stored page is.** The page *definition* is already a well-specified document, so the store does not
+invent one: `sdk/commerce/storefront/storefrontPage.ts` defines kind 30024 with a closed block union of
+**12 types** (`:125-292`, `StorefrontBlockSchema` at `:293`) and hard bounds (`STOREFRONT_LIMITS`, `:47-55`:
+100 blocks, 20 000-char text, 2 048-char URLs). A stored page is:
+
+```
+the validated document           JSON, exactly what parseStorefrontPage accepts
+the rendered HTML fragment       produced once, at ingest (§5.5.2)
+its head meta                    title / description / og:* / twitter:* / canonical
+its identity                     (author, d), kind 30024, event id, created_at
+its series memberships           from ["t", …] tags, if any
+```
+
+**5.5.1 Storage format — OUR CHOICE, and deliberately boring.** Two shapes of file, no database, no index server:
+
+```
+data/pages/<author-hex>/<d>.json                 one file per page, written atomically (tmp + fsync + rename)
+data/pages/series/<seriesKey>/<author-hex>.json  newest-first list of {d, createdAt, eventId}
+```
+
+- **Why not one big file**: a page may be 100 blocks and megabytes; re-reading the corpus to answer one request
+  is the relay round-trip's cost in local form, which defeats the point. One file per page means a lookup is one
+  `open`.
+- **Why a separate series file**: `/featured` must not scan every author directory. It reads one small file.
+- **Why not a database**: ruling 1 leaves format free, and `ruling-simple-routing-file.md:5-18` has already set
+  the house style (a file, no layer). The retrieval shape needed here is `get(author, d)` and "newest in series"
+  — both are path lookups.
+- **Atomicity**: the same `writeAtomic` discipline as the routing table (§4.5). One writer (the server), one
+  process, no lock file.
+- **This is a choice, not a ruling** — a SQLite or LMDB store would satisfy the ruling equally. It is chosen for
+  the reasons above, and swapping it touches `pageStore.ts` only, because nothing else opens these paths.
+
+**5.5.2 Render-at-ingest, and the one honest split.** Following the ruling's lean (b) — *render at publish, store
+the result* — the fragment is produced when the page is stored, not per request. But the block union is not
+uniform:
+
+| block types (`storefrontPage.ts`) | rendered at ingest? | why |
+|---|---|---|
+| `ProfileHeader`, `Hero`, `Text`, `LinkList`, `Image`, `Divider`, `Spacer` | **yes**, fully | pure presentation of page data; no query |
+| `ProductGrid`, `FeaturedProduct`, `ProductRow`, `Search`, `Categories` | **placeholder + hydration** | they display *live* commerce data; a frozen copy would show stale prices and dead add-to-cart |
+
+So the stored fragment is the full page with data-bound blocks as **named, empty slots** that the client fills
+after hydration. This is **OUR CHOICE**, and it is the same shape as the ruling's own "replaceable regions":
+the slot is the region. A crawler sees the text, the headings, the links, the images, the meta — which is what
+SEO needs — and a human sees live products.
+
+> **A correction to the ruling's lean, stated plainly.** The lean says (b) "gives instant responses and SEO with
+> no SSR framework migration". The *first* half is right; the second is optimistic. There is no server body
+> renderer today, so (b) *builds* one — the difference between (a) render-per-request and (b)
+> render-at-ingest is **when** it runs, not **whether** it exists. What (b) genuinely buys is that a request does
+> no rendering at all, which is what "instant" requires.
+
+**5.5.3 The ingest path is write-restricted.** This is the part ruling 1 calls non-negotiable, and the part the
+current system does not have (§R2.3).
+
+```
+POST /api/pages/publish        body: one signed NIP-01 event, kind 30024
+  1. verifyEvent(event)                                  ← the websocket.ts:30 template
+  2. tier(event.pubkey) must be app | admin | editor     ← §7.1; "no ACL" is refused here
+  3. kind allowlist: {30024} only                        ← "specific kinds"
+  4. author allowlist: the tier lookup IS the allowlist   ← "specific pubkeys"
+  5. size caps from STOREFRONT_LIMITS, checked before parse
+  6. parseStorefrontPage → refuse on any invalid block (not "drop it")
+  7. pageRender → refuse the WRITE if rendering throws
+  8. writeAtomic(page file) + series index update
+  9. 200 { stored: true, path? }  |  4xx { refused: <reason> }
+```
+
+Two consequences that are design, not implementation detail:
+
+- **A page that cannot render is never stored**, which is why §3.2's "item unavailable" narrows to non-page
+  targets.
+- **Restriction is enforced on the *pubkey*, not on a submitted role.** The caller cannot claim a tier; the
+  server looks the tier up (`§7.1`), which is exactly the shape ruling 2 describes for the ACL. One actor model,
+  two write surfaces (routes and pages).
+
+**5.5.4 Transport — the ruling leaves it open; this is what we pick.** Ruling 2: writes "can find the right way
+to send those events to the app, whether it's writing to the app relay (which might only accept a specific set
+of events from specific pubkeys) or listening to public relays". Options, with the measured constraint that
+matters:
+
+| option | cost | verdict |
+|---|---|---|
+| **(i) the app accepts the signed event directly** (§5.5.3) | new endpoint; the CMS must post to it as well as (or instead of) the relay | **OUR CHOICE for increment 1** — no relay dependency at all, smallest surface, and the allowlist is one function |
+| (ii) a write-restricted app relay + a server subscription | relay policy change (`main.go:84-87` currently has no author filter), a long-lived subscription, and ingest now depends on a relay being up | compatible later; not needed now |
+| (iii) listen to public relays with a filter | expense, filter drift, and the exact public-writable model the owner rejected | rejected |
+
+**What this means for the existing publish path, stated so it is not discovered late:** `publishStorefrontPage`
+publishes **only** to relays today (`platform/web/storefront/storefrontPublish.ts:81-99`, failing closed on zero
+ACKs). Under (i) the CMS must also call `/api/pages/publish`, or pages are published to Nostr and never served.
+That is a client change, it belongs with increment 3, and it is the one place where "local-first" costs a
+modification to a working path.
 
 ---
 
@@ -466,15 +713,41 @@ only a blacklist and a featured list; **explicitly a follow-up**, but the refere
 
 ---
 
-## 7. The ACL — three tiers, enforced server-side
+## 7. The ACL — four levels, keyed on the signing pubkey, enforced server-side
 
-`ruling-acl.md:5-24`, binding, and re-stated by `ruling-app-authority-and-portable-leases.md:55-70`.
+`ruling-local-pages-acl-and-legacy-routes.md:39-62`, binding, and it **supersedes `ruling-acl.md`'s three tiers for
+authority**. The owner's words: *"ACL is simple: tiered access by nostr public key … the current model of
+app -> admin/owner -> editor -> no acl is fine … The write should be a nostr signed event."*
 
-| tier | what the ruling grants | what that means operationally |
+| level | who | what it means operationally |
 |---|---|---|
-| **admin** | full control of the app and its pages | any operation on any binding, any target, including one held by an editor or a paying user. **Also the tier that authors the default route** (`ruling-acl.md:15-16`) |
-| **editor** | may create and publish pages to new places, **and** holds per-path grants | creation is **broad**: publish a page to any *free* top-level path, self-service. **Access is per-path and explicitly granted**: retargeting or touching an *existing* binding requires a grant naming that path. Not a role, not a blanket right |
-| **premium / paid** | may reserve a path as part of their store | a **lease**: paid, time-bounded, top-level only, self-service, attached to a pubkey |
+| **`app`** | the instance's own key | the instance acting on itself: bootstrapping, migrations, the default route, writing a page it authors. Above admin, because admin is *a person* and `app` is *the system* |
+| **`admin` / owner** | pubkeys in the admin list | full control of the app and its pages: any operation on any binding or target, including one held by an editor or a leaseholder. **Also the level that authors the default route** (`ruling-acl.md:15-16`) |
+| **`editor`** | pubkeys in the editor list | publishes pages to **free** top-level paths self-service; retargeting or touching an *existing* binding requires a **grant naming that path**. Not a role-derived blanket right |
+| **no ACL** | everyone else | nothing on the write side. Reads are unaffected: the site is public |
+
+**The credential is a signed Nostr event, and the level is a lookup on its pubkey.** That is the whole actor
+question, and it is **CLOSED** (O-1, §10): **NIP-98 is not needed**. The existing WebSocket path is the template —
+`platform/server/websocket.ts:30` verifies the client's own signature, then
+`platform/server/EventHandler.ts:238` re-signs. What changes is only what is *carried*: an intent, not tags.
+
+**Measured, the four levels are already half-built.** `platform/server/EventValidator.ts:53` encodes
+`app ∨ admin` (`event.pubkey !== appPubkey && !adminManager.isAdmin(...)`), `:75` encodes `admin ∨ editor`, and
+`:86` encodes admin-only for the `general` branch **[S]**. The tier sets themselves are the existing managers —
+`platform/server/AdminManager.ts:5` `Set<string>`, `platform/server/EditorManager.ts` the same shape, seeded from
+`adminPubkeys: []` at boot (`platform/server/startup.ts:71`) and rebuilt from kind-30000 `d='admins'` / `d='editors'`
+(`platform/server/EventHandler.ts:249-259`) **[S]**. So this is a **widening of an existing predicate**, not a new
+authority system.
+
+**A lease is NOT a level — and this is the distinction the old text got wrong.** `ruling-acl.md` listed
+premium/paid as a third *tier*; ruling 2 removes it from the ladder in as many words: a lease grants a **path**, a
+level grants **authority**, and *"a person may hold both, either, or neither"*
+(`ruling-local-pages-acl-and-legacy-routes.md:61-62`). Operationally:
+
+- authority is answered by `may(actor, op, …)` from the three ordered levels above;
+- a lease is answered by the **binding's `holder` field** and its term, per path (§3.2, §3.4);
+- an editor who buys a lease is an editor (authority) *and* a leaseholder (path). Nothing composes them, and
+  nothing needs to.
 
 ### 7.1 Enforcement and the decision function
 
@@ -483,27 +756,58 @@ only a blacklist and a featured list; **explicitly a follow-up**, but the refere
 file**, never against anything the caller sent:
 
 ```
-may(actor, op, path, file) → Allowed | Denied(reason)
-  reserved(path) or compiledIn(path)        → Denied('app-owned-name')          for every tier
-  role(actor) === 'admin'                   → Allowed                          (any op)
-  role(actor) === 'editor'
+may(actor, op, path, file) → Allowed(warnings[]) | Denied(reason)
+
+  level(actor) = 'app'    if actor === getAppPublicKey()        ← the instance itself
+               | 'admin'  if AdminManager.isAdmin(actor)
+               | 'editor' if EditorManager.isEditor(actor)
+               | 'none'   otherwise          ← looked up BY PUBKEY, never taken from the request
+
+  reserved(path) AND NOT compiledIn(path)   → Denied('app-owned-name')     every level, app included
+  level === 'app'                           → Allowed                     (bootstrap, migrations, default route)
+  level === 'admin'                         → Allowed                     (any op, any binding, any target)
+  level === 'editor'
+     compiledIn(path)                        → Denied('compiled-in-needs-admin')
      op ∈ {create, publishPageToPath} and path is FREE
         and granted(actor, path)             → Allowed
      op ∈ {retarget, release} and granted(actor, path)
         and target.author === actor          → Allowed
-     otherwise                               → Denied('no-grant')              ← a VISIBLE refusal
+     otherwise                               → Denied('no-grant')         ← a VISIBLE refusal
   op ∈ {reserve, renew} and path is FREE and path is top-level
-     and payment settled for (actor, path)   → Allowed
-  otherwise                                  → Denied(<reason naming the holder's tier>)
+     and payment settled for (actor, path)   → Allowed                     ← this is a LEASE, not a level
+  level === 'none'                          → Denied('no-acl')
+  otherwise                                 → Denied(<reason naming the holder's level>)
+
+  on every Allowed: if compiledIn(path) → warnings += 'compiled-in-path'  ← ruling 3: warn, never refuse
 ```
+
+- **`compiledIn(path)` moved from the refusal set to the warning set.** REVISION 2, ruling 3: binding
+  `/dashboard` is legal. The response carries `warning: 'compiled-in-path'` so the management surface can say
+  "this path is a compiled-in route; your binding supersedes it" — informative, not blocking.
+- **`reserved` had to be split, and this is an inference, not a ruling.** Seven of the eight compiled-in
+  segments are *also* in the 37-name reserved list (`dashboard`, `products`, `checkout`, `setup`, `community`,
+  `posts`, `nostr` — measured §8.3), so "reserved refuses everyone" and "compiled-in paths are re-pointable"
+  cannot both hold. The reading adopted: **`RESERVED \ COMPILED_IN` refuses everyone; `COMPILED_IN` refuses
+  editor and lease but allows `app` and `admin`, with the warning.** It follows from "admin has full control over
+  the app and its pages" (`ruling-acl.md:13-16`) plus "legacy routes must be superseded"
+  (`ruling-local-pages-acl-and-legacy-routes.md:78-80`). **This is OUR CHOICE and the owner can overturn it by
+  saying an editor may take a compiled-in path.**
 
 - **`grants` live in the file.** The ruling makes grants data, not a role: `"grants": { "<editor>": ["featured-*", "about"] }`.
   A `*` is a **suffix wildcard on a literal prefix**, matched in code — never as a regex or SQL pattern, so a
   name containing `%` cannot become a wildcard.
-- **Roles are read from the existing managers**, which is where they already are: `AdminManagerImpl`/`EditorManagerImpl`
-  are `Set`s rebuilt from kind-30000 `d='admins'`/`d='editors'` (`platform/server/AdminManager.ts`, `EditorManager.ts`
-  **[S]**; seeded from `adminPubkeys: []` at boot, `platform/server/startup.ts:71`). They are consulted at
-  decision time as "an admin *now*", never copied into the routing file.
+- **Levels are read from the existing managers**, which is where they already are: `AdminManagerImpl`/`EditorManagerImpl`
+  are `Set`s rebuilt from kind-30000 `d='admins'`/`d='editors'` (`platform/server/AdminManager.ts:5-20`,
+  `EditorManager.ts` **[S]**; seeded from `adminPubkeys: []` at boot, `platform/server/startup.ts:71`). They are
+  consulted at decision time as "an admin *now*", never copied into the routing file. `app` is not a set at all:
+  it is `getAppPublicKey()`, the key the instance already holds (`platform/server/runtime.ts`).
+- **The actor is established once, at the edge, and cannot be asserted.** `actor = event.pubkey` after
+  `verifyEvent` (§5.5.3 step 1); every other field the caller sent is ignored. **A signed intent older than a
+  freshness window is refused** — replay protection is required precisely because there is no session, and this
+  is **OUR CHOICE** (the ruling does not name a window); the window belongs on the intent event's `created_at`,
+  checked for the same reason `ogMeta.ts` rejects a relay answer that is not the event it asked for.
+- **A page write and a route write use the same actor model.** §5.5.3's ingest and this function must not grow
+  two different ideas of who is calling; if they diverge, one of them is wrong.
 - **A refusal is a visible state**, not a silent no-op (`ruling-acl.md:59-64`): the API returns
   `Denied(reason)`, and the management surface renders it with the reason *and* the holding tier.
 - **An editor cannot point a path at someone else's page.** The grant is authority over a path; the target must
@@ -533,7 +837,7 @@ Derived from `ruling-acl.md:59-66`, extended by the two new binding kinds:
 | # | case | expected |
 |---|---|---|
 | N1 | editor touches a path not in their grant | `Denied('no-grant')`, rendered as a visible refusal naming the missing grant |
-| N2 | lease requested on a path held by an admin binding or an in-term lease | `Denied` naming the holding tier — and **no invoice is issued** |
+| N2 | lease requested on a path held by an admin binding or an in-term lease | `Denied` naming what holds it — and **no invoice is issued** |
 | N3 | a lease past its term is requested | **404** from the router. The holder was warned before the term (§7.4) |
 | N4 | a lease is terminated by the provider | **404**, immediately, server-enforced |
 | N5 | admin reassigns a route held by an editor or a paying user | takes effect, and the displaced holder sees the revocation with actor and reason on their own list |
@@ -543,6 +847,10 @@ Derived from `ruling-acl.md:59-66`, extended by the two new binding kinds:
 | N9 | two admin bindings on one path in the file | refused at load, every violation printed |
 | N10 | a lease on a subpath | refused by the validator |
 | N11 | a lease on a free top-level path while an ancestor is leased | refused (`'held-by-ancestor'`) |
+| N12 | **an admin binds a compiled-in path** (`/dashboard`) | **accepted**, `Allowed` with `warnings: ['compiled-in-path']`; `/dashboard` then serves the bound page and the compiled route is not served in parallel (§5.2, §5.4) |
+| N13 | a page publish arrives with a bad signature | `Denied('bad-signature')`; nothing written (§5.5.3 step 1) |
+| N14 | a page publish arrives from a `none`-level pubkey, or for a kind outside the allowlist | `Denied('no-acl')` / `Denied('kind-not-allowed')`; nothing written |
+| N15 | a page publish carries an invalid block | `Denied('invalid-page: <path>')` — refused, **not** stored with the block dropped |
 
 ### 7.4 Lapse, renewal, and the holder being told *before* it lapses
 
@@ -591,8 +899,12 @@ yields `/$auctionId /$collectionId /$productId /$pubkey /$vanityName /auctions/$
 `/profile/:profileId`, `/products/:productId`, `/posts/:postId`, `/auctions/:auctionId` and
 `/collection/:collectionId` are **prefixes**; `/`+one segment is the catch-all `/$vanityName`
 (`platform/web/routeTree.gen.ts:74-78`), and the `/$pubkey` entries are nested under `dashboard/sales/messages`.
-**Precedence between a compiled-in prefix and a table-declared one is therefore a real question** and is settled in
-§5.4: a compiled-in route always wins, which is why the validator refuses a declared prefix that would shadow one.
+**Precedence between a compiled-in prefix and a table-declared one is therefore a real question**, and REVISION 2
+answers it the other way round from the original text: **a table-declared prefix wins** when it is more specific,
+because the routing tree supersedes the compiled-in tree (§5.4). The validator **warns** on a declared pattern
+that shadows a compiled-in prefix (`compiled-in-path`), instead of refusing it. The compiled-in prefixes
+(`/profile/:profileId`, `/products/:productId`, `/posts/:postId`, `/auctions/:auctionId`,
+`/collection/:collectionId`) stay exactly as they are until someone binds over them.
 
 **Source of truth**: the set must be **derived from `routeTree.gen.ts` at build time**, not typed by hand
 (`designs/B-server-authoritative.md:489-493` is right about this: "a name the router owns is a fact about the
@@ -628,26 +940,34 @@ static − reserved → {auctions, new}        [M]
 top-level route and is not reserved** — the live hole `review-adversarial.json` F7 case 1 records.
 `home`, `featured` and `blog` are **not** reserved either **[M]**.
 
-**What the reserved list becomes, under the ruling:**
+**What the reserved list becomes, under the ruling — REVISION 2 splits it in three:**
 
 | set | meaning | enforced where |
 |---|---|---|
-| **RESERVED** (the 37) | names not yet handed out; a binding on one is refused | file validator, at load and at write |
-| **COMPILED_IN** (the 8, derived) | names the app's own router serves; a binding on one is refused **and the refusal is explained as "app-owned"** | file validator + generated artefact + a drift test |
+| **RESERVED \ COMPILED_IN** (the 37 minus the 7 that collide) | names not yet handed out, plus the server URL space; a binding on one is refused | file validator, at load and at write, for every level |
+| **COMPILED_IN** (the 8, derived) | names the app's own router serves **by default**; a binding on one is **allowed** with a warning for `app`/`admin`, refused for editor/lease (§7.1) | file validator (warning), generated artefact, a drift test |
 | everything else | handable to an editor or a leaseholder | — |
 
-Two consequences the plan builds:
+**Consequences, all three changed by ruling 3:**
 
-1. **The union `RESERVED ∪ COMPILED_IN` is the refusal set, and it is checked as a set, not as prose.** The
-   current gap (`auctions`) is closed by construction: `COMPILED_IN` is derived from the route tree, so
-   `auctions` is refused for every tier without anyone remembering to add it to a list.
-2. **Refusing a *new* name is not the same as invalidating an *existing* binding.** If a future release
-   compiles a new top-level route whose name a binding already holds, the file becomes invalid on load and the
-   site refuses to boot — which is the correct failure (loud, not silent), and the plan requires the management
-   surface to report it before deploying. **Grandfather-and-warn vs refuse** is **OUR CHOICE: refuse**, because
-   the ruling makes the compiled-in surface un-reassignable and a silent grandfather would produce two meanings
-   for one URL. `designs/C-ownership-domain.md:674` leans grandfather-and-warn; this architecture does not adopt
-   it, and says so.
+1. **The refusal set is `RESERVED \ COMPILED_IN`, not the union.** The old text made
+   `RESERVED ∪ COMPILED_IN` the refusal set and celebrated it as closing the `auctions` hole. **That celebration
+   was wrong for the new ruling.** `auctions` being bindable is now *the intended behaviour* — an admin may
+   re-point `/auctions`, and the binding supersedes the compiled route (§5.4). What still matters is that an
+   **editor** cannot take it without an admin's decision, which the `compiled-in-needs-admin` branch gives.
+2. **`auctions` is still the interesting name, for a different reason.** It is one of the two top-level segments
+   *not* in the 37 (`static − reserved → {auctions, new}` **[M]**), so it is compiled-in but not reserved. Under
+   the split above it is governed by the `COMPILED_IN` row — allowed with a warning — which is now the *same*
+   treatment as `dashboard`. The asymmetry the review found is gone because it stopped being an asymmetry that
+   matters: derivation from `routeTree.gen.ts` still supplies the set, and nothing is refused for being
+   compiled-in.
+3. **A *new* compiled-in segment appearing later must not break the site.** This reverses the old "refuse and do
+   not boot". If a future release compiles a top-level route whose name a binding already holds, the file loads
+   and **warns** (`compiled-in-path`), the binding keeps winning, and the management surface reports the collision
+   before deploy. **Grandfather-and-warn is now the behaviour, by ruling** — `designs/C-ownership-domain.md:674`
+   was right and the previous text ("OUR CHOICE: refuse") is withdrawn. A warning that does not affect serving is
+   the only option consistent with "legacy routes are re-pointable": refusing would make the site unbootable for
+   doing exactly what the owner asked for.
 
 ---
 
@@ -685,8 +1005,8 @@ kills the clobber (`:127-140`); "no fall-through from a broken claim" (`:209`, a
 | `:312` case 5 | "the database cannot be read → the client uses its last cached table and says so" | **Superseded**: no local-snapshot fallback, no degraded mode (`ruling-simple-routing-file.md:14-16`) |
 | `:325-328` §4.2 | `/` fallback ladder ending in "the existing inline composition … + an admin banner" on unreadable | **partly superseded**: the banner for an unreadable table is gone (the process is not serving). The inline composition as `/`'s empty state survives (§3.5) |
 | `:163-174` §2.3, `:203-212` | `leases(id, name, …, state ∈ active\|grace\|lapsed\|revoked)`, `ends_at = 0` means perpetual, **14-day grace** | **Superseded on all three counts**: (a) `ends_at=0`-means-perpetual is exactly the "one row with an optional expiry" the ruling forbids (`ruling-resolution-and-signed-ledger.md:43-46`); (b) a `state` column with `lapsed` is a stored verdict where this architecture derives liveness from the clock (§7.4); (c) **grace is not adopted** (§7.4) |
-| `:466-478` §6.2 | `may(actor, op, name, target)` with `name ∈ RESERVED ∪ STATIC_SEGMENTS → NO` | **survives in spirit, superseded in encoding**: the refusal set is `RESERVED ∪ COMPILED_IN` derived at build (§8.3); the op table is kept, the SQL is gone |
-| `:357-382` §5.1 | purchase via **NIP-98 (kind 27235)** for `quote`/`settle`/`mine` | **NOT ADOPTED, and not superseded by a ruling** — it is a plausible mechanism with **zero precedent in the repo** (`git grep -n '27235\|NIP-98' -- platform/ sdk/ docs/ | wc -l` → 0 **[M]**). The ruling requires the **server** to be the enforcement point, which NIP-98 satisfies; but the ACL needs an actor for *three* tiers including anonymous paying users, and the cheapest actor the repo already has is the app's own signed-event submitter. **§10 flags this as an open decision with a lean**, not a settled choice |
+| `:466-478` §6.2 | `may(actor, op, name, target)` with `name ∈ RESERVED ∪ STATIC_SEGMENTS → NO` | **survives in shape, superseded in both encoding and policy**: the set is split into `RESERVED \ COMPILED_IN` (refuse) and `COMPILED_IN` (allow with a warning) at §8.3; the op table is kept, the SQL is gone |
+| `:357-382` §5.1 | purchase via **NIP-98 (kind 27235)** for `quote`/`settle`/`mine` | **REJECTED by ruling 2**, and for a better reason than "no precedent": the credential is already a **signed Nostr event** and the level is a pubkey lookup (`ruling-local-pages-acl-and-legacy-routes.md:50-53`), so NIP-98 adds a second auth protocol to express what one signature already expresses. Zero precedent remains true (`git grep -n '27235\|NIP-98' -- platform/ sdk/ docs/ | wc -l` → 0 **[M]**) but is now corroboration, not the argument |
 | `:352-455` §5 | zap/nutzap verification, `payments` table, swap, custody | **reserved** (`ruling-acl.md:36-42` leaves signing open; `ruling-d3-persistence-and-redesign.md:20-31` settles D3) — **not this architecture's subject**. The two facts B established (no `verifyEvent` on the receipt; `nostrPubkey` declared and never read) are carried into §10 as the reason the payment work must precede any *paid* lease |
 | `:537-555` §8 migration | "rollback: delete the DB file and set `ROUTES_AUTHORITY=relay`" | **superseded**: there is no `ROUTES_AUTHORITY` flag and no relay authority. Rollback is `git revert` of the increment, or restoring `routes.json` from its `.bak` |
 
@@ -703,17 +1023,19 @@ point (`:68-71`), which is what makes it possible for the client to stop reading
 | `:322-366` §3.1 | SQLite `lease` history table + `occupancy` table with a partial unique index, a 60 s background reap | **Superseded by `ruling-simple-routing-file.md:5-18`**. The *insight* survives: uniqueness is enforced by the store, not by code — here by the file validator refusing a second binding on a path |
 | `:396-419` §4.2 | a per-name **`kind 30078` relay mirror** with `d="route:<name>"`, plus a `routes-manifest` **sharded at 1500 names** for discovery | **Superseded**: publishing to Nostr is "relatively unimportant" and never the read path (`ruling-app-authority-and-portable-leases.md:23-24`, `:50-53`); a manifest with shard rules is the storage debate wearing a publication hat. What survives is the *concept* of a signed per-lease confirmation — as the **deferred bonus**, §11 |
 | `:380-394` §4.1 | the authoritative surface is an **HTTP API** `GET /api/routes/resolve`, `POST /api/routes/grant|retarget|renew|revoke|release|reassign|default` | **partly superseded**: the *server* is the surface (right), but the **read** is not an API the client assembles a page from — the server resolves and serves (`ruling-resolution-and-signed-ledger.md:8-12`). The **write** ops survive as the server's management commands behind `apply()` |
-| `:248-265` §2.4 | `can(actor, op, subject, ctx)` with **no statement of how the server learns the actor** (`review-adversarial.json` records 0 hits for `NIP-98\|27235\|authent\|session\|cookie`) | **NOT ACCEPTED AS SPECIFIED**: an authority function whose actor is never established is not an authority function. The actor is settled in §10 as an open decision, with the lean from the repo's one existing authenticated write path (`platform/server/websocket.ts:30-33` verifies the client's own signature before `platform/server/EventHandler.ts:238` re-signs) |
+| `:248-265` §2.4 | `can(actor, op, subject, ctx)` with **no statement of how the server learns the actor** (`review-adversarial.json` records 0 hits for `NIP-98\|27235\|authent\|session\|cookie`) | **ACCEPTED as a shape, and the omission is now closed**: ruling 2 settles the actor as **the signing pubkey of a signed event**, so `actor` comes in as `event.pubkey` after `verifyEvent` (§7.1, `platform/server/websocket.ts:30`) |
 | `:138` §2.1, `:161` | "Sub-paths (`/name/sub`) do not exist and are not designed here" | **Superseded by `ruling-resolution-and-signed-ledger.md:31-33`** ("Subpaths are in scope") and `ruling-simple-routing-file.md:37-54` (a lease carries its subpaths) |
 | `:359-366` §3.1 | occupancy materialised + a **bounded background reap every 60 s** | **superseded**: liveness is derived; nothing needs a reap for correctness (§7.4). Hygiene, if ever needed, is not part of this architecture |
 | `:623-629` §9 | increment 1 = domain + store, "wired to nothing", with a read-only `reconcile` | **superseded in content**: it is a good *shape* for a first increment and the minimality is preserved — but the smallest thing that proves **this** architecture end to end is different (§IMPLEMENTATION-PLAN §1) |
-| `:674` §11.2 | a new top-level route may **retroactively invalidate** a live lease; rule should be **"grandfather, and warn"** | **OUR CHOICE, not adopted**: this architecture **refuses** the file and refuses to boot (§8.3), because a silent grandfather gives one URL two meanings |
+| `:674` §11.2 | a new top-level route may **retroactively invalidate** a live lease; rule should be **"grandfather, and warn"** | **ADOPTED by REVISION 2** (§8.3 consequence 3). The previous text refused the file and refused to boot; ruling 3 makes compiled-in paths re-pointable, so a refusal would make the site unbootable for doing the intended thing. **This row is now a carried-forward design, not a superseded one** |
 | `:686-690` §11.4 | "no candidate should ship a routes ledger while the purchase path prices leases from a client-asserted amount" | **ADOPTED as a constraint on the plan**: any *paid* lease waits for the verification fix (§10, risk R-1) |
 | `:676-680` §11.3 | R3 cannot be separated from the transport: "newest" is an author-asserted timestamp | **ADOPTED and recorded** in §5.3 as an accepted limit |
 
-**C's parts that survive**: the three tiers as **entitlements over a resource**, not classes of writer over an
-event kind (`:128`, `:248-265`) — that is §7; `Delegation` as a *separate* aggregate from ownership (`:185-195`),
-which is §7's `grants` map; `Assurance` as a type that does not collapse payment states into a boolean (`:163`,
+**C's parts that survive**: the tiers as **entitlements over a resource**, not classes of writer over an
+event kind (`:128`, `:248-265`) — that is §7, now with four levels instead of three and with the lease kept
+strictly *outside* the ladder (`ruling-local-pages-acl-and-legacy-routes.md:61-62`); `Delegation` as a *separate*
+aggregate from ownership (`:185-195`), which is §7's `grants` map; `Assurance` as a type that does not collapse
+payment states into a boolean (`:163`,
 matching `AGENTS.md:41-46`); and the name/target/term vocabulary, which is why §3.1 reads the way it does.
 
 ### 9.4 `proposal-v2.md` — the conservative candidate
@@ -747,7 +1069,7 @@ now SUPERSEDED:
 | `:195-196` §3 door 1 | "write a self-sufficient, app-key-signed event per name inside the same transaction **from day one**" | **SUPERSEDED**: the door is now closed differently — a **backup file** (§4.4). The concern (payments accepted with history only in one file) is real and is carried as an operational task, not an architectural layer |
 | `:282-286` §6 Q1, `:283` | "ship the first visible slice now … a path can resolve to a page … governed by a simple first-published-wins rule" | **SUPERSEDED**: first-published-wins is a read-time rule and there is no read-time arbitration (§9.4). The slice survives, the rule does not |
 | `:286` §6 Q2 | "if our server's database is lost, must the site's names still work? **My lean: yes**" | **SUPERSEDED by `ruling-simple-routing-file.md:14-16`**, explicitly: "your site is broken. You don't have a fallback website after engine X is broken" |
-| `:161` X3, `:165` | adopt **NIP-98** from B to close C's missing actor | **not settled by any ruling** — carried to §10 as an open decision with a lean |
+| `:161` X3, `:165` | adopt **NIP-98** from B to close C's missing actor | **SETTLED AGAINST by ruling 2**, and the question changes shape: the actor is a signing pubkey (`ruling-local-pages-acl-and-legacy-routes.md:50-53`), so no second auth protocol is introduced. §10 O-1 is closed, not deferred |
 | `:104-123` C8, ADR-0006 | ADR-0006:211-215 asks for a signing proof "any client can verify" and this makes B's bet untenable | **reconciled, and its weight changes**: the owner's ruling (`ruling-app-authority-and-portable-leases.md:23-24,50-53`) makes publishing "relatively unimportant" for routing. So ADR-0006's requirement now binds the **deferred ledger** (§11), not the read path. The adjudication was not wrong about the doctrine; the doctrine was narrowed by the owner |
 | `:7` what it could not do | "the typecheck baseline 205 is `[U]` for me" | **still `[U]`, and now quantified**: the same command on this **dirty** checkout reports **401**, of which **241 are in non-app files** (94 `runs/`, 72 `notes/`, 72 `node_modules/*.d.ts`, 30 `src/` **[M]**). Neither number is a baseline; the plan re-derives it per branch |
 
@@ -762,12 +1084,24 @@ C1 (no server-side storage), C5 (30024 addressable), C6 (the clobber's mechanism
 Nothing below is a ruling; nothing below is presented as one. The plan is shaped so that **only R-1 blocks a
 release**, and only increments 6+ depend on the rest.
 
-### O-1 · Who does the server think you are? (the ACL's actor)
+**REVISION 2 changed the list.** O-1 is **CLOSED**. The two questions the new ruling opens that touch this
+document are recorded as O-6 and O-7 at the end of this section, with leans and no ruling.
 
-The ruling makes the server the enforcement point (`ruling-resolution-and-signed-ledger.md:48-54`) and defines
-three tiers (`ruling-acl.md:5-24`) — but never says how an incoming write proves *which tier* the caller holds.
-Without that, §7.1's `may(actor, …)` has no `actor`, which is C's largest omission (`review-adversarial.json`,
-C §"unsupported claims").
+### O-1 · Who does the server think you are? (the ACL's actor) — **CLOSED**
+
+**Status: closed by `ruling-local-pages-acl-and-legacy-routes.md:39-62`.** The text below is kept as the record of
+why it was open, because the reasoning is the reason the answer is what it is.
+
+What was open: the rulings made the server the enforcement point
+(`ruling-resolution-and-signed-ledger.md:48-54`) and defined the tiers (`ruling-acl.md:5-24`) — but never said how
+an incoming write proves *which tier* the caller holds. Without that, §7.1's `may(actor, …)` had no `actor`,
+which was C's largest omission (`review-adversarial.json`, C §"unsupported claims").
+
+**What closed it:** the owner ruled that the write *is* a signed Nostr event and the tier is a lookup by its
+pubkey — *"tiered access by nostr public key"* — with the transport deliberately left open. Consequences, all
+now built into §7.1 rather than proposed: `actor = event.pubkey` after `verifyEvent`; **no NIP-98**; the existing
+WS submit path (`platform/server/websocket.ts:30` → `platform/server/EventHandler.ts:238`) is the template; and
+the payload is an **intent**, not a tag list, so the server still composes every field.
 
 The repo has exactly one authenticated write path today, and it is measured:
 
@@ -780,17 +1114,18 @@ That path works for admin and editor (both are pubkeys the server already holds 
 and is **wrong as an enforcement point for paths**, because the client composes the tags the server then
 rubber-stamps (`designs/COMPARISON.md:161`, F5).
 
-**Lean**: keep the WebSocket submit channel as the **transport**, but make it carry an *intent*, not tags — the
-same discipline `ruling-resolution-and-signed-ledger.md:18-20` requires (the server builds the record). The
-client's signature establishes `actor`; the server decides every field. **This satisfies the ruling without
-introducing anything new.** B's NIP-98 (`designs/B-server-authoritative.md:370-382`) does the same job with a
-standardised proof, at the cost of new machinery with zero precedent (`git grep '27235\|NIP-98' -- platform/ sdk/ docs/ | wc -l`
-→ 0 **[M]**).
+**The lean that was adopted, now confirmed by the ruling:** keep the signed submit channel as the **transport**,
+but make it carry an *intent*, not tags — the same discipline `ruling-resolution-and-signed-ledger.md:18-20`
+requires (the server builds the record). The client's signature establishes `actor`; the server decides every
+field. NIP-98 (`designs/B-server-authoritative.md:370-382`) would do the same job with a standardised proof, at
+the cost of machinery with zero precedent (`git grep '27235\|NIP-98' -- platform/ sdk/ docs/ | wc -l` → 0 **[M]**)
+— and ruling 2's answer makes it unnecessary rather than merely unattractive.
 
-**Cost of the lean**: it reuses a channel whose *current* semantics are "re-sign what you send", so the change is
-a **removal** of the generic `general` branch for route intents (`platform/server/EventValidator.ts:85-93`) —
-behaviour-changing for anything else that uses it. **Cost if NIP-98 is preferred instead**: a new auth
-mechanism, a new replay-window check, and an ADR under `AGENTS.md:63-64`. **Settle before increment 4.**
+**The cost is unchanged and still real**: the channel's *current* semantics are "re-sign what you send", so the
+change is a **removal** of the generic `general` branch for route and page intents
+(`platform/server/EventValidator.ts:85-93`) — behaviour-changing for anything else that uses it. Plus the replay
+window noted in §7.1, which the ruling does not specify and the plan must pick. **This is now increment 4's
+work, not a blocker on it.**
 
 ### O-2 · Admin binding vs a leased path's subpath (the one surviving precedence question)
 
@@ -832,6 +1167,40 @@ admin-granted or editor-created binding can ship first; a lease that takes payme
 verified.** The plan therefore orders the verification increment **before** the lease write path (increment 6
 before 7) and does not put a payable surface on any earlier increment.
 
+### O-6 · Does the app run its own relay, and is it the one the auctions use? *(new, ruling 1's question 2)*
+
+`ruling-local-pages-acl-and-legacy-routes.md:102-105` — the owner's private-use model "implies a store with a
+write allowlist", and he offers two shapes: one instance serving both the public auctions role and the private
+app role, or two roles kept separate.
+
+**Measured state:** one khatru relay, deployed from this repo (`deploy-simple/relay/cmd/market-relay/main.go`),
+with **no author filter** (`:84-87`) and `RELAY_SUPPORTED_NIPS="1,11,50"`
+(`deploy-simple/relay/config/production.env:12`). Its own ops doc documents a memory-pressure failure mode —
+*"refusing connection: emergency mode active … under memory pressure"* (`deploy-simple/RELAY_DEPLOY.md:212-216`)
+**[S]**. That is the closest thing in the tree to the symptom the owner named, and it is a *documented ops
+symptom*, not a measurement of OOM under write load — **[U]** on the causal claim.
+
+**Lean: separate roles.** Do not make the public/auctions relay the app's private store; the symptom he named is
+an argument against mixing them, and the cost is one more process. **Cost of the lean:** two things to deploy,
+monitor and back up. **Cost of the alternative (one relay, two filters):** a single failure domain where a public
+write flood degrades page serving — the exact coupling ruling 1 exists to break.
+
+**But note what REVISION 2 removed from the question:** under §5.5.4's option (i), the app's page ingest does not
+need a relay at all, so this becomes a question about *deployment hygiene*, not about correctness. It does not
+block any increment.
+
+### O-7 · How modular is "modular"? *(new, ruling 1's question 4)*
+
+Replaceable regions inside a compiled page (a navbar slot) versus a page shell that mounts a compiled sub-app.
+`ruling-local-pages-acl-and-legacy-routes.md:111-114` leans **a shell with named slots the sub-app owns
+internally**.
+
+**This document adopts that lean as the direction, and nothing more.** §5.5.2 already produces one kind of slot
+for a different reason (data-bound blocks), so the vocabulary exists. But the ruling's own sequencing is explicit —
+re-pointing is routing (**this run**), modular contents are the **next** step — so **no increment here builds a
+slot system**, and increment 1 must not grow one. The only thing this run owes the next step is that re-pointing
+does not *preclude* it, which §5.2's one-guard seam already guarantees.
+
 ---
 
 ## 11. The signed lease-confirmation ledger — BUILD LATER, explicitly out of scope
@@ -854,6 +1223,9 @@ What this architecture leaves in place for it, at zero cost now:
 3. `apply()` is the single mutation point, so "sign and append a confirmation" is one hook, not a search.
 
 **Nothing in increments 1–8 publishes to Nostr**, and the plan says so in each increment's "does NOT do" list.
+REVISION 2 adds one clarification rather than a change: pages are **stored locally** by the app (§5.5) and
+mirroring them to a public relay is **not built** — it would be a publication feature, not a serving one, and the
+serving path never waits for it.
 
 ---
 
@@ -861,11 +1233,13 @@ What this architecture leaves in place for it, at zero cost now:
 
 | # | question | why it is open | whether the plan depends on it |
 |---|---|---|---|
-| Q1 | Is `auctions` supposed to be reassignable? | it is a real top-level route and is **not** reserved **[M]**; §8.3 makes it un-reassignable like the other seven | no — the plan refuses it and says so; if the owner wants it assignable, the route must stop being compiled-in |
-| Q2 | Does the owner want `/dashboard` itself reroutable, or a path of his choosing that renders a dashboard page? | `ruling-app-authority-and-portable-leases.md:59-60`'s example reads as the former but is only the latter under this architecture (§5.2) | no for increments 1–5; increment 4's management surface must state the refusal |
-| Q3 | Does `#t` work on kind 30024 on this deployment's relay? | **[U]** — no relay reached | **yes, for R3**: the R3 increment (5) is gated on one live measurement and has a stated fallback (server-side series index, not designed) |
+| Q1 | Is `auctions` supposed to be reassignable? | **ANSWERED by ruling 3 (REVISION 2)**: yes. It is a compiled-in path like the other seven, and a compiled-in path is re-pointable by an admin with a warning (§8.3) | no — it is the intended behaviour |
+| Q2 | Does the owner want `/dashboard` itself reroutable, or a path of his choosing? | **ANSWERED by ruling 3**: reroutable, verbatim. The earlier text read the example down to "a path of his choosing"; the ruling says "legacy routes will need to be superceded and re-pointed" | no — increment 4 builds it and must **warn**, not refuse |
+| Q3 | Does `#t` work on kind 30024 on this deployment's relay? | **demoted, and no longer blocking**: R3 reads a local index built at ingest (§5.3). Still `[U]`, but only relevant to a backfill of pre-existing pages | no |
 | Q4 | The typecheck baseline | **`[U]`** — 205 cannot be reproduced on a clean tree in this run; the dirty checkout reports **401** with **241** of them in non-app files, which is why a per-branch re-baseline is mandatory (`proposal-v2.md:619-621`) | yes, as a gate — the plan requires per-branch numbers and asserts on the sorted error list |
 | Q5 | Who signs a self-service reservation (a paid lease)? | `ruling-acl.md:36-42` open; §10 O-5 | yes, for increment 7 only |
+| Q6 | Who may re-point a **compiled-in** path — admin only, or editor too? | ruling 3 says legacy routes are re-pointable and does not name the actor; §7.1's split (admin/app yes, editor no) is **OUR INFERENCE** from "admin has full control" | no for 1–8 as written; it becomes real the first time the owner tries an editor on `/dashboard` |
+| Q7 | Does the app gain an **SSR tier** for page bodies? | ruling 1's lean (b) is render-at-publish; §5.5.2 shows that still requires a server-side renderer, so the choice decides whether the renderer lives in the server process at all | yes for increment 1 — it is the increment's spine, and the plan picks (b) with the split stated |
 
 ---
 
@@ -873,32 +1247,42 @@ What this architecture leaves in place for it, at zero cost now:
 
 ```
                         ┌───────────────────────────────────────────────┐
-  request /x  ─────────▶│  URL space: /api/*, /images/* (fixed)         │
-                        │  then compiled-in routes (the app's own)      │──▶ /dashboard, /auctions, …
-                        │  then the ROUTING FILE                        │
+  request /x  ─────────▶│  URL space: /api/*, /images/* (fixed, matched   │
+                        │  by the Bun server before anything else)        │
+                        │                         ↓                       │
+                        │  the ROUTING FILE, for EVERY path — including   │
+                        │  the compiled-in ones (REVISION 2)              │
                         └──────────────────────┬────────────────────────┘
                                                │  in memory, loaded once, boot-refuses-if-bad
                         ┌──────────────────────▼────────────────────────┐
                         │  RUNG 1  exact path, live                     │  admin binding → target
                         │          expired/terminated lease → 404       │  no network call
+                        │  RUNG 1b no binding? then a compiled-in page  │  the app's own default
+                        │          or prefix answers (warning at write) │
                         │  RUNG 2  programmed prefix (item/:eventId,    │  no network call to ROUTE
                         │          p/:npub, series)                     │
                         │  RUNG 3  404                                  │
                         └──────────────────────┬────────────────────────┘
                                                │ routing decided: (author, d) or prefix+param
                         ┌──────────────────────▼────────────────────────┐
-                        │  PAGE  kind 30024 at (author, d) — the author's│  relay may be down:
-                        │  own signed event, fetched AFTER routing      │  "item unavailable", not 404
+                        │  PAGE STORE  local files at (author, d):       │  NO relay, NO indexer:
+                        │  document + rendered fragment + meta          │  instant, indexable, previewable
+                        │  data-bound blocks are slots, hydrated client │
                         └───────────────────────────────────────────────┘
 
-  writes:  admin │ editor(grant) │ leaseholder  ──▶ may(actor, op, path, file)
-                                                     └─▶ apply(mutation) ──▶ validate ──▶ write tmp+rename (.bak kept)
+  writes:  signed event published/page intent (actor = event.pubkey)
+             └─▶ level(pubkey) ∈ {app, admin, editor} ──▶ may(actor, op, path, file)
+                    └─▶ apply(mutation) ──▶ validate ──▶ tmp+rename (.bak kept)
+             └─▶ /api/pages/publish ──▶ verify sig ──▶ kind allowlist ──▶ parse ──▶ render ──▶ store
 
-  NOTHING in the route path touches: a database · a cache · an event store · a relay · an indexer.
+  NOTHING in the route path or the serve path touches: a database · a cache · an event store ·
+  a relay · an indexer. Nostr is an output mirror, never an input.
 ```
 
-Three sentences that are the test of any future change:
+Four sentences that are the test of any future change:
 
 1. **If it makes a request consult the network to decide which path matched, it is wrong.**
-2. **If it makes a lapsed lease render something other than 404, it is wrong.**
-3. **If it writes the routing file from anything but a full copy of the routing file, it is wrong.**
+2. **If it makes a request consult the network to render a bound page, it is wrong.** (REVISION 2 — the SEO and
+   instant-response requirement.)
+3. **If it makes a lapsed lease render something other than 404, it is wrong.**
+4. **If it writes the routing file from anything but a full copy of the routing file, it is wrong.**

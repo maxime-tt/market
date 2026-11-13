@@ -11,8 +11,48 @@ A "rule" cited as `ruling-…md:line` is in `runs/2026-11-13-admin-routes/`. A `
 `3a07e7067`.
 
 **The governing constraint, repeated because every increment must be checked against it:** nothing in the route
-path may consult a relay or an indexer to decide which path matched (`ARCHITECTURE.md` §2). An increment that
-adds such a call fails its own exit criteria regardless of test results.
+path may consult a relay or an indexer to decide which path matched (`ARCHITECTURE.md` §2) — **and, since
+REVISION 2, nothing in the serve path may consult a relay to render a bound page either.** An increment that adds
+such a call fails its own exit criteria regardless of test results.
+
+---
+
+## REVISION 2 — what changed and why
+
+**Authority:** `ruling-local-pages-acl-and-legacy-routes.md` (owner, 2026-11-13). Three clauses change this plan;
+one deletes its riskiest item.
+
+| # | passage as written in revision 1 | invalidated by | now reads as |
+|---|---|---|---|
+| 1 | §1 **the whole increment** — "the routing file, resolved server-side, end to end", whose proof is *"the binding's page is found by **event id in the URL**, not by an indexer"* | ruling 1 | increment 1 is **the page store plus the resolver**: a signed page is ingested to local storage and served from it. The relay fetch is gone, and with it the whole `pageById` mechanism |
+| 2 | §1.1 `pageHtml.ts` — *"fetch a signed kind-30024 event by id + build the HTML shell response"* | ruling 1 | `pageStore.ts` (local read/write) + `pageRender.ts` (document → HTML + meta) + `pageHtml.ts` (compose the response) |
+| 3 | §1.4 in full — **"Two reads exist and they are ordered deliberately"**, ending in *"whether a single NIP-01 `{"ids":[<id>]}` read returns the event … is `[U]`, and the first thing to measure"* | ruling 1 | there is **one read and it is local**. `{"ids":[…]}` is no longer on any path, so the increment is no longer gated on a relay property |
+| 4 | §1.4 (4) — the fallback *"a server-side page cache … deliberately NOT designed here; the increment stops and reports instead"* | ruling 1 | the "fallback" is now **the design**: the server holds the page it serves. Nothing stops and reports |
+| 5 | §1.7 (now §1.8) "does NOT do" — *"No Nostr publication of any kind"* | ruling 1 | still true, but the increment now has a **write** path (`POST /api/pages/publish`), which revision 1 did not have. The allowlist is new and mandatory |
+| 6 | §1.6 (now §1.7) E2/E3 — prove the ladder without a relay; boot with a dead `APP_RELAY_URL` | ruling 1 | kept **and strengthened**: the page must also *render* with the relay dead, not merely resolve |
+| 7 | §2 dependency graph — increment 1 is a resolver; increment 5 depends on a relay `#t` measurement | rulings 1 + 3 | increment 1 carries the store; increment 5 reads a **local** series index and is no longer relay-gated |
+| 8 | §2.1 table row for **5** — "R3 series resolution … needs a resolved path before a series can answer it" | ruling 1 | same dependency, minus the measurement gate |
+| 9 | §4 increment 3, exit **S4** — *"the app's own routes are untouched … `/dashboard`, `/auctions`, `/products` → unchanged from before the increment"* | ruling 3 | **REVERSED.** A bound compiled-in path must **serve the binding**. S4 becomes "unchanged **when unbound**", plus a new criterion that a bound `/dashboard` serves the page |
+| 10 | §5 increment 4 — **"Blocked on O-1 … The increment does not start until that is settled"** | ruling 2 | **unblocked**. The actor is `event.pubkey`; the function has four levels, `app` at the top |
+| 11 | §5 increment 4 — `may()` described for "three tiers", and `app-owned-name` for compiled-in paths | rulings 2 + 3 | four levels; `compiled-in-path` is a **warning**, not a refusal |
+| 12 | §6 increment 5 — **"Gated on one measurement … does the this deployment's relay index `#t` on kind 30024"**, with *"the increment stops and reports"* | ruling 1 | **gate removed**. The series index is local, built at ingest; R8 (the relay measurement) is deleted |
+| 13 | §6 increment 5 files — `series.ts` issuing `{kinds:[30024], '#t':[…]}` | ruling 1 | `series.ts` reads the local index; the query shape above no longer exists |
+| 14 | §9 increment 8, exit **M2** — *"rerouting `/dashboard` is **refused with an explanation** … 'app-owned: `dashboard` is the app's own page'"* | ruling 3 | **REVERSED.** M2 asserts the **opposite**: the binding is accepted, carries `warning: 'compiled-in-path'`, and `/dashboard` serves the bound page |
+| 15 | §11 **R-1 (the riskiest)** in full — *"increment 1's page fetch is the one network call that remains, and it is the one I could not measure"* | ruling 1 | **deleted.** The riskiest item is a non-question. R-1 is replaced by the render-at-ingest decision (§11) |
+| 16 | §11 **R-2** — *"the actor (O-1) is unspecified, and increment 4 cannot start without it"* | ruling 2 | **closed**; R-2 is now "the replay window is unspecified and we pick one" |
+| 17 | §12 table row — *"making `/dashboard` itself reassignable … no ruling requires it and no increment depends on it"* | ruling 3 | **it is the ruling's example**, and increment 4 builds it |
+| 18 | §0.3 fact 2 — *"Nothing in `platform/server/` reads or writes a file today → 0, so the file writer in increment 1 is new machinery"* | ruling 1 | still true and now **doubly** true: increment 1 writes a routing file *and* a page store |
+| 19 | §3 increment 2, exit **V2** — *"`auctions` is refused as app-owned … closes the live hole"* | ruling 3 | becomes "`auctions` is **accepted with a warning**"; the "hole" is now intended behaviour (`ARCHITECTURE.md` §8.3) |
+
+**What this plan did not change.** Increments 2–4 and 6–8 keep their positions and their dependency edges; the
+routing file is still a file with no fallback; leases are still top-level-only and still 404 on expiry; nothing
+publishes to Nostr. **The increments stay in dependency order** — 1 → 2 → 4 → 8 is still the sequential track,
+and the parallel sets are recomputed in §2.2.
+
+**One new sequencing fact.** Increment 1 now needs a **renderer**, and a renderer needs the page document to be
+stable. It is: `sdk/commerce/storefront/storefrontPage.ts` is a closed union with hard bounds, so increment 1
+renders *today's* block union rather than inventing one. What it does **not** need is the series tag (increment 5)
+or the CMS write path (increment 3).
 
 ---
 
@@ -78,57 +118,80 @@ A report that quotes only one of the two numbers is misleading either way — **
    before increment 6.
 2. **Nothing in `platform/server/` reads or writes a file today** **[M]**
    `grep -rnE 'bun:sqlite|node:fs|writeFile|readFile|Bun\.file' platform/server/ --include=*.ts | grep -v '\.test\.'`
-   → 0. So the file writer in increment 1 is genuinely new machinery — small, but new. That is what makes
-   increment 1 the honest proof of the architecture rather than a refactor.
+   → 0, and there is no `data/` directory (`ls data` → absent) **[M]**. So the file writer in increment 1 is
+   genuinely new machinery — small, but new. **REVISION 2 makes this doubly true**: increment 1 now writes two
+   durable things (the routing table and the page store) and reads one of them on every request. That is what
+   makes increment 1 the honest proof of the architecture rather than a refactor.
 
 ---
 
-## 1. Increment 1 — the routing file, resolved server-side, end to end
+## 1. Increment 1 — the page store, served from local storage, end to end
 
-**Goal:** one page and one path prove the accepted architecture with no relay, no database and no cache: the
-server holds a routing file, resolves `/x` to a binding, serves that page's HTML, and 404s everything else.
+**Goal:** one page and one path prove the accepted architecture with **no relay on the read path** and no
+database: a signed page is ingested into local storage, the server holds a routing file, resolves `/x` to a
+binding, serves that page's HTML *from the store*, and 404s everything else.
 
-This is the smallest thing that proves the architecture **end to end**, deliberately "boring, not cute". It
-proves four architectural claims at once, each of which the current code fails:
+This is REVISION 2's core, and it is deliberately "boring, not cute". It proves **six** architectural claims at
+once, each of which the current code fails:
 
 | claim | what increment 1 demonstrates |
 |---|---|
-| the app is its own authority | a page is served with `APP_RELAY_URL` pointed at a **dead** address and the instance boots and serves |
-| routing needs no network | the binding's page is found by **event id in the URL**, not by an indexer (§1.4) |
-| an unreadable table is a broken site | the process refuses to boot on a corrupt file, with a named message |
+| the app is its own authority | a page is served with `APP_RELAY_URL` pointed at a **dead** address: the instance boots, resolves, and renders |
+| no relay round-trip for served data | `/x` is answered from `data/pages/…`; the route and serve path open **zero** sockets (§1.4) |
+| the ingest path is write-restricted | a page event from a pubkey outside `{app, admin, editor}`, or of the wrong kind, is refused — nothing is written (§1.5) |
+| SEO-grade output | `curl /x` shows the page's **body** (headings, text, links) and `og:`/`twitter:` meta **without executing JavaScript** |
+| an unreadable table is a broken site | the process refuses to boot on a corrupt `routes.json`, with a named message |
 | rung 3 is honest | anything unmatched is a real HTTP **404** |
 
 ### 1.1 Files
 
-**New (7):**
+**New (13):**
 
 ```
 platform/server/routes/routeFile.ts             the file: load / validate / serialize / writeAtomic / lookup / prefixMatch
 platform/server/routes/resolve.ts               the three-rung ladder + the two binding kinds (pure, no I/O)
-platform/server/routes/pageHtml.ts              fetch a signed kind-30024 event by id + build the HTML shell response
+platform/server/routes/pageStore.ts             the local page store: put / get / series index / writeAtomic
+platform/server/routes/pageRender.ts            StorefrontPage document → HTML fragment + head meta (react-dom/server)
+platform/server/routes/pageHtml.ts              compose <head> + fragment + SPA bootstrap + `#__AR_PAGE__` payload
+platform/server/http/pages.ts                   POST /api/pages/publish — verify → level → kinds → parse → render → store
 platform/server/routes/routeFile.test.ts
 platform/server/routes/resolve.test.ts
-platform/server/routes/pageHtml.test.ts
-sdk/config/routeNames.ts                        RESERVED_NAMES (37) + NAME_PATTERN, one definition, imported by both today's copies
+platform/server/routes/pageStore.test.ts
+platform/server/routes/pageRender.test.ts
+platform/server/routes/pageHtml.test.ts         (merge into pageStore.test.ts if it earns nothing alone)
+platform/server/routes/pagesHttp.test.ts        the write restriction, end to end
+sdk/config/routeNames.ts                        RESERVED_NAMES (37) + NAME_PATTERN + the RESERVED\COMPILED_IN split
 ```
+
+That is **13 new files**: 6 production modules, 6 test modules, 1 shared config module. Counted from the list, not
+estimated. If a test file collapses into another, say which and why — do not silently drop a criterion.
 
 **New (data / fixture):**
 
 ```
 data/routes.example.json                        a committed example file, NOT loaded by default
+data/pages.example/<d>.json                      one committed example page, NOT loaded by default
 ```
 
 **Modified (3):**
 
 ```
 platform/web/app/entry.tsx                      load the routing file before buildServer(...)   (beside :23)
-platform/server/buildServer.ts                  mount the resolver in front of the SPA catch-all (:52-54)
+platform/server/buildServer.ts                  mount the resolver + pages routes in front of the SPA catch-all (:52-54)
 platform/server/http/config.ts                  no change required; listed only because /api/config already
                                                 runs before the table — verified, not modified
 ```
 
 **Nothing else.** Not `platform/server/VanityManager.ts`, not `platform/server/ZapPurchaseManager.ts`, not
-`$vanityName.tsx`, not `index.tsx`, not `src/`, not `routeTree.gen.ts`.
+`$vanityName.tsx`, not `index.tsx`, not `src/`, not `routeTree.gen.ts`, **not `ui/storefront/`** (the renderer is
+consumed, not edited — if a block needs a server-safe variant, that is a new file under `platform/server/routes/`,
+and the reason is stated in the increment's report).
+
+**One measured constraint on the renderer.** `ui/storefront/` imports no NDK, no `localStorage` and no `window`
+outside a comment (`grep -nE 'localStorage|ndk|window\.' ui/storefront/*.tsx` → 1 hit, a comment **[M]**), and the
+block slots that *do* read live data sit in `platform/web/storefront/StorefrontBlockSlots.tsx`, which the renderer
+does not import. So the renderer can run under Bun; the slot map is exactly what the serve path leaves empty
+(§1.4).
 
 ### 1.2 The file, in this increment
 
@@ -139,8 +202,12 @@ platform/server/http/config.ts                  no change required; listed only 
 { "version": 1, "seq": 1, "default": null,
   "bindings": [ { "kind": "admin", "path": "<name>", "target": { "type": "page", "author": "<64-hex>", "d": "<d>" },
                   "updatedAt": <int>, "updatedBy": "<64-hex|instance>" } ],
-  "prefixes": [ { "pattern": "item/:eventId", "target": { "type": "pageById", "param": "eventId" } } ] }
+  "prefixes": [ { "pattern": "item/:eventId", "target": { "type": "render", "render": "item", "param": "eventId" } } ] }
 ```
+
+Note the prefix target is `render`, not "a page fetched by id": a prefix route serves a *rendered surface* whose
+data lookup is the page's own concern (`ARCHITECTURE.md` §3.3 rung 2). REVISION 2 deleted `pageById` as a target
+type, because a page is now always found through the store at `(author, d)`.
 
 Refused in increment 1 (with the reason naming the later increment): `meaning: "lease"`, `grants`, `series`
 targets, any `prefixes` pattern other than the declared ones.
@@ -156,7 +223,8 @@ targets, any `prefixes` pattern other than the declared ones.
    - `kind === 'admin'` ⟹ `expiresAt` **absent** (not `null`);
    - `meaning === 'lease'` ⟹ `expiresAt` is a positive integer **and** `path` contains no `/`;
    - every `target` type in the increment-1 subset (`page`), every hex field 64 lowercase hex;
-   - `prefixes` are distinct and none shadows a compiled-in dynamic route.
+   - `prefixes` are distinct; a pattern that shadows a compiled-in dynamic route is **accepted with a
+     `compiled-in-path` warning**, not refused (REVISION 2, ruling 3).
 3. **`serialize(file)`** — stable JSON: keys sorted, 2-space indent, trailing newline, so a `git diff` is a
    review artefact and a `sha256sum` is an assertion.
 4. **`writeAtomic(path, text)`** — write `path.tmp`, `fsync`, copy the current file to `path.bak`, `rename`. On any
@@ -169,35 +237,101 @@ targets, any `prefixes` pattern other than the declared ones.
 
 **No timers, no watchers, no caching layer, no re-read per request.** The loaded object is the whole state.
 
-### 1.4 `pageHtml.ts` — how one page is served
+### 1.4 The page store — how a page is stored and how a request is answered
 
-**Two reads exist and they are ordered deliberately:**
+REVISION 2 replaced "fetch the event by id" with "read the stored page". The whole subsection is new in substance,
+so it is stated as the design the increment must implement.
 
-1. **Routing needs nothing.** A `prefixes` entry `item/:eventId` turns `/item/<id>` into
-   `{ type: 'pageById', param: 'eventId' }`. The socket's `params.eventId` **is** the fact the router needed; there
-   is no indexer.
-2. **Then the page.** `pageHtml.ts` fetches the event by id over the existing NDK connection, verifies `sig`,
-   parses it with `parseStorefrontPage` (`sdk/commerce/storefront/storefrontPage.ts` **[S]**), and returns the
-   SPA shell with the page's `og:`/`title` and a `#__AR_PAGE__` script payload. A fetch failure is **HTTP 200**
-   with an "item unavailable" payload — **never** 404 (`ARCHITECTURE.md` §3.3 rung 2).
-3. **Why by id and not by `d`:** fetching by `(author, d)` needs the author, which for a *page* binding comes from
-   the file and is fine — but for the **prefix** rung there is no author, and "which author's page is at `d`" is
-   exactly the indexer dependency the ruling removes. Event id is self-describing, so the prefix rung needs no
-   index. Exact-path bindings may use `(author, d)`; **increment 1 implements only `pageById` and `page`**, and
-   that asymmetry is intentional and pinned by a test.
-4. **`[U]`, and the first thing to measure:** whether a single NIP-01 `{"ids":[<id>]}` read returns the event on
-   this deployment's relay. The repo's own read seam supports explicit id reads
-   (`sdk/core/event-store/filter.ts:4` `ids?: string[]` **[S]**) but the relay's behaviour is not verified here.
-   If it does not, the fallback is a **server-side page cache**: the app already receives every page the CMS
-   publishes in production (`platform/web/storefront/storefrontPublish.ts:81-99` publishes as the author), so a
-   server-side subscription to kind 30024 is available — **but that is a design decision, not a fallback, and it
-   is deliberately NOT designed here**; the increment stops and reports instead.
+**1.4.1 What is stored.** One directory per page, keyed by the coordinate the routing file already names:
 
-**Rendering.** Increment 1 serves the **shell plus the page payload**; the client renders it through the existing
-`StorefrontRenderer` with the page's own `pubkey`. That keeps the change to one route file on the client
-(increment 3) and avoids inventing a second renderer.
+```
+data/pages/<author-hex>/<d>.json      { document, html, meta, eventId, createdAt, author, d, series[] }
+data/pages/series/<key>/<author>.json [{ d, createdAt, eventId }]  newest-first, rebuilt on each store
+```
 
-### 1.5 `sdk/config/routeNames.ts`
+- `document` is the **validated** `StorefrontPage` (what `parseStorefrontPage` accepts), not the raw event content.
+- `html` is the **rendered fragment** produced at ingest (§1.4.2).
+- `meta` is `{ title, description, ogImage, canonical }`, derived once so a request does no derivation.
+- Writes are `tmp + fsync + rename`, the same `writeAtomic` device as `routeFile.ts`, and the `.bak` is kept.
+- **No index service, no scan for `get`**: the path is derived from `(author, d)`, which the binding supplies.
+- **`data/pages/` is created on first successful ingest** and never auto-created empty at boot — an empty store
+  is a valid state, a missing store is not an error.
+
+**1.4.2 What is rendered at ingest, and what is not.** `pageRender.ts` runs `StorefrontRenderer` under
+`react-dom/server` (measured: `react-dom` 19 is already a dependency, `package.json:92` **[M]**) over the document
+with an **empty slot map**, and returns an HTML fragment. The split is by block type, and it is deliberate:
+
+| block types | at ingest | at request |
+|---|---|---|
+| `ProfileHeader`, `Hero`, `Text`, `LinkList`, `Image`, `Divider`, `Spacer` | rendered to HTML | served as-is |
+| `ProductGrid`, `FeaturedProduct`, `ProductRow`, `Search`, `Categories` | an empty, named slot `<div data-ar-block="ProductGrid" …>` | hydrated client-side from the existing query path |
+
+The slot names come from `StorefrontBlockSlots.tsx`'s existing map, so the client's hydration is the code that
+already exists — the serve path does not invent a second renderer for data blocks, and it does not freeze prices
+into HTML. **This split is OUR CHOICE**, recorded because a reader will ask why the page is not "fully static":
+because a storefront with stale prices is worse than one that hydrates five regions.
+
+**1.4.3 How a request is answered.**
+
+```
+GET /x  →  routeFile.lookup('x') → binding{ target: { type:'page', author, d } }
+        →  pageStore.get(author, d)          ← ONE file read, no network
+        →  pageHtml.compose({ meta, html, payload })
+        →  200 text/html
+```
+
+`pageHtml.compose` emits a complete document: `<head>` with `title`, `description`, `og:*`, `twitter:*`,
+`<link rel="canonical">`; then the rendered fragment; then the SPA bootstrap and a `#__AR_PAGE__` JSON payload
+naming `(author, d)` so the client can hydrate the same page rather than re-resolving the route. **A crawler that
+runs no JavaScript sees the page; a browser sees the same page and then becomes the app.** This is the SEO/instant
+requirement satisfied structurally, not by an optimisation.
+
+**1.4.4 What a missing page does.** In increment 1 a binding is hand-edited, so a binding to a page that was never
+stored is possible: it answers **500 with a named error** (`binding-target-missing`), **not** 404 and **not** "item
+unavailable". From increment 4 the write path refuses such a binding up front, so the state becomes unreachable
+except by deleting a stored page — the same 500, which is honest. **404 stays reserved for "no binding matched"**
+(`ARCHITECTURE.md` §3.3 rung 3), and that distinction is the one this run keeps losing when it is not asserted.
+
+### 1.5 `POST /api/pages/publish` — the write-restricted ingest
+
+This is the piece ruling 1 makes non-negotiable and the piece the relay does not have (measured,
+`ARCHITECTURE.md` §R2.3). It is deliberately the **only** way a page enters the store.
+
+```
+POST /api/pages/publish     body: { event: <signed NIP-01 event, kind 30024> }
+  1  verifyEvent(event)                       → 400 'bad-signature'
+  2  level(event.pubkey) ∈ {app, admin, editor}
+       app   = getAppPublicKey()              → 403 'no-acl'
+       admin = AdminManager.isAdmin
+       editor= EditorManager.isEditor
+  3  kind allowlist  {30024}                  → 400 'kind-not-allowed'
+  4  size caps, from STOREFRONT_LIMITS         → 400 'too-large'   (checked BEFORE parse)
+  5  parseStorefrontPage(event.content)       → 400 'invalid-page: <pointer>'
+  6  pageRender(document)                     → 400 'render-failed: <message>'
+  7  pageStore.put({ document, html, meta, author, d, eventId, createdAt, series })
+  8  200 { stored: true, author, d, eventId }
+```
+
+- **The author allowlist is the level lookup.** There is no second list to keep in sync, and no "role" the caller
+  can assert — the server reads the tier from its own managers (`ARCHITECTURE.md` §7.1). This is ruling 2's actor
+  model applied to pages, and it is why the increment still has **no `may()`**: `may()` is about *paths*, and the
+  page store does not own paths.
+- **A failed render refuses the write.** This is what lets `ARCHITECTURE.md` §3.2 narrow "item unavailable" to
+  non-page targets: a page in the store is, by construction, a page that renders.
+- **Replay**: the event's `created_at` must be within a freshness window (**OUR CHOICE**, see §11 R-2). A stale
+  signed event is refused rather than stored twice.
+- **`d` comes from the event's `d` tag**, never from the request body — the same "the server builds the record,
+  never the submitted tag list" discipline the route writes use (`ARCHITECTURE.md` §4.5).
+- **Publication to a relay is not part of this endpoint.** Under option (i) the app *is* the destination
+  (`ARCHITECTURE.md` §5.5.4); mirroring is a later, optional feature.
+
+**What this costs, and it is the honest part:** `publishStorefrontPage` currently publishes **only** to relays and
+fails closed on zero ACKs (`platform/web/storefront/storefrontPublish.ts:81-99` **[S]**). After this increment a
+page can be published to Nostr and never served, until increment 3 adds the second call. The increment must ship
+with that stated in its operator note — **it is a real, temporary divergence between "published" and "served"**,
+and it is one `fetch` to fix.
+
+### 1.6 `sdk/config/routeNames.ts`
 
 The 37 reserved names exist **twice**, identically, and neither exports its copy: `sdk/config/vanity.ts:51-89`
 and `platform/server/VanityManager.ts:6-44` **[M]** (37 each, sets equal).
@@ -211,36 +345,44 @@ and `platform/server/VanityManager.ts:6-44` **[M]** (37 each, sets equal).
 **Boundary check**: `sdk/config/routeNames.ts` must import nothing. `platform/server/` importing `@sdk/config/*`
 is already allowed and used (`platform/server/http/config.ts:17` imports `@sdk/config/schemas/app` **[S]**).
 
-### 1.6 Evidence and exit criteria
+### 1.7 Evidence and exit criteria
 
 | # | criterion | command | expected |
 |---|---|---|---|
-| E1 | the new suite passes | `bun test --isolate platform/server/routes/` | record N pass, 0 fail (no prior count) |
-| E2 | the ladder is proven without a relay | `bun test --isolate platform/server/routes/resolve.test.ts` | includes: exact admin binding → target; unmatched path → `{ status: 404 }`; **no `fetch`/NDK call is reachable** — asserted with a module mock that throws if touched (the `restart.test.ts` device `designs/B-server-authoritative.md:699-701` uses) |
-| E3 | **boots with a dead relay** | `APP_RELAY_URL=wss://127.0.0.1:9 APP_PRIVATE_KEY=<test key> PORT=3100 bun platform/web/app/entry.tsx` then `curl -s -o /dev/null -w '%{http_code}' localhost:3100/x` | boots, and `/x` → **200** when bound, **404** when not. This is the whole architecture claim in one command, and it is the criterion that fails on `master` today (`platform/server/startup.ts:41-51`) |
-| E4 | a corrupt file refuses to boot | `printf '{"version":1,' > data/routes.json` then start | process exits non-zero, stderr names the file and the parse position. **No partial load** |
-| E5 | a reserved name in the file refuses to boot | fixture with `"path":"dashboard"` | exit non-zero, message names `dashboard` as app-owned |
+| E1 | the new suites pass | `bun test --isolate platform/server/routes/` | record N pass, 0 fail (no prior count; the ingest suite is `routes/pagesHttp.test.ts` and is included by the directory glob) |
+| E2 | the ladder is proven without a relay | `bun test --isolate platform/server/routes/resolve.test.ts` | exact admin binding → target; unmatched path → `{ status: 404 }`; **no `fetch`/NDK call is reachable** — asserted with a module mock that throws if touched (the `restart.test.ts` device `designs/B-server-authoritative.md:699-701` uses) |
+| E3 | **boots and renders with a dead relay** | `APP_RELAY_URL=wss://127.0.0.1:9 APP_PRIVATE_KEY=<test key> PORT=3100 bun platform/web/app/entry.tsx`, then `curl -s localhost:3100/x \| grep -c '<h1'` and `curl -s localhost:3100/x \| grep -c 'og:title'` | boots; `/x` → **200** with the page **body** and the meta, `/nothing` → **404**. This is the whole claim in one command, and it fails on `master` today (`platform/server/startup.ts:41-51`) |
+| E4 | a corrupt file refuses to boot | `printf '{"version":1,' > data/routes.json` then start | exits non-zero, stderr names the file and the parse position. **No partial load** |
+| E5 | a reserved name in the file refuses to boot | fixture with `"path":"api"` (in `RESERVED \ COMPILED_IN`) | exit non-zero, message names `api` |
+| E5b | **a compiled-in name in the file loads with a warning** | fixture with `"path":"dashboard"` | exit **0**, stderr/log carries `compiled-in-path`, and `dashboard` serves the bound page. **REVISION 2: this replaced the old E5 refusal** |
 | E6 | a lease on a subpath refuses to boot | fixture with `"meaning":"lease","path":"shop/x"` | exit non-zero |
-| E7 | atomic write leaves a backup | `bun test --isolate platform/server/routes/routeFile.test.ts` | after `writeAtomic`, `routes.json.bak` holds the previous bytes; a simulated failure mid-write leaves the original intact |
-| E8 | nothing reads the network in the route path | `grep -nE "fetch\(|ndk|Relay" platform/server/routes/routeFile.ts platform/server/routes/resolve.ts` | **0 hits** |
-| E9 | typecheck list identical | the §0.1 command, before and after | `diff` of the sorted lists **empty**; count recorded from the branch, never carried |
-| E10 | boundaries | `bun test --isolate sdk/boundary.test.ts platform/boundary.test.ts ui/boundary.test.ts` | pass |
-| E11 | format | `bun run format:check` | pass |
-| E12 | the diff is the diff | `git status --porcelain` | exactly the files in §1.1. `routeTree.gen.ts` untouched |
+| E7 | atomic write leaves a backup | `bun test --isolate platform/server/routes/routeFile.test.ts platform/server/routes/pageStore.test.ts` | after `writeAtomic`, `.bak` holds the previous bytes; a simulated failure mid-write leaves the original intact |
+| E8 | nothing reads the network in the route or serve path | `grep -nE "fetch\(|ndk|Relay" platform/server/routes/routeFile.ts platform/server/routes/resolve.ts platform/server/routes/pageStore.ts platform/server/routes/pageRender.ts platform/server/routes/pageHtml.ts` | **0 hits** |
+| E9 | the ingest refuses what it must | `bun test --isolate platform/server/routes/pagesHttp.test.ts` | bad signature → 400; `none`-level pubkey → 403; kind ≠ 30024 → 400; over-cap → 400 and **no file written**; invalid block → 400 and **no file written** |
+| E10 | a stored page is served byte-identically twice | `curl localhost:3100/x \| sha256sum` twice | identical, and the second request opens no socket (assert with the E2 mock) |
+| E11 | typecheck list identical | the §0.1 command, before and after | `diff` of the sorted lists **empty**; count recorded from the branch, never carried |
+| E12 | boundaries and format | `bun test --isolate sdk/boundary.test.ts platform/boundary.test.ts ui/boundary.test.ts`; `bun run format:check` | pass |
+| E13 | the diff is the diff | `git status --porcelain` | exactly the files in §1.1. `routeTree.gen.ts` and `ui/storefront/` untouched |
 
 **The number to watch**: `curl -s -o /dev/null -w '%{http_code}' localhost:3100/no-such-path` must print **404**.
 On `master` today the SPA catch-all returns the shell with **200** for any unknown path (`platform/server/buildServer.ts:54`
 `'/*': indexHtml`) **[S]** — so 404 is a visible behaviour change and it is the point of rung 3.
 
-### 1.7 What increment 1 explicitly does NOT do
+**The number that is new in REVISION 2 and matters most**: `curl -s localhost:3100/x | grep -c '<h1'` must be
+**≥ 1** with JavaScript never executed. If the body is not in the HTML, the increment has served a shell with a
+payload again, which is exactly what the ruling rejected.
 
-- No lease write path, no payment, no ACL beyond admin-only (`may()` is not built — every write is out of scope
-  because **no write path exists yet**; the file is edited by hand or by the test fixtures).
-- No `series` target, no `grants`, no management UI, no `list` reference.
-- No client routing change: `/` and `/$vanityName` behave exactly as today (`platform/web/routes/index.tsx:57`,
-  `platform/web/routes/$vanityName.tsx:19-41`). **No user-visible change except a 404 where a shell used to be.**
-- No Nostr publication of any kind.
-- No removal of `VanityManager`/`ZapPurchaseManager` — they keep running unchanged.
+### 1.8 What increment 1 explicitly does NOT do
+
+- No lease write path, no payment, no `may()`, no `grants`, no editor/lease distinction beyond the ingest
+  allowlist (which is the actor lookup only).
+- No `series` target, no `list` reference, no management UI.
+- No client routing change **except the hydration seam**: `/` and `/$vanityName` still resolve as today
+  (`platform/web/routes/index.tsx:29`, `platform/web/routes/$vanityName.tsx:19-41`); the `#__AR_PAGE__` payload is
+  consumed in increment 3.
+- **No Nostr publication, and no relay ingest.** The relay is not asked anything, ever, in this increment.
+- No removal of `VanityManager`/`ZapPurchaseManager` — they keep running unchanged, and the CMS still publishes
+  to relays as before (so "published" and "served" diverge until increment 3 — stated in §1.5).
 - Nothing deployed; no live unit restarted.
 
 ---
@@ -249,7 +391,7 @@ On `master` today the SPA catch-all returns the shell with **200** for any unkno
 
 ```
         ┌──────────────────────────────────────────────────────────────┐
-        │ 1  routing file + resolver, end to end        (the proof)     │
+        │ 1  routing file + PAGE STORE + resolver, end to end  (proof)  │
         └───────────────┬──────────────────────────┬───────────────────┘
                         │                          │
         ┌───────────────▼───────────┐   ┌──────────▼────────────────────────┐
@@ -280,11 +422,11 @@ On `master` today the SPA catch-all returns the shell with **200** for any unkno
 
 | # | increment | depends on | why that dependency exists |
 |---|---|---|---|
-| **1** | routing file + ladder, end to end | — | nothing |
-| **2** | validator completeness: lease meaning, subpath rules, `COMPILED_IN` derived | 1 | needs the file writer to exist before it can refuse more shapes of it |
-| **3** | `/` and `/$vanityName` served from the table | 1 | needs `lookup`; **deliberately not 2** — it only needs exact admin bindings |
-| **4** | ACL: `may()`, `grants`, actor, the write API | 1 (and 2 for the fields it validates) | `may()` reads the whole file, including `grants`, which 2's validator must already accept |
-| **5** | R3 series resolution | 1 (and 3 for the path to be reachable) | needs a resolved path before a series can answer it |
+| **1** | routing file + page store + ladder, end to end | — | nothing |
+| **2** | validator completeness: lease meaning, subpath rules, `COMPILED_IN` derived, reserved/compiled-in split | 1 | needs the file writer to exist before it can accept/refuse more shapes of it |
+| **3** | `/` and `/<name>` served from the table (R1/R2/R4 visible); client hydration seam; CMS also posts to `/api/pages/publish` | 1 | needs `lookup` and a stored page; **deliberately not 2** — it only needs exact admin bindings |
+| **4** | ACL: `may()`, `grants`, four levels, the write API | 1 (and 2 for the fields it validates) | `may()` reads the whole file, including `grants`, which 2's validator must already accept |
+| **5** | R3 series resolution, from the local series index | 1 (and 3 for the path to be reachable) | needs a stored page before a series can answer |
 | **6** | zap receipt verification | — (independent of 1–5) | it is a *payment* change on the existing vanity path |
 | **7** | lease purchase (paid) | 2, 4, **6** | a lease needs the validator's lease shape, the ACL's actor, and a verified receipt |
 | **8** | management surface | 4, 7, 5 | it reads and writes through all three |
@@ -307,6 +449,11 @@ On `master` today the SPA catch-all returns the shell with **200** for any unkno
 - **Genuinely parallel pairs, safe to dispatch simultaneously:**
   `(2 ∥ 3)`, `(2 ∥ 5)`, `(4 ∥ 5)`, `(6 ∥ anything)`.
   **Unsafe pairs:** `(1 ∥ anything)`, `(2 ∥ 4)` and `(4 ∥ 7)` — all write `routeFile.ts` or depend on its shape.
+- **Inside increment 1 there is exactly one safe split**, and it is worth naming because the increment grew
+  (REVISION 2): `routeFile.ts` + `resolve.ts` on one side, `pageStore.ts` + `pageRender.ts` + `pageHtml.ts` +
+  `http/pages.ts` on the other. They share **no file** and communicate through one interface (`get(author, d) →
+  {document, html, meta}`). They are **not** parallel-safe as commits — `buildServer.ts` is touched by both — but
+  they are safe as two agents on one branch if the mount order is agreed first.
 - **One merge hazard, stated**: 3 and 4 both make the client stop reading the vanity registry
   (`platform/web/config/vanityBinding.ts:90-129`). They must agree on **one** replacement read, or the app ends up
   with two. The plan assigns that replacement to **3** and forbids 4 from touching client files.
@@ -347,7 +494,7 @@ Stated so it is not rediscovered.
 | # | criterion | command | expected |
 |---|---|---|---|
 | V1 | the generated set is exactly 8 | `bun test --isolate sdk/config/compiledInSegments.test.ts` | regenerating from a clean `routeTree.gen.ts` produces an identical file |
-| V2 | `auctions` is refused as app-owned | `bun test --isolate platform/server/routes/` (fixture with `"path":"auctions"`) | boot-refusal naming `auctions` — this closes the live hole `review-adversarial.json` F7 case 1 records |
+| V2 | **`auctions` loads with a warning** | `bun test --isolate platform/server/routes/` (fixture with `"path":"auctions"`) | exit 0, `compiled-in-path` warning, and `/auctions` serves the bound page. **REVISION 2 reversed this row**: it used to assert a boot refusal closing the "live hole" `review-adversarial.json` F7 case 1 records. Under ruling 3 that hole is intended behaviour, and what remains to assert is that an **editor** cannot take it (`compiled-in-needs-admin`, asserted in increment 4's A-set) |
 | V3 | a lease on a free top-level path is accepted | fixture | loads |
 | V4 | a lease with no `expiresAt`, or an admin binding with `expiresAt`, is refused | 2 fixtures | both refused, distinct messages |
 | V5 | a lease on a subpath is refused | fixture `"meaning":"lease","path":"shop/x"` | refused (`lease-must-be-top-level`) |
@@ -355,6 +502,9 @@ Stated so it is not rediscovered.
 | V7 | a subpath binding under a live lease **is** accepted | fixture | loads |
 | V8 | when the parent lease expires, the subpath binding stops resolving | unit test at `expiresAt + 1` | the subpath returns `{ status: 404 }` — "every subpath dies with it" (`ruling-simple-routing-file.md:45-48`) |
 | V9 | `grants` accepts literal paths and `prefix*` only | unit | a `%` or a bare `*` is refused, so no name can become a wildcard |
+| V10 | **`api` (reserved, not compiled-in) is still refused for every level** | fixture with `"path":"api"` | exit non-zero, `app-owned-name` — the URL space is not re-pointable |
+| V11 | **the split is derived, not hand-typed** | `bun test --isolate sdk/config/compiledInSegments.test.ts` | `RESERVED \ COMPILED_IN` and `COMPILED_IN` are computed from the 37-name list and the generated 8; a name in both lands only in `COMPILED_IN` |
+| V12 | a **new** compiled-in segment appearing later does **not** break boot | fixture: add a segment to the generated set whose name a binding already holds | exit 0, `compiled-in-path` warning, binding still wins |
 
 **NOT:** no write API (still hand-edited / fixtures), no UI, no client change, no payment, no Nostr.
 
@@ -363,17 +513,24 @@ Stated so it is not rediscovered.
 ## 4. Increment 3 — `/` and the dynamic top-level path become the table's
 
 **Goal:** the owner's own example, made real: `/` renders whatever the default binding names, and `/<name>` renders
-a bound page — or **404**. The client stops resolving routes; the server decides.
+a bound page — or **404**. **And, since REVISION 2, `/dashboard` and the other compiled-in paths are re-pointable
+by a binding rather than refused.** The client stops resolving routes; the server decides, and the client renders
+the decision it was served.
 
 **Files:**
 ```
-modified   platform/server/routes/resolve.ts          + default binding + `/<name>` rung 1 + rung 3
+modified   platform/server/routes/resolve.ts          + default binding + `/<name>` rung 1 + rung 3 + compiled-in fallback
 modified   platform/server/routes/pageHtml.ts         + render the default and the exact-path bindings
 new        platform/server/routes/defaultBinding.ts   the default target → the page payload (or the inline composition)
-modified   platform/web/routes/index.tsx              :57,:81-101 fallback shell only; `/` renders the server's decision
+modified   platform/web/routes/index.tsx              `/` renders the server's decision; inline composition only as the empty state
 modified   platform/web/routes/$vanityName.tsx        becomes a 404 surface for unmatched segments
+modified   platform/web/routes/__root.tsx             the hydration seam: if `#__AR_PAGE__` is present, render it
+                                                      instead of <Outlet/> (REVISION 2 — this is what lets a
+                                                      compiled-in path be re-pointed without touching its files)
 modified   platform/web/storefront/StorefrontAddressPage.tsx   gains an `author` prop (defaulted to appPublicKey)
 modified   platform/web/storefront/storefrontQuery.ts  + a hook that reads the page payload for (author, d)
+modified   platform/web/storefront/storefrontPublish.ts        ALSO post the signed event to /api/pages/publish
+                                                      (REVISION 2 — without this, nothing new is ever served)
 new        platform/server/routes/surface.test.ts
 ```
 
@@ -386,6 +543,14 @@ migration, and it is a one-line-per-name admin action, not a code path. The incr
 bind them before deploying. This is the only part of the plan that needs a live relay read, and it is a **migration
 step**, not a route path.
 
+**The second behaviour change, and it is REVISION 2's reversal:** a bound **compiled-in** path now serves the
+binding. `/dashboard` with a binding is the bound page, not the dashboard. The compiled dashboard still exists and
+is still compiled in — it simply is not what that URL answers while a binding is live. The one piece of work that
+makes this true without touching `platform/web/routes/_dashboard-layout/` is `__root.tsx`'s seam: the served HTML
+carries `#__AR_PAGE__`, and the root renders that payload in place of `<Outlet/>`. **Assert it, because it is the
+only place two routing systems can disagree**: with a binding, `/dashboard` must not mount the dashboard; without
+one, it must.
+
 **Exit criteria:**
 
 | # | criterion | command | expected |
@@ -393,27 +558,32 @@ step**, not a route path.
 | S1 | `/` renders the default binding's page | fixture + `curl -s localhost:3100/ \| grep <marker>` | the bound page's marker; with no default, the inline composition's marker |
 | S2 | a bound `/<name>` renders | `curl -o /dev/null -w '%{http_code}' localhost:3100/shop` | 200 |
 | S3 | an unbound `/<name>` is 404 | same, `/nothing-here` | **404** |
-| S4 | the app's own routes are untouched | `curl -o /dev/null -w '%{http_code}' localhost:3100/dashboard`, `/auctions`, `/products` | unchanged from before the increment (quoted before/after) |
-| S5 | a binding's page that is unrenderable is 200 + "item unavailable" | fixture pointing at an absent `d` | **200**, and the payload says item unavailable — **never** 404 (`ARCHITECTURE.md` §3.3 rung 2) |
+| S4 | **unbound** compiled-in routes are unchanged | `curl -o /dev/null -w '%{http_code}' localhost:3100/dashboard`, `/auctions`, `/products` **with no binding** | unchanged from before the increment (quoted before/after). **REVISION 2: the old S4 asserted this unconditionally, which contradicted ruling 3** |
+| S4b | **a bound compiled-in route serves the binding** | fixture binding `dashboard` → a stored page, then `curl -s localhost:3100/dashboard \| grep -c '<marker>'` | the page's marker, and **not** the dashboard's nav (`grep -c 'SidebarNav'`-equivalent selector returns 0). The write response carried `warning: 'compiled-in-path'` |
+| S5 | a binding's page that is unrenderable is 200 + "item unavailable" | fixture pointing at an absent page | **500 with a named error**, not 404 and not 200 — REVISION 2: an absent *page* is now a broken binding (`ARCHITECTURE.md` §1.4.4), and "item unavailable" belongs to non-page targets |
 | S6 | the client no longer calls `resolveVanity` on a path | `grep -n 'resolveVanity' platform/web/routes/` | 0 hits (the registry read stays for the dashboard/account page until increment 8) |
 | S7 | existing storefront tests unchanged | `bun test --isolate sdk/commerce/storefront/ platform/web/storefront/` | same pass/fail before and after, quoted |
 | S8 | browse suite unchanged | `bun test --isolate platform/web/browse/` **and** without `--isolate` | **168/0** and **153/15** — quote both, same as before the change |
 | S9 | typecheck list identical, format, boundaries | §0.1, §0.2 | as before |
+| S10 | **a page published through the CMS is served** | publish from the CMS, then `curl -s localhost:3100/<its path> \| grep -c '<marker>'` | the marker, **and** the relay ACK still happened (both destinations). REVISION 2: without the second call in `storefrontPublish.ts`, this returns 404 and the increment ships a page that nobody can see |
 
 **NOT:** no series (increment 5), no grants or ACL (increment 4), no management UI, no lease, no removal of
-`VanityManager`. **The registry keeps running and keeps being read by the dashboard/account surface**
+`VanityManager`, **no modularisation of any compiled-in page** — re-pointing is routing, and the ruling puts modular
+contents in the *next* step. **The registry keeps running and keeps being read by the dashboard/account surface**
 (`platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx`) — deleting it is increment 8, and only
 after the routing file is the only thing that resolves.
 
 ---
 
-## 5. Increment 4 — the ACL: `may()`, grants, the actor, one write path
+## 5. Increment 4 — the ACL: `may()`, grants, four levels, one write path
 
-**Goal:** three tiers enforced server-side at one function, with a visible refusal carrying a reason — and
-**admin, editor and lease-write calls all go through `apply()`**, never through composed tags.
+**Goal:** **four levels** (`app` → `admin` → `editor` → none) enforced server-side at one function, keyed on the
+signing pubkey, with a visible refusal carrying a reason — and **admin, editor and lease-write calls all go
+through `apply()`**, never through composed tags.
 
-**Blocked on** O-1 in `ARCHITECTURE.md` §10 (who the server thinks you are). The increment does not start until
-that is settled; the lean is recorded there and costs are stated.
+**No longer blocked.** REVISION 2 closes the actor question: `actor = event.pubkey` after `verifyEvent`, and the
+level is a lookup in the existing managers (`ARCHITECTURE.md` §7.1). Increment 4 **starts** here — what it owes is
+a decision on the **replay window**, which the ruling does not name and this plan picks (§11 R-2).
 
 **Files:**
 ```
@@ -441,7 +611,10 @@ cannot be the enforcement point.
 | A2 | editor without a grant is refused, visibly | unit + `curl` | `Denied('no-grant')` with HTTP 403 and a body naming the missing grant |
 | A3 | editor with `prefix*` may create, not retarget, another's page | unit | allowed for `create`; `Denied('not-their-page')` for `retarget` |
 | A4 | a second binding on one path is refused | unit | `Denied('held-by:<tier>')`, naming the holding tier |
-| A5 | a binding on a reserved or compiled-in name is refused | unit | `Denied('app-owned-name')` |
+| A5 | a binding on a name in `RESERVED \ COMPILED_IN` is refused | unit | `Denied('app-owned-name')` |
+| A5b | **a binding on a compiled-in name is allowed with a warning** | unit, `dashboard` | `Allowed` with `warnings: ['compiled-in-path']` — REVISION 2 reversed A5's old blanket refusal |
+| A5c | **an editor cannot take a compiled-in path** | unit, editor actor with a grant on `dashboard` | `Denied('compiled-in-needs-admin')` — the split §8.3 makes, and the reason `auctions` is still protected |
+| A5d | the `app` level outranks admin and cannot be claimed | unit: a non-app key naming `app` in the body | the level comes from the pubkey; the submitted claim is ignored (`Allowed` never, `Denied('no-acl')` for an outsider) |
 | A6 | every accepted write goes through `apply` | `grep -n "writeAtomic" platform/server/` | one call site, inside `apply()` |
 | A7 | the file's `seq` increments and the previous bytes are kept | unit | `seq: n → n+1`; `routes.json.bak` holds `n` |
 | A8 | a write cannot smuggle a field | unit: post a `updatedAt`, an `updatedBy`, an `expiresAt` in the body | the server's own values win; the smuggled field is ignored, and a test asserts it |
@@ -453,29 +626,29 @@ nothing charges for it; that is 7), no Nostr, no `list`.
 
 ---
 
-## 6. Increment 5 — R3: the series path, resolved from a bound series target
+## 6. Increment 5 — R3: the series path, resolved from the local series index
 
-**Goal:** `/featured` resolves to the **newest** page of series `featured`, dynamically, with no routing-time
-network call and no second write when a member is published.
+**Goal:** `/featured` resolves to the **newest** page of series `featured`, dynamically, with no network read and no
+second write when a member is published.
 
-**Gated on one measurement, and it is the only `[U]` that blocks an increment:**
-
-```bash
-# does this deployment's relay index `#t` on kind 30024?
-# run against the instance's own relay, then re-run against a page known to carry ["t","featured"]
-```
-
-**If it does not**, the increment **stops and reports**; the stated fallback (a server-side series index in the
-routing file) is **not designed**, because designing it before measuring would be designing for an unmeasured
-failure.
+**REVISION 2 removed the gate.** The increment used to be blocked on a live measurement of whether the relay
+indexes `#t` on kind 30024, with "stop and report" as the outcome if it did not. Ruling 1 makes that measurement
+irrelevant to serving: the series index is **local state maintained at ingest** (`ARCHITECTURE.md` §5.3, §5.5.1),
+so the comparator runs over `data/pages/series/<key>/<author>.json`. The measurement still exists as a **backfill**
+question for pages published before this increment, and a backfill is a one-off script, not a gate.
 
 **Files:**
 ```
-new        platform/server/routes/series.ts            seriesTarget → { kinds:[30024], '#t':[key], authors:[owner] } query
+new        platform/server/routes/series.ts            seriesTarget → read the local index, apply the newest-first rule
+                                                      (REVISION 2: the `{kinds:[30024],'#t':…}` query is gone)
 new        platform/server/routes/series.test.ts
+modified   platform/server/routes/pageStore.ts         the series index is written here, on put()
 modified   platform/server/routes/routeFile.ts         accept `{ "type":"series", "series": "<key>", "author": "<64-hex>" }`
-modified   platform/web/storefront/storefrontPublish.ts  address argument (`d` + optional series tag), DEFAULTED
+modified   platform/web/storefront/storefrontPublish.ts  the series tag travels with the publish (already read from the
+                                                      event's `t` tags at ingest; the publish side must actually set it)
 modified   platform/web/storefront/storefrontPublish.test.ts
+new        scripts/backfill-series-index.ts            one-off, reads stored pages, writes the indexes (optional,
+                                                      and only if pages were stored before this increment)
 ```
 
 **The address argument is R1's whole mechanism**: `platform/web/storefront/storefrontPublish.ts:60`
@@ -494,12 +667,14 @@ existing caller compiles and behaves identically. **[S]** and it is the one-para
 | R5 | the newest member switched off / unparseable / zero blocks → the next newest | unit | next usable member; if none, `/`'s inline composition (for `/featured`, a 200 page-level "nothing to show", not 404) |
 | R6 | a page published by someone else with `t=featured` is ignored | unit | 🡒 the series is `authors:[owner]`-scoped; the outsider's page never wins |
 | R7 | the existing publish path is byte-identical for existing callers | `bun test --isolate platform/web/storefront/` | same counts as before; plus one test asserting `d='storefront-page'` when no address is passed |
-| R8 | `#t` on 30024 measured on the deployment relay | the command above, pasted | **the gate** |
+| R8 | **the series answer needs no network** | `grep -nE "fetch\(|Relay|ndk" platform/server/routes/series.ts`; plus the E2 throwing mock around a `/featured` resolve | **0 hits**, and the resolve succeeds with the network forbidden. **REVISION 2 deleted R8's old "measure `#t` on the deployment relay"** |
+| R9 | the index is rebuilt from stored pages, not from the request path | `bun test --isolate platform/server/routes/series.test.ts` | after `scripts/backfill-series-index.ts`, `/featured` answers without any store write |
 
-**NOT:** no series *management* UI (increment 8 may add a picker), no `list` reference (follow-up), no backfill
-of series tags onto existing pages, no auto-derivation of a series from a `d` prefix — the membership tag is
-declared explicitly by the author, because a `featured-<date>` naming convention that silently joins a series
-would let any dated page become `/featured` (`proposal-v2.md:409-415` considers it and this plan refuses it).
+**NOT:** no series *management* UI (increment 8 may add a picker), no `list` reference (follow-up), **no inventing
+series tags** — the backfill script only indexes pages that already carry a `t` tag in their stored document — and
+no auto-derivation of a series from a `d` prefix: the membership tag is declared explicitly by the author, because
+a `featured-<date>` naming convention that silently joins a series would let any dated page become `/featured`
+(`proposal-v2.md:409-415` considers it and this plan refuses it).
 
 ---
 
@@ -610,7 +785,8 @@ DELETED/DEMOTED (see below)
 | # | criterion | command | expected |
 |---|---|---|---|
 | M1 | the page lists bindings, grants, leases, and the default | component test | renders; a refusal shows the reason and the holding tier |
-| M2 | rerouting `/dashboard` is refused **with an explanation** | component test | "app-owned: `dashboard` is the app's own page" — the owner's example answer (`ARCHITECTURE.md` §5.2) |
+| M2 | **rerouting `/dashboard` succeeds, with an explanation** | component test | the dialog accepts the binding and shows `compiled-in-path`: "this path is a compiled-in route; your binding supersedes it". **REVISION 2 reversed this row** — it used to assert a refusal, which ruling 3 forbids |
+| M2b | the surface lists every compiled-in name it may supersede | component test | the 8 derived segments appear, with the ones already bound marked; the list is read from the generated artefact, not typed |
 | M3 | the clobber cannot recur | regression test: write an admin binding + the default + an editor grant, then **take a payment**, then assert all three still resolve and the file's `seq` moved by exactly 1 | passes. **This test cannot pass on the current code** — `platform/server/ZapPurchaseManager.ts:202` republishes from a map that knows only `vanity` entries (`platform/server/VanityManager.ts:110-112` **[S]**). It is the test `ruling-d3-persistence-and-redesign.md:78-79` asks for, and its absence is why the bug went unnoticed |
 | M4 | no route resolution reads a relay | `grep -rnE "fetch\(|Relay\.connect|ndk\." platform/server/routes/` | 0 hits in `routeFile.ts`, `resolve.ts`, `authority.ts`, `lease.ts` |
 | M5 | `/api/healthz` reports the table's state and `seq` | `curl localhost:3100/api/healthz` | `{"routes":"ok","seq":n}` |
@@ -661,44 +837,61 @@ which tests came across.
 
 ## 11. The riskiest single thing in this plan, and the two next-riskiest
 
-### R-1 (the riskiest) — increment 1's page fetch is the one network call that remains, and it is the one I could not measure
+### R-1 (the riskiest) — increment 1 now builds a renderer, and rendering is the one thing no part of the system does today
 
-The architecture forbids the network in **routing**. It cannot forbid the network in **serving a page**: the page
-lives on a relay, authored by its author, and serving content the instance does not hold is the entire point of
-keeping pages where they are. So increment 1 makes exactly **one** network read — the kind-30024 event — and it
-does so **after** routing has already decided which page answers.
+**REVISION 2 deleted the old R-1 in full.** It said the riskiest item was increment 1's page fetch — "the one
+network call that remains, and the one I could not measure" — and speculated about whether `{"ids":[…]}`
+returns anything. Ruling 1 makes that a non-question: the page is stored, so there is no fetch to measure. **The
+old R-1 is not mitigated, it is removed**, which is the best outcome a risk can have.
 
-Two things follow, and both are honest risks rather than defects:
+**The new riskiest thing is the replacement's own cost.** The plan now requires the server to turn a
+`StorefrontPage` document into HTML, and **nothing in the server does that today**: `ogMeta.ts` injects meta into a
+shell it fetches from itself (`platform/server/ogMeta.ts:198-215`), and `react-dom/server` appears only in test
+files (`grep -rl renderToStaticMarkup --include=*.ts --include=*.tsx . --exclude-dir=node_modules | wc -l` → 102
+files; with `| grep -v '\.test\.'` → 0 **[M]**). Three ways this bites:
 
-1. **`[U]`: does `{"ids":[<64-hex>]}` return the event on this deployment's relay?** The repo's filter type
-   supports it (`sdk/core/event-store/filter.ts:4` **[S]**) but I could not reach a relay. If it does not,
-   increment 1's "page by id" mechanism does not work, and the honest alternatives are (a) bind by `(author, d)`
-   only, which means the prefix rung cannot render a page it was not told the author of, or (b) a server-side
-   kind-30024 subscription, which is a real architectural addition and must then be argued, not slipped in.
-   **The plan stops and reports rather than choosing (b) silently.**
-2. **The 404 becomes the failure mode of a relay outage for a *bound* path**, because the server cannot render a
-   page it cannot fetch. That is *not* the anti-pattern — routing still succeeded and the table was still read
-   from disk — but it is the failure a reader will *see* and it will look like a routing failure. Which is why
-   the plan pins the distinction with a test: **an unrenderable page is 200 + "item unavailable"; only an
-   unmatched path is 404** (exit S5, E2). If those two collapse into one, the architecture's central distinction
-   has been lost in code, and no amount of green tests will show it.
+1. **A client-only import reaches the server.** Measured, the renderer's own directory is clean (`ui/storefront/`
+   has no `localStorage`, NDK or `window` outside a comment **[M]**), but `StorefrontRenderer` renders *slots*
+   supplied by the caller — and the caller that supplies live data, `StorefrontBlockSlots.tsx`, imports query
+   hooks. The defence is structural and is why §1.4.2 passes an **empty** slot map: if a slot component is ever
+   pulled in, the increment has failed its own design, and E8's grep plus the throwing-fetch mock will not catch
+   it. **Add one test that imports `pageRender.ts` under Bun with no DOM globals** — that is the assertion.
+2. **The rendered fragment and the hydrated app disagree.** Two renderers over one document is exactly the
+   "two truths" class of bug this run exists to delete, one level down. The mitigation is that the client does not
+   re-render the static blocks: it hydrates the same DOM the server emitted, with `#__AR_PAGE__` naming the page.
+   If the client instead re-renders from the document, the SEO output and the human output can diverge, and no
+   test that only checks one of them will show it. **E10's byte-identical double-fetch is the cheap canary; S4b is
+   the real one.**
+3. **The publish/serve divergence is real for one increment.** Until increment 3 adds the second call,
+   `publishStorefrontPage` writes to relays and the app stores nothing, so a freshly published page is not served.
+   That is a **temporary**, self-inflicted divergence and it must be in the operator note (`§1.5`).
 
-**Why this is the riskiest thing rather than the biggest**: it is the one place where the plan's proof and the
-architecture's own boundary touch, so a mistake there reads as an architectural failure rather than an
-implementation bug.
+**Why this is the riskiest rather than the biggest**: it is the only new subsystem in increment 1 that has no
+precedent in the repo, and it sits on the path every served page takes. A bug there is a wrong page, not a wrong
+route — which is harder to notice and worse to be wrong about.
 
-### R-2 — the actor (O-1) is unspecified, and increment 4 cannot start without it
+### R-2 — the replay window is unspecified, and increment 4 picks one *(was: the actor)*
 
-`may(actor, …)` with no established `actor` is C's actual omission (`ARCHITECTURE.md` §10 O-1). The plan
-sequences 1→2→3 so that everything before the ACL is **admin-only by hand-edited file**, which keeps the
-unresolved question from blocking the proof. Increment 4 must not begin on a guess.
+**The old R-2 is closed.** It said the ACL's actor was unspecified and increment 4 could not start; ruling 2
+settles it (`ARCHITECTURE.md` §7.1). What survives is a smaller, genuinely open detail:
 
-### R-3 — the `auctions` / `/new` / compiled-in derivation is a **build artifact**, and a stale one silently
-un-protects a name
+**A signed event with no session has no built-in expiry.** A captured route-write event can be replayed until its
+effect is idempotent, and nothing in the ruling names a window. **The plan picks: `created_at` within 300 s of the
+server's clock, and a refused event is refused loudly** (`Denied('stale-intent')`). Rationale: 300 s is the
+window `ZapPurchaseManager.ts:116-131` already applies to receipts, so the repo has one convention rather than
+two. **This is OUR CHOICE, not a ruling**, and the cost of being wrong is asymmetric — too tight breaks a slow
+client, too loose widens a replay window — so it is a named constant in one module, not a literal scattered
+through handlers.
 
-Measured: `static − reserved → {auctions, new}` **[M]**, and the naive parse yields 9 not 8. A generator that
-blesses the bug would make `auctions` bindable *and* its drift test green. Increment 2 checks the parent, and its
-drift test regenerates rather than compares to a hand-typed list.
+### R-3 — the compiled-in derivation is a **build artifact**, and a stale one mis-classifies a name
+
+Measured: `static − reserved → {auctions, new}` **[M]**, and the naive parse yields 9 not 8 because `/new` is
+nested. **REVISION 2 changed what a stale artefact causes.** It used to be "a name becomes bindable and the drift
+test stays green" — under ruling 3 bindable is the point, so the failure moved: a stale set means a name that
+*is* compiled-in is not classified as compiled-in, so an **editor** can take it without the
+`compiled-in-needs-admin` refusal, and the management surface's "may supersede" list is wrong. That is a quieter
+failure than the old one, which is why the drift test matters more, not less. Increment 2 checks the parent, and
+its drift test regenerates rather than comparing to a hand-typed list (V1, V11).
 
 ---
 
@@ -709,7 +902,7 @@ drift test regenerates rather than compares to a hand-typed list.
 | the signed lease-confirmation ledger; honouring another instance's leases | `ARCHITECTURE.md` §11 | **BUILD LATER** by ruling (`ruling-resolution-and-signed-ledger.md:56-68`); the file leaves `instance.pubkey: null` and per-lease `leaseId` so it is an addition, not a migration |
 | the `list` reference | `ARCHITECTURE.md` §6 | **marked follow-up** (`ruling-d8-multipage-and-lists.md:70-80`); the union variant is parsed and refused so the follow-up is a resolver branch |
 | nutzap as a payment rail | this file §7 "NOT" | custody, mint egress, a separate ADR (`AGENTS.md:63-64`); not asked for in this run |
-| making `/dashboard` itself reassignable | `ARCHITECTURE.md` §5.2, Q2 | it is 30 files, a layout, a nav model and an admin gate (`platform/web/app/useRootRedirects.ts:28,40-42`); no ruling requires it and no increment depends on it |
+| **modularising** a compiled-in page (replaceable regions, sub-app sub-paths) | `ARCHITECTURE.md` §5.2, O-7 | ruling 3 sequences it as the **next step** after routing. Re-pointing is in this plan; modular contents are not. **The old row here said `/dashboard` reassignment "is 30 files, a layout, a nav model and an admin gate … no ruling requires it" — that was wrong and is withdrawn**: reassignment needs one `__root.tsx` seam, and ruling 3 requires it |
 | a grace window on lease expiry | `ARCHITECTURE.md` §7.4 | OUR CHOICE not to add one; one comparison if the owner says otherwise |
 | subpaths published by a leaseholder | `ARCHITECTURE.md` §10 O-2 | needs the one surviving precedence ruling |
 | custom DNS domains | `ruling-acl.md:52-53` | the example is a path; this plan does paths only |
