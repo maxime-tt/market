@@ -231,3 +231,42 @@ alone and leave the FROST checkpoint as a follow-up.
    test, then §5.5 verdicts, then your §5.6 e2e.
 
 Nothing here is pushed anywhere; both branches are local on our side, and will go to you as PRs.
+
+---
+
+## 8. Correction — audit, 2026-11-13 (app-side, after independent review)
+
+An independent audit of `feat/verdict-publish` (tip `edb7ecb`) and `feat/relay-ingest` (tip
+`6177a00`) found that two claims in this contract are **not true of the code**. The code is sound;
+the wording overstates. Recorded here because this document is what the app side builds against, so
+a client reading only this file would believe something the implementation does not guarantee.
+
+**8.1 The anchor is not the deciding block.** §3.5 and the publisher's own comments say a verdict is
+*"anchored to THAT block's hash"* — the block that decided the auction. The implementation anchors
+to **the committed height when the publisher's sweep ran** (`Publisher.Step` reads
+`app.committedSnapshot()`; `PublishRecord` labels it *"the app's committed height when Step ran"*).
+No deciding height is computed or stored, and because the sweep runs on an interval that height is
+normally **later** than the block that closed the auction.
+
+What the anchor therefore **does** prove: *the committed state at height H produced this outcome* —
+which is the property that matters for determinism, and it is reorg-safe at H.
+
+What it does **not** prove: that the verdict was published after the auction's deciding block. A
+client cannot derive that from `(height, block_hash)` alone.
+
+The behaviour is defensible — arguably better than the wording, since the outcome is genuinely a
+function of that committed state. **The wording is what is wrong**, and clients should be built
+against the corrected statement, not the original one.
+
+**8.2 The `-race` verification excludes the socket paths.** The relay-ingest work's claim of being
+`-race` clean does not cover the relay socket paths: `skipUnderRace` (`relayobserve_test.go:46-51`)
+makes every socket-acceptance test skip when the binary is built with `-race`, including the test
+whose own comment advertises the `-race` command — so the advertised verification is structurally
+unable to fail. The stated reason is a race inside `go-nostr` v0.52.1, which the audit judged
+legitimate. **Read it as "no races detected in what runs", not as "the socket paths are race-free".**
+
+**Not established, and not claimed:** that the 4 mint-gated `sigall_mint_test.go` tests pass. They
+skip without a live mint (`ARENA_TEST_MINT`), and they are exactly the tests that would prove the
+mint enforces the 2-of-2 lock rather than validator code doing so. That remains unverified by us.
+
+Corrections to the implementation itself are on a separate branch, not yet merged.
