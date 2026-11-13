@@ -577,6 +577,13 @@ export interface ArenaAuctionView {
 	/** The latest version that passed the immutable check. */
 	canonicalEventId: string
 	createdAt: number
+	/**
+	 * The **root** 1440's `created_at` — when the auction actually started.
+	 * `createdAt` above is the canonical version's, which moves forward when the
+	 * seller edits display fields, so an end time derived from it would drift.
+	 * Additive: consumers that predate it are unaffected.
+	 */
+	rootCreatedAt: number
 	content: ArenaCreateContent
 	/** How many 1440 versions exist, accepted or not — a display aid, not a count of anything authoritative. */
 	versions: number
@@ -913,6 +920,7 @@ export function projectArenaEvents(
 			rootEventId: entry.root.id,
 			canonicalEventId: entry.canonical.id,
 			createdAt: entry.canonical.createdAt,
+			rootCreatedAt: entry.root.createdAt,
 			content: entry.canonical.content_,
 			versions: entry.versions,
 			bids: auctionBids,

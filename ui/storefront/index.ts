@@ -25,6 +25,13 @@ export { ProductRowBlock, type ProductRowBlockProps, type ProductRowBlockViewPro
 export { SearchBlock, type SearchBlockProps, type SearchBlockViewProps } from './blocks/SearchBlock'
 export { CategoriesBlock, type CategoriesBlockProps, type CategoriesBlockBlockProps, type CategoriesBlockViewProps } from './blocks/CategoriesBlock'
 export {
+	AuctionListBlock,
+	type AuctionListBlockProps,
+	type AuctionListBlockViewProps,
+	type AuctionListItem,
+	type AuctionListStatus,
+} from './blocks/AuctionListBlock'
+export {
 	ProfileHeaderBlock,
 	type ProfileHeaderBlockProps,
 	type ProfileHeaderBlockViewProps,

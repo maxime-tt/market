@@ -11,6 +11,7 @@ import { StorefrontBlockView, StorefrontRoot } from '@ui/storefront'
 import { usePuck, type Config, type Data } from '@puckeditor/core'
 import { storefrontBlockSlots } from './StorefrontBlockSlots'
 import { CollectionPickerField, ProductPickerField } from './fields/ItemPickerField'
+import { AuctionPickerField } from './fields/AuctionPickerField'
 import { ThemePaletteStrip, ThemeSwatchGrid, ThemeTunePanel } from './fields/ThemePickerField'
 
 /**
@@ -151,6 +152,7 @@ export const storefrontCmsConfig: Config = {
 		identity: { title: 'Identity', components: ['ProfileHeader', 'Hero'] },
 		content: { title: 'Content', components: ['Text', 'Image', 'LinkList', 'Search'] },
 		commerce: { title: 'Products', components: ['ProductGrid', 'FeaturedProduct', 'ProductRow'] },
+		auctions: { title: 'Auctions', components: ['AuctionList'] },
 		layout: { title: 'Layout', components: ['Divider', 'Spacer'] },
 		browse: { title: 'Browse', components: ['Categories'] },
 	},
@@ -458,6 +460,43 @@ export const storefrontCmsConfig: Config = {
 			},
 			defaultProps: { title: '', categories: [] },
 			render: renderBlock('Categories'),
+		},
+
+		AuctionList: {
+			label: 'Auctions',
+			fields: {
+				title: { type: 'text', label: 'Section title' },
+				source: {
+					type: 'radio',
+					label: 'Show',
+					options: [
+						{ label: 'My auctions', value: 'mine' },
+						{ label: 'Hand-picked', value: 'picked' },
+					],
+				},
+				auctionCoordinates: {
+					type: 'custom',
+					label: 'Auctions (ordered)',
+					render: ({ value, onChange, readOnly }) => (
+						<AuctionPickerField
+							label="Auctions (ordered)"
+							value={Array.isArray(value) ? (value as string[]) : []}
+							onChange={onChange}
+							readOnly={readOnly}
+						/>
+					),
+				},
+				limit: { type: 'number', label: 'Maximum auctions', min: 1, max: 30, step: 1 },
+				emptyMessage: { type: 'text', label: 'Message when empty' },
+			},
+			defaultProps: {
+				title: 'Live auctions',
+				source: 'mine',
+				auctionCoordinates: [],
+				limit: 6,
+				emptyMessage: 'No auctions here yet.',
+			},
+			render: renderBlock('AuctionList'),
 		},
 	},
 }

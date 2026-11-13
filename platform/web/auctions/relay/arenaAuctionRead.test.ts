@@ -293,6 +293,10 @@ describe('1440 is regular: latest version wins, behind the immutable check', () 
 		expect(snapshot.auctions[0].content.title).toBe('Correct title')
 		expect(snapshot.auctions[0].rootEventId).toBe('v1')
 		expect(snapshot.auctions[0].versions).toBe(2)
+		// The start time is the root's, not the edited version's: a display edit
+		// must not move when the auction began (and therefore when it ends).
+		expect(snapshot.auctions[0].rootCreatedAt).toBe(1000)
+		expect(snapshot.auctions[0].createdAt).toBe(2000)
 		expect(snapshot.rejectedCreates).toHaveLength(0)
 	})
 

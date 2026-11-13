@@ -166,6 +166,10 @@ describe('StorefrontRenderer', () => {
 			{ type: 'Image', props: { id: 'b7', url: '', alt: '', width: 'narrow', rounded: false, href: '' } },
 			{ type: 'Divider', props: { id: 'b8' } },
 			{ type: 'Spacer', props: { id: 'b9', size: 'sm' } },
+			{
+				type: 'AuctionList',
+				props: { id: 'b10', title: 'Live', source: 'mine', auctionCoordinates: [], limit: 6, emptyMessage: '' },
+			},
 		]
 		for (const block of blocks) {
 			const markup = renderToStaticMarkup(createElement(StorefrontBlockView, { block }))

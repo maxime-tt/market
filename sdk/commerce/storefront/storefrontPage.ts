@@ -290,6 +290,48 @@ export const CategoriesBlockSchema = z.object({
 	}),
 })
 
+/**
+ * An explicit `1440:<seller>:<d>` auction coordinate (the read adapter's own
+ * convention, `arenaAuctionRead.ts:402`, since a 1440 is regular and not
+ * addressable). Bounded and scheme-checked so the document cannot carry a
+ * free-form address into the auction read.
+ */
+const auctionCoordinateRef = z
+	.string()
+	.max(400)
+	.refine((value) => /^1440:[0-9a-fA-F]{64}:.+$/.test(value), {
+		message: 'Auction reference must be a 1440:<seller pubkey>:<d> coordinate',
+	})
+
+/**
+ * A listing of auctions an author can place in a page.
+ *
+ * `source: 'mine'` mirrors `ProductGrid`: the read is scoped to the page
+ * author's own auctions. `source: 'picked'` is the author naming explicit
+ * coordinates — the one deliberate widening, and it exists because a page
+ * authored by the app key owns no auctions at all, so "place auctions on the
+ * front page" is otherwise impossible. It is bounded, explicit and never a
+ * free-form query: each entry is a full coordinate, so what the page can show
+ * is exactly what the editor wrote down. Every card names its own seller, so a
+ * picked auction is curation, not a claim of authorship.
+ *
+ * The document never stores a title, price or outcome: those are read live, so
+ * a cached price can never be a price the seller did not agree to honour.
+ */
+export const AuctionListBlockSchema = z.object({
+	type: z.literal('AuctionList'),
+	props: z.object({
+		...blockBase,
+		title: shortText.default(''),
+		/** `mine` = the page author's auctions; `picked` = the explicit coordinates below. */
+		source: z.enum(['mine', 'picked']).default('mine'),
+		/** Ordered explicit references, used when `source` is `picked`. */
+		auctionCoordinates: z.array(auctionCoordinateRef).max(30).default([]),
+		limit: z.number().int().min(1).max(30).default(6),
+		emptyMessage: shortText.default('No auctions here yet.'),
+	}),
+})
+
 export const StorefrontBlockSchema = z.discriminatedUnion('type', [
 	ProfileHeaderBlockSchema,
 	HeroBlockSchema,
@@ -303,6 +345,7 @@ export const StorefrontBlockSchema = z.discriminatedUnion('type', [
 	ProductRowBlockSchema,
 	SearchBlockSchema,
 	CategoriesBlockSchema,
+	AuctionListBlockSchema,
 ])
 
 export type StorefrontBlock = z.infer<typeof StorefrontBlockSchema>

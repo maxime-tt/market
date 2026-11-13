@@ -14,6 +14,7 @@ import { ProductGridBlock, type ProductGridBlockProps } from './blocks/ProductGr
 import { ProductRowBlock, type ProductRowBlockProps } from './blocks/ProductRowBlock'
 import { SearchBlock, type SearchBlockProps } from './blocks/SearchBlock'
 import { CategoriesBlock, type CategoriesBlockBlockProps } from './blocks/CategoriesBlock'
+import { AuctionListBlock, type AuctionListBlockProps } from './blocks/AuctionListBlock'
 import { ProfileHeaderBlock, type ProfileHeaderBlockProps } from './blocks/ProfileHeaderBlock'
 import { TextBlock } from './blocks/TextBlock'
 import { DividerBlock, SpacerBlock } from './blocks/SpacingBlocks'
@@ -54,6 +55,7 @@ export interface StorefrontDataSlots {
 	ProductRow?: (props: ProductRowBlockProps) => ReactNode
 	Search?: (props: SearchBlockProps) => ReactNode
 	Categories?: (props: CategoriesBlockBlockProps) => ReactNode
+	AuctionList?: (props: AuctionListBlockProps) => ReactNode
 }
 
 /**
@@ -154,6 +156,21 @@ export function StorefrontBlockView({ block, slots }: { block: StorefrontBlock; 
 				<CategoriesBlock categories={categories} title={title} categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`} />
 			)
 		}
+		case 'AuctionList':
+			return slots?.AuctionList ? (
+				slots.AuctionList(block.props)
+			) : (
+				// No host, no read: the honest state is "could not be loaded", not
+				// an empty list, which would claim there are no auctions.
+				<AuctionListBlock
+					{...block.props}
+					auctions={null}
+					missing={[]}
+					status="error"
+					relayHealth={{ answered: 0, total: 0 }}
+					auctionHref={(coordinate) => `/auctions/${encodeURIComponent(coordinate.split(':').slice(2).join(':'))}`}
+				/>
+			)
 		default: {
 			// Unreachable while the switch matches the union. The assignment
 			// makes that a compile-time guarantee; the `null` keeps a page that
