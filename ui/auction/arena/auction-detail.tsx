@@ -29,8 +29,17 @@ import {
  * - **Positions are derived, not decided.** The per-bidder totals come from
  *   summing bid *deltas*. They are labelled as a derived view: the 1445 verdict
  *   names a winner, and the mint decides whether money moved.
- * - **Nothing is published from here.** This is the read half — no bid form, no
- *   settlement control, no publish affordance.
+ * - **Bidding is a slot, not a form.** The detail view renders the host's bid
+ *   panel through `bidPanel` and does not own a single bid rule: the entry
+ *   surface, its validation and its publish state are
+ *   `ui/auction/arena/bid-panel.tsx` + `bid-rules.ts`, mounted by
+ *   `platform/web/auctions/relay/AuctionBidHost.tsx`. Passing the node in keeps
+ *   this file a pure read-side presentation — and keeps a route that has no
+ *   publish seam additive-only over the read half (no bid panel, no behaviour
+ *   change). A detail view that passed `null` would be telling the bidder the
+ *   auction has no way to be bid on, so the *slot* contract is: the route
+ *   supplies the host, or it supplies nothing because bidding is out of scope
+ *   for that route.
  */
 
 export interface ArenaAuctionDetailProps {
@@ -41,6 +50,12 @@ export interface ArenaAuctionDetailProps {
 	backHref?: string | null
 	/** Host-owned seller identity node (avatar + display name). */
 	sellerIdentity?: ReactNode
+	/**
+	 * The host's bid panel (`AuctionBidHost`), rendered between the terms and the
+	 * bids. `null`/absent omits the slot entirely; nothing renders in its place
+	 * — a placeholder here would imply bidding exists and is unavailable.
+	 */
+	bidPanel?: ReactNode
 	className?: string
 	ref?: Ref<HTMLDivElement>
 }
@@ -65,6 +80,7 @@ export function ArenaAuctionDetail({
 	relayHealth,
 	backHref = null,
 	sellerIdentity,
+	bidPanel = null,
 	className,
 	ref,
 }: ArenaAuctionDetailProps) {
@@ -192,6 +208,8 @@ export function ArenaAuctionDetail({
 					<TermCard label="Funding mode" value={model.fundingMode ?? 'not stated'} />
 				</div>
 			</section>
+
+			{bidPanel !== null && <div data-slot="arena-auction-detail-bid">{bidPanel}</div>}
 
 			<section className="space-y-3">
 				<div className="flex items-baseline justify-between">
