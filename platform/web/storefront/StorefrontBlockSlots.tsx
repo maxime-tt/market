@@ -1,20 +1,32 @@
 import { ProductCardHost } from '@platform/web/products/ProductCardHost'
-import { nip05ValidationQueryOptions, getNormalizedProfileDisplayName, useProfile } from '@platform/web/profiles/profileQuery'
+import { nip05ValidationQueryOptions, getNormalizedProfileDisplayName, useProfile, useProfileNames } from '@platform/web/profiles/profileQuery'
 import { productsByPubkeyQueryOptions } from '@platform/web/products/productQuery'
+// The live blocks' data: ONE browse index feed (the same streamed read the
+// browse home paints) and the feed's own strip builder.
+import { feedStrips, useBrowseIndexFeed } from '@platform/web/browse/browseIndexFeed'
+import { materialForPubkey, symbolForPubkey, type BrowseProduct } from '@platform/web/browse/browseProductMap'
+import { ProductCard } from '@ui/browse/product-card'
 import type { NDKEvent } from '@platform/web/readContext'
 import { getReadContext } from '@platform/web/readContext'
 import {
+	BrowseFeedBlock,
+	BrowseStatsBlock,
 	CategoriesBlock,
 	FeaturedProductBlock,
 	ProfileHeaderBlock,
 	ProductGridBlock,
 	ProductRowBlock,
+	ProductStripsBlock,
 	SearchBlock,
+	type BrowseFeedBlockProps,
+	type BrowseFeedRow,
+	type BrowseStatsBlockProps,
 	type CategoriesBlockBlockProps,
 	type FeaturedProductBlockProps,
 	type ProfileHeaderBlockProps,
 	type ProductGridBlockProps,
 	type ProductRowBlockProps,
+	type ProductStripsBlockProps,
 	type SearchBlockProps,
 	type StorefrontDataSlots,
 	type StorefrontProfileData,
@@ -188,6 +200,94 @@ function CategoriesSlot({ categories, title }: CategoriesBlockBlockProps) {
 	)
 }
 
+/**
+ * The card the live feed renders: the browse read-model mapped onto the
+ * presentational `ProductCard`.
+ *
+ * There is no `onSelect` here on purpose. On a CMS page a click follows the
+ * tile's real deep link (`/?p=<id>`), which is the browser's own behaviour —
+ * hover previews and middle-click work, and there is no in-place panel for a
+ * host callback to open.
+ */
+function BrowseFeedCardHost({ product, sellerName }: { product: BrowseProduct; sellerName?: string }) {
+	return (
+		<ProductCard
+			id={product.id}
+			title={product.title}
+			seller={sellerName ?? product.pubkey.slice(0, 8)}
+			sellerPubkey={product.pubkey}
+			sellerName={sellerName}
+			image={product.image}
+			price={product.price}
+			priceCurrency={product.currency}
+			material={materialForPubkey(product.pubkey)}
+			symbolId={symbolForPubkey(product.pubkey)}
+			href={`/?p=${encodeURIComponent(product.id)}`}
+			sellerHref={`/profile/${encodeURIComponent(product.pubkey)}`}
+		/>
+	)
+}
+
+/**
+ * The live wall strips. One feed, read through the SAME `useBrowseIndexFeed`
+ * the browse home uses — this is not a second read. The strip items come from
+ * the feed's own `feedStrips`, with seller names resolved through the batched
+ * profile read the browse cards use, so a tile states the seller's name and
+ * never a pubkey prefix when one exists.
+ */
+function ProductStripsSlot({ title, limit, reverse }: ProductStripsBlockProps) {
+	const { data: feed, isLoading, isError } = useBrowseIndexFeed()
+	const products = (feed?.products ?? []).slice(0, limit)
+	const sellerNames = useProfileNames(products.map((product) => product.pubkey))
+	const items = feedStrips(products, limit, (pubkey) => sellerNames.get(pubkey))
+
+	return (
+		<ProductStripsBlock
+			title={title}
+			limit={limit}
+			reverse={reverse}
+			items={feed ? items : null}
+			isLoading={isLoading}
+			isError={isError}
+		/>
+	)
+}
+
+/**
+ * The measured facts line, fed by the feed's own `stats` — the numbers the
+ * browse hero already states. No literal ever reaches the block.
+ */
+function BrowseStatsSlot({ align }: BrowseStatsBlockProps) {
+	const { data: feed, isLoading, isError } = useBrowseIndexFeed()
+	return <BrowseStatsBlock align={align} stats={feed?.stats} isLoading={isLoading} isError={isError} />
+}
+
+/**
+ * The live browse feed — the streamed grid. The rows are the feed's loaded
+ * listings; each is rendered through the browse card above.
+ */
+function BrowseFeedSlot({ title, limit, columns, emptyMessage }: BrowseFeedBlockProps) {
+	const { data: feed, isLoading, isError } = useBrowseIndexFeed()
+	const products = (feed?.products ?? []).slice(0, limit)
+	const sellerNames = useProfileNames(products.map((product) => product.pubkey))
+
+	return (
+		<BrowseFeedBlock
+			title={title}
+			limit={limit}
+			columns={columns}
+			emptyMessage={emptyMessage}
+			products={feed ? products : null}
+			isLoading={isLoading}
+			isError={isError}
+			renderProduct={(row: BrowseFeedRow) => {
+				const product = row as BrowseProduct
+				return <BrowseFeedCardHost product={product} sellerName={sellerNames.get(product.pubkey)} />
+			}}
+		/>
+	)
+}
+
 /** The slot map handed to `StorefrontRenderer` on the published-page mounts. */
 export const storefrontBlockSlots: StorefrontDataSlots = {
 	ProductGrid: (props) => <ProductGridSlot {...props} />,
@@ -196,4 +296,7 @@ export const storefrontBlockSlots: StorefrontDataSlots = {
 	ProductRow: (props) => <ProductRowSlot {...props} />,
 	Search: (props) => <SearchSlot {...props} />,
 	Categories: (props) => <CategoriesSlot {...props} />,
+	ProductStrips: (props) => <ProductStripsSlot {...props} />,
+	BrowseStats: (props) => <BrowseStatsSlot {...props} />,
+	BrowseFeed: (props) => <BrowseFeedSlot {...props} />,
 }

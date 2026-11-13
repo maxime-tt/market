@@ -24,6 +24,9 @@ export { FeaturedProductBlock, type FeaturedProductBlockProps, type FeaturedProd
 export { ProductRowBlock, type ProductRowBlockProps, type ProductRowBlockViewProps } from './blocks/ProductRowBlock'
 export { SearchBlock, type SearchBlockProps, type SearchBlockViewProps } from './blocks/SearchBlock'
 export { CategoriesBlock, type CategoriesBlockProps, type CategoriesBlockBlockProps, type CategoriesBlockViewProps } from './blocks/CategoriesBlock'
+export { ProductStripsBlock, type ProductStripsBlockProps, type ProductStripsBlockViewProps } from './blocks/ProductStripsBlock'
+export { BrowseStatsBlock, type BrowseStatsBlockProps, type BrowseStatsBlockViewProps } from './blocks/BrowseStatsBlock'
+export { BrowseFeedBlock, type BrowseFeedBlockProps, type BrowseFeedBlockViewProps, type BrowseFeedRow } from './blocks/BrowseFeedBlock'
 export {
 	ProfileHeaderBlock,
 	type ProfileHeaderBlockProps,

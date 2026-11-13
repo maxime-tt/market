@@ -290,6 +290,67 @@ export const CategoriesBlockSchema = z.object({
 	}),
 })
 
+/**
+ * The live wall strips — the browse home's scrolling product bands, as a page
+ * block.
+ *
+ * A LIVE block, like the two below it: the document stores only the *query*
+ * (how many listings, which way the row drifts) and never the listings
+ * themselves — a cached title or price on a page would be a listing the seller
+ * may no longer honour (ADR-019). `ui/` never resolves the data; the platform
+ * host reads the browse index feed over the read seam and passes the strip
+ * items in.
+ */
+export const ProductStripsBlockSchema = z.object({
+	type: z.literal('ProductStrips'),
+	props: z.object({
+		...blockBase,
+		/** Optional heading above the band. */
+		title: shortText.default(''),
+		/** How many listings the strip draws from the feed. */
+		limit: z.number().int().min(1).max(STOREFRONT_LIMITS.maxProductsPerGrid).default(16),
+		/** Drift the row the other way — two strips then read as one band. */
+		reverse: z.boolean().default(false),
+	}),
+})
+
+/**
+ * The measured facts line — the browse hero's *"N items loaded from N sellers"*
+ * copy, as a page block.
+ *
+ * LIVE and measurement-only: the document stores no number at all. The block
+ * renders whatever the host's browse feed measured, and renders nothing when
+ * the feed has measured nothing — the frame's market-wide placeholder copy is
+ * never emitted. `ui/` never resolves the count; the host passes `feed.stats`
+ * in.
+ */
+export const BrowseStatsBlockSchema = z.object({
+	type: z.literal('BrowseStats'),
+	props: z.object({
+		...blockBase,
+		align: alignment.default('center'),
+	}),
+})
+
+/**
+ * The live browse feed — the streamed grid of listings, as a page block.
+ *
+ * LIVE: the document stores the query (how many, how wide) and never the
+ * listings. The platform host reads the browse index feed and renders each
+ * tile through its own card renderer, so the grid is the same streamed read
+ * the browse home paints, not a second feed.
+ */
+export const BrowseFeedBlockSchema = z.object({
+	type: z.literal('BrowseFeed'),
+	props: z.object({
+		...blockBase,
+		title: shortText.default(''),
+		limit: z.number().int().min(1).max(STOREFRONT_LIMITS.maxProductsPerGrid).default(24),
+		columns: z.union([z.literal(2), z.literal(3), z.literal(4)]).default(3),
+		emptyMessage: shortText.default('No products loaded yet.'),
+	}),
+})
+
 export const StorefrontBlockSchema = z.discriminatedUnion('type', [
 	ProfileHeaderBlockSchema,
 	HeroBlockSchema,
@@ -303,6 +364,9 @@ export const StorefrontBlockSchema = z.discriminatedUnion('type', [
 	ProductRowBlockSchema,
 	SearchBlockSchema,
 	CategoriesBlockSchema,
+	ProductStripsBlockSchema,
+	BrowseStatsBlockSchema,
+	BrowseFeedBlockSchema,
 ])
 
 export type StorefrontBlock = z.infer<typeof StorefrontBlockSchema>

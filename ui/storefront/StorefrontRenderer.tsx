@@ -17,6 +17,9 @@ import { CategoriesBlock, type CategoriesBlockBlockProps } from './blocks/Catego
 import { ProfileHeaderBlock, type ProfileHeaderBlockProps } from './blocks/ProfileHeaderBlock'
 import { TextBlock } from './blocks/TextBlock'
 import { DividerBlock, SpacerBlock } from './blocks/SpacingBlocks'
+import { ProductStripsBlock, type ProductStripsBlockProps } from './blocks/ProductStripsBlock'
+import { BrowseStatsBlock, type BrowseStatsBlockProps } from './blocks/BrowseStatsBlock'
+import { BrowseFeedBlock, type BrowseFeedBlockProps } from './blocks/BrowseFeedBlock'
 
 /**
  * Turns a validated page document into elements.
@@ -54,6 +57,9 @@ export interface StorefrontDataSlots {
 	ProductRow?: (props: ProductRowBlockProps) => ReactNode
 	Search?: (props: SearchBlockProps) => ReactNode
 	Categories?: (props: CategoriesBlockBlockProps) => ReactNode
+	ProductStrips?: (props: ProductStripsBlockProps) => ReactNode
+	BrowseStats?: (props: BrowseStatsBlockProps) => ReactNode
+	BrowseFeed?: (props: BrowseFeedBlockProps) => ReactNode
 }
 
 /**
@@ -154,6 +160,24 @@ export function StorefrontBlockView({ block, slots }: { block: StorefrontBlock; 
 				<CategoriesBlock categories={categories} title={title} categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`} />
 			)
 		}
+		case 'ProductStrips':
+			return slots?.ProductStrips ? (
+				slots.ProductStrips(block.props)
+			) : (
+				<ProductStripsBlock {...block.props} items={null} isLoading={false} isError={false} />
+			)
+		case 'BrowseStats':
+			return slots?.BrowseStats ? (
+				slots.BrowseStats(block.props)
+			) : (
+				<BrowseStatsBlock {...block.props} stats={undefined} isLoading={false} isError={false} />
+			)
+		case 'BrowseFeed':
+			return slots?.BrowseFeed ? (
+				slots.BrowseFeed(block.props)
+			) : (
+				<BrowseFeedBlock {...block.props} products={null} isLoading={false} isError={false} renderProduct={() => null} />
+			)
 		default: {
 			// Unreachable while the switch matches the union. The assignment
 			// makes that a compile-time guarantee; the `null` keeps a page that

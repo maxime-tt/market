@@ -166,6 +166,11 @@ describe('StorefrontRenderer', () => {
 			{ type: 'Image', props: { id: 'b7', url: '', alt: '', width: 'narrow', rounded: false, href: '' } },
 			{ type: 'Divider', props: { id: 'b8' } },
 			{ type: 'Spacer', props: { id: 'b9', size: 'sm' } },
+			// The live blocks: the switch must have a case for each schema member,
+			// and with no slot they must degrade to their own empty state, not throw.
+			{ type: 'ProductStrips', props: { id: 'b10', title: '', limit: 16, reverse: false } },
+			{ type: 'BrowseStats', props: { id: 'b11', align: 'center' } },
+			{ type: 'BrowseFeed', props: { id: 'b12', title: '', limit: 24, columns: 3, emptyMessage: 'Nothing yet.' } },
 		]
 		for (const block of blocks) {
 			const markup = renderToStaticMarkup(createElement(StorefrontBlockView, { block }))

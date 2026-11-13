@@ -153,6 +153,11 @@ export const storefrontCmsConfig: Config = {
 		commerce: { title: 'Products', components: ['ProductGrid', 'FeaturedProduct', 'ProductRow'] },
 		layout: { title: 'Layout', components: ['Divider', 'Spacer'] },
 		browse: { title: 'Browse', components: ['Categories'] },
+		// Live/derived content: blocks whose content is a streamed read at
+		// render time, not data stored on the page. The taxonomy had no place
+		// for these, which is why the browse home's surfaces could not be
+		// expressed as blocks. See notes/PROPOSAL-home-composition.md.
+		live: { title: 'Live', components: ['ProductStrips', 'BrowseStats', 'BrowseFeed'] },
 	},
 
 	root: {
@@ -458,6 +463,60 @@ export const storefrontCmsConfig: Config = {
 			},
 			defaultProps: { title: '', categories: [] },
 			render: renderBlock('Categories'),
+		},
+
+		// ---------------------------------------------------------------------
+		// Live blocks — content is a streamed read at render time, never stored
+		// on the page. All three are data-bound through `storefrontBlockSlots`
+		// (the browse index feed), so the editor canvas and the published page
+		// draw the same live surfaces the browse home draws.
+		// ---------------------------------------------------------------------
+
+		ProductStrips: {
+			label: 'Live product strips',
+			fields: {
+				title: { type: 'text', label: 'Section title' },
+				limit: { type: 'number', label: 'Maximum products', min: 1, max: 60, step: 1 },
+				reverse: {
+					type: 'radio',
+					label: 'Drift direction',
+					options: [
+						{ label: 'Left', value: false },
+						{ label: 'Right', value: true },
+					],
+				},
+			},
+			defaultProps: { title: '', limit: 16, reverse: false },
+			render: renderBlock('ProductStrips'),
+		},
+
+		BrowseStats: {
+			label: 'Live browse stats',
+			fields: {
+				align: { type: 'select', label: 'Alignment', options: alignOptions },
+			},
+			defaultProps: { align: 'center' },
+			render: renderBlock('BrowseStats'),
+		},
+
+		BrowseFeed: {
+			label: 'Live browse feed',
+			fields: {
+				title: { type: 'text', label: 'Section title' },
+				limit: { type: 'number', label: 'Maximum products', min: 1, max: 60, step: 1 },
+				columns: {
+					type: 'select',
+					label: 'Columns',
+					options: [
+						{ label: 'Two', value: 2 },
+						{ label: 'Three', value: 3 },
+						{ label: 'Four', value: 4 },
+					],
+				},
+				emptyMessage: { type: 'text', label: 'Message when empty' },
+			},
+			defaultProps: { title: '', limit: 24, columns: 3, emptyMessage: 'No products loaded yet.' },
+			render: renderBlock('BrowseFeed'),
 		},
 	},
 }
