@@ -1,8 +1,10 @@
-# PROPOSAL — the home composition, and what it fixes downstream
+# DECISION — the home composition: Option C
 
-**Status:** proposal for the owner's call. Not a ruling.
-**Why now:** it blocks stage 4 of `DECISION-retire-bidder-held-path.md` ("wire into the app
-experience"), and it is the same question as "auctions are completely separate from the rest".
+**Status:** **DECIDED by the owner (Maxime), 2026-11-13 — Option C.** The CMS stays the home
+composition layer, and the block set is extended to cover the live surfaces.
+**Why it mattered now:** it blocked stage 4 of `DECISION-retire-bidder-held-path.md` ("wire into
+the app experience"), and it is the same question as "auctions are completely separate from the
+rest".
 **Date:** 2026-11-13.
 
 ---
@@ -130,16 +132,49 @@ block is the way auctions enter the app experience; the Catalogue is not.
 - The **`ProductRow` fallback carrying one hardcoded d-tag**, which is a placeholder masquerading as
   content.
 
-## 6. The one question I need answered
+## 6. The question, and the answer
 
 **Which surface wins for the home: the browse hero's live experience, or an authored CMS page?**
 
-My recommendation is **Option C** — keep the CMS as the composition layer, and extend its block set
-so it can express the live surfaces the hero had (strips, measured stats, feed) plus a new auction
-block. It is the only option that satisfies the owner's CMS ruling *and* restores the lost features
-*and* gives auctions a place in the composition, which is the same problem stated three ways.
+**ANSWERED: Option C.** The CMS stays the composition layer (honouring the owner's ruling that the
+home is CMS-produced), and its block set is extended so it can express the live surfaces the hero
+had — product strips, measured stats, a live feed — plus a new **auction** block.
 
-If the answer is instead "the browse hero *is* the home, the CMS is for other pages", that is
-Option A and it is legitimate — but then the auction block has to be added to `BrowseIndexHost`
-instead, and the owner's CMS ruling should be formally retired rather than left contradicting the
-code.
+That single move satisfies the CMS ruling *and* restores the lost features *and* gives auctions a
+place in the composition, which is the same problem stated three ways.
+
+**In flight as a result:** the three live blocks (product strips, measured stats, browse feed) in a
+dedicated worktree. The **auction block** follows the relay read adapter — it cannot be built until
+the `1440`-series read path exists, because a block that cannot resolve its data is exactly the
+placeholder problem this decision is fixing.
+
+## 7. Blocker found while writing the test plan — the home is not authorable
+
+Verified 2026-11-13, on master:
+
+- The **home** reads the **app key's** kind-30024 document with **`d = 'home'`**
+  (`platform/web/routes/index.tsx:57` — `useStorefrontAddressPage(APP_PUBKEY, 'home')`).
+- The **editor** (`StorefrontBuilder`, mounted at
+  `platform/web/routes/_dashboard-layout/dashboard/account/profile-page.tsx`) publishes kind-30024
+  with **`d = 'storefront-page'`** (`platform/web/storefront/storefrontPublish.ts:60`) as the
+  **logged-in user**.
+
+**The addresses do not meet, and the signer is not the app key.** So publishing a page in the CMS
+editor can never change the home, which is why the home still renders only its inline fallback — a
+`Search` block, one `ProductRow` holding **a single hardcoded d-tag**, and three category links.
+
+**Consequence for Option C:** the new live blocks are useless for the home until the home can
+actually be authored. Fix one of:
+
+- let the editor target the app key's `home` address (an admin-scoped editor, or an explicit address
+  selector), or
+- change the home's addressing to `storefront-page` so the existing editor reaches it (simpler, but
+  collides with per-user profile pages using the same address), or
+- publish the home document at the event level as the app key (a stopgap for testing, not a fix —
+  the app key is not exposed in the UI).
+
+**Not decided here.** It is a prerequisite for "author a real home document", which is an owner
+editorial call, so it is flagged rather than chosen.
+
+**Also relevant:** `/home` resolves through the `/$vanityName` route to `StorefrontAddressPage`, so
+the app key's `home` address can be *inspected* directly even while nothing can write it.
