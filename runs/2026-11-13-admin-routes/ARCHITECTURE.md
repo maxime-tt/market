@@ -3,8 +3,8 @@
 **Run:** `runs/2026-11-13-admin-routes` (run A) · **Role:** consolidator, one implementation plan out of four
 candidate designs plus six owner rulings · **Base:** `/home/admin_maxime/work/market`, `master`, HEAD
 `3a07e7067` · **State:** read-only. No source change, no branch, no build, no deploy. This file and
-`IMPLEMENTATION-PLAN.md` (plus `report-consolidation.md`, `report-revision-2.md` and `report-revision-3.md`) are the
-only things written.
+`IMPLEMENTATION-PLAN.md` (plus `report-consolidation.md`, `report-revision-2.md`, `report-revision-3.md` and
+`report-revision-4.md`) are the only things written.
 
 **REVISION 2 (2026-11-13, same day).** Three new owner rulings arrived after this document was first written —
 `ruling-local-pages-acl-and-legacy-routes.md` — and they invalidate specific passages below. §REVISION 2 at the
@@ -16,6 +16,14 @@ REVISION 2 — the **widget layer** (§5.7) and the **relay split** (§5.6) — 
 leans (§R3.3). It is the newest authority in this file: §REVISION 3 lists every passage it invalidated, and where it
 and REVISION 2 disagree, this revision wins. The shell/page-store model of REVISION 2 is explicitly **not**
 re-opened.
+
+**REVISION 4 (2026-11-13, fourth pass) — a SCOPE CUT, not a correction of facts.**
+`ruling-react-components-and-deferred-widgets.md` **demotes the web-component/widget-bundle layer of REVISION 3 to
+DEFERRED**: page composition is **React components — the CMS's existing block definitions**, the loader is *"a
+Plebeian Market instance or similar"*, and no script binding or widget compiling is built. The **serving model is
+untouched** (§R4.2), the routing work is stated as the deliverable, and the ingest-time renderer is **named and
+priced** rather than assumed (§R4.3). Where this revision and REVISION 3 disagree, **this one wins**; the widget
+text is kept, marked deferred, with its consequence (§R4.5).
 
 **What this document is.** The owner accepted a set of architecture rulings. They supersede parts of the four
 candidate designs (`designs/A-one-writer-per-event.md`, `designs/B-server-authoritative.md`,
@@ -49,7 +57,164 @@ critical path (ruling 1, §5.3, §5.5).
 
 ---
 
+## REVISION 4 — what changed and why (a SCOPE CUT)
+
+**Authority:** `ruling-react-components-and-deferred-widgets.md` (owner, 2026-11-13), binding. It does **not** correct
+a fact; it removes a layer from the build. The owner's words, which are the ruling (`:5-9`):
+
+> *"…what we usually fall back on is the fact that we can stick to React components, assume the loaders will either be
+> Plebeian Market instances or similar, and thus stick to our current widget definitions that we use in the CMS, to
+> avoid script binding and widget compiling. I think it would be better to stick that to simplify scope and focus on
+> the routing functionality first"*
+
+And the scope consequence is stated by the ruling itself (`:60-65`): *"A third party cannot ship a page into the
+instance without the instance building their block. The page-composition vocabulary is ours."*
+
+### R4.1 Every passage this scope cut changed, with what it changed to
+
+| # | passage as written in REVISION 3 | changed by | now reads as |
+|---|---|---|---|
+| 1 | §3.1 nouns: `PAGE` "REFERENCES widgets by registry id", plus a second block adding the nouns `WIDGET` and `WIDGET REGISTRY` | ruling "reuse the EXISTING CMS widget definitions" | `PAGE` references **the existing CMS block types** (`ProductGrid`, `ProductRow`, `ProductStrips`, `Search`, `Categories`, `Hero`, `Text`, `Image`, `LinkList`, `Divider`, `Spacer`, `BrowseStats`, `BrowseFeed`, `AuctionList`, …) — real React components already in the tree and already in the CMS editor. `WIDGET` / `WIDGET REGISTRY` become a **DEFERRED** block in the same place, not a noun of the model (§3.1) |
+| 2 | §3.1 paragraph "A widget registry is not the 'manifest' this paragraph refuses" | same | replaced by a paragraph that keeps the refusal of a second routing record and says the block vocabulary is **the instance's build**, not a registry the page talks to (§3.1) |
+| 3 | §5.5 stored page, field "`its widget ids` — the registry ids the document references, so `pageHtml` can emit exactly those script imports without re-scanning" | nothing is emitted per block | **removed**. The stored page is document + fragment + meta + identity + series memberships. There is no id list because there is no per-block asset to emit (§5.5) |
+| 4 | §5.5.2 block table, row 2: the five data-bound blocks at ingest are "**an empty widget mount point**", at request "a **widget** upgrades it and fetches its own live data in the browser" | same | at ingest: a **placeholder region** carrying the block's `type`; at request: **served as-is, then filled in the browser by the existing React slot map** after hydration. No element upgrade, no bundle (§5.5.2) |
+| 5 | §5.5.2 split rule: "*anything that is a function of live network state is a widget and is never rendered on the server*" | same | "*…is a **data-bound block** and is never rendered on the server*" — same rule, our vocabulary again (§5.5.2) |
+| 6 | §5.5.2 correcting box, last sentence: "(b) builds a smaller renderer … `pageRender.ts` renders static blocks and emits mount points" | same | still true and now sharper: the renderer renders **static blocks** and emits a **placeholder** for the five data-bound ones. Its mechanism is named and priced in §R4.3 |
+| 7 | §5.5.3 dispatch, step 5a: `→ widget ids resolve (§5.7.2) → pageRender → writeAtomic` | same | `→ pageRender → writeAtomic`. **The second ingest refusal ("a page that names an unknown widget id is refused") is removed**, leaving the one that was always the real one: a page that cannot render is never stored (§5.5.3) |
+| 8 | §5.7 in full — heading "The widget layer — pages reference widgets, never source", §5.7.1 four constraints, §5.7.2 the registry and its collision, §5.7.3 "how it actually renders", §5.7.4 the measured cost table, §5.7.5 | the scope cut | **kept verbatim in substance and marked DEFERRED** (§5.7). It is the record of *what the layer would be* and *why it is not being built now*, with the consequence stated. Nothing in it is implemented by any increment (§R4.5) |
+| 9 | §10 O-7 table, row "**widget** (§5.7, this run's model)" | same | row relabelled "**widget** (§5.7, **deferred**)" — the slot/widget distinction survives, the widget column is future (§10 O-7) |
+| 10 | §10 O-8 "Who admits a widget to the registry?" — an open process question of this build | same | **deferred with the layer**, not an open question of this build and not needed by any increment (§10 O-8) |
+| 11 | §13 diagram: "Dynamic regions: an EMPTY MOUNT POINT, filled in the browser by a WIDGET (custom element, script-imported bundle)"; page store "+ the widget ids the document references"; write line "`widget ids in registry?`" | same | "data-bound blocks: a PLACEHOLDER, filled in the browser by the existing React slot map **after** hydration"; no id list; dispatch is `parse → render → store` (§13) |
+| 12 | §13 invariant sentence 5: "…or gives a page a way to name a widget by URL, it is wrong" | same | "**If it server-renders a page's dynamic content, or lets a page introduce code, it is wrong.**" — the invariant without the deferred vocabulary (§13) |
+| 13 | §REVISION 3's table and §REVISION 2's tables, presenting the widget model as current | same | a **READ THIS FIRST** note added at the head of §REVISION 3 saying which of its rows are deferred and which stand; the tables stay as history (§REVISION 3) |
+
+**Not changed by this cut:** the relay split (§5.6), the single ingest endpoint, the ACL, leases, the routing file, the
+page store, and every served-page property (§R4.2).
+
+### R4.2 The serving model is **not** touched — stated explicitly, because a scope cut invites over-reading
+
+These three properties are preserved exactly, because they carry the owner's SEO and dynamic-content requirements
+(`ruling-react-components-and-deferred-widgets.md:47-58`):
+
+1. **A bound page is served from local storage, with no relay round-trip.** The routing decision never touches the
+   network (§2 rules 1–2, §5.3, §5.4, §5.5).
+2. **Render once at ingest, store the fragment, hydrate the SAME DOM client-side** rather than re-rendering — so the
+   page a crawler sees and the page a person sees cannot diverge (§5.5.2). The cut does not weaken this; it *reduces*
+   what has to be hydrated (no element upgrade layer).
+3. **Data-bound blocks fetch their own live data in the browser after hydration.** This is coherent **because the
+   existing data-bound CMS blocks already behave that way**: `platform/web/storefront/StorefrontBlockSlots.tsx:48-56`
+   runs `useQuery(productsByPubkeyQueryOptions(pubkey))` and passes `isLoading` into the props-only block
+   (`ui/storefront/blocks/ProductGridBlock.tsx:67,90`), so the block is a React component that renders without data and
+   fills itself when data arrives **[S]**. Removing the widget layer restores that mechanism rather than replacing it.
+
+### R4.3 The mechanism that renders the stored fragment at ingest — **named and priced**
+
+REVISION 2 cited `renderToStaticMarkup` in 102 files as evidence that server rendering was established; REVISION 3
+measured that **all 102 are tests**, so it establishes a *convention*, not a production path. This revision closes the
+gap by naming the mechanism and its actual cost. **Measured at `fee719957`** (commands in `report-revision-4.md` §2):
+
+| question | answer | evidence |
+|---|---|---|
+| is `react-dom/server` present? | **yes**, a declared dependency and installed | `package.json:92` `"react-dom": "^19.2.6"`; `node_modules/react-dom` 19.2.6 and `node_modules/react` 19.2.6 **[M]** |
+| is it used in **non-test** code? | **no — 0 files** | `grep -rl renderToStaticMarkup --include=*.ts --include=*.tsx . --exclude-dir=node_modules \| wc -l` → **102**; the same list filtered `\| grep -vE '\.(test\|spec)\.(ts\|tsx)$'` → **0**; by top-level dir **94 `ui/`, 8 `platform/`** **[M]**. Ten files under `platform/` import `react-dom/server` and all ten are `*.test.*` **[M]** |
+| any precedent for rendering to a string in `platform/server/`? | **none.** `grep -rn "react" platform/server/ --include=*.ts` → **0 hits**; `grep -rn "from '@ui/" platform/server/ --include=*.ts` → **0** **[M]** | the only HTML the server emits today is built by **string concatenation**: `sdk/commerce/products/ogTags.ts:301-306` (with `escapeHtmlAttribute` at `:233`) injected into a shell it fetches from itself (`platform/server/http/og.ts:27-31`, `platform/server/ogMeta.ts:198-215`) **[S]** |
+| does it work where it has to work? | **yes, measured**: the real `ui/storefront` block components render to a string in a **Bun process with no `window` and no `document`** | probe output in `report-revision-4.md` §2.3: `renderToStaticMarkup` over `StorefrontBlockView` → 1054 chars of HTML, `typeof window === 'undefined'`, `typeof document === 'undefined'` **[M]** |
+
+**So the mechanism is:** a new `pageRender.ts` imports `renderToStaticMarkup` from `react-dom/server` and
+`StorefrontRenderer` / `StorefrontBlockView` from `ui/storefront/`, runs **once at ingest inside the Bun server
+process**, and returns `{ html, meta }`. The data-bound five are rendered with **no slot map**, which is not a
+special case: `ui/storefront/StorefrontRenderer.tsx:103-166` already falls back to each block's props-only "no data
+yet" state when a slot is absent (`:105-136`), and it is rendered as the placeholder's content.
+
+**What it costs, item by item:**
+
+1. **One module, not a subsystem.** `pageRender.ts` maps document → elements → string. No framework, no streaming
+   API, no per-request rendering. The TSX it imports is transpiled by Bun at import, and the server entrypoint is
+   already run as `bun platform/web/app/entry.tsx` (`IMPLEMENTATION-PLAN.md` §0.1/E3), so **no build step and no
+   `package.json` change** are added. **[M]** for the dependency; **[J]** for the module size.
+2. **One boundary-guard amendment — the cost REVISION 3 missed.** `platform/boundary.test.ts:83-88` asserts that no
+   module under `platform/server/` imports `react`, `react-dom*`, or `@ui/*`:
+
+   ```ts
+   test('server code does not import the web host or React', async () => {
+       const violations = (await collectImports(join(PLATFORM_ROOT, 'server')))
+           .filter(({ specifier }) => /^(?:@platform\/web|react(?:-dom)?(?:\/|$)|@ui\/)/.test(specifier))
+   ```
+
+   Those are precisely the three specifiers `pageRender.ts` needs. Two honest options, and the plan picks one as
+   **OUR CHOICE**: keep the module at `platform/server/routes/pageRender.ts` and add **one named allowlist entry**
+   with the reason, because the guard's subject is "server code does not pull the browser host in" and this module
+   renders React **to a string, with no DOM** — the same thing 102 test files already do; *or* move the module outside
+   `platform/server/` (e.g. `platform/render/pageRender.ts`) and leave the guard untouched, at the cost of a
+   one-file directory. **Cost of being wrong:** E12/S9 (`bun test --isolate platform/boundary.test.ts`) fails, which
+   is loud and immediate, not silent.
+3. **One resolution trap, measured so it is not hit in production.** A probe run from a directory without
+   `node_modules` resolved `react-dom@19.3.1` from Bun's global install cache against the repo's `react@19.2.6` and
+   failed with *"Invalid hook call … more than one copy of React"* **[M]**. Both React packages must resolve from
+   **one tree**; that is automatic once `pageRender.ts` lives in the repo, and it is the reason this was measured
+   rather than assumed.
+4. **A hydration obligation, read from source.** The server renders the five data-bound blocks slot-less (the empty
+   state), while the client's slot passes `isLoading` from its query (`StorefrontBlockSlots.tsx:50,56` →
+   `ProductGridBlock.tsx:90`). If the client's **first** commit renders the slot map, those five subtrees hydrate as
+   **mismatches** and React 19 re-renders them — the DOM a person sees would then differ from the DOM a crawler got,
+   which is this run's rule 2 failing one level down. The mitigation is in the seam the plan already builds: the
+   `#__AR_PAGE__` client applies the live slot map **after** hydration, not during it. **Named as a criterion, not a
+   hope** (`IMPLEMENTATION-PLAN.md` §1.4.2, E10b).
+5. **Not paid:** no SSR tier, no stream rendering, no style extraction. The CSS import at
+   `ui/storefront/StorefrontRenderer.tsx:8` (`./storefront-theme.css`) did **not** break the Bun server import
+   **[M]**; the fragment carries classes and inline theme vars exactly as it does in the browser today.
+
+### R4.4 Scope of this build — what is IN, and what is explicitly OUT
+
+The owner's priority is explicit (`ruling-react-components-and-deferred-widgets.md:21-22`: *"focus on the routing
+functionality first"*). Stated once, so no increment has to imply it:
+
+| | **IN this build** | |
+|---|---|---|
+| 1 | the routing file — one JSON file, validator, single writer (`apply`), boot-refuses-if-bad | §4 |
+| 2 | resolution — three rungs, two binding kinds, longest-prefix, 404 default | §3.2–§3.5 |
+| 3 | the page store — local, one file per page, atomic writes, series index | §5.5 |
+| 4 | serving — the fragment from local storage, no relay, `#__AR_PAGE__`, hydrate-the-same-DOM | §5.5.2 |
+| 5 | the one ingest endpoint at the app relay's POST surface, kind-dispatched | §5.5.3, §5.6 |
+| 6 | the ACL — four levels on the signing pubkey, `may()`, `grants`, visible refusals | §7 |
+| 7 | leases — top-level only, term, 404 on lapse, no grace | §3.4, §7.4 |
+| 8 | the management surface, and the legacy registry's retirement | plan §9 |
+
+| | **OUT of this build (deferred, recorded)** | |
+|---|---|---|
+| A | **the widget / portability layer** — custom elements, per-widget bundles, `WIDGET`/`WIDGET REGISTRY`, script imports, widget compiling, a page shipping code, "link a git repo" as delivery | §5.7, §R4.5 |
+| B | **modular sub-apps** — compiled pages' contents modularised into replaceable regions; "basic slots" stays the whole requirement (O-7) | §10 O-7 |
+| C | **the signed lease-confirmation ledger**, and honouring another instance's leases | §11 |
+| D | **list management** — `list` references resolved, user-authored lists, the product picker | §6 |
+
+### R4.5 Deferred is not deleted — the distinction, and the consequence
+
+The widget layer is **DEFERRED**, and the door is not silently closed. Recorded in the same words the ruling uses so a
+later reader cannot mistake this for an omission:
+
+- **What it would have been:** §5.7 in full — a page referencing a widget **by registry id, never by URL** (§5.7.2),
+  delivered as a custom element from a script-imported, content-hashed bundle the operator shipped (§5.7.3).
+- **Why it is not built now:** it is **new machinery on three measured axes** — 0 occurrences of `customElements` /
+  `extends HTMLElement` / `attachShadow`; no widget-bundle build (`build.ts:138-140` derives entrypoints from
+  `src/**.html` and there are 0 such files); no remote script loading in app code (§5.7.4). Deferring **declines to
+  build something absent**; it does not remove something present.
+- **The consequence, plainly:** **a third party cannot ship a page into the instance without the instance building
+  their block.** The page-composition vocabulary is ours — the CMS's block registry — and extending it means shipping
+  React components with the app. If a partner ever needs to contribute a block, **that** is the work the deferred
+  layer represents, and it is new machinery, not a configuration change.
+- **It is distinct from the DELETED.** The **auctions-relay-as-app-relay** conflation, the **two-write-surface** shape
+  and the **`/api/pages/publish`** endpoint are deleted (§5.5.3, §5.6). The widget layer is *not* deleted: §5.7 stays
+  in this document as the design of record, and O-8 stays as the process question it will raise.
+
+---
+
 ## REVISION 3 — what changed and why
+
+> **READ THIS FIRST (added by REVISION 4).** This revision's **widget layer** — rows 3, 4, 5, 8 in the table below, and
+> all of §5.7 — is **DEFERRED** by `ruling-react-components-and-deferred-widgets.md`. The **relay split** (§5.6) and the
+> **single ingest endpoint** (§5.5.3, §5.6.3) stand and are not affected. The tables in this section are kept as the
+> history of what REVISION 3 corrected; where they describe the widget layer as the model, §REVISION 4 and §5.7's
+> DEFERRED banner are the current text.
 
 **Authority:** `ruling-pages-widgets-and-app-relay.md` (owner, 2026-11-13). It post-dates REVISION 2 and corrects
 **one layer** of it: pages are **web-components-focused, rendered in the browser from script-imported widget
@@ -202,6 +367,11 @@ intent — arrives as a **signed Nostr event** at the **app's own internal relay
 ingest path (§5.6). The **auctions relay is not that relay**: it is a test placeholder standing in for the real
 public relays (§5.6.1). Reads never touch either relay; writes touch only the internal one, and only to be ingested.
 
+**REVISION 4 adds the composition vocabulary, and it is not a new noun.** A page's blocks are **React components the
+CMS already defines**; the loader is *"a Plebeian Market instance or similar"*; and the page is rendered once at
+ingest from those components, then hydrated by the same app. No web components, no bundle per block, no code in a page
+(§R4.2, §5.7).
+
 ---
 
 ## 2. The anti-pattern to avoid, measured
@@ -258,23 +428,36 @@ superseding everything that proposed otherwise.
 
 ```
 BINDING     a path resolves to a target. Two kinds, never one row with an optional term (§3.2).
-PAGE        the page DEFINITION: a document, authored by the page's author, that REFERENCES widgets by
-            registry id and carries no source of any kind (§5.7). Kind 30024 on the wire, `d` = its identity.
+PAGE        the page DEFINITION: a document, authored by the page's author, that REFERENCES blocks by
+            the CMS's existing block type and carries no source of any kind (§5.7). Kind 30024 on the
+            wire, `d` = its identity.
 PAGE STORE  the instance's LOCAL copy of the pages it serves: the document, plus what is needed to
             answer a request without a relay (§5.5). Storage format is the implementer's choice —
             ruling 1 says so explicitly ("a custom database in a more efficient way, I don't mind").
 REFERENCE   what a page block points at: a coordinate, or a list name (reserved, not built — §6).
 ```
 
-**REVISION 3 adds two nouns that are not page content and not paths** — they are the widget layer, and they are
-listed separately because neither lives in the routing file or in the page document:
+**REVISION 4 — what a page references, and the vocabulary it does not have.** A page references **the block types the
+CMS already ships** — `ProductGrid`, `ProductRow`, `ProductStrips`, `Search`, `Categories`, `Hero`, `Text`, `Image`,
+`LinkList`, `Divider`, `Spacer`, `BrowseStats`, `BrowseFeed`, `AuctionList`, … — which are **React components already
+in the tree and already in the CMS editor** (`platform/web/storefront/storefrontCms.tsx:149,196` builds the editor's
+`components` map over the same union `sdk/commerce/storefront/storefrontPage.ts:293-306` closes) **[S]**. The
+composition vocabulary is therefore **ours**; a third party extending it ships a React component with the app
+(§R4.5).
+
+**DEFERRED, and not nouns of this model** (`ruling-react-components-and-deferred-widgets.md:38-45`). Listed here so the
+door is visibly open rather than silently shut, and so nothing below reads as if it were built:
 
 ```
-WIDGET          a custom element delivered as a script-imported bundle, built into the deploy artefact and
-                served as a static asset. It fetches its own live data in the browser (§5.7).
-WIDGET REGISTRY the instance's allowlist for widgets: id → element name → bundle path → props schema.
-                A page may only name an id that is in it (§5.7.2).
+WIDGET          (DEFERRED) a custom element delivered as a script-imported bundle, built into the deploy
+                artefact and served as a static asset, fetching its own live data in the browser (§5.7).
+WIDGET REGISTRY (DEFERRED) the instance's allowlist for widgets: id → element name → bundle path →
+                props schema. A page would name an id, never a URL (§5.7.2).
 ```
+
+Both are described in full in §5.7, which is retained as the **design of record**, and **neither appears in any
+increment**. Deferring them is `[M]`-backed as *declining to build something absent*: 0 custom elements, 0 widget
+bundles, 0 remote script loads in app code (§5.7.4).
 
 There is no separate "route table event", no "claim event", no "default event", no "manifest", no sharded
 projection, no event-store, no database for *routing*. A binding lives in the routing file (§4). A page is still
@@ -283,10 +466,11 @@ because a round trip per request decides whether the page can be indexed, previe
 routing file holds **no page content** — only what the instance has decided a path means; the page store holds
 content and nothing about paths.
 
-**A widget registry is not the "manifest" this paragraph refuses.** That refusal is about a second *routing*
-record (a sharded table of paths on a relay). The widget registry lists **code the instance already ships**, keyed
-by id, and it never names a path. The distinction is load-bearing: paths come from the routing file, code comes
-from the build artefact, and a page may reference both without owning either (§5.7.2).
+**Why this is not the "manifest" the previous paragraph refuses, and not a registry either.** That refusal is about a
+second *routing* record (a sharded table of paths on a relay). The block vocabulary is different in kind: it is **code
+the instance already ships**, it never names a path, and a page reaches it by *type* through the same closed union the
+schema validates — no lookup table, no registration, no per-block asset. Paths come from the routing file; blocks come
+from the build artefact; a page references both without owning either (§5.7.2, §R4.5).
 
 ### 3.2 Two binding kinds — never one row with an optional expiry
 
@@ -700,9 +884,12 @@ the rendered HTML fragment       produced once, at ingest (§5.5.2)
 its head meta                    title / description / og:* / twitter:* / canonical
 its identity                     (author, d), kind 30024, event id, created_at
 its series memberships           from ["t", …] tags, if any
-its widget ids                   the registry ids the document references, so pageHtml can emit
-                                 exactly those script imports without re-scanning (§5.7.3)
 ```
+
+**REVISION 4 removed one field from that list** — "the widget ids the document references, so `pageHtml` can emit
+exactly those script imports". With the widget layer deferred there is **no per-block asset to emit** (§R4.5), so the
+store holds nothing about block identity beyond the document itself. A page is data; the code that renders it is the
+app.
 
 **5.5.1 Storage format — OUR CHOICE, and deliberately boring.** Two shapes of file, no database, no index server:
 
@@ -746,22 +933,34 @@ the owner's, both binding:
 > a **static asset fetch**. Rendering per request is the thing being eliminated, not merely reduced.
 
 So the split, stated as a rule a future reader can test a proposal against: **anything that is a function of the
-page's own data is rendered once at ingest; anything that is a function of live network state is a widget and is
-never rendered on the server.**
+page's own data is rendered once at ingest; anything that is a function of live network state is a data-bound block
+and is never rendered on the server.** (REVISION 4: "widget" became "data-bound block" — the rule is unchanged, our
+vocabulary is the CMS's.)
 
 | block types (`storefrontPage.ts:293-306`) | at ingest | at request | why |
 |---|---|---|---|
 | `ProfileHeader`, `Hero`, `Text`, `LinkList`, `Image`, `Divider`, `Spacer` | **rendered to HTML** | served as-is | pure presentation of page data; no query, so no staleness |
-| `ProductGrid`, `FeaturedProduct`, `ProductRow`, `Search`, `Categories` | **an empty widget mount point** | a **widget** upgrades it and fetches its own live data in the browser | live commerce data: a frozen copy is a stale price and a dead add-to-cart |
+| `ProductGrid`, `FeaturedProduct`, `ProductRow`, `Search`, `Categories` | **a placeholder region** carrying the block's `type`, with the block's own "no data yet" view as its content | served as-is, then **filled in the browser by the existing React slot map after hydration** | live commerce data: a frozen copy is a stale price and a dead add-to-cart |
 
-The 7-static/5-dynamic split is REVISION 2's and is unchanged; what changed is **what fills the slot**. It is no longer a
-React slot map resolved in the client bundle — it is a custom element delivered as a script-imported bundle (§5.7).
-The slot markup is the widget's mount point and its fallback content, so a client that fails to load the bundle
-still shows the page, minus that region.
+The 7-static/5-dynamic split is REVISION 2's and is unchanged. **REVISION 4 restored what fills the slot**, and it is
+what REVISION 2 said before REVISION 3 changed it: the client's own React components, supplied through
+`StorefrontDataSlots` (`ui/storefront/StorefrontRenderer.tsx:50`) by
+`platform/web/storefront/StorefrontBlockSlots.tsx:192` **[S]**. There is no element upgrade, no bundle, and no script
+import (§R4.5). The placeholder is rendered by the same renderer with **no slot map** — `StorefrontBlockView` already
+falls back to the props-only view for every data-bound type (`ui/storefront/StorefrontRenderer.tsx:105-136`) — so the
+crawler sees the block's honest empty state rather than a blank hole.
+
+**How the fragment is produced, named rather than assumed (REVISION 4).** `pageRender.ts` calls
+`renderToStaticMarkup` from `react-dom/server` over `ui/storefront`'s components **inside the Bun server process, once,
+at ingest**. Measured: react-dom 19.2.6 is already a dependency (`package.json:92`), the real block components render
+to a string under Bun with **no `window` and no `document`**, and `platform/server/` has no React import today, so the
+module is new — one module, no dependency change, no build step, one boundary-guard entry. The full cost, including the
+hydration obligation for the five data-bound regions, is §R4.3.
 
 **What the crawler sees, stated plainly so the SEO claim is not overclaimed.** A crawler that runs no JavaScript
 sees the page's **static content and its head meta** — headings, text, links, images, `og:`/`twitter:`/canonical.
-It does **not** see widget output, because widget output is fetched in the browser by design. That is the honest
+It does **not** see the five data-bound blocks' live content, because that is fetched in the browser by design — it
+sees their empty state. That is the honest
 boundary of the ruling's model, and it is the same boundary `storefrontPage.ts:10-22` already draws.
 
 > **A correction to the ruling's lean, retained from REVISION 2.** The lean says (b) "gives instant responses and
@@ -770,7 +969,9 @@ boundary of the ruling's model, and it is the same boundary `storefrontPage.ts:1
 > render-at-ingest is **when** it runs, not **whether it exists**. What (b) genuinely buys is that a request does
 > no rendering at all, which is what "instant" requires. REVISION 3 changes nothing in this box and adds one
 > consequence: the renderer (b) builds is smaller than REVISION 2 assumed, because it never has to render a
-> dynamic surface — `pageRender.ts` renders static blocks and emits mount points.
+> dynamic surface — `pageRender.ts` renders static blocks and emits a placeholder for each data-bound block. REVISION 4
+> names that renderer's mechanism and prices it (§R4.3): `renderToStaticMarkup` from `react-dom/server`, already a
+> dependency, one new module, no build step.
 
 **5.5.3 The ingest path is write-restricted, and there is exactly one of it (REVISION 3).** This is the part
 ruling 1 calls non-negotiable, and the part the current system does not have (§R2.3). Ruling §5 settles **what the
@@ -785,8 +986,8 @@ POST /api/app-events           body: one signed NIP-01 event, any kind in the ap
   3. kind allowlist (below)  → else 400 'kind-not-allowed' ← "specific kinds"
   4. author allowlist: the level lookup IS the allowlist   ← "specific pubkeys"
   5. dispatch on kind:
-       30024  page      → size caps → parseStorefrontPage → widget ids resolve (§5.7.2)
-                          → pageRender → writeAtomic(page file) + series index
+       30024  page      → size caps → parseStorefrontPage → pageRender → writeAtomic(page file)
+                          + series index
        <route-intent>   → the intent branch: may(actor, op, path, file) → apply(mutation)   (§4.5, §7.1)
   6. 200 { stored: true, kind, path? }  |  4xx { refused: <reason> }
 ```
@@ -799,8 +1000,10 @@ page. §5.6.3 says where the endpoint physically lives and what that costs.
 Three consequences that are design, not implementation detail:
 
 - **A page that cannot render is never stored**, which is why §3.2's "item unavailable" narrows to non-page
-  targets. REVISION 3 adds a second ingest refusal beside it: **a page that names a widget id found nowhere in the
-  registry is refused at ingest** (§5.7.2), for the same reason — a stored page must be a page that works.
+  targets. **REVISION 4 removed the second ingest refusal REVISION 3 added** ("a page that names a widget id found
+  nowhere in the registry is refused", §5.7.2): with the widget layer deferred there is nothing to resolve an id
+  against, and the block vocabulary is a closed union the parser already enforces. **One refusal remains, and it is
+  the one that matters** — `pageRender` must succeed before the write commits.
 - **Restriction is enforced on the *pubkey*, not on a submitted role.** The caller cannot claim a tier; the server
   looks the tier up (§7.1), which is exactly the shape ruling 2 describes for the ACL. **REVISION 3 collapses the
   two write surfaces into one endpoint dispatched by kind**, so the actor model is evaluated once, in one handler,
@@ -910,27 +1113,41 @@ data-management obligations, and a bare `/api/…` handler does not.
 
 ---
 
-### 5.7 The widget layer — pages reference widgets, never source
+### 5.7 The widget layer — **DEFERRED** (REVISION 4), recorded so the door is not silently closed
 
-`ruling-pages-widgets-and-app-relay.md:27-44`, binding:
+> **STATUS: DEFERRED — not built by any increment in this plan.**
+> `ruling-react-components-and-deferred-widgets.md` (2026-11-13) rules that page composition **stays on React
+> components and the CMS's existing block definitions**, *"to avoid script binding and widget compiling"*. Everything
+> in §5.7.1–§5.7.5 is therefore the **design of record for a layer that is not being built now**: it is why the
+> deferral is a choice rather than an omission, what the layer would cost if it is ever required, and the invariant it
+> would have to respect. **The consequence, restated from the ruling's own words:** *"A third party cannot ship a page
+> into the instance without the instance building their block. The page-composition vocabulary is ours"*
+> (`:60-65`). Nothing below contradicts §5.5.2's current model (React components, a placeholder, the existing slot map)
+> — §5.5.2 is what is built; §5.7 is what is deferred.
+
+**The ruling this text was written to** (`ruling-pages-widgets-and-app-relay.md:27-44`) remains on the record as the
+thing the layer would satisfy:
 
 > "For sure page publishing should not be source code (can link a git repo) but web components focused, renderable
 > directly in the browser using script imports for widget libraries."
 
 #### 5.7.1 What a page is, and four things it is not
 
-A **page definition** is data (§3.1). Ruling §3 constrains it in four ways, and the fourth is the one that decides
-the whole design:
+A **page definition** is data (§3.1). Ruling §3 constrained it in four ways, and the fourth is the one that decided the
+whole design. **REVISION 4: items 1–3 describe the build; item 4 is the deferred half.**
 
-1. **It must not contain or inline source.** No script, no JSX, no inline HTML.
-2. **It must not contain a copy of a widget.** A widget is referenced, never embedded.
-3. **It may link a git repo** — the place a widget or sub-app is built from — **as a link**. Measured toehold: the
-   document's `safeHref` already allows `https://` URLs inside a `LinkList` block
-   (`sdk/commerce/storefront/storefrontPage.ts:103`, `isSafeHref` at `:70-97`), so a repo link needs no new
-   mechanism and no new field. The server **never fetches it**, at ingest or at serve.
-4. **It must be renderable directly in the browser**, with widget libraries pulled in by **script imports**.
+1. **It must not contain or inline source.** No script, no JSX, no inline HTML. **Still true, and unaffected** — the
+   document is the same closed union (§5.5).
+2. **It must not contain a copy of a block.** A block is referenced by its `type`, never embedded. **Still true.**
+3. **It may link a git repo** — the place a *deferred* widget or sub-app would be built from — **as a link**. Measured
+   toehold: the document's `safeHref` already allows `https://` URLs inside a `LinkList` block
+   (`sdk/commerce/storefront/storefrontPage.ts:103`, `isSafeHref` at `:70-97`), so a repo link needs no new mechanism
+   and no new field. The server **never fetches it**, at ingest or at serve. **Still true of a link**; what is deferred
+   is any reading of it as *delivery* (§R4.5).
+4. **(DEFERRED)** *It must be renderable directly in the browser, with widget libraries pulled in by **script
+   imports**.* This is the clause the owner set aside, and it is the only one in §5.7.1 that is not built.
 
-#### 5.7.2 The collision this layer walks into, and the resolution
+#### 5.7.2 The collision this layer walks into, and the resolution — *(deferred, and still the correct resolution if built)*
 
 `storefrontPage.ts:10-22` states the invariant that currently makes page documents safe, in as many words:
 
@@ -955,10 +1172,11 @@ WIDGET REGISTRY (instance-owned, built into the deploy artefact)
 
 Consequences, stated as consequences:
 
-- **Adding a widget is a deploy, not a publish.** The allowlist is the instance's, so a page can only reach code the
-  operator shipped. This is *why* the owner's "link a git repo" is a **link**: the repo is provenance a reader can
-  follow, not an input the server loads.
-- **Ingest refuses an unknown widget id** (§5.5.3), so a stored page is a page whose widgets exist.
+- **Adding a widget would be a deploy, not a publish.** The allowlist is the instance's, so a page could only reach
+  code the operator shipped. This is *why* the owner's "link a git repo" is a **link**: the repo is provenance a reader
+  can follow, not an input the server loads.
+- **If built, ingest would refuse an unknown widget id**, so a stored page would be a page whose widgets exist. **Not
+  built** — REVISION 4 removed that refusal from §5.5.3, because with the layer deferred there is no id to resolve.
 - **The registry is not the "manifest" §3.1 refuses** — it maps ids to code, never to paths.
 - **The id-and-props encoding is OUR CHOICE.** The ruling says "script imports for widget libraries"; it does not
   say how a document names one. This encoding is chosen because it is the only one that keeps §5.7.2's invariant.
@@ -969,10 +1187,11 @@ question. The architecture gives it a place to happen (the registry, at build ti
 the honest state, and it is the one place where "links a git repo" could quietly become "loads code from a repo"
 if the registry is ever populated from the document instead of from the build.
 
-#### 5.7.3 How it actually renders
+#### 5.7.3 How it would render — **DEFERRED**; this is not what the build emits
 
 ```
 pageStore holds:   document + static fragment + meta + the widget ids the document references
+                   ← a deferred build would re-add that id list, which §5.5 removed
 pageHtml emits:    <head> meta
                    the React-rendered static fragment
                    <ar-product-grid data-widget="product-grid">  ← SSR'd fallback children (the empty state)
@@ -1001,7 +1220,7 @@ does not change** for them: only what resolves the reference — the registry an
 the **extension point**, added when the first such widget exists, not now — **OUR CHOICE**, and it keeps this build
 from inventing a plugin protocol.
 
-#### 5.7.4 What is new machinery, measured
+#### 5.7.4 What is new machinery, measured — **this table is the reason for the deferral**
 
 | piece | state today | what the layer adds |
 |---|---|---|
@@ -1013,11 +1232,14 @@ from inventing a plugin protocol.
 So: the widget layer is **new machinery** on three axes (elements, bundles, registry) and **reuses** the SSR
 convention on a fourth. It must be priced as new work, not as a re-wiring of `StorefrontDataSlots`.
 
-#### 5.7.5 What does not change
+#### 5.7.5 What the deferral leaves true
 
-The page document stays a **closed union** validated at ingest; the renderer stays React for everything static; the
-client still hydrates rather than re-renders; and no page can introduce code. The only new object is a mount point
-whose filler is a bundle the operator shipped.
+The page document stays a **closed union** validated at ingest; the renderer stays React for everything the page
+carries; the client still hydrates rather than re-renders; and **no page can introduce code**. What the deferral
+removes is one object: a mount point whose filler would be a bundle the operator shipped. With it gone, the page's
+dynamic regions are filled by the app's **own** components — which is the model the CMS already uses
+(`platform/web/storefront/storefrontCms.tsx:46` renders every editor block through the same
+`StorefrontBlockView`) **[S]**.
 
 ---
 
@@ -1540,24 +1762,28 @@ Replaceable regions inside a compiled page (a navbar slot) versus a page shell t
 `ruling-local-pages-acl-and-legacy-routes.md:111-114` leans **a shell with named slots the sub-app owns
 internally**.
 
-**This document adopts that lean as the direction, and nothing more.** §5.5.2 already produces one kind of slot
-for a different reason (the widget mount point), so the vocabulary exists. But the ruling's own sequencing is
-explicit — re-pointing is routing (**this run**), modular contents are the **next** step — so **no increment here
-builds a slot system**, and increment 1 must not grow one. The only thing this run owes the next step is that
-re-pointing does not *preclude* it, which §5.2's one-guard seam already guarantees.
+**This document adopts that lean as the direction, and nothing more.** §5.5.2 already produces one kind of region for a
+different reason (the placeholder a data-bound block renders into), so the vocabulary exists without a slot system.
+But the ruling's own sequencing is explicit — re-pointing is routing (**this run**), modular contents are the **next**
+step — so **no increment here builds a slot system**, and increment 1 must not grow one. The only thing this run owes
+the next step is that re-pointing does not *preclude* it, which §5.2's one-guard seam already guarantees.
 
 **REVISION 3 — confirmed and closed as a question.** Ruling §6 settles the depth: *"some basic slots that can be
 replaced is good enough to start."* So the requirement is **basic replaceable slots**, not a slot framework, and
 this document over-designed nothing by leaving it out. The widget layer (§5.7) is the *other* kind of replaceability
 — a page region whose implementation is a separately built bundle — and it is worth distinguishing them once:
 
-| | **slot** (O-7, next step) | **widget** (§5.7, this run's model) |
+| | **slot** (O-7, next step) | **widget** (§5.7, **deferred** — REVISION 4) |
 |---|---|---|
 | replaces | content *inside* one compiled page | a *region of a published page* |
 | who owns it | the page, chosen by the author | the instance, admitted to the registry |
 | built when | at build time, with the page | separately, into its own bundle |
 
-### O-8 · Who admits a widget to the registry? *(new in REVISION 3)*
+### O-8 · Who admits a widget to the registry? *(new in REVISION 3; **DEFERRED with the layer** in REVISION 4)*
+
+> **Status: DEFERRED.** The widget layer is not built (§5.7, §R4.5), so this is not an open question of this build and
+> **no increment needs an answer**. It is kept because it is the question that will have to be answered *before* the
+> deferred layer is built, and because the failure mode it names is quiet.
 
 The ruling permits a page to **link a git repo** "e.g. where a widget or sub-app is built from". That is a link and
 this architecture keeps it a link (§5.7.1), which means **widget code enters the instance only through the registry,
@@ -1652,16 +1878,15 @@ So the sentence "nothing publishes to Nostr" survives, and the sentence "the app
                         ┌──────────────────────▼────────────────────────┐
                         │  PAGE STORE  local files at (author, d):       │  NO relay, NO indexer:
                         │  document + rendered fragment + meta          │  instant, indexable, previewable
-                        │  + the widget ids the document references     │
                         │  static content: React, rendered ONCE at      │
-                        │  ingest. Dynamic regions: an EMPTY MOUNT      │
-                        │  POINT, filled in the browser by a WIDGET     │
-                        │  (custom element, script-imported bundle)     │
+                        │  ingest. Data-bound blocks: a PLACEHOLDER,    │
+                        │  filled in the browser by the existing React  │
+                        │  slot map AFTER hydration (REVISION 4)        │
                         └───────────────────────────────────────────────┘
 
   writes:  ONE endpoint — the app relay's event-POST surface (§5.5.3, §5.6.3)
              └─▶ verify sig ──▶ level(pubkey) ∈ {app, admin, editor} ──▶ dispatch on kind
-                   ├─ kind 30024 (page)      ──▶ parse ──▶ widget ids in registry? ──▶ render ──▶ store
+                   ├─ kind 30024 (page)      ──▶ parse ──▶ render ──▶ store
                    └─ kind <route intent>    ──▶ may(actor, op, path, file)
                                                   └─▶ apply(mutation) ──▶ validate ──▶ tmp+rename (.bak)
 
@@ -1681,6 +1906,7 @@ Five sentences that are the test of any future change:
    instant-response requirement.)
 3. **If it makes a lapsed lease render something other than 404, it is wrong.**
 4. **If it writes the routing file from anything but a full copy of the routing file, it is wrong.**
-5. **If it server-renders a page's dynamic content, or gives a page a way to name a widget by URL, it is
-   wrong.** (REVISION 3 — reason 1 of §5.5.2, and the invariant of §5.7.2. A page names a widget **id**; the id
-   resolves through the instance's registry to a bundle the operator shipped.)
+5. **If it server-renders a page's dynamic content, or lets a page introduce code, it is wrong.** (REVISION 3's reason
+   1 of §5.5.2, with REVISION 4's vocabulary: a page references the **CMS's existing block types** and nothing else; it
+   cannot name a URL, ship a script, or bring its own renderer. Extending the vocabulary means shipping a React
+   component with the app — §R4.5.)

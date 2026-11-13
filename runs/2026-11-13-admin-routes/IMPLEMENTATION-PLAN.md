@@ -17,6 +17,54 @@ such a call fails its own exit criteria regardless of test results.
 
 ---
 
+## REVISION 4 — what changed and why (a SCOPE CUT)
+
+**Authority:** `ruling-react-components-and-deferred-widgets.md` (owner, 2026-11-13). It **removes a layer** from this
+plan — the web-component/widget-bundle work of REVISION 3 — and restores the page-composition model the CMS already
+has: **React components, the existing block types**. Increments keep their positions; **increment 9 is deferred, not
+deleted**; the **render mechanism at ingest is named and priced** because REVISION 3 left it implied.
+
+| # | passage as written in REVISION 3 | changed by | now reads as |
+|---|---|---|---|
+| 1 | §1.1 file list, **15 new files**, including `widgetRegistry.ts` + `widgetRegistry.test.ts` | the scope cut | **13 new files** — the registry module and its test are removed. `pageRender.ts` is described as *static blocks → HTML; data-bound blocks → a placeholder* (§1.1) |
+| 2 | §1.4.2 table, dynamic row: "a **widget mount point** — `<ar-product-grid data-widget=\"product-grid\">` with the SSR'd empty state as its children" | same | a **placeholder region** carrying the block's `type`, with the block's own "no data yet" view as its content; the existing React slot map fills it **after hydration** (§1.4.2) |
+| 3 | §1.4.2, "REVISION 3: in increment 1 every registry entry has `bundle: null` … the existing `StorefrontBlockSlots.tsx` hydration still fills those regions" | same | **deleted**: there is no registry and no bundle. `StorefrontBlockSlots.tsx` is the mechanism, not an interim state (§1.4.2) |
+| 4 | §1.4.3 `pageHtml.compose` emits "one `<script type=\"module\" src=\"/widgets/<id>-<hash>.js\">` per **referenced** widget" | same | **no script tag is emitted for any block.** Composition is `<head>` meta + fragment + SPA bootstrap + `#__AR_PAGE__` (§1.4.3) |
+| 5 | §1.5 ingest step `4c widget ids resolve in the registry → 400 'unknown-widget'`, and the bullet "An unknown widget id refuses the write" | same | **removed**; steps renumber (`4d → 4c`, `4e → 4d`). One refusal discipline remains: a page that cannot render is not stored (§1.5) |
+| 6 | §1.7 **E8** grep includes `widgetRegistry.ts`; **E9** asserts `unknown widget id → 400` | same | E8's file list drops the registry; E9's unknown-widget row is removed. **E10b is added**: hydration parity for the five data-bound regions (§1.7) |
+| 7 | §1.8 bullet "**No widget bundle is built or served.** The registry exists and holds the five built-ins…" | same | "**No widget layer at all** — no custom element, no bundle, no registry, no script import. The page's dynamic regions are the app's own React components, filled after hydration" (§1.8) |
+| 8 | §2 graph box **9 (the widget layer)**, §2.1 row 9, §2.2 "3, 5 and 9 can start as soon as 1 lands" | same | the box and the row are removed from the dependency graph; §2.2's Track II is **3 → 5**, and §2 states that **nothing in this plan emits a bundle** (§2, §2.1, §2.2) |
+| 9 | §9b "Increment 9 — the widget layer" | same | **DEFERRED** banner; kept in full as the design of record, with its exit criteria W1–W13 marked as *not run in this build* (§9b) |
+| 10 | §11 **R-4** "the widget layer is new machinery …" as a live risk | same | relabelled **R-4 (DEFERRED)** — a risk of the deferred layer, not of this build; `R-1` absorbs what is actually at risk now, which is the renderer's mechanism and the boundary guard (§11) |
+| 11 | §12 rows "who admits a widget to the registry" and "a generic `Widget` block" | same | both marked **deferred with the layer**, and §12 gains the **scope list** (§12) |
+
+### R4.2 What this plan did **not** change
+
+- **The serve path.** Render once at ingest, store the fragment, hydrate the SAME DOM, data-bound blocks fetch their
+  own data after hydration. Unchanged, and now *shorter*: one less client mechanism (§1.4.2).
+- **The write path, the ACL, leases, the routing file, the page store, the series index, the management surface.**
+  Increments 1–8 keep their positions, files and exit criteria except the rows tabled above.
+- **Increment 1 is still the proof increment**, and it is still the only increment that builds a renderer.
+
+### R4.3 What renders the fragment at ingest, and what it costs
+
+`pageRender.ts` calls **`renderToStaticMarkup` from `react-dom/server`** over `ui/storefront`'s components, **once, at
+ingest, inside the Bun server process**. Measured at `fee719957`, commands in `report-revision-4.md` §2:
+`react-dom` is already a dependency (`package.json:92`, installed 19.2.6); `renderToStaticMarkup` appears in **102
+files and 0 non-test files**; `platform/server/` has **0** React imports, so the server's only HTML today is string
+building (`sdk/commerce/products/ogTags.ts:301-306`); and the real block components **do** render to a string under Bun
+with no `window`/`document` (probe: 1054 chars). Costs, all four:
+
+1. **one module** — no dependency, no build step (Bun transpiles the TSX at import);
+2. **one boundary-guard entry** — `platform/boundary.test.ts:83-88` forbids `react`, `react-dom*` and `@ui/*` inside
+   `platform/server/`, so either the module is allowlisted **by name** or it lives outside that directory. **OUR
+   CHOICE**: allowlist it, reason written at the guard;
+3. **one hydration obligation** — the five data-bound regions are server-rendered slot-less, so the client must apply
+   its slot map **after** hydration or React 19 hydrates them as mismatches (E10b);
+4. **nothing else** — no streaming, no SSR tier, no per-request rendering, no style extraction.
+
+---
+
 ## REVISION 3 — what changed and why
 
 **Authority:** `ruling-pages-widgets-and-app-relay.md` (owner, 2026-11-13). It corrects **one layer** of this plan —

@@ -73,6 +73,30 @@ establishes **no production server rendering**. Whatever renders the stored frag
 therefore needs its mechanism **named and priced**, and must not be assumed to exist because a test
 helper does.
 
+## The scope, in three parts — corrected by the owner after the first draft
+
+The first draft of this ruling listed a binary (in / out). The owner corrected it: **modular sub-apps and
+list management are IN, sequenced after the current work** — *"modular subapps, and list management I
+would both like in - but perhaps after we can get our current todo list done."* So:
+
+1. **NOW — the current todo list.** Routing · the routing file · the page store · serving · the ACL ·
+   leases.
+2. **LATER, and already committed to.** **Modular sub-apps** — legacy and general pages becoming modular
+   sub-apps with their own sub-paths (browse experience, seller dashboard, buyer/orders dashboard), so a
+   monolith is not rebuilt. **List management** — generalising the currently blacklist-and-featured-only
+   list machinery so all users can use lists, plus a CMS reference meaning "the members of the named
+   list". Both are sequenced, not dropped.
+3. **DEFERRED — needs a new reason to build.** The **widget/portability layer only**: web components,
+   custom elements, script binding, widget compiling, linking a git repo, third-party widget delivery.
+   The owner did **not** reinstate this one, so the consequence recorded above stands. The **signed
+   ledger** stays deferred with it.
+
+**The architecture must merely LEAVE ROOM for (2), and that has to be verified rather than assumed.**
+Two checks, because two revisions have since touched this ground: does the programmed-prefix rung still
+allow an arbitrarily deep sub-app path, given that only *leases* are restricted to a top-level path? And
+does the page definition's reference model still have room for a `list` reference? If either has been
+narrowed, that is a real conflict to report, not to paper over.
+
 ## Standing convention, recorded because this recurs
 
 When the page-composition layer is discussed, **the fallback is React components plus the existing CMS
