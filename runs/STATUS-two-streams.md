@@ -58,8 +58,32 @@ means a route name or real DNS; naming rules. Plus five negative paths the accep
       runs: **42 pass, 0 fail**.
 - [x] **Scope fence added** — the intro and every earlier-work branch are marked parked; a child
       wandering there is a scope violation.
-- [ ] **Next:** item 2, the auction block (auctions placeable inside a page), then stage 3 — the
-      auction surfaces reading the adapter.
+- [x] **Item 2, the auction block — COMPLETE, verified, pushed.** `d7s2/auction-block` @ `9b37ef09d`
+      (fork + nostr, read back from both). 14 files, 1,418 insertions: the block, its platform-side read
+      (`auctionListRead.ts`), an `AuctionPickerField`, the CMS registry entry, and the renderer wiring.
+      **The orchestrator re-ran the tests itself: 32 pass / 0 fail, and the storefront suites it touches
+      107 pass / 0 fail isolated.** The typecheck held at exactly **205** — no new errors. Its degraded
+      states are honest: `loading` never claims a count, `incomplete` says a relay did not answer,
+      `no-relays` and `error` are named, an auction with no duration reports its end as **unknown**, and
+      an unverified on-chain state says so rather than inferring one.
+- [~] **Item 3, the read half, in flight** — the auction card, detail view and verdict panel on the 1440
+      series, ported from the 30408 presentation but reading through the verified adapter. The verdict
+      panel must show per-validator verdicts with divergence flagged and **must not infer a winner**
+      (quorum is not implemented). The bid flow is deliberately held back to the next slice, because it
+      renders inside the detail view this slice builds — a real dependency, not caution.
+- [x] **The chain so far, all on top of the union:** `auctions-1440-kinds` = union+23,
+      `auctions-read-adapter` = union+24, `auction-block` = union+25. Nothing merges until the parts are
+      tested (owner's option 1).
+- [ ] **Next:** verify and push item 3's read half, then stage 3's write half (the bid flow), then stage
+      4 (wiring into the app experience).
+
+## A process lesson, recorded because it cost us twice
+
+**Children must WRITE their report to a file in the run directory, not only report back.** Two slices
+finished without a written report and their completion messages did not arrive, so their reservations
+and self-declared gaps were lost — the parent could verify the code but not the child's own account of
+what it could *not* verify. Every subsequent brief now names an exact report path under the run
+directory, and says why.
 
 ## Premise corrections the children found, and the orchestrator verified
 
