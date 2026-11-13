@@ -21,7 +21,10 @@ dependency order:
    verdict panel.
 4. **The home's addressing gap** — ⚠️ **this belongs to the sibling run** (`runs/2026-11-13-admin-routes/`).
    Do not duplicate it here; the routes run is resolving it.
-5. **The intro** — see the correction under *Known drift* below.
+5. **The intro** — ⚠️ **PARKED by the owner (2026-11-13): do not pursue.** A real implementation does
+   exist on `d7s2/intro-animation` and it is recorded under *Known drift* below, but the standing
+   instruction is to keep these two streams on **custom routes** and **the auctions front end** and
+   not to wander into earlier work. Do not open that branch, do not verify it, do not merge it.
 6. **Stage 4** — wire into the app experience; the chain-fed catalogue stays deferred.
 7. **Stage 5** — delete the retired bidder-held-path implementation (101 files), only once stage 3
    covers its surfaces.
@@ -113,6 +116,11 @@ written to except as the increment requires**:
 ## Stop conditions
 
 - **Nothing is deployed.** No live unit is restarted by this run.
+- **Out of scope by the owner's standing instruction (2026-11-13): the intro** (item 5, `d7s2/intro-animation`)
+  **and every other earlier-work branch** — the union runs, the catalogue branches, the preserved
+  work. They are recorded in this order only so they are not lost, never to be acted on by this run.
+  Do not open, verify, merge or "tidy" them. The two streams are custom routes and the auctions front
+  end; anything else is a scope violation.
 - Stop and report if a slice cannot be specified without deciding the sibling run's shape (the routes
   and the home addressing are the sibling's).
 - Stop and report if the working tree disagrees with the premises above at the named commits.
