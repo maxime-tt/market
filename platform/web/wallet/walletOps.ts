@@ -58,7 +58,8 @@ import { auctionP2pkPubkeysMatch } from '@sdk/commerce/auctions/auctionP2pk'
 import { AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS } from '@sdk/commerce/auctions/constants'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { asEncryptingSigner } from '@sdk/core'
-import { KeyChain, Mint, Wallet, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import { KeyChain, Mint, Wallet, schnorrSignDigest, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import type { ArenaWalletSpendSigner } from '@platform/web/auctions/relay/arenaBidFunding'
 import { NDKEvent, NDKNutzap, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { fetchEventsWithTimeout, getAppNdk } from '@platform/web/ndkPublishContext'
 import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
@@ -191,6 +192,31 @@ const getWalletPrivkey = (pubkey?: string): string | null => {
 	const material: WalletKeyMaterial | null = walletKeyMaterialCache
 	if (!pubkey || !material) return null
 	return auctionP2pkPubkeysMatch(material.walletP2pk, pubkey) ? material.walletPrivkey : null
+}
+
+/**
+ * The wallet spend key as a **signing surface**, for the escrow's two outcome
+ * templates.
+ *
+ * The consolidated protocol requires the bidder to pre-sign its settle and
+ * refund templates with the wallet key that owns the 2-of-2 lock — not with the
+ * Nostr identity (`notes/HANDOVER-consolidated-auction-client.md`: the identity
+ * authorises the event, the wallet owns value and holds its own spend key).
+ * This is the narrowest way to give `arenaBidFunding` that signature without
+ * ever handing it the private key: it can sign a 32-byte digest and nothing
+ * else. The pair is the same one the auction HD root derives from, so the lock
+ * and the app's existing reclaim path agree about who owns the money.
+ *
+ * Answers `null` until the one-time key migration has produced the pair; a
+ * caller must then say the bid is unfunded rather than invent a key.
+ */
+const getAuctionBidWalletSigner = (): ArenaWalletSpendSigner | null => {
+	const material: WalletKeyMaterial | null = walletKeyMaterialCache
+	if (!material) return null
+	return {
+		pubkey: material.walletP2pk,
+		signDigest: (digestHex: string) => schnorrSignDigest(digestHex, material.walletPrivkey),
+	}
 }
 
 /**
@@ -775,6 +801,13 @@ export const walletOps = {
 	 */
 	lockAuctionBidFunds: async (params: LockAuctionBidFundsParams): Promise<LockAuctionBidFundsResult> =>
 		getAuctionLock().lockAuctionBidFunds(params),
+
+	/**
+	 * The wallet spend key's signing surface for the consolidated protocol's
+	 * escrow templates. `null` until the one-time key migration has produced the
+	 * pair — a caller must then publish no funded bid rather than invent one.
+	 */
+	getAuctionBidWalletSigner,
 
 	/**
 	 * Dev-only helper: mint free test ecash from configured dev mints into the wallet.

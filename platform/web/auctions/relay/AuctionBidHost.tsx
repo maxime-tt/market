@@ -25,7 +25,23 @@
  * uses) on a signed bare event, and publishing through the SDK seam
  * (`createWebNostrIo().publish`, i.e. `sdk/core/nostr-io` via
  * `platform/web/sdkNostrIo.ts`, per `AGENTS.md:85-89`). Neither is the retired
- * 30408 publish binding: that path funds a Cashu lock, and this one does not.
+ * 30408 publish binding.
+ *
+ * ## The escrow, and what is NOT wired here yet
+ *
+ * A bid on the consolidated protocol carries its money: proofs locked under a
+ * 2-of-2 `[bidder, committee]` condition, plus a pre-signed settle and refund
+ * template (`arenaBidFunding.ts`). **This host does not yet obtain that payload**
+ * — it passes `null` below, so `publishArenaBid` refuses the bid as
+ * `bid.unfunded` and the panel says so instead of publishing an unfunded 1441
+ * the validator would drop. Closing it needs three things this slice does not
+ * have: the mint-side lock (a Cashu send that writes the escrow condition, which
+ * the retired `auctionFunds` path does not produce), the committee key from
+ * `GET /api/config`, and the auction's own terms — `sellerWallet`, `v4vSplit` and
+ * the end+window locktime floor — which `ArenaAuctionDetailModel` still exposes
+ * under the retired names (`fundingMode`, `locktimeSeconds`). The read model is
+ * realigned to the protocol's create fields; its detail model is the next
+ * increment. Until then a funded bid is refused by name rather than faked.
  *
  * ## Refencing the read after a bid
  *
@@ -70,10 +86,10 @@ export interface AuctionBidHostProps {
 function useArenaBidder(): ArenaBidderState {
 	const { isAuthenticated, user } = useStore(authStore)
 	const pubkey = isAuthenticated ? (user?.pubkey ?? null) : null
-	// The arena bid this slice publishes carries no funding payload; the wallet
-	// is required because a bid is a signed event and the signer lives with the
-	// session (`getActiveSignerCapability`). `ready` therefore means "a signer is
-	// available", not "funds are locked" — the panel's advisory says no funds move.
+	// `ready` means "a signer is available", not "funds are locked": the escrow
+	// payload is built elsewhere and this host does not obtain it yet (see the
+	// header). The publish path refuses a bid with no funding, so this gap is a
+	// named refusal, never a silent unfunded bid.
 	const wallet: ArenaBidderState['wallet'] = pubkey === null ? 'missing' : getActiveSignerCapability() !== null ? 'ready' : 'unavailable'
 	return useMemo(() => ({ pubkey, wallet }), [pubkey, wallet])
 }
@@ -133,6 +149,11 @@ export function AuctionBidHost({ model, readStatus, now, resetKey, className, on
 					publisher: { publish: (event) => io.publish(event) },
 					relays,
 					now: Math.floor(Date.now() / 1000),
+					// NOT WIRED YET — see the header: the escrow lock and the
+					// auction's terms. Passing `null` makes `publishArenaBid`
+					// refuse with `bid.unfunded`, which the panel renders.
+					funding: null,
+					fundingTerms: null,
 				},
 			)
 			setSubmission(result.state)

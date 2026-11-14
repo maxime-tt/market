@@ -30,7 +30,8 @@
  * kind:     1441
  * tags:     ["e", <auction root event id>]      <- REQUIRED (see below)
  *           ["a", "1440:<seller>:<d>"]          <- the coordinate, for indexers
- * content:  {"auction_id":"<d>","amount":<integer sats>}
+ * content:  {"auction":"<1440:seller:d>","auction_id":"<d>","amount":<sats>,
+ *            "wallet":<bidder wallet key>,"proofs":[...],"outcome_templates":{...}}
  * ```
  *
  * Each field is a **decision**, not a port:
@@ -42,20 +43,31 @@
  *   `ArenaAuctionView.rootEventId`, and the detail model carries it as
  *   `rootEventId`. Binding to `canonicalEventId` would orphan every bid the
  *   moment the seller fixed a typo in a title.
- * - **`auction_id` is the `d`**, which is what the read adapter resolves a bid
- *   by (`arenaAuctionRead.ts:485-501` reads `content.auction_id`), and what the
- *   create's own `d` equals (a mismatch is refused by the read gate).
+ * - **`auction` is the coordinate `1440:<seller>:<d>`** — the reference chain's
+ *   `BidContent.Auction` (`chain/app.go:104`) and its `Auction.ID`
+ *   (`chain/app.go:550`). Without it the chain cannot find the lot and refuses
+ *   the bid as `unknown auction`.
+ * - **`auction_id` is the `d`**, kept because this app's own read adapter
+ *   resolves a bid by `content.auction_id` (`arenaAuctionRead.ts:485-501`).
+ *   Both are emitted so the protocol and the local view agree.
  * - **`amount` is the DELTA**, an integer, in sats. The arena protocol's bid
  *   model is additive (`platform/web/auctions/protocol/client.ts:62-63`) — the
  *   read adapter sums bid amounts per bidder into positions — and the surface
  *   says "bids add to your position" for exactly that reason. It is written as
  *   a JSON **number**, not a string, because that is the type the read adapter
  *   accepts and the type the demo client wrote.
- * - **No funding payload.** The custodial `reservation` / `cashu_lock` /
- *   `outcome_templates` / `sigall_deposit` extensions that
- *   `client.ts:244-254` could attach belong to the retired bidder-held path and
- *   to funding modes this slice does not implement. A bid published here says
- *   nothing about funding, and the UI says so (`ARENA_BID_ADVISORY`).
+ * - **`wallet`, `proofs` and `outcome_templates` are the funding payload**, and
+ *   they are not optional. The money is locked under a 2-of-2 NUT-11 `SIG_ALL`
+ *   condition whose destinations the bidder fixed when it bid; the validator
+ *   refuses a bid that omits them (`chain/sigall.go`
+ *   `verifySigAllBidTemplates`). `arenaBidFunding` builds and checks them; this
+ *   module attaches them and refuses to sign an unfunded bid. The old comment
+ *   here called these extensions "the retired bidder-held path" — that was the
+ *   *opposite* of the truth: the retired thing was the bidder-HOSTED release,
+ *   and this payload is the consolidated protocol's core.
+ * - **The two keys are not one key.** The event is signed by the Nostr identity
+ *   (`ArenaBidSigner`); the templates are signed by the wallet spend key inside
+ *   `arenaBidFunding`. This module never derives either from the other.
  *
  * ## Honest reporting: what each relay did
  *
@@ -103,6 +115,11 @@ import {
 } from '@ui/auction/arena/bid-rules'
 import type { ArenaBidSubmissionState } from '@ui/auction/arena/bid-panel'
 import { arenaAuctionCoordinate } from '@platform/web/auctions/relay/arenaAuctionRead'
+import {
+	verifyArenaBidFunding,
+	type ArenaBidFunding,
+	type ArenaBidFundingTerms,
+} from '@platform/web/auctions/relay/arenaBidFunding'
 
 const HEX64 = /^[0-9a-f]{64}$/
 
@@ -128,6 +145,10 @@ export type ArenaBidRefusal =
 	| 'bid.signature-mismatch'
 	/** A relay ACKed an event with a different id. */
 	| 'bid.ack-for-other-event'
+	/** The bid carries no funding payload. The consolidated protocol refuses it. */
+	| 'bid.unfunded'
+	/** The funding payload does not satisfy the lock, nonce, locktime or template rules. */
+	| 'bid.funding-invalid'
 
 export class ArenaBidPublishError extends Error {
 	readonly refusal: ArenaBidRefusal
@@ -145,16 +166,33 @@ export class ArenaBidPublishError extends Error {
 // The event
 // =========================================================================
 
-/** The bid content, as the frozen protocol reads it (`arenaAuctionRead.ts:485-501`). */
+/** The bid content, as the frozen protocol reads it (`chain/app.go` `BidContent`). */
 export interface ArenaBidContent {
+	/** The auction coordinate `1440:<seller>:<d>` — what the chain keys the lot by. */
+	auction: string
+	/** The `d` tag, kept for this app's own read adapter. */
 	auction_id: string
 	amount: number
+	/** The bidder's wallet spend key that owns the escrow lock. */
+	wallet: string
+	/** The locked proofs the templates spend. */
+	proofs: ArenaBidFunding['proofs']
+	/** The bidder's two pre-signed spends. The validator refuses a bid without them. */
+	outcome_templates: ArenaBidFunding['outcome_templates']
 }
 
-/** Pure: what a 1441 for this auction and amount must carry. Throws a refusal, never guesses. */
+/**
+ * Pure: what a 1441 for this auction and amount must carry. Throws a refusal,
+ * never guesses.
+ *
+ * `funding` is required. A bid without a lock and its two pre-signed templates
+ * is refused by the consolidated protocol, so publishing one would be a lie the
+ * relays would faithfully store.
+ */
 export function buildArenaBidContent(
 	auction: Pick<ArenaAuctionDetailModel, 'd' | 'seller' | 'rootEventId' | 'coordinate'>,
 	amount: number,
+	funding: ArenaBidFunding | null | undefined,
 ): { content: ArenaBidContent; tags: string[][] } {
 	if (typeof auction.d !== 'string' || auction.d.trim() === '') {
 		throw new ArenaBidPublishError('bid.no-auction-id', 'The auction has no id, so a bid cannot name it.', { phase: 'failed', amount, reason: 'The auction has no id.' })
@@ -173,10 +211,24 @@ export function buildArenaBidContent(
 			reason: 'The bid amount is not a whole number of sats.',
 		})
 	}
+	if (funding === null || funding === undefined || funding.proofs.length === 0) {
+		throw new ArenaBidPublishError('bid.unfunded', 'the bid carries no escrow lock or pre-signed outcome templates', {
+			phase: 'failed',
+			amount,
+			reason: 'The bid has no funding: its money is not locked and its outcome templates are not signed.',
+		})
+	}
 	// The read adapter's own coordinate convention (`arenaAuctionRead.ts:401-404`).
 	const coordinate = auction.coordinate.includes(':') ? auction.coordinate : arenaAuctionCoordinate(auction.seller, auction.d)
 	return {
-		content: { auction_id: auction.d, amount },
+		content: {
+			auction: coordinate,
+			auction_id: auction.d,
+			amount,
+			wallet: funding.wallet,
+			proofs: funding.proofs,
+			outcome_templates: funding.outcome_templates,
+		},
 		tags: [
 			['e', auction.rootEventId],
 			['a', coordinate],
@@ -205,6 +257,13 @@ export interface ArenaBidPublishOptions {
 	relays: readonly string[]
 	/** Unix seconds. Injected so a test can pin it. */
 	now: number
+	/**
+	 * The locked escrow and its two pre-signed templates. Required: the
+	 * consolidated protocol refuses a bid without them.
+	 */
+	funding: ArenaBidFunding | null | undefined
+	/** The auction terms the funding is re-checked against before signing. */
+	fundingTerms: ArenaBidFundingTerms | null | undefined
 	/** Called once, when the event is signed and before the relays answer. */
 	onSigned?: (eventId: string) => void
 }
@@ -248,7 +307,28 @@ export async function publishArenaBid(
 		throw new ArenaBidPublishError('bid.not-allowed', bidBlockedCopy(check.reason, check), failedState(bidBlockedCopy(check.reason, check)))
 	}
 
-	const { content, tags } = buildArenaBidContent(input.model, typed)
+	const { content, tags } = buildArenaBidContent(input.model, typed, options.funding)
+	// Re-check the funding payload against the auction's own terms before a
+	// signature exists. The producer already checked it; this is the same rule
+	// applied at the point where money rules have to hold, so a caller that
+	// assembles a payload by hand cannot publish a lock the chain will refuse.
+	if (options.funding === null || options.funding === undefined || options.fundingTerms === null || options.fundingTerms === undefined) {
+		throw new ArenaBidPublishError('bid.unfunded', 'no escrow funding or funding terms were supplied for this bid', failedState('The bid has no funding terms to check its escrow against.'))
+	}
+	try {
+		verifyArenaBidFunding(options.funding, options.fundingTerms)
+	} catch (error) {
+		const detail = error instanceof Error ? error.message : String(error)
+		throw new ArenaBidPublishError('bid.funding-invalid', `escrow funding refused: ${detail}`, failedState(`The escrow funding is not valid: ${detail}`))
+	}
+	const escrowTotal = options.funding.proofs.reduce((sum, proof) => sum + proof.amount, 0)
+	if (escrowTotal !== typed) {
+		throw new ArenaBidPublishError(
+			'bid.funding-invalid',
+			`escrow proofs total ${escrowTotal} but the bid is ${typed}`,
+			failedState('The escrow does not match the amount this bid names.'),
+		)
+	}
 	const template = { kind: ARENA_AUCTION_BID_KIND, created_at: options.now, tags, content: JSON.stringify(content) }
 
 	// The id of the event that WILL be signed, from the template — so a signer
