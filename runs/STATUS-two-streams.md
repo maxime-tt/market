@@ -173,3 +173,53 @@ append-only latest-per-validator rule, and whether the app can pre-sign a templa
 **Also:** master still proxies to `/api/demo/reservation` (`auctionsProtocol.ts:34,94`, wired at
 `buildServer.ts:12`) and the old client posts to it (`client.ts:241`) — dead against the consolidated
 protocol, and part of the retired implementation, so it goes with stage 5 rather than being patched.
+
+## Latest — 2026-11-14, evening
+
+**All three slices that were in flight are landed, verified and pushed.** The child
+that built them died mid-run (its own transcripts stop at 22:30 on 2026-11-13) and
+never wrote a report; the work survived uncommitted in three worktrees. The parent
+session finished them and **re-measured every number itself** — the reports
+(`report-increment-1.md`, `report-realign-read.md`, `report-bid-funding.md`) say
+which numbers are the parent's and none are inherited.
+
+| slice | branch @ commit | pushed | evidence |
+|---|---|---|---|
+| **A — increment 1**: the routing table + page store, served with no relay on the read path | `d7s2/routing-page-store` @ `690a35d23` | fork + nostr | 66 pass / 0 fail; typecheck 205 (baseline); **boots with a dead relay, ingests, serves the page body and meta with no JS, 404s an unmatched path, byte-identical twice** |
+| **B — read realignment**: the frozen field set, the supersession rule, the verdict fold | `d7s2/arena-realign-read` @ `7621a35e4` | fork + nostr | 480 pass / 1 skip / 0 fail; typecheck 205 |
+| **B — bid funding**: the five-tag 2-of-2 lock, the two pre-signed templates, the nonce and the locktime floor | `d7s2/arena-bid-funding` @ `b01ce21d6` | fork + nostr | 520 pass / 1 skip / 0 fail (auctions + wallet); typecheck 205 |
+
+**Fixed while finishing them, each measured rather than asserted:** 26 red tests from
+one off-by-one in the escrow-lock parser; 10 new type errors (5 from a `never`-typed
+helper that TypeScript would not narrow after, 1 from the read slice's own test
+annotation, and the rest downstream of the funding requirement); 13 pre-existing
+publish tests that had to be given a real escrow once funding became mandatory.
+
+**The feasibility question is answered: the app CAN pre-sign a template digest.**
+`walletOps.getAuctionBidWalletSigner()` exposes the wallet spend key as a surface
+that signs a 32-byte digest and nothing else; `schnorrSignDigest` from cashu-ts does
+the signing. The private key is never handed to the funding module, and it answers
+`null` until the key migration has produced the pair.
+
+**Two corrections to the plan, both measured.** (1) E3's boot command curls `/x`,
+which the shared name grammar refuses (3–30 characters) — the end-to-end run uses
+`shop`; the implementation is right and the plan's example is wrong. (2)
+`format:check` fails on the base as well (35 files, all pre-existing, none of ours).
+
+**Where the next work starts — one gap, named in two places:**
+
+- **`ArenaAuctionDetailModel` still speaks the retired vocabulary** (`fundingMode`,
+  `locktimeSeconds`, `lateBid*`, `reserve`) and does not carry the protocol's
+  `sellerWallet`, `v4vSplit`, `mode`, `windowSec`/`durationSec`. The events are read
+  and gated correctly; the **view model** is not realigned. Realigning it is the
+  next increment on B's read path.
+- **A funded bid cannot yet be placed in the app.** `AuctionBidHost.tsx` passes
+  `funding: null`, so the publish path refuses by name (`bid.unfunded`) and the
+  panel says so — deliberately, rather than publishing an unfunded 1441. Closing it
+  needs the **mint-side escrow send** (the app's existing lock is the retired 30408
+  path) plus the committee key from `GET /api/config` and the terms above.
+
+**Not verified, and stated as such:** E10b (hydration parity, a browser criterion)
+and the live protocol test (skipped without `AUCTIONS_LIVE=1`). Nothing is deployed;
+no live unit was restarted.
+
