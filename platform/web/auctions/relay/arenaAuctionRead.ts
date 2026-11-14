@@ -92,21 +92,22 @@
  * ## 1440 is regular, so "latest version wins" is built here
  *
  * `1440` is a NIP-01 *regular* kind: the relay stores every version side by
- * side and replaces nothing (`notes/DECISION-auction-kinds-and-editable-allowlist.md`
- * §4, "What is NOT free in this range"). So:
+ * side and replaces nothing (spec §7). So:
  *
- * - the **root** is the earliest `1440` by `created_at` for `(seller, d)`
- *   (decision §4.1);
- * - a later version is an **update** only if its `e` tag names that root
- *   (decision §4.3) — an event that does not supersede the root is not an
- *   update and is ignored, never guessed at;
- * - an update is **accepted** only if every field in
- *   {@link ARENA_CREATE_IMMUTABLE_FIELDS} is unchanged from the root
- *   (decision §3, §4.3);
- * - the **canonical** version is the latest accepted one by `created_at`
- *   (decision §4, last bullet).
+ * - the auction's identity is **`(seller, d)`** — the coordinate
+ *   `a = 1440:<seller>:<d>`, our own convention, not NIP-01 addressability;
+ * - the **root** is the first `1440` by `created_at` for `(seller, d)`, and it
+ *   **must carry no `e` tag** (`chain/app.go:544-548`);
+ * - a later version is a **supersession** only if its `e` tag names that root
+ *   — an event that does not supersede the root is not an update and is
+ *   ignored, never guessed at;
+ * - a supersession is **accepted** only if every field in
+ *   {@link ARENA_CREATE_IMMUTABLE_FIELDS} is unchanged from the last accepted
+ *   version (spec §8); `title`, `description`, `image` (and the display-only
+ *   `category`, `name`) are the mutable ones;
+ * - the **canonical** version is the latest accepted one by `created_at`.
  *
- * A rejected update is not silently swallowed: it lands in
+ * A rejected version is not silently swallowed: it lands in
  * `snapshot.rejectedCreates` with the field that changed, per
  * `AGENTS.md:111-115` (a visitor "cannot tell a curated item from a broken one"
  * if a constraint failure is invisible).
@@ -120,6 +121,7 @@ import {
 	ARENA_AUCTION_CREATE_KIND,
 	ARENA_STATE_COMMITMENT_KIND,
 	ARENA_VERDICT_KIND,
+	type ArenaVerdictOutcome,
 } from '@sdk/commerce/auctions/constants'
 import {
 	ARENA_REFUSAL_BAD_CONTENT,
@@ -141,9 +143,22 @@ import {
 
 /** A 1440 whose `d` tag and content `auction_id` disagree — it addresses two auctions at once. */
 export const ARENA_REFUSAL_BAD_IDENTITY = 'arena.bad_identity' as const
+/**
+ * A 1440 with no `d` tag, or a `d` outside the one grammar the protocol allows:
+ * `[A-Za-z0-9_-]{1,64}` (`chain/app.go:383-394` `validD`, spec §8). A `d` with
+ * a space in it is refused by the chain, so a reader must not invent an auction
+ * from one.
+ */
+export const ARENA_REFUSAL_BAD_D = 'arena.bad_d' as const
+/**
+ * The FIRST 1440 for a `(seller, d)` carries no `e` tag: it is the root, and it
+ * cannot claim a root it does not know (`chain/app.go:544-548`). A 1440 that
+ * would be first and still carries `e` is refused rather than promoted.
+ */
+export const ARENA_REFUSAL_ROOT_CARRIES_E = 'arena.root_carries_e' as const
 /** A deeper 1440 that does not carry `e = <root event id>`: not a supersession of the root (decision §4.3). */
 export const ARENA_REFUSAL_NOT_SUPERSEDING_ROOT = 'arena.not_superseding_root' as const
-/** A deeper 1440 that changes a field frozen at first publish (decision §3). */
+/** A deeper 1440 that changes a field frozen at first publish (spec §8). */
 export const ARENA_REFUSAL_IMMUTABLE_CHANGED = 'arena.immutable_field_changed' as const
 /** A 1441 that names no auction this read knows: no `a`, no root `e`, no unambiguous `auction_id`. */
 export const ARENA_REFUSAL_UNBOUND_BID = 'arena.unbound_bid' as const
@@ -152,6 +167,8 @@ export const ARENA_REFUSAL_UNEXPECTED_KIND = 'arena.unexpected_kind' as const
 
 export type ArenaReadRefusalName =
 	| typeof ARENA_REFUSAL_BAD_IDENTITY
+	| typeof ARENA_REFUSAL_BAD_D
+	| typeof ARENA_REFUSAL_ROOT_CARRIES_E
 	| typeof ARENA_REFUSAL_NOT_SUPERSEDING_ROOT
 	| typeof ARENA_REFUSAL_IMMUTABLE_CHANGED
 	| typeof ARENA_REFUSAL_UNBOUND_BID
@@ -165,26 +182,30 @@ export type ArenaReadRefusalName =
 	| 'arena.bad_outcome'
 
 // =========================================================================
-// The immutable allow-list for a 1440 (decision §3, §4.3)
+// The immutable allow-list for a 1440 (MERGED-PROTOCOL-SPEC §8)
 //
-// "display is mutable; money, time and cryptography are not." All eleven
-// fields below are frozen at first publish; `title` / `description` /
-// `image_url` are deliberately absent, because those are the three that may be
-// edited, including after the first bid.
+// "display is mutable; money, time and cryptography are not." The seven fields
+// below are frozen at first publish. `title`, `description`, `image` (and the
+// two display-only fields `category`, `name`) are deliberately absent: those
+// are the ones a supersession may change.
+//
+// The names are the WIRE names of the consolidated protocol, camelCase, taken
+// from the enforcer itself — `chain/app.go:265-283` (`CreateContent`) and
+// `chain/app.go:433-455` (`immutableChanged`, which names the refusal
+// `immutable_field_changed <Field>`). The client reference implementation
+// agrees: `web/src/lib/arena.js:229-245` writes and re-writes exactly this set.
+// Any earlier snake_case list (`starting_bid`, `locktime_seconds`, …) is the
+// retired 30408 create shape and is not on the wire at all.
 // =========================================================================
 
 export const ARENA_CREATE_IMMUTABLE_FIELDS = [
-	'auction_id',
-	'starting_bid',
-	'min_increment',
-	'reserve',
-	'duration_seconds',
-	'late_bid_window_seconds',
-	'late_bid_extension_seconds',
-	'max_total_extension_seconds',
-	'locktime_seconds',
-	'funding_mode',
-	'seller_coco_payment_public_key',
+	'startPrice',
+	'minIncrement',
+	'mode',
+	'windowSec',
+	'durationSec',
+	'sellerWallet',
+	'v4vSplit',
 ] as const
 
 export type ArenaCreateImmutableField = (typeof ARENA_CREATE_IMMUTABLE_FIELDS)[number]
@@ -196,14 +217,10 @@ export type ArenaCreateImmutableField = (typeof ARENA_CREATE_IMMUTABLE_FIELDS)[n
  * absent/empty collapses to `null`.
  */
 const NUMERIC_IMMUTABLE_FIELDS: ReadonlySet<string> = new Set([
-	'starting_bid',
-	'min_increment',
-	'reserve',
-	'duration_seconds',
-	'late_bid_window_seconds',
-	'late_bid_extension_seconds',
-	'max_total_extension_seconds',
-	'locktime_seconds',
+	'startPrice',
+	'minIncrement',
+	'windowSec',
+	'durationSec',
 ])
 
 // =========================================================================
@@ -240,30 +257,55 @@ export interface ArenaAuctionEventBase {
 	relays: string[]
 }
 
-/** The create content (`KindCreate`, `platform/web/auctions/protocol/client.ts:198-229`), as read. */
+/**
+ * One committed V4V payout row: `{role, recipientPubkey, allocationBps}` in
+ * integer basis points (spec §6, `chain/app.go:275-282` `SplitRow`). The
+ * recipient key is camelCase on the wire, unlike the spec's prose.
+ */
+export interface ArenaV4VRow {
+	role: string | null
+	recipientPubkey: string | null
+	allocationBps: number | null
+}
+
+/**
+ * The create content of the **consolidated** protocol, as read.
+ *
+ * Source: `chain/app.go:265-283` (`CreateContent`) and the client reference
+ * `web/src/lib/arena.js:229-245`. There is no `auction_id` in the content —
+ * the identity is the `d` tag (spec §8) — and none of the retired 30408 fields
+ * (`starting_bid`, `reserve`, `locktime_seconds`, `funding_mode`, the late-bid
+ * trio) exists on the wire.
+ */
 export interface ArenaCreateContent {
-	auctionId: string
 	title: string | null
 	description: string | null
-	imageUrl: string | null
-	startingBid: number | null
+	/** The `image` field; `image_url` is the retired name. */
+	image: string | null
+	category: string | null
+	/** The seller's display name (`name` on the wire). */
+	name: string | null
+	startPrice: number | null
 	minIncrement: number | null
-	reserve: number | null
-	durationSeconds: number | null
-	lateBidWindowSeconds: number | null
-	lateBidExtensionSeconds: number | null
-	maxTotalExtensionSeconds: number | null
-	locktimeSeconds: number | null
-	fundingMode: string | null
-	sellerCocoPaymentPublicKey: string | null
+	/** `fixed` or `antisnipe`; the producer writes `fixed` when the field is empty. */
+	mode: string | null
+	/** The anti-snipe reset window, 0 for a fixed lot. */
+	windowSec: number | null
+	durationSec: number | null
+	/** The committed seller payout key — a money field, and immutable. */
+	sellerWallet: string | null
+	/** `null` when no split was committed (the seller is paid alone). */
+	v4vSplit: readonly ArenaV4VRow[] | null
 }
 
 export interface ArenaCreateEvent extends ArenaAuctionEventBase {
 	type: 'create'
-	/** The `d` value — the auction's identity within its seller (decision §3). */
+	/**
+	 * The `d` value — the auction's identity within its seller (spec §8). It is
+	 * read from the **tag**, because that is where the protocol puts it; the
+	 * retired content field `auction_id` is only accepted as an alias.
+	 */
 	d: string
-	/** `content.auction_id`, which must equal `d`; a mismatch is refused, never reconciled. */
-	auctionId: string
 	/** The `e` tag, when present: the root this version claims to supersede. */
 	supersedes: string | null
 	content_: ArenaCreateContent
@@ -286,6 +328,36 @@ export interface ArenaBidEvent extends ArenaAuctionEventBase {
 export interface ArenaVerdictEvent extends ArenaAuctionEventBase {
 	type: 'verdict'
 	verdict: ParsedArenaVerdict
+}
+
+/**
+ * One verdict as the read holds it: the parsed, anchored claim plus the
+ * provenance needed to resolve it. Verdicts are **append-only** (kind 1445 is a
+ * regular kind, spec §9), so ordering them needs the event's own `created_at`
+ * and id — `height` alone cannot tell a later statement from an earlier one at
+ * the same height.
+ */
+export interface ArenaVerdictView extends ParsedArenaVerdict {
+	eventId: string
+	createdAt: number
+	relays: string[]
+}
+
+/**
+ * The resolved outcome for one auction: the latest anchored verdict **per
+ * validator**, folded to the outcome the most validators signed (ties broken by
+ * the lexicographically smallest outcome, then by the newest event), the way
+ * `chain/verdict.go:ResolveOutcome` folds the same stream.
+ */
+export interface ArenaResolvedVerdict {
+	outcome: ArenaVerdictOutcome
+	bidId: string | null
+	height: number
+	blockHash: string
+	/** Validators whose latest verdict carries this outcome, sorted. */
+	signers: string[]
+	/** Validators with any anchored verdict for this auction. */
+	validatorCount: number
 }
 
 export interface ArenaStateCommitmentEvent extends ArenaAuctionEventBase {
@@ -316,6 +388,18 @@ type DecodeResult = { ok: true; event: ArenaAuctionEvent } | { ok: false; refusa
 // =========================================================================
 
 const HEX = /^[0-9a-fA-F]+$/
+
+/**
+ * The one `d` grammar the protocol allows: `[A-Za-z0-9_-]{1,64}`
+ * (`chain/app.go:383-394` `validD`, spec §8). A space, a colon, a dot or 65
+ * characters is refused by the chain — a UUID with dashes is fine, a readable
+ * label with a space is not.
+ */
+export const ARENA_D_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+
+export function isValidArenaD(d: string): boolean {
+	return ARENA_D_PATTERN.test(d)
+}
 
 function tagValue(tags: readonly string[][], name: string): string | null {
 	for (const tag of tags) {
@@ -349,14 +433,43 @@ function parseJsonObject(content: string): Record<string, unknown> | null {
 	return parsed as Record<string, unknown>
 }
 
+/**
+ * Canonical form of one V4V split row, for the immutable comparison.
+ *
+ * The split is a **money** field (spec §8) and it is order-sensitive: §6
+ * requires the settle template to carry "the same recipients, amounts and
+ * order", so a reordering IS a change. Each row is canonicalised on its own
+ * keys, and the rows are compared in the order the event wrote them.
+ */
+function canonicalSplitRow(value: unknown): string {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return JSON.stringify(value ?? null)
+	const row = value as Record<string, unknown>
+	const role = asTrimmedString(row.role)
+	const recipient = asTrimmedString(row.recipientPubkey)?.toLowerCase() ?? null
+	const bps = asFiniteNumber(row.allocationBps)
+	return JSON.stringify([role, recipient, bps])
+}
+
+function canonicalSplit(value: unknown): string | null {
+	if (value === undefined || value === null) return null
+	if (!Array.isArray(value)) return JSON.stringify(value)
+	if (value.length === 0) return null
+	return value.map(canonicalSplitRow).join('|')
+}
+
 /** Canonical form of one frozen field, for the immutable comparison. */
-function canonicalImmutableValue(value: unknown, numeric: boolean): string | null {
+function canonicalImmutableValue(value: unknown, field: string): string | null {
+	if (field === 'v4vSplit') return canonicalSplit(value)
+	const numeric = NUMERIC_IMMUTABLE_FIELDS.has(field)
 	if (value === undefined || value === null) return null
 	if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null
 	if (typeof value === 'boolean') return String(value)
 	if (typeof value === 'string') {
 		const trimmed = value.trim()
 		if (trimmed === '') return null
+		// A payout key is compared lower-cased, exactly as the chain commits it
+		// (`chain/app.go:445` `strings.ToLower(c.SellerWallet)`).
+		if (field === 'sellerWallet') return trimmed.toLowerCase()
 		if (numeric) {
 			const n = Number(trimmed)
 			return Number.isFinite(n) ? String(n) : trimmed
@@ -369,27 +482,37 @@ function canonicalImmutableValue(value: unknown, numeric: boolean): string | nul
 function canonicalImmutableFields(content: Record<string, unknown>): Record<string, string | null> {
 	const out: Record<string, string | null> = {}
 	for (const field of ARENA_CREATE_IMMUTABLE_FIELDS) {
-		out[field] = canonicalImmutableValue(content[field], NUMERIC_IMMUTABLE_FIELDS.has(field))
+		out[field] = canonicalImmutableValue(content[field], field)
 	}
 	return out
 }
 
+function splitOf(value: unknown): readonly ArenaV4VRow[] | null {
+	if (!Array.isArray(value) || value.length === 0) return null
+	return value.map((row) => {
+		const record = typeof row === 'object' && row !== null ? (row as Record<string, unknown>) : {}
+		return {
+			role: asTrimmedString(record.role),
+			recipientPubkey: asTrimmedString(record.recipientPubkey) ?? asTrimmedString(record.recipient_pubkey),
+			allocationBps: asFiniteNumber(record.allocationBps) ?? asFiniteNumber(record.allocation_bps),
+		}
+	})
+}
+
 function createContentOf(content: Record<string, unknown>): ArenaCreateContent {
 	return {
-		auctionId: asTrimmedString(content.auction_id) ?? '',
 		title: asTrimmedString(content.title),
 		description: asTrimmedString(content.description),
-		imageUrl: asTrimmedString(content.image_url),
-		startingBid: asFiniteNumber(content.starting_bid),
-		minIncrement: asFiniteNumber(content.min_increment),
-		reserve: asFiniteNumber(content.reserve),
-		durationSeconds: asFiniteNumber(content.duration_seconds),
-		lateBidWindowSeconds: asFiniteNumber(content.late_bid_window_seconds),
-		lateBidExtensionSeconds: asFiniteNumber(content.late_bid_extension_seconds),
-		maxTotalExtensionSeconds: asFiniteNumber(content.max_total_extension_seconds),
-		locktimeSeconds: asFiniteNumber(content.locktime_seconds),
-		fundingMode: asTrimmedString(content.funding_mode),
-		sellerCocoPaymentPublicKey: asTrimmedString(content.seller_coco_payment_public_key),
+		image: asTrimmedString(content.image) ?? asTrimmedString(content.image_url),
+		category: asTrimmedString(content.category),
+		name: asTrimmedString(content.name),
+		startPrice: asFiniteNumber(content.startPrice),
+		minIncrement: asFiniteNumber(content.minIncrement),
+		mode: asTrimmedString(content.mode),
+		windowSec: asFiniteNumber(content.windowSec),
+		durationSec: asFiniteNumber(content.durationSec),
+		sellerWallet: asTrimmedString(content.sellerWallet),
+		v4vSplit: splitOf(content.v4vSplit),
 	}
 }
 
@@ -453,19 +576,26 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 		const content = parseJsonObject(event.content)
 		if (content === null) return refuse(relay, event, ARENA_REFUSAL_BAD_CONTENT, 'create content is not a JSON object')
 
-		const auctionId = asTrimmedString(content.auction_id)
-		if (auctionId === null) return refuse(relay, event, ARENA_REFUSAL_BAD_CONTENT, 'create content has no auction_id')
-
+		// The identity is the `d` tag (spec §8, `chain/app.go:490-500`). The
+		// retired content field `auction_id` is accepted as an alias only when
+		// the tag is absent, and only if the two agree when both are present.
+		const legacyAuctionId = asTrimmedString(content.auction_id)
 		const tagD = tagValue(event.tags, 'd')
-		// `d` and `content.auction_id` are the same fact written twice; if they
-		// disagree the event addresses two auctions and neither reading is safe.
-		if (tagD !== null && tagD !== auctionId) {
+		const d = tagD ?? legacyAuctionId
+		if (d === null) return refuse(relay, event, ARENA_REFUSAL_BAD_D, 'create carries no d tag')
+		if (tagD !== null && legacyAuctionId !== null && tagD !== legacyAuctionId) {
 			return refuse(
 				relay,
 				event,
 				ARENA_REFUSAL_BAD_IDENTITY,
-				`d tag ${JSON.stringify(tagD)} != content.auction_id ${JSON.stringify(auctionId)}`,
+				`d tag ${JSON.stringify(tagD)} != content.auction_id ${JSON.stringify(legacyAuctionId)}`,
 			)
+		}
+		// `[A-Za-z0-9_-]{1,64}` and nothing else (`chain/app.go:383-394`,
+		// `validD`). A `d` with a space, a colon or 65 chars is refused by the
+		// chain, so it identifies no auction here either.
+		if (!isValidArenaD(d)) {
+			return refuse(relay, event, ARENA_REFUSAL_BAD_D, `d ${JSON.stringify(d)} is not [A-Za-z0-9_-]{1,64}`)
 		}
 
 		return {
@@ -473,8 +603,7 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 			event: {
 				...baseOf(event, relay),
 				type: 'create',
-				d: tagD ?? auctionId,
-				auctionId,
+				d,
 				supersedes: tagValue(event.tags, 'e'),
 				content_: createContentOf(content),
 				immutable: canonicalImmutableFields(content),
@@ -491,7 +620,9 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 			event: {
 				...baseOf(event, relay),
 				type: 'bid',
-				auctionId: asTrimmedString(content.auction_id),
+				// The consolidated bid content names the auction `auction` (the
+				// coordinate); `auction_id` is the retired 30408 name.
+				auctionId: asTrimmedString(content.auction) ?? asTrimmedString(content.auction_id),
 				// A read adapter resolves *addressing*; it does not judge validity.
 				// A zero or negative delta is the validator's business, not this gate's.
 				amount: asFiniteNumber(content.amount),
@@ -506,10 +637,15 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 	// ignore an unanchored event with (`arenaAnchor.ts:8-13`).
 	try {
 		if (event.kind === ARENA_VERDICT_KIND) {
-			const verdict = parseArenaVerdict({ kind: event.kind, tags: event.tags, content: event.content })
+			const verdict = parseArenaVerdict({ kind: event.kind, tags: event.tags, content: event.content, pubkey: event.pubkey })
 			return { ok: true, event: { ...baseOf(event, relay), type: 'verdict', verdict } }
 		}
-		const commitment = parseArenaStateCommitment({ kind: event.kind, tags: event.tags, content: event.content })
+		const commitment = parseArenaStateCommitment({
+			kind: event.kind,
+			tags: event.tags,
+			content: event.content,
+			pubkey: event.pubkey,
+		})
 		return { ok: true, event: { ...baseOf(event, relay), type: 'commitment', commitment } }
 	} catch (error) {
 		const reason = error instanceof ArenaContractError ? error.refusal : 'arena.bad_content'
@@ -597,7 +733,15 @@ export interface ArenaAuctionView {
 	topBid: { bidder: string; total: number } | null
 	/** Bids whose `amount` was not a finite number; the positions above are then incomplete. */
 	bidsWithoutAmount: number
-	verdicts: ParsedArenaVerdict[]
+	/**
+	 * Every anchored verdict this read saw for the auction, height descending
+	 * then validator key. Append-only, so this is a list and not a value.
+	 */
+	verdicts: ArenaVerdictView[]
+	/** The latest anchored verdict per validator — the display truth. */
+	latestVerdicts: ArenaVerdictView[]
+	/** The per-validator fold, or `null` when no anchored verdict was read. */
+	resolvedVerdict: ArenaResolvedVerdict | null
 	relays: string[]
 }
 
@@ -654,8 +798,10 @@ function byOldestThenId(a: { createdAt: number; id: string }, b: { createdAt: nu
 }
 
 /**
- * The immutable check (decision §3): returns the first frozen field whose value
- * differs from the root's, or null when every one is unchanged.
+ * The immutable check (spec §8): returns the first frozen field whose value
+ * differs from the last **accepted** version, or null when every one is
+ * unchanged. `from`/`to` are the canonical strings the comparison used, so a
+ * refusal detail names the actual movement rather than "it differs".
  */
 export function findImmutableChange(
 	root: ArenaCreateEvent,
@@ -676,18 +822,57 @@ interface AcceptedVersion {
 	detail: string
 }
 
-/** Resolve one `(seller, d)` group to root + accepted versions + rejects. */
+/**
+ * Resolve one `(seller, d)` group to root + accepted versions + rejects.
+ *
+ * The two rules, both from `chain/app.go:520-580`:
+ *
+ * 1. the **first** 1440 for `(seller, d)` is the root and **must carry no `e`
+ *    tag** — it cannot claim a root it does not know. A 1440 that would be
+ *    first and still carries `e` is refused, and the next un-`e`d event is the
+ *    root (the chain reaches the same state: a refused create leaves no
+ *    auction, so the next create for the coordinate is a root).
+ * 2. a later 1440 is a supersession only when `e = <root event id>`; anything
+ *    else is ignored, never guessed at. Accepted supersessions are then gated
+ *    on the immutable list, compared against the last accepted version — which
+ *    is what the chain's state holds.
+ */
 function resolveVersions(versions: readonly ArenaCreateEvent[]): {
-	root: ArenaCreateEvent
+	root: ArenaCreateEvent | null
 	accepted: ArenaCreateEvent[]
 	rejected: AcceptedVersion[]
 } {
 	const ordered = [...versions].sort(byOldestThenId)
-	const root = ordered[0]
-	const accepted: ArenaCreateEvent[] = [root]
 	const rejected: AcceptedVersion[] = []
 
-	for (const candidate of ordered.slice(1)) {
+	const rootIndex = ordered.findIndex((version) => version.supersedes === null)
+	if (rootIndex === -1) {
+		for (const event of ordered) {
+			rejected.push({
+				event,
+				reason: ARENA_REFUSAL_ROOT_CARRIES_E,
+				field: null,
+				detail: 'no 1440 for this (seller, d) is a root: every one carries an e tag',
+			})
+		}
+		return { root: null, accepted: [], rejected }
+	}
+
+	const root = ordered[rootIndex]
+	// Anything older than the root that still claims a root is refused, not
+	// promoted: it addressed a root that did not exist when it was published.
+	for (const event of ordered.slice(0, rootIndex)) {
+		rejected.push({
+			event,
+			reason: ARENA_REFUSAL_ROOT_CARRIES_E,
+			field: null,
+			detail: `the first 1440 for this (seller, d) must not carry an e tag; this one names ${JSON.stringify(event.supersedes)}`,
+		})
+	}
+
+	const accepted: ArenaCreateEvent[] = [root]
+
+	for (const candidate of ordered.slice(rootIndex + 1)) {
 		if (candidate.supersedes !== root.id) {
 			rejected.push({
 				event: candidate,
@@ -697,7 +882,7 @@ function resolveVersions(versions: readonly ArenaCreateEvent[]): {
 			})
 			continue
 		}
-		const change = findImmutableChange(root, candidate)
+		const change = findImmutableChange(accepted[accepted.length - 1], candidate)
 		if (change !== null) {
 			rejected.push({
 				event: candidate,
@@ -711,6 +896,75 @@ function resolveVersions(versions: readonly ArenaCreateEvent[]): {
 	}
 
 	return { root, accepted, rejected }
+}
+
+/**
+ * Fold a verdict stream to the display truth: **latest per validator**, then
+ * the outcome the most of those validators signed.
+ *
+ * The rule is the chain's own (`chain/verdict.go:ResolveOutcome`): a later
+ * verdict does not replace an earlier one — 1445 is regular and append-only —
+ * so each validator's newest anchored statement is taken, and the quorum view
+ * is the modal outcome with ties broken by the lexicographically smallest
+ * outcome (deterministic, not editorial). An unanchored or malformed verdict
+ * never reaches this function: the gate refused it.
+ */
+export function resolveVerdicts(verdicts: readonly ArenaVerdictView[]): {
+	latest: ArenaVerdictView[]
+	resolved: ArenaResolvedVerdict | null
+} {
+	const perValidator = new Map<string, ArenaVerdictView>()
+	for (const verdict of verdicts) {
+		// A verdict with no `p` tag cannot be attributed, so each such event is
+		// its own bucket rather than all of them collapsing into one validator.
+		const key = verdict.validatorPubkey ?? `\u0000${verdict.eventId}`
+		const prior = perValidator.get(key)
+		if (
+			prior === undefined ||
+			verdict.createdAt > prior.createdAt ||
+			(verdict.createdAt === prior.createdAt && verdict.eventId > prior.eventId)
+		) {
+			perValidator.set(key, verdict)
+		}
+	}
+	if (perValidator.size === 0) return { latest: [], resolved: null }
+
+	const latest = [...perValidator.values()].sort(
+		(a, b) => b.height - a.height || (a.validatorPubkey ?? '').localeCompare(b.validatorPubkey ?? ''),
+	)
+
+	const counts = new Map<string, number>()
+	for (const verdict of latest) counts.set(verdict.outcome, (counts.get(verdict.outcome) ?? 0) + 1)
+	let outcome: string | null = null
+	for (const candidate of [...counts.keys()].sort()) {
+		if (outcome === null || (counts.get(candidate) ?? 0) > (counts.get(outcome) ?? 0)) outcome = candidate
+	}
+	if (outcome === null) return { latest, resolved: null }
+
+	const agreeing = latest.filter((verdict) => verdict.outcome === outcome)
+	const signers = agreeing.map((verdict) => verdict.validatorPubkey ?? '').sort()
+	// The newest anchored statement among the validators that signed that view.
+	let best = agreeing[0]
+	for (const verdict of agreeing) {
+		if (
+			verdict.createdAt > best.createdAt ||
+			(verdict.createdAt === best.createdAt && verdict.eventId > best.eventId)
+		) {
+			best = verdict
+		}
+	}
+
+	return {
+		latest,
+		resolved: {
+			outcome: outcome as ArenaVerdictOutcome,
+			bidId: best.bidId,
+			height: best.height,
+			blockHash: best.blockHash,
+			signers,
+			validatorCount: latest.length,
+		},
+	}
 }
 
 function emptyHealth(relays: readonly string[], aborted = false): ArenaReadHealth {
@@ -789,9 +1043,6 @@ export function projectArenaEvents(
 
 	for (const [key, versions] of groups) {
 		const { root, accepted, rejected } = resolveVersions(versions)
-		const canonical = [...accepted].sort(byNewestThenId)[0]
-		const coordinate = arenaAuctionCoordinate(root.pubkey, root.d)
-		resolved.set(key, { root, canonical, versions: versions.length, coordinate })
 		for (const reject of rejected) {
 			rejectedCreates.push({
 				eventId: reject.event.id,
@@ -802,6 +1053,13 @@ export function projectArenaEvents(
 				detail: reject.detail,
 			})
 		}
+		// No root among these versions (every one carried an `e`): the group
+		// names no auction at all, and inventing one would be the guess the
+		// supersession rule exists to prevent.
+		if (root === null) continue
+		const canonical = [...accepted].sort(byNewestThenId)[0]
+		const coordinate = arenaAuctionCoordinate(root.pubkey, root.d)
+		resolved.set(key, { root, canonical, versions: versions.length, coordinate })
 	}
 
 	// ---- bind bids to auctions ------------------------------------------
@@ -859,8 +1117,8 @@ export function projectArenaEvents(
 	}
 
 	// ---- verdicts, grouped by auction id --------------------------------
-	const verdictsByAuction = new Map<string, ParsedArenaVerdict[]>()
-	const orphanVerdicts: ParsedArenaVerdict[] = []
+	const verdictsByAuction = new Map<string, ArenaVerdictView[]>()
+	const orphanVerdicts: ArenaVerdictView[] = []
 	const dToCoordinate = new Map<string, string[]>()
 	for (const entry of resolved.values()) {
 		const list = dToCoordinate.get(entry.root.d)
@@ -874,13 +1132,19 @@ export function projectArenaEvents(
 			: (dToCoordinate.get(auctionId) ?? []).length === 1
 				? dToCoordinate.get(auctionId)![0]
 				: null
+		const view: ArenaVerdictView = {
+			...event.verdict,
+			eventId: event.id,
+			createdAt: event.createdAt,
+			relays: event.relays,
+		}
 		if (coordinate === null) {
-			orphanVerdicts.push(event.verdict)
+			orphanVerdicts.push(view)
 			continue
 		}
 		const list = verdictsByAuction.get(coordinate)
-		if (list === undefined) verdictsByAuction.set(coordinate, [event.verdict])
-		else list.push(event.verdict)
+		if (list === undefined) verdictsByAuction.set(coordinate, [view])
+		else list.push(view)
 	}
 
 	// ---- assemble views --------------------------------------------------
@@ -906,12 +1170,18 @@ export function projectArenaEvents(
 		}
 
 		const verdicts = [...(verdictsByAuction.get(entry.coordinate) ?? [])].sort(
-			(a, b) => b.height - a.height || (a.validatorPubkey ?? '').localeCompare(b.validatorPubkey ?? ''),
+			(a, b) =>
+				b.createdAt - a.createdAt ||
+				b.height - a.height ||
+				(a.validatorPubkey ?? '').localeCompare(b.validatorPubkey ?? '') ||
+				a.eventId.localeCompare(b.eventId),
 		)
+		const { latest: latestVerdicts, resolved: resolvedVerdict } = resolveVerdicts(verdicts)
 
 		const relays = new Set<string>()
 		for (const relay of entry.canonical.relays) relays.add(relay)
 		for (const bid of auctionBids) for (const relay of bid.relays) relays.add(relay)
+		for (const verdict of verdicts) for (const relay of verdict.relays) relays.add(relay)
 
 		auctions.push({
 			coordinate: entry.coordinate,
@@ -928,6 +1198,8 @@ export function projectArenaEvents(
 			topBid,
 			bidsWithoutAmount,
 			verdicts,
+			latestVerdicts,
+			resolvedVerdict,
 			relays: [...relays].sort(),
 		})
 	}

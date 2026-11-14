@@ -21,20 +21,26 @@ import {
 } from '@sdk/commerce/auctions/constants'
 import {
 	ARENA_READ_KINDS,
+	ARENA_REFUSAL_BAD_D,
 	ARENA_REFUSAL_BAD_IDENTITY,
 	ARENA_REFUSAL_IMMUTABLE_CHANGED,
 	ARENA_REFUSAL_NOT_SUPERSEDING_ROOT,
+	ARENA_REFUSAL_ROOT_CARRIES_E,
 	ARENA_REFUSAL_UNBOUND_BID,
 	ARENA_REFUSAL_UNEXPECTED_KIND,
 	arenaAuctionFilters,
 	createArenaAuctionRead,
 	decodeArenaEvent,
 	findImmutableChange,
+	isValidArenaD,
 	projectArenaEvents,
+	resolveVerdicts,
 	type ArenaAuctionRead,
+	type ArenaCreateImmutableField,
 	type ArenaRelayOpen,
 	type ArenaRelayOpenOptions,
 	type ArenaReadStreamItem,
+	type ArenaVerdictView,
 } from './arenaAuctionRead'
 
 // =========================================================================
@@ -72,12 +78,13 @@ function ev(spec: EventSpec): NostrEventLike {
 
 function createContent(over: Record<string, unknown> = {}): Record<string, unknown> {
 	return {
-		auction_id: 'lot-1',
 		title: 'A lot',
-		starting_bid: 1000,
-		min_increment: 10,
-		duration_seconds: 3600,
-		funding_mode: 'cashu_sigall_v1',
+		startPrice: 1000,
+		minIncrement: 10,
+		mode: 'fixed',
+		windowSec: 0,
+		durationSec: 3600,
+		sellerWallet: 'seller-wallet',
 		...over,
 	}
 }
@@ -86,7 +93,7 @@ function createEvent(
 	over: Partial<{ id: string; created_at: number; pubkey: string; d: string; e: string | null }> = {},
 	content: Record<string, unknown> = {},
 ): NostrEventLike {
-	const d = over.d ?? (content.auction_id as string) ?? 'lot-1'
+	const d = over.d ?? 'lot-1'
 	const tags: string[][] = [['d', d]]
 	if (over.e) tags.push(['e', over.e])
 	return ev({
@@ -106,7 +113,7 @@ function bidEvent(
 	if (over.a) tags.push(['a', over.a])
 	if (over.e) tags.push(['e', over.e])
 	const content: Record<string, unknown> = {}
-	if (over.auctionId !== undefined) content.auction_id = over.auctionId
+	if (over.auctionId !== undefined) content.auction = over.auctionId
 	if (over.amount !== undefined) content.amount = over.amount
 	return ev({
 		kind: 1441,
@@ -264,9 +271,9 @@ describe('dedupe and order', () => {
 	})
 
 	test('auctions are newest first, ties to the lexically lowest event id', async () => {
-		const older = createEvent({ id: 'older', created_at: 900 }, { auction_id: 'lot-old' })
-		const tieB = createEvent({ id: 'tie-b', created_at: 1000 }, { auction_id: 'lot-b' })
-		const tieA = createEvent({ id: 'tie-a', created_at: 1000 }, { auction_id: 'lot-a' })
+		const older = createEvent({ id: 'older', created_at: 900, d: 'lot-old' })
+		const tieB = createEvent({ id: 'tie-b', created_at: 1000, d: 'lot-b' })
+		const tieA = createEvent({ id: 'tie-a', created_at: 1000, d: 'lot-a' })
 		const read = readFrom({ 'wss://a': { events: [older, tieB, tieA] } })
 
 		const snapshot = await read.snapshot()
@@ -312,28 +319,134 @@ describe('1440 is regular: latest version wins, behind the immutable check', () 
 	})
 
 	test('an edit that moves an immutable field is rejected and named', async () => {
-		const root = createEvent({ id: 'v1', created_at: 1000 }, { starting_bid: 1000 })
+		const root = createEvent({ id: 'v1', created_at: 1000 }, { startPrice: 1000 })
 		// The classic attack the allow-list exists for: a "typo fix" that lowers the floor.
-		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { starting_bid: 1 })
+		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { startPrice: 1 })
 		const read = readFrom({ 'wss://a': { events: [root, attack] } })
 
 		const snapshot = await read.snapshot()
 		expect(snapshot.auctions[0].canonicalEventId).toBe('v1')
-		expect(snapshot.auctions[0].content.startingBid).toBe(1000)
+		expect(snapshot.auctions[0].content.startPrice).toBe(1000)
 		expect(snapshot.rejectedCreates).toHaveLength(1)
 		expect(snapshot.rejectedCreates[0].reason).toBe(ARENA_REFUSAL_IMMUTABLE_CHANGED)
-		expect(snapshot.rejectedCreates[0].field).toBe('starting_bid')
+		expect(snapshot.rejectedCreates[0].field).toBe('startPrice')
+	})
+
+	test('a supersession that changes sellerWallet is REFUSED, and the field is named', async () => {
+		// The payout destination is the money field that matters most: an accepted
+		// edit here would let a seller redirect a settled escrow, and the reader
+		// would show the redirect as canonical.
+		const root = createEvent({ id: 'v1', created_at: 1000 }, { sellerWallet: 'seller-wallet-one' })
+		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { sellerWallet: 'attacker-wallet' })
+		const snapshot = await readFrom({ 'wss://a': { events: [root, attack] } }).snapshot()
+
+		expect(snapshot.auctions[0].canonicalEventId).toBe('v1')
+		expect(snapshot.auctions[0].content.sellerWallet).toBe('seller-wallet-one')
+		expect(snapshot.rejectedCreates).toHaveLength(1)
+		expect(snapshot.rejectedCreates[0].reason).toBe(ARENA_REFUSAL_IMMUTABLE_CHANGED)
+		expect(snapshot.rejectedCreates[0].field).toBe('sellerWallet')
+	})
+
+	test('a supersession that changes the V4V split is REFUSED', async () => {
+		const root = createEvent(
+			{ id: 'v1', created_at: 1000 },
+			{
+				v4vSplit: [
+					{ role: 'validator', recipientPubkey: 'validator-wallet', allocationBps: 200 },
+					{ role: 'v4v', recipientPubkey: 'v4v-wallet', allocationBps: 300 },
+				],
+			},
+		)
+		const reprice = createEvent(
+			{ id: 'v2', created_at: 2000, e: 'v1' },
+			{
+				v4vSplit: [
+					{ role: 'validator', recipientPubkey: 'validator-wallet', allocationBps: 200 },
+					{ role: 'v4v', recipientPubkey: 'v4v-wallet', allocationBps: 5000 },
+				],
+			},
+		)
+		const reorder = createEvent(
+			{ id: 'v3', created_at: 3000, e: 'v1' },
+			{
+				v4vSplit: [
+					{ role: 'v4v', recipientPubkey: 'v4v-wallet', allocationBps: 300 },
+					{ role: 'validator', recipientPubkey: 'validator-wallet', allocationBps: 200 },
+				],
+			},
+		)
+		const snapshot = await readFrom({ 'wss://a': { events: [root, reprice, reorder] } }).snapshot()
+
+		expect(snapshot.auctions[0].canonicalEventId).toBe('v1')
+		expect(snapshot.auctions[0].content.v4vSplit?.map((row) => row.allocationBps)).toEqual([200, 300])
+		expect(snapshot.rejectedCreates.map((reject) => reject.field)).toEqual(['v4vSplit', 'v4vSplit'])
+		expect(snapshot.rejectedCreates.every((reject) => reject.reason === ARENA_REFUSAL_IMMUTABLE_CHANGED)).toBe(true)
+	})
+
+	test('a supersession that changes mode is REFUSED', async () => {
+		// Flipping a fixed lot to antisnipe would move its end time, which is a
+		// bidder-locked value: the window resets the clock the bid priced against.
+		const root = createEvent({ id: 'v1', created_at: 1000 }, { mode: 'fixed' })
+		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { mode: 'antisnipe', windowSec: 120 })
+		const snapshot = await readFrom({ 'wss://a': { events: [root, attack] } }).snapshot()
+
+		expect(snapshot.auctions[0].canonicalEventId).toBe('v1')
+		expect(snapshot.auctions[0].content.mode).toBe('fixed')
+		expect(snapshot.rejectedCreates).toHaveLength(1)
+		expect(snapshot.rejectedCreates[0].field).toBe('mode')
+	})
+
+	test('a supersession that touches only title, description and image is ACCEPTED', async () => {
+		const root = createEvent({ id: 'v1', created_at: 1000 })
+		const edit = createEvent(
+			{ id: 'v2', created_at: 2000, e: 'v1' },
+			{ title: 'Corrected title', description: 'Corrected description', image: 'https://example.test/lot.png' },
+		)
+		const snapshot = await readFrom({ 'wss://a': { events: [root, edit] } }).snapshot()
+
+		expect(snapshot.auctions[0].canonicalEventId).toBe('v2')
+		expect(snapshot.auctions[0].content.title).toBe('Corrected title')
+		expect(snapshot.auctions[0].content.description).toBe('Corrected description')
+		expect(snapshot.auctions[0].content.image).toBe('https://example.test/lot.png')
+		// The money and time fields came from the root and did not move.
+		expect(snapshot.auctions[0].content.startPrice).toBe(1000)
+		expect(snapshot.auctions[0].content.sellerWallet).toBe('seller-wallet')
+		expect(snapshot.rejectedCreates).toHaveLength(0)
 	})
 
 	test('every frozen field is frozen, not just the money ones', async () => {
 		const root = createEvent({ id: 'v1' })
-		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { locktime_seconds: 1 })
 		const decodedRoot = decodeArenaEvent(root, 'wss://a')
-		const decodedAttack = decodeArenaEvent(attack, 'wss://a')
-		expect(decodedRoot.ok && decodedAttack.ok).toBe(true)
-		if (decodedRoot.ok && decodedAttack.ok && decodedRoot.event.type === 'create' && decodedAttack.event.type === 'create') {
-			expect(findImmutableChange(decodedRoot.event, decodedAttack.event)?.field).toBe('locktime_seconds')
+		expect(decodedRoot.ok).toBe(true)
+		if (!decodedRoot.ok || decodedRoot.event.type !== 'create') return
+
+		const flips: Array<[Record<string, unknown>, ArenaCreateImmutableField]> = [
+			[{ startPrice: 2 }, 'startPrice'],
+			[{ minIncrement: 11 }, 'minIncrement'],
+			[{ mode: 'antisnipe' }, 'mode'],
+			[{ windowSec: 60 }, 'windowSec'],
+			[{ durationSec: 7200 }, 'durationSec'],
+			[{ sellerWallet: 'other-wallet' }, 'sellerWallet'],
+			[{ v4vSplit: [{ role: 'v4v', recipientPubkey: 'v4v-wallet', allocationBps: 100 }] }, 'v4vSplit'],
+		]
+		for (const [override, field] of flips) {
+			const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, override)
+			const decodedAttack = decodeArenaEvent(attack, 'wss://a')
+			expect(decodedAttack.ok).toBe(true)
+			if (!decodedAttack.ok || decodedAttack.event.type !== 'create') continue
+			expect(findImmutableChange(decodedRoot.event, decodedAttack.event)?.field).toBe(field)
 		}
+	})
+
+	test('a numeric field rewritten as a string is the same value, not a change', async () => {
+		// A producer's type wobble (`"1000"` for `1000`) must not read as an edit:
+		// the chain compares integers, and so does this gate.
+		const root = createEvent({ id: 'v1', created_at: 1000 }, { startPrice: 1000 })
+		const edit = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { startPrice: '1000', title: 'same price' })
+		const snapshot = await readFrom({ 'wss://a': { events: [root, edit] } }).snapshot()
+
+		expect(snapshot.auctions[0].canonicalEventId).toBe('v2')
+		expect(snapshot.rejectedCreates).toHaveLength(0)
 	})
 
 	test('a deeper version that does not name the root is ignored, never guessed at', async () => {
@@ -355,6 +468,78 @@ describe('1440 is regular: latest version wins, behind the immutable check', () 
 
 		const snapshot = await read.snapshot()
 		expect(snapshot.auctions[0].canonicalEventId).toBe('aaa')
+	})
+})
+
+// =========================================================================
+// The (seller, d) identity and the root e tag
+// =========================================================================
+
+describe('the (seller, d) identity and the root e tag', () => {
+	test('the d grammar is exactly [A-Za-z0-9_-]{1,64}', () => {
+		expect(isValidArenaD('lot-1')).toBe(true)
+		expect(isValidArenaD('a')).toBe(true)
+		expect(isValidArenaD('A_b-9')).toBe(true)
+		expect(isValidArenaD('x'.repeat(64))).toBe(true)
+		expect(isValidArenaD('')).toBe(false)
+		expect(isValidArenaD('x'.repeat(65))).toBe(false)
+		expect(isValidArenaD('two words')).toBe(false)
+		expect(isValidArenaD('1440:seller:d')).toBe(false)
+		expect(isValidArenaD('lot.1')).toBe(false)
+	})
+
+	test('a create with no usable d is refused by name, not given a made-up identity', () => {
+		for (const d of ['two words', 'x'.repeat(65), 'lot.1']) {
+			const decoded = decodeArenaEvent(createEvent({ d }), 'wss://a')
+			expect(decoded.ok).toBe(false)
+			if (!decoded.ok) expect(decoded.refusal.reason).toBe(ARENA_REFUSAL_BAD_D)
+		}
+		const noD = ev({ kind: ARENA_AUCTION_CREATE_KIND, tags: [], content: { title: 'no d' } })
+		const decoded = decodeArenaEvent(noD, 'wss://a')
+		expect(decoded.ok).toBe(false)
+		if (!decoded.ok) expect(decoded.refusal.reason).toBe(ARENA_REFUSAL_BAD_D)
+	})
+
+	test('the FIRST 1440 for a (seller, d) is the root and carries NO e tag', async () => {
+		const snapshot = await readFrom({ 'wss://a': { events: [createEvent({ id: 'root-1', d: 'lot-1' })] } }).snapshot()
+		expect(snapshot.auctions).toHaveLength(1)
+		expect(snapshot.auctions[0].rootEventId).toBe('root-1')
+	})
+
+	test('a first 1440 that carries an e tag is refused, not promoted to root', async () => {
+		const claimed = createEvent({ id: 'claims-a-root', created_at: 1000, e: 'root-that-does-not-exist' })
+		const snapshot = await readFrom({ 'wss://a': { events: [claimed] } }).snapshot()
+
+		expect(snapshot.auctions).toHaveLength(0)
+		expect(snapshot.rejectedCreates).toHaveLength(1)
+		expect(snapshot.rejectedCreates[0].reason).toBe(ARENA_REFUSAL_ROOT_CARRIES_E)
+	})
+
+	test('a later 1440 must name the ROOT, not the version it last saw', async () => {
+		// A bid binds to the root, so an edit chain that points at the previous
+		// version would detach every bid placed against the auction.
+		const root = createEvent({ id: 'root-1', created_at: 1000 }, { title: 'one' })
+		const first = createEvent({ id: 'edit-1', created_at: 2000, e: 'root-1' }, { title: 'two' })
+		const chained = createEvent({ id: 'edit-2', created_at: 3000, e: 'edit-1' }, { title: 'three' })
+		const snapshot = await readFrom({ 'wss://a': { events: [root, first, chained] } }).snapshot()
+
+		expect(snapshot.auctions[0].canonicalEventId).toBe('edit-1')
+		expect(snapshot.auctions[0].content.title).toBe('two')
+		expect(snapshot.rejectedCreates).toHaveLength(1)
+		expect(snapshot.rejectedCreates[0].reason).toBe(ARENA_REFUSAL_NOT_SUPERSEDING_ROOT)
+		expect(snapshot.rejectedCreates[0].eventId).toBe('edit-2')
+	})
+
+	test('the identity is (seller, d): the same d under two sellers is two auctions', async () => {
+		const alice = createEvent({ id: 'alice-root', pubkey: SELLER_A, d: 'shared-d' })
+		const bob = createEvent({ id: 'bob-root', pubkey: SELLER_B, d: 'shared-d' })
+		const snapshot = await readFrom({ 'wss://a': { events: [alice, bob] } }).snapshot()
+
+		expect(snapshot.auctions).toHaveLength(2)
+		expect(snapshot.auctions.map((auction) => auction.coordinate).sort()).toEqual([
+			`1440:${SELLER_A}:shared-d`,
+			`1440:${SELLER_B}:shared-d`,
+		])
 	})
 })
 
@@ -464,6 +649,95 @@ describe('verdicts and commitments', () => {
 	})
 })
 
+describe('verdicts are append-only and resolve latest-per-validator', () => {
+	test('a later verdict from the same validator is a NEW statement, not a replacement', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const first = verdictEvent({
+			auctionId: 'lot-1',
+			outcome: 'winner',
+			validator: 'validator-1',
+			height: 10,
+			bidId: 'bid-9',
+			created_at: 1200,
+			id: 'verdict-early',
+		})
+		const later = verdictEvent({
+			auctionId: 'lot-1',
+			outcome: 'cancelled',
+			validator: 'validator-1',
+			height: 20,
+			created_at: 1300,
+			id: 'verdict-late',
+		})
+		const snapshot = await readFrom({ 'wss://a': { events: [create, first, later] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		// Both events are kept: kind 1445 is regular, so nothing is replaced.
+		expect(view.verdicts).toHaveLength(2)
+		expect(view.verdicts[0].eventId).toBe('verdict-late')
+		// One current claim per validator, and it is the later one.
+		expect(view.latestVerdicts).toHaveLength(1)
+		expect(view.latestVerdicts[0].outcome).toBe('cancelled')
+		expect(view.resolvedVerdict?.outcome).toBe('cancelled')
+		expect(view.resolvedVerdict?.height).toBe(20)
+	})
+
+	test('the fold is a quorum over each validator latest anchored verdict', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const v1 = verdictEvent({ outcome: 'winner', validator: 'validator-1', height: 10, created_at: 1200 })
+		const v2 = verdictEvent({ outcome: 'winner', validator: 'validator-2', height: 10, created_at: 1210 })
+		const v3 = verdictEvent({ outcome: 'aborted', validator: 'validator-3', height: 10, created_at: 1220 })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, v1, v2, v3] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		expect(view.latestVerdicts).toHaveLength(3)
+		expect(view.resolvedVerdict?.outcome).toBe('winner')
+		expect(view.resolvedVerdict?.signers).toEqual(['validator-1', 'validator-2'])
+		expect(view.resolvedVerdict?.validatorCount).toBe(3)
+	})
+
+	test('a validator that later contradicts itself counts once, on its latest statement', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const v1Early = verdictEvent({ outcome: 'winner', validator: 'validator-1', height: 10, created_at: 1200 })
+		const v1Late = verdictEvent({ outcome: 'aborted', validator: 'validator-1', height: 11, created_at: 1300 })
+		const v2 = verdictEvent({ outcome: 'winner', validator: 'validator-2', height: 10, created_at: 1210 })
+		const v3 = verdictEvent({ outcome: 'winner', validator: 'validator-3', height: 10, created_at: 1220 })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, v1Early, v1Late, v2, v3] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		// Three published verdicts, four events: validator-1's early `winner` is
+		// history, and counts for nothing.
+		expect(view.verdicts).toHaveLength(4)
+		expect(view.latestVerdicts).toHaveLength(3)
+		expect(view.resolvedVerdict?.outcome).toBe('winner')
+		expect(view.resolvedVerdict?.signers).toEqual(['validator-2', 'validator-3'])
+		expect(view.resolvedVerdict?.validatorCount).toBe(3)
+	})
+
+	test('resolveVerdicts takes the modal outcome, ties broken lexicographically', () => {
+		const base = {
+			auctionId: '1440:seller:lot-1',
+			bidId: null,
+			payoutTokenSha256: null,
+			blockHash: 'beef',
+			derivedFrom: 'committed_state',
+			relays: ['wss://a'],
+		}
+		const claim = (validatorPubkey: string, outcome: ArenaVerdictView['outcome'], createdAt: number): ArenaVerdictView => ({
+			...base,
+			validatorPubkey,
+			outcome,
+			height: 10,
+			eventId: `${validatorPubkey}-${createdAt}`,
+			createdAt,
+		})
+		const tie = resolveVerdicts([claim('v-one', 'winner', 1000), claim('v-two', 'aborted', 1000), claim('v-three', 'cancelled', 1000)])
+		// 'aborted' < 'cancelled' < 'winner': deterministic, not editorial.
+		expect(tie.resolved?.outcome).toBe('aborted')
+		expect(resolveVerdicts([]).resolved).toBeNull()
+	})
+})
+
 // =========================================================================
 // A relay that is down, slow, or lying
 // =========================================================================
@@ -511,8 +785,8 @@ describe('resilience', () => {
 	})
 
 	test('a lying relay cannot inject a kind it was never asked for, bad JSON, or an immutable flip', async () => {
-		const root = createEvent({ id: 'v1', created_at: 1000 }, { starting_bid: 1000 })
-		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { starting_bid: 1 })
+		const root = createEvent({ id: 'v1', created_at: 1000 }, { startPrice: 1000 })
+		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { startPrice: 1 })
 		const read = readFrom({
 			'wss://liar': {
 				events: [

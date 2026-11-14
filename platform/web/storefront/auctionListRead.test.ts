@@ -197,20 +197,18 @@ describe('toAuctionListItem', () => {
 		createdAt: 1000,
 		rootCreatedAt: 1000,
 		content: {
-			auctionId: 'lot-1',
 			title: 'A lot',
 			description: null,
-			imageUrl: null,
-			startingBid: 1000,
+			image: null,
+			category: null,
+			name: null,
+			startPrice: 1000,
 			minIncrement: 10,
-			reserve: null,
-			durationSeconds: 100,
-			lateBidWindowSeconds: null,
-			lateBidExtensionSeconds: null,
-			maxTotalExtensionSeconds: null,
-			locktimeSeconds: null,
-			fundingMode: 'cashu_sigall_v1',
-			sellerCocoPaymentPublicKey: null,
+			mode: 'fixed',
+			windowSec: 0,
+			durationSec: 100,
+			sellerWallet: 'seller-wallet',
+			v4vSplit: null,
 		},
 		versions: 1,
 		bids: [],
@@ -218,6 +216,8 @@ describe('toAuctionListItem', () => {
 		topBid: null,
 		bidsWithoutAmount: 0,
 		verdicts: [],
+		latestVerdicts: [],
+		resolvedVerdict: null,
 		relays: ['wss://a'],
 	}
 
@@ -227,7 +227,7 @@ describe('toAuctionListItem', () => {
 	})
 
 	test('a create with no duration has no end to state', () => {
-		const noDuration = { ...view, content: { ...view.content, durationSeconds: null } }
+		const noDuration = { ...view, content: { ...view.content, durationSec: null } }
 		const item = toAuctionListItem(noDuration, 9_999_999)
 		expect(item.endsAt).toBeNull()
 		expect(item.phase).toBe('unknown')
@@ -251,8 +251,20 @@ describe('toAuctionListItem', () => {
 			blockHash: 'beef',
 			derivedFrom: 'committed_state',
 			validatorPubkey: 'validator-1',
+			eventId: 'verdict-1',
+			createdAt: 1200,
+			relays: ['wss://a'],
 		}
-		expect(toAuctionListItem({ ...view, verdicts: [verdict] }, 1200).verdict).toBe('winner')
+		const resolvedVerdict = {
+			outcome: 'winner' as const,
+			bidId: 'bid-1',
+			height: 10,
+			blockHash: 'beef',
+			signers: ['validator-1'],
+			validatorCount: 1,
+		}
+		const withVerdict = { ...view, verdicts: [verdict], latestVerdicts: [verdict], resolvedVerdict }
+		expect(toAuctionListItem(withVerdict, 1200).verdict).toBe('winner')
 		expect(toAuctionListItem(view, 1200).verdict).toBeNull()
 	})
 })
