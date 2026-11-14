@@ -1,0 +1,25 @@
+{
+	"version": 1,
+	"enabled": true,
+	"root": {
+		"props": {
+			"title": "Example storefront",
+			"theme": "default",
+			"palette": "default"
+		}
+	},
+	"content": [
+		{
+			"type": "Hero",
+			"props": { "id": "hero-1", "title": "Example storefront", "subtitle": "A committed example page. Not loaded by default." }
+		},
+		{
+			"type": "Text",
+			"props": {
+				"id": "text-1",
+				"markdown": "This document is what `POST /api/app-events` accepts as a kind-30024 `content` string. It is here to exercise the store and renderer in a scratch directory; nothing reads it at boot."
+			}
+		},
+		{ "type": "ProductGrid", "props": { "id": "grid-1", "title": "Products" } }
+	]
+}

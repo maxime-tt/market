@@ -1,47 +1,11 @@
 import type { NostrEvent } from '@nostr-dev-kit/ndk'
+import { NAME_PATTERN, RESERVED_NAMES as RESERVED_NAME_LIST } from '@sdk/config/routeNames'
 import { ZapPurchaseManager, type PricingTier, type ZapPurchaseEntry } from './ZapPurchaseManager'
 import type { EventSigner } from './EventSigner'
 
-// Reserved vanity names that cannot be registered
-const RESERVED_NAMES = new Set([
-	'admin',
-	'api',
-	'dashboard',
-	'products',
-	'product',
-	'profile',
-	'checkout',
-	'setup',
-	'community',
-	'posts',
-	'post',
-	'nostr',
-	'search',
-	'collection',
-	'collections',
-	'settings',
-	'support',
-	'help',
-	'about',
-	'terms',
-	'privacy',
-	'login',
-	'logout',
-	'register',
-	'signup',
-	'signin',
-	'account',
-	'user',
-	'users',
-	'app',
-	'static',
-	'assets',
-	'images',
-	'public',
-	'favicon',
-	'robots',
-	'sitemap',
-])
+// Reserved vanity names that cannot be registered — one copy, in
+// `sdk/config/routeNames.ts` (the same list the client's vanity store reads).
+const RESERVED_NAMES = new Set(RESERVED_NAME_LIST)
 
 // Pricing tiers: amount in sats -> validity in days (or seconds for dev)
 export const VANITY_PRICING: Record<string, PricingTier> = {
@@ -180,8 +144,7 @@ export class VanityManagerImpl extends ZapPurchaseManager<VanityEntry> {
 	}
 
 	private isValidVanityName(name: string): boolean {
-		// Allow alphanumeric, hyphens, underscores, 3-30 characters
-		const regex = /^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/
-		return regex.test(name.toLowerCase())
+		// The app's one name grammar, shared with the routing file's validator.
+		return NAME_PATTERN.test(name.toLowerCase())
 	}
 }

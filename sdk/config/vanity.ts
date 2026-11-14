@@ -13,6 +13,7 @@
  * a future host that wants the names cached across reloads can inject one here without touching the actions.
  */
 import { createStateStore } from '../core/state'
+import { NAME_PATTERN, RESERVED_NAMES as RESERVED_NAME_LIST } from './routeNames'
 import type { StateStore } from '../core/state'
 
 export interface VanityEntry {
@@ -47,46 +48,9 @@ const initialState: VanityState = {
  */
 export const vanityState: StateStore<VanityState> = createStateStore<VanityState>({ initial: initialState })
 
-// Reserved names that cannot be registered (should match server)
-const RESERVED_NAMES = new Set([
-	'admin',
-	'api',
-	'dashboard',
-	'products',
-	'product',
-	'profile',
-	'checkout',
-	'setup',
-	'community',
-	'posts',
-	'post',
-	'nostr',
-	'search',
-	'collection',
-	'collections',
-	'settings',
-	'support',
-	'help',
-	'about',
-	'terms',
-	'privacy',
-	'login',
-	'logout',
-	'register',
-	'signup',
-	'signin',
-	'account',
-	'user',
-	'users',
-	'app',
-	'static',
-	'assets',
-	'images',
-	'public',
-	'favicon',
-	'robots',
-	'sitemap',
-])
+// Reserved names that cannot be registered — one copy, in `routeNames.ts`
+// (the same 37 names the server's VanityManager reads).
+const RESERVED_NAMES = new Set(RESERVED_NAME_LIST)
 
 export const vanityActions = {
 	/**
@@ -169,9 +133,8 @@ export const vanityActions = {
 	 * Validate vanity name format
 	 */
 	isValidVanityName: (name: string): boolean => {
-		// Allow alphanumeric, hyphens, underscores, 3-30 characters
-		const regex = /^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/
-		return regex.test(name.toLowerCase())
+		// The app's one name grammar, shared with the routing file's validator.
+		return NAME_PATTERN.test(name.toLowerCase())
 	},
 
 	/**

@@ -38,7 +38,17 @@ export async function initializeAppSettings(): Promise<void> {
 		// config handler ID), so publish and discovery stay in lockstep.
 		const handlerIds = resolveHandlerIdChain(getInstanceConfig().handlerId)
 
-		const settings = await fetchAppSettings(RELAY_URL as string, publicKey, handlerIds)
+		// A relay outage degrades *new publishes and settings discovery*, not
+		// serving: the routing table and the page store are local. Refusing to
+		// boot because a relay is unreachable would make the app unable to serve
+		// pages it already holds, so a failed fetch is logged and the process
+		// continues with no settings (IMPLEMENTATION-PLAN.md §1.7 E3).
+		let settings: Awaited<ReturnType<typeof fetchAppSettings>> = null
+		try {
+			settings = await fetchAppSettings(RELAY_URL as string, publicKey, handlerIds)
+		} catch (error) {
+			console.warn('⚠️ App settings unavailable; serving from local state:', error instanceof Error ? error.message : error)
+		}
 		setAppSettings(settings)
 		if (settings) {
 			console.log('App settings loaded successfully')

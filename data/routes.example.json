@@ -1,0 +1,31 @@
+{
+	"bindings": [
+		{
+			"kind": "admin",
+			"path": "shop",
+			"target": {
+				"author": "0000000000000000000000000000000000000000000000000000000000000000",
+				"d": "example-storefront",
+				"type": "page"
+			},
+			"updatedAt": 1763000000,
+			"updatedBy": "instance"
+		}
+	],
+	"default": null,
+	"instance": {
+		"pubkey": null
+	},
+	"prefixes": [
+		{
+			"pattern": "item/:eventId",
+			"target": {
+				"param": "eventId",
+				"render": "item",
+				"type": "render"
+			}
+		}
+	],
+	"seq": 1,
+	"version": 1
+}
