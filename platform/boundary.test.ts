@@ -18,6 +18,13 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 // bundle — the SPA shell (index.html) pulls `frontend.tsx`, not the entry.
 const WEB_SERVER_ENTRY = 'platform/web/app/entry.tsx'
 
+// `pageRender.ts` renders React to a STRING with no DOM (`react-dom/server`
+// `renderToStaticMarkup`) at ingest, inside the Bun process — the same thing
+// 102 test files already do. It is allowlisted BY NAME, not by directory: the
+// guard must still catch a browser-only import (hooks, queries, `window`)
+// reaching any other server module. IMPLEMENTATION-PLAN.md §1.4.2 / §11 R-1.
+const SERVER_REACT_ALLOWLIST = new Set(['platform/server/routes/pageRender.ts'])
+
 // (J-c, d7-s2/B5: the legacy src/ allowlist + its test retired with the src/ deletion —
 // the tree is gone and the ledger was already emptied at d7-s2/B4.)
 
@@ -82,7 +89,10 @@ describe('Platform dependency boundary', () => {
 
 	test('server code does not import the web host or React', async () => {
 		const violations = (await collectImports(join(PLATFORM_ROOT, 'server')))
-			.filter(({ specifier }) => /^(?:@platform\/web|react(?:-dom)?(?:\/|$)|@ui\/)/.test(specifier))
+			.filter(
+				({ file, specifier }) =>
+					!SERVER_REACT_ALLOWLIST.has(repoPath(file)) && /^(?:@platform\/web|react(?:-dom)?(?:\/|$)|@ui\/)/.test(specifier),
+			)
 			.map(({ file, specifier }) => `${repoPath(file)} imports ${specifier}`)
 		expect(violations).toEqual([])
 	})
