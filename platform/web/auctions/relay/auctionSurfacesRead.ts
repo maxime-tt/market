@@ -88,7 +88,7 @@ export function arenaSurfaceRelayCounts(health: ArenaReadHealth): ArenaRelayHeal
 
 /** Where an auction's end time comes from, and why it can be `null`. */
 export function auctionEndsAt(view: ArenaAuctionView): number | null {
-	const duration = view.content.durationSeconds
+	const duration = view.content.durationSec
 	// A create with no duration has no end to state. `0` is treated the same: an
 	// auction that lasts zero seconds is not a fact this adapter will assert.
 	if (duration === null || duration <= 0) return null
@@ -121,13 +121,6 @@ export function divergenceFor(view: ArenaAuctionView, divergences: readonly Aren
 	return { auctionId: view.coordinate, byRelay }
 }
 
-/** Distinct validator keys among a set of verdicts; a verdict with no `p` tag counts as one key. */
-function validatorKeys(verdicts: ArenaAuctionView['verdicts']): string[] {
-	const keys = new Set<string>()
-	for (const verdict of verdicts) keys.add(verdict.validatorPubkey ?? '')
-	return [...keys]
-}
-
 /** The verdict outcomes a view carries, de-duplicated and sorted. */
 function outcomesOf(verdicts: ArenaAuctionView['verdicts']): string[] {
 	return [...new Set(verdicts.map((verdict) => verdict.outcome))].sort()
@@ -145,10 +138,15 @@ export interface ArenaSurfaceContext {
 /** One canonical auction → the card model. */
 export function toAuctionCardModel(view: ArenaAuctionView, context: ArenaSurfaceContext): ArenaAuctionCardModel {
 	const endsAt = auctionEndsAt(view)
-	// `verdicts` arrives sorted by height descending (`arenaAuctionRead.ts:901`),
-	// so the first entry is the highest-anchored verdict the read saw. Picking
-	// any other would state an older state over a newer one.
-	const verdict = view.verdicts[0]?.outcome ?? null
+	// A verdict is a claim by ONE validator, and the verdicts are append-only.
+	// The card states an outcome only when every validator's LATEST anchored
+	// verdict says the same thing: a disagreement is a contested auction, and
+	// showing whichever event happened to be highest would turn a fork into a
+	// result. The full list is on the verdict panel; this is one word.
+	const resolved = view.resolvedVerdict
+	const unanimous =
+		resolved !== null && view.latestVerdicts.every((verdict) => verdict.outcome === resolved.outcome)
+	const verdict = unanimous ? resolved.outcome : null
 	const divergence = context.divergences ? divergenceFor(view, context.divergences) : null
 
 	return {
@@ -156,8 +154,8 @@ export function toAuctionCardModel(view: ArenaAuctionView, context: ArenaSurface
 		seller: view.seller,
 		d: view.d,
 		title: view.content.title,
-		imageUrl: view.content.imageUrl,
-		startingBid: view.content.startingBid,
+		imageUrl: view.content.image,
+		startingBid: view.content.startPrice,
 		topBidTotal: view.topBid?.total ?? null,
 		bidCount: view.bids.length,
 		bidsWithoutAmount: view.bidsWithoutAmount,
@@ -165,7 +163,7 @@ export function toAuctionCardModel(view: ArenaAuctionView, context: ArenaSurface
 		phase: endsAt === null ? 'unknown' : context.now < endsAt ? 'open' : 'ended',
 		verdict,
 		verdictCount: view.verdicts.length,
-		validatorCount: validatorKeys(view.verdicts).length,
+		validatorCount: view.latestVerdicts.length,
 		divergent: divergence !== null,
 		relayCount: view.relays.length,
 	}
@@ -188,13 +186,19 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 		...toAuctionCardModel(view, context),
 		description: view.content.description,
 		minIncrement: view.content.minIncrement,
-		reserve: view.content.reserve,
-		durationSeconds: view.content.durationSeconds,
-		lateBidWindowSeconds: view.content.lateBidWindowSeconds,
-		lateBidExtensionSeconds: view.content.lateBidExtensionSeconds,
-		maxTotalExtensionSeconds: view.content.maxTotalExtensionSeconds,
-		locktimeSeconds: view.content.locktimeSeconds,
-		fundingMode: view.content.fundingMode,
+		// The consolidated create has no reserve: `startPrice` is the floor a
+		// bid must clear and `reserve_not_met` is a verdict outcome, not a
+		// published number. Stated as `null` ("not stated"), never as 0.
+		reserve: null,
+		durationSeconds: view.content.durationSec,
+		// The window IS the reset amount now; the extension and the total cap
+		// were removed by the consolidated protocol (§3), and a locktime is
+		// derived per bid (§2), not published.
+		lateBidWindowSeconds: view.content.windowSec,
+		lateBidExtensionSeconds: null,
+		maxTotalExtensionSeconds: null,
+		locktimeSeconds: null,
+		fundingMode: null,
 		versions: view.versions,
 		rootEventId: view.rootEventId,
 		canonicalEventId: view.canonicalEventId,
@@ -207,9 +211,10 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 /**
  * One canonical auction → the verdict-panel model.
  *
- * Rows are kept **one per published verdict event**, in the read's own order
- * (height descending, then validator key). Nothing is merged per validator and
- * nothing is counted into a quorum, because there is no quorum rule to apply.
+ * Rows are kept **one per published verdict event**, newest first — the
+ * append-only audit trail, not a merged value. The per-validator resolution
+ * (`latestVerdicts`) is what the counts below state, because a validator that
+ * published twice has one current claim and one history entry.
  */
 export function toVerdictPanelModel(view: ArenaAuctionView, context: ArenaSurfaceContext): ArenaVerdictPanelModel {
 	const rows: ArenaVerdictRow[] = view.verdicts.map((verdict) => ({
@@ -225,7 +230,7 @@ export function toVerdictPanelModel(view: ArenaAuctionView, context: ArenaSurfac
 	return {
 		auctionId: view.coordinate,
 		rows,
-		validatorCount: validatorKeys(view.verdicts).length,
+		validatorCount: view.latestVerdicts.length,
 		outcomes: outcomesOf(view.verdicts),
 		divergence: context.divergences ? divergenceFor(view, context.divergences) : null,
 	}

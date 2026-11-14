@@ -32,6 +32,12 @@ export interface ArenaEventLike {
 	kind: number
 	tags: string[][]
 	content: string
+	/**
+	 * The signing key, when the caller has the whole event. A verdict must be
+	 * signed by the validator whose roster pubkey it carries in its `p` tag, so
+	 * when this is present it is checked against that tag.
+	 */
+	pubkey?: string
 }
 
 // ---------- Named refusals -------------------------------------------------
@@ -47,6 +53,21 @@ export const ARENA_REFUSAL_BAD_HASH = 'arena.bad_hash' as const
 export const ARENA_REFUSAL_BAD_CONTENT = 'arena.bad_content' as const
 export const ARENA_REFUSAL_BAD_KIND = 'arena.bad_kind' as const
 export const ARENA_REFUSAL_BAD_OUTCOME = 'arena.bad_outcome' as const
+/**
+ * A verdict with no `p` tag, or with an empty one. The `p` tag is the
+ * validator's roster pubkey (`chain/verdict.go:BuildVerdictEvent` appends
+ * `["p", NostrPubkeyHex(sk)]`); without it a verdict cannot be attributed to
+ * anybody, and one shared publisher would make a forged verdict
+ * indistinguishable from a real one.
+ */
+export const ARENA_REFUSAL_NO_VALIDATOR = 'arena.no_validator' as const
+/**
+ * A verdict whose `p` tag names a different key than the event's signer. The
+ * producer signs each verdict under that validator's OWN key and carries the
+ * same key in `p`, so a mismatch is a forged attribution, not a formatting
+ * quirk.
+ */
+export const ARENA_REFUSAL_SIGNER_MISMATCH = 'arena.signer_mismatch' as const
 
 export type ArenaRefusalName =
 	| typeof ARENA_REFUSAL_UNANCHORED
@@ -56,6 +77,8 @@ export type ArenaRefusalName =
 	| typeof ARENA_REFUSAL_BAD_CONTENT
 	| typeof ARENA_REFUSAL_BAD_KIND
 	| typeof ARENA_REFUSAL_BAD_OUTCOME
+	| typeof ARENA_REFUSAL_NO_VALIDATOR
+	| typeof ARENA_REFUSAL_SIGNER_MISMATCH
 
 /** The one error type every refusal throws, carrying its stable `name`. */
 export class ArenaContractError extends Error {
@@ -159,11 +182,14 @@ function isWellFormedHash(value: unknown): value is string {
 /**
  * The anchor gate, shared by both event types.
  *
- * The anchor may be carried in the tags (`["height","N"]`, `["hash","hex"]`,
- * the indexable/identity fields) and/or in the content (`height` + `block_hash`
- * for a verdict, `height` + `app_hash` for a state commitment); NIP-01 signs
- * both. A value that is *present but malformed* is refused as such; a value
- * *absent from both sources* refuses the event as **unanchored** by name.
+ * The anchor is carried in the tags (`["height","N"]`, `["hash","hex"]` — the
+ * indexable fields) **and** in the content (`height` + `block_hash` for a
+ * verdict, `height` + `app_hash` for a state commitment); NIP-01 signs both.
+ * The producer writes both and cross-checks them (`chain/verdict.go:ParseVerdict`:
+ * "so a relay that re-framed one cannot hide the other"), so this parser does
+ * the same: a value absent from BOTH sources refuses the event as
+ * **unanchored** by name; a value present but malformed or contradictory is
+ * refused as such.
  */
 function requireAnchor(
 	tags: string[][],
@@ -171,25 +197,65 @@ function requireAnchor(
 	contentHashField: string,
 	kindLabel: string,
 ): { height: number; hash: string } {
-	const rawHeight = tagValue(tags, 'height') ?? content.height
-	const rawHash = tagValue(tags, 'hash') ?? content[contentHashField]
+	const tagHeight = tagValue(tags, 'height')
+	const tagHash = tagValue(tags, 'hash')
+	const contentHeight = content.height
+	const contentHash = content[contentHashField]
 
-	if (rawHeight === undefined || rawHeight === null) {
+	if (tagHeight === null && (contentHeight === undefined || contentHeight === null)) {
 		throw new ArenaUnanchoredError(`${kindLabel} is missing the mandatory height anchor`)
 	}
-	if (rawHash === undefined || rawHash === null) {
+	if (tagHash === null && (contentHash === undefined || contentHash === null)) {
 		throw new ArenaUnanchoredError(`${kindLabel} is missing the mandatory hash anchor`)
 	}
 
-	const height = parseHeight(rawHeight)
+	const height = parseHeight(tagHeight ?? contentHeight)
 	if (height === null) {
 		throw new ArenaContractError(ARENA_REFUSAL_BAD_HEIGHT, `${kindLabel} height anchor is not a positive integer`)
 	}
-	if (!isWellFormedHash(rawHash)) {
+	const hash = tagHash ?? contentHash
+	if (!isWellFormedHash(hash)) {
 		throw new ArenaContractError(ARENA_REFUSAL_BAD_HASH, `${kindLabel} hash anchor is not a non-empty hex string`)
 	}
 
-	return { height, hash: rawHash }
+	// The two framings must agree. Either one alone is evidence; two that
+	// disagree are evidence of tampering, which is not an anchor at all.
+	if (tagHeight !== null && contentHeight !== undefined && contentHeight !== null) {
+		const contentHeightValue = parseHeight(contentHeight)
+		if (contentHeightValue === null || contentHeightValue !== height) {
+			throw new ArenaUnanchoredError(
+				`${kindLabel} height tag ${JSON.stringify(tagHeight)} disagrees with content ${JSON.stringify(contentHeight)}`,
+			)
+		}
+	}
+	if (tagHash !== null && contentHash !== undefined && contentHash !== null) {
+		if (typeof contentHash !== 'string' || contentHash.trim().toLowerCase() !== tagHash.toLowerCase()) {
+			throw new ArenaUnanchoredError(`${kindLabel} hash tag disagrees with the content's ${contentHashField}`)
+		}
+	}
+
+	return { height, hash }
+}
+
+/**
+ * The attribution gate: a verdict carries its signer's roster pubkey in a `p`
+ * tag, and is signed by that same key (`chain/verdict.go`, `BuildVerdictEvent`
+ * → `["p", NostrPubkeyHex(sk)]` under `sk`). A verdict with no `p` tag cannot
+ * be attributed to a validator, and one whose `p` names another key is a forged
+ * attribution.
+ */
+function requireValidator(tags: string[][], signer: string | undefined, kindLabel: string): string {
+	const claimed = tagValue(tags, 'p')
+	if (claimed === null) {
+		throw new ArenaContractError(ARENA_REFUSAL_NO_VALIDATOR, `${kindLabel} carries no p tag naming its validator`)
+	}
+	if (signer !== undefined && signer !== claimed) {
+		throw new ArenaContractError(
+			ARENA_REFUSAL_SIGNER_MISMATCH,
+			`${kindLabel} is signed by ${signer} but claims p = ${claimed}`,
+		)
+	}
+	return claimed
 }
 
 // ---------- Parsers --------------------------------------------------------
@@ -216,6 +282,7 @@ export function parseArenaVerdict(event: ArenaEventLike): ParsedArenaVerdict {
 	if (!auctionId) {
 		throw new ArenaContractError(ARENA_REFUSAL_BAD_CONTENT, 'verdict has no auction id')
 	}
+	const validatorPubkey = requireValidator(event.tags, event.pubkey, 'verdict')
 
 	const bidIdTag = tagValue(event.tags, 'bid')
 	const bidId = bidIdTag ?? (typeof content.bid_id === 'string' && content.bid_id.length > 0 ? content.bid_id : null)
@@ -229,7 +296,7 @@ export function parseArenaVerdict(event: ArenaEventLike): ParsedArenaVerdict {
 		height: anchor.height,
 		blockHash: anchor.hash,
 		derivedFrom: typeof content.derived_from === 'string' ? content.derived_from : '',
-		validatorPubkey: tagValue(event.tags, 'p'),
+		validatorPubkey,
 	}
 }
 
@@ -244,12 +311,13 @@ export function parseArenaStateCommitment(event: ArenaEventLike): ParsedArenaSta
 	const content = parseContentObject(event.content)
 	requireSchema(content, ARENA_STATE_COMMITMENT_SCHEMA)
 	const anchor = requireAnchor(event.tags, content, 'app_hash', 'state commitment')
+	const validatorPubkey = requireValidator(event.tags, event.pubkey, 'state commitment')
 
 	return {
 		height: anchor.height,
 		appHash: anchor.hash,
 		time: typeof content.time === 'number' ? content.time : null,
-		validatorPubkey: tagValue(event.tags, 'p'),
+		validatorPubkey,
 	}
 }
 

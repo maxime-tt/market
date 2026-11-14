@@ -90,21 +90,26 @@ export function relayCounts(health: ArenaReadHealth): { answered: number; total:
 
 /** One canonical auction view → the block's plain card model. */
 export function toAuctionListItem(view: ArenaAuctionView, now: number): AuctionListItem {
-	const duration = view.content.durationSeconds
+	const duration = view.content.durationSec
 	// A create with no duration has no end to state. `0` is treated the same:
 	// an auction that lasts zero seconds is not a fact this block will assert.
 	const endsAt = duration !== null && duration > 0 ? view.rootCreatedAt + duration : null
 	const phase: AuctionListItem['phase'] = endsAt === null ? 'unknown' : now < endsAt ? 'open' : 'ended'
-	// `verdicts` arrives sorted by height descending (`arenaAuctionRead.ts:901`),
-	// so the first entry is the highest-anchored verdict the read saw. Anything
-	// else would pick an older state over a newer one.
-	const verdict = view.verdicts[0]?.outcome ?? null
+	// `verdicts` is append-only and per-validator. The block states a word only
+	// when every validator's LATEST anchored verdict agrees; a disagreement is
+	// contested, and saying nothing is more honest than picking the
+	// highest-anchored event.
+	const resolved = view.resolvedVerdict
+	const verdict =
+		resolved !== null && view.latestVerdicts.every((entry) => entry.outcome === resolved.outcome)
+			? resolved.outcome
+			: null
 	return {
 		coordinate: view.coordinate,
 		seller: view.seller,
 		d: view.d,
 		title: view.content.title,
-		startingBid: view.content.startingBid,
+		startingBid: view.content.startPrice,
 		topBidTotal: view.topBid?.total ?? null,
 		bidCount: view.bids.length,
 		endsAt,

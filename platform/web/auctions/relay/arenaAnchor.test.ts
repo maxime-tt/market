@@ -2,12 +2,17 @@ import { describe, expect, test } from 'bun:test'
 import {
 	ARENA_AUCTION_KINDS,
 	ARENA_STATE_COMMITMENT_KIND,
+	ARENA_STATE_COMMITMENT_SCHEMA,
 	ARENA_VERDICT_KIND,
+	ARENA_VERDICT_OUTCOMES,
+	ARENA_VERDICT_SCHEMA,
 } from '@sdk/commerce/auctions/constants'
 import {
 	ARENA_REFUSAL_BAD_HEIGHT,
 	ARENA_REFUSAL_BAD_HASH,
 	ARENA_REFUSAL_BAD_SCHEMA,
+	ARENA_REFUSAL_NO_VALIDATOR,
+	ARENA_REFUSAL_SIGNER_MISMATCH,
 	ArenaContractError,
 	ArenaUnanchoredError,
 	isAnchoredArenaEvent,
@@ -50,7 +55,7 @@ function verdict(
 		['outcome', 'winner'],
 		['p', VALIDATOR],
 	]
-	return { kind: overrides.kind ?? ARENA_VERDICT_KIND, tags, content: JSON.stringify(content) }
+	return { kind: overrides.kind ?? ARENA_VERDICT_KIND, tags, content: JSON.stringify(content), pubkey: VALIDATOR }
 }
 
 function stateCommit(
@@ -68,7 +73,7 @@ function stateCommit(
 		['hash', BLOCK_HASH],
 		['p', VALIDATOR],
 	]
-	return { kind: ARENA_STATE_COMMITMENT_KIND, tags, content: JSON.stringify(content) }
+	return { kind: ARENA_STATE_COMMITMENT_KIND, tags, content: JSON.stringify(content), pubkey: VALIDATOR }
 }
 
 /** Assert a call throws the named refusal (and, for the class, that class). */
@@ -204,6 +209,65 @@ describe('parseArenaVerdict', () => {
 	test('rejects a verdict of the wrong kind', () => {
 		const ev = verdict({ kind: ARENA_AUCTION_KINDS.create })
 		expectRefusal(() => parseArenaVerdict(ev), 'arena.bad_kind')
+	})
+})
+
+// ---------- The wire vocabulary --------------------------------------------
+
+describe('the verdict contract on the wire', () => {
+	test('the content schema strings are the producer literals', () => {
+		// `chain/verdict.go:52-56` (`VerdictSchema`, `StateCommitSchema`). Pinned
+		// as literals here on purpose: our parser REFUSES a wrong schema, so if
+		// the constant ever drifts from the producer's, every real verdict would
+		// be refused as `arena.bad_schema` and the read would silently go empty.
+		expect(ARENA_VERDICT_SCHEMA).toBe('arena.verdict.v1')
+		expect(ARENA_STATE_COMMITMENT_SCHEMA).toBe('arena.statecommit.v1')
+	})
+
+	test('the outcome vocabulary is exactly the four the state machine decides', () => {
+		// `chain/verdict.go:70-76` (`OutcomeWinner`, `OutcomeReserveNotMet`,
+		// `OutcomeCancelled`, `OutcomeAborted`). Anything else — including the
+		// older validator's `won_pending_settlement` — is not this protocol's.
+		expect([...ARENA_VERDICT_OUTCOMES]).toEqual(['winner', 'reserve_not_met', 'cancelled', 'aborted'])
+		for (const outcome of ARENA_VERDICT_OUTCOMES) {
+			expect(parseArenaVerdict(verdict({ content: { outcome } })).outcome).toBe(outcome)
+		}
+		for (const outcome of ['won_pending_settlement', 'expired', 'settled', '']) {
+			expectRefusal(() => parseArenaVerdict(verdict({ content: { outcome } })), 'arena.bad_outcome')
+		}
+	})
+
+	test('a verdict with no p tag is refused: it cannot be attributed to a validator', () => {
+		const ev = verdict({
+			tags: [
+				['auction', AUCTION_ID],
+				['height', '12345'],
+				['hash', BLOCK_HASH],
+				['outcome', 'winner'],
+			],
+		})
+		expectRefusal(() => parseArenaVerdict(ev), ARENA_REFUSAL_NO_VALIDATOR)
+		expect(isAnchoredArenaEvent(ev)).toBe(false)
+	})
+
+	test('a verdict whose p tag names another key than its signer is refused', () => {
+		const ev = verdict({
+			tags: [
+				['auction', AUCTION_ID],
+				['height', '12345'],
+				['hash', BLOCK_HASH],
+				['outcome', 'winner'],
+				['p', 'bb'.repeat(32)],
+			],
+		})
+		expectRefusal(() => parseArenaVerdict(ev), ARENA_REFUSAL_SIGNER_MISMATCH)
+	})
+
+	test('an anchor whose tag and content disagree is not an anchor', () => {
+		const badHeight = verdict({ content: { height: 999 } })
+		expectRefusal(() => parseArenaVerdict(badHeight), 'arena.unanchored', ArenaUnanchoredError)
+		const badHash = verdict({ content: { block_hash: 'ffff' } })
+		expectRefusal(() => parseArenaVerdict(badHash), 'arena.unanchored', ArenaUnanchoredError)
 	})
 })
 

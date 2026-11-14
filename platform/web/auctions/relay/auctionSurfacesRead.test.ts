@@ -67,11 +67,16 @@ function createEvent(
 		kind: ARENA_AUCTION_CREATE_KIND,
 		tags,
 		content: JSON.stringify({
+			// `auction_id` is the retired alias the gate still accepts beside the
+			// `d` tag; the identity itself is the tag (spec §8).
 			auction_id: d,
 			title: `Lot ${d}`,
-			starting_bid: 1000,
-			duration_seconds: 3600,
-			funding_mode: 'cashu_sigall_v1',
+			startPrice: 1000,
+			minIncrement: 10,
+			mode: 'fixed',
+			windowSec: 0,
+			durationSec: 3600,
+			sellerWallet: 'seller-wallet',
 			...content,
 		}),
 	}
@@ -225,14 +230,14 @@ describe('arenaSurfaceStatus', () => {
 
 describe('auctionEndsAt / auctionPhase', () => {
 	test('a create with no duration has no end, and the phase says unknown rather than inventing one', () => {
-		const auction = onlyAuction(snapshotOf([createEvent({}, { duration_seconds: undefined })]))
-		expect(auction.content.durationSeconds).toBeNull()
+		const auction = onlyAuction(snapshotOf([createEvent({}, { durationSec: undefined })]))
+		expect(auction.content.durationSec).toBeNull()
 		expect(auctionEndsAt(auction)).toBeNull()
 		expect(auctionPhase(auction, 10_000)).toBe('unknown')
 	})
 
 	test('a zero duration is not treated as an instant end', () => {
-		const auction = onlyAuction(snapshotOf([createEvent({}, { duration_seconds: 0 })]))
+		const auction = onlyAuction(snapshotOf([createEvent({}, { durationSec: 0 })]))
 		expect(auctionEndsAt(auction)).toBeNull()
 		expect(auctionPhase(auction, 10_000)).toBe('unknown')
 	})
@@ -288,7 +293,24 @@ describe('toAuctionCardModel', () => {
 		expect(card.divergent).toBe(false)
 	})
 
-	test('the stated verdict is the highest-anchored one', () => {
+	test('the stated verdict is the one every validator agrees on', () => {
+		const auction = onlyAuction(
+			snapshotOf([
+				createEvent(),
+				verdictEvent({ height: 10, outcome: 'winner', validator: 'validator-one' }),
+				verdictEvent({ height: 11, outcome: 'winner', validator: 'validator-two' }),
+			]),
+		)
+		const card = toAuctionCardModel(auction, CONTEXT)
+		expect(card.verdict).toBe('winner')
+		expect(card.verdictCount).toBe(2)
+		expect(card.validatorCount).toBe(2)
+	})
+
+	test('validators disagreeing is a CONTESTED auction: no single word, and both claims kept', () => {
+		// Before the consolidated rule this picked the highest-anchored event,
+		// which turned a validator fork into a result. The card now says nothing
+		// rather than picking a side; the panel still shows both rows.
 		const auction = onlyAuction(
 			snapshotOf([
 				createEvent(),
@@ -297,9 +319,10 @@ describe('toAuctionCardModel', () => {
 			]),
 		)
 		const card = toAuctionCardModel(auction, CONTEXT)
-		expect(card.verdict).toBe('winner')
+		expect(card.verdict).toBeNull()
 		expect(card.verdictCount).toBe(2)
 		expect(card.validatorCount).toBe(2)
+		expect(toVerdictPanelModel(auction, CONTEXT).outcomes).toEqual(['cancelled', 'winner'])
 	})
 })
 
@@ -309,10 +332,11 @@ describe('toAuctionCardModel', () => {
 
 describe('toAuctionDetailModel', () => {
 	test('keeps unstated terms null rather than filling them in', () => {
-		const auction = onlyAuction(snapshotOf([createEvent({}, { reserve: undefined, min_increment: undefined })]))
+		const auction = onlyAuction(snapshotOf([createEvent({}, { minIncrement: undefined })]))
 		const detail = toAuctionDetailModel(auction, CONTEXT)
 		expect(detail.reserve).toBeNull()
 		expect(detail.minIncrement).toBeNull()
+		expect(detail.durationSeconds).toBe(3600)
 		expect(detail.startingBid).toBe(1000)
 		expect(detail.versions).toBe(1)
 		expect(detail.rootEventId).toBe(auction.rootEventId)
@@ -338,7 +362,7 @@ describe('toAuctionDetailModel', () => {
 		const root = createEvent({ id: 'create-root', created_at: 1000 })
 		const accepted = createEvent({ e: 'create-root', created_at: 2000 }, { title: 'New title' })
 		// Changes a frozen field: the read refuses it as an update, and the version count still counts it.
-		const refused = createEvent({ e: 'create-root', created_at: 3000 }, { starting_bid: 1 })
+		const refused = createEvent({ e: 'create-root', created_at: 3000 }, { startPrice: 1 })
 		const auction = onlyAuction(snapshotOf([root, accepted, refused]))
 		const detail = toAuctionDetailModel(auction, CONTEXT)
 		expect(detail.versions).toBe(3)
@@ -369,15 +393,15 @@ describe('toVerdictPanelModel', () => {
 		expect(panel.divergence).toBeNull()
 	})
 
-	test('a verdict with no p tag is surfaced with a null validator, not dropped', () => {
+	test('a verdict with no p tag is refused by the read, not surfaced with a null validator', () => {
+		// A verdict that cannot be attributed to a validator is not evidence of
+		// anything: the producer always writes `p`, so the absence is a refusal
+		// (`arena.no_validator`), not a rendering edge case.
 		const event = verdictEvent({ validator: 'validator-one' })
-		// Remove the p tag: the parser reports validatorPubkey === null rather than refusing.
 		event.tags = event.tags.filter((tag) => tag[0] !== 'p')
-		const auction = onlyAuction(snapshotOf([createEvent(), event]))
-		const panel = toVerdictPanelModel(auction, CONTEXT)
-		expect(panel.rows).toHaveLength(1)
-		expect(panel.rows[0].validator).toBeNull()
-		expect(panel.validatorCount).toBe(1)
+		const result = decodeArenaEvent(event, 'wss://relay.one')
+		expect(result.ok).toBe(false)
+		if (!result.ok) expect(result.refusal.reason).toBe('arena.no_validator')
 	})
 
 	test('no verdicts is an empty panel, which the view must read as unknown', () => {
@@ -477,9 +501,8 @@ describe('collectArenaSurfacesRead', () => {
 	})
 
 	test('a refused create never reaches a surface', async () => {
-		const badCreate = createEvent({ id: 'create-bad' }, { starting_bid: 'free' })
-		// Drops the `d` tag while keeping content.auction_id, which is legal; the
-		// refusal case is bad JSON, so replace the content outright.
+		const badCreate = createEvent({ id: 'create-bad' }, { startPrice: 'free' })
+		// The refusal case is bad JSON, so replace the content outright.
 		badCreate.content = 'not json'
 		const state = await collectArenaSurfacesRead(readFrom({ 'wss://a': { events: [badCreate, createEvent({ id: 'create-good' })] } }))
 		expect(state.snapshot?.auctions).toHaveLength(1)
