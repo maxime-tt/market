@@ -4,12 +4,14 @@ import { productsByPubkeyQueryOptions } from '@platform/web/products/productQuer
 import type { NDKEvent } from '@platform/web/readContext'
 import { getReadContext } from '@platform/web/readContext'
 import {
+	AuctionListBlock,
 	CategoriesBlock,
 	FeaturedProductBlock,
 	ProfileHeaderBlock,
 	ProductGridBlock,
 	ProductRowBlock,
 	SearchBlock,
+	type AuctionListBlockProps,
 	type CategoriesBlockBlockProps,
 	type FeaturedProductBlockProps,
 	type ProfileHeaderBlockProps,
@@ -23,14 +25,16 @@ import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useStorefrontContext } from '@ui/storefront/StorefrontContext'
+import { selectAuctionList, useAuctionListRead } from './auctionListRead'
 
 /**
  * The platform's data-bound slot map for the storefront renderer (batch 2's
- * `StorefrontDataSlots` seam). `ui/` is props-only, so the four data-bound
+ * `StorefrontDataSlots` seam). `ui/` is props-only, so the data-bound
  * block types resolve their reads here, over the existing platform queries:
  *
  *   ProductGrid / FeaturedProduct / ProductRow → `productsByPubkeyQueryOptions` (kind 30402)
  *   ProfileHeader                              → `useProfile` (kind 0) + NIP-05 validation
+ *   AuctionList                                → `createWebArenaAuctionRead` (1440 series)
  *
  * Author anchoring is the fork's security property, preserved by construction:
  * every slot takes the pubkey from `useStorefrontContext()` — the value
@@ -188,6 +192,54 @@ function CategoriesSlot({ categories, title }: CategoriesBlockBlockProps) {
 	)
 }
 
+/**
+ * The auction listing.
+ *
+ * The read is unfiltered by author on purpose (`arenaAuctionRead` subscribes to
+ * kinds, not people), and the *selection* is where the page's authority lives:
+ * `mine` keeps only the page author's auctions, `picked` keeps exactly the
+ * coordinates the editor wrote down. A picked auction renders with its own
+ * seller on the card, so it is curation, not a claim that the page author owns
+ * it.
+ */
+function AuctionListSlot(props: AuctionListBlockProps) {
+	const { pubkey } = useStorefrontContext()
+	const read = useAuctionListRead()
+	const now = Math.floor(Date.now() / 1000)
+	const selection = {
+		source: props.source,
+		seller: pubkey,
+		coordinates: props.auctionCoordinates,
+		limit: props.limit,
+		now,
+	} as const
+	const selected = read.snapshot
+		? selectAuctionList(read.snapshot, selection)
+		: { items: [], missing: props.source === 'picked' ? props.auctionCoordinates : [] }
+
+	return (
+		<AuctionListBlock
+			{...props}
+			auctions={selected.items}
+			missing={selected.missing}
+			status={read.status}
+			relayHealth={read.relayHealth}
+			auctionHref={auctionHref}
+		/>
+	)
+}
+
+/**
+ * The auction route's param is the `d` tag (`auctions.$auctionId.tsx` reads it
+ * as `getAuctionId`). That surface still resolves the legacy 30408 pipeline
+ * until stage 3 rewrites it onto the 1440 read, so a 1440 auction may not be
+ * found there yet — the link is the right address, the destination is behind.
+ */
+function auctionHref(coordinate: string): string {
+	const d = coordinate.split(':').slice(2).join(':')
+	return `/auctions/${encodeURIComponent(d)}`
+}
+
 /** The slot map handed to `StorefrontRenderer` on the published-page mounts. */
 export const storefrontBlockSlots: StorefrontDataSlots = {
 	ProductGrid: (props) => <ProductGridSlot {...props} />,
@@ -196,4 +248,5 @@ export const storefrontBlockSlots: StorefrontDataSlots = {
 	ProductRow: (props) => <ProductRowSlot {...props} />,
 	Search: (props) => <SearchSlot {...props} />,
 	Categories: (props) => <CategoriesSlot {...props} />,
+	AuctionList: (props) => <AuctionListSlot {...props} />,
 }

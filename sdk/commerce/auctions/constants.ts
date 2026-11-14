@@ -256,3 +256,77 @@ export const BIDDER_AGGREGATE_SCHEMA_TYPE = 'auction_bidder_aggregate_v1'
 
 /** d-tag prefix for validator policy events (kind 30441). */
 export const VALIDATOR_POLICY_D_PREFIX = 'policy:auction'
+
+// =========================================================================
+// Arena 1440-series kinds — the chain-backed POC protocol (`plebeian-arena-auctions`).
+//
+// This is a SECOND, DIFFERENT protocol from the `cashu_p2pk_bidder_path_v1`
+// 30408 family above. It is chain-backed (CometBFT) with Nostr relays as the
+// transport, and its kinds are NIP-01 *regular* kinds (1000–9999) so a khatru
+// relay stores them and replays them on subscription. The ephemeral range was
+// fatal: a khatru relay refuses such an EVENT with no live subscriber
+// ("mute: no one was listening for this") and does not buffer it.
+//
+// Frozen in, and only in:
+//   notes/DECISION-auction-kinds-and-editable-allowlist.md
+//   notes/REPLY-nostr-verdict-contract.md
+//
+// These values MUST NOT replace, reuse or renumber the 30408-family constants
+// above; the two families coexist deliberately. Every number lives in exactly
+// one place — this block and the `ARENA_AUCTION_KINDS` map below.
+// =========================================================================
+
+/** Kind 1440 — arena auction create / root (regular, seller-signed). The POC's `KindCreate`. */
+export const ARENA_AUCTION_CREATE_KIND = 1440 as AuctionKind
+
+/** Kind 1441 — arena bid (regular, bidder-signed). */
+export const ARENA_AUCTION_BID_KIND = 1441 as AuctionKind
+
+/** Kind 1442 — arena auction chat. NOT ours: the POC already uses it; never reuse for anything of ours. */
+export const ARENA_AUCTION_CHAT_KIND = 1442 as AuctionKind
+
+/** Kind 1443 — arena refund (regular, renumbered out of the ephemeral range). */
+export const ARENA_AUCTION_REFUND_KIND = 1443 as AuctionKind
+
+/** Kind 1444 — arena settle (regular, renumbered out of the ephemeral range). */
+export const ARENA_AUCTION_SETTLE_KIND = 1444 as AuctionKind
+
+/** Kind 1445 — validator verdict / outcome (regular). Anchor (height + block_hash) is MANDATORY. */
+export const ARENA_VERDICT_KIND = 1445 as AuctionKind
+
+/** Kind 1446 — funding abort (regular, renumbered out of the ephemeral range). */
+export const ARENA_FUNDING_ABORT_KIND = 1446 as AuctionKind
+
+/** Kind 1447 — periodic state commitment (regular). Anchor (height + app_hash) is MANDATORY. */
+export const ARENA_STATE_COMMITMENT_KIND = 1447 as AuctionKind
+
+/**
+ * The eight arena 1440-series kinds in one frozen record — the single place
+ * the numbers are written, so a future renumber is one edit. Matches the
+ * "one exported map" rule in the decision note.
+ */
+export const ARENA_AUCTION_KINDS = {
+	create: ARENA_AUCTION_CREATE_KIND,
+	bid: ARENA_AUCTION_BID_KIND,
+	chat: ARENA_AUCTION_CHAT_KIND,
+	refund: ARENA_AUCTION_REFUND_KIND,
+	settle: ARENA_AUCTION_SETTLE_KIND,
+	verdict: ARENA_VERDICT_KIND,
+	fundingAbort: ARENA_FUNDING_ABORT_KIND,
+	stateCommitment: ARENA_STATE_COMMITMENT_KIND,
+} as const
+
+export type ArenaAuctionKind = (typeof ARENA_AUCTION_KINDS)[keyof typeof ARENA_AUCTION_KINDS]
+
+// ---------- Arena content schemas (frozen wire contract) ------------------
+
+/** `schema` value inside a kind-1445 verdict's JSON content. */
+export const ARENA_VERDICT_SCHEMA = 'arena.verdict.v1'
+
+/** `schema` value inside a kind-1447 state commitment's JSON content. */
+export const ARENA_STATE_COMMITMENT_SCHEMA = 'arena.statecommit.v1'
+
+/** The only `outcome` values a kind-1445 verdict may carry. */
+export const ARENA_VERDICT_OUTCOMES = ['winner', 'reserve_not_met', 'cancelled', 'aborted'] as const
+
+export type ArenaVerdictOutcome = (typeof ARENA_VERDICT_OUTCOMES)[number]

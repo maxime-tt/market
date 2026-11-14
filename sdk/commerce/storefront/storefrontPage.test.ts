@@ -350,6 +350,70 @@ describe('validateStorefrontPageForPublish — the author is told, not silently 
 	})
 })
 
+describe('AuctionList block', () => {
+	const seller = 'a'.repeat(64)
+	const coordinate = `1440:${seller}:lot-1`
+
+	test('a coordinate-named listing round-trips through publish validation', () => {
+		const page = {
+			...createEmptyStorefrontPage(),
+			enabled: true,
+			content: [block('AuctionList', { title: 'Live', source: 'picked', auctionCoordinates: [coordinate], limit: 3 })],
+		}
+		const validated = validateStorefrontPageForPublish(page)
+		expect(validated.ok).toBe(true)
+		if (!validated.ok) return
+		expect(validated.page.content[0].props).toMatchObject({
+			source: 'picked',
+			auctionCoordinates: [coordinate],
+			limit: 3,
+		})
+	})
+
+	test('a reference that is not a 1440 coordinate is refused at publish, not silently dropped', () => {
+		const page = {
+			...createEmptyStorefrontPage(),
+			enabled: true,
+			content: [block('AuctionList', { source: 'picked', auctionCoordinates: ['https://evil.example/auction'] })],
+		}
+		const validated = validateStorefrontPageForPublish(page)
+		expect(validated.ok).toBe(false)
+		if (validated.ok) return
+		expect(validated.errors.join(' ')).toContain('1440:<seller pubkey>:<d>')
+	})
+
+	test('a coordinate with a short or non-hex seller is refused', () => {
+		const page = {
+			...createEmptyStorefrontPage(),
+			enabled: true,
+			content: [block('AuctionList', { source: 'picked', auctionCoordinates: ['1440:seller-a:lot-1'] })],
+		}
+		expect(validateStorefrontPageForPublish(page).ok).toBe(false)
+	})
+
+	test('an unknown field cannot smuggle a stored price past the schema', () => {
+		const parsed = parseStorefrontPage(
+			documentWith([block('AuctionList', { source: 'mine', auctionCoordinates: [], price: 999, title: 'Free' })]),
+		)
+		expect(parsed.droppedBlocks).toBe(0)
+		expect(parsed.page?.content[0].props).not.toHaveProperty('price')
+	})
+
+	test('the bounds apply: more than 30 references is refused', () => {
+		const page = {
+			...createEmptyStorefrontPage(),
+			enabled: true,
+			content: [
+				block('AuctionList', {
+					source: 'picked',
+					auctionCoordinates: Array.from({ length: 31 }, (_, i) => `1440:${seller}:lot-${i}`),
+				}),
+			],
+		}
+		expect(validateStorefrontPageForPublish(page).ok).toBe(false)
+	})
+})
+
 describe('round trip', () => {
 	test('a published document parses back to what was validated', () => {
 		const page = {
