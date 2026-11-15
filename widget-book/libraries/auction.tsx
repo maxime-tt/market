@@ -2,23 +2,14 @@ import { useState, type ReactNode } from 'react'
 import type { ParsedValidatorVerdictEvent } from '@sdk/commerce/auctions/events'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import type { BidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
-import type {
-	AuctionAntiSnipeWindowMinutesPreset,
-	AuctionFormData,
-	AuctionMinBidCurvePeakPreset,
-	AuctionMinBidCurveShape,
-	AuctionSettlementGracePreset,
-} from '@sdk/commerce/auctions/auctionForm'
-import { AuctionCategoryTab, AuctionImagesTab, AuctionNameTab, AuctionSpecTab } from '@ui/auction/auction-editor-tabs'
+import type { AuctionFormData } from '@sdk/commerce/auctions/auctionForm'
+import { AuctionCategoryTab, AuctionNameTab } from '@ui/auction/auction-editor-tabs'
 import { AuctionFiltersView, AuctionListItemView, AuctionTopBidBox } from '@ui/auction/auction-list-views'
 import { AuctionDisplayView } from '@ui/auction/auction-display-view'
 import { AuctionShippingView } from '@ui/auction/auction-shipping-view'
 import { AuctionTabView } from '@ui/auction/auction-tab-view'
 import type { AuctionShippingOptionSummary } from '@ui/auction/model'
 import { AuctionTimelinePreview } from '@ui/auction/auction-timeline-preview'
-import { AntiSnipeCurveSettings } from '@ui/auction/anti-snipe-curve-settings'
-import { BidLadderPreview } from '@ui/auction/bid-ladder-preview'
-import { SettlementGraceSettings } from '@ui/auction/settlement-grace-settings'
 import { BidStatusBanner, BidStatusPill, getBidStatusCopy, type BidStatusDisplayInput } from '@ui/auction/bid-status-views'
 import { AuctionShippingDetailRow, AuctionShippingOptionCard } from '@ui/auction/shipping-option-views'
 import { AuctionVerdictView } from '@ui/auction/auction-verdict-view'
@@ -171,70 +162,20 @@ function AuctionListItemSeenDemo() {
 	)
 }
 
-/** Local state mirrors the host's anti-snipe slice so the spec can click the
- * switch/window/shape/peak controls and observe the `onFormPatch` wiring. */
-function AntiSnipeCurveSettingsDemo() {
-	const [slice, setSlice] = useState<{
-		antiSnipeWindowMinutes: AuctionAntiSnipeWindowMinutesPreset
-		minBidCurveShape: AuctionMinBidCurveShape
-		minBidCurvePeakMultiplier: AuctionMinBidCurvePeakPreset
-	}>({ antiSnipeWindowMinutes: 0, minBidCurveShape: 'none', minBidCurvePeakMultiplier: 2 })
-	return (
-		<div className="max-w-md">
-			<AntiSnipeCurveSettings
-				antiSnipeWindowMinutes={slice.antiSnipeWindowMinutes}
-				minBidCurveShape={slice.minBidCurveShape}
-				minBidCurvePeakMultiplier={slice.minBidCurvePeakMultiplier}
-				onFormPatch={(patch) => setSlice((prev) => ({ ...prev, ...patch }))}
-				startAtSeconds={1_760_000_000}
-				endAtSeconds={1_760_086_400}
-				maxEndAtSeconds={1_760_090_000}
-				settlementGraceSeconds={86_400}
-				startingBid={1000}
-				bidIncrement={50}
-				reserve={2500}
-			/>
-		</div>
-	)
-}
-
-/** The settlement-grace card with its own `value` state, so the spec can click a
- * preset and observe the active choice move through `onValueChange`. */
-function SettlementGraceSettingsDemo() {
-	const [value, setValue] = useState<AuctionSettlementGracePreset>('1h')
-	return (
-		<div className="max-w-md">
-			<SettlementGraceSettings value={value} onValueChange={setValue} />
-		</div>
-	)
-}
-
 /** A full literal `AuctionFormData` for the editor-tab demos (T6.3 S5a). */
 const AUCTION_FORM_DATA: AuctionFormData = {
+	auctionId: 'handmade-mug',
 	title: 'Handmade mug',
-	summary: 'One-of-a-kind stoneware mug',
 	description: 'Wheel-thrown, food-safe glaze.',
-	startingBid: '1000',
-	bidIncrement: '50',
-	reserve: '2500',
-	startAt: '',
-	endAt: '',
-	antiSnipeWindowMinutes: 0,
-	minBidCurveShape: 'none',
-	minBidCurvePeakMultiplier: 2,
-	settlementGracePreset: '1h',
-	mainCategory: 'Collectibles',
-	categories: [],
-	imageUrls: [],
-	specs: [
-		{ key: 'Brand', value: 'Leica' },
-		{ key: 'Condition', value: 'Mint' },
-	],
-	shippings: [],
-	trustedMints: ['https://mint.one'],
-	isNSFW: false,
-	enableLiveChat: true,
-	auditorPubkey: '',
+	imageUrl: 'https://img.example/mug.png',
+	category: 'Collectibles',
+	name: 'Studio Nord',
+	startPrice: '1000',
+	minIncrement: '50',
+	mode: 'fixed',
+	windowSec: '',
+	durationSec: 86_400,
+	v4vSplit: [{ role: 'validator', recipientPubkey: 'a'.repeat(64), allocationBps: '100' }],
 }
 
 /** The flattened option shape the host hands the shipping view. */
@@ -245,18 +186,6 @@ const SHIPPING_OPTION: AuctionShippingOptionSummary = {
 	currency: 'USD',
 	service: 'standard',
 	carrier: 'DHL',
-}
-
-/** Host-owned uploader stand-in: each slot renders its own delete control. */
-function renderUploaderDemo({ src, index, onDelete }: { src: string | null; index: number; onDelete: (index: number) => void }) {
-	return (
-		<div className="flex items-center justify-between rounded-md border p-2 text-sm" data-slot="uploader-slot">
-			<span>{src ?? 'Add an image'}</span>
-			<button type="button" onClick={() => onDelete(index)}>
-				Delete
-			</button>
-		</div>
-	)
 }
 
 /** Host stand-in for `AvatarHost`: the book shows a plain deterministic chip. */
@@ -548,41 +477,12 @@ function AuctionTimelineChartViewDemo() {
 	)
 }
 
-/** Interactive images tab: deleting a slot proves the `onDelete` wiring. */
-function AuctionImagesTabDemo() {
-	const [images, setImages] = useState([
-		{ imageUrl: 'https://img.example/1.png', imageOrder: 0 },
-		{ imageUrl: 'https://img.example/2.png', imageOrder: 1 },
-	])
-	return (
-		<div className="max-w-md">
-			<AuctionImagesTab images={images} setImages={setImages} renderUploader={renderUploaderDemo} />
-		</div>
-	)
-}
-
-/** The mechanics tab with local form state so the spec can open Advanced. */
+/** The mechanics tab with local form state, so the spec can switch the closing rule. */
 function AuctionTabViewDemo() {
 	const [formData, setFormData] = useState<AuctionFormData>(AUCTION_FORM_DATA)
-	const [startMode, setStartMode] = useState<'immediate' | 'scheduled'>('immediate')
-	const [endMode, setEndMode] = useState<'duration' | 'absolute'>('duration')
-	const [durationSeconds, setDurationSeconds] = useState(86_400)
 	return (
 		<div className="max-w-md">
-			<AuctionTabView
-				formData={formData}
-				setFormData={setFormData}
-				availableMints={['https://mint.one', 'https://mint.two']}
-				startMode={startMode}
-				setStartMode={setStartMode}
-				endMode={endMode}
-				setEndMode={setEndMode}
-				durationSeconds={durationSeconds}
-				setDurationSeconds={setDurationSeconds}
-				validationMessages={{}}
-				userRemovedMints={new Set<string>()}
-				onUserRemovedMintsChange={() => {}}
-			/>
+			<AuctionTabView formData={formData} setFormData={setFormData} validationMessages={{}} />
 		</div>
 	)
 }
@@ -812,24 +712,6 @@ export const auction: WidgetLibrary = {
 			),
 		},
 		{
-			// The bid-ladder preview: sats-only price progression (T6.3 S3).
-			name: 'BidLadderPreview',
-			render: () => (
-				<div className="max-w-md">
-					<BidLadderPreview startingBid={1000} bidIncrement={50} reserve={2500} />
-				</div>
-			),
-		},
-		{
-			// Same preview with the reserve below the starting bid: the "no reserve" column.
-			name: 'BidLadderPreviewNoReserve',
-			render: () => (
-				<div className="max-w-md">
-					<BidLadderPreview startingBid={1000} bidIncrement={50} reserve={0} />
-				</div>
-			),
-		},
-		{
 			// The time-axis preview with an anti-snipe window and a curve (T6.3 S3).
 			name: 'AuctionTimelinePreview',
 			render: () => (
@@ -890,67 +772,6 @@ export const auction: WidgetLibrary = {
 			),
 		},
 		{
-			// The anti-snipe policy card with a window, a curve and its timeline (T6.3 S4).
-			name: 'AntiSnipeCurveSettings',
-			render: () => (
-				<div className="max-w-md">
-					<AntiSnipeCurveSettings
-						antiSnipeWindowMinutes={15}
-						minBidCurveShape="linear"
-						minBidCurvePeakMultiplier={5}
-						onFormPatch={() => {}}
-						startAtSeconds={1_760_000_000}
-						endAtSeconds={1_760_086_400}
-						maxEndAtSeconds={1_760_090_000}
-						settlementGraceSeconds={86_400}
-						startingBid={1000}
-						bidIncrement={50}
-						reserve={2500}
-					/>
-				</div>
-			),
-		},
-		{
-			// The same card with no window: the curve controls are gated and the timeline is flat.
-			name: 'AntiSnipeCurveSettingsOff',
-			render: () => (
-				<div className="max-w-md">
-					<AntiSnipeCurveSettings
-						antiSnipeWindowMinutes={0}
-						minBidCurveShape="none"
-						minBidCurvePeakMultiplier={2}
-						onFormPatch={() => {}}
-						startAtSeconds={1_760_000_000}
-						endAtSeconds={1_760_086_400}
-						maxEndAtSeconds={1_760_086_400}
-						settlementGraceSeconds={86_400}
-						startingBid={1000}
-						bidIncrement={50}
-						reserve={0}
-					/>
-				</div>
-			),
-		},
-		{
-			// Interactive: click the controls to prove the `onFormPatch` wiring.
-			name: 'AntiSnipeCurveSettingsInteractive',
-			render: () => <AntiSnipeCurveSettingsDemo />,
-		},
-		{
-			// The settlement-grace picker with 1 hour selected (T6.3 S4).
-			name: 'SettlementGraceSettings',
-			render: () => (
-				<div className="max-w-md">
-					<SettlementGraceSettings value="1h" onValueChange={() => {}} />
-				</div>
-			),
-		},
-		{
-			// Interactive: click a preset to prove the `onValueChange` wiring.
-			name: 'SettlementGraceSettingsInteractive',
-			render: () => <SettlementGraceSettingsDemo />,
-		},
-		{
 			// The four simple editor tabs, as one cluster file (T6.3 S5a).
 			name: 'AuctionNameTab',
 			render: () => (
@@ -963,89 +784,23 @@ export const auction: WidgetLibrary = {
 			name: 'AuctionCategoryTab',
 			render: () => (
 				<div className="max-w-md">
-					<AuctionCategoryTab
-						formData={AUCTION_FORM_DATA}
-						setFormData={() => {}}
-						subCategoryInput="Cameras, Optics"
-						setSubCategoryInput={() => {}}
-						mainCategories={['Collectibles', 'Art', 'Bitcoin']}
-					/>
+					<AuctionCategoryTab formData={AUCTION_FORM_DATA} setFormData={() => {}} mainCategories={['Collectibles', 'Art', 'Bitcoin']} />
 				</div>
 			),
-		},
-		{
-			name: 'AuctionSpecTab',
-			render: () => (
-				<div className="max-w-md">
-					<AuctionSpecTab formData={AUCTION_FORM_DATA} setFormData={() => {}} />
-				</div>
-			),
-		},
-		{
-			name: 'AuctionImagesTab',
-			render: () => (
-				<div className="max-w-md">
-					<AuctionImagesTab
-						images={[{ imageUrl: 'https://img.example/1.png', imageOrder: 0 }]}
-						setImages={() => {}}
-						renderUploader={renderUploaderDemo}
-					/>
-				</div>
-			),
-		},
-		{
-			// Interactive: delete a slot to prove the `onDelete` wiring.
-			name: 'AuctionImagesTabInteractive',
-			render: () => <AuctionImagesTabDemo />,
 		},
 		{
 			// The mechanics tab: start/end timing, starting bid, Advanced (T6.3 S5a).
 			name: 'AuctionTabView',
 			render: () => (
 				<div className="max-w-md">
-					<AuctionTabView
-						formData={AUCTION_FORM_DATA}
-						setFormData={() => {}}
-						availableMints={['https://mint.one', 'https://mint.two']}
-						startMode="immediate"
-						setStartMode={() => {}}
-						endMode="duration"
-						setEndMode={() => {}}
-						durationSeconds={86_400}
-						setDurationSeconds={() => {}}
-						validationMessages={{}}
-						userRemovedMints={new Set<string>()}
-						onUserRemovedMintsChange={() => {}}
-					/>
+					<AuctionTabView formData={AUCTION_FORM_DATA} setFormData={() => {}} validationMessages={{}} />
 				</div>
 			),
 		},
 		{
-			// The same tab with the date pickers selected instead of the duration slider.
-			name: 'AuctionTabViewScheduled',
-			render: () => (
-				<div className="max-w-md">
-					<AuctionTabView
-						formData={AUCTION_FORM_DATA}
-						setFormData={() => {}}
-						availableMints={[]}
-						startMode="scheduled"
-						setStartMode={() => {}}
-						endMode="absolute"
-						setEndMode={() => {}}
-						durationSeconds={3600}
-						setDurationSeconds={() => {}}
-						validationMessages={{}}
-						userRemovedMints={new Set<string>()}
-						onUserRemovedMintsChange={() => {}}
-					/>
-				</div>
-			),
-		},
-		{
-			// Interactive: open Advanced to prove the collapsible composition of the
-			// bid-increment/reserve inputs, the curve card and the mints list.
-			name: 'AuctionTabViewAdvanced',
+			// Interactive: switch the closing rule and the duration, and watch the mode's
+			// own controls appear.
+			name: 'AuctionTabViewInteractive',
 			render: () => <AuctionTabViewDemo />,
 		},
 		{

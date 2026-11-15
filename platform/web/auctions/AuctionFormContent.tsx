@@ -1,208 +1,191 @@
+/**
+ * The CMS auction-create form (`NewAuctionContent` hosts it in a sheet).
+ *
+ * The form is a kind-1440 arena create and nothing else. Its tabs are the create's fields:
+ * display (title, description, name), mechanics (duration, starting price, increment,
+ * closing rule), category, the single image, and the optional committed split. The retired
+ * 30408 knobs — reserve, the anti-snipe floor curve, settlement grace, the auditor list,
+ * trusted mints, specs, shipping selections, NSFW/chat flags and start/end scheduling — are
+ * **not rendered**, because the settled protocol has no field to receive them; a control
+ * whose value is dropped on publish is worse than no control. Shipping in particular has no
+ * home in a create: the winner's claim (`AuctionClaimFormData`) is what carries a shipping
+ * address, and the auction itself never named one under this protocol.
+ *
+ * Validation is the publish path's own rule (`arenaCreateFormIssues`), so the editor cannot
+ * enable a Publish button the publisher would refuse.
+ */
 import { Button } from '@ui/primitives/button'
 import { ImageUploader } from '@platform/web/media/ImageUploader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import {
-	AUCTION_MIN_DURATION_SECONDS,
-	getAuctionPublishValidationIssues,
-	validateAuctionPublishInput,
+	auctionFormToCreateInput,
+	AUCTION_V4V_TOTAL_BPS,
+	getArenaCreateIssues,
 	type AuctionPublishValidationField,
-	type AuctionPublishValidationIssue,
+	type ArenaCreateValidationIssue,
 } from '@sdk/commerce/auctions/auctionPublishValidation'
-import { syncMintSelection } from '@sdk/commerce/auctions/mintSync'
-import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@sdk/config/constants'
-import { authStore } from '@platform/web/auth/authStore'
-import { configStore } from '@platform/web/config/appConfigStore'
-import { isWalletDevModeEnabled, WALLET_DEV_TEST_MINTS } from '@sdk/commerce/payments/wallet/devWallet'
-import { normalizeProductShippingSelections, type ProductShippingSelection } from '@sdk/commerce/products'
-import { usePublishAuctionMutation, type AuctionFormData, type AuctionSpecEntry } from '@platform/web/auctions/auctionPublish'
 import { AUCTION_MIN_BID_LEG_SATS } from '@sdk/commerce/auctions/constants'
-import {
-	createShippingReference,
-	getShippingInfo,
-	isShippingOptionDeleted,
-	useShippingOptionsByPubkey,
-} from '@platform/web/shipping/shippingQuery'
+import { PRODUCT_CATEGORIES } from '@sdk/config/constants'
+import { authStore } from '@platform/web/auth/authStore'
+import { usePublishAuctionMutation, type AuctionFormData, type AuctionV4vSplitRowInput } from '@platform/web/auctions/auctionPublish'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@platform/web/auctions/auctionFormStorage'
+import { Input } from '@ui/primitives/input'
+import { Label } from '@ui/primitives/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { AuctionCategoryTab, AuctionImagesTab, AuctionNameTab, AuctionSpecTab } from '@ui/auction/auction-editor-tabs'
-import { AuctionShippingView } from '@ui/auction/auction-shipping-view'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+import { AuctionCategoryTab, AuctionNameTab } from '@ui/auction/auction-editor-tabs'
 import { AuctionTabView } from '@ui/auction/auction-tab-view'
-import {
-	type AuctionImage,
-	type AuctionShippingOptionSummary,
-	type AuctionValidationMessages as ValidationMessages,
-	type EndMode,
-	type StartMode,
-	type TabProps,
-} from '@ui/auction/model'
-import { parseDatetimeLocalSeconds, toDatetimeLocal } from '@ui/utils/datetime'
+import type { AuctionValidationMessages as ValidationMessages } from '@ui/auction/model'
 
-type AuctionTab = 'name' | 'auction' | 'category' | 'spec' | 'images' | 'shipping'
+type AuctionTab = 'name' | 'auction' | 'category' | 'image' | 'split'
+
+const DEFAULT_DURATION_SEC = 24 * 60 * 60
 
 const INITIAL_FORM: AuctionFormData = {
+	auctionId: '',
 	title: '',
-	summary: '',
 	description: '',
-	startingBid: '',
-	bidIncrement: String(AUCTION_MIN_BID_LEG_SATS),
-	reserve: undefined,
-	startAt: '',
-	endAt: '',
-	// Default anti-snipe to off; enabling applies the 5-min linear 2x preset.
-	antiSnipeWindowMinutes: 0,
-	minBidCurveShape: 'none',
-	minBidCurvePeakMultiplier: 2,
-	settlementGracePreset: '1h',
-	mainCategory: '',
-	categories: [],
-	imageUrls: [],
-	specs: [],
-	shippings: [],
-	trustedMints: [],
-	isNSFW: false,
-	enableLiveChat: true,
-	// Empty string defers auditor selection to the app's configured
-	// default (`config.cvmServerPubkey`). The auction publish path
-	// resolves this via `getAuctionAuditorsOrThrow` — the seller never
-	// has to pick an auditor manually for the minimal demo flow. A
-	// future Phase 7 reputation UI may surface a multi-select here.
-	auditorPubkey: '',
+	imageUrl: '',
+	category: '',
+	name: '',
+	startPrice: '',
+	minIncrement: String(AUCTION_MIN_BID_LEG_SATS),
+	mode: 'fixed',
+	windowSec: '',
+	durationSec: DEFAULT_DURATION_SEC,
+	v4vSplit: [],
 }
 
-function parseListInput(value: string): string[] {
-	return value
-		.split(/[\n,]/)
-		.map((item) => item.trim())
-		.filter(Boolean)
-}
-
-function toValidationMessages(issues: AuctionPublishValidationIssue[]): ValidationMessages {
-	const messages: ValidationMessages = {}
-	for (const issue of issues) {
-		messages[issue.field] ??= issue.message
-	}
-	return messages
-}
-
-function toIndexedValidationMessages(
-	issues: AuctionPublishValidationIssue[],
-	field: AuctionPublishValidationField,
-): Record<number, string> {
-	const messages: Record<number, string> = {}
-	for (const issue of issues) {
-		if (issue.field === field && issue.index !== undefined) {
-			messages[issue.index] ??= issue.message
-		}
-	}
-	return messages
-}
-
-type AvailableShipping = AuctionShippingOptionSummary
-
-function ShippingTab({
-	formData,
-	setFormData,
-	userPubkey,
-	shippingExtraCostErrors,
-}: TabProps & { userPubkey: string; shippingExtraCostErrors: Record<number, string> }) {
-	const shippingOptionsQuery = useShippingOptionsByPubkey(userPubkey)
-
-	const availableShippingOptions = useMemo<AvailableShipping[]>(() => {
-		if (!shippingOptionsQuery.data || !userPubkey) return []
-		return shippingOptionsQuery.data
-			.filter((event) => !isShippingOptionDeleted(event))
-			.map((event) => {
-				const info = getShippingInfo(event)
-				if (!info || !info.id || !info.id.trim()) return null
-				return {
-					id: createShippingReference(userPubkey, info.id),
-					name: info.title,
-					price: info.price.amount,
-					currency: info.price.currency,
-					service: info.service || '',
-					carrier: info.carrier,
-				}
-			})
-			.filter((opt): opt is AvailableShipping => opt !== null)
-	}, [shippingOptionsQuery.data, userPubkey])
-
-	const selections = useMemo<ProductShippingSelection[]>(() => normalizeProductShippingSelections(formData.shippings), [formData.shippings])
-
-	const selectionsWithOption = useMemo(
-		() =>
-			selections.map((selection) => ({
-				selection,
-				option: availableShippingOptions.find((option) => option.id === selection.shippingRef) ?? null,
-			})),
-		[selections, availableShippingOptions],
-	)
-
-	const updateSelections = (next: ProductShippingSelection[]) => {
-		setFormData((prev) => ({ ...prev, shippings: next }))
-	}
-
-	const addShipping = (option: AvailableShipping) => {
-		if (selections.some((s) => s.shippingRef === option.id)) return
-		updateSelections([...selections, { shippingRef: option.id, extraCost: '' }])
-	}
-
-	const removeShipping = (index: number) => {
-		updateSelections(selections.filter((_, i) => i !== index))
-	}
-
-	const updateExtraCost = (index: number, extraCost: string) => {
-		const next = [...selections]
-		next[index] = { ...next[index], extraCost }
-		updateSelections(next)
-	}
-
-	const unselectedOptions = availableShippingOptions.filter((option) => !selections.some((s) => s.shippingRef === option.id))
-
-	return (
-		<AuctionShippingView
-			attached={selectionsWithOption.map(({ selection, option }) => ({ ...selection, option }))}
-			unselected={unselectedOptions}
-			hasUser={!!userPubkey}
-			isLoading={shippingOptionsQuery.isLoading}
-			hasAnyOptions={availableShippingOptions.length > 0}
-			extraCostErrors={shippingExtraCostErrors}
-			onAdd={addShipping}
-			onRemove={removeShipping}
-			onExtraCostChange={updateExtraCost}
-		/>
-	)
-}
-
-const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'spec', 'images', 'shipping']
+const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'image', 'split']
 
 const VALIDATION_FIELD_LABELS: Record<AuctionPublishValidationField, string> = {
+	auctionId: 'Auction id',
 	title: 'Title',
 	description: 'Description',
-	startingBid: 'Starting Bid',
-	bidIncrement: 'Bid Increment',
-	reserve: 'Reserve',
-	startAt: 'Start Time',
-	endAt: 'End Time',
-	duration: 'Duration',
-	antiSnipeWindowMinutes: 'Anti-snipe Window',
-	minBidCurveShape: 'Curve Shape',
-	minBidCurvePeakMultiplier: 'Peak Multiplier',
-	settlementGracePreset: 'Settlement Grace',
-	trustedMints: 'Trusted Mints',
-	imageUrls: 'Image',
-	shippingExtraCost: 'Shipping Extra Cost',
+	image: 'Image',
+	startPrice: 'Starting Bid',
+	minIncrement: 'Bid Increment',
+	mode: 'Closing Rule',
+	windowSec: 'Anti-snipe Window',
+	durationSec: 'Duration',
+	v4vSplit: 'Split',
+	sellerWallet: 'Wallet',
 }
 
-function isMeaningfulDraft(formData: AuctionFormData, baselineMints: string[]): boolean {
-	if (formData.title.trim().length > 0) return true
+function toValidationMessages(issues: ArenaCreateValidationIssue[]): ValidationMessages {
+	const messages: ValidationMessages = {}
+	for (const issue of issues) messages[issue.field] ??= issue.message
+	return messages
+}
 
-	const baseline = new Set(baselineMints)
-	const current = formData.trustedMints
-	if (baseline.size !== current.length) return true
-	return current.some((mint) => !baseline.has(mint))
+function toIndexedValidationMessages(issues: ArenaCreateValidationIssue[], field: AuctionPublishValidationField): Record<number, string> {
+	const messages: Record<number, string> = {}
+	for (const issue of issues) {
+		if (issue.field === field && issue.index !== undefined) messages[issue.index] ??= issue.message
+	}
+	return messages
+}
+
+function isMeaningfulDraft(formData: AuctionFormData): boolean {
+	return formData.title.trim().length > 0 || formData.imageUrl.trim().length > 0
+}
+
+/** The committed split: rows of role + recipient + basis points, total capped at 10000. */
+function SplitTab({
+	formData,
+	setFormData,
+	errors,
+}: {
+	formData: AuctionFormData
+	setFormData: (updater: (prev: AuctionFormData) => AuctionFormData) => void
+	errors: Record<number, string>
+}) {
+	const rows = formData.v4vSplit
+	const update = (index: number, patch: Partial<AuctionV4vSplitRowInput>) => {
+		setFormData((prev) => {
+			const next = [...prev.v4vSplit]
+			next[index] = { ...next[index], ...patch }
+			return { ...prev, v4vSplit: next }
+		})
+	}
+	const allocated = rows.reduce((sum, row) => sum + (parseInt(row.allocationBps, 10) || 0), 0)
+
+	return (
+		<div className="flex flex-col gap-4">
+			<div className="space-y-1">
+				<Label className="text-base font-medium">Value split</Label>
+				<p className="text-sm text-text-mid">
+					Optional. Each row pays a fixed share of the hammer price, in basis points (1% = 100 bps). The rows may
+					allocate at most {AUCTION_V4V_TOTAL_BPS} bps between them; the seller keeps the remainder.
+				</p>
+				<p className="text-xs text-text-mid">
+					Allocated: {allocated} / {AUCTION_V4V_TOTAL_BPS} bps
+				</p>
+			</div>
+
+			{rows.map((row, index) => (
+				<div key={index} className="flex flex-col gap-2 rounded-lg border border-border-default bg-surface-sunken px-3 py-3">
+					<div className="flex items-center gap-2">
+						<Select
+							value={row.role}
+							onValueChange={(value) => update(index, { role: value === 'v4v' ? 'v4v' : 'validator' })}
+						>
+							<SelectTrigger className="w-40">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="validator">validator</SelectItem>
+								<SelectItem value="v4v">v4v</SelectItem>
+							</SelectContent>
+						</Select>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							className="text-error hover:text-error-foreground"
+							onClick={() => setFormData((prev) => ({ ...prev, v4vSplit: prev.v4vSplit.filter((_, i) => i !== index) }))}
+						>
+							<Trash2 className="w-4 h-4" />
+						</Button>
+					</div>
+					<Input
+						placeholder="Recipient Nostr pubkey (64 hex)"
+						value={row.recipientPubkey}
+						onChange={(e) => update(index, { recipientPubkey: e.target.value })}
+						className="font-mono text-xs"
+					/>
+					<Input
+						type="number"
+						min={1}
+						max={AUCTION_V4V_TOTAL_BPS}
+						step="1"
+						placeholder="Allocation (basis points)"
+						value={row.allocationBps}
+						onChange={(e) => update(index, { allocationBps: e.target.value })}
+					/>
+					{errors[index] && <p className="text-xs text-error">{errors[index]}</p>}
+				</div>
+			))}
+
+			<Button
+				type="button"
+				variant="outline"
+				className="w-full"
+				onClick={() =>
+					setFormData((prev) => ({
+						...prev,
+						v4vSplit: [...prev.v4vSplit, { role: 'validator', recipientPubkey: '', allocationBps: '' }],
+					}))
+				}
+			>
+				Add split row
+			</Button>
+		</div>
+	)
 }
 
 export function AuctionFormContent() {
@@ -210,137 +193,58 @@ export function AuctionFormContent() {
 	const publishMutation = usePublishAuctionMutation()
 	const authState = useStore(authStore)
 	const userPubkey = authState.user?.pubkey || ''
-	const appStage = useStore(configStore, (state) => state.config.stage)
-	const walletDevMode = appStage === 'staging' || isWalletDevModeEnabled()
-	// Instance-configured allowlist (ADR-018) takes precedence; DEFAULT_TRUSTED_MINTS
-	// is only the shipped tier-3 fallback for before config loads or an instance
-	// that hasn't set its own list.
-	const configTrustedMints = useStore(configStore, (state) => state.config.trustedMints)
 
-	const availableMints = useMemo(
-		() =>
-			Array.from(
-				new Set([
-					...(configTrustedMints?.length ? configTrustedMints : DEFAULT_TRUSTED_MINTS),
-					...(walletDevMode ? WALLET_DEV_TEST_MINTS : []),
-				]),
-			),
-		[configTrustedMints, walletDevMode],
-	)
-
-	const prevAvailableMintsRef = useRef(availableMints)
-	const userRemovedMintsRef = useRef<Set<string>>(new Set())
-
-	const setUserRemovedMints = (next: Set<string>) => {
-		userRemovedMintsRef.current = next
-	}
-
-	useEffect(() => {
-		const prev = prevAvailableMintsRef.current
-		if (prev === availableMints) return
-
-		setFormData((prevForm) => ({
-			...prevForm,
-			trustedMints: syncMintSelection(prev, availableMints, prevForm.trustedMints, userRemovedMintsRef.current),
-		}))
-
-		prevAvailableMintsRef.current = availableMints
-	}, [availableMints])
-
-	const [formData, setFormData] = useState<AuctionFormData>(() => ({ ...INITIAL_FORM, trustedMints: [...availableMints] }))
-	const [images, setImages] = useState<AuctionImage[]>([])
+	const [formData, setFormData] = useState<AuctionFormData>(() => ({ ...INITIAL_FORM, auctionId: uuidv4() }))
 	const [activeTab, setActiveTab] = useState<AuctionTab>('name')
-	const [subCategoryInput, setSubCategoryInput] = useState('')
-	const [startMode, setStartMode] = useState<StartMode>('immediate')
-	const [endMode, setEndMode] = useState<EndMode>('duration')
-	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
-
-	const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
+	const [savedAt, setSavedAt] = useState<number | null>(null)
+	const [publishError, setPublishError] = useState<string | null>(null)
 	const draftLoadedRef = useRef(false)
 	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const draftGenerationRef = useRef(0)
 
-	const hasDraft = draftSavedAt !== null
+	const hasDraft = savedAt !== null
 
 	useEffect(() => {
 		if (!userPubkey || draftLoadedRef.current) return
-
 		draftLoadedRef.current = true
 		const draft = getAuctionFormDraft(userPubkey)
 		if (!draft) return
-		setDraftSavedAt(draft.savedAt)
-		setFormData(draft.formData)
-		setImages(draft.images)
-		setStartMode(draft.startMode)
-		setEndMode(draft.endMode)
-		setDurationSeconds(draft.durationSeconds)
-		setSubCategoryInput(draft.subCategoryInput)
+		setSavedAt(draft.savedAt)
+		// A draft without an identity (one written before this form existed) gets a fresh
+		// `d` rather than an empty one: the identity is required to publish at all.
+		setFormData({ ...draft.formData, auctionId: draft.formData.auctionId || uuidv4() })
 	}, [userPubkey])
 
 	useEffect(() => {
 		if (!userPubkey || !draftLoadedRef.current) return
 
-		const gen = draftGenerationRef.current
+		const generation = draftGenerationRef.current
 		if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
 
 		saveTimerRef.current = setTimeout(() => {
-			if (draftGenerationRef.current !== gen) return
-			if (!isMeaningfulDraft(formData, availableMints)) return
-			saveAuctionFormDraft(userPubkey, { formData, images, startMode, endMode, durationSeconds, subCategoryInput })
-			if (draftGenerationRef.current === gen) setDraftSavedAt(Date.now())
+			if (draftGenerationRef.current !== generation) return
+			if (!isMeaningfulDraft(formData)) return
+			saveAuctionFormDraft(userPubkey, { formData })
+			if (draftGenerationRef.current === generation) setSavedAt(Date.now())
 		}, 1500)
 
 		return () => {
 			if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
 		}
-	}, [formData, images, startMode, endMode, durationSeconds, subCategoryInput, userPubkey, availableMints])
+	}, [formData, userPubkey])
 
-	const buildPublishFormData = (nowSeconds: number): AuctionFormData => {
-		const effectiveStartAt = startMode === 'immediate' ? '' : (formData.startAt ?? '')
-		let resolvedEndAt = formData.endAt
-		if (endMode === 'duration') {
-			const parsedStart = formData.startAt ? parseDatetimeLocalSeconds(formData.startAt) : null
-			const startSeconds = startMode === 'immediate' ? nowSeconds : (parsedStart ?? nowSeconds)
-			resolvedEndAt = toDatetimeLocal(new Date((startSeconds + durationSeconds) * 1000))
-		}
-
-		return {
-			...formData,
-			startAt: effectiveStartAt,
-			endAt: resolvedEndAt,
-			imageUrls: images
-				.slice()
-				.sort((a, b) => a.imageOrder - b.imageOrder)
-				.map((img) => img.imageUrl)
-				.filter((url) => url.trim().length > 0),
-			categories: parseListInput(subCategoryInput),
-			specs: formData.specs.filter((spec: AuctionSpecEntry) => spec.key.trim() && spec.value.trim()),
-		}
-	}
-
-	const validationNowSeconds = Math.floor(Date.now() / 1000)
-	const validationIssues = getAuctionPublishValidationIssues(buildPublishFormData(validationNowSeconds), {
-		nowSeconds: validationNowSeconds,
-		minDurationSeconds: AUCTION_MIN_DURATION_SECONDS,
-	})
+	const validationIssues = getArenaCreateIssues(auctionFormToCreateInput(formData), { sellerWallet: 'not-checked-here' })
 	const validationMessages = toValidationMessages(validationIssues)
-	const shippingExtraCostErrors = toIndexedValidationMessages(validationIssues, 'shippingExtraCost')
+	const splitErrors = toIndexedValidationMessages(validationIssues, 'v4vSplit')
 
-	const hasValidName = !validationMessages.title
-	const hasValidDescription = !validationMessages.description
+	const hasValidName = !validationMessages.title && !validationMessages.description
 	const hasValidBidding =
-		!validationMessages.startingBid &&
-		!validationMessages.bidIncrement &&
-		!validationMessages.reserve &&
-		!validationMessages.startAt &&
-		!validationMessages.endAt &&
-		!validationMessages.duration &&
-		!validationMessages.antiSnipeWindowMinutes &&
-		!validationMessages.minBidCurveShape &&
-		!validationMessages.minBidCurvePeakMultiplier &&
-		!validationMessages.settlementGracePreset
-	const hasValidImages = !validationMessages.imageUrls
-	const hasValidMints = !validationMessages.trustedMints
+		!validationMessages.startPrice &&
+		!validationMessages.minIncrement &&
+		!validationMessages.durationSec &&
+		!validationMessages.mode &&
+		!validationMessages.windowSec
+	const hasValidImage = !validationMessages.image
 
 	const canSubmit = validationIssues.length === 0
 
@@ -348,15 +252,13 @@ export function AuctionFormContent() {
 	const isLastTab = currentTabIndex === TAB_ORDER.length - 1
 
 	const tabValid: Record<AuctionTab, boolean> = {
-		name: hasValidName && hasValidDescription,
-		auction: hasValidBidding && hasValidMints,
+		name: hasValidName,
+		auction: hasValidBidding,
 		category: true,
-		spec: true,
-		images: hasValidImages,
-		shipping: Object.keys(shippingExtraCostErrors).length === 0,
+		image: hasValidImage,
+		split: Object.keys(splitErrors).length === 0 && !validationMessages.v4vSplit,
 	}
 
-	// Tab at index i is reachable only if every tab before it is valid.
 	const isTabReachable = (tabIndex: number): boolean => {
 		for (let i = 0; i < tabIndex; i++) {
 			if (!tabValid[TAB_ORDER[i]]) return false
@@ -388,23 +290,11 @@ export function AuctionFormContent() {
 			case 'name':
 				return missingLabels(['title', 'description'])
 			case 'auction':
-				return missingLabels([
-					'startingBid',
-					'bidIncrement',
-					'reserve',
-					'startAt',
-					'endAt',
-					'duration',
-					'antiSnipeWindowMinutes',
-					'minBidCurveShape',
-					'minBidCurvePeakMultiplier',
-					'settlementGracePreset',
-					'trustedMints',
-				])
-			case 'images':
-				return missingLabels(['imageUrls'])
-			case 'shipping':
-				return missingLabels(['shippingExtraCost'])
+				return missingLabels(['startPrice', 'minIncrement', 'durationSec', 'mode', 'windowSec'])
+			case 'image':
+				return missingLabels(['image'])
+			case 'split':
+				return missingLabels(['v4vSplit'])
 			default:
 				return []
 		}
@@ -414,45 +304,37 @@ export function AuctionFormContent() {
 		draftGenerationRef.current++
 		draftLoadedRef.current = true
 		clearAuctionFormDraft(userPubkey)
-		setDraftSavedAt(null)
-		setFormData({ ...INITIAL_FORM, trustedMints: [...availableMints] })
-		setImages([])
-		setStartMode('immediate')
-		setEndMode('duration')
-		setDurationSeconds(24 * 60 * 60)
-		setSubCategoryInput('')
+		setSavedAt(null)
+		setFormData({ ...INITIAL_FORM, auctionId: uuidv4() })
 	}
 
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
 		event.stopPropagation()
-
-		const nowSeconds = Math.floor(Date.now() / 1000)
-		const nextFormData = buildPublishFormData(nowSeconds)
+		setPublishError(null)
 
 		try {
-			validateAuctionPublishInput(nextFormData, { nowSeconds, minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
-			const publishedEventId = await publishMutation.mutateAsync(nextFormData)
-			if (!publishedEventId) return
+			const result = await publishMutation.mutateAsync(formData)
+			if (!result.eventId) return
 
 			draftGenerationRef.current++
 			clearAuctionFormDraft(userPubkey)
-			setDraftSavedAt(null)
+			setSavedAt(null)
 
 			document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 			navigate({ to: '/auctions' })
 		} catch (error) {
 			console.error('Failed to submit auction form:', error)
+			setPublishError(error instanceof Error ? error.message : String(error))
 		}
 	}
 
 	const tabs: { value: AuctionTab; label: string; showAsterisk: boolean }[] = [
-		{ value: 'name', label: 'Name', showAsterisk: !hasValidName || !hasValidDescription },
-		{ value: 'auction', label: 'Auction', showAsterisk: !hasValidBidding || !hasValidMints },
+		{ value: 'name', label: 'Name', showAsterisk: !hasValidName },
+		{ value: 'auction', label: 'Auction', showAsterisk: !hasValidBidding },
 		{ value: 'category', label: 'Category', showAsterisk: false },
-		{ value: 'spec', label: 'Spec', showAsterisk: false },
-		{ value: 'images', label: 'Images', showAsterisk: !hasValidImages },
-		{ value: 'shipping', label: 'Shipping', showAsterisk: Object.keys(shippingExtraCostErrors).length > 0 },
+		{ value: 'image', label: 'Image', showAsterisk: !hasValidImage },
+		{ value: 'split', label: 'Split', showAsterisk: !tabValid.split },
 	]
 
 	return (
@@ -485,48 +367,29 @@ export function AuctionFormContent() {
 							<AuctionNameTab formData={formData} setFormData={setFormData} />
 						</TabsContent>
 						<TabsContent value="auction" className="mt-4">
-							<AuctionTabView
-								formData={formData}
-								setFormData={setFormData}
-								availableMints={availableMints}
-								startMode={startMode}
-								setStartMode={setStartMode}
-								endMode={endMode}
-								setEndMode={setEndMode}
-								durationSeconds={durationSeconds}
-								setDurationSeconds={setDurationSeconds}
-								validationMessages={validationMessages}
-								userRemovedMints={userRemovedMintsRef.current}
-								onUserRemovedMintsChange={setUserRemovedMints}
-							/>
+							<AuctionTabView formData={formData} setFormData={setFormData} validationMessages={validationMessages} />
 						</TabsContent>
 						<TabsContent value="category" className="mt-4">
-							<AuctionCategoryTab
-								formData={formData}
-								setFormData={setFormData}
-								subCategoryInput={subCategoryInput}
-								setSubCategoryInput={setSubCategoryInput}
-								mainCategories={PRODUCT_CATEGORIES}
-							/>
+							<AuctionCategoryTab formData={formData} setFormData={setFormData} mainCategories={PRODUCT_CATEGORIES} />
 						</TabsContent>
-						<TabsContent value="spec" className="mt-4">
-							<AuctionSpecTab formData={formData} setFormData={setFormData} />
+						<TabsContent value="image" className="mt-4">
+							<div className="space-y-3">
+								<p className="text-text-mid">The lot has one image. We recommend a square image of 1600x1600 and under 2mb.</p>
+								{validationMessages.image && <p className="text-xs text-error">{validationMessages.image}</p>}
+								<ImageUploader
+									src={formData.imageUrl || null}
+									index={0}
+									imagesLength={1}
+									forSingle
+									initialUrl={formData.imageUrl}
+									onUrlChange={(url) => setFormData((prev) => ({ ...prev, imageUrl: url }))}
+									onSave={({ url }) => setFormData((prev) => ({ ...prev, imageUrl: url }))}
+									onDelete={() => setFormData((prev) => ({ ...prev, imageUrl: '' }))}
+								/>
+							</div>
 						</TabsContent>
-						<TabsContent value="images" className="mt-4">
-							<AuctionImagesTab
-								images={images}
-								setImages={setImages}
-								error={validationMessages.imageUrls}
-								renderUploader={(props) => <ImageUploader {...props} initialUrl={props.index < 0 ? '' : undefined} />}
-							/>
-						</TabsContent>
-						<TabsContent value="shipping" className="mt-4">
-							<ShippingTab
-								formData={formData}
-								setFormData={setFormData}
-								userPubkey={userPubkey}
-								shippingExtraCostErrors={shippingExtraCostErrors}
-							/>
+						<TabsContent value="split" className="mt-4">
+							<SplitTab formData={formData} setFormData={setFormData} errors={splitErrors} />
 						</TabsContent>
 					</div>
 				</Tabs>
@@ -547,6 +410,9 @@ export function AuctionFormContent() {
 							Clear draft
 						</Button>
 					</div>
+				)}
+				{publishError && (
+					<p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{publishError}</p>
 				)}
 				{currentTabErrors.length > 0 && (
 					<ul className="mb-3 max-h-28 overflow-y-auto space-y-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">

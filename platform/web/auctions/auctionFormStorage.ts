@@ -1,28 +1,24 @@
-import type {
-	AuctionAntiSnipeWindowMinutesPreset,
-	AuctionFormData,
-	AuctionMinBidCurvePeakPreset,
-	AuctionMinBidCurveShape,
-	AuctionSettlementGracePreset,
-} from '@platform/web/auctions/auctionPublish'
-import {
-	AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES,
-	AUCTION_MIN_BID_CURVE_PEAK_PRESETS,
-	AUCTION_SETTLEMENT_GRACE_PRESETS,
-} from '@platform/web/auctions/auctionPublish'
-
-type AuctionImage = { imageUrl: string; imageOrder: number }
-type StartMode = 'immediate' | 'scheduled'
-type EndMode = 'duration' | 'absolute'
+/**
+ * `platform/web/auctions/auctionFormStorage.ts` — the seller's unfinished auction-create
+ * draft, kept in `localStorage` per pubkey.
+ *
+ * The draft holds exactly what the kind-1440 create form holds (`AuctionFormData`): the
+ * auction's `d`, the display fields, the money and time fields, and the split rows. The
+ * retired 30408 draft fields (`reserve`, the anti-snipe curve, settlement grace, the
+ * auditor pubkey, trusted mints, specs, shipping selections, the image list and the
+ * start/end scheduling modes) are **not** read back — a draft written by the old form
+ * parses into the fields that still exist and everything else is dropped. There is nothing
+ * to migrate: a draft is unsent form state, and re-interpreting a retired knob as a live
+ * one is exactly the bug this slice removes.
+ *
+ * Everything is coerced on read, never trusted: a draft is user-editable text in a shared
+ * origin's storage.
+ */
+import type { AuctionFormData, AuctionV4vSplitRowInput } from '@platform/web/auctions/auctionPublish'
 
 export type AuctionFormDraft = {
 	pubkey: string
 	formData: AuctionFormData
-	images: AuctionImage[]
-	startMode: StartMode
-	endMode: EndMode
-	durationSeconds: number
-	subCategoryInput: string
 	savedAt: number
 }
 
@@ -38,9 +34,17 @@ function num(v: unknown, fallback: number): number {
 	return typeof v === 'number' && Number.isFinite(v) ? v : fallback
 }
 
-function strArray(v: unknown): string[] {
+/** Split rows, keeping only complete-enough rows: a role of `validator` or `v4v`, and text. */
+function splitRows(v: unknown): AuctionV4vSplitRowInput[] {
 	if (!Array.isArray(v)) return []
-	return v.filter((x): x is string => typeof x === 'string')
+	return v
+		.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+		.map((row) => ({
+			role: (str(row.role) === 'v4v' ? 'v4v' : 'validator') as AuctionV4vSplitRowInput['role'],
+			recipientPubkey: str(row.recipientPubkey),
+			allocationBps: str(row.allocationBps),
+		}))
+		.filter((row) => row.recipientPubkey !== '' || row.allocationBps !== '')
 }
 
 function validateDraft(raw: unknown): AuctionFormDraft | null {
@@ -55,83 +59,22 @@ function validateDraft(raw: unknown): AuctionFormDraft | null {
 
 	const fd = d.formData && typeof d.formData === 'object' ? (d.formData as Record<string, unknown>) : {}
 
-	const antiSnipeWindowMinutes = (AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES as readonly number[]).includes(
-		num(fd.antiSnipeWindowMinutes, 0),
-	)
-		? (num(fd.antiSnipeWindowMinutes, 0) as AuctionAntiSnipeWindowMinutesPreset)
-		: 0
-
-	const minBidCurveShapeOptions: AuctionMinBidCurveShape[] = ['none', 'linear', 'exponential']
-	const minBidCurveShape: AuctionMinBidCurveShape = minBidCurveShapeOptions.includes(fd.minBidCurveShape as AuctionMinBidCurveShape)
-		? (fd.minBidCurveShape as AuctionMinBidCurveShape)
-		: 'none'
-
-	const minBidCurvePeakMultiplier = (AUCTION_MIN_BID_CURVE_PEAK_PRESETS as readonly number[]).includes(num(fd.minBidCurvePeakMultiplier, 2))
-		? (num(fd.minBidCurvePeakMultiplier, 2) as AuctionMinBidCurvePeakPreset)
-		: 2
-
-	const settlementGraceOptions = Object.keys(AUCTION_SETTLEMENT_GRACE_PRESETS) as AuctionSettlementGracePreset[]
-	const settlementGracePreset: AuctionSettlementGracePreset = settlementGraceOptions.includes(
-		fd.settlementGracePreset as AuctionSettlementGracePreset,
-	)
-		? (fd.settlementGracePreset as AuctionSettlementGracePreset)
-		: '1h'
-
-	const rawSpecs = Array.isArray(fd.specs) ? fd.specs : []
-	const specs = rawSpecs
-		.filter((s): s is Record<string, unknown> => !!s && typeof s === 'object')
-		.map((s) => ({ key: str(s.key), value: str(s.value) }))
-
-	const rawShippings = Array.isArray(fd.shippings) ? fd.shippings : []
-	const shippings = rawShippings
-		.filter((s): s is Record<string, unknown> => !!s && typeof s === 'object')
-		.map((s) => ({ shippingRef: str(s.shippingRef), extraCost: str(s.extraCost) }))
-
-	const rawImages = Array.isArray(d.images) ? d.images : []
-	const images: AuctionImage[] = rawImages
-		.filter((i): i is Record<string, unknown> => !!i && typeof i === 'object')
-		.map((i) => ({ imageUrl: str(i.imageUrl), imageOrder: num(i.imageOrder, 0) }))
-		.filter((i) => i.imageUrl.length > 0)
-
-	const startModeRaw = str(d.startMode)
-	const startMode: StartMode = startModeRaw === 'scheduled' ? 'scheduled' : 'immediate'
-
-	const endModeRaw = str(d.endMode)
-	const endMode: EndMode = endModeRaw === 'absolute' ? 'absolute' : 'duration'
-
 	const formData: AuctionFormData = {
+		auctionId: str(fd.auctionId),
 		title: str(fd.title),
-		summary: str(fd.summary),
 		description: str(fd.description),
-		startingBid: str(fd.startingBid),
-		bidIncrement: str(fd.bidIncrement, '1'),
-		reserve: str(fd.reserve, ''),
-		startAt: str(fd.startAt),
-		endAt: str(fd.endAt),
-		antiSnipeWindowMinutes,
-		minBidCurveShape,
-		minBidCurvePeakMultiplier,
-		settlementGracePreset,
-		mainCategory: str(fd.mainCategory),
-		categories: strArray(fd.categories),
-		imageUrls: strArray(fd.imageUrls),
-		specs,
-		shippings,
-		trustedMints: strArray(fd.trustedMints),
-		isNSFW: fd.isNSFW === true,
-		pathIssuerPubkey: str(fd.pathIssuerPubkey),
+		imageUrl: str(fd.imageUrl),
+		category: str(fd.category),
+		name: str(fd.name),
+		startPrice: str(fd.startPrice),
+		minIncrement: str(fd.minIncrement),
+		mode: str(fd.mode) === 'antisnipe' ? 'antisnipe' : 'fixed',
+		windowSec: str(fd.windowSec),
+		durationSec: num(fd.durationSec, 0),
+		v4vSplit: splitRows(fd.v4vSplit),
 	}
 
-	return {
-		pubkey,
-		formData,
-		images,
-		startMode,
-		endMode,
-		durationSeconds: num(d.durationSeconds, 86400),
-		subCategoryInput: str(d.subCategoryInput),
-		savedAt,
-	}
+	return { pubkey, formData, savedAt }
 }
 
 export const saveAuctionFormDraft = (pubkey: string, draft: Omit<AuctionFormDraft, 'pubkey' | 'savedAt'>): void => {

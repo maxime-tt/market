@@ -87,7 +87,7 @@ export {
 	ProductShippingView,
 	ProductSpecsView,
 } from './products/product-editor-tabs'
-export { AuctionCategoryTab, AuctionImagesTab, AuctionNameTab, AuctionSpecTab } from './auction/auction-editor-tabs'
+export { AuctionCategoryTab, AuctionNameTab } from './auction/auction-editor-tabs'
 export { AuctionShippingView } from './auction/auction-shipping-view'
 export { AuctionTabView } from './auction/auction-tab-view'
 export {

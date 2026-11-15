@@ -1,19 +1,21 @@
 /**
  * Auction duration presets — data, not a component.
  *
- * Extracted from the `auction-editor` monolith (T6.3 slice S1). The slider
- * indexes `DURATION_PRESETS` directly (value 1 maps to index 0), so the array
- * order is part of the contract; `DURATION_PRESETS_SHORTCUT` is the subset of
- * presets offered as one-tap buttons, kept as references so the two cannot
- * drift apart.
+ * The slider indexes `DURATION_PRESETS` directly (value 1 maps to index 0), so the array
+ * order is part of the contract; `DURATION_PRESETS_SHORTCUT` is the subset of presets
+ * offered as one-tap buttons, derived from the ladder so the two cannot drift apart.
+ *
+ * The ladder stops at **three days** because the kind-1440 create's `durationSec` accepts
+ * 20 s … 259200 s (`auctionPublishValidation.ts`). The old ladder ran to 30 days, which the
+ * settled protocol refuses; offering it would be a choice the publish path then rejects.
  */
+import { AUCTION_MAX_DURATION_SEC, AUCTION_MIN_DURATION_SEC } from '@sdk/commerce/auctions/auctionPublishValidation'
 
 /** One selectable auction duration. */
 export type AuctionDurationPreset = { label: string; seconds: number }
 
-/** The full preset ladder, in slider order (1 minute … 30 days). */
-export const DURATION_PRESETS: AuctionDurationPreset[] = [
-	{ label: '1m', seconds: 1 * 60 },
+const PRESETS: AuctionDurationPreset[] = [
+	{ label: '1m', seconds: 60 },
 	{ label: '2m', seconds: 2 * 60 },
 	{ label: '3m', seconds: 3 * 60 },
 	{ label: '4m', seconds: 4 * 60 },
@@ -41,29 +43,14 @@ export const DURATION_PRESETS: AuctionDurationPreset[] = [
 	{ label: '1d', seconds: 86400 },
 	{ label: '2d', seconds: 2 * 86400 },
 	{ label: '3d', seconds: 3 * 86400 },
-	{ label: '4d', seconds: 4 * 86400 },
-	{ label: '5d', seconds: 5 * 86400 },
-	{ label: '6d', seconds: 6 * 86400 },
-	{ label: '7d', seconds: 7 * 86400 },
-	{ label: '8d', seconds: 8 * 86400 },
-	{ label: '9d', seconds: 9 * 86400 },
-	{ label: '10d', seconds: 10 * 86400 },
-	{ label: '11d', seconds: 11 * 86400 },
-	{ label: '12d', seconds: 12 * 86400 },
-	{ label: '13d', seconds: 13 * 86400 },
-	{ label: '14d', seconds: 14 * 86400 },
-	{ label: '15d', seconds: 15 * 86400 },
-	{ label: '20d', seconds: 20 * 86400 },
-	{ label: '25d', seconds: 25 * 86400 },
-	{ label: '30d', seconds: 30 * 86400 },
 ]
 
+/** The full preset ladder, in slider order — every entry inside the protocol's range. */
+export const DURATION_PRESETS: AuctionDurationPreset[] = PRESETS.filter(
+	(preset) => preset.seconds >= AUCTION_MIN_DURATION_SEC && preset.seconds <= AUCTION_MAX_DURATION_SEC,
+)
+
 /** The one-tap shortcuts shown above the duration slider. */
-export const DURATION_PRESETS_SHORTCUT: AuctionDurationPreset[] = [
-	DURATION_PRESETS[9], // 1 Hour
-	DURATION_PRESETS[19], // 12 Hours
-	DURATION_PRESETS[25], // 1 Day
-	DURATION_PRESETS[31], // 7 Days
-	DURATION_PRESETS[38], // 14 Days
-	DURATION_PRESETS[42], // 30 Days
-]
+export const DURATION_PRESETS_SHORTCUT: AuctionDurationPreset[] = DURATION_PRESETS.filter((preset) =>
+	['1h', '12h', '1d', '3d'].includes(preset.label),
+)

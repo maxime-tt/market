@@ -33,24 +33,13 @@ test('renders the auction library', async ({ page }) => {
 		'AuctionShippingOptionCard',
 		'AuctionShippingOptionCardStates',
 		'AuctionShippingOptionCardPartial',
-		'BidLadderPreview',
-		'BidLadderPreviewNoReserve',
 		'AuctionTimelinePreview',
 		'AuctionTimelinePreviewFlat',
 		'AuctionTimelinePreviewWaiting',
-		'AntiSnipeCurveSettings',
-		'AntiSnipeCurveSettingsOff',
-		'AntiSnipeCurveSettingsInteractive',
-		'SettlementGraceSettings',
-		'SettlementGraceSettingsInteractive',
 		'AuctionNameTab',
 		'AuctionCategoryTab',
-		'AuctionSpecTab',
-		'AuctionImagesTab',
-		'AuctionImagesTabInteractive',
 		'AuctionTabView',
-		'AuctionTabViewScheduled',
-		'AuctionTabViewAdvanced',
+		'AuctionTabViewInteractive',
 		'AuctionShippingView',
 		'AuctionShippingViewNotConnected',
 		'AuctionShippingViewLoading',
@@ -218,61 +207,40 @@ test('renders the auction card surface states', async ({ page }) => {
 	await expect(ended).toContainText('You were outbid')
 })
 
-test('renders the four simple editor tabs', async ({ page }) => {
+test('renders the two editor tabs the create actually has', async ({ page }) => {
 	await page.goto('/?library=auction')
 
 	const name = page.getByTestId('widget-AuctionNameTab')
 	await expect(name.locator('#auction-title')).toHaveValue('Handmade mug')
-	await expect(name.locator('#auction-summary')).toHaveValue('One-of-a-kind stoneware mug')
 	await expect(name.locator('#auction-description')).toHaveValue('Wheel-thrown, food-safe glaze.')
-	await expect(name).toContainText('This auction contains adult/sensitive content')
+	await expect(name.locator('#auction-name')).toHaveValue('Studio Nord')
+	// The retired 30408 fields are gone from the editor.
+	await expect(name.locator('#auction-summary')).toHaveCount(0)
+	await expect(name).not.toContainText('adult/sensitive content')
 
 	const category = page.getByTestId('widget-AuctionCategoryTab')
-	await expect(category).toContainText('Main Category')
-	await expect(category.locator('textarea')).toHaveValue('Cameras, Optics')
-
-	const spec = page.getByTestId('widget-AuctionSpecTab')
-	await expect(spec).toContainText('Item Specifications')
-	await expect(spec.getByRole('button', { name: 'Add Specification' })).toBeVisible()
-
-	// The images tab hands every slot to the host renderer.
-	const images = page.getByTestId('widget-AuctionImagesTab')
-	await expect(images.locator('[data-slot="uploader-slot"]')).toHaveCount(2)
+	await expect(category).toContainText('Category')
+	await expect(category.locator('#auction-category-free')).toHaveValue('Collectibles')
 })
 
-test('removes an image slot through the host renderer callback', async ({ page }) => {
-	await page.goto('/?library=auction')
-
-	const live = page.getByTestId('widget-AuctionImagesTabInteractive')
-	await expect(live.locator('[data-slot="uploader-slot"]')).toHaveCount(3)
-	await live.locator('[data-slot="uploader-slot"] button', { hasText: 'Delete' }).first().click()
-	await expect(live.locator('[data-slot="uploader-slot"]')).toHaveCount(2)
-})
-
-test('renders the mechanics tab, and Advanced reveals the deferred controls', async ({ page }) => {
+test('renders the mechanics tab and its closing-rule control', async ({ page }) => {
 	await page.goto('/?library=auction')
 
 	const view = page.getByTestId('widget-AuctionTabView')
-	await expect(view).toContainText('Start Time')
-	await expect(view).toContainText('Immediate')
-	await expect(view).toContainText('The auction goes live the moment you publish.')
+	await expect(view).toContainText('Duration')
 	await expect(view).toContainText('Starting Bid (sats)')
-	// Advanced is collapsed at rest.
+	await expect(view).toContainText('Fixed time')
+	await expect(view).toContainText('Anti-snipe')
+	// The retired 30408 knobs are gone, not merely collapsed.
 	await expect(view).not.toContainText('Reserve (sats)')
+	await expect(view).not.toContainText('Settlement grace')
+	await expect(view).not.toContainText('Trusted Mints')
 
-	const scheduled = page.getByTestId('widget-AuctionTabViewScheduled')
-	await expect(scheduled).toContainText('Pick a start date')
-	await expect(scheduled).toContainText('Pick an end date')
-
-	// The interactive demo opens Advanced and composes the S3/S4 cards.
-	const live = page.getByTestId('widget-AuctionTabViewAdvanced')
-	await live.getByRole('button', { name: 'Advanced' }).click()
-	await expect(live).toContainText('Bid Increment (sats)')
-	await expect(live).toContainText('Reserve (sats)')
-	await expect(live).toContainText('Bid ladder preview')
-	await expect(live).toContainText('Anti-snipe')
-	await expect(live).toContainText('Settlement grace')
-	await expect(live).toContainText('Trusted Mints')
+	// The interactive demo switches the closing rule and reveals the window control.
+	const live = page.getByTestId('widget-AuctionTabViewInteractive')
+	await live.getByRole('button', { name: 'Anti-snipe' }).click()
+	await expect(live).toContainText('pushes the close back')
+	await expect(live).toContainText('The window must be 1 to 15 minutes')
 })
 
 test('renders the shipping panel and its degenerate branches', async ({ page }) => {
@@ -526,25 +494,6 @@ test('renders the technical row with a copy control only when copyable', async (
 	await expect(row.locator('[data-slot="copy-button"]')).toHaveAttribute('data-copied', 'true')
 })
 
-test('renders the bid-ladder preview in its reserve and no-reserve states', async ({ page }) => {
-	await page.goto('/?library=auction')
-
-	const reserved = page.getByTestId('widget-BidLadderPreview')
-	await expect(reserved).toContainText('Bid ladder preview')
-	await expect(reserved).toContainText('1,000 sats')
-	await expect(reserved).toContainText('+50')
-	await expect(reserved).toContainText('2,500 sats')
-	await expect(reserved).toContainText('Reserve')
-	// 30 increments to the reserve, capped at the 24-tick ladder.
-	await expect(reserved.locator('[class*="w-px"]')).toHaveCount(24)
-	await expect(reserved).toContainText('30 bids of 50 sats needed to clear the reserve.')
-
-	const plain = page.getByTestId('widget-BidLadderPreviewNoReserve')
-	await expect(plain).toContainText('No reserve')
-	await expect(plain).toContainText('Highest bid wins')
-	await expect(plain.locator('[class*="w-px"]')).toHaveCount(0)
-})
-
 test('renders the timeline preview with the anti-snipe ramp and the flat fallback', async ({ page }) => {
 	await page.goto('/?library=auction')
 
@@ -573,46 +522,4 @@ test('prompts for an end time instead of charting the timeline', async ({ page }
 	await expect(waiting).toContainText('Pick an end time to preview the bidding timeline.')
 	await expect(waiting.locator('svg')).toHaveCount(0)
 	await expect(waiting).not.toContainText('Bidding timeline')
-})
-
-test('renders the anti-snipe policy card and gates the curve on a window', async ({ page }) => {
-	await page.goto('/?library=auction')
-
-	const off = page.getByTestId('widget-AntiSnipeCurveSettingsOff')
-	await expect(off).toContainText('Anti-snipe')
-	await expect(off.getByRole('switch')).toHaveAttribute('data-state', 'unchecked')
-	await expect(off).toContainText('Pick a window above to enable the curve.')
-	// Both the shape buttons (3) and the multiplier buttons (3) are gated on a window.
-	await expect(off.locator('button:disabled')).toHaveCount(6)
-
-	// The interactive demo proves the `onFormPatch` wiring: switching on enables
-	// every control and the peak footnote, then the window/shape chips move.
-	const live = page.getByTestId('widget-AntiSnipeCurveSettingsInteractive')
-	await expect(live.locator('button:disabled')).toHaveCount(6)
-	await live.getByRole('switch').click()
-	await expect(live.getByRole('switch')).toHaveAttribute('data-state', 'checked')
-	await expect(live.locator('button:disabled')).toHaveCount(0)
-	await expect(live).toContainText('Floor at auction end will be 2× the floor when the anti-snipe ramp begins.')
-
-	await live.getByRole('button', { name: '15 min' }).click()
-	await expect(live.getByRole('button', { name: '15 min' })).toHaveClass(/border-success/)
-	await live.getByRole('button', { name: 'Exponential' }).click()
-	await expect(live.getByRole('button', { name: 'Exponential' })).toHaveClass(/border-success/)
-	await expect(live.getByRole('button', { name: 'Linear' })).not.toHaveClass(/border-success/)
-})
-
-test('renders the settlement-grace picker and moves the active choice', async ({ page }) => {
-	await page.goto('/?library=auction')
-
-	const card = page.getByTestId('widget-SettlementGraceSettings')
-	await expect(card).toContainText('Settlement grace')
-	await expect(card.getByRole('button')).toHaveCount(3)
-	await expect(card.getByRole('button', { name: '1 hour' })).toHaveClass(/border-success/)
-
-	// The interactive demo proves the `onValueChange` wiring: the active chip moves.
-	const live = page.getByTestId('widget-SettlementGraceSettingsInteractive')
-	await expect(live.getByRole('button', { name: '1 hour' })).toHaveClass(/border-success/)
-	await live.getByRole('button', { name: '3 hours' }).click()
-	await expect(live.getByRole('button', { name: '3 hours' })).toHaveClass(/border-success/)
-	await expect(live.getByRole('button', { name: '1 hour' })).not.toHaveClass(/border-success/)
 })
