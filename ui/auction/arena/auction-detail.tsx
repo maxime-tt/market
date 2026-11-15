@@ -5,9 +5,13 @@ import { cn } from '../../utils/cn'
 import { AuctionDetailCard, AuctionTechnicalRow } from '../auction-detail-views'
 import { readStateMessage } from './auction-card'
 import {
+	antisnipeBehaviourLabel,
+	bpsLabel,
 	phaseLabel,
 	phaseTone,
+	sellerRemainderBps,
 	shortKey,
+	ARENA_ESCROW_COPY,
 	type ArenaAuctionDetailModel,
 	type ArenaRelayHealth,
 	type ArenaSurfaceStatus,
@@ -23,9 +27,8 @@ import {
  * different, so three things are stated rather than assumed:
  *
  * - **Terms are `not stated` when the create did not state them.** A missing
- *   `reserve` is not "no reserve" and a missing `duration_seconds` is not a
- *   zero-length auction; the create simply said nothing, and the card says
- *   exactly that.
+ *   `durationSec` is not a zero-length auction and a missing `startPrice` is
+ *   not "free"; the create simply said nothing, and the card says exactly that.
  * - **Positions are derived, not decided.** The per-bidder totals come from
  *   summing bid *deltas*. They are labelled as a derived view: the 1445 verdict
  *   names a winner, and the mint decides whether money moved.
@@ -106,6 +109,7 @@ export function ArenaAuctionDetail({
 	const label = model.title?.trim() || model.d
 	const partial = unavailableCopy(status)
 	const positions = [...model.positions].sort((a, b) => b.total - a.total || a.bidder.localeCompare(b.bidder))
+	const antisnipe = antisnipeBehaviourLabel(model.mode, model.windowSec)
 
 	return (
 		<div ref={ref} data-slot="arena-auction-detail" data-state={status} className={cn('space-y-6', className)}>
@@ -191,22 +195,52 @@ export function ArenaAuctionDetail({
 				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					<TermCard label="Starting bid" value={term(model.startingBid, 'sats')} />
 					<TermCard label="Minimum increment" value={term(model.minIncrement, 'sats')} />
+					<TermCard label="Mode" value={model.mode ?? 'not stated'} />
 					<TermCard
-						label="Reserve"
-						value={model.reserve === null ? 'not stated' : term(model.reserve, 'sats')}
-						helper={model.reserve === null ? 'An unstated reserve is not "no reserve".' : undefined}
+						label="Anti-snipe"
+						value={antisnipe ?? (model.windowSec === null ? 'not stated' : term(model.windowSec, 'seconds'))}
+						helper={antisnipe !== null ? 'No hard end: the lot closes when the bidding stops.' : undefined}
 					/>
 					<TermCard
 						label="Duration"
-						value={term(model.durationSeconds, 'seconds')}
-						helper={model.durationSeconds === null ? 'No duration, so there is no end to state.' : undefined}
+						value={term(model.durationSec, 'seconds')}
+						helper={model.durationSec === null ? 'No duration, so there is no end to state.' : undefined}
 					/>
-					<TermCard label="Late-bid window" value={term(model.lateBidWindowSeconds, 'seconds')} />
-					<TermCard label="Late-bid extension" value={term(model.lateBidExtensionSeconds, 'seconds')} />
-					<TermCard label="Max total extension" value={term(model.maxTotalExtensionSeconds, 'seconds')} />
-					<TermCard label="Locktime" value={term(model.locktimeSeconds, 'seconds')} />
-					<TermCard label="Funding mode" value={model.fundingMode ?? 'not stated'} />
 				</div>
+			</section>
+
+			{model.v4vSplit !== null && model.v4vSplit.length > 0 && (
+				<section className="space-y-2">
+					<h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-text-mid">V4V split</h2>
+					<p className="text-[11px] text-text-mid">
+						Committed at creation and immutable. The seller receives the remainder.
+					</p>
+					<ul className="space-y-1.5">
+						{model.v4vSplit.map((row, index) => (
+							<li
+								key={`${row.role}-${row.recipientPubkey}-${index}`}
+								className="flex items-center justify-between gap-2 rounded-lg border border-border-default bg-surface-raised px-3 py-2 text-xs"
+							>
+								<span className="flex items-center gap-2">
+									<StatusBadge status={row.role} tone="neutral" />
+									<span className="font-mono text-text-mid">{shortKey(row.recipientPubkey)}</span>
+								</span>
+								<span className="font-medium text-text-high">{bpsLabel(row.allocationBps)}</span>
+							</li>
+						))}
+						<li className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-border-default bg-surface-sunken px-3 py-2 text-xs">
+							<span className="font-medium text-text-high">seller (remainder)</span>
+							<span className="font-medium text-text-high">{bpsLabel(sellerRemainderBps(model.v4vSplit))}</span>
+						</li>
+					</ul>
+				</section>
+			)}
+
+			<section className="space-y-2">
+				<h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-text-mid">Escrow</h2>
+				<p data-slot="arena-escrow-copy" className="text-sm text-text-high">
+					{ARENA_ESCROW_COPY}
+				</p>
 			</section>
 
 			{bidPanel !== null && <div data-slot="arena-auction-detail-bid">{bidPanel}</div>}

@@ -59,13 +59,11 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		...card(),
 		description: 'Thrown on a wheel.',
 		minIncrement: 100,
-		reserve: 5000,
-		durationSeconds: 3600,
-		lateBidWindowSeconds: 60,
-		lateBidExtensionSeconds: 120,
-		maxTotalExtensionSeconds: 600,
-		locktimeSeconds: 900,
-		fundingMode: 'cashu_sigall_v1',
+		mode: 'antisnipe',
+		windowSec: 60,
+		durationSec: 3600,
+		sellerWallet: '02'.repeat(33),
+		v4vSplit: null,
 		versions: 1,
 		rootEventId: 'root-event-1',
 		canonicalEventId: 'root-event-1',
@@ -264,15 +262,16 @@ describe('ArenaAuctionDetail', () => {
 	test('renders terms as published and says "not stated" for the ones the create omitted', () => {
 		const html = render(
 			createElement(ArenaAuctionDetail, {
-				model: detail({ reserve: null, durationSeconds: null, fundingMode: null }),
+				model: detail({ mode: null, windowSec: null, durationSec: null, v4vSplit: null }),
 				status: 'settled',
-				relayHealth: HEALTH,
+			relayHealth: HEALTH,
 			}),
 		)
-		expect(html).toContain('An unstated reserve is not &quot;no reserve&quot;.')
-		expect(html).toContain('No duration, so there is no end to state.')
 		expect(html).toContain('not stated')
-		expect(html).not.toContain('Reserve</span></div>0')
+		expect(html).toContain('No duration, so there is no end to state.')
+		// The protocol has no reserve at all: the word must not appear on the page.
+		expect(html).not.toContain('Reserve')
+		expect(html).not.toContain('Funding mode')
 	})
 
 	test('positions are labelled derived, not an outcome', () => {

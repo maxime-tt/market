@@ -90,7 +90,7 @@ export function relayCounts(health: ArenaReadHealth): { answered: number; total:
 
 /** One canonical auction view → the block's plain card model. */
 export function toAuctionListItem(view: ArenaAuctionView, now: number): AuctionListItem {
-	const duration = view.content.durationSeconds
+	const duration = view.content.durationSec
 	// A create with no duration has no end to state. `0` is treated the same:
 	// an auction that lasts zero seconds is not a fact this block will assert.
 	const endsAt = duration !== null && duration > 0 ? view.rootCreatedAt + duration : null
@@ -104,7 +104,7 @@ export function toAuctionListItem(view: ArenaAuctionView, now: number): AuctionL
 		seller: view.seller,
 		d: view.d,
 		title: view.content.title,
-		startingBid: view.content.startingBid,
+		startingBid: view.content.startPrice,
 		topBidTotal: view.topBid?.total ?? null,
 		bidCount: view.bids.length,
 		endsAt,

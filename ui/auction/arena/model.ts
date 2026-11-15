@@ -96,6 +96,28 @@ export interface ArenaAuctionCardModel {
 // Detail
 // =========================================================================
 
+/**
+ * One row of the **V4V split** a create commits (`MERGED-PROTOCOL-SPEC.md` §6):
+ * a role (`validator` | `v4v`), the recipient's pubkey, and an integer share of
+ * the settle in basis points. The seller receives the remainder
+ * (`10000 − Σ allocationBps`, §6).
+ */
+export interface ArenaV4vSplitRow {
+	role: string
+	recipientPubkey: string
+	allocationBps: number
+}
+
+/**
+ * The seller's share of a committed split, in bps: `10000 − Σ allocations`,
+ * floored at 0 so a malformed over-allocation reads as "no remainder" rather
+ * than a negative number.
+ */
+export function sellerRemainderBps(v4vSplit: readonly ArenaV4vSplitRow[]): number {
+	const allocated = v4vSplit.reduce((sum, row) => sum + (Number.isFinite(row.allocationBps) ? row.allocationBps : 0), 0)
+	return Math.max(0, 10_000 - allocated)
+}
+
 export interface ArenaAuctionBidModel {
 	eventId: string
 	bidder: string
@@ -115,13 +137,20 @@ export interface ArenaAuctionPositionModel {
 export interface ArenaAuctionDetailModel extends ArenaAuctionCardModel {
 	description: string | null
 	minIncrement: number | null
-	reserve: number | null
-	durationSeconds: number | null
-	lateBidWindowSeconds: number | null
-	lateBidExtensionSeconds: number | null
-	maxTotalExtensionSeconds: number | null
-	locktimeSeconds: number | null
-	fundingMode: string | null
+	/** `fixed` | `antisnipe`, or `null` when the create stated no mode. */
+	mode: string | null
+	/**
+	 * The anti-snipe window in seconds. On an `antisnipe` lot an accepted bid
+	 * inside the window pushes the end to `now + windowSec`; there is no cap and
+	 * no hard end. `null` when the create stated none.
+	 */
+	windowSec: number | null
+	/** The lot's stated duration in seconds; `null` when the create stated none. */
+	durationSec: number | null
+	/** The seller's wallet key the settle locks value to; `null` when unstated. */
+	sellerWallet: string | null
+	/** The committed V4V split (§6), or `null` when the create stated none. */
+	v4vSplit: ArenaV4vSplitRow[] | null
 	/** How many 1440 versions exist — accepted or not. A display aid, never a count of edits accepted. */
 	versions: number
 	/** The first 1440 for `(seller, d)`; bids bind to this id, not to a version. */
@@ -179,6 +208,30 @@ export interface ArenaVerdictPanelModel {
 
 /** The one sentence a surface may say about an auction with no stated end. */
 export const ARENA_UNKNOWN_END_LABEL = 'End time unknown'
+
+/**
+ * The one sentence a surface may say about anti-snipe, or `null` when the
+ * create did not state an `antisnipe` mode with a positive window. Anti-snipe
+ * is behaviour, not a knob: an accepted bid inside the window pushes the end to
+ * `now + windowSec`, and there is no cap and no hard end (`MERGED-PROTOCOL-SPEC.md`
+ * §3 — `MaxTotalExtension` is removed by the protocol).
+ */
+export function antisnipeBehaviourLabel(mode: string | null, windowSec: number | null): string | null {
+	if (mode !== 'antisnipe' || windowSec === null || windowSec <= 0) return null
+	return `extends by ${windowSec.toLocaleString()}s while bids keep arriving, no hard end`
+}
+
+/** A basis-point share, as a surface states it. `null` is the words, never `0`. */
+export function bpsLabel(value: number | null): string {
+	return value === null ? 'not stated' : `${value.toLocaleString()} bps`
+}
+
+/**
+ * The one escrow sentence a surface may show. Abstract on purpose: it names the
+ * two destinations and the refund, and never a wallet key or a proof.
+ */
+export const ARENA_ESCROW_COPY =
+	'Sats are locked in escrow until the lot closes: they go to the seller if you win, and come back to you otherwise. If the lot never resolves they are refundable after its close. No wallet keys or proofs are shown here.'
 
 export function phaseLabel(phase: ArenaAuctionPhase): string {
 	if (phase === 'open') return 'Open'

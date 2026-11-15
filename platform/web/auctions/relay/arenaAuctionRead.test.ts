@@ -74,10 +74,10 @@ function createContent(over: Record<string, unknown> = {}): Record<string, unkno
 	return {
 		auction_id: 'lot-1',
 		title: 'A lot',
-		starting_bid: 1000,
-		min_increment: 10,
-		duration_seconds: 3600,
-		funding_mode: 'cashu_sigall_v1',
+		startPrice: 1000,
+		minIncrement: 10,
+		durationSec: 3600,
+		mode: 'fixed',
 		...over,
 	}
 }
@@ -312,27 +312,27 @@ describe('1440 is regular: latest version wins, behind the immutable check', () 
 	})
 
 	test('an edit that moves an immutable field is rejected and named', async () => {
-		const root = createEvent({ id: 'v1', created_at: 1000 }, { starting_bid: 1000 })
+		const root = createEvent({ id: 'v1', created_at: 1000 }, { startPrice: 1000 })
 		// The classic attack the allow-list exists for: a "typo fix" that lowers the floor.
-		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { starting_bid: 1 })
+		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { startPrice: 1 })
 		const read = readFrom({ 'wss://a': { events: [root, attack] } })
 
 		const snapshot = await read.snapshot()
 		expect(snapshot.auctions[0].canonicalEventId).toBe('v1')
-		expect(snapshot.auctions[0].content.startingBid).toBe(1000)
+		expect(snapshot.auctions[0].content.startPrice).toBe(1000)
 		expect(snapshot.rejectedCreates).toHaveLength(1)
 		expect(snapshot.rejectedCreates[0].reason).toBe(ARENA_REFUSAL_IMMUTABLE_CHANGED)
-		expect(snapshot.rejectedCreates[0].field).toBe('starting_bid')
+		expect(snapshot.rejectedCreates[0].field).toBe('startPrice')
 	})
 
 	test('every frozen field is frozen, not just the money ones', async () => {
 		const root = createEvent({ id: 'v1' })
-		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { locktime_seconds: 1 })
+		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { mode: 'antisnipe' })
 		const decodedRoot = decodeArenaEvent(root, 'wss://a')
 		const decodedAttack = decodeArenaEvent(attack, 'wss://a')
 		expect(decodedRoot.ok && decodedAttack.ok).toBe(true)
 		if (decodedRoot.ok && decodedAttack.ok && decodedRoot.event.type === 'create' && decodedAttack.event.type === 'create') {
-			expect(findImmutableChange(decodedRoot.event, decodedAttack.event)?.field).toBe('locktime_seconds')
+			expect(findImmutableChange(decodedRoot.event, decodedAttack.event)?.field).toBe('mode')
 		}
 	})
 
@@ -511,8 +511,8 @@ describe('resilience', () => {
 	})
 
 	test('a lying relay cannot inject a kind it was never asked for, bad JSON, or an immutable flip', async () => {
-		const root = createEvent({ id: 'v1', created_at: 1000 }, { starting_bid: 1000 })
-		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { starting_bid: 1 })
+		const root = createEvent({ id: 'v1', created_at: 1000 }, { startPrice: 1000 })
+		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { startPrice: 1 })
 		const read = readFrom({
 			'wss://liar': {
 				events: [

@@ -129,6 +129,8 @@ import {
 	type ParsedArenaStateCommitment,
 	type ParsedArenaVerdict,
 } from './arenaAnchor'
+// Type-only: erased at runtime, so this adapter stays free of any `ui/` code.
+import type { ArenaV4vSplitRow } from '@ui/auction/arena/model'
 
 // =========================================================================
 // Refusals
@@ -165,26 +167,24 @@ export type ArenaReadRefusalName =
 	| 'arena.bad_outcome'
 
 // =========================================================================
-// The immutable allow-list for a 1440 (decision §3, §4.3)
+// The immutable allow-list for a 1440 (MERGED-PROTOCOL-SPEC.md §8)
 //
-// "display is mutable; money, time and cryptography are not." All eleven
+// "display is mutable; money, time and cryptography are not." The seven
 // fields below are frozen at first publish; `title` / `description` /
-// `image_url` are deliberately absent, because those are the three that may be
-// edited, including after the first bid.
+// `image` are deliberately absent, because those are the three that may be
+// edited, including after the first bid. `auction_id` (the `d` value) is the
+// auction's own identity and is enforced separately by the `d`/`auction_id`
+// identity check below.
 // =========================================================================
 
 export const ARENA_CREATE_IMMUTABLE_FIELDS = [
-	'auction_id',
-	'starting_bid',
-	'min_increment',
-	'reserve',
-	'duration_seconds',
-	'late_bid_window_seconds',
-	'late_bid_extension_seconds',
-	'max_total_extension_seconds',
-	'locktime_seconds',
-	'funding_mode',
-	'seller_coco_payment_public_key',
+	'mode',
+	'startPrice',
+	'minIncrement',
+	'windowSec',
+	'durationSec',
+	'sellerWallet',
+	'v4vSplit',
 ] as const
 
 export type ArenaCreateImmutableField = (typeof ARENA_CREATE_IMMUTABLE_FIELDS)[number]
@@ -193,17 +193,14 @@ export type ArenaCreateImmutableField = (typeof ARENA_CREATE_IMMUTABLE_FIELDS)[n
  * Which of the frozen fields are numbers on the wire. Compared numerically, so
  * `1000` and `"1000"` are the same value (a producer's type wobble is not a
  * field change); everything else is compared as a trimmed string, and
- * absent/empty collapses to `null`.
+ * absent/empty collapses to `null`. `v4vSplit` is an array of objects and is
+ * compared by its canonical JSON serialisation.
  */
 const NUMERIC_IMMUTABLE_FIELDS: ReadonlySet<string> = new Set([
-	'starting_bid',
-	'min_increment',
-	'reserve',
-	'duration_seconds',
-	'late_bid_window_seconds',
-	'late_bid_extension_seconds',
-	'max_total_extension_seconds',
-	'locktime_seconds',
+	'startPrice',
+	'minIncrement',
+	'windowSec',
+	'durationSec',
 ])
 
 // =========================================================================
@@ -240,22 +237,22 @@ export interface ArenaAuctionEventBase {
 	relays: string[]
 }
 
-/** The create content (`KindCreate`, `platform/web/auctions/protocol/client.ts:198-229`), as read. */
+/** The create content (`KindCreate`), as read — the consolidated protocol's camelCase fields only. */
 export interface ArenaCreateContent {
 	auctionId: string
 	title: string | null
 	description: string | null
-	imageUrl: string | null
-	startingBid: number | null
+	/** The lot's image URL (`image` on the wire). */
+	image: string | null
+	/** The opening price (`startPrice` on the wire); `null` when unstated. */
+	startPrice: number | null
 	minIncrement: number | null
-	reserve: number | null
-	durationSeconds: number | null
-	lateBidWindowSeconds: number | null
-	lateBidExtensionSeconds: number | null
-	maxTotalExtensionSeconds: number | null
-	locktimeSeconds: number | null
-	fundingMode: string | null
-	sellerCocoPaymentPublicKey: string | null
+	/** `fixed` | `antisnipe`; `null` when unstated. */
+	mode: string | null
+	windowSec: number | null
+	durationSec: number | null
+	sellerWallet: string | null
+	v4vSplit: ArenaV4vSplitRow[] | null
 }
 
 export interface ArenaCreateEvent extends ArenaAuctionEventBase {
@@ -338,6 +335,27 @@ function asTrimmedString(value: unknown): string | null {
 	return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
+/**
+ * The committed V4V split, or `null`. A row is kept only when its role is a
+ * non-empty string, its recipient is a non-empty string, and its allocation is
+ * a finite number; anything else is dropped, never coerced. An absent, empty or
+ * unparseable split is `null` — "no split stated", not an empty split.
+ */
+function asV4vSplit(value: unknown): ArenaV4vSplitRow[] | null {
+	if (!Array.isArray(value)) return null
+	const rows: ArenaV4vSplitRow[] = []
+	for (const entry of value) {
+		if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
+		const row = entry as Record<string, unknown>
+		const role = asTrimmedString(row.role)
+		const recipientPubkey = asTrimmedString(row.recipientPubkey)
+		const allocationBps = asFiniteNumber(row.allocationBps)
+		if (role === null || recipientPubkey === null || allocationBps === null) continue
+		rows.push({ role, recipientPubkey, allocationBps })
+	}
+	return rows.length > 0 ? rows : null
+}
+
 function parseJsonObject(content: string): Record<string, unknown> | null {
 	let parsed: unknown
 	try {
@@ -376,20 +394,21 @@ function canonicalImmutableFields(content: Record<string, unknown>): Record<stri
 
 function createContentOf(content: Record<string, unknown>): ArenaCreateContent {
 	return {
+		// The identity key stays snake_case on the wire: `MERGED-PROTOCOL-SPEC.md` §8
+		// names `auction_id` (the `d` value), the bid and verdict content carry the
+		// same key, and the live e2e create does too. Only the money and time fields
+		// below are the consolidated protocol's camelCase.
 		auctionId: asTrimmedString(content.auction_id) ?? '',
 		title: asTrimmedString(content.title),
 		description: asTrimmedString(content.description),
-		imageUrl: asTrimmedString(content.image_url),
-		startingBid: asFiniteNumber(content.starting_bid),
-		minIncrement: asFiniteNumber(content.min_increment),
-		reserve: asFiniteNumber(content.reserve),
-		durationSeconds: asFiniteNumber(content.duration_seconds),
-		lateBidWindowSeconds: asFiniteNumber(content.late_bid_window_seconds),
-		lateBidExtensionSeconds: asFiniteNumber(content.late_bid_extension_seconds),
-		maxTotalExtensionSeconds: asFiniteNumber(content.max_total_extension_seconds),
-		locktimeSeconds: asFiniteNumber(content.locktime_seconds),
-		fundingMode: asTrimmedString(content.funding_mode),
-		sellerCocoPaymentPublicKey: asTrimmedString(content.seller_coco_payment_public_key),
+		image: asTrimmedString(content.image),
+		startPrice: asFiniteNumber(content.startPrice),
+		minIncrement: asFiniteNumber(content.minIncrement),
+		mode: asTrimmedString(content.mode),
+		windowSec: asFiniteNumber(content.windowSec),
+		durationSec: asFiniteNumber(content.durationSec),
+		sellerWallet: asTrimmedString(content.sellerWallet),
+		v4vSplit: asV4vSplit(content.v4vSplit),
 	}
 }
 

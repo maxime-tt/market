@@ -88,7 +88,7 @@ export function arenaSurfaceRelayCounts(health: ArenaReadHealth): ArenaRelayHeal
 
 /** Where an auction's end time comes from, and why it can be `null`. */
 export function auctionEndsAt(view: ArenaAuctionView): number | null {
-	const duration = view.content.durationSeconds
+	const duration = view.content.durationSec
 	// A create with no duration has no end to state. `0` is treated the same: an
 	// auction that lasts zero seconds is not a fact this adapter will assert.
 	if (duration === null || duration <= 0) return null
@@ -156,8 +156,8 @@ export function toAuctionCardModel(view: ArenaAuctionView, context: ArenaSurface
 		seller: view.seller,
 		d: view.d,
 		title: view.content.title,
-		imageUrl: view.content.imageUrl,
-		startingBid: view.content.startingBid,
+		imageUrl: view.content.image,
+		startingBid: view.content.startPrice,
 		topBidTotal: view.topBid?.total ?? null,
 		bidCount: view.bids.length,
 		bidsWithoutAmount: view.bidsWithoutAmount,
@@ -188,13 +188,11 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 		...toAuctionCardModel(view, context),
 		description: view.content.description,
 		minIncrement: view.content.minIncrement,
-		reserve: view.content.reserve,
-		durationSeconds: view.content.durationSeconds,
-		lateBidWindowSeconds: view.content.lateBidWindowSeconds,
-		lateBidExtensionSeconds: view.content.lateBidExtensionSeconds,
-		maxTotalExtensionSeconds: view.content.maxTotalExtensionSeconds,
-		locktimeSeconds: view.content.locktimeSeconds,
-		fundingMode: view.content.fundingMode,
+		mode: view.content.mode,
+		windowSec: view.content.windowSec,
+		durationSec: view.content.durationSec,
+		sellerWallet: view.content.sellerWallet,
+		v4vSplit: view.content.v4vSplit,
 		versions: view.versions,
 		rootEventId: view.rootEventId,
 		canonicalEventId: view.canonicalEventId,
