@@ -132,7 +132,7 @@ export function bidButtonLabel(
 /** The sentence under the input: the floor, in words. */
 export function bidFloorLabel(model: ArenaAuctionDetailModel, check: ArenaBidCheck | null): string {
 	if (check === null || check.minimum === null) {
-		if (model.startingBid === null) return 'This auction published no starting bid.'
+		if (model.startPrice === null) return 'This auction published no starting bid.'
 		return 'The minimum for your next bid cannot be computed from the bids read so far.'
 	}
 	if (check.ownPosition !== null) {

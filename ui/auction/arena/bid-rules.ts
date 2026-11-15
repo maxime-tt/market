@@ -22,9 +22,9 @@
  * ## Money is integer sats
  *
  * `AGENTS.md:41-46` — never collapse a payment state into a boolean — and the
- * auction's terms are sats (`starting_bid`, `min_increment`, `reserve` are
- * integer sats in the 1440 content; the read adapter only ever yields
- * `number`s). So an amount is parsed **digit by digit**: `10` and `"10"` are
+ * auction's terms are sats (`startPrice`, `minIncrement` are integer sats in
+ * the consolidated 1440 content; the read adapter only ever yields `number`s).
+ * So an amount is parsed **digit by digit**: `10` and `"10"` are
  * ten sats; `"10.5"` is **not** rounded to 10 or 11 — it is refused with its
  * own reason, because `10.5 sats` cannot be published and the alternative
  * (silently flooring) would stake an amount the bidder never typed. `sats` is
@@ -95,7 +95,7 @@ export type ArenaBidBlockedReason =
 	| 'not-integer-sats'
 	/** Zero. Not an amount. */
 	| 'zero'
-	/** The create published no `starting_bid`, so no first bid can be checked against it. */
+	/** The create published no `startPrice`, so no first bid can be checked against it. */
 	| 'no-starting-bid'
 	/** Below the lowest bid the published terms allow. The amount it names lives on the verdict. */
 	| 'below-minimum'
@@ -112,7 +112,7 @@ export interface ArenaBidCheck {
 	amount: number | null
 	/**
 	 * The lowest amount the published terms allow for this bidder at `now`,
-	 * or `null` when it cannot be computed (`starting_bid` unstated).
+	 * or `null` when it cannot be computed (`startPrice` unstated).
 	 */
 	minimum: number | null
 	/** The bidder's own position, if they already have one. Tells the UI the input is a **delta**. */
@@ -165,11 +165,11 @@ export function parseBidAmountSats(raw: string | number | null | undefined): num
  */
 export interface ArenaBidFloor {
 	/**
-	 * - `first`   — no bid read yet: the opening must reach `starting_bid`;
+	 * - `first`   — no bid read yet: the opening must reach `startPrice`;
 	 * - `raise`   — there is a top position: the new position must reach
-	 *               `top + min_increment` (the increment when the create stated
+	 *               `top + minIncrement` (the increment when the create stated
 	 *               one, otherwise the top itself — see below);
-	 * - `unknown` — the create stated no `starting_bid`, so no floor can be computed.
+	 * - `unknown` — the create stated no `startPrice`, so no floor can be computed.
 	 */
 	kind: 'first' | 'raise' | 'unknown'
 	/** The amount a bidder's position must reach, or `null` for `unknown`. */
@@ -181,12 +181,12 @@ export interface ArenaBidFloor {
 /**
  * The floor for a bid placed **now**, from the published terms.
  *
- * - No bid read → `starting_bid` (the create's own opening price). No
- *   `starting_bid` → `unknown`; the adapter refuses rather than inventing `0`.
+ * - No bid read → `startPrice` (the create's own opening price). No
+ *   `startPrice` → `unknown`; the adapter refuses rather than inventing `0`.
  * - A top position exists but its total is unknown (bids without readable
  *   amounts) → a raise the client cannot compute: `unknown`, until the read is
  *   complete. An auction *with* the top known is the normal case.
- * - A top position → `top + min_increment`. An **unstated** `min_increment` is
+ * - A top position → `top + minIncrement`. An **unstated** `minIncrement` is
  *   not zero: the terms are silent, so the client will not invent a raise
  *   below the top. It requires **one more sat than the top** — the floor the
  *   protocol itself enforces on a raise regardless of the increment, and the
@@ -194,7 +194,7 @@ export interface ArenaBidFloor {
  *   (`minIncrement === null` → "no minimum increment was published").
  */
 export function arenaBidFloor(
-	model: Pick<ArenaAuctionDetailModel, 'startingBid' | 'minIncrement' | 'topBidTotal' | 'bidCount' | 'bidsWithoutAmount'>,
+	model: Pick<ArenaAuctionDetailModel, 'startPrice' | 'minIncrement' | 'topBidTotal' | 'bidCount' | 'bidsWithoutAmount'>,
 	ownPosition: number | null,
 ): ArenaBidFloor {
 	if (model.bidsWithoutAmount > 0 || (model.bidCount > 0 && model.topBidTotal === null)) {
@@ -216,15 +216,15 @@ export function arenaBidFloor(
 		}
 		return { kind: 'raise', minimum: top + step, topTotal: top }
 	}
-	if (model.startingBid === null || !Number.isSafeInteger(model.startingBid)) {
+	if (model.startPrice === null || !Number.isSafeInteger(model.startPrice)) {
 		return { kind: 'unknown', minimum: null, topTotal: null }
 	}
 	// The bidder has already bid on an auction whose bids were not read into a
 	// top — the read is partial. Their own position is the best floor known.
-	if (ownPosition !== null && model.startingBid <= 0) {
+	if (ownPosition !== null && model.startPrice <= 0) {
 		return { kind: 'first', minimum: ownPosition, topTotal: null }
 	}
-	return { kind: 'first', minimum: model.startingBid, topTotal: null }
+	return { kind: 'first', minimum: model.startPrice, topTotal: null }
 }
 
 // =========================================================================
@@ -286,7 +286,7 @@ export function checkArenaBid(input: ArenaBidCheckInput): ArenaBidCheck {
 	if (amount === null) return { allowed: false, reason: 'not-integer-sats', ...base }
 	if (amount === 0) return { allowed: false, reason: 'zero', ...base }
 	if (floor.minimum === null) {
-		return { allowed: false, reason: model?.startingBid === null ? 'no-starting-bid' : 'read-incomplete', ...base }
+		return { allowed: false, reason: model?.startPrice === null ? 'no-starting-bid' : 'read-incomplete', ...base }
 	}
 	const resulting = (ownPosition ?? 0) + amount
 	if (resulting < floor.minimum) return { allowed: false, reason: 'below-minimum', ...base }

@@ -155,7 +155,7 @@ export function toAuctionCardModel(view: ArenaAuctionView, context: ArenaSurface
 		d: view.d,
 		title: view.content.title,
 		imageUrl: view.content.image,
-		startingBid: view.content.startPrice,
+		startPrice: view.content.startPrice,
 		topBidTotal: view.topBid?.total ?? null,
 		bidCount: view.bids.length,
 		bidsWithoutAmount: view.bidsWithoutAmount,
@@ -188,17 +188,15 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 		minIncrement: view.content.minIncrement,
 		// The consolidated create has no reserve: `startPrice` is the floor a
 		// bid must clear and `reserve_not_met` is a verdict outcome, not a
-		// published number. Stated as `null` ("not stated"), never as 0.
-		reserve: null,
-		durationSeconds: view.content.durationSec,
+		// published number. There is no `reserve` field to state at all.
+		mode: view.content.mode,
 		// The window IS the reset amount now; the extension and the total cap
 		// were removed by the consolidated protocol (§3), and a locktime is
 		// derived per bid (§2), not published.
-		lateBidWindowSeconds: view.content.windowSec,
-		lateBidExtensionSeconds: null,
-		maxTotalExtensionSeconds: null,
-		locktimeSeconds: null,
-		fundingMode: null,
+		windowSec: view.content.windowSec,
+		durationSec: view.content.durationSec,
+		sellerWallet: view.content.sellerWallet,
+		v4vSplit: view.content.v4vSplit,
 		versions: view.versions,
 		rootEventId: view.rootEventId,
 		canonicalEventId: view.canonicalEventId,

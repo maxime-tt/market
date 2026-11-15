@@ -36,7 +36,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		d: 'lot-1',
 		title: 'A handmade mug',
 		imageUrl: null,
-		startingBid: 1000,
+		startPrice: 1000,
 		topBidTotal: null,
 		bidCount: 0,
 		bidsWithoutAmount: 0,
@@ -49,13 +49,11 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		relayCount: 2,
 		description: null,
 		minIncrement: 100,
-		reserve: null,
-		durationSeconds: 3600,
-		lateBidWindowSeconds: null,
-		lateBidExtensionSeconds: null,
-		maxTotalExtensionSeconds: null,
-		locktimeSeconds: null,
-		fundingMode: null,
+		mode: null,
+		windowSec: null,
+		durationSec: 3600,
+		sellerWallet: null,
+		v4vSplit: null,
 		versions: 1,
 		rootEventId: 'root-event-1',
 		canonicalEventId: 'root-event-1',
@@ -132,7 +130,7 @@ describe('arenaBidFloor — the floor comes from the create, never a guess', () 
 	})
 
 	test('an unstated starting_bid gives no floor at all — not zero', () => {
-		expect(arenaBidFloor(detail({ startingBid: null }), null)).toEqual({ kind: 'unknown', minimum: null, topTotal: null })
+		expect(arenaBidFloor(detail({ startPrice: null }), null)).toEqual({ kind: 'unknown', minimum: null, topTotal: null })
 	})
 
 	test('bids with no readable amount make the top unknown, so the raise floor is unknown', () => {
@@ -235,7 +233,7 @@ describe('checkArenaBid — the amount check', () => {
 	})
 
 	test('no starting_bid: refused as unstated, not as zero', () => {
-		const check = checkArenaBid(input({ model: detail({ startingBid: null }), raw: '5000' }))
+		const check = checkArenaBid(input({ model: detail({ startPrice: null }), raw: '5000' }))
 		expect(check).toMatchObject({ allowed: false, reason: 'no-starting-bid', minimum: null })
 	})
 

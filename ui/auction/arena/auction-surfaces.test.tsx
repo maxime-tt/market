@@ -39,7 +39,7 @@ function card(over: Partial<ArenaAuctionCardModel> = {}): ArenaAuctionCardModel 
 		d: 'lot-1',
 		title: 'A handmade mug',
 		imageUrl: null,
-		startingBid: 1000,
+		startPrice: 1000,
 		topBidTotal: null,
 		bidCount: 0,
 		bidsWithoutAmount: 0,
@@ -59,13 +59,11 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		...card(),
 		description: 'Thrown on a wheel.',
 		minIncrement: 100,
-		reserve: 5000,
-		durationSeconds: 3600,
-		lateBidWindowSeconds: 60,
-		lateBidExtensionSeconds: 120,
-		maxTotalExtensionSeconds: 600,
-		locktimeSeconds: 900,
-		fundingMode: 'cashu_sigall_v1',
+		mode: 'antisnipe',
+		windowSec: 60,
+		durationSec: 3600,
+		sellerWallet: null,
+		v4vSplit: null,
 		versions: 1,
 		rootEventId: 'root-event-1',
 		canonicalEventId: 'root-event-1',
@@ -239,8 +237,8 @@ describe('card formatters', () => {
 	test('priceLine never asserts a total it cannot support', () => {
 		expect(priceLine(card({ topBidTotal: 450 }))).toBe('450 sats')
 		expect(priceLine(card({ bidsWithoutAmount: 2 }))).toBe('2 bids carry no readable amount — total unknown')
-		expect(priceLine(card({ startingBid: 1000 }))).toBe('No bids · starting 1,000 sats')
-		expect(priceLine(card({ startingBid: null }))).toBe('No bid amount stated')
+		expect(priceLine(card({ startPrice: 1000 }))).toBe('No bids · starting 1,000 sats')
+		expect(priceLine(card({ startPrice: null }))).toBe('No bid amount stated')
 	})
 
 	test('every read state has its own sentence', () => {
@@ -261,18 +259,53 @@ describe('card formatters', () => {
 // =========================================================================
 
 describe('ArenaAuctionDetail', () => {
-	test('renders terms as published and says "not stated" for the ones the create omitted', () => {
+	test('renders the consolidated terms and says "not stated" for the ones the create omitted', () => {
 		const html = render(
 			createElement(ArenaAuctionDetail, {
-				model: detail({ reserve: null, durationSeconds: null, fundingMode: null }),
+				model: detail({ mode: null, windowSec: null, durationSec: null, sellerWallet: null }),
 				status: 'settled',
 				relayHealth: HEALTH,
 			}),
 		)
-		expect(html).toContain('An unstated reserve is not &quot;no reserve&quot;.')
+		expect(html).toContain('Start price')
 		expect(html).toContain('No duration, so there is no end to state.')
 		expect(html).toContain('not stated')
-		expect(html).not.toContain('Reserve</span></div>0')
+		// The consolidated protocol has no reserve term at all.
+		expect(html).not.toContain('Reserve')
+	})
+
+	test('anti-snipe is shown as behaviour, not knobs, and escrow names a refund date', () => {
+		const html = render(
+			createElement(ArenaAuctionDetail, {
+				model: detail({ mode: 'antisnipe', windowSec: 60, endsAt: 4600 }),
+				status: 'settled',
+				relayHealth: HEALTH,
+			}),
+		)
+		expect(html).toContain('Anti-snipe')
+		expect(html).toContain('no hard end')
+		expect(html).toContain('Refundable from')
+		expect(html).not.toContain('Late-bid extension')
+		expect(html).not.toContain('Max total extension')
+	})
+
+	test('the V4V split renders roles, bps and the seller remainder', () => {
+		const html = render(
+			createElement(ArenaAuctionDetail, {
+				model: detail({
+					v4vSplit: [
+						{ role: 'validator', recipientPubkey: 'validator-one', allocationBps: 200 },
+						{ role: 'v4v', recipientPubkey: 'charity-one', allocationBps: 300 },
+					],
+				}),
+				status: 'settled',
+				relayHealth: HEALTH,
+			}),
+		)
+		expect(html).toContain('V4V payout split')
+		expect(html).toContain('validator')
+		expect(html).toContain('Seller remainder')
+		expect(html).toContain('9,500 bps (95.00%)')
 	})
 
 	test('positions are labelled derived, not an outcome', () => {

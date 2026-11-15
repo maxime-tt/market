@@ -334,10 +334,14 @@ describe('toAuctionDetailModel', () => {
 	test('keeps unstated terms null rather than filling them in', () => {
 		const auction = onlyAuction(snapshotOf([createEvent({}, { minIncrement: undefined })]))
 		const detail = toAuctionDetailModel(auction, CONTEXT)
-		expect(detail.reserve).toBeNull()
+		// The consolidated protocol has no reserve at all: the field is gone.
+		expect('reserve' in detail).toBe(false)
 		expect(detail.minIncrement).toBeNull()
-		expect(detail.durationSeconds).toBe(3600)
-		expect(detail.startingBid).toBe(1000)
+		expect(detail.durationSec).toBe(3600)
+		expect(detail.startPrice).toBe(1000)
+		expect(detail.mode).toBe('fixed')
+		expect(detail.windowSec).toBe(0)
+		expect(detail.sellerWallet).toBe('seller-wallet')
 		expect(detail.versions).toBe(1)
 		expect(detail.rootEventId).toBe(auction.rootEventId)
 	})

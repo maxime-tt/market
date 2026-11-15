@@ -5,9 +5,13 @@ import { cn } from '../../utils/cn'
 import { AuctionDetailCard, AuctionTechnicalRow } from '../auction-detail-views'
 import { readStateMessage } from './auction-card'
 import {
+	bpsLabel,
+	endModeBehaviour,
+	escrowRefundableFrom,
 	phaseLabel,
 	phaseTone,
 	shortKey,
+	v4vSellerRemainderBps,
 	type ArenaAuctionDetailModel,
 	type ArenaRelayHealth,
 	type ArenaSurfaceStatus,
@@ -23,9 +27,11 @@ import {
  * different, so three things are stated rather than assumed:
  *
  * - **Terms are `not stated` when the create did not state them.** A missing
- *   `reserve` is not "no reserve" and a missing `duration_seconds` is not a
+ *   `startPrice` is not a zero-sat floor and a missing `durationSec` is not a
  *   zero-length auction; the create simply said nothing, and the card says
- *   exactly that.
+ *   exactly that. The consolidated protocol has **no `reserve`** — the floor a
+ *   bid must clear is `startPrice`, and `reserve_not_met` is a verdict outcome,
+ *   not a published number — so there is no reserve term to render.
  * - **Positions are derived, not decided.** The per-bidder totals come from
  *   summing bid *deltas*. They are labelled as a derived view: the 1445 verdict
  *   names a winner, and the mint decides whether money moved.
@@ -106,6 +112,9 @@ export function ArenaAuctionDetail({
 	const label = model.title?.trim() || model.d
 	const partial = unavailableCopy(status)
 	const positions = [...model.positions].sort((a, b) => b.total - a.total || a.bidder.localeCompare(b.bidder))
+	// The escrow's honest deadline: the date a last-resort refund opens for a
+	// lot that never settles. `null` when the create stated no end.
+	const refundableFrom = escrowRefundableFrom(model.endsAt, model.windowSec)
 
 	return (
 		<div ref={ref} data-slot="arena-auction-detail" data-state={status} className={cn('space-y-6', className)}>
@@ -189,25 +198,66 @@ export function ArenaAuctionDetail({
 			<section className="space-y-3">
 				<h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-text-mid">Terms, as published</h2>
 				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-					<TermCard label="Starting bid" value={term(model.startingBid, 'sats')} />
+					<TermCard label="Start price" value={term(model.startPrice, 'sats')} />
 					<TermCard label="Minimum increment" value={term(model.minIncrement, 'sats')} />
 					<TermCard
-						label="Reserve"
-						value={model.reserve === null ? 'not stated' : term(model.reserve, 'sats')}
-						helper={model.reserve === null ? 'An unstated reserve is not "no reserve".' : undefined}
+						label="Duration"
+						value={term(model.durationSec, 'seconds')}
+						helper={model.durationSec === null ? 'No duration, so there is no end to state.' : undefined}
 					/>
 					<TermCard
-						label="Duration"
-						value={term(model.durationSeconds, 'seconds')}
-						helper={model.durationSeconds === null ? 'No duration, so there is no end to state.' : undefined}
+						label="End behaviour"
+						value={model.mode ?? 'not stated'}
+						helper={endModeBehaviour(model.mode, model.windowSec)}
 					/>
-					<TermCard label="Late-bid window" value={term(model.lateBidWindowSeconds, 'seconds')} />
-					<TermCard label="Late-bid extension" value={term(model.lateBidExtensionSeconds, 'seconds')} />
-					<TermCard label="Max total extension" value={term(model.maxTotalExtensionSeconds, 'seconds')} />
-					<TermCard label="Locktime" value={term(model.locktimeSeconds, 'seconds')} />
-					<TermCard label="Funding mode" value={model.fundingMode ?? 'not stated'} />
+					<TermCard
+						label="Seller wallet"
+						value={
+							model.sellerWallet === null ? 'not stated' : <span className="font-mono text-xs">{shortKey(model.sellerWallet)}</span>
+						}
+						helper={
+							model.sellerWallet === null
+								? 'No payout key was committed, so settlement has no committed destination.'
+								: 'The committed key settlement locks the payout to.'
+						}
+					/>
 				</div>
 			</section>
+
+			<section className="space-y-2" data-slot="arena-auction-escrow">
+				<h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-text-mid">Escrow</h2>
+				<p className="text-sm text-text-high">
+					Your sats are locked until the lot closes. They go to the seller if you win, back to you otherwise.
+				</p>
+				<p className="text-xs text-text-mid" data-slot="arena-auction-escrow-refund">
+					{refundableFrom !== null
+						? `Refundable from ${new Date(refundableFrom * 1000).toLocaleString()} if nothing settles.`
+						: 'The create stated no end, so the date a last-resort refund opens cannot be named.'}
+				</p>
+			</section>
+
+			{model.v4vSplit !== null && (
+				<section className="space-y-2" data-slot="arena-auction-v4v">
+					<h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-text-mid">V4V payout split</h2>
+					<p className="text-[11px] text-text-mid">
+						Committed at creation and immutable. The seller receives the remainder.
+					</p>
+					<ul className="space-y-1">
+						{model.v4vSplit.map((row, index) => (
+							<li key={`${row.role ?? 'row'}-${index}`} className="flex items-center justify-between gap-2 text-xs">
+								<span className="text-text-mid">
+									{row.role ?? 'row'} · <span className="font-mono">{shortKey(row.recipientPubkey)}</span>
+								</span>
+								<span className="font-medium text-text-high">{bpsLabel(row.allocationBps)}</span>
+							</li>
+						))}
+						<li className="flex items-center justify-between gap-2 border-t border-border-default pt-1 text-xs">
+							<span className="text-text-mid">Seller remainder</span>
+							<span className="font-medium text-text-high">{bpsLabel(v4vSellerRemainderBps(model.v4vSplit))}</span>
+						</li>
+					</ul>
+				</section>
+			)}
 
 			{bidPanel !== null && <div data-slot="arena-auction-detail-bid">{bidPanel}</div>}
 

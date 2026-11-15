@@ -99,7 +99,7 @@ export function priceLine(model: ArenaAuctionCardModel): string {
 		const n = model.bidsWithoutAmount
 		return `${n} ${n === 1 ? 'bid carries' : 'bids carry'} no readable amount — total unknown`
 	}
-	if (model.startingBid !== null) return `No bids · starting ${model.startingBid.toLocaleString()} sats`
+	if (model.startPrice !== null) return `No bids · starting ${model.startPrice.toLocaleString()} sats`
 	return 'No bid amount stated'
 }
 

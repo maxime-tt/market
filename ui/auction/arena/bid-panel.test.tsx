@@ -30,7 +30,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		d: 'lot-1',
 		title: 'A handmade mug',
 		imageUrl: null,
-		startingBid: 1000,
+		startPrice: 1000,
 		topBidTotal: null,
 		bidCount: 0,
 		bidsWithoutAmount: 0,
@@ -43,13 +43,11 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		relayCount: 2,
 		description: null,
 		minIncrement: 100,
-		reserve: null,
-		durationSeconds: 3600,
-		lateBidWindowSeconds: null,
-		lateBidExtensionSeconds: null,
-		maxTotalExtensionSeconds: null,
-		locktimeSeconds: null,
-		fundingMode: null,
+		mode: null,
+		windowSec: null,
+		durationSec: 3600,
+		sellerWallet: null,
+		v4vSplit: null,
 		versions: 1,
 		rootEventId: 'root-event-1',
 		canonicalEventId: 'root-event-1',
@@ -261,7 +259,7 @@ describe('bidButtonLabel and bidFloorLabel', () => {
 	})
 
 	test('an unstated starting bid is stated as unstated', () => {
-		expect(bidFloorLabel(detail({ startingBid: null }), checkFor(detail({ startingBid: null })))).toBe('This auction published no starting bid.')
+		expect(bidFloorLabel(detail({ startPrice: null }), checkFor(detail({ startPrice: null })))).toBe('This auction published no starting bid.')
 	})
 })
 
