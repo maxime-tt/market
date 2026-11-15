@@ -72,12 +72,12 @@ function ev(spec: EventSpec): NostrEventLike {
 
 function createContent(over: Record<string, unknown> = {}): Record<string, unknown> {
 	return {
-		auction_id: 'lot-1',
+		auctionId: 'lot-1',
 		title: 'A lot',
-		starting_bid: 1000,
-		min_increment: 10,
-		duration_seconds: 3600,
-		funding_mode: 'cashu_sigall_v1',
+		startPrice: 1000,
+		minIncrement: 10,
+		durationSec: 3600,
+		mode: 'fixed',
 		...over,
 	}
 }
@@ -86,7 +86,7 @@ function createEvent(
 	over: Partial<{ id: string; created_at: number; pubkey: string; d: string; e: string | null }> = {},
 	content: Record<string, unknown> = {},
 ): NostrEventLike {
-	const d = over.d ?? (content.auction_id as string) ?? 'lot-1'
+	const d = over.d ?? (content.auctionId as string) ?? 'lot-1'
 	const tags: string[][] = [['d', d]]
 	if (over.e) tags.push(['e', over.e])
 	return ev({
@@ -264,9 +264,9 @@ describe('dedupe and order', () => {
 	})
 
 	test('auctions are newest first, ties to the lexically lowest event id', async () => {
-		const older = createEvent({ id: 'older', created_at: 900 }, { auction_id: 'lot-old' })
-		const tieB = createEvent({ id: 'tie-b', created_at: 1000 }, { auction_id: 'lot-b' })
-		const tieA = createEvent({ id: 'tie-a', created_at: 1000 }, { auction_id: 'lot-a' })
+		const older = createEvent({ id: 'older', created_at: 900 }, { auctionId: 'lot-old' })
+		const tieB = createEvent({ id: 'tie-b', created_at: 1000 }, { auctionId: 'lot-b' })
+		const tieA = createEvent({ id: 'tie-a', created_at: 1000 }, { auctionId: 'lot-a' })
 		const read = readFrom({ 'wss://a': { events: [older, tieB, tieA] } })
 
 		const snapshot = await read.snapshot()
@@ -274,7 +274,7 @@ describe('dedupe and order', () => {
 	})
 
 	test('a 1440 whose d tag disagrees with its auction_id is refused, not reconciled', () => {
-		const bad = createEvent({ d: 'lot-x' }, { auction_id: 'lot-y' })
+		const bad = createEvent({ d: 'lot-x' }, { auctionId: 'lot-y' })
 		const decoded = decodeArenaEvent(bad, 'wss://a')
 		expect(decoded.ok).toBe(false)
 		if (!decoded.ok) expect(decoded.refusal.reason).toBe(ARENA_REFUSAL_BAD_IDENTITY)
@@ -312,27 +312,27 @@ describe('1440 is regular: latest version wins, behind the immutable check', () 
 	})
 
 	test('an edit that moves an immutable field is rejected and named', async () => {
-		const root = createEvent({ id: 'v1', created_at: 1000 }, { starting_bid: 1000 })
+		const root = createEvent({ id: 'v1', created_at: 1000 }, { startPrice: 1000 })
 		// The classic attack the allow-list exists for: a "typo fix" that lowers the floor.
-		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { starting_bid: 1 })
+		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { startPrice: 1 })
 		const read = readFrom({ 'wss://a': { events: [root, attack] } })
 
 		const snapshot = await read.snapshot()
 		expect(snapshot.auctions[0].canonicalEventId).toBe('v1')
-		expect(snapshot.auctions[0].content.startingBid).toBe(1000)
+		expect(snapshot.auctions[0].content.startPrice).toBe(1000)
 		expect(snapshot.rejectedCreates).toHaveLength(1)
 		expect(snapshot.rejectedCreates[0].reason).toBe(ARENA_REFUSAL_IMMUTABLE_CHANGED)
-		expect(snapshot.rejectedCreates[0].field).toBe('starting_bid')
+		expect(snapshot.rejectedCreates[0].field).toBe('startPrice')
 	})
 
 	test('every frozen field is frozen, not just the money ones', async () => {
 		const root = createEvent({ id: 'v1' })
-		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { locktime_seconds: 1 })
+		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { windowSec: 1 })
 		const decodedRoot = decodeArenaEvent(root, 'wss://a')
 		const decodedAttack = decodeArenaEvent(attack, 'wss://a')
 		expect(decodedRoot.ok && decodedAttack.ok).toBe(true)
 		if (decodedRoot.ok && decodedAttack.ok && decodedRoot.event.type === 'create' && decodedAttack.event.type === 'create') {
-			expect(findImmutableChange(decodedRoot.event, decodedAttack.event)?.field).toBe('locktime_seconds')
+			expect(findImmutableChange(decodedRoot.event, decodedAttack.event)?.field).toBe('windowSec')
 		}
 	})
 
@@ -511,8 +511,8 @@ describe('resilience', () => {
 	})
 
 	test('a lying relay cannot inject a kind it was never asked for, bad JSON, or an immutable flip', async () => {
-		const root = createEvent({ id: 'v1', created_at: 1000 }, { starting_bid: 1000 })
-		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { starting_bid: 1 })
+		const root = createEvent({ id: 'v1', created_at: 1000 }, { startPrice: 1000 })
+		const attack = createEvent({ id: 'v2', created_at: 2000, e: 'v1' }, { startPrice: 1 })
 		const read = readFrom({
 			'wss://liar': {
 				events: [

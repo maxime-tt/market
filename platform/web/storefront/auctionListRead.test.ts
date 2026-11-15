@@ -44,7 +44,7 @@ function createEvent(
 	over: { id?: string; pubkey?: string; created_at?: number; d?: string; e?: string | null } = {},
 	content: Record<string, unknown> = {},
 ): NostrEventLike {
-	const d = over.d ?? (content.auction_id as string) ?? 'lot-1'
+	const d = over.d ?? (content.auctionId as string) ?? 'lot-1'
 	const tags: string[][] = [['d', d]]
 	if (over.e) tags.push(['e', over.e])
 	return {
@@ -54,11 +54,11 @@ function createEvent(
 		kind: ARENA_AUCTION_CREATE_KIND,
 		tags,
 		content: JSON.stringify({
-			auction_id: d,
+			auctionId: d,
 			title: `Lot ${d}`,
-			starting_bid: 1000,
-			duration_seconds: 3600,
-			funding_mode: 'cashu_sigall_v1',
+			startPrice: 1000,
+			durationSec: 3600,
+			mode: 'fixed',
 			...content,
 		}),
 	}
@@ -200,17 +200,14 @@ describe('toAuctionListItem', () => {
 			auctionId: 'lot-1',
 			title: 'A lot',
 			description: null,
-			imageUrl: null,
-			startingBid: 1000,
+			image: null,
+			startPrice: 1000,
 			minIncrement: 10,
-			reserve: null,
-			durationSeconds: 100,
-			lateBidWindowSeconds: null,
-			lateBidExtensionSeconds: null,
-			maxTotalExtensionSeconds: null,
-			locktimeSeconds: null,
-			fundingMode: 'cashu_sigall_v1',
-			sellerCocoPaymentPublicKey: null,
+			mode: 'fixed',
+			windowSec: null,
+			durationSec: 100,
+			sellerWallet: null,
+			v4vSplit: null,
 		},
 		versions: 1,
 		bids: [],
@@ -227,7 +224,7 @@ describe('toAuctionListItem', () => {
 	})
 
 	test('a create with no duration has no end to state', () => {
-		const noDuration = { ...view, content: { ...view.content, durationSeconds: null } }
+		const noDuration = { ...view, content: { ...view.content, durationSec: null } }
 		const item = toAuctionListItem(noDuration, 9_999_999)
 		expect(item.endsAt).toBeNull()
 		expect(item.phase).toBe('unknown')

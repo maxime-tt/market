@@ -59,13 +59,11 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		...card(),
 		description: 'Thrown on a wheel.',
 		minIncrement: 100,
-		reserve: 5000,
-		durationSeconds: 3600,
-		lateBidWindowSeconds: 60,
-		lateBidExtensionSeconds: 120,
-		maxTotalExtensionSeconds: 600,
-		locktimeSeconds: 900,
-		fundingMode: 'cashu_sigall_v1',
+		mode: 'fixed',
+		windowSec: null,
+		durationSec: 3600,
+		sellerWallet: null,
+		v4vSplit: null,
 		versions: 1,
 		rootEventId: 'root-event-1',
 		canonicalEventId: 'root-event-1',
@@ -264,15 +262,53 @@ describe('ArenaAuctionDetail', () => {
 	test('renders terms as published and says "not stated" for the ones the create omitted', () => {
 		const html = render(
 			createElement(ArenaAuctionDetail, {
-				model: detail({ reserve: null, durationSeconds: null, fundingMode: null }),
+				model: detail({ mode: null, windowSec: null, durationSec: null }),
 				status: 'settled',
 				relayHealth: HEALTH,
 			}),
 		)
-		expect(html).toContain('An unstated reserve is not &quot;no reserve&quot;.')
 		expect(html).toContain('No duration, so there is no end to state.')
 		expect(html).toContain('not stated')
-		expect(html).not.toContain('Reserve</span></div>0')
+	})
+
+	test('anti-snipe is shown as behaviour, with no extension knobs', () => {
+		const html = render(
+			createElement(ArenaAuctionDetail, {
+				model: detail({ mode: 'antisnipe', windowSec: 300 }),
+				status: 'settled',
+				relayHealth: HEALTH,
+			}),
+		)
+		expect(html).toContain('extends by 300s while bids keep arriving, no hard end')
+		expect(html).not.toContain('Late-bid window')
+		expect(html).not.toContain('Max total extension')
+		expect(html).not.toContain('Funding mode')
+	})
+
+	test('a committed V4V split shows each role with bps and the seller remainder', () => {
+		const html = render(
+			createElement(ArenaAuctionDetail, {
+				model: detail({
+					v4vSplit: [
+						{ role: 'validator', recipientPubkey: 'validator-pubkey-one', allocationBps: 500 },
+						{ role: 'v4v', recipientPubkey: 'v4v-pubkey-two', allocationBps: 100 },
+					],
+				}),
+				status: 'settled',
+				relayHealth: HEALTH,
+			}),
+		)
+		expect(html).toContain('V4V split')
+		expect(html).toContain('500 bps')
+		expect(html).toContain('100 bps')
+		expect(html).toContain('seller (remainder)')
+		expect(html).toContain('9,400 bps')
+	})
+
+	test('the escrow copy is abstract: destinations and refund, never keys or proofs', () => {
+		const html = render(createElement(ArenaAuctionDetail, { model: detail(), status: 'settled', relayHealth: HEALTH }))
+		expect(html).toContain('locked in escrow')
+		expect(html).toContain('No wallet keys or proofs are shown here.')
 	})
 
 	test('positions are labelled derived, not an outcome', () => {

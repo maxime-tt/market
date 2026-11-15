@@ -57,7 +57,7 @@ function createEvent(
 	over: { id?: string; pubkey?: string; created_at?: number; d?: string; e?: string | null } = {},
 	content: Record<string, unknown> = {},
 ): NostrEventLike {
-	const d = over.d ?? (content.auction_id as string) ?? 'lot-1'
+	const d = over.d ?? (content.auctionId as string) ?? 'lot-1'
 	const tags: string[][] = [['d', d]]
 	if (over.e) tags.push(['e', over.e])
 	return {
@@ -67,11 +67,11 @@ function createEvent(
 		kind: ARENA_AUCTION_CREATE_KIND,
 		tags,
 		content: JSON.stringify({
-			auction_id: d,
+			auctionId: d,
 			title: `Lot ${d}`,
-			starting_bid: 1000,
-			duration_seconds: 3600,
-			funding_mode: 'cashu_sigall_v1',
+			startPrice: 1000,
+			durationSec: 3600,
+			mode: 'fixed',
 			...content,
 		}),
 	}
@@ -225,14 +225,14 @@ describe('arenaSurfaceStatus', () => {
 
 describe('auctionEndsAt / auctionPhase', () => {
 	test('a create with no duration has no end, and the phase says unknown rather than inventing one', () => {
-		const auction = onlyAuction(snapshotOf([createEvent({}, { duration_seconds: undefined })]))
-		expect(auction.content.durationSeconds).toBeNull()
+		const auction = onlyAuction(snapshotOf([createEvent({}, { durationSec: undefined })]))
+		expect(auction.content.durationSec).toBeNull()
 		expect(auctionEndsAt(auction)).toBeNull()
 		expect(auctionPhase(auction, 10_000)).toBe('unknown')
 	})
 
 	test('a zero duration is not treated as an instant end', () => {
-		const auction = onlyAuction(snapshotOf([createEvent({}, { duration_seconds: 0 })]))
+		const auction = onlyAuction(snapshotOf([createEvent({}, { durationSec: 0 })]))
 		expect(auctionEndsAt(auction)).toBeNull()
 		expect(auctionPhase(auction, 10_000)).toBe('unknown')
 	})
@@ -309,11 +309,12 @@ describe('toAuctionCardModel', () => {
 
 describe('toAuctionDetailModel', () => {
 	test('keeps unstated terms null rather than filling them in', () => {
-		const auction = onlyAuction(snapshotOf([createEvent({}, { reserve: undefined, min_increment: undefined })]))
+		const auction = onlyAuction(snapshotOf([createEvent({}, { minIncrement: undefined })]))
 		const detail = toAuctionDetailModel(auction, CONTEXT)
-		expect(detail.reserve).toBeNull()
 		expect(detail.minIncrement).toBeNull()
 		expect(detail.startingBid).toBe(1000)
+		expect(detail.mode).toBe('fixed')
+		expect(detail.windowSec).toBeNull()
 		expect(detail.versions).toBe(1)
 		expect(detail.rootEventId).toBe(auction.rootEventId)
 	})
@@ -338,7 +339,7 @@ describe('toAuctionDetailModel', () => {
 		const root = createEvent({ id: 'create-root', created_at: 1000 })
 		const accepted = createEvent({ e: 'create-root', created_at: 2000 }, { title: 'New title' })
 		// Changes a frozen field: the read refuses it as an update, and the version count still counts it.
-		const refused = createEvent({ e: 'create-root', created_at: 3000 }, { starting_bid: 1 })
+		const refused = createEvent({ e: 'create-root', created_at: 3000 }, { startPrice: 1 })
 		const auction = onlyAuction(snapshotOf([root, accepted, refused]))
 		const detail = toAuctionDetailModel(auction, CONTEXT)
 		expect(detail.versions).toBe(3)
@@ -477,7 +478,7 @@ describe('collectArenaSurfacesRead', () => {
 	})
 
 	test('a refused create never reaches a surface', async () => {
-		const badCreate = createEvent({ id: 'create-bad' }, { starting_bid: 'free' })
+		const badCreate = createEvent({ id: 'create-bad' }, { startPrice: 'free' })
 		// Drops the `d` tag while keeping content.auction_id, which is legal; the
 		// refusal case is bad JSON, so replace the content outright.
 		badCreate.content = 'not json'

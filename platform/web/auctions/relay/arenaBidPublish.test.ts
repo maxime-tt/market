@@ -86,13 +86,11 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		relayCount: 2,
 		description: null,
 		minIncrement: 100,
-		reserve: null,
-		durationSeconds: 3600,
-		lateBidWindowSeconds: null,
-		lateBidExtensionSeconds: null,
-		maxTotalExtensionSeconds: null,
-		locktimeSeconds: null,
-		fundingMode: null,
+		mode: 'fixed',
+		windowSec: null,
+		durationSec: 3600,
+		sellerWallet: null,
+		v4vSplit: null,
 		versions: 1,
 		rootEventId: ROOT,
 		canonicalEventId: ROOT,
@@ -475,7 +473,7 @@ describe('round-trip: a published 1441 is what the read adapter binds', () => {
 			created_at: 1000,
 			kind: 1440,
 			tags: [['d', d]],
-			content: JSON.stringify({ auction_id: d, title: 'Mug', starting_bid: 1000, min_increment: 100, duration_seconds: 3600 }),
+			content: JSON.stringify({ auctionId: d, title: 'Mug', startPrice: 1000, minIncrement: 100, durationSec: 3600, mode: 'fixed' }),
 		}
 	}
 
@@ -552,7 +550,7 @@ describe('readBack — fixtures used by the round-trip', () => {
 		const read = createArenaAuctionRead({
 			relays: [RELAY_A],
 			openRelay: () => async function* () {
-				yield { type: 'event', event: { id: 'cf'.repeat(32), pubkey: SELLER, created_at: 1000, kind: 1440, tags: [['d', 'lot-1']], content: JSON.stringify({ auction_id: 'lot-1', starting_bid: 1000 }) } } as EventStreamItem<NostrEventLike>
+				yield { type: 'event', event: { id: 'cf'.repeat(32), pubkey: SELLER, created_at: 1000, kind: 1440, tags: [['d', 'lot-1']], content: JSON.stringify({ auctionId: 'lot-1', startPrice: 1000, mode: 'fixed' }) } } as EventStreamItem<NostrEventLike>
 				yield { type: 'caught-up', info: { eose: [RELAY_A], pending: [], complete: true } } as EventStreamItem<NostrEventLike>
 			},
 			deadlineMs: 50,
