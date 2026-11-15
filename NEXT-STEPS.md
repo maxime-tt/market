@@ -51,7 +51,7 @@ front end receives an order, not a taxonomy. Options:
 
 **Interaction to be aware of:** after step 2 the pills are `all_tags`, which is dominated by the
 largest sellers' vocabulary (health 1903, pharma 1629, steroid 928 …). So step 2 without a step 3
-makes the pills *more* seller-shaped, not less. The two belong together.
+makes the pills _more_ seller-shaped, not less. The two belong together.
 
 ## 4. The CMS home page
 

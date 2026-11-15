@@ -25,7 +25,7 @@ with no `filters` at all.
 - `q=testosterone` → **671** hits from a term in no title; `all_tags = "testosterone"` → 481.
 - `q=bitcoin` → **1,683**; `category_tags = "bitcoin"` → 1,139.
 
-The keyword finds *more*, not fewer, because it searches title + body + tags. The filter was
+The keyword finds _more_, not fewer, because it searches title + body + tags. The filter was
 strictly narrowing what the ranking could already order.
 
 **Also gone:** the meaningless "tag-only, empty term" state. There is no longer a search with an
@@ -69,8 +69,8 @@ live.
 So `all_tags` **is** already deduped between the two vocabularies — `[...new Set([...category_tags,
 ...labelTags])]` in `pointer.ts`. No work needed.
 
-**But that dedupe is not what the duplicate pills were.** The duplicates came from a *different
-field pair*: `all_tags` vs `category_top`/`category_sub` — e.g. `health` at 1,903 (`all_tags`) and
+**But that dedupe is not what the duplicate pills were.** The duplicates came from a _different
+field pair_: `all_tags` vs `category_top`/`category_sub` — e.g. `health` at 1,903 (`all_tags`) and
 1,866 (`category_top`), `pharma` at 1,629 and 1,627. Two fields, same word, two React keys.
 
 **So (4) removes the duplicate at the root, and no separate dedupe change is required.** The two

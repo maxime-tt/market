@@ -94,7 +94,14 @@ describe('getVariationParentAddress refuses to guess', () => {
 	})
 
 	test('returns null with more than one product parent tag', () => {
-		expect(getVariationParentAddress(variation('shoe', [['a', parentAddress], ['a', parentAddress]]))).toBeNull()
+		expect(
+			getVariationParentAddress(
+				variation('shoe', [
+					['a', parentAddress],
+					['a', parentAddress],
+				]),
+			),
+		).toBeNull()
 	})
 
 	test('returns null for a malformed coordinate', () => {
@@ -137,7 +144,14 @@ describe('variation labels and specs', () => {
 	})
 
 	test('falls back to title, then d-tag, then Option', () => {
-		expect(getVariationLabel(variation('shoe', [['title', 'Runner'], ['spec', 'sku', 'x']]))).toBe('Runner')
+		expect(
+			getVariationLabel(
+				variation('shoe', [
+					['title', 'Runner'],
+					['spec', 'sku', 'x'],
+				]),
+			),
+		).toBe('Runner')
 		expect(getVariationLabel(variation('shoe', []))).toBe('shoe')
 	})
 })
@@ -152,10 +166,38 @@ describe('isProductHidden', () => {
 
 describe('prepareProductFamilyCatalog', () => {
 	test('keeps the newest revision per address with a lower-id tie-break', () => {
-		const older = listing('shoe', [['title', 'old'], ['stock', '1']], { id: 'b', created_at: 1 })
-		const newer = listing('shoe', [['title', 'new'], ['stock', '1']], { id: 'a', created_at: 2 })
-		const tiedLow = listing('coat', [['title', 'low'], ['stock', '1']], { id: 'aaa', created_at: 5 })
-		const tiedHigh = listing('coat', [['title', 'high'], ['stock', '1']], { id: 'zzz', created_at: 5 })
+		const older = listing(
+			'shoe',
+			[
+				['title', 'old'],
+				['stock', '1'],
+			],
+			{ id: 'b', created_at: 1 },
+		)
+		const newer = listing(
+			'shoe',
+			[
+				['title', 'new'],
+				['stock', '1'],
+			],
+			{ id: 'a', created_at: 2 },
+		)
+		const tiedLow = listing(
+			'coat',
+			[
+				['title', 'low'],
+				['stock', '1'],
+			],
+			{ id: 'aaa', created_at: 5 },
+		)
+		const tiedHigh = listing(
+			'coat',
+			[
+				['title', 'high'],
+				['stock', '1'],
+			],
+			{ id: 'zzz', created_at: 5 },
+		)
 		const catalog = prepareProductFamilyCatalog([older, newer, tiedHigh, tiedLow])
 		const titles = catalog.items.map((item) => item.product.tags.find((t) => t[0] === 'title')?.[1])
 		expect(titles).toContain('new')
@@ -187,7 +229,10 @@ describe('prepareProductFamilyCatalog', () => {
 	})
 
 	test('treats a childless variable parent like a simple product', () => {
-		const parent = listing('lone', [['type', 'variable'], ['stock', '2']])
+		const parent = listing('lone', [
+			['type', 'variable'],
+			['stock', '2'],
+		])
 		const catalog = prepareProductFamilyCatalog([parent])
 		expect(catalog.items).toHaveLength(1)
 		expect(catalog.items[0].kind).toBe('simple')
@@ -214,7 +259,10 @@ describe('prepareProductFamilyCatalog', () => {
 	})
 
 	test('surfaces an available orphan variation on its own', () => {
-		const orphan = variation('shoe-42', [['a', `30402:${seller}:missing`], ['stock', '1']])
+		const orphan = variation('shoe-42', [
+			['a', `30402:${seller}:missing`],
+			['stock', '1'],
+		])
 		const catalog = prepareProductFamilyCatalog([orphan])
 		expect(catalog.unresolvedVariations).toHaveLength(1)
 		expect(catalog.items[0].kind).toBe('unresolved-variation')
@@ -249,7 +297,14 @@ describe('prepareProductFamilyCatalog', () => {
 
 describe('family resolution and presentation', () => {
 	const build = () => {
-		const parent = listing('shoe', [['type', 'variable'], ['image', 'parent.jpg']], { created_at: 3 })
+		const parent = listing(
+			'shoe',
+			[
+				['type', 'variable'],
+				['image', 'parent.jpg'],
+			],
+			{ created_at: 3 },
+		)
 		const size42 = variation('shoe-42', [
 			['a', parentAddress],
 			['spec', 'size', '42'],
@@ -284,7 +339,11 @@ describe('family resolution and presentation', () => {
 
 	test('defaults to the first variation when none is available', () => {
 		const parent = listing('shoe', [['type', 'variable']])
-		const sold = variation('shoe-42', [['a', parentAddress], ['spec', 'size', '42'], ['stock', '0']])
+		const sold = variation('shoe-42', [
+			['a', parentAddress],
+			['spec', 'size', '42'],
+			['stock', '0'],
+		])
 		const catalog = prepareProductFamilyCatalog([parent, sold])
 		expect(catalog.families[0].availableVariations).toHaveLength(0)
 		expect(resolveProductVariation(catalog.families[0])?.label).toBe('42')
@@ -306,8 +365,16 @@ describe('family resolution and presentation', () => {
 		expect(getProductFamilyPriceRange(family, readPrice)).toEqual({ min: 100, max: 100, currency: 'USD' })
 
 		const soldOutParent = listing('boot', [['type', 'variable']])
-		const a = variation('boot-1', [['a', `30402:${seller}:boot`], ['price', '80', 'USD'], ['stock', '0']])
-		const b = variation('boot-2', [['a', `30402:${seller}:boot`], ['price', '150', 'USD'], ['stock', '0']])
+		const a = variation('boot-1', [
+			['a', `30402:${seller}:boot`],
+			['price', '80', 'USD'],
+			['stock', '0'],
+		])
+		const b = variation('boot-2', [
+			['a', `30402:${seller}:boot`],
+			['price', '150', 'USD'],
+			['stock', '0'],
+		])
 		const soldCatalog = prepareProductFamilyCatalog([soldOutParent, a, b])
 		expect(getProductFamilyPriceRange(soldCatalog.families[0], readPrice)).toEqual({ min: 80, max: 150, currency: 'USD' })
 	})
@@ -316,19 +383,33 @@ describe('family resolution and presentation', () => {
 describe('groupProductSearchResultsByFamily', () => {
 	test('collapses N children to one row and prefers the parent', () => {
 		const parent = listing('shoe', [['type', 'variable']])
-		const children = [42, 43, 44].map((size) => variation(`shoe-${size}`, [['a', parentAddress], ['spec', 'size', String(size)]]))
+		const children = [42, 43, 44].map((size) =>
+			variation(`shoe-${size}`, [
+				['a', parentAddress],
+				['spec', 'size', String(size)],
+			]),
+		)
 		const rows = groupProductSearchResultsByFamily([...children, parent])
 		expect(rows).toEqual([parent])
 	})
 
 	test('keeps the first child when the parent is absent', () => {
-		const first = variation('shoe-42', [['a', parentAddress], ['spec', 'size', '42']])
-		const second = variation('shoe-43', [['a', parentAddress], ['spec', 'size', '43']])
+		const first = variation('shoe-42', [
+			['a', parentAddress],
+			['spec', 'size', '42'],
+		])
+		const second = variation('shoe-43', [
+			['a', parentAddress],
+			['spec', 'size', '43'],
+		])
 		expect(groupProductSearchResultsByFamily([first, second])).toEqual([first])
 	})
 
 	test('keeps a lone child as its own row', () => {
-		const lone = variation('shoe-42', [['a', parentAddress], ['spec', 'size', '42']])
+		const lone = variation('shoe-42', [
+			['a', parentAddress],
+			['spec', 'size', '42'],
+		])
 		expect(groupProductSearchResultsByFamily([lone])).toEqual([lone])
 	})
 

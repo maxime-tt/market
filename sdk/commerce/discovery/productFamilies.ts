@@ -279,16 +279,12 @@ export function prepareProductFamilyCatalog<E extends ProductFamilyEvent>(
 }
 
 /** The family an event belongs to as parent or variation, for detail routing. */
-export function findProductFamily<E extends ProductFamilyEvent>(
-	catalog: ProductFamilyCatalog<E>,
-	event: E,
-): ProductFamily<E> | null {
+export function findProductFamily<E extends ProductFamilyEvent>(catalog: ProductFamilyCatalog<E>, event: E): ProductFamily<E> | null {
 	const address = getProductAddress(event)
 	if (!address) return null
 	return (
-		catalog.families.find(
-			(family) => family.address === address || family.variations.some((variation) => variation.address === address),
-		) ?? null
+		catalog.families.find((family) => family.address === address || family.variations.some((variation) => variation.address === address)) ??
+		null
 	)
 }
 
@@ -312,10 +308,7 @@ export function resolveProductVariation<E extends ProductFamilyEvent>(
  * parent's, so switching options swaps the gallery, while a variation without
  * images inherits the parent gallery instead of showing nothing.
  */
-export function getProductFamilyImages<E extends ProductFamilyEvent>(
-	parent: E,
-	selected: ProductFamilyVariation<E> | null,
-): string[][] {
+export function getProductFamilyImages<E extends ProductFamilyEvent>(parent: E, selected: ProductFamilyVariation<E> | null): string[][] {
 	const selectedImages = selected ? getProductImages(selected.product) : []
 	return selectedImages.length > 0 ? selectedImages : getProductImages(parent)
 }

@@ -106,7 +106,12 @@ describe('product reads', () => {
 	test('a parent address narrows the read to that family’s children by `#a`', async () => {
 		const parentAddress = '30402:' + 'a'.repeat(64) + ':shoe'
 		const context = createContext([
-			event({ tags: [['d', 'shoe-42'], ['a', parentAddress]] }),
+			event({
+				tags: [
+					['d', 'shoe-42'],
+					['a', parentAddress],
+				],
+			}),
 			event({ tags: [['d', 'unrelated']] }),
 		])
 
