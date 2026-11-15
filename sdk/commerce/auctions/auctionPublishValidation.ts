@@ -1,382 +1,381 @@
-import { normalizeProductShippingSelection, type ProductShippingSelection, type ProductShippingSelectionInput } from '../products'
-import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from './constants'
+/**
+ * `sdk/commerce/auctions/auctionPublishValidation.ts` — the create rule for a 1440.
+ *
+ * One pure function turns the form's strings into the protocol's numbers, or refuses
+ * **by name**. Every refusal is a distinct `ArenaCreateRefusal`, so a test (and the UI)
+ * can tell "no duration" from "duration out of range" from "no seller wallet" without
+ * matching message text — the discipline `arenaAnchor.ts` and `arenaAuctionRead.ts` set
+ * for their own refusal names.
+ *
+ * The rules are the settled protocol's (MERGED-PROTOCOL-SPEC §8) and nothing else:
+ *
+ * | field         | rule                                                      |
+ * | ------------- | --------------------------------------------------------- |
+ * | `auctionId`   | the `d`: 1…64 of `[A-Za-z0-9_-]`                           |
+ * | `startPrice`  | a positive safe integer of sats                            |
+ * | `minIncrement`| a positive safe integer of sats                            |
+ * | `mode`        | `fixed` or `antisnipe`                                     |
+ * | `durationSec` | 20 … 259200 (the protocol's window)                        |
+ * | `windowSec`   | 60 … 900, and only for `antisnipe`                         |
+ * | `v4vSplit`    | rows ≤ 10000 bps in total, no repeated recipient           |
+ * | `sellerWallet`| required, and refused when absent — never substituted      |
+ *
+ * There is no `reserve` rule because the protocol has no reserve: the owner has deferred
+ * it, and a knob that silently does nothing is worse than no knob.
+ */
+import type { ArenaAuctionMode, AuctionFormData, AuctionV4vSplitRowInput, ArenaV4vSplitRole } from './auctionForm'
 
-export const AUCTION_MIN_DURATION_SECONDS = 60
+/** Shortest auction the protocol accepts, in seconds. */
+export const AUCTION_MIN_DURATION_SEC = 20
 
+/** Longest auction the protocol accepts, in seconds (three days). */
+export const AUCTION_MAX_DURATION_SEC = 259_200
+
+/** Shortest anti-snipe window the protocol accepts, in seconds. */
+export const AUCTION_MIN_ANTISNIPE_WINDOW_SEC = 60
+
+/** Longest anti-snipe window the protocol accepts, in seconds. */
+export const AUCTION_MAX_ANTISNIPE_WINDOW_SEC = 900
+
+/** The whole of the split, in basis points. Sum of rows may not exceed it. */
+export const AUCTION_V4V_TOTAL_BPS = 10_000
+
+/** The protocol's `d`/`auction_id` charset and length. */
+export const AUCTION_AUCTION_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+
+/** One V4V split row, as it is written into the create content. */
+export interface ArenaV4vSplitRow {
+	role: ArenaV4vSplitRole
+	recipientPubkey: string
+	allocationBps: number
+}
+
+// =========================================================================
+// Refusals: names, never sentences
+// =========================================================================
+
+export type ArenaCreateRefusal =
+	/** The form carries no `d`. */
+	| 'create.no-auction-id'
+	/** The `d` is outside the protocol's charset/length. */
+	| 'create.bad-auction-id'
+	| 'create.no-title'
+	| 'create.no-description'
+	| 'create.no-image'
+	/** No duration was supplied at all. */
+	| 'create.no-duration'
+	/** A duration was supplied but is outside 20…259200. */
+	| 'create.duration-out-of-range'
+	/** No start price was supplied at all. */
+	| 'create.no-start-price'
+	/** The start price was supplied but is not a positive integer. */
+	| 'create.start-price-not-positive'
+	/** The increment was supplied but is not a positive integer (this includes "absent"). */
+	| 'create.increment-not-positive'
+	/** `mode` is neither `fixed` nor `antisnipe`. */
+	| 'create.unknown-mode'
+	/** `antisnipe` with a window outside 60…900. */
+	| 'create.window-out-of-range'
+	/** A split row's allocation is not a positive integer of basis points. */
+	| 'create.split-bps-not-positive'
+	/** The rows allocate more than 10000 bps between them. */
+	| 'create.split-exceeds-total'
+	/** Two rows name the same recipient: one payee, one row. */
+	| 'create.duplicate-split-recipient'
+	/** A split row's role is neither `validator` nor `v4v`. */
+	| 'create.unknown-split-role'
+	/** A split row's recipient is not a 64-hex Nostr pubkey. */
+	| 'create.bad-split-recipient'
+	/** No wallet spend key was available. The create is refused, never faked. */
+	| 'create.no-seller-wallet'
+
+/** The form field a refusal belongs to, for inline messages in the editor. */
 export type AuctionPublishValidationField =
+	| 'auctionId'
 	| 'title'
 	| 'description'
-	| 'startingBid'
-	| 'bidIncrement'
-	| 'reserve'
-	| 'startAt'
-	| 'endAt'
-	| 'duration'
-	| 'antiSnipeWindowMinutes'
-	| 'minBidCurveShape'
-	| 'minBidCurvePeakMultiplier'
-	| 'settlementGracePreset'
-	| 'shippingExtraCost'
-	| 'trustedMints'
-	| 'imageUrls'
+	| 'image'
+	| 'startPrice'
+	| 'minIncrement'
+	| 'mode'
+	| 'windowSec'
+	| 'durationSec'
+	| 'v4vSplit'
+	| 'sellerWallet'
 
-export type AuctionPublishValidationIssue = {
+export interface ArenaCreateValidationIssue {
 	field: AuctionPublishValidationField
+	refusal: ArenaCreateRefusal
 	message: string
+	/** The split row's index, when the issue is about one row. */
 	index?: number
 }
 
-export type AuctionPublishValidationInput = {
+/** What the validator receives. `sellerWallet` is the wallet seam's answer, or null. */
+export interface ArenaCreateValidationInput {
+	auctionId?: string | null
 	title?: string | null
-	summary?: string | null
 	description?: string | null
-	startingBid?: string | number | null
-	bidIncrement?: string | number | null
-	reserve?: string | number | null
-	startAt?: string | null
-	endAt?: string | null
-	/**
-	 * Anti-snipe window in minutes — added to `end_at` to compute
-	 * `max_end_at`. `0` (default) disables the curve entirely.
-	 * Allowed values are enforced by `AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES`
-	 * in `publish/auctions.tsx`; the validator just checks the integer
-	 * is non-negative.
-	 */
-	antiSnipeWindowMinutes?: number | null
-	/** `'none' | 'linear' | 'exponential'`. */
-	minBidCurveShape?: string | null
-	/** Peak multiplier preset: 2, 5, or 10. */
-	minBidCurvePeakMultiplier?: number | null
-	/** `'5min' | '1h' | '3h'`. */
-	settlementGracePreset?: string | null
-	imageUrls?: string[] | null
-	shippings?: ProductShippingSelectionInput[] | null
-	trustedMints?: string[] | null
+	imageUrl?: string | null
+	category?: string | null
+	name?: string | null
+	startPrice?: string | number | null
+	minIncrement?: string | number | null
+	mode?: string | null
+	windowSec?: string | number | null
+	durationSec?: string | number | null
+	v4vSplit?: readonly AuctionV4vSplitRowInput[] | null
 }
 
-export type ValidatedAuctionPublishData = {
+export interface ArenaCreateValidationContext {
+	/** The wallet spend key's pubkey (`sellerWallet` in the content), or null when unavailable. */
+	sellerWallet: string | null
+}
+
+/** The protocol-ready create fields. Numbers are numbers, and the split is parsed. */
+export interface ArenaCreateValue {
+	auctionId: string
 	title: string
-	summary: string
 	description: string
-	startingBid: number
-	bidIncrement: number
-	/**
-	 * Reserve in sats. Always populated (defaults to 0 when the seller
-	 * left the field empty) — see AUCTIONS.md §4.1: the tag is required,
-	 * `0` means "no reserve". Keeping this non-optional means the
-	 * publish path can safely emit `String(reserve)` without producing
-	 * `"undefined"` on the wire.
-	 */
-	reserve: number
-	startAt: number
-	endAt: number
-	durationSeconds: number
-	/** Anti-snipe window in seconds (`antiSnipeWindowMinutes × 60`). */
-	antiSnipeWindowSeconds: number
-	minBidCurveShape: 'none' | 'linear' | 'exponential'
-	minBidCurvePeakMultiplier: number
-	settlementGracePreset: '5min' | '1h' | '3h'
-	maxEndAt: number
-	imageUrls: string[]
-	shippings: ProductShippingSelection[]
-	trustedMints: string[]
+	image: string
+	category: string
+	name: string
+	startPrice: number
+	minIncrement: number
+	mode: ArenaAuctionMode
+	windowSec: number
+	durationSec: number
+	sellerWallet: string
+	v4vSplit: ArenaV4vSplitRow[]
 }
 
-export type AuctionPublishValidationOptions = {
-	nowSeconds?: number
-	minDurationSeconds?: number
-}
+export class ArenaCreateRefusalError extends Error {
+	readonly refusal: ArenaCreateRefusal
+	readonly issues: ArenaCreateValidationIssue[]
 
-export class AuctionPublishValidationError extends Error {
-	issues: AuctionPublishValidationIssue[]
-
-	constructor(issues: AuctionPublishValidationIssue[]) {
-		super(issues[0]?.message ?? 'Invalid auction publish data')
-		this.name = 'AuctionPublishValidationError'
+	constructor(refusal: ArenaCreateRefusal, message: string, issues: ArenaCreateValidationIssue[] = []) {
+		super(message)
+		this.name = 'ArenaCreateRefusalError'
+		this.refusal = refusal
 		this.issues = issues
 	}
 }
 
-// Accept an optional leading `-` so we can distinguish "the user typed a
-// signed integer" (→ specific "must be ≥ 0" / "must be > 0" message) from
-// "the user typed something that isn't a number at all" (→ "Please enter
-// a valid number"). Without the optional sign the regex rejected `-1`
-// outright as a non-number, which masked the real validation rule.
-const SIGNED_INTEGER_PATTERN = /^-?\d+$/
+// =========================================================================
+// Parsing helpers
+// =========================================================================
 
-const toTrimmedString = (value: string | number | null | undefined): string =>
+const HEX64 = /^[0-9a-f]{64}$/
+const UNSIGNED_INTEGER = /^\d+$/
+
+const text = (value: string | number | null | undefined): string =>
 	value === null || value === undefined ? '' : String(value).trim()
 
-const parseNonNegativeInteger = (
-	value: string | number | null | undefined,
-	field: AuctionPublishValidationField,
-	label: string,
-	issues: AuctionPublishValidationIssue[],
-): number | undefined => {
-	const text = toTrimmedString(value)
-	if (!SIGNED_INTEGER_PATTERN.test(text)) {
-		issues.push({ field, message: 'Please enter a valid number.' })
-		return
-	}
-
-	const parsed = Number(text)
-	if (!Number.isSafeInteger(parsed)) {
-		issues.push({ field, message: 'Please enter a valid number.' })
-		return
-	}
-
-	if (parsed < 0) {
-		issues.push({ field, message: `${label} must be an integer greater than or equal to 0` })
-		return
-	}
-
-	return parsed
+/** A non-negative safe integer from a string/number, or null. Never rounds, never coerces junk to 0. */
+const parseInteger = (value: string | number | null | undefined): number | null => {
+	if (typeof value === 'number') return Number.isSafeInteger(value) ? value : null
+	const trimmed = text(value)
+	if (!UNSIGNED_INTEGER.test(trimmed)) return null
+	const parsed = Number(trimmed)
+	return Number.isSafeInteger(parsed) ? parsed : null
 }
 
-const parseIntegerAtLeast = (
-	value: string | number | null | undefined,
-	field: AuctionPublishValidationField,
-	label: string,
-	minimumSats: number,
-	issues: AuctionPublishValidationIssue[],
-): number | undefined => {
-	const text = toTrimmedString(value)
-	if (!SIGNED_INTEGER_PATTERN.test(text)) {
-		issues.push({ field, message: 'Please enter a valid number.' })
-		return
+/**
+ * Normalise the form's split rows. Blank rows are dropped (the editor seeds one empty
+ * row); a typed row is kept as-is so validation can refuse it by name rather than
+ * silently discarding a seller's allocation.
+ */
+function splitRowsOf(rows: readonly AuctionV4vSplitRowInput[] | null | undefined): {
+	rows: { index: number; role: string; recipientPubkey: string; allocationBps: string }[]
+} {
+	const out: { index: number; role: string; recipientPubkey: string; allocationBps: string }[] = []
+	for (const [index, row] of (rows ?? []).entries()) {
+		const recipientPubkey = text(row.recipientPubkey)
+		const allocationBps = text(row.allocationBps)
+		if (recipientPubkey === '' && allocationBps === '') continue
+		out.push({ index, role: text(row.role), recipientPubkey, allocationBps })
 	}
-
-	const parsed = Number(text)
-	if (!Number.isSafeInteger(parsed)) {
-		issues.push({ field, message: 'Please enter a valid number.' })
-		return
-	}
-
-	if (parsed < minimumSats) {
-		issues.push({ field, message: `${label} must be at least ${minimumSats} sats` })
-		return
-	}
-
-	return parsed
+	return { rows: out }
 }
 
-const parseOptionalUnixTimestamp = (
-	value: string | null | undefined,
-	field: AuctionPublishValidationField,
-	label: string,
-	issues: AuctionPublishValidationIssue[],
-): number | undefined => {
-	const text = toTrimmedString(value)
-	if (!text) return
+// =========================================================================
+// The rule
+// =========================================================================
 
-	const timestampMs = new Date(text).getTime()
-	if (!Number.isFinite(timestampMs)) {
-		issues.push({ field, message: `${label} must be a valid date and time` })
-		return
+/**
+ * Validate the form and return the protocol-ready value, or the full issue list.
+ * Exported as a `Result` so the editor can render every message at once while the
+ * publish path throws on the first refusal.
+ */
+export function normalizeArenaCreateInput(
+	input: ArenaCreateValidationInput,
+	context: ArenaCreateValidationContext,
+): { ok: true; value: ArenaCreateValue } | { ok: false; issues: ArenaCreateValidationIssue[] } {
+	const issues: ArenaCreateValidationIssue[] = []
+	const refuse = (field: AuctionPublishValidationField, refusal: ArenaCreateRefusal, message: string, index?: number) => {
+		issues.push(index === undefined ? { field, refusal, message } : { field, refusal, message, index })
 	}
 
-	return Math.floor(timestampMs / 1000)
-}
+	const auctionId = text(input.auctionId)
+	if (auctionId === '') refuse('auctionId', 'create.no-auction-id', 'An auction id is required.')
+	else if (!AUCTION_AUCTION_ID_PATTERN.test(auctionId)) {
+		refuse('auctionId', 'create.bad-auction-id', 'The auction id must be 1–64 characters of A–Z, a–z, 0–9, `_` or `-`.')
+	}
 
-const normalizeImages = (imageUrls: string[] | null | undefined): string[] =>
-	(imageUrls ?? []).map((url) => url.trim()).filter((url) => url.length > 0)
+	const title = text(input.title)
+	if (title === '') refuse('title', 'create.no-title', 'Auction title is required')
 
-const normalizeTrustedMints = (trustedMints: string[] | null | undefined): string[] =>
-	(trustedMints ?? []).map((mint) => mint.trim()).filter((mint) => mint.length > 0)
+	const description = text(input.description)
+	if (description === '') refuse('description', 'create.no-description', 'Auction description is required')
 
-const normalizeShippingSelections = (
-	inputs: ProductShippingSelectionInput[] | null | undefined,
-	issues: AuctionPublishValidationIssue[],
-): ProductShippingSelection[] => {
-	const seenShippingRefs = new Set<string>()
-	const normalized: ProductShippingSelection[] = []
+	const image = text(input.imageUrl)
+	if (image === '') refuse('image', 'create.no-image', 'At least one image is required')
 
-	for (const [index, input] of (inputs ?? []).entries()) {
-		const selection = normalizeProductShippingSelection(input)
-		if (!selection) continue
+	// --- money ---------------------------------------------------------
+	const startPriceText = text(input.startPrice)
+	const startPrice = parseInteger(input.startPrice)
+	if (startPriceText === '') refuse('startPrice', 'create.no-start-price', 'A starting price is required')
+	else if (startPrice === null || startPrice <= 0) {
+		refuse('startPrice', 'create.start-price-not-positive', 'The starting price must be a whole number of sats above zero')
+	}
 
-		const shippingRef = selection.shippingRef.trim()
-		if (!shippingRef || seenShippingRefs.has(shippingRef)) continue
-		seenShippingRefs.add(shippingRef)
+	const minIncrement = parseInteger(input.minIncrement)
+	if (minIncrement === null || minIncrement <= 0) {
+		refuse('minIncrement', 'create.increment-not-positive', 'The bid increment must be a whole number of sats above zero')
+	}
 
-		const extraCost = selection.extraCost.trim()
-		if (!extraCost) {
-			normalized.push({ shippingRef, extraCost: '' })
+	// --- time ----------------------------------------------------------
+	const durationText = text(input.durationSec)
+	const durationSec = parseInteger(input.durationSec)
+	if (durationText === '' || durationSec === null) {
+		refuse('durationSec', 'create.no-duration', 'An auction duration is required')
+	} else if (durationSec < AUCTION_MIN_DURATION_SEC || durationSec > AUCTION_MAX_DURATION_SEC) {
+		refuse(
+			'durationSec',
+			'create.duration-out-of-range',
+			`The auction duration must be between ${AUCTION_MIN_DURATION_SEC} seconds and ${AUCTION_MAX_DURATION_SEC} seconds (3 days).`,
+		)
+	}
+
+	const modeRaw = text(input.mode)
+	const mode: ArenaAuctionMode | null = modeRaw === 'fixed' || modeRaw === 'antisnipe' ? modeRaw : null
+	if (mode === null) refuse('mode', 'create.unknown-mode', 'The auction mode must be `fixed` or `antisnipe`.')
+
+	// A fixed-time auction has no window: the field is zeroed rather than carried, so
+	// the immutable `windowSec` cannot read as a knob that does nothing. An anti-snipe
+	// auction must state a window inside the protocol's range.
+	let windowSec = 0
+	if (mode === 'antisnipe') {
+		const windowText = text(input.windowSec)
+		const parsedWindow = parseInteger(input.windowSec)
+		if (windowText === '' || parsedWindow === null || parsedWindow < AUCTION_MIN_ANTISNIPE_WINDOW_SEC || parsedWindow > AUCTION_MAX_ANTISNIPE_WINDOW_SEC) {
+			refuse(
+				'windowSec',
+				'create.window-out-of-range',
+				`An anti-snipe window must be between ${AUCTION_MIN_ANTISNIPE_WINDOW_SEC} and ${AUCTION_MAX_ANTISNIPE_WINDOW_SEC} seconds.`,
+			)
+		} else {
+			windowSec = parsedWindow
+		}
+	}
+
+	// --- the committed split -------------------------------------------
+	const { rows } = splitRowsOf(input.v4vSplit)
+	const v4vSplit: ArenaV4vSplitRow[] = []
+	const seenRecipients = new Set<string>()
+	let totalBps = 0
+	for (const row of rows) {
+		if (row.role !== 'validator' && row.role !== 'v4v') {
+			refuse('v4vSplit', 'create.unknown-split-role', 'A split row role must be `validator` or `v4v`.', row.index)
 			continue
 		}
-
-		const parsedExtraCost = parseNonNegativeInteger(extraCost, 'shippingExtraCost', 'Shipping extra cost', issues)
-		if (parsedExtraCost === null) {
-			const issue = issues[issues.length - 1]
-			if (issue?.field === 'shippingExtraCost') issue.index = index
+		if (!HEX64.test(row.recipientPubkey)) {
+			refuse('v4vSplit', 'create.bad-split-recipient', 'A split recipient must be a 64-character hex Nostr pubkey.', row.index)
 			continue
 		}
-
-		normalized.push({ shippingRef, extraCost: String(parsedExtraCost) })
-	}
-
-	return normalized
-}
-
-const normalizeAuctionPublishInput = (
-	input: AuctionPublishValidationInput,
-	options: AuctionPublishValidationOptions = {},
-): { value: ValidatedAuctionPublishData; issues: AuctionPublishValidationIssue[] } => {
-	const issues: AuctionPublishValidationIssue[] = []
-	const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000)
-
-	const title = toTrimmedString(input.title)
-	if (!title) {
-		issues.push({ field: 'title', message: 'Auction title is required' })
-	}
-
-	const description = toTrimmedString(input.description)
-	if (!description) {
-		issues.push({ field: 'description', message: 'Auction description is required' })
-	}
-
-	const startingBid = parseIntegerAtLeast(input.startingBid, 'startingBid', 'Starting bid', AUCTION_MIN_BID_SATS, issues)
-	const bidIncrement = parseIntegerAtLeast(input.bidIncrement, 'bidIncrement', 'Bid increment', AUCTION_MIN_BID_LEG_SATS, issues)
-
-	// AUCTIONS.md §4.1: the `reserve` tag is required, with `0` meaning
-	// "no reserve". Default missing/empty input to 0 so the published
-	// kind-30408 always carries a numeric reserve. Without this default
-	// the publish path stringified `undefined` straight into the tag —
-	// auction `1618640c…0881` on the staging relay shows up with
-	// `["reserve","undefined"]`. Parsers tolerate it (`parseInt` → NaN
-	// → fallback 0) but it's an embarrassing data-quality bug.
-	let reserve = 0
-	if (input.reserve !== undefined && input.reserve !== null && toTrimmedString(input.reserve) !== '') {
-		const parsedReserve = parseNonNegativeInteger(input.reserve, 'reserve', 'Reserve', issues)
-		if (parsedReserve !== undefined) {
-			reserve = parsedReserve
+		if (seenRecipients.has(row.recipientPubkey)) {
+			refuse('v4vSplit', 'create.duplicate-split-recipient', 'A recipient appears in more than one split row.', row.index)
+			continue
 		}
-		if (startingBid !== undefined && parsedReserve !== undefined && parsedReserve !== 0 && parsedReserve < startingBid) {
-			issues.push({ field: 'reserve', message: 'Reserve must be greater than or equal to the starting bid' })
+		const allocationBps = parseInteger(row.allocationBps)
+		if (allocationBps === null || allocationBps <= 0) {
+			refuse('v4vSplit', 'create.split-bps-not-positive', 'A split allocation must be a whole number of basis points above zero.', row.index)
+			continue
 		}
+		seenRecipients.add(row.recipientPubkey)
+		totalBps += allocationBps
+		v4vSplit.push({ role: row.role, recipientPubkey: row.recipientPubkey, allocationBps })
+	}
+	if (totalBps > AUCTION_V4V_TOTAL_BPS) {
+		refuse('v4vSplit', 'create.split-exceeds-total', `The split rows allocate ${totalBps} bps of the ${AUCTION_V4V_TOTAL_BPS} available.`)
 	}
 
-	const parsedStartAt = parseOptionalUnixTimestamp(input.startAt, 'startAt', 'Auction start time', issues)
-	const startAt = parsedStartAt ?? nowSeconds
-	const parsedEndAt = parseOptionalUnixTimestamp(input.endAt, 'endAt', 'Auction end time', issues)
-	if (!toTrimmedString(input.endAt)) {
-		issues.push({ field: 'endAt', message: 'Auction end time is required' })
+	// --- the seller's wallet -------------------------------------------
+	const sellerWallet = (context.sellerWallet ?? '').trim()
+	if (sellerWallet === '') {
+		refuse('sellerWallet', 'create.no-seller-wallet', 'The wallet spend key is not available, so the auction cannot name a seller wallet.')
 	}
 
-	const endAt = parsedEndAt ?? 0
-	const effectiveStartBoundary = Math.max(startAt, nowSeconds)
-	if (parsedEndAt && parsedEndAt <= effectiveStartBoundary) {
-		issues.push({ field: 'endAt', message: 'Auction end time must be after the start time and current time' })
-	}
-
-	const durationSeconds = parsedEndAt ? parsedEndAt - effectiveStartBoundary : 0
-	if (parsedEndAt !== null && options.minDurationSeconds !== undefined && durationSeconds < options.minDurationSeconds) {
-		// Compute the human label from the configured minimum so the message
-		// reflects the actual rule the form is enforcing, not a hard-coded
-		// "1 minute". Prefer minute granularity above 60 s so we don't say
-		// "1800 seconds" for the default 30-minute floor.
-		const minSeconds = options.minDurationSeconds
-		const message =
-			minSeconds >= 60 && minSeconds % 60 === 0
-				? `Auction duration must be at least ${minSeconds / 60} minute${minSeconds === 60 ? '' : 's'}`
-				: `Auction duration must be at least ${minSeconds} second${minSeconds === 1 ? '' : 's'}`
-		issues.push({ field: 'duration', message })
-	}
-
-	// Anti-snipe window in minutes → seconds. `0` means no window
-	// (max_end_at = end_at, curve disabled regardless of shape).
-	// AUCTIONS.md §6.0 / §6.1.
-	const rawWindowMinutes = typeof input.antiSnipeWindowMinutes === 'number' ? input.antiSnipeWindowMinutes : 0
-	const antiSnipeWindowMinutes = Number.isFinite(rawWindowMinutes) && rawWindowMinutes >= 0 ? Math.floor(rawWindowMinutes) : 0
-	if (!Number.isFinite(rawWindowMinutes) || rawWindowMinutes < 0) {
-		issues.push({ field: 'antiSnipeWindowMinutes', message: 'Anti-snipe window must be a non-negative number of minutes' })
-	}
-	const antiSnipeWindowSeconds = antiSnipeWindowMinutes * 60
-
-	const minBidCurveShapeRaw = typeof input.minBidCurveShape === 'string' ? input.minBidCurveShape : 'none'
-	const minBidCurveShape: 'none' | 'linear' | 'exponential' =
-		minBidCurveShapeRaw === 'linear' || minBidCurveShapeRaw === 'exponential' ? minBidCurveShapeRaw : 'none'
-	if (minBidCurveShape !== minBidCurveShapeRaw && minBidCurveShapeRaw !== 'none') {
-		issues.push({ field: 'minBidCurveShape', message: 'Anti-snipe curve shape must be none, linear, or exponential' })
-	}
-
-	const peakRaw = typeof input.minBidCurvePeakMultiplier === 'number' ? input.minBidCurvePeakMultiplier : 2
-	const minBidCurvePeakMultiplier = Number.isFinite(peakRaw) && peakRaw >= 1 && peakRaw <= 100 ? peakRaw : 2
-	if (!Number.isFinite(peakRaw) || peakRaw < 1 || peakRaw > 100) {
-		issues.push({
-			field: 'minBidCurvePeakMultiplier',
-			message: 'Anti-snipe peak multiplier must be a number in [1, 100]',
-		})
-	}
-	// If the seller chose a curve but no window, the curve has zero
-	// duration — surface that as a validation hint so the form can
-	// either nudge them to widen the window or pick 'none'.
-	if (minBidCurveShape !== 'none' && antiSnipeWindowMinutes === 0) {
-		issues.push({
-			field: 'antiSnipeWindowMinutes',
-			message: 'Pick an anti-snipe window so the curve has time to ramp, or set the curve shape to none.',
-		})
-	}
-
-	const settlementGraceRaw = typeof input.settlementGracePreset === 'string' ? input.settlementGracePreset : '1h'
-	const settlementGracePreset: '5min' | '1h' | '3h' =
-		settlementGraceRaw === '5min' || settlementGraceRaw === '1h' || settlementGraceRaw === '3h' ? settlementGraceRaw : '1h'
-	if (settlementGracePreset !== settlementGraceRaw) {
-		issues.push({ field: 'settlementGracePreset', message: 'Settlement grace must be 5min, 1h, or 3h' })
-	}
-
-	const imageUrls = normalizeImages(input.imageUrls)
-	if (imageUrls.length === 0) {
-		issues.push({ field: 'imageUrls', message: 'At least one image is required' })
-	}
-
-	const trustedMints = normalizeTrustedMints(input.trustedMints)
-	if (trustedMints.length === 0) {
-		issues.push({ field: 'trustedMints', message: 'At least one trusted mint is required' })
-	}
-
-	const shippings = normalizeShippingSelections(input.shippings, issues)
-
-	// max_end_at = end_at + window (no dynamic shifting per AUCTIONS.md §6.1).
-	const maxEndAt = endAt + antiSnipeWindowSeconds
+	if (issues.length > 0) return { ok: false, issues }
 
 	return {
+		ok: true,
 		value: {
+			auctionId,
 			title,
-			summary: toTrimmedString(input.summary),
 			description,
-			startingBid: startingBid ?? 0,
-			bidIncrement: bidIncrement ?? 0,
-			reserve,
-			startAt,
-			endAt,
-			durationSeconds,
-			antiSnipeWindowSeconds,
-			minBidCurveShape,
-			minBidCurvePeakMultiplier,
-			settlementGracePreset,
-			maxEndAt,
-			imageUrls,
-			shippings,
-			trustedMints,
+			image,
+			category: text(input.category),
+			name: text(input.name),
+			startPrice: startPrice as number,
+			minIncrement: minIncrement as number,
+			mode: mode as ArenaAuctionMode,
+			windowSec,
+			durationSec: durationSec as number,
+			sellerWallet,
+			v4vSplit,
 		},
-		issues,
 	}
 }
 
-export const getAuctionPublishValidationIssues = (
-	input: AuctionPublishValidationInput,
-	options: AuctionPublishValidationOptions = {},
-): AuctionPublishValidationIssue[] => normalizeAuctionPublishInput(input, options).issues
-
-export const validateAuctionPublishInput = (
-	input: AuctionPublishValidationInput,
-	options: AuctionPublishValidationOptions = {},
-): ValidatedAuctionPublishData => {
-	const result = normalizeAuctionPublishInput(input, options)
-	if (result.issues.length > 0) {
-		throw new AuctionPublishValidationError(result.issues)
-	}
-
-	return result.value
+/**
+ * The issues only — what the editor renders as inline messages. Never throws: a form
+ * with an empty title must still render.
+ */
+export const getArenaCreateIssues = (
+	input: ArenaCreateValidationInput,
+	context: ArenaCreateValidationContext,
+): ArenaCreateValidationIssue[] => {
+	const result = normalizeArenaCreateInput(input, context)
+	return result.ok ? [] : result.issues
 }
+
+/**
+ * The value, or a throw carrying the first refusal's **name**. The publish path uses
+ * this: it refuses with a name, never with prose it has to re-parse.
+ */
+export const validateArenaCreateInput = (
+	input: ArenaCreateValidationInput,
+	context: ArenaCreateValidationContext,
+): ArenaCreateValue => {
+	const result = normalizeArenaCreateInput(input, context)
+	if (result.ok) return result.value
+	const first = result.issues[0]
+	throw new ArenaCreateRefusalError(first.refusal, first.message, result.issues)
+}
+
+/** The form's own fields, as the validator's input. One mapping, one place. */
+export const auctionFormToCreateInput = (formData: AuctionFormData): ArenaCreateValidationInput => ({
+	auctionId: formData.auctionId,
+	title: formData.title,
+	description: formData.description,
+	imageUrl: formData.imageUrl,
+	category: formData.category,
+	name: formData.name,
+	startPrice: formData.startPrice,
+	minIncrement: formData.minIncrement,
+	mode: formData.mode,
+	windowSec: formData.windowSec,
+	durationSec: formData.durationSec,
+	v4vSplit: formData.v4vSplit,
+})

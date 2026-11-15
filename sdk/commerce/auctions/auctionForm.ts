@@ -1,85 +1,68 @@
-import type { ProductShippingSelectionInput } from '../products'
+/**
+ * `sdk/commerce/auctions/auctionForm.ts` — the CMS auction-create form's data contract.
+ *
+ * The shape here is the **settled 1440 create** (MERGED-PROTOCOL-SPEC §8), not the
+ * retired 30408 tag listing. Every field below either lands in the create content or is
+ * the auction's identity; there are no knobs left over from the tag protocol. The one
+ * field that is not part of the protocol at all is `auctionId`, which is the `d` tag —
+ * the identity the create content repeats as `auction_id`.
+ *
+ * What used to be here and is gone (each was a 30408 tag with no home in a 1440):
+ * `reserve`, `startAt`/`endAt` scheduling, `antiSnipeWindowMinutes` + `minBidCurveShape` +
+ * `minBidCurvePeakMultiplier` (the floor curve), `settlementGracePreset`,
+ * `auditorPubkey` (the `auditors` list), `trustedMints`, `specs`, `shippings`,
+ * `isNSFW`, `enableLiveChat`, `summary`, `categories[]` and `pathIssuerPubkey`.
+ * `trustedMints`/`specs`/`shippings` are not in the create at all — see
+ * `auctionPublish.ts` for what happened to them.
+ *
+ * Numeric fields stay strings while the seller is typing; `auctionPublishValidation.ts`
+ * is the single place that parses them, and it refuses by name rather than coercing.
+ */
 
-export interface AuctionSpecEntry {
-	key: string
-	value: string
+/** The protocol's two auction modes (`mode` in the create content). */
+export type ArenaAuctionMode = 'fixed' | 'antisnipe'
+
+/** The protocol's two V4V split roles (`v4vSplit[].role` in the create content). */
+export type ArenaV4vSplitRole = 'validator' | 'v4v'
+
+/**
+ * One split row as the form holds it: `allocationBps` is a string until validation
+ * parses it, because a typed basis-point total must be refused, not rounded.
+ */
+export interface AuctionV4vSplitRowInput {
+	role: ArenaV4vSplitRole
+	recipientPubkey: string
+	allocationBps: string
 }
 
 /**
- * Settlement grace presets (AUCTIONS.md §4.1). Seconds between
- * `max_end_at` and the bid's Cashu locktime — i.e. how long the seller
- * has to publish the kind-1024 settlement after bidding closes.
+ * The auction-create form's state. One image, one category, one name: the create content
+ * has a single `image`, a single `category` and a single `name`, so the form does too.
  */
-export const AUCTION_SETTLEMENT_GRACE_PRESETS = {
-	'5min': 300,
-	'1h': 3600,
-	'3h': 10800,
-} as const
-export type AuctionSettlementGracePreset = keyof typeof AUCTION_SETTLEMENT_GRACE_PRESETS
-
-/**
- * Anti-snipe curve shapes (AUCTIONS.md §6.1). Controls how the bid
- * floor scales in `(end_at, max_end_at]`.
- */
-export type AuctionMinBidCurveShape = 'none' | 'linear' | 'exponential'
-
-/**
- * Peak-multiplier presets for the anti-snipe curve. Applied as
- * `floor = baseline × peak` at `t = max_end_at`. 1.0 is implicit when
- * `shape = 'none'`.
- */
-export const AUCTION_MIN_BID_CURVE_PEAK_PRESETS = [2, 5, 10] as const
-export type AuctionMinBidCurvePeakPreset = (typeof AUCTION_MIN_BID_CURVE_PEAK_PRESETS)[number]
-
-/**
- * Anti-snipe window presets — minutes added to `end_at` to compute
- * `max_end_at`. Drives the duration of the curve. `0` disables the
- * window entirely (max_end_at = end_at, no curve regardless of shape).
- */
-export const AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES = [0, 5, 15, 30] as const
-export type AuctionAntiSnipeWindowMinutesPreset = (typeof AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES)[number]
-
 export interface AuctionFormData {
+	/** The `d` tag — the auction's identity within its seller. */
+	auctionId: string
 	title: string
-	summary: string
 	description: string
-	startingBid: string
-	bidIncrement: string
-	reserve?: string
-	startAt?: string
-	endAt: string
+	/** The lot's image URL (`image` in the create content). */
+	imageUrl: string
+	/** Free-text category (`category` in the create content). */
+	category: string
+	/** The seller's display name for the lot (`name` in the create content). */
+	name: string
+	/** Opening price in sats → `startPrice`. */
+	startPrice: string
+	/** Minimum raise per bid in sats → `minIncrement`. */
+	minIncrement: string
+	mode: ArenaAuctionMode
 	/**
-	 * Seconds added to `end_at` to compute `max_end_at`. Zero = no
-	 * anti-snipe window. When zero the curve has zero duration and is
-	 * effectively disabled regardless of `minBidCurveShape`.
+	 * Anti-snipe window in **seconds** → `windowSec`. Only read when `mode` is
+	 * `'antisnipe'`; a fixed-time auction publishes `windowSec: 0` and this field is
+	 * not sent. The protocol's range is 60…900 and validation enforces it.
 	 */
-	antiSnipeWindowMinutes: AuctionAntiSnipeWindowMinutesPreset
-	/** Shape of the anti-snipe floor curve in the `(end_at, max_end_at]` window. */
-	minBidCurveShape: AuctionMinBidCurveShape
-	/** Floor multiplier applied at `t = max_end_at`. Only relevant when shape ≠ none. */
-	minBidCurvePeakMultiplier: AuctionMinBidCurvePeakPreset
-	/**
-	 * Settlement grace preset — chosen as `5min`/`1h`/`3h` in the UI,
-	 * mapped to seconds at publish time via
-	 * `AUCTION_SETTLEMENT_GRACE_PRESETS[preset]`.
-	 */
-	settlementGracePreset: AuctionSettlementGracePreset
-	mainCategory: string
-	categories: string[]
-	imageUrls: string[]
-	specs: AuctionSpecEntry[]
-	shippings: ProductShippingSelectionInput[]
-	trustedMints: string[]
-	isNSFW: boolean
-	enableLiveChat: boolean
-	/**
-	 * Pubkey of the validator (auditor) the seller wants listed on the
-	 * auction's `auditors` tag. Empty string = "use the app's configured
-	 * default" (resolved at publish time via `getAuctionAuditorsOrThrow`).
-	 *
-	 * Single value today; the kind-30408 event supports a multi-auditor
-	 * list. The Phase 7 reputation UI is expected to grow this into a
-	 * multi-select; for the demo a single pubkey is fine.
-	 */
-	auditorPubkey: string
+	windowSec: string
+	/** How long the auction runs, in seconds → `durationSec` (20…259200). */
+	durationSec: number
+	/** The committed value split → `v4vSplit`. Empty means "no split", not "zero split". */
+	v4vSplit: AuctionV4vSplitRowInput[]
 }

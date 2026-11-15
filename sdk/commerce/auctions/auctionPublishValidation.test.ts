@@ -1,127 +1,179 @@
 import { describe, expect, test } from 'bun:test'
-import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@sdk/commerce/auctions/auctionPublishValidation'
-import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@sdk/commerce/auctions/constants'
+import {
+	AUCTION_MAX_ANTISNIPE_WINDOW_SEC,
+	AUCTION_MAX_DURATION_SEC,
+	AUCTION_MIN_ANTISNIPE_WINDOW_SEC,
+	AUCTION_MIN_DURATION_SEC,
+	AUCTION_V4V_TOTAL_BPS,
+	ArenaCreateRefusalError,
+	auctionFormToCreateInput,
+	getArenaCreateIssues,
+	normalizeArenaCreateInput,
+	validateArenaCreateInput,
+	type ArenaCreateValidationInput,
+} from '@sdk/commerce/auctions/auctionPublishValidation'
+import type { AuctionFormData } from '@sdk/commerce/auctions/auctionForm'
 
-const NOW_SECONDS = 1_800_000_000
+/**
+ * `sdk/commerce/auctions/auctionPublishValidation.ts` — the create rule.
+ *
+ * The point of these tests is that the rule refuses **by name** and parses rather than
+ * coerces: a typed `"0"` increment is a named refusal, not a silent 0 on the wire.
+ */
+const WALLET = '02' + 'ab'.repeat(32)
 
-const at = (seconds: number): string => new Date(seconds * 1000).toISOString()
-
-const baseInput = {
-	title: 'Auction title',
-	summary: 'Short summary',
-	description: 'Auction description',
-	startingBid: '100',
-	bidIncrement: '10',
-	reserve: '100',
-	startAt: at(NOW_SECONDS + 60),
-	endAt: at(NOW_SECONDS + 3_600),
-	antiSnipeWindowMinutes: 0 as number,
-	minBidCurveShape: 'none' as 'none' | 'linear' | 'exponential',
-	minBidCurvePeakMultiplier: 2 as number,
-	settlementGracePreset: '1h' as '5min' | '1h' | '3h',
-	imageUrls: ['https://example.com/auction.png'],
-	shippings: [{ shippingRef: '30406:seller:standard', extraCost: '' }],
-	trustedMints: ['https://mint.example'],
+const base: ArenaCreateValidationInput = {
+	auctionId: 'lot-1',
+	title: 'Title',
+	description: 'Description',
+	imageUrl: 'https://img.example/1.png',
+	category: 'Collectibles',
+	name: 'Studio',
+	startPrice: '1000',
+	minIncrement: '100',
+	mode: 'fixed',
+	windowSec: '',
+	durationSec: 3600,
+	v4vSplit: [],
 }
 
-const validate = (input: Partial<typeof baseInput> = {}) =>
-	validateAuctionPublishInput(
-		{
-			...baseInput,
-			...input,
-		},
-		{ nowSeconds: NOW_SECONDS, minDurationSeconds: AUCTION_MIN_DURATION_SECONDS },
-	)
+const validate = (over: Partial<ArenaCreateValidationInput> = {}, sellerWallet: string | null = WALLET) =>
+	validateArenaCreateInput({ ...base, ...over }, { sellerWallet })
 
-describe('auction publish validation', () => {
-	test('reserve lower than starting bid is rejected', () => {
-		expect(() => validate({ reserve: '99' })).toThrow('Reserve must be greater than or equal to the starting bid')
+const refusalOf = (run: () => unknown): string => {
+	try {
+		run()
+	} catch (error) {
+		if (error instanceof ArenaCreateRefusalError) return error.refusal
+		throw error
+	}
+	throw new Error('expected a refusal')
+}
+
+describe('the protocol limits', () => {
+	test('are the settled ones', () => {
+		expect(AUCTION_MIN_DURATION_SEC).toBe(20)
+		expect(AUCTION_MAX_DURATION_SEC).toBe(259_200)
+		expect(AUCTION_MIN_ANTISNIPE_WINDOW_SEC).toBe(60)
+		expect(AUCTION_MAX_ANTISNIPE_WINDOW_SEC).toBe(900)
+		expect(AUCTION_V4V_TOTAL_BPS).toBe(10_000)
+	})
+})
+
+describe('parsing', () => {
+	test('turns the form strings into the protocol numbers', () => {
+		const value = validate({ mode: 'antisnipe', windowSec: '300' })
+		expect(value.startPrice).toBe(1000)
+		expect(value.minIncrement).toBe(100)
+		expect(value.durationSec).toBe(3600)
+		expect(value.mode).toBe('antisnipe')
+		expect(value.windowSec).toBe(300)
+		expect(value.sellerWallet).toBe(WALLET)
 	})
 
-	test('reserve of 0 is treated as no reserve, not rejected vs starting bid', () => {
-		const result = validate({ reserve: '0' })
-		expect(result.reserve).toBe(0)
+	test('a fixed-time auction publishes windowSec 0 whatever the form held', () => {
+		expect(validate({ mode: 'fixed', windowSec: '900' }).windowSec).toBe(0)
 	})
 
-	test('starting bid below auction minimum is rejected', () => {
-		expect(() => validate({ startingBid: String(AUCTION_MIN_BID_SATS - 1) })).toThrow(
-			`Starting bid must be at least ${AUCTION_MIN_BID_SATS} sats`,
+	test('drops blank split rows but refuses a typed one', () => {
+		expect(validate({ v4vSplit: [{ role: 'validator', recipientPubkey: '', allocationBps: '' }] }).v4vSplit).toEqual([])
+		expect(refusalOf(() => validate({ v4vSplit: [{ role: 'v4v', recipientPubkey: 'zz', allocationBps: '10' }] }))).toBe(
+			'create.bad-split-recipient',
 		)
 	})
+})
 
-	test('bid increment below bid-leg minimum is rejected', () => {
-		expect(() => validate({ bidIncrement: String(AUCTION_MIN_BID_LEG_SATS - 1) })).toThrow(
-			`Bid increment must be at least ${AUCTION_MIN_BID_LEG_SATS} sats`,
+describe('refusals', () => {
+	test('identity', () => {
+		expect(refusalOf(() => validate({ auctionId: '' }))).toBe('create.no-auction-id')
+		expect(refusalOf(() => validate({ auctionId: 'has spaces' }))).toBe('create.bad-auction-id')
+		expect(refusalOf(() => validate({ auctionId: 'x'.repeat(65) }))).toBe('create.bad-auction-id')
+		expect(() => validate({ auctionId: 'A-Z_a-z-09' })).not.toThrow()
+	})
+
+	test('display fields', () => {
+		expect(refusalOf(() => validate({ title: '  ' }))).toBe('create.no-title')
+		expect(refusalOf(() => validate({ description: '' }))).toBe('create.no-description')
+		expect(refusalOf(() => validate({ imageUrl: '' }))).toBe('create.no-image')
+	})
+
+	test('money and time', () => {
+		expect(refusalOf(() => validate({ startPrice: null }))).toBe('create.no-start-price')
+		expect(refusalOf(() => validate({ startPrice: '0' }))).toBe('create.start-price-not-positive')
+		expect(refusalOf(() => validate({ startPrice: '1.5' }))).toBe('create.start-price-not-positive')
+		expect(refusalOf(() => validate({ minIncrement: '' }))).toBe('create.increment-not-positive')
+		expect(refusalOf(() => validate({ durationSec: null }))).toBe('create.no-duration')
+		expect(refusalOf(() => validate({ durationSec: 19 }))).toBe('create.duration-out-of-range')
+		expect(refusalOf(() => validate({ durationSec: 259_201 }))).toBe('create.duration-out-of-range')
+		expect(validate({ durationSec: 259_200 }).durationSec).toBe(259_200)
+	})
+
+	test('mode and window', () => {
+		expect(refusalOf(() => validate({ mode: 'sealed' }))).toBe('create.unknown-mode')
+		expect(refusalOf(() => validate({ mode: 'antisnipe', windowSec: '59' }))).toBe('create.window-out-of-range')
+		expect(refusalOf(() => validate({ mode: 'antisnipe', windowSec: '901' }))).toBe('create.window-out-of-range')
+	})
+
+	test('the split', () => {
+		expect(refusalOf(() => validate({ v4vSplit: [{ role: 'validator', recipientPubkey: 'aa'.repeat(32), allocationBps: '0' }] }))).toBe(
+			'create.split-bps-not-positive',
 		)
-	})
-
-	test('end time at or before max start/current time is rejected', () => {
-		expect(() => validate({ startAt: at(NOW_SECONDS + 600), endAt: at(NOW_SECONDS + 600) })).toThrow(
-			'Auction end time must be after the start time and current time',
+		expect(refusalOf(() => validate({ v4vSplit: [{ role: 'charity' as 'validator', recipientPubkey: 'aa'.repeat(32), allocationBps: '10' }] }))).toBe(
+			'create.unknown-split-role',
 		)
+		expect(
+			refusalOf(() =>
+				validate({
+					v4vSplit: [{ role: 'validator', recipientPubkey: 'aa'.repeat(32), allocationBps: '10001' }],
+				}),
+			),
+		).toBe('create.split-exceeds-total')
 	})
 
-	test('duration under the configured minimum is rejected', () => {
-		// Asserts against the message the validator builds from
-		// `AUCTION_MIN_DURATION_SECONDS` rather than a hard-coded "30
-		// minutes" string — the constant was lowered from 30 min to 1
-		// min in commit a15f7934, and the test silently flipped from
-		// "passes" to "fails on stale message". Tracking the constant
-		// here keeps this test in sync with future tweaks too.
-		const minMinutes = AUCTION_MIN_DURATION_SECONDS / 60
-		const expectedMessage = `Auction duration must be at least ${minMinutes} minute${minMinutes === 1 ? '' : 's'}`
-		expect(() => validate({ startAt: '', endAt: at(NOW_SECONDS + AUCTION_MIN_DURATION_SECONDS - 1) })).toThrow(expectedMessage)
+	test('the seller wallet', () => {
+		expect(refusalOf(() => validate({}, null))).toBe('create.no-seller-wallet')
+		expect(refusalOf(() => validate({}, '   '))).toBe('create.no-seller-wallet')
+	})
+})
+
+describe('the editor-facing views', () => {
+	test('getArenaCreateIssues reports every field at once and never throws', () => {
+		const issues = getArenaCreateIssues({ ...base, title: '', startPrice: '' }, { sellerWallet: WALLET })
+		expect(issues.map((issue) => issue.refusal).sort()).toEqual(['create.no-start-price', 'create.no-title'])
 	})
 
-	test('negative shipping extra cost is rejected', () => {
-		expect(() => validate({ shippings: [{ shippingRef: '30406:seller:standard', extraCost: '-1' }] })).toThrow(
-			'Shipping extra cost must be an integer greater than or equal to 0',
-		)
+	test('normalizeArenaCreateInput is the result form of the same rule', () => {
+		expect(normalizeArenaCreateInput({ ...base, title: '' }, { sellerWallet: WALLET }).ok).toBe(false)
 	})
 
-	test('duplicate shipping refs are deduped with first occurrence winning', () => {
-		const validated = validate({
-			shippings: [
-				{ shippingRef: '30406:seller:standard', extraCost: '5' },
-				{ shippingRef: '30406:seller:standard', extraCost: '10' },
-				{ shippingRef: '30406:seller:pickup', extraCost: '' },
-			],
+	test('auctionFormToCreateInput forwards every field the form holds', () => {
+		const formData: AuctionFormData = {
+			auctionId: 'lot-9',
+			title: 'T',
+			description: 'D',
+			imageUrl: 'https://img.example/9.png',
+			category: 'Art',
+			name: 'N',
+			startPrice: '500',
+			minIncrement: '25',
+			mode: 'antisnipe',
+			windowSec: '120',
+			durationSec: 600,
+			v4vSplit: [{ role: 'v4v', recipientPubkey: 'aa'.repeat(32), allocationBps: '50' }],
+		}
+		expect(auctionFormToCreateInput(formData)).toEqual({
+			auctionId: 'lot-9',
+			title: 'T',
+			description: 'D',
+			imageUrl: 'https://img.example/9.png',
+			category: 'Art',
+			name: 'N',
+			startPrice: '500',
+			minIncrement: '25',
+			mode: 'antisnipe',
+			windowSec: '120',
+			durationSec: 600,
+			v4vSplit: formData.v4vSplit,
 		})
-
-		expect(validated.shippings).toEqual([
-			{ shippingRef: '30406:seller:standard', extraCost: '5' },
-			{ shippingRef: '30406:seller:pickup', extraCost: '' },
-		])
-	})
-
-	test('valid input returns normalized values', () => {
-		const validated = validate({
-			title: '  Auction title  ',
-			description: '  Auction description  ',
-			startingBid: '00100',
-			bidIncrement: '0010',
-			reserve: '00120',
-			antiSnipeWindowMinutes: 15,
-			minBidCurveShape: 'exponential',
-			minBidCurvePeakMultiplier: 5,
-			settlementGracePreset: '1h',
-			imageUrls: ['  https://example.com/auction.png  '],
-			shippings: [{ shippingRef: ' 30406:seller:standard ', extraCost: '0005' }],
-			trustedMints: ['  https://mint.example  '],
-		})
-
-		expect(validated.title).toBe('Auction title')
-		expect(validated.description).toBe('Auction description')
-		expect(validated.startingBid).toBe(100)
-		expect(validated.bidIncrement).toBe(10)
-		expect(validated.reserve).toBe(120)
-		expect(validated.antiSnipeWindowSeconds).toBe(15 * 60)
-		expect(validated.minBidCurveShape).toBe('exponential')
-		expect(validated.minBidCurvePeakMultiplier).toBe(5)
-		expect(validated.settlementGracePreset).toBe('1h')
-		expect(validated.imageUrls).toEqual(['https://example.com/auction.png'])
-		expect(validated.shippings).toEqual([{ shippingRef: '30406:seller:standard', extraCost: '5' }])
-		expect(validated.trustedMints).toEqual(['https://mint.example'])
-		expect(validated.maxEndAt).toBe(validated.endAt + 15 * 60)
 	})
 })

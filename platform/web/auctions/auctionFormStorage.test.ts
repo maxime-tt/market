@@ -30,16 +30,15 @@ Object.defineProperty(globalThis, 'window', { value: globalThis, writable: true,
 Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock, writable: true, configurable: true })
 
 // bun test runs every test file in the same process and shares one globalThis.
-// Undo the shims above once this file's tests finish so downstream files (e.g.
-// the src/queries/__tests__ victims whose imports probe `document`/`window`)
-// don't enter browser mode and crash mid-run.
+// Undo the shims above once this file's tests finish so downstream files don't
+// enter browser mode and crash mid-run.
 afterAll(() => {
 	delete (globalThis as any).window
 	delete (globalThis as any).localStorage
 })
 
 // ---------------------------------------------------------------------------
-// Fixtures
+// Fixtures — the kind-1440 create form's fields, and nothing else
 // ---------------------------------------------------------------------------
 
 const PUBKEY_A = 'aaaa1111'
@@ -47,32 +46,19 @@ const PUBKEY_B = 'bbbb2222'
 
 const baseDraft: Omit<AuctionFormDraft, 'pubkey' | 'savedAt'> = {
 	formData: {
+		auctionId: 'lot-1',
 		title: 'Vintage Camera',
-		summary: 'Rare find',
 		description: 'A beautiful vintage camera in great condition.',
-		startingBid: '5000',
-		bidIncrement: '100',
-		reserve: '10000',
-		startAt: '',
-		endAt: '2099-01-01T12:00',
-		antiSnipeWindowMinutes: 15,
-		minBidCurveShape: 'linear',
-		minBidCurvePeakMultiplier: 5,
-		settlementGracePreset: '1h',
-		mainCategory: 'Photography',
-		categories: ['Collectibles', 'Film'],
-		imageUrls: ['https://example.com/camera.jpg'],
-		specs: [{ key: 'Brand', value: 'Leica' }],
-		shippings: [{ shippingRef: '30406:seller:standard', extraCost: '200' }],
-		trustedMints: ['https://mint.example.com'],
-		isNSFW: false,
-		pathIssuerPubkey: '',
+		imageUrl: 'https://example.com/camera.jpg',
+		category: 'Photography',
+		name: 'Studio Nord',
+		startPrice: '5000',
+		minIncrement: '100',
+		mode: 'antisnipe',
+		windowSec: '300',
+		durationSec: 86_400,
+		v4vSplit: [{ role: 'validator', recipientPubkey: 'aa'.repeat(32), allocationBps: '250' }],
 	},
-	images: [{ imageUrl: 'https://example.com/camera.jpg', imageOrder: 0 }],
-	startMode: 'immediate',
-	endMode: 'absolute',
-	durationSeconds: 86400,
-	subCategoryInput: 'Collectibles, Film',
 }
 
 beforeEach(() => localStorageMock.clear())
@@ -83,39 +69,12 @@ afterEach(() => localStorageMock.clear())
 // ---------------------------------------------------------------------------
 
 describe('save/load roundtrip', () => {
-	test('restores all formData fields exactly', () => {
+	test('restores the create form fields exactly', () => {
 		saveAuctionFormDraft(PUBKEY_A, baseDraft)
 		const loaded = getAuctionFormDraft(PUBKEY_A)
 
 		expect(loaded).not.toBeNull()
-		expect(loaded!.formData.title).toBe('Vintage Camera')
-		expect(loaded!.formData.startingBid).toBe('5000')
-		expect(loaded!.formData.antiSnipeWindowMinutes).toBe(15)
-		expect(loaded!.formData.minBidCurveShape).toBe('linear')
-		expect(loaded!.formData.minBidCurvePeakMultiplier).toBe(5)
-		expect(loaded!.formData.settlementGracePreset).toBe('1h')
-		expect(loaded!.formData.specs).toEqual([{ key: 'Brand', value: 'Leica' }])
-		expect(loaded!.formData.shippings).toEqual([{ shippingRef: '30406:seller:standard', extraCost: '200' }])
-		expect(loaded!.formData.trustedMints).toEqual(['https://mint.example.com'])
-		expect(loaded!.formData.isNSFW).toBe(false)
-	})
-
-	test('a draft without a reserve reloads with empty string, not "0"', () => {
-		const draft = { ...baseDraft, formData: { ...baseDraft.formData, reserve: undefined } }
-		saveAuctionFormDraft(PUBKEY_A, draft)
-		const loaded = getAuctionFormDraft(PUBKEY_A)
-		expect(loaded!.formData.reserve).toBe('')
-	})
-
-	test('restores top-level draft fields', () => {
-		saveAuctionFormDraft(PUBKEY_A, baseDraft)
-		const loaded = getAuctionFormDraft(PUBKEY_A)
-
-		expect(loaded!.startMode).toBe('immediate')
-		expect(loaded!.endMode).toBe('absolute')
-		expect(loaded!.durationSeconds).toBe(86400)
-		expect(loaded!.subCategoryInput).toBe('Collectibles, Film')
-		expect(loaded!.images).toEqual([{ imageUrl: 'https://example.com/camera.jpg', imageOrder: 0 }])
+		expect(loaded!.formData).toEqual(baseDraft.formData)
 	})
 
 	test('savedAt is a recent timestamp', () => {
@@ -130,18 +89,16 @@ describe('save/load roundtrip', () => {
 
 	test('overwriting a draft replaces it entirely', () => {
 		saveAuctionFormDraft(PUBKEY_A, baseDraft)
-		saveAuctionFormDraft(PUBKEY_A, { ...baseDraft, formData: { ...baseDraft.formData, title: 'Updated Title' } })
-		const loaded = getAuctionFormDraft(PUBKEY_A)
-
-		expect(loaded!.formData.title).toBe('Updated Title')
+		saveAuctionFormDraft(PUBKEY_A, { formData: { ...baseDraft.formData, title: 'Updated Title' } })
+		expect(getAuctionFormDraft(PUBKEY_A)!.formData.title).toBe('Updated Title')
 	})
 })
 
 // ---------------------------------------------------------------------------
-// Malformed JSON handling
+// Malformed JSON and retired fields
 // ---------------------------------------------------------------------------
 
-describe('malformed JSON handling', () => {
+describe('malformed and legacy payloads', () => {
 	test('returns null for unparseable JSON', () => {
 		store[`auction_form_draft_${PUBKEY_A}`] = '{not valid json'
 		expect(getAuctionFormDraft(PUBKEY_A)).toBeNull()
@@ -159,72 +116,74 @@ describe('malformed JSON handling', () => {
 	})
 
 	test('returns null when savedAt is missing', () => {
-		const record = { ...baseDraft, pubkey: PUBKEY_A }
-		store[`auction_form_draft_${PUBKEY_A}`] = JSON.stringify(record)
+		store[`auction_form_draft_${PUBKEY_A}`] = JSON.stringify({ ...baseDraft, pubkey: PUBKEY_A })
 		expect(getAuctionFormDraft(PUBKEY_A)).toBeNull()
 	})
 
-	test('coerces unknown antiSnipeWindowMinutes to 0', () => {
-		saveAuctionFormDraft(PUBKEY_A, baseDraft)
-		const raw = JSON.parse(store[`auction_form_draft_${PUBKEY_A}`]!)
-		raw.formData.antiSnipeWindowMinutes = 999
-		store[`auction_form_draft_${PUBKEY_A}`] = JSON.stringify(raw)
+	test('a 30408-era draft parses into the fields that still exist, dropping the retired ones', () => {
+		// Exactly what the retired form wrote: no auctionId, no imageUrl, no mode…
+		store[`auction_form_draft_${PUBKEY_A}`] = JSON.stringify({
+			pubkey: PUBKEY_A,
+			savedAt: Date.now(),
+			images: [{ imageUrl: 'https://example.com/camera.jpg', imageOrder: 0 }],
+			startMode: 'immediate',
+			endMode: 'absolute',
+			durationSeconds: 86_400,
+			subCategoryInput: 'Collectibles, Film',
+			formData: {
+				title: 'Old draft',
+				description: 'From the tag protocol',
+				startingBid: '5000',
+				bidIncrement: '100',
+				reserve: '10000',
+				antiSnipeWindowMinutes: 15,
+				minBidCurveShape: 'linear',
+				settlementGracePreset: '1h',
+				trustedMints: ['https://mint.example.com'],
+				specs: [{ key: 'Brand', value: 'Leica' }],
+				shippings: [{ shippingRef: '30406:seller:standard', extraCost: '200' }],
+				isNSFW: false,
+			},
+		})
 
-		const loaded = getAuctionFormDraft(PUBKEY_A)
-		expect(loaded!.formData.antiSnipeWindowMinutes).toBe(0)
+		const loaded = getAuctionFormDraft(PUBKEY_A)!
+		expect(loaded.formData.title).toBe('Old draft')
+		expect(loaded.formData.description).toBe('From the tag protocol')
+		// The identity and the create's own fields come back empty, not invented.
+		expect(loaded.formData.auctionId).toBe('')
+		expect(loaded.formData.imageUrl).toBe('')
+		expect(loaded.formData.startPrice).toBe('')
+		expect(loaded.formData.minIncrement).toBe('')
+		expect(loaded.formData.durationSec).toBe(0)
+		expect(loaded.formData.mode).toBe('fixed')
+		expect(loaded.formData.v4vSplit).toEqual([])
+		// Nothing retired survives on the object at all.
+		for (const retired of ['reserve', 'antiSnipeWindowMinutes', 'minBidCurveShape', 'settlementGracePreset', 'trustedMints', 'specs', 'shippings', 'isNSFW']) {
+			expect(Object.keys(loaded.formData)).not.toContain(retired)
+		}
 	})
 
-	test('coerces unknown minBidCurveShape to "none"', () => {
+	test('coerces an unknown mode to "fixed"', () => {
 		saveAuctionFormDraft(PUBKEY_A, baseDraft)
 		const raw = JSON.parse(store[`auction_form_draft_${PUBKEY_A}`]!)
-		raw.formData.minBidCurveShape = 'zigzag'
+		raw.formData.mode = 'dutch'
 		store[`auction_form_draft_${PUBKEY_A}`] = JSON.stringify(raw)
 
-		const loaded = getAuctionFormDraft(PUBKEY_A)
-		expect(loaded!.formData.minBidCurveShape).toBe('none')
+		expect(getAuctionFormDraft(PUBKEY_A)!.formData.mode).toBe('fixed')
 	})
 
-	test('coerces unknown settlementGracePreset to "1h"', () => {
+	test('drops split rows with no text, keeps the rest', () => {
 		saveAuctionFormDraft(PUBKEY_A, baseDraft)
 		const raw = JSON.parse(store[`auction_form_draft_${PUBKEY_A}`]!)
-		raw.formData.settlementGracePreset = 'forever'
-		store[`auction_form_draft_${PUBKEY_A}`] = JSON.stringify(raw)
-
-		const loaded = getAuctionFormDraft(PUBKEY_A)
-		expect(loaded!.formData.settlementGracePreset).toBe('1h')
-	})
-
-	test('drops non-string entries from trustedMints array', () => {
-		saveAuctionFormDraft(PUBKEY_A, baseDraft)
-		const raw = JSON.parse(store[`auction_form_draft_${PUBKEY_A}`]!)
-		raw.formData.trustedMints = ['https://good.mint', 42, null, 'https://other.mint']
-		store[`auction_form_draft_${PUBKEY_A}`] = JSON.stringify(raw)
-
-		const loaded = getAuctionFormDraft(PUBKEY_A)
-		expect(loaded!.formData.trustedMints).toEqual(['https://good.mint', 'https://other.mint'])
-	})
-
-	test('drops images with empty imageUrl', () => {
-		saveAuctionFormDraft(PUBKEY_A, baseDraft)
-		const raw = JSON.parse(store[`auction_form_draft_${PUBKEY_A}`]!)
-		raw.images = [
-			{ imageUrl: '', imageOrder: 0 },
-			{ imageUrl: 'https://example.com/ok.jpg', imageOrder: 1 },
+		raw.formData.v4vSplit = [
+			{ role: 'validator', recipientPubkey: '', allocationBps: '' },
+			{ role: 'v4v', recipientPubkey: 'bb'.repeat(32), allocationBps: '100' },
 		]
 		store[`auction_form_draft_${PUBKEY_A}`] = JSON.stringify(raw)
 
-		const loaded = getAuctionFormDraft(PUBKEY_A)
-		expect(loaded!.images).toEqual([{ imageUrl: 'https://example.com/ok.jpg', imageOrder: 1 }])
-	})
-
-	test('stringified "true" for isNSFW is not treated as true', () => {
-		saveAuctionFormDraft(PUBKEY_A, baseDraft)
-		const raw = JSON.parse(store[`auction_form_draft_${PUBKEY_A}`]!)
-		raw.formData.isNSFW = 'true'
-		store[`auction_form_draft_${PUBKEY_A}`] = JSON.stringify(raw)
-
-		const loaded = getAuctionFormDraft(PUBKEY_A)
-		expect(loaded!.formData.isNSFW).toBe(false)
+		expect(getAuctionFormDraft(PUBKEY_A)!.formData.v4vSplit).toEqual([
+			{ role: 'v4v', recipientPubkey: 'bb'.repeat(32), allocationBps: '100' },
+		])
 	})
 })
 
@@ -235,7 +194,7 @@ describe('malformed JSON handling', () => {
 describe('cross-user safety', () => {
 	test('drafts are isolated per pubkey', () => {
 		saveAuctionFormDraft(PUBKEY_A, baseDraft)
-		saveAuctionFormDraft(PUBKEY_B, { ...baseDraft, formData: { ...baseDraft.formData, title: 'User B Draft' } })
+		saveAuctionFormDraft(PUBKEY_B, { formData: { ...baseDraft.formData, title: 'User B Draft' } })
 
 		expect(getAuctionFormDraft(PUBKEY_A)!.formData.title).toBe('Vintage Camera')
 		expect(getAuctionFormDraft(PUBKEY_B)!.formData.title).toBe('User B Draft')
@@ -258,7 +217,7 @@ describe('cross-user safety', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Clear draft behaviour
+// Clear / publish
 // ---------------------------------------------------------------------------
 
 describe('clear draft behaviour', () => {
@@ -278,66 +237,16 @@ describe('clear draft behaviour', () => {
 		expect(() => clearAuctionFormDraft(PUBKEY_A)).not.toThrow()
 		expect(getAuctionFormDraft(PUBKEY_A)).toBeNull()
 	})
-})
-
-// ---------------------------------------------------------------------------
-// Publish clears draft (simulated via the storage layer)
-// ---------------------------------------------------------------------------
-
-describe('publish clears draft', () => {
-	test('draft is absent after the publish flow removes it', () => {
-		saveAuctionFormDraft(PUBKEY_A, baseDraft)
-		expect(hasAuctionFormDraft(PUBKEY_A)).toBe(true)
-
-		// simulate what handleSubmit does on success
-		clearAuctionFormDraft(PUBKEY_A)
-
-		expect(hasAuctionFormDraft(PUBKEY_A)).toBe(false)
-	})
 
 	test('saving a new draft after publish works correctly', () => {
 		saveAuctionFormDraft(PUBKEY_A, baseDraft)
 		clearAuctionFormDraft(PUBKEY_A)
 
-		const newDraft = { ...baseDraft, formData: { ...baseDraft.formData, title: 'New Auction' } }
-		saveAuctionFormDraft(PUBKEY_A, newDraft)
-
+		saveAuctionFormDraft(PUBKEY_A, { formData: { ...baseDraft.formData, title: 'New Auction' } })
 		expect(getAuctionFormDraft(PUBKEY_A)!.formData.title).toBe('New Auction')
 	})
-})
 
-// ---------------------------------------------------------------------------
-// Empty form not persisted (guard matches isMeaningfulDraft in the component)
-// ---------------------------------------------------------------------------
-
-describe('empty form not persisted', () => {
 	test('hasAuctionFormDraft returns false when nothing has been saved', () => {
 		expect(hasAuctionFormDraft(PUBKEY_A)).toBe(false)
-	})
-
-	test('getAuctionFormDraft returns null for a key that was never written', () => {
-		expect(getAuctionFormDraft(PUBKEY_A)).toBeNull()
-	})
-
-	test('a draft saved then loaded with no meaningful fields still round-trips structurally', () => {
-		const emptyLike: Omit<AuctionFormDraft, 'pubkey' | 'savedAt'> = {
-			...baseDraft,
-			formData: {
-				...baseDraft.formData,
-				title: '',
-				summary: '',
-				description: '',
-				startingBid: '',
-			},
-			images: [],
-			subCategoryInput: '',
-		}
-		// The storage layer itself does not block saving empty content —
-		// that guard lives in the component (isMeaningfulDraft). Verify that
-		// the storage layer faithfully round-trips whatever it receives.
-		saveAuctionFormDraft(PUBKEY_A, emptyLike)
-		const loaded = getAuctionFormDraft(PUBKEY_A)
-		expect(loaded!.formData.title).toBe('')
-		expect(loaded!.images).toEqual([])
 	})
 })

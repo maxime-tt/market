@@ -1,287 +1,133 @@
-import { useMemo, useState, type Dispatch, type Ref, type SetStateAction } from 'react'
-import { ChevronDown, Plus, X } from 'lucide-react'
+import { useMemo, useState, type Ref } from 'react'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@sdk/commerce/auctions'
-import { AUCTION_SETTLEMENT_GRACE_PRESETS } from '@sdk/commerce/auctions/auctionForm'
+import {
+	AUCTION_MAX_ANTISNIPE_WINDOW_SEC,
+	AUCTION_MIN_ANTISNIPE_WINDOW_SEC,
+} from '@sdk/commerce/auctions/auctionPublishValidation'
 import { Button } from '../primitives/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../primitives/collapsible'
 import { Input } from '../primitives/input'
 import { Label } from '../primitives/label'
 import { Slider } from '../primitives/slider'
-import { DateTimePicker } from '../shared/datetime-picker'
-import { InfoTooltip } from '../shared/info-tooltip'
 import { cn } from '../utils/cn'
-import { parseDatetimeLocalSeconds, toDatetimeLocal } from '../utils/datetime'
 import { formatAbsolute, formatDuration } from '../utils/duration'
-import { AntiSnipeCurveSettings } from './anti-snipe-curve-settings'
-import { BidLadderPreview } from './bid-ladder-preview'
 import { DURATION_PRESETS, DURATION_PRESETS_SHORTCUT } from './duration-presets'
-import { type EndMode, type StartMode, type TabProps, type ValidationMessages } from './model'
-import { SettlementGraceSettings } from './settlement-grace-settings'
+import { type TabProps, type ValidationMessages } from './model'
 
 /**
- * The auction form's "Auction" mechanics tab: start/end timing, the duration
- * presets + slider, the starting bid, and the collapsible Advanced block
- * (bid increment, reserve, bid-ladder preview, the anti-snipe curve card, the
- * settlement-grace picker and the trusted-mints list).
+ * The auction form's "Auction" mechanics tab: duration, the starting price, the increment
+ * and the two protocol modes.
  *
- * T6.3 slice S5a: lifted verbatim out of
- * `ui/components/auction-editor/AuctionEditorTabs.tsx`, renamed from
- * `AuctionTabContent` to match the repo's `*-view` naming, and given the
- * `className`/`ref` contract from `ui/AGENTS.md`. Markup, copy, class strings,
- * hooks and the derived-timing logic are unchanged. It composes the S3/S4
- * modules (`BidLadderPreview`, `AntiSnipeCurveSettings`, `SettlementGraceSettings`).
+ * Every control here maps to a field the kind-1440 create actually carries. Start/end
+ * scheduling is gone (the create has `durationSec`, not `start_at`/`end_at`), and so are
+ * the retired knobs — reserve, the anti-snipe floor curve, settlement grace and the
+ * trusted-mint list have no field in the settled protocol, so they have no control here.
+ * `windowSec` is rendered only for `mode: 'antisnipe'`, because a fixed-time auction
+ * publishes `windowSec: 0` and a visible knob that is always overwritten is a lie.
  */
 
+/** One-tap anti-snipe windows. All inside the protocol's 60…900 s range. */
+const ANTISNIPE_WINDOWS: { label: string; seconds: number }[] = [
+	{ label: '1m', seconds: 60 },
+	{ label: '5m', seconds: 300 },
+	{ label: '15m', seconds: 900 },
+]
+
 export type AuctionTabViewProps = TabProps & {
-	availableMints: readonly string[]
-	startMode: StartMode
-	setStartMode: Dispatch<SetStateAction<StartMode>>
-	endMode: EndMode
-	setEndMode: Dispatch<SetStateAction<EndMode>>
-	durationSeconds: number
-	setDurationSeconds: Dispatch<SetStateAction<number>>
 	validationMessages: ValidationMessages
-	userRemovedMints: Set<string>
-	onUserRemovedMintsChange: (next: Set<string>) => void
 	className?: string
 	ref?: Ref<HTMLDivElement>
 }
 
-export function AuctionTabView({
-	formData,
-	setFormData,
-	availableMints,
-	startMode,
-	setStartMode,
-	endMode,
-	setEndMode,
-	durationSeconds,
-	setDurationSeconds,
-	validationMessages,
-	userRemovedMints,
-	onUserRemovedMintsChange,
-	className,
-	ref,
-}: AuctionTabViewProps) {
-	const [inputSliderValue, setInputSliderValue] = useState<number>(() => {
-		const idx = DURATION_PRESETS.findIndex((p) => p.seconds === durationSeconds)
-		return idx >= 0 ? idx + 1 : 1
+export function AuctionTabView({ formData, setFormData, validationMessages, className, ref }: AuctionTabViewProps) {
+	const [sliderValue, setSliderValue] = useState<number>(() => {
+		const index = DURATION_PRESETS.findIndex((preset) => preset.seconds === formData.durationSec)
+		return index >= 0 ? index + 1 : 1
 	})
 
-	const selectedMints = formData.trustedMints
-	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
-	const canRemoveMint = selectedMints.length > 1
+	const durationSec = formData.durationSec
+	const nowSeconds = useMemo(() => Math.floor(Date.now() / 1000), [])
+	const endSeconds = nowSeconds + (Number.isFinite(durationSec) ? durationSec : 0)
+	const windowSec = parseInt(formData.windowSec, 10)
+	const windowOutOfRange =
+		Number.isFinite(windowSec) && (windowSec < AUCTION_MIN_ANTISNIPE_WINDOW_SEC || windowSec > AUCTION_MAX_ANTISNIPE_WINDOW_SEC)
 
-	const removeMint = (mint: string) => {
-		if (!canRemoveMint) return
-		setFormData((prev) => ({ ...prev, trustedMints: prev.trustedMints.filter((m) => m !== mint) }))
-		onUserRemovedMintsChange(new Set(userRemovedMints).add(mint))
+	const setDuration = (seconds: number) => {
+		setFormData((prev) => ({ ...prev, durationSec: seconds }))
 	}
 
-	const addMint = (mint: string) => {
-		if (selectedMints.includes(mint)) return
-		setFormData((prev) => ({ ...prev, trustedMints: [...prev.trustedMints, mint] }))
-		if (userRemovedMints.has(mint)) {
-			const next = new Set(userRemovedMints)
-			next.delete(mint)
-			onUserRemovedMintsChange(next)
-		}
-	}
-
-	type Section = 'advanced'
-	const [openSection, setOpenSection] = useState<Section | null>(null)
-	const toggle = (s: Section) => (isOpen: boolean) => setOpenSection(isOpen ? s : null)
-
-	const startingBidNum = parseInt(formData.startingBid, 10)
-	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
-	const reserveNum = parseInt(formData.reserve ?? '', 10)
-	const showBidLadder = formData.startingBid !== '' && startingBidNum > 0 && formData.bidIncrement !== '' && bidIncrementNum > 0
-	const antiSnipeWindowSeconds = formData.antiSnipeWindowMinutes * 60
-	const endTimeError = validationMessages.endAt ?? validationMessages.duration ?? validationMessages.startAt
-
-	const effectiveStartSeconds = useMemo(() => {
-		if (startMode === 'immediate') return Math.floor(Date.now() / 1000)
-		const parsed = formData.startAt ? parseDatetimeLocalSeconds(formData.startAt) : null
-		return parsed ?? Math.floor(Date.now() / 1000)
-	}, [startMode, formData.startAt])
-
-	const virtualEndSeconds = useMemo(() => {
-		if (endMode === 'duration') return effectiveStartSeconds + durationSeconds
-		return parseDatetimeLocalSeconds(formData.endAt) ?? 0
-	}, [endMode, effectiveStartSeconds, durationSeconds, formData.endAt])
-
-	const virtualDurationSeconds = useMemo(() => {
-		if (endMode === 'duration') return durationSeconds
-		if (!virtualEndSeconds) return 0
-		return Math.max(0, virtualEndSeconds - effectiveStartSeconds)
-	}, [endMode, durationSeconds, virtualEndSeconds, effectiveStartSeconds])
-
-	// `max_end_at` preview — when no anti-snipe window is set this equals
-	// `end_at` and the curve has zero duration. AUCTIONS.md §6.0.
-	const curveMaxEndSeconds = useMemo(() => {
-		if (!virtualEndSeconds) return 0
-		if (antiSnipeWindowSeconds <= 0) return virtualEndSeconds
-		return virtualEndSeconds + antiSnipeWindowSeconds
-	}, [virtualEndSeconds, antiSnipeWindowSeconds])
-
-	const handleStartImmediate = () => {
-		setStartMode('immediate')
-		setFormData((prev) => ({ ...prev, startAt: '' }))
-	}
-
-	const handleStartScheduled = () => {
-		setStartMode('scheduled')
-		setFormData((prev) => (prev.startAt ? prev : { ...prev, startAt: toDatetimeLocal(new Date(Date.now() + 15 * 60 * 1000)) }))
-	}
-
-	const handleEndAsDuration = () => {
-		setEndMode('duration')
-		setFormData((prev) => ({ ...prev, endAt: '' }))
-	}
-
-	const handleEndAsAbsolute = () => {
-		setEndMode('absolute')
-		setFormData((prev) => {
-			if (prev.endAt) return prev
-			const initial = new Date((effectiveStartSeconds + durationSeconds) * 1000)
-			return { ...prev, endAt: toDatetimeLocal(initial) }
-		})
+	const setMode = (mode: 'fixed' | 'antisnipe') => {
+		setFormData((prev) => ({
+			...prev,
+			mode,
+			// A fixed-time auction carries no window; clearing it here means the sent
+			// content can never disagree with the mode the seller picked.
+			windowSec: mode === 'antisnipe' ? prev.windowSec || '60' : '',
+		}))
 	}
 
 	return (
 		<div ref={ref} className={cn('flex flex-col gap-4', className)}>
-			{/* Section order: timing first (start + end), then bidding
-			    mechanics (amounts + ladder), then auction-end policy
-			    (anti-snipe curve + settlement grace). The curve preview
-			    is embedded inside the anti-snipe card so its visual
-			    feedback sits next to the inputs that drive it. */}
-
-			<div className="grid w-full gap-2 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
-				<div className="flex items-center justify-between gap-2">
-					<Label>Start Time</Label>
-					<div className="inline-flex rounded-md border border-border-default bg-surface-sunken p-0.5 text-xs">
-						<button
-							type="button"
-							onClick={handleStartImmediate}
-							className={`px-3 py-1 rounded ${startMode === 'immediate' ? 'bg-surface-raised text-text-high shadow-sm' : 'text-text-mid hover:text-text-high'}`}
-						>
-							Immediate
-						</button>
-						<button
-							type="button"
-							onClick={handleStartScheduled}
-							className={`px-3 py-1 rounded ${startMode === 'scheduled' ? 'bg-surface-raised text-text-high shadow-sm' : 'text-text-mid hover:text-text-high'}`}
-						>
-							Schedule
-						</button>
-					</div>
-				</div>
-
-				{startMode === 'immediate' ? (
-					<p className="text-xs text-text-mid">The auction goes live the moment you publish.</p>
-				) : (
-					<DateTimePicker
-						value={formData.startAt ?? ''}
-						onChange={(next) => setFormData((prev) => ({ ...prev, startAt: next }))}
-						placeholder="Pick a start date & time"
-					/>
-				)}
-			</div>
-
 			<div className="grid w-full gap-3 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
 				<div className="flex items-center justify-between gap-2">
 					<Label>
-						<span className="after:content-['*'] after:ml-0.5 after:text-error">End Time</span>
+						<span className="after:content-['*'] after:ml-0.5 after:text-error">Duration</span>
 					</Label>
-					<div className="inline-flex rounded-md border border-border-default bg-surface-sunken p-0.5 text-xs">
-						<button
-							type="button"
-							onClick={handleEndAsDuration}
-							className={`px-3 py-1 rounded ${endMode === 'duration' ? 'bg-surface-raised text-text-high shadow-sm' : 'text-text-mid hover:text-text-high'}`}
-						>
-							Duration
-						</button>
-						<button
-							type="button"
-							onClick={handleEndAsAbsolute}
-							className={`px-3 py-1 rounded ${endMode === 'absolute' ? 'bg-surface-raised text-text-high shadow-sm' : 'text-text-mid hover:text-text-high'}`}
-						>
-							End date
-						</button>
+					<span className="text-xs text-text-mid">20 seconds to 3 days</span>
+				</div>
+
+				<div className="flex flex-wrap gap-1.5">
+					{DURATION_PRESETS_SHORTCUT.map((preset) => {
+						const isActive = durationSec === preset.seconds
+						return (
+							<button
+								key={preset.label}
+								type="button"
+								onClick={() => {
+									const index = DURATION_PRESETS.findIndex((value) => value.seconds === preset.seconds)
+									setSliderValue(index + 1)
+									setDuration(preset.seconds)
+								}}
+								className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+									isActive
+										? 'border-border-default bg-surface-raised text-text-high'
+										: 'border-border-default bg-surface-raised text-text-high hover:border-border-default'
+								}`}
+							>
+								{preset.label}
+							</button>
+						)
+					})}
+				</div>
+
+				<div>
+					<Slider
+						min={1}
+						max={DURATION_PRESETS.length}
+						value={[sliderValue]}
+						onValueChange={(val) => {
+							const next = val?.at(0)
+							if (next) {
+								setSliderValue(next)
+								setDuration(DURATION_PRESETS[next - 1].seconds)
+							}
+						}}
+						className="w-full accent-secondary"
+					/>
+					<div className="flex items-center justify-between text-[10px] text-text-mid">
+						<span>1m</span>
+						<span>3d</span>
 					</div>
 				</div>
 
-				{endMode === 'duration' ? (
-					<div className="space-y-3">
-						<div className="flex flex-wrap gap-1.5">
-							{DURATION_PRESETS_SHORTCUT.map((preset) => {
-								const isActive = durationSeconds === preset.seconds
-								return (
-									<button
-										key={preset.label}
-										type="button"
-										onClick={() => {
-											const indexSlider = DURATION_PRESETS.findIndex((v) => v.seconds === preset.seconds)
-											setInputSliderValue(indexSlider + 1)
-											setDurationSeconds(preset.seconds)
-										}}
-										className={`rounded-full px-3 py-1 text-xs font-semibold border ${
-											isActive
-												? 'border-border-default bg-surface-raised text-text-high'
-												: 'border-border-default bg-surface-raised text-text-high hover:border-border-default'
-										}`}
-									>
-										{preset.label}
-									</button>
-								)
-							})}
-						</div>
-
-						<div>
-							<Slider
-								min={1}
-								max={DURATION_PRESETS.length}
-								value={[inputSliderValue]}
-								onValueChange={(val) => {
-									const sliderValue = val?.at(0)
-									if (sliderValue) {
-										setInputSliderValue(sliderValue)
-
-										const value = DURATION_PRESETS[sliderValue - 1]
-										setDurationSeconds(value.seconds)
-									}
-								}}
-								className="w-full accent-secondary"
-							/>
-							<div className="flex items-center justify-between text-[10px] text-text-mid">
-								<span>1m</span>
-								<span>30d</span>
-							</div>
-						</div>
-
-						<div className="rounded-md bg-surface-sunken px-3 py-2 text-xs text-text-high">
-							<p>
-								<span className="font-semibold text-text-high">Runs for:</span> {formatDuration(durationSeconds)}
-							</p>
-							<p className="mt-0.5">
-								<span className="font-semibold text-text-high">Ends:</span> {formatAbsolute(virtualEndSeconds)}
-							</p>
-						</div>
-						{endTimeError && <p className="text-xs text-error">{endTimeError}</p>}
-					</div>
-				) : (
-					<div className="space-y-2">
-						<DateTimePicker
-							value={formData.endAt}
-							onChange={(next) => setFormData((prev) => ({ ...prev, endAt: next }))}
-							placeholder="Pick an end date & time"
-						/>
-						{virtualEndSeconds > 0 && (
-							<p className="text-xs text-text-mid">Runs for approximately {formatDuration(virtualDurationSeconds)}.</p>
-						)}
-						{endTimeError && <p className="text-xs text-error">{endTimeError}</p>}
-					</div>
-				)}
+				<div className="rounded-md bg-surface-sunken px-3 py-2 text-xs text-text-high">
+					<p>
+						<span className="font-semibold text-text-high">Runs for:</span> {formatDuration(durationSec)}
+					</p>
+					<p className="mt-0.5">
+						<span className="font-semibold text-text-high">Ends:</span> {formatAbsolute(endSeconds)}
+					</p>
+				</div>
+				{validationMessages.durationSec && <p className="text-xs text-error">{validationMessages.durationSec}</p>}
 			</div>
 
 			<div className="grid w-full gap-1.5 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
@@ -294,129 +140,87 @@ export function AuctionTabView({
 					type="number"
 					min={AUCTION_MIN_BID_SATS}
 					step="1"
-					value={formData.startingBid}
-					onChange={(e) => setFormData((prev) => ({ ...prev, startingBid: e.target.value }))}
+					value={formData.startPrice}
+					onChange={(e) => setFormData((prev) => ({ ...prev, startPrice: e.target.value }))}
 				/>
-				{validationMessages.startingBid && <p className="text-xs text-error">{validationMessages.startingBid}</p>}
+				{validationMessages.startPrice && <p className="text-xs text-error">{validationMessages.startPrice}</p>}
 			</div>
 
-			<div>
-				<Collapsible open={openSection === 'advanced'} onOpenChange={toggle('advanced')}>
-					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-border-default bg-surface-raised px-4 py-3 text-sm font-medium text-text-high hover:bg-surface-sunken">
-						Advanced
-						<ChevronDown className={`w-4 h-4 text-text-high transition-transform ${openSection === 'advanced' ? 'rotate-180' : ''}`} />
-					</CollapsibleTrigger>
-					<CollapsibleContent>
-						<div className="mt-2 space-y-2">
-							<div className="grid w-full gap-4 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
-								<div className="grid w-full gap-1.5">
-									<Label htmlFor="auction-bid-increment">
-										<span className="after:content-['*'] after:ml-0.5 after:text-error">Bid Increment (sats)</span>
-									</Label>
-									<p className="text-xs text-text-mid">Minimum amount each new bid must exceed the previous by.</p>
-									<Input
-										id="auction-bid-increment"
-										type="number"
-										min={AUCTION_MIN_BID_LEG_SATS}
-										step="1"
-										value={formData.bidIncrement}
-										onFocus={(e) => e.target.select()}
-										onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value.replace(/^0+(\d)/, '$1') }))}
-									/>
-									{validationMessages.bidIncrement && <p className="text-xs text-error">{validationMessages.bidIncrement}</p>}
-								</div>
+			<div className="grid w-full gap-1.5 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
+				<Label htmlFor="auction-bid-increment">
+					<span className="after:content-['*'] after:ml-0.5 after:text-error">Bid Increment (sats)</span>
+				</Label>
+				<p className="text-xs text-text-mid">Minimum amount each new bid must exceed the previous by.</p>
+				<Input
+					id="auction-bid-increment"
+					type="number"
+					min={AUCTION_MIN_BID_LEG_SATS}
+					step="1"
+					value={formData.minIncrement}
+					onFocus={(e) => e.target.select()}
+					onChange={(e) => setFormData((prev) => ({ ...prev, minIncrement: e.target.value.replace(/^0+(\d)/, '$1') }))}
+				/>
+				{validationMessages.minIncrement && <p className="text-xs text-error">{validationMessages.minIncrement}</p>}
+			</div>
 
-								<div className="space-y-3">
-									<div className="grid w-full gap-1.5">
-										<div className="flex items-center space-x-2">
-											<Label htmlFor="auction-reserve">Reserve (sats)</Label>
-											<InfoTooltip content="Minimum bid required for the auction to have a winner. No winner if highest bid is lower than the reserve. Leave empty for no reserve." />
-										</div>
-										<Input
-											id="auction-reserve"
-											type="number"
-											min="0"
-											placeholder="Optional — no reserve if left empty"
-											value={formData.reserve ?? ''}
-											onFocus={(e) => e.target.select()}
-											onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
-										/>
-										{validationMessages.reserve && <p className="text-xs text-error">{validationMessages.reserve}</p>}
-									</div>
-								</div>
+			<div className="grid w-full gap-3 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
+				<Label>Closing rule</Label>
+				<div className="inline-flex w-fit rounded-md border border-border-default bg-surface-sunken p-0.5 text-xs">
+					<Button
+						type="button"
+						variant={formData.mode === 'fixed' ? 'secondary' : 'ghost'}
+						size="sm"
+						onClick={() => setMode('fixed')}
+					>
+						Fixed time
+					</Button>
+					<Button
+						type="button"
+						variant={formData.mode === 'antisnipe' ? 'secondary' : 'ghost'}
+						size="sm"
+						onClick={() => setMode('antisnipe')}
+					>
+						Anti-snipe
+					</Button>
+				</div>
 
-								{showBidLadder && <BidLadderPreview startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />}
-							</div>
-							<AntiSnipeCurveSettings
-								antiSnipeWindowMinutes={formData.antiSnipeWindowMinutes}
-								minBidCurveShape={formData.minBidCurveShape}
-								minBidCurvePeakMultiplier={formData.minBidCurvePeakMultiplier}
-								onFormPatch={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
-								startAtSeconds={effectiveStartSeconds}
-								endAtSeconds={virtualEndSeconds}
-								maxEndAtSeconds={curveMaxEndSeconds}
-								settlementGraceSeconds={AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]}
-								startingBid={startingBidNum}
-								bidIncrement={bidIncrementNum}
-								reserve={reserveNum}
-							/>
-							<SettlementGraceSettings
-								value={formData.settlementGracePreset}
-								onValueChange={(next) => setFormData((prev) => ({ ...prev, settlementGracePreset: next }))}
-							/>
-							<div className="grid w-full gap-1.5 rounded-lg border border-border-default bg-surface-raised px-4 py-4">
-								<Label className="text-text-high">Trusted Mints</Label>
-								<p className="text-xs text-text-mid">
-									Bids will be rejected unless the token is minted by one of these mints. At least one is required.
-								</p>
-								{validationMessages.trustedMints && <p className="text-xs text-error">{validationMessages.trustedMints}</p>}
-
-								<div className="space-y-2 mt-1">
-									{selectedMints.map((mint) => (
-										<div
-											key={mint}
-											className="flex items-center justify-between gap-2 rounded-lg border border-border-default bg-surface-sunken px-3 py-2"
-										>
-											<span className="truncate text-sm text-text-high" title={mint}>
-												{mint}
-											</span>
-											<Button
-												type="button"
-												variant="outline"
-												size="sm"
-												onClick={() => removeMint(mint)}
-												disabled={!canRemoveMint}
-												className="text-error hover:text-error-foreground disabled:opacity-40"
-												title={canRemoveMint ? 'Remove mint' : 'At least one mint is required'}
-											>
-												<X className="w-4 h-4" />
-											</Button>
-										</div>
-									))}
-								</div>
-
-								{unselectedMints.length > 0 && (
-									<div className="space-y-2 mt-3">
-										<p className="text-xs font-semibold uppercase tracking-wide text-text-mid">Add a mint</p>
-										{unselectedMints.map((mint) => (
-											<button
-												key={mint}
-												type="button"
-												onClick={() => addMint(mint)}
-												className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-border-default bg-surface-sunken px-3 py-2 text-left text-sm text-text-high hover:border-border-default"
-											>
-												<span className="truncate" title={mint}>
-													{mint}
-												</span>
-												<Plus className="w-4 h-4 text-text-mid shrink-0" />
-											</button>
-										))}
-									</div>
-								)}
-							</div>
+				{formData.mode === 'antisnipe' ? (
+					<div className="space-y-2">
+						<p className="text-xs text-text-mid">
+							A bid inside the last {formatDuration(windowSec > 0 ? windowSec : 0)} pushes the close back by the same
+							amount. The window must be 1 to 15 minutes.
+						</p>
+						<div className="flex flex-wrap gap-1.5">
+							{ANTISNIPE_WINDOWS.map((preset) => {
+								const isActive = windowSec === preset.seconds
+								return (
+									<button
+										key={preset.label}
+										type="button"
+										onClick={() => setFormData((prev) => ({ ...prev, windowSec: String(preset.seconds) }))}
+										className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+											isActive
+												? 'border-border-default bg-surface-raised text-text-high'
+												: 'border-border-default bg-surface-raised text-text-high hover:border-border-default'
+										}`}
+									>
+										{preset.label}
+									</button>
+								)
+							})}
 						</div>
-					</CollapsibleContent>
-				</Collapsible>
+						{validationMessages.windowSec && <p className="text-xs text-error">{validationMessages.windowSec}</p>}
+						{windowOutOfRange && !validationMessages.windowSec && (
+							<p className="text-xs text-error">
+								An anti-snipe window must be between {AUCTION_MIN_ANTISNIPE_WINDOW_SEC} and{' '}
+								{AUCTION_MAX_ANTISNIPE_WINDOW_SEC} seconds.
+							</p>
+						)}
+					</div>
+				) : (
+					<p className="text-xs text-text-mid">The auction closes when its duration runs out, and no later.</p>
+				)}
+				{validationMessages.mode && <p className="text-xs text-error">{validationMessages.mode}</p>}
 			</div>
 		</div>
 	)
