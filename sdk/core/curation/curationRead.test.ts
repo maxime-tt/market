@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
 import {
 	buildBlacklistFilter,
 	buildCurationListFilter,
@@ -190,14 +191,14 @@ describe('featured lists', () => {
 	})
 
 	test('auctions drop malformed coordinates and filtered sellers', () => {
-		const ok = `30408:${ALICE}:auction`
-		const banned = `30408:${BOB}:auction`
+		const ok = `${ARENA_AUCTION_CREATE_KIND}:${ALICE}:auction`
+		const banned = `${ARENA_AUCTION_CREATE_KIND}:${BOB}:auction`
 		const ev = event(
 			[
 				['a', ok],
-				['a', `30408:${ALICE}:`],
-				['a', `30408::x`],
-				['a', `30408:${ALICE}:x:y`],
+				['a', `${ARENA_AUCTION_CREATE_KIND}:${ALICE}:`],
+				['a', `${ARENA_AUCTION_CREATE_KIND}::x`],
+				['a', `${ARENA_AUCTION_CREATE_KIND}:${ALICE}:x:y`],
 				['a', banned],
 			],
 			7,

@@ -2,15 +2,15 @@ import { CollectionCardHost as CollectionCard } from '@platform/web/collections/
 import { FeaturedUserCardHost as FeaturedUserCard } from '@platform/web/featured/FeaturedUserCardHost'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
-import { AuctionCardHost as AuctionCard } from '@platform/web/auctions/AuctionCardHost'
-import { getAuctionBidderStatus } from '@platform/web/auctions/auctionBidderStatus'
-import { InvalidAuctionBidBlock } from '@platform/web/auctions/InvalidAuctionNotice'
+import { ArenaAuctionCard } from '@ui/auction/arena/auction-card'
+import { arenaAuctionHref } from '@platform/web/auctions/relay/ArenaAuctionsListHost'
 import { Button } from '@ui/primitives/button'
 import { cn } from '@ui/utils/cn'
 import { collectionByATagQueryOptions } from '@platform/web/collections/collectionQuery'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useFeaturedAuctions, useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@platform/web/featured/featuredQueries'
-import { auctionByATagQueryOptions } from '@platform/web/auctions/auctionsQuery'
+import { useArenaSurfacesRead } from '@platform/web/auctions/relay/auctionSurfacesRead'
+import { featuredAuctionCards } from '@platform/web/featured/featuredAuctionLots'
 import { productByATagQueryOptions } from '@platform/web/products/productQuery'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -73,36 +73,6 @@ function FeaturedCollectionItem({ collectionCoords, ...props }: { collectionCoor
 	return <CollectionCard collection={collection} {...props} />
 }
 
-function FeaturedAuctionItem({ auctionCoords, ...props }: { auctionCoords: string } & React.HTMLAttributes<HTMLDivElement>) {
-	const [, pubkey, dTag] = auctionCoords.split(':')
-
-	const { data: auction, isLoading } = useQuery({
-		...auctionByATagQueryOptions(pubkey, dTag),
-		enabled: !!(pubkey && dTag),
-	})
-
-	if (isLoading) {
-		return (
-			<div className="animate-pulse">
-				<div className="bg-gray-200 aspect-square rounded-lg mb-2"></div>
-				<div className="bg-gray-200 h-4 rounded mb-1"></div>
-				<div className="bg-gray-200 h-3 rounded w-2/3"></div>
-			</div>
-		)
-	}
-
-	if (!auction) return null
-
-	return (
-		<AuctionCard
-			auction={auction}
-			getBidderStatus={(input) => getAuctionBidderStatus(input as unknown as Parameters<typeof getAuctionBidderStatus>[0])}
-			renderBidBlocked={(admission) => <InvalidAuctionBidBlock admission={admission} itemLabel="auction" compact />}
-			{...props}
-		/>
-	)
-}
-
 // FeaturedUserItem has been replaced with FeaturedUserCard component
 
 // Main component for displaying all featured sections
@@ -113,9 +83,14 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 	const { data: featuredCollections } = useFeaturedCollections(config?.appPublicKey || '')
 	const { data: featuredUsers } = useFeaturedUsers(config?.appPublicKey || '')
 
+	// The featured auctions strip is a view of the arena read: an entry names a live
+	// `1440:<seller>:<d>`, and only the read can say whether that lot is published.
+	const arenaRead = useArenaSurfacesRead()
+
 	// Limit items per section
 	const displayProducts = featuredProducts?.featuredProducts?.slice(0, maxItemsPerSection) || []
 	const displayAuctions = featuredAuctions?.featuredAuctions?.slice(0, maxItemsPerSection) || []
+	const auctionCards = featuredAuctionCards(displayAuctions, arenaRead, Math.floor(Date.now() / 1000))
 	const displayCollections = featuredCollections?.featuredCollections?.slice(0, maxItemsPerSection) || []
 	const displayUsers = featuredUsers?.featuredUsers?.slice(0, maxItemsPerSection) || []
 
@@ -155,7 +130,7 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 			)}
 
 			{/* Featured Auctions */}
-			{displayAuctions.length > 0 && (
+			{auctionCards.length > 0 && (
 				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : classNameDark)}>
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
@@ -174,8 +149,15 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 							)}
 						</div>
 						<ItemGrid className="gap-4 sm:gap-8">
-							{displayAuctions.map((auctionCoords: string) => (
-								<FeaturedAuctionItem key={auctionCoords} auctionCoords={auctionCoords} className={classNameLight} />
+							{auctionCards.map((card) => (
+								<ArenaAuctionCard
+									key={card.coordinate}
+									model={card}
+									status={arenaRead.status}
+									relayHealth={arenaRead.relayHealth}
+									href={arenaAuctionHref(card.d)}
+									className={classNameLight}
+								/>
 							))}
 						</ItemGrid>
 					</div>
