@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { finalizeEvent, getPublicKey, type Event } from 'nostr-tools/pure'
 import { hexToBytes } from 'nostr-tools/utils'
 import { STOREFRONT_PAGE_KIND } from '@sdk/commerce/storefront/storefrontPage'
+import { ROUTE_INTENT_KIND, ROUTE_INTENT_VERSION, routeIntentContent, type RouteIntent } from '@sdk/commerce/storefront/routeIntent'
 import { buildAppEventsRoutes, type AccessLevel } from '../http/appEvents'
+import { buildRouteTableRoutes } from '../http/routeTable'
 import { buildContentRoutes } from '../buildServer'
 import { createPageStore, type PageStore } from './pageStore'
 import { renderPage } from './pageRender'
+import { loadRouteTable, type RouteTable } from './routeTable'
 import { validateRoutesFile, type RoutesFile } from './routeFile'
 
 const realFetch = globalThis.fetch
@@ -72,6 +75,7 @@ interface Harness {
 	url: string
 	store: PageStore
 	root: string
+	table: RouteTable
 	routes: Record<string, unknown>
 	stop: () => void
 }
@@ -85,22 +89,27 @@ function start(
 		levelOf?: (pubkey: string) => AccessLevel
 		maxContentBytes?: number
 		render?: typeof renderPage
+		routeTable?: RouteTable
 	} = {},
 ): Harness {
 	const root = mkdtempSync(join(tmpdir(), 'ar-pages-http-'))
 	directories.push(root)
 	const store = createPageStore({ root })
-	const routing = routesFile(options.bindings)
+	const routesPath = join(root, 'routes.json')
+	writeFileSync(routesPath, `${JSON.stringify(routesFile(options.bindings), null, 2)}\n`)
+	const table = options.routeTable ?? loadRouteTable(routesPath)
 	const routes = {
 		...buildAppEventsRoutes({
 			pageStore: store,
+			routeTable: table,
 			levelOf: options.levelOf ?? ((pubkey) => (pubkey === APP_PUBKEY ? 'app' : null)),
 			now: () => clock,
 			maxContentBytes: options.maxContentBytes,
 			render: options.render,
 		}),
+		...buildRouteTableRoutes({ table }),
 		...buildContentRoutes({
-			routing,
+			routing: table,
 			pageStore: store,
 			indexHtml: new Response('SHELL', { headers: { 'content-type': 'text/html' } }),
 			now: () => clock,
@@ -108,7 +117,7 @@ function start(
 	} as Record<string, unknown>
 
 	const server = Bun.serve({ port: 0, routes: routes as never })
-	const harness: Harness = { url: `http://localhost:${server.port}`, store, root, routes, stop: () => server.stop(true) }
+	const harness: Harness = { url: `http://localhost:${server.port}`, store, root, table, routes, stop: () => server.stop(true) }
 	harnesses.push(harness)
 	return harness
 }
@@ -306,5 +315,182 @@ describe('one write surface (E14)', () => {
 		const keys = Object.keys(harness.routes)
 		expect(keys.filter((key) => key === '/api/app-events')).toHaveLength(1)
 		expect(keys.some((key) => key.includes(`pages${'/'}publish`))).toBe(false)
+	})
+})
+
+/** A signed route intent, with the path doubling as the event's `d` tag. */
+function intentEvent(intent: RouteIntent, options: { key?: Uint8Array; createdAt?: number } = {}): Event {
+	return finalizeEvent(
+		{
+			kind: ROUTE_INTENT_KIND,
+			created_at: options.createdAt ?? clock,
+			tags: [['d', intent.path]],
+			content: routeIntentContent(intent),
+		},
+		options.key ?? APP_KEY,
+	) as Event
+}
+
+const setIntent = (path: string, d = 'home', author = APP_PUBKEY): RouteIntent => ({
+	version: ROUTE_INTENT_VERSION,
+	action: 'set',
+	path,
+	target: { type: 'page', author, d },
+})
+
+const removeIntent = (path: string): RouteIntent => ({ version: ROUTE_INTENT_VERSION, action: 'remove', path, target: null })
+
+describe('route intents — the admin authors a binding over the one ingest', () => {
+	test('a binding authored at runtime is served by the next request, with no restart', async () => {
+		const harness = start()
+		await post(harness, signed())
+
+		// Before the intent: an unknown single-segment path is a real 404.
+		expect((await realFetch(`${harness.url}/newshop`)).status).toBe(404)
+
+		const response = await post(harness, intentEvent(setIntent('newshop')))
+		expect(response.status).toBe(200)
+		expect(await response.json()).toMatchObject({
+			stored: true,
+			kind: ROUTE_INTENT_KIND,
+			path: 'newshop',
+			action: 'set',
+			changed: true,
+		})
+
+		const served = await realFetch(`${harness.url}/newshop`)
+		expect(served.status).toBe(200)
+		expect(await served.text()).toContain('NEEDLE-42')
+	})
+
+	test('the binding is persisted to the table file, not just held in memory', async () => {
+		const harness = start()
+		const path = join(harness.root, 'routes.json')
+		await post(harness, intentEvent(setIntent('newshop', 'home')))
+
+		const written = JSON.parse(readFileSync(path, 'utf8'))
+		expect(written.bindings.map((entry: { path: string }) => entry.path)).toContain('newshop')
+		expect(written.bindings.find((entry: { path: string }) => entry.path === 'newshop')).toMatchObject({
+			updatedAt: clock,
+			updatedBy: APP_PUBKEY,
+		})
+	})
+
+	test('a remove intent takes the path down without a restart', async () => {
+		const harness = start()
+		await post(harness, signed())
+		await post(harness, intentEvent(setIntent('newshop')))
+		expect((await realFetch(`${harness.url}/newshop`)).status).toBe(200)
+
+		expect((await post(harness, intentEvent(removeIntent('newshop')))).status).toBe(200)
+		expect((await realFetch(`${harness.url}/newshop`)).status).toBe(404)
+	})
+
+	test('a binding authored at runtime supersedes a compiled-in page, which still answers when unbound', async () => {
+		const harness = start()
+		await post(harness, signed())
+
+		const compiled = await realFetch(`${harness.url}/products`)
+		expect(compiled.status).toBe(200)
+		expect(await compiled.text()).toBe('SHELL')
+
+		const applied = await post(harness, intentEvent(setIntent('products')))
+		expect(applied.status).toBe(200)
+		expect(await applied.json()).toMatchObject({ warnings: [{ code: 'compiled-in-path', path: 'products' }] })
+
+		const served = await realFetch(`${harness.url}/products`)
+		expect(await served.text()).toContain('NEEDLE-42')
+	})
+
+	test('an editor may author a binding — the ACL is the existing one, not a second model', async () => {
+		const editorPubkey = getPublicKey(EDITOR_KEY)
+		const harness = start({ levelOf: (pubkey) => (pubkey === APP_PUBKEY ? 'app' : pubkey === editorPubkey ? 'editor' : null) })
+		const response = await post(harness, intentEvent(setIntent('newshop'), { key: EDITOR_KEY }))
+		expect(response.status).toBe(200)
+		expect(harness.table.current().bindings.find((entry) => entry.path === 'newshop')?.updatedBy).toBe(editorPubkey)
+	})
+
+	test('a signer below app/admin/editor is 403 no-acl and the table is untouched', async () => {
+		const harness = start()
+		const response = await post(harness, intentEvent(setIntent('newshop'), { key: OUTSIDER_KEY }))
+		expect(response.status).toBe(403)
+		expect(await response.json()).toMatchObject({ error: 'no-acl' })
+		expect(harness.table.current().bindings.map((entry) => entry.path)).toEqual(['shop'])
+	})
+
+	test('an intent whose path disagrees with its d tag is refused and nothing is applied', async () => {
+		const harness = start()
+		// Signed with a d tag that disagrees with the path inside the document.
+		const mismatched = finalizeEvent(
+			{ kind: ROUTE_INTENT_KIND, created_at: clock, tags: [['d', 'other']], content: routeIntentContent(setIntent('newshop')) },
+			APP_KEY,
+		) as Event
+		const response = await post(harness, mismatched)
+		expect(response.status).toBe(400)
+		expect(await response.json()).toMatchObject({ error: 'invalid-route-intent' })
+		expect(harness.table.current().bindings.map((entry) => entry.path)).toEqual(['shop'])
+	})
+
+	test('a subpath or a URL-space name is refused with the reason', async () => {
+		const harness = start()
+		for (const path of ['shop/featured', 'api']) {
+			const response = await post(harness, intentEvent(setIntent(path)))
+			expect(response.status).toBe(400)
+			const body = (await response.json()) as { error: string; detail: string }
+			expect(body.error).toBe('invalid-route-intent')
+			expect(body.detail).toContain('/path')
+		}
+		expect(harness.table.current().bindings.map((entry) => entry.path)).toEqual(['shop'])
+	})
+
+	test('a stale intent is refused before it reaches the table', async () => {
+		const harness = start()
+		const response = await post(harness, intentEvent(setIntent('newshop'), { createdAt: clock - 301 }))
+		expect(response.status).toBe(400)
+		expect(await response.json()).toMatchObject({ error: 'stale-intent' })
+	})
+
+	test('a change that would make the table invalid is a 400 and is not persisted', async () => {
+		const harness = start()
+		const before = readFileSync(join(harness.root, 'routes.json'), 'utf8')
+		// Stand in for a table whose validator rejects the result: the ingest must
+		// map that refusal to a named error and write nothing. (The table-level
+		// test in routeTable.test.ts exercises a real validator refusal.)
+		const refusing: RouteTable = {
+			path: join(harness.root, 'routes.json'),
+			current: () => harness.table.current(),
+			warnings: () => harness.table.warnings(),
+			apply: () => ({ ok: false, violations: ['/bindings/0/path: duplicate binding for shop'] }),
+		}
+		const guarded = start({ routeTable: refusing })
+
+		const response = await post(guarded, intentEvent(setIntent('newshop')))
+		expect(response.status).toBe(400)
+		const body = (await response.json()) as { error: string; detail: string }
+		expect(body.error).toBe('invalid-route-table')
+		expect(body.detail).toContain('duplicate binding')
+		expect(readFileSync(join(harness.root, 'routes.json'), 'utf8')).toBe(before)
+		expect(guarded.table.current().bindings.map((entry) => entry.path)).toEqual(['shop'])
+	})
+
+	test('GET /api/routes reports the live table and its warnings', async () => {
+		const harness = start()
+		const before = (await (await realFetch(`${harness.url}/api/routes`)).json()) as {
+			seq: number
+			bindings: Array<{ path: string }>
+			warnings: unknown[]
+		}
+		expect(before.bindings.map((entry) => entry.path)).toEqual(['shop'])
+		expect(before.warnings).toEqual([])
+
+		await post(harness, intentEvent(setIntent('products')))
+		const after = (await (await realFetch(`${harness.url}/api/routes`)).json()) as {
+			seq: number
+			bindings: Array<{ path: string; target: { author: string; d: string } }>
+			warnings: Array<{ code: string; path: string }>
+		}
+		expect(after.seq).toBe(before.seq + 1)
+		expect(after.bindings.map((entry) => entry.path)).toEqual(['shop', 'products'])
+		expect(after.warnings).toEqual([{ code: 'compiled-in-path', path: 'products', message: expect.any(String) }])
 	})
 })

@@ -1,22 +1,27 @@
 import { verifyEvent, type Event } from 'nostr-tools/pure'
 import { parseStorefrontPage, STOREFRONT_PAGE_KIND } from '@sdk/commerce/storefront/storefrontPage'
+import { parseRouteIntent, ROUTE_INTENT_KIND } from '@sdk/commerce/storefront/routeIntent'
 import { getAppPublicKeyOrThrow } from '../runtime'
 import { getEventHandler } from '../EventHandler'
 import { renderPage, type RenderedPage } from '../routes/pageRender'
 import type { PageStore, StoredPage } from '../routes/pageStore'
+import type { RouteTable } from '../routes/routeTable'
 import type { BunRoutes } from './types'
 
 /**
  * `POST /api/app-events` — the ONE write-restricted ingest surface
  * (`IMPLEMENTATION-PLAN.md` §1.5).
  *
- * verify → level → kind allowlist → dispatch. In increment 1 there is one
- * kind, the storefront page (30024); increment 4 adds the route-intent kind to
- * this same endpoint rather than creating a second write path.
+ * verify → level → kind allowlist → dispatch. Two kinds are accepted: the
+ * storefront page (30024), and the route intent (30025) that points a path at
+ * one. Both pass the same gate in the same order, so there is exactly one place
+ * where "may this pubkey write?" is answered.
  *
  * The endpoint never reads a relay: it is the app relay's own POST surface,
  * running in-process. `d` comes from the signed event's tag, never from the
- * request body, and the record is built by the server.
+ * request body, and the record is built by the server. A route intent is
+ * applied to the live table and re-validated as a whole; a change that would
+ * make the table invalid is refused and nothing is persisted.
  */
 
 export type AccessLevel = 'app' | 'admin' | 'editor' | null
@@ -25,6 +30,8 @@ export interface AppEventsDeps {
 	pageStore: PageStore
 	/** Server-side level lookup — the signed event's pubkey is the only input. */
 	levelOf: (pubkey: string) => AccessLevel
+	/** The live table route intents are applied to. */
+	routeTable: RouteTable
 	/** Injectable for tests; production uses `renderPage`. */
 	render?: (page: Parameters<typeof renderPage>[0], options: { author: string }) => RenderedPage
 	/** Unix seconds. */
@@ -89,6 +96,8 @@ export function createLevelLookup(): (pubkey: string) => AccessLevel {
 	}
 }
 
+export const ACCEPTED_KINDS: readonly number[] = [STOREFRONT_PAGE_KIND, ROUTE_INTENT_KIND]
+
 export function buildAppEventsRoutes(deps: AppEventsDeps): BunRoutes {
 	const render = deps.render ?? renderPage
 	const now = deps.now ?? (() => Math.floor(Date.now() / 1000))
@@ -114,8 +123,8 @@ export function buildAppEventsRoutes(deps: AppEventsDeps): BunRoutes {
 		const level = deps.levelOf(event.pubkey)
 		if (level !== 'app' && level !== 'admin' && level !== 'editor') return fail(403, 'no-acl')
 
-		// 3. Kind allowlist. Increment 4 adds the route-intent kind here.
-		if (event.kind !== STOREFRONT_PAGE_KIND) return fail(400, 'kind-not-allowed', `kind ${event.kind}`)
+		// 3. Kind allowlist.
+		if (!ACCEPTED_KINDS.includes(event.kind)) return fail(400, 'kind-not-allowed', `kind ${event.kind}`)
 
 		// 4. Replay: a signed event with no session has no built-in expiry.
 		if (Math.abs(now() - event.created_at) > freshness) return fail(400, 'stale-intent')
@@ -124,6 +133,41 @@ export function buildAppEventsRoutes(deps: AppEventsDeps): BunRoutes {
 		// validation time proportional to its own length.
 		if (Buffer.byteLength(event.content, 'utf8') > maxBytes) return fail(400, 'too-large')
 
+		if (event.kind === ROUTE_INTENT_KIND) return applyRouteIntent(event)
+
+		return storePage(event)
+	}
+
+	/**
+	 * The route-intent arm. The event's `d` tag is the binding path — the same
+	 * "the tag, never the body" rule the page arm applies to `d` — and the
+	 * table's own validator decides whether the result is servable.
+	 */
+	function applyRouteIntent(event: SignedEvent): Response {
+		const d = event.tags.find((tag) => tag[0] === 'd')?.[1]
+		if (typeof d !== 'string' || d.length === 0) return fail(400, 'invalid-route-intent', '/d: missing d tag')
+
+		const parsed = parseRouteIntent(event.content, d)
+		if (!parsed.intent || parsed.error) return fail(400, 'invalid-route-intent', parsed.error ?? 'route intent rejected')
+		const intent = parsed.intent
+
+		// Attribution is the event: `createdAt` is the signature's timestamp and
+		// `updatedBy` its pubkey. Neither is read from the request body.
+		const applied = deps.routeTable.apply(intent, { createdAt: event.created_at, pubkey: event.pubkey })
+		if (!applied.ok) return json(400, { error: 'invalid-route-table', detail: applied.violations.join('; ') })
+
+		return json(200, {
+			stored: true,
+			kind: ROUTE_INTENT_KIND,
+			path: intent.path,
+			action: intent.action,
+			eventId: event.id,
+			changed: applied.changed,
+			warnings: applied.warnings,
+		})
+	}
+
+	function storePage(event: SignedEvent): Response {
 		// 4b. Parse. A structurally wrong document is refused, not stored.
 		const parsed = parseStorefrontPage(event.content)
 		if (!parsed.page || parsed.error) return fail(400, 'invalid-page', parsed.error ?? 'page document rejected')
