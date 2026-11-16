@@ -13,11 +13,16 @@
  * 64-hex literal in a test file is indistinguishable from a key to the
  * pre-commit scanner.
  */
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ARENA_AUCTION_BID_KIND, ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
+import { testLabelActions } from '@sdk/config/test-labels'
 import type { NostrEventLike } from '@sdk/core'
+import {
+	findAuction,
+	toAuctionDetailModel,
+} from '@platform/web/auctions/relay/auctionSurfacesRead'
 import {
 	decodeArenaEvent,
 	projectArenaEvents,
@@ -366,5 +371,93 @@ describe('divergence is surfaced', () => {
 		const markup = renderHost({ snapshot: divergent })
 
 		expect(markup).toContain('Relays disagree about this auction')
+	})
+})
+
+// =========================================================================
+// ADR-0009 — the live list honours test labels
+// =========================================================================
+
+describe('ADR-0009 — test-labeled lots are hidden from the auction list', () => {
+	const openCoordinate = `1440:${SELLER}:open-lot`
+
+	/** A completed label read: these coordinates were checked, and all carry a label. */
+	const markLoadedAndLabeled = (coordinates: string[]) =>
+		testLabelActions.applyFetchedLabels(
+			new Map(coordinates.map((coordinate) => [coordinate, { eventId: `label-${coordinate}`, labelerPubkey: 'labeler' }])),
+			coordinates,
+		)
+
+	const select = (over: Partial<Parameters<typeof selectArenaListCards>[1]> = {}) =>
+		selectArenaListCards(OPEN_AND_ENDED, { now: NOW, status: 'settled', sort: 'newest', hideEnded: false, ...over })
+
+	beforeEach(() => {
+		testLabelActions.clearLabels()
+	})
+
+	afterEach(() => {
+		testLabelActions.clearLabels()
+	})
+
+	test('a labeled 1440 lot is absent from the list while its neighbours still render', () => {
+		markLoadedAndLabeled([openCoordinate])
+
+		const { cards, total } = select()
+		expect(cards.map((card) => card.d)).toEqual(['endless-lot', 'ended-lot'])
+		// Labeled lots are not discoverable results, so they are not in the count
+		// a "filtered" empty state would be blamed on.
+		expect(total).toBe(2)
+
+		const markup = renderHost({ snapshot: OPEN_AND_ENDED })
+		expect(markup).not.toContain('Lot open-lot')
+		expect(markup).toContain('Lot endless-lot')
+		expect(markup).toContain('Lot ended-lot')
+	})
+
+	test('fails open when no label read has happened — a labeled coordinate hides nothing', () => {
+		// The store knows a label, but no read completed (`isLoaded` false): ADR-0009
+		// says a read that did not happen is not evidence, so the lot stays.
+		testLabelActions.setLabel(openCoordinate, 'label-event', 'labeler')
+		expect(testLabelActions.areLabelsLoaded()).toBe(false)
+
+		expect(select().cards.map((card) => card.d)).toEqual(['open-lot', 'endless-lot', 'ended-lot'])
+		expect(renderHost({ snapshot: OPEN_AND_ENDED })).toContain('Lot open-lot')
+	})
+
+	test('the show-test-listings toggle reveals labeled lots, and switching it off hides them again', () => {
+		markLoadedAndLabeled([openCoordinate])
+
+		expect(select().cards.map((card) => card.d)).not.toContain('open-lot')
+		expect(select({ showTestListings: true }).cards.map((card) => card.d)).toEqual(['open-lot', 'endless-lot', 'ended-lot'])
+
+		// The toggle is the SDK state the product surfaces read, not a second one.
+		testLabelActions.setShowTestListings(true)
+		expect(renderHost({ snapshot: OPEN_AND_ENDED })).toContain('Lot open-lot')
+
+		testLabelActions.setShowTestListings(false)
+		expect(renderHost({ snapshot: OPEN_AND_ENDED })).not.toContain('Lot open-lot')
+	})
+
+	test('a settled read whose only lot is labeled says there are no auctions, not that a filter hid them', () => {
+		markLoadedAndLabeled([`1440:${SELLER}:lot-1`])
+
+		const markup = renderHost({ snapshot: ONE_LOT, status: 'settled', relayHealth: { answered: 2, total: 2 } })
+		expect(markup).toContain('No auctions yet.')
+		expect(markup).not.toContain('No auctions match the current filter')
+	})
+
+	test('the gate is projection-only: the detail page still finds the labeled lot', () => {
+		markLoadedAndLabeled([`1440:${SELLER}:lot-1`])
+
+		const view = findAuction(ONE_LOT, `1440:${SELLER}:lot-1`)
+		expect(view).not.toBeNull()
+		expect(toAuctionDetailModel(view!, { now: NOW, status: 'settled' }).d).toBe('lot-1')
+	})
+
+	test('a labeled lot from another seller is judged on its own coordinate, not the kind alone', () => {
+		markLoadedAndLabeled([`1440:${OTHER_SELLER}:open-lot`])
+
+		// `open-lot` is SELLER's; OtherSeller's same `d` is a different coordinate.
+		expect(select().cards.map((card) => card.d)).toEqual(['open-lot', 'endless-lot', 'ended-lot'])
 	})
 })

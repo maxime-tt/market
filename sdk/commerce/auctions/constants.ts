@@ -1,10 +1,14 @@
 /**
- * Auction protocol constants — `cashu_p2pk_bidder_path_v1`.
+ * Auction protocol constants.
  *
- * Lives in `src/lib/auction/` (the bidder-held-path scheme's home) to
- * keep it isolated from the legacy `src/lib/auction*.ts` files during
- * the transition. Once Phase 2 deletes the v1 code, this directory's
- * contents will become the canonical auction module.
+ * Two halves, one protocol each:
+ *  - the retired `cashu_p2pk_bidder_path_v1` 30408 family (30408 listing,
+ *    1023 bid, 1024 settlement, 1025 path release, 30440–30442 validator);
+ *  - the arena 1440 series (1440 create, 1441 bid, 1445 verdict), which is the
+ *    auction protocol — a lot's coordinate is `1440:<seller>:<d>`.
+ *
+ * New code reads the 1440 series. The 30408 family's numbers stay exported for
+ * the modules that still carry them; nothing may add a new consumer.
  *
  * See AUCTIONS.md for the full spec.
  */
@@ -42,9 +46,6 @@ export const AUCTION_SETTLEMENT_KIND = 1024 as AuctionKind
 
 /** Kind 1025 — path release (regular event, bidder-signed). §4.3.1. */
 export const AUCTION_PATH_RELEASE_KIND = 1025 as AuctionKind
-
-/** Kind 1026 — fallback offer (regular event, seller-signed, optional). §8.3. */
-export const AUCTION_FALLBACK_OFFER_KIND = 1026 as AuctionKind
 
 /** Kind 30440 — validator bid verdict (parameterized replaceable). §4.4.1. */
 export const VALIDATOR_VERDICT_KIND = 30440 as AuctionKind
@@ -117,9 +118,8 @@ export const AUCTION_PATH_HD_MAX_INDEX = 0x7fffffff
 
 /**
  * Single-value tags that MUST NOT change once the auction is first
- * published. The seller may publish updates (kind 30408 is addressable),
- * but updates touching any of these are rejected by compliant clients
- * and validators — §4.1.
+ * published. The seller may publish updates to a listing, but updates touching
+ * any of these are rejected by compliant clients and validators — §4.1.
  */
 export const AUCTION_IMMUTABLE_SINGLE_TAGS = [
 	'auction_type',
@@ -258,22 +258,26 @@ export const BIDDER_AGGREGATE_SCHEMA_TYPE = 'auction_bidder_aggregate_v1'
 export const VALIDATOR_POLICY_D_PREFIX = 'policy:auction'
 
 // =========================================================================
-// Arena 1440-series kinds — the chain-backed POC protocol (`plebeian-arena-auctions`).
+// Arena 1440-series kinds — the auction protocol (`plebeian-arena-auctions`).
 //
-// This is a SECOND, DIFFERENT protocol from the `cashu_p2pk_bidder_path_v1`
-// 30408 family above. It is chain-backed (CometBFT) with Nostr relays as the
-// transport, and its kinds are NIP-01 *regular* kinds (1000–9999) so a khatru
-// relay stores them and replays them on subscription. The ephemeral range was
-// fatal: a khatru relay refuses such an EVENT with no live subscriber
-// ("mute: no one was listening for this") and does not buffer it.
+// 1440 create, 1441 bid, 1445 verdict are THE auction kinds. The
+// `cashu_p2pk_bidder_path_v1` 30408 family above is the retired predecessor:
+// nothing new may be published under it and no new code may depend on its
+// numbers, so a lot's coordinate is `1440:<seller>:<d>` everywhere.
+//
+// The change is also a transport change. The arena is chain-backed
+// (CometBFT) with Nostr relays as the transport, and its kinds are NIP-01
+// *regular* kinds (1000–9999) so a khatru relay stores them and replays them on
+// subscription. The ephemeral range was fatal: a khatru relay refuses such an
+// EVENT with no live subscriber ("mute: no one was listening for this") and does
+// not buffer it.
 //
 // Frozen in, and only in:
 //   notes/DECISION-auction-kinds-and-editable-allowlist.md
 //   notes/REPLY-nostr-verdict-contract.md
 //
-// These values MUST NOT replace, reuse or renumber the 30408-family constants
-// above; the two families coexist deliberately. Every number lives in exactly
-// one place — this block and the `ARENA_AUCTION_KINDS` map below.
+// Every number lives in exactly one place — this block and the
+// `ARENA_AUCTION_KINDS` map below.
 // =========================================================================
 
 /** Kind 1440 — arena auction create / root (regular, seller-signed). The POC's `KindCreate`. */

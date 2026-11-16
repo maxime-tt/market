@@ -37,17 +37,38 @@
  * - the 30408 **category chips** are deleted — a 1440 create carries no category
  *   in the read's content (`ArenaCreateContent`), so a chip could not filter
  *   anything;
- * - the **`Show test listings`** toggle is deleted — the arena read has no
- *   test-label concept, so the toggle gated nothing.
+ * - the **`Show test listings`** control is not rendered here. The reader's
+ *   choice still applies, because the gate below reads the same
+ *   `testLabelState.showTestListings` the product surfaces read.
+ *
+ * ## ADR-0009 — the live list honours test labels
+ *
+ * A `test`-labeled lot is hidden from this discovery surface. The label truth is
+ * read from the SDK registry/store (`sdk/config/test-labels`) through the same
+ * coordinate filter the product surfaces use, and the relay read that populates
+ * it is `fetchTestLabels` — the arena subscription opened first, so the label
+ * read is reconciliation, not a second source of lots.
+ *
+ * Two rules are load-bearing:
+ *
+ * - **fail-open** — until the label read has populated the store, nothing is
+ *   hidden (`filterTestLabeledItems` keeps everything), because a read that did
+ *   not happen is not evidence about an item;
+ * - **detail stays reachable** — this gate is only on the list projection. The
+ *   lot's own page (`auctions.$auctionId.tsx`) reads the same snapshot without a
+ *   label filter, as do the seller-profile and owner-dashboard reads.
  */
 
 import type { ArenaAuctionSnapshot, ArenaAuctionView, ArenaVerdictDivergence } from '@platform/web/auctions/relay/arenaAuctionRead'
 import { auctionEndsAt, toAuctionCardModel } from '@platform/web/auctions/relay/auctionSurfacesRead'
+import { fetchTestLabels, useTestLabelState } from '@platform/web/config/testLabelsBinding'
+import { filterTestLabeledItems } from '@sdk/config/testLabelFilters'
 import { ArenaAuctionCard } from '@ui/auction/arena/auction-card'
 import { AuctionFiltersView } from '@ui/auction/auction-list-views'
 import type { ArenaAuctionCardModel, ArenaRelayHealth, ArenaSurfaceStatus } from '@ui/auction/arena/model'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { Button } from '@ui/wrappers/button'
+import { useEffect } from 'react'
 
 // =========================================================================
 // The link shape — the `d` tag only, the existing contract
@@ -92,6 +113,11 @@ export interface ArenaListSelection {
 	status: ArenaSurfaceStatus
 	sort: ArenaListSort
 	hideEnded: boolean
+	/**
+	 * The reader's `showTestListings` choice, read from the SDK test-label state by
+	 * the caller. `true` reveals labeled lots; absent/false keeps the ADR-0009 gate.
+	 */
+	showTestListings?: boolean
 	/** `snapshot.verdictDivergence`, so a card can flag relay disagreement. */
 	divergences?: readonly ArenaVerdictDivergence[]
 }
@@ -99,7 +125,11 @@ export interface ArenaListSelection {
 export interface ArenaListSelectionResult {
 	/** The cards to render, in the selected order. */
 	cards: ArenaAuctionCardModel[]
-	/** How many lots the read delivered, **before** the filter. */
+	/**
+	 * How many **discoverable** lots the read delivered, before the hide-ended
+	 * filter. Test-labeled lots are not in this count: they are not discovery
+	 * results, so an all-labeled list must not be blamed on a filter the reader set.
+	 */
 	total: number
 }
 
@@ -162,8 +192,12 @@ export function selectArenaListCards(
 	selection: ArenaListSelection,
 ): ArenaListSelectionResult {
 	const views = snapshot?.auctions ?? []
+	// ADR-0009: a `test`-labeled lot is not a discovery result. The SDK filter
+	// fails open until a label read has populated the store, so an unloaded label
+	// state hides nothing. The reader's toggle reveals labeled lots again.
+	const discoverable = selection.showTestListings ? views : filterTestLabeledItems(views)
 	const context = { now: selection.now, status: selection.status, divergences: selection.divergences }
-	const cards = orderArenaViews(views, selection.sort).map((view) => toAuctionCardModel(view, context))
+	const cards = orderArenaViews(discoverable, selection.sort).map((view) => toAuctionCardModel(view, context))
 	const kept = selection.hideEnded ? cards.filter((card) => card.phase !== 'ended') : cards
 	return { cards: kept, total: cards.length }
 }
@@ -273,11 +307,30 @@ export function ArenaAuctionsListHost({
 	onToggleHideEnded,
 	onReset,
 }: ArenaAuctionsListHostProps) {
+	const { showTestListings } = useTestLabelState()
+
+	// ADR-0009: the arena read is the live lot source; the label read reconciles
+	// it against the registry. Batch one fetch for the snapshot's coordinates
+	// whenever the set changes (or the reader switches the toggle back off), so
+	// the labels resolve without a per-lot read. Skipped entirely while the reader
+	// is revealing labeled lots — nothing is gated, so nothing needs reading.
+	const coordinatesKey = (snapshot?.auctions ?? []).map((view) => view.coordinate).join('|')
+	useEffect(() => {
+		if (showTestListings) return
+		const coordinates = coordinatesKey === '' ? [] : coordinatesKey.split('|')
+		if (coordinates.length === 0) return
+
+		void fetchTestLabels(coordinates).catch((error: unknown) => {
+			console.warn('Test label fetch failed for the auction list:', error)
+		})
+	}, [coordinatesKey, showTestListings])
+
 	const { cards, total } = selectArenaListCards(snapshot, {
 		now,
 		status,
 		sort,
 		hideEnded,
+		showTestListings,
 		divergences: snapshot?.verdictDivergence,
 	})
 

@@ -12,6 +12,7 @@ import {
 	LABEL_EVENT_KIND,
 	LABEL_NAMESPACE,
 	LABEL_VALUE_TEST,
+	TEST_LABEL_AUCTION_KIND,
 	TEST_LABEL_PRODUCT_KIND,
 	l_TAG,
 } from '@sdk/config/test-label-constants'
@@ -35,7 +36,8 @@ const EDITOR_PUBKEY = 'd'.repeat(64)
 const MERCHANT_PUBKEY = 'c'.repeat(64)
 
 const PRODUCT_COORD = `30402:${MERCHANT_PUBKEY}:my-product`
-const AUCTION_COORD = `30408:${MERCHANT_PUBKEY}:my-auction`
+// Auction lots are arena create events: the lot's coordinate is `1440:<seller>:<d>`.
+const AUCTION_COORD = `${TEST_LABEL_AUCTION_KIND}:${MERCHANT_PUBKEY}:my-auction`
 
 const makeFakeEvent = (params: { kind?: number; id?: string; pubkey?: string; created_at?: number; tags: string[][] }): NostrEventLike =>
 	({
