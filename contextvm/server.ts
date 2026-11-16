@@ -3,8 +3,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { fetchAllSources, SUPPORTED_FIAT, type AggregatedRates, type FiatCode } from './tools/price-sources'
 import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema } from './schemas'
 import { RatesCache } from './tools/rates-cache'
-import { startAuctionValidator } from '../platform/server/auction-validator'
-import { readBidSpamPolicyFromEnv } from '../platform/server/auction-validator/spamPolicy'
 import { startLiveActivityWorker, stopLiveActivityWorker } from './tools/live-activity-worker'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -12,10 +10,9 @@ import { dirname } from 'node:path'
 // The v1 auction CVM tools (request_path, submit_bid_token,
 // request_settlement, get_auction_state) and their CEP-15 announcement
 // have been removed. The bidder-held-path scheme has no oracle: bidders
-// generate paths locally, validators publish kind-30440 verdicts as
-// pub/sub on relays. The auction validator daemon will be added to this
-// process in Phase 4 — it doesn't register MCP tools, it just
-// subscribes to relays and publishes.
+// generate paths locally and the verdicts the app reads are the committee
+// backend's, not this process's — the in-repo 30408 validator that used to
+// run here is retired with the rest of that series.
 
 const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY
 if (!SERVER_PRIVATE_KEY) {
@@ -292,22 +289,11 @@ async function main() {
 	await mcpServer.connect(serverTransport)
 	console.log('Server is running and listening for requests on Nostr...')
 
-	// Auction validator (kind-30440 / 30441 publisher). Pure pub/sub
-	// daemon — no MCP transport, no CEP-15 announcement. Shares this
-	// process's signer + relay pool. See src/server/auction-validator.
-	const validatorHandle = await startAuctionValidator({
-		signer,
-		relayPool,
-		name: `Plebeian validator (${STAGE})`,
-		spamPolicy: readBidSpamPolicyFromEnv(),
-	})
-
 	startLiveActivityWorker({ relayPool, signer, issuerPubkey: serverPubkey })
 
 	const shutdown = async (sig: NodeJS.Signals) => {
 		console.log(`\nReceived ${sig}, shutting down...`)
 		stopLiveActivityWorker()
-		await validatorHandle.stop()
 		process.exit(0)
 	}
 	process.once('SIGINT', () => void shutdown('SIGINT'))
