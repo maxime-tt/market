@@ -8,8 +8,15 @@
  * that already owns the `@/lib/stores/ndk` edge) instead of `@/lib/stores/ndk`, so it adds no counted
  * `platform -> src` import. The query keys are literal-identical to the pre-drain values. The vacated
  * `src/queries/app-settings.tsx` path is an `export *` shim over this file until E1.
+ *
+ * Identity for the role checks comes from the SDK auth machine — `useStore(authStore)` -> `AuthState.user`
+ * (`{ pubkey }`) — not from the NDK instance: `ndk.activeUser` is never assigned in this tree (the signer
+ * is the SDK signer capability since A3.5), so reading it made every check fail closed and hid the admin
+ * surface. `authStore` is taken from the same `readContext` import as the relay accessors, which is why
+ * this file adds no import edge (and no `authStore -> readContext -> applesauceIo` cycle).
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
 import {
 	buildCurationListFilter,
@@ -25,8 +32,9 @@ import {
 	type EditorSettings as SdkEditorSettings,
 } from '@sdk/core/curation'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
+import type { AuthUser } from '@sdk/core/auth'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
-import { createAppRelayReadContext, getAppRelayUrl } from '@platform/web/readContext'
+import { authStore, createAppRelayReadContext, getAppRelayUrl } from '@platform/web/readContext'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
 
 export { getFormattedAdmins, getFormattedEditors, getUserRoleForPubkey, isAdmin, isEditor, isOwner }
@@ -34,6 +42,20 @@ export { getFormattedAdmins, getFormattedEditors, getUserRoleForPubkey, isAdmin,
 export type AdminSettings = SdkAdminSettings<NostrEventLike>
 
 export type EditorSettings = SdkEditorSettings<NostrEventLike>
+
+/**
+ * The identity seam both role hooks share: the signed-in user comes from the SDK auth machine
+ * (`AuthState.user`, `AuthUser = { pubkey }`), never from the NDK instance.
+ *
+ * `ndk.activeUser` is permanently undefined in this tree — nothing ever assigns it, because since
+ * A3.5 the signer is the SDK signer capability, not an NDK signer. Reading it made every role check
+ * fail closed (`isAdmin(settings, '')` is `false`), which hid the whole admin surface from the owner
+ * and every admin. The hooks read this through `useStore(authStore)` so a login/logout re-renders
+ * them; this function is the pure part of that seam.
+ */
+export function resolveUserPubkey(user: AuthUser | null | undefined): string | undefined {
+	return user?.pubkey
+}
 
 /**
  * Fetches admin settings (kind 30000) for the app
@@ -107,8 +129,9 @@ export const useAdminSettings = (appPubkey?: string) => {
  */
 export const useAmIAdmin = (appPubkey?: string) => {
 	const { data: adminSettings, isLoading } = useAdminSettings(appPubkey)
-	const ndk = getAppNdk()
-	const currentUserPubkey = ndk?.activeUser?.pubkey
+	// Reactive identity: `useStore` subscribes, so a login/logout re-renders the hook.
+	const { user } = useStore(authStore)
+	const currentUserPubkey = resolveUserPubkey(user)
 
 	const amIAdmin = isAdmin(adminSettings, currentUserPubkey || '')
 	const amIOwner = isOwner(adminSettings, currentUserPubkey || '')
@@ -194,8 +217,9 @@ export const useEditorSettings = (appPubkey?: string) => {
 export const useUserRole = (appPubkey?: string) => {
 	const { data: adminSettings, isLoading: isLoadingAdmins } = useAdminSettings(appPubkey)
 	const { data: editorSettings, isLoading: isLoadingEditors } = useEditorSettings(appPubkey)
-	const ndk = getAppNdk()
-	const currentUserPubkey = ndk?.activeUser?.pubkey
+	// Reactive identity: same SDK auth-machine read as `useAmIAdmin`, never `ndk.activeUser`.
+	const { user } = useStore(authStore)
+	const currentUserPubkey = resolveUserPubkey(user)
 
 	const amIAdmin = isAdmin(adminSettings, currentUserPubkey || '')
 	const amIOwner = isOwner(adminSettings, currentUserPubkey || '')
