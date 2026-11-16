@@ -44,6 +44,7 @@ const EXPECTED: ReadonlyArray<readonly [path: string, emoji: string, title: stri
 	['/dashboard/app-settings/team', '👥', 'Team'],
 	['/dashboard/app-settings/blacklists', '🚫', 'Blacklists'],
 	['/dashboard/app-settings/featured-items', '⭐', 'Featured Items'],
+	['/dashboard/app-settings/routes', '🧭', 'Routes'],
 	['/dashboard/about', 'ℹ️', 'About'],
 ]
 

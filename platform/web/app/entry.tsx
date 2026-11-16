@@ -9,7 +9,7 @@
 
 import index from './index.html'
 import { buildServer, initializeAppSettings, startEventHandlerInitialization } from '@platform/server'
-import { loadRoutesFile } from '@platform/server/routes/routeFile'
+import { loadRouteTable } from '@platform/server/routes/routeTable'
 
 import.meta.hot.accept()
 
@@ -25,13 +25,15 @@ export const serverPromise: Promise<ResolvedServer> = (async () => {
 	// unreadable or invalid table refuses boot — the site is broken, not
 	// degraded (ARCHITECTURE.md §4.4). It is read before settings discovery so
 	// a corrupt file fails immediately rather than after a relay timeout.
-	const routing = loadRoutesFile(process.env.AR_ROUTES_FILE ?? './data/routes.json')
-	for (const warning of routing.warnings) console.warn(`⚠️ ${warning.message}`)
+	// The table stays live after boot: route intents authored through the
+	// ingest mutate this same object, and every request re-resolves against it.
+	const routing = loadRouteTable(process.env.AR_ROUTES_FILE ?? './data/routes.json')
+	for (const warning of routing.warnings()) console.warn(`⚠️ ${warning.message}`)
 	await initializeAppSettings()
 	// Heavy relay-dependent EventHandler bootstrap runs in parallel with
 	// HTTP serving — relay timeouts shouldn't block the setup form.
 	void startEventHandlerInitialization()
-	resolvedServer = buildServer({ indexHtml: index, routing: routing.file })
+	resolvedServer = buildServer({ indexHtml: index, routing })
 	console.log(`🚀 Server running at ${resolvedServer.url}`)
 	return resolvedServer
 })()

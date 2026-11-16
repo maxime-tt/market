@@ -11,11 +11,12 @@ import type { BunRoutes } from './http/types'
 import { buildAnalyticsRoutes } from './http/analytics'
 import { buildAuctionsProtocolRoutes } from './http/auctionsProtocol'
 import { buildAppEventsRoutes, createLevelLookup } from './http/appEvents'
-import { COMPILED_IN_NAMES } from '@sdk/config/routeNames'
+import { buildRouteTableRoutes } from './http/routeTable'
 import { resolve } from './routes/resolve'
 import { composePageHtml, composeRenderPlaceholder } from './routes/pageHtml'
 import { createPageStore, type PageStore } from './routes/pageStore'
-import type { RoutesFile } from './routes/routeFile'
+import { createShellResponder } from './routes/shell'
+import type { RouteTable } from './routes/routeTable'
 
 /**
  * Compose the Bun HTTP/WebSocket server. Routes are merged from each
@@ -23,12 +24,18 @@ import type { RoutesFile } from './routes/routeFile'
  * (`'/*'`) is provided by the entrypoint that owns the build artefact —
  * we accept it as an argument so this module stays free of asset imports.
  *
- * Routing (increment 1): the routing file is loaded once by the entrypoint
- * and passed in. Every bound path, programmed prefix and compiled-in segment
- * is registered before the `':name'` catch and the `'/*'` SPA fallback, so an
- * unmatched single-segment path is a real 404 — the visible change rung 3 is
- * for. Multi-segment client routes still fall through to the SPA, which is
- * the pre-existing behaviour and is extended in increment 3.
+ * Routing (increment 2): the table is a *live* object, not a snapshot. The
+ * entrypoint loads it at boot and passes it in; every handler resolves against
+ * `table.current()` when the request arrives, so a binding authored over
+ * `POST /api/app-events` is served by the next request with no restart.
+ *
+ * Registration order still decides which handler a URL reaches — boot bindings
+ * and programmed prefixes get their own literal routes, then `':name'`, then
+ * the SPA — but it no longer decides *whether* a binding is honoured. The
+ * compiled-in names are deliberately not registered as static shell routes any
+ * more: they flow through `':name'` so that rung 1 (an exact binding) can
+ * supersede a compiled-in page at request time, which is ruling 3 applied to a
+ * table that changes while the process runs.
  */
 export interface BuildServerOptions {
 	/**
@@ -38,13 +45,13 @@ export interface BuildServerOptions {
 	 * to import here, so we accept anything Bun's route record will take.
 	 */
 	indexHtml: unknown
-	/** Loaded once at boot; an unreadable file refuses boot before we get here. */
-	routing: RoutesFile
+	/** Loaded once at boot, then mutated by route intents; unreadable refuses boot. */
+	routing: RouteTable
 	pageStore?: PageStore
 }
 
 export interface ContentRoutesOptions {
-	routing: RoutesFile
+	routing: RouteTable
 	pageStore: PageStore
 	indexHtml: unknown
 	/** Unix seconds; injected so a lapsed lease can be asserted at expiry + 1. */
@@ -65,11 +72,14 @@ export function buildContentRoutes({
 	now = () => Math.floor(Date.now() / 1000),
 }: ContentRoutesOptions): BunRoutes {
 	const routes: BunRoutes = {}
-	const boundPaths = new Set(routing.bindings.map((binding) => binding.path))
+	// The shell, as a Response a handler may return. One self-request per boot
+	// when `indexHtml` is the Bun HTML bundle; a clone per request otherwise.
+	const shell = createShellResponder({ indexHtml, fetchShell: () => fetch(`http://127.0.0.1:${PORT}/`) })
 
-	const servePath = (request: Request): Response => {
+	const servePath = async (request: Request): Promise<Response> => {
 		const url = new URL(request.url)
-		const resolution = resolve(routing, url.pathname, now())
+		// Read the table per request: this is what makes an authored binding live.
+		const resolution = resolve(routing.current(), url.pathname, now())
 
 		if (resolution.status === 404)
 			return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } })
@@ -79,10 +89,17 @@ export function buildContentRoutes({
 		}
 
 		if (resolution.outcome === 'compiled-in') {
-			// Compiled-in segments are registered as static routes; a handler
-			// reaching here cannot delegate to Bun's HTMLBundle, so it is not a
-			// path this table serves.
-			return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } })
+			// Rung 1b: no binding claims this compiled-in name, so the SPA shell
+			// answers — the same bytes the `'/*'` route would have returned.
+			try {
+				return await shell()
+			} catch (error) {
+				const detail = error instanceof Error ? error.message : String(error)
+				return html(
+					`<!doctype html><html><head><title>Page unavailable</title></head><body><h1>spa-shell-unavailable</h1><p>${detail}</p></body></html>`,
+					500,
+				)
+			}
 		}
 
 		const page = pageStore.get(resolution.target.author, resolution.target.d)
@@ -105,26 +122,27 @@ export function buildContentRoutes({
 		)
 	}
 
-	// Rung 1: one literal route per binding. The handler still re-resolves on
-	// every request so a lease that lapses while the process runs 404s.
-	for (const binding of routing.bindings) {
+	// Bindings that exist at boot keep their own literal routes. A subpath
+	// binding (`a/b`) has no other way to be reached; the top-level ones are
+	// registered here too so their URL keeps the most specific route.
+	for (const binding of routing.current().bindings) {
 		routes[`/${binding.path}`] = { GET: servePath }
 	}
 
-	// Rung 1b: compiled-in pages with no binding keep their compiled page. A
-	// binding on the same name is already registered above and wins.
-	for (const name of COMPILED_IN_NAMES) {
-		if (!boundPaths.has(name)) routes[`/${name}`] = indexHtml as BunRoutes[string]
-	}
-
 	// Rung 2: programmed prefixes. Bun's `:param` segments carry the value.
-	for (const prefix of routing.prefixes) {
+	// Prefixes are not authorable in this increment (the pattern must be one the
+	// build programs), so reading them once here is still correct.
+	for (const prefix of routing.current().prefixes) {
 		routes[`/${prefix.pattern}`] = { GET: servePath }
 	}
 
-	// Any other single-segment path is resolved (and 404s) rather than being
-	// handed the SPA shell. Multi-segment paths still reach the shell below.
+	// Any other single-segment path is resolved per request — including a
+	// binding authored after boot, and including the compiled-in names, whose
+	// precedence over a binding is rung 1 vs rung 1b and therefore resolved
+	// with the live table rather than baked into registration.
 	routes['/:name'] = { GET: servePath }
+
+	// Multi-segment client routes still fall through to the SPA.
 	routes['/*'] = indexHtml as BunRoutes[string]
 
 	return routes
@@ -149,8 +167,10 @@ export function buildServer({ indexHtml, routing, pageStore = createPageStore() 
 		...buildAuctionsProtocolRoutes(),
 		// What this instance may report: page views only, environment-gated.
 		...buildAnalyticsRoutes(),
-		// The one write-restricted ingest surface.
-		...buildAppEventsRoutes({ pageStore, levelOf: createLevelLookup() }),
+		// The one write-restricted ingest surface: pages and route intents.
+		...buildAppEventsRoutes({ pageStore, routeTable: routing, levelOf: createLevelLookup() }),
+		// The routing table as this process currently serves it.
+		...buildRouteTableRoutes({ table: routing }),
 		// Product pages get og: meta tags server-rendered into the initial
 		// HTML (issue #459) — must beat the catch-all below.
 		...ogRoutes(indexHtml),

@@ -174,6 +174,7 @@ export const DASHBOARD_NAV: readonly NavSection[] = [
 				fullBleed: true,
 				hidesPageTitle: true,
 			}),
+			item('/dashboard/app-settings/routes', '🧭', 'Routes', { adminOnly: true, fullBleed: true, hidesPageTitle: true }),
 		],
 	},
 	{
