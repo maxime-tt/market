@@ -2,17 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import {
 	buildBlacklistFilter,
 	buildCurationListFilter,
-	getFormattedAdmins,
 	getFormattedBlacklist,
-	getFormattedEditors,
-	getUserRoleForPubkey,
-	isAdmin,
 	isBlacklisted,
-	isEditor,
-	isOwner,
-	parseAdminSettings,
 	parseBlacklistSettings,
-	parseEditorSettings,
 	parseFeaturedAuctions,
 	parseFeaturedCollections,
 	parseFeaturedProducts,
@@ -47,61 +39,6 @@ describe('curation filters', () => {
 
 	test('blacklist filter is the NIP-51 mute list without a d-tag', () => {
 		expect(buildBlacklistFilter(APP)).toEqual({ kinds: [10000], authors: [APP] })
-	})
-})
-
-describe('admin and editor settings', () => {
-	test('admins come from p tags in order; first admin is the owner', () => {
-		const ev = event(
-			[
-				['d', 'admins'],
-				['p', ALICE],
-				['e', 'x'],
-				['p', ''],
-				['p', BOB],
-			],
-			100,
-		)
-		const settings = parseAdminSettings(ev, APP)
-		expect(settings).toEqual({ admins: [ALICE, BOB], owner: ALICE, lastUpdated: 100, event: ev })
-	})
-
-	test('owner falls back to app pubkey and lastUpdated to 0', () => {
-		expect(parseAdminSettings(event([['d', 'admins']]), APP)).toMatchObject({ admins: [], owner: APP, lastUpdated: 0 })
-	})
-
-	test('missing editor event yields an empty list', () => {
-		expect(parseEditorSettings(null)).toEqual({ editors: [], lastUpdated: 0, event: null })
-		expect(parseEditorSettings(event([['p', CAROL]], 5))).toMatchObject({ editors: [CAROL], lastUpdated: 5 })
-	})
-
-	test('role helpers', () => {
-		const admins = parseAdminSettings(
-			event([
-				['p', ALICE],
-				['p', BOB],
-			]),
-			APP,
-		)
-		const editors = parseEditorSettings(event([['p', CAROL]]))
-		expect(isOwner(admins, ALICE)).toBe(true)
-		expect(isOwner(admins, BOB)).toBe(false)
-		expect(isAdmin(admins, BOB)).toBe(true)
-		expect(isAdmin(admins, '')).toBe(false)
-		expect(isAdmin(null, ALICE)).toBe(false)
-		expect(isEditor(editors, CAROL)).toBe(true)
-		expect(isEditor(undefined, CAROL)).toBe(false)
-		expect(getUserRoleForPubkey(admins, editors, ALICE)).toBe('owner')
-		expect(getUserRoleForPubkey(admins, editors, BOB)).toBe('admin')
-		expect(getUserRoleForPubkey(admins, editors, CAROL)).toBe('editor')
-		expect(getUserRoleForPubkey(null, null, APP)).toBe('user')
-		expect(getFormattedAdmins(admins)).toEqual([
-			{ pubkey: ALICE, isOwner: true, index: 0 },
-			{ pubkey: BOB, isOwner: false, index: 1 },
-		])
-		expect(getFormattedAdmins(null)).toEqual([])
-		expect(getFormattedEditors(editors)).toEqual([{ pubkey: CAROL, role: 'editor' }])
-		expect(getFormattedEditors(undefined)).toEqual([])
 	})
 })
 

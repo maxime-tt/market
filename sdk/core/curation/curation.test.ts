@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createTestPublishContext } from '../testing/publishContext'
-import { buildBlacklistEventData, buildCurationListEventData, planRoleChange, readCurationListItems } from './curationLists'
-import { publishBlacklistWorkflow, publishCurationListWorkflow, publishRoleChangeWorkflow } from './curationPublish'
+import { buildBlacklistEventData, buildCurationListEventData, readCurationListItems } from './curationLists'
+import { publishBlacklistWorkflow, publishCurationListWorkflow } from './curationPublish'
 
 const pk = (char: string) => char.repeat(64)
 const productCoord = `30402:${pk('a')}:mug`
@@ -79,47 +79,5 @@ describe('curation publish workflows', () => {
 		expect(await publishCurationListWorkflow(context, 'admins', [])).toEqual({ ok: false, issue: 'admins-required' })
 		expect((await publishCurationListWorkflow(context, 'editors', [])).ok).toBe(true)
 		expect(published).toHaveLength(1)
-	})
-
-	test('role changes publish admins before editors', async () => {
-		const { context, published } = createTestPublishContext()
-		const outcome = await publishRoleChangeWorkflow(context, { admins: [pk('a'), pk('b')], editors: [] })
-
-		expect(outcome.ok).toBe(true)
-		expect(published.map((event) => event.tags[0])).toEqual([
-			['d', 'admins'],
-			['d', 'editors'],
-		])
-	})
-})
-
-describe('planRoleChange', () => {
-	const owner = pk('o')
-	const admin = pk('a')
-	const editor = pk('e')
-	const state = { admins: [owner, admin], editors: [editor], owner }
-
-	test('promotes an editor to admin and removes them from editors', () => {
-		expect(planRoleChange('promoteEditorToAdmin', state, editor)).toEqual({
-			ok: true,
-			value: { admins: [owner, admin, editor], editors: [] },
-		})
-		expect(planRoleChange('promoteEditorToAdmin', state, pk('z'))).toEqual({ ok: false, error: 'not-editor' })
-	})
-
-	test('protects the owner and the last admin', () => {
-		expect(planRoleChange('demoteAdminToEditor', state, owner)).toEqual({ ok: false, error: 'owner-protected' })
-		expect(planRoleChange('removeAdmin', { admins: [admin], editors: null }, admin)).toEqual({ ok: false, error: 'last-admin' })
-		expect(planRoleChange('removeFromAllRoles', state, owner)).toEqual({ ok: false, error: 'owner-protected' })
-	})
-
-	test('demoting an admin adds them to editors once', () => {
-		expect(planRoleChange('demoteAdminToEditor', state, admin)).toEqual({ ok: true, value: { admins: [owner], editors: [editor, admin] } })
-	})
-
-	test('reports missing lists and users without roles', () => {
-		expect(planRoleChange('removeEditor', { admins: null, editors: null }, editor)).toEqual({ ok: false, error: 'no-editor-list' })
-		expect(planRoleChange('removeFromAllRoles', state, pk('z'))).toEqual({ ok: false, error: 'no-roles' })
-		expect(planRoleChange('promoteUserToEditor', state, admin)).toEqual({ ok: false, error: 'already-admin' })
 	})
 })

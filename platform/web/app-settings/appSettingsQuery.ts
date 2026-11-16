@@ -2,12 +2,13 @@
  * platform/web/app-settings/appSettingsQuery.ts — the React binding for the admin/editor settings reads
  * (store drain D1, slice 5).
  *
- * The framework-free reads (`readAdminSettingsWorkflow` / `readEditorSettingsWorkflow`) and the parsers
- * live in `@sdk/core/curation`. This file owns the react-query hooks and the live admin/editor list
- * subscriptions, and resolves its NDK client + app relay from `@platform/web/readContext.ts` (the file
- * that already owns the `@/lib/stores/ndk` edge) instead of `@/lib/stores/ndk`, so it adds no counted
- * `platform -> src` import. The query keys are literal-identical to the pre-drain values. The vacated
- * `src/queries/app-settings.tsx` path is an `export *` shim over this file until E1.
+ * The framework-free reads (`readAdminSettingsWorkflow` / `readEditorSettingsWorkflow`), the parsers and
+ * the role predicates live in `@sdk/core/roles`. This file owns the react-query hooks and the live
+ * admin/editor list subscriptions, and resolves its NDK client + app relay from
+ * `@platform/web/readContext.ts` (the file that already owns the `@/lib/stores/ndk` edge) instead of
+ * `@/lib/stores/ndk`, so it adds no counted `platform -> src` import. The query keys are
+ * literal-identical to the pre-drain values. The vacated `src/queries/app-settings.tsx` path is an
+ * `export *` shim over this file until E1.
  *
  * Identity for the role checks comes from the SDK auth machine — `useStore(authStore)` -> `AuthState.user`
  * (`{ pubkey }`) — not from the NDK instance: `ndk.activeUser` is never assigned in this tree (the signer
@@ -18,8 +19,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
+import { buildCurationListFilter } from '@sdk/core/curation'
 import {
-	buildCurationListFilter,
 	getFormattedAdmins,
 	getFormattedEditors,
 	getUserRoleForPubkey,
@@ -28,34 +29,18 @@ import {
 	isOwner,
 	readAdminSettingsWorkflow,
 	readEditorSettingsWorkflow,
+	resolveUserPubkey,
 	type AdminSettings as SdkAdminSettings,
 	type EditorSettings as SdkEditorSettings,
-} from '@sdk/core/curation'
+} from '@sdk/core/roles'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
-import type { AuthUser } from '@sdk/core/auth'
 import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 import { authStore, createAppRelayReadContext, getAppRelayUrl } from '@platform/web/readContext'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
 
-export { getFormattedAdmins, getFormattedEditors, getUserRoleForPubkey, isAdmin, isEditor, isOwner }
-
 export type AdminSettings = SdkAdminSettings<NostrEventLike>
 
 export type EditorSettings = SdkEditorSettings<NostrEventLike>
-
-/**
- * The identity seam both role hooks share: the signed-in user comes from the SDK auth machine
- * (`AuthState.user`, `AuthUser = { pubkey }`), never from the NDK instance.
- *
- * `ndk.activeUser` is permanently undefined in this tree — nothing ever assigns it, because since
- * A3.5 the signer is the SDK signer capability, not an NDK signer. Reading it made every role check
- * fail closed (`isAdmin(settings, '')` is `false`), which hid the whole admin surface from the owner
- * and every admin. The hooks read this through `useStore(authStore)` so a login/logout re-renders
- * them; this function is the pure part of that seam.
- */
-export function resolveUserPubkey(user: AuthUser | null | undefined): string | undefined {
-	return user?.pubkey
-}
 
 /**
  * Fetches admin settings (kind 30000) for the app

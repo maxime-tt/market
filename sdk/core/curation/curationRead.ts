@@ -15,19 +15,6 @@ export interface CurationListEvent {
 	created_at?: number
 }
 
-export interface AdminSettings<E = CurationListEvent> {
-	admins: string[]
-	owner: string
-	lastUpdated: number
-	event: E
-}
-
-export interface EditorSettings<E = CurationListEvent> {
-	editors: string[]
-	lastUpdated: number
-	event: E | null
-}
-
 export interface BlacklistSettings<E = CurationListEvent> {
 	blacklistedPubkeys: string[]
 	blacklistedProducts: string[]
@@ -35,8 +22,6 @@ export interface BlacklistSettings<E = CurationListEvent> {
 	lastUpdated: number
 	event: E | null
 }
-
-export type UserRole = 'owner' | 'admin' | 'editor' | 'user'
 
 export type FeaturedListKey = 'featuredProducts' | 'featuredCollections' | 'featuredAuctions' | 'featuredUsers'
 
@@ -69,17 +54,6 @@ export function buildCurationListFilter(list: CurationListKey, appPubkey: string
 
 export function buildBlacklistFilter(appPubkey: string): CurationFilter {
 	return { kinds: [MUTE_LIST_KIND], authors: [appPubkey] }
-}
-
-/** Owner is the first listed admin, falling back to the app pubkey. */
-export function parseAdminSettings<E extends CurationListEvent>(event: E, appPubkey: string): AdminSettings<E> {
-	const admins = readCurationListItems('admins', event.tags)
-	return { admins, owner: admins[0] || appPubkey, lastUpdated: event.created_at ?? 0, event }
-}
-
-export function parseEditorSettings<E extends CurationListEvent>(event: E | null): EditorSettings<E> {
-	if (!event) return { editors: [], lastUpdated: 0, event: null }
-	return { editors: readCurationListItems('editors', event.tags), lastUpdated: event.created_at ?? 0, event }
 }
 
 export function parseBlacklistSettings<E extends CurationListEvent>(event: E | null): BlacklistSettings<E> {
@@ -145,21 +119,6 @@ export function parseFeaturedUsers(event: CurationListEvent, filterUsers: ItemsF
 	}
 }
 
-export function isAdmin(adminSettings: AdminSettings<unknown> | null | undefined, pubkey: string): boolean {
-	if (!adminSettings || !pubkey) return false
-	return adminSettings.admins.includes(pubkey)
-}
-
-export function isOwner(adminSettings: AdminSettings<unknown> | null | undefined, pubkey: string): boolean {
-	if (!adminSettings || !pubkey) return false
-	return adminSettings.owner === pubkey
-}
-
-export function isEditor(editorSettings: EditorSettings<unknown> | null | undefined, pubkey: string): boolean {
-	if (!editorSettings || !pubkey) return false
-	return editorSettings.editors.includes(pubkey)
-}
-
 export function isBlacklisted(blacklistSettings: BlacklistSettings<unknown> | null | undefined, pubkey: string): boolean {
 	if (!blacklistSettings || !pubkey) return false
 	return blacklistSettings.blacklistedPubkeys.includes(pubkey)
@@ -212,63 +171,7 @@ export async function readFeaturedWorkflow<E extends NostrEventLike>(
 	return await readNewestCurationListEvent(context, list, appPubkey)
 }
 
-/**
- * Admin-settings read (kind 30000, `d=admins`) over the host's `EventReadContext`. A missing app pubkey
- * is an error (as the pre-drain reader); no published list is null, matching `fetchLatestAppEvent`.
- */
-export async function readAdminSettingsWorkflow<E extends NostrEventLike>(
-	context: EventReadContext<E>,
-	appPubkey?: string,
-): Promise<AdminSettings<E> | null> {
-	if (!appPubkey) throw new Error('App pubkey is required')
-
-	const latestEvent = await readNewestCurationListEvent(context, 'admins', appPubkey)
-	if (!latestEvent) {
-		console.log(`No admin settings found for app pubkey: ${appPubkey}`)
-		return null
-	}
-
-	return parseAdminSettings(latestEvent, appPubkey)
-}
-
-/**
- * Editor-settings read (kind 30000, `d=editors`) over the host's `EventReadContext`. No published list
- * is the empty settings record (the pre-drain reader parsed a null event).
- */
-export async function readEditorSettingsWorkflow<E extends NostrEventLike>(
-	context: EventReadContext<E>,
-	appPubkey?: string,
-): Promise<EditorSettings<E>> {
-	if (!appPubkey) throw new Error('App pubkey is required')
-
-	const latestEvent = await readNewestCurationListEvent(context, 'editors', appPubkey)
-	if (!latestEvent) console.log(`No editor settings found for app pubkey: ${appPubkey}`)
-
-	return parseEditorSettings(latestEvent)
-}
-
-export function getFormattedAdmins(adminSettings: AdminSettings<unknown> | null | undefined) {
-	if (!adminSettings) return []
-	return adminSettings.admins.map((pubkey, index) => ({ pubkey, isOwner: pubkey === adminSettings.owner, index }))
-}
-
-export function getFormattedEditors(editorSettings: EditorSettings<unknown> | null | undefined) {
-	if (!editorSettings || !editorSettings.editors) return []
-	return editorSettings.editors.map((pubkey) => ({ pubkey, role: 'editor' as const }))
-}
-
 export function getFormattedBlacklist(blacklistSettings: BlacklistSettings<unknown> | null | undefined) {
 	if (!blacklistSettings || !blacklistSettings.blacklistedPubkeys) return []
 	return blacklistSettings.blacklistedPubkeys.map((pubkey) => ({ pubkey, status: 'blacklisted' as const }))
-}
-
-export function getUserRoleForPubkey(
-	adminSettings: AdminSettings<unknown> | null | undefined,
-	editorSettings: EditorSettings<unknown> | null | undefined,
-	pubkey: string,
-): UserRole {
-	if (isOwner(adminSettings, pubkey)) return 'owner'
-	if (isAdmin(adminSettings, pubkey)) return 'admin'
-	if (isEditor(editorSettings, pubkey)) return 'editor'
-	return 'user'
 }

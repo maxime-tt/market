@@ -8,7 +8,6 @@ import {
 	isValidCurationListItem,
 	type BlacklistData,
 	type CurationListKey,
-	type RoleChangePlan,
 } from './curationLists'
 
 export type CurationPublishIssue = { issue: 'invalid-item'; item: string } | { issue: 'admins-required' }
@@ -39,27 +38,4 @@ export async function publishBlacklistWorkflow<SignedEvent extends SignedEventLi
 	if (invalid !== undefined) return { ok: false, issue: 'invalid-item', item: invalid }
 
 	return { ok: true, event: await signAndPublish(context, buildBlacklistEventData(data)) }
-}
-
-export type RoleChangePublishOutcome<SignedEvent> =
-	| { ok: true; adminEvent?: SignedEvent; editorEvent?: SignedEvent }
-	| ({ ok: false; list: 'admins' | 'editors' } & CurationPublishIssue)
-
-/** Admin list first, then editors; not atomic — a failure after the first publish leaves the first change in place. */
-export async function publishRoleChangeWorkflow<SignedEvent extends SignedEventLike>(
-	context: EventPublishContext<SignedEvent>,
-	plan: RoleChangePlan,
-): Promise<RoleChangePublishOutcome<SignedEvent>> {
-	const result: { ok: true; adminEvent?: SignedEvent; editorEvent?: SignedEvent } = { ok: true }
-	if (plan.admins) {
-		const outcome = await publishCurationListWorkflow(context, 'admins', plan.admins)
-		if (!outcome.ok) return { ...outcome, list: 'admins' }
-		result.adminEvent = outcome.event
-	}
-	if (plan.editors) {
-		const outcome = await publishCurationListWorkflow(context, 'editors', plan.editors)
-		if (!outcome.ok) return { ...outcome, list: 'editors' }
-		result.editorEvent = outcome.event
-	}
-	return result
 }

@@ -20,16 +20,8 @@ import type { SignerCapability } from '@sdk/core/signer'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { createAppSettingsPublishContext, curationIssueMessage, resolveListOwner } from '@platform/web/curationContext'
-import {
-	CURATION_LISTS,
-	planRoleChange,
-	publishCurationListWorkflow,
-	publishRoleChangeWorkflow,
-	readCurationListItems,
-	type RoleChange,
-	type RoleChangeIssue,
-	type RoleListsState,
-} from '@sdk/core/curation'
+import { CURATION_LISTS, publishCurationListWorkflow, readCurationListItems } from '@sdk/core/curation'
+import { planRoleChange, publishRoleChangeWorkflow, type RoleChange, type RoleChangeIssue, type RoleListsState } from '@sdk/core/roles'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 

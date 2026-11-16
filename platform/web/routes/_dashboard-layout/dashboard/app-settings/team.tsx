@@ -22,14 +22,8 @@ import {
 	useRemoveEditorMutation,
 	useRemoveUserFromAllRolesMutation,
 } from '@platform/web/app-settings/appSettingsPublish'
-import {
-	getFormattedAdmins,
-	getFormattedEditors,
-	getUserRoleForPubkey,
-	useAdminSettings,
-	useEditorSettings,
-	useUserRole,
-} from '@platform/web/app-settings/appSettingsQuery'
+import { getFormattedAdmins, getFormattedEditors, getUserRoleForPubkey } from '@sdk/core/roles'
+import { useAdminSettings, useEditorSettings, useUserRole } from '@platform/web/app-settings/appSettingsQuery'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { npubToHex } from '@platform/web/app/pubkeyCodec'

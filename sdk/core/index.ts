@@ -22,9 +22,12 @@ export * as cashuWrapper from './cashu-wrapper'
 export * as nwcWrapper from './nwc-wrapper'
 export * as bolt11Wrapper from './bolt11-wrapper'
 export * as capability from './capability'
+// roles is flat too: four role names, the two list records and the transition verbs; nothing it exports
+// collides with curation or notifications.
+export * from './roles'
+export * from './curation'
 // notifications is flat, like event-store: its vocabulary (Notification, NotificationRule, the queue and the
 // ledger) collides with nothing already exported here, and the app composes the mechanism directly.
-export * from './curation'
 export * from './notifications'
 // state is flat too: it is the generic observable container the drain's stores are built on, and its one
 // vocabulary (StateStore, StateStoreOptions, StateError) collides with nothing already exported here.
