@@ -1,3 +1,4 @@
+import { ARENA_AUCTION_CREATE_KIND } from '../../commerce/auctions/constants'
 import type { UnsignedEventData } from '../publishing'
 import type { Result } from '../result'
 import { failure, success } from '../result'
@@ -9,7 +10,12 @@ export const CURATION_LISTS = {
 	editors: { kind: 30000, dTag: 'editors', itemTag: 'p' },
 	featuredProducts: { kind: 30405, dTag: 'featured_products', itemTag: 'a', itemKind: 30402 },
 	featuredCollections: { kind: 30003, dTag: 'featured_collections', itemTag: 'a', itemKind: 30405 },
-	featuredAuctions: { kind: 30409, dTag: 'featured_auctions', itemTag: 'a', itemKind: 30408 },
+	/**
+	 * A featured auction names a live arena lot, so its item kind is the arena
+	 * create kind (1440), not the retired 30408 family. The list event's own kind
+	 * (30409) is unchanged: it addresses the list, not the lot.
+	 */
+	featuredAuctions: { kind: 30409, dTag: 'featured_auctions', itemTag: 'a', itemKind: ARENA_AUCTION_CREATE_KIND },
 	featuredUsers: { kind: 30000, dTag: 'featured_users', itemTag: 'p' },
 } as const
 

@@ -1,4 +1,3 @@
-import { AuctionDisplayComponent } from '@platform/web/auctions/AuctionDisplayHost'
 import { CollectionDisplayHost, ProductDisplayHost, UserDisplayHost } from '@platform/web/app-settings/entityDisplayHosts'
 import { Button } from '@ui/wrappers/button'
 import { EmptyState } from '@ui/shared/empty-state'
@@ -30,10 +29,12 @@ import {
 	reorderFeaturedUsers,
 } from '@platform/web/featured/featuredPublish'
 import { useUserRole } from '@platform/web/app-settings/appSettingsQuery'
-import { fetchAuction, getAuctionId } from '@platform/web/auctions/auctionsQuery'
 import { fetchCollection, fetchCollectionByEventId, getCollectionId } from '@platform/web/collections/collectionQuery'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useFeaturedAuctions, useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@platform/web/featured/featuredQueries'
+import { FeaturedAuctionsEditor } from '@platform/web/featured/FeaturedAuctionsEditor'
+import { featuredAuctionOptions, resolveFeaturedAuctionEntries } from '@platform/web/featured/featuredAuctionLots'
+import { useArenaSurfacesRead } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import { fetchProduct, getProductId } from '@platform/web/products/productQuery'
 import { configKeys } from '@sdk/core/query/queryKeyFactory'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
@@ -115,36 +116,6 @@ const convertCollectionInputToCoords = async (input: string): Promise<string> =>
 	}
 }
 
-const convertAuctionInputToCoords = async (input: string): Promise<string> => {
-	if (input.includes(':')) {
-		try {
-			const coords = getCoordsFromATag(input)
-			if (coords.kind !== 30408) {
-				throw new Error('Expected auction coordinates with kind 30408')
-			}
-			return input
-		} catch (error) {
-			throw new Error(`Invalid auction coordinate format: ${error instanceof Error ? error.message : 'Unknown error'}`)
-		}
-	}
-
-	try {
-		const auctionEvent = await fetchAuction(input)
-		if (!auctionEvent) {
-			throw new Error('Auction not found')
-		}
-
-		const realDtag = getAuctionId(auctionEvent)
-		if (!realDtag) {
-			throw new Error('Auction has no dtag')
-		}
-
-		return getATagFromCoords({ kind: 30408, pubkey: auctionEvent.pubkey, identifier: realDtag })
-	} catch (error) {
-		throw new Error(`Failed to convert auction ID to coordinates: ${error instanceof Error ? error.message : 'Unknown error'}`)
-	}
-}
-
 function FeaturedItemsComponent() {
 	useDashboardTitle('Featured Items')
 	const { data: config } = useConfigQuery()
@@ -154,10 +125,17 @@ function FeaturedItemsComponent() {
 	const { data: featuredUsers, isLoading: isLoadingUsers } = useFeaturedUsers(config?.appPublicKey || '')
 	const { amIAdmin, amIEditor, isLoading: isLoadingPermissions } = useUserRole(config?.appPublicKey)
 
+	// The published-lot read the auctions tab is built on: a featured entry names a
+	// live `1440:<seller>:<d>`, so both the picker and the rows come from it.
+	const arenaRead = useArenaSurfacesRead()
+	const featuredAuctionCoords = featuredAuctions?.featuredAuctions ?? []
+	const auctionEntries = resolveFeaturedAuctionEntries(featuredAuctionCoords, arenaRead, Math.floor(Date.now() / 1000))
+	const auctionOptions = featuredAuctionOptions(arenaRead, featuredAuctionCoords)
+
 	// State for adding new items
 	const [newProductInput, setNewProductInput] = useState('')
 	const [newCollectionInput, setNewCollectionInput] = useState('')
-	const [newAuctionInput, setNewAuctionInput] = useState('')
+	const [pickedAuction, setPickedAuction] = useState('')
 	const [newUserInput, setNewUserInput] = useState('')
 	const [isAddingProduct, setIsAddingProduct] = useState(false)
 	const [isAddingCollection, setIsAddingCollection] = useState(false)
@@ -383,19 +361,18 @@ function FeaturedItemsComponent() {
 	}
 
 	const handleAddAuction = async () => {
-		if (!newAuctionInput.trim()) {
-			toast.error('Please enter an auction ID or coordinate (e.g., "auction-id" or "30408:pubkey:d-tag")')
+		if (!pickedAuction) {
+			toast.error('Choose a published auction to feature')
 			return
 		}
 
 		try {
 			setIsAddingAuction(true)
-			const auctionCoords = await convertAuctionInputToCoords(newAuctionInput.trim())
 			await addAuctionMutation.mutateAsync({
-				auctionCoords,
+				auctionCoords: pickedAuction,
 				appPubkey: config?.appPublicKey,
 			})
-			setNewAuctionInput('')
+			setPickedAuction('')
 			toast.success('Auction added to featured list')
 		} catch (error) {
 			console.error('Failed to add auction:', error)
@@ -782,76 +759,22 @@ function FeaturedItemsComponent() {
 
 					{/* Featured Auctions Tab */}
 					<TabsContent value="auctions" className="space-y-6">
-						<Card>
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2">
-									<Gavel className="w-5 h-5" />
-									Featured Auctions
-								</CardTitle>
-								<CardDescription>
-									Auctions highlighted on the auctions page hero. Order matters - use up/down buttons to reorder.
-								</CardDescription>
-							</CardHeader>
-							<CardContent className="space-y-4">
-								{!featuredAuctions?.featuredAuctions || featuredAuctions.featuredAuctions.length === 0 ? (
-									<EmptyState icon={<Gavel />} title="No featured auctions yet" />
-								) : (
-									<div className="space-y-3">
-										{featuredAuctions.featuredAuctions.map((auctionCoords, index) => (
-											<AuctionDisplayComponent
-												key={auctionCoords}
-												auctionCoords={auctionCoords}
-												index={index}
-												onMoveUp={() => handleMoveAuctionUp(index)}
-												onMoveDown={() => handleMoveAuctionDown(index)}
-												onRemove={() => handleRemoveAuction(auctionCoords)}
-												canMoveUp={index > 0}
-												canMoveDown={index < featuredAuctions.featuredAuctions.length - 1}
-												isReordering={reorderAuctionsMutation.isPending}
-												isRemoving={removeAuctionMutation.isPending}
-											/>
-										))}
-									</div>
-								)}
-							</CardContent>
-						</Card>
-
-						<Card>
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2">
-									<Plus className="w-5 h-5" />
-									Add Featured Auction
-								</CardTitle>
-								<CardDescription>Add an auction to the featured list using its ID or full coordinate.</CardDescription>
-							</CardHeader>
-							<CardContent className="space-y-4">
-								<div className="space-y-2">
-									<Label htmlFor="newAuction">Auction ID or Coordinate</Label>
-									<div className="flex gap-2">
-										<Input
-											id="newAuction"
-											value={newAuctionInput}
-											onChange={(e) => setNewAuctionInput(e.target.value)}
-											placeholder="auction-id or 30408:pubkey:d-tag"
-											className="flex-1"
-										/>
-										<Button
-											onClick={handleAddAuction}
-											pending={isAddingAuction || addAuctionMutation.isPending}
-											disabled={isAddingAuction || addAuctionMutation.isPending || !newAuctionInput.trim()}
-										>
-											{!(isAddingAuction || addAuctionMutation.isPending) && <Plus className="w-4 h-4" />}Add
-										</Button>
-									</div>
-								</div>
-								<div className="text-xs text-gray-500">
-									Note: Auctions will be displayed in the order they appear in the list. Use the up/down buttons to reorder.
-								</div>
-							</CardContent>
-						</Card>
+						<FeaturedAuctionsEditor
+							entries={auctionEntries}
+							options={auctionOptions}
+							read={arenaRead}
+							picked={pickedAuction}
+							onPickChange={setPickedAuction}
+							onAdd={handleAddAuction}
+							onRemove={handleRemoveAuction}
+							onMoveUp={handleMoveAuctionUp}
+							onMoveDown={handleMoveAuctionDown}
+							isAdding={isAddingAuction || addAuctionMutation.isPending}
+							isReordering={reorderAuctionsMutation.isPending}
+							isRemoving={removeAuctionMutation.isPending}
+						/>
 					</TabsContent>
 
-					{/* Featured Users Tab */}
 					<TabsContent value="users" className="space-y-6">
 						{/* Current Featured Users */}
 						<Card>
