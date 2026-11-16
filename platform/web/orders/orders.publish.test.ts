@@ -137,13 +137,11 @@ mock.module('@platform/web/profiles/profileQuery', () => ({
 
 const ndkStoreMock = () => ({
 	ndkActions: {
-		getNDK: () => ({
-			activeUser: currentBuyer
-				? {
-						pubkey: currentBuyer.pubkey,
-					}
-				: undefined,
-		}),
+		// No `activeUser` here: production never assigns it (the identity is the auth machine's — see
+		// the `getCurrentPubkey` registration below). Fabricating one made any reintroduced NDK
+		// identity read pass in tests while being `undefined` in production, which is the exact
+		// failure mode this migration removed.
+		getNDK: () => ({}),
 		getSigner: () => currentSigner,
 		publishEvent: mock(async (event: PublishedEvent) => {
 			publishedEvents.push(event)

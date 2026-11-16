@@ -1,12 +1,13 @@
 import { OrderDataTable } from '@platform/web/orders/OrderDataTable'
 import { salesColumns } from '@platform/web/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { readMarks } from '@platform/web/notifications'
 import { useOrdersBySeller } from '@platform/web/orders/ordersQuery'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { filterAndSortOrderListings } from '@sdk/commerce/orders'
+import { authStore } from '@platform/web/readContext'
 import { createFileRoute } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')({
@@ -15,11 +16,10 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')
 
 function SalesComponent() {
 	useDashboardTitle('Sales')
-	const ndk = ndkActions.getNDK()
-	const currentUser = ndk?.activeUser
+	const { user } = useStore(authStore)
 	const [statusFilter, setStatusFilter] = useState<string>('any')
 	const [orderBy, setOrderBy] = useState<string>('newest')
-	const { data: sales, isLoading } = useOrdersBySeller(currentUser?.pubkey || '', { includePrivateOrderDetails: true })
+	const { data: sales, isLoading } = useOrdersBySeller(user?.pubkey || '', { includePrivateOrderDetails: true })
 
 	// Mark all orders as seen when the page is viewed
 	useEffect(() => {
@@ -33,7 +33,7 @@ function SalesComponent() {
 			<OrderDataTable
 				heading={<h1 className="text-2xl font-bold">Sales</h1>}
 				data={filteredSales}
-				columns={salesColumns}
+				columns={salesColumns(user?.pubkey)}
 				isLoading={isLoading}
 				filterColumn="orderId"
 				showStatusFilter={true}

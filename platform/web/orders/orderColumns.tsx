@@ -1,4 +1,3 @@
-import { ndkActions } from '@platform/web/ndk/ndkStore'
 import type { OrderWithRelatedEvents } from '@platform/web/orders/ordersQuery'
 import { getOrderRecipientPubkey, getOrderReference } from '@sdk/commerce/orders'
 import { Link } from '@tanstack/react-router'
@@ -36,40 +35,33 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 ]
 
 // Actions column for purchases (buyer's perspective)
-const purchaseActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
+//
+// This module is NOT a component: the columns are module-level constants and `cell` runs inside
+// react-table during another component's render, so `useStore` is illegal here and a one-shot read
+// would not re-render on login. The identity is therefore a factory parameter, supplied by the route
+// from its own reactive auth read.
+const purchaseActionsColumn = (pubkey: string | undefined): ColumnDef<OrderWithRelatedEvents> => ({
 	accessorKey: 'actions',
 	header: 'Actions',
-	cell: ({ row }) => {
-		const ndk = ndkActions.getNDK()
-		const currentUserPubkey = ndk?.activeUser?.pubkey
-
-		if (!currentUserPubkey) return null
-
-		return (
+	cell: ({ row }) =>
+		pubkey ? (
 			<div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2">
-				<OrderActions order={row.original} userPubkey={currentUserPubkey} />
+				<OrderActions order={row.original} userPubkey={pubkey} />
 			</div>
-		)
-	},
-}
+		) : null,
+})
 
 // Actions column for sales (seller's perspective)
-const salesActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
+const salesActionsColumn = (pubkey: string | undefined): ColumnDef<OrderWithRelatedEvents> => ({
 	accessorKey: 'actions',
 	header: 'Actions',
-	cell: ({ row }) => {
-		const ndk = ndkActions.getNDK()
-		const currentUserPubkey = ndk?.activeUser?.pubkey
-
-		if (!currentUserPubkey) return null
-
-		return (
+	cell: ({ row }) =>
+		pubkey ? (
 			<div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2">
-				<OrderActions order={row.original} userPubkey={currentUserPubkey} />
+				<OrderActions order={row.original} userPubkey={pubkey} />
 			</div>
-		)
-	},
-}
+		) : null,
+})
 
 const sellerColumn: ColumnDef<OrderWithRelatedEvents> = {
 	accessorKey: 'seller',
@@ -84,16 +76,16 @@ const buyerColumn: ColumnDef<OrderWithRelatedEvents> = {
 }
 
 // Columns for purchases (buyer's perspective)
-export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
+export const purchaseColumns = (pubkey: string | undefined): ColumnDef<OrderWithRelatedEvents>[] => [
 	baseOrderColumns[0], // Order ID
 	sellerColumn,
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount
-	purchaseActionsColumn, // Actions
+	purchaseActionsColumn(pubkey), // Actions
 ]
 
 // Columns for sales (seller's perspective)
-export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
+export const salesColumns = (pubkey: string | undefined): ColumnDef<OrderWithRelatedEvents>[] => [
 	{
 		...baseOrderColumns[0], // Order ID
 		accessorFn: (row) => getOrderReference(row.order) ?? undefined,
@@ -104,18 +96,18 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	},
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount
-	salesActionsColumn, // Actions
+	salesActionsColumn(pubkey), // Actions
 ]
 
 // Full columns (showing both buyer and seller)
-export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
+export const fullOrderColumns = (pubkey: string | undefined): ColumnDef<OrderWithRelatedEvents>[] => [
 	baseOrderColumns[0], // Order ID
 	sellerColumn,
 	buyerColumn,
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount
 	{
-		...salesActionsColumn,
+		...salesActionsColumn(pubkey),
 		header: 'Actions',
 	},
 ]

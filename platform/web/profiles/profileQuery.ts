@@ -28,6 +28,7 @@ import {
 } from '@sdk/core/profile'
 import { profileKeys } from '@sdk/core/query/queryKeyFactory'
 import { getAppNdk } from '@platform/web/ndkPublishContext'
+import { getCurrentPubkey } from '@platform/web/readContext'
 
 // Facade fallback (batch F2): the dashboard profile route's form state is typed by this bridge's own
 // `NDKUserProfile`; re-exported here so route consumers stop importing the package directly.
@@ -329,7 +330,8 @@ export const useZapCapabilityInfo = (npub: string) => {
 export const getWotScore = async (pubkey: string): Promise<number | null> => {
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
-	if (!ndk.activeUser) return null
+	// Identity comes from the auth machine; the NDK instance is still what `NDKWoT` needs for relay access.
+	if (!getCurrentPubkey()) return null
 
 	try {
 		const wot = new NDKWoT(ndk, pubkey)

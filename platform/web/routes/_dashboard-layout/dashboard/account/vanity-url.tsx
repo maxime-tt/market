@@ -9,6 +9,8 @@ import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { toast } from 'sonner'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
+import { authStore } from '@platform/web/readContext'
+import { useStore } from '@tanstack/react-store'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useVanitySettings, getVanityForPubkey, getExpiredVanityForPubkey } from '@platform/web/config/vanityBinding'
 import { vanityActions } from '@platform/web/config/vanityStore'
@@ -33,7 +35,10 @@ function handleCopyError(error: unknown) {
 function VanityUrlComponent() {
 	useDashboardTitle('Vanity URL')
 	const ndk = ndkActions.getNDK()
-	const pubkey = ndk?.activeUser?.pubkey
+	// The signed-in identity is the auth machine's; `ndk` stays because the paid NIP-05/vanity
+	// purchase flow below hands the instance on.
+	const { user } = useStore(authStore)
+	const pubkey = user?.pubkey
 
 	const { data: config } = useConfigQuery()
 	const { data: vanitySettings, isLoading } = useVanitySettings(config?.appPublicKey)

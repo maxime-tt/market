@@ -1,4 +1,3 @@
-import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { useUserRole } from '@platform/web/app-settings/appSettingsQuery'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useMemo } from 'react'
@@ -35,8 +34,7 @@ export function useEntityPermissions(entityPubkey: string | undefined): EntityPe
 	const appPubkey = config?.appPublicKey
 
 	const { userRole, isLoading, currentUserPubkey } = useUserRole(appPubkey)
-	const ndk = ndkActions.getNDK()
-	const authenticatedUserPubkey = ndk?.activeUser?.pubkey
+	const authenticatedUserPubkey = currentUserPubkey
 
 	const permissions = useMemo(() => {
 		// Determine if current user is the entity owner
