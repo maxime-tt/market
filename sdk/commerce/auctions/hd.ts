@@ -5,6 +5,12 @@ import { HDKey } from '@scure/bip32'
 // key, so it must stay identical across every deployment/fork rather than
 // resolve from instance config.
 export const AUCTION_HD_ROOT_CONTEXT = 'plebeian.market:auction-hd-root:v1'
+/**
+ * The `30408` in the account index is frozen derivation identity, NOT the event
+ * kind: it was chosen to mirror the kind when the path was cut, and every
+ * auction key ever derived depends on that literal. The event kind moved to the
+ * arena 1440 series; this path must not follow it.
+ */
 export const AUCTION_HD_ACCOUNT_PATH = "m/30408'/0'/0'"
 
 const sha512Bytes = async (value: string): Promise<Uint8Array> => {

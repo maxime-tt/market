@@ -16,6 +16,8 @@
  * See docs/adr/ADR-0009-test-listing-labels-via-nip-32.md for the full design.
  */
 
+import { ARENA_AUCTION_CREATE_KIND } from '../commerce/auctions/constants'
+
 // --- Event kinds ---
 
 /** NIP-32 labeling event kind */
@@ -54,5 +56,12 @@ export const K_TAG = 'k'
 /** NIP-99 product listing kind */
 export const TEST_LABEL_PRODUCT_KIND = 30402
 
-/** Auction listing kind (see AUCTION_KIND in src/lib/auction/constants.ts) */
-export const TEST_LABEL_AUCTION_KIND = 30408
+/**
+ * Auction lot kind — the arena auction create event, kind 1440.
+ *
+ * A lot's coordinate is `1440:<seller>:<d>`, so this is the kind the label
+ * surfaces must key on: the label gate (`sdk/config/testLabelFilters.ts`), the
+ * curation button/dialog, and every `a` tag written for an auction. The retired
+ * 30408 listing is not labelable and no longer has a kind here.
+ */
+export const TEST_LABEL_AUCTION_KIND = ARENA_AUCTION_CREATE_KIND

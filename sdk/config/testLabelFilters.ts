@@ -86,9 +86,45 @@ export const isAuctionTestLabeled = (event: NostrEventLike): boolean => {
 }
 
 /**
+ * Check whether an item coordinate carries an active test label.
+ *
+ * The coordinate-shaped counterpart to {@link isItemEventTestLabeled}: a read-model
+ * (e.g. `ArenaAuctionView`, which already carries `coordinate`) can be gated
+ * without re-deriving the coordinate from an event.
+ *
+ * Fail-open, exactly as {@link filterTestLabeledEvents} is: until a label read has
+ * populated the store, nothing is labeled — ADR-0009 says a read that did not
+ * happen hides nothing.
+ */
+export const isCoordinateTestLabeled = (coordinate: string): boolean => {
+	if (!coordinate) return false
+	if (!testLabelActions.areLabelsLoaded()) return false
+	return testLabelActions.isTestLabeled(coordinate)
+}
+
+/**
+ * Filter out test-labeled items from an array of coordinate-carrying read-models.
+ *
+ * The read-model counterpart to {@link filterTestLabeledEvents}: same store, same
+ * fail-open rule, but the item already carries the `kind:pubkey:d` coordinate, so
+ * no event is parsed. Safe on a live read whose labels still resolve asynchronously.
+ */
+export const filterTestLabeledItems = <T extends { coordinate: string }>(items: readonly T[]): T[] => {
+	if (!testLabelActions.areLabelsLoaded()) {
+		return [...items] // Return all if labels not loaded yet
+	}
+
+	return items.filter((item) => !testLabelActions.isTestLabeled(item.coordinate))
+}
+
+/**
  * Filter item coordinates, dropping test-labeled ones
  */
-export const filterTestLabeledCoordinates = (coordinates: string[]): string[] => {
+export const filterTestLabeledCoordinates = <T extends string>(coordinates: readonly T[]): T[] => {
+	if (!testLabelActions.areLabelsLoaded()) {
+		return [...coordinates] // Return all if labels not loaded yet
+	}
+
 	return coordinates.filter((coordinate) => !testLabelActions.isTestLabeled(coordinate))
 }
 
@@ -102,6 +138,8 @@ export const useTestLabelFilters = () => {
 		isProductTestLabeled,
 		isAuctionTestLabeled,
 		isItemTestLabeled: isItemEventTestLabeled,
+		isCoordinateTestLabeled,
 		filterCoordinates: filterTestLabeledCoordinates,
+		filterItems: filterTestLabeledItems,
 	}
 }

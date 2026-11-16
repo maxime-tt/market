@@ -22,7 +22,7 @@ export const nostrEventIdHex = z.string().regex(/^[0-9a-fA-F]{64}$/, 'Must be a 
 /** Addressable coordinate `kind:pubkey:d` — same shape as common but anchored. */
 export const addressableCoordinate = z
 	.string()
-	.regex(/^\d+:[0-9a-fA-F]{64}:[A-Za-z0-9_-]+$/, 'Must be `kind:pubkey:d` (e.g. 30408:<seller>:<auction-d>)')
+	.regex(/^\d+:[0-9a-fA-F]{64}:[A-Za-z0-9_-]+$/, 'Must be `kind:pubkey:d` (e.g. 1440:<seller>:<lot-d>)')
 
 /** Non-negative unix-seconds integer. */
 export const unixSeconds = z.number().int().nonnegative()
@@ -30,7 +30,7 @@ export const unixSeconds = z.number().int().nonnegative()
 /**
  * Positive unix-seconds integer — a real wall-clock instant, never the epoch.
  *
- * Used for the kind-30408 timing tags (`start_at`, `end_at`, `max_end_at`).
+ * Used for the auction timing tags (`start_at`, `end_at`, `max_end_at`).
  * AUCTIONS.md §4.1 requires those tags to be present; §6.0 makes them the
  * structural ordering invariant of the auction. `0` is neither: it is the
  * absent value wearing a number, and a close time of `0` is what let a

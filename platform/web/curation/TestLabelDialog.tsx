@@ -1,5 +1,5 @@
 import { publishTestLabel, publishTestLabelDeletion } from '@platform/web/curation/testLabelActions'
-import { TEST_LABEL_PRODUCT_KIND } from '@sdk/config/test-label-constants'
+import { testLabelItemSlug } from '@platform/web/curation/testLabelItemKind'
 import { getATagFromCoords } from '@sdk/core/utils/coords'
 import { invalidateTestLabelCaches, useTestLabelForCoordinate } from '@platform/web/config/testLabelsBinding'
 import { useQueryClient } from '@tanstack/react-query'
@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { TestLabelDialogView } from '@ui/dashboard/test-label-views'
 
 export interface TestLabelDialogProps {
-	/** Item event kind: 30402 (product) or 30408 (auction) */
+	/** Item event kind: 30402 (product) or 1440 (arena auction lot) */
 	kind: number
 	/** Author pubkey of the item (not the labeler) */
 	pubkey: string
@@ -73,10 +73,12 @@ export function TestLabelDialog({
 	const [isUnmarking, setIsUnmarking] = useState(false)
 	const [labelContent, setLabelContent] = useState('')
 
-	const isProduct = kind === TEST_LABEL_PRODUCT_KIND
-	const kindSlug = isProduct ? 'product' : 'auction'
+	// A kind outside the label registry is refused rather than guessed at: the
+	// retired 30408 listing would otherwise reach the confirm button and publish
+	// a label at a coordinate nothing reads.
+	const kindSlug = testLabelItemSlug(kind)
 
-	const coordinate = pubkey && dTag ? getATagFromCoords({ kind, pubkey, identifier: dTag }) : ''
+	const coordinate = kindSlug && pubkey && dTag ? getATagFromCoords({ kind, pubkey, identifier: dTag }) : ''
 	const { labelEventId } = useTestLabelForCoordinate(coordinate || undefined)
 
 	// Contact reference is resolved from the acting labeler when known.
@@ -129,6 +131,9 @@ export function TestLabelDialog({
 			setIsUnmarking(false)
 		}
 	}
+
+	// Hook order is fixed above, so the refusal sits here rather than at the top.
+	if (!kindSlug || !coordinate) return null
 
 	return (
 		<TestLabelDialogView
