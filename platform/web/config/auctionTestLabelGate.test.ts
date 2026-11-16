@@ -262,29 +262,16 @@ afterEach(() => {
 const ids = (events: NostrEventLike[]) => events.map((event) => event.id)
 
 describe('fetchAuctions — the auction feed is a discovery surface (ADR-0009)', () => {
-	test('excludes a test-labeled auction and keeps the unlabeled ones', async () => {
-		seedLabels([LABELED_COORD])
-
-		const results = await fetchAuctions(200)
-
-		expect(ids(results)).not.toContain(LABELED_V2.id)
-		expect(ids(results)).not.toContain(LABELED_V1.id)
-		expect(ids(results)).toContain(CONTROL_V2.id)
-		expect(ids(results)).toContain(OTHER_AUCTION.id)
-		expect(results).toHaveLength(2)
-	})
-
-	test('a labeled coordinate drops as a whole — every version goes, not just the displayed one', async () => {
-		seedLabels([LABELED_COORD])
-
-		const results = await fetchAuctions(200)
-
-		// The gate is per coordinate and runs before the version collapse, so a
-		// surviving older version cannot resurrect the auction in the feed.
-		expect(results.some((event) => event.tags.some((tag) => tag[0] === 'd' && tag[1] === LABELED_D))).toBe(false)
-		// The control's two versions still collapse to one displayed auction.
-		expect(results.filter((event) => event.tags.some((tag) => tag[0] === 'd' && tag[1] === CONTROL_D))).toHaveLength(1)
-	})
+	// Three cases were removed here on 2026-11-16 by the owner's call. They asserted that the
+	// test-label gate HIDES an auction in this feed — and this feed cannot hide anything:
+	// `fetchAuctions` reads the retired 30408 family and has no importer, so no reader reaches
+	// it. Keeping them meant three permanent reds pinning dead code. The promise they carried
+	// (ADR-0009: a labeled lot drops from a discovery surface, and the show-test-listings toggle
+	// reveals it) is asserted against the LIVE arena list, where it passes.
+	//
+	// What stays below are the fail-open and over-filter guards: they assert that nothing is
+	// hidden when no label state has loaded, which is true of this function and is exactly what
+	// a fail-closed implementation would break.
 
 	test('does not over-filter when every coordinate is known unlabeled', async () => {
 		seedLabels()
@@ -292,27 +279,6 @@ describe('fetchAuctions — the auction feed is a discovery surface (ADR-0009)',
 		const results = await fetchAuctions(200)
 
 		expect(ids(results)).toEqual([LABELED_V2.id, CONTROL_V2.id, OTHER_AUCTION.id])
-	})
-
-	test('the show-test-listings toggle reveals the labeled auction, and switching it off re-hides it', async () => {
-		seedLabels([LABELED_COORD])
-
-		// Off (the default): the gate applies. Without this half the case would
-		// pass vacuously if no label were known at all.
-		const hidden = await fetchAuctions(200)
-		expect(ids(hidden)).not.toContain(LABELED_V2.id)
-		expect(hidden).toHaveLength(2)
-
-		testLabelActions.setShowTestListings(true)
-		const revealed = await fetchAuctions(200)
-		expect(ids(revealed)).toContain(LABELED_V2.id)
-		expect(revealed).toHaveLength(3)
-
-		// Back to the default — the reveal is a browsing aid, not a state change
-		testLabelActions.setShowTestListings(false)
-		const rehidden = await fetchAuctions(200)
-		expect(ids(rehidden)).not.toContain(LABELED_V2.id)
-		expect(rehidden).toHaveLength(2)
 	})
 
 	test('fails open: with no label state loaded, nothing is hidden', async () => {
