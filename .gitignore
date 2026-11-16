@@ -53,3 +53,9 @@ contextvm/
 # Encrypted test wallet material
 scripts/encrypted_test_wallet.json
 e2e/baseline-results/
+
+# Kami agent worktrees are created inside the served tree by default, and a
+# nested checkout breaks the HTML shell: bunfig serves pages through
+# bun-plugin-tailwind, whose source scan skips only gitignored paths, so it
+# compiles the nested copy too and the whole page bundle fails silently.
+.kami-worktrees/
