@@ -487,7 +487,7 @@ describe('route intents — the admin authors a binding over the one ingest', ()
 		const after = (await (await realFetch(`${harness.url}/api/routes`)).json()) as {
 			seq: number
 			bindings: Array<{ path: string; target: { author: string; d: string } }>
-			warnings: Array<{ code: string; path: string }>
+			warnings: Array<{ code: string; path: string; message: string }>
 		}
 		expect(after.seq).toBe(before.seq + 1)
 		expect(after.bindings.map((entry) => entry.path)).toEqual(['shop', 'products'])

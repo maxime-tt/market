@@ -38,6 +38,7 @@ import {
 	arenaVerdictKey,
 	type ArenaBidBinding,
 	type ArenaCreateIdentity,
+	type ArenaEventLike,
 	type ArenaPhaseWindow,
 	type ArenaPositionBid,
 } from './arenaMonitorRules'
@@ -383,12 +384,17 @@ export const useNotificationMonitor = () => {
 			}
 		}
 
-		const scheduleAuctionPhaseNotification = (auctionKey: string, window: ArenaPhaseWindow) => {
+		const scheduleAuctionPhaseNotification = (auctionKey: string, phaseWindow: ArenaPhaseWindow) => {
 			if (!auctionKey) return
 
 			const scheduleAt = (runAt: number | null, scheduledKeys: Set<string>, callback: () => void) => {
 				if (runAt === null || !runAt || runAt <= Math.floor(Date.now() / 1000) || scheduledKeys.has(auctionKey)) return
 				scheduledKeys.add(auctionKey)
+				// `window.setTimeout`, not the bare global: the pairing below
+				// (`phaseTimeoutIds: number[]` + `window.clearTimeout`) is DOM timers, and
+				// `globalThis.setTimeout` picks the Node overload, which returns `Timeout`.
+				// The parameter is named `phaseWindow` because it used to be `window` and
+				// shadowed the global.
 				const timeoutId = window.setTimeout(
 					() => {
 						scheduledKeys.delete(auctionKey)
@@ -400,15 +406,15 @@ export const useNotificationMonitor = () => {
 				phaseTimeoutIds.push(timeoutId)
 			}
 
-			if (window.startAt > readMarks.getLastSeenAuctionLive(auctionKey)) {
-				scheduleAt(window.startAt, scheduledAuctionLiveKeys, () => {
+			if (phaseWindow.startAt > readMarks.getLastSeenAuctionLive(auctionKey)) {
+				scheduleAt(phaseWindow.startAt, scheduledAuctionLiveKeys, () => {
 					console.log('[NotificationMonitor] Seller auction went live:', auctionKey)
 					produceAppNotification({ kind: 'auction-live', auctionKey, createdAt: nowSeconds() })
 				})
 			}
 
-			if (window.cutoffAt !== null && window.cutoffAt > readMarks.getLastSeenAuctionSettlementBegins(auctionKey)) {
-				scheduleAt(window.cutoffAt, scheduledAuctionSettlementKeys, () => {
+			if (phaseWindow.cutoffAt !== null && phaseWindow.cutoffAt > readMarks.getLastSeenAuctionSettlementBegins(auctionKey)) {
+				scheduleAt(phaseWindow.cutoffAt, scheduledAuctionSettlementKeys, () => {
 					console.log('[NotificationMonitor] Seller auction entered settlement:', auctionKey)
 					produceAppNotification({ kind: 'auction-settlement', auctionKey, createdAt: nowSeconds() })
 				})
@@ -680,7 +686,11 @@ export const useNotificationMonitor = () => {
 				const watchedLots = Array.from(watchedLotsByCoordinate.values())
 				const watchedCoordinates = watchedLots.map((lot) => lot.coordinate)
 
-				const watchedBidFeed: Array<{ event: NDKEvent; binding: ArenaBidBinding }> = []
+				// `ArenaEventLike`, not `NDKEvent`: these rules moved to `arenaMonitorRules.ts`,
+				// whose input type is the structural shape it reads. Annotating the feed `NDKEvent`
+				// narrows `created_at` away at the filter below (2032-02's TS2339), and it is the
+				// looser type the rules were built against.
+				const watchedBidFeed: Array<{ event: ArenaEventLike; binding: ArenaBidBinding }> = []
 				for (const event of await fetchTaggedAuctionEvents({
 					kind: AUCTION_BID_KIND_NDK,
 					auctionRootEventIds: [],
@@ -694,7 +704,7 @@ export const useNotificationMonitor = () => {
 				// every comparison runs on the latest totals rather than on one event's delta.
 				const watchedPositions = arenaBidPositions(watchedBidFeed.map(({ event, binding }) => ({ ...binding, bidder: event.pubkey })))
 				const ownPositionAt = (coordinate: string): number => watchedPositions[coordinate]?.[user.pubkey] ?? 0
-				const bidderOutbidsOwnPosition = (event: NDKEvent, binding: ArenaBidBinding): boolean => {
+				const bidderOutbidsOwnPosition = (event: ArenaEventLike, binding: ArenaBidBinding): boolean => {
 					if (!binding.coordinate) return false
 					const ownPosition = ownPositionAt(binding.coordinate)
 					return ownPosition > 0 && (watchedPositions[binding.coordinate]?.[event.pubkey] ?? 0) > ownPosition
@@ -804,7 +814,10 @@ export const useNotificationMonitor = () => {
 				for (const auctionKey of Object.keys(unseenAuctionSettlementBeginsCountsByAuction)) {
 					bulkEvents.push({ kind: 'auction-settlement', auctionKey, createdAt: nowForBulk })
 				}
-				for (const event of newHigherBidEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
+				// `newHigherBidEvents` holds `{ event, binding }` PAIRS, not events: reading
+				// `created_at` off the pair was always `undefined`, so every higher-bid
+				// notification silently fell back to `nowForBulk` as its timestamp.
+				for (const { event } of newHigherBidEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
 				for (const event of newVerdictEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
 				reconcileAppNotificationCounts(appNotifications, bulkEvents)
 
