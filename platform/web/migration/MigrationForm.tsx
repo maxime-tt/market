@@ -10,7 +10,7 @@ import { MigrationProgressDialog, type MigrationStep, type RelayStatus } from '@
 import { MigrationFormView, type MigrationFormData, type MigrationShippingOption } from '@ui/migration/migration-form-view'
 import { parseNip15Product } from '@sdk/commerce/products/nip15Migration'
 import type { RichShippingInfo } from '@platform/web/cart/cartStore'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core'
 import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { useState, useEffect, useMemo, useCallback } from 'react'
@@ -18,7 +18,7 @@ import { toast } from 'sonner'
 import { useNavigate } from '@tanstack/react-router'
 
 interface MigrationFormProps {
-	nip15Event: NDKEvent
+	nip15Event: NostrEventLike
 	onBack: () => void
 	onSuccess: () => void
 }
