@@ -17,6 +17,7 @@
  */
 import type { Event } from 'nostr-tools'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/orders/messaging/orderSchema'
+import { ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
 import type { EncryptingSigner } from '@sdk/core'
 import {
 	createNip59GiftWrap,
@@ -29,7 +30,12 @@ import {
 } from '@sdk/core/nostr/nip59'
 
 export const AUCTION_CLAIM_SUBJECT = 'auction-claim'
-export const AUCTION_EVENT_KIND = 30408
+/**
+ * The lot coordinate kind. Under the consolidated protocol a lot's coordinate is
+ * `1440:<seller>:<d>`; the retired 30408 coordinate is gone, so a claim carries
+ * the arena coordinate and this is the kind its parser accepts.
+ */
+export const AUCTION_EVENT_KIND = ARENA_AUCTION_CREATE_KIND
 
 const HEX_32_BYTES_RE = /^[0-9a-f]{64}$/i
 
@@ -47,7 +53,7 @@ export type PrivateAuctionClaimPayload = {
 	orderId: string
 	auctionCoordinates: string
 	auctionEventId: string
-	settlementEventId: string
+	verdictEventId: string
 	buyerPubkey: string
 	sellerPubkey: string
 	totalAmountSats: number
@@ -61,7 +67,7 @@ export type AuctionClaimMessageFields = {
 	orderId: string
 	auctionCoordinates: string
 	auctionEventId: string
-	settlementEventId: string
+	verdictEventId: string
 	buyerPubkey: string
 	sellerPubkey: string
 	totalAmountSats: number
@@ -95,7 +101,7 @@ export type AuctionClaimPublicMarkerFields = {
 	orderId: string
 	auctionCoordinates: string
 	auctionEventId: string
-	settlementEventId: string
+	verdictEventId: string
 	buyerPubkey: string
 	sellerPubkey: string
 	totalAmountSats: number
@@ -214,7 +220,7 @@ export function buildAuctionClaimPublicMarkerTags(fields: AuctionClaimMessageFie
 		['amount', String(payload.totalAmountSats)],
 		['a', payload.auctionCoordinates],
 		['e', payload.auctionEventId],
-		['e', payload.settlementEventId, '', 'settlement'],
+		['e', payload.verdictEventId, '', 'verdict'],
 	]
 }
 
@@ -228,8 +234,8 @@ export function getAuctionClaimPublicMarkerFields(event: { pubkey?: string; tags
 	const orderId = readTag(event.tags, 'order')
 	const amount = readTag(event.tags, 'amount')
 	const auctionCoordinates = readTag(event.tags, 'a')
-	const settlementEventId = event.tags.find((tag) => tag[0] === 'e' && tag[3] === 'settlement')?.[1] ?? ''
-	const auctionEventId = event.tags.find((tag) => tag[0] === 'e' && tag[3] !== 'settlement')?.[1] ?? ''
+	const verdictEventId = event.tags.find((tag) => tag[0] === 'e' && tag[3] === 'verdict')?.[1] ?? ''
+	const auctionEventId = event.tags.find((tag) => tag[0] === 'e' && tag[3] !== 'verdict')?.[1] ?? ''
 	const totalAmountSats = Number(amount)
 
 	if (subject !== AUCTION_CLAIM_SUBJECT) return null
@@ -238,7 +244,7 @@ export function getAuctionClaimPublicMarkerFields(event: { pubkey?: string; tags
 	if (!auctionCoordinates) return null
 	if (!HEX_32_BYTES_RE.test(sellerPubkey ?? '')) return null
 	if (!HEX_32_BYTES_RE.test(auctionEventId)) return null
-	if (!HEX_32_BYTES_RE.test(settlementEventId)) return null
+	if (!HEX_32_BYTES_RE.test(verdictEventId)) return null
 	if (!Number.isSafeInteger(totalAmountSats) || totalAmountSats <= 0) return null
 
 	try {
@@ -252,7 +258,7 @@ export function getAuctionClaimPublicMarkerFields(event: { pubkey?: string; tags
 		orderId,
 		auctionCoordinates,
 		auctionEventId,
-		settlementEventId,
+		verdictEventId,
 		buyerPubkey,
 		sellerPubkey: sellerPubkey ?? '',
 		totalAmountSats,
@@ -286,7 +292,7 @@ export function privateAuctionClaimMatchesPublicMarker(
 		payload.orderId === markerFields.orderId &&
 		payload.auctionCoordinates === markerFields.auctionCoordinates &&
 		payload.auctionEventId === markerFields.auctionEventId &&
-		payload.settlementEventId === markerFields.settlementEventId &&
+		payload.verdictEventId === markerFields.verdictEventId &&
 		payload.buyerPubkey === markerFields.buyerPubkey &&
 		payload.sellerPubkey === markerFields.sellerPubkey &&
 		payload.totalAmountSats === markerFields.totalAmountSats
@@ -298,7 +304,7 @@ export function buildPrivateAuctionClaimPayload(fields: AuctionClaimMessageField
 	assertHex32Bytes(fields.buyerPubkey, 'buyer pubkey')
 	assertHex32Bytes(fields.sellerPubkey, 'seller pubkey')
 	assertHex32Bytes(fields.auctionEventId, 'auction event id')
-	assertHex32Bytes(fields.settlementEventId, 'settlement event id')
+	assertHex32Bytes(fields.verdictEventId, 'verdict event id')
 	assertPositiveSafeInteger(fields.totalAmountSats, 'total amount sats')
 
 	const coordinate = parseAuctionCoordinate(fields.auctionCoordinates)
@@ -311,7 +317,7 @@ export function buildPrivateAuctionClaimPayload(fields: AuctionClaimMessageField
 		orderId: fields.orderId,
 		auctionCoordinates: fields.auctionCoordinates,
 		auctionEventId: fields.auctionEventId,
-		settlementEventId: fields.settlementEventId,
+		verdictEventId: fields.verdictEventId,
 		buyerPubkey: fields.buyerPubkey,
 		sellerPubkey: fields.sellerPubkey,
 		totalAmountSats: fields.totalAmountSats,
@@ -368,7 +374,7 @@ function parsePrivateAuctionClaimPayload(content: string): PrivateAuctionClaimPa
 		orderId: stringValue(parsed.orderId, 'order id'),
 		auctionCoordinates: stringValue(parsed.auctionCoordinates, 'auction coordinate'),
 		auctionEventId: stringValue(parsed.auctionEventId, 'auction event id'),
-		settlementEventId: stringValue(parsed.settlementEventId, 'settlement event id'),
+		verdictEventId: stringValue(parsed.verdictEventId, 'verdict event id'),
 		buyerPubkey: stringValue(parsed.buyerPubkey, 'buyer pubkey'),
 		sellerPubkey: stringValue(parsed.sellerPubkey, 'seller pubkey'),
 		totalAmountSats: numberValue(parsed.totalAmountSats, 'total amount sats'),

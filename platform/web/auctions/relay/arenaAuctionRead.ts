@@ -525,7 +525,7 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 	// ignore an unanchored event with (`arenaAnchor.ts:8-13`).
 	try {
 		if (event.kind === ARENA_VERDICT_KIND) {
-			const verdict = parseArenaVerdict({ kind: event.kind, tags: event.tags, content: event.content })
+			const verdict = parseArenaVerdict({ id: event.id, kind: event.kind, tags: event.tags, content: event.content })
 			return { ok: true, event: { ...baseOf(event, relay), type: 'verdict', verdict } }
 		}
 		const commitment = parseArenaStateCommitment({ kind: event.kind, tags: event.tags, content: event.content })

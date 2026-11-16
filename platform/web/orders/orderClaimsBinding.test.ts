@@ -51,13 +51,13 @@ mock.module('@platform/web/auctions/auctionsQuery', () => ({
 const SELLER_PK = 'a'.repeat(64)
 const BUYER_PK = 'b'.repeat(64)
 const AUCTION_EVENT_ID = 'c'.repeat(64)
-const SETTLEMENT_EVENT_ID = 'd'.repeat(64)
+const VERDICT_EVENT_ID = 'd'.repeat(64)
 
 const claimFields: AuctionClaimMessageFields = {
 	orderId: 'order-1',
-	auctionCoordinates: `30408:${SELLER_PK}:d-tag`,
+	auctionCoordinates: `1440:${SELLER_PK}:d-tag`,
 	auctionEventId: AUCTION_EVENT_ID,
-	settlementEventId: SETTLEMENT_EVENT_ID,
+	verdictEventId: VERDICT_EVENT_ID,
 	buyerPubkey: BUYER_PK,
 	sellerPubkey: SELLER_PK,
 	totalAmountSats: 21_000,
@@ -99,9 +99,9 @@ describe('useOrderClaimForSeller (orderClaimsBinding)', () => {
 		expect(auctionClaimOrderType.parsePublicMarker(claimOrderEvent)).toEqual(getAuctionClaimPublicMarkerFields(claimOrderEvent))
 		expect(auctionClaimOrderType.parsePublicMarker(claimOrderEvent)).toEqual({
 			orderId: 'order-1',
-			auctionCoordinates: `30408:${SELLER_PK}:d-tag`,
+			auctionCoordinates: `1440:${SELLER_PK}:d-tag`,
 			auctionEventId: AUCTION_EVENT_ID,
-			settlementEventId: SETTLEMENT_EVENT_ID,
+			verdictEventId: VERDICT_EVENT_ID,
 			buyerPubkey: BUYER_PK,
 			sellerPubkey: SELLER_PK,
 			totalAmountSats: 21_000,

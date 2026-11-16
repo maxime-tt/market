@@ -456,9 +456,9 @@ describe('auction lifecycle SDK workflows', () => {
 	test('winner claim marker has no delivery PII and preserves private-first partial progress', async () => {
 		const claim = {
 			orderId: 'order-1',
-			auctionCoordinate: auction.coordinate,
+			auctionCoordinate: `1440:${auction.sellerPubkey}:lot-1`,
 			auctionEventId: 'e'.repeat(64),
-			settlementEventId: 'f'.repeat(64),
+			verdictEventId: 'f'.repeat(64),
 			buyerPubkey: 'd'.repeat(64),
 			sellerPubkey: auction.sellerPubkey,
 			finalAmount: 100,

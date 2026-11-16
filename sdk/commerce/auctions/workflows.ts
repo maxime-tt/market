@@ -3,7 +3,7 @@ import type { Signer, SignedEventLike } from '../../core/ports/signer'
 import type { WalletRecoveryPort } from '../../core/ports/wallet'
 import type { KeyValueStoragePort } from '../../core/ports/storage'
 import { createWorkflowError, type WorkflowError } from '../../core/errors'
-import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS, AUCTION_SETTLEMENT_KIND } from './constants'
+import { ARENA_AUCTION_CREATE_KIND, AUCTION_BID_KIND, AUCTION_KIND, AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS, AUCTION_SETTLEMENT_KIND } from './constants'
 import type { ParsedAuctionEvent } from './events'
 import {
 	buildAuctionEventTags,
@@ -949,7 +949,12 @@ export interface AuctionWinnerClaimInput {
 	orderId: string
 	auctionCoordinate: string
 	auctionEventId: string
-	settlementEventId: string
+	/**
+	 * The winning **1445 verdict** event id. Under the consolidated protocol the
+	 * verdict is the authority on who won; there is no manual settlement event,
+	 * so the claim is keyed on the verdict instead.
+	 */
+	verdictEventId: string
 	buyerPubkey: string
 	sellerPubkey: string
 	finalAmount: number
@@ -974,21 +979,21 @@ export function prepareAuctionWinnerClaim(input: AuctionWinnerClaimInput): Prepa
 		orderId: input.orderId,
 		auctionCoordinate: input.auctionCoordinate,
 		auctionEventId: input.auctionEventId,
-		settlementEventId: input.settlementEventId,
+		verdictEventId: input.verdictEventId,
 	})) {
 		if (!value.trim()) throw new Error(`${name} is required`)
 	}
 	if (!isHexPubkey(input.buyerPubkey) || !isHexPubkey(input.sellerPubkey)) throw new Error('Buyer and seller must be 32-byte hex pubkeys')
-	if (!isEventId(input.auctionEventId) || !isEventId(input.settlementEventId))
-		throw new Error('Auction and settlement ids must be 32-byte hex event ids')
+	if (!isEventId(input.auctionEventId) || !isEventId(input.verdictEventId))
+		throw new Error('Auction and verdict ids must be 32-byte hex event ids')
 	if (!Number.isSafeInteger(input.finalAmount) || input.finalAmount <= 0) throw new Error('Claim amount must be a positive safe integer')
 	for (const field of ['name', 'firstLineOfAddress', 'city', 'zipPostcode', 'country'] as const) {
 		if (!input.shippingAddress[field].trim()) throw new Error(`Shipping ${field} is required`)
 	}
 	const coordinateParts = input.auctionCoordinate.split(':')
 	if (
-		coordinateParts.length !== 3 ||
-		coordinateParts[0] !== String(AUCTION_KIND) ||
+		coordinateParts.length < 3 ||
+		coordinateParts[0] !== String(ARENA_AUCTION_CREATE_KIND) ||
 		coordinateParts[1].toLowerCase() !== input.sellerPubkey.toLowerCase()
 	) {
 		throw new Error('Auction coordinate does not belong to the seller')
@@ -1009,7 +1014,7 @@ export function prepareAuctionWinnerClaim(input: AuctionWinnerClaimInput): Prepa
 				['amount', String(input.finalAmount)],
 				['a', input.auctionCoordinate],
 				['e', input.auctionEventId],
-				['e', input.settlementEventId, '', 'settlement'],
+				['e', input.verdictEventId, '', 'verdict'],
 			],
 		},
 	}

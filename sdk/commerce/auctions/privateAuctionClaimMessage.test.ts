@@ -23,7 +23,7 @@ import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@sdk/core/t
 
 const CREATED_AT = 1_700_000_000
 const AUCTION_EVENT_ID = 'a'.repeat(64)
-const SETTLEMENT_EVENT_ID = 'b'.repeat(64)
+const VERDICT_EVENT_ID = 'b'.repeat(64)
 const ORDER_ID = 'order-123'
 
 const PII_SENTINELS = [
@@ -53,9 +53,9 @@ function baseFields(overrides: Partial<AuctionClaimMessageFields> = {}): Auction
 	const seller = keyPair()
 	return {
 		orderId: ORDER_ID,
-		auctionCoordinates: `30408:${seller.pubkey}:auction-1`,
+		auctionCoordinates: `1440:${seller.pubkey}:auction-1`,
 		auctionEventId: AUCTION_EVENT_ID,
-		settlementEventId: SETTLEMENT_EVENT_ID,
+		verdictEventId: VERDICT_EVENT_ID,
 		buyerPubkey: buyer.pubkey,
 		sellerPubkey: seller.pubkey,
 		totalAmountSats: 21_000,
@@ -118,10 +118,10 @@ describe('private auction claim message', () => {
 		expect(() => buildPrivateAuctionClaimPayload({ ...fields, auctionCoordinates: `30402:${fields.sellerPubkey}:auction-1` })).toThrow(
 			'Invalid auction coordinate',
 		)
-		expect(() => buildPrivateAuctionClaimPayload({ ...fields, auctionCoordinates: `30408:${'f'.repeat(64)}:auction-1` })).toThrow(
+		expect(() => buildPrivateAuctionClaimPayload({ ...fields, auctionCoordinates: `1440:${'f'.repeat(64)}:auction-1` })).toThrow(
 			'Auction coordinate seller pubkey does not match seller pubkey',
 		)
-		expect(() => buildPrivateAuctionClaimPayload({ ...fields, auctionCoordinates: `30408:${fields.sellerPubkey}:` })).toThrow(
+		expect(() => buildPrivateAuctionClaimPayload({ ...fields, auctionCoordinates: `1440:${fields.sellerPubkey}:` })).toThrow(
 			'Invalid auction coordinate d tag',
 		)
 	})
@@ -134,7 +134,7 @@ describe('private auction claim message', () => {
 			buildPrivateAuctionClaimPayload({
 				...fields,
 				sellerPubkey: 'not-a-pubkey',
-				auctionCoordinates: '30408:not-a-pubkey:auction-1',
+				auctionCoordinates: '1440:not-a-pubkey:auction-1',
 			}),
 		).toThrow('Invalid seller pubkey')
 	})
@@ -143,8 +143,8 @@ describe('private auction claim message', () => {
 		const fields = baseFields()
 
 		expect(() => buildPrivateAuctionClaimPayload({ ...fields, auctionEventId: 'not-an-event-id' })).toThrow('Invalid auction event id')
-		expect(() => buildPrivateAuctionClaimPayload({ ...fields, settlementEventId: 'not-an-event-id' })).toThrow(
-			'Invalid settlement event id',
+		expect(() => buildPrivateAuctionClaimPayload({ ...fields, verdictEventId: 'not-an-event-id' })).toThrow(
+			'Invalid verdict event id',
 		)
 	})
 
@@ -163,7 +163,7 @@ describe('private auction claim message', () => {
 		const fields = baseFields({
 			buyerPubkey: buyer.pubkey,
 			sellerPubkey: seller.pubkey,
-			auctionCoordinates: `30408:${seller.pubkey}:auction-1`,
+			auctionCoordinates: `1440:${seller.pubkey}:auction-1`,
 		})
 
 		const wrapped = createPrivateAuctionClaimMessage({
@@ -184,7 +184,7 @@ describe('private auction claim message', () => {
 
 		expect(decrypted.payload.auctionCoordinates).toBe(fields.auctionCoordinates)
 		expect(decrypted.payload.auctionEventId).toBe(AUCTION_EVENT_ID)
-		expect(decrypted.payload.settlementEventId).toBe(SETTLEMENT_EVENT_ID)
+		expect(decrypted.payload.verdictEventId).toBe(VERDICT_EVENT_ID)
 		expect(decrypted.payload.orderId).toBe(ORDER_ID)
 		expect(decrypted.payload.totalAmountSats).toBe(21_000)
 		expect(decrypted.payload.shippingAddress).toEqual(fields.shippingAddress)
@@ -199,7 +199,7 @@ describe('private auction claim message', () => {
 		const fields = baseFields({
 			buyerPubkey: buyer.pubkey,
 			sellerPubkey: seller.pubkey,
-			auctionCoordinates: `30408:${seller.pubkey}:auction-1`,
+			auctionCoordinates: `1440:${seller.pubkey}:auction-1`,
 		})
 
 		const wrapped = await createPrivateAuctionClaimMessageWithSigner({
@@ -229,7 +229,7 @@ describe('private auction claim message', () => {
 			['amount', '21000'],
 			['a', fields.auctionCoordinates],
 			['e', AUCTION_EVENT_ID],
-			['e', SETTLEMENT_EVENT_ID, '', 'settlement'],
+			['e', VERDICT_EVENT_ID, '', 'verdict'],
 		])
 		expectNoPii({ content: '', tags })
 	})
@@ -245,7 +245,7 @@ describe('private auction claim message', () => {
 			orderId: fields.orderId,
 			auctionCoordinates: fields.auctionCoordinates,
 			auctionEventId: fields.auctionEventId,
-			settlementEventId: fields.settlementEventId,
+			verdictEventId: fields.verdictEventId,
 			buyerPubkey: fields.buyerPubkey,
 			sellerPubkey: fields.sellerPubkey,
 			totalAmountSats: fields.totalAmountSats,
@@ -289,7 +289,7 @@ describe('private auction claim message', () => {
 		expect(
 			getAuctionClaimPublicMarkerFields({
 				pubkey: fields.buyerPubkey,
-				tags: tags.filter((tag) => !(tag[0] === 'e' && tag[3] === 'settlement')),
+				tags: tags.filter((tag) => !(tag[0] === 'e' && tag[3] === 'verdict')),
 			}),
 		).toBeNull()
 		expect(

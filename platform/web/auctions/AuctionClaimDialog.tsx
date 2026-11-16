@@ -13,7 +13,7 @@ interface AuctionClaimDialogProps {
 	onOpenChange: (open: boolean) => void
 	auctionEventId: string
 	auctionCoordinates: string
-	settlementEventId: string
+	verdictEventId: string
 	sellerPubkey: string
 	finalAmount: number
 }
@@ -23,7 +23,7 @@ export function AuctionClaimDialog({
 	onOpenChange,
 	auctionEventId,
 	auctionCoordinates,
-	settlementEventId,
+	verdictEventId,
 	sellerPubkey,
 	finalAmount,
 }: AuctionClaimDialogProps) {
@@ -47,7 +47,7 @@ export function AuctionClaimDialog({
 		const data: AuctionClaimFormData = {
 			auctionEventId,
 			auctionCoordinates,
-			settlementEventId,
+			verdictEventId,
 			sellerPubkey,
 			finalAmount,
 			shippingAddress: {

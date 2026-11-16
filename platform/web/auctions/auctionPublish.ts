@@ -196,7 +196,7 @@ export const useDeleteAuctionMutation = () => {
 export interface AuctionClaimFormData {
 	auctionEventId: string
 	auctionCoordinates: string
-	settlementEventId: string
+	verdictEventId: string
 	sellerPubkey: string
 	finalAmount: number
 	shippingAddress: {
@@ -216,7 +216,7 @@ export interface AuctionClaimFormData {
  * Creates a Kind 16 order event that references the won auction.
  * This is identical to a normal order creation but uses an `a` tag
  * pointing at the auction coordinate and an `e` tag pointing at the
- * settlement event instead of product `item` tags.
+ * winning verdict event instead of product `item` tags.
  */
 export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): Promise<string> => {
 	const buyerPubkey = await resolveAuctionClaimBuyerPubkey()
@@ -226,7 +226,7 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 		orderId,
 		auctionCoordinates: formData.auctionCoordinates,
 		auctionEventId: formData.auctionEventId,
-		settlementEventId: formData.settlementEventId,
+		verdictEventId: formData.verdictEventId,
 		buyerPubkey,
 		sellerPubkey: formData.sellerPubkey,
 		totalAmountSats: formData.finalAmount,
@@ -241,7 +241,7 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 			orderId,
 			auctionCoordinate: claimFields.auctionCoordinates,
 			auctionEventId: claimFields.auctionEventId,
-			settlementEventId: claimFields.settlementEventId,
+			verdictEventId: claimFields.verdictEventId,
 			buyerPubkey: claimFields.buyerPubkey,
 			sellerPubkey: claimFields.sellerPubkey,
 			finalAmount: claimFields.totalAmountSats,
@@ -257,7 +257,7 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 					orderId: payload.orderId,
 					auctionCoordinates: payload.auctionCoordinate,
 					auctionEventId: payload.auctionEventId,
-					settlementEventId: payload.settlementEventId,
+					verdictEventId: payload.verdictEventId,
 					buyerPubkey: payload.buyerPubkey,
 					sellerPubkey: payload.sellerPubkey,
 					totalAmountSats: payload.finalAmount,

@@ -18,7 +18,7 @@ import { fetchPrivateAuctionClaimForMarker } from '@platform/web/auctions/auctio
 const SELLER_PK = 'a'.repeat(64)
 const BUYER_PK = 'b'.repeat(64)
 const AUCTION_EVENT_ID = 'c'.repeat(64)
-const SETTLEMENT_EVENT_ID = 'd'.repeat(64)
+const VERDICT_EVENT_ID = 'd'.repeat(64)
 
 const realGetUser = applesauceIo.getUser
 const realFetchEvents = applesauceIo.fetchEvents
@@ -41,9 +41,9 @@ const makeMarker = (): NostrEventLike => ({
 		['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
 		['order', 'order-1'],
 		['amount', '50000'],
-		['a', `30408:${SELLER_PK}:d-tag`],
+		['a', `1440:${SELLER_PK}:d-tag`],
 		['e', AUCTION_EVENT_ID],
-		['e', SETTLEMENT_EVENT_ID, '', 'settlement'],
+		['e', VERDICT_EVENT_ID, '', 'verdict'],
 	],
 })
 

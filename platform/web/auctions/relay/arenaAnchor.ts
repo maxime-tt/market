@@ -29,6 +29,8 @@ import {
 
 /** The only fields a parser reads. A `nostr-tools` `NostrEvent` is assignable. */
 export interface ArenaEventLike {
+	/** The event id, when the caller has it. Used to carry the verdict's own id. */
+	id?: string
 	kind: number
 	tags: string[][]
 	content: string
@@ -83,6 +85,12 @@ export class ArenaUnanchoredError extends ArenaContractError {
 // ---------- Parsed shapes --------------------------------------------------
 
 export interface ParsedArenaVerdict {
+	/**
+	 * The verdict **event id** — the authority a won lot's shipping claim is keyed
+	 * on under the consolidated protocol (there is no manual settlement event).
+	 * Empty only when the caller parsed an event without an id.
+	 */
+	eventId: string
 	auctionId: string
 	/** null when the auction had no bid (no-bid / aborted). */
 	bidId: string | null
@@ -222,6 +230,7 @@ export function parseArenaVerdict(event: ArenaEventLike): ParsedArenaVerdict {
 	const payout = content.payout_token_sha256
 
 	return {
+		eventId: event.id ?? '',
 		auctionId,
 		bidId,
 		outcome: outcome as ArenaVerdictOutcome,

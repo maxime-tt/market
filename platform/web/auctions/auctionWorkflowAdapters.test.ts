@@ -129,9 +129,9 @@ describe('auction app workflow adapters', () => {
 		const outcome = await runAuctionWinnerClaimAppAdapter({
 			claim: {
 				orderId: 'order-1',
-				auctionCoordinate: auction.coordinate,
+				auctionCoordinate: `1440:${auction.sellerPubkey}:lot`,
 				auctionEventId: 'e'.repeat(64),
-				settlementEventId: 'f'.repeat(64),
+				verdictEventId: 'f'.repeat(64),
 				buyerPubkey: 'd'.repeat(64),
 				sellerPubkey: auction.sellerPubkey,
 				finalAmount: 25,
