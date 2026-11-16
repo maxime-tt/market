@@ -70,7 +70,13 @@ REQUIRE_COVERAGE="${AUCTIONS_GUARD_REQUIRE_COVERAGE:-1}"
 # src/publish/auctions.tsx and src/queries/auctions.tsx — left the tree with every
 # remaining src shim, so the scanned set falls (94 -> 92 measured) and the floor
 # drops 87 -> 85 with them (same commit, per the E0 fusion rule above).
-MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-85}"
+# Migration slice d7s2/mig-deadcode: the in-repo 30408 validator
+# (`platform/server/auction-validator/*.ts`, 12 production files) was retired with
+# the rest of that series — it subscribed to 30408/1023/1024/1025 and knew nothing
+# of 1440/1445, and the verdicts the app reads come from the committee backend. The
+# scanned set falls 89 -> 77 measured, so the floor drops 85 -> 77 with it (same
+# commit, per the E0 fusion rule above).
+MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-77}"
 
 # I-PARKED wave 3 commit D (2026-10-30): the list card moved verbatim out of
 # `src/components/AuctionCard.tsx` to its platform host + ui view pair
@@ -226,7 +232,11 @@ GLOBS=(
 	# commit (the sdk/commerce/auctions/schemas/*.ts family below covers them), so
 	# the family matches nothing and the coverage check fails by design. Re-add a
 	# schemas family if an auction schema module reappears under src/lib/schemas/.
-	"$ROOT"/platform/server/auction-validator/*.ts
+	# `platform/server/auction-validator/*.ts` was retired here (slice d7s2/mig-deadcode):
+	# the in-repo 30408 validator only ever subscribed to 30408/1023/1024/1025, the
+	# consolidated series publishes 1440/1445 and reads committee verdicts, so the
+	# directory is gone and the family was dropped with it (MIN_SCANNED 85 -> 77).
+	# Re-add a server-side validator family if a daemon reappears under platform/server/.
 	# Batch 2 lane C (2026-10-30): the `src/components/nostr/AuctionSectionGrid.tsx` single-file
 	# family was retired here — the component moved verbatim to
 	# `platform/web/auctions/AuctionSectionGrid.tsx`, joining the existing
