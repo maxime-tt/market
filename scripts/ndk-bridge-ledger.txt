@@ -39,7 +39,13 @@ platform/web/payments/ZapDialogHost.tsx|h-kit/H-b|sdk/core/query/queryKeyFactory
 # --- declare-as-you-touch rows -----------------------------------------------
 # I-c-notifications (2026-10-29): the monitor moved from src/hooks/ and names the NDK transport
 # (subscribe/fetch through the platform NDK store), so it is declared the day it lands.
-platform/web/notifications/monitor.ts|I-c-notifications|sdk/commerce/auctions/auctionRead.ts|the notification monitor subscribes/fetches through the platform NDK store and injects the sdk auction-read getters (bid amounts, start/cutoff times, root ids) to scope relay events into notification keys|client-NDK-removal (ADR-0002; post-Wave-J)
+# Retargeted 2026-11-16 when the arena rules were extracted: the auction-read GETTERS
+# (bid amounts, start/cutoff times, root ids) left this file for
+# `platform/web/notifications/arenaMonitorRules.ts`, which injects the platform
+# `auctions/relay/arenaAuctionRead` adapter and names no NDK transport at all — so it is not a
+# bridge and needs no row. What this file still injects from `sdk/` is the arena kind vocabulary
+# it scopes relay events by, so that is the declared capability.
+platform/web/notifications/monitor.ts|I-c-notifications|sdk/commerce/auctions/constants.ts|the notification monitor subscribes/fetches through the platform NDK store and injects the sdk arena kind vocabulary (create/bid/verdict) to scope relay events into notification keys; the auction-read getters it used to inject now live in the NDK-free arenaMonitorRules.ts|client-NDK-removal (ADR-0002; post-Wave-J)
 # H-c/H-e relays cluster (2026-10-30): the relay-manager leaves moved to
 # ui/settings/relay-manager-views + platform/web/relays/RelayManagerHost, and the
 # NDK status classification they needed landed in this existing NDK read helper
