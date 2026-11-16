@@ -13,7 +13,7 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@platform/web/auth/authStore'
-import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@sdk/commerce/auctions/constants'
+import { ARENA_AUCTION_BID_KIND, ARENA_AUCTION_CREATE_KIND, ARENA_VERDICT_KIND } from '@sdk/commerce/auctions/constants'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { appNotifications } from './instance'
 import { produceAppNotification, reconcileAppNotificationCounts } from './producers'
@@ -29,21 +29,24 @@ import {
 import { LIVE_ACTIVITY_KIND, LIVE_CHAT_KIND } from '@sdk/core/nostr/nip53'
 import { configStore } from '@platform/web/config/appConfigStore'
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/orders/messaging/orderSchema'
-import { fetchAuctionBidsByBidder, fetchAuctionsByPubkey } from '@platform/web/auctions/auctionsQuery'
 import { fetchProductsByPubkey } from '@platform/web/products/productQuery'
 import {
-	getAuctionBiddingCutoffAt,
-	getAuctionId,
-	getAuctionRootEventId,
-	getAuctionStartAt,
-	getBidAmount,
-	getBidAuctionCoordinates,
-	getBidAuctionEventId,
-} from '@sdk/commerce/auctions/auctionRead'
+	arenaBidBinding,
+	arenaBidPositions,
+	arenaCreateIdentity,
+	arenaPhaseWindow,
+	arenaVerdictKey,
+	type ArenaBidBinding,
+	type ArenaCreateIdentity,
+	type ArenaPhaseWindow,
+	type ArenaPositionBid,
+} from './arenaMonitorRules'
 import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
 
 type NDKKind = NonNullable<NDKFilter['kinds']>[number]
-const AUCTION_KIND_NDK = 30408 as NDKKind
+const AUCTION_CREATE_KIND_NDK = ARENA_AUCTION_CREATE_KIND as NDKKind
+const AUCTION_BID_KIND_NDK = ARENA_AUCTION_BID_KIND as NDKKind
+const AUCTION_VERDICT_KIND_NDK = ARENA_VERDICT_KIND as NDKKind
 const PRODUCT_KIND_NDK = PRODUCT_KIND as NDKKind
 const COMMENT_KIND_NDK = 1111 as NDKKind
 const LIVE_ACTIVITY_KIND_NDK = LIVE_ACTIVITY_KIND as unknown as NDKKind
@@ -51,7 +54,6 @@ const LIVE_CHAT_KIND_NDK = LIVE_CHAT_KIND as unknown as NDKKind
 
 const AUCTION_MONITOR_LIMIT = 500
 const AUCTION_FILTER_CHUNK_SIZE = 80
-const IGNORED_AUCTION_BID_STATUSES = new Set(['cancelled', 'canceled', 'rejected', 'failed', 'expired', 'refunded', 'reclaimed', 'claimed'])
 
 const uniqueStrings = (values: string[]): string[] => Array.from(new Set(values.filter(Boolean)))
 
@@ -75,14 +77,18 @@ const dedupeEvents = (events: NDKEvent[]): NDKEvent[] => {
 	})
 }
 
-const getAuctionCoordinate = (auction: NDKEvent): string => {
-	const auctionDTag = getAuctionId(auction)
-	return auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
+/** One lot the monitor routes notifications for: its coordinate, its `d`, and its notification key. */
+interface MonitoredLot {
+	coordinate: string
+	d: string
+	key: string
 }
 
-const getEventAuctionRootId = (event: NDKEvent): string => getBidAuctionEventId(event)
-
-const getEventAuctionCoordinate = (event: NDKEvent): string => getBidAuctionCoordinates(event)
+/**
+ * The `d` part of a `1440:<seller>:<d>` coordinate. A `d` may itself contain `:`, so the tail is
+ * rejoined rather than sliced to a single field.
+ */
+const coordinateDTag = (coordinate: string): string => coordinate.split(':').slice(2).join(':')
 
 const getAddressableEventCoordinate = (event: NDKEvent): string => {
 	const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
@@ -100,20 +106,6 @@ const resolveScopedKeyFromLookups = (values: string[], lookups: Array<Map<string
 		}
 	}
 	return ''
-}
-
-const getAuctionNotificationKey = (auction: NDKEvent): string =>
-	getAuctionRootEventId(auction) || getAuctionCoordinate(auction) || auction.id
-
-const getAuctionBidStatus = (event: NDKEvent): string =>
-	event.tags
-		.find((tag) => tag[0] === 'status')?.[1]
-		?.trim()
-		.toLowerCase() || 'unknown'
-
-const isCountableAuctionBidEvent = (event: NDKEvent): boolean => {
-	const status = getAuctionBidStatus(event)
-	return !IGNORED_AUCTION_BID_STATUSES.has(status)
 }
 
 const makeTaggedAuctionFilters = ({
@@ -302,7 +294,7 @@ export const useNotificationMonitor = () => {
 		const seenAuctionThreadCommentEventIds = new Set<string>()
 		const seenBidEventIds = new Set<string>()
 		const seenProductCommentEventIds = new Set<string>()
-		const seenSettlementEventIds = new Set<string>()
+		const seenVerdictEventIds = new Set<string>()
 		const scheduledAuctionLiveKeys = new Set<string>()
 		const scheduledAuctionSettlementKeys = new Set<string>()
 		const subscribedSellerAuctionRootEventIds = new Set<string>()
@@ -391,12 +383,11 @@ export const useNotificationMonitor = () => {
 			}
 		}
 
-		const scheduleAuctionPhaseNotification = (auction: NDKEvent) => {
-			const auctionKey = getAuctionNotificationKey(auction)
+		const scheduleAuctionPhaseNotification = (auctionKey: string, window: ArenaPhaseWindow) => {
 			if (!auctionKey) return
 
-			const scheduleAt = (runAt: number, scheduledKeys: Set<string>, callback: () => void) => {
-				if (!runAt || runAt <= Math.floor(Date.now() / 1000) || scheduledKeys.has(auctionKey)) return
+			const scheduleAt = (runAt: number | null, scheduledKeys: Set<string>, callback: () => void) => {
+				if (runAt === null || !runAt || runAt <= Math.floor(Date.now() / 1000) || scheduledKeys.has(auctionKey)) return
 				scheduledKeys.add(auctionKey)
 				const timeoutId = window.setTimeout(
 					() => {
@@ -409,33 +400,19 @@ export const useNotificationMonitor = () => {
 				phaseTimeoutIds.push(timeoutId)
 			}
 
-			const startAt = getAuctionStartAt(auction)
-			if (startAt > readMarks.getLastSeenAuctionLive(auctionKey)) {
-				scheduleAt(startAt, scheduledAuctionLiveKeys, () => {
-					console.log('[NotificationMonitor] Seller auction went live:', auction.id)
+			if (window.startAt > readMarks.getLastSeenAuctionLive(auctionKey)) {
+				scheduleAt(window.startAt, scheduledAuctionLiveKeys, () => {
+					console.log('[NotificationMonitor] Seller auction went live:', auctionKey)
 					produceAppNotification({ kind: 'auction-live', auctionKey, createdAt: nowSeconds() })
 				})
 			}
 
-			const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
-			if (biddingCutoffAt > readMarks.getLastSeenAuctionSettlementBegins(auctionKey)) {
-				scheduleAt(biddingCutoffAt, scheduledAuctionSettlementKeys, () => {
-					console.log('[NotificationMonitor] Seller auction entered settlement:', auction.id)
+			if (window.cutoffAt !== null && window.cutoffAt > readMarks.getLastSeenAuctionSettlementBegins(auctionKey)) {
+				scheduleAt(window.cutoffAt, scheduledAuctionSettlementKeys, () => {
+					console.log('[NotificationMonitor] Seller auction entered settlement:', auctionKey)
 					produceAppNotification({ kind: 'auction-settlement', auctionKey, createdAt: nowSeconds() })
 				})
 			}
-		}
-
-		const getHighestOwnBidAmountForAuction = (
-			event: NDKEvent,
-			highestOwnBidByRootId: Map<string, number>,
-			highestOwnBidByCoordinate: Map<string, number>,
-		): number => {
-			const auctionRootEventId = getEventAuctionRootId(event)
-			const auctionCoordinate = getEventAuctionCoordinate(event)
-			const rootAmount = auctionRootEventId ? (highestOwnBidByRootId.get(auctionRootEventId) ?? 0) : 0
-			const coordinateAmount = auctionCoordinate ? (highestOwnBidByCoordinate.get(auctionCoordinate) ?? 0) : 0
-			return Math.max(rootAmount, coordinateAmount)
 		}
 
 		// Initial fetch to calculate current unseen counts and set up auction-specific subscriptions
@@ -500,25 +477,64 @@ export const useNotificationMonitor = () => {
 					return isUpdate && event.pubkey !== user.pubkey && isNewPurchaseUpdate(event)
 				})
 
-				// Owner scope: this read builds the notification routing table for the
-				// seller's own auctions, so it keeps malformed events visible — a
-				// malformed auction that the seller republishes must not silently lose
-				// its notification mapping in the meantime.
-				const sellerAuctions = await fetchAuctionsByPubkey(user.pubkey, 500, { includeInvalid: true })
+				// Seller scope: the user's own arena lots. A 1440 is a regular kind, so one lot can
+				// arrive as several versions; they collapse onto the lot's coordinate, and the root
+				// (the earliest version carrying no superseding `e` tag) is the one that announces a
+				// phase — an update never re-announces a start it did not begin.
+				const sellerCreateEvents = Array.from(
+					await ndk.fetchEvents({ kinds: [AUCTION_CREATE_KIND_NDK], authors: [user.pubkey], limit: AUCTION_MONITOR_LIMIT }),
+				)
 				const sellerProducts = await fetchProductsByPubkey(user.pubkey, true, 500)
 				const sellerAuctionKeyByRootEventId = new Map<string, string>()
 				const sellerAuctionKeyByCoordinate = new Map<string, string>()
+				const sellerLotRoots = new Map<string, { event: NDKEvent; identity: ArenaCreateIdentity }>()
 				const sellerProductKeyByEventId = new Map<string, string>()
 				const sellerProductKeyByCoordinate = new Map<string, string>()
 
-				for (const auction of sellerAuctions) {
-					const auctionKey = getAuctionNotificationKey(auction)
-					if (!auctionKey) continue
+				for (const event of sellerCreateEvents) {
+					const identity = arenaCreateIdentity(event)
+					if (!identity) continue
 
-					const rootEventId = getAuctionRootEventId(auction) || auction.id
-					const coordinate = getAuctionCoordinate(auction)
-					if (rootEventId) sellerAuctionKeyByRootEventId.set(rootEventId, auctionKey)
-					if (coordinate) sellerAuctionKeyByCoordinate.set(coordinate, auctionKey)
+					// Every version of a lot routes to the lot's coordinate.
+					sellerAuctionKeyByCoordinate.set(identity.coordinate, identity.coordinate)
+					if (identity.supersedes) continue
+
+					// 1440 is regular, so the root is the EARLIEST version with no `e` tag
+					// (`arenaAuctionRead.ts`, "1440 is regular, so 'latest version wins' is built here").
+					const prior = sellerLotRoots.get(identity.coordinate)
+					if (!prior || (event.created_at ?? 0) < (prior.event.created_at ?? 0)) {
+						sellerLotRoots.set(identity.coordinate, { event, identity })
+					}
+				}
+
+				const sellerLots: MonitoredLot[] = []
+				const sellerPhaseWindows = new Map<string, ArenaPhaseWindow>()
+				for (const [coordinate, { event, identity }] of sellerLotRoots) {
+					sellerLots.push({ coordinate, d: identity.d, key: coordinate })
+					sellerAuctionKeyByRootEventId.set(event.id, coordinate)
+					const phaseWindow = arenaPhaseWindow(event)
+					if (phaseWindow) sellerPhaseWindows.set(coordinate, phaseWindow)
+				}
+
+				// Bind a 1441 to one of the seller's lots: `a` coordinate first, then the `e` root,
+				// then a `d` that exactly one of the seller's lots carries — the same order the read
+				// adapter binds bids (`arenaAuctionRead.ts`, "bind bids to auctions").
+				const sellerAuctionKeyForBid = (event: NDKEvent): string => {
+					const binding = arenaBidBinding(event)
+					if (!binding) return ''
+					if (binding.coordinate) {
+						const byCoordinate = sellerAuctionKeyByCoordinate.get(binding.coordinate)
+						if (byCoordinate) return byCoordinate
+					}
+					if (binding.rootEventId) {
+						const byRoot = sellerAuctionKeyByRootEventId.get(binding.rootEventId)
+						if (byRoot) return byRoot
+					}
+					if (binding.auctionId) {
+						const matches = sellerLots.filter((lot) => lot.d === binding.auctionId)
+						if (matches.length === 1) return matches[0].key
+					}
+					return ''
 				}
 
 				const sellerProductScopes = sellerProducts
@@ -530,12 +546,12 @@ export const useNotificationMonitor = () => {
 					if (coordinate) sellerProductKeyByCoordinate.set(coordinate, productKey)
 				}
 
-				const sellerAuctionRootEventIds = uniqueStrings(sellerAuctions.map((auction) => getAuctionRootEventId(auction) || auction.id))
-				const sellerAuctionCoordinates = uniqueStrings(sellerAuctions.map(getAuctionCoordinate))
+				const sellerAuctionRootEventIds = Array.from(sellerAuctionKeyByRootEventId.keys())
+				const sellerAuctionCoordinates = sellerLots.map((lot) => lot.coordinate)
 				const sellerProductEventIds = uniqueStrings(sellerProductScopes.map((scope) => scope.eventId))
 				const sellerProductCoordinates = uniqueStrings(sellerProductScopes.map((scope) => scope.coordinate))
 				const sellerBidEvents = await fetchTaggedAuctionEvents({
-					kind: AUCTION_BID_KIND,
+					kind: AUCTION_BID_KIND_NDK,
 					auctionRootEventIds: sellerAuctionRootEventIds,
 					auctionCoordinates: sellerAuctionCoordinates,
 					since: readMarks.getLastSeenAuctionBids() + 1,
@@ -580,18 +596,12 @@ export const useNotificationMonitor = () => {
 
 				const newSellerBidEvents = sellerBidEvents.filter((event) => {
 					seenAuctionEventIds.add(event.id)
-					const auctionKey = resolveScopedKeyFromLookups([getEventAuctionRootId(event), getEventAuctionCoordinate(event)].filter(Boolean), [
-						sellerAuctionKeyByRootEventId,
-						sellerAuctionKeyByCoordinate,
-					])
-					return event.pubkey !== user.pubkey && !!auctionKey && isCountableAuctionBidEvent(event) && isNewAuctionBid(event, auctionKey)
+					const auctionKey = sellerAuctionKeyForBid(event)
+					return event.pubkey !== user.pubkey && !!auctionKey && isNewAuctionBid(event, auctionKey)
 				})
 
 				const newSellerBidCountsByAuction = newSellerBidEvents.reduce<Record<string, number>>((counts, event) => {
-					const auctionKey = resolveScopedKeyFromLookups([getEventAuctionRootId(event), getEventAuctionCoordinate(event)].filter(Boolean), [
-						sellerAuctionKeyByRootEventId,
-						sellerAuctionKeyByCoordinate,
-					])
+					const auctionKey = sellerAuctionKeyForBid(event)
 					if (!auctionKey) return counts
 					counts[auctionKey] = (counts[auctionKey] || 0) + 1
 					return counts
@@ -629,71 +639,88 @@ export const useNotificationMonitor = () => {
 					return event.pubkey !== user.pubkey && !!productKey && isNewProductComment(event, productKey)
 				})
 
-				const unseenAuctionLiveCountsByAuction = sellerAuctions.reduce<Record<string, number>>((counts, auction) => {
-					const auctionKey = getAuctionNotificationKey(auction)
-					if (!auctionKey) return counts
-
-					const startAt = getAuctionStartAt(auction)
-					if (startAt > readMarks.getLastSeenAuctionLive(auctionKey) && startAt <= initializationStartedAt) {
-						counts[auctionKey] = 1
-					}
-					return counts
-				}, {})
-
-				const unseenAuctionSettlementBeginsCountsByAuction = sellerAuctions.reduce<Record<string, number>>((counts, auction) => {
-					const auctionKey = getAuctionNotificationKey(auction)
-					if (!auctionKey) return counts
-
-					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
-					if (biddingCutoffAt > readMarks.getLastSeenAuctionSettlementBegins(auctionKey) && biddingCutoffAt <= initializationStartedAt) {
-						counts[auctionKey] = 1
-					}
-					return counts
-				}, {})
-
-				const ownBidEvents = await fetchAuctionBidsByBidder(user.pubkey, 500)
-				const highestOwnBidByRootId = new Map<string, number>()
-				const highestOwnBidByCoordinate = new Map<string, number>()
-
-				for (const bid of ownBidEvents) {
-					const amount = getBidAmount(bid)
-					const auctionRootEventId = getBidAuctionEventId(bid)
-					const auctionCoordinate = getBidAuctionCoordinates(bid)
-
-					if (auctionRootEventId) {
-						highestOwnBidByRootId.set(auctionRootEventId, Math.max(highestOwnBidByRootId.get(auctionRootEventId) ?? 0, amount))
-					}
-					if (auctionCoordinate) {
-						highestOwnBidByCoordinate.set(auctionCoordinate, Math.max(highestOwnBidByCoordinate.get(auctionCoordinate) ?? 0, amount))
+				const unseenAuctionLiveCountsByAuction: Record<string, number> = {}
+				for (const lot of sellerLots) {
+					const phaseWindow = sellerPhaseWindows.get(lot.coordinate)
+					if (!phaseWindow) continue
+					if (phaseWindow.startAt > readMarks.getLastSeenAuctionLive(lot.key) && phaseWindow.startAt <= initializationStartedAt) {
+						unseenAuctionLiveCountsByAuction[lot.key] = 1
 					}
 				}
 
-				const watchedAuctionRootEventIds = Array.from(highestOwnBidByRootId.keys())
-				const watchedAuctionCoordinates = Array.from(highestOwnBidByCoordinate.keys())
-				const watchedBidEvents = await fetchTaggedAuctionEvents({
-					kind: AUCTION_BID_KIND,
-					auctionRootEventIds: watchedAuctionRootEventIds,
-					auctionCoordinates: watchedAuctionCoordinates,
-					since: readMarks.getLastSeenBidUpdates() + 1,
-				})
-				const watchedSettlementEvents = await fetchTaggedAuctionEvents({
-					kind: AUCTION_SETTLEMENT_KIND,
-					auctionRootEventIds: watchedAuctionRootEventIds,
-					auctionCoordinates: watchedAuctionCoordinates,
-					since: readMarks.getLastSeenBidUpdates() + 1,
-				})
+				const unseenAuctionSettlementBeginsCountsByAuction: Record<string, number> = {}
+				for (const lot of sellerLots) {
+					const phaseWindow = sellerPhaseWindows.get(lot.coordinate)
+					if (!phaseWindow || phaseWindow.cutoffAt === null) continue
+					if (
+						phaseWindow.cutoffAt > readMarks.getLastSeenAuctionSettlementBegins(lot.key) &&
+						phaseWindow.cutoffAt <= initializationStartedAt
+					) {
+						unseenAuctionSettlementBeginsCountsByAuction[lot.key] = 1
+					}
+				}
 
-				const newHigherBidEvents = watchedBidEvents.filter((event) => {
-					seenBidEventIds.add(event.id)
-					if (event.pubkey === user.pubkey || !isCountableAuctionBidEvent(event) || !isNewBidUpdate(event)) return false
+				// Watched scope: the lots this user has bid on. A 1441's amount is a DELTA added to the
+				// bidder's position, so "a higher bid" is only meaningful on summed positions: read every
+				// bid for the watched lots and project positions the way the read adapter does, then
+				// compare totals.
+				const ownBidEvents = Array.from(
+					await ndk.fetchEvents({ kinds: [AUCTION_BID_KIND_NDK], authors: [user.pubkey], limit: AUCTION_MONITOR_LIMIT }),
+				)
+				const watchedLotsByCoordinate = new Map<string, MonitoredLot>()
+				for (const event of ownBidEvents) {
+					const binding = arenaBidBinding(event)
+					if (!binding?.coordinate || watchedLotsByCoordinate.has(binding.coordinate)) continue
+					watchedLotsByCoordinate.set(binding.coordinate, {
+						coordinate: binding.coordinate,
+						d: binding.auctionId || coordinateDTag(binding.coordinate),
+						key: binding.coordinate,
+					})
+				}
+				const watchedLots = Array.from(watchedLotsByCoordinate.values())
+				const watchedCoordinates = watchedLots.map((lot) => lot.coordinate)
 
-					const highestOwnBidAmount = getHighestOwnBidAmountForAuction(event, highestOwnBidByRootId, highestOwnBidByCoordinate)
-					return highestOwnBidAmount > 0 && getBidAmount(event) > highestOwnBidAmount
-				})
+				const watchedBidFeed: Array<{ event: NDKEvent; binding: ArenaBidBinding }> = []
+				for (const event of await fetchTaggedAuctionEvents({
+					kind: AUCTION_BID_KIND_NDK,
+					auctionRootEventIds: [],
+					auctionCoordinates: watchedCoordinates,
+				})) {
+					const binding = arenaBidBinding(event)
+					if (binding?.coordinate) watchedBidFeed.push({ event, binding })
+				}
 
-				const newSettlementEvents = watchedSettlementEvents.filter((event) => {
-					seenSettlementEventIds.add(event.id)
-					return event.pubkey !== user.pubkey && isNewBidUpdate(event)
+				// Positions are derived once and then kept current by the live subscription below, so
+				// every comparison runs on the latest totals rather than on one event's delta.
+				const watchedPositions = arenaBidPositions(watchedBidFeed.map(({ event, binding }) => ({ ...binding, bidder: event.pubkey })))
+				const ownPositionAt = (coordinate: string): number => watchedPositions[coordinate]?.[user.pubkey] ?? 0
+				const bidderOutbidsOwnPosition = (event: NDKEvent, binding: ArenaBidBinding): boolean => {
+					if (!binding.coordinate) return false
+					const ownPosition = ownPositionAt(binding.coordinate)
+					return ownPosition > 0 && (watchedPositions[binding.coordinate]?.[event.pubkey] ?? 0) > ownPosition
+				}
+
+				const lastSeenBidUpdates = readMarks.getLastSeenBidUpdates()
+				const newHigherBidEvents = watchedBidFeed.filter(
+					({ event, binding }) =>
+						event.pubkey !== user.pubkey &&
+						(event.created_at ?? 0) > lastSeenBidUpdates &&
+						bidderOutbidsOwnPosition(event, binding),
+				)
+
+				// The terminal event of an arena lot is its 1445 verdict. A verdict names its lot by the
+				// `auction` tag (a `d` or a coordinate) — not an `a`/`e` tag — so no relay-side filter can
+				// narrow it and the watched window is read and bound locally (`arenaVerdictKey`).
+				const watchedVerdictEvents = Array.from(
+					await ndk.fetchEvents({
+						kinds: [AUCTION_VERDICT_KIND_NDK],
+						since: lastSeenBidUpdates + 1,
+						limit: AUCTION_MONITOR_LIMIT,
+					}),
+				).filter((event) => event.pubkey !== user.pubkey && isNewBidUpdate(event) && !!arenaVerdictKey(event, watchedLots))
+				const newVerdictEvents = watchedVerdictEvents.filter((event) => {
+					seenVerdictEventIds.add(event.id)
+					return true
 				})
 
 				if (isCancelled) return
@@ -705,28 +732,27 @@ export const useNotificationMonitor = () => {
 				let reconciledAuctionLiveCount = 0
 				let reconciledAuctionSettlementBeginsCount = 0
 
-				for (const auction of sellerAuctions) {
-					const auctionKey = getAuctionNotificationKey(auction)
-					if (!auctionKey) continue
+				for (const lot of sellerLots) {
+					const phaseWindow = sellerPhaseWindows.get(lot.coordinate)
+					if (!phaseWindow) continue
 
-					const startAt = getAuctionStartAt(auction)
 					if (
-						startAt > initializationStartedAt &&
-						startAt <= initializationCompletedAt &&
-						startAt > readMarks.getLastSeenAuctionLive(auctionKey)
+						phaseWindow.startAt > initializationStartedAt &&
+						phaseWindow.startAt <= initializationCompletedAt &&
+						phaseWindow.startAt > readMarks.getLastSeenAuctionLive(lot.key)
 					) {
-						if (!unseenAuctionLiveCountsByAuction[auctionKey]) reconciledAuctionLiveCount++
-						unseenAuctionLiveCountsByAuction[auctionKey] = 1
+						if (!unseenAuctionLiveCountsByAuction[lot.key]) reconciledAuctionLiveCount++
+						unseenAuctionLiveCountsByAuction[lot.key] = 1
 					}
 
-					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 					if (
-						biddingCutoffAt > initializationStartedAt &&
-						biddingCutoffAt <= initializationCompletedAt &&
-						biddingCutoffAt > readMarks.getLastSeenAuctionSettlementBegins(auctionKey)
+						phaseWindow.cutoffAt !== null &&
+						phaseWindow.cutoffAt > initializationStartedAt &&
+						phaseWindow.cutoffAt <= initializationCompletedAt &&
+						phaseWindow.cutoffAt > readMarks.getLastSeenAuctionSettlementBegins(lot.key)
 					) {
-						if (!unseenAuctionSettlementBeginsCountsByAuction[auctionKey]) reconciledAuctionSettlementBeginsCount++
-						unseenAuctionSettlementBeginsCountsByAuction[auctionKey] = 1
+						if (!unseenAuctionSettlementBeginsCountsByAuction[lot.key]) reconciledAuctionSettlementBeginsCount++
+						unseenAuctionSettlementBeginsCountsByAuction[lot.key] = 1
 					}
 				}
 
@@ -750,10 +776,7 @@ export const useNotificationMonitor = () => {
 				}
 				for (const event of newPurchaseUpdates) bulkEvents.push({ kind: 'order-update', createdAt: event.created_at || nowForBulk })
 				for (const event of newSellerBidEvents) {
-					const auctionKey = resolveScopedKeyFromLookups([getEventAuctionRootId(event), getEventAuctionCoordinate(event)].filter(Boolean), [
-						sellerAuctionKeyByRootEventId,
-						sellerAuctionKeyByCoordinate,
-					])
+					const auctionKey = sellerAuctionKeyForBid(event)
 					if (auctionKey)
 						bulkEvents.push({ kind: 'auction-bid', auctionKey, bidEventId: event.id, createdAt: event.created_at || nowForBulk })
 				}
@@ -782,7 +805,7 @@ export const useNotificationMonitor = () => {
 					bulkEvents.push({ kind: 'auction-settlement', auctionKey, createdAt: nowForBulk })
 				}
 				for (const event of newHigherBidEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
-				for (const event of newSettlementEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
+				for (const event of newVerdictEvents) bulkEvents.push({ kind: 'bid-update', createdAt: event.created_at || nowForBulk })
 				reconcileAppNotificationCounts(appNotifications, bulkEvents)
 
 				console.log('[NotificationMonitor] Initial counts:', {
@@ -795,25 +818,24 @@ export const useNotificationMonitor = () => {
 					productComments: newSellerProductCommentEvents.length,
 					auctionLive: unseenAuctionLiveCount,
 					auctionSettlementBegins: unseenAuctionSettlementBeginsCount,
-					bidUpdates: newHigherBidEvents.length + newSettlementEvents.length,
+					bidUpdates: newHigherBidEvents.length + newVerdictEvents.length,
 					reconciledAuctionLive: reconciledAuctionLiveCount,
 					reconciledAuctionSettlementBegins: reconciledAuctionSettlementBeginsCount,
 					initializationWindowSeconds: Math.max(0, initializationCompletedAt - initializationStartedAt),
 					conversations: Object.keys(conversationCounts).length,
 				})
 
-				sellerAuctions.forEach(scheduleAuctionPhaseNotification)
+				for (const lot of sellerLots) {
+					const phaseWindow = sellerPhaseWindows.get(lot.coordinate)
+					if (phaseWindow) scheduleAuctionPhaseNotification(lot.key, phaseWindow)
+				}
 
 				const handleSellerBidEvent = (event: NDKEvent) => {
 					if (!event.id || seenAuctionEventIds.has(event.id)) return
 					seenAuctionEventIds.add(event.id)
 
-					const auctionKey = resolveScopedKeyFromLookups([getEventAuctionRootId(event), getEventAuctionCoordinate(event)].filter(Boolean), [
-						sellerAuctionKeyByRootEventId,
-						sellerAuctionKeyByCoordinate,
-					])
-					if (event.pubkey === user.pubkey || !auctionKey || !isCountableAuctionBidEvent(event) || !isNewAuctionBid(event, auctionKey))
-						return
+					const auctionKey = sellerAuctionKeyForBid(event)
+					if (event.pubkey === user.pubkey || !auctionKey || !isNewAuctionBid(event, auctionKey)) return
 
 					console.log('[NotificationMonitor] New auction bid received:', event.id)
 					produceAppNotification({ kind: 'auction-bid', auctionKey, bidEventId: event.id, createdAt: event.created_at || nowSeconds() })
@@ -822,10 +844,18 @@ export const useNotificationMonitor = () => {
 				const handleWatchedBidEvent = (event: NDKEvent) => {
 					if (!event.id || seenBidEventIds.has(event.id)) return
 					seenBidEventIds.add(event.id)
-					if (event.pubkey === user.pubkey || !isCountableAuctionBidEvent(event) || !isNewBidUpdate(event)) return
+					if (event.pubkey === user.pubkey || !isNewBidUpdate(event)) return
 
-					const highestOwnBidAmount = getHighestOwnBidAmountForAuction(event, highestOwnBidByRootId, highestOwnBidByCoordinate)
-					if (highestOwnBidAmount <= 0 || getBidAmount(event) <= highestOwnBidAmount) return
+					const binding = arenaBidBinding(event)
+					if (!binding || !watchedLotsByCoordinate.has(binding.coordinate)) return
+
+					// Fold the live delta into the projection BEFORE comparing: the arena's bid model
+					// is additive, so one bid's `amount` is not a position on its own.
+					if (binding.amount !== null) {
+						const lot = (watchedPositions[binding.coordinate] ??= {})
+						lot[event.pubkey] = (lot[event.pubkey] ?? 0) + binding.amount
+					}
+					if (!bidderOutbidsOwnPosition(event, binding)) return
 
 					console.log('[NotificationMonitor] New higher bid on watched auction:', event.id)
 					produceAppNotification({ kind: 'bid-update', createdAt: event.created_at || nowSeconds() })
@@ -873,7 +903,7 @@ export const useNotificationMonitor = () => {
 					subscribedSellerAuctionRootEventIds.add(auctionRootEventId)
 
 					subscribeToTaggedAuctionEvents({
-						kind: AUCTION_BID_KIND,
+						kind: AUCTION_BID_KIND_NDK,
 						tagName: '#e',
 						values: [auctionRootEventId],
 						onEvent: handleSellerBidEvent,
@@ -891,7 +921,7 @@ export const useNotificationMonitor = () => {
 					subscribedSellerAuctionCoordinates.add(auctionCoordinate)
 
 					subscribeToTaggedAuctionEvents({
-						kind: AUCTION_BID_KIND,
+						kind: AUCTION_BID_KIND_NDK,
 						tagName: '#a',
 						values: [auctionCoordinate],
 						onEvent: handleSellerBidEvent,
@@ -987,74 +1017,73 @@ export const useNotificationMonitor = () => {
 						})
 				}
 
-				const handleWatchedSettlementEvent = (event: NDKEvent) => {
-					if (!event.id || seenSettlementEventIds.has(event.id)) return
-					seenSettlementEventIds.add(event.id)
+				const handleWatchedVerdictEvent = (event: NDKEvent) => {
+					if (!event.id || seenVerdictEventIds.has(event.id)) return
+					seenVerdictEventIds.add(event.id)
 					if (event.pubkey === user.pubkey || !isNewBidUpdate(event)) return
+					if (!arenaVerdictKey(event, watchedLots)) return
 
-					console.log('[NotificationMonitor] New settlement on watched auction:', event.id)
+					console.log('[NotificationMonitor] New verdict on watched auction:', event.id)
 					produceAppNotification({ kind: 'bid-update', createdAt: event.created_at || nowSeconds() })
 				}
 
 				const handleOwnAuctionEvent = (event: NDKEvent) => {
 					if (event.pubkey !== user.pubkey) return
 
-					const auctionKey = getAuctionNotificationKey(event)
-					if (!auctionKey) return
+					const identity = arenaCreateIdentity(event)
+					if (!identity) return
 
-					const auctionRootEventId = getAuctionRootEventId(event) || event.id
-					const auctionCoordinate = getAuctionCoordinate(event)
+					const auctionKey = identity.coordinate
+					sellerAuctionKeyByCoordinate.set(identity.coordinate, auctionKey)
 
-					sellerAuctionKeyByRootEventId.set(auctionRootEventId, auctionKey)
-					if (auctionCoordinate) sellerAuctionKeyByCoordinate.set(auctionCoordinate, auctionKey)
+					// A lot's scopes and its phase hang off its ROOT create: a later version (one that
+					// names a root in its `e` tag) edits display fields and announces nothing.
+					if (identity.supersedes) return
 
-					subscribeSellerAuctionRootScope(auctionRootEventId)
-					if (auctionCoordinate) {
-						subscribeSellerAuctionCoordinateScope(auctionCoordinate)
+					sellerAuctionKeyByRootEventId.set(event.id, auctionKey)
+					subscribeSellerAuctionRootScope(event.id)
+					subscribeSellerAuctionCoordinateScope(identity.coordinate)
 
-						void fetchTaggedAuctionEvents({
-							kind: LIVE_ACTIVITY_KIND_NDK,
-							auctionRootEventIds: [],
-							auctionCoordinates: [auctionCoordinate],
+					void fetchTaggedAuctionEvents({
+						kind: LIVE_ACTIVITY_KIND_NDK,
+						auctionRootEventIds: [],
+						auctionCoordinates: [identity.coordinate],
+					})
+						.then((events) => {
+							events.forEach(handleSellerLiveActivityEvent)
 						})
-							.then((events) => {
-								events.forEach(handleSellerLiveActivityEvent)
-							})
-							.catch((error) => {
-								console.error('[NotificationMonitor] Failed to refresh live-activity scopes for new auction:', error)
-							})
-					}
+						.catch((error) => {
+							console.error('[NotificationMonitor] Failed to refresh live-activity scopes for new auction:', error)
+						})
 
-					scheduleAuctionPhaseNotification(event)
+					const phaseWindow = arenaPhaseWindow(event)
+					if (phaseWindow) scheduleAuctionPhaseNotification(auctionKey, phaseWindow)
 				}
 
 				sellerAuctionRootEventIds.forEach(subscribeSellerAuctionRootScope)
 				sellerAuctionCoordinates.forEach(subscribeSellerAuctionCoordinateScope)
 				sellerLiveActivityCoords.forEach(subscribeSellerLiveActivityCoordinate)
 				subscribeToTaggedAuctionEvents({
-					kind: AUCTION_BID_KIND,
-					tagName: '#e',
-					values: watchedAuctionRootEventIds,
+					kind: AUCTION_BID_KIND_NDK,
+					tagName: '#a',
+					values: watchedCoordinates,
 					onEvent: handleWatchedBidEvent,
 				})
-				subscribeToTaggedAuctionEvents({
-					kind: AUCTION_BID_KIND,
-					tagName: '#a',
-					values: watchedAuctionCoordinates,
-					onEvent: handleWatchedBidEvent,
-				})
-				subscribeToTaggedAuctionEvents({
-					kind: AUCTION_SETTLEMENT_KIND,
-					tagName: '#e',
-					values: watchedAuctionRootEventIds,
-					onEvent: handleWatchedSettlementEvent,
-				})
-				subscribeToTaggedAuctionEvents({
-					kind: AUCTION_SETTLEMENT_KIND,
-					tagName: '#a',
-					values: watchedAuctionCoordinates,
-					onEvent: handleWatchedSettlementEvent,
-				})
+				// Verdicts are subscribed unfiltered and bound locally: their lot reference is the
+				// `auction` tag (a `d` or a coordinate), which the relay cannot index, so an `#a`
+				// filter here would silently match nothing.
+				const watchedVerdictSubscription = ndk.subscribe(
+					{
+						kinds: [AUCTION_VERDICT_KIND_NDK],
+						since: subscriptionSince,
+					},
+					{
+						closeOnEose: false,
+					},
+				)
+
+				watchedVerdictSubscription.on('event', handleWatchedVerdictEvent)
+				subscriptionsRef.current.push(watchedVerdictSubscription)
 				subscribeToTaggedAuctionEvents({
 					kind: COMMENT_KIND_NDK,
 					tagName: '#a',
@@ -1079,7 +1108,7 @@ export const useNotificationMonitor = () => {
 
 				const auctionListingSubscription = ndk.subscribe(
 					{
-						kinds: [AUCTION_KIND_NDK],
+						kinds: [AUCTION_CREATE_KIND_NDK],
 						authors: [user.pubkey],
 						since: subscriptionSince,
 					},
