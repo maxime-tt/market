@@ -1,8 +1,20 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { QueryClient } from '@tanstack/react-query'
 
-import { ndkActions } from '@platform/web/ndk/ndkStore'
-import { fetchProfileByIdentifier, profileByIdentifierQueryOptions, wotScoreQueryOptions } from '@platform/web/profiles/profileQuery'
+// `getWotScore`'s identity guard now reads the auth machine (`getCurrentPubkey`, re-exported by the
+// read context) instead of `ndk.activeUser`, which nothing assigns. The identity is stubbed through
+// the real module's own exports so every other read path in this file keeps its normal seam.
+const realReadContext = await import('@platform/web/readContext')
+let currentPubkey: string | null = null
+mock.module('@platform/web/readContext', () => ({
+	...realReadContext,
+	getCurrentPubkey: () => currentPubkey,
+}))
+
+const { ndkActions } = await import('@platform/web/ndk/ndkStore')
+const { fetchProfileByIdentifier, getWotScore, profileByIdentifierQueryOptions, wotScoreQueryOptions } = await import(
+	'@platform/web/profiles/profileQuery'
+)
 
 // Infer NDK return types from the function under test instead of importing
 // the NDK package directly — the NDK-footprint CI guard counts any src/ file
@@ -18,6 +30,7 @@ const realGetNDK = ndkActions.getNDK
 const realSetTimeout = globalThis.setTimeout
 
 afterEach(() => {
+	currentPubkey = null
 	;(ndkActions as { getNDK: () => unknown }).getNDK = realGetNDK as () => unknown
 	globalThis.setTimeout = realSetTimeout as typeof globalThis.setTimeout
 })
@@ -215,5 +228,62 @@ describe('identity-scoped query options disable for invalid input (zero relay I/
 
 	test('wotScoreQueryOptions enables for valid 64-char hex pubkeys', () => {
 		expect(wotScoreQueryOptions(VALID_HEX).enabled).toBe(true)
+	})
+})
+
+/**
+ * The regression: `getWotScore` guarded on `ndk.activeUser`, permanently `undefined`, so every WoT
+ * score was blank and each profile view burned two retries. The guard is now the auth machine's
+ * identity. The NDK instance stays (NDKWoT needs it for relay access) — only the identity check moved.
+ */
+describe('getWotScore takes its identity from the auth machine', () => {
+	test('signed out: returns null and never touches the NDK instance', async () => {
+		currentPubkey = null
+		const touched: string[] = []
+		const ndkStub = new Proxy(
+			{},
+			{
+				get: (_target, prop) => {
+					touched.push(String(prop))
+					return undefined
+				},
+			},
+		)
+		;(ndkActions as { getNDK: () => unknown }).getNDK = () => ndkStub
+
+		const score = await getWotScore(VALID_HEX)
+
+		expect(score).toBeNull()
+		// The guard short-circuits before `new NDKWoT(ndk, pubkey)`, so nothing reads the client.
+		expect(touched).toEqual([])
+	})
+
+	test('signed in: proceeds past the guard and hands the NDK instance to NDKWoT', async () => {
+		currentPubkey = VALID_HEX
+		const touched: string[] = []
+		const ndkStub = new Proxy(
+			{},
+			{
+				get: (_target, prop) => {
+					touched.push(String(prop))
+					return undefined
+				},
+			},
+		)
+		;(ndkActions as { getNDK: () => unknown }).getNDK = () => ndkStub
+
+		// NDKWoT cannot complete against an inert client; the point is that it was reached at all
+		// (its own errors are swallowed → null), which with the old guard could never happen.
+		const score = await getWotScore(VALID_HEX)
+
+		expect(score).toBeNull()
+		expect(touched.length).toBeGreaterThan(0)
+	})
+
+	test('signed in but NDK is not initialized: still the NDK error, not a silent null', async () => {
+		currentPubkey = VALID_HEX
+		;(ndkActions as { getNDK: () => unknown }).getNDK = () => undefined
+
+		await expect(getWotScore(VALID_HEX)).rejects.toThrow('NDK not initialized')
 	})
 })

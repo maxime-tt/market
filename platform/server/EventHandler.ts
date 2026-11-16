@@ -1,4 +1,4 @@
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core'
 import type { EventHandlerConfig, ProcessedEvent } from './types'
 import { AdminManagerImpl } from './AdminManager'
 import { EditorManagerImpl } from './EditorManager'
@@ -202,7 +202,7 @@ export class EventHandler {
 		console.log(`Subscribed to zap purchase receipts (${label})`)
 	}
 
-	public handleEvent(event: NostrEvent): NostrEvent | null {
+	public handleEvent(event: NostrEventLike): NostrEventLike | null {
 		if (!this.isInitialized) {
 			throw new Error('EventHandler is not initialized')
 		}
@@ -211,7 +211,7 @@ export class EventHandler {
 		return processed.signedEvent
 	}
 
-	public processEvent(event: NostrEvent): ProcessedEvent {
+	public processEvent(event: NostrEventLike): ProcessedEvent {
 		if (!this.isInitialized || !this.eventValidator || !this.eventSigner) {
 			throw new Error('EventHandler is not initialized')
 		}
@@ -234,8 +234,11 @@ export class EventHandler {
 			console.error('Error handling special event:', error)
 		})
 
-		// Sign the event
-		const signedEvent = this.eventSigner.signEvent(event)
+		// The signer still speaks NDK's loose `NostrEvent` (gap G2, slice 2's file):
+		// created_at is required there and id/kind optional, so the two assertions below
+		// are the erased boundary until `EventSigner` gets an SDK type for a signable event.
+		const signer = this.eventSigner
+		const signedEvent = signer.signEvent(event as unknown as Parameters<typeof signer.signEvent>[0]) as unknown as NostrEventLike
 
 		return {
 			originalEvent: event,
@@ -244,7 +247,7 @@ export class EventHandler {
 		}
 	}
 
-	private async handleSpecialEvents(event: NostrEvent): Promise<void> {
+	private async handleSpecialEvents(event: NostrEventLike): Promise<void> {
 		const isSetupEvent = event.kind === 31990 && event.content.includes('"name":')
 		const isAdminListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'admins')
 		const isEditorListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'editors')
@@ -260,7 +263,9 @@ export class EventHandler {
 			this.editorManager.updateFromEvent(event)
 		} else if (isBlacklistEvent) {
 			console.log('Blacklist event accepted, processing blacklist update')
-			await this.blacklistManager.handleBlacklistEvent(event)
+			// BlacklistManager still takes NDK's loose `NostrEvent` (slice 2's file): erased assertion.
+			const blacklistManager = this.blacklistManager
+			await blacklistManager.handleBlacklistEvent(event as unknown as Parameters<typeof blacklistManager.handleBlacklistEvent>[0])
 		}
 
 		// Route registry events to matching purchase managers
@@ -270,7 +275,8 @@ export class EventHandler {
 				event.tags.some((tag) => tag[0] === 'd' && tag[1] === manager.config.registryDTag)
 			) {
 				console.log(`Registry event accepted for [${manager.config.registryDTag}]`)
-				await manager.handleRegistryEvent(event)
+				// ZapPurchaseManager still takes NDK's loose `NostrEvent` (slice 2's file, gap G5): erased assertion.
+				await manager.handleRegistryEvent(event as unknown as Parameters<typeof manager.handleRegistryEvent>[0])
 			}
 		}
 	}

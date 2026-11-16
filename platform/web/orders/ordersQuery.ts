@@ -12,7 +12,9 @@ import { NIP59_GIFT_WRAP_KIND, signerSupportsNip44 } from '@sdk/core/nostr/nip59
 import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@sdk/commerce/orders/messaging/privateOrderMessage'
 import {
 	applesauceIo,
+	authStore,
 	fetchNdkEventSet,
+	getCurrentPubkey,
 	mergeNdkEventSetsById,
 	rehydrateVerifiedNdkEvent,
 	type NDKEvent,
@@ -27,6 +29,7 @@ import { createNdkReadContext, fetchEventsByFilter } from '@platform/web/readCon
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import type { EncryptingSigner } from '@sdk/core/ports/encryptingSigner'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useStore } from '@tanstack/react-store'
 import type { Event } from 'nostr-tools'
 import { useEffect, useMemo } from 'react'
 import { orderKeys } from '@sdk/core/query/queryKeyFactory'
@@ -226,19 +229,19 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const user = ndk.activeUser
-	if (!user) throw new Error('No active user')
+	const pubkey = getCurrentPubkey()
+	if (!pubkey) throw new Error('No active user')
 
 	// Fetch orders where the current user is involved (either as sender or recipient of encrypted DMs)
 	const orderCreationFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND],
-		authors: [user.pubkey],
+		authors: [pubkey],
 		limit: 100,
 	}
 
 	const orderReceivedFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND],
-		'#p': [user.pubkey],
+		'#p': [pubkey],
 		limit: 100,
 	}
 
@@ -430,8 +433,9 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
  * Hook to fetch all orders for the current user (as buyer or seller)
  */
 export const useOrders = () => {
-	const ndk = getAppNdk()
-	const isConnected = !!ndk?.activeUser
+	// Reactive identity: a login/logout re-renders this hook and flips `enabled`.
+	const { user } = useStore(authStore)
+	const isConnected = !!user?.pubkey
 
 	return useQuery({
 		queryKey: orderKeys.all,

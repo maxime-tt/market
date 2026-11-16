@@ -11,8 +11,6 @@ import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { asEncryptingSigner } from '@sdk/core'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { orderKeys } from '@sdk/core/query/queryKeyFactory'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
@@ -42,22 +40,26 @@ import type { Event } from 'nostr-tools'
 import { publishOrderStatusUpdateWorkflow } from '@sdk/commerce/orders'
 
 /**
- * A3.4: sign an NDKEvent in place through the **active signer capability** (the
- * auth session's `currentSigner()`), never NDK's instance signer. The in-place
- * mutation contract (`id`, `pubkey`, `sig` land on the event object) is the
- * adapter's own, so NDK's implicit instance-signer sign() path is retired.
+ * A3.7: sign an unsigned event template through the **active signer capability**
+ * (the auth session's `currentSigner()`), never NDK's instance signer. Returns
+ * the raw signed `NostrEvent` — the event object that used to be an NDK wrapper
+ * mutated in place. `created_at` is stamped with now when the template has none,
+ * exactly as NDK's own `sign()` did.
  */
-async function signNdkEventWithActiveCapability(event: NDKEvent): Promise<void> {
+async function signTemplateWithActiveCapability(template: {
+	kind: number
+	content: string
+	tags: string[][]
+	created_at?: number
+}): Promise<NostrEvent> {
 	const capability = getActiveSignerCapability()
 	if (!capability) throw new Error('No active user')
-	const signed = await capability.signEvent({
-		kind: event.kind,
-		content: event.content,
-		// NDK's own sign() stamps an unset created_at with now; mirror that.
-		created_at: event.created_at ?? Math.floor(Date.now() / 1000),
-		tags: event.tags as string[][],
+	return await capability.signEvent({
+		kind: template.kind,
+		content: template.content,
+		created_at: template.created_at ?? Math.floor(Date.now() / 1000),
+		tags: template.tags,
 	})
-	Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
 }
 
 async function resolveDeliveryRequirementsForProducts(
@@ -163,11 +165,8 @@ export const createOrder = async (params: OrderCreateParams): Promise<string> =>
 	const total = (params.price * params.quantity).toFixed(2)
 	const orderId = uuidv4()
 
-	// Create the order event according to Gamma Market Spec (NIP-17)
-	const event = new NDKEvent(ndk)
-	event.kind = ORDER_PROCESS_KIND // Kind 16 for order processing
-	event.content = 'Order created'
-	event.tags = [
+	// Build the order event according to Gamma Market Spec (NIP-17)
+	const tags: string[][] = [
 		// Required tags per spec
 		['p', params.sellerPubkey], // Merchant's pubkey
 		['subject', 'order-info'],
@@ -182,11 +181,11 @@ export const createOrder = async (params: OrderCreateParams): Promise<string> =>
 	// Add optional tags
 	const shippingRef = getPublicSellerShippingRef(params.shippingRef)
 	if (shippingRef) {
-		event.tags.push(['shipping', shippingRef])
+		tags.push(['shipping', shippingRef])
 	}
 
-	// Sign and publish the event
-	await signNdkEventWithActiveCapability(event)
+	// Sign and publish the event (same relay path: publishAppEvent -> ndkActions.publishEvent)
+	const event = await signTemplateWithActiveCapability({ kind: ORDER_PROCESS_KIND, content: 'Order created', tags })
 	await publishAppEvent(event)
 
 	return event.id
@@ -239,11 +238,11 @@ export const updateOrderStatus = async (params: OrderStatusUpdateParams): Promis
 	const capability = getActiveSignerCapability()
 	if (!capability) throw new Error('No active user')
 
-	// A3.4: the publish context is built from the signer capability + the NDK
-	// publish binding (the raw signed event is wrapped into an NDKEvent for
-	// `ndkActions.publishEvent`); `createNdkPublishContext` is retired here.
+	// The publish context is built from the signer capability + the NDK publish
+	// binding, which wraps the raw signed event into the NDK event object that
+	// `ndkActions.publishEvent` takes.
 	const context = await createSignerPublishContext(capability, async (event) => {
-		await publishAppEvent(new NDKEvent(ndk, event))
+		await publishAppEvent(event)
 	})
 	return publishOrderStatusUpdateWorkflow(
 		{ ...context, now: getNextOrderUpdateCreatedAt, loadOrder: (id) => ndk.fetchEvent({ ids: [id] }) },
@@ -325,11 +324,8 @@ export const createPaymentReceipt = async (params: PaymentReceiptParams): Promis
 
 	if (!merchantPubkey) throw new Error('Merchant pubkey not found in order')
 
-	// Create the payment receipt event according to Gamma Market Spec
-	const event = new NDKEvent(ndk)
-	event.kind = PAYMENT_RECEIPT_KIND
-	event.content = `Payment confirmation for order`
-	event.tags = [
+	// Build the payment receipt event according to Gamma Market Spec
+	const tags: string[][] = [
 		// Required tags per spec
 		['p', merchantPubkey], // Merchant's pubkey
 		['subject', 'order-receipt'],
@@ -343,7 +339,11 @@ export const createPaymentReceipt = async (params: PaymentReceiptParams): Promis
 	]
 
 	// Sign and publish the event
-	await signNdkEventWithActiveCapability(event)
+	const event = await signTemplateWithActiveCapability({
+		kind: PAYMENT_RECEIPT_KIND,
+		content: `Payment confirmation for order`,
+		tags,
+	})
 	await publishAppEvent(event)
 
 	return event.id
@@ -435,11 +435,11 @@ export interface PaymentReceiptData {
  * Creates a spec-compliant order creation event (Kind 16, type 1)
  * Following gamma_spec.md section 4.1
  */
-export async function createOrderCreationEvent(data: OrderCreationData): Promise<NDKEvent> {
+export async function createOrderCreationEvent(data: OrderCreationData): Promise<NostrEvent> {
 	return createOrderCreationEventWithOrderId(data, uuidv4())
 }
 
-async function createOrderCreationEventWithOrderId(data: OrderCreationData, orderId: string): Promise<NDKEvent> {
+async function createOrderCreationEventWithOrderId(data: OrderCreationData, orderId: string): Promise<NostrEvent> {
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -453,24 +453,15 @@ async function createOrderCreationEventWithOrderId(data: OrderCreationData, orde
 		createdAt: now,
 	})
 
-	// Create the event
-	const event = new NDKEvent(ndk)
-	event.kind = template.kind as typeof ORDER_PROCESS_KIND
-	event.created_at = template.created_at
-	event.content = template.content
-	event.tags = template.tags as NDKTag[]
-
-	// Sign the event (A3.4: through the active signer capability, not NDK's instance signer)
-	await signNdkEventWithActiveCapability(event)
-
-	return event
+	// Sign the event through the active signer capability (not NDK's instance signer)
+	return await signTemplateWithActiveCapability(template)
 }
 
 /**
  * Creates a spec-compliant payment request event (Kind 16, type 2)
  * Following gamma_spec.md section 4.2
  */
-export async function createPaymentRequestEvent(data: PaymentRequestData): Promise<NDKEvent> {
+export async function createPaymentRequestEvent(data: PaymentRequestData): Promise<NostrEvent> {
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -486,24 +477,15 @@ export async function createPaymentRequestEvent(data: PaymentRequestData): Promi
 		content: data.notes,
 	})
 
-	// Create the event
-	const event = new NDKEvent(ndk)
-	event.kind = template.kind as typeof ORDER_PROCESS_KIND
-	event.created_at = template.created_at
-	event.content = template.content
-	event.tags = template.tags as NDKTag[]
-
-	// Sign the event (A3.4: through the active signer capability, not NDK's instance signer)
-	await signNdkEventWithActiveCapability(event)
-
-	return event
+	// Sign the event through the active signer capability (not NDK's instance signer)
+	return await signTemplateWithActiveCapability(template)
 }
 
 /**
  * Creates a spec-compliant status update event (Kind 16, type 3)
  * Following gamma_spec.md section 4.3
  */
-export async function createStatusUpdateEvent(data: StatusUpdateData): Promise<NDKEvent> {
+export async function createStatusUpdateEvent(data: StatusUpdateData): Promise<NostrEvent> {
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -515,24 +497,15 @@ export async function createStatusUpdateEvent(data: StatusUpdateData): Promise<N
 		content: data.notes,
 	})
 
-	// Create the event
-	const event = new NDKEvent(ndk)
-	event.kind = template.kind as typeof ORDER_PROCESS_KIND
-	event.created_at = template.created_at
-	event.content = template.content
-	event.tags = template.tags as NDKTag[]
-
-	// Sign the event (A3.4: through the active signer capability, not NDK's instance signer)
-	await signNdkEventWithActiveCapability(event)
-
-	return event
+	// Sign the event through the active signer capability (not NDK's instance signer)
+	return await signTemplateWithActiveCapability(template)
 }
 
 /**
  * Creates a spec-compliant payment receipt event (Kind 17)
  * Following gamma_spec.md section 4.6
  */
-export async function createPaymentReceiptEvent(data: PaymentReceiptData): Promise<NDKEvent> {
+export async function createPaymentReceiptEvent(data: PaymentReceiptData): Promise<NostrEvent> {
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -547,24 +520,19 @@ export async function createPaymentReceiptEvent(data: PaymentReceiptData): Promi
 		content: data.notes,
 	})
 
-	// Create the event
-	const event = new NDKEvent(ndk)
-	event.kind = template.kind as typeof PAYMENT_RECEIPT_KIND
-	event.created_at = template.created_at
-	event.content = template.content
-	event.tags = template.tags as NDKTag[]
-
-	// Sign the event (A3.4: through the active signer capability, not NDK's instance signer)
-	await signNdkEventWithActiveCapability(event)
-
-	return event
+	// Sign the event through the active signer capability (not NDK's instance signer)
+	return await signTemplateWithActiveCapability(template)
 }
 
 /**
  * Creates a general communication event (Kind 14)
  * Following gamma_spec.md section 4.5
  */
-export async function createGeneralCommunicationEvent(recipientPubkey: string, subject: string, message: string): Promise<NDKEvent> {
+export async function createGeneralCommunicationEvent(
+	recipientPubkey: string,
+	subject: string,
+	message: string,
+): Promise<NostrEvent> {
 	const ndk = getAppNdk()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -575,23 +543,14 @@ export async function createGeneralCommunicationEvent(recipientPubkey: string, s
 		createdAt: Math.floor(Date.now() / 1000),
 	})
 
-	// Create the event
-	const event = new NDKEvent(ndk)
-	event.kind = template.kind as typeof ORDER_GENERAL_KIND
-	event.created_at = template.created_at
-	event.content = template.content
-	event.tags = template.tags as NDKTag[]
-
-	// Sign the event (A3.4: through the active signer capability, not NDK's instance signer)
-	await signNdkEventWithActiveCapability(event)
-
-	return event
+	// Sign the event through the active signer capability (not NDK's instance signer)
+	return await signTemplateWithActiveCapability(template)
 }
 
 /**
  * Publishes an order-related event to the network
  */
-export async function publishOrderEvent(event: NDKEvent): Promise<boolean> {
+export async function publishOrderEvent(event: NostrEvent): Promise<boolean> {
 	try {
 		await publishAppEvent(event)
 		console.log(`Published order event: ${event.kind}`)
@@ -681,11 +640,11 @@ type SellerOrderPreflight = {
 type PreparedSellerOrderData = SellerOrderPreflight & {
 	orderData: OrderCreationData
 	orderId: string
-	privateGiftWrapEvent?: NDKEvent
+	privateGiftWrapEvent?: Event
 }
 
 type PreparedSellerOrderPublishWork = PreparedSellerOrderData & {
-	orderEvent: NDKEvent
+	orderEvent: NostrEvent
 }
 
 function trimOptional(value: string | undefined): string | undefined {
@@ -741,20 +700,6 @@ function createPrivateOrderDeliveryDetails(params: {
 	}
 }
 
-function createNdkEventFromRawEvent(event: Event): NDKEvent {
-	const ndk = getAppNdk()
-	if (!ndk) throw new Error('NDK not initialized')
-	return new NDKEvent(ndk, {
-		id: event.id,
-		pubkey: event.pubkey,
-		created_at: event.created_at,
-		kind: event.kind,
-		tags: event.tags.map((tag) => [...tag]),
-		content: event.content,
-		sig: event.sig,
-	})
-}
-
 function publishResultHasRelayDetails(result: unknown): boolean {
 	return result instanceof Set || Array.isArray(result) || (typeof result === 'object' && result !== null && 'size' in result)
 }
@@ -768,7 +713,7 @@ function publishResultHasRelaySuccess(result: unknown): boolean {
 	return true
 }
 
-async function publishRequiredPrivateGiftWrap(event: NDKEvent): Promise<void> {
+async function publishRequiredPrivateGiftWrap(event: NostrEvent): Promise<void> {
 	const result = await publishAppEvent(event)
 	if (publishResultHasRelayDetails(result) && !publishResultHasRelaySuccess(result)) {
 		throw new Error('Encrypted seller delivery could not be published')
@@ -903,7 +848,7 @@ export async function publishOrderWorkflowWithDependencies(params: PublishOrderD
 				shippingRef: plan.shippingRef,
 			}
 
-			let privateGiftWrapEvent: NDKEvent | undefined
+			let privateGiftWrapEvent: Event | undefined
 			if (plan.requiresPrivateDelivery) {
 				try {
 					const privateDetails = createPrivateOrderDeliveryDetails({
@@ -920,7 +865,9 @@ export async function publishOrderWorkflowWithDependencies(params: PublishOrderD
 						details: privateDetails,
 						signer,
 					})
-					privateGiftWrapEvent = createNdkEventFromRawEvent(giftWrap)
+					// The SDK already returns the signed NIP-59 gift wrap as a raw event;
+				// the NDK wrap that used to copy it field-by-field is gone.
+				privateGiftWrapEvent = giftWrap
 				} catch {
 					throw new Error('Encrypted seller delivery could not be prepared')
 				}

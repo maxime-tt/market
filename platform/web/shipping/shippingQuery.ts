@@ -20,7 +20,7 @@ import { readShippingOptionsWorkflow } from '@sdk/commerce/shipping'
 import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
-import { createNdkReadContext, getNdkEventStore, fetchEventById, fetchEventByNaddr } from '@platform/web/readContext'
+import { createNdkReadContext, getCurrentPubkey, getNdkEventStore, fetchEventById, fetchEventByNaddr } from '@platform/web/readContext'
 
 // Re-export shippingKeys for use in other files
 export { shippingKeys }
@@ -195,12 +195,14 @@ export const updateShippingStatus = async (params: ShippingUpdateParams): Promis
  */
 export const useUpdateShippingStatusMutation = () => {
 	const queryClient = useQueryClient()
-	const ndk = getAppNdk()
-	const currentUserPubkey = ndk?.activeUser?.pubkey
 
 	return useMutation({
 		mutationFn: updateShippingStatus,
 		onSuccess: async (eventId, params) => {
+			// Identity is read at call time, not at render time: a mutation can settle after an
+			// account switch, and a render-time capture would invalidate the wrong user's keys.
+			const currentUserPubkey = getCurrentPubkey() ?? undefined
+
 			// Show toast first for immediate feedback
 			toast.success(`Order shipping status updated to ${params.status}`)
 

@@ -5,8 +5,8 @@ import { useBugReportsInfiniteScroll } from '@platform/web/app/useBugReportsInfi
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@platform/web/media/blossomUploadHost'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { getBugRelay, ndkActions } from '@platform/web/ndk/ndkStore'
+import { publishNostrEvent } from '@platform/web/ndkPublishContext'
 import { cn } from '@ui/utils/cn'
-import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -217,37 +217,25 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				console.warn('NDK connection warning:', connectError)
 			}
 
-			// Create kind 1 event (text note)
-			const event = new NDKEvent(ndk)
-			event.kind = 1
-			event.content = bugReport
-
-			// Add plebian2beta tag
-			event.tags = [['t', 'plebian2beta']]
-
-			console.log('Event created:', {
-				kind: event.kind,
-				contentLength: event.content.length,
-				tags: event.tags,
-			})
-
-			// Sign and publish the event (A3.6: in place through the capability —
-			// NDK's implicit instance-signer path it replaced)
+			// A kind 1 text note carrying the plebian2beta tag.
 			console.log('Signing event...')
-			const signed = await signer.signEvent({
-				kind: event.kind,
-				content: event.content,
-				created_at: event.created_at ?? Math.floor(Date.now() / 1000),
-				tags: event.tags as string[][],
+			const event = await signer.signEvent({
+				kind: 1,
+				content: bugReport,
+				created_at: Math.floor(Date.now() / 1000),
+				tags: [['t', 'plebian2beta']],
 			})
-			Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
 			console.log('Event signed, ID:', event.id)
 
 			console.log('Publishing event to the bug relay only...')
 
-			// Publish only to the instance's bug relay - never to public relays.
-			const bugRelaySet = NDKRelaySet.fromRelayUrls([relayUrl], ndk)
-			const publishPromise = event.publish(bugRelaySet)
+			// Publish only to the instance's bug relay - never to public relays. The
+			// explicit `relayUrls` override is what keeps the target identical: the
+			// bridge builds its relay set from `[relayUrl]` and hands it
+			// to `ndkActions.publishEvent` exactly as the retired `event.publish(set)`
+			// did. This path deliberately does NOT go through `publishAppEvent`, so
+			// (as before) the bug report is not written through to the read stores.
+			const publishPromise = publishNostrEvent(event, { relayUrls: [relayUrl] })
 			const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000))
 
 			await Promise.race([publishPromise, timeoutPromise])

@@ -176,7 +176,9 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				// Create zapper instance with lnPay callback to capture the generated invoice
 				const zapper = new NDKZapper(data.recipient, data.amount * 1000, 'msat', {
 					ndk: ndkState.ndk,
-					signer: ndkState.ndk.signer || undefined,
+					// No `signer`: NDK never holds one (the app signs through the SDK capability), so the
+					// old `ndkState.ndk.signer || undefined` was `undefined` by construction and setting a
+					// second signer here would give NDK a competing view of who is logged in.
 					comment: data.description,
 					lnPay: async (payment) => {
 						console.log('📄 Zap invoice generated:', {

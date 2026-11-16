@@ -82,8 +82,22 @@ mock.module('@platform/web/auth/authStore', () => ({
 	getActiveSignerCapability: () => null,
 }))
 
-mock.module('@platform/web/permissions/useEntityPermissions', () => ({
-	useEntityPermissions: () => ({ canEdit: false, canBlacklist: false, canSetFeatured: false }),
+/**
+ * The permission hook is NOT stubbed here: shadowing it with a constant `{ canEdit: false }` is what
+ * made the "owner cannot edit their own profile" regression invisible to this suite. Instead its
+ * identity dependency (`useUserRole`) is stubbed, so the real ownership logic runs against a pubkey
+ * this file controls.
+ */
+const STRANGER_PUBKEY = 'f'.repeat(64)
+
+let roleState: { userRole: 'owner' | 'admin' | 'editor' | 'user'; isLoading: boolean; currentUserPubkey: string | undefined } = {
+	userRole: 'user',
+	isLoading: false,
+	currentUserPubkey: undefined,
+}
+
+mock.module('@platform/web/app-settings/appSettingsQuery', () => ({
+	useUserRole: () => roleState,
 }))
 
 mock.module('@platform/web/permissions/EntityActionsMenu', () => ({
@@ -191,6 +205,7 @@ function sellerProfile(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 beforeEach(() => {
+	roleState = { userRole: 'user', isLoading: false, currentUserPubkey: undefined }
 	listingsQuery = { data: undefined, isLoading: false, isError: false, refetch: () => {} }
 	profileQuery = {
 		data: { profile: sellerProfile(), user: { pubkey: SELLER_PUBKEY } },
@@ -295,5 +310,33 @@ describe('ProfilePage — the seller page', () => {
 
 		expect(markup).toContain('Loading profile')
 		expect(markup).not.toContain('widget-seller-profile-view')
+	})
+
+	test('the profile owner sees the edit affordance, a stranger does not', () => {
+		listingsQuery = { data: { listings: [], eose: ['wss://relay.test'], pending: [] }, isLoading: false, isError: false, refetch: () => {} }
+
+		roleState = { userRole: 'user', isLoading: false, currentUserPubkey: SELLER_PUBKEY }
+		const asOwner = render()
+
+		roleState = { userRole: 'user', isLoading: false, currentUserPubkey: STRANGER_PUBKEY }
+		const asStranger = render()
+
+		roleState = { userRole: 'user', isLoading: false, currentUserPubkey: undefined }
+		const asSignedOut = render()
+
+		// Ownership is decided here by the permission hook, not stubbed away.
+		expect(asOwner).toContain('Edit profile')
+		expect(asStranger).not.toContain('Edit profile')
+		expect(asSignedOut).not.toContain('Edit profile')
+	})
+
+	test('the owner is offered "Add your first listing" on their empty seller page', () => {
+		listingsQuery = { data: { listings: [], eose: ['wss://relay.test'], pending: [] }, isLoading: false, isError: false, refetch: () => {} }
+		roleState = { userRole: 'user', isLoading: false, currentUserPubkey: SELLER_PUBKEY }
+
+		const markup = render()
+
+		expect(markup).toContain('No listings yet')
+		expect(markup).toContain('Add your first listing')
 	})
 })

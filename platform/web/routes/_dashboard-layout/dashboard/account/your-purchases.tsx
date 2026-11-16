@@ -1,12 +1,13 @@
 import { OrderDataTable } from '@platform/web/orders/OrderDataTable'
 import { purchaseColumns } from '@platform/web/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
-import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { readMarks } from '@platform/web/notifications'
 import { useOrdersByBuyer } from '@platform/web/orders/ordersQuery'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { filterAndSortOrderListings } from '@sdk/commerce/orders'
+import { authStore } from '@platform/web/readContext'
 import { createFileRoute } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/your-purchases')({
@@ -15,11 +16,10 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/account/your-
 
 function YourPurchasesComponent() {
 	useDashboardTitle('Your Purchases')
-	const ndk = ndkActions.getNDK()
-	const currentUser = ndk?.activeUser
+	const { user } = useStore(authStore)
 	const [statusFilter, setStatusFilter] = useState<string>('any')
 	const [orderBy, setOrderBy] = useState<string>('newest')
-	const { data: purchases, isLoading } = useOrdersByBuyer(currentUser?.pubkey || '')
+	const { data: purchases, isLoading } = useOrdersByBuyer(user?.pubkey || '')
 
 	// Mark all purchase updates as seen when the page is viewed
 	useEffect(() => {
@@ -36,7 +36,7 @@ function YourPurchasesComponent() {
 			<OrderDataTable
 				heading={<h1 className="text-2xl font-bold">Your Purchases</h1>}
 				data={filteredPurchases}
-				columns={purchaseColumns}
+				columns={purchaseColumns(user?.pubkey)}
 				isLoading={isLoading}
 				filterColumn="status"
 				showStatusFilter={true}

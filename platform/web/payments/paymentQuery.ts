@@ -1,6 +1,6 @@
 import { PAYMENT_DETAILS_METHOD, ZAP_RELAYS, type PaymentDetailsMethod } from '@sdk/config/constants'
 import { appConfigBinding } from '@platform/web/config/appConfigBinding'
-import { getAppNdk, publishAppEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createNdkReadContext, fetchEventsByFilter } from '@platform/web/readContext'
 import { isValidHexKey } from '@sdk/core/utils/utils'
@@ -20,6 +20,14 @@ import { v4 as uuidv4 } from 'uuid'
 import { paymentDetailsKeys, walletDetailsKeys } from '@sdk/core/query/queryKeyFactory'
 import { getNdkEventStore } from '@platform/web/readContext'
 import { readPaymentDetailEventsWorkflow } from '@sdk/commerce/payments'
+import { buildAddressableDeletion, signAndPublish } from '@sdk/core/publishing'
+import { createSignerPublishContext } from '@platform/web/sdkSigner'
+
+/**
+ * G5: no SDK constant names NIP-78 application data (30078); the
+ * `NDKKind.AppSpecificData` enum member used here answers the same number.
+ */
+const PAYMENT_DETAILS_KIND = 30078
 
 /**
  * Payment method types as defined in the spec
@@ -513,28 +521,24 @@ export const deletePaymentDetail = async (params: DeletePaymentDetailParams): Pr
 		const signer = getActiveSignerCapability()
 		if (!signer) throw new Error('No signer available')
 
-		// Create a deletion event (NIP-09)
-		// Use a-tag for addressable events (kind 30078)
-		const event = new NDKEvent(ndk)
-		event.kind = 5 // Deletion event
-		event.content = 'Deleted payment detail'
-		event.tags = [['a', `${NDKKind.AppSpecificData}:${params.userPubkey}:${params.dTag}`]]
-
-		// A3.5: signed through the capability (in-place mutation contract), never
-		// an NDK-typed signer.
-		const signed = await signer.signEvent({
-			kind: event.kind,
-			content: event.content,
-			created_at: event.created_at ?? Math.floor(Date.now() / 1000),
-			tags: event.tags as string[][],
+		// NIP-09 deletion of an addressable event: the SDK builds the `a` tag
+		// (`30078:<authorPubkey>:<dTag>`) and the sign-and-publish tail. The
+		// coordinate keeps `params.userPubkey` — the identity the caller scoped the
+		// detail to — rather than deriving it from the active capability.
+		const context = await createSignerPublishContext(signer, async (event) => {
+			await publishAppNostrEvent(ndk, event)
 		})
-		Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
-		await publishAppEvent(event)
+		const deletion = await signAndPublish(
+			context,
+			buildAddressableDeletion(PAYMENT_DETAILS_KIND, params.userPubkey, params.dTag, 'Deleted payment detail'),
+		)
 
 		// Relays may keep serving the detail; the store applies the deletion to every later read.
-		await getNdkEventStore().add(event)
+		// G4: this admission is unverified (which store the read path consults), so the
+		// NDK wrap stays.
+		await getNdkEventStore().add(new NDKEvent(ndk, deletion))
 
-		return event.id
+		return deletion.id
 	} catch (error) {
 		console.error('Error deleting payment details:', error)
 		throw error

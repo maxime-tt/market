@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { ndkActions } from '@platform/web/ndk/ndkStore'
 import type { ProfileDisplayFields } from '@sdk/core'
 
 /**
@@ -35,6 +34,8 @@ import { useUpdateProfileMutation } from '@platform/web/profiles/profilePublish'
 import { useQuery } from '@tanstack/react-query'
 import { profileByIdentifierQueryOptions } from '@platform/web/profiles/profileQuery'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
+import { authStore } from '@platform/web/readContext'
+import { useStore } from '@tanstack/react-store'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profile')({
@@ -45,8 +46,8 @@ function ProfileComponent() {
 	useDashboardTitle('Profile')
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
-	const ndk = ndkActions.getNDK()
-	const pubkey = ndk?.activeUser?.pubkey
+	const { user } = useStore(authStore)
+	const pubkey = user?.pubkey
 
 	// fetch: the signed-in user's own kind-0 profile (single entity; a stream is not warranted)
 	const profileOptions = profileByIdentifierQueryOptions(pubkey || '')

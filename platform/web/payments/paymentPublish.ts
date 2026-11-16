@@ -11,18 +11,24 @@
  * No signature, mutation key or toast copy changed in the move.
  */
 import { appConfigBinding } from '@platform/web/config/appConfigBinding'
-import { getAppNdk, publishAppEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { parseNwcUri } from '@sdk/commerce/payments/state/wallet'
 import { type PaymentDetailsMethod } from '@sdk/config/constants'
 import { paymentDetailsKeys } from '@sdk/core/query/queryKeyFactory'
 import { validatePreimage } from '@sdk/commerce/payments/preimage'
-import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
 import { NWCClient } from '@getalby/sdk/nwc'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { createBuyerPaymentReceiptTemplate } from '@sdk/commerce/orders'
+
+/**
+ * G5: the SDK has no named constant for NIP-78 application data (30078) — the
+ * the NDK kind enum member this file used is gone with the NDK
+ * import. Local, named, one kind, rather than a bare magic number at the call site.
+ */
+const PAYMENT_DETAILS_KIND = 30078
 
 /**
  * Interface for publishing payment details.
@@ -77,11 +83,7 @@ export const publishPaymentDetail = async (params: PublishPaymentDetailParams): 
 		// No encryption needed - buyers need to read these to generate invoices
 		const contentStr = JSON.stringify(contentObj)
 
-		// Create the event
-		const event = new NDKEvent(ndk)
-		event.kind = NDKKind.AppSpecificData
-		event.content = contentStr
-		event.tags = [
+		const tags: string[][] = [
 			['d', params.dTag || uuidv4()],
 			['l', 'payment_detail'],
 			['p', appPubkey], // Reference to the app
@@ -91,20 +93,19 @@ export const publishPaymentDetail = async (params: PublishPaymentDetailParams): 
 		if (params.coordinates) {
 			const coordinatesArray = Array.isArray(params.coordinates) ? params.coordinates : [params.coordinates]
 			coordinatesArray.forEach((coord) => {
-				event.tags.push(['a', coord])
+				tags.push(['a', coord])
 			})
 		}
 
-		// Sign and publish. A3.5: signed through the capability (in-place mutation
-		// contract: id/pubkey/sig land on the event), never an NDK-typed signer.
-		const signed = await signer.signEvent({
-			kind: event.kind,
-			content: event.content,
-			created_at: event.created_at ?? Math.floor(Date.now() / 1000),
-			tags: event.tags as string[][],
+		// Sign and publish. Signed through the capability, then published through the
+		// NDK publish binding (`publishAppNostrEvent`) so relay selection is unchanged.
+		const event = await signer.signEvent({
+			kind: PAYMENT_DETAILS_KIND,
+			content: contentStr,
+			created_at: Math.floor(Date.now() / 1000),
+			tags,
 		})
-		Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
-		await publishAppEvent(event)
+		await publishAppNostrEvent(ndk, event)
 
 		return event.id
 	} catch (error) {
@@ -367,7 +368,6 @@ export const publishPaymentReceipt = async (params: PublishPaymentReceiptParams)
 	if (!userPubkey) throw new Error('No user available')
 
 	// Build the event through SDK rules, then sign and publish at the app boundary.
-	const event = new (await import('@nostr-dev-kit/ndk')).NDKEvent(ndk)
 	const template = createBuyerPaymentReceiptTemplate({
 		merchantPubkey: invoice.recipientPubkey || '',
 		orderId: invoice.orderId,
@@ -377,21 +377,15 @@ export const publishPaymentReceipt = async (params: PublishPaymentReceiptParams)
 		createdAt: Math.floor(Date.now() / 1000),
 		content: invoice.description,
 	})
-	event.kind = template.kind
-	event.content = template.content
-	event.tags = template.tags
-	event.created_at = template.created_at
 
 	try {
-		// A3.5: signed through the capability (in-place mutation contract).
-		const signed = await signer.signEvent({
-			kind: event.kind,
-			content: event.content,
-			created_at: event.created_at ?? Math.floor(Date.now() / 1000),
-			tags: event.tags as string[][],
+		const event = await signer.signEvent({
+			kind: template.kind,
+			content: template.content,
+			created_at: template.created_at ?? Math.floor(Date.now() / 1000),
+			tags: template.tags,
 		})
-		Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
-		await publishAppEvent(event)
+		await publishAppNostrEvent(ndk, event)
 
 		console.log(`✅ Payment receipt published for order ${invoice.orderId}`)
 		return event.id

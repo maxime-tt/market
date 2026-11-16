@@ -1,4 +1,4 @@
-import { getAppNdk, NDKEvent, type NDKSigner, type NdkClient as NDK, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, NDKEvent, type NdkClient as NDK, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import type { SignerCapability } from '@sdk/core/signer'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
@@ -13,7 +13,7 @@ import {
 } from '@sdk/commerce/products'
 import { getNdkEventStore } from '@platform/web/readContext'
 import { productKeys } from '@sdk/core/query/queryKeyFactory'
-import type { NDKTag } from '@nostr-dev-kit/ndk'
+import type { UnsignedEventData } from '@sdk/core/publishing'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createClientTag } from '@platform/web/nip89'
@@ -22,27 +22,26 @@ export type ProductFormData = SellerProductListingInput
 export { productPublishIssueMessage }
 
 /**
- * Creates a new product event (kind 30402)
+ * Builds a new product event (kind 30402) as an **unsigned** event: kind, content
+ * and tags only. The caller signs it (`capability.signEvent`) and publishes
+ * through `publishAppNostrEvent`. The `signer`/`ndk` parameters are kept for
+ * call-site compatibility and are not read — construction no longer needs a client.
  */
 export const createProductEvent = (
 	formData: ProductFormData,
-	signer: SignerCapability,
-	ndk: NDK,
+	_signer: SignerCapability,
+	_ndk: unknown,
 	productId?: string, // Optional for updates
 	appPubkey?: string, // Optional app pubkey for client tag
 	handlerId?: string, // Optional handler ID for client tag
-): NDKEvent => {
-	const event = new NDKEvent(ndk)
+): UnsignedEventData => {
 	// Generate a unique ID if not provided (for new products)
 	const id = productId || `product_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 	const eventData = buildSellerProductEventData(formData, id, {
 		clientTag: appPubkey && handlerId ? createClientTag(appPubkey, handlerId) : undefined,
 	})
-	event.kind = eventData.kind
-	event.content = eventData.content
-	event.tags = eventData.tags as NDKTag[]
 
-	return event
+	return { kind: eventData.kind, content: eventData.content, tags: eventData.tags }
 }
 
 /**

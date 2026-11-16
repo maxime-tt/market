@@ -4,7 +4,6 @@ import { applesauceIo, type NostrUser, type PublishOptions, type PublishResult }
 import { getNdkEventStore, getRawEventStore } from '@platform/web/readContext'
 import type { NostrEventLike } from '@sdk/core'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
-import type { EventPublishContext } from '@sdk/core/ports/eventPublish'
 
 export type NdkClient = NonNullable<ConstructorParameters<typeof NDKEvent>[0]>
 
@@ -31,9 +30,31 @@ async function writeThroughPublishedEvent(event: NDKEvent): Promise<void> {
 	await Promise.allSettled([getRawEventStore().add(event as unknown as NostrEventLike), getNdkEventStore().add(event)])
 }
 
-export const publishAppEvent = async (event: NDKEvent) => {
-	const result = await ndkActions.publishEvent(event)
-	await writeThroughPublishedEvent(event)
+function requireAppNdk(): NdkClient {
+	const ndk = getAppNdk()
+	if (!ndk) throw new Error('NDK not initialized')
+	return ndk
+}
+
+/**
+ * Publish write-through (contract rev 2.21 decision 4), accepting either currency:
+ *
+ * - an `NDKEvent`, constructed by a caller that already holds the client (the
+ *   legacy shape, unchanged);
+ * - a raw **signed** `NostrEvent`, which is wrapped into the `NDKEvent` that
+ *   `ndkActions.publishEvent` takes. The wrap is at this seam only, so the
+ *   relay selection below is byte-identical for both callers: `publishEvent`
+ *   resolves `getWriteRelaySet()` itself (undefined in production -> all
+ *   connected relays, including NIP-65 outbox discoveries), and resolves with
+ *   the set of relays that ACKed — an empty set on zero ACKs, never a throw.
+ *   Callers that fail closed on zero ACKs (`orderPublish`) depend on that set,
+ *   so this function's return value must stay the `ndkActions.publishEvent`
+ *   result and must not be adapted into a different shape.
+ */
+export const publishAppEvent = async (event: NDKEvent | NostrEvent) => {
+	const ndkEvent = event instanceof NDKEvent ? event : new NDKEvent(requireAppNdk(), event)
+	const result = await ndkActions.publishEvent(ndkEvent)
+	await writeThroughPublishedEvent(ndkEvent)
 	return result
 }
 
@@ -129,32 +150,7 @@ export type { EventTemplate, NostrEvent, PublishOptions, PublishResult }
  */
 export { createUserScopedKeyValueStoragePort } from '@platform/web/app/sdkAdapters'
 
-/**
- * Platform adapter: binds the web host's NDK client and signer to the SDK's
- * explicit publish context. SDK workflows never read the NDK singleton.
- */
-export async function createNdkPublishContext(
-	ndk: NdkClient,
-	signer: NDKSigner,
-	publish: (event: NDKEvent) => Promise<void> = async (event) => {
-		await ndkActions.publishEvent(event)
-	},
-): Promise<EventPublishContext<NDKEvent>> {
-	const author = await signer.user()
-	return {
-		authorPubkey: author.pubkey,
-		now: () => Math.floor(Date.now() / 1000),
-		signer: {
-			sign: async (template) => {
-				const event = new NDKEvent(ndk)
-				event.kind = template.kind as typeof event.kind
-				event.content = template.content
-				event.tags = template.tags as typeof event.tags
-				event.created_at = template.created_at
-				await event.sign(signer)
-				return event
-			},
-		},
-		publish,
-	}
-}
+// A3.7 retired `createNdkPublishContext`: it built an `NDKEvent` and signed it
+// with NDK's `event.sign(signer)`, had no callers, and was the last place in
+// this file that constructed an event for signing. Publish contexts now come
+// from `createSignerPublishContext` (capability + `publishAppNostrEvent`).

@@ -10,7 +10,6 @@
  * literal-identical to the pre-drain values.
  */
 import { useQuery } from '@tanstack/react-query'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { walletActions } from '@sdk/commerce/payments/state/wallet'
 import type { Wallet as UserNwcWallet } from '@sdk/commerce/payments/state/wallet'
 import {
@@ -32,7 +31,7 @@ export type { Wallet as UserNwcWallet } from '@sdk/commerce/payments/state/walle
 /** The host's relay fetch + NIP-44 self-decrypt for the wallet-list read. A3.5: the signer reads come from the active signer capability (`createCapabilityWalletListPort`, `nwcWalletRead`), not NDK's instance signer. */
 function createWalletListPort(ndk: NonNullable<ReturnType<typeof getAppNdk>>): NwcWalletListPort<NwcWalletEventLike> {
 	return createCapabilityWalletListPort(getActiveSignerCapabilityOrThrow(), async (filter) =>
-		Array.from(await ndk.fetchEvents(filter as unknown as NDKFilter)),
+		Array.from(await ndk.fetchEvents(filter as unknown as Parameters<typeof ndk.fetchEvents>[0])),
 	)
 }
 

@@ -80,10 +80,11 @@ const BOUNDARY_LEAK_ALLOWLIST = new Set([
 	'platform/web/products/useStreamingProducts.ts',
 	'platform/web/products/ProductCardHost.tsx',
 	'platform/web/collections/collectionPublish.ts',
-	'platform/web/account/piiDeletion.ts',
-	'platform/web/v4v/v4vQuery.ts',
+	// slice 2 (publish construction): the listing is built and signed as a raw event now;
+	// the one residual NDK constructor is the NIP-09 deletion's read-store admission (G4:
+	// which store the read path consults is unverified, so the wrap stays).
+	'platform/web/products/productPublish.ts',
 	'platform/web/shipping/shippingPublish.ts',
-	'platform/web/nip89.ts',
 	'platform/web/migration.tsx',
 	// cms (d7s2): storefront product grid uses NDKEvent casts in the product card host;
 	// the storefront theme-studio lane owns this file — converting needs the messaging

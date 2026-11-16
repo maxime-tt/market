@@ -1,5 +1,5 @@
 import { Relay } from 'nostr-tools'
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@sdk/core'
 import {
 	determineStage,
 	getAppPublicKeyOrThrow,
@@ -96,7 +96,7 @@ export const configRoutes: BunRoutes = {
 			]
 
 			const signedEvents = eventTemplates.map((template) => {
-				const processed = handler.processEvent({ ...template, pubkey: appPubkey } as NostrEvent)
+				const processed = handler.processEvent({ ...template, pubkey: appPubkey } as unknown as NostrEventLike)
 				if (!processed.signedEvent) throw new Error(processed.validationResult.reason || 'Setup event was rejected')
 				return processed.signedEvent
 			})
