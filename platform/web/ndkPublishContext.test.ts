@@ -54,6 +54,10 @@ const mockNdkStore = {
 }
 const mockNdkActions = {
 	publishEvent: mock(async (_event?: unknown, _relaySet?: unknown) => new Set([{ url: 'wss://relay.example' }])),
+	// slice 2: `publishAppEvent` resolves the app client through the same accessor
+	// every publish binding uses, then wraps a raw event into the NDK event object
+	// `publishEvent` takes.
+	getNDK: () => mockNdkStore.state.ndk,
 }
 const mockGetWriteRelays = mock(() => mockNdkStore.state.writeRelayUrls)
 
@@ -64,7 +68,7 @@ const ndkStoreMock = () => ({
 })
 mock.module('@platform/web/ndk/ndkStore', ndkStoreMock) // E1b: src shim specifier retired
 
-import { publishNostrEvent } from './ndkPublishContext'
+import { publishAppNostrEvent, publishNostrEvent } from './ndkPublishContext'
 
 function resetNdkState() {
 	mockNdkStore.state.ndk = null
@@ -129,5 +133,46 @@ describe('NDK publish bridge (ndkPublishContext.publishNostrEvent)', () => {
 		const [[event, relaySet]] = mockNdkActions.publishEvent.mock.calls
 		expect((event as { rawEvent(): unknown }).rawEvent()).toEqual(stubRawEvent)
 		expect(relaySet).toBeUndefined()
+	})
+})
+
+/**
+ * The app publish rail — `publishAppEvent` / `publishAppNostrEvent`, which every
+ * migrated publish family now calls. Slice 2 rewrote construction and signing but
+ * deliberately did NOT touch the publish call, so these tests pin exactly the two
+ * properties the rewrite could have broken silently:
+ *
+ * 1. the event reaches `ndkActions.publishEvent` with NO relay-set argument, so
+ *    relay selection stays inside the store (`relaySet ??= getWriteRelaySet()`,
+ *    undefined in production -> all connected relays including outbox);
+ * 2. the return value is the store's `Set` of ACKing relays — empty on zero ACKs,
+ *    never a throw and never a reshaped `PublishResult`. `orderPublish`'s
+ *    fail-closed checks (`publishResultHasRelaySuccess`) read that set.
+ */
+describe('app publish rail (ndkPublishContext.publishAppEvent)', () => {
+	afterEach(resetNdkState)
+
+	test('a raw signed event is published with no relay-set override and returns the ACKed set', async () => {
+		mockNdkStore.state.ndk = makeMockNdk()
+
+		const result = await publishAppNostrEvent(mockNdkStore.state.ndk as never, stubRawEvent as never)
+
+		const [[event, relaySet]] = mockNdkActions.publishEvent.mock.calls
+		expect((event as { kind: number }).kind).toBe(1)
+		expect((event as { content: string }).content).toBe('hello')
+		expect((event as { rawEvent(): unknown }).rawEvent()).toMatchObject(stubRawEvent)
+		// No override: the store decides the write relay set for the whole app.
+		expect(relaySet).toBeUndefined()
+		expect(result).toEqual(new Set([{ url: 'wss://relay.example' }]))
+	})
+
+	test('zero ACKs resolves with the store set (empty), it does not throw', async () => {
+		mockNdkStore.state.ndk = makeMockNdk()
+		mockNdkActions.publishEvent.mockImplementationOnce(async () => new Set())
+
+		const result = await publishAppNostrEvent(mockNdkStore.state.ndk as never, stubRawEvent as never)
+
+		expect(result).toBeInstanceOf(Set)
+		expect((result as Set<unknown>).size).toBe(0)
 	})
 })

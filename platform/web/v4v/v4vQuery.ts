@@ -32,7 +32,7 @@ import {
 	resolveCommunityQueryFixtureStep,
 } from '@sdk/core/query/communityQueryFixtures'
 import { v4vKeys } from '@sdk/core/query/queryKeyFactory'
-import { getAppNdk, publishAppEvent, NDKEvent, type NdkClient } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent, type NdkClient } from '@platform/web/ndkPublishContext'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 
 export type { V4VConfigurationState }
@@ -120,28 +120,23 @@ export const publishV4VShares = async (shares: V4VShareDTO[], userPubkey: string
 		// zapTags can be empty array (user takes 100%)
 		const zapTags = shares.map((share) => ['zap', share.pubkey, share.percentage.toString()])
 
-		const event = new NDKEvent(ndk)
-		event.kind = 30078
-		event.content = JSON.stringify(zapTags)
-		event.tags = [
+		const tags: string[][] = [
 			['d', uuidv4()],
 			['l', 'v4v_share'],
 		]
 
 		if (appPubkey) {
-			event.tags.push(['p', appPubkey])
+			tags.push(['p', appPubkey])
 		}
 
-		// A3.5: signed through the capability (in-place mutation contract), never
-		// an NDK-typed signer.
-		const signed = await signer.signEvent({
-			kind: event.kind,
-			content: event.content,
-			created_at: event.created_at ?? Math.floor(Date.now() / 1000),
-			tags: event.tags as string[][],
+		// Signed through the capability, published through the NDK publish binding.
+		const event = await signer.signEvent({
+			kind: 30078,
+			content: JSON.stringify(zapTags),
+			created_at: Math.floor(Date.now() / 1000),
+			tags,
 		})
-		Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
-		await publishAppEvent(event)
+		await publishAppNostrEvent(ndk, event)
 
 		return true
 	} catch (error) {

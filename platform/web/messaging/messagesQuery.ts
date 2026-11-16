@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { getAppNdk, publishAppEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { authStore } from '@platform/web/readContext'
 import { createBuyerChatTemplate } from '@sdk/commerce/orders'
+import type { NostrEvent } from 'nostr-tools/pure'
 import { useStore } from '@tanstack/react-store'
 import { NDKEvent, type NDKUser, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { messageKeys } from '@sdk/core/query/queryKeyFactory'
@@ -212,7 +213,7 @@ export function useConversationMessages(otherUserPubkey: string | undefined) {
 /**
  * Sends a new message (Kind 14) to a recipient.
  */
-export async function sendChatMessage(recipientPubkey: string, content: string, subject?: string): Promise<NDKEvent | undefined> {
+export async function sendChatMessage(recipientPubkey: string, content: string, subject?: string): Promise<NostrEvent | undefined> {
 	const ndk = getAppNdk()
 	const currentUser = authStore.state?.user
 
@@ -233,17 +234,18 @@ export async function sendChatMessage(recipientPubkey: string, content: string, 
 	}
 
 	const template = createBuyerChatTemplate({ recipientPubkey, content, subject, createdAt: Math.floor(Date.now() / 1000) })
-	const event = new NDKEvent(ndk, template)
 
 	try {
-		const signed = await signer.signEvent({
-			kind: event.kind,
-			content: event.content,
-			created_at: event.created_at ?? Math.floor(Date.now() / 1000),
-			tags: event.tags as string[][],
+		// Sign through the capability, publish through the NDK publish binding: the
+		// same `ndkActions.publishEvent` + `getWriteRelaySet` path, and the same
+		// read-store write-through, as the previous `publishAppEvent(event)`.
+		const event = await signer.signEvent({
+			kind: template.kind,
+			content: template.content,
+			created_at: template.created_at ?? Math.floor(Date.now() / 1000),
+			tags: template.tags,
 		})
-		Object.assign(event, { id: signed.id, pubkey: signed.pubkey, sig: signed.sig })
-		await publishAppEvent(event)
+		await publishAppNostrEvent(ndk, event)
 		return event
 	} catch (error) {
 		console.error('Error sending chat message:', error)

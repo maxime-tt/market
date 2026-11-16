@@ -1,10 +1,18 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import type NDK from '@nostr-dev-kit/ndk'
 import { ZAP_RELAYS } from '@sdk/config/constants'
+import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 
-// Builds a kind-9734 zap request with the correct tags,
+/**
+ * A kind-9734 zap request, built and signed at the app boundary.
+ *
+ * The `ndk` field is retained for call-site compatibility and is no longer read:
+ * signing goes through the active signer capability instead of NDK's instance
+ * signer (`event.sign()` with no argument, whose `ndk.signer` the store's signer
+ * surface no longer sets — so the old path was already the broken one whenever no
+ * instance signer had been wired). Nothing is published to a relay here; the
+ * signed request is POSTed to `/api/zapPurchase`.
+ */
 export interface ZapPurchaseInvoiceOptions {
-	ndk: NDK
+	ndk?: unknown
 	appPubkey: string
 	appRelay: string
 	zapLabel: string
@@ -19,21 +27,24 @@ export interface ZapPurchaseInvoiceResult {
 }
 
 export async function zapPurchase(opts: ZapPurchaseInvoiceOptions): Promise<ZapPurchaseInvoiceResult> {
-	const { ndk, appPubkey, appRelay, zapLabel, registryTag, registryKey, amountSats } = opts
+	const { appPubkey, appRelay, zapLabel, registryTag, registryKey, amountSats } = opts
 
-	// Build and sign a kind-9734 zap request
-	const zapRequest = new NDKEvent(ndk)
-	zapRequest.kind = 9734
-	zapRequest.content = ''
-	zapRequest.tags = [
-		['p', appPubkey],
-		['amount', (amountSats * 1000).toString()],
-		['L', zapLabel],
-		[registryTag, registryKey],
-		['relays', ...Array.from(new Set([appRelay, ...ZAP_RELAYS].filter(Boolean)))],
-	]
+	const signer = getActiveSignerCapability()
+	if (!signer) throw new Error('No signer available')
 
-	await zapRequest.sign()
+	// Build and sign a kind-9734 zap request.
+	const zapRequest = await signer.signEvent({
+		kind: 9734,
+		content: '',
+		created_at: Math.floor(Date.now() / 1000),
+		tags: [
+			['p', appPubkey],
+			['amount', (amountSats * 1000).toString()],
+			['L', zapLabel],
+			[registryTag, registryKey],
+			['relays', ...Array.from(new Set([appRelay, ...ZAP_RELAYS].filter(Boolean)))],
+		],
+	})
 
 	const invoiceId = `${zapLabel}-${registryKey}-${amountSats}-${Date.now()}`
 
@@ -43,7 +54,8 @@ export async function zapPurchase(opts: ZapPurchaseInvoiceOptions): Promise<ZapP
 		body: JSON.stringify({
 			amountSats,
 			registryKey,
-			zapRequest: zapRequest.rawEvent(),
+			// The signed event *is* the raw event; `rawEvent()` had no other job.
+			zapRequest,
 		}),
 	})
 
@@ -62,7 +74,7 @@ export async function zapPurchase(opts: ZapPurchaseInvoiceOptions): Promise<ZapP
 
 // Shared context every purchase helper needs.
 export interface PurchaseContext {
-	ndk: NDK
+	ndk?: unknown
 	appPubkey: string
 	appRelay: string
 }

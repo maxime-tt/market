@@ -1,7 +1,7 @@
 import { DEFAULT_INSTANCE_CONFIG } from '@sdk/config/instance-config'
 import { configStore } from '@sdk/config/app-config'
 import { type NdkClient, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
-import { NDKEvent } from '@platform/web/ndkPublishContext'
+import type { UnsignedEventData } from '@sdk/core/publishing'
 import type { SignerCapability } from '@sdk/core/signer'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import {
@@ -48,25 +48,23 @@ function resolveHandlerMetadata(handlerId?: string, relayUrl?: string, siteUrl?:
 }
 
 /**
- * Creates a handler information event (kind 31990) for Plebeian Market
- * This announces which event kinds the application can handle
+ * Builds a handler information event (kind 31990) for Plebeian Market as an
+ * **unsigned** event (kind, content, tags). Callers sign and publish it.
+ * The `signer`/`ndk` parameters are kept for call-site compatibility and are
+ * not read — construction no longer needs a client.
  *
  * @param appSettings - Optional app settings to include in the content (for backward compatibility)
  */
 export const createHandlerInfoEvent = (
-	signer: SignerCapability,
-	ndk: NdkClient,
+	_signer: SignerCapability,
+	_ndk: NdkClient,
 	handlerId?: string,
 	appSettings?: Record<string, unknown>,
-): NDKEvent => {
+): UnsignedEventData => {
 	const { effectiveHandlerId, effectiveSiteUrl } = resolveHandlerMetadata(handlerId)
 	const data = buildHandlerInfoEventData({ handlerId: effectiveHandlerId, siteUrl: effectiveSiteUrl, appSettings })
 
-	const event = new NDKEvent(ndk)
-	event.kind = data.kind
-	event.content = data.content
-	event.tags = data.tags
-	return event
+	return { kind: data.kind, content: data.content, tags: data.tags }
 }
 
 /**

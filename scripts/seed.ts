@@ -172,6 +172,26 @@ async function ensureAuctionWalletForSeller(signer: NDKPrivateKeySigner, pubkey:
 	}
 }
 
+/**
+ * Signs and publishes an SDK-built **unsigned** event through the seed's own NDK
+ * client. The featured-list builders stopped constructing NDKEvents (zero-NDK
+ * programme, slice 2), so the construction seam that used to live in
+ * `featuredPublish` is now explicit here — same client, same signer, same
+ * default relay fan-out as `event.publish()` before.
+ */
+async function publishSeedEvent(
+	template: { kind: number; content: string; tags: string[][] },
+	signer: NDKPrivateKeySigner,
+	ndk: NonNullable<ConstructorParameters<typeof NDKEvent>[0]>,
+): Promise<void> {
+	const event = new NDKEvent(ndk)
+	event.kind = template.kind as typeof event.kind
+	event.content = template.content
+	event.tags = template.tags
+	await event.sign(signer)
+	await event.publish()
+}
+
 function getSeedCvmRelays(): string[] {
 	const appRelay = process.env.APP_RELAY_URL || 'ws://localhost:10547'
 	return [appRelay]
@@ -946,8 +966,7 @@ async function seedData() {
 				createSignerFromKey(APP_PRIVATE_KEY!),
 				ndk,
 			)
-			await featuredUsersEvent.sign(appSigner)
-			await featuredUsersEvent.publish()
+			await publishSeedEvent(featuredUsersEvent, appSigner, ndk)
 		}
 
 		// Publish featured collections
@@ -958,8 +977,7 @@ async function seedData() {
 				createSignerFromKey(APP_PRIVATE_KEY!),
 				ndk,
 			)
-			await featuredCollectionsEvent.sign(appSigner)
-			await featuredCollectionsEvent.publish()
+			await publishSeedEvent(featuredCollectionsEvent, appSigner, ndk)
 		}
 
 		// Publish featured products
@@ -970,8 +988,7 @@ async function seedData() {
 				createSignerFromKey(APP_PRIVATE_KEY!),
 				ndk,
 			)
-			await featuredProductsEvent.sign(appSigner)
-			await featuredProductsEvent.publish()
+			await publishSeedEvent(featuredProductsEvent, appSigner, ndk)
 		}
 
 		// Publish featured auctions
@@ -982,8 +999,7 @@ async function seedData() {
 				createSignerFromKey(APP_PRIVATE_KEY!),
 				ndk,
 			)
-			await featuredAuctionsEvent.sign(appSigner)
-			await featuredAuctionsEvent.publish()
+			await publishSeedEvent(featuredAuctionsEvent, appSigner, ndk)
 		}
 
 		console.log('Featured items created successfully!')

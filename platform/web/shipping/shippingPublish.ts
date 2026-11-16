@@ -21,7 +21,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { getAppNdk, type NdkClient as NDK, NDKEvent, type NDKSigner, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
-import { getActiveSignerCapability } from '@platform/web/auth/authStore'
+import { getActiveSignerCapability, getCurrentPubkey } from '@platform/web/auth/authStore'
 import type { SignerCapability } from '@sdk/core/signer'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { getNdkEventStore } from '@platform/web/readContext'
@@ -130,7 +130,11 @@ export const usePublishShippingOptionMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
 	const signer = getActiveSignerCapability()
-	const currentUserPubkey = ndk?.activeUser?.pubkey
+	// Slice 4 identity: the SDK auth machine's identity read (the same source
+	// `appSettingsPublish` and `useUserRole` use), not the retired NDK activeUser.
+	// Synchronous on purpose — the mutation hooks and their optimistic `onMutate`
+	// read it at render time to build the cache keys.
+	const currentUserPubkey = getCurrentPubkey()
 
 	return useMutation({
 		mutationFn: async (formData: ShippingFormData) => {
@@ -162,7 +166,11 @@ export const useUpdateShippingOptionMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
 	const signer = getActiveSignerCapability()
-	const currentUserPubkey = ndk?.activeUser?.pubkey
+	// Slice 4 identity: the SDK auth machine's identity read (the same source
+	// `appSettingsPublish` and `useUserRole` use), not the retired NDK activeUser.
+	// Synchronous on purpose — the mutation hooks and their optimistic `onMutate`
+	// read it at render time to build the cache keys.
+	const currentUserPubkey = getCurrentPubkey()
 
 	return useMutation({
 		mutationFn: async ({ shippingDTag, formData }: { shippingDTag: string; formData: ShippingFormData }) => {
@@ -195,7 +203,11 @@ export const useDeleteShippingOptionMutation = () => {
 	const queryClient = useQueryClient()
 	const ndk = getAppNdk()
 	const signer = getActiveSignerCapability()
-	const currentUserPubkey = ndk?.activeUser?.pubkey
+	// Slice 4 identity: the SDK auth machine's identity read (the same source
+	// `appSettingsPublish` and `useUserRole` use), not the retired NDK activeUser.
+	// Synchronous on purpose — the mutation hooks and their optimistic `onMutate`
+	// read it at render time to build the cache keys.
+	const currentUserPubkey = getCurrentPubkey()
 
 	return useMutation({
 		mutationFn: async (shippingDTag: string) => {

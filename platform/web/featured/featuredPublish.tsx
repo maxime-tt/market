@@ -1,12 +1,11 @@
 import {
 	fetchLatestAppEvent,
 	getAppNdk,
-	NDKEvent,
 	type NDKFilter,
-	type NDKSigner,
 	type NdkClient as NDK,
 	publishAppNostrEvent,
 } from '@platform/web/ndkPublishContext'
+import type { UnsignedEventData } from '@sdk/core/publishing'
 import type { SignerCapability } from '@sdk/core/signer'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
@@ -61,38 +60,34 @@ const FEATURED_LABELS: Record<FeaturedListKey, { invalidItem: string; alreadyLis
 	featuredUsers: { invalidItem: 'pubkey', alreadyListed: 'User is already featured', notListed: 'User is not featured' },
 }
 
-function createFeaturedListEvent(ndk: NDK, list: FeaturedListKey, items: string[]): NDKEvent {
-	const data = buildCurationListEventData(list, items)
-	const event = new NDKEvent(ndk)
-	event.kind = data.kind
-	event.content = data.content
-	event.tags = data.tags
-	return event
+function createFeaturedListEvent(list: FeaturedListKey, items: string[]): UnsignedEventData {
+	return buildCurationListEventData(list, items)
 }
 
 /**
- * Creates a Kind 30405 featured products event (Collection format)
+ * Creates a Kind 30405 featured products event (Collection format) as an
+ * **unsigned** event. Callers sign and publish it.
  */
-export const createFeaturedProductsEvent = (data: FeaturedProductsData, _signer: SignerCapability, ndk: NDK): NDKEvent =>
-	createFeaturedListEvent(ndk, 'featuredProducts', data.featuredProducts)
+export const createFeaturedProductsEvent = (data: FeaturedProductsData, _signer: SignerCapability, _ndk: unknown): UnsignedEventData =>
+	createFeaturedListEvent('featuredProducts', data.featuredProducts)
 
 /**
- * Creates a Kind 30003 featured collections event (NIP-51 list)
+ * Creates a Kind 30003 featured collections event (NIP-51 list) as an **unsigned** event.
  */
-export const createFeaturedCollectionsEvent = (data: FeaturedCollectionsData, _signer: SignerCapability, ndk: NDK): NDKEvent =>
-	createFeaturedListEvent(ndk, 'featuredCollections', data.featuredCollections)
+export const createFeaturedCollectionsEvent = (data: FeaturedCollectionsData, _signer: SignerCapability, _ndk: unknown): UnsignedEventData =>
+	createFeaturedListEvent('featuredCollections', data.featuredCollections)
 
 /**
- * Creates a Kind 30409 featured auctions event
+ * Creates a Kind 30409 featured auctions event as an **unsigned** event.
  */
-export const createFeaturedAuctionsEvent = (data: FeaturedAuctionsData, _signer: SignerCapability, ndk: NDK): NDKEvent =>
-	createFeaturedListEvent(ndk, 'featuredAuctions', data.featuredAuctions)
+export const createFeaturedAuctionsEvent = (data: FeaturedAuctionsData, _signer: SignerCapability, _ndk: unknown): UnsignedEventData =>
+	createFeaturedListEvent('featuredAuctions', data.featuredAuctions)
 
 /**
- * Creates a Kind 30000 featured users event (NIP-51 list)
+ * Creates a Kind 30000 featured users event (NIP-51 list) as an **unsigned** event.
  */
-export const createFeaturedUsersEvent = (data: FeaturedUsersData, _signer: SignerCapability, ndk: NDK): NDKEvent =>
-	createFeaturedListEvent(ndk, 'featuredUsers', data.featuredUsers)
+export const createFeaturedUsersEvent = (data: FeaturedUsersData, _signer: SignerCapability, _ndk: unknown): UnsignedEventData =>
+	createFeaturedListEvent('featuredUsers', data.featuredUsers)
 
 /** Validates, signs, and submits a featured list through the app-settings WebSocket. */
 async function publishFeaturedList(list: FeaturedListKey, items: string[], signer: SignerCapability, ndk: NDK): Promise<string> {

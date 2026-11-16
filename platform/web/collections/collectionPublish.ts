@@ -1,10 +1,11 @@
-import { getAppNdk, NDKEvent, type NDKSigner, type NdkClient as NDK, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
+import { getAppNdk, NDKEvent, type NdkClient as NDK, publishAppNostrEvent } from '@platform/web/ndkPublishContext'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import type { SignerCapability } from '@sdk/core/signer'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { collectionsKeys } from '@sdk/core/query/queryKeyFactory'
 import { getNdkEventStore } from '@platform/web/readContext'
+import type { UnsignedEventData } from '@sdk/core/publishing'
 import { toast } from 'sonner'
 import {
 	buildCollectionEventData,
@@ -25,17 +26,18 @@ export interface CollectionFormData {
 }
 
 /**
- * Creates a new collection event (kind 30405)
+ * Builds a new collection event (kind 30405) as an **unsigned** event: kind,
+ * content and tags only. The caller signs and publishes. The `signer`/`ndk`
+ * parameters are kept for call-site compatibility and are not read.
  */
 export const createCollectionEvent = (
 	formData: CollectionFormData,
-	signer: SignerCapability,
-	ndk: NDK,
+	_signer: SignerCapability,
+	_ndk: unknown,
 	collectionId?: string,
 	appPubkey?: string, // Optional app pubkey for client tag
 	handlerId?: string, // Optional handler ID for client tag
-): NDKEvent => {
-	const event = new NDKEvent(ndk)
+): UnsignedEventData => {
 	const eventData = buildCollectionEventData({
 		collectionId: collectionId || crypto.randomUUID(),
 		name: formData.name,
@@ -46,11 +48,8 @@ export const createCollectionEvent = (
 		shippings: formData.shippings,
 		clientTag: appPubkey && handlerId ? createClientTag(appPubkey, handlerId) : undefined,
 	})
-	event.kind = eventData.kind as typeof COLLECTION_EVENT_KIND
-	event.content = eventData.content
-	event.tags = eventData.tags
 
-	return event
+	return { kind: eventData.kind as typeof COLLECTION_EVENT_KIND, content: eventData.content, tags: eventData.tags }
 }
 
 const toCollectionInput = (formData: CollectionFormData) => ({

@@ -1,6 +1,6 @@
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { ndkActions } from '@platform/web/ndk/ndkStore'
-import { NDKEvent } from '@platform/web/ndkPublishContext'
+import { publishAppNostrEvent } from '@platform/web/ndkPublishContext'
 
 export interface DeletionResult {
 	success: boolean
@@ -63,29 +63,22 @@ export async function deletePIIEvents(eventIds: string[], onProgress?: (deletedC
 			}
 		}
 
-		// Create deletion event (kind 5) per NIP-09
-		const deletionEvent = new NDKEvent(ndk)
-		deletionEvent.kind = 5 // Deletion event kind
-		deletionEvent.content = 'Deleting PII exposure events'
-
-		// Add 'e' tags for each event to delete
-		deletionEvent.tags = eventIds.map((id) => ['e', id])
-
+		// Deletion event (kind 5) per NIP-09. This is an `e`-tag deletion of specific
+		// events, with `k` tags naming the kinds — NOT the addressable `a`-tag form
+		// that `sdk/core/publishing.buildAddressableDeletion` builds, so the SDK
+		// helper is not a drop-in here.
+		const tags: string[][] = eventIds.map((id) => ['e', id])
 		// Add 'k' tags for kinds being deleted (16 for order events)
-		deletionEvent.tags.push(['k', '16'])
+		tags.push(['k', '16'])
 
-		// Sign and publish the deletion event (A3.6: in place through the capability,
-		// the implicit event.sign()/instance-signer path it replaced).
+		// Sign through the capability, publish through the NDK publish binding.
 		const signedDeletion = await signer.signEvent({
-			kind: deletionEvent.kind,
-			content: deletionEvent.content,
-			created_at: deletionEvent.created_at ?? Math.floor(Date.now() / 1000),
-			tags: deletionEvent.tags as string[][],
+			kind: 5, // Deletion event kind
+			content: 'Deleting PII exposure events',
+			created_at: Math.floor(Date.now() / 1000),
+			tags,
 		})
-		Object.assign(deletionEvent, { id: signedDeletion.id, pubkey: signedDeletion.pubkey, sig: signedDeletion.sig })
-
-		// Publish to all connected relays
-		const publishedRelays = await ndkActions.publishEvent(deletionEvent)
+		const publishedRelays = await publishAppNostrEvent(ndk, signedDeletion)
 
 		console.log(`Deletion request published to ${publishedRelays.size} relays`)
 
