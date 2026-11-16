@@ -59,3 +59,7 @@ e2e/baseline-results/
 # bun-plugin-tailwind, whose source scan skips only gitignored paths, so it
 # compiles the nested copy too and the whole page bundle fails silently.
 .kami-worktrees/
+
+# The served instance's routing table is runtime state, not source: a checkout
+# must never clobber the table an instance is actually serving.
+data/routes.json
