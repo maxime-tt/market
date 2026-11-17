@@ -2,7 +2,8 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { StrictMode, useEffect } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, hydrateRoot } from 'react-dom/client'
+import { readServedPage, ServedPageRoot } from './servedPage'
 import { createQueryClient } from '@platform/web/queryClient'
 import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from '@platform/web/router-utils'
@@ -115,7 +116,32 @@ function App() {
 
 const elem = document.getElementById('root')!
 
-if (import.meta.hot) {
+/**
+ * The served page, read before anything mounts.
+ *
+ * When the server answered with a page it composed, `#root` already holds that
+ * page and `#__AR_PAGE__` names the coordinate it came from: the routing
+ * decision is made, and the client's job is to keep the bytes and fill the
+ * data-bound regions (`platform/web/servedPage.tsx`). When it is absent the
+ * server sent the SPA shell and the app mounts exactly as before.
+ */
+const servedPage = readServedPage()
+
+if (servedPage) {
+	// The boot the slots' reads depend on starts now, in parallel with
+	// hydration, rather than after a mount that is already showing the page.
+	void bootApp(queryClient).catch(() => {})
+	const served = <ServedPageRoot payload={servedPage} queryClient={queryClient} router={router} app={<App />} />
+
+	// Hydrate, never render: the server's DOM is the page, and replacing it
+	// would trade a correct first paint for a blank one.
+	if (import.meta.hot) {
+		const root = (import.meta.hot.data.servedRoot ??= hydrateRoot(elem, served))
+		root.render(served)
+	} else {
+		hydrateRoot(elem, served)
+	}
+} else if (import.meta.hot) {
 	// With hot module reloading, `import.meta.hot.data` is persisted.
 	const root = (import.meta.hot.data.root ??= createRoot(elem))
 	root.render(<App />)

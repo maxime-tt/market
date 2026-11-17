@@ -8,7 +8,18 @@ import type { PageMeta } from './pageStore'
  * static content and the meta; a browser sees the same DOM and then hydrates
  * it. The fragment is never re-rendered by the client — the payload names the
  * `(author, d)` the server already resolved, so the client does not re-decide
- * the route (that seam is consumed in increment 3).
+ * the route.
+ *
+ * Three things the document carries for that seam, and what each is for:
+ *
+ *   - `#__AR_PAGE__` — the coordinate the routing file resolved to, so the
+ *     client reads the same page's live data without re-deciding anything;
+ *   - the fragment's wrapper (`[data-ar-served-page]`) — the element the
+ *     client's first commit reproduces byte-for-byte, so hydration matches
+ *     without the client knowing the document;
+ *   - the bundle's own `<script type="module">` and stylesheets, read from the
+ *     shell's bytes at serve time. Without them a served page ships no JS and
+ *     no CSS at all — measured on the increment-1/2 document.
  *
  * No block emits a script. There is no per-block asset and no registry.
  */
@@ -90,9 +101,20 @@ export function composePageHtml(options: ComposePageOptions): string {
 		...stylesheetHrefs.map((href) => `<link rel="stylesheet" href="${escapeHtml(href)}">`),
 		'</head>',
 		'<body>',
-		'<div id="root">',
-		html,
-		'</div>',
+		// `#root` holds exactly one element: the wrapper the client's first commit
+		// reproduces. It exists so that commit needs to know nothing about the
+		// document — its only attribute is this constant, and the fragment inside
+		// keeps the theme attributes the server rendered, adopted by
+		// `dangerouslySetInnerHTML` and never reconciled
+		// (`platform/web/servedPage.tsx`). Hydration through the router is
+		// impossible: TanStack's `Matches` renders a `Suspense` fallback on its
+		// first commit (measured in Chromium), so the served document hydrates
+		// outside it.
+		//
+		// On ONE line, deliberately: a newline between `#root` and the wrapper is a
+		// whitespace text node, and React's first commit has no such node to match
+		// it against — measured, that alone fails hydration.
+		`<div id="root"><div data-ar-served-page="true">${html}</div></div>`,
 		`<script id="__AR_PAGE__" type="application/json">${serializePagePayload(payload)}</script>`,
 		bootstrapSrc ? `<script type="module" src="${escapeHtml(bootstrapSrc)}"></script>` : '',
 		'</body>',

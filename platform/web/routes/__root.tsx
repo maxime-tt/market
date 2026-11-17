@@ -6,6 +6,7 @@ import { Pattern } from '@ui/shared/pattern'
 import { usePageViews } from '@platform/web/analytics/usePageViews'
 import { useDocumentIdentity } from '@platform/web/app/useDocumentIdentity'
 import { useRootRedirects } from '@platform/web/app/useRootRedirects'
+import { ServedPage, servedPageForPath } from '@platform/web/servedPage'
 import { createRootRoute, Outlet, useLocation, useMatches } from '@tanstack/react-router'
 
 /**
@@ -44,9 +45,27 @@ function RootLayout() {
 	// One page view per navigation, query string dropped (see the module).
 	usePageViews()
 
+	/**
+	 * The served page, in place of `<Outlet/>`.
+	 *
+	 * The routing file decided this path, not the router: when the server
+	 * answered `/dashboard` with a bound page, the compiled-in dashboard is not
+	 * what that URL means while the binding is live, and this guard is what stops
+	 * it from mounting over the page the server sent (`ARCHITECTURE.md` §5.2,
+	 * S4b). It is also what makes a client-side return to the served path render
+	 * the served page rather than the route that happens to share the URL — the
+	 * router knows nothing about the routing file, so the payload is the only
+	 * thing that does.
+	 *
+	 * On the first paint this never runs: a served document hydrates outside the
+	 * router (`servedPage.tsx`). It applies from the moment the app takes the URL
+	 * back, which is the first navigation.
+	 */
+	const served = servedPageForPath(location.pathname)
+
 	// Setup renders without the app chrome.
 	if (isSetupPage) {
-		return <Outlet />
+		return served ? <ServedPage payload={served} /> : <Outlet />
 	}
 
 	return (
@@ -54,7 +73,7 @@ function RootLayout() {
 			{!headerHidden && <Header />}
 
 			<main className="flex flex-col flex-grow">
-				<Outlet />
+				{served ? <ServedPage payload={served} /> : <Outlet />}
 			</main>
 			<Pattern pattern="page" />
 			{!isDashboardPage && !isCheckoutPage && <FooterHost />}
