@@ -427,9 +427,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 									</div>
 								)}
 							</div>
-							<h1 className="text-center text-base font-semibold tracking-tight sm:text-lg">
-								{isStorefront ? 'Your Storefront' : dTag}
-							</h1>
+							<h1 className="text-center text-base font-semibold tracking-tight sm:text-lg">{isStorefront ? 'Your Storefront' : dTag}</h1>
 							<div className="flex min-w-0 justify-center sm:justify-end">{actions}</div>
 						</div>
 

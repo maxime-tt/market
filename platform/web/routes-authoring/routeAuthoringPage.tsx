@@ -13,7 +13,12 @@ import {
 	RouteEditCard,
 	RouteRemovalConfirm,
 } from '@ui/settings/route-authoring-views'
-import { SettingsAccessDenied, SettingsLoadingSkeleton, SettingsMobileHeader, SettingsPageHeader } from '@ui/settings/operator-settings-views'
+import {
+	SettingsAccessDenied,
+	SettingsLoadingSkeleton,
+	SettingsMobileHeader,
+	SettingsPageHeader,
+} from '@ui/settings/operator-settings-views'
 import { isCompiledInName } from '@sdk/config/routeNames'
 import { useAmIAdmin } from '@platform/web/app-settings/appSettingsQuery'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
@@ -89,8 +94,8 @@ export function RouteAuthoringPage() {
 						<div className="space-y-1.5">
 							<CardTitle>What this changes</CardTitle>
 							<CardDescription>
-								A binding points one path at one stored page and takes effect on the next request this instance serves. The routing table
-								on disk is changed by the signed change, and the table is re-validated as a whole before it is written.
+								A binding points one path at one stored page and takes effect on the next request this instance serves. The routing table on
+								disk is changed by the signed change, and the table is re-validated as a whole before it is written.
 							</CardDescription>
 						</div>
 						<Button onClick={() => void navigate({ to: '/dashboard/app-settings/routes/new' })}>New route</Button>
@@ -149,8 +154,8 @@ export function RouteAuthoringPage() {
 
 				<p className="flex items-start gap-2 text-text-mid text-xs">
 					<Shield className="mt-0.5 h-3 w-3 shrink-0" />
-					The change is signed by your key and sent to this instance. The server checks the signature and your access level; a path
-					owned by the URL space (like <code>api</code>) or a multi-segment path is refused.
+					The change is signed by your key and sent to this instance. The server checks the signature and your access level; a path owned by
+					the URL space (like <code>api</code>) or a multi-segment path is refused.
 				</p>
 			</div>
 		</div>
@@ -192,9 +197,7 @@ export function RouteCreatePage() {
 		try {
 			const result = await publish.mutateAsync(validation.intent)
 			const warning = result.warnings.find((entry) => entry.path === validation.intent?.path)
-			toast.success(
-				`Bound /${validation.intent.path}` + (result.changed ? '' : ' — the table already matched, so nothing changed'),
-			)
+			toast.success(`Bound /${validation.intent.path}` + (result.changed ? '' : ' — the table already matched, so nothing changed'))
 			if (warning) toast.warning(`${validation.intent.path} also names a page compiled into this build; the binding wins.`)
 			void navigate({ to: '/dashboard/app-settings/routes' })
 		} catch (error) {
@@ -243,8 +246,8 @@ export function RouteCreatePage() {
 
 				<p className="flex items-start gap-2 text-text-mid text-xs">
 					<Shield className="mt-0.5 h-3 w-3 shrink-0" />
-					The change is signed by your key and sent to this instance. The server checks the signature and your access level; a path
-					owned by the URL space (like <code>api</code>) or a multi-segment path is refused.
+					The change is signed by your key and sent to this instance. The server checks the signature and your access level; a path owned by
+					the URL space (like <code>api</code>) or a multi-segment path is refused.
 				</p>
 			</div>
 		</div>
@@ -276,7 +279,11 @@ export function RouteEditPage({ path }: { path: string }) {
 	}, [row])
 
 	const submit = useCallback(async () => {
-		const validation = validateDraft({ path, author: page.author, d: page.d }, rows.map((candidate) => candidate.path), path)
+		const validation = validateDraft(
+			{ path, author: page.author, d: page.d },
+			rows.map((candidate) => candidate.path),
+			path,
+		)
 		if (!validation.intent) {
 			setErrors(validation.errors)
 			return

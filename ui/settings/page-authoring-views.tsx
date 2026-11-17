@@ -76,13 +76,7 @@ export function PagesLoading({ className }: { className?: string }) {
 /** The pages could not be read: say so, and do not pretend it is empty. */
 export function PagesError({ message, onRetry, className }: { message: string; onRetry?: () => void; className?: string }) {
 	return (
-		<ErrorState
-			title="Could not read your pages"
-			message={message}
-			onRetry={onRetry}
-			retryTestId="pages-retry"
-			className={className}
-		/>
+		<ErrorState title="Could not read your pages" message={message} onRetry={onRetry} retryTestId="pages-retry" className={className} />
 	)
 }
 
@@ -114,7 +108,11 @@ export function PagesList({ pages, dropped, pendingD = null, onEdit, className }
 	return (
 		<div className={cn('space-y-3', className)} data-testid="pages-list">
 			{pages.map((page) => (
-				<div key={page.d} className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-4" data-page-d={page.d}>
+				<div
+					key={page.d}
+					className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-4"
+					data-page-d={page.d}
+				>
 					<div className="min-w-0 space-y-1">
 						<PageLabelChips label={page} />
 						{page.title && <p className="text-sm">{page.title}</p>}
@@ -180,8 +178,8 @@ export function NewPageForm({ value, error, notice, pending, onChange, onSubmit,
 						onChange={(event) => onChange(event.target.value)}
 					/>
 					<p className="text-text-mid text-xs">
-						One lowercase name, 3–30 characters: letters, digits, "-" or "_". It becomes the address of this page and cannot be
-						changed later.
+						One lowercase name, 3–30 characters: letters, digits, "-" or "_". It becomes the address of this page and cannot be changed
+						later.
 					</p>
 				</div>
 

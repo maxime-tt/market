@@ -11,15 +11,7 @@ import {
 } from '@ui/settings/operator-settings-views'
 import { ProfileWalletCheckView } from '@ui/settings/profile-wallet-check-view'
 import { RelayCardView, RelayManagerView } from '@ui/settings/relay-manager-views'
-import {
-	NewPageForm,
-	PageLabelChips,
-	PagePicker,
-	PagesEmpty,
-	PagesError,
-	PagesList,
-	PagesLoading,
-} from '@ui/settings/page-authoring-views'
+import { NewPageForm, PageLabelChips, PagePicker, PagesEmpty, PagesError, PagesList, PagesLoading } from '@ui/settings/page-authoring-views'
 import {
 	RouteBindingsEmpty,
 	RouteBindingsError,

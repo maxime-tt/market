@@ -80,9 +80,7 @@ export function describeBinding(binding: Binding, warnings: RouteTableWarning[] 
 }
 
 export function describeBindings(bindings: Binding[], warnings: RouteTableWarning[] = []): BindingRow[] {
-	return [...bindings]
-		.sort((a, b) => a.path.localeCompare(b.path))
-		.map((binding) => describeBinding(binding, warnings))
+	return [...bindings].sort((a, b) => a.path.localeCompare(b.path)).map((binding) => describeBinding(binding, warnings))
 }
 
 /** Whether this binding can be edited in this increment: page targets only. */

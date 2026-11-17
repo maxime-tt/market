@@ -281,8 +281,8 @@ export function RouteBindingsList({ rows, pendingPath, onEdit, onRemove, onEditP
 							<p className="flex items-start gap-2 rounded bg-warning-muted p-2 text-warning-muted-foreground text-xs">
 								<AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
 								<span>
-									<strong>{row.path}</strong> is also a page compiled into this build. The binding wins — the compiled page is not
-									reachable at this path while the binding exists.
+									<strong>{row.path}</strong> is also a page compiled into this build. The binding wins — the compiled page is not reachable
+									at this path while the binding exists.
 								</span>
 							</p>
 						)}
@@ -343,8 +343,8 @@ export function RouteRemovalConfirm({
 		<Card>
 			<CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
 				<p className="text-sm">
-					Remove the binding on <strong>/{path}</strong>? The page it points at is not deleted, but{' '}
-					<strong>/{path}</strong> stops resolving to it.
+					Remove the binding on <strong>/{path}</strong>? The page it points at is not deleted, but <strong>/{path}</strong> stops resolving
+					to it.
 				</p>
 				<div className="flex gap-2">
 					<Button variant="destructive" size="sm" onClick={onConfirm} disabled={pending}>

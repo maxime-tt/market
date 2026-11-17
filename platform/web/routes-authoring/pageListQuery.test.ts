@@ -103,11 +103,7 @@ describe('fetchMyPages', () => {
 	})
 
 	test('events from another author or another kind are discarded', async () => {
-		fetchResult = [
-			pageEvent('featured', { pubkey: OTHER }),
-			pageEvent('about', { kind: 1 }),
-			pageEvent('shop', { id: 'right' }),
-		]
+		fetchResult = [pageEvent('featured', { pubkey: OTHER }), pageEvent('about', { kind: 1 }), pageEvent('shop', { id: 'right' })]
 		const result = await fetchMyPages(AUTHOR)
 		expect(result.pages.map((page) => page.d)).toEqual(['shop'])
 	})
@@ -125,9 +121,7 @@ describe('fetchMyPages', () => {
 
 	test('the list is capped and reports how many it left out', async () => {
 		const count = PAGE_LIST_CAP + 3
-		fetchResult = Array.from({ length: count }, (_, index) =>
-			pageEvent(`page-${index}`, { id: `id-${index}`, created_at: 1000 + index }),
-		)
+		fetchResult = Array.from({ length: count }, (_, index) => pageEvent(`page-${index}`, { id: `id-${index}`, created_at: 1000 + index }))
 		const result = await fetchMyPages(AUTHOR)
 		expect(result.pages).toHaveLength(PAGE_LIST_CAP)
 		expect(result.dropped).toBe(3)

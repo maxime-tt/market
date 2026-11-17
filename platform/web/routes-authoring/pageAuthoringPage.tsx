@@ -13,7 +13,12 @@ import {
 	PagesLoading,
 	type PickerPage,
 } from '@ui/settings/page-authoring-views'
-import { SettingsAccessDenied, SettingsLoadingSkeleton, SettingsMobileHeader, SettingsPageHeader } from '@ui/settings/operator-settings-views'
+import {
+	SettingsAccessDenied,
+	SettingsLoadingSkeleton,
+	SettingsMobileHeader,
+	SettingsPageHeader,
+} from '@ui/settings/operator-settings-views'
 import { useAmIAdmin } from '@platform/web/app-settings/appSettingsQuery'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
@@ -143,7 +148,16 @@ export function PagesPage({ suggestedName }: { suggestedName?: string }) {
 	// they have typed, the sentence is worth showing immediately.
 	const nameError = submitted || name.length > 0 ? validatePageName(name) : null
 	const options = useMemo(() => toPickerPages(pubkey, pages.data?.pages ?? []), [pubkey, pages.data])
-	const notice = useMemo(() => (nameError ? null : pageNameNotice(name, options.map((page) => page.d))), [nameError, name, options])
+	const notice = useMemo(
+		() =>
+			nameError
+				? null
+				: pageNameNotice(
+						name,
+						options.map((page) => page.d),
+					),
+		[nameError, name, options],
+	)
 
 	const openPage = useCallback(
 		(target: string) => {
@@ -199,8 +213,8 @@ export function PagesPage({ suggestedName }: { suggestedName?: string }) {
 				<NewPageForm value={name} error={nameError} notice={notice} pending={false} onChange={setName} onSubmit={create} />
 
 				<p className="text-text-mid text-xs">
-					The name is the page&rsquo;s address, and it is also the default path it is published under. It cannot be changed later, so
-					pick one you can live with.
+					The name is the page&rsquo;s address, and it is also the default path it is published under. It cannot be changed later, so pick
+					one you can live with.
 				</p>
 			</div>
 		</div>
