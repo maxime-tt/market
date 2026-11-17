@@ -1,4 +1,4 @@
-import { QueryClientProvider, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { QueryClientProvider, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { RouterContextProvider, useRouter, useRouterState, type AnyRouter } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -6,7 +6,8 @@ import { bootStore } from '@platform/web/boot'
 import { WebUiProvider } from '@platform/web/WebUiProvider'
 import { AppProviders } from '@platform/web/app/AppProviders'
 import { StorefrontProvider } from '@ui/storefront/StorefrontContext'
-import { shouldRenderStorefrontPage, useStorefrontAddressPage } from './storefront/storefrontQuery'
+import { isValidHexKey } from '@sdk/core/utils/utils'
+import { shouldRenderStorefrontPage, storefrontAddressPageQueryOptions } from './storefront/storefrontQuery'
 import { fillServedPageRegions } from './storefront/StorefrontBlockSlots'
 
 /**
@@ -125,8 +126,17 @@ export function ServedPage({ payload }: { payload: ServedPagePayload }) {
 	const queryClient = useQueryClient()
 	const router = useRouter()
 	const bootStatus = useStore(bootStore, (state) => state.status)
-	const { data } = useStorefrontAddressPage(payload.author, payload.d)
-	const page = shouldRenderStorefrontPage(data) ? data.page : null
+	// Gated on the boot, and it is load-bearing: this is a *live* relay read, and
+	// before `bootApp` finishes there is no relay client to read with. Measured
+	// ungated — the query resolved `success` with no page, and React Query then
+	// cached that empty answer for the query's whole stale window, so the regions
+	// never filled; gated, the same read returns the page's event. Waiting costs
+	// nothing: the server's own markup is already on screen.
+	const q = useQuery({
+		...storefrontAddressPageQueryOptions(payload.author, payload.d),
+		enabled: bootStatus === 'ready' && isValidHexKey(payload.author) && payload.d.length > 0,
+	})
+	const page = shouldRenderStorefrontPage(q.data) ? q.data.page : null
 	const container = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
