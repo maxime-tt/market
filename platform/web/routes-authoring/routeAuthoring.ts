@@ -54,7 +54,11 @@ export function describeBinding(binding: Binding, warnings: RouteTableWarning[] 
 	return {
 		path: binding.path,
 		targetLabel:
-			target.type === 'page' ? `page ${shortPubkey(target.author)} / ${target.d}` : `${target.type} ${target.render} (${target.param})`,
+			target.type === 'page'
+				? `page ${shortPubkey(target.author)} / ${target.d}`
+				: target.type === 'series'
+					? `series ${target.series} / ${shortPubkey(target.author)}`
+					: `${target.type} ${target.render} (${target.param})`,
 		updatedAtLabel: formatUpdatedAt(binding.updatedAt),
 		updatedByLabel: shortPubkey(binding.updatedBy),
 		warning: warnings.find((warning) => warning.path === binding.path)?.message ?? null,

@@ -25,6 +25,19 @@ const file = (overrides: Record<string, unknown> = {}): RoutesFile =>
 		...overrides,
 	}).file
 
+const seriesBinding = (path: string, extra: Record<string, unknown> = {}) => ({
+	kind: 'admin',
+	path,
+	target: { type: 'series', series: 'featured', author: AUTHOR },
+	updatedAt: 1763000000,
+	updatedBy: 'instance',
+	...extra,
+})
+
+/** The base table plus a series binding at `path` (default `/featured`). */
+const withSeries = (path = 'featured', extra: Record<string, unknown> = {}): RoutesFile =>
+	file({ bindings: [binding('shop'), seriesBinding(path, extra)] })
+
 const originalFetch = globalThis.fetch
 
 afterEach(() => {
@@ -94,6 +107,67 @@ describe('resolve — the three rungs', () => {
 	})
 })
 
+describe('resolve — R3 series at rung 1', () => {
+	// T8
+	test("rung 1: a series binding with a resolver yields the resolver's member", () => {
+		const resolution = resolve(withSeries(), '/featured', NOW, {
+			series: (target) => (target.series === 'featured' ? { author: AUTHOR, d: 'featured-13-11-2026' } : null),
+		})
+		expect(resolution).toEqual({
+			status: 200,
+			outcome: 'series',
+			target: { type: 'series', series: 'featured', author: AUTHOR },
+			author: AUTHOR,
+			d: 'featured-13-11-2026',
+			path: 'featured',
+		})
+	})
+
+	// T9
+	test('rung 1: a series binding with no resolver is 404 series-empty, never a render', () => {
+		expect(resolve(withSeries(), '/featured', NOW)).toEqual({
+			status: 404,
+			outcome: 'not-found',
+			path: 'featured',
+			reason: 'series-empty',
+		})
+		// A resolver that finds nothing is the same honest 404.
+		expect(resolve(withSeries(), '/featured', NOW, { series: () => null })).toEqual({
+			status: 404,
+			outcome: 'not-found',
+			path: 'featured',
+			reason: 'series-empty',
+		})
+	})
+
+	// T10
+	test('rung 1: a series binding never falls through to a compiled-in name of the same path', () => {
+		// `dashboard` is compiled in; a series binding on it is answered at rung 1
+		// (empty → series-empty), never as the compiled-in page.
+		expect(resolve(withSeries('dashboard'), '/dashboard', NOW, { series: () => null })).toEqual({
+			status: 404,
+			outcome: 'not-found',
+			path: 'dashboard',
+			reason: 'series-empty',
+		})
+		expect(resolve(withSeries('dashboard'), '/dashboard', NOW, { series: () => ({ author: AUTHOR, d: 'x' }) }).outcome).toBe('series')
+	})
+
+	// T11
+	test('an expired lease on a series path is still 404 lease-expired and does not consult the resolver', () => {
+		let consulted = 0
+		const leased = withSeries('featured', { meaning: 'lease', expiresAt: NOW })
+		const resolution = resolve(leased, '/featured', NOW, {
+			series: () => {
+				consulted += 1
+				return { author: AUTHOR, d: 'x' }
+			},
+		})
+		expect(resolution).toEqual({ status: 404, outcome: 'not-found', path: 'featured', reason: 'lease-expired' })
+		expect(consulted).toBe(0)
+	})
+})
+
 describe('resolve — no network on the route path (sentence 1)', () => {
 	test('resolution succeeds while any fetch call throws', () => {
 		globalThis.fetch = (() => {
@@ -104,5 +178,27 @@ describe('resolve — no network on the route path (sentence 1)', () => {
 		expect(resolve(file(), '/item/abc', NOW).status).toBe(200)
 		expect(resolve(file(), '/dashboard', NOW).status).toBe(200)
 		expect(resolve(file(), '/nothing', NOW).status).toBe(404)
+	})
+})
+
+describe('resolve — the purity contract [GUARD]', () => {
+	// T12
+	test('every existing resolve test passes with resolve(file, path, now) and no context', () => {
+		// Three arguments, no context: the same answers as before this increment,
+		// because a series binding is the only thing that can tell the difference.
+		expect(resolve(file(), '/shop', NOW)).toEqual({
+			status: 200,
+			outcome: 'page',
+			target: { type: 'page', author: AUTHOR, d: 'shop' },
+			path: 'shop',
+		})
+		expect(resolve(file(), '/dashboard', NOW)).toEqual({
+			status: 200,
+			outcome: 'compiled-in',
+			path: 'dashboard',
+			warning: 'compiled-in-path',
+		})
+		expect(resolve(file(), '/item/abc', NOW).outcome).toBe('render')
+		expect(resolve(file(), '/nothing', NOW)).toEqual({ status: 404, outcome: 'not-found', path: 'nothing', reason: 'no-match' })
 	})
 })

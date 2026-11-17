@@ -208,4 +208,26 @@ describe('the live routing table', () => {
 		const written = JSON.parse(readFileSync(path, 'utf8'))
 		expect(() => validateRoutesFile(written)).not.toThrow()
 	})
+
+	// T22
+	test('apply carries a series target into the binding instead of narrowing it to page', () => {
+		const path = tableFile()
+		const table = loadRouteTable(path)
+		const intent: RouteIntent = {
+			version: ROUTE_INTENT_VERSION,
+			action: 'set',
+			path: 'featured',
+			target: { type: 'series', series: 'featured', author: AUTHOR },
+		}
+
+		expect(table.apply(intent, at(1_800_000_000))).toMatchObject({ ok: true, changed: true })
+		expect(table.current().bindings[0].target).toEqual({ type: 'series', series: 'featured', author: AUTHOR })
+
+		// Persisted and reloaded — the whole file is re-validated on the way in.
+		expect(loadRouteTable(path).current().bindings[0].target).toEqual({ type: 'series', series: 'featured', author: AUTHOR })
+
+		// Re-applying the same target is a no-op, not a rewrite.
+		expect(table.apply(intent, at(1_800_000_100))).toMatchObject({ ok: true, changed: false })
+		expect(table.current().seq).toBe(2)
+	})
 })

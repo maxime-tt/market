@@ -6,6 +6,7 @@ import {
 	validateStorefrontPageForPublish,
 	type StorefrontPage,
 } from '@sdk/commerce/storefront/storefrontPage'
+import { PAGE_SERIES_TAG, isValidPagePath, isValidSeriesTag } from '@platform/server/routes/pagePaths'
 
 /**
  * Publishing a user's storefront page (ADR-0006).
@@ -115,21 +116,53 @@ async function ingestSignedPage(event: NostrEvent): Promise<void> {
 }
 
 /**
+ * Where a page lands: the addressable coordinate (`d`) and the series it joins.
+ *
+ * `dTag` defaults to `STOREFRONT_PAGE_D_TAG`, so every existing caller (which
+ * passes no address) keeps publishing one page at `d = storefront-page` — the
+ * defaulted signature is a byte-identical no-op. Passing a `dTag` is R2: the
+ * page's own `d` is its path, so an author can hold hundreds of pages (R1).
+ *
+ * `series` is the list of `t` tags the page declares. It is **never derived
+ * from `dTag`** on this path: a naming convention that silently joined a series
+ * would let any dated page become `/featured` (D15). The author states it.
+ */
+export interface PageAddress {
+	dTag?: string
+	series?: readonly string[]
+}
+
+/**
  * Builds the unsigned event for a page. Exported for tests and for callers that
  * want to inspect what would be signed without signing it.
  *
- * @throws if the page fails strict validation. Refusing here rather than
- * dropping bad blocks is the point: the author gets told, instead of publishing
- * a page that silently renders with holes in it.
+ * @throws if the page fails strict validation, or if the address names a path
+ * or series tag that is not a valid route name. Refusing here rather than
+ * signing is the point: a bad path is a page nobody can reach.
  */
-export function buildStorefrontPageEvent(page: StorefrontPage): EventTemplate {
+export function buildStorefrontPageEvent(page: StorefrontPage, address: PageAddress = {}): EventTemplate {
 	const validation = validateStorefrontPageForPublish(page)
 	if (!validation.ok) {
 		throw new Error(`Storefront page is not valid: ${validation.errors.join(', ')}`)
 	}
 
+	const dTag = address.dTag ?? STOREFRONT_PAGE_D_TAG
+	if (!isValidPagePath(dTag)) {
+		throw new Error(`Storefront page address is not valid: /d ${JSON.stringify(dTag)} is not a route name (3-30 lowercase alphanumerics, "_" or "-")`)
+	}
+
+	// Deduped so one page declares a series once, and validated so a page never
+	// signs a `t` tag the ingest would have to drop.
+	const series = [...new Set(address.series ?? [])]
+	for (const value of series) {
+		if (!isValidSeriesTag(value)) {
+			throw new Error(`Storefront page address is not valid: /series ${JSON.stringify(value)} is not a route name`)
+		}
+	}
+
 	const validated = validation.page
-	const tags: string[][] = [['d', STOREFRONT_PAGE_D_TAG]]
+	const tags: string[][] = [['d', dTag]]
+	for (const value of series) tags.push([PAGE_SERIES_TAG, value])
 
 	const title = validated.root.props.title.trim()
 	if (title.length > 0) tags.push([TITLE_TAG, title])
@@ -150,11 +183,11 @@ export function buildStorefrontPageEvent(page: StorefrontPage): EventTemplate {
  * rather than throws in that case, so the check has to live here to be
  * adapter-independent.
  */
-export async function publishStorefrontPage(page: StorefrontPage): Promise<PublishStorefrontPageResult> {
+export async function publishStorefrontPage(page: StorefrontPage, address: PageAddress = {}): Promise<PublishStorefrontPageResult> {
 	const user = await getUser()
 	if (!user?.pubkey) throw new Error('You must be logged in to publish a page')
 
-	const template = buildStorefrontPageEvent(page)
+	const template = buildStorefrontPageEvent(page, address)
 	const signed: NostrEvent = await signNostrEvent(template)
 
 	// The signer decides the author. If it signed as somebody else (a signer
@@ -198,7 +231,11 @@ export async function publishStorefrontPage(page: StorefrontPage): Promise<Publi
  * default profile view again while the author keeps every block. This is not a
  * NIP-09 deletion: deleting would destroy content the author may want back, and
  * relays honour deletions inconsistently anyway.
+ *
+ * The address — including `series` — travels with it. A switched-off page keeps
+ * its membership, so `/featured` reports the series "empty" (or falls to the
+ * next member) rather than "never existed".
  */
-export async function unpublishStorefrontPage(page: StorefrontPage): Promise<PublishStorefrontPageResult> {
-	return publishStorefrontPage({ ...page, enabled: false })
+export async function unpublishStorefrontPage(page: StorefrontPage, address: PageAddress = {}): Promise<PublishStorefrontPageResult> {
+	return publishStorefrontPage({ ...page, enabled: false }, address)
 }

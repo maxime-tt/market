@@ -1,4 +1,4 @@
-import type { RouteIntent } from '@sdk/commerce/storefront/routeIntent'
+import type { RouteIntent, RouteIntentTarget } from '@sdk/commerce/storefront/routeIntent'
 import {
 	RoutesFileError,
 	ROUTES_FILE_VERSION,
@@ -7,6 +7,7 @@ import {
 	validateRoutesFile,
 	writeAtomic,
 	type Binding,
+	type RouteTarget,
 	type RouteWarning,
 	type RoutesFile,
 } from './routeFile'
@@ -72,6 +73,21 @@ function candidateFile(current: RoutesFile, bindings: Binding[], seq: number): u
 	}
 }
 
+/** The binding target an intent asks for — carried through, never narrowed to `page`. */
+function toRouteTarget(target: RouteIntentTarget): RouteTarget {
+	return target.type === 'page'
+		? { type: 'page', author: target.author, d: target.d }
+		: { type: 'series', series: target.series, author: target.author }
+}
+
+/** Whether the existing target already satisfies the intent — a no-write check. */
+function sameTarget(existing: RouteTarget, incoming: RouteIntentTarget): boolean {
+	if (existing.type === 'page' && incoming.type === 'page') return existing.author === incoming.author && existing.d === incoming.d
+	if (existing.type === 'series' && incoming.type === 'series')
+		return existing.author === incoming.author && existing.series === incoming.series
+	return false
+}
+
 /**
  * Applies an intent to a table in memory and on disk.
  *
@@ -117,21 +133,16 @@ export function createRouteTable({ file, path, warnings = [] }: CreateRouteTable
 			}
 
 			const target = intent.target
-			if (!target) return { ok: false, violations: ['/target: a set intent must name a page target'] }
+			if (!target) return { ok: false, violations: ['/target: a set intent must name a page or series target'] }
 
-			if (
-				existing &&
-				existing.target.type === 'page' &&
-				existing.target.author === target.author &&
-				existing.target.d === target.d
-			) {
+			if (existing && sameTarget(existing.target, target)) {
 				return { ok: true, changed: false, warnings: currentWarnings }
 			}
 
 			const binding: Binding = {
 				kind: 'admin',
 				path: intent.path,
-				target: { type: 'page', author: target.author, d: target.d },
+				target: toRouteTarget(target),
 				updatedAt: meta.createdAt,
 				updatedBy: meta.pubkey,
 			}

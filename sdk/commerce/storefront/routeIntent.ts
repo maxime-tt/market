@@ -38,12 +38,26 @@ export interface RouteIntentPageTarget {
 	d: string
 }
 
+/**
+ * The series address a binding points at (R3): the path answers the newest page
+ * in `series` by `author`. A target the routing-file validator accepts but no
+ * intent can express would be dead on arrival, so the intent surface grows it
+ * here too.
+ */
+export interface RouteIntentSeriesTarget {
+	type: 'series'
+	series: string
+	author: string
+}
+
+export type RouteIntentTarget = RouteIntentPageTarget | RouteIntentSeriesTarget
+
 export interface RouteIntent {
 	version: typeof ROUTE_INTENT_VERSION
 	action: RouteIntentAction
 	path: string
 	/** Present for `set`, `null` for `remove`. */
-	target: RouteIntentPageTarget | null
+	target: RouteIntentTarget | null
 }
 
 export interface RouteIntentParseResult {
@@ -130,8 +144,22 @@ export function parseRouteIntent(content: string, dTag?: string): RouteIntentPar
 
 	const target = parsed.target
 	if (!isRecord(target)) return { intent: null, error: '/target: expected an object' }
+
+	if (target.type === 'series') {
+		if (typeof target.series !== 'string' || !isValidRouteName(target.series)) {
+			return { intent: null, error: '/target/series: expected a non-empty series tag matching the name grammar' }
+		}
+		if (typeof target.author !== 'string' || !HEX64.test(target.author)) {
+			return { intent: null, error: '/target/author: expected 64 lowercase hex' }
+		}
+		return {
+			intent: { version: ROUTE_INTENT_VERSION, action, path, target: { type: 'series', series: target.series, author: target.author } },
+			error: null,
+		}
+	}
+
 	if (target.type !== 'page') {
-		return { intent: null, error: `/target/type: ${JSON.stringify(target.type)} is not supported (only "page")` }
+		return { intent: null, error: `/target/type: ${JSON.stringify(target.type)} is not supported (only "page" or "series")` }
 	}
 	if (typeof target.author !== 'string' || !HEX64.test(target.author)) {
 		return { intent: null, error: '/target/author: expected 64 lowercase hex' }

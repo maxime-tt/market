@@ -16,6 +16,7 @@ import { resolve } from './routes/resolve'
 import { composePageHtml, composeRenderPlaceholder } from './routes/pageHtml'
 import { createPageStore, type PageStore } from './routes/pageStore'
 import { createShellResponder } from './routes/shell'
+import { resolveSeries } from './routes/series'
 import type { RouteTable } from './routes/routeTable'
 
 /**
@@ -79,7 +80,15 @@ export function buildContentRoutes({
 	const servePath = async (request: Request): Promise<Response> => {
 		const url = new URL(request.url)
 		// Read the table per request: this is what makes an authored binding live.
-		const resolution = resolve(routing.current(), url.pathname, now())
+		// The series resolver is injected rather than inlined into `resolve()`:
+		// routing stays pure and does no I/O, and `/featured` still answers from
+		// the local series index (`resolveSeries` is the only reader of it).
+		const resolution = resolve(routing.current(), url.pathname, now(), {
+			series: (target) => {
+				const found = resolveSeries(target, pageStore, pageStore)
+				return found.outcome === 'found' ? { author: found.author, d: found.d } : null
+			},
+		})
 
 		if (resolution.status === 404)
 			return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } })
@@ -102,7 +111,10 @@ export function buildContentRoutes({
 			}
 		}
 
-		const page = pageStore.get(resolution.target.author, resolution.target.d)
+		// A `page` or a `series` outcome both name an `(author, d)` to read; for a
+		// series, the resolver already chose the newest present member.
+		const { author, d } = resolution.outcome === 'series' ? resolution : resolution.target
+		const page = pageStore.get(author, d)
 		// A stored page is servable only while the author has it switched on.
 		// `enabled: false` is the unpublish: the store keeps the document (so
 		// the author loses no blocks — ADR-019 R6) but a bound path must stop
@@ -113,7 +125,7 @@ export function buildContentRoutes({
 			// or stored but switched off). That is 500 with a named error —
 			// never 404, which stays reserved for "no binding matched".
 			return html(
-				`<!doctype html><html><head><title>Page unavailable</title></head><body><h1>binding-target-missing</h1><p>No stored page at (${resolution.target.author}, ${resolution.target.d}).</p></body></html>`,
+				`<!doctype html><html><head><title>Page unavailable</title></head><body><h1>binding-target-missing</h1><p>No stored page at (${author}, ${d}).</p></body></html>`,
 				500,
 			)
 		}
@@ -122,7 +134,7 @@ export function buildContentRoutes({
 			composePageHtml({
 				meta: page.meta,
 				html: page.html,
-				payload: { author: resolution.target.author, d: resolution.target.d, version: 1 },
+				payload: { author, d, version: 1 },
 				path: url.pathname.replace(/\/+$/, '') || '/',
 			}),
 		)

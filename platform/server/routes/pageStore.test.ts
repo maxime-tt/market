@@ -68,6 +68,20 @@ describe('pageStore — put and get', () => {
 		const encoded = encodeURIComponent('../escape')
 		expect(existsSync(join(directory, AUTHOR, `${encoded}.json`))).toBe(true)
 	})
+
+	// T17
+	test('has is true for a stored page and false for an absent one, and the index is still newest-first', () => {
+		const store = createPageStore({ root: root() })
+		store.put(stored({ d: 'home', series: ['featured'], createdAt: NOW }))
+		store.put(stored({ d: 'newer', series: ['featured'], createdAt: NOW + 5 }))
+
+		expect(store.has(AUTHOR, 'home')).toBe(true)
+		expect(store.has(AUTHOR, 'absent')).toBe(false)
+		expect(store.has('not-hex', 'home')).toBe(false)
+
+		// `has` was added; it must not have changed what the index returns.
+		expect(store.seriesMembers('featured', AUTHOR).map((member) => member.d)).toEqual(['newer', 'home'])
+	})
 })
 
 describe('pageStore — the series index', () => {
