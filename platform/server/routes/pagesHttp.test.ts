@@ -162,6 +162,23 @@ describe('POST /api/app-events — the one write-restricted ingest', () => {
 		expect(first).toBe(second)
 	})
 
+	test('a page switched off is no longer served at its bound path', async () => {
+		const harness = start()
+		await post(harness, signed())
+		expect((await realFetch(`${harness.url}/shop`)).status).toBe(200)
+
+		// The unpublish document: the same coordinate, `enabled: false`. The
+		// author keeps every block — the store still holds them — but the bound
+		// path must stop answering with a withdrawn page.
+		clock += 1
+		const withdrawnDocument = JSON.stringify({ ...JSON.parse(DOCUMENT), enabled: false })
+		expect((await post(harness, signed(withdrawnDocument))).status).toBe(200)
+
+		const withdrawn = await realFetch(`${harness.url}/shop`)
+		expect(withdrawn.status).toBe(500)
+		expect(await withdrawn.text()).toContain('binding-target-missing')
+	})
+
 	test('an editor is allowed and the level comes from the pubkey, not the body', async () => {
 		const harness = start({ levelOf: (pubkey) => (pubkey === APP_PUBKEY ? 'app' : pubkey === getPublicKey(EDITOR_KEY) ? 'editor' : null) })
 		const response = await post(harness, signed(DOCUMENT, { key: EDITOR_KEY }))
