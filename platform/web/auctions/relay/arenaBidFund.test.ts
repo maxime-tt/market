@@ -93,9 +93,7 @@ interface SentLock {
  * so the proofs always describe the lock the seam asked for — which is exactly
  * what the real mint does.
  */
-function escrowDouble(
-	over: { keysetId?: string; keysetIds?: string[]; fail?: Error; proofs?: 'empty' | 'short'; blankId?: boolean } = {},
-) {
+function escrowDouble(over: { keysetId?: string; keysetIds?: string[]; fail?: Error; proofs?: 'empty' | 'short'; blankId?: boolean } = {}) {
 	const sent: SentLock[] = []
 	let executes = 0
 	const manager: ArenaEscrowSendManager = {
@@ -173,10 +171,7 @@ const refusalOf = async (promise: Promise<unknown>): Promise<ArenaBidFundRefusal
 describe('a funded bid is assembled from the lock and the terms', () => {
 	test('locks exactly the bid amount, once, at the floor, and the payload verifies', async () => {
 		const escrow = escrowDouble()
-		const result = await assembleArenaBidFunding(
-			{ model: fixedLot(), amount: AMOUNT, now: NOW },
-			ports({ manager: escrow.manager }),
-		)
+		const result = await assembleArenaBidFunding({ model: fixedLot(), amount: AMOUNT, now: NOW }, ports({ manager: escrow.manager }))
 
 		// Exactly one send, for exactly the bid amount, to exactly the configured mint.
 		expect(escrow.sent).toHaveLength(1)
@@ -217,14 +212,17 @@ describe('a funded bid is assembled from the lock and the terms', () => {
 			ports({ manager: escrow.manager }),
 		)
 		const floor = arenaBidLocktimeFloor({ mode: 'antisnipe', endAt: END_AT, windowSec: WINDOW, now: lateNow })
-		expect(floor).toBe(lateNow + WINDOW + 900 + 15)
+		expect(floor).toBe(lateNow + 15 + WINDOW + 900 + 15)
 		expect(escrow.sent[0].options.locktime).toBe(floor)
 		expect(verifyArenaBidFunding(result.funding, result.fundingTerms)).toBe(floor)
 	})
 
 	test('an anti-snipe bid far from the window still pays the safety margin on the stated end', async () => {
 		const escrow = escrowDouble()
-		await assembleArenaBidFunding({ model: fixedLot({ mode: 'antisnipe', windowSec: WINDOW }), amount: 64, now: NOW }, ports({ manager: escrow.manager }))
+		await assembleArenaBidFunding(
+			{ model: fixedLot({ mode: 'antisnipe', windowSec: WINDOW }), amount: 64, now: NOW },
+			ports({ manager: escrow.manager }),
+		)
 		expect(escrow.sent[0].options.locktime).toBe(END_AT + 900 + 15)
 	})
 
@@ -275,7 +273,11 @@ describe('every precondition refuses by name, before any money moves', () => {
 		amount?: number
 		ports?: () => ReturnType<typeof ports>
 	}[] = [
-		{ name: 'the config cannot be read', refusal: 'fund.config-unreadable', ports: () => ports({ config: new Error('502 from /api/auctions/config') }) },
+		{
+			name: 'the config cannot be read',
+			refusal: 'fund.config-unreadable',
+			ports: () => ports({ config: new Error('502 from /api/auctions/config') }),
+		},
 		{
 			name: 'no committee key is configured',
 			refusal: 'fund.committee-key-missing',
@@ -304,7 +306,11 @@ describe('every precondition refuses by name, before any money moves', () => {
 		{ name: 'the lot states a mode the protocol does not define', refusal: 'fund.unknown-mode', model: fixedLot({ mode: 'dutch' }) },
 		{ name: 'an anti-snipe lot states no window', refusal: 'fund.no-window', model: fixedLot({ mode: 'antisnipe', windowSec: null }) },
 		{ name: 'the lot states no seller wallet', refusal: 'fund.seller-wallet-missing', model: fixedLot({ sellerWallet: null }) },
-		{ name: 'the seller wallet is not a payment key', refusal: 'fund.seller-wallet-invalid', model: fixedLot({ sellerWallet: 'seller-alice' }) },
+		{
+			name: 'the seller wallet is not a payment key',
+			refusal: 'fund.seller-wallet-invalid',
+			model: fixedLot({ sellerWallet: 'seller-alice' }),
+		},
 		{
 			name: 'a v4v split row names an invalid recipient',
 			refusal: 'fund.split-recipient-invalid',

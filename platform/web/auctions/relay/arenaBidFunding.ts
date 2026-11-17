@@ -35,14 +35,7 @@
  * with the wallet spend key, supplied as a callback so this module never holds
  * key material.
  */
-import {
-	OutputData,
-	getPubKeyFromPrivKey,
-	hashToCurve,
-	pointFromHex,
-	schnorrVerifyDigest,
-	type P2PKOptions,
-} from '@cashu/cashu-ts'
+import { OutputData, getPubKeyFromPrivKey, hashToCurve, pointFromHex, schnorrVerifyDigest, type P2PKOptions } from '@cashu/cashu-ts'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 
@@ -258,11 +251,7 @@ const hex32 = (value: bigint): string => value.toString(16).padStart(64, '0')
  * options produce **exactly five tags in canonical order** and never six
  * (`OutputData.createP2PKData`; pinned by the Go `sigAllGoldenTagSet`).
  */
-export function buildArenaEscrowLockOptions(input: {
-	bidderWallet: string
-	committeeKey: string
-	locktime: number
-}): P2PKOptions {
+export function buildArenaEscrowLockOptions(input: { bidderWallet: string; committeeKey: string; locktime: number }): P2PKOptions {
 	if (!isCompressed(input.bidderWallet)) refuse('wallet.not-compressed')
 	if (!isCompressed(input.committeeKey)) refuse('lock.pubkeys-not-committee')
 	if (!Number.isSafeInteger(input.locktime) || input.locktime <= 0) refuse('lock.locktime-not-integer')
@@ -400,7 +389,22 @@ export function arenaBidLocktimeFloor(input: {
 	const safety = input.settlementSafetySec ?? ARENA_SETTLEMENT_SAFETY_SECONDS
 	const latency = input.bidToConsensusLatencySec ?? ARENA_BID_TO_CONSENSUS_LATENCY_SECONDS
 	const window = input.mode === 'antisnipe' ? Math.max(0, Math.floor(input.windowSec ?? 0)) : 0
-	const establishedEnd = input.mode === 'antisnipe' ? Math.max(input.endAt, input.now + window) : input.endAt
+	// The chain evaluates its floor against the BLOCK time of the block that
+	// admits the bid (`chain/app.go` `minLocktime`), and `bidToConsensusLatencySec`
+	// is precisely the allowance for the gap between the bidder's clock and that
+	// block. A client that derives the end it establishes from its **own** clock
+	// therefore locks one latency short whenever that term binds — i.e. for a bid
+	// inside the anti-snipe window, whose end is `now + windowSec` rather than the
+	// lot's stated end. Measured live by the validator session: locktime
+	// `1794932210` against a floor of `1794932213`; `CheckTx` admitted the bid, the
+	// block included it, the transition refused it, and it never reached the state.
+	// So estimate the admitting block the way the chain's own client does
+	// (`web/src/lib/arena.js` `minBidLocktime`: `block = now + latency`) when
+	// establishing the end this bid creates. The chain's floor only moves up when
+	// the window term binds and over-locking is allowed (spec §2.3), so the
+	// estimate is safe.
+	const blockNow = input.now + latency
+	const establishedEnd = input.mode === 'antisnipe' ? Math.max(input.endAt, blockNow + window) : input.endAt
 	return Math.ceil(establishedEnd + safety + latency)
 }
 
@@ -561,11 +565,13 @@ export function verifyArenaBidFunding(funding: ArenaBidFunding, terms: ArenaBidF
 		})
 		if (template.outputs.length === 0) refuse('template.bad-output')
 		if (template.outputs.length !== expected.length) {
-			refuse(outcome === 'settle' && (terms.v4vSplit?.length ?? 0) > 0 && template.outputs.length < expected.length
-				? 'template.split-omits'
-				: outcome === 'settle' && (terms.v4vSplit?.length ?? 0) > 0
-					? 'template.split-adds'
-					: 'template.amount')
+			refuse(
+				outcome === 'settle' && (terms.v4vSplit?.length ?? 0) > 0 && template.outputs.length < expected.length
+					? 'template.split-omits'
+					: outcome === 'settle' && (terms.v4vSplit?.length ?? 0) > 0
+						? 'template.split-adds'
+						: 'template.amount',
+			)
 		}
 		let total = 0
 		template.outputs.forEach((output, index) => {
@@ -649,5 +655,4 @@ export async function buildArenaBidFunding(input: {
 }
 
 /** Compressed public key for a 32-byte private key — used by producers and tests. */
-export const arenaWalletPubkey = (walletPrivkeyHex: string): string =>
-	bytesToHex(getPubKeyFromPrivKey(hexToBytes(walletPrivkeyHex)))
+export const arenaWalletPubkey = (walletPrivkeyHex: string): string => bytesToHex(getPubKeyFromPrivKey(hexToBytes(walletPrivkeyHex)))

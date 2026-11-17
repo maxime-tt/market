@@ -152,7 +152,12 @@ describe('the escrow lock — exactly five tags, canonical order', () => {
 	const cases: { name: string; secret: string; minLocktime?: number; refusal: string }[] = [
 		{
 			name: 'a one-of-one lock (no pubkeys, no n_sigs)',
-			secret: secretWith({ tags: [['locktime', String(LOCKTIME)], ['sigflag', 'SIG_ALL']] }),
+			secret: secretWith({
+				tags: [
+					['locktime', String(LOCKTIME)],
+					['sigflag', 'SIG_ALL'],
+				],
+			}),
 			refusal: 'lock.tag-count',
 		},
 		{
@@ -226,9 +231,11 @@ describe('the escrow lock — exactly five tags, canonical order', () => {
 
 	for (const { name, secret, minLocktime, refusal } of cases) {
 		test(`refuses ${name} by name (${refusal})`, () => {
-			expect(refusalOf(() => parseArenaEscrowLock(secret, { bidderWallet: BIDDER, committeeKey: COMMITTEE, minLocktime: minLocktime ?? LOCKTIME }))).toBe(
-				refusal,
-			)
+			expect(
+				refusalOf(() =>
+					parseArenaEscrowLock(secret, { bidderWallet: BIDDER, committeeKey: COMMITTEE, minLocktime: minLocktime ?? LOCKTIME }),
+				),
+			).toBe(refusal)
 		})
 	}
 
@@ -257,11 +264,13 @@ describe('the locktime floor — the end THIS bid establishes', () => {
 		expect(arenaBidLocktimeFloor({ mode: 'antisnipe', endAt: 2000, windowSec: 300, now: 500 })).toBe(2000 + 900 + 15)
 	})
 
-	test('an anti-snipe bid inside the window uses now + windowSec, not the old EndAt', () => {
+	test('an anti-snipe bid inside the window uses the admitting block plus windowSec, not the old EndAt', () => {
 		// 60 s left, a 300 s window: the bid resets the clock to 900, so the lock
 		// must clear 900 + 915, not 700 + 915. Checking the old end is the exact
-		// bug spec §2.2 records.
-		expect(arenaBidLocktimeFloor({ mode: 'antisnipe', endAt: 760, windowSec: 300, now: 700 })).toBe(700 + 300 + 900 + 15)
+		// bug spec §2.2 records. The end is established against the block that
+		// ADMITS the bid (`now + latency`, the chain's own client), not the
+		// bidder's clock — locking a latency short is refused by the chain.
+		expect(arenaBidLocktimeFloor({ mode: 'antisnipe', endAt: 760, windowSec: 300, now: 700 })).toBe(700 + 15 + 300 + 900 + 15)
 		expect(arenaBidLocktimeFloor({ mode: 'antisnipe', endAt: 760, windowSec: 300, now: 700 })).toBeGreaterThan(760 + 900 + 15)
 	})
 
