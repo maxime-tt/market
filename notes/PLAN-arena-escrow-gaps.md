@@ -37,6 +37,63 @@ series". Where this plan and that document disagree, the document wins.
 **re-bidding (raising your own leading bid) is available**. Both of my earlier "disagreements" were
 legacy surface, not open questions — see the two deviations below.
 
+**Owner rulings on the Catalogue port (2026-11-17):** (1) **Layout A replaces** the arena
+list/detail presentation — "only the new UI"; (2) the clock is a **combination of wall time and block
+time**. Both are recorded in `notes/REVIEW-catalogue-pplx-port-against-the-plan.md` and applied in
+increment 10.
+
+### The block clock — what exists, and the two things missing (measured 2026-11-17)
+
+Asked by the owner before implementing ruling 2: *do we have a mechanism for watching block time over
+the relay-based communication with the validators?* **Yes — it is already in the read, and unused.**
+
+What exists, app side (`platform/web/auctions/relay/arenaAuctionRead.ts`, `relay/arenaAnchor.ts`):
+
+- the read is a **live stream**, not a one-shot: `EventReadContext.stream(filters)`, documented as
+  "delivers decoded events in batches … **then keeps delivering. Ends when aborted or `close()`d**" —
+  so a 1447 published later arrives without a re-read;
+- `1447` is one of the four subscribed kinds, in the one place the read writes them
+  (`arenaAuctionRead.ts:210-215`);
+- commitments are deduped by `(validator, height, app_hash)` and **sorted by height descending**
+  (`:959-968`);
+- **`highestCommitment` already exists in the snapshot** (`ArenaAuctionSnapshot.highestCommitment`,
+  `:653`, set from `stateCommitments[0]` at `:969`) — the highest anchored height, tie-broken by
+  validator pubkey;
+- `ParsedArenaStateCommitment` = `{height, appHash, time | null, validatorPubkey}` (`arenaAnchor.ts:108`),
+  parsed with **the same anchor discipline as a verdict** — it throws `ArenaUnanchoredError` when
+  `(height, app_hash)` is incomplete (`:249-263`);
+- **equivocation detection already exists**: `commitmentForks` — two relays reporting a different
+  `app_hash` at the same height (`:640-644`, `:972-991`), which the module itself calls "a signal, not
+  proof".
+
+What exists, chain side (`arena-merged-ref/chain/verdict.go`): `KindStateCommit = 1447`, schema
+`arena.statecommit.v1`, content `StateCommitmentContent{Schema, Height, AppHash, Time int64}` — `Time`
+is a struct field and always written (`BuildStateCommitmentEvent(sk, height, appHash, at)`, `:298-314`);
+the anchor is **mandatory and signature-verified**, and the roster is checked
+(`ParseStateCommitment(ev, roster)`, `:319`). Cadence: **`StateCommitEvery int64 = 100`** blocks
+(`:61`), configurable.
+
+**Missing, and small:**
+
+1. **An exposure.** Nothing reads `stateCommitments` / `highestCommitment` outside the read and anchor
+   modules, and `ArenaSurfaceContext` carries only the divergence list — so no view can see chain time.
+   It needs one small seam: expose the highest commitment through `ArenaSurfacesReadState`, plus a
+   **freshness rule** (chain time is "as of height N", so the surface must show how far wall clock has
+   moved since, and say *unknown* / *stale* when no commitment has arrived — never present a
+   100-block-old `time` as "now").
+2. **A clock policy** over `commitmentForks`: never regress, and take the highest **agreed** height
+   before advancing — a forked or backwards commitment must not move the rules clock.
+
+**Two caveats that shape the design (and match "combination of wall time and block time"):**
+
+- **The cadence is coarse — every 100 blocks.** Block time is a *step* function, so it cannot be the
+  countdown's tick; it is the **rules** clock (is the end passed, is the window open, is a lock
+  settleable) plus a health/freshness signal, with wall clock driving the display. That is exactly the
+  ruling.
+- **Nothing publishes 1447 today** — the chain is not deployed (increments 1 and 9), so on the live
+  instance the block half honestly reads *unknown* until then, and this decision can be implemented now
+  but only **verified** after 1 and 9 land.
+
 ### Spec conformance of the two sides, as measured
 
 | spec rule | chain ref (`arena-merged-ref`) | app (`unite/1420-all`) |
@@ -301,6 +358,11 @@ is the **same key the validators settle with**.
 - **Consistency rule (state it, or the app will trust a stale term):** the params in the event must be
   the ones committed in the app hash it names — a client that reads params and a height can then tell
   they belong together.
+- **Cadence rule, from the block-clock finding above:** the 1447 cadence is **every 100 blocks**, which
+  is fine for a clock but too slow for escrow terms — a roster, mint or window-bound change would lag
+  the app by up to 100 blocks, and a lock built on a stale key is the unspendable class. So publish the
+  params **on change as well as on the cadence**, and carry a `params_version` the client checks against
+  the version in the commitment it trusts. Cheap, and it removes a whole failure mode.
 - **The FROST group key must be the published one.** `checkSigAllLock` uses `s.Params.GroupKey`; the
   app must lock to exactly that value. A test must pin a create-and-bid fixture against the published
   params and assert the lock's `pubkeys` equals `GroupKey` x-only — the seam that otherwise strands
