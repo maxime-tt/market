@@ -103,9 +103,15 @@ export function buildContentRoutes({
 		}
 
 		const page = pageStore.get(resolution.target.author, resolution.target.d)
-		if (!page) {
-			// Routing succeeded; the binding's target is missing. That is 500 with
-			// a named error — never 404, which stays reserved for "no binding matched".
+		// A stored page is servable only while the author has it switched on.
+		// `enabled: false` is the unpublish: the store keeps the document (so
+		// the author loses no blocks — ADR-019 R6) but a bound path must stop
+		// answering with a withdrawn page, or an unpublish that reached only
+		// relays would leave this instance serving it.
+		if (!page || page.document?.enabled !== true) {
+			// Routing succeeded; the binding's target is missing (never stored,
+			// or stored but switched off). That is 500 with a named error —
+			// never 404, which stays reserved for "no binding matched".
 			return html(
 				`<!doctype html><html><head><title>Page unavailable</title></head><body><h1>binding-target-missing</h1><p>No stored page at (${resolution.target.author}, ${resolution.target.d}).</p></body></html>`,
 				500,

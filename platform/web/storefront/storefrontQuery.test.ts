@@ -49,16 +49,50 @@ mock.module('@platform/web/readContext', () => ({
 	}),
 }))
 
+/**
+ * The ingest leg of publish. `publishStorefrontPage` POSTs the signed page to
+ * the one write surface (`/api/app-events`, the same call `routeTableQuery.ts`
+ * makes), and this file's production modules only reach the network through
+ * `globalThis.fetch` for that one call. Standing in for it here is what lets
+ * these tests assert the request the browser would send, and drive the two
+ * refusal shapes (a refused ingest, a dead ingest) without a server.
+ */
+interface IngestCall {
+	url: string
+	method: string
+	body: unknown
+}
+let ingestCalls: IngestCall[] = []
+let ingestRespond: () => Response = () => jsonResponse(200, { stored: true })
+
+function jsonResponse(status: number, body: unknown): Response {
+	return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+}
+
+const urlOf = (input: RequestInfo | URL): string =>
+	typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+	const raw = init?.body
+	ingestCalls.push({
+		url: urlOf(input),
+		method: init?.method ?? 'GET',
+		body: typeof raw === 'string' ? JSON.parse(raw) : null,
+	})
+	return ingestRespond()
+}) as typeof fetch
+
 // Imported inside beforeAll, after the seams above are mocked — a static import
 // would be hoisted past `mock.module` and bind the real platform modules.
 let buildStorefrontPageEvent: (typeof import('./storefrontPublish'))['buildStorefrontPageEvent']
 let publishStorefrontPage: (typeof import('./storefrontPublish'))['publishStorefrontPage']
+let unpublishStorefrontPage: (typeof import('./storefrontPublish'))['unpublishStorefrontPage']
 let fetchStorefrontPage: (typeof import('./storefrontQuery'))['fetchStorefrontPage']
 let shouldRenderStorefrontPage: (typeof import('./storefrontQuery'))['shouldRenderStorefrontPage']
 let storefrontAddressPageQueryOptions: (typeof import('./storefrontQuery'))['storefrontAddressPageQueryOptions']
 
 beforeAll(async () => {
-	;({ buildStorefrontPageEvent, publishStorefrontPage } = await import('./storefrontPublish'))
+	;({ buildStorefrontPageEvent, publishStorefrontPage, unpublishStorefrontPage } = await import('./storefrontPublish'))
 	;({ fetchStorefrontPage, shouldRenderStorefrontPage, storefrontAddressPageQueryOptions } = await import('./storefrontQuery'))
 })
 
@@ -133,6 +167,79 @@ describe('publishStorefrontPage', () => {
 		signAs = OTHER
 		await expect(publishStorefrontPage(createEmptyStorefrontPage())).rejects.toThrow(/different account/i)
 		signAs = AUTHOR
+	})
+})
+
+describe('publishStorefrontPage — the ingest switch', () => {
+	// The relay leg and the local-store leg are separate facts. These tests pin
+	// that the SAME signed event goes to the ingest, that a refused or dead
+	// ingest is a refusal the author sees (never a success), and that switching
+	// the page off travels the identical path — an unpublish that only reached
+	// relays would leave this instance serving a withdrawn page.
+
+	test('posts the same signed event to the ingest so this instance stores it', async () => {
+		signAs = AUTHOR
+		publishedRelays = new Set(['wss://a.example'])
+		ingestCalls = []
+		ingestRespond = () => jsonResponse(200, { stored: true })
+
+		await publishStorefrontPage(createEmptyStorefrontPage())
+
+		expect(ingestCalls).toHaveLength(1)
+		expect(ingestCalls[0].url).toBe('/api/app-events')
+		expect(ingestCalls[0].method).toBe('POST')
+		const sent = (ingestCalls[0].body as { event: NostrEventLike }).event
+		expect(sent.id).toBe('signed-id')
+		expect(sent.pubkey).toBe(AUTHOR)
+		expect(sent.kind).toBe(STOREFRONT_PAGE_KIND)
+	})
+
+	test('a refused ingest rejects, naming the relays that did accept and why the instance did not', async () => {
+		signAs = AUTHOR
+		publishedRelays = new Set(['wss://a.example', 'wss://b.example'])
+		ingestCalls = []
+		ingestRespond = () => jsonResponse(403, { error: 'no-acl' })
+
+		const failure = publishStorefrontPage(createEmptyStorefrontPage())
+		await expect(failure).rejects.toThrow(/did not store it/i)
+		await expect(publishStorefrontPage(createEmptyStorefrontPage())).rejects.toThrow(/2 relays/)
+		await expect(publishStorefrontPage(createEmptyStorefrontPage())).rejects.toThrow(/app key, an admin or an editor/)
+	})
+
+	test('a dead ingest rejects rather than reporting the page as live', async () => {
+		signAs = AUTHOR
+		publishedRelays = new Set(['wss://a.example'])
+		ingestCalls = []
+		ingestRespond = () => {
+			throw new Error('network is dead')
+		}
+
+		await expect(publishStorefrontPage(createEmptyStorefrontPage())).rejects.toThrow(/did not store it/i)
+		ingestRespond = () => jsonResponse(200, { stored: true })
+	})
+
+	test('an ingest that answers without confirming the store is a refusal', async () => {
+		signAs = AUTHOR
+		publishedRelays = new Set(['wss://a.example'])
+		ingestCalls = []
+		ingestRespond = () => jsonResponse(200, { stored: false })
+
+		await expect(publishStorefrontPage(createEmptyStorefrontPage())).rejects.toThrow(/did not store it/i)
+		ingestRespond = () => jsonResponse(200, { stored: true })
+	})
+
+	test('switching the page off reaches the ingest with the same coordinate', async () => {
+		signAs = AUTHOR
+		publishedRelays = new Set(['wss://a.example'])
+		ingestCalls = []
+		ingestRespond = () => jsonResponse(200, { stored: true })
+
+		await unpublishStorefrontPage({ ...createEmptyStorefrontPage(), enabled: true })
+
+		expect(ingestCalls).toHaveLength(1)
+		const sent = (ingestCalls[0].body as { event: NostrEventLike }).event
+		expect(JSON.parse(sent.content as string).enabled).toBe(false)
+		expect(sent.tags).toContainEqual(['d', STOREFRONT_PAGE_D_TAG])
 	})
 })
 
