@@ -175,6 +175,9 @@ export const DASHBOARD_NAV: readonly NavSection[] = [
 				hidesPageTitle: true,
 			}),
 			item('/dashboard/app-settings/routes', '🧭', 'Routes', { adminOnly: true, fullBleed: true, hidesPageTitle: true }),
+			// Authored pages are what a route binds to; the list sits beside the
+			// table so the two halves of "point a path at a page" are adjacent.
+			item('/dashboard/app-settings/pages', '📄', 'Pages', { adminOnly: true, fullBleed: true, hidesPageTitle: true }),
 		],
 	},
 	{
