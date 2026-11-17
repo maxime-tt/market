@@ -56,10 +56,7 @@ import {
 	type ArenaEscrowProof,
 	type ArenaWalletSpendSigner,
 } from '@platform/web/auctions/relay/arenaBidFunding'
-import {
-	lockArenaEscrowWithCoco,
-	type ArenaEscrowSendManager,
-} from '@platform/web/auctions/relay/arenaBidEscrow'
+import { lockArenaEscrowWithCoco, type ArenaEscrowSendManager } from '@platform/web/auctions/relay/arenaBidEscrow'
 
 // =========================================================================
 // Ports
@@ -183,8 +180,14 @@ const isCompressed = (value: unknown): value is string => typeof value === 'stri
 /** The modes the protocol defines (spec §3). Anything else has no derivable floor. */
 const AUCTION_MODES = new Set(['fixed', 'antisnipe'])
 
-/** `cashu_mint_url` first, then the legacy `mint_url`; `null` when neither is a usable url. */
-function mintUrlOf(config: ArenaBidFundConfig): string | null {
+/**
+ * `cashu_mint_url` first, then the legacy `mint_url`; `null` when neither is a usable url.
+ *
+ * Exported because the escrow's mint is the only mint a dev-funded bid may top up
+ * at: a caller that mints somewhere else funds a balance the lock cannot spend
+ * (`walletOps.placeDevBidOnSeededAuction`).
+ */
+export function mintUrlOf(config: ArenaBidFundConfig): string | null {
 	for (const candidate of [config.cashu_mint_url, config.mint_url]) {
 		if (typeof candidate !== 'string') continue
 		const trimmed = candidate.trim()
@@ -204,10 +207,7 @@ function mintUrlOf(config: ArenaBidFundConfig): string | null {
 // =========================================================================
 
 /** The lot terms the escrow and its templates are built against. */
-export type ArenaBidFundTerms = Pick<
-	ArenaAuctionDetailModel,
-	'mode' | 'endsAt' | 'windowSec' | 'sellerWallet' | 'v4vSplit'
->
+export type ArenaBidFundTerms = Pick<ArenaAuctionDetailModel, 'mode' | 'endsAt' | 'windowSec' | 'sellerWallet' | 'v4vSplit'>
 
 export interface AssembleArenaBidFundingInput {
 	/** The auction as read, or `null` when nothing was read (refused, never guessed). */

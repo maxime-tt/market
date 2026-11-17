@@ -34,9 +34,11 @@
  * template (`arenaBidFunding.ts`). This host obtains that payload before it
  * publishes anything: `assembleArenaBidFunding` (`arenaBidFund.ts`) reads the
  * committee key and mint from `GET /api/auctions/config`, takes the wallet spend
- * key from `walletOps.getAuctionBidWalletSigner()`, derives the locktime floor
- * from the lot's own `mode` / `endsAt` / `windowSec`, locks exactly the bid
- * amount through Coco (`lockArenaEscrowWithCoco`), and builds the two templates.
+ * key, derives the locktime floor from the lot's own `mode` / `endsAt` /
+ * `windowSec`, locks exactly the bid amount through Coco
+ * (`lockArenaEscrowWithCoco`), and builds the two templates. Its ports are the
+ * wallet's (`walletOps.arenaBidFundPorts`), shared with the dev bid helper in that
+ * module so the two bid paths cannot disagree about the mint or the committee key.
  * The result is passed to `publishArenaBid` as both `funding` and
  * `fundingTerms`, which re-checks it against the same terms before a signature
  * exists.
@@ -62,12 +64,9 @@ import { useStore } from '@tanstack/react-store'
 import type { Event } from '@sdk/core/nostr-io'
 import { authStore, getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createWebNostrIo, webRelayPolicy } from '@platform/web/sdkNostrIo'
-import { createHttpPorts } from '@platform/web/auctions/protocol/httpPorts'
 import type { ArenaBidFunding, ArenaBidFundingTerms } from '@platform/web/auctions/relay/arenaBidFunding'
-import { arenaEscrowSendOverCoco } from '@platform/web/auctions/relay/arenaEscrowCocoSend'
-import { ArenaBidFundError, assembleArenaBidFunding, type ArenaBidFundPorts } from '@platform/web/auctions/relay/arenaBidFund'
-import { cashuStore } from '@platform/web/wallet/cashuStore'
-import { walletOps } from '@platform/web/wallet/walletOps'
+import { ArenaBidFundError, assembleArenaBidFunding } from '@platform/web/auctions/relay/arenaBidFund'
+import { arenaBidFundPorts } from '@platform/web/wallet/walletOps'
 import { ArenaBidPanel, type ArenaBidSubmissionState } from '@ui/auction/arena/bid-panel'
 import {
 	arenaBidBlock,
@@ -97,27 +96,12 @@ function withEscrowLockedNote(state: ArenaBidSubmissionState): ArenaBidSubmissio
 }
 
 /**
- * The escrow ports, built from the app's own seams.
- *
- * The config read is per call, not cached: the committee key and the mint are
- * published by the auction backend and can change between bids, and a stale
- * committee key would lock the bidder's money to a key no validator holds.
- * `readWalletSigner` answers `null` until the one-time wallet-key migration has
- * produced the spend key, and `readEscrowManager` answers `null` until Coco is
- * ready — both are refusals, never substitutes.
+ * The escrow ports are the wallet's own (`walletOps.arenaBidFundPorts`): the spend
+ * key, the wallet store's Coco manager and the committee config are all wallet-side
+ * facts, and the dev bid helper in that module locks the same escrow — one
+ * definition, so the two paths cannot disagree about which mint or committee key a
+ * bid's money is bound to.
  */
-const arenaBidFundPorts: ArenaBidFundPorts = {
-	readConfig: () => createHttpPorts({ apiBase: '/api/auctions' }).getConfig(),
-	readWalletSigner: () => walletOps.getAuctionBidWalletSigner(),
-	// The money moves through the one wallet the app already holds: Coco's own
-	// `Manager`, bound to the escrow send port by `arenaEscrowSendOverCoco` (Coco
-	// has no `init`, and its `prepare` takes the P2PK target — the adapter is that
-	// mapping and nothing else).
-	readEscrowManager: () => {
-		const manager = cashuStore.state.manager
-		return manager === null ? null : arenaEscrowSendOverCoco(manager)
-	},
-}
 
 export interface AuctionBidHostProps {
 	/** The auction as the read delivered it, or `null` when it has not been read. */
@@ -167,7 +151,8 @@ export function AuctionBidHost({ model, readStatus, now, resetKey, className, on
 		return check.minimum !== null ? String(check.minimum) : ''
 	}, [model, readStatus, now, bidder])
 
-	const check = model !== null ? checkArenaBid({ model, status: readStatus, now, bidder, raw: amountInput === '' ? prefill : amountInput }) : null
+	const check =
+		model !== null ? checkArenaBid({ model, status: readStatus, now, bidder, raw: amountInput === '' ? prefill : amountInput }) : null
 
 	// A bid acknowledged by a relay becomes "seen" only when the read serves it.
 	useEffect(() => {

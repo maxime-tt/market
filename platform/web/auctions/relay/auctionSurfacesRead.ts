@@ -43,6 +43,7 @@ import {
 	createWebArenaAuctionRead,
 	projectArenaEvents,
 	type ArenaAuctionEvent,
+	type ArenaAuctionRead,
 	type ArenaAuctionSnapshot,
 	type ArenaAuctionView,
 	type ArenaReadHealth,
@@ -252,6 +253,16 @@ const EMPTY_STATE: ArenaSurfacesReadState = {
 }
 
 /**
+ * What one consumed read answers. The projection is **never** `null`: an empty read
+ * is an empty snapshot (`snapshot.auctions === []`), which is the honest "no lot was
+ * delivered" the surfaces need. The `null` in {@link ArenaSurfacesReadState} belongs
+ * to the React seam's initial state, before any read has run.
+ */
+export interface CollectedArenaSurfacesRead extends Omit<ArenaSurfacesReadState, 'snapshot'> {
+	snapshot: ArenaAuctionSnapshot
+}
+
+/**
  * Consume one live read to its caught-up marker.
  *
  * Ends the subscription: these are page surfaces, not a live feed, and the live
@@ -259,9 +270,9 @@ const EMPTY_STATE: ArenaSurfacesReadState = {
  * throws for network reasons — a failed relay is health, not an error.
  */
 export async function collectArenaSurfacesRead(
-	read: ReturnType<typeof createWebArenaAuctionRead>,
+	read: ArenaAuctionRead,
 	options: { signal?: AbortSignal; onProgress?: (state: ArenaSurfacesReadState) => void } = {},
-): Promise<ArenaSurfacesReadState> {
+): Promise<CollectedArenaSurfacesRead> {
 	const byId = new Map<string, ArenaAuctionEvent>()
 	const refusals: ArenaRefusedEvent[] = []
 	let snapshot = projectArenaEvents([])

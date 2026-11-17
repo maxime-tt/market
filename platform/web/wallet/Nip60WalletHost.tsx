@@ -140,7 +140,7 @@ export function Nip60WalletHost() {
 
 		setIsDevBidding(true)
 		try {
-			const result = await walletOps.placeDevBidOnSeededAuction({ preferredBidAmount, preferredMintUrl: mints[0] })
+			const result = await walletOps.placeDevBidOnSeededAuction({ preferredBidAmount })
 			setLastDevBid(result)
 			toast.success(`Bid placed: ${result.bidAmount.toLocaleString()} sats on "${result.auctionTitle}"`)
 		} catch (err) {

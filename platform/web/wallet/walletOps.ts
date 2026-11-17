@@ -55,15 +55,24 @@ import {
 } from '@sdk/commerce/payments/wallet'
 import { getMintHostname } from '@sdk/commerce/payments/display'
 import { auctionP2pkPubkeysMatch } from '@sdk/commerce/auctions/auctionP2pk'
-import { AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS } from '@sdk/commerce/auctions/constants'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
-import { asEncryptingSigner } from '@sdk/core'
+import { asEncryptingSigner, type EventStorePort } from '@sdk/core'
+import type { Event } from '@sdk/core/nostr-io'
 import { KeyChain, Mint, Wallet, schnorrSignDigest, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import type { ArenaWalletSpendSigner } from '@platform/web/auctions/relay/arenaBidFunding'
+import { assembleArenaBidFunding, mintUrlOf, type ArenaBidFundPorts } from '@platform/web/auctions/relay/arenaBidFund'
+import { publishArenaBid, type ArenaBidPublishResult } from '@platform/web/auctions/relay/arenaBidPublish'
+import { arenaEscrowSendOverCoco } from '@platform/web/auctions/relay/arenaEscrowCocoSend'
+import { createWebArenaAuctionRead } from '@platform/web/auctions/relay/arenaAuctionRead'
+import { collectArenaSurfacesRead } from '@platform/web/auctions/relay/auctionSurfacesRead'
+import { selectDevBidCandidate } from '@platform/web/auctions/relay/arenaDevBid'
+import { createHttpPorts } from '@platform/web/auctions/protocol/httpPorts'
+import { createWebNostrIo, webRelayPolicy } from '@platform/web/sdkNostrIo'
+import type { ArenaBidderState } from '@ui/auction/arena/bid-rules'
 import { NDKEvent, NDKNutzap, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { fetchEventsWithTimeout, getAppNdk } from '@platform/web/ndkPublishContext'
 import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
-import { getCurrentPubkey } from '@platform/web/readContext'
+import { getCurrentPubkey, getReadContext } from '@platform/web/readContext'
 
 // The wallet state this surface reads and writes lives here. Re-exported so a `platform/` or
 // `sdk/` consumer reaches the store and the rails through ONE src/ import — the source-boundary
@@ -93,14 +102,25 @@ export interface WalletTestMintResult {
 	proofsMinted: number
 }
 
+/** What the dev bid helper placed, on the arena's terms. */
 export interface WalletDevAuctionBidResult {
+	/** The published kind-1441's event id. */
 	bidEventId: string
+	/** The lot's **root** kind-1440 event id — what the bid binds to with `e`. */
 	auctionEventId: string
+	/** `1440:<seller>:<d>`. */
 	auctionCoordinates: string
 	auctionTitle: string
+	/** The mint the escrow was locked at — the auction backend's, not the bidder's choice. */
 	mintUrl: string
+	/**
+	 * The bid's `content.amount`: the **delta** added to this bidder's position, in sats
+	 * (`ui/auction/arena/bid-rules.ts` — the arena's amount is a delta, not a new total).
+	 */
 	bidAmount: number
+	/** The floor **position** the terms required at submit time (the panel's own `minimum`). */
 	minBid: number
+	/** Test ecash minted for this bid, 0 when the wallet already covered it. */
 	topUpAmount: number
 }
 
@@ -163,17 +183,8 @@ const createCashuWalletForMint = async (targetMint: string): Promise<{ cashuWall
 	}
 }
 
-const getFirstTagValue = (event: NDKEvent, tagName: string): string => event.tags.find((tag) => tag[0] === tagName)?.[1] || ''
-
-const parseNonNegativeInt = (value: string, fallback: number = 0): number => {
-	const parsed = parseInt(value, 10)
-	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
-}
-
 const WALLET_EVENT_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const WALLET_EVENT_FETCH_TIMEOUT_MS = 5000
-const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
-const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 
 /**
  * The wallet's own P2PK pair, as a synchronous lookup, so the reclaim host's legacy refund-key
@@ -217,6 +228,31 @@ const getAuctionBidWalletSigner = (): ArenaWalletSpendSigner | null => {
 		pubkey: material.walletP2pk,
 		signDigest: (digestHex: string) => schnorrSignDigest(digestHex, material.walletPrivkey),
 	}
+}
+
+/**
+ * The wallet's escrow ports, built from the app's own seams.
+ *
+ * One definition, two callers: the arena bid panel
+ * (`platform/web/auctions/relay/AuctionBidHost.tsx`) and the dev bid helper in this
+ * module. Both lock a real escrow through `assembleArenaBidFunding`, so both must
+ * read the same committee key, the same mint and the same wallet key — a second
+ * bundle would be a second answer to "where does this bid's money live".
+ *
+ * The config read is per call, never cached: the committee key and the mint are
+ * published by the auction backend and can change between bids, and a stale
+ * committee key would lock a bidder's money to a key no validator holds.
+ * `readWalletSigner` answers `null` until the one-time wallet-key migration has
+ * produced the spend key, and `readEscrowManager` answers `null` until Coco is
+ * ready — both are refusals the escrow reports, never substitutes.
+ */
+export const arenaBidFundPorts: ArenaBidFundPorts = {
+	readConfig: () => createHttpPorts({ apiBase: '/api/auctions' }).getConfig(),
+	readWalletSigner: () => getAuctionBidWalletSigner(),
+	readEscrowManager: () => {
+		const manager = cashuStore.state.manager
+		return manager === null ? null : arenaEscrowSendOverCoco(manager)
+	},
 }
 
 /**
@@ -880,16 +916,24 @@ export const walletOps = {
 	},
 
 	/**
-	 * Dev-only helper: pick a live seeded auction on the user's relays,
-	 * top up the wallet with test ecash if needed, and publish a bid via
-	 * the bidder-held-path flow. Delegates the heavy lifting to
-	 * `publishAuctionBid` so this helper stays a thin UX wrapper rather than
-	 * reimplementing the bid pipeline.
+	 * Dev-only helper: find a live seeded **arena** lot this wallet may bid on, top the
+	 * wallet up with test ecash at the mint the auction backend names, and place the bid
+	 * through the app's own consolidated-protocol path.
+	 *
+	 * The read is the lot surfaces' own (`createWebArenaAuctionRead` +
+	 * `collectArenaSurfacesRead`), the choice is `selectDevBidCandidate` (which asks the
+	 * panel's own `checkArenaBid`), and the money is real: `assembleArenaBidFunding` locks
+	 * the escrow through Coco and pre-signs the two outcome templates, and
+	 * `publishArenaBid` re-checks that payload against the lot's own terms before a
+	 * kind-1441 exists. Nothing here fabricates lock material — a lot the dev cannot pay
+	 * for is refused by the lock, not papered over.
+	 *
+	 * `preferredMintUrl` is gone with the retired family: the escrow's mint is the auction
+	 * backend's (`GET /api/auctions/config`), not the bidder's choice, so the top-up goes
+	 * to that one mint with no fallback. Funding any other mint would leave the lock
+	 * unpayable.
 	 */
-	placeDevBidOnSeededAuction: async (params?: {
-		preferredBidAmount?: number
-		preferredMintUrl?: string
-	}): Promise<WalletDevAuctionBidResult> => {
+	placeDevBidOnSeededAuction: async (params?: { preferredBidAmount?: number }): Promise<WalletDevAuctionBidResult> => {
 		if (!isWalletDevModeEnabled()) {
 			throw new Error('Dev wallet actions are disabled in this environment')
 		}
@@ -903,89 +947,95 @@ export const walletOps = {
 		if (!capability) throw new Error('No signer available')
 		const bidderPubkey = await capability.getPublicKey()
 
-		// Find a live auction. We pull recent kind-30408 events and
-		// filter to ones that (a) we're not the seller of and (b) still
-		// have time on the clock.
+		// The arena's amount is a **delta** in whole sats. A dev's typed amount is read
+		// once, here, and named rather than rounded — the panel refuses decimals too.
+		const preferredAmount = params?.preferredBidAmount
+		if (preferredAmount !== undefined && (!Number.isSafeInteger(preferredAmount) || preferredAmount <= 0)) {
+			throw new Error(`A dev bid amount must be a whole number of sats, got ${String(preferredAmount)}`)
+		}
+
 		const now = Math.floor(Date.now() / 1000)
-		const auctions = Array.from(await fetchEventsWithTimeout({ kinds: [AUCTION_KIND], limit: 100 }, { timeoutMs: 5000 }))
-		const candidates = auctions.filter((auction) => {
-			if (auction.pubkey === bidderPubkey) return false
-			const endAt = parseNonNegativeInt(getFirstTagValue(auction, 'end_at'), 0)
-			const maxEndAt = parseNonNegativeInt(getFirstTagValue(auction, 'max_end_at'), 0) || endAt
-			if (!endAt || maxEndAt <= now) return false
-			const startAt = parseNonNegativeInt(getFirstTagValue(auction, 'start_at'), 0)
-			if (startAt && startAt > now) return false
-			return true
+		// The same relays the lot surfaces read and the same ones the bid is offered to
+		// (`AuctionBidHost`): a bid published elsewhere is invisible to the very view that
+		// placed it, so "presumed → seen" could never happen.
+		const relays = [...webRelayPolicy('query')]
+		const read = createWebArenaAuctionRead({
+			relays,
+			store: getReadContext().store as unknown as EventStorePort<Event>,
+			deadlineMs: 5000,
 		})
-		if (!candidates.length) throw new Error('No live seeded auction available to bid on')
-		const selected = candidates[Math.floor(Math.random() * candidates.length)]
+		const { snapshot, status } = await collectArenaSurfacesRead(read)
+		const bidder: ArenaBidderState = { pubkey: bidderPubkey, wallet: 'ready' }
+		const candidate = selectDevBidCandidate({ snapshot, status, bidder, now, preferredAmount })
+		if (candidate === null) {
+			throw new Error(
+				`No live seeded arena lot this wallet may bid on (read ${status}, ${snapshot.auctions.length} lot(s) read) — seed a live lot with \`bun run seed\` and try again`,
+			)
+		}
+		// `check.allowed` implies a parsed integer amount; the guard keeps the type honest
+		// without a cast.
+		const bidAmount = candidate.check.amount
+		if (bidAmount === null) throw new Error('The selected lot has no biddable amount')
 
-		// Pull the auction fields the publish flow needs.
-		const dTag = getFirstTagValue(selected, 'd')
-		const auctionCoordinates = dTag ? `${AUCTION_KIND}:${selected.pubkey}:${dTag}` : ''
-		if (!auctionCoordinates) throw new Error('Selected auction has no `d` tag')
-		const p2pkXpub = getFirstTagValue(selected, 'p2pk_xpub')
-		if (!p2pkXpub) throw new Error('Selected auction is missing p2pk_xpub')
-		const startAt = parseNonNegativeInt(getFirstTagValue(selected, 'start_at'), 0)
-		const endAt = parseNonNegativeInt(getFirstTagValue(selected, 'end_at'), 0)
-		const maxEndAt = parseNonNegativeInt(getFirstTagValue(selected, 'max_end_at'), 0) || endAt
-		const settlementGraceSeconds =
-			parseNonNegativeInt(getFirstTagValue(selected, 'settlement_grace'), 0) || AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS
-		const startingBid = parseNonNegativeInt(getFirstTagValue(selected, 'starting_bid'), 0)
-		const bidIncrement = parseNonNegativeInt(getFirstTagValue(selected, 'bid_increment'), 0) || 100
-		const trustedMints = selected.tags.filter((tag) => tag[0] === 'mint' && tag[1]).map((tag) => tag[1])
+		// The escrow's mint is the auction backend's, and only that mint is topped up:
+		// the lock has to live where the committee will settle it.
+		const config = await arenaBidFundPorts.readConfig()
+		const mintUrl = mintUrlOf(config)
+		if (mintUrl === null) throw new Error('The auction backend names no Cashu mint, so this bid has no escrow to fund')
 
-		// Decide the bid amount: caller's preference, or a minimum
-		// increment over the current top bid.
-		const existingBids = Array.from(
-			await fetchEventsWithTimeout({ kinds: [AUCTION_BID_KIND], '#e': [selected.id], limit: 200 }, { timeoutMs: 5000 }),
-		)
-		const currentTop = existingBids.reduce((max, bid) => {
-			const amount = parseNonNegativeInt(getFirstTagValue(bid, 'amount'), 0)
-			return amount > max ? amount : max
-		}, 0)
-		const minBid = currentTop > 0 ? currentTop + bidIncrement : startingBid
-		const preferred = params?.preferredBidAmount ? Math.floor(params.preferredBidAmount) : minBid
-		const bidAmount = Math.max(minBid, Number.isFinite(preferred) && preferred > 0 ? preferred : minBid)
-
-		// Top up the wallet at the chosen mint if it can't cover the
-		// bid. mintTestEcash works against the public testnut mints
-		// only — that's a dev-only assumption, fine here.
-		const mintForLock = params?.preferredMintUrl?.trim() || trustedMints[0]
-		if (!mintForLock) throw new Error('Selected auction has no trusted mint')
 		const { mintBalances } = getBalancesFromState(wallet)
-		const balanceAtMint = mintBalances[mintForLock] ?? 0
+		const balanceAtMint = mintBalances[mintUrl] ?? 0
+		let topUpAmount = 0
 		if (balanceAtMint < bidAmount) {
-			const topUpAmount = bidAmount - balanceAtMint + 1000 // small safety buffer for fees / future bids
-			await walletOps.mintTestEcash(topUpAmount, mintForLock)
+			topUpAmount = bidAmount - balanceAtMint + 1000 // small safety buffer for mint fees / a later bid
+			// No fallback mint: the dev mints are free test mints, but a balance minted
+			// elsewhere is a balance this escrow cannot spend.
+			await walletOps.mintTestEcash(topUpAmount, mintUrl, { allowFallback: false })
 		}
 
-		const { publishAuctionBid } = await import('@platform/web/auctions/auctionPublish')
-		type AuctionBidFormData = Parameters<typeof publishAuctionBid>[0]
-		const formData: AuctionBidFormData = {
-			auctionEventId: selected.id,
-			auctionCoordinates,
-			amount: bidAmount,
-			auctionStartAt: startAt,
-			auctionEffectiveEndAt: maxEndAt,
-			auctionLocktimeAt: maxEndAt,
-			settlementGraceSeconds,
-			sellerPubkey: selected.pubkey,
-			p2pkXpub,
-			mintCandidates: trustedMints.length ? trustedMints : [mintForLock],
+		// The escrow first, and only for a bid the check already allowed: money is never
+		// locked for a bid that is about to be refused, and a bid is never published
+		// without its escrow. `bidAmount` is the same number `publishArenaBid` re-parses
+		// from `raw`, so the amount locked is the amount the event names.
+		const assembled = await assembleArenaBidFunding({ model: candidate.model, amount: bidAmount, now }, arenaBidFundPorts)
+		const io = createWebNostrIo()
+		let result: ArenaBidPublishResult
+		try {
+			result = await publishArenaBid(
+				{ model: candidate.model, status, bidder, raw: String(bidAmount) },
+				{
+					signer: {
+						pubkey: bidderPubkey,
+						sign: async (template) => (await capability.signEvent({ ...template, pubkey: bidderPubkey })) as unknown as Event,
+					},
+					// `NostrIo` is never closed: it shares the app's pool (`sdkNostrIo.ts`).
+					publisher: { publish: (event) => io.publish(event) },
+					relays,
+					now,
+					funding: assembled.funding,
+					fundingTerms: assembled.fundingTerms,
+				},
+			)
+		} catch (error) {
+			// The lock is not reversible and is published nowhere, so a failure here leaves
+			// real money sitting at the mint — the same fact the panel states to a bidder
+			// (`AuctionBidHost.withEscrowLockedNote`), and the one thing the dev must not
+			// miss. Re-bidding the same amount would lock a second escrow on top of it.
+			const detail = getErrorMessage(error)
+			throw new Error(
+				`The bid was not published: ${detail} Its escrow is locked at ${mintUrl}, so those funds come back only through the lock's refund path after its locktime — do not bid the same amount again from this wallet.`,
+			)
 		}
-
-		const bidEventId = await publishAuctionBid(formData)
 
 		return {
-			bidEventId,
-			auctionEventId: selected.id,
-			auctionCoordinates,
-			auctionTitle: getFirstTagValue(selected, 'title') || 'untitled',
-			mintUrl: mintForLock,
+			bidEventId: result.eventId,
+			auctionEventId: candidate.view.rootEventId,
+			auctionCoordinates: candidate.view.coordinate,
+			auctionTitle: candidate.model.title ?? candidate.view.d,
+			mintUrl,
 			bidAmount,
-			minBid,
-			topUpAmount: Math.max(0, bidAmount - balanceAtMint),
+			minBid: candidate.check.minimum ?? bidAmount,
+			topUpAmount,
 		}
 	},
 
