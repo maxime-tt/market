@@ -1,9 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-	ARENA_AUCTION_KINDS,
-	ARENA_STATE_COMMITMENT_KIND,
-	ARENA_VERDICT_KIND,
-} from '@sdk/commerce/auctions/constants'
+import { ARENA_AUCTION_KINDS, ARENA_PARAMS_KIND, ARENA_STATE_COMMITMENT_KIND, ARENA_VERDICT_KIND } from '@sdk/commerce/auctions/constants'
 import {
 	ARENA_REFUSAL_BAD_HEIGHT,
 	ARENA_REFUSAL_BAD_HASH,
@@ -53,9 +49,7 @@ function verdict(
 	return { kind: overrides.kind ?? ARENA_VERDICT_KIND, tags, content: JSON.stringify(content) }
 }
 
-function stateCommit(
-	overrides: { tags?: string[][]; content?: Record<string, unknown> } = {},
-): ArenaEventLike {
+function stateCommit(overrides: { tags?: string[][]; content?: Record<string, unknown> } = {}): ArenaEventLike {
 	const content: Record<string, unknown> = {
 		schema: 'arena.statecommit.v1',
 		height: 12345,
@@ -96,9 +90,11 @@ describe('ARENA_AUCTION_KINDS', () => {
 			verdict: 1445,
 			fundingAbort: 1446,
 			stateCommitment: 1447,
+			params: 1448,
 		})
 		expect(ARENA_VERDICT_KIND).toBe(1445)
 		expect(ARENA_STATE_COMMITMENT_KIND).toBe(1447)
+		expect(ARENA_PARAMS_KIND).toBe(1448)
 	})
 })
 
@@ -255,9 +251,9 @@ describe('isAnchoredArenaEvent', () => {
 	test('is true for anchored events and false for unanchored / unknown kinds', () => {
 		expect(isAnchoredArenaEvent(verdict())).toBe(true)
 		expect(isAnchoredArenaEvent(stateCommit())).toBe(true)
-		expect(
-			isAnchoredArenaEvent(verdict({ tags: [['auction', AUCTION_ID]], content: { height: undefined, block_hash: undefined } })),
-		).toBe(false)
+		expect(isAnchoredArenaEvent(verdict({ tags: [['auction', AUCTION_ID]], content: { height: undefined, block_hash: undefined } }))).toBe(
+			false,
+		)
 		expect(isAnchoredArenaEvent({ kind: 1, tags: [], content: 'hi' })).toBe(false)
 	})
 })

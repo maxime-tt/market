@@ -13,8 +13,14 @@
  * Everything it touches is a **port**, so the whole assembly is testable
  * without a browser, a mint or a relay:
  *
- * - `readConfig` — `GET /api/auctions/config` (`AuctionsConfig`): the committee
- *   FROST group key and the Cashu mint the escrow must live on;
+ * - `readConfig` — the escrow's committed terms (**kind 1448**,
+ *   `arena.params.v1`), read from the relay by
+ *   `platform/web/auctions/relay/arenaParamsRead.ts`: the committee FROST group
+ *   key, the Cashu mint the escrow must live on, its keyset, the network's
+ *   bounds, and the two locktime terms (`settlement_safety_sec`,
+ *   `bid_to_consensus_latency_sec`). This was `GET /api/auctions/config` until
+ *   the chain began committing its params; the HTTP read is retired and there is
+ *   deliberately no fallback to it;
  * - `readWalletSigner` — the wallet spend key's digest-signing surface
  *   (`walletOps.getAuctionBidWalletSigner`), `null` until the one-time key
  *   migration produced the pair;
@@ -25,7 +31,8 @@
  * ## The order is the safety property
  *
  * Every check that can be made **without** moving money is made before the
- * lock, in this order: the amount, the committee key, the mint url, the wallet
+ * lock, in this order: the amount, the committee key, the mint url, the two
+ * relay locktime terms (settlement safety, bid-to-consensus latency), the wallet
  * signer, the wallet manager, the lot's end and mode, its window, its seller
  * wallet, and that the committed v4v split is representable at this amount.
  * Only then does the escrow send run, exactly once. A payload that could not be
@@ -56,23 +63,42 @@ import {
 	type ArenaEscrowProof,
 	type ArenaWalletSpendSigner,
 } from '@platform/web/auctions/relay/arenaBidFunding'
-import {
-	lockArenaEscrowWithCoco,
-	type ArenaEscrowSendManager,
-} from '@platform/web/auctions/relay/arenaBidEscrow'
+import { lockArenaEscrowWithCoco, type ArenaEscrowSendManager } from '@platform/web/auctions/relay/arenaBidEscrow'
 
 // =========================================================================
 // Ports
 // =========================================================================
 
-/** The three config fields the escrow needs, as `GET /api/auctions/config` carries them. */
+/**
+ * The escrow terms the assembly reads, as the relay's kind-1448 params event
+ * (`arena.params.v1`) carries them — mapped by the caller
+ * (`group_key` → `committee_public_key`, `mint_url` → `mint_url`). Every field
+ * is `null` when the relay did not carry it: **nothing is defaulted here**, so
+ * a missing term is a named refusal, never a guess. The assembly consumes the
+ * committee key, the mint and the two locktime terms; the rest are the relay's
+ * committed document, exposed for the surfaces.
+ */
 export interface ArenaBidFundConfig {
-	/** The committee's single FROST group key (spec §1.1). */
+	/** The committee's single FROST group key (spec §1.1), from the relay's `group_key`. */
 	committee_public_key?: string | null
 	/** The mint the escrow lives on; preferred over `mint_url` when both are set. */
 	cashu_mint_url?: string | null
-	/** The legacy name for the same field. */
+	/** The mint url as the relay names it (`mint_url`). */
 	mint_url?: string | null
+	/** The mint's keyset id (the relay's `keyset_id`). */
+	keyset_id?: string | null
+	/** The mint's denomination → pubkey map (the relay's `keys`). */
+	keys?: Record<string, string> | null
+	/** The settlement safety window the locktime floor adds after the established end. */
+	settlement_safety_sec?: number | null
+	/** The bid-to-consensus latency the locktime floor adds on top of the safety window. */
+	bid_to_consensus_latency_sec?: number | null
+	min_window_sec?: number | null
+	max_window_sec?: number | null
+	min_duration_sec?: number | null
+	max_duration_sec?: number | null
+	max_proofs?: number | null
+	threshold?: number | null
 }
 
 export interface ArenaBidFundPorts {
@@ -91,12 +117,16 @@ export interface ArenaBidFundPorts {
 // =========================================================================
 
 export type ArenaBidFundRefusal =
-	/** `GET /api/auctions/config` did not answer a usable document. */
+	/** The relay served no usable, anchored `arena.params.v1` reading. */
 	| 'fund.config-unreadable'
-	/** The config states no committee key, or one that is not a compressed secp256k1 key. */
+	/** The relay's params state no committee key, or one that is not a compressed secp256k1 key. */
 	| 'fund.committee-key-missing'
-	/** The config states no mint, or one that is not an http(s) url. */
+	/** The relay's params state no mint, or one that is not an http(s) url. */
 	| 'fund.mint-url-missing'
+	/** The relay's params state no settlement-safety window, so no locktime floor can be derived. */
+	| 'fund.settlement-safety-missing'
+	/** The relay's params state no bid-to-consensus latency, so no locktime floor can be derived. */
+	| 'fund.bid-latency-missing'
 	/** The wallet spend key does not exist yet (the one-time key migration has not run). */
 	| 'fund.wallet-signer-missing'
 	/** The Cashu wallet is not ready, so there is no manager to send with. */
@@ -132,10 +162,13 @@ export type ArenaBidFundRefusal =
 	| 'fund.lock-failed'
 
 export const ARENA_BID_FUND_REFUSAL_TEXT: Record<ArenaBidFundRefusal, string> = {
-	'fund.config-unreadable': 'the auction committee configuration could not be read',
-	'fund.committee-key-missing': 'the auction committee key is not configured, so no escrow can be locked to it',
-	'fund.mint-url-missing': 'no Cashu mint is configured for auctions, so the escrow cannot be minted',
-	'fund.wallet-signer-missing': 'this wallet has no spend key for auction escrows yet — open the wallet so it can be created, then try the bid again',
+	'fund.config-unreadable': 'the escrow terms could not be read from the relay',
+	'fund.committee-key-missing': 'the committee key is not committed on the relay, so no escrow can be locked to it',
+	'fund.mint-url-missing': 'no Cashu mint is committed on the relay, so the escrow cannot be minted',
+	'fund.settlement-safety-missing': 'the relay commits no settlement-safety window, so no locktime floor can be derived',
+	'fund.bid-latency-missing': 'the relay commits no bid-to-consensus latency, so no locktime floor can be derived',
+	'fund.wallet-signer-missing':
+		'this wallet has no spend key for auction escrows yet — open the wallet so it can be created, then try the bid again',
 	'fund.wallet-manager-missing': 'the Cashu wallet is not ready, so no escrow can be funded',
 	'fund.no-end-time': 'the auction states no end time, so no locktime floor can be derived',
 	'fund.unknown-mode': 'the auction states no mode this client can derive a locktime floor from',
@@ -180,6 +213,9 @@ const refuse: (refusal: ArenaBidFundRefusal, detail?: string) => never = (refusa
 const COMPRESSED_PUBKEY = /^0[23][0-9a-f]{64}$/
 const isCompressed = (value: unknown): value is string => typeof value === 'string' && COMPRESSED_PUBKEY.test(value)
 
+/** A non-negative integer, or `null`. Used for the relay's numeric terms. */
+const asCount = (value: unknown): number | null => (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null)
+
 /** The modes the protocol defines (spec §3). Anything else has no derivable floor. */
 const AUCTION_MODES = new Set(['fixed', 'antisnipe'])
 
@@ -204,10 +240,7 @@ function mintUrlOf(config: ArenaBidFundConfig): string | null {
 // =========================================================================
 
 /** The lot terms the escrow and its templates are built against. */
-export type ArenaBidFundTerms = Pick<
-	ArenaAuctionDetailModel,
-	'mode' | 'endsAt' | 'windowSec' | 'sellerWallet' | 'v4vSplit'
->
+export type ArenaBidFundTerms = Pick<ArenaAuctionDetailModel, 'mode' | 'endsAt' | 'windowSec' | 'sellerWallet' | 'v4vSplit'>
 
 export interface AssembleArenaBidFundingInput {
 	/** The auction as read, or `null` when nothing was read (refused, never guessed). */
@@ -258,6 +291,14 @@ export async function assembleArenaBidFunding(
 	if (mintUrl === null) {
 		return refuse('fund.mint-url-missing', 'neither cashu_mint_url nor mint_url is an http(s) url')
 	}
+	// The two locktime terms are the relay's, never this module's own defaults: a
+	// relay that commits the terms but omits one has not committed a floor, and
+	// substituting the 900/15 fallback would lock against a bound the chain may
+	// not hold (spec §2; `arenaBidLocktimeFloor`).
+	const settlementSafetySec = asCount(config.settlement_safety_sec)
+	if (settlementSafetySec === null) refuse('fund.settlement-safety-missing', 'the relay states no settlement_safety_sec')
+	const latencySec = asCount(config.bid_to_consensus_latency_sec)
+	if (latencySec === null) refuse('fund.bid-latency-missing', 'the relay states no bid_to_consensus_latency_sec')
 
 	const signer = ports.readWalletSigner()
 	if (signer === null) return refuse('fund.wallet-signer-missing', 'the wallet spend key is not available')
@@ -295,7 +336,14 @@ export async function assembleArenaBidFunding(
 	// amount the committed split cannot represent never commits the bidder's money.
 	arenaSettleDestinations({ amount, sellerWallet, v4vSplit })
 
-	const minLocktime = arenaBidLocktimeFloor({ mode, endAt, windowSec, now: input.now })
+	const minLocktime = arenaBidLocktimeFloor({
+		mode,
+		endAt,
+		windowSec,
+		now: input.now,
+		settlementSafetySec,
+		bidToConsensusLatencySec: latencySec,
+	})
 
 	// --- 2. The one money movement ----------------------------------------
 	let proofs: ArenaEscrowProof[]

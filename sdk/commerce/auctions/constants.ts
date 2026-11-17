@@ -304,8 +304,11 @@ export const ARENA_FUNDING_ABORT_KIND = 1446 as AuctionKind
 /** Kind 1447 — periodic state commitment (regular). Anchor (height + app_hash) is MANDATORY. */
 export const ARENA_STATE_COMMITMENT_KIND = 1447 as AuctionKind
 
+/** Kind 1448 — validator-committed escrow params (regular). Anchor (height + app_hash) is MANDATORY. */
+export const ARENA_PARAMS_KIND = 1448 as AuctionKind
+
 /**
- * The eight arena 1440-series kinds in one frozen record — the single place
+ * The nine arena 1440-series kinds in one frozen record — the single place
  * the numbers are written, so a future renumber is one edit. Matches the
  * "one exported map" rule in the decision note.
  */
@@ -318,6 +321,7 @@ export const ARENA_AUCTION_KINDS = {
 	verdict: ARENA_VERDICT_KIND,
 	fundingAbort: ARENA_FUNDING_ABORT_KIND,
 	stateCommitment: ARENA_STATE_COMMITMENT_KIND,
+	params: ARENA_PARAMS_KIND,
 } as const
 
 export type ArenaAuctionKind = (typeof ARENA_AUCTION_KINDS)[keyof typeof ARENA_AUCTION_KINDS]
@@ -329,6 +333,9 @@ export const ARENA_VERDICT_SCHEMA = 'arena.verdict.v1'
 
 /** `schema` value inside a kind-1447 state commitment's JSON content. */
 export const ARENA_STATE_COMMITMENT_SCHEMA = 'arena.statecommit.v1'
+
+/** `schema` value inside a kind-1448 escrow-params event's JSON content. */
+export const ARENA_PARAMS_SCHEMA = 'arena.params.v1'
 
 /** The only `outcome` values a kind-1445 verdict may carry. */
 export const ARENA_VERDICT_OUTCOMES = ['winner', 'reserve_not_met', 'cancelled', 'aborted'] as const

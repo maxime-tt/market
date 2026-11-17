@@ -51,11 +51,11 @@
  *   resolves a bid by `content.auction_id` (`arenaAuctionRead.ts:485-501`).
  *   Both are emitted so the protocol and the local view agree.
  * - **`amount` is the DELTA**, an integer, in sats. The arena protocol's bid
- *   model is additive (`platform/web/auctions/protocol/client.ts:62-63`) — the
- *   read adapter sums bid amounts per bidder into positions — and the surface
- *   says "bids add to your position" for exactly that reason. It is written as
- *   a JSON **number**, not a string, because that is the type the read adapter
- *   accepts and the type the demo client wrote.
+ *   model is additive (the reference chain's `BidContent.Amount`, `chain/app.go`)
+ *   — the read adapter sums bid amounts per bidder into positions — and the
+ *   surface says "bids add to your position" for exactly that reason. It is
+ *   written as a JSON **number**, not a string, because that is the type the
+ *   read adapter accepts and the type the demo client wrote.
  * - **`wallet`, `proofs` and `outcome_templates` are the funding payload**, and
  *   they are not optional. The money is locked under a 2-of-2 NUT-11 `SIG_ALL`
  *   condition whose destinations the bidder fixed when it bid; the validator
@@ -115,11 +115,7 @@ import {
 } from '@ui/auction/arena/bid-rules'
 import type { ArenaBidSubmissionState } from '@ui/auction/arena/bid-panel'
 import { arenaAuctionCoordinate } from '@platform/web/auctions/relay/arenaAuctionRead'
-import {
-	verifyArenaBidFunding,
-	type ArenaBidFunding,
-	type ArenaBidFundingTerms,
-} from '@platform/web/auctions/relay/arenaBidFunding'
+import { verifyArenaBidFunding, type ArenaBidFunding, type ArenaBidFundingTerms } from '@platform/web/auctions/relay/arenaBidFunding'
 
 const HEX64 = /^[0-9a-f]{64}$/
 
@@ -195,7 +191,11 @@ export function buildArenaBidContent(
 	funding: ArenaBidFunding | null | undefined,
 ): { content: ArenaBidContent; tags: string[][] } {
 	if (typeof auction.d !== 'string' || auction.d.trim() === '') {
-		throw new ArenaBidPublishError('bid.no-auction-id', 'The auction has no id, so a bid cannot name it.', { phase: 'failed', amount, reason: 'The auction has no id.' })
+		throw new ArenaBidPublishError('bid.no-auction-id', 'The auction has no id, so a bid cannot name it.', {
+			phase: 'failed',
+			amount,
+			reason: 'The auction has no id.',
+		})
 	}
 	if (typeof auction.rootEventId !== 'string' || !HEX64.test(auction.rootEventId)) {
 		throw new ArenaBidPublishError(
@@ -297,7 +297,12 @@ export interface ArenaBidPublishResult {
  * hold. It is the *same* {@link checkArenaBid}, so the two cannot disagree.
  */
 export async function publishArenaBid(
-	input: { model: ArenaAuctionDetailModel | null; status: 'loading' | 'settled' | 'incomplete' | 'no-relays' | 'error'; bidder: ArenaBidderState; raw: string },
+	input: {
+		model: ArenaAuctionDetailModel | null
+		status: 'loading' | 'settled' | 'incomplete' | 'no-relays' | 'error'
+		bidder: ArenaBidderState
+		raw: string
+	},
 	options: ArenaBidPublishOptions,
 ): Promise<ArenaBidPublishResult> {
 	const check = checkArenaBid({ model: input.model, status: input.status, now: options.now, bidder: input.bidder, raw: input.raw })
@@ -313,13 +318,21 @@ export async function publishArenaBid(
 	// applied at the point where money rules have to hold, so a caller that
 	// assembles a payload by hand cannot publish a lock the chain will refuse.
 	if (options.funding === null || options.funding === undefined || options.fundingTerms === null || options.fundingTerms === undefined) {
-		throw new ArenaBidPublishError('bid.unfunded', 'no escrow funding or funding terms were supplied for this bid', failedState('The bid has no funding terms to check its escrow against.'))
+		throw new ArenaBidPublishError(
+			'bid.unfunded',
+			'no escrow funding or funding terms were supplied for this bid',
+			failedState('The bid has no funding terms to check its escrow against.'),
+		)
 	}
 	try {
 		verifyArenaBidFunding(options.funding, options.fundingTerms)
 	} catch (error) {
 		const detail = error instanceof Error ? error.message : String(error)
-		throw new ArenaBidPublishError('bid.funding-invalid', `escrow funding refused: ${detail}`, failedState(`The escrow funding is not valid: ${detail}`))
+		throw new ArenaBidPublishError(
+			'bid.funding-invalid',
+			`escrow funding refused: ${detail}`,
+			failedState(`The escrow funding is not valid: ${detail}`),
+		)
 	}
 	const escrowTotal = options.funding.proofs.reduce((sum, proof) => sum + proof.amount, 0)
 	if (escrowTotal !== typed) {
@@ -338,7 +351,11 @@ export async function publishArenaBid(
 	try {
 		expectedId = getEventHash({ ...template, pubkey: options.signer.pubkey })
 	} catch (error) {
-		throw new ArenaBidPublishError('bid.bad-root', error instanceof Error ? error.message : String(error), failedState('The event could not be built.'))
+		throw new ArenaBidPublishError(
+			'bid.bad-root',
+			error instanceof Error ? error.message : String(error),
+			failedState('The event could not be built.'),
+		)
 	}
 
 	let event: Event
@@ -346,7 +363,11 @@ export async function publishArenaBid(
 		event = await options.signer.sign(template)
 	} catch (error) {
 		const detail = error instanceof Error ? error.message : String(error)
-		throw new ArenaBidPublishError('bid.not-allowed', `signing failed: ${detail}`, failedState(`Your wallet did not sign the bid: ${detail}`))
+		throw new ArenaBidPublishError(
+			'bid.not-allowed',
+			`signing failed: ${detail}`,
+			failedState(`Your wallet did not sign the bid: ${detail}`),
+		)
 	}
 	if (event.id !== expectedId || event.kind !== ARENA_AUCTION_BID_KIND) {
 		throw new ArenaBidPublishError(
@@ -388,7 +409,8 @@ export async function publishArenaBid(
 		// Fail closed, the same contract `publishRequired` enforces on the 30408
 		// path: a zero-ACK publish is a publish failure, whatever the transport
 		// resolved with.
-		const named = rejected.length > 0 ? rejected.map((r) => `${r.url}${r.message ? ` (${r.message})` : ''}`).join('; ') : 'no relay answered'
+		const named =
+			rejected.length > 0 ? rejected.map((r) => `${r.url}${r.message ? ` (${r.message})` : ''}`).join('; ') : 'no relay answered'
 		throw new ArenaBidPublishError('bid.not-allowed', `No relay accepted the bid (kind ${ARENA_AUCTION_BID_KIND}, id ${event.id})`, {
 			phase: 'unpublished',
 			amount: typed,
@@ -418,10 +440,7 @@ export async function publishArenaBid(
  * an ACK is a promise a relay made. Both are recorded, and the panel shows the
  * second only when it is true.
  */
-export function settleSubmissionFromRead(
-	state: ArenaBidSubmissionState,
-	model: ArenaAuctionDetailModel | null,
-): ArenaBidSubmissionState {
+export function settleSubmissionFromRead(state: ArenaBidSubmissionState, model: ArenaAuctionDetailModel | null): ArenaBidSubmissionState {
 	if (state.phase !== 'presumed' || model === null) return state
 	const seen = model.bids.some((bid) => bid.eventId === state.eventId)
 	if (!seen) return state

@@ -154,10 +154,10 @@ export function parseBidAmountSats(raw: string | number | null | undefined): num
 
 /**
  * Bids are **deltas** added to a bidder's position, not the resulting total
- * (`platform/web/auctions/protocol/client.ts:62-63`: "A DELTA added to the
- * bidder's existing position, not their new total"). So the comparable figure
- * for "can this bid stand?" is the bidder's position **after** the delta, which
- * is `ownPosition + amount` — not `amount` on its own.
+ * (the reference chain's `BidContent.Amount`, `chain/app.go`: "a DELTA added to
+ * the bidder's existing position, not their new total"). So the comparable
+ * figure for "can this bid stand?" is the bidder's position **after** the delta,
+ * which is `ownPosition + amount` — not `amount` on its own.
  *
  * A bidder who already holds 1,000 sats and types `100` on an auction whose
  * floor is 1,100 has not bid 1,100; they have bid 100 and their position is
@@ -271,14 +271,24 @@ export function checkArenaBid(input: ArenaBidCheckInput): ArenaBidCheck {
 	const { model, status, now, bidder, raw } = input
 	const blocked = arenaBidBlock(model, status, now, bidder)
 	const amount = parseBidAmountSats(raw)
-	const ownPosition = model !== null && bidder.pubkey !== null ? (model.positions.find((p) => p.bidder === bidder.pubkey)?.total ?? null) : null
+	const ownPosition =
+		model !== null && bidder.pubkey !== null ? (model.positions.find((p) => p.bidder === bidder.pubkey)?.total ?? null) : null
 	const floor = model !== null ? arenaBidFloor(model, ownPosition) : { kind: 'unknown' as const, minimum: null, topTotal: null }
 	const base = { amount, minimum: floor.minimum, ownPosition }
 
 	if (blocked !== null) {
 		// An empty box on an ended auction is still `ended`, not `empty`: the
 		// first thing the bidder needs to know is that bidding is closed.
-		if (blocked === 'ended' || blocked === 'concluded' || blocked === 'end-unknown' || blocked === 'own-auction' || blocked === 'no-wallet' || blocked === 'wallet-unavailable' || blocked === 'auction-not-read' || blocked === 'not-started') {
+		if (
+			blocked === 'ended' ||
+			blocked === 'concluded' ||
+			blocked === 'end-unknown' ||
+			blocked === 'own-auction' ||
+			blocked === 'no-wallet' ||
+			blocked === 'wallet-unavailable' ||
+			blocked === 'auction-not-read' ||
+			blocked === 'not-started'
+		) {
 			return { allowed: false, reason: blocked, ...base }
 		}
 	}
