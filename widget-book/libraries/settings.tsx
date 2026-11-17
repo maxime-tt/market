@@ -11,6 +11,23 @@ import {
 } from '@ui/settings/operator-settings-views'
 import { ProfileWalletCheckView } from '@ui/settings/profile-wallet-check-view'
 import { RelayCardView, RelayManagerView } from '@ui/settings/relay-manager-views'
+import {
+	NewPageForm,
+	PageLabelChips,
+	PagePicker,
+	PagesEmpty,
+	PagesError,
+	PagesList,
+	PagesLoading,
+} from '@ui/settings/page-authoring-views'
+import {
+	RouteBindingsEmpty,
+	RouteBindingsError,
+	RouteBindingsList,
+	RouteCreateForm,
+	RouteEditCard,
+	RouteRemovalConfirm,
+} from '@ui/settings/route-authoring-views'
 import type { WidgetLibrary } from '../libraries'
 
 /**
@@ -29,6 +46,62 @@ const memberActions = [
 	{ label: 'Edit Role', icon: Pencil, tone: 'text-info', onSelect: () => {} },
 	{ label: 'Remove Role', icon: Trash2, tone: 'text-destructive', onSelect: () => {} },
 ]
+
+/** Fixed authoring fixtures: the harness renders one deterministic state. */
+const pickerPages = [
+	{
+		name: 'Storefront',
+		authorLabel: 'npub1merchant…',
+		enabled: true,
+		isDefault: true,
+		d: 'storefront-page',
+		title: 'The merchant storefront',
+	},
+	{
+		name: 'featured-13-11-2026',
+		authorLabel: 'npub1merchant…',
+		enabled: false,
+		isDefault: false,
+		d: 'featured-13-11-2026',
+		title: null,
+	},
+]
+
+const bindingRows = [
+	{
+		path: 'featured',
+		targetLabel: 'page npub1merchant… / featured-13-11-2026',
+		pageName: 'featured-13-11-2026',
+		pageAuthorLabel: 'npub1merchant…',
+		updatedAtLabel: '13 Nov 2026',
+		updatedByLabel: 'npub1admin…',
+		warning: null,
+		author: 'a'.repeat(64),
+		d: 'featured-13-11-2026',
+	},
+	{
+		path: 'shop',
+		targetLabel: 'page npub1merchant… / storefront-page',
+		pageName: 'Storefront',
+		pageAuthorLabel: 'npub1merchant…',
+		updatedAtLabel: '12 Nov 2026',
+		updatedByLabel: 'npub1admin…',
+		warning: 'shop is also a page compiled into this build.',
+		author: 'a'.repeat(64),
+		d: 'storefront-page',
+	},
+]
+
+const pickerProps = {
+	pages: pickerPages,
+	loading: false,
+	error: null,
+	selectedD: null,
+	onSelect: () => {},
+	advanced: { author: '', d: '' },
+	onAdvancedChange: () => {},
+	onAdvancedApply: () => {},
+}
 
 export const settings: WidgetLibrary = {
 	name: 'settings',
@@ -228,6 +301,149 @@ export const settings: WidgetLibrary = {
 					/>
 				</div>
 			),
+		},
+		{
+			name: 'PageLabelChips',
+			render: () => (
+				<div className="flex flex-col gap-2">
+					<PageLabelChips label={{ name: 'Storefront', authorLabel: 'npub1merchant…', enabled: true, isDefault: true }} />
+					<PageLabelChips label={{ name: 'featured-13-11-2026', authorLabel: 'npub1merchant…', enabled: false, isDefault: false }} />
+				</div>
+			),
+		},
+		{
+			name: 'PagesList',
+			render: () => (
+				<div className="max-w-2xl">
+					<PagesList pages={pickerPages} dropped={0} onEdit={() => {}} />
+				</div>
+			),
+		},
+		{
+			name: 'PagesListTruncated',
+			render: () => (
+				<div className="max-w-2xl">
+					<PagesList pages={pickerPages.slice(0, 1)} dropped={7} onEdit={() => {}} />
+				</div>
+			),
+		},
+		{
+			name: 'PagesLoading',
+			render: () => <PagesLoading className="max-w-2xl" />,
+		},
+		{
+			name: 'PagesError',
+			render: () => <PagesError className="max-w-2xl" message="The relay did not answer." onRetry={() => {}} />,
+		},
+		{
+			name: 'PagesEmpty',
+			render: () => <PagesEmpty className="max-w-2xl" onCreate={() => {}} />,
+		},
+		{
+			name: 'NewPageForm',
+			render: () => (
+				<div className="max-w-xl">
+					<NewPageForm value="" error={null} notice={null} pending={false} onChange={() => {}} onSubmit={() => {}} />
+				</div>
+			),
+		},
+		{
+			name: 'NewPageFormError',
+			render: () => (
+				<div className="max-w-xl">
+					<NewPageForm
+						value="Storefront"
+						error="The name is reserved for the storefront page."
+						notice={null}
+						pending={false}
+						onChange={() => {}}
+						onSubmit={() => {}}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'PagePicker',
+			render: () => (
+				<div className="max-w-xl">
+					<PagePicker
+						pages={pickerPages}
+						loading={false}
+						error={null}
+						selectedD="featured-13-11-2026"
+						onSelect={() => {}}
+						advanced={{ author: '', d: '' }}
+						onAdvancedChange={() => {}}
+						onAdvancedApply={() => {}}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'RouteBindingsList',
+			render: () => (
+				<div className="max-w-2xl">
+					<RouteBindingsList rows={bindingRows} pendingPath={null} onEdit={() => {}} onRemove={() => {}} onEditPage={() => {}} />
+				</div>
+			),
+		},
+		{
+			name: 'RouteBindingsEmpty',
+			render: () => <RouteBindingsEmpty />,
+		},
+		{
+			name: 'RouteBindingsError',
+			render: () => <RouteBindingsError message="The routing table could not be read." onRetry={() => {}} />,
+		},
+		{
+			name: 'RouteCreateForm',
+			render: () => (
+				<div className="max-w-xl">
+					<RouteCreateForm
+						path="featured"
+						onPathChange={() => {}}
+						pagePicker={<PagePicker {...pickerProps} />}
+						errors={[]}
+						pending={false}
+						onSubmit={() => {}}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'RouteCreateFormNotice',
+			render: () => (
+				<div className="max-w-xl">
+					<RouteCreateForm
+						path="shop"
+						onPathChange={() => {}}
+						pagePicker={<PagePicker {...pickerProps} />}
+						errors={[]}
+						notice="This path is also a page compiled into this build. The binding wins while it exists."
+						pending={false}
+						onSubmit={() => {}}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'RouteEditCard',
+			render: () => (
+				<div className="max-w-xl">
+					<RouteEditCard
+						path="featured"
+						pagePicker={<PagePicker {...pickerProps} />}
+						errors={[]}
+						pending={false}
+						onSubmit={() => {}}
+						onCancel={() => {}}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'RouteRemovalConfirm',
+			render: () => <RouteRemovalConfirm path="featured" pending={false} onConfirm={() => {}} onCancel={() => {}} />,
 		},
 	],
 }

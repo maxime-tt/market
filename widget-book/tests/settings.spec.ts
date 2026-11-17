@@ -24,6 +24,22 @@ const entryNames = [
 	'RelayCardView',
 	'RelayManagerView',
 	'RelayManagerViewSignedOut',
+	'PageLabelChips',
+	'PagesList',
+	'PagesListTruncated',
+	'PagesLoading',
+	'PagesError',
+	'PagesEmpty',
+	'NewPageForm',
+	'NewPageFormError',
+	'PagePicker',
+	'RouteBindingsList',
+	'RouteBindingsEmpty',
+	'RouteBindingsError',
+	'RouteCreateForm',
+	'RouteCreateFormNotice',
+	'RouteEditCard',
+	'RouteRemovalConfirm',
 ]
 
 test('renders the settings library', async ({ page }) => {
