@@ -76,6 +76,17 @@ export interface ArenaEscrowProof {
 	amount: number
 	secret: string
 	C: string
+	/**
+	 * The mint's NUT-12 DLEQ proof, when the mint returned one.
+	 *
+	 * The chain's admission proves — for every proof a bid commits — that `C`
+	 * really is the mint's signature on this `secret` before it will accept the
+	 * escrow (`chain/cashu.go` `verifyDLEQ`, reached from `applyBid`). It reads
+	 * the proof from the bid content, so a locked proof that omits its DLEQ is
+	 * refused outright as `missing DLEQ proof`. Carrying it here is therefore
+	 * load-bearing, not decoration: without it the escrow can never be admitted.
+	 */
+	dleq?: { e: string; s: string; r: string } | null
 }
 
 /** One output the bidder pre-authorises: its opening is committed, not chosen later. */

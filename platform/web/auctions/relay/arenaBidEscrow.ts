@@ -65,6 +65,21 @@ const amountOf = (proof: Proof): number => {
 }
 
 /**
+ * Carry the mint's NUT-12 DLEQ proof through to the committed escrow proof.
+ *
+ * The chain proves every committed proof is a real mint signature with this
+ * (`verifyDLEQ`) and refuses a bid whose proofs omit it as `missing DLEQ proof`.
+ * `r` is optional on cashu-ts's `SerializedDLEQ` but the chain's verifier needs
+ * all three scalars, so a proof that carries only `e`/`s` is passed as `null`
+ * rather than as an unverifiable partial — the bid is then refused honestly,
+ * before any money moves, instead of at admission.
+ */
+const escrowDleqOf = (dleq: Proof['dleq']): { e: string; s: string; r: string } | null =>
+	dleq && typeof dleq.e === 'string' && typeof dleq.s === 'string' && typeof dleq.r === 'string'
+		? { e: dleq.e, s: dleq.s, r: dleq.r }
+		: null
+
+/**
  * Lock `amount` into the escrow and return the locked proofs.
  *
  * Throws when the mint does not support NUT-11, does not have the funds, or
@@ -73,10 +88,7 @@ const amountOf = (proof: Proof): number => {
  * failures are reclaimable), and a silent second lock would double-commit the
  * bidder's money.
  */
-export async function lockArenaEscrowWithCoco(
-	manager: ArenaEscrowSendManager,
-	input: LockArenaEscrowInput,
-): Promise<ArenaEscrowProof[]> {
+export async function lockArenaEscrowWithCoco(manager: ArenaEscrowSendManager, input: LockArenaEscrowInput): Promise<ArenaEscrowProof[]> {
 	if (!Number.isSafeInteger(input.amount) || input.amount <= 0) {
 		throw new Error('escrow amount must be a positive integer number of sats')
 	}
@@ -101,5 +113,6 @@ export async function lockArenaEscrowWithCoco(
 		amount: amountOf(proof),
 		secret: proof.secret,
 		C: proof.C,
+		dleq: escrowDleqOf(proof.dleq),
 	}))
 }
