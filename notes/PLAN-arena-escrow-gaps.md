@@ -435,6 +435,38 @@ verified.** Detail:
   mint swaps 55-107 ms, `every escrow is settled at the mint (nothing stranded)`, and
   `seller 360 + alice 640 + bob 1000 + carol 1000 = 3000 (3000 minted)`.
 
+- **The intermittent uncommitted bid — ROOT-CAUSED (2026-11-17), and it is block production, not the
+  anti-snipe rules.** A purpose-built probe (3 anti-snipe lots, two bids each, with the tx polled by hash and the
+  mempools sampled every second) caught it on the first iteration:
+
+  ```
+  it1: bid2 submitted via=relay hash=undefined late=-
+  it1: mempools immediately after submit: 0/0/0/1
+     +5s  inState=false h=86 mem=0/0/0/0      +10s inState=false h=86   +15s … +20s h=86
+  it1: bid2 committed=false        (it2 and it3: committed within 1 s)
+  ```
+
+  Two things follow, both chain-side:
+  1. **A tx sat in a validator's mempool (V4: 1 unconfirmed) with the height frozen at 86 for the whole 20 s
+     window** — i.e. the chain did not produce a block while it had work to commit. "Blocks on demand" is
+     therefore *delayed*: the tx waits for the next trigger (the repo's README says blocks come "only when there
+     is something to commit, plus one a minute as a heartbeat", so the worst case is a ~60 s wait). A client
+     waiting 15 s — as the suite does — sees a timeout, and the bid lands later, which is why the mempools looked
+     empty when I checked afterwards. **This is not an anti-snipe bug**: the step is simply where the suite
+     submits a second bid in quick succession.
+  2. **With `-relay` the submit path is worse than it looks**: `/api/tx` publishes to the relay and returns
+     `200 {"ok":true,"via":"relay"}` **without submitting to any validator** (`main.go`: `if publisher != nil { …
+     writeJSON(200, …); return }`), and the event's fate then rests on the relay observer's hop — which drops a
+     submit on `endpoint is closed while node is catching up` and **never retries**. `hash` is empty on that
+     path, so the client cannot even poll the tx.
+
+  **Fixes to specify (all chain-side):** (a) a pending tx must trigger a block promptly, or the design must state
+  the heartbeat latency and every client must outwait it; (b) `/api/tx` must not report ok on a relay publish
+  alone — either submit directly as well, or wait for the commit it is claiming; (c) the observer must **retry
+  with backoff** on a refused submit instead of dropping the event, and (d) it should carry a durable cursor so a
+  cold start re-ingests the backlog rather than re-reading from the beginning and racing the node.
+  Recorded for the validator-side session; the suite itself should also wait longer than one heartbeat interval.
+
 - **Open item (chain-side, flagged not solved):** in 2 of 5 runs the **second anti-snipe bid never commits**
   within the suite's 15 s (`timeout waiting for bid commit`). Measured at the moment of failure: **all four
   mempools empty**, no CheckTx refusal in any validator log, no `-relay`/publish error, chain responsive.
