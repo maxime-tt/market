@@ -21,21 +21,18 @@
  * (`resolveArenaLot`, `arenaLotRead.ts`): a bare `d` is ambiguous across sellers
  * and is answered by naming the candidates, never by guessing; "not found" is
  * said only from a `settled` read. The projection is the same
- * (`toAuctionDetailModel`, `toVerdictPanelModel`) and the surfaces are the same
- * `ui/auction/arena/*` views — only the `bidPanel` slot is left empty, because
- * bidding is not a dashboard action.
+ * (`toAuctionDetailModel`, `toVerdictPanelModel`) and the surfaces are the
+ * ported Layout A detail (`ui/auctions/catalogue/catalogue-detail-view.tsx`)
+ * plus the verdict panel (`ui/auction/arena/verdict-panel.tsx`) — only the
+ * `bidPanel` slot is left empty, because bidding is not a dashboard action.
  */
 
 import type { ArenaAuctionView } from '@platform/web/auctions/relay/arenaAuctionRead'
-import {
-	toAuctionDetailModel,
-	toVerdictPanelModel,
-	type ArenaSurfacesReadState,
-} from '@platform/web/auctions/relay/auctionSurfacesRead'
+import { toAuctionDetailModel, toVerdictPanelModel, type ArenaSurfacesReadState } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import { resolveArenaLot, type ArenaLotLookup } from '@platform/web/auctions/relay/arenaLotRead'
-import { ArenaAuctionDetail } from '@ui/auction/arena/auction-detail'
+import { CatalogueDetailView } from '@ui/auctions/catalogue/catalogue-detail-view'
 import { ArenaVerdictPanel } from '@ui/auction/arena/verdict-panel'
-import { shortKey, type ArenaRelayHealth, type ArenaSurfaceStatus } from '@ui/auction/arena/model'
+import { chainClockLabel, shortKey, type ArenaRelayHealth, type ArenaSurfaceStatus } from '@ui/auction/arena/model'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { AuctionFulfilmentHost } from '@platform/web/dashboard/AuctionFulfilmentHost'
 import { sellerAuctionHref } from '@platform/web/dashboard/sellerAuctionHref'
@@ -73,12 +70,16 @@ export function SellerAuctionLotHost({ d, seller, now, read }: SellerAuctionLotH
 
 	return (
 		<div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6">
-			{/* No `bidPanel`: this page is read-only by design. */}
-			<ArenaAuctionDetail
+			{/* The Layout A detail, ported. No `bidPanel`: this page is read-only by
+			    design, so the slot the public route fills stays empty here. The chain
+			    clock is passed in the host's own words, never formatted here. */}
+			<CatalogueDetailView
 				model={detail}
 				status={read.status}
 				relayHealth={read.relayHealth}
+				now={now}
 				backHref="/dashboard/products/auctions"
+				chainClockLabel={read.chainClock === null ? null : chainClockLabel(read.chainClock)}
 				sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} />}
 			/>
 			{verdicts !== null && (
@@ -114,8 +115,8 @@ function SellerLotAmbiguous({
 		<div data-slot="seller-lot-ambiguous" data-state={status} className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6">
 			<h1 className="font-header text-2xl font-semibold text-text-high">More than one auction has this id</h1>
 			<p className="text-sm text-text-mid">
-				An auction id is unique only within its seller, and {candidates.length} sellers published this one. Pick the lot you
-				meant — the page will not guess which.
+				An auction id is unique only within its seller, and {candidates.length} sellers published this one. Pick the lot you meant — the
+				page will not guess which.
 			</p>
 			<ul className="space-y-2">
 				{candidates.map((candidate) => (

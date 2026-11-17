@@ -350,3 +350,71 @@ export function satsLabel(value: number | null): string {
 /** The one place the panel is allowed to say what it is not doing. */
 export const ARENA_QUORUM_DISCLAIMER =
 	'Quorum is not implemented. This panel lists the verdicts validators published to the relay — it does not tally them, does not choose a winner, and does not confirm that any money moved.'
+
+// =========================================================================
+// The honesty sentences a list/card surface may state
+// =========================================================================
+
+/** A two-part honest message: a short title and the reason under it. */
+export interface ReadMessage {
+	title: string
+	detail: string
+}
+
+/**
+ * What a surface says when the read delivered no model. Each state gets its own
+ * sentence: they are not interchangeable, and collapsing them into one
+ * "nothing here" is the bug this exists to prevent.
+ *
+ * Lives here (not in a view) because it is a property of the read, not of any
+ * one presentation: the retired arena card, the ported Layout A detail and the
+ * verdict panel all state the same read the same way, and a second copy would
+ * eventually disagree with the first.
+ */
+export function readStateMessage(status: ArenaSurfaceStatus, subject = 'this auction'): ReadMessage | null {
+	switch (status) {
+		case 'loading':
+			return {
+				title: `Reading ${subject} from relays…`,
+				detail: 'Nothing has arrived yet. An empty card here means the read has not finished, not that the auction is missing.',
+			}
+		case 'no-relays':
+			return {
+				title: `No relay answered, so ${subject} could not be read.`,
+				detail: 'This is not the same as the auction not existing.',
+			}
+		case 'incomplete':
+			return {
+				title: `The read stopped before every relay answered.`,
+				detail: `Anything shown for ${subject} is what arrived, not the whole picture.`,
+			}
+		case 'error':
+			return {
+				title: `${subject[0].toUpperCase()}${subject.slice(1)} could not be read right now.`,
+				detail: 'The read failed rather than answering. Retrying is the only honest next step.',
+			}
+		case 'settled':
+			return {
+				title: `No such auction was read.`,
+				detail: 'Every relay answered and none of them carried it.',
+			}
+	}
+}
+
+/** `N bids` once the read is finished; `N bids so far` while it is not. */
+export function bidCountLabel(count: number, status: ArenaSurfaceStatus): string {
+	const noun = count === 1 ? 'bid' : 'bids'
+	if (status === 'settled') return `${count} ${noun}`
+	return `${count} ${noun} so far`
+}
+
+/** The price line, which must never assert a total it cannot support. */
+export function priceLine(model: ArenaAuctionCardModel): string {
+	if (model.topBidTotal !== null) return `${model.topBidTotal.toLocaleString()} sats`
+	if (model.bidsWithoutAmount > 0) {
+		const n = model.bidsWithoutAmount
+		return `${n} ${n === 1 ? 'bid carries' : 'bids carry'} no readable amount — total unknown`
+	}
+	if (model.startingBid !== null) return `No bids · starting ${model.startingBid.toLocaleString()} sats`
+	return 'No bid amount stated'
+}

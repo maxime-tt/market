@@ -68,6 +68,14 @@ describe('CatalogueDetailView', () => {
 		expect(html).toContain('escrow')
 	})
 
+	test('the read-model carries no reserve or funding mode, and neither is rendered', () => {
+		// The retired arena detail asserted the same absence; this keeps it pinned
+		// to the view that replaced it (the arena read has neither field, `model.ts`).
+		const html = render()
+		expect(html).not.toContain('Reserve')
+		expect(html).not.toContain('Funding mode')
+	})
+
 	test('counts down against the read’s now, not the browser clock', () => {
 		expect(render()).toContain('3m 20s')
 	})

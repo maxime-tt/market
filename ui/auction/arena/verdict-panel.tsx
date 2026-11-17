@@ -1,9 +1,9 @@
 import type { ReactNode, Ref } from 'react'
 import { StatusBadge } from '../../shared/status-badge'
 import { cn } from '../../utils/cn'
-import { readStateMessage } from './auction-card'
 import {
 	ARENA_QUORUM_DISCLAIMER,
+	readStateMessage,
 	shortKey,
 	verdictTone,
 	type ArenaRelayHealth,
@@ -57,7 +57,11 @@ function relayCountLabel(relayHealth: ArenaRelayHealth): string | null {
 
 function VerdictRow({ row, renderValidator }: { row: ArenaVerdictRow; renderValidator?: (pubkey: string | null) => ReactNode }) {
 	return (
-		<li data-slot="arena-verdict-row" data-outcome={row.outcome} className="rounded-lg border border-border-default bg-surface-raised px-3 py-2 text-xs">
+		<li
+			data-slot="arena-verdict-row"
+			data-outcome={row.outcome}
+			className="rounded-lg border border-border-default bg-surface-raised px-3 py-2 text-xs"
+		>
 			<div className="flex flex-wrap items-center gap-2">
 				<StatusBadge status={row.outcome} tone={verdictTone(row.outcome)} className="text-[10px] font-semibold uppercase tracking-wide" />
 				<span className="text-text-mid">height {row.height.toLocaleString()}</span>
@@ -73,8 +77,7 @@ function VerdictRow({ row, renderValidator }: { row: ArenaVerdictRow; renderVali
 				</span>
 				<span>bid {row.bidId === null ? 'none (no bid)' : shortKey(row.bidId)}</span>
 				<span>
-					payout{' '}
-					{row.payoutTokenSha256 === null ? 'none claimed' : <span className="font-mono">{shortKey(row.payoutTokenSha256)}</span>}
+					payout {row.payoutTokenSha256 === null ? 'none claimed' : <span className="font-mono">{shortKey(row.payoutTokenSha256)}</span>}
 				</span>
 			</div>
 		</li>
@@ -133,15 +136,18 @@ export function ArenaVerdictPanel({ model, status, relayHealth, renderValidator,
 
 			{duplicates && (
 				<p className="text-[11px] text-text-mid">
-					More verdicts than validators: at least one validator published more than one verdict. The panel lists them by
-					height and does not merge them.
+					More verdicts than validators: at least one validator published more than one verdict. The panel lists them by height and does not
+					merge them.
 				</p>
 			)}
 
 			{model.outcomes.length > 1 && (
-				<p data-slot="arena-verdict-disagreement" className="rounded-lg border border-warning-border bg-warning-muted px-3 py-2 text-xs text-warning-muted-foreground">
-					The published verdicts disagree (outcomes: {model.outcomes.join(', ')}). No quorum is applied here, so this
-					panel does not pick one.
+				<p
+					data-slot="arena-verdict-disagreement"
+					className="rounded-lg border border-warning-border bg-warning-muted px-3 py-2 text-xs text-warning-muted-foreground"
+				>
+					The published verdicts disagree (outcomes: {model.outcomes.join(', ')}). No quorum is applied here, so this panel does not pick
+					one.
 				</p>
 			)}
 
@@ -152,8 +158,7 @@ export function ArenaVerdictPanel({ model, status, relayHealth, renderValidator,
 				>
 					<p className="font-semibold">Two relays report different outcomes for this auction.</p>
 					<p className="mt-1 text-[11px]">
-						This is a signal, not proof: it can be a stale relay, a partition, or equivocation. The read does not
-						adjudicate it.
+						This is a signal, not proof: it can be a stale relay, a partition, or equivocation. The read does not adjudicate it.
 					</p>
 					<ul className="mt-2 space-y-1">
 						{Object.entries(model.divergence.byRelay)
@@ -169,7 +174,10 @@ export function ArenaVerdictPanel({ model, status, relayHealth, renderValidator,
 			)}
 
 			{model.rows.length === 0 ? (
-				<p data-slot="arena-verdict-empty" className="rounded-lg border border-dashed border-border-default bg-surface-raised p-3 text-xs text-text-mid">
+				<p
+					data-slot="arena-verdict-empty"
+					className="rounded-lg border border-dashed border-border-default bg-surface-raised p-3 text-xs text-text-mid"
+				>
 					{status === 'settled'
 						? 'No validator published a verdict for this auction that these relays carried. That is an absence, not a verdict of "no outcome".'
 						: 'No verdict has been read yet — the read has not finished, so this is not "no verdict".'}

@@ -33,10 +33,9 @@ import {
 	selectArenaListCards,
 	type ArenaListSort,
 } from '@platform/web/auctions/relay/ArenaAuctionsListHost'
-import { ArenaAuctionCard } from '@ui/auction/arena/auction-card'
+import { CatalogueCards } from '@ui/auctions/catalogue/catalogue-view'
 import { AuctionFiltersView } from '@ui/auction/auction-list-views'
 import type { ArenaRelayHealth, ArenaSurfaceStatus } from '@ui/auction/arena/model'
-import { ItemGrid } from '@ui/shared/item-grid'
 import { Button } from '@ui/wrappers/button'
 import { sellerAuctionHref } from '@platform/web/dashboard/sellerAuctionHref'
 
@@ -49,10 +48,7 @@ import { sellerAuctionHref } from '@platform/web/dashboard/sellerAuctionHref'
  * field (so `verdictDivergence` still reaches the cards). `null` in, `null` out:
  * "not read yet" is not "read and empty".
  */
-export function sellerAuctionsSnapshot(
-	snapshot: ArenaAuctionSnapshot | null,
-	seller: string,
-): ArenaAuctionSnapshot | null {
+export function sellerAuctionsSnapshot(snapshot: ArenaAuctionSnapshot | null, seller: string): ArenaAuctionSnapshot | null {
 	if (snapshot === null) return null
 	return { ...snapshot, auctions: snapshot.auctions.filter((auction) => auction.seller === seller) }
 }
@@ -124,9 +120,10 @@ export interface SellerAuctionsListHostProps {
 }
 
 /**
- * The seller's own lots: one `ArenaAuctionCard` per 1440 lot the seller
- * published. Controlled on purpose — the route owns the filter state, so the
- * host is a pure function of props and a test renders every state with literals.
+ * The seller's own lots: the Layout A card grid (`CatalogueCards`) over the 1440
+ * lots the seller published. Controlled on purpose — the route owns the filter
+ * state, so the host is a pure function of props and a test renders every state
+ * with literals.
  */
 export function SellerAuctionsListHost({
 	snapshot,
@@ -179,17 +176,13 @@ export function SellerAuctionsListHost({
 							{partialNotice}
 						</p>
 					)}
-					<ItemGrid className="gap-4 sm:gap-8">
-						{cards.map((card) => (
-							<ArenaAuctionCard
-								key={card.coordinate}
-								model={card}
-								status={status}
-								relayHealth={relayHealth}
-								href={sellerAuctionHref(card.d, card.seller)}
-							/>
-						))}
-					</ItemGrid>
+					<CatalogueCards
+						cards={cards}
+						status={status}
+						relayHealth={relayHealth}
+						now={now}
+						hrefFor={(card) => sellerAuctionHref(card.d, card.seller)}
+					/>
 				</>
 			) : filteredToNothing ? (
 				<div

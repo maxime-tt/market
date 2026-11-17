@@ -7,21 +7,25 @@
  * (`ui/AGENTS.md:18-28`), so there is nothing to stub — the platform adapter is
  * where `platform/web/auctions/relay/auctionSurfacesRead.test.ts` does its work.
  *
- * The cases mirror the storefront block's suite
- * (`ui/storefront/auction-list-block.test.tsx`): a count is a verdict, a verdict
- * needs a finished read, and "unknown" is never rendered as a value.
+ * The card / detail presentations moved to the ported Layout A views
+ * (`ui/auctions/catalogue/*`), which carry their own suites
+ * (`catalogue-detail-view.test.tsx`) and are exercised through the hosts
+ * (`ArenaAuctionsListHost.test.tsx`, `SellerAuctionsListHost.test.tsx`,
+ * `SellerAuctionLotHost.test.tsx`). What is asserted here is the part that did
+ * not move: the read-state sentences, the count/price honesty, and the verdict
+ * panel that infers no quorum.
  */
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ArenaAuctionCard, bidCountLabel, priceLine, readStateMessage } from './auction-card'
-import { ArenaAuctionDetail } from './auction-detail'
 import {
 	ARENA_QUORUM_DISCLAIMER,
 	ARENA_UNKNOWN_END_LABEL,
+	bidCountLabel,
 	phaseLabel,
+	priceLine,
+	readStateMessage,
 	type ArenaAuctionCardModel,
-	type ArenaAuctionDetailModel,
 	type ArenaVerdictPanelModel,
 	type ArenaVerdictRow,
 } from './model'
@@ -50,26 +54,6 @@ function card(over: Partial<ArenaAuctionCardModel> = {}): ArenaAuctionCardModel 
 		validatorCount: 0,
 		divergent: false,
 		relayCount: 2,
-		...over,
-	}
-}
-
-function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetailModel {
-	return {
-		...card(),
-		description: 'Thrown on a wheel.',
-		minIncrement: 100,
-		mode: 'antisnipe',
-		windowSec: 60,
-		durationSec: 3600,
-		sellerWallet: '02'.repeat(33),
-		v4vSplit: null,
-		versions: 1,
-		rootEventId: 'root-event-1',
-		canonicalEventId: 'root-event-1',
-		rootCreatedAt: 1000,
-		bids: [],
-		positions: [],
 		...over,
 	}
 }
@@ -105,127 +89,8 @@ function render(node: Parameters<typeof renderToStaticMarkup>[0]): string {
 }
 
 // =========================================================================
-// Card
+// Read-state sentences and count/price honesty
 // =========================================================================
-
-describe('ArenaAuctionCard — read states', () => {
-	test('loading with nothing delivered states the read, and never claims a count', () => {
-		const html = render(createElement(ArenaAuctionCard, { model: null, status: 'loading', relayHealth: HEALTH, href: null }))
-		expect(html).toContain('Reading this auction from relays')
-		expect(html).toContain('not that the auction is missing')
-		expect(html).toContain('1 of 2 relays answered')
-		expect(html).not.toContain('No such auction')
-	})
-
-	test('no relay answered is not "the auction does not exist"', () => {
-		const html = render(createElement(ArenaAuctionCard, { model: null, status: 'no-relays', relayHealth: { answered: 0, total: 2 }, href: null }))
-		expect(html).toContain('No relay answered')
-		expect(html).toContain('not the same as the auction not existing')
-		expect(html).not.toContain('No such auction was read')
-	})
-
-	test('an incomplete read says so without pretending to be final', () => {
-		const html = render(createElement(ArenaAuctionCard, { model: null, status: 'incomplete', relayHealth: HEALTH, href: null }))
-		expect(html).toContain('stopped before every relay answered')
-		expect(html).toContain('not the whole picture')
-	})
-
-	test('only a settled read may say the auction was not found', () => {
-		const html = render(createElement(ArenaAuctionCard, { model: null, status: 'settled', relayHealth: { answered: 2, total: 2 }, href: null }))
-		expect(html).toContain('No such auction was read')
-		expect(html).toContain('Every relay answered')
-	})
-
-	test('an error is a failure, not an empty result', () => {
-		const html = render(createElement(ArenaAuctionCard, { model: null, status: 'error', relayHealth: HEALTH, href: null }))
-		expect(html).toContain('could not be read right now')
-		expect(html).not.toContain('No such auction')
-	})
-})
-
-describe('ArenaAuctionCard — what it may state', () => {
-	test('a create with no duration renders an unknown end, not a made-up one', () => {
-		const html = render(
-			createElement(ArenaAuctionCard, {
-				model: card({ phase: 'unknown', endsAt: null }),
-				status: 'settled',
-				relayHealth: HEALTH,
-				href: '/auctions/lot-1',
-			}),
-		)
-		expect(html).toContain(ARENA_UNKNOWN_END_LABEL)
-		expect(html).not.toContain('LIVE')
-		expect(html).not.toContain('ENDS')
-	})
-
-	test('an ended auction with no verdict says the outcome is not verified, not that there is none', () => {
-		const html = render(
-			createElement(ArenaAuctionCard, { model: card({ phase: 'ended', verdict: null }), status: 'settled', relayHealth: HEALTH, href: null }),
-		)
-		expect(html).toContain('Outcome not verified yet')
-		expect(html).toContain('>Ended<')
-	})
-
-	test('a read verdict is labelled relay-reported', () => {
-		const html = render(
-			createElement(ArenaAuctionCard, {
-				model: card({ phase: 'ended', verdict: 'winner', verdictCount: 1, validatorCount: 1 }),
-				status: 'settled',
-				relayHealth: HEALTH,
-				href: null,
-			}),
-		)
-		expect(html).toContain('Outcome: winner (relay-reported)')
-	})
-
-	test('a partial read says "so far", a finished one does not', () => {
-		const loading = render(
-			createElement(ArenaAuctionCard, {
-				model: card({ bidCount: 3, topBidTotal: 300 }),
-				status: 'incomplete',
-				relayHealth: HEALTH,
-				href: null,
-			}),
-		)
-		expect(loading).toContain('3 bids so far')
-		const settled = render(
-			createElement(ArenaAuctionCard, {
-				model: card({ bidCount: 3, topBidTotal: 300 }),
-				status: 'settled',
-				relayHealth: HEALTH,
-				href: null,
-			}),
-		)
-		expect(settled).toContain('3 bids')
-		expect(settled).not.toContain('3 bids so far')
-	})
-
-	test('bids with no readable amount make the total unknown, never zero', () => {
-		const html = render(
-			createElement(ArenaAuctionCard, {
-				model: card({ bidCount: 2, bidsWithoutAmount: 1, topBidTotal: null }),
-				status: 'settled',
-				relayHealth: HEALTH,
-				href: null,
-			}),
-		)
-		expect(html).toContain('1 bid carries no readable amount — total unknown')
-		expect(html).not.toContain('0 sats')
-	})
-
-	test('relay disagreement is flagged on the card', () => {
-		const html = render(
-			createElement(ArenaAuctionCard, {
-				model: card({ divergent: true, verdict: 'winner' }),
-				status: 'settled',
-				relayHealth: HEALTH,
-				href: null,
-			}),
-		)
-		expect(html).toContain('Relays disagree about this auction')
-		expect(html).toContain('Outcome: winner (relay-reported)')
-	})
-})
 
 describe('card formatters', () => {
 	test('bidCountLabel qualifies a partial read', () => {
@@ -251,67 +116,6 @@ describe('card formatters', () => {
 		expect(phaseLabel('open')).toBe('Open')
 		expect(phaseLabel('ended')).toBe('Ended')
 		expect(phaseLabel('unknown')).toBe(ARENA_UNKNOWN_END_LABEL)
-	})
-})
-
-// =========================================================================
-// Detail
-// =========================================================================
-
-describe('ArenaAuctionDetail', () => {
-	test('renders terms as published and says "not stated" for the ones the create omitted', () => {
-		const html = render(
-			createElement(ArenaAuctionDetail, {
-				model: detail({ mode: null, windowSec: null, durationSec: null, v4vSplit: null }),
-				status: 'settled',
-			relayHealth: HEALTH,
-			}),
-		)
-		expect(html).toContain('not stated')
-		expect(html).toContain('No duration, so there is no end to state.')
-		// The protocol has no reserve at all: the word must not appear on the page.
-		expect(html).not.toContain('Reserve')
-		expect(html).not.toContain('Funding mode')
-	})
-
-	test('positions are labelled derived, not an outcome', () => {
-		const html = render(
-			createElement(ArenaAuctionDetail, {
-				model: detail({ positions: [{ bidder: 'bidder-one', total: 300 }], topBidTotal: 300, bidCount: 1 }),
-				status: 'settled',
-				relayHealth: HEALTH,
-			}),
-		)
-		expect(html).toContain('Positions (derived)')
-		expect(html).toContain('the verdict names the winner')
-	})
-
-	test('no verdict is rendered as unknown, with the reason spelled out', () => {
-		const html = render(
-			createElement(ArenaAuctionDetail, { model: detail({ verdict: null }), status: 'settled', relayHealth: HEALTH }),
-		)
-		expect(html).toContain('Unknown is not')
-	})
-
-	test('a partial read says so at the top and qualifies the bid list', () => {
-		const html = render(
-			createElement(ArenaAuctionDetail, {
-				model: detail({ bids: [], bidCount: 0 }),
-				status: 'incomplete',
-				relayHealth: HEALTH,
-			}),
-		)
-		expect(html).toContain('stopped before every relay answered')
-		expect(html).toContain('the read has not finished, so this is not')
-		expect(html).toContain('1 of 2 relays answered')
-	})
-
-	test('an empty read delivers the read state, not an empty auction', () => {
-		const html = render(
-			createElement(ArenaAuctionDetail, { model: null, status: 'loading', relayHealth: { answered: 0, total: 2 } }),
-		)
-		expect(html).toContain('Reading this auction from relays')
-		expect(html).not.toContain('Terms, as published')
 	})
 })
 
@@ -351,7 +155,10 @@ describe('ArenaVerdictPanel — no quorum is inferred, ever', () => {
 		const html = render(
 			createElement(ArenaVerdictPanel, {
 				model: panel({
-					rows: [verdictRow({ validator: V1, outcome: 'winner', height: 100 }), verdictRow({ validator: V2, outcome: 'cancelled', height: 120 })],
+					rows: [
+						verdictRow({ validator: V1, outcome: 'winner', height: 100 }),
+						verdictRow({ validator: V2, outcome: 'cancelled', height: 120 }),
+					],
 					validatorCount: 2,
 					outcomes: ['cancelled', 'winner'],
 				}),

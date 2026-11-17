@@ -287,7 +287,7 @@ export interface ArenaAuctionsListHostProps {
 }
 
 /**
- * The index list: one `ArenaAuctionCard` per live 1440 lot.
+ * The index list: the Layout A `CatalogueView` over the live 1440 lots.
  *
  * Controlled on purpose — the route owns the filter state, so the host is a pure
  * function of props and a test renders any state with literals.

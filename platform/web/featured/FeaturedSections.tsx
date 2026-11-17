@@ -2,7 +2,7 @@ import { CollectionCardHost as CollectionCard } from '@platform/web/collections/
 import { FeaturedUserCardHost as FeaturedUserCard } from '@platform/web/featured/FeaturedUserCardHost'
 import { ItemGrid } from '@ui/shared/item-grid'
 import { ProductCardHost as ProductCard } from '@platform/web/products/ProductCardHost'
-import { ArenaAuctionCard } from '@ui/auction/arena/auction-card'
+import { CatalogueCards } from '@ui/auctions/catalogue/catalogue-view'
 import { arenaAuctionHref } from '@platform/web/auctions/relay/ArenaAuctionsListHost'
 import { Button } from '@ui/primitives/button'
 import { cn } from '@ui/utils/cn'
@@ -87,10 +87,14 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 	// `1440:<seller>:<d>`, and only the read can say whether that lot is published.
 	const arenaRead = useArenaSurfacesRead()
 
+	// One wall-clock instant for the strip, shared with the projection so the
+	// countdown and the read are judged against the same `now`.
+	const now = Math.floor(Date.now() / 1000)
+
 	// Limit items per section
 	const displayProducts = featuredProducts?.featuredProducts?.slice(0, maxItemsPerSection) || []
 	const displayAuctions = featuredAuctions?.featuredAuctions?.slice(0, maxItemsPerSection) || []
-	const auctionCards = featuredAuctionCards(displayAuctions, arenaRead, Math.floor(Date.now() / 1000))
+	const auctionCards = featuredAuctionCards(displayAuctions, arenaRead, now)
 	const displayCollections = featuredCollections?.featuredCollections?.slice(0, maxItemsPerSection) || []
 	const displayUsers = featuredUsers?.featuredUsers?.slice(0, maxItemsPerSection) || []
 
@@ -148,18 +152,13 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 								</div>
 							)}
 						</div>
-						<ItemGrid className="gap-4 sm:gap-8">
-							{auctionCards.map((card) => (
-								<ArenaAuctionCard
-									key={card.coordinate}
-									model={card}
-									status={arenaRead.status}
-									relayHealth={arenaRead.relayHealth}
-									href={arenaAuctionHref(card.d)}
-									className={classNameLight}
-								/>
-							))}
-						</ItemGrid>
+						<CatalogueCards
+							cards={auctionCards}
+							status={arenaRead.status}
+							relayHealth={arenaRead.relayHealth}
+							now={now}
+							hrefFor={(card) => arenaAuctionHref(card.d)}
+						/>
 					</div>
 				</section>
 			)}
