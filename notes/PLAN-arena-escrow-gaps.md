@@ -95,20 +95,53 @@ claiming the ecash the validators minted for you) plus two defects found during 
 
 ## 2. Decisions needed before dispatch (owner)
 
-**D1 — Which backend is authoritative on the instance?** The live instance currently proxies
-`/api/auctions/{state,config,event}` to `http://127.0.0.1:8080`, which is the **MVP demo**
-(`auctions-mvp-demo.service`, `poc`, 4 validators, `funding_mode: custodial_reservation_v1`). Its
-records are its own API's (`settle-probe-…`, `proof-…`, field names like
-`seller_coco_payment_public_key`), and it does not ingest the app's kinds. Options:
-  - **(a) Deploy the arena chain** from the integration ref as the backend, keep the MVP beside it on
-    a different port (recommended: it is the protocol the app's kinds belong to, and it is already
-    written).
-  - **(b) Teach the MVP demo to ingest 1440/1441** (a second observer beside its own kinds) — smaller
-    deploy, but it means maintaining two protocols in one backend, which the kind-map decision
-    already rejected.
-  - **(c) Point the app at the arena chain only for the 1440 flow and leave the MVP for everything
-    else** — rejected unless you say otherwise: two backends behind one proxy path is the
-    "two create surfaces" trap in transport form.
+**D1 — RESOLVED (owner, 2026-11-17): the validators watch the test relay; the app only reads and
+publishes to that relay; and no HTTP traffic ever crosses directly from client to validator.** The
+protocol is the migrated one — kind-1440 with real sats from our test mint. So: the arena chain is
+the backend, the MVP is not a fallback, and the app's HTTP paths to the backend are to be **deleted,
+not repointed** (the MVP needs no port to sit on).
+
+**Verification against the live deployment (2026-11-17) — the ruling is NOT satisfied yet.** Three
+findings, each measured:
+
+1. **Two client→backend HTTP call sites exist today**, both through the app's own proxy
+   (`platform/server/http/auctionsProtocol.ts`, which forwards `/api/auctions/{state,config,event}`
+   and the MVP's `/api/demo/reservation` to `http://127.0.0.1:8080`):
+   - `platform/web/auctions/relay/AuctionBidHost.tsx:110` —
+     `createHttpPorts({ apiBase: '/api/auctions' }).getConfig()`: **the escrow's terms**. The
+     committee key and mint URL arrive over HTTP, and `arenaBidFunding` locks to the key it is handed.
+   - `platform/web/auctions/catalogue/catalogueQuery.ts:25` — `fetch('/api/auctions/state')`: the
+     **Catalogue surface** reads committed state over HTTP.
+   Everything else already reads or writes the relay (lots 1440, bids 1441, verdicts 1445). The
+   client's `reserve()` (`/api/demo/reservation`, the MVP's custodial mode) has **no app caller** —
+   it is test-only — so it deletes with the proxy.
+2. **Nothing publishes the escrow's terms to the relay, so a relay-only client is currently
+   impossible.** The chain holds them: `chain/app.go` `Params` carries `MintURL`, `KeysetID`, `Keys`,
+   `GroupKey` (the FROST 3-of-4 escrow key), `FrostPublic`, `ValidatorNames`, `MinWindowSec`,
+   `MaxWindowSec`, `SettlementSafetySec`, `BidToConsensusLatencySec`, `MinDurationSec`,
+   `MaxDurationSec`, `MaxProofs`, `Threshold` and the validator roster — and the comment says the
+   roster lives in `Params` so it is inside the AppHash. But the only thing published to the relay is
+   the kind-1447 **state commitment**, whose content is `schema, height, appHash, time` — a hash, not
+   the params. So the committee key has no relay source today. **This is a gap the plan did not have:
+   it is increment 9 below.**
+3. **The deployed backend is not the arena chain.** `/api/auctions/config` currently answers from the
+   MVP demo — `schema: PlebeianAuctionsPOCStateV8`, `application_authority: legacy_ed25519_v1`,
+   `funding_mode: custodial_reservation_v1`, `profile: FAKE_MONEY_ONLY` — whose auction records are
+   its own API's (`settle-probe-…`, `proof-…`). The app *speaks* 1440/1441 (verified on the relay:
+   creates and bids carrying the NUT-11 `n_sigs:2` escrow), but the backend never ingests them and
+   publishes no verdict.
+
+**The mint is right already:** the app's escrow locks proofs from `https://mint.playday.it`
+(`cashu_mint_url` in that config), the box's Nutshell + FakeWallet test mint — not the MVP's internal
+`mint_url: http://127.0.0.1:8080/test-mint`, which belongs to the MVP's own note-based funding and
+which the arena path never touches.
+
+**A stranding hazard this check exposed.** The escrow key is `s.Params.GroupKey` — a **FROST 3-of-4
+group key** "no single validator holds" (`chain/app.go:637` → `checkSigAllLock(..., s.Params.GroupKey,
+...)`). The app currently locks to whatever `committee_public_key` its HTTP config gives it, from a
+*different* network. Unless the app reads the arena chain's own published group key, every escrow it
+creates is locked to a key the validators cannot sign for — unspendable by anyone, exactly the
+"wrong derived value, nothing raises" class. Increment 9 is what removes it.
 
 **D2 — Is the arena chain repo in scope for me to land branches in?** The handover calls it another
 session's (`ChiefmonkeyArt`). This plan assumes I may branch and commit there (never force-push
@@ -121,8 +154,9 @@ Neither decision blocks increment 6 or 7 — start those immediately if you want
 
 ## 3. The increments
 
-Ordering: **6 → 7 → 1 → 2 → 3 → 4 → 5 → 8**. 6 and 7 are independent and land today. 1 must precede
-2 (there is nothing to ingest into otherwise). 2 must precede 3/4/5 (a lot the chain never sees can
+Ordering: **6 → 7 → 1 → 9 → 2 → 3 → 4 → 5 → 8**. 6 and 7 are independent and land today. 1 must
+precede 9 (the params must come from the arena chain, not the MVP). 1 precedes 2 (there is nothing to
+ingest into otherwise). 2 must precede 3/4/5 (a lot the chain never sees can
 never be extended, refunded or settled). 8 is the app-side claim path that 4 and 5 both need, and it
 is deliberately **its own increment** because it is the seam both of them would otherwise assume the
 other owns.
@@ -214,6 +248,59 @@ renders. **No app-side behaviour may regress** — every read the app does today
 (`seller`, `end_time`, `starting_bid`, `status`, `high_bid`, `original_end_time`,
 `late_bid_extension_seconds`, `max_total_extension_seconds`, `required_locktime`, `winner`) — diff the
 two shapes **before** repointing, and say in the report which fields differ.
+
+---
+
+### Increment 9 — publish the chain's params to the relay (the escrow's terms source)
+
+**Why this exists.** The ruling "no HTTP ever crosses from client to validator" cannot hold today: the
+escrow's committee key and mint URL are only available over HTTP (increment D1's finding 1), and the
+chain publishes only `schema, height, appHash, time` in its 1447 state commitment. Without this
+increment, deleting the app's config read leaves the escrow with **no** source for the key it must lock
+to — so this increment gates the HTTP removal, and it gates increment 4/5's settlement actually being
+possible for locks the app creates.
+
+**Goal.** The app learns every term the escrow needs from relay events alone, and the key it locks to
+is the **same key the validators settle with**.
+
+**Scope (chain side).**
+- Publish the escrow-relevant `Params` to the relay, per validator, signed, anchored — either as a new
+  `schema` inside the existing 1447 commitment, or as its own kind if we prefer the commitment to stay
+  a pure `(height, app_hash, time)` anchor. Decide, and say which, because the app's reader is written
+  against the choice.
+- What it must carry at minimum: `GroupKey` (the FROST escrow key), `MintURL`, `KeysetID`, `Keys`,
+  `SettlementSafetySec`, `BidToConsensusLatencySec`, `MinWindowSec`, `MaxWindowSec`,
+  `MinDurationSec`, `MaxDurationSec`, `MaxProofs`, `Threshold`, and the validator roster.
+- **Consistency rule (state it, or the app will trust a stale term):** the params in the event must be
+  the ones committed in the app hash it names — a client that reads params and a height can then tell
+  they belong together.
+- **The FROST group key must be the published one.** `checkSigAllLock` uses `s.Params.GroupKey`; the
+  app must lock to exactly that value. A test must pin a create-and-bid fixture against the published
+  params and assert the lock's `pubkeys` equals `GroupKey` x-only — the seam that otherwise strands
+  every escrow silently.
+
+**Scope (app side).**
+- Replace `createHttpPorts({ apiBase: '/api/auctions' }).getConfig()` in
+  `platform/web/auctions/relay/AuctionBidHost.tsx` with a relay read of the published params, verified
+  the same way verdicts already are (signature, schema, mandatory anchor, roster check —
+  `sdk/commerce/auctions/verdictQuorum.ts` / `arenaAnchor.ts` are the existing patterns to reuse).
+- Replace `fetch('/api/auctions/state')` in `platform/web/auctions/catalogue/catalogueQuery.ts` with
+  the relay read of lots/bids/verdicts the arena client already has, or change that surface if it
+  genuinely needed the state document.
+- **Delete** the proxy (`platform/server/http/auctionsProtocol.ts`, its routes and
+  `AUCTIONS_PROTOCOL_UPSTREAM_URL`) and the client's `reserve` path in the same increment as the last
+  reader moves — not before, and not left as a fallback. A fallback HTTP path is how "no HTTP ever"
+  quietly stops being true.
+
+**Depends on.** 1. Blocks the deletion half of this increment; 2, 3, 4, 5 depend on its app half for a
+correct lock key.
+
+**Seam owned.** chain params → relay event → app's escrow terms.
+
+**Acceptance.** With the proxy route removed from the build: create a lot and place a funded bid in the
+browser with the network panel showing **zero** requests to `/api/auctions/*`; the resulting lock's
+`pubkeys` equals the published `GroupKey`; and a bid assembled from the relay-read params is accepted
+by consensus.
 
 ---
 
@@ -389,14 +476,19 @@ named — because 1–5 are split across two repos and three areas.
 
 ## 5. Open questions for the owner
 
-1. **D1 / D2 above** (backend authority; whether I may land in the arena repo).
-2. **Do we keep the MVP demo running at all** once the arena chain serves the instance? Keeping it
-   leaves a second, custodial funding mode reachable behind a different path; stopping it is a
-   one-way door for anything still pointed at it.
-3. **Should the app keep the HTTP proxy read at all**, or move the config/committee/mint read to the
-   relay too? The ingest handover's direction was one transport, and the state document is what the
-   verdict note calls the transport the front end should stop needing. Not required to close the
-   three gaps, but the plan should not bake in a dependency we intend to delete.
+1. **D2 only, now:** may I land branches in the arena repo? (D1 is settled: the arena chain is the
+   backend; the app talks to the relay only, and the HTTP proxy is deleted, not repointed.)
+2. **The existing test locks and the group key.** Every escrow created so far is locked to the MVP's
+   `committee_public_key`, which is not the arena chain's FROST group key — those locks can never be
+   settled by the validators. Confirm a wipe of the test lots is fine (fake money), rather than any
+   attempt to carry them across.
+3. **Do we keep the MVP demo running at all** once the arena chain serves the instance? Keeping it
+   leaves a second, custodial funding mode one env var away; stopping it is a one-way door for
+   anything still pointed at it. My recommendation: stop it, and delete the app's paths to it in
+   increment 9.
+4. **The Catalogue surface's state read** (`catalogueQuery.ts`): does it move to the relay reads the
+   arena client already has, or does that surface change shape? The ruling settles *that* it must not
+   be HTTP; it does not settle what replaces it.
 4. **The locktime reclaim action** (a bidder whose bid was neither outbid nor won, getting their sats
    back after `locktime`): wanted as a user-visible action, or is the validator-driven refund enough
    for now? It is the difference between increment 8 being "claim what you were paid" and "also reclaim
