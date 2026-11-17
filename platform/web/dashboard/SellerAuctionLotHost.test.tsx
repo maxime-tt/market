@@ -25,9 +25,7 @@ import type { ArenaSurfaceStatus } from '@ui/auction/arena/model'
 // test only needs to know it was handed the resolved lot.
 mock.module('@platform/web/dashboard/AuctionFulfilmentHost', () => ({
 	AuctionFulfilmentHost: (props: { view: { coordinate: string } | null }) =>
-		props.view === null
-			? null
-			: createElement('div', { 'data-testid': 'fulfilment-stub', 'data-coordinate': props.view.coordinate }),
+		props.view === null ? null : createElement('div', { 'data-testid': 'fulfilment-stub', 'data-coordinate': props.view.coordinate }),
 	winningBidderOf: () => null,
 	formatClaimAddress: () => '',
 }))
@@ -121,7 +119,7 @@ function snapshotOf(events: NostrEventLike[]): ArenaAuctionSnapshot {
 }
 
 function readState(events: NostrEventLike[], status: ArenaSurfaceStatus, relayHealth = { answered: 1, total: 1 }): ArenaSurfacesReadState {
-	return { snapshot: snapshotOf(events), status, relayHealth }
+	return { snapshot: snapshotOf(events), status, relayHealth, chainClock: null }
 }
 
 function render(read: ArenaSurfacesReadState, over: { d?: string; seller?: string | null; now?: number } = {}): string {
@@ -188,7 +186,7 @@ describe('SellerAuctionLotHost — not found only from a settled read', () => {
 	})
 
 	test('before the first result (no snapshot) it is a partial read, not a verdict', () => {
-		const markup = render({ snapshot: null, status: 'loading', relayHealth: { answered: 0, total: 0 } })
+		const markup = render({ snapshot: null, status: 'loading', relayHealth: { answered: 0, total: 0 }, chainClock: null })
 		expect(markup).toContain('Reading this auction from relays')
 		expect(markup).not.toContain('No such auction was read.')
 	})
@@ -205,10 +203,9 @@ describe('SellerAuctionLotHost — an ambiguous d', () => {
 	})
 
 	test('the ?seller param picks exactly one lot', () => {
-		const markup = render(
-			readState([createEvent({ pubkey: SELLER_A }, ), createEvent({ pubkey: SELLER_B })], 'settled'),
-			{ seller: SELLER_B },
-		)
+		const markup = render(readState([createEvent({ pubkey: SELLER_A }), createEvent({ pubkey: SELLER_B })], 'settled'), {
+			seller: SELLER_B,
+		})
 		expect(markup).not.toContain('data-slot="seller-lot-ambiguous"')
 		expect(markup).toContain('data-slot="arena-auction-detail"')
 		expect(markup).toContain('data-coordinate="1440:seller-bob:lot-1"')

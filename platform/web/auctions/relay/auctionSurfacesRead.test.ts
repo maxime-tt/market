@@ -16,6 +16,7 @@ import type { EventFilter, EventStreamItem, NostrEventLike } from '@sdk/core'
 import {
 	ARENA_AUCTION_BID_KIND,
 	ARENA_AUCTION_CREATE_KIND,
+	ARENA_STATE_COMMITMENT_KIND,
 	ARENA_VERDICT_KIND,
 	ARENA_VERDICT_SCHEMA,
 } from '@sdk/commerce/auctions/constants'
@@ -77,9 +78,7 @@ function createEvent(
 	}
 }
 
-function bidEvent(
-	over: { auctionId?: string; amount?: unknown; pubkey?: string; created_at?: number } = {},
-): NostrEventLike {
+function bidEvent(over: { auctionId?: string; amount?: unknown; pubkey?: string; created_at?: number } = {}): NostrEventLike {
 	return {
 		id: nextId('bid'),
 		pubkey: over.pubkey ?? BIDDER_ONE,
@@ -123,6 +122,24 @@ function verdictEvent(
 interface FakeRelayOptions {
 	events?: NostrEventLike[]
 	fail?: string
+}
+
+function commitmentEvent(over: { height?: number; appHash?: string; validator?: string; time?: number | null } = {}): NostrEventLike {
+	const height = over.height ?? 10
+	const appHash = over.appHash ?? 'cafe'
+	const time = over.time === undefined ? 1_700_000_000 : over.time
+	return {
+		id: nextId('commit'),
+		pubkey: over.validator ?? 'validator-one',
+		created_at: 1400,
+		kind: ARENA_STATE_COMMITMENT_KIND,
+		tags: [
+			['height', String(height)],
+			['hash', appHash],
+			['p', over.validator ?? 'validator-one'],
+		],
+		content: JSON.stringify({ schema: 'arena.statecommit.v1', height, app_hash: appHash, time }),
+	}
 }
 
 function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
@@ -188,9 +205,7 @@ describe('arenaSurfaceStatus', () => {
 		// `summarizeHealth` sets this when no relay answered — mirrored here rather
 		// than recomputed, because the adapter is the authority on its own health.
 		const relay = { url: 'wss://a', status: 'timeout' as const, events: 0, refusals: 0, eose: false, error: null }
-		expect(
-			arenaSurfaceStatus(health({ relays: [relay], pending: ['wss://a'], noRelaysReachable: true })),
-		).toBe('no-relays')
+		expect(arenaSurfaceStatus(health({ relays: [relay], pending: ['wss://a'], noRelaysReachable: true }))).toBe('no-relays')
 	})
 
 	test('one relay still pending makes the read incomplete, even with data', () => {
@@ -402,9 +417,7 @@ describe('divergenceFor', () => {
 
 	test('matches a divergence keyed by the full coordinate', () => {
 		const auction = onlyAuction(snapshotOf([createEvent()]))
-		const found = divergenceFor(auction, [
-			{ auctionId: auction.coordinate, byRelay: { 'wss://a': ['winner'], 'wss://b': ['cancelled'] } },
-		])
+		const found = divergenceFor(auction, [{ auctionId: auction.coordinate, byRelay: { 'wss://a': ['winner'], 'wss://b': ['cancelled'] } }])
 		expect(found?.auctionId).toBe(auction.coordinate)
 	})
 
@@ -487,6 +500,24 @@ describe('collectArenaSurfacesRead', () => {
 		const state = await collectArenaSurfacesRead(readFrom({ 'wss://a': { events: [badCreate, createEvent({ id: 'create-good' })] } }))
 		expect(state.snapshot?.auctions).toHaveLength(1)
 		expect(state.snapshot?.refusals.some((refusal) => refusal.reason === 'arena.bad_content')).toBe(true)
+	})
+
+	test('the read state carries the chain clock anchored on the commitments the read saw', async () => {
+		const state = await collectArenaSurfacesRead(
+			readFrom({ 'wss://a': { events: [createEvent(), commitmentEvent({ height: 30, time: 1_699_999_000 })] } }),
+		)
+		expect(state.chainClock?.height).toBe(30)
+		expect(state.chainClock?.time).toBe(1_699_999_000)
+		expect(state.chainClock?.ageSec).not.toBeNull()
+		// The rules clock is the same anchored instant.
+		expect(state.chainClock?.rulesHeight).toBe(30)
+	})
+
+	test('with no commitment the chain clock is honestly unknown, never zero or now', async () => {
+		const state = await collectArenaSurfacesRead(readFrom({ 'wss://a': { events: [createEvent()] } }))
+		expect(state.chainClock?.time).toBeNull()
+		expect(state.chainClock?.height).toBeNull()
+		expect(state.chainClock?.freshness).toBe('unknown')
 	})
 })
 

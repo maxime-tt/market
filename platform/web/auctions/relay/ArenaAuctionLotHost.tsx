@@ -57,6 +57,7 @@ const EMPTY_READ: ArenaSurfacesReadState = {
 	snapshot: null,
 	status: 'loading',
 	relayHealth: { answered: 0, total: 0 },
+	chainClock: null,
 }
 
 /**
@@ -150,11 +151,7 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: Arena
 				relayHealth={read.relayHealth}
 				backHref="/auctions"
 				sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} />}
-				bidPanel={
-					detail === null ? null : (
-						<AuctionBidHost model={detail} readStatus={read.status} now={now} onPublished={onPublished} />
-					)
-				}
+				bidPanel={detail === null ? null : <AuctionBidHost model={detail} readStatus={read.status} now={now} onPublished={onPublished} />}
 			/>
 			{verdicts !== null && (
 				<ArenaVerdictPanel
@@ -183,15 +180,11 @@ function ArenaLotAmbiguous({
 	relayHealth: ArenaRelayHealth
 }) {
 	return (
-		<div
-			data-slot="arena-lot-ambiguous"
-			data-state={status}
-			className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6"
-		>
+		<div data-slot="arena-lot-ambiguous" data-state={status} className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6">
 			<h1 className="font-header text-2xl font-semibold text-text-high">More than one auction has this id</h1>
 			<p className="text-sm text-text-mid">
-				An auction id is unique only within its seller, and {candidates.length} sellers published this one. Pick the
-				lot you meant — the page will not guess which.
+				An auction id is unique only within its seller, and {candidates.length} sellers published this one. Pick the lot you meant — the
+				page will not guess which.
 			</p>
 			<ul className="space-y-2">
 				{candidates.map((candidate) => (

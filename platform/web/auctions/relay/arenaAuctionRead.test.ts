@@ -14,11 +14,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import type { EventFilter, EventStreamItem, NostrEventLike } from '@sdk/core'
-import {
-	ARENA_AUCTION_CREATE_KIND,
-	ARENA_STATE_COMMITMENT_KIND,
-	ARENA_VERDICT_KIND,
-} from '@sdk/commerce/auctions/constants'
+import { ARENA_AUCTION_CREATE_KIND, ARENA_STATE_COMMITMENT_KIND, ARENA_VERDICT_KIND } from '@sdk/commerce/auctions/constants'
 import {
 	ARENA_READ_KINDS,
 	ARENA_REFUSAL_BAD_IDENTITY,
@@ -119,7 +115,16 @@ function bidEvent(
 }
 
 function verdictEvent(
-	over: { auctionId?: string; bidId?: string; outcome?: string; height?: number; hash?: string; validator?: string; created_at?: number; id?: string } = {},
+	over: {
+		auctionId?: string
+		bidId?: string
+		outcome?: string
+		height?: number
+		hash?: string
+		validator?: string
+		created_at?: number
+		id?: string
+	} = {},
 ): NostrEventLike {
 	const auctionId = over.auctionId ?? 'lot-1'
 	const height = over.height ?? 10
@@ -150,10 +155,11 @@ function verdictEvent(
 }
 
 function commitmentEvent(
-	over: { height?: number; appHash?: string; validator?: string; created_at?: number; id?: string } = {},
+	over: { height?: number; appHash?: string; validator?: string; created_at?: number; id?: string; time?: number | null } = {},
 ): NostrEventLike {
 	const height = over.height ?? 10
 	const appHash = over.appHash ?? 'cafe'
+	const time = over.time === undefined ? 1700000000 : over.time
 	return ev({
 		kind: ARENA_STATE_COMMITMENT_KIND,
 		pubkey: over.validator ?? 'validator-1',
@@ -164,7 +170,7 @@ function commitmentEvent(
 			['hash', appHash],
 			['p', over.validator ?? 'validator-1'],
 		],
-		content: { schema: 'arena.statecommit.v1', height, app_hash: appHash, time: 1700000000 },
+		content: { schema: 'arena.statecommit.v1', height, app_hash: appHash, time },
 	})
 }
 
@@ -195,9 +201,7 @@ function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
 			}
 			yield {
 				type: 'caught-up',
-				info: options.silent
-					? { eose: [], pending: [url], complete: false }
-					: { eose: [url], pending: [], complete: false },
+				info: options.silent ? { eose: [], pending: [url], complete: false } : { eose: [url], pending: [], complete: false },
 			} as EventStreamItem<NostrEventLike>
 		},
 	})
@@ -444,6 +448,32 @@ describe('verdicts and commitments', () => {
 		}).snapshot()
 		expect(forked.commitmentForks).toHaveLength(1)
 		expect(forked.commitmentForks[0].byRelay).toEqual({ 'wss://a': ['aaaa'], 'wss://b': ['bbbb'] })
+	})
+
+	test('two commitments at one height with different times do not collapse, and the newest time wins', async () => {
+		// The heartbeat publishes several ticks at one unchanged height; they share
+		// `(validator, height, app_hash)` and differ only by `time`. Without `time` in
+		// the identity they collapse to one entry and the *first* (oldest) wins, so the
+		// clock would be as stale as the oldest tick. They must stay two, newest first.
+		const older = commitmentEvent({ height: 50, appHash: 'aaaa', validator: 'validator-1', time: 1700000100 })
+		const newer = commitmentEvent({ height: 50, appHash: 'aaaa', validator: 'validator-1', time: 1700000500 })
+		const read = readFrom({ 'wss://a': { events: [older, newer] } })
+
+		const snapshot = await read.snapshot()
+		expect(snapshot.stateCommitments).toHaveLength(2)
+		expect(snapshot.stateCommitments.map((c) => c.time)).toEqual([1700000500, 1700000100])
+		expect(snapshot.highestCommitment?.time).toBe(1700000500)
+	})
+
+	test('at one height the stated newest time sorts ahead of a commitment with no time', async () => {
+		const noTime = commitmentEvent({ height: 50, appHash: 'aaaa', validator: 'validator-1', time: null })
+		const timed = commitmentEvent({ height: 50, appHash: 'aaaa', validator: 'validator-1', time: 1700000200 })
+		const read = readFrom({ 'wss://a': { events: [noTime, timed] } })
+
+		const snapshot = await read.snapshot()
+		expect(snapshot.stateCommitments).toHaveLength(2)
+		expect(snapshot.stateCommitments[0].time).toBe(1700000200)
+		expect(snapshot.stateCommitments[1].time).toBeNull()
 	})
 
 	test('relays reporting different outcomes for one auction are flagged as divergent', async () => {

@@ -196,12 +196,7 @@ export type ArenaCreateImmutableField = (typeof ARENA_CREATE_IMMUTABLE_FIELDS)[n
  * absent/empty collapses to `null`. `v4vSplit` is an array of objects and is
  * compared by its canonical JSON serialisation.
  */
-const NUMERIC_IMMUTABLE_FIELDS: ReadonlySet<string> = new Set([
-	'startPrice',
-	'minIncrement',
-	'windowSec',
-	'durationSec',
-])
+const NUMERIC_IMMUTABLE_FIELDS: ReadonlySet<string> = new Set(['startPrice', 'minIncrement', 'windowSec', 'durationSec'])
 
 // =========================================================================
 // Raw event → decoded event
@@ -290,11 +285,7 @@ export interface ArenaStateCommitmentEvent extends ArenaAuctionEventBase {
 	commitment: ParsedArenaStateCommitment
 }
 
-export type ArenaAuctionEvent =
-	| ArenaCreateEvent
-	| ArenaBidEvent
-	| ArenaVerdictEvent
-	| ArenaStateCommitmentEvent
+export type ArenaAuctionEvent = ArenaCreateEvent | ArenaBidEvent | ArenaVerdictEvent | ArenaStateCommitmentEvent
 
 /** One event the gate refused, with the relay that offered it. */
 export interface ArenaRefusedEvent {
@@ -434,12 +425,7 @@ function baseOf(event: NostrEventLike, relay: string): ArenaAuctionEventBase {
 	}
 }
 
-function refuse(
-	relay: string,
-	event: NostrEventLike | null,
-	reason: string,
-	detail: string,
-): { ok: false; refusal: ArenaRefusedEvent } {
+function refuse(relay: string, event: NostrEventLike | null, reason: string, detail: string): { ok: false; refusal: ArenaRefusedEvent } {
 	return {
 		ok: false,
 		refusal: {
@@ -643,13 +629,19 @@ export interface ArenaCommitmentFork {
 	byRelay: Record<string, string[]>
 }
 
+/** A kind-1447 state commitment with its provenance: the parsed anchor plus the relays that delivered it. */
+export interface ArenaStateCommitmentView extends ParsedArenaStateCommitment {
+	/** Every relay that delivered this commitment. */
+	relays: string[]
+}
+
 export interface ArenaAuctionSnapshot {
 	/** Canonical auctions, `created_at` descending (tie: lowest event id first). */
 	auctions: ArenaAuctionView[]
 	/** Verdicts whose `auction` id matches no create this read saw. */
 	orphanVerdicts: ParsedArenaVerdict[]
-	/** State commitments, height descending then validator pubkey. */
-	stateCommitments: ParsedArenaStateCommitment[]
+	/** State commitments, height descending then time descending, then validator pubkey. */
+	stateCommitments: ArenaStateCommitmentView[]
 	highestCommitment: ParsedArenaStateCommitment | null
 	commitmentForks: ArenaCommitmentFork[]
 	verdictDivergence: ArenaVerdictDivergence[]
@@ -801,10 +793,7 @@ export function projectArenaEvents(
 	}
 
 	const rejectedCreates: ArenaRejectedCreate[] = []
-	const resolved = new Map<
-		string,
-		{ root: ArenaCreateEvent; canonical: ArenaCreateEvent; versions: number; coordinate: string }
-	>()
+	const resolved = new Map<string, { root: ArenaCreateEvent; canonical: ArenaCreateEvent; versions: number; coordinate: string }>()
 
 	for (const [key, versions] of groups) {
 		const { root, accepted, rejected } = resolveVersions(versions)
@@ -905,9 +894,7 @@ export function projectArenaEvents(
 	// ---- assemble views --------------------------------------------------
 	const auctions: ArenaAuctionView[] = []
 	for (const [key, entry] of resolved) {
-		const auctionBids = [...(bidsByKey.get(key) ?? [])].sort(
-			(a, b) => a.createdAt - b.createdAt || a.eventId.localeCompare(b.eventId),
-		)
+		const auctionBids = [...(bidsByKey.get(key) ?? [])].sort((a, b) => a.createdAt - b.createdAt || a.eventId.localeCompare(b.eventId))
 		const positions: Record<string, number> = {}
 		let bidsWithoutAmount = 0
 		for (const bid of auctionBids) {
@@ -951,21 +938,37 @@ export function projectArenaEvents(
 		})
 	}
 
-	auctions.sort(
-		(a, b) => b.createdAt - a.createdAt || a.canonicalEventId.localeCompare(b.canonicalEventId),
-	)
+	auctions.sort((a, b) => b.createdAt - a.createdAt || a.canonicalEventId.localeCompare(b.canonicalEventId))
 
 	// ---- state commitments ----------------------------------------------
+	// The identity includes `time`. Several commitments at one unchanged height
+	// (the ephemeral heartbeat, and today the 1 s publisher) share
+	// `(validator, height, app_hash)`; without `time` they collapse to one, the
+	// *first* seen wins, and the newest chain time is lost — which would make the
+	// clock as stale as the oldest tick at that height. A `null` time is its own
+	// identity: "no time" is not the same tick as any concrete one.
 	const commitmentByKey = new Map<string, { commitment: ParsedArenaStateCommitment; relays: Set<string> }>()
 	for (const event of commitmentEvents) {
-		const key = `${event.commitment.validatorPubkey ?? ''}\u0000${event.commitment.height}\u0000${event.commitment.appHash}`
+		const key = `${event.commitment.validatorPubkey ?? ''}\u0000${event.commitment.height}\u0000${event.commitment.appHash}\u0000${event.commitment.time ?? 'no-time'}`
 		const prior = commitmentByKey.get(key)
 		if (prior === undefined) commitmentByKey.set(key, { commitment: event.commitment, relays: new Set(event.relays) })
 		else for (const relay of event.relays) prior.relays.add(relay)
 	}
-	const stateCommitments = [...commitmentByKey.values()]
-		.map((entry) => entry.commitment)
-		.sort((a, b) => b.height - a.height || (a.validatorPubkey ?? '').localeCompare(b.validatorPubkey ?? ''))
+	const stateCommitments: ArenaStateCommitmentView[] = [...commitmentByKey.values()]
+		.map((entry) => ({ ...entry.commitment, relays: [...entry.relays].sort() }))
+		// height desc, then time desc (the newest chain time at a height wins),
+		// then the validator key as the final, stable tie-break. A commitment with
+		// no `time` sorts last at its height: an unknown time never claims the
+		// front over a stated one.
+		.sort((a, b) => {
+			if (a.height !== b.height) return b.height - a.height
+			if (a.time !== b.time) {
+				if (a.time === null) return 1
+				if (b.time === null) return -1
+				return b.time - a.time
+			}
+			return (a.validatorPubkey ?? '').localeCompare(b.validatorPubkey ?? '')
+		})
 	const highestCommitment = stateCommitments[0] ?? null
 
 	// ---- divergence (the equivocation signal the REPLY note asks for) ----

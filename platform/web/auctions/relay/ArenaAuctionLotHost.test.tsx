@@ -42,8 +42,7 @@ mock.module('@platform/web/auctions/relay/AuctionBidHost', () => ({
 }))
 
 mock.module('@platform/web/profiles/userCardHosts', () => ({
-	UserCardHost: (props: { pubkey?: string }) =>
-		createElement('span', { 'data-testid': 'user-card-stub' }, props.pubkey ?? ''),
+	UserCardHost: (props: { pubkey?: string }) => createElement('span', { 'data-testid': 'user-card-stub' }, props.pubkey ?? ''),
 }))
 
 // Imported after the mocks above (a static import is hoisted past `mock.module`).
@@ -136,7 +135,7 @@ function snapshotOf(events: NostrEventLike[]): ArenaAuctionSnapshot {
 }
 
 function readState(events: NostrEventLike[], status: ArenaSurfaceStatus, relayHealth = { answered: 1, total: 1 }): ArenaSurfacesReadState {
-	return { snapshot: snapshotOf(events), status, relayHealth }
+	return { snapshot: snapshotOf(events), status, relayHealth, chainClock: null }
 }
 
 function render(read: ArenaSurfacesReadState, over: { d?: string; seller?: string | null; now?: number } = {}): string {
@@ -285,7 +284,7 @@ describe('ArenaAuctionLotHost — an empty read', () => {
 	})
 
 	test('before the first result (no snapshot yet) it is a partial read, not a verdict', () => {
-		const markup = render({ snapshot: null, status: 'loading', relayHealth: { answered: 0, total: 0 } })
+		const markup = render({ snapshot: null, status: 'loading', relayHealth: { answered: 0, total: 0 }, chainClock: null })
 		expect(markup).toContain('Reading this auction from relays')
 		expect(markup).not.toContain('No such auction was read.')
 	})
@@ -309,7 +308,10 @@ describe('ArenaAuctionLotHost — an ambiguous d', () => {
 
 	test('the ?seller param disambiguates to exactly one lot', () => {
 		const markup = render(
-			readState([createEvent({ pubkey: SELLER_A }, { title: 'Alice lot' }), createEvent({ pubkey: SELLER_B }, { title: 'Bob lot' })], 'settled'),
+			readState(
+				[createEvent({ pubkey: SELLER_A }, { title: 'Alice lot' }), createEvent({ pubkey: SELLER_B }, { title: 'Bob lot' })],
+				'settled',
+			),
 			{ seller: SELLER_B },
 		)
 		expect(markup).not.toContain('data-slot="arena-lot-ambiguous"')
@@ -333,7 +335,14 @@ describe('ArenaAuctionLotHost — verdicts', () => {
 
 	test('two disagreeing verdicts are shown as a disagreement the panel refuses to resolve', () => {
 		const markup = render(
-			readState([createEvent(), verdictEvent({ outcome: 'winner', validator: 'validator-one' }), verdictEvent({ outcome: 'cancelled', validator: 'validator-two' })], 'settled'),
+			readState(
+				[
+					createEvent(),
+					verdictEvent({ outcome: 'winner', validator: 'validator-one' }),
+					verdictEvent({ outcome: 'cancelled', validator: 'validator-two' }),
+				],
+				'settled',
+			),
 		)
 		expect(markup).toContain('data-slot="arena-verdict-disagreement"')
 		expect(markup).toContain('does not pick one')

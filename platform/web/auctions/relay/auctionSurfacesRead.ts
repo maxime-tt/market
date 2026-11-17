@@ -50,11 +50,13 @@ import {
 	type ArenaVerdictDivergence,
 } from '@platform/web/auctions/relay/arenaAuctionRead'
 import { auctionListStatus, relayCounts } from '@platform/web/storefront/auctionListRead'
+import { arenaChainClock } from '@platform/web/auctions/relay/arenaClock'
 import type {
 	ArenaAuctionBidModel,
 	ArenaAuctionCardModel,
 	ArenaAuctionDetailModel,
 	ArenaAuctionPhase,
+	ArenaChainClockModel,
 	ArenaRelayHealth,
 	ArenaSurfaceStatus,
 	ArenaVerdictPanelModel,
@@ -243,12 +245,21 @@ export interface ArenaSurfacesReadState {
 	snapshot: ArenaAuctionSnapshot | null
 	status: ArenaSurfaceStatus
 	relayHealth: ArenaRelayHealth
+	/**
+	 * The **chain clock** as of this read, projected from the 1447 commitments —
+	 * "chain time as of height N, M s ago", or `null`/`unknown` when none arrived.
+	 * Built with the wall clock the read finished at, so a host with a fresher
+	 * `now` can rebuild it with {@link arenaChainClock} (same snapshot, new `now`)
+	 * to keep the age live; the route's own ticking `now` stays the display clock.
+	 */
+	chainClock: ArenaChainClockModel | null
 }
 
 const EMPTY_STATE: ArenaSurfacesReadState = {
 	snapshot: null,
 	status: 'loading',
 	relayHealth: { answered: 0, total: 0 },
+	chainClock: null,
 }
 
 /**
@@ -265,6 +276,20 @@ export async function collectArenaSurfacesRead(
 	const byId = new Map<string, ArenaAuctionEvent>()
 	const refusals: ArenaRefusedEvent[] = []
 	let snapshot = projectArenaEvents([])
+	// The clock is rebuilt on every projection, threaded with its own previous
+	// reading so it can refuse to regress. Wall clock here is the age's reference
+	// (never a substitute for a chain time); the route re-derives it each tick.
+	let chainClock: ArenaChainClockModel | null = null
+
+	const refresh = (health: ArenaReadHealth): void => {
+		snapshot = projectArenaEvents([...byId.values()], health, refusals)
+		chainClock = arenaChainClock({
+			stateCommitments: snapshot.stateCommitments,
+			commitmentForks: snapshot.commitmentForks,
+			now: Math.floor(Date.now() / 1000),
+			previous: chainClock,
+		})
+	}
 
 	try {
 		for await (const item of read.events({ signal: options.signal })) {
@@ -274,15 +299,20 @@ export async function collectArenaSurfacesRead(
 					if (prior === undefined) byId.set(event.id, event)
 					else for (const relay of event.relays) if (!prior.relays.includes(relay)) prior.relays.push(relay)
 				}
-				snapshot = projectArenaEvents([...byId.values()], snapshot.health, refusals)
-				options.onProgress?.({ snapshot, status: 'loading', relayHealth: arenaSurfaceRelayCounts(snapshot.health) })
+				refresh(snapshot.health)
+				options.onProgress?.({
+					snapshot,
+					status: 'loading',
+					relayHealth: arenaSurfaceRelayCounts(snapshot.health),
+					chainClock,
+				})
 				continue
 			}
 			if (item.type === 'refused') {
 				refusals.push(...item.refusals)
 				continue
 			}
-			snapshot = projectArenaEvents([...byId.values()], item.health, refusals)
+			refresh(item.health)
 			break
 		}
 	} finally {
@@ -293,6 +323,7 @@ export async function collectArenaSurfacesRead(
 		snapshot,
 		status: arenaSurfaceStatus(snapshot.health),
 		relayHealth: arenaSurfaceRelayCounts(snapshot.health),
+		chainClock,
 	}
 }
 

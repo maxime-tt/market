@@ -203,8 +203,87 @@ export interface ArenaVerdictPanelModel {
 }
 
 // =========================================================================
+// Chain clock
+// =========================================================================
+
+/**
+ * How fresh the anchored chain time is, against how far wall clock has moved
+ * since it. `unknown` means no chain time arrived at all — never a `0`, never
+ * `now`.
+ */
+export type ArenaChainClockFreshness = 'unknown' | 'fresh' | 'stale'
+
+/**
+ * The arena **chain clock**: the anchored chain time the *rules* judge against,
+ * with the freshness a surface must show and the refusals it must explain.
+ *
+ * The clock is a combination of wall time and block time: the route's ticking
+ * `now` drives the *display*, and this anchored value drives the *rules* — is
+ * the window open, has the end passed, is a lock settleable. It is "as of height
+ * N", so it always carries its age; an old time is never presented as now, a
+ * missing one is `null` (rendered `unknown`), and a refused (forked or
+ * regressive) reading is carried, not silently dropped.
+ *
+ * Every field is plain data; a surface reads it and says the words.
+ */
+export interface ArenaChainClockModel {
+	/** The anchored chain time (unix seconds), or `null` when none arrived. */
+	time: number | null
+	/** The height the chain time is anchored at, or `null`. */
+	height: number | null
+	/** The validator that signed the anchor, or `null`. */
+	validatorPubkey: string | null
+	/** Every relay that delivered the anchor. */
+	relays: string[]
+	/** How far wall clock has moved since the anchored time, or `null` when it is unknown. */
+	ageSec: number | null
+	/** `unknown` (no anchor) | `fresh` (within the threshold) | `stale` (past it). */
+	freshness: ArenaChainClockFreshness
+	/** The instant the **rules** judge against — the anchored time at the highest *agreed* height, or `null`. */
+	rulesTime: number | null
+	/** The height the rules time is anchored at, or `null`. */
+	rulesHeight: number | null
+	/** Heights the clock refused to advance on because relays disagreed (commitmentForks), highest first. */
+	refusedHeights: number[]
+	/** True when the newest reading would have moved the clock backwards and was refused. */
+	regressionRefused: boolean
+}
+
+// =========================================================================
 // Pure formatters
 // =========================================================================
+
+/** The one sentence a surface may say when no chain time has arrived. */
+export const ARENA_CHAIN_CLOCK_UNKNOWN_LABEL = 'Chain time unknown'
+
+/** The one word a surface appends when the anchored time is past the threshold. */
+export const ARENA_CHAIN_CLOCK_STALE_LABEL = 'stale'
+
+/** The one sentence a surface appends when a reading was refused for moving the clock backwards. */
+export const ARENA_CHAIN_CLOCK_REGRESSION_LABEL = 'a later reading was older and was refused'
+
+/**
+ * The one sentence a surface may render for the chain clock. It states the
+ * anchored time **as of its height** with its age — never as "now" — says
+ * `unknown` when there is none, marks a stale reading, and names any forked
+ * height it refused and any regressive reading it refused. `M s ago` is the
+ * model's own `ageSec`: the age when the reading was taken.
+ */
+export function chainClockLabel(clock: ArenaChainClockModel): string {
+	const parts: string[] = []
+	if (clock.time === null || clock.height === null || clock.ageSec === null) {
+		parts.push(ARENA_CHAIN_CLOCK_UNKNOWN_LABEL)
+	} else {
+		parts.push(`Chain time as of height ${clock.height}, ${clock.ageSec} s ago`)
+		if (clock.freshness === 'stale') parts.push(ARENA_CHAIN_CLOCK_STALE_LABEL)
+	}
+	if (clock.refusedHeights.length > 0) {
+		const noun = clock.refusedHeights.length === 1 ? 'height' : 'heights'
+		parts.push(`refused forked ${noun} ${clock.refusedHeights.join(', ')}`)
+	}
+	if (clock.regressionRefused) parts.push(ARENA_CHAIN_CLOCK_REGRESSION_LABEL)
+	return parts.join(' — ')
+}
 
 /** The one sentence a surface may say about an auction with no stated end. */
 export const ARENA_UNKNOWN_END_LABEL = 'End time unknown'
