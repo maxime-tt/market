@@ -133,3 +133,24 @@ params read, subscribes the pulse, and the HTTP path can finally be deleted with
 proving zero `/api/auctions/*` requests. Until that deployment happens, workstreams A and D are
 verified-by-test only, and the app-side halves they gate remain marked blocked rather than worked
 around.
+
+---
+
+## 8. Addendum — a defect found only by running the deployed chain (2026-11-17, late)
+
+**The params cadence was a level, not an edge, and it flooded the relay.** `verdictpublish.go`'s gate
+was `needParams := p.lastParams == "" || digest != p.lastParams || height%p.every == 0`. Blocks are
+produced **on demand**, so the chain can sit at one committed height indefinitely — and while that
+height is a multiple of the cadence (100), every pass re-published the same params event. Measured on
+the live relay: **61 events per validator at height 500** (and 49 at height 400), i.e. ~4 stored events
+per second for as long as the chain stayed there, on a public relay, with 479 kind-1448 events
+accumulated in about five hours.
+
+Fixed in the chain repo on `fix/params-cadence-edge` (off `feat/validator-workstreams`): the publisher
+records the height its last params event was published at and requires the height to have **moved onto**
+the cadence, so a cadence refresh fires once. A terms change still publishes immediately and a failed
+publish still retries. `TestParamsCadenceDoesNotRepublishWhileIdleAtAMultipleOfEvery` pins it — it
+**fails on the previous code** (6 publishes while idle at height 100) and passes with the fix.
+
+Their existing `TestParamsEventRepublishedOnChangeAndNotOtherwise` could not catch this: it drives
+heights 11 and 12, which are never multiples of the cadence.
