@@ -6,10 +6,12 @@ import { isValidSeriesTag } from './pagePaths'
 /**
  * The routing file: one JSON file, loaded once, never partially loaded.
  *
- * `ARCHITECTURE.md` §4. A file that is missing, unparseable or invalid is a
- * broken site — the process refuses to boot rather than degrading to an empty
- * table (§4.4). The in-memory object returned by `loadRoutesFile` is the whole
- * state; there are no timers, no watchers, and no re-read per request.
+ * `ARCHITECTURE.md` §4. A file that exists but is unparseable or invalid is a
+ * broken site — the process refuses to boot rather than degrading (§4.4). A
+ * **missing** file is the empty table, so a fresh checkout or deployment boots
+ * and the first write creates the file. The in-memory object returned by
+ * `loadRoutesFile` is the whole state; there are no timers, no watchers, and no
+ * re-read per request.
  *
  * Accepted and refused, as the layer now stands:
  *
@@ -365,15 +367,28 @@ export function validateRoutesFile(candidate: unknown, source = '<memory>'): { f
 }
 
 /**
- * Reads, parses and validates the file. Throws on every failure state in
- * `ARCHITECTURE.md` §4.4 — missing, unparseable, or invalid. Never creates a
- * file, never falls back to an empty table.
+ * Reads, parses and validates the file.
+ *
+ * A **missing** file is not a malformed one: the routing table is empty (no
+ * bindings, no default, no prefixes) and the first write creates the file, so
+ * a fresh checkout and a fresh deployment boot. Nothing is created here — a
+ * load is a read. A file that exists but is unparseable or invalid still
+ * refuses, and is never rewritten or backed up.
  */
 export function loadRoutesFile(path: string): LoadedRoutesFile {
 	let text: string
 	try {
 		text = readFileSync(path, 'utf8')
 	} catch (error) {
+		// `ENOENT` means the file (or the directory leading to it) is not there
+		// yet — an empty table, not a refusal. Every other failure still refuses.
+		if (isRecord(error) && error.code === 'ENOENT') {
+			return {
+				file: { version: ROUTES_FILE_VERSION, instance: { pubkey: null }, seq: 0, default: null, bindings: [], prefixes: [] },
+				warnings: [],
+				path,
+			}
+		}
 		const detail = error instanceof Error ? error.message : String(error)
 		throw new RoutesFileError(path, [`/ : cannot read the routing file (${detail})`])
 	}

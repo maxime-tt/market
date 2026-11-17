@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
@@ -181,6 +181,22 @@ describe('the live routing table', () => {
 		const path = join(directory, 'routes.json')
 		writeFileSync(path, '{"version":1,"seq":0,"bindings":[{"kind":"admin"}],"prefixes":[]}')
 		expect(() => loadRouteTable(path)).toThrow()
+	})
+
+	test('a missing file boots an empty table, and the first write creates the file', () => {
+		const path = join(scratch(), 'routes.json')
+		const table = loadRouteTable(path)
+
+		expect(table.current()).toMatchObject({ seq: 0, default: null, bindings: [], prefixes: [] })
+		expect(existsSync(path)).toBe(false)
+
+		expect(table.apply(set('shop'), at(1_800_000_000))).toMatchObject({ ok: true, changed: true })
+		expect(existsSync(path)).toBe(true)
+
+		const reloaded = loadRouteTable(path)
+		expect(reloaded.current().bindings).toHaveLength(1)
+		expect(reloaded.current().bindings[0].path).toBe('shop')
+		expect(reloaded.current().seq).toBe(1)
 	})
 
 	test('a lease binding is left intact by an unrelated set', () => {
