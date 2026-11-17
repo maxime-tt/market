@@ -94,6 +94,57 @@ the anchor is **mandatory and signature-verified**, and the roster is checked
   instance the block half honestly reads *unknown* until then, and this decision can be implemented now
   but only **verified** after 1 and 9 land.
 
+### Could the clock be "every validator publishes an ephemeral event per block tick"? (asked 2026-11-17)
+
+**Measured answer: no — and "per block tick" is the wrong shape too. But the goal is cheap, and the
+right change is smaller than the question assumes.**
+
+**1. Ephemeral kinds are already ruled out on this deployment, in the chain's own words.**
+`chain/nostr.go:21-26`: *"All are REGULAR kinds (1000 <= n < 10000 per NIP-01), never the NIP-01
+ephemeral range: **khatru (nak serve) refuses an ephemeral event with no matching live subscription and
+does not buffer it**, so an ephemeral kind would silently drop auction traffic."* `regularKind()` and
+`TestKindMapIsRegularRange` pin the whole series to that range. Independent of the relay: not storing
+an event means a client that connects one second later never sees the tick — a clock you cannot *join*
+is not a clock, it is a lottery on being connected at the right instant.
+
+**2. There is no block tick to hook.** Blocks are **on demand**, not on a timer — `runCloser`'s own
+comment (`node.go:559-561`): *"With blocks on demand nothing else would make the block that closes an
+idle lot."* So a per-block pulse fires when someone else happens to transact and **never when the lot
+is quiet** — backwards for a clock, which matters most when nothing is happening.
+
+**3. That exposes the real defect: the current commitment is *block-gated on an on-demand-block chain*.**
+The publisher is already a **1-second ticker** (`go pub.Run(ctx, time.Second)`, `node.go:643`) calling
+`Step`, which publishes only when the height has advanced `StateCommitEvery = 100` blocks. On a chain
+that produces blocks only on demand, "100 blocks" has **no wall-time bound at all** — an idle auction
+can leave the clock stale indefinitely. The cadence number was never the bug; the *gate* is.
+
+**The change, therefore (small, and it needs no new kind, schema, parser or gate):** make the
+commitment gate **time-based** — publish when `now − lastCommit ≥ interval` **or** the height moved,
+whichever comes first. A heartbeat of ~10 s is ample: the rules that consume it are
+`SettlementSafetySec = 900 s` and anti-snipe windows of 60-900 s, so nothing can use sub-second
+resolution, and per-block (a 250 ms-class tick × N validators, stored on a public relay) would be a
+storage and bandwidth flood in exchange for precision no rule can spend.
+
+**App-side consequence that MUST land with it, or the clock silently freezes:** the read's dedupe key
+is `(validatorPubkey, height, appHash)` (`arenaAuctionRead.ts:961`) — **`time` is not in it**. Successive
+heartbeats at one height share that key, so the read collapses them, keeps the *first*, and the newest
+`time` is lost: the clock would be as stale as the oldest heartbeat seen at that height. The key must
+include `time` (and the sort become height desc, then time desc). One line, and it is the difference
+between a live clock and a plausible-looking frozen one.
+
+**If storage ever does become the constraint**, the elegant shape is a **replaceable** kind (NIP-01
+10000-19999): the relay keeps only the newest per validator, so precision costs ~zero storage, and
+unlike ephemeral it *is* stored, so a late joiner reads the current clock immediately. That needs the
+regular-range test amended and the decision recorded there — but measure first: a 10 s heartbeat is
+6/min × 4 validators ≈ 35k events/day, which is nothing next to re-architecting the kind map.
+
+**Authority is unchanged either way:** wall clock may smooth the *display*; only the anchored
+commitment may drive the *rules*, because a pulse that is not anchored to committed state can never
+authorise anything. A faster heartbeat also helps `commitmentForks` — more ticks, more chances to catch
+a fork early. **And it closes increment 9's staleness problem in the same stroke:** with a time-based
+heartbeat the escrow params ride a ~10 s clock instead of a 100-block one, so the `params_version`
+check becomes belt-and-braces rather than load-bearing.
+
 ### Spec conformance of the two sides, as measured
 
 | spec rule | chain ref (`arena-merged-ref`) | app (`unite/1420-all`) |
