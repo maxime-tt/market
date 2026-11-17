@@ -1,4 +1,5 @@
 import { COMPILED_IN_NAMES } from '@sdk/config/routeNames'
+import { defaultBinding } from './defaultBinding'
 import { lookup, prefixMatch, type PageTarget, type RenderTarget, type RoutesFile, type SeriesTarget } from './routeFile'
 
 /**
@@ -57,7 +58,32 @@ export function resolve(file: RoutesFile, pathname: string, nowSeconds: number, 
 	const normalized = normalizePath(pathname)
 	if (!normalized) return { status: 404, outcome: 'not-found', path: pathname, reason: 'invalid-path' }
 
-	const path = normalized.path
+	// RUNG 0 — the default binding. `/` is not privileged: the routing file's
+	// `default` names a path, `/` means that path, and the ladder below runs for
+	// it unchanged (`ARCHITECTURE.md` §3.5 R4). That is what makes a default
+	// naming a series path (`/featured`) resolve through inc2's series arm, and
+	// a default naming a compiled-in path answer with that compiled-in page —
+	// with no `path === '/'` branch anywhere below.
+	//
+	// A file naming no default keeps today's home: the compiled-in route at `/`
+	// (`platform/web/routes/index.tsx`), whose empty state is the inline
+	// composition. Reported through the `compiled-in` outcome, because that is
+	// exactly what answers — the same arm a bound-but-unmatched `/dashboard`
+	// takes. The serve path then hands over the SPA shell.
+	let path = normalized.path
+	const fallback = path === '' ? defaultBinding(file) : null
+	if (fallback?.kind === 'inline') return { status: 200, outcome: 'compiled-in', path: '/', warning: 'compiled-in-path' }
+
+	// The named path is re-normalised rather than trusted: it is validated at
+	// load, but a direct request for it would be normalised, and `/` must mean
+	// the same path a direct request means — one ladder, one answer.
+	let segments = normalized.segments
+	if (fallback) {
+		const named = normalizePath(fallback.path)
+		if (!named || named.path === '') return { status: 200, outcome: 'compiled-in', path: '/', warning: 'compiled-in-path' }
+		path = named.path
+		segments = named.segments
+	}
 
 	// RUNG 1 — exact path.
 	const exact = lookup(file, path, nowSeconds)
@@ -84,13 +110,13 @@ export function resolve(file: RoutesFile, pathname: string, nowSeconds: number, 
 
 	// RUNG 1b — a compiled-in page answers. Allowed, with the warning the
 	// write path already recorded; never a reason to 404 a working URL.
-	if (normalized.segments.length === 1 && COMPILED_IN_NAMES.includes(normalized.segments[0])) {
+	if (segments.length === 1 && COMPILED_IN_NAMES.includes(segments[0])) {
 		return { status: 200, outcome: 'compiled-in', path, warning: 'compiled-in-path' }
 	}
 
 	// RUNG 2 — programmed prefix. The segment pattern is in the file; the id is
 	// in the URL, so routing needs no indexer and no network call.
-	const prefixed = prefixMatch(file, normalized.segments)
+	const prefixed = prefixMatch(file, segments)
 	if (prefixed) {
 		return { status: 200, outcome: 'render', target: prefixed.binding.target, params: prefixed.params, path }
 	}

@@ -26,6 +26,18 @@ export interface ComposePageOptions {
 	/** The request path — used for the canonical URL, which ingest cannot know. */
 	path: string
 	/**
+	 * The stylesheet URLs the shell styles itself with, in document order. A
+	 * served page replaces the whole `<head>`, so without these the page renders
+	 * unstyled until the bundle boots — measured: the shell links the app's CSS
+	 * (one `chunk-*.css` in a production build, five `_bun/asset/*.css` in dev)
+	 * and the font stylesheets, and nothing re-emits them otherwise.
+	 *
+	 * Sourced from the shell's own bytes (`shell.ts` `readShellAssets`), never
+	 * from a constructed path: there is no in-process source for the hashed URL
+	 * other than the shell.
+	 */
+	stylesheetHrefs?: string[]
+	/**
 	 * Optional SPA bundle URL. Increment 1 has no stable asset path to pass
 	 * (the SPA shell is Bun's HTMLBundle, injected at serve time), so the
 	 * bootstrap script is emitted only when a caller supplies one; the
@@ -49,7 +61,7 @@ export function serializePagePayload(payload: PagePayload): string {
 }
 
 export function composePageHtml(options: ComposePageOptions): string {
-	const { meta, html, payload, path, bootstrapSrc } = options
+	const { meta, html, payload, path, bootstrapSrc, stylesheetHrefs = [] } = options
 	const title = escapeHtml(meta.title)
 	const description = escapeHtml(meta.description)
 	const canonical = escapeHtml(meta.canonical ?? path)
@@ -72,6 +84,10 @@ export function composePageHtml(options: ComposePageOptions): string {
 		`<meta name="twitter:title" content="${title}">`,
 		`<meta name="twitter:description" content="${description}">`,
 		meta.ogImage ? `<meta name="twitter:image" content="${escapeHtml(meta.ogImage)}">` : '',
+		// The shell's own stylesheets, re-emitted in document order. Empty when
+		// the shell carried none (a test's placeholder shell), which is why the
+		// head is built as a filtered list rather than a fixed document.
+		...stylesheetHrefs.map((href) => `<link rel="stylesheet" href="${escapeHtml(href)}">`),
 		'</head>',
 		'<body>',
 		'<div id="root">',
