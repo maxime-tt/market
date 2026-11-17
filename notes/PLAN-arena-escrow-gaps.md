@@ -15,7 +15,8 @@ observation, a tester can do all five of these and see the named artifact:
 | 1 | fund a bid | the kind-1441 carries a NUT-11 `n_sigs:2` lock to the committee; the wallet shows a pending send |
 | 2 | bid | the bid **commits on the chain** (it appears in committed state, not only on the relay) |
 | 3 | bid inside the anti-snipe window | committed `end_time` moves past `original_end_time`; the app shows the moved end |
-| 4 | bid after the end (a late bid) | the chain voids it and refunds it **at once**; a 1443 records it; the bidder's balance returns |
+| 4 | be out-bid (a higher bid lands) | the previous leader's escrow is **refunded at once** by the validators — not left locked till close; a 1443 records it; their balance returns |
+| 4b | bid after the end (a late bid) | the chain voids it and refunds it at once — the same push-refund mechanism, a different trigger; a 1443 records it |
 | 5 | let a lot close with a winner | a 1445 verdict is published; the validators move the escrow; a 1444 records it; the **seller's** balance rises |
 
 Today only (1) and (2)'s publish half work. Verified live on 2026-11-17 (details in
@@ -56,11 +57,35 @@ system today:
   - **push settlement (ADR-0009)**: the `Auction` record carries `settled: "refund" | "payout"` plus
     `out []Proof` — "the validators moved the escrow themselves … that ecash, P2PK-locked to the
     recipient". Both settlement and refund are this one mechanism, aimed at the seller or the bidder.
-  - **"instant refund" = the voided-late-bid path**: a `lateBid` is recorded and the validators
-    "refund it at once (ADR-0007)", capped at `maxVoids = 256` per auction; past the cap "the bidder
-    reclaims after locktime, as before".
+  - **"instant refund" — owner's ruling (2026-11-17): it is the OUT-BID case.** When a higher bid
+    lands, the previous leader's bid is refunded at once by the validators. **This is not implemented
+    on either side today.** Measured in `chain/app.go` `applyBid`: on an accepted higher bid the chain
+    does exactly one thing to the previous leader — `s.Bids[au.HighBid].Status = "outbid"` — and
+    refunds nothing; at close, `closeDue` marks every non-winner `"lost"`. The only "refundable now"
+    case in the code is the *late* bid ("Then it is late: recorded as void, refundable now"), capped at
+    `maxVoids = 256`. The out-bid refund is therefore **new behaviour**, not a wiring gap.
+  - **Why it fits the existing design cleanly:** the outbid bidder signed a **refund template at funding
+    time** (it is the `refund` half of `outcome_templates`, locked to its own wallet key). Refunding it
+    on being outbid needs **no new client signature** — the validators simply execute, early, an
+    authorization the bidder already committed, through the same push-settlement machinery
+    (`settled: "refund"`, `out: [...]`). The custody change it implies is real though: only the current
+    leader's sats stay locked, so an outbid bidder is not tying up funds for the auction's life.
   - late-bid extension bookkeeping already exists on a committed record (`Auction.Extensions`,
-    incremented in `app.go` when a late bid lands inside the window).
+    incremented in `app.go` when a late bid lands inside the window) — but see the cap disagreement
+    below.
+
+**Two measured disagreements between the ref and the app, both surfaced while planning:**
+
+1. **The extension cap.** The chain ref applies the anti-snipe reset **uncapped** ("No cap: the lot ends
+   when the bidding stops", `chain/app.go` `applyBid`), while the app's config exposes
+   `max_total_extension_seconds: 1800` and the running backend's records carry
+   `max_total_extension_seconds` / `late_bid_extension_seconds`. One of the two is wrong; decide which
+   in increment 3 rather than letting the app display a cap the chain ignores.
+2. **Re-bidding as the leader.** The chain **refuses** a bid from the current highest bidder
+   (`lateBid{"you are already the highest bidder"}`), while the app tells the bidder "Bids add to your
+   position. Yours is 1,000 sats; your position must reach at least 1,000 sats." Those cannot both be
+   true, and increment 4's refund-on-outbid makes the read-side "position" model load-bearing: if an
+   outbid position is refunded at once, a "position" is *locked sats*, not a cumulative claim.
 
 **Consequence for this plan:** three of the increments are *land + verify against the running app*,
 not *build*. The genuinely new code is on the app side (surfacing the chain's time and money, and
@@ -246,29 +271,52 @@ exceed the cap must not exceed it.
 
 ---
 
-### Increment 4 — instant refund (the voided late bid)
+### Increment 4 — refund on out-bid (the "instant refund"), and the late-bid sibling
 
-**Goal.** A bid that lands too late is voided and refunded at once, and the bidder sees it.
+**Owner's ruling (2026-11-17).** "The instant refund scenario is actually meant to be the out-bid
+scenario, such that when a higher bid comes in, your bid gets refunded via the validators."
+
+**Goal.** When a higher bid is committed, the previous leader's escrow is refunded **at once** — the
+validators execute it, a 1443 records it, and the outbid bidder's balance returns without waiting for
+close, settlement, or locktime. The late bid (below) is the same mechanism with a different trigger.
+
+**Why this is new code, not wiring.** Measured today: the chain marks the previous leader
+`Status: "outbid"` and refunds nothing; only the *late* bid is "refundable now" in the code. So this
+increment implements the trigger. It needs **no new client signature**: the outbid bidder's refund
+template was signed and committed *at funding time* (the `refund` half of `outcome_templates`, locked
+to its own wallet key), so the validators execute an authorization the bidder already gave —
+`settled: "refund"` + `out: [...]`, P2PK-locked to that bidder, via the push-settlement path.
 
 **Scope.**
-- **Chain half.** Prove the ADR-0007 path end to end for an ingested late bid beyond `maxVoids`'
-  sibling case: the bid is recorded `void`, the validators spend the bidder's **pre-signed refund
-  template** against the mint, and the resulting ecash is published P2PK-locked to the bidder
-  (`settled: "refund"`, `out: [...]`). A 1443 records it. If the refund spend is only half-written,
-  finish it here.
-- **App half.** Read the refund record, show the bidder's position as refunded (not "pending"), and
-  stop offering anything that would double-spend it.
+- **Chain half (the work).** In `applyBid`, the moment a bid becomes the new leader, push the
+  *previous* leader's committed refund: spend its locked proofs to its own refund key and publish the
+  resulting ecash + the record. Decide and document the failure posture: if the refund spend cannot be
+  completed in that block, the previous leader's bid must stay a **visible, refundable obligation**
+  (retried on the next block or at close) rather than being silently dropped — a leader change must
+  never lose someone's sats. Keep the late-bid path (`void` → refund at once, `maxVoids` cap) as the
+  sibling case, and make both go through one refund routine so they cannot drift.
+- **App half.** Read the refund record and show the truth: `sdk/commerce/auctions/bidGroupStatus.ts`
+  already distinguishes `refund_received` / `reclaimed` / `reclaim_available` / `outbid` / `locked`, so
+  the outbid-and-refunded case must land on `refund_received` (money back) rather than staying `locked`
+  or `outbid` until close. The bidder's dashboard and the lot's bid list must say "outbid — refunded",
+  and nothing may still offer a reclaim for sats already returned.
+- **Product copy.** If the previous leader is refunded at once, "Bids add to your position" is no
+  longer a description of custody. Fold the corrected wording into this increment.
 
-**Depends on.** 2, and 8 for the money actually arriving in the wallet.
+**Depends on.** 2 (a bid must commit before it can be outbid); 8 for the sats to appear in the wallet.
 
-**Seam owned.** the void decision → the refund spend → the 1443 record.
+**Seam owned.** the leader change → the refund spend → the 1443 record → the bidder's displayed state.
 
-**Acceptance.** Bid after the end: proof at the mint that the locked proofs were spent to the
-bidder's key (NUT-07), a 1443 for the auction, and the app showing the position refunded.
-
-**Note on the word "instant".** This is the only genuinely instant refund the protocol provides. The
-other refund (a lost bidder reclaiming after `locktime`) is *not* instant and must not be described
-as such; increment 8 may add it as a separate, honestly-labelled action.
+**Acceptance.**
+- Out-bid: A funds and bids, B outbids → the mint shows A's locked proofs spent to A's key (NUT-07),
+  a 1443 records it, A's app state reads refunded and A's balance is restored **while the lot is still
+  open**. A's escrow is never left locked till close.
+- Late bid: a bid after the end is voided and refunded at once (the sibling case), with the same
+  evidence.
+- Failure posture: with the refund spend made to fail deliberately, the previous leader's obligation
+  is still visible and retried — never silently dropped.
+- Not-instant: a bidder who loses at close and was *not* outbid beforehand still reclaims after
+  `locktime`; that path must not be described as instant.
 
 ---
 
@@ -349,9 +397,15 @@ named — because 1–5 are split across two repos and three areas.
    relay too? The ingest handover's direction was one transport, and the state document is what the
    verdict note calls the transport the front end should stop needing. Not required to close the
    three gaps, but the plan should not bake in a dependency we intend to delete.
-4. **The locktime reclaim action** (a lost bidder getting their sats back after `locktime`): wanted as
-   a user-visible action, or is the validator-driven void refund enough for now? It is the difference
-   between increment 8 being "claim what you were paid" and "also reclaim what you locked".
+4. **The locktime reclaim action** (a bidder whose bid was neither outbid nor won, getting their sats
+   back after `locktime`): wanted as a user-visible action, or is the validator-driven refund enough
+   for now? It is the difference between increment 8 being "claim what you were paid" and "also reclaim
+   what you locked".
+5. **What is a "position", once outbid bids are refunded at once?** The chain refuses a re-bid from the
+   current leader, while the app tells the bidder "bids add to your position". If every outbid position
+   is refunded immediately, a position is *locked sats owned by the current leader* — not a cumulative
+   claim a bidder keeps adding to. Confirm that reading, because it decides both the copy and how
+   `computeValidatedBids` derives the next floor.
 
 ---
 
