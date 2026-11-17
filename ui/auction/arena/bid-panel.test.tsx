@@ -13,8 +13,15 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ArenaBidPanel, bidButtonLabel, bidFloorLabel, isArenaBidSubmissionUnsuccessful, submissionLine, type ArenaBidSubmissionState } from './bid-panel'
-import { ArenaAuctionDetail } from './auction-detail'
+import {
+	ArenaBidPanel,
+	bidButtonLabel,
+	bidFloorLabel,
+	isArenaBidSubmissionUnsuccessful,
+	submissionLine,
+	type ArenaBidSubmissionState,
+} from './bid-panel'
+import { CatalogueDetailView } from '@ui/auctions/catalogue/catalogue-detail-view'
 import { ARENA_BID_ADVISORY, checkArenaBid, type ArenaBidCheck, type ArenaBidderState } from './bid-rules'
 import type { ArenaAuctionDetailModel } from './model'
 
@@ -218,7 +225,12 @@ describe('submissionLine — what the bidder is told between click and relay', (
 	})
 
 	test('unpublished is a failure that names the relays’ answer', () => {
-		const line = submissionLine({ phase: 'unpublished', amount: 1000, eventId: 'ev-1', reason: 'No relay accepted it — wss://a (blocked).' })!
+		const line = submissionLine({
+			phase: 'unpublished',
+			amount: 1000,
+			eventId: 'ev-1',
+			reason: 'No relay accepted it — wss://a (blocked).',
+		})!
 		expect(line.title).toContain('not published')
 		expect(line.detail).toContain('blocked')
 		expect(line.tone).toBe('error')
@@ -259,7 +271,9 @@ describe('bidButtonLabel and bidFloorLabel', () => {
 	})
 
 	test('an unstated starting bid is stated as unstated', () => {
-		expect(bidFloorLabel(detail({ startingBid: null }), checkFor(detail({ startingBid: null })))).toBe('This auction published no starting bid.')
+		expect(bidFloorLabel(detail({ startingBid: null }), checkFor(detail({ startingBid: null })))).toBe(
+			'This auction published no starting bid.',
+		)
 	})
 })
 
@@ -267,13 +281,14 @@ describe('bidButtonLabel and bidFloorLabel', () => {
 // The detail view's slot
 // =========================================================================
 
-describe('ArenaAuctionDetail — the bid slot', () => {
-	test('renders the host panel between the terms and the bids', () => {
+describe('CatalogueDetailView — the bid slot', () => {
+	test('renders the host panel in its slot', () => {
 		const html = renderToStaticMarkup(
-			createElement(ArenaAuctionDetail, {
+			createElement(CatalogueDetailView, {
 				model: detail(),
 				status: 'settled',
 				relayHealth: { answered: 2, total: 2 },
+				now: 1400,
 				bidPanel: createElement(ArenaBidPanel, {
 					model: detail(),
 					readStatus: 'settled',
@@ -288,20 +303,20 @@ describe('ArenaAuctionDetail — the bid slot', () => {
 			}),
 		)
 		expect(html).toContain('data-slot="arena-auction-detail-bid"')
+		expect(html).toContain('data-testid="catalogue-bid-slot"')
 		expect(html).toContain('data-slot="arena-bid-panel"')
-		const termsAt = html.indexOf('Terms, as published')
-		const bidAt = html.indexOf('data-slot="arena-auction-detail-bid"')
-		const bidsAt = html.indexOf('>Bids<')
-		expect(termsAt).toBeGreaterThan(-1)
-		expect(bidAt).toBeGreaterThan(termsAt)
-		expect(bidsAt).toBeGreaterThan(bidAt)
+		// The slot sits with the buy column, before the bid feed below it.
+		const slotAt = html.indexOf('data-slot="arena-auction-detail-bid"')
+		const feedAt = html.indexOf('Live bidding')
+		expect(feedAt).toBeGreaterThan(-1)
+		expect(slotAt).toBeLessThan(feedAt)
 	})
 
 	test('omitting the slot renders nothing in its place — no placeholder implying bidding exists', () => {
 		const html = renderToStaticMarkup(
-			createElement(ArenaAuctionDetail, { model: detail(), status: 'settled', relayHealth: { answered: 2, total: 2 } }),
+			createElement(CatalogueDetailView, { model: detail(), status: 'settled', relayHealth: { answered: 2, total: 2 }, now: 1400 }),
 		)
 		expect(html).not.toContain('arena-auction-detail-bid')
-		expect(html).not.toContain('Place a bid')
+		expect(html).not.toContain('arena-bid-panel')
 	})
 })

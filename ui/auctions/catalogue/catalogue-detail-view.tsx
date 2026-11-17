@@ -1,7 +1,7 @@
 import './catalogue-theme.css'
 import type { ReactNode } from 'react'
 import { catalogueCssVars } from './catalogue-preset'
-import { bidCountLabel, priceLine, readStateMessage } from '@ui/auction/arena/auction-card'
+import { bidCountLabel, priceLine, readStateMessage } from '@ui/auction/arena/model'
 import {
 	antisnipeBehaviourLabel,
 	phaseLabel,

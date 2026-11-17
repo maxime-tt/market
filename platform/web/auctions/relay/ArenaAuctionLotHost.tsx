@@ -22,10 +22,10 @@
  *
  * ## What it refuses to say
  *
- * - **Not found is said only from a settled read.** {@link ArenaAuctionDetail}
- *   renders the correct sentence for whatever `status` it is handed
- *   (`auction-card.tsx:58-86`), so this host passes the read's real status
- *   through and never upgrades a partial read to "no such auction".
+ * - **Not found is said only from a settled read.** {@link CatalogueDetailView}
+ *   renders the correct sentence for whatever `status` it is handed, so this host
+ *   passes the read's real status through and never upgrades a partial read to
+ *   "no such auction".
  * - **A bare `d` with several sellers is ambiguous, not guessed**
  *   (`arenaLotRead.ts`): the host lists the candidates and renders no lot.
  * - **The verdict panel infers no winner.** The host builds its model from

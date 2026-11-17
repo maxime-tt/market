@@ -8,7 +8,8 @@
  * is an assembler and nothing else: it owns the URL, the one clock the page
  * ticks, and the read, and renders
  * `platform/web/dashboard/SellerAuctionLotHost.tsx`, which resolves the `d` the
- * same way the public detail route does and composes `ArenaAuctionDetail` +
+ * same way the public detail route does and composes the Layout A detail
+ * (`CatalogueDetailView`) +
  * `ArenaVerdictPanel`.
  *
  * The 30408 pipeline this route used to drive (`auctionQueryOptions`, streaming
