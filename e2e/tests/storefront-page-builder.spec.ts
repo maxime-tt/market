@@ -194,6 +194,41 @@ test.describe('storefront page builder', () => {
 		expect(disabledDocument.content.length).toBeGreaterThan(0)
 	})
 
+	test('publishes at the address the dashboard URL names', async ({ merchantPage }) => {
+		const d = `spec-page-${Date.now()}`
+		const marker = `Custom address page ${Date.now()}`
+
+		// A named page is the same kind of document at a different address, so
+		// seeding it leaves the default page every other test reads untouched.
+		await publishStorefrontPage(
+			MERCHANT_SK,
+			{
+				version: STOREFRONT_PAGE_VERSION,
+				enabled: false,
+				root: { props: { title: 'Custom address' } },
+				content: [{ type: 'Text', props: { id: 't1', markdown: marker, align: 'left', width: 'normal' } }],
+			},
+			d,
+		)
+
+		// The editor at `/pages/$d` reads, drafts and publishes at exactly that
+		// address — the seam this spec exists to pin.
+		await merchantPage.goto(`/dashboard/app-settings/pages/${d}`)
+		await expect(merchantPage.getByTestId('storefront-builder')).toBeVisible({ timeout: 20_000 })
+		await expect(merchantPage.getByText(marker)).toBeVisible({ timeout: 20_000 })
+
+		await merchantPage.getByTestId('storefront-enable-toggle').click()
+		await merchantPage.getByTestId('storefront-publish').click()
+		await expect(merchantPage.getByText(/published to \d+ relay/i)).toBeVisible({ timeout: 20_000 })
+
+		const event = await fetchStorefrontEvent(MERCHANT_PK, d)
+		expect(event).not.toBeNull()
+		expect(event?.tags).toContainEqual(['d', d])
+		const document = JSON.parse(event!.content)
+		expect(document.enabled).toBe(true)
+		expect(document.content[0].props.markdown).toBe(marker)
+	})
+
 	test('a hostile page event renders inert', async ({ unauthenticatedPage }) => {
 		const sk = generateSecretKey()
 		const pk = getPublicKey(sk)
@@ -391,21 +426,21 @@ async function publishRaw(skHex: string, template: EventTemplate) {
 	}
 }
 
-async function publishStorefrontPage(skHex: string, document: unknown) {
+async function publishStorefrontPage(skHex: string, document: unknown, dTag = STOREFRONT_PAGE_D_TAG) {
 	return publishRaw(skHex, {
 		kind: STOREFRONT_PAGE_KIND,
 		created_at: Math.floor(Date.now() / 1000),
-		tags: [['d', STOREFRONT_PAGE_D_TAG]],
+		tags: [['d', dTag]],
 		content: JSON.stringify(document),
 	})
 }
 
-async function fetchStorefrontEvent(pubkey: string) {
+async function fetchStorefrontEvent(pubkey: string, dTag: string = STOREFRONT_PAGE_D_TAG) {
 	const relay = await Relay.connect(RELAY_URL)
 	try {
 		return await new Promise<{ kind: number; pubkey: string; tags: string[][]; content: string } | null>((resolve) => {
 			let latest: { kind: number; pubkey: string; tags: string[][]; content: string; created_at: number } | null = null
-			const sub = relay.subscribe([{ kinds: [STOREFRONT_PAGE_KIND], authors: [pubkey], '#d': [STOREFRONT_PAGE_D_TAG] }], {
+			const sub = relay.subscribe([{ kinds: [STOREFRONT_PAGE_KIND], authors: [pubkey], '#d': [dTag] }], {
 				onevent(event) {
 					if (!latest || event.created_at >= latest.created_at) latest = event
 				},
