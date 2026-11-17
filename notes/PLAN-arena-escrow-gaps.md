@@ -353,21 +353,70 @@ never `#a` with a regular kind. Keep the refusal honest if the read genuinely ca
 
 ---
 
-### Increment 1 — deploy the arena chain as the instance's auctions backend
+### Increment 1 — deploy the arena chain, and prove it before the app relies on it
 
-**Goal.** The app's `/api/auctions/*` is served by the arena chain from the integration ref, with the
-relay as the transport, running as a durable unit.
+**This increment is the GATE for every other one.** Nothing app-side can be called *verified* — as opposed
+to built — until the chain builds, passes its own suite, and runs. Owner's question (2026-11-17): "should we
+test the auctions protocol actually deploys and passes tests before we rely on it in the app" — yes, and it
+is this increment with acceptance criteria attached.
 
-**Scope.**
-- Choose the base: the integration ref as-is, or re-integrate the three `feat/*` branches onto a
-  tagged `origin/main` (do whichever the repo's history makes cleaner; record which).
-- Stand it up per the repo's own `scripts.sh` / `serve.sh`, with the relay flag(s) pointing at
-  `wss://relay.playday.it`, as a **systemd user unit with linger** (a bare process dies with the
-  session — the standing rule on this box), on its own data directory, recording height/auction-count
-  before and after any restart.
-- Repoint the app's proxy: `AUCTIONS_PROTOCOL_UPSTREAM_URL` (see
-  `platform/server/http/auctionsProtocol.ts`) at the new backend; keep the MVP demo running,
-  untouched, on its current port until this is verified, then decide whether to stop it.
+**Goal.** The canonical chain runs on this box, ingests the app's kind-1440/1441 events from the relay, and
+publishes verdicts and kind-1447 commitments — proven by the repo's own suite and by one end-to-end exchange
+of real test-mint sats.
+
+**Base — the canonical release (settled 2026-11-17).** `~/work/arena-merged-ref`, branch
+`feat/auctions-merged-protocol` @ `3379305` (2026-11-13), origin `https://github.com/maxime-tt/plebeian-arena-auctions.git`
+(our fork of ChiefmonkeyArt's upstream). The repo exists here in three divergent copies — canonical fork /
+a divergent ngit publication (`~/work/arena-integration`, `integration/auctions` @ `85afee1`) / the retired
+MVP demo — and the brief for the validator-side session spells out how to tell them apart.
+
+**Nothing is deployed today (measured 2026-11-17).** No systemd unit names any arena checkout
+(`grep -rlE "arena-merged-ref|arena-integration|arena-publish|auctions-merged-protocol|verdictpublish"
+~/.config/systemd/user/` → empty); no chain/validator/FROST process runs; no `run/chain` root,
+`priv_validator_key.json` or FROST key exists under `~`. The only auctions backend running is the **retired
+MVP demo** (`poc` on `127.0.0.1:8080`, unit `auctions-mvp-demo.service`), with the demo mint on `:3338`
+and the demo relay (`nak serve`) on `:7777`.
+
+**Toolchain blocker (found 2026-11-17).** `scripts.sh` does `export PATH=/tmp/go/bin:$PATH` — and
+`/tmp/go/bin` **does not exist** (tmpfs, gone; host up 17 days). `go`, `cargo`, `rustc` and `bun` are all
+absent; `node v26`/`npm` are present. `scripts.sh build` needs Go *and* Node (and the FROST binary needs
+Rust). **Install the toolchain outside `/tmp`** — the standing `/tmp` rule on this box — before anything else.
+
+**Two live-host collisions to settle explicitly.** The gateway's default is `127.0.0.1:8080`, which `poc`
+holds today, so the chain needs its own port (`PORT=` in `scripts.sh start`); and the chain's mint default is
+`:3338`, which is **already a mint** (the demo mint — most likely what `mint.playday.it` fronts, and the same
+Nutshell 0.21.0 + FakeWallet the escrow needs). Decide: reuse that mint or run the chain's own; either way
+**the app's escrow must lock from the mint the app's config names**, or every lock lands on a mint that will
+never see the settle.
+
+**Acceptance — in this order, each with its evidence.**
+1. **It builds** on the canonical commit: `./scripts.sh build` (Go + `web/` npm build). Evidence: the command
+   output, and `bin/arena` existing.
+2. **Its own suite passes**: `go test ./chain/` (audit regressions + fuzz seeds) and `./scripts.sh test`
+   (the repo's `tests/e2e.mjs`, ~56 check sites — the README says 64 — covering pushed refunds/payouts,
+   void late bids, idle-chain and on-time closes, the group-key lock, a single 64-byte signature, release
+   refused at 2-of-4, a forged signature rejected by the mint, validator stop/catch-up, reclaim after
+   locktime, conservation of sats), plus the FROST roundtrip and the web page tests. **Judged against
+   `MERGED-PROTOCOL-SPEC.md`, not the README** — the README still documents the `/api/release` pull path
+   that the spec retires and that the code has already dropped, so the README is stale.
+3. **It runs here**: `arena init` (FROST keygen across four validators; genesis carries the group key) then
+   the gateway supervising 4 CometBFT validators, as a **systemd user unit with linger** (a bare process dies
+   with the session), on its own data root, with the relay flags pointing at the test relay. Evidence: the
+   unit, the process list, and a 1447 commitment actually appearing on the relay.
+4. **One end-to-end exchange of real test-mint sats**: create a lot → bid → a higher bid that refunds the
+   first bidder → close → the seller is paid — verified **at the mint** that the sats moved. This is the
+   back half that has never run: the app's create and bid reached the relay and stopped there, because
+   nothing was ingesting them.
+5. **Only then** does the app's read show a verdict and an anchored height instead of "unknown", and
+   increment 9's deletion of the app's HTTP paths becomes verifiable.
+
+**Ownership.** Hand to the **same validator-side session as the heartbeat change** — one branch, one
+deployment, deployed from one commit. The heartbeat is only *observable* in a running chain, and deploying
+from a single commit is what keeps the three-copies question closed. The app-side work (increments 9/10 and
+the read's dedupe key) proceeds in parallel but stays marked unverified until step 5.
+
+**Not this increment.** Stopping the MVP demo. Keep it running and untouched until step 4 passes, then
+decide.
 - Document the runbook (start/stop/verify, the relay it expects, where its data lives).
 
 **Depends on.** D1, D2.
