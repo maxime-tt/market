@@ -146,6 +146,36 @@ describe('buildStorefrontPageEvent', () => {
 	})
 })
 
+describe('buildStorefrontPageEvent — the page address (R1/R2)', () => {
+	// T18
+	test('buildStorefrontPageEvent(page) with no address is byte-identical to today', () => {
+		const page = createEmptyStorefrontPage()
+		page.root.props.title = 'Alice’s shop'
+		expect(buildStorefrontPageEvent(page).tags).toEqual([['d', STOREFRONT_PAGE_D_TAG], ['title', 'Alice’s shop']])
+	})
+
+	// T19
+	test('an address publishes to its d and carries its t tags, deduped', () => {
+		const template = buildStorefrontPageEvent(createEmptyStorefrontPage(), {
+			dTag: 'featured-13-11-2026',
+			series: ['featured', 'sale', 'featured'],
+		})
+		expect(template.tags).toEqual([
+			['d', 'featured-13-11-2026'],
+			['t', 'featured'],
+			['t', 'sale'],
+		])
+	})
+
+	// T20
+	test('a bad path or bad series tag throws and nothing is signed', () => {
+		lastSigned = null
+		expect(() => buildStorefrontPageEvent(createEmptyStorefrontPage(), { dTag: 'Featured' })).toThrow(/route name/)
+		expect(() => buildStorefrontPageEvent(createEmptyStorefrontPage(), { dTag: 'featured', series: ['NO'] })).toThrow(/route name/)
+		expect(lastSigned).toBeNull()
+	})
+})
+
 describe('publishStorefrontPage', () => {
 	test('returns the relays that acknowledged', async () => {
 		signAs = AUTHOR

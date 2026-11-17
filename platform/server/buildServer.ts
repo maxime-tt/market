@@ -15,7 +15,9 @@ import { buildRouteTableRoutes } from './http/routeTable'
 import { resolve } from './routes/resolve'
 import { composePageHtml, composeRenderPlaceholder } from './routes/pageHtml'
 import { createPageStore, type PageStore } from './routes/pageStore'
-import { createShellResponder } from './routes/shell'
+import { createShellResponder, readShellAssets, SHELL_PATH, type ShellAssets } from './routes/shell'
+import { pagePayloadFor } from './routes/defaultBinding'
+import { resolveSeries } from './routes/series'
 import type { RouteTable } from './routes/routeTable'
 
 /**
@@ -36,6 +38,14 @@ import type { RouteTable } from './routes/routeTable'
  * more: they flow through `':name'` so that rung 1 (an exact binding) can
  * supersede a compiled-in page at request time, which is ruling 3 applied to a
  * table that changes while the process runs.
+ *
+ * Serving (increment 3): `'/'` is registered like any other path and means
+ * whatever the table's `default` names (R4) — with no default it is the
+ * compiled-in home, so the URL that used to bypass this function entirely now
+ * goes through it. A served page ships the bundle's own script and stylesheets,
+ * read from the shell bytes this module already caches (`readShellAssets`);
+ * `/` no longer answers with the shell, so the shell is fetched from
+ * `SHELL_PATH` instead — a self-request to `/` would re-enter `servePath`.
  */
 export interface BuildServerOptions {
 	/**
@@ -74,12 +84,42 @@ export function buildContentRoutes({
 	const routes: BunRoutes = {}
 	// The shell, as a Response a handler may return. One self-request per boot
 	// when `indexHtml` is the Bun HTML bundle; a clone per request otherwise.
-	const shell = createShellResponder({ indexHtml, fetchShell: () => fetch(`http://127.0.0.1:${PORT}/`) })
+	//
+	// The self-request goes to `SHELL_PATH`, never to `/`: since increment 3 `/`
+	// is the default binding's page (R4), so a fetch of `/` would re-enter this
+	// handler and wait on the very promise that is fetching it. `SHELL_PATH` is
+	// the same bundle, served by the `'/*'` catch-all below.
+	const shell = createShellResponder({ indexHtml, fetchShell: () => fetch(`http://127.0.0.1:${PORT}${SHELL_PATH}`) })
+
+	// The bundle's asset URLs, read once from the shell bytes the responder
+	// already caches — the only in-process source there is (the `HTMLBundle`
+	// exposes no file list, measured). A shell that cannot be read leaves a
+	// served page without its bundle rather than failing the page: the page's
+	// content and its meta are already composed and are what the request is for.
+	let assets: Promise<ShellAssets> | null = null
+	const shellAssets = (): Promise<ShellAssets> => {
+		assets ??= shell
+			.text()
+			.then(readShellAssets)
+			.catch((error: unknown) => {
+				console.warn(`⚠️ served page has no bundle: ${error instanceof Error ? error.message : String(error)}`)
+				return { bootstrapSrc: null, stylesheetHrefs: [] } satisfies ShellAssets
+			})
+		return assets
+	}
 
 	const servePath = async (request: Request): Promise<Response> => {
 		const url = new URL(request.url)
 		// Read the table per request: this is what makes an authored binding live.
-		const resolution = resolve(routing.current(), url.pathname, now())
+		// The series resolver is injected rather than inlined into `resolve()`:
+		// routing stays pure and does no I/O, and `/featured` still answers from
+		// the local series index (`resolveSeries` is the only reader of it).
+		const resolution = resolve(routing.current(), url.pathname, now(), {
+			series: (target) => {
+				const found = resolveSeries(target, pageStore, pageStore)
+				return found.outcome === 'found' ? { author: found.author, d: found.d } : null
+			},
+		})
 
 		if (resolution.status === 404)
 			return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } })
@@ -102,7 +142,10 @@ export function buildContentRoutes({
 			}
 		}
 
-		const page = pageStore.get(resolution.target.author, resolution.target.d)
+		// A `page` or a `series` outcome both name an `(author, d)` to read; for a
+		// series, the resolver already chose the newest present member.
+		const { author, d } = resolution.outcome === 'series' ? resolution : resolution.target
+		const page = pageStore.get(author, d)
 		// A stored page is servable only while the author has it switched on.
 		// `enabled: false` is the unpublish: the store keeps the document (so
 		// the author loses no blocks — ADR-019 R6) but a bound path must stop
@@ -113,20 +156,34 @@ export function buildContentRoutes({
 			// or stored but switched off). That is 500 with a named error —
 			// never 404, which stays reserved for "no binding matched".
 			return html(
-				`<!doctype html><html><head><title>Page unavailable</title></head><body><h1>binding-target-missing</h1><p>No stored page at (${resolution.target.author}, ${resolution.target.d}).</p></body></html>`,
+				`<!doctype html><html><head><title>Page unavailable</title></head><body><h1>binding-target-missing</h1><p>No stored page at (${author}, ${d}).</p></body></html>`,
 				500,
 			)
 		}
+
+		// The bundle the page needs to hydrate, and the stylesheets the shell
+		// styled itself with: both read from the shell's own bytes, and both
+		// absent (never invented) when the shell cannot be read.
+		const { bootstrapSrc, stylesheetHrefs } = await shellAssets()
 
 		return html(
 			composePageHtml({
 				meta: page.meta,
 				html: page.html,
-				payload: { author: resolution.target.author, d: resolution.target.d, version: 1 },
+				payload: pagePayloadFor({ author, d }),
 				path: url.pathname.replace(/\/+$/, '') || '/',
+				bootstrapSrc: bootstrapSrc ?? undefined,
+				stylesheetHrefs,
 			}),
 		)
 	}
+
+	// `/` — the default binding (R4). Bun matches a literal `'/'` route and its
+	// `':name'` route never sees an empty segment (measured), so the root has to
+	// be registered explicitly or it falls through to the SPA shell and the
+	// routing file's `default` is never consulted. `resolve()` decides what it
+	// means: the named path's ladder, or the compiled-in home when there is none.
+	routes['/'] = { GET: servePath }
 
 	// Bindings that exist at boot keep their own literal routes. A subpath
 	// binding (`a/b`) has no other way to be reached; the top-level ones are

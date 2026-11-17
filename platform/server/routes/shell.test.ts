@@ -1,5 +1,38 @@
 import { describe, expect, test } from 'bun:test'
-import { createShellResponder } from './shell'
+import { isValidRouteName } from '@sdk/config/routeNames'
+import { createShellResponder, readShellAssets, SHELL_PATH } from './shell'
+
+describe('readShellAssets — the bundle URLs, read from the shell bytes', () => {
+	test('reads the module script and every stylesheet, in document order', () => {
+		const assets = readShellAssets(
+			'<!doctype html><html><head>' +
+				'<link rel="preconnect" href="https://fonts.gstatic.com">' +
+				'<link href="https://fonts.googleapis.com/css2?family=DM+Sans&display=swap" rel="stylesheet">' +
+				'<link rel="stylesheet" crossorigin href="/chunk-a.css">' +
+				'</head><body><script type="module" crossorigin src="/chunk-a.js" data-bun-dev-server-script></script>' +
+				'<script>var beacon = 1</script></body></html>',
+		)
+		expect(assets.bootstrapSrc).toBe('/chunk-a.js')
+		expect(assets.stylesheetHrefs).toEqual(['https://fonts.googleapis.com/css2?family=DM+Sans&display=swap', '/chunk-a.css'])
+	})
+
+	test('a shell with no bundle reports absence rather than a guessed path', () => {
+		expect(readShellAssets('<!doctype html><html><head><title>x</title></head><body></body></html>')).toEqual({
+			bootstrapSrc: null,
+			stylesheetHrefs: [],
+		})
+	})
+
+	test('only the first module script is taken — the dev beacon is not a second entry', () => {
+		const assets = readShellAssets('<script type="module" src="/a.js"></script><script type="module" src="/b.js"></script>')
+		expect(assets.bootstrapSrc).toBe('/a.js')
+	})
+
+	test('SHELL_PATH is two segments and outside the route-name grammar, so no binding can claim it', () => {
+		expect(SHELL_PATH.split('/').filter(Boolean)).toHaveLength(2)
+		expect(isValidRouteName(SHELL_PATH.split('/')[1])).toBe(false)
+	})
+})
 
 describe('the SPA shell responder', () => {
 	test('a Response shell is cloned per request, so a consumed body stays servable', async () => {

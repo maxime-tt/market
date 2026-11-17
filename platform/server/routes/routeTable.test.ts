@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
@@ -183,6 +183,22 @@ describe('the live routing table', () => {
 		expect(() => loadRouteTable(path)).toThrow()
 	})
 
+	test('a missing file boots an empty table, and the first write creates the file', () => {
+		const path = join(scratch(), 'routes.json')
+		const table = loadRouteTable(path)
+
+		expect(table.current()).toMatchObject({ seq: 0, default: null, bindings: [], prefixes: [] })
+		expect(existsSync(path)).toBe(false)
+
+		expect(table.apply(set('shop'), at(1_800_000_000))).toMatchObject({ ok: true, changed: true })
+		expect(existsSync(path)).toBe(true)
+
+		const reloaded = loadRouteTable(path)
+		expect(reloaded.current().bindings).toHaveLength(1)
+		expect(reloaded.current().bindings[0].path).toBe('shop')
+		expect(reloaded.current().seq).toBe(1)
+	})
+
 	test('a lease binding is left intact by an unrelated set', () => {
 		const path = tableFile([
 			{
@@ -207,5 +223,27 @@ describe('the live routing table', () => {
 		table.apply(set('shop'), at(1_800_000_000))
 		const written = JSON.parse(readFileSync(path, 'utf8'))
 		expect(() => validateRoutesFile(written)).not.toThrow()
+	})
+
+	// T22
+	test('apply carries a series target into the binding instead of narrowing it to page', () => {
+		const path = tableFile()
+		const table = loadRouteTable(path)
+		const intent: RouteIntent = {
+			version: ROUTE_INTENT_VERSION,
+			action: 'set',
+			path: 'featured',
+			target: { type: 'series', series: 'featured', author: AUTHOR },
+		}
+
+		expect(table.apply(intent, at(1_800_000_000))).toMatchObject({ ok: true, changed: true })
+		expect(table.current().bindings[0].target).toEqual({ type: 'series', series: 'featured', author: AUTHOR })
+
+		// Persisted and reloaded — the whole file is re-validated on the way in.
+		expect(loadRouteTable(path).current().bindings[0].target).toEqual({ type: 'series', series: 'featured', author: AUTHOR })
+
+		// Re-applying the same target is a no-op, not a rewrite.
+		expect(table.apply(intent, at(1_800_000_100))).toMatchObject({ ok: true, changed: false })
+		expect(table.current().seq).toBe(2)
 	})
 })

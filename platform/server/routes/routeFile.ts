@@ -1,21 +1,25 @@
 import { closeSync, copyFileSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { isValidRouteName, URL_SPACE_NAMES, isCompiledInName } from '@sdk/config/routeNames'
+import { isValidSeriesTag } from './pagePaths'
 
 /**
  * The routing file: one JSON file, loaded once, never partially loaded.
  *
- * `ARCHITECTURE.md` §4. A file that is missing, unparseable or invalid is a
- * broken site — the process refuses to boot rather than degrading to an empty
- * table (§4.4). The in-memory object returned by `loadRoutesFile` is the whole
- * state; there are no timers, no watchers, and no re-read per request.
+ * `ARCHITECTURE.md` §4. A file that exists but is unparseable or invalid is a
+ * broken site — the process refuses to boot rather than degrading (§4.4). A
+ * **missing** file is the empty table, so a fresh checkout or deployment boots
+ * and the first write creates the file. The in-memory object returned by
+ * `loadRoutesFile` is the whole state; there are no timers, no watchers, and no
+ * re-read per request.
  *
- * Increment-1 subset, and the refusals that name their successor increment:
+ * Accepted and refused, as the layer now stands:
  *
- *   - accepted: admin bindings to `page` targets, top-level lease bindings
- *     (`meaning: "lease"` with a positive `expiresAt`, no `/` in the path),
- *     and the declared prefix patterns;
- *   - refused: `grants` (§4/ACL, increment 4), `series` targets (increment 5),
+ *   - accepted: admin bindings to `page` and `series` targets, top-level lease
+ *     bindings (`meaning: "lease"` with a positive `expiresAt`, no `/` in the
+ *     path), and the declared prefix patterns;
+ *   - refused: `grants` (§4/ACL, increment 4), a **malformed** `series` target
+ *     (a well-formed one loads — the refusal narrowed, it did not vanish),
  *     `pageByParam`/`profile` prefix targets, and any prefix pattern the build
  *     does not program.
  *
@@ -25,6 +29,17 @@ import { isValidRouteName, URL_SPACE_NAMES, isCompiledInName } from '@sdk/config
  */
 
 export const ROUTES_FILE_VERSION = 1
+
+/**
+ * The routing file's size ceiling, measured on the bytes `serializeRoutesFile`
+ * actually emits — never estimated per binding. It exists to catch a runaway
+ * (a bug, a loop), **not** to ration: at ~335 bytes per binding (64-hex author
+ * plus attribution), 4 MiB is roughly 12 500 bindings — far past the owner's
+ * "hundreds of custom browse pages" (R1). A 32 KiB cap, by contrast, would
+ * refuse the 98th binding; that number is why this one is large
+ * (`PLAN-increment-2-reconciled.md` §1.4).
+ */
+export const ROUTES_FILE_BUDGET_BYTES = 4 * 1024 * 1024
 
 /** Prefix patterns this build programs. Increment 1 serves them as render targets. */
 export const DECLARED_PREFIX_PATTERNS: readonly string[] = ['item/:eventId']
@@ -43,7 +58,20 @@ export interface RenderTarget {
 	param: string
 }
 
-export type RouteTarget = PageTarget | RenderTarget
+/**
+ * A series binding (R3): the path answers the **newest** page in `series`, from
+ * the series owner's local index. It is not a renderer (it has no id in the
+ * URL) and not a page (it names no single coordinate), so it is its own arm.
+ */
+export interface SeriesTarget {
+	type: 'series'
+	/** The `t` value pages declare membership with. */
+	series: string
+	/** The series owner — 64-hex, part of the binding, never inferred (`ARCHITECTURE.md` §5.3). */
+	author: string
+}
+
+export type RouteTarget = PageTarget | RenderTarget | SeriesTarget
 
 export interface Binding {
 	kind: 'admin'
@@ -250,9 +278,14 @@ export function validateRoutesFile(candidate: unknown, source = '<memory>'): { f
 					violations.push(`${base}/target/d: expected a non-empty page d tag`)
 				}
 			} else if (target.type === 'series') {
-				violations.push(`${base}/target/type: series targets are not supported until increment 5`)
+				if (!isValidSeriesTag(target.series)) {
+					violations.push(`${base}/target/series: ${JSON.stringify(target.series)} does not match the name grammar`)
+				}
+				if (typeof target.author !== 'string' || !HEX64.test(target.author)) {
+					violations.push(`${base}/target/author: expected 64 lowercase hex`)
+				}
 			} else {
-				violations.push(`${base}/target/type: ${JSON.stringify(target.type)} is not supported in increment 1 (only "page")`)
+				violations.push(`${base}/target/type: ${JSON.stringify(target.type)} is not supported (only "page" or "series")`)
 			}
 
 			const targetObject = isRecord(target) ? (target as unknown as RouteTarget) : ({ type: 'page', author: '', d: '' } as PageTarget)
@@ -334,15 +367,28 @@ export function validateRoutesFile(candidate: unknown, source = '<memory>'): { f
 }
 
 /**
- * Reads, parses and validates the file. Throws on every failure state in
- * `ARCHITECTURE.md` §4.4 — missing, unparseable, or invalid. Never creates a
- * file, never falls back to an empty table.
+ * Reads, parses and validates the file.
+ *
+ * A **missing** file is not a malformed one: the routing table is empty (no
+ * bindings, no default, no prefixes) and the first write creates the file, so
+ * a fresh checkout and a fresh deployment boot. Nothing is created here — a
+ * load is a read. A file that exists but is unparseable or invalid still
+ * refuses, and is never rewritten or backed up.
  */
 export function loadRoutesFile(path: string): LoadedRoutesFile {
 	let text: string
 	try {
 		text = readFileSync(path, 'utf8')
 	} catch (error) {
+		// `ENOENT` means the file (or the directory leading to it) is not there
+		// yet — an empty table, not a refusal. Every other failure still refuses.
+		if (isRecord(error) && error.code === 'ENOENT') {
+			return {
+				file: { version: ROUTES_FILE_VERSION, instance: { pubkey: null }, seq: 0, default: null, bindings: [], prefixes: [] },
+				warnings: [],
+				path,
+			}
+		}
 		const detail = error instanceof Error ? error.message : String(error)
 		throw new RoutesFileError(path, [`/ : cannot read the routing file (${detail})`])
 	}
@@ -362,9 +408,21 @@ export function loadRoutesFile(path: string): LoadedRoutesFile {
 /**
  * Stable JSON: keys sorted recursively, two-space indent, trailing newline —
  * so a diff is a review artefact and a hash is an assertion.
+ *
+ * The emitted bytes are measured here, before any caller can write them: a
+ * table over `ROUTES_FILE_BUDGET_BYTES` is **refused, never truncated**. The
+ * error names the byte count, the binding count and the cap so the message is
+ * actionable.
  */
 export function serializeRoutesFile(file: RoutesFile): string {
-	return `${JSON.stringify(sortKeys(file), null, 2)}\n`
+	const text = `${JSON.stringify(sortKeys(file), null, 2)}\n`
+	const bytes = Buffer.byteLength(text, 'utf8')
+	if (bytes > ROUTES_FILE_BUDGET_BYTES) {
+		throw new Error(
+			`Routing file budget exceeded: ${bytes} bytes for ${file.bindings.length} bindings, over the ${ROUTES_FILE_BUDGET_BYTES}-byte cap — refusing to write (never truncating).`,
+		)
+	}
+	return text
 }
 
 function sortKeys(value: unknown): unknown {

@@ -22,10 +22,12 @@ import {
 	type StorefrontProfileData,
 } from '@ui/storefront'
 import { useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { useQuery } from '@tanstack/react-query'
 import { useStorefrontContext } from '@ui/storefront/StorefrontContext'
 import { selectAuctionList, useAuctionListRead } from './auctionListRead'
+import type { StorefrontBlock, StorefrontPage } from '@sdk/commerce/storefront/storefrontPage'
 
 /**
  * The platform's data-bound slot map for the storefront renderer (batch 2's
@@ -249,4 +251,79 @@ export const storefrontBlockSlots: StorefrontDataSlots = {
 	Search: (props) => <SearchSlot {...props} />,
 	Categories: (props) => <CategoriesSlot {...props} />,
 	AuctionList: (props) => <AuctionListSlot {...props} />,
+}
+
+/**
+ * The region marker the server writes around each data-bound block
+ * (`platform/server/routes/pageRender.ts`: `data-ar-block`, `data-ar-block-id`,
+ * `data-ar-block-placeholder`). Spelled here rather than imported: that module
+ * renders with `react-dom/server`, which the client bundle must never pull in.
+ */
+const SERVED_REGION_SELECTOR = '[data-ar-block-placeholder="true"]'
+
+/**
+ * The slot element for a data-bound block, read out of the one slot map.
+ *
+ * The switch is exhaustive over the five types the server leaves as regions —
+ * the same five `pageRender.ts` refuses to render — so a region can only ever
+ * be filled with the component the published page would have mounted.
+ */
+function servedRegionElement(block: StorefrontBlock): ReactNode {
+	switch (block.type) {
+		case 'ProductGrid':
+			return storefrontBlockSlots.ProductGrid?.(block.props) ?? null
+		case 'FeaturedProduct':
+			return storefrontBlockSlots.FeaturedProduct?.(block.props) ?? null
+		case 'ProductRow':
+			return storefrontBlockSlots.ProductRow?.(block.props) ?? null
+		case 'Search':
+			return storefrontBlockSlots.Search?.(block.props) ?? null
+		case 'Categories':
+			return storefrontBlockSlots.Categories?.(block.props) ?? null
+		default:
+			return null
+	}
+}
+
+/**
+ * Fills the served page's data-bound regions — the client half of the 7/5
+ * split (`ARCHITECTURE.md` §5.5.2, `R4.3.4`).
+ *
+ * The server rendered the page's own data at ingest and left a region per
+ * data-bound block holding that block's honest empty state. This walks those
+ * regions in the served DOM, pairs each with the block the live document names
+ * (`data-ar-block-id` ↔ `block.props.id` — the only identity the two share),
+ * and mounts the block's slot into it as its own React root. The static
+ * content is never re-rendered and never touched: React does not own it, and
+ * this function only ever writes inside the regions.
+ *
+ * Called **after** hydration, from an effect — filling during the first commit
+ * would hydrate those five subtrees against the server's empty state as
+ * mismatches, which is exactly what `R4.3.4` names.
+ *
+ * `wrap` is the host's provider stack (query client, router context, the
+ * page's author). It is a parameter rather than an import so this module stays
+ * the DOM/region half and the host keeps the wiring; the region resolves its
+ * reads exactly as the published page's mount does.
+ *
+ * Returns the teardown: every region root unmounts, leaving the server's
+ * markup in place.
+ */
+export function fillServedPageRegions(
+	container: HTMLElement,
+	page: StorefrontPage,
+	wrap: (children: ReactNode) => ReactNode,
+): () => void {
+	const roots: Root[] = []
+	for (const element of container.querySelectorAll<HTMLElement>(SERVED_REGION_SELECTOR)) {
+		const block = page.content.find((candidate) => candidate.props.id === element.dataset.arBlockId)
+		if (!block) continue
+		const root = createRoot(element)
+		root.render(<>{wrap(servedRegionElement(block))}</>)
+		roots.push(root)
+	}
+
+	return () => {
+		for (const root of roots) root.unmount()
+	}
 }

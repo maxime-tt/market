@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
 	DECLARED_PREFIX_PATTERNS,
+	ROUTES_FILE_BUDGET_BYTES,
 	RoutesFileError,
 	defaultPath,
 	loadRoutesFile,
@@ -33,6 +34,15 @@ const binding = (path: string, extra: Record<string, unknown> = {}) => ({
 	kind: 'admin',
 	path,
 	target: { type: 'page', author: AUTHOR, d: 'home' },
+	updatedAt: 1763000000,
+	updatedBy: 'instance',
+	...extra,
+})
+
+const seriesBinding = (path: string, series = 'featured', extra: Record<string, unknown> = {}) => ({
+	kind: 'admin',
+	path,
+	target: { type: 'series', series, author: AUTHOR },
 	updatedAt: 1763000000,
 	updatedBy: 'instance',
 	...extra,
@@ -69,15 +79,51 @@ describe('routeFile — load and validate', () => {
 		expect(loaded.warnings).toEqual([])
 	})
 
-	test('a missing file refuses with the path named', () => {
+	test('a missing file is an empty table, not a malformed one', () => {
 		const path = join(scratch(), 'absent.json')
-		expect(() => loadRoutesFile(path)).toThrow(RoutesFileError)
+		const loaded = loadRoutesFile(path)
+
+		expect(loaded.path).toBe(path)
+		expect(loaded.file).toEqual({
+			version: 1,
+			instance: { pubkey: null },
+			seq: 0,
+			default: null,
+			bindings: [],
+			prefixes: [],
+		})
+		expect(loaded.warnings).toEqual([])
+		// Loading is a read: the file stays absent until something writes it.
+		expect(existsSync(path)).toBe(false)
+	})
+
+	test('the empty table a missing file stands for resolves nothing and round-trips through the validator', () => {
+		const file = loadRoutesFile(join(scratch(), 'absent.json')).file
+
+		expect(lookup(file, 'shop', 1_800_000_000)).toBeNull()
+		expect(prefixMatch(file, ['item', 'abc'])).toBeNull()
+		expect(defaultPath(file)).toBeNull()
+		expect(validateRoutesFile(JSON.parse(serializeRoutesFile(file))).file).toEqual(file)
+	})
+
+	test('an existing malformed file still refuses, byte for byte', () => {
+		const directory = scratch()
+		const path = join(directory, 'routes.json')
+		writeFileSync(path, '{"version":2,"seq":0,"bindings":[],"prefixes":[]}')
+
+		let message = ''
 		try {
 			loadRoutesFile(path)
 		} catch (error) {
-			expect((error as RoutesFileError).message).toContain(path)
-			expect((error as RoutesFileError).violations[0]).toContain('cannot read')
+			message = (error as RoutesFileError).message
 		}
+
+		expect(message).toBe(
+			`Routing file refused: ${path}\n` +
+				'  • /version: expected 1, got 2\n' +
+				`Restore it from ${path}.bak (written by the last successful write) or from version control.`,
+		)
+		expect(existsSync(path)).toBe(true)
 	})
 
 	test('corrupt JSON refuses with the file path and the parse detail', () => {
@@ -148,12 +194,27 @@ describe('routeFile — load and validate', () => {
 		}
 	})
 
-	test('grants and series targets are refused, naming their later increment', () => {
+	test('a well-formed series binding loads with its series key and author', () => {
+		const file = load(base({ bindings: [seriesBinding('featured')] }))
+		expect(file.bindings).toHaveLength(1)
+		expect(file.bindings[0].target).toEqual({ type: 'series', series: 'featured', author: AUTHOR })
+	})
+
+	test('grants are still refused; a MALFORMED series target is refused by field pointer', () => {
 		const grants = captureViolations({ ...base(), grants: { [OTHER]: ['featured-*'] } })
 		expect(grants).toContain('increment 4')
 
-		const series = captureViolations(base({ bindings: [binding('featured', { target: { type: 'series', series: 'featured' } })] }))
-		expect(series).toContain('increment 5')
+		// The refusal narrowed, it did not vanish: a bad series key and a bad
+		// author each name the field that failed.
+		const badSeries = captureViolations(
+			base({ bindings: [binding('featured', { target: { type: 'series', series: 'NO', author: AUTHOR } })] }),
+		)
+		expect(badSeries).toContain('/target/series')
+
+		const badAuthor = captureViolations(
+			base({ bindings: [binding('featured', { target: { type: 'series', series: 'featured', author: 'nope' } })] }),
+		)
+		expect(badAuthor).toContain('/target/author')
 	})
 
 	test('an unprogrammed prefix is refused', () => {
@@ -213,6 +274,49 @@ describe('routeFile — serialization and atomic writes', () => {
 		mkdirSync(`${path}.tmp`)
 		expect(() => writeAtomic(path, 'replacement')).toThrow()
 		expect(readFileSync(path, 'utf8')).toBe('original')
+	})
+
+	test('the file budget refuses a table over the cap, naming bytes, bindings and the cap, and writes nothing', () => {
+		// The cap is 4 MiB and a binding serialises to roughly 285 bytes here, so
+		// a table of 15 000 bindings is comfortably over it without a pathological
+		// allocation.
+		const many = Array.from({ length: 15_000 }, (_value, index) =>
+			binding(`page${index}`, { target: { type: 'page', author: AUTHOR, d: `page-${index}` } }),
+		)
+		const oversized: RoutesFile = {
+			version: 1,
+			instance: { pubkey: null },
+			seq: 1,
+			default: null,
+			bindings: many as unknown as RoutesFile['bindings'],
+			prefixes: [],
+		}
+
+		const directory = scratch()
+		const path = join(directory, 'routes.json')
+		let message = ''
+		try {
+			// The argument is evaluated first: the serializer refuses before
+			// `writeAtomic` is ever reached, so nothing is written.
+			writeAtomic(path, serializeRoutesFile(oversized))
+		} catch (error) {
+			message = error instanceof Error ? error.message : String(error)
+		}
+
+		expect(message).toContain('budget exceeded')
+		expect(message).toContain(`${many.length} bindings`)
+		expect(message).toContain(`${ROUTES_FILE_BUDGET_BYTES}`)
+		// The observed byte count is quoted, not estimated.
+		expect(message).toMatch(/\d{7,} bytes/)
+		expect(existsSync(path)).toBe(false)
+	})
+
+	test('serializeRoutesFile round-trips a series binding byte-identically twice', () => {
+		const file = load(base({ bindings: [seriesBinding('featured')] }))
+		const first = serializeRoutesFile(file)
+		const second = serializeRoutesFile(load(JSON.parse(first)))
+		expect(second).toBe(first)
+		expect(validateRoutesFile(JSON.parse(first)).file).toEqual(file)
 	})
 })
 

@@ -7,7 +7,7 @@ import {
 	type StorefrontPage,
 	type StorefrontParseResult,
 } from '@sdk/commerce/storefront/storefrontPage'
-import { publishStorefrontPage } from './storefrontPublish'
+import { publishStorefrontPage, type PageAddress } from './storefrontPublish'
 import { isValidHexKey } from '@sdk/core/utils/utils'
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { storefrontKeys } from '@sdk/core/query/queryKeyFactory'
@@ -41,7 +41,7 @@ const EMPTY_RESULT: StorefrontPageResult = { event: null, pubkey: null, page: nu
  * than trusting arrival order. A missing `created_at` (the read model types it
  * optional) sorts as the oldest possible event.
  */
-function selectReplaceable(events: NostrEventLike[]): NostrEventLike | null {
+export function selectReplaceable(events: NostrEventLike[]): NostrEventLike | null {
 	let winner: NostrEventLike | null = null
 	for (const event of events) {
 		if (!winner) {
@@ -101,19 +101,39 @@ export async function fetchStorefrontPage(pubkey: string, dTag: string = STOREFR
 	return { event, pubkey: event.pubkey, ...parsed }
 }
 
-export const storefrontPageQueryOptions = (pubkey: string) =>
+/**
+ * The cache key for one author's page document.
+ *
+ * The storefront page keeps the key it has always had
+ * (`['storefront','page',pubkey]`), so the builder and the public profile read
+ * one entry; every other address appends its `d`, so two pages of one author
+ * never share a cache entry. `sdk/core/query/queryKeyFactory.ts` owns
+ * `storefrontKeys` and this lane must not edit `sdk/`, so the per-`d` segment is
+ * composed here — one function, so the query and its invalidation cannot drift.
+ */
+export function storefrontPageKey(pubkey: string, dTag?: string) {
+	return dTag === undefined || dTag === STOREFRONT_PAGE_D_TAG
+		? storefrontKeys.page(pubkey)
+		: ([...storefrontKeys.page(pubkey), dTag] as const)
+}
+
+export const storefrontPageQueryOptions = (pubkey: string, dTag?: string) =>
 	queryOptions({
-		queryKey: storefrontKeys.page(pubkey),
-		queryFn: () => fetchStorefrontPage(pubkey),
-		enabled: isValidHexKey(pubkey),
+		queryKey: storefrontPageKey(pubkey, dTag),
+		queryFn: () => fetchStorefrontPage(pubkey, dTag),
+		enabled: isValidHexKey(pubkey) && (dTag ?? STOREFRONT_PAGE_D_TAG).length > 0,
 		// Pages change rarely and sit on the critical path of every profile
 		// view, so a generous stale window avoids a relay round trip per visit.
 		staleTime: 2 * 60 * 1000,
 	})
 
-/** One author's storefront page. `pubkey` must be hex; resolve npub/NIP-05 first. */
-export function useStorefrontPage(pubkey: string | undefined) {
-	return useQuery(storefrontPageQueryOptions(pubkey ?? ''))
+/**
+ * One author's page at one address. `pubkey` must be hex; resolve npub/NIP-05
+ * first. `dTag` defaults to the storefront page, so the existing call sites
+ * read exactly the coordinate (and the cache entry) they always did.
+ */
+export function useStorefrontPage(pubkey: string | undefined, dTag?: string) {
+	return useQuery(storefrontPageQueryOptions(pubkey ?? '', dTag))
 }
 
 /**
@@ -154,18 +174,20 @@ export function shouldRenderStorefrontPage(result: StorefrontPageResult | undefi
 }
 
 /**
- * Publishes the author's own page and refreshes their cached copy.
+ * Publishes a page and refreshes the cached copy of the address it wrote.
  *
  * Invalidation is a cache hint, not proof of relay retention: the mutation
  * result carries the relays that actually ACKed, and the UI reports from that.
+ * The key comes from the same helper the read uses, so a publish at `dTag`
+ * refreshes exactly the entry that `dTag` reads.
  */
 export function usePublishStorefrontPage() {
 	const queryClient = useQueryClient()
 
 	return useMutation({
-		mutationFn: (page: StorefrontPage) => publishStorefrontPage(page),
-		onSuccess: (result) => {
-			queryClient.invalidateQueries({ queryKey: storefrontKeys.page(result.pubkey) })
+		mutationFn: ({ page, address }: { page: StorefrontPage; address?: PageAddress }) => publishStorefrontPage(page, address),
+		onSuccess: (result, variables) => {
+			queryClient.invalidateQueries({ queryKey: storefrontPageKey(result.pubkey, variables.address?.dTag) })
 		},
 	})
 }

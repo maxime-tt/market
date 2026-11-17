@@ -46,6 +46,8 @@ export interface SeriesMember {
 export interface PageStore {
 	put(page: StoredPage): void
 	get(author: string, d: string): StoredPage | null
+	/** Whether a servable page exists at the coordinate — one read, never a scan. */
+	has(author: string, d: string): boolean
 	seriesMembers(series: string, author: string): SeriesMember[]
 	root: string
 }
@@ -93,6 +95,17 @@ export function createPageStore(options: PageStoreOptions = {}): PageStore {
 		}
 	}
 
+	/** One file read: the page at the coordinate, or null. Shared by get and has. */
+	const readPage = (author: string, d: string): StoredPage | null => {
+		const path = pagePath(author, d)
+		if (!path) return null
+		const stored = readJson(path)
+		if (typeof stored !== 'object' || stored === null) return null
+		const candidate = stored as StoredPage
+		if (typeof candidate.html !== 'string' || typeof candidate.document !== 'object') return null
+		return candidate
+	}
+
 	return {
 		root,
 
@@ -115,13 +128,11 @@ export function createPageStore(options: PageStoreOptions = {}): PageStore {
 		},
 
 		get(author: string, d: string): StoredPage | null {
-			const path = pagePath(author, d)
-			if (!path) return null
-			const stored = readJson(path)
-			if (typeof stored !== 'object' || stored === null) return null
-			const candidate = stored as StoredPage
-			if (typeof candidate.html !== 'string' || typeof candidate.document !== 'object') return null
-			return candidate
+			return readPage(author, d)
+		},
+
+		has(author: string, d: string): boolean {
+			return readPage(author, d) !== null
 		},
 
 		seriesMembers(series: string, author: string): SeriesMember[] {

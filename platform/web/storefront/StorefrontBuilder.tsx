@@ -11,7 +11,7 @@ import {
 import { Button } from '@ui/primitives/button'
 import { Switch } from '@ui/primitives/switch'
 import type { StorefrontPage, StorefrontRootProps, StorefrontThemeId } from '@sdk/commerce/storefront/storefrontPage'
-import { STOREFRONT_PAGE_VERSION, validateStorefrontPageForPublish } from '@sdk/commerce/storefront/storefrontPage'
+import { STOREFRONT_PAGE_D_TAG, STOREFRONT_PAGE_VERSION, validateStorefrontPageForPublish } from '@sdk/commerce/storefront/storefrontPage'
 import { validateStorefrontThemeSelection } from '@sdk/config/storefront/storefrontThemes'
 import { StorefrontProvider } from '@ui/storefront'
 import { cn } from '@ui/utils/cn'
@@ -45,6 +45,12 @@ import '@puckeditor/core/puck.css'
 
 /**
  * The page builder.
+ *
+ * The editor is addressed, not moded: `dTag` is the `d` the page is read from,
+ * drafted under and published to. It defaults to the storefront page, so the
+ * ACCOUNT tab's call site is unchanged, and the Pages surface opens the same
+ * editor at a custom `d`. Nothing inside the document branches on which kind of
+ * page this is — the only difference is the address.
  *
  * This is a small state machine over three modes:
  *
@@ -85,9 +91,13 @@ function fromPuckData(data: Data, enabled: boolean): StorefrontPage {
 	}
 }
 
-export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
-	const { data: published, isLoading } = useStorefrontPage(pubkey)
+export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pubkey: string; dTag?: string }) {
+	const { data: published, isLoading } = useStorefrontPage(pubkey, dTag)
 	const publish = usePublishStorefrontPage()
+
+	// Derived, never passed: the storefront page is the one whose address is the
+	// reserved default. Everything address-specific in the chrome hangs off this.
+	const isStorefront = dTag === STOREFRONT_PAGE_D_TAG
 
 	// The claimed name (if any) is bought on separate dashboard pages today — see
 	// ADR-019 — but the builder is where an author actually needs to know it: it
@@ -98,7 +108,12 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 	const { data: nip05Settings } = useNip05Settings(config?.appPublicKey)
 	const vanityEntry = useMemo(() => getVanityForPubkey(vanitySettings, pubkey), [vanitySettings, pubkey])
 	const nip05Entry = useMemo(() => getNip05ForPubkey(nip05Settings, pubkey), [nip05Settings, pubkey])
-	const liveHref = vanityEntry ? `/${vanityEntry.vanityName}?preview=draft` : `/profile/${pubkey}?preview=draft`
+	// The vanity URL and the profile URL both point at the *storefront* page, so
+	// for any other address they would be a plausible-but-wrong link. A custom
+	// page's live URL is the path it is bound to, which this editor does not
+	// know; it is set by whoever does (the Routes list's "View the page"). So the
+	// link is absent here rather than wrong.
+	const liveHref = isStorefront ? (vanityEntry ? `/${vanityEntry.vanityName}?preview=draft` : `/profile/${pubkey}?preview=draft`) : null
 
 	const [mode, setMode] = useState<BuilderMode>('loading')
 	const [initialData, setInitialData] = useState<Data | null>(null)
@@ -143,7 +158,7 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 		if (seeded.current || isLoading) return
 		seeded.current = true
 
-		const draft = loadStorefrontDraft(pubkey)
+		const draft = loadStorefrontDraft(pubkey, dTag)
 		const existing = draft ?? published?.page
 
 		// A document with no blocks is indistinguishable from no document at
@@ -163,7 +178,7 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 			setEnabled(existing?.enabled ?? false)
 			setMode('wizard')
 		}
-	}, [isLoading, published, pubkey])
+	}, [dTag, isLoading, published, pubkey])
 
 	const handleWizardComplete = useCallback(
 		(page: StorefrontPage) => {
@@ -176,10 +191,10 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 			// Persisted immediately: the author's template/theme choice is real
 			// work, and a refresh before their first edit inside Puck must not
 			// lose it and send them back to the wizard.
-			saveStorefrontDraft(pubkey, page)
+			saveStorefrontDraft(pubkey, dTag, page)
 			setMode('editor')
 		},
-		[pubkey],
+		[dTag, pubkey],
 	)
 
 	const handleChange = useCallback(
@@ -187,18 +202,18 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 			currentData.current = data
 			setIsDirty(true)
 			setErrors([])
-			saveStorefrontDraft(pubkey, fromPuckData(data, enabled))
+			saveStorefrontDraft(pubkey, dTag, fromPuckData(data, enabled))
 		},
-		[pubkey, enabled],
+		[dTag, pubkey, enabled],
 	)
 
 	const handleToggleEnabled = useCallback(
 		(next: boolean) => {
 			setEnabled(next)
 			setIsDirty(true)
-			if (currentData.current) saveStorefrontDraft(pubkey, fromPuckData(currentData.current, next))
+			if (currentData.current) saveStorefrontDraft(pubkey, dTag, fromPuckData(currentData.current, next))
 		},
-		[pubkey],
+		[dTag, pubkey],
 	)
 
 	const handlePublish = useCallback(
@@ -229,8 +244,8 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 			setErrors([])
 
 			try {
-				const result = await publish.mutateAsync(validation.page)
-				clearStorefrontDraft(pubkey)
+				const result = await publish.mutateAsync({ page: validation.page, address: { dTag } })
+				clearStorefrontDraft(pubkey, dTag)
 				setIsDirty(false)
 				// Report the relays that actually acknowledged. "Published" on its
 				// own would be a claim about retention we cannot make.
@@ -245,11 +260,11 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 				toast.error(message)
 			}
 		},
-		[enabled, publish, pubkey],
+		[dTag, enabled, publish, pubkey],
 	)
 
 	const handleDiscardDraft = useCallback(() => {
-		clearStorefrontDraft(pubkey)
+		clearStorefrontDraft(pubkey, dTag)
 		const page = published?.page
 
 		if (page && page.content.length > 0) {
@@ -269,7 +284,7 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 		setIsDirty(false)
 		setErrors([])
 		toast.success('Unpublished changes discarded')
-	}, [published, pubkey])
+	}, [dTag, published, pubkey])
 
 	// Reopening the wizard always asks first: `finish()` there REPLACES the
 	// whole block list, and there is no separate "are you sure" inside the
@@ -377,31 +392,42 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 							className="grid grid-cols-1 items-center gap-3 border-b px-4 py-3 sm:grid-cols-[1fr_auto_1fr]"
 						>
 							<div className="flex flex-col items-start gap-1">
-								<Button variant="outline" size="sm" asChild data-testid="storefront-view-live">
-									<a href={liveHref} target="_blank" rel="noopener noreferrer">
-										View live page <ExternalLink className="size-3.5" aria-hidden="true" />
-									</a>
-								</Button>
-								<div className="flex items-center gap-1 pl-1 text-xs text-muted-foreground" data-testid="storefront-identity">
-									<Link2 className="size-3" aria-hidden="true" />
-									{vanityEntry || nip05Entry ? (
-										<span>
-											{[vanityEntry && `${hostname}/${vanityEntry.vanityName}`, nip05Entry && `${nip05Entry.username}@${hostname}`]
-												.filter(Boolean)
-												.join(' · ')}
-										</span>
-									) : (
-										<a
-											href="/dashboard/account/vanity-url"
-											className="underline decoration-dotted hover:text-foreground"
-											data-testid="storefront-claim-identity"
-										>
-											Claim a custom URL & Nostr address
+								{liveHref ? (
+									<Button variant="outline" size="sm" asChild data-testid="storefront-view-live">
+										<a href={liveHref} target="_blank" rel="noopener noreferrer">
+											View live page <ExternalLink className="size-3.5" aria-hidden="true" />
 										</a>
-									)}
-								</div>
+									</Button>
+								) : (
+									// A custom page has no live URL until a path is bound to
+									// it, and that binding lives in APP SETTINGS → Routes. An
+									// absent link beats a link to somebody else's address.
+									<span className="text-xs text-muted-foreground" data-testid="storefront-no-live-page">
+										Not published under a path yet — bind one in Routes.
+									</span>
+								)}
+								{isStorefront && (
+									<div className="flex items-center gap-1 pl-1 text-xs text-muted-foreground" data-testid="storefront-identity">
+										<Link2 className="size-3" aria-hidden="true" />
+										{vanityEntry || nip05Entry ? (
+											<span>
+												{[vanityEntry && `${hostname}/${vanityEntry.vanityName}`, nip05Entry && `${nip05Entry.username}@${hostname}`]
+													.filter(Boolean)
+													.join(' · ')}
+											</span>
+										) : (
+											<a
+												href="/dashboard/account/vanity-url"
+												className="underline decoration-dotted hover:text-foreground"
+												data-testid="storefront-claim-identity"
+											>
+												Claim a custom URL & Nostr address
+											</a>
+										)}
+									</div>
+								)}
 							</div>
-							<h1 className="text-center text-base font-semibold tracking-tight sm:text-lg">Your Storefront</h1>
+							<h1 className="text-center text-base font-semibold tracking-tight sm:text-lg">{isStorefront ? 'Your Storefront' : dTag}</h1>
 							<div className="flex min-w-0 justify-center sm:justify-end">{actions}</div>
 						</div>
 
@@ -494,9 +520,11 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 				)
 			},
 		[
+			dTag,
 			handleDiscardDraft,
 			isDirty,
 			isFullscreen,
+			isStorefront,
 			liveHref,
 			nip05Entry,
 			publish.isPending,

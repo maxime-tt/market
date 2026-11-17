@@ -19,23 +19,31 @@ import { storefrontBlockSlots } from './StorefrontBlockSlots'
  * identical code path, so a page deployed under any other `d` needs zero new
  * machinery.
  *
- * The app key comes from the public app config (`useConfigQuery`); it is never
- * hard-coded here and adds no settings field. This lane adds no app-key
+ * The author defaults to this instance's app key from the public app config
+ * (`useConfigQuery`) and is never hard-coded here; a caller that already knows
+ * it — the served page, whose `#__AR_PAGE__` names it — passes `author` and
+ * skips the config read entirely. This lane adds no app-key
  * publishing surface, so the coordinate is usually absent: that renders a
  * deliberate empty state, not an error. A page that fails to parse degrades to
  * the same empty state (relay content is untrusted until the parser accepts
  * it); a relay/transport failure surfaces as an error state with a retry.
  */
-export function StorefrontAddressPage({ dTag }: { dTag: string }) {
+export function StorefrontAddressPage({ dTag, author: authorProp }: { dTag: string; author?: string }) {
 	const { data: config, isLoading: isLoadingConfig } = useConfigQuery()
-	const author = config?.appPublicKey ?? ''
+	// The app key comes from the public app config (`useConfigQuery`) when the
+	// caller does not already know it. A caller that does — the served page knows
+	// the author from `#__AR_PAGE__` — passes it and the config read stops gating
+	// the page read.
+	const author = authorProp ?? config?.appPublicKey ?? ''
+	const needsConfig = authorProp === undefined
 	const hasAddress = isValidHexKey(author) && dTag.length > 0
 	const { data: page, isLoading: isLoadingPage, isError, refetch } = useStorefrontAddressPage(hasAddress ? author : undefined, dTag)
 
 	// The config read gates the page read (the query stays disabled without a
 	// valid author), so the two loads are strictly sequential: wait for the
-	// config first, then for the page.
-	if (isLoadingConfig || (hasAddress && isLoadingPage)) {
+	// config first, then for the page. With the author supplied there is nothing
+	// to wait for but the page itself.
+	if ((needsConfig && isLoadingConfig) || (hasAddress && isLoadingPage)) {
 		return <LoadingState className="min-h-screen" label="Loading…" />
 	}
 

@@ -44,7 +44,7 @@ const binding = (path: string, d = 'home', extra: Record<string, unknown> = {}) 
 	...extra,
 })
 
-function routesFile(bindings: ReturnType<typeof binding>[] = [binding('shop')]): RoutesFile {
+function routesFile(bindings: unknown[] = [binding('shop')]): RoutesFile {
 	return validateRoutesFile({
 		version: 1,
 		instance: { pubkey: null },
@@ -85,7 +85,7 @@ const directories: string[] = []
 
 function start(
 	options: {
-		bindings?: ReturnType<typeof binding>[]
+		bindings?: unknown[]
 		levelOf?: (pubkey: string) => AccessLevel
 		maxContentBytes?: number
 		render?: typeof renderPage
@@ -509,5 +509,88 @@ describe('route intents — the admin authors a binding over the one ingest', ()
 		expect(after.seq).toBe(before.seq + 1)
 		expect(after.bindings.map((entry) => entry.path)).toEqual(['shop', 'products'])
 		expect(after.warnings).toEqual([{ code: 'compiled-in-path', path: 'products', message: expect.any(String) }])
+	})
+})
+
+/** A series binding: the path answers the newest page in `series` by `author`. */
+const seriesBinding = (path: string, series = 'featured', author = APP_PUBKEY) => ({
+	kind: 'admin',
+	path,
+	target: { type: 'series', series, author },
+	updatedAt: 1763000000,
+	updatedBy: 'instance',
+})
+
+/** A minimal valid document carrying a unique marker, so served bytes identify it. */
+const documentWith = (marker: string): string =>
+	JSON.stringify({
+		version: 1,
+		enabled: true,
+		root: { props: { title: `Page ${marker}`, theme: 'default' } },
+		content: [{ type: 'Text', props: { id: 'text-1', markdown: `marker:${marker}` } }],
+	})
+
+const routesBytes = (harness: Harness): string => readFileSync(join(harness.root, 'routes.json'), 'utf8')
+
+describe('R1/R2/R3 — custom paths and the series path (page-path layer)', () => {
+	// T23
+	test('a page published at a custom d is served at its bound path', async () => {
+		const harness = start({ bindings: [binding('custom-page', 'custom-d')] })
+
+		expect((await post(harness, signed(documentWith('CUSTOM'), { d: 'custom-d' }))).status).toBe(200)
+
+		const served = await realFetch(`${harness.url}/custom-page`)
+		expect(served.status).toBe(200)
+		expect(await served.text()).toContain('marker:CUSTOM')
+	})
+
+	// T24 (E10)
+	test('[R3] /featured answers the newest member, and a later publish changes the answer with routes.json bytes unchanged', async () => {
+		const harness = start({ bindings: [binding('shop'), seriesBinding('featured')] })
+
+		// Two pages declare membership in `featured` at their own `d`s.
+		clock += 1
+		expect((await post(harness, signed(documentWith('FIRST'), { d: 'featured-a', createdAt: clock, tags: [['t', 'featured']] }))).status).toBe(200)
+		clock += 1
+		expect((await post(harness, signed(documentWith('SECOND'), { d: 'featured-b', createdAt: clock, tags: [['t', 'featured']] }))).status).toBe(200)
+
+		const before = routesBytes(harness)
+		const first = await realFetch(`${harness.url}/featured`)
+		expect(first.status).toBe(200)
+		expect(await first.text()).toContain('marker:SECOND')
+
+		// A third membership is published; the series answer changes with **no**
+		// routing-file write — that is what "dynamic" means.
+		clock += 1
+		expect((await post(harness, signed(documentWith('THIRD'), { d: 'featured-c', createdAt: clock, tags: [['t', 'featured']] }))).status).toBe(200)
+
+		const second = await realFetch(`${harness.url}/featured`)
+		expect(second.status).toBe(200)
+		expect(await second.text()).toContain('marker:THIRD')
+		expect(routesBytes(harness)).toBe(before)
+	})
+
+	// T25
+	test('a page tagged featured by a non-owner is stored but never wins /featured', async () => {
+		const harness = start({
+			bindings: [binding('shop'), seriesBinding('featured')],
+			levelOf: (pubkey) => (pubkey === APP_PUBKEY ? 'app' : pubkey === OUTSIDER_PUBKEY ? 'editor' : null),
+		})
+
+		clock += 1
+		expect((await post(harness, signed(documentWith('OWNER'), { d: 'owner-page', createdAt: clock, tags: [['t', 'featured']] }))).status).toBe(200)
+		// The outsider's page is *newer* and tagged into the same series, but it
+		// belongs to a different (series, author) key — it must not become /featured.
+		clock += 100
+		expect(
+			(await post(harness, signed(documentWith('OUTSIDER'), { d: 'outsider-page', createdAt: clock, key: OUTSIDER_KEY, tags: [['t', 'featured']] })))
+				.status,
+		).toBe(200)
+
+		const served = await realFetch(`${harness.url}/featured`)
+		expect(served.status).toBe(200)
+		const html = await served.text()
+		expect(html).toContain('marker:OWNER')
+		expect(html).not.toContain('marker:OUTSIDER')
 	})
 })

@@ -96,4 +96,30 @@ describe('route intent — the signed record of a binding', () => {
 		expect(() => buildRouteIntentEvent(setIntent({ path: 'api' }), 1)).toThrow('Route intent is not valid')
 		expect(() => buildRouteIntentEvent(setIntent({ path: 'a/b' }), 1)).toThrow('top-level name')
 	})
+
+	// T21
+	test('a series target round-trips through the intent content', () => {
+		const intent: RouteIntent = {
+			version: ROUTE_INTENT_VERSION,
+			action: 'set',
+			path: 'featured',
+			target: { type: 'series', series: 'featured', author: AUTHOR },
+		}
+		const result = parse(intent, 'featured')
+		expect(result.error).toBeNull()
+		expect(result.intent?.target).toEqual({ type: 'series', series: 'featured', author: AUTHOR })
+
+		const event = buildRouteIntentEvent(intent, 1_800_000_000)
+		expect(event.tags).toEqual([['d', 'featured']])
+		expect(parseRouteIntent(event.content, event.tags[0][1]).intent?.target).toEqual({
+			type: 'series',
+			series: 'featured',
+			author: AUTHOR,
+		})
+
+		// A malformed series target is still refused, by field pointer.
+		const bad = (target: unknown) => parseRouteIntent(JSON.stringify({ version: 1, action: 'set', path: 'featured', target })).error
+		expect(bad({ type: 'series', series: 'NO', author: AUTHOR })).toContain('/target/series')
+		expect(bad({ type: 'series', series: 'featured', author: 'nope' })).toContain('/target/author')
+	})
 })
