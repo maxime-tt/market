@@ -1,15 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import {
-	CATALOGUE_DARK,
-	CATALOGUE_EASE,
-	CATALOGUE_FONTS,
-	CATALOGUE_LIGHT,
-	CATALOGUE_RADIUS,
-	catalogueCssVars,
-} from './catalogue-preset'
+import { CATALOGUE_DARK, CATALOGUE_EASE, CATALOGUE_FONTS, CATALOGUE_LIGHT, CATALOGUE_RADIUS, catalogueCssVars } from './catalogue-preset'
 import { CatalogueView } from './catalogue-view'
+import type { ArenaAuctionCardModel } from '@ui/auction/arena/model'
 
 describe('Catalogue preset', () => {
 	test('carries the extraction’s light token values', () => {
@@ -51,39 +45,64 @@ describe('Catalogue preset', () => {
 })
 
 describe('CatalogueView', () => {
-	const auction = {
-		id: 'lot-1',
-		title: 'A lot',
+	// The Layout A list is fed the arena read-model now, not the demo state
+	// document: the two flat fields the demo carried (`fundingMode`, `status`)
+	// have no arena source and the countdown reads the read's `now`.
+	const card: ArenaAuctionCardModel = {
+		coordinate: '1440:abc:lot-1',
 		seller: 'abc',
+		d: 'lot-1',
+		title: 'A lot',
+		imageUrl: null,
 		startingBid: 10,
-		endTime: 1_060,
-		status: 'open',
-		fundingMode: 'custodial_reservation_v1',
+		topBidTotal: null,
+		bidCount: 0,
+		bidsWithoutAmount: 0,
+		endsAt: 1_060,
+		phase: 'open',
+		verdict: null,
+		verdictCount: 0,
+		validatorCount: 0,
+		divergent: false,
+		relayCount: 1,
 	}
+	const relayHealth = { answered: 1, total: 1 }
+	const hrefFor = (view: ArenaAuctionCardModel) => `/auctions/${view.d}`
 
-	test('states the money is fake — not optional', () => {
-		const html = renderToStaticMarkup(
-			createElement(CatalogueView, { auctions: [auction], isLoading: false, isError: false, now: 1_000 }),
-		)
-		expect(html).toContain('FAKE_MONEY_ONLY')
-		expect(html).toContain('catalogue-fake-money')
+	test('states the escrow — the arena read has no funding mode to assert', () => {
+		const html = renderToStaticMarkup(createElement(CatalogueView, { cards: [card], status: 'settled', relayHealth, now: 1_000, hrefFor }))
+		expect(html).toContain('catalogue-escrow-notice')
+		expect(html).toContain('escrow')
 	})
 
-	test('counts down against the committed time, not the browser clock', () => {
-		const html = renderToStaticMarkup(
-			createElement(CatalogueView, { auctions: [auction], isLoading: false, isError: false, now: 1_000 }),
-		)
+	test('counts down against the read’s now, not the browser clock', () => {
+		const html = renderToStaticMarkup(createElement(CatalogueView, { cards: [card], status: 'settled', relayHealth, now: 1_000, hrefFor }))
 		expect(html).toContain('1m 00s')
 	})
 
-	test('renders one card per lot, and an honest empty state', () => {
+	test('renders one card per lot', () => {
 		const withLots = renderToStaticMarkup(
-			createElement(CatalogueView, { auctions: [auction, { ...auction, id: 'lot-2' }], isLoading: false, isError: false, now: 1_000 }),
+			createElement(CatalogueView, {
+				cards: [card, { ...card, coordinate: '1440:abc:lot-2', d: 'lot-2' }],
+				status: 'settled',
+				relayHealth,
+				now: 1_000,
+				hrefFor,
+			}),
 		)
 		expect(withLots).toContain('2 lots')
-		const empty = renderToStaticMarkup(
-			createElement(CatalogueView, { auctions: [], isLoading: false, isError: false, now: 1_000 }),
+	})
+
+	test('a lot with no stated end says so in words, never a 0', () => {
+		const html = renderToStaticMarkup(
+			createElement(CatalogueView, {
+				cards: [{ ...card, endsAt: null, phase: 'unknown' }],
+				status: 'settled',
+				relayHealth,
+				now: 1_000,
+				hrefFor,
+			}),
 		)
-		expect(empty).toContain('catalogue-empty')
+		expect(html).toContain('End time unknown')
 	})
 })

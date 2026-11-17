@@ -45,8 +45,8 @@ import {
 	toVerdictPanelModel,
 	type ArenaSurfacesReadState,
 } from '@platform/web/auctions/relay/auctionSurfacesRead'
-import { ArenaAuctionDetail } from '@ui/auction/arena/auction-detail'
 import { ArenaVerdictPanel } from '@ui/auction/arena/verdict-panel'
+import { CatalogueDetailView } from '@ui/auctions/catalogue/catalogue-detail-view'
 import { shortKey, type ArenaRelayHealth, type ArenaSurfaceStatus } from '@ui/auction/arena/model'
 import { AuctionBidHost } from '@platform/web/auctions/relay/AuctionBidHost'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
@@ -145,10 +145,11 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: Arena
 
 	return (
 		<div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6">
-			<ArenaAuctionDetail
+			<CatalogueDetailView
 				model={detail}
 				status={read.status}
 				relayHealth={read.relayHealth}
+				now={now}
 				backHref="/auctions"
 				sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} />}
 				bidPanel={detail === null ? null : <AuctionBidHost model={detail} readStatus={read.status} now={now} onPublished={onPublished} />}
