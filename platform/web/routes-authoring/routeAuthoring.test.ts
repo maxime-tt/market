@@ -31,6 +31,8 @@ describe('the authoring view model', () => {
 		expect(describeBinding(binding())).toMatchObject({
 			path: 'shop',
 			targetLabel: `page ${AUTHOR.slice(0, 8)}…${AUTHOR.slice(-4)} / storefront-page`,
+			pageName: 'Storefront',
+			pageAuthorLabel: `${AUTHOR.slice(0, 8)}…${AUTHOR.slice(-4)}`,
 			updatedAtLabel: '2027-01-15',
 			updatedByLabel: `${ADMIN.slice(0, 8)}…${ADMIN.slice(-4)}`,
 			warning: null,
@@ -75,7 +77,7 @@ describe('the authoring view model', () => {
 		expect(result.intent).toBeNull()
 		expect(result.errors).toHaveLength(2)
 		expect(result.errors[0]).toContain('Enter a path')
-		expect(result.errors[1]).toContain('Enter the author pubkey')
+		expect(result.errors[1]).toContain('Choose the page this path should serve')
 	})
 
 	test('the path rules match the ones the server will enforce', () => {
@@ -94,7 +96,7 @@ describe('the authoring view model', () => {
 	})
 
 	test('the d tag is required and bounded', () => {
-		expect(validateDraft({ path: 'shop', author: AUTHOR, d: '  ' }, []).errors[0]).toContain('Enter the d tag')
+		expect(validateDraft({ path: 'shop', author: AUTHOR, d: '  ' }, []).errors[0]).toContain('Choose the page this path should serve')
 		expect(validateDraft({ path: 'shop', author: AUTHOR, d: 'x'.repeat(513) }, []).errors[0]).toContain('cannot be used')
 	})
 

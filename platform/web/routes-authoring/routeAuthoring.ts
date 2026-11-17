@@ -1,6 +1,7 @@
 import { ROUTE_INTENT_VERSION, isValidIntentDTag, validateIntentPath, type RouteIntent } from '@sdk/commerce/storefront/routeIntent'
 import type { Binding } from '@platform/server/routes/routeFile'
 import { npubToHex } from '@platform/web/app/pubkeyCodec'
+import { pageLabel } from './pageIdentity'
 import type { RouteTableWarning } from './routeTableQuery'
 
 /**
@@ -14,7 +15,12 @@ import type { RouteTableWarning } from './routeTableQuery'
 
 export interface BindingRow {
 	path: string
+	/** The raw address, `page <short author> / <d>` — a secondary line in the row. */
 	targetLabel: string
+	/** The page's name as a human reads it: `Storefront` for the reserved default. */
+	pageName: string
+	/** The page author as a human reads it. */
+	pageAuthorLabel: string
 	updatedAtLabel: string
 	updatedByLabel: string
 	/** The `compiled-in-path` warning for this binding, or null. */
@@ -26,7 +32,9 @@ export interface BindingRow {
 
 export interface BindingDraft {
 	path: string
+	/** Hex author of the target page, resolved from the picker or a pasted address. */
 	author: string
+	/** The target page's `d`. Set together with `author`, never alone. */
 	d: string
 }
 
@@ -59,6 +67,10 @@ export function describeBinding(binding: Binding, warnings: RouteTableWarning[] 
 				: target.type === 'series'
 					? `series ${target.series} / ${shortPubkey(target.author)}`
 					: `${target.type} ${target.render} (${target.param})`,
+		// A human reads a row as "/featured → featured-13-11-2026 (mine)"; the raw
+		// address above stays available as the row's secondary line.
+		pageName: target.type === 'page' ? pageLabel(target.d) : '',
+		pageAuthorLabel: target.type === 'page' ? shortPubkey(target.author) : '',
 		updatedAtLabel: formatUpdatedAt(binding.updatedAt),
 		updatedByLabel: shortPubkey(binding.updatedBy),
 		warning: warnings.find((warning) => warning.path === binding.path)?.message ?? null,
@@ -116,12 +128,10 @@ export function validateDraft(draft: BindingDraft, boundPaths: string[], editing
 	}
 
 	const author = resolveAuthor(draft.author)
-	if (author.error) errors.push(author.error)
-
-	if (draft.d.trim().length === 0) {
-		errors.push('Enter the d tag of the published page (usually "storefront-page").')
+	if (author.error || draft.d.trim().length === 0) {
+		errors.push('Choose the page this path should serve.')
 	} else if (!isValidIntentDTag(draft.d)) {
-		errors.push('That d tag cannot be used: it is longer than 512 characters or contains a NUL.')
+		errors.push('That page address cannot be used: it is longer than 512 characters or contains a NUL.')
 	}
 
 	if (errors.length > 0 || !author.hex) return { errors, intent: null }
@@ -141,8 +151,14 @@ export function removeIntent(path: string): RouteIntent {
 	return { version: ROUTE_INTENT_VERSION, action: 'remove', path, target: null }
 }
 
-/** The form's starting point for a new binding. */
-export const EMPTY_DRAFT: BindingDraft = { path: '', author: '', d: 'storefront-page' }
+/**
+ * The form's starting point for a new binding: a path, and no page yet.
+ *
+ * `author` and `d` always travel together — they are one page's coordinate —
+ * and they arrive from the picker (or the Advanced paste field) already
+ * resolved, so there is no default `d` to pre-fill.
+ */
+export const EMPTY_DRAFT: BindingDraft = { path: '', author: '', d: '' }
 
 export function draftFromRow(row: BindingRow): BindingDraft {
 	return { path: row.path, author: row.author, d: row.d }
