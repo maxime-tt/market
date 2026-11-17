@@ -179,7 +179,9 @@ Neither decision blocks increment 6 or 7 — start those immediately if you want
 
 ## 3. The increments
 
-Ordering: **6 → 7 → 1 → 9 → 2 → 3 → 4 → 5 → 8**. 6 and 7 are independent and land today. 1 must
+Ordering: **6 → 7 → 1 → 9 → 10 → 2 → 3 → 4 → 5 → 8**, where **10 is the pplx Catalogue port**
+(`notes/HANDOVER-2026-11-17-catalogue-pplx-port.md`; its review and crossovers are in
+`notes/REVIEW-catalogue-pplx-port-against-the-plan.md`). 6 and 7 are independent and land today. 1 must
 precede 9 (the params must come from the arena chain, not the MVP). 1 precedes 2 (there is nothing to
 ingest into otherwise). 2 must precede 3/4/5 (a lot the chain never sees can
 never be extended, refunded or settled). 8 is the app-side claim path that 4 and 5 both need, and it
