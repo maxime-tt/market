@@ -70,6 +70,13 @@ export interface CatalogueDetailViewProps {
 	now: number
 	/** Host-resolved link back to the list, or `null` to omit the affordance. */
 	backHref?: string | null
+	/**
+	 * The read's chain clock, already rendered into words by the host
+	 * (`chainClockLabel`). `null`/absent renders nothing: the label is the only
+	 * thing a surface may say about chain time, so the view never formats a
+	 * number itself and never substitutes the wall clock for it.
+	 */
+	chainClockLabel?: string | null
 	/** Host-owned seller identity node (avatar + display name). */
 	sellerIdentity?: ReactNode
 	/** The host's arena bid panel; `null`/absent omits the slot entirely. */
@@ -119,6 +126,7 @@ export function CatalogueDetailView({
 	status,
 	relayHealth,
 	now,
+	chainClockLabel,
 	backHref = null,
 	sellerIdentity,
 	bidPanel = null,
@@ -322,6 +330,7 @@ export function CatalogueDetailView({
 									{relayHealth.answered} of {relayHealth.total} relays answered
 								</span>
 							)}
+							{chainClockLabel != null && <span data-testid="catalogue-chain-clock"> {chainClockLabel}</span>}
 						</div>
 						<span className="cat-muted">{bidCountLabel(model.bidCount, status)}</span>
 					</div>

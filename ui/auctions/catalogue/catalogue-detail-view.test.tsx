@@ -112,4 +112,11 @@ describe('CatalogueDetailView', () => {
 		expect(html).toContain('catalogue-detail-state')
 		expect(html).toContain('Reading this auction from relays')
 	})
+
+	test('renders the chain clock only in the host’s words, and says nothing without one', () => {
+		expect(render()).not.toContain('catalogue-chain-clock')
+		const html = render({ chainClockLabel: 'Chain time as of height 207, 12 s ago — stale' })
+		expect(html).toContain('catalogue-chain-clock')
+		expect(html).toContain('Chain time as of height 207, 12 s ago — stale')
+	})
 })

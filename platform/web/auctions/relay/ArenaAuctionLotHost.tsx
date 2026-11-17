@@ -47,7 +47,7 @@ import {
 } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import { ArenaVerdictPanel } from '@ui/auction/arena/verdict-panel'
 import { CatalogueDetailView } from '@ui/auctions/catalogue/catalogue-detail-view'
-import { shortKey, type ArenaRelayHealth, type ArenaSurfaceStatus } from '@ui/auction/arena/model'
+import { chainClockLabel, shortKey, type ArenaRelayHealth, type ArenaSurfaceStatus } from '@ui/auction/arena/model'
 import { AuctionBidHost } from '@platform/web/auctions/relay/AuctionBidHost'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { lotHref, resolveArenaLot, type ArenaLotLookup } from '@platform/web/auctions/relay/arenaLotRead'
@@ -151,6 +151,7 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: Arena
 				relayHealth={read.relayHealth}
 				now={now}
 				backHref="/auctions"
+				chainClockLabel={read.chainClock === null ? null : chainClockLabel(read.chainClock)}
 				sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} />}
 				bidPanel={detail === null ? null : <AuctionBidHost model={detail} readStatus={read.status} now={now} onPublished={onPublished} />}
 			/>
