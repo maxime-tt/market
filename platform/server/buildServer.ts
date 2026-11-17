@@ -9,7 +9,6 @@ import { PORT } from './runtime'
 import { websocketHandler } from './websocket'
 import type { BunRoutes } from './http/types'
 import { buildAnalyticsRoutes } from './http/analytics'
-import { buildAuctionsProtocolRoutes } from './http/auctionsProtocol'
 import { buildAppEventsRoutes, createLevelLookup } from './http/appEvents'
 import { buildRouteTableRoutes } from './http/routeTable'
 import { resolve } from './routes/resolve'
@@ -226,8 +225,6 @@ export function buildServer({ indexHtml, routing, pageStore = createPageStore() 
 		// Browse search proxy — mounted only when the instance selects the
 		// `rabbithole` provider; an empty record (nothing mounted) by default.
 		...buildBrowseSearchRoutes(),
-		// Auctions backend read surface (loopback demo on this box).
-		...buildAuctionsProtocolRoutes(),
 		// What this instance may report: page views only, environment-gated.
 		...buildAnalyticsRoutes(),
 		// The one write-restricted ingest surface: pages and route intents.

@@ -71,6 +71,9 @@ const fixedLot = (over: Partial<ArenaBidFundTerms> = {}): ArenaBidFundTerms => (
 const config = (over: Partial<ArenaBidFundConfig> = {}): ArenaBidFundConfig => ({
 	committee_public_key: COMMITTEE,
 	cashu_mint_url: MINT,
+	// The two locktime terms the relay commits; the assembly refuses without them.
+	settlement_safety_sec: 900,
+	bid_to_consensus_latency_sec: 15,
 	...over,
 })
 
@@ -257,7 +260,7 @@ describe('a funded bid is assembled from the lock and the terms', () => {
 		const legacy = escrowDouble()
 		await assembleArenaBidFunding(
 			{ model: fixedLot(), amount: 64, now: NOW },
-			ports({ config: { committee_public_key: COMMITTEE, mint_url: 'https://legacy.test' }, manager: legacy.manager }),
+			ports({ config: config({ cashu_mint_url: null, mint_url: 'https://legacy.test' }), manager: legacy.manager }),
 		)
 		expect(legacy.sent[0].mintUrl).toBe('https://legacy.test')
 	})
@@ -297,6 +300,16 @@ describe('every precondition refuses by name, before any money moves', () => {
 			name: 'the configured mint is not a url',
 			refusal: 'fund.mint-url-missing',
 			ports: () => ports({ config: config({ cashu_mint_url: 'mint.test' }) }),
+		},
+		{
+			name: 'the relay states no settlement safety window',
+			refusal: 'fund.settlement-safety-missing',
+			ports: () => ports({ config: config({ settlement_safety_sec: null }) }),
+		},
+		{
+			name: 'the relay states no bid-to-consensus latency',
+			refusal: 'fund.bid-latency-missing',
+			ports: () => ports({ config: config({ bid_to_consensus_latency_sec: null }) }),
 		},
 		{ name: 'the wallet has no spend key', refusal: 'fund.wallet-signer-missing', ports: () => ports({ signer: null }) },
 		{ name: 'the Cashu wallet is not ready', refusal: 'fund.wallet-manager-missing', ports: () => ports({ manager: null }) },
