@@ -24,7 +24,32 @@ Today only (1) and (2)'s publish half work. Verified live on 2026-11-17 (details
 
 ---
 
-## 1. What already exists — do not re-derive any of this
+## 1. The authority, and what already exists — do not re-derive any of this
+
+**The authority is `MERGED-PROTOCOL-SPEC.md`** (owner-ruled 2026-11-13, 361 lines; the copy this plan
+was checked against is `/home/admin_maxime/work/auctions-simplify/MERGED-PROTOCOL-SPEC.md`, with the
+app-side handover at `notes/HANDOVER-merged-protocol-spec.md` in this repo). It "supersedes his v0.5.x
+re-lock, the expiring/Expired no-sale close, the two-mode locktime floors and the settler's authority
+to build outputs", and it keeps "push settlement, the two modes, no maximum auction time and the 1440
+series". Where this plan and that document disagree, the document wins.
+
+**Owner rulings recorded against it (2026-11-17):** the anti-snipe reset is **uncapped**, and
+**re-bidding (raising your own leading bid) is available**. Both of my earlier "disagreements" were
+legacy surface, not open questions — see the two deviations below.
+
+### Spec conformance of the two sides, as measured
+
+| spec rule | chain ref (`arena-merged-ref`) | app (`unite/1420-all`) |
+|---|---|---|
+| §3 `antisnipe`: `EndAt = max(EndAt, now + WindowSec)`, **no cap, no hard end**; `MaxTotalExtension` **removed** (§10, §11) | **conformant** — `applyBid`: "No cap: the lot ends when the bidding stops" | **legacy leftover** — the config type carries `maxTotalExtensionSeconds` and the running backend's records carry `max_total_extension_seconds` |
+| §3 "every `EndAt` mover becomes the leader" — nothing authorises refusing a leader's raise; §1.4's refusal list has no such rule | **non-conformant** — `lateBid{"you are already the highest bidder"}` | conformant in copy ("Bids add to your position") |
+| §4(a) instant refund fires **the moment** a bid becomes `outbid`, `void` or `lost` | **non-conformant** — it only sets `Status: "outbid"` and refunds nothing; `closeDue` marks `"lost"` and still refunds nothing | no reader for it yet (increment 4) |
+| §2.2 the lock check runs against the end **the bid itself establishes** (after the extension) | **non-conformant, named in the spec** — "His code checks **before** the extension (`checkLock` at `app.go:494` precedes the extension block at `:537`) … the post-end safety margin **collapses from 900 s to as little as 15 s**" | n/a (the chain owns the lock floor) |
+| §12 the state-shape change requires **chain format 6 and a wipe** | verify at dispatch | n/a |
+
+The two I raised are therefore: **one app-side legacy carry-over (the cap) and one chain-side legacy
+refusal (own-raise)** — plus a third, the check-order bug, which the spec calls out in the chain's own
+code and which is the real defect in this area.
 
 The escalation is **not** design work; both sides exist as branches. Reconciled against the running
 system today:
@@ -337,11 +362,14 @@ amount, and the chain's own ledger line for it is `ok` (not `void`, not `rejecte
 **Goal.** A bid inside the anti-snipe window moves the committed end, and the app shows the moved end.
 
 **Scope.**
-- **Chain half.** Confirm the extension rule the chain applies against the app's create fields
-  (`mode: antisnipe`, `windowSec`, `durationSec`) and the committed record's
-  `original_end_time` / `late_bid_extension_seconds` / `max_total_extension_seconds` — the increment
-  in `app.go` exists; prove it fires from an *ingested* late bid inside the window, and that the cap
-  is honoured. If the cap is not enforced, that is the defect to fix here.
+- **Chain half.** The rule itself is **spec-correct and uncapped** (§3): prove it fires from an
+  *ingested* accepted bid inside the window. **The defect here is the check order** (§2.2): the lock
+  must be validated against the end *the bid itself establishes* — after the extension — and today
+  `checkLock` runs before the extension block, which collapses the post-end safety margin from 900 s to
+  as little as 15 s and can lose a sale to a ~15 s settler stall. Fix the order, and add a test pinning
+  that an extending bid's locktime floor is derived from `now + WindowSec`, not the old `EndAt`.
+  Also verify §12's format bump (v6) is in place, since the refund/extension fields changed the state
+  shape and the rule is **bump and wipe, no migration**.
 - **App half.** The lot's displayed end must come from committed time, not from the create event
   alone: read the committed `end_time` (state doc or a validator-published commitment, whichever
   increment 1 settles on), show the moved end and the countdown from it, and use it as the basis for
@@ -362,6 +390,15 @@ exceed the cap must not exceed it.
 
 **Owner's ruling (2026-11-17).** "The instant refund scenario is actually meant to be the out-bid
 scenario, such that when a higher bid comes in, your bid gets refunded via the validators."
+
+**Spec (§4a, verbatim):** "The bidder pre-signed the refund at bid time. The moment the bid becomes
+`outbid`, `void` or `lost`, that template plus the **committee's FROST co-signature** is a complete
+spend. The settler (§5) collects the co-signature and submits it. **This is the fast path and the
+intended one.**" So the trigger set is **`outbid` | `void` | `lost`** — three triggers, one routine —
+and the executor is the settler, holding no key, collecting one FROST co-signature per move (§5).
+**Neither side implements this today**: the chain only flips the status and defers every refund to
+locktime, which is exactly the "instant" the owner is asking for. And §4 forbids the mirror-image
+mistake: **a refund of a *winning* bid before its locktime.**
 
 **Goal.** When a higher bid is committed, the previous leader's escrow is refunded **at once** — the
 validators execute it, a 1443 records it, and the outbid bidder's balance returns without waiting for
@@ -416,8 +453,14 @@ to its own wallet key), so the validators execute an authorization the bidder al
   fires when the committed end passes; a per-validator **1445 verdict** is published with its
   mandatory anchor (height + block hash) per the frozen verdict contract
   (`notes/REPLY-nostr-verdict-contract.md`); then the push settlement runs — the winning bid's
-  **committed settle template** plus the committee's signature, submitted to the mint, and the new
-  ecash published P2PK-locked to the seller (`settled: "payout"`, `out: [...]`), recorded by a 1444.
+  **committed settle template** plus the committee's FROST co-signature, submitted to the mint, and the
+  new ecash published P2PK-locked to the seller (`settled: "payout"`, `out: [...]`), recorded by a 1444.
+  Per §5 the settler **is an executor, not an author**: it may only submit a pre-signed template and
+  record the result — it may not build outputs, choose a destination or re-lock, and it holds no key.
+  **There is no pull path** (`/api/release` is deleted): nobody requests a co-signature, so a settler
+  that is down at close **loses the sale** (§5, §13.2 — accepted: the winner reclaims via the
+  last-resort path, no money is lost, no escrow is stuck). Say that plainly on the surface rather than
+  implying the sale is guaranteed.
 - **App half.** Read the verdict and the settle, show the outcome on the lot (the verdict panel and
   the Outcome card already exist and read 1445), and show the seller's payout arriving.
 
