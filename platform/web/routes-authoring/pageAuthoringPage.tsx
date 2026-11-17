@@ -131,6 +131,10 @@ export function PagesPage({ suggestedName }: { suggestedName?: string }) {
 	const { amIAdmin, isLoading: isLoadingAdmin, currentUserPubkey } = useAmIAdmin(config?.appPublicKey)
 	const pages = useMyPages(currentUserPubkey)
 	const navigate = useNavigate()
+	// The read and the label builder both need a pubkey; the query is disabled
+	// without one, so the empty string only ever reaches a page that renders
+	// nothing. Same narrowing the routes page uses for its picker.
+	const pubkey = currentUserPubkey ?? ''
 
 	const [name, setName] = useState(suggestedName ?? '')
 	const [submitted, setSubmitted] = useState(false)
@@ -138,7 +142,7 @@ export function PagesPage({ suggestedName }: { suggestedName?: string }) {
 	// An empty field is not an error until the author has committed to it; once
 	// they have typed, the sentence is worth showing immediately.
 	const nameError = submitted || name.length > 0 ? validatePageName(name) : null
-	const options = useMemo(() => toPickerPages(currentUserPubkey, pages.data?.pages ?? []), [currentUserPubkey, pages.data])
+	const options = useMemo(() => toPickerPages(pubkey, pages.data?.pages ?? []), [pubkey, pages.data])
 	const notice = useMemo(() => (nameError ? null : pageNameNotice(name, options.map((page) => page.d))), [nameError, name, options])
 
 	const openPage = useCallback(
