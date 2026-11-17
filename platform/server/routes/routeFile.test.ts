@@ -79,15 +79,51 @@ describe('routeFile — load and validate', () => {
 		expect(loaded.warnings).toEqual([])
 	})
 
-	test('a missing file refuses with the path named', () => {
+	test('a missing file is an empty table, not a malformed one', () => {
 		const path = join(scratch(), 'absent.json')
-		expect(() => loadRoutesFile(path)).toThrow(RoutesFileError)
+		const loaded = loadRoutesFile(path)
+
+		expect(loaded.path).toBe(path)
+		expect(loaded.file).toEqual({
+			version: 1,
+			instance: { pubkey: null },
+			seq: 0,
+			default: null,
+			bindings: [],
+			prefixes: [],
+		})
+		expect(loaded.warnings).toEqual([])
+		// Loading is a read: the file stays absent until something writes it.
+		expect(existsSync(path)).toBe(false)
+	})
+
+	test('the empty table a missing file stands for resolves nothing and round-trips through the validator', () => {
+		const file = loadRoutesFile(join(scratch(), 'absent.json')).file
+
+		expect(lookup(file, 'shop', 1_800_000_000)).toBeNull()
+		expect(prefixMatch(file, ['item', 'abc'])).toBeNull()
+		expect(defaultPath(file)).toBeNull()
+		expect(validateRoutesFile(JSON.parse(serializeRoutesFile(file))).file).toEqual(file)
+	})
+
+	test('an existing malformed file still refuses, byte for byte', () => {
+		const directory = scratch()
+		const path = join(directory, 'routes.json')
+		writeFileSync(path, '{"version":2,"seq":0,"bindings":[],"prefixes":[]}')
+
+		let message = ''
 		try {
 			loadRoutesFile(path)
 		} catch (error) {
-			expect((error as RoutesFileError).message).toContain(path)
-			expect((error as RoutesFileError).violations[0]).toContain('cannot read')
+			message = (error as RoutesFileError).message
 		}
+
+		expect(message).toBe(
+			`Routing file refused: ${path}\n` +
+				'  • /version: expected 1, got 2\n' +
+				`Restore it from ${path}.bak (written by the last successful write) or from version control.`,
+		)
+		expect(existsSync(path)).toBe(true)
 	})
 
 	test('corrupt JSON refuses with the file path and the parse detail', () => {
