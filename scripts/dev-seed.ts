@@ -2,14 +2,18 @@
 /**
  * Dev seed orchestrator.
  *
- * Spawns the ContextVM auction server in the background, waits for it
- * to log "Server is running", then runs the seed script (which uses the
- * CVM client to request real derivation paths for every seeded bid),
- * then leaves the server running and starts the bun web dev server.
+ * Spawns the ContextVM server in the background, waits for it
+ * to log "Server is running", then runs the seed script, then leaves
+ * the server running and starts the bun web dev server.
+ *
+ * The CVM server is kept alive for the app's own calls (BTC price and
+ * rates tools); the seed does not talk to it. Seeded lots are arena
+ * 1440 creates that carry their own terms, and the retired path oracle
+ * whose `path_issuer` a seeded auction used to name is gone with the
+ * 30408 series.
  *
  * Replaces the previous `bun run startup && bun run seed && bun --hot platform/web/app/entry.tsx`
- * chain — the seed now needs the CVM server alive before it can publish
- * auctions whose `path_issuer` resolves to anything reachable.
+ * chain, which ran the steps in one shell without a managed cleanup path.
  *
  * Failure modes:
  *   - CVM server never logs "ready" → `dev:seed` aborts after a 30s
@@ -107,7 +111,7 @@ async function main() {
 		console.log('Running app startup (kind 31990 settings)...')
 		await run('startup', ['bun', 'run', 'scripts/startup.ts'])
 
-		console.log('\nRunning seed (this calls request_path on the CVM server for every bid)...')
+		console.log('\nRunning seed...')
 		await run('seed', ['bun', 'run', 'scripts/seed.ts'])
 
 		console.log('\n=== seed complete — handing off to bun dev (CVM server stays running) ===')
