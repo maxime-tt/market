@@ -17,21 +17,18 @@
  * module it pointed at before the cut.
  */
 import {
-	createAppWalletKeyStore,
 	createAuctionHost,
 	createAuctionLock,
 	createAuctionReclaim,
 	createAuctionReceipt,
-	createRelayWalletKeyMigrationSource,
-	createWalletEventReader,
 	DEV_TEST_MINT_URL,
 	deriveAuctionChildPrivkey,
 	getSpendableProofsForMint,
 	isWalletDevModeEnabled,
-	latestByCreatedAt,
 	loadAuctionMintKeysets,
-	migrateWalletKeyMaterial,
+	provisionWalletKeyMaterial,
 	WALLET_DEV_TEST_MINTS,
+	walletKeyPortFromKeyRing,
 	AuctionBidLockMutationPossibleError,
 	type AuctionBidPendingTokenContext,
 	type AuctionFundsMintAccess,
@@ -46,18 +43,12 @@ import {
 	type LockAuctionBidFundsResult,
 	type PendingToken,
 	type PendingTokenContext,
-	type WalletEventOpener,
-	type WalletEventRelay,
 	type WalletKeyMaterial,
-	type WalletKeyMigrationSource,
-	type WalletKeySigner,
-	type WalletKeyStore,
 } from '@sdk/commerce/payments/wallet'
 import { getMintHostname } from '@sdk/commerce/payments/display'
 import { auctionP2pkPubkeysMatch } from '@sdk/commerce/auctions/auctionP2pk'
 import { AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS } from '@sdk/commerce/auctions/constants'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
-import { asEncryptingSigner } from '@sdk/core'
 import { KeyChain, Mint, Wallet, schnorrSignDigest, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import type { ArenaWalletSpendSigner } from '@platform/web/auctions/relay/arenaBidFunding'
 import { NDKEvent, NDKNutzap, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
@@ -170,17 +161,15 @@ const parseNonNegativeInt = (value: string, fallback: number = 0): number => {
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
 }
 
-const WALLET_EVENT_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[number]
-const WALLET_EVENT_FETCH_TIMEOUT_MS = 5000
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 
 /**
  * The wallet's own P2PK pair, as a synchronous lookup, so the reclaim host's legacy refund-key
- * fallback keeps its old meaning ("the key the wallet itself holds") now that the pair lives in
- * the sealed key store rather than in the relay wallet's `privkeys` map. It is filled from the
- * same one-way migration the auction HD root uses; until that has run, the wallet holds no key
- * and the lookup answers null, exactly as an empty map did.
+ * fallback keeps its old meaning ("the key the wallet itself holds"). It is filled from the
+ * wallet's coco key ring — the seed-derived pair the auction HD root and the escrow lock both
+ * derive from — and is filled on demand by {@link walletOps.ensureAuctionWalletKey}, so a wallet
+ * that was not ready at login is no longer stranded for the session.
  *
  * The pair is only ever the wallet's OWN p2pk — per-bid refund keys are deliberately never in it
  * (see `auctionFunds.ts`'s refund-key preference), so this stays a safety net and not a second
@@ -207,8 +196,8 @@ const getWalletPrivkey = (pubkey?: string): string | null => {
  * else. The pair is the same one the auction HD root derives from, so the lock
  * and the app's existing reclaim path agree about who owns the money.
  *
- * Answers `null` until the one-time key migration has produced the pair; a
- * caller must then say the bid is unfunded rather than invent a key.
+ * Answers `null` until {@link walletOps.ensureAuctionWalletKey} has resolved the pair from
+ * coco's key ring; a caller must then say the bid is unfunded rather than invent a key.
  */
 const getAuctionBidWalletSigner = (): ArenaWalletSpendSigner | null => {
 	const material: WalletKeyMaterial | null = walletKeyMaterialCache
@@ -220,110 +209,37 @@ const getAuctionBidWalletSigner = (): ArenaWalletSpendSigner | null => {
 }
 
 /**
- * The sealer's signer: the app's NDK signer, adapted to the nip44 surface `walletKeyStore`
- * expects. `NDKSigner` does not declare `nip44` (the wallet event is opened through the
- * event's own `decrypt()` — see §9.6's trap note), so the sealer is built from the signer's
- * NIP-44 `encrypt`/`decrypt` through the same adapter the SDK uses.
- */
-const auctionWalletKeySigner = (): WalletKeySigner | null => {
-	// A3.4: the signer comes from the auth session's capability, not the NDK instance's signer.
-	const capability = getActiveSignerCapability()
-	return capability ? { nip44: asEncryptingSigner(capability) } : null
-}
-
-/** The app's key store: the pair's durable, sealed home. The signer is read lazily per call. */
-let auctionWalletKeyStoreInstance: WalletKeyStore | null = null
-const getAuctionWalletKeyStore = (): WalletKeyStore => {
-	// Built lazily, not at module scope: the wallet barrel and this store are in an import
-	// cycle (via `./ndk` and the auth store), so an eager call here can touch
-	// `createAppWalletKeyStore` before that module has initialised.
-	auctionWalletKeyStoreInstance ??= createAppWalletKeyStore({
-		getSigner: auctionWalletKeySigner,
-		getPubkey: getCurrentPubkey,
-	})
-	return auctionWalletKeyStoreInstance
-}
-
-/**
- * The relay read for the migration source: the owner's latest kind-17375 event, weight-ordered
- * rather than trusting relay order (a stale wallet event carries a stale key, and a stale key
- * is a different HD root). It follows the same fetch path the rest of this module uses —
- * `ndkActions.fetchEventsWithTimeout` over the NDK bridge — so no new I/O seam is introduced
- * here.
- */
-const walletEventRelay = (): WalletEventRelay => ({
-	fetchLatestWalletEvent: async (ownerPubkey) => {
-		const events = Array.from(
-			await fetchEventsWithTimeout(
-				{ kinds: [WALLET_EVENT_KIND], authors: [ownerPubkey], limit: 5 },
-				{ timeoutMs: WALLET_EVENT_FETCH_TIMEOUT_MS },
-			),
-		)
-		return latestByCreatedAt(events.map((event) => ({ content: event.content, createdAt: event.created_at || 0 })))
-	},
-})
-
-/**
- * The migration source the app runs: the pair comes from the owner's relay wallet event,
- * decrypted by the signer, through the two seams in `src/lib/wallet/` — `createWalletEventReader`
- * over the relay read and the signer, `createRelayWalletKeyMigrationSource` over the reader.
+ * Resolve the wallet key material the auction HD root derives from, for the authenticated owner,
+ * by provisioning it from the wallet's own coco key ring.
  *
- * Two failures RAISE rather than answering "no pairs", because the migration reads an empty
- * candidate list as `nothing-to-migrate` and a caller that takes that route may create a fresh
- * wallet over a real one:
+ * The pair is the key ring's latest `p2pk` keypair — seed-derived, generated on first use by
+ * `provisionWalletKeyMaterial` when the ring holds none — and nothing is read from, or written
+ * to, a relay. `manager.keyring` is coco's own ring, so the pair has exactly one home and no
+ * duplicate copy is kept.
  *
- *   - an event that exists but cannot be opened (the reader raises `WalletEventUnreadableError`);
- *   - no signer at all — nothing can open the event, so it is unreadable by construction.
+ * The owner pubkey is the one the wallet is signed in as. Without it the pair cannot be attributed
+ * to an owner, so it is refused — the same fail-closed stance `walletKeys` takes for material it
+ * cannot trust.
  *
- * The reader never picks among several keys: `selectWalletKeyPair` resolves only against a
- * named pubkey, and this caller has none to name, so an event carrying more than one key is
- * reported (`no-matching-pair`), never guessed.
- */
-const createRelayBackedKeyMigrationSource = (): WalletKeyMigrationSource => {
-	// A3.4: same switch as the sealer above — the capability answers, never the NDK instance's signer.
-	const capability = getActiveSignerCapability()
-	const opener: WalletEventOpener = capability
-		? asEncryptingSigner(capability)
-		: {
-				decrypt: async () => {
-					throw new Error('wallet event unreadable: no signer to open it')
-				},
-			}
-	return createRelayWalletKeyMigrationSource(createWalletEventReader({ relay: walletEventRelay(), opener }))
-}
-
-/**
- * Resolve the wallet key material the auction HD root derives from, for the authenticated
- * owner. The pair's durable home is the sealed key store; the one-way migration reads the
- * relay event once and writes it there, after which every call reads it back without
- * consulting the relay again.
- *
- * There is no fallback, and that is the point of this wiring. The pair comes from the relay
- * event or from the local store and from nowhere else: a migration that yields no material —
- * an event that cannot be opened, a candidate list with no unambiguous key, an owner with no
- * wallet event — RAISES rather than seeding the store from a wallet-side read that could put
- * a different pair (and so a different HD root) in place.
- *
- * The owner pubkey is the one the wallet was initialised for. Without it the pair cannot be
- * attributed to an owner, so it is refused — the same fail-closed stance `walletKeys` takes for
- * material it cannot trust.
+ * NOTE (relay path, unwired pending a follow-up): the legacy one-way migration is no longer called
+ * from here. The owner wants a separate functionality to import legacy wallets later, so
+ * `migrateWalletKeyMaterial`, `createRelayWalletKeyMigrationSource`/`createWalletEventReader` and
+ * the sealed `createAppWalletKeyStore` stay in the tree — intact and tested — and are simply no
+ * longer wired to the auction paths.
  */
 const resolveAuctionKeyMaterial = async (): Promise<WalletKeyMaterial> => {
 	const ownerCapability = getActiveSignerCapability()
 	const ownerPubkey = ownerCapability ? await ownerCapability.getPublicKey().catch(() => '') : ''
 	if (!ownerPubkey) {
-		throw new Error('Current wallet does not expose the auction HD root private key')
+		throw new Error('The wallet is not signed in, so it cannot name a spend key yet')
 	}
 
-	const migration = await migrateWalletKeyMaterial({
-		store: getAuctionWalletKeyStore(),
-		source: createRelayBackedKeyMigrationSource(),
-		ownerPubkey,
-	})
-	if (!migration.material) {
-		throw new Error('Current wallet does not expose the auction HD root private key')
+	const manager = cashuStore.state.manager
+	if (!manager) {
+		throw new Error('The wallet is not ready, so it cannot name a spend key yet')
 	}
-	return migration.material
+
+	return provisionWalletKeyMaterial({ port: walletKeyPortFromKeyRing(manager.keyring, ownerPubkey), ownerPubkey })
 }
 
 /**
@@ -584,11 +500,12 @@ export const walletOps = {
 
 		await wallet.hydrate()
 
-		// The pair the auction HD root and the reclaim fallback derive from. Best effort: a
-		// fresh profile with no wallet event yet has no pair, and that must not fail the
-		// wallet's own startup — the auction paths raise for it when they actually need it.
+		// The pair the auction HD root and the reclaim fallback derive from. Best effort at
+		// startup: a wallet that is not ready yet must not fail the wallet's own startup, and
+		// the auction paths call `ensureAuctionWalletKey()` again on demand — that call retries,
+		// so this is no longer a single shot that strands the wallet for the session.
 		try {
-			walletKeyMaterialCache = await resolveAuctionKeyMaterial()
+			await walletOps.ensureAuctionWalletKey()
 		} catch (keyErr) {
 			console.warn('[wallet] Wallet key material is not available yet:', keyErr)
 		}
@@ -804,10 +721,29 @@ export const walletOps = {
 
 	/**
 	 * The wallet spend key's signing surface for the consolidated protocol's
-	 * escrow templates. `null` until the one-time key migration has produced the
-	 * pair — a caller must then publish no funded bid rather than invent one.
+	 * escrow templates. `null` until {@link walletOps.ensureAuctionWalletKey} has
+	 * resolved the pair — a caller must then refuse rather than invent one, and
+	 * must await the ensure first.
 	 */
 	getAuctionBidWalletSigner,
+
+	/**
+	 * Resolve and cache the wallet's auction spend key on demand, and RETRY after a failure.
+	 *
+	 * The startup bootstrap in {@link walletOps.initialize} is best effort, so a wallet that was
+	 * not ready when the app loaded used to leave the cache empty for the whole session and every
+	 * auction create or bid then refused, forever, with no way back. This is the awaited remedy
+	 * the two paths call before they read the (synchronous) signer: it is idempotent — a cached
+	 * pair short-circuits — and a failure is never cached, so the next call tries again instead
+	 * of replaying the first error.
+	 *
+	 * The pair is provisioned against coco's own key ring (seed-derived, generated once on a
+	 * wallet that has none); nothing is read from a relay.
+	 */
+	ensureAuctionWalletKey: async (): Promise<void> => {
+		if (walletKeyMaterialCache) return
+		walletKeyMaterialCache = await resolveAuctionKeyMaterial()
+	},
 
 	/**
 	 * Dev-only helper: mint free test ecash from configured dev mints into the wallet.

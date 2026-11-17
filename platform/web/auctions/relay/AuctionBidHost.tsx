@@ -205,6 +205,15 @@ export function AuctionBidHost({ model, readStatus, now, resetKey, className, on
 			// no amount — the publish path's own refusal is the honest answer and
 			// no lock is attempted.
 			if (model !== null && check !== null && check.allowed && check.amount !== null) {
+				// Resolve (and, on a fresh wallet, create) the spend key before the escrow reads
+				// the synchronous signer. The ensure retries, so a wallet that was not ready at
+				// login is not stranded; if it still fails, `readWalletSigner` answers null and
+				// the assembly refuses with `fund.wallet-signer-missing`.
+				try {
+					await walletOps.ensureAuctionWalletKey()
+				} catch (keyErr) {
+					console.warn('[wallet] Auction spend key is not available:', keyErr)
+				}
 				const assembled = await assembleArenaBidFunding({ model, amount: check.amount, now: nowSec }, arenaBidFundPorts)
 				funding = assembled.funding
 				fundingTerms = assembled.fundingTerms

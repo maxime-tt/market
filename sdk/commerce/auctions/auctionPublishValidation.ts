@@ -313,7 +313,7 @@ export function normalizeArenaCreateInput(
 	// --- the seller's wallet -------------------------------------------
 	const sellerWallet = (context.sellerWallet ?? '').trim()
 	if (sellerWallet === '') {
-		refuse('sellerWallet', 'create.no-seller-wallet', 'The wallet spend key is not available, so the auction cannot name a seller wallet.')
+		refuse('sellerWallet', 'create.no-seller-wallet', 'The wallet spend key could not be prepared, so the auction cannot name a seller wallet. Open the wallet, make sure it is ready, and try again.')
 	}
 
 	if (issues.length > 0) return { ok: false, issues }

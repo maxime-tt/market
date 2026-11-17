@@ -135,7 +135,7 @@ export const ARENA_BID_FUND_REFUSAL_TEXT: Record<ArenaBidFundRefusal, string> = 
 	'fund.config-unreadable': 'the auction committee configuration could not be read',
 	'fund.committee-key-missing': 'the auction committee key is not configured, so no escrow can be locked to it',
 	'fund.mint-url-missing': 'no Cashu mint is configured for auctions, so the escrow cannot be minted',
-	'fund.wallet-signer-missing': 'this wallet has no spend key for auction escrows yet',
+	'fund.wallet-signer-missing': 'this wallet has no spend key for auction escrows yet — open the wallet so it can be created, then try the bid again',
 	'fund.wallet-manager-missing': 'the Cashu wallet is not ready, so no escrow can be funded',
 	'fund.no-end-time': 'the auction states no end time, so no locktime floor can be derived',
 	'fund.unknown-mode': 'the auction states no mode this client can derive a locktime floor from',

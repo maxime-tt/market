@@ -95,12 +95,20 @@ export const publishAuctionCreate = async (formData: AuctionFormData): Promise<A
 		throw new Error('Sign in to publish an auction: no signer is available.')
 	}
 	const sellerPubkey = await capability.getPublicKey()
+	// Resolve (and, on a wallet that has none yet, create) the wallet spend key before it is
+	// read: the signer below is a synchronous cache read, and this ensure retries, so a wallet
+	// that was not ready at login can no longer be stranded for the session.
+	try {
+		await walletOps.ensureAuctionWalletKey()
+	} catch (keyErr) {
+		console.warn('[wallet] Auction spend key is not available:', keyErr)
+	}
 	const walletSigner = walletOps.getAuctionBidWalletSigner()
 	if (walletSigner === null) {
 		// Named, not substituted: see the doc comment above.
 		throw new ArenaCreateRefusalError(
 			'create.no-seller-wallet',
-			'The wallet spend key is not available yet, so this auction cannot name a seller wallet. Open the wallet and try again.',
+			'The wallet spend key could not be prepared, so this auction cannot name a seller wallet. Open the wallet, make sure it is ready, and try again.',
 		)
 	}
 
