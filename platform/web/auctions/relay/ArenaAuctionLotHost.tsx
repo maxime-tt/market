@@ -45,8 +45,8 @@ import {
 	toVerdictPanelModel,
 	type ArenaSurfacesReadState,
 } from '@platform/web/auctions/relay/auctionSurfacesRead'
-import { ArenaAuctionDetail } from '@ui/auction/arena/auction-detail'
 import { ArenaVerdictPanel } from '@ui/auction/arena/verdict-panel'
+import { CatalogueDetailView } from '@ui/auctions/catalogue/catalogue-detail-view'
 import { shortKey, type ArenaRelayHealth, type ArenaSurfaceStatus } from '@ui/auction/arena/model'
 import { AuctionBidHost } from '@platform/web/auctions/relay/AuctionBidHost'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
@@ -144,17 +144,14 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: Arena
 
 	return (
 		<div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6">
-			<ArenaAuctionDetail
+			<CatalogueDetailView
 				model={detail}
 				status={read.status}
 				relayHealth={read.relayHealth}
+				now={now}
 				backHref="/auctions"
 				sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} />}
-				bidPanel={
-					detail === null ? null : (
-						<AuctionBidHost model={detail} readStatus={read.status} now={now} onPublished={onPublished} />
-					)
-				}
+				bidPanel={detail === null ? null : <AuctionBidHost model={detail} readStatus={read.status} now={now} onPublished={onPublished} />}
 			/>
 			{verdicts !== null && (
 				<ArenaVerdictPanel
@@ -183,15 +180,11 @@ function ArenaLotAmbiguous({
 	relayHealth: ArenaRelayHealth
 }) {
 	return (
-		<div
-			data-slot="arena-lot-ambiguous"
-			data-state={status}
-			className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6"
-		>
+		<div data-slot="arena-lot-ambiguous" data-state={status} className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6">
 			<h1 className="font-header text-2xl font-semibold text-text-high">More than one auction has this id</h1>
 			<p className="text-sm text-text-mid">
-				An auction id is unique only within its seller, and {candidates.length} sellers published this one. Pick the
-				lot you meant — the page will not guess which.
+				An auction id is unique only within its seller, and {candidates.length} sellers published this one. Pick the lot you meant — the
+				page will not guess which.
 			</p>
 			<ul className="space-y-2">
 				{candidates.map((candidate) => (

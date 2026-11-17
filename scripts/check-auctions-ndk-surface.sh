@@ -76,7 +76,15 @@ REQUIRE_COVERAGE="${AUCTIONS_GUARD_REQUIRE_COVERAGE:-1}"
 # of 1440/1445, and the verdicts the app reads come from the committee backend. The
 # scanned set falls 89 -> 77 measured, so the floor drops 85 -> 77 with it (same
 # commit, per the E0 fusion rule above).
-MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-77}"
+# Migration slice d7s2/app-layout-a-port (WS-B, the pplx Catalogue port): the
+# Layout A surfaces replaced the demo read, so the now-dead catalogue list route
+# `platform/web/routes/auctions.catalogue.tsx` (a member of the
+# `platform/web/routes/auctions.*.tsx` glob family) was deleted with its demo
+# HTTP client `platform/web/auctions/catalogue/catalogueQuery.ts`. The scanned
+# set falls 77 -> 76 measured, so the floor drops 77 -> 76 with it (same commit,
+# per the E0 fusion rule above). The family still matches the live auction routes
+# (`auctions.index.tsx`, `auctions.$auctionId.tsx`), so no coverage is lost.
+MIN_SCANNED="${AUCTIONS_GUARD_MIN_SCANNED:-76}"
 
 # I-PARKED wave 3 commit D (2026-10-30): the list card moved verbatim out of
 # `src/components/AuctionCard.tsx` to its platform host + ui view pair

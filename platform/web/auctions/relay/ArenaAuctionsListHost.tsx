@@ -63,10 +63,9 @@ import type { ArenaAuctionSnapshot, ArenaAuctionView, ArenaVerdictDivergence } f
 import { auctionEndsAt, toAuctionCardModel } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import { fetchTestLabels, useTestLabelState } from '@platform/web/config/testLabelsBinding'
 import { filterTestLabeledItems } from '@sdk/config/testLabelFilters'
-import { ArenaAuctionCard } from '@ui/auction/arena/auction-card'
+import { CatalogueView } from '@ui/auctions/catalogue/catalogue-view'
 import { AuctionFiltersView } from '@ui/auction/auction-list-views'
 import type { ArenaAuctionCardModel, ArenaRelayHealth, ArenaSurfaceStatus } from '@ui/auction/arena/model'
-import { ItemGrid } from '@ui/shared/item-grid'
 import { Button } from '@ui/wrappers/button'
 import { useEffect } from 'react'
 
@@ -187,10 +186,7 @@ export function orderArenaViews(views: readonly ArenaAuctionView[], sort: ArenaL
  * settled read that produced lots but no visible lot is a filter's fault, and an
  * empty read is not — the two sentences must not be confused.
  */
-export function selectArenaListCards(
-	snapshot: ArenaAuctionSnapshot | null,
-	selection: ArenaListSelection,
-): ArenaListSelectionResult {
+export function selectArenaListCards(snapshot: ArenaAuctionSnapshot | null, selection: ArenaListSelection): ArenaListSelectionResult {
 	const views = snapshot?.auctions ?? []
 	// ADR-0009: a `test`-labeled lot is not a discovery result. The SDK filter
 	// fails open until a label read has populated the store, so an unloaded label
@@ -363,17 +359,7 @@ export function ArenaAuctionsListHost({
 							{partialNotice}
 						</p>
 					)}
-					<ItemGrid className="gap-4 sm:gap-8">
-						{cards.map((card) => (
-							<ArenaAuctionCard
-								key={card.coordinate}
-								model={card}
-								status={status}
-								relayHealth={relayHealth}
-								href={arenaAuctionHref(card.d)}
-							/>
-						))}
-					</ItemGrid>
+					<CatalogueView cards={cards} status={status} relayHealth={relayHealth} now={now} hrefFor={(card) => arenaAuctionHref(card.d)} />
 				</>
 			) : filteredToNothing ? (
 				<div
