@@ -353,6 +353,56 @@ never `#a` with a regular kind. Keep the refusal honest if the read genuinely ca
 
 ---
 
+### Increment 1 — STATUS (measured 2026-11-17)
+
+The acceptance ladder, run in order. Rungs 1-2 pass; rung 3 runs but the repo's own suite stops on a
+**stale assumption in the test**, and rung 4 (relay + real-sat end-to-end) is not reached yet.
+
+| rung | result |
+|---|---|
+| build | **PASS** — `cd chain && go build -o ../bin/arena .` → `bin/arena` 49 MB in 24 s; `cd frost && cargo build --release` → `bin/arena-frost` 659 KB; `cd web && npm ci && npm run build` → `web/dist` |
+| Go suite | **PASS — 113 pass / 0 skip / 0 fail** (11.0 s) with `ARENA_TEST_MINT=http://127.0.0.1:3338 NAK_BINARY=~/.local/bin/nak go test -count=1 -v ./...` — including `TestPushRefundSettles`, `TestPushSettleRefusesForgeries`, `TestRelayIngestRefusesTamperedSignature`, `TestRelayIngestRequiresRelayNoDirectHTTP` |
+| run | **PASS** — `arena init` (format 6, 4 validators, keyset `0102b930…`, FROST group key, settlement safety 900 s, bid-to-consensus 15 s) then the gateway on `:8090`; 4 nodes up (p2p 2665x/2666x, rpc 2667x, http 7101-7104), all four RPCs report `catching_up=false`, consensus advances, **and a create really commits** (height 6 → 8, the lot present in state) |
+| repo e2e | **FAILS at step [1]** — for a test-side reason, see finding 1 |
+| relay + real-sat e2e | not reached |
+
+**Toolchain, corrected.** `go` (1.27.2) is at `~/.local/go/bin` and `cargo`/`rustc` (1.98.1) at `~/.cargo/bin` — both
+present, just not on `PATH`. `scripts.sh`'s `export PATH=/tmp/go/bin` and the `/tmp/go/bin` directory itself are
+stale (tmpfs). No install was needed; the earlier "blocker" was a PATH assumption.
+
+**The mint collision is resolved with evidence.** `127.0.0.1:3338` and `https://mint.playday.it` serve the
+**same instance** — identical `pubkey 03bc3696e06b4aed318f74ff637cbcd13d77b7ea101babd9a1268516e7b45b817f` and
+version `Nutshell/0.21.0`. So the chain's `-mint` default *is* the app's escrow mint; no separate mint is needed.
+Likewise `relay.playday.it` and the local `market-relay` on `:7777` are the same relay (identical `/info`).
+Ports 7101-7104, 2665x-2668x and 8090 are free; only the gateway's default `:8080` is taken (by the MVP `poc`),
+so the chain runs on `:8090`.
+
+**Finding 1 — the repo's own acceptance suite is stale (test-side, not chain-side).** `tests/e2e.mjs` step [1]
+waits for `st.auctions[cr.id]`, the Nostr **event id**, but the chain's state map is keyed by the **auction
+coordinate** `1440:<seller>:<d>`: measured, `auctions[cr.coord]` → FOUND, `auctions[cr.id]` and
+`auctions[cr.rootId]` → undefined, and every state key starts with `1440:`. The shipped front end
+(`web/src/main.js`) reads by those same keys, so the chain and the UI agree and the test is the outlier — it
+predates the coordinate-identity change that `web/src/lib/arena.js` documents in its own comment ("the auction's
+identity is (seller, d) — our own coordinate"). The fix is in the test (`cr.coord`), **after** the protocol owner
+confirms the intended shape. Until then the suite cannot be called green, and the suite is the thing the owner
+asked to pass before the app relies on the protocol.
+
+**Finding 2 — relay-ingest drops the events present at startup.** With `-relay wss://relay.playday.it`, every
+validator logs at startup, for each event it sees:
+`relay observer: submit failed for <event id>: broadcast rejected: endpoint is closed while node is catching up`
+— and those events are **not retried**. One later committed (`committed 7b93d06a… kind=1440 height=0`). On the
+live relay there are always existing events at a cold start, so the deployment rung needs a retry (or an observer
+that waits for the node to be ready). Note also that with a relay configured `/api/tx` answers
+`200 {"ok":true,"via":"relay"}` **before** the tx commits (publish-then-return, with a direct-submit fallback on
+publish failure), so the app must not read that 200 as commitment.
+
+**Minor, and worth knowing for the app:**
+- `arena init` regenerates the FROST group key each run (seen: `039e0efc…` then `03692f5b…`) — so the escrow's
+  committee key is deployment-specific. Deploy once and keep the root; this is precisely why increment 9 must
+  publish the params (and a `params_version`) to the relay rather than letting anyone hardcode a key.
+- `-lock-margin` is retired as a lock driver (spec §10); the README's `LOCK_MARGIN=30` advice is stale.
+- The gateway's `-demo-controls` route (needed by the suite) must **not** be on the real deployment.
+
 ### Increment 1 — deploy the arena chain, and prove it before the app relies on it
 
 **This increment is the GATE for every other one.** Nothing app-side can be called *verified* — as opposed
