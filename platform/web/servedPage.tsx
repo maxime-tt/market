@@ -61,8 +61,15 @@ let payload: ServedPagePayload | null = null
 let markup = ''
 let servedPath: string | null = null
 
-/** The server's own normalisation (`resolve.ts` `normalizePath`), so the two agree. */
-const normalizePath = (pathname: string) => pathname.replace(/\/+$/, '').toLowerCase()
+/**
+ * The server's own normalisation (`resolve.ts` `normalizePath`), so the two agree.
+ *
+ * Exported because the app-chrome guard (`storefront/appChromePage.ts`) asks the
+ * same question of the same server answer: two path comparisons, one rule.
+ */
+export function normalizePath(pathname: string): string {
+	return pathname.replace(/\/+$/, '').toLowerCase()
+}
 
 /**
  * The served page's payload and markup, read from the DOM the server sent.

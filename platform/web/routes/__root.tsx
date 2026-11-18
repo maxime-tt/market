@@ -7,6 +7,8 @@ import { usePageViews } from '@platform/web/analytics/usePageViews'
 import { useDocumentIdentity } from '@platform/web/app/useDocumentIdentity'
 import { useRootRedirects } from '@platform/web/app/useRootRedirects'
 import { ServedPage, servedPageForPath } from '@platform/web/servedPage'
+import { appChromePageForPath } from '@platform/web/storefront/appChromePage'
+import { BoundPathPage } from '@platform/web/storefront/BoundPathPage'
 import { createRootRoute, Outlet, useLocation, useMatches } from '@tanstack/react-router'
 
 /**
@@ -33,12 +35,34 @@ function RootLayout() {
 	const isCheckoutPage = location.pathname.startsWith('/checkout')
 
 	/**
+	 * The page the server bound to this path, in place of `<Outlet/>` — the
+	 * app-chrome sibling of `served` below, read from `#__AR_ROUTE__`.
+	 *
+	 * The same reason it lives here rather than in a route file: the routing file
+	 * decides the path, not the router, and a binding may supersede a
+	 * *compiled-in* name (`resolve()` checks bindings first; `surface.test.ts`
+	 * S4b pins it). `/dashboard` bound to a page must render the page, and
+	 * `$vanityName` never sees a path the router already has a route for. One
+	 * guard above the outlet covers every bound path, including `/`.
+	 *
+	 * The payload is a fact about this document load. A client-side navigation to
+	 * a *different* bound path has no payload and falls through to the outlet;
+	 * only the cold-loaded path renders as a page.
+	 */
+	const appPage = appChromePageForPath(location.pathname)
+
+	/**
 	 * A route that draws its own page nav — Browse renders `BrowseNav` — opts out
 	 * of the legacy header here, so exactly one nav renders. The decision is
 	 * route metadata (`staticData.hidesAppHeader`), not a pathname check in this
 	 * frame, so every state of that route inherits it; see `appChrome.ts`.
+	 *
+	 * A bound page overrides it: the header the route opted out of is the app's
+	 * frame, and a page rendered *inside* that frame must have it. (Without this,
+	 * a page bound at `/` — whose route hides the header — would render with no
+	 * nav at all.)
 	 */
-	const headerHidden = useMatches({ select: (matches) => hidesAppHeader(matches) })
+	const headerHidden = useMatches({ select: (matches) => hidesAppHeader(matches) }) && !appPage
 
 	useDocumentIdentity()
 	useRootRedirects()
@@ -65,7 +89,7 @@ function RootLayout() {
 
 	// Setup renders without the app chrome.
 	if (isSetupPage) {
-		return served ? <ServedPage payload={served} /> : <Outlet />
+		return appPage ? <BoundPathPage payload={appPage} /> : served ? <ServedPage payload={served} /> : <Outlet />
 	}
 
 	return (
@@ -73,7 +97,7 @@ function RootLayout() {
 			{!headerHidden && <Header />}
 
 			<main className="flex flex-col flex-grow">
-				{served ? <ServedPage payload={served} /> : <Outlet />}
+				{appPage ? <BoundPathPage payload={appPage} /> : served ? <ServedPage payload={served} /> : <Outlet />}
 			</main>
 			<Pattern pattern="page" />
 			{!isDashboardPage && !isCheckoutPage && <FooterHost />}
