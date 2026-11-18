@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { finalizeEvent, getPublicKey, type Event } from 'nostr-tools/pure'
@@ -52,6 +52,15 @@ const DOCUMENT = JSON.stringify({
 		{ type: 'ProductGrid', props: { id: 'grid-1', title: 'Products' } },
 	],
 })
+
+/**
+ * The same page opting out of app chrome. Every document-level assertion below
+ * (markers, `og:title`, `data-ar-block`, the canonical URL) is about the
+ * *composed standalone document*, so it is asserted against this fixture — that
+ * is what pins the opt-out, and it is the only document that produces those
+ * bytes any more.
+ */
+const STANDALONE_DOCUMENT = JSON.stringify({ ...JSON.parse(DOCUMENT), chrome: 'standalone' })
 
 /**
  * A shell that looks like the real one where it matters: the asset URLs a
@@ -169,6 +178,91 @@ const post = (harness: Harness, event: Event) =>
 const status = async (harness: Harness, path: string) => (await realFetch(`${harness.url}${path}`)).status
 const body = async (harness: Harness, path: string) => (await realFetch(`${harness.url}${path}`)).text()
 
+describe('app chrome — a bound page’s document decides how the path answers', () => {
+	/**
+	 * The increment's proof test. The document has no `chrome` field at all, so
+	 * it gets the schema default (`'app'`), and the path must answer with the
+	 * shell plus the route payload — not with the composed standalone document.
+	 *
+	 * Measured on the parent commit (server before this increment): the
+	 * response was the composed document (`NEEDLE-42`, `id="__AR_PAGE__"`) and
+	 * had no `__AR_ROUTE__` script at all.
+	 */
+	test('a page with no `chrome` field bound at a path answers with the shell and the route payload', async () => {
+		const harness = start({ bindings: [binding('shop')] })
+		await post(harness, signed())
+
+		const response = await realFetch(`${harness.url}/shop`)
+		expect(response.status).toBe(200)
+		const html = await response.text()
+
+		// The shell, plus the payload: the two things the client needs. The
+		// shell's head and body are byte-identical to what it serves itself.
+		expect(html).toContain(SHELL_HTML.slice(0, SHELL_HTML.indexOf('</body>')))
+		expect(html).toContain('<script type="module" src="/chunk-app.js"></script>')
+		expect(html).toContain(
+			`<script id="__AR_ROUTE__" type="application/json">{"author":"${APP_PUBKEY}","d":"home","path":"/shop"}</script>`,
+		)
+
+		// And *not* the standalone document.
+		expect(html).not.toContain('NEEDLE-42')
+		expect(html).not.toContain('id="__AR_PAGE__"')
+		expect(html).not.toContain('data-ar-served-page')
+
+		// Per-URL and live state: never cached by a proxy.
+		expect(response.headers.get('cache-control')).toBe('no-store')
+	})
+
+	test('an explicit `chrome: "app"` is the same answer, and `/` carries `/` as its path', async () => {
+		const harness = start({ default: 'shop', bindings: [binding('shop')] })
+		await post(harness, signed(JSON.stringify({ ...JSON.parse(DOCUMENT), chrome: 'app' })))
+
+		const html = await body(harness, '/')
+		expect(html).toContain(`{"author":"${APP_PUBKEY}","d":"home","path":"/"}`)
+		expect(html).not.toContain('NEEDLE-42')
+	})
+
+	test('a stored record written before the field existed is served as app chrome', async () => {
+		const harness = start({ bindings: [binding('shop')] })
+		await post(harness, signed())
+		// Re-write the record by hand without `chrome`, as a process that predates
+		// the field would have left it: the default is decided by the server.
+		const record = JSON.parse(readFileSync(join(harness.root, APP_PUBKEY, 'home.json'), 'utf8')) as Record<string, unknown>
+		const document = { ...(record.document as Record<string, unknown>) }
+		delete document.chrome
+		writeFileSync(join(harness.root, APP_PUBKEY, 'home.json'), JSON.stringify({ ...record, document }))
+
+		const html = await body(harness, '/shop')
+		expect(html).toContain(`{"author":"${APP_PUBKEY}","d":"home","path":"/shop"}`)
+		expect(html).not.toContain('NEEDLE-42')
+	})
+
+	test('a subpath binding with `chrome: "app"` still answers the composed document', async () => {
+		// A hand-written `data/routes.json` subpath: the router has no route for a
+		// two-segment bound path, so app chrome there would render its not-found.
+		const harness = start({ bindings: [binding('shop/featured')] })
+		await post(harness, signed())
+
+		expect(await status(harness, '/shop/featured')).toBe(200)
+		const html = await body(harness, '/shop/featured')
+		expect(html).toContain('NEEDLE-42')
+		expect(html).toContain('<link rel="canonical" href="/shop/featured">')
+		expect(html).not.toContain('__AR_ROUTE__')
+	})
+
+	test('the standalone document is pinned: `chrome: "standalone"` keeps every byte of today’s answer', async () => {
+		const harness = start({ bindings: [binding('shop')] })
+		await post(harness, signed(JSON.stringify({ ...JSON.parse(DOCUMENT), chrome: 'standalone' })))
+
+		const html = await body(harness, '/shop')
+		expect(html).toContain('NEEDLE-42')
+		expect(html).toContain('<div data-testid="storefront-page"')
+		expect(html).toContain(`<script id="__AR_PAGE__" type="application/json">{"author":"${APP_PUBKEY}","d":"home","version":1}</script>`)
+		expect(html).toContain('<link rel="canonical" href="/shop">')
+		expect(html).not.toContain('__AR_ROUTE__')
+	})
+})
+
 describe('S1 — `/` renders the default binding, or the compiled-in home when it names nothing', () => {
 	test('with no default, `/` is the compiled-in home: the SPA shell, which composes the inline home', async () => {
 		const harness = start()
@@ -177,13 +271,27 @@ describe('S1 — `/` renders the default binding, or the compiled-in home when i
 		expect(await response.text()).toBe(SHELL_HTML)
 	})
 
-	test('with `default: "shop"`, `/` serves the page bound at `shop` — marker, payload and all', async () => {
+	test('with `default: "shop"`, `/` answers with the shell and the payload naming the page bound at `shop`', async () => {
 		const harness = start({ default: 'shop', bindings: [binding('shop')] })
 		expect((await post(harness, signed())).status).toBe(200)
 
 		const response = await realFetch(`${harness.url}/`)
 		expect(response.status).toBe(200)
 		const html = await response.text()
+		// The default's page is app chrome (the document omits the field), so `/`
+		// answers with the shell — its own title, not the page's.
+		expect(html).toContain('<title>Plebeian Market</title>')
+		expect(html).not.toContain('NEEDLE-42')
+		// The payload names the coordinate the binding resolved to, and the path
+		// is the URL that was asked for.
+		expect(html).toContain(`{"author":"${APP_PUBKEY}","d":"home","path":"/"}`)
+	})
+
+	test('the same page opting out (`chrome: "standalone"`) still serves its composed document at `/`', async () => {
+		const harness = start({ default: 'shop', bindings: [binding('shop')] })
+		expect((await post(harness, signed(STANDALONE_DOCUMENT))).status).toBe(200)
+
+		const html = await body(harness, '/')
 		expect(html).toContain('NEEDLE-42')
 		expect(html).toContain('<div data-testid="storefront-page"')
 		// The payload names the coordinate the binding resolved to, and the
@@ -192,16 +300,32 @@ describe('S1 — `/` renders the default binding, or the compiled-in home when i
 		expect(html).toContain('<link rel="canonical" href="/">')
 	})
 
-	test('`/` and the path the default names serve the same page; only the canonical URL differs', async () => {
+	test('`/` and the path the default names serve the same page; only the path the answer carries differs', async () => {
 		const harness = start({ default: 'shop', bindings: [binding('shop')] })
 		await post(harness, signed())
 		const home = await body(harness, '/')
 		const shop = await body(harness, '/shop')
 
-		// One page, one branch, one payload: `/` is served by the identical code
-		// path the named path is. The canonical URL (and `og:url`, derived from
-		// it) is the URL the request arrived on — which is the only difference.
-		const withoutPathMeta = (html: string) => html.replace(/<link rel="canonical"[^>]*>\n?/, '').replace(/<meta property="og:url"[^>]*>\n?/, '')
+		// One page, one branch, one payload shape: `/` is served by the identical
+		// code path the named path is. In app chrome both answers are the shell,
+		// and the only thing that differs is the path the payload names — which
+		// is the URL the request arrived on.
+		const withoutPath = (html: string) => html.replace(/,"path":"[^"]*"/, '')
+		expect(withoutPath(home)).toBe(withoutPath(shop))
+		expect(home).toContain('"path":"/"')
+		expect(shop).toContain('"path":"/shop"')
+	})
+
+	test('the same holds for a standalone default: the page is composed, only the canonical URL differs', async () => {
+		const harness = start({ default: 'shop', bindings: [binding('shop')] })
+		await post(harness, signed(STANDALONE_DOCUMENT))
+		const home = await body(harness, '/')
+		const shop = await body(harness, '/shop')
+
+		// The canonical URL (and `og:url`, derived from it) is the URL the
+		// request arrived on — which is the only difference.
+		const withoutPathMeta = (html: string) =>
+			html.replace(/<link rel="canonical"[^>]*>\n?/, '').replace(/<meta property="og:url"[^>]*>\n?/, '')
 		expect(withoutPathMeta(home)).toBe(withoutPathMeta(shop))
 		expect(home).toContain('<link rel="canonical" href="/">')
 		expect(shop).toContain('<link rel="canonical" href="/shop">')
@@ -232,6 +356,29 @@ describe('S1 — `/` renders the default binding, or the compiled-in home when i
 		const response = await realFetch(`${harness.url}/`)
 		expect(response.status).toBe(200)
 		const html = await response.text()
+		// The member is app chrome (its document omits the field), so the series
+		// path answers with the shell and the payload names the member the
+		// resolver chose — the series rung, not a bypass of it.
+		expect(html).not.toContain('NEEDLE-42')
+		expect(html).toContain(`{"author":"${APP_PUBKEY}","d":"featured-13-11-2026","path":"/"}`)
+	})
+
+	test('a series whose member opts out (`chrome: "standalone"`) is composed, newest member and all', async () => {
+		const harness = start({
+			default: 'featured',
+			bindings: [
+				{
+					kind: 'admin',
+					path: 'featured',
+					target: { type: 'series', series: 'featured', author: APP_PUBKEY },
+					updatedAt: 1763000000,
+					updatedBy: 'instance',
+				},
+			],
+		})
+		expect((await post(harness, signed(STANDALONE_DOCUMENT, { d: 'featured-13-11-2026', tags: [['t', 'featured']] }))).status).toBe(200)
+
+		const html = await body(harness, '/')
 		expect(html).toContain('NEEDLE-42')
 		expect(html).toContain(`{"author":"${APP_PUBKEY}","d":"featured-13-11-2026","version":1}`)
 	})
@@ -243,9 +390,19 @@ describe('S1 — `/` renders the default binding, or the compiled-in home when i
 })
 
 describe('S2/S3 — a bound `/<name>` serves; an unbound one is a real 404', () => {
-	test('a bound `/<name>` is 200 with the page', async () => {
+	test('a bound `/<name>` is 200 with the shell and the payload naming the page', async () => {
 		const harness = start({ bindings: [binding('shop')] })
 		await post(harness, signed())
+		expect(await status(harness, '/shop')).toBe(200)
+		const html = await body(harness, '/shop')
+		expect(html).toContain('<div id="root"></div>')
+		expect(html).toContain(`{"author":"${APP_PUBKEY}","d":"home","path":"/shop"}`)
+		expect(html).not.toContain('NEEDLE-42')
+	})
+
+	test('a bound `/<name>` whose page opts out is 200 with the composed page', async () => {
+		const harness = start({ bindings: [binding('shop')] })
+		await post(harness, signed(STANDALONE_DOCUMENT))
 		expect(await status(harness, '/shop')).toBe(200)
 		expect(await body(harness, '/shop')).toContain('NEEDLE-42')
 	})
@@ -290,17 +447,31 @@ describe('S4/S4b — compiled-in paths: unchanged while unbound, superseded whil
 		}
 	})
 
-	test('a live binding on a compiled-in name serves the binding, not the shell', async () => {
+	test('a live binding on a compiled-in name answers with the binding — the shell, plus the payload naming it', async () => {
 		const harness = start({ bindings: [binding('dashboard')] })
 		await post(harness, signed())
 
 		const response = await realFetch(`${harness.url}/dashboard`)
 		expect(response.status).toBe(200)
 		const html = await response.text()
+		// The compiled-in page is what answers *only* when no binding exists. With
+		// one live, the answer is the binding's page — which, in app chrome, is
+		// the shell plus a payload naming the binding's target. The shell alone
+		// would leave the router rendering the dashboard route.
+		expect(html).toContain('<title>Plebeian Market</title>')
+		expect(html).toContain(
+			`<script id="__AR_ROUTE__" type="application/json">{"author":"${APP_PUBKEY}","d":"home","path":"/dashboard"}</script>`,
+		)
+		expect(html).not.toContain('NEEDLE-42')
+	})
+
+	test('a live binding on a compiled-in name whose page opts out serves the composed document, not the shell', async () => {
+		const harness = start({ bindings: [binding('dashboard')] })
+		await post(harness, signed(STANDALONE_DOCUMENT))
+
+		const html = await body(harness, '/dashboard')
 		expect(html).toContain('NEEDLE-42')
 		expect(html).toContain('<div data-testid="storefront-page"')
-		// The compiled-in page is what answers *only* when no binding exists; with
-		// one live, the shell must not be served at all.
 		expect(html).not.toBe(SHELL_HTML)
 		expect(html).not.toContain('<title>Plebeian Market</title>')
 	})
@@ -311,13 +482,13 @@ describe('S4/S4b — compiled-in paths: unchanged while unbound, superseded whil
 		const applied = await post(harness, intentEvent(setIntent('dashboard')))
 		expect(applied.status).toBe(200)
 		expect(await applied.json()).toMatchObject({ warnings: [{ code: 'compiled-in-path', path: 'dashboard' }] })
-		expect(await body(harness, '/dashboard')).toContain('NEEDLE-42')
+		expect(await body(harness, '/dashboard')).toContain(`{"author":"${APP_PUBKEY}","d":"home","path":"/dashboard"}`)
 	})
 
 	test('removing the binding hands the path back to the compiled-in page', async () => {
 		const harness = start({ bindings: [binding('dashboard')] })
 		await post(harness, signed())
-		expect(await body(harness, '/dashboard')).toContain('NEEDLE-42')
+		expect(await body(harness, '/dashboard')).toContain('"__AR_ROUTE__"')
 
 		const removed = await post(harness, intentEvent({ version: ROUTE_INTENT_VERSION, action: 'remove', path: 'dashboard', target: null }))
 		expect(removed.status).toBe(200)
@@ -356,7 +527,7 @@ describe('S5 — a binding whose page is unrenderable is 500 with a named error'
 describe('a served page ships the bundle the shell declares', () => {
 	test('the module script and every stylesheet come from the shell bytes', async () => {
 		const harness = start({ bindings: [binding('shop')] })
-		await post(harness, signed())
+		await post(harness, signed(STANDALONE_DOCUMENT))
 
 		const html = await body(harness, '/shop')
 		expect(html).toContain('<script type="module" src="/chunk-app.js"></script>')
@@ -365,9 +536,20 @@ describe('a served page ships the bundle the shell declares', () => {
 		expect(html).toContain('id="__AR_PAGE__"')
 	})
 
+	test('an app-chrome page keeps the shell’s own bundle rather than re-emitting it', async () => {
+		const harness = start({ bindings: [binding('shop')] })
+		await post(harness, signed())
+
+		const html = await body(harness, '/shop')
+		// One answer, one copy: the shell's own tags, untouched.
+		expect((html.match(/<script type="module" src="\/chunk-app.js"><\/script>/g) ?? []).length).toBe(1)
+		expect((html.match(/<link rel="stylesheet" href="\/chunk-app.css">/g) ?? []).length).toBe(1)
+		expect(html).not.toContain('id="__AR_PAGE__"')
+	})
+
 	test('a page served at `/` ships them too', async () => {
 		const harness = start({ default: 'shop', bindings: [binding('shop')] })
-		await post(harness, signed())
+		await post(harness, signed(STANDALONE_DOCUMENT))
 		const html = await body(harness, '/')
 		expect(html).toContain('<script type="module" src="/chunk-app.js"></script>')
 		expect(html).toContain('<link rel="stylesheet" href="/chunk-app.css">')
@@ -378,7 +560,7 @@ describe('a served page ships the bundle the shell declares', () => {
 			bindings: [binding('shop')],
 			shell: '<!doctype html><html><body><div id="root"></div></body></html>',
 		})
-		await post(harness, signed())
+		await post(harness, signed(STANDALONE_DOCUMENT))
 
 		const html = await body(harness, '/shop')
 		expect(html).toContain('NEEDLE-42')

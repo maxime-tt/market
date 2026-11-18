@@ -10,10 +10,11 @@ import {
 } from '@ui/primitives/alert-dialog'
 import { Button } from '@ui/primitives/button'
 import { Switch } from '@ui/primitives/switch'
-import type { StorefrontPage, StorefrontRootProps, StorefrontThemeId } from '@sdk/commerce/storefront/storefrontPage'
+import type { StorefrontPage, StorefrontPageChrome, StorefrontRootProps, StorefrontThemeId } from '@sdk/commerce/storefront/storefrontPage'
 import { STOREFRONT_PAGE_D_TAG, STOREFRONT_PAGE_VERSION, validateStorefrontPageForPublish } from '@sdk/commerce/storefront/storefrontPage'
 import { validateStorefrontThemeSelection } from '@sdk/config/storefront/storefrontThemes'
 import { StorefrontProvider } from '@ui/storefront'
+import { PageChromeControl } from '@ui/settings/page-authoring-views'
 import { cn } from '@ui/utils/cn'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { getNip05ForPubkey, useNip05Settings } from '@platform/web/config/nip05Binding'
@@ -82,10 +83,11 @@ function toPuckData(page: StorefrontPage): Data {
 	return { root: { props: page.root.props }, content: page.content } as Data
 }
 
-function fromPuckData(data: Data, enabled: boolean): StorefrontPage {
+function fromPuckData(data: Data, enabled: boolean, chrome: StorefrontPageChrome): StorefrontPage {
 	return {
 		version: STOREFRONT_PAGE_VERSION,
 		enabled,
+		chrome,
 		root: { props: (data.root?.props ?? {}) as StorefrontPage['root']['props'] },
 		content: data.content as StorefrontPage['content'],
 	}
@@ -118,6 +120,10 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 	const [mode, setMode] = useState<BuilderMode>('loading')
 	const [initialData, setInitialData] = useState<Data | null>(null)
 	const [enabled, setEnabled] = useState(false)
+	// Presentation intent, carried like `enabled` but on its own axis: a page can
+	// be live and standalone, or off and app-chromed. Seeded from the document,
+	// never derived, and written into the draft and the published event.
+	const [chrome, setChrome] = useState<StorefrontPageChrome>('app')
 	const [isDirty, setIsDirty] = useState(false)
 	const [errors, setErrors] = useState<string[]>([])
 	const [confirmChangeTemplateOpen, setConfirmChangeTemplateOpen] = useState(false)
@@ -166,6 +172,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 		// wizard rather than a blank Puck canvas with nothing to click on.
 		if (existing && existing.content.length > 0) {
 			setEnabled(existing.enabled)
+			setChrome(existing.chrome)
 			setIsDirty(Boolean(draft))
 			const data = toPuckData(existing)
 			currentData.current = data
@@ -176,6 +183,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 			// exists — arriving at the wizard (e.g. because every block failed to
 			// parse) must not quietly switch a previously-live page back on.
 			setEnabled(existing?.enabled ?? false)
+			setChrome(existing?.chrome ?? 'app')
 			setMode('wizard')
 		}
 	}, [dTag, isLoading, published, pubkey])
@@ -183,6 +191,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 	const handleWizardComplete = useCallback(
 		(page: StorefrontPage) => {
 			setEnabled(page.enabled)
+			setChrome(page.chrome)
 			setIsDirty(true)
 			const data = toPuckData(page)
 			currentData.current = data
@@ -202,23 +211,32 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 			currentData.current = data
 			setIsDirty(true)
 			setErrors([])
-			saveStorefrontDraft(pubkey, dTag, fromPuckData(data, enabled))
+			saveStorefrontDraft(pubkey, dTag, fromPuckData(data, enabled, chrome))
 		},
-		[dTag, pubkey, enabled],
+		[dTag, pubkey, enabled, chrome],
 	)
 
 	const handleToggleEnabled = useCallback(
 		(next: boolean) => {
 			setEnabled(next)
 			setIsDirty(true)
-			if (currentData.current) saveStorefrontDraft(pubkey, dTag, fromPuckData(currentData.current, next))
+			if (currentData.current) saveStorefrontDraft(pubkey, dTag, fromPuckData(currentData.current, next, chrome))
 		},
-		[dTag, pubkey],
+		[dTag, pubkey, chrome],
+	)
+
+	const handleToggleChrome = useCallback(
+		(next: StorefrontPageChrome) => {
+			setChrome(next)
+			setIsDirty(true)
+			if (currentData.current) saveStorefrontDraft(pubkey, dTag, fromPuckData(currentData.current, enabled, next))
+		},
+		[dTag, pubkey, enabled],
 	)
 
 	const handlePublish = useCallback(
 		async (data: Data) => {
-			const page = fromPuckData(data, enabled)
+			const page = fromPuckData(data, enabled, chrome)
 
 			// Strict validation happens here, not at render: a block the renderer
 			// would silently drop becomes a message the author can act on while
@@ -260,7 +278,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 				toast.error(message)
 			}
 		},
-		[dTag, enabled, publish, pubkey],
+		[dTag, enabled, chrome, publish, pubkey],
 	)
 
 	const handleDiscardDraft = useCallback(() => {
@@ -269,6 +287,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 
 		if (page && page.content.length > 0) {
 			setEnabled(page.enabled)
+			setChrome(page.chrome)
 			const data = toPuckData(page)
 			currentData.current = data
 			setInitialData(data)
@@ -277,6 +296,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 			// Nothing published to fall back to either — the only honest
 			// "discard" is to send the author back to step one.
 			setEnabled(false)
+			setChrome('app')
 			currentData.current = null
 			setInitialData(null)
 			setMode('wizard')
@@ -327,6 +347,14 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 							</label>
 						</div>
 
+						<div
+							className="flex shrink-0 items-center gap-1 rounded-lg border bg-background p-1"
+							role="group"
+							aria-label="Page presentation"
+						>
+							<PageChromeControl chrome={chrome} onChange={handleToggleChrome} disabled={publish.isPending} />
+						</div>
+
 						<Button
 							size="lg"
 							className="shrink-0"
@@ -344,7 +372,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 					</div>
 				)
 			},
-		[enabled, handleToggleEnabled, handlePublish, publish.isPending],
+		[enabled, chrome, handleToggleEnabled, handleToggleChrome, handlePublish, publish.isPending],
 	)
 
 	const headerOverride = useMemo(

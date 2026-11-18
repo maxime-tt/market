@@ -24,9 +24,19 @@ const OUTSIDER_PUBKEY = getPublicKey(OUTSIDER_KEY)
 
 let clock = 1_800_000_000
 
+/**
+ * The document the ingest/serve assertions below are about, opting OUT of app
+ * chrome (`chrome: 'standalone'`). These tests assert the *composed document's*
+ * bytes — the marker, the `<h1>`, the head meta, the data-bound block regions —
+ * and only a standalone page answers with that document. A page left on the
+ * default app chrome answers with the SPA shell plus a `#__AR_ROUTE__` payload;
+ * that answer has its own describe below (`app chrome — …`), so neither
+ * behaviour is asserted by accident here.
+ */
 const DOCUMENT = JSON.stringify({
 	version: 1,
 	enabled: true,
+	chrome: 'standalone',
 	root: { props: { title: 'Test shop', theme: 'default' } },
 	content: [
 		{ type: 'Hero', props: { id: 'hero-1', title: 'Welcome to the test shop' } },
@@ -326,6 +336,54 @@ describe('the serve path — the ladder, 404s and a dead relay', () => {
 	})
 })
 
+describe('app chrome — a bound page renders through the app, not as a standalone document', () => {
+	/**
+	 * The same document with **no** `chrome` field. The schema defaults it to
+	 * `'app'`, so this is the shape every page published before this change has,
+	 * and the shape a new publish produces unless the author opts out.
+	 */
+	const appChromeDocument = JSON.stringify({
+		version: 1,
+		enabled: true,
+		root: { props: { title: 'Test shop', theme: 'default' } },
+		content: [{ type: 'Text', props: { id: 'text-1', markdown: 'A served page with a marker: NEEDLE-42.' } }],
+	})
+
+	test('a page with no chrome field answers with the shell and the route payload, not the composed document', async () => {
+		const harness = start()
+		expect((await post(harness, signed(appChromeDocument))).status).toBe(200)
+
+		const served = await realFetch(`${harness.url}/shop`)
+		expect(served.status).toBe(200)
+		const html = await served.text()
+
+		// The shell, plus the payload naming the page the path resolved to — the
+		// server's answer, carried into the browser so the root guard can render
+		// the page inside the real header and footer.
+		expect(html).toContain('SHELL')
+		expect(html).toContain('id="__AR_ROUTE__"')
+		expect(html).toContain(`"author":"${APP_PUBKEY}"`)
+		expect(html).toContain('"d":"home"')
+		expect(html).toContain('"path":"/shop"')
+		// And *not* the composed document: that is the whole point of the flip.
+		expect(html).not.toContain('NEEDLE-42')
+		expect(html).not.toContain('data-ar-served-page')
+		// Per-URL and state-dependent, so it must never be cached.
+		expect(served.headers.get('cache-control')).toBe('no-store')
+	})
+
+	test('the same page opting out (`chrome: "standalone"`) still serves its composed document', async () => {
+		const harness = start()
+		expect((await post(harness, signed())).status).toBe(200)
+
+		const served = await realFetch(`${harness.url}/shop`)
+		expect(served.status).toBe(200)
+		const html = await served.text()
+		expect(html).toContain('NEEDLE-42')
+		expect(html).not.toContain('id="__AR_ROUTE__"')
+	})
+})
+
 describe('one write surface (E14)', () => {
 	test('the ingest is registered once and the retired name does not exist', () => {
 		const harness = start()
@@ -521,11 +579,16 @@ const seriesBinding = (path: string, series = 'featured', author = APP_PUBKEY) =
 	updatedBy: 'instance',
 })
 
-/** A minimal valid document carrying a unique marker, so served bytes identify it. */
+/**
+ * A minimal valid document carrying a unique marker, so served bytes identify it.
+ * Standalone, like `DOCUMENT`: these cases assert the composed document's body,
+ * which only the standalone arm emits.
+ */
 const documentWith = (marker: string): string =>
 	JSON.stringify({
 		version: 1,
 		enabled: true,
+		chrome: 'standalone',
 		root: { props: { title: `Page ${marker}`, theme: 'default' } },
 		content: [{ type: 'Text', props: { id: 'text-1', markdown: `marker:${marker}` } }],
 	})
@@ -550,9 +613,13 @@ describe('R1/R2/R3 — custom paths and the series path (page-path layer)', () =
 
 		// Two pages declare membership in `featured` at their own `d`s.
 		clock += 1
-		expect((await post(harness, signed(documentWith('FIRST'), { d: 'featured-a', createdAt: clock, tags: [['t', 'featured']] }))).status).toBe(200)
+		expect(
+			(await post(harness, signed(documentWith('FIRST'), { d: 'featured-a', createdAt: clock, tags: [['t', 'featured']] }))).status,
+		).toBe(200)
 		clock += 1
-		expect((await post(harness, signed(documentWith('SECOND'), { d: 'featured-b', createdAt: clock, tags: [['t', 'featured']] }))).status).toBe(200)
+		expect(
+			(await post(harness, signed(documentWith('SECOND'), { d: 'featured-b', createdAt: clock, tags: [['t', 'featured']] }))).status,
+		).toBe(200)
 
 		const before = routesBytes(harness)
 		const first = await realFetch(`${harness.url}/featured`)
@@ -562,7 +629,9 @@ describe('R1/R2/R3 — custom paths and the series path (page-path layer)', () =
 		// A third membership is published; the series answer changes with **no**
 		// routing-file write — that is what "dynamic" means.
 		clock += 1
-		expect((await post(harness, signed(documentWith('THIRD'), { d: 'featured-c', createdAt: clock, tags: [['t', 'featured']] }))).status).toBe(200)
+		expect(
+			(await post(harness, signed(documentWith('THIRD'), { d: 'featured-c', createdAt: clock, tags: [['t', 'featured']] }))).status,
+		).toBe(200)
 
 		const second = await realFetch(`${harness.url}/featured`)
 		expect(second.status).toBe(200)
@@ -578,13 +647,19 @@ describe('R1/R2/R3 — custom paths and the series path (page-path layer)', () =
 		})
 
 		clock += 1
-		expect((await post(harness, signed(documentWith('OWNER'), { d: 'owner-page', createdAt: clock, tags: [['t', 'featured']] }))).status).toBe(200)
+		expect(
+			(await post(harness, signed(documentWith('OWNER'), { d: 'owner-page', createdAt: clock, tags: [['t', 'featured']] }))).status,
+		).toBe(200)
 		// The outsider's page is *newer* and tagged into the same series, but it
 		// belongs to a different (series, author) key — it must not become /featured.
 		clock += 100
 		expect(
-			(await post(harness, signed(documentWith('OUTSIDER'), { d: 'outsider-page', createdAt: clock, key: OUTSIDER_KEY, tags: [['t', 'featured']] })))
-				.status,
+			(
+				await post(
+					harness,
+					signed(documentWith('OUTSIDER'), { d: 'outsider-page', createdAt: clock, key: OUTSIDER_KEY, tags: [['t', 'featured']] }),
+				)
+			).status,
 		).toBe(200)
 
 		const served = await realFetch(`${harness.url}/featured`)

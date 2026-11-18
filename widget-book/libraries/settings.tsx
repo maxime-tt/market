@@ -11,7 +11,17 @@ import {
 } from '@ui/settings/operator-settings-views'
 import { ProfileWalletCheckView } from '@ui/settings/profile-wallet-check-view'
 import { RelayCardView, RelayManagerView } from '@ui/settings/relay-manager-views'
-import { NewPageForm, PageLabelChips, PagePicker, PagesEmpty, PagesError, PagesList, PagesLoading } from '@ui/settings/page-authoring-views'
+import {
+	NewPageForm,
+	PageChromeControl,
+	PageLabelChips,
+	PagePicker,
+	PagesEmpty,
+	PagesError,
+	PagesList,
+	PagesLoading,
+	type PickerPage,
+} from '@ui/settings/page-authoring-views'
 import {
 	RouteBindingsEmpty,
 	RouteBindingsError,
@@ -40,12 +50,13 @@ const memberActions = [
 ]
 
 /** Fixed authoring fixtures: the harness renders one deterministic state. */
-const pickerPages = [
+const pickerPages: PickerPage[] = [
 	{
 		name: 'Storefront',
 		authorLabel: 'npub1merchant…',
 		enabled: true,
 		isDefault: true,
+		chrome: 'app',
 		d: 'storefront-page',
 		title: 'The merchant storefront',
 	},
@@ -54,6 +65,7 @@ const pickerPages = [
 		authorLabel: 'npub1merchant…',
 		enabled: false,
 		isDefault: false,
+		chrome: 'standalone',
 		d: 'featured-13-11-2026',
 		title: null,
 	},
@@ -298,8 +310,20 @@ export const settings: WidgetLibrary = {
 			name: 'PageLabelChips',
 			render: () => (
 				<div className="flex flex-col gap-2">
-					<PageLabelChips label={{ name: 'Storefront', authorLabel: 'npub1merchant…', enabled: true, isDefault: true }} />
-					<PageLabelChips label={{ name: 'featured-13-11-2026', authorLabel: 'npub1merchant…', enabled: false, isDefault: false }} />
+					<PageLabelChips label={{ name: 'Storefront', authorLabel: 'npub1merchant…', enabled: true, isDefault: true, chrome: 'app' }} />
+					<PageLabelChips
+						label={{ name: 'featured-13-11-2026', authorLabel: 'npub1merchant…', enabled: false, isDefault: false, chrome: 'standalone' }}
+					/>
+				</div>
+			),
+		},
+		{
+			name: 'PageChromeControl',
+			render: () => (
+				<div className="flex flex-col gap-3">
+					<PageChromeControl chrome="app" onChange={() => {}} />
+					<PageChromeControl chrome="standalone" onChange={() => {}} />
+					<PageChromeControl chrome="app" onChange={() => {}} disabled />
 				</div>
 			),
 		},

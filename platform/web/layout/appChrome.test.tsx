@@ -1,6 +1,8 @@
 /**
- * platform/web/layout/appChrome.test.tsx — the legacy header stands down on the
- * routes that draw their own nav.
+ * platform/web/layout/appChrome.test.tsx — the app frame's chrome decisions:
+ * the legacy header stands down on the routes that draw their own nav, and a
+ * page the server bound to the path (`#__AR_ROUTE__`) renders inside that frame
+ * instead of the route's own content.
  *
  * Shape chosen: a route-level render test. The real root frame
  * (`routes/__root.tsx`) is mounted in a memory router around a single child, and
@@ -38,6 +40,23 @@ mock.module('@platform/web/app/useRootRedirects', () => ({ useRootRedirects: () 
 mock.module('@platform/web/app/useDocumentIdentity', () => ({ useDocumentIdentity: () => {} }))
 mock.module('@platform/web/layout/FooterHost', () => ({ FooterHost: () => null }))
 mock.module('@platform/web/auctions/AuctionWonModal', () => ({ AuctionWonModal: () => null }))
+
+/**
+ * The app-chrome seam, stubbed at its two module boundaries so the frame's
+ * decision is what is under test: `appChromePageForPath` is what the frame
+ * consults (its own reading of `#__AR_ROUTE__` is covered by
+ * `storefront/appChromePage.test.ts`), and `BoundPathPage` renders a marker
+ * instead of dragging the page renderer and its relay reads in here.
+ */
+let boundPage: { author: string; d: string; path: string } | null = null
+
+mock.module('@platform/web/storefront/appChromePage', () => ({
+	appChromePageForPath: (pathname: string) => (boundPage && boundPage.path === pathname ? boundPage : null),
+}))
+mock.module('@platform/web/storefront/BoundPathPage', () => ({
+	BoundPathPage: ({ payload }: { payload: { author: string; d: string } }) =>
+		createElement('div', { 'data-testid': 'bound-path-page' }, `${payload.author}/${payload.d}`),
+}))
 
 afterAll(() => {
 	mock.restore()
@@ -91,6 +110,61 @@ describe('root frame chrome', () => {
 		expect(markup).toContain(LEGACY_HEADER_MARKER)
 		expect(markup.split('<header').length - 1).toBe(1)
 		expect(markup).toContain('routed-content')
+	})
+})
+
+describe('a page bound to this path', () => {
+	/**
+	 * The fix this block pins: a payload supersedes `<Outlet/>`, and it also
+	 * overrides `hidesAppHeader`'s effect on the header — a page rendering inside
+	 * the app's frame must have that frame's nav. (`/` is the case that matters:
+	 * the browse route is the one route that hides the header, and it is also
+	 * where a `default` binding lands.)
+	 */
+	function boundTo(path: string) {
+		boundPage = { author: 'a'.repeat(64), d: 'home', path }
+	}
+
+	test('renders the page instead of the route, and keeps the header a hiding route dropped', async () => {
+		const { Route: browseRoute } = await import('../routes/index')
+		expect(browseRoute.options.staticData).toEqual({ hidesAppHeader: true })
+		boundTo('/')
+		try {
+			const markup = await renderRouteFrame(browseRoute.options.staticData, createElement('div', null, 'routed-content'))
+
+			expect(markup).toContain('data-testid="bound-path-page"')
+			expect(markup).toContain(LEGACY_HEADER_MARKER)
+			expect(markup).not.toContain('routed-content')
+		} finally {
+			boundPage = null
+		}
+	})
+
+	test('renders the page instead of a non-hiding route’s content, header unchanged', async () => {
+		const { Route: productsRoute } = await import('../routes/products.index')
+		boundTo('/')
+		try {
+			const markup = await renderRouteFrame(productsRoute.options.staticData, createElement('div', null, 'routed-content'))
+
+			expect(markup).toContain('data-testid="bound-path-page"')
+			expect(markup).toContain(LEGACY_HEADER_MARKER)
+			expect(markup).not.toContain('routed-content')
+		} finally {
+			boundPage = null
+		}
+	})
+
+	test('a payload for another path does not take over the route', async () => {
+		const { Route: productsRoute } = await import('../routes/products.index')
+		boundTo('/elsewhere')
+		try {
+			const markup = await renderRouteFrame(productsRoute.options.staticData, createElement('div', null, 'routed-content'))
+
+			expect(markup).not.toContain('data-testid="bound-path-page"')
+			expect(markup).toContain('routed-content')
+		} finally {
+			boundPage = null
+		}
 	})
 })
 

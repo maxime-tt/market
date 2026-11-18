@@ -12,7 +12,7 @@ import { buildAnalyticsRoutes } from './http/analytics'
 import { buildAppEventsRoutes, createLevelLookup } from './http/appEvents'
 import { buildRouteTableRoutes } from './http/routeTable'
 import { resolve } from './routes/resolve'
-import { composePageHtml, composeRenderPlaceholder } from './routes/pageHtml'
+import { composePageHtml, composeRenderPlaceholder, injectRoutePayload } from './routes/pageHtml'
 import { createPageStore, type PageStore } from './routes/pageStore'
 import { createShellResponder, readShellAssets, SHELL_PATH, type ShellAssets } from './routes/shell'
 import { pagePayloadFor } from './routes/defaultBinding'
@@ -54,7 +54,7 @@ export interface BuildServerOptions {
 	 * to import here, so we accept anything Bun's route record will take.
 	 */
 	indexHtml: unknown
-	/** Loaded once at boot, then mutated by route intents; unreadable refuses boot. */
+	/** Loaded once at boot, then mutated by route intents; an invalid file refuses boot, a missing one is the empty table. */
 	routing: RouteTable
 	pageStore?: PageStore
 }
@@ -69,6 +69,23 @@ export interface ContentRoutesOptions {
 
 const html = (body: string, status = 200): Response =>
 	new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8' } })
+
+/**
+ * How a stored page asks its bound path to answer.
+ *
+ * The field is presentation intent carried on the page document
+ * (`StorefrontPage.chrome`), so the author's choice travels with the page and
+ * any client can honour or ignore it. This is the **one** place that decides
+ * what a missing or unrecognised value means: a record written before the field
+ * existed has no `chrome`, and it resolves to `'app'` — the same default the
+ * schema applies to a document that omits it. Only the exact string
+ * `'standalone'` opts out.
+ *
+ * Takes the loose shape rather than `StorefrontPage` because the value comes
+ * off local storage written by an older process; nothing here is trusted.
+ */
+export const servedChrome = (document: { chrome?: string } | undefined): 'app' | 'standalone' =>
+	document?.chrome === 'standalone' ? 'standalone' : 'app'
 
 /**
  * The route table for pages. Exported so the serve path can be exercised
@@ -144,6 +161,12 @@ export function buildContentRoutes({
 		// A `page` or a `series` outcome both name an `(author, d)` to read; for a
 		// series, the resolver already chose the newest present member.
 		const { author, d } = resolution.outcome === 'series' ? resolution : resolution.target
+		// The binding's own path — what the routing file wrote, not the request
+		// URL. The subpath guard below is about the binding's shape; `/` is served
+		// by the same branch because `resolve()` normalises it to the path its
+		// default names (R4), so `resolution.path` is the named path for `/` and
+		// for a direct request alike. A series resolution carries the same field.
+		const bindingPath = resolution.path
 		const page = pageStore.get(author, d)
 		// A stored page is servable only while the author has it switched on.
 		// `enabled: false` is the unpublish: the store keeps the document (so
@@ -160,6 +183,60 @@ export function buildContentRoutes({
 			)
 		}
 
+		// The request path, normalised once: it is the standalone arm's canonical
+		// URL and the app-chrome arm's payload `path`, and the client compares it
+		// against `location.pathname` with the same trailing-slash rule.
+		const path = url.pathname.replace(/\/+$/, '') || '/'
+
+		// **Subpath guard** (`PLAN-2026-11-17-app-chrome-pages.md` §8.2). An
+		// authorable lease cannot name a subpath (`NAME_PATTERN` has no `/`), but
+		// a hand-written `data/routes.json` can, and this function registers a
+		// literal route for it above. The browser has no route for a two-segment
+		// bound path — `/$vanityName` matches exactly one segment — so app chrome
+		// there would cold-load the shell and render the router's not-found. The
+		// binding's own path is what is checked: it is the shape the file wrote,
+		// independent of how the URL was cased or slashed. A subpath always
+		// answers with the composed standalone document.
+		//
+		// `/` needs no special case: `resolve()` normalises the default binding
+		// to a path and returns the same `page` outcome (R4), so the home flows
+		// through this identical branch.
+		const appChrome = servedChrome(page.document) === 'app' && !bindingPath.includes('/')
+
+		if (appChrome) {
+			// The shell's own bytes, with the route payload inserted: the client
+			// mounts the app normally and the root guard
+			// (`platform/web/routes/__root.tsx`) renders the page inside the real
+			// header and footer. `shell()` returns a Response — read it, never
+			// mutate the cached one. The response is a fresh one with `no-store`:
+			// the injected document is per-URL and depends on live state, so it
+			// must not be cacheable.
+			try {
+				const shellResponse = await shell()
+				const bytes = await shellResponse.text()
+				return new Response(injectRoutePayload(bytes, { author, d, path }), {
+					status: shellResponse.status,
+					headers: {
+						'content-type': shellResponse.headers.get('content-type') ?? 'text/html; charset=utf-8',
+						'cache-control': 'no-store',
+					},
+				})
+			} catch (error) {
+				// Fail visible, in the same shape as the compiled-in arm. Never fall
+				// back to the standalone document: a silent fallback would hand the
+				// same URL two different looks and hide the reason it changed.
+				const detail = error instanceof Error ? error.message : String(error)
+				return html(
+					`<!doctype html><html><head><title>Page unavailable</title></head><body><h1>spa-shell-unavailable</h1><p>${detail}</p></body></html>`,
+					500,
+				)
+			}
+		}
+
+		// The standalone answer: the composed document, unchanged. It is the
+		// opt-out (`chrome: 'standalone'`), the subpath case, and what a stored
+		// record served it before this increment.
+		//
 		// The bundle the page needs to hydrate, and the stylesheets the shell
 		// styled itself with: both read from the shell's own bytes, and both
 		// absent (never invented) when the shell cannot be read.
@@ -170,7 +247,7 @@ export function buildContentRoutes({
 				meta: page.meta,
 				html: page.html,
 				payload: pagePayloadFor({ author, d }),
-				path: url.pathname.replace(/\/+$/, '') || '/',
+				path,
 				bootstrapSrc: bootstrapSrc ?? undefined,
 				stylesheetHrefs,
 			}),

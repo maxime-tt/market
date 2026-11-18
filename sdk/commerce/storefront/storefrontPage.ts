@@ -25,6 +25,13 @@ import { z } from 'zod'
  * version does not know, or whose props fail validation, is dropped by
  * `parseStorefrontPage` and the rest of the page still renders — so an older
  * client meets a newer page without erroring.
+ *
+ * `chrome` is *presentation intent* carried on the document so that any client
+ * can honour it: `'app'` (the default) asks for the page to render inside the
+ * app's own header, footer and navigation, `'standalone'` asks for the page on
+ * its own. It is deliberately additive and does not bump the document version.
+ * A client that does not know the field ignores it and renders the page exactly
+ * as it did before.
  */
 
 /** Addressable kind carrying a storefront page document. See ADR-019. */
@@ -547,13 +554,23 @@ export const StorefrontPageEnvelopeSchema = z.object({
 	 * turning the page off, and never by losing a rented name either.
 	 */
 	enabled: z.boolean().default(false),
+	/**
+	 * Presentation intent: render inside the app's chrome (`'app'`, the
+	 * default) or on its own (`'standalone'`). Additive — older clients ignore
+	 * it and render as they did before.
+	 */
+	chrome: z.enum(['app', 'standalone']).default('app'),
 	root: z.object({ props: StorefrontRootPropsSchema.prefault({}) }).prefault({}),
 	content: z.array(z.unknown()).default([]),
 })
 
+export type StorefrontPageChrome = 'app' | 'standalone'
+
 export interface StorefrontPage {
 	version: typeof STOREFRONT_PAGE_VERSION
 	enabled: boolean
+	/** Presentation intent; see the envelope schema and the file header. */
+	chrome: StorefrontPageChrome
 	root: { props: StorefrontRootProps }
 	content: StorefrontBlock[]
 }
@@ -571,6 +588,7 @@ export function createEmptyStorefrontPage(): StorefrontPage {
 	return {
 		version: STOREFRONT_PAGE_VERSION,
 		enabled: false,
+		chrome: 'app',
 		root: { props: StorefrontRootPropsSchema.parse({}) },
 		content: [],
 	}
@@ -644,6 +662,12 @@ export function parseStorefrontPage(raw: string | null | undefined): StorefrontP
 	// profile page" value must not resolve to "yes".
 	const enabled = doc.enabled === true
 
+	// `chrome` is parsed with the same tolerance: only the exact string
+	// `'standalone'` opts the page out of the app chrome. Missing, unknown and
+	// mistyped values all resolve to `'app'`, so the field can never take a
+	// page dark or change how a client that predates it renders.
+	const chrome: StorefrontPageChrome = doc.chrome === 'standalone' ? 'standalone' : 'app'
+
 	const rootCandidate =
 		doc.root && typeof doc.root === 'object' && !Array.isArray(doc.root) ? (doc.root as Record<string, unknown>).props : undefined
 	const root = { props: parseStorefrontRootProps(rootCandidate) }
@@ -668,7 +692,7 @@ export function parseStorefrontPage(raw: string | null | undefined): StorefrontP
 	}
 
 	return {
-		page: { version: STOREFRONT_PAGE_VERSION, enabled, root, content },
+		page: { version: STOREFRONT_PAGE_VERSION, enabled, chrome, root, content },
 		droppedBlocks,
 		error: null,
 	}
@@ -713,6 +737,7 @@ export function validateStorefrontPageForPublish(page: unknown): { ok: true; pag
 		page: {
 			version: STOREFRONT_PAGE_VERSION,
 			enabled: envelope.data.enabled,
+			chrome: envelope.data.chrome,
 			root: envelope.data.root,
 			content,
 		},
