@@ -154,3 +154,9 @@ publish still retries. `TestParamsCadenceDoesNotRepublishWhileIdleAtAMultipleOfE
 
 Their existing `TestParamsEventRepublishedOnChangeAndNotOtherwise` could not catch this: it drives
 heights 11 and 12, which are never multiples of the cadence.
+
+**Confirmed on the live chain, 2026-11-18.** The first multiple-of-100 height after the fixed binary was
+deployed was **1200**: the relay carries **4** kind-1448 events at that height — exactly one per
+validator. The two cadence heights before the fix show the defect at full scale: **226** events at
+height 1000 and **223** at height 1100. (Height 1166 carries 4: that is the deploy height, published
+once by each validator on the first pass with the new code.)
