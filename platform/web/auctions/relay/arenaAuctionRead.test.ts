@@ -284,7 +284,17 @@ async function collect(stream: AsyncIterable<ArenaReadStreamItem>): Promise<Aren
 
 describe('the read seam', () => {
 	test('asks for exactly the six auction kinds and nothing else', () => {
-		expect(arenaAuctionFilters()).toEqual([{ kinds: [1440, 1441, 1443, 1444, 1445, 1447] }])
+		// One filter per kind group, each with its own limit: a single combined
+		// filter is answered with the newest events across all kinds, which the
+		// chain's 10 s commitments then fill entirely (measured live: 36 lots on
+		// the relay, one lot on the page).
+		expect(arenaAuctionFilters()).toEqual([
+			{ kinds: [1440], limit: 500 },
+			{ kinds: [1441], limit: 500 },
+			{ kinds: [1443, 1444], limit: 200 },
+			{ kinds: [1445], limit: 200 },
+			{ kinds: [1447], limit: 60 },
+		])
 		expect(ARENA_READ_KINDS).toEqual([1440, 1441, 1443, 1444, 1445, 1447])
 	})
 

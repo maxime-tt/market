@@ -223,9 +223,24 @@ export const ARENA_READ_KINDS = [
 	ARENA_STATE_COMMITMENT_KIND,
 ] as readonly number[]
 
-/** The subscription filter: one filter, six kinds. Nothing else is ever requested. */
+/** The subscription filters: six kinds, one budget each. Nothing else is ever requested. */
 export function arenaAuctionFilters(): EventFilter[] {
-	return [{ kinds: [...ARENA_READ_KINDS] }]
+	// One filter per kind group, each with an explicit limit. A relay caps a
+	// filter's response (khatru answers at most 500 events), so a SINGLE combined
+	// filter over all the kinds is answered with the newest 500 events ACROSS
+	// them — and once the chain publishes a commitment every 10 s, those 500 are
+	// all commitments and no lot ever arrives. Measured on the live relay
+	// 2026-11-18: 36 creates alongside ~500 commitments, while the app's list
+	// rendered a single lot. Splitting the filter gives each kind its own budget.
+	return [
+		{ kinds: [ARENA_AUCTION_CREATE_KIND], limit: 500 },
+		{ kinds: [ARENA_AUCTION_BID_KIND], limit: 500 },
+		{ kinds: [ARENA_AUCTION_REFUND_KIND, ARENA_AUCTION_SETTLE_KIND], limit: 200 },
+		{ kinds: [ARENA_VERDICT_KIND], limit: 200 },
+		// The clock needs the newest few readings, not the history: this kind is
+		// published every ~10 s by every validator.
+		{ kinds: [ARENA_STATE_COMMITMENT_KIND], limit: 60 },
+	]
 }
 
 /** The fields a decoded event always has, whatever its kind. */
