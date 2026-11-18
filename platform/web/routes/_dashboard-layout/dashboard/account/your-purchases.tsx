@@ -1,5 +1,8 @@
 import { OrderDataTable } from '@platform/web/orders/OrderDataTable'
+import { arenaPurchaseColumns } from '@platform/web/orders/arenaPurchaseColumns'
+import { arenaPurchaseRows } from '@platform/web/orders/arenaPurchases'
 import { purchaseColumns } from '@platform/web/orders/orderColumns'
+import { useArenaSurfacesRead } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { readMarks } from '@platform/web/notifications'
 import { useOrdersByBuyer } from '@platform/web/orders/ordersQuery'
@@ -20,6 +23,13 @@ function YourPurchasesComponent() {
 	const [statusFilter, setStatusFilter] = useState<string>('any')
 	const [orderBy, setOrderBy] = useState<string>('newest')
 	const { data: purchases, isLoading } = useOrdersByBuyer(user?.pubkey || '')
+	// Auction wins are purchases too (owner ruling): projected from the arena read,
+	// because an arena win has no order event and none is fabricated for it.
+	const arenaRead = useArenaSurfacesRead()
+	const arenaWins = useMemo(
+		() => arenaPurchaseRows(arenaRead.snapshot?.auctions ?? [], user?.pubkey ?? ''),
+		[arenaRead.snapshot, user?.pubkey],
+	)
 
 	// Mark all purchase updates as seen when the page is viewed
 	useEffect(() => {
@@ -32,7 +42,18 @@ function YourPurchasesComponent() {
 	)
 
 	return (
-		<div className="h-full">
+		<div className="h-full space-y-10">
+			{arenaWins.length > 0 && (
+				<OrderDataTable
+					heading={<h2 className="text-xl font-bold">Auction wins</h2>}
+					data={arenaWins}
+					columns={arenaPurchaseColumns}
+					isLoading={arenaRead.status === 'loading'}
+					emptyMessage="No auction wins read."
+					showSearch={false}
+					showOrderBy={false}
+				/>
+			)}
 			<OrderDataTable
 				heading={<h1 className="text-2xl font-bold">Your Purchases</h1>}
 				data={filteredPurchases}
