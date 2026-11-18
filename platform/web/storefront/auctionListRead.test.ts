@@ -216,6 +216,9 @@ describe('toAuctionListItem', () => {
 		refundForBid: {},
 		settleForBid: {},
 		settleReceipt: null,
+		committedEnd: null,
+		committedEnds: [],
+		createRefusal: null,
 		relays: ['wss://a'],
 	}
 

@@ -447,6 +447,118 @@ export function settleSubmissionFromRead(state: ArenaBidSubmissionState, model: 
 	return { phase: 'seen', amount: state.amount, eventId: state.eventId, acceptedBy: state.acceptedBy, totalRelays: state.totalRelays }
 }
 
+// =========================================================================
+// The three-state diagnosis — a published bid the chain did not take
+//
+// Owner ruling (`notes/DECISION-2026-11-18-refused-bids-are-not-committed.md`):
+// a refused bid is never committed, and the chain publishes **no** 1450 for one.
+// So the app never invents a reason. It diagnoses from what it already reads:
+// whether the bid is in committed state, and whether the chain is advancing.
+// =========================================================================
+
+/**
+ * The three states a bid the app published can be in, and nothing else.
+ *
+ * - `committed` — the bid is in committed state (the read serves it, or a
+ *   receipt names it): the bid is live. Say nothing.
+ * - `not-accepted` — it was published and is **not** committed while the chain
+ *   is advancing: the chain saw it and did not accept it. **This is not a
+ *   network problem** and must not read like one. The escrow is still locked
+ *   until its locktime, so the surface states the locktime and the reclaim.
+ * - `infrastructure` — it is published and not committed, but the chain is
+ *   **not advancing** (no fresh commitments across several blocks): that is an
+ *   infrastructure problem, not the bid. The honest statement is that, and the
+ *   app makes no claim about the bid.
+ */
+export type ArenaBidDiagnosisState = 'committed' | 'not-accepted' | 'infrastructure'
+
+/** One diagnosis, with the facts it rests on and no invented reason. */
+export interface ArenaBidDiagnosis {
+	state: ArenaBidDiagnosisState
+	/** The bid event id the diagnosis is about. */
+	eventId: string
+	/**
+	 * The escrow locktime (unix seconds) the bid was funded against, when the
+	 * app held it — the instant the funds become reclaimable through the lock's
+	 * own refund path. `null` when the app did not hold it (never a guess).
+	 */
+	escrowLocktime: number | null
+	/**
+	 * `true` only in `not-accepted` **and** when the locktime is known: the bid
+	 * was not taken by the chain and its funds are locked by real sats until
+	 * then, so the bidder can reclaim them. `false` for `committed` (nothing to
+	 * reclaim — the bid is live) and for `infrastructure` (the bid may still
+	 * land; reclaiming now would strand it).
+	 */
+	reclaimable: boolean
+}
+
+/**
+ * Whether the chain is advancing — fresh kind-1447 commitments across several
+ * distinct blocks, recent against the wall clock. This is the only chain signal
+ * the app needs to tell "the chain refused the bid" from "the chain is stuck".
+ *
+ * `heights` are the distinct anchored heights of the commitments the read saw;
+ * `newestTime` the newest commitment's `time`; `now` the wall clock. It answers
+ * `true` only when there are at least `minDistinctHeights` (default 2 — "across
+ * several blocks") distinct heights and the newest is within `freshWithinSec`
+ * (default 120 s) of now. Anything else is "not advancing", which is the honest
+ * answer when there is nothing to prove the chain is moving.
+ */
+export function arenaChainAdvancing(input: {
+	heights: readonly number[]
+	newestTime: number | null
+	now: number
+	minDistinctHeights?: number
+	freshWithinSec?: number
+}): boolean {
+	const distinct = new Set(input.heights.filter((height) => Number.isInteger(height) && height > 0))
+	if (distinct.size < (input.minDistinctHeights ?? 2)) return false
+	if (input.newestTime === null) return false
+	const age = input.now - input.newestTime
+	return age >= 0 && age <= (input.freshWithinSec ?? 120)
+}
+
+/**
+ * Diagnose a bid the app published. **Never invents a reason** — it decides one
+ * of three states from the facts the read already holds.
+ *
+ * - committed (in the read's bids, or a receipt names it) → `committed`, say nothing;
+ * - published, not committed, chain advancing → `not-accepted`, with the locktime
+ *   and the reclaim affordance;
+ * - published, not committed, chain not advancing → `infrastructure`.
+ *
+ * A bid that was never published (no event id, or a failed submission) is not
+ * diagnosed here: this function is only about a bid that reached a relay.
+ */
+export function diagnosePublishedBid(input: {
+	eventId: string
+	/** `true` when the read served the bid — the app's committed-state signal. */
+	seenInRead: boolean
+	/** `true` when a receipt (1443/1444) names the bid event id. */
+	namedByReceipt: boolean
+	/** `true` when the chain is advancing (`arenaChainAdvancing`). */
+	chainAdvancing: boolean
+	/** The escrow locktime the bid was funded against, or `null`. */
+	escrowLocktime: number | null
+}): ArenaBidDiagnosis {
+	if (input.seenInRead || input.namedByReceipt) {
+		return { state: 'committed', eventId: input.eventId, escrowLocktime: input.escrowLocktime, reclaimable: false }
+	}
+	if (input.chainAdvancing) {
+		return {
+			state: 'not-accepted',
+			eventId: input.eventId,
+			escrowLocktime: input.escrowLocktime,
+			// Reclaimable only once the lock's own refund path is reachable, and
+			// only when the locktime is known: a reclaim affordance with an
+			// unknown deadline would be a button that cannot be honoured.
+			reclaimable: input.escrowLocktime !== null,
+		}
+	}
+	return { state: 'infrastructure', eventId: input.eventId, escrowLocktime: input.escrowLocktime, reclaimable: false }
+}
+
 /** What an error thrown by {@link publishArenaBid} means for the panel. */
 export function submissionFromError(error: unknown, fallbackAmount: number): ArenaBidSubmissionState {
 	if (error instanceof ArenaBidPublishError) return error.state

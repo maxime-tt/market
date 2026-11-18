@@ -151,6 +151,36 @@ describe('parseArenaParamsEvent — the live relay fixture', () => {
 		})
 	})
 
+	test('exposes the create-content rules the chain publishes as code', () => {
+		// The rules travel on `ParamsContent` only, so `params_version` is
+		// unchanged by them. Signed and anchored like any reading.
+		const event = signedParams({
+			...LIVE_CONTENT,
+			validators: [{ pubkey: SIGNER.pubkey, name: 'Validator 1', index: 1 }],
+			max_title_chars: 120,
+			max_description_chars: 2000,
+			max_image_chars: 500,
+			max_category_chars: 40,
+			max_name_chars: 40,
+			image_rule: 'same-site-or-https',
+			start_price_min: 1,
+			start_price_max: 10_000_000,
+			increment_min: 1,
+			increment_max: 1_000_000,
+		})
+		const { terms } = parseArenaParamsEvent(event)
+		expect(terms.max_title_chars).toBe(120)
+		expect(terms.max_description_chars).toBe(2000)
+		expect(terms.max_image_chars).toBe(500)
+		expect(terms.max_category_chars).toBe(40)
+		expect(terms.max_name_chars).toBe(40)
+		expect(terms.image_rule).toBe('same-site-or-https')
+		expect(terms.start_price_min).toBe(1)
+		expect(terms.start_price_max).toBe(10_000_000)
+		expect(terms.increment_min).toBe(1)
+		expect(terms.increment_max).toBe(1_000_000)
+	})
+
 	test('every term the relay did not carry is null — never a default, never a 0', () => {
 		// A signed, anchored, on-roster event whose content carries ONLY the schema,
 		// the anchor and the roster: every escrow term is absent.
@@ -176,6 +206,16 @@ describe('parseArenaParamsEvent — the live relay fixture', () => {
 			max_proofs: null,
 			threshold: null,
 			validators: [{ pubkey: SIGNER.pubkey, name: null, index: null }],
+			max_title_chars: null,
+			max_description_chars: null,
+			max_image_chars: null,
+			max_category_chars: null,
+			max_name_chars: null,
+			image_rule: null,
+			start_price_min: null,
+			start_price_max: null,
+			increment_min: null,
+			increment_max: null,
 		})
 	})
 })

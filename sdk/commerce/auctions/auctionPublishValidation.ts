@@ -88,6 +88,26 @@ export type ArenaCreateRefusal =
 	| 'create.bad-split-recipient'
 	/** No wallet spend key was available. The create is refused, never faked. */
 	| 'create.no-seller-wallet'
+	/** The title is longer than the chain's published `max_title_chars`. */
+	| 'create.title-too-long'
+	/** The description is longer than the chain's published `max_description_chars`. */
+	| 'create.description-too-long'
+	/** The image URL is longer than the chain's published `max_image_chars`. */
+	| 'create.image-too-long'
+	/** The category is longer than the chain's published `max_category_chars`. */
+	| 'create.category-too-long'
+	/** The name is longer than the chain's published `max_name_chars`. */
+	| 'create.name-too-long'
+	/** The image URL does not satisfy the chain's published `image_rule`. */
+	| 'create.image-rule-violated'
+	/** The starting price is below the chain's published `start_price_min`. */
+	| 'create.start-price-below-min'
+	/** The starting price is above the chain's published `start_price_max`. */
+	| 'create.start-price-above-max'
+	/** The increment is below the chain's published `increment_min`. */
+	| 'create.increment-below-min'
+	/** The increment is above the chain's published `increment_max`. */
+	| 'create.increment-above-max'
 
 /** The form field a refusal belongs to, for inline messages in the editor. */
 export type AuctionPublishValidationField =
@@ -95,6 +115,8 @@ export type AuctionPublishValidationField =
 	| 'title'
 	| 'description'
 	| 'image'
+	| 'category'
+	| 'name'
 	| 'startPrice'
 	| 'minIncrement'
 	| 'mode'
@@ -130,7 +152,45 @@ export interface ArenaCreateValidationInput {
 export interface ArenaCreateValidationContext {
 	/** The wallet spend key's pubkey (`sellerWallet` in the content), or null when unavailable. */
 	sellerWallet: string | null
+	/**
+	 * The **create-content rules** the chain publishes in kind 1448
+	 * (`arenaParamsRead.ts` terms), or `null` when the app holds no params
+	 * reading. These are the chain's own rules, read from the wire, **not** a
+	 * second hardcoded copy: a rule change on the chain reaches this pre-flight
+	 * with no client edit. A rule that is `null` here is **not checked** (never
+	 * defaulted), because the app cannot enforce a rule it was not given.
+	 */
+	rules?: ArenaCreateRules | null
 }
+
+/**
+ * The create-content rules the chain publishes, in the wire's own snake_case.
+ * Every field is optional and nullable: a rule the app was not given is not
+ * enforced, because a rule the app was not given could be anything.
+ */
+export interface ArenaCreateRules {
+	max_title_chars?: number | null
+	max_description_chars?: number | null
+	max_image_chars?: number | null
+	max_category_chars?: number | null
+	max_name_chars?: number | null
+	image_rule?: string | null
+	start_price_min?: number | null
+	start_price_max?: number | null
+	increment_min?: number | null
+	increment_max?: number | null
+}
+
+/**
+ * The one image rule the chain names today (`image_rule: "same-site-or-https"`).
+ * The rule is a **name**, not a pattern: it tells the app which rule to apply —
+ * empty, an `https://…` URL, or a `./…` / `/…` same-site path with a single
+ * leading slash and a fixed URI-safe byte set. It does not parametrise one.
+ */
+export const ARENA_IMAGE_RULE_SAME_SITE_OR_HTTPS = 'same-site-or-https'
+
+/** The URI-safe byte set the same-site image rule accepts, from `chain`'s `safeImage`. */
+const SAME_SITE_IMAGE_PATH = /^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@%/]*$/
 
 /** The protocol-ready create fields. Numbers are numbers, and the split is parsed. */
 export interface ArenaCreateValue {
@@ -168,8 +228,28 @@ export class ArenaCreateRefusalError extends Error {
 const HEX64 = /^[0-9a-f]{64}$/
 const UNSIGNED_INTEGER = /^\d+$/
 
-const text = (value: string | number | null | undefined): string =>
-	value === null || value === undefined ? '' : String(value).trim()
+/**
+ * A rule from the chain's published params as an integer, or `null` when the
+ * rule was not given. A non-integer or negative value is treated as "not
+ * given" — the app will not enforce a malformed rule as if it were a rule.
+ */
+const asRuleInt = (value: number | null | undefined): number | null =>
+	typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
+
+/**
+ * The chain's `same-site-or-https` image rule, implemented: empty, an
+ * absolute `https://` URL, or a same-site path (`/…` or `./…`) with a single
+ * leading slash and only URI-safe bytes. The rule name tells the app **which**
+ * rule to apply; it does not parametrise it.
+ */
+function sameSiteOrHttpsImage(url: string): boolean {
+	if (url === '') return true
+	if (url.startsWith('https://')) return true
+	if (url.startsWith('./')) return SAME_SITE_IMAGE_PATH.test(url.slice(1))
+	return SAME_SITE_IMAGE_PATH.test(url)
+}
+
+const text = (value: string | number | null | undefined): string => (value === null || value === undefined ? '' : String(value).trim())
 
 /** A non-negative safe integer from a string/number, or null. Never rounds, never coerces junk to 0. */
 const parseInteger = (value: string | number | null | undefined): number | null => {
@@ -268,7 +348,12 @@ export function normalizeArenaCreateInput(
 	if (mode === 'antisnipe') {
 		const windowText = text(input.windowSec)
 		const parsedWindow = parseInteger(input.windowSec)
-		if (windowText === '' || parsedWindow === null || parsedWindow < AUCTION_MIN_ANTISNIPE_WINDOW_SEC || parsedWindow > AUCTION_MAX_ANTISNIPE_WINDOW_SEC) {
+		if (
+			windowText === '' ||
+			parsedWindow === null ||
+			parsedWindow < AUCTION_MIN_ANTISNIPE_WINDOW_SEC ||
+			parsedWindow > AUCTION_MAX_ANTISNIPE_WINDOW_SEC
+		) {
 			refuse(
 				'windowSec',
 				'create.window-out-of-range',
@@ -299,7 +384,12 @@ export function normalizeArenaCreateInput(
 		}
 		const allocationBps = parseInteger(row.allocationBps)
 		if (allocationBps === null || allocationBps <= 0) {
-			refuse('v4vSplit', 'create.split-bps-not-positive', 'A split allocation must be a whole number of basis points above zero.', row.index)
+			refuse(
+				'v4vSplit',
+				'create.split-bps-not-positive',
+				'A split allocation must be a whole number of basis points above zero.',
+				row.index,
+			)
 			continue
 		}
 		seenRecipients.add(row.recipientPubkey)
@@ -313,7 +403,87 @@ export function normalizeArenaCreateInput(
 	// --- the seller's wallet -------------------------------------------
 	const sellerWallet = (context.sellerWallet ?? '').trim()
 	if (sellerWallet === '') {
-		refuse('sellerWallet', 'create.no-seller-wallet', 'The wallet spend key could not be prepared, so the auction cannot name a seller wallet. Open the wallet, make sure it is ready, and try again.')
+		refuse(
+			'sellerWallet',
+			'create.no-seller-wallet',
+			'The wallet spend key could not be prepared, so the auction cannot name a seller wallet. Open the wallet, make sure it is ready, and try again.',
+		)
+	}
+
+	// --- the chain's own published rules (kind 1448) --------------------
+	// Read from the wire, never a second hardcoded copy. A rule the app was not
+	// given is not checked: refusing against a guessed rule is worse than saying
+	// the app cannot check it.
+	const rules = context.rules ?? null
+	if (rules !== null) {
+		const titleLimit = asRuleInt(rules.max_title_chars)
+		if (titleLimit !== null && title.length > titleLimit) {
+			refuse('title', 'create.title-too-long', `The title is ${title.length} characters; the chain publishes a limit of ${titleLimit}.`)
+		}
+		const descriptionLimit = asRuleInt(rules.max_description_chars)
+		if (descriptionLimit !== null && description.length > descriptionLimit) {
+			refuse(
+				'description',
+				'create.description-too-long',
+				`The description is ${description.length} characters; the chain publishes a limit of ${descriptionLimit}.`,
+			)
+		}
+		const imageLimit = asRuleInt(rules.max_image_chars)
+		if (imageLimit !== null && image.length > imageLimit) {
+			refuse('image', 'create.image-too-long', `The image URL is ${image.length} characters; the chain publishes a limit of ${imageLimit}.`)
+		}
+		const categoryLimit = asRuleInt(rules.max_category_chars)
+		const category = text(input.category)
+		if (categoryLimit !== null && category.length > categoryLimit) {
+			refuse(
+				'category',
+				'create.category-too-long',
+				`The category is ${category.length} characters; the chain publishes a limit of ${categoryLimit}.`,
+			)
+		}
+		const nameLimit = asRuleInt(rules.max_name_chars)
+		const name = text(input.name)
+		if (nameLimit !== null && name.length > nameLimit) {
+			refuse('name', 'create.name-too-long', `The name is ${name.length} characters; the chain publishes a limit of ${nameLimit}.`)
+		}
+		// `image_rule` is a name, not a pattern: only the one rule the chain names
+		// is enforced. An empty image passes (the rule accepts empty); anything
+		// the named rule does not accept is refused.
+		if (rules.image_rule === ARENA_IMAGE_RULE_SAME_SITE_OR_HTTPS && image !== '' && !sameSiteOrHttpsImage(image)) {
+			refuse('image', 'create.image-rule-violated', 'The image must be an https:// URL or a same-site path (a single leading slash).')
+		}
+		const startMin = asRuleInt(rules.start_price_min)
+		if (startMin !== null && startPrice !== null && startPrice > 0 && startPrice < startMin) {
+			refuse(
+				'startPrice',
+				'create.start-price-below-min',
+				`The starting price must be at least ${startMin} sats; the chain publishes a minimum of ${startMin}.`,
+			)
+		}
+		const startMax = asRuleInt(rules.start_price_max)
+		if (startMax !== null && startPrice !== null && startPrice > startMax) {
+			refuse(
+				'startPrice',
+				'create.start-price-above-max',
+				`The starting price must be at most ${startMax} sats; the chain publishes a maximum of ${startMax}.`,
+			)
+		}
+		const incrementMin = asRuleInt(rules.increment_min)
+		if (incrementMin !== null && minIncrement !== null && minIncrement > 0 && minIncrement < incrementMin) {
+			refuse(
+				'minIncrement',
+				'create.increment-below-min',
+				`The bid increment must be at least ${incrementMin} sats; the chain publishes a minimum of ${incrementMin}.`,
+			)
+		}
+		const incrementMax = asRuleInt(rules.increment_max)
+		if (incrementMax !== null && minIncrement !== null && minIncrement > incrementMax) {
+			refuse(
+				'minIncrement',
+				'create.increment-above-max',
+				`The bid increment must be at most ${incrementMax} sats; the chain publishes a maximum of ${incrementMax}.`,
+			)
+		}
 	}
 
 	if (issues.length > 0) return { ok: false, issues }
@@ -354,10 +524,7 @@ export const getArenaCreateIssues = (
  * The value, or a throw carrying the first refusal's **name**. The publish path uses
  * this: it refuses with a name, never with prose it has to re-parse.
  */
-export const validateArenaCreateInput = (
-	input: ArenaCreateValidationInput,
-	context: ArenaCreateValidationContext,
-): ArenaCreateValue => {
+export const validateArenaCreateInput = (input: ArenaCreateValidationInput, context: ArenaCreateValidationContext): ArenaCreateValue => {
 	const result = normalizeArenaCreateInput(input, context)
 	if (result.ok) return result.value
 	const first = result.issues[0]

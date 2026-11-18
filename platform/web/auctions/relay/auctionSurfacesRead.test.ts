@@ -12,6 +12,7 @@
  * to the pre-commit scanner.
  */
 import { describe, expect, test } from 'bun:test'
+import { finalizeEvent, getPublicKey } from 'nostr-tools'
 import type { EventFilter, EventStreamItem, NostrEventLike } from '@sdk/core'
 import {
 	ARENA_AUCTION_BID_KIND,
@@ -34,10 +35,12 @@ import {
 import {
 	arenaSurfaceRelayCounts,
 	arenaSurfaceStatus,
+	auctionCreateDerivedEndsAt,
 	auctionEndsAt,
 	auctionPhase,
 	collectArenaSurfacesRead,
 	divergenceFor,
+	endSourceOf,
 	findAuction,
 	toAuctionCardModel,
 	toAuctionDetailModel,
@@ -140,6 +143,68 @@ function commitmentEvent(over: { height?: number; appHash?: string; validator?: 
 		],
 		content: JSON.stringify({ schema: 'arena.statecommit.v1', height, app_hash: appHash, time }),
 	}
+}
+
+const LOT_STATE_SK = new Uint8Array(32).fill(17)
+const LOT_STATE_PUB = getPublicKey(LOT_STATE_SK)
+
+/** A signed kind-1449 committed end for a lot (the chain's live shape, §4). */
+function lotStateEvent(over: { auctionId?: string; endTime?: number; extensions?: number; height?: number } = {}): NostrEventLike {
+	const auctionId = over.auctionId ?? '1440:seller-alice:lot-1'
+	const endTime = over.endTime ?? 1_000_500
+	const height = over.height ?? 690
+	const hash = 'a8e25d2044c0be17413f822a4e867af5b4332f599c760dc6da180f604cb9542f'
+	return finalizeEvent(
+		{
+			kind: 1449,
+			created_at: 1_795_021_527,
+			tags: [
+				['auction', auctionId],
+				['height', String(height)],
+				['hash', hash],
+				['p', LOT_STATE_PUB],
+			],
+			content: JSON.stringify({
+				schema: 'arena.lot.v1',
+				auction_id: auctionId,
+				end_time: endTime,
+				original_end_time: 1_000_000,
+				extensions: over.extensions ?? 1,
+				height,
+				block_hash: hash,
+			}),
+		},
+		LOT_STATE_SK,
+	) as unknown as NostrEventLike
+}
+
+/** A signed kind-1450 refusal of a create (the chain's live shape, §4). */
+function refusedEvent(over: { refusedEventId?: string; reason?: string; height?: number } = {}): NostrEventLike {
+	const refusedEventId = over.refusedEventId ?? 'create-root'
+	const reason = over.reason ?? 'title required (max 120 chars)'
+	const height = over.height ?? 1749
+	const hash = '0210e491ea9750bc2673d5d5ab3cfad2adabab56dff0bf095ff2bc5fa9ba8fb6'
+	return finalizeEvent(
+		{
+			kind: 1450,
+			created_at: 1_795_021_902,
+			tags: [
+				['e', refusedEventId],
+				['height', String(height)],
+				['hash', hash],
+				['p', LOT_STATE_PUB],
+			],
+			content: JSON.stringify({
+				schema: 'arena.refused.v1',
+				event_id: refusedEventId,
+				kind: 1440,
+				reason,
+				height,
+				block_hash: hash,
+			}),
+		},
+		LOT_STATE_SK,
+	) as unknown as NostrEventLike
 }
 
 function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
@@ -261,6 +326,65 @@ describe('auctionEndsAt / auctionPhase', () => {
 		expect(auctionEndsAt(auction)).toBe(1000 + 3600)
 		expect(auctionPhase(auction, 2000)).toBe('open')
 		expect(auctionPhase(auction, 5000)).toBe('ended')
+	})
+})
+
+// =========================================================================
+// The committed end and the create refusal — the chain's state half
+// =========================================================================
+
+describe('the committed end and the create refusal', () => {
+	test('with a 1449 the end is the committed end and the source says so', () => {
+		const auction = onlyAuction(snapshotOf([createEvent({ id: 'create-root', created_at: 1000 }), lotStateEvent({ endTime: 1000 + 4000 })]))
+		expect(auctionEndsAt(auction)).toBe(1000 + 4000)
+		expect(endSourceOf(auction)).toBe('committed')
+		expect(auctionCreateDerivedEndsAt(auction)).toBe(1000 + 3600)
+	})
+
+	test('without a 1449 the end is create-derived and the source says so', () => {
+		const auction = onlyAuction(snapshotOf([createEvent({ id: 'create-root', created_at: 1000 })]))
+		expect(auctionEndsAt(auction)).toBe(1000 + 3600)
+		expect(endSourceOf(auction)).toBe('create-derived')
+	})
+
+	test('the card carries the committed end, its height and the per-bid ordinal', () => {
+		const auction = onlyAuction(
+			snapshotOf([
+				createEvent({ id: 'create-root', created_at: 1000 }),
+				lotStateEvent({ endTime: 1000 + 4000, height: 690, extensions: 2 }),
+			]),
+		)
+		const card = toAuctionCardModel(auction, CONTEXT)
+		expect(card.endsAt).toBe(1000 + 4000)
+		expect(card.endSource).toBe('committed')
+		expect(card.createDerivedEndsAt).toBe(1000 + 3600)
+		expect(card.committedEndHeight).toBe(690)
+		// The ordinal is an ordinal, never a count: the event said 2.
+		expect(card.committedEndOrdinal).toBe(2)
+	})
+
+	test('the phase and countdown follow the committed end, not the create-derived one', () => {
+		const auction = onlyAuction(snapshotOf([createEvent({ id: 'create-root', created_at: 1000 }), lotStateEvent({ endTime: 6000 })]))
+		// The create-derived end (4600) has passed, but the committed end is 6000.
+		expect(auctionPhase(auction, 5000)).toBe('open')
+		expect(auctionPhase(auction, 6100)).toBe('ended')
+	})
+
+	test('a lot whose create the chain refused carries the chain reason verbatim', () => {
+		const auction = onlyAuction(
+			snapshotOf([
+				createEvent({ id: 'create-root' }),
+				refusedEvent({ refusedEventId: 'create-root', reason: 'startPrice out of range (1..10000000)' }),
+			]),
+		)
+		const detail = toAuctionDetailModel(auction, CONTEXT)
+		expect(detail.createRefusal?.reason).toBe('startPrice out of range (1..10000000)')
+		expect(detail.createRefusal?.height).toBe(1749)
+	})
+
+	test('a lot with no refusal read has a null createRefusal, never an invented reason', () => {
+		const auction = onlyAuction(snapshotOf([createEvent({ id: 'create-root' })]))
+		expect(toAuctionDetailModel(auction, CONTEXT).createRefusal).toBeNull()
 	})
 })
 

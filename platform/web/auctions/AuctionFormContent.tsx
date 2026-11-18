@@ -27,7 +27,12 @@ import {
 import { AUCTION_MIN_BID_LEG_SATS } from '@sdk/commerce/auctions/constants'
 import { PRODUCT_CATEGORIES } from '@sdk/config/constants'
 import { authStore } from '@platform/web/auth/authStore'
-import { usePublishAuctionMutation, type AuctionFormData, type AuctionV4vSplitRowInput } from '@platform/web/auctions/auctionPublish'
+import {
+	usePublishAuctionMutation,
+	useArenaCreateRules,
+	type AuctionFormData,
+	type AuctionV4vSplitRowInput,
+} from '@platform/web/auctions/auctionPublish'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@platform/web/auctions/auctionFormStorage'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
@@ -67,6 +72,8 @@ const VALIDATION_FIELD_LABELS: Record<AuctionPublishValidationField, string> = {
 	title: 'Title',
 	description: 'Description',
 	image: 'Image',
+	category: 'Category',
+	name: 'Name',
 	startPrice: 'Starting Bid',
 	minIncrement: 'Bid Increment',
 	mode: 'Closing Rule',
@@ -119,8 +126,8 @@ function SplitTab({
 			<div className="space-y-1">
 				<Label className="text-base font-medium">Value split</Label>
 				<p className="text-sm text-text-mid">
-					Optional. Each row pays a fixed share of the hammer price, in basis points (1% = 100 bps). The rows may
-					allocate at most {AUCTION_V4V_TOTAL_BPS} bps between them; the seller keeps the remainder.
+					Optional. Each row pays a fixed share of the hammer price, in basis points (1% = 100 bps). The rows may allocate at most{' '}
+					{AUCTION_V4V_TOTAL_BPS} bps between them; the seller keeps the remainder.
 				</p>
 				<p className="text-xs text-text-mid">
 					Allocated: {allocated} / {AUCTION_V4V_TOTAL_BPS} bps
@@ -130,10 +137,7 @@ function SplitTab({
 			{rows.map((row, index) => (
 				<div key={index} className="flex flex-col gap-2 rounded-lg border border-border-default bg-surface-sunken px-3 py-3">
 					<div className="flex items-center gap-2">
-						<Select
-							value={row.role}
-							onValueChange={(value) => update(index, { role: value === 'v4v' ? 'v4v' : 'validator' })}
-						>
+						<Select value={row.role} onValueChange={(value) => update(index, { role: value === 'v4v' ? 'v4v' : 'validator' })}>
 							<SelectTrigger className="w-40">
 								<SelectValue />
 							</SelectTrigger>
@@ -198,6 +202,10 @@ export function AuctionFormContent() {
 	const [activeTab, setActiveTab] = useState<AuctionTab>('name')
 	const [savedAt, setSavedAt] = useState<number | null>(null)
 	const [publishError, setPublishError] = useState<string | null>(null)
+	// The chain's own create rules (kind 1448), read from the relay: the
+	// pre-flight is the chain's rules, never a second hardcoded copy. `null`
+	// until a reading arrives, and a `null` rule is not checked.
+	const createRules = useArenaCreateRules()
 	const draftLoadedRef = useRef(false)
 	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const draftGenerationRef = useRef(0)
@@ -233,7 +241,10 @@ export function AuctionFormContent() {
 		}
 	}, [formData, userPubkey])
 
-	const validationIssues = getArenaCreateIssues(auctionFormToCreateInput(formData), { sellerWallet: 'not-checked-here' })
+	const validationIssues = getArenaCreateIssues(auctionFormToCreateInput(formData), {
+		sellerWallet: 'not-checked-here',
+		rules: createRules,
+	})
 	const validationMessages = toValidationMessages(validationIssues)
 	const splitErrors = toIndexedValidationMessages(validationIssues, 'v4vSplit')
 
@@ -411,9 +422,7 @@ export function AuctionFormContent() {
 						</Button>
 					</div>
 				)}
-				{publishError && (
-					<p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{publishError}</p>
-				)}
+				{publishError && <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{publishError}</p>}
 				{currentTabErrors.length > 0 && (
 					<ul className="mb-3 max-h-28 overflow-y-auto space-y-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">
 						{currentTabErrors.map((err, i) => (

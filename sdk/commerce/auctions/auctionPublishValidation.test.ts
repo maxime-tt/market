@@ -10,6 +10,7 @@ import {
 	getArenaCreateIssues,
 	normalizeArenaCreateInput,
 	validateArenaCreateInput,
+	type ArenaCreateRules,
 	type ArenaCreateValidationInput,
 } from '@sdk/commerce/auctions/auctionPublishValidation'
 import type { AuctionFormData } from '@sdk/commerce/auctions/auctionForm'
@@ -39,6 +40,23 @@ const base: ArenaCreateValidationInput = {
 
 const validate = (over: Partial<ArenaCreateValidationInput> = {}, sellerWallet: string | null = WALLET) =>
 	validateArenaCreateInput({ ...base, ...over }, { sellerWallet })
+
+/** The chain's real published create rules (kind 1448), as the form reads them. */
+const PUBLISHED_RULES: ArenaCreateRules = {
+	max_title_chars: 120,
+	max_description_chars: 2000,
+	max_image_chars: 500,
+	max_category_chars: 40,
+	max_name_chars: 40,
+	image_rule: 'same-site-or-https',
+	start_price_min: 1,
+	start_price_max: 10_000_000,
+	increment_min: 1,
+	increment_max: 1_000_000,
+}
+
+const validateWithRules = (over: Partial<ArenaCreateValidationInput> = {}, rules: ArenaCreateRules | null = PUBLISHED_RULES) =>
+	validateArenaCreateInput({ ...base, ...over }, { sellerWallet: WALLET, rules })
 
 const refusalOf = (run: () => unknown): string => {
 	try {
@@ -118,9 +136,9 @@ describe('refusals', () => {
 		expect(refusalOf(() => validate({ v4vSplit: [{ role: 'validator', recipientPubkey: 'aa'.repeat(32), allocationBps: '0' }] }))).toBe(
 			'create.split-bps-not-positive',
 		)
-		expect(refusalOf(() => validate({ v4vSplit: [{ role: 'charity' as 'validator', recipientPubkey: 'aa'.repeat(32), allocationBps: '10' }] }))).toBe(
-			'create.unknown-split-role',
-		)
+		expect(
+			refusalOf(() => validate({ v4vSplit: [{ role: 'charity' as 'validator', recipientPubkey: 'aa'.repeat(32), allocationBps: '10' }] })),
+		).toBe('create.unknown-split-role')
 		expect(
 			refusalOf(() =>
 				validate({
@@ -175,5 +193,56 @@ describe('the editor-facing views', () => {
 			durationSec: 600,
 			v4vSplit: formData.v4vSplit,
 		})
+	})
+})
+
+// =========================================================================
+// The chain's published create rules (kind 1448) are the pre-flight
+// =========================================================================
+
+describe('the chain-published create rules drive the pre-flight', () => {
+	test('a 121-character title is refused with the published max_title_chars, not a hardcoded 120', () => {
+		// The rule is the wire's own value: changing the published limit changes
+		// the refusal, with no client edit.
+		const title = 'x'.repeat(121)
+		expect(refusalOf(() => validateWithRules({ title }))).toBe('create.title-too-long')
+		expect(validateWithRules({ title: 'x'.repeat(120) }).title).toBe('x'.repeat(120))
+
+		// A different published limit (say 5) refuses a 6-character title and
+		// accepts a 5-character one — proof the number comes from the rules.
+		expect(refusalOf(() => validateWithRules({ title: 'x'.repeat(6) }, { max_title_chars: 5 }))).toBe('create.title-too-long')
+		expect(validateWithRules({ title: 'x'.repeat(5) }, { max_title_chars: 5 }).title).toBe('x'.repeat(5))
+	})
+
+	test('each published character limit is enforced by its own name', () => {
+		expect(refusalOf(() => validateWithRules({ description: 'x'.repeat(2001) }))).toBe('create.description-too-long')
+		expect(refusalOf(() => validateWithRules({ imageUrl: `https://e/${'x'.repeat(500)}` }))).toBe('create.image-too-long')
+		expect(refusalOf(() => validateWithRules({ category: 'x'.repeat(41) }))).toBe('create.category-too-long')
+		expect(refusalOf(() => validateWithRules({ name: 'x'.repeat(41) }))).toBe('create.name-too-long')
+	})
+
+	test('the price and increment bounds are enforced by their own names', () => {
+		expect(refusalOf(() => validateWithRules({ startPrice: '10000001' }))).toBe('create.start-price-above-max')
+		expect(refusalOf(() => validateWithRules({ startPrice: '0' }, { start_price_min: 1 }))).toBe('create.start-price-not-positive')
+		expect(refusalOf(() => validateWithRules({ minIncrement: '1000001' }))).toBe('create.increment-above-max')
+		// `start_price_min` above zero is the one case the base rule cannot catch.
+		expect(refusalOf(() => validateWithRules({ startPrice: '3' }, { start_price_min: 5 }))).toBe('create.start-price-below-min')
+		expect(validateWithRules({ startPrice: '3' }, { start_price_min: 1 }).startPrice).toBe(3)
+	})
+
+	test('the image rule is a name: same-site-or-https accepts https and same-site paths, refuses the rest', () => {
+		expect(validateWithRules({ imageUrl: 'https://img.example/1.png' }).image).toBe('https://img.example/1.png')
+		expect(validateWithRules({ imageUrl: '/uploads/1.png' }).image).toBe('/uploads/1.png')
+		expect(validateWithRules({ imageUrl: './1.png' }).image).toBe('./1.png')
+		expect(refusalOf(() => validateWithRules({ imageUrl: 'http://img.example/1.png' }))).toBe('create.image-rule-violated')
+		expect(refusalOf(() => validateWithRules({ imageUrl: '//evil.example/1.png' }))).toBe('create.image-rule-violated')
+		expect(refusalOf(() => validateWithRules({ imageUrl: 'javascript:alert(1)' }))).toBe('create.image-rule-violated')
+	})
+
+	test('a rule the reading did not carry is not checked — never a substituted default', () => {
+		// No rules at all: every rule-based check is skipped, the base rule still holds.
+		expect(validateWithRules({ title: 'x'.repeat(200) }, null).title).toBe('x'.repeat(200))
+		// A null rule inside a reading is also not checked.
+		expect(validateWithRules({ title: 'x'.repeat(200) }, { ...PUBLISHED_RULES, max_title_chars: null }).title).toBe('x'.repeat(200))
 	})
 })

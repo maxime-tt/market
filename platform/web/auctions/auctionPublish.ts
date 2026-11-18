@@ -22,20 +22,23 @@ import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { walletOps } from '@platform/web/wallet/walletOps'
 import { getUser, signNostrEvent, type EventTemplate } from '@platform/web/ndkPublishContext'
 import { createWebNostrIo, webRelayPolicy } from '@platform/web/sdkNostrIo'
+import { getReadContext } from '@platform/web/readContext'
+import type { EventStorePort } from '@sdk/core'
 import { runAuctionWinnerClaimAppAdapter } from '@platform/web/auctions/auctionWorkflowAdapters'
 import { createPrivateAuctionClaimMessageForActiveSigner } from '@platform/web/readContext'
 import { recordAuctionDeletion } from '@platform/web/auctions/auctionsQuery'
 import type { Event } from '@sdk/core/nostr-io'
 import { auctionKeys, orderKeys } from '@sdk/core/query/queryKeyFactory'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { auctionFormToCreateInput } from '@sdk/commerce/auctions/auctionPublishValidation'
 import type { AuctionFormData } from '@sdk/commerce/auctions/auctionForm'
 import type { ArenaCreatePublishResult } from '@platform/web/auctions/relay/arenaAuctionCreate'
-import {
-	publishArenaCreate,
-} from '@platform/web/auctions/relay/arenaAuctionCreate'
+import type { ArenaCreateRules } from '@sdk/commerce/auctions/auctionPublishValidation'
+import { createWebArenaParamsRead } from '@platform/web/auctions/relay/arenaParamsRead'
+import { arenaCreateRulesFromParams } from '@platform/web/auctions/relay/arenaAuctionCreate'
+import { publishArenaCreate } from '@platform/web/auctions/relay/arenaAuctionCreate'
 import {
 	publishAuctionClaimMarkerToPrivateRelays,
 	publishRequired,
@@ -126,6 +129,38 @@ export const publishAuctionCreate = async (formData: AuctionFormData): Promise<A
 		relays: [...webRelayPolicy('query')],
 		now: Math.floor(Date.now() / 1000),
 	})
+}
+
+/**
+ * The chain's published create rules (kind 1448) for the create form's
+ * pre-flight, or `null` until a reading arrives.
+ *
+ * Read once per mount from the same relays the create is published to, and
+ * mapped straight through by {@link arenaCreateRulesFromParams}: the editor's
+ * pre-flight is the chain's own rules rather than a second hardcoded copy. A
+ * `null` return means no anchored reading was available — the form then simply
+ * cannot check the rule-based constraints (it does **not** substitute a
+ * default), so a create that would break a published rule is caught by the
+ * chain's own refusal at publish, exactly as before this reading existed.
+ *
+ * Reads through the SDK seam (`arenaParamsRead.ts` → `sdk/core/nostr-io`); the
+ * read is not cached across sessions because the committee key and the rules
+ * live in the same event and both are read fresh where they are used.
+ */
+export const useArenaCreateRules = (): ArenaCreateRules | null => {
+	const query = useQuery({
+		queryKey: ['arena', 'create-rules'] as const,
+		staleTime: 30_000,
+		queryFn: async (): Promise<ArenaCreateRules | null> => {
+			const read = createWebArenaParamsRead({
+				relays: [...webRelayPolicy('query')],
+				store: getReadContext().store as unknown as EventStorePort<Event>,
+			})
+			const { params } = await read()
+			return params === null ? null : arenaCreateRulesFromParams(params.terms)
+		},
+	})
+	return query.data ?? null
 }
 
 export const usePublishAuctionMutation = () => {

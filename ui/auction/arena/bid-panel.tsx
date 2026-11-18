@@ -66,6 +66,20 @@ export type ArenaBidSubmissionState =
 	| { phase: 'presumed'; amount: number; eventId: string; acceptedBy: string[]; totalRelays: number }
 	/** The read delivered the bid back: the relays hold it. Still not an outcome (`bid-rules.ts`). */
 	| { phase: 'seen'; amount: number; eventId: string; acceptedBy: string[]; totalRelays: number }
+	/**
+	 * The bid is on the relay but **not** in committed state while the chain is
+	 * advancing: the chain saw it and did not accept it. **Not** a network
+	 * problem. The escrow is locked until `locktime`, and the bidder can reclaim
+	 * the funds through the lock's refund path. The panel never invents a reason
+	 * (the chain publishes no 1450 for a refused bid, by ruling).
+	 */
+	| { phase: 'not-accepted'; amount: number; eventId: string; locktime: number | null; reclaimable: boolean }
+	/**
+	 * The bid is on the relay but not in committed state and the chain is **not**
+	 * advancing: that is an infrastructure problem, not the bid. The panel makes
+	 * no claim about the bid itself.
+	 */
+	| { phase: 'infrastructure'; amount: number; eventId: string }
 	/** Signed and offered, but **no** relay ACKed. Published nowhere — fail closed. */
 	| { phase: 'unpublished'; amount: number; eventId: string | null; reason: string }
 	/** Signing failed, or the wallet refused; nothing was published and nothing was signed. */
@@ -106,11 +120,7 @@ export interface ArenaBidPanelProps {
 // =========================================================================
 
 /** The button's label — the same progression the retired panel used ("Submitting..." → idle). */
-export function bidButtonLabel(
-	blockedReason: ArenaBidBlockedReason | null,
-	check: ArenaBidCheck | null,
-	pending: boolean,
-): string {
+export function bidButtonLabel(blockedReason: ArenaBidBlockedReason | null, check: ArenaBidCheck | null, pending: boolean): string {
 	if (pending) return 'Submitting…'
 	if (blockedReason !== null) {
 		const labels: Partial<Record<ArenaBidBlockedReason, string>> = {
@@ -146,7 +156,9 @@ export function bidFloorLabel(model: ArenaAuctionDetailModel, check: ArenaBidChe
 }
 
 /** The label the submission state renders. Always a fact about relays, never about money. */
-export function submissionLine(state: ArenaBidSubmissionState): { title: string; detail: string; tone: 'neutral' | 'success' | 'warning' | 'error' } | null {
+export function submissionLine(
+	state: ArenaBidSubmissionState,
+): { title: string; detail: string; tone: 'neutral' | 'success' | 'warning' | 'error' } | null {
 	switch (state.phase) {
 		case 'idle':
 			return null
@@ -165,8 +177,34 @@ export function submissionLine(state: ArenaBidSubmissionState): { title: string;
 		case 'seen':
 			return {
 				title: `Bid seen on the read — ${state.acceptedBy.length} of ${state.totalRelays} relays acknowledged it.`,
-				detail: 'The relays that answered delivered your bid back, and it is counted in the bids below. That is storage, not an outcome: the verdict names a winner and the chain decides.',
+				detail:
+					'The relays that answered delivered your bid back, and it is counted in the bids below. That is storage, not an outcome: the verdict names a winner and the chain decides.',
 				tone: 'success',
+			}
+		case 'not-accepted': {
+			// The chain is advancing and this bid is not in committed state: the
+			// chain saw it and did not accept it. This is emphatically NOT a network
+			// problem, and the app states no reason — the chain publishes none for a
+			// refused bid, by ruling.
+			const locktimeCopy =
+				state.locktime !== null
+					? ` Your escrow stays locked until ${new Date(state.locktime * 1000).toISOString()}, after which the lock's own refund path returns the funds to your wallet.`
+					: ' The escrow locktime is not known to this view.'
+			const reclaimCopy = state.reclaimable
+				? ' You can reclaim the locked sats once that locktime has passed.'
+				: ' Do not bid the same amount again from this wallet — that would lock a second escrow.'
+			return {
+				title: 'The chain did not accept this bid.',
+				detail: `The chain is advancing and this bid is not in committed state, so it saw the bid and did not take it. This is not a network problem and this app does not know the reason — the chain does not publish one for a refused bid.${locktimeCopy}${reclaimCopy}`,
+				tone: 'warning',
+			}
+		}
+		case 'infrastructure':
+			return {
+				title: 'The chain is not advancing.',
+				detail:
+					'The relays have your bid, but the chain has published no fresh blocks, so this app cannot say whether the bid will be accepted. This is an infrastructure problem, not a problem with your bid — nothing here says the bid was refused.',
+				tone: 'warning',
 			}
 		case 'unpublished':
 			return {
@@ -219,9 +257,7 @@ export function ArenaBidPanel({
 				<h2 id="arena-bid-panel-title" className="text-xs font-semibold uppercase tracking-[0.16em] text-text-mid">
 					Place a bid
 				</h2>
-				{model !== null && model.phase === 'open' && !hardBlocked && (
-					<StatusBadge status="Bidding open" tone="success" />
-				)}
+				{model !== null && model.phase === 'open' && !hardBlocked && <StatusBadge status="Bidding open" tone="success" />}
 			</div>
 
 			{hardBlocked && blockedReason !== null && (
@@ -254,7 +290,13 @@ export function ArenaBidPanel({
 					/>
 					<span className="pointer-events-none absolute right-3 text-xs text-text-mid">sats</span>
 				</div>
-				<Button type="button" onClick={onSubmit} disabled={disabled} variant={hardBlocked ? 'secondary' : 'default'} className="whitespace-nowrap sm:min-w-36">
+				<Button
+					type="button"
+					onClick={onSubmit}
+					disabled={disabled}
+					variant={hardBlocked ? 'secondary' : 'default'}
+					className="whitespace-nowrap sm:min-w-36"
+				>
 					{bidButtonLabel(blockedReason, check, pending)}
 				</Button>
 			</div>

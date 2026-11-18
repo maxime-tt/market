@@ -58,6 +58,8 @@ import type {
 	ArenaAuctionDetailModel,
 	ArenaAuctionPhase,
 	ArenaChainClockModel,
+	ArenaCreateRefusalModel,
+	ArenaEndSource,
 	ArenaReceiptModel,
 	ArenaRelayHealth,
 	ArenaSurfaceStatus,
@@ -90,8 +92,13 @@ export function arenaSurfaceRelayCounts(health: ArenaReadHealth): ArenaRelayHeal
 // Projections
 // =========================================================================
 
-/** Where an auction's end time comes from, and why it can be `null`. */
-export function auctionEndsAt(view: ArenaAuctionView): number | null {
+/**
+ * The **create-derived** end: `root.created_at + duration_seconds`, or `null`
+ * when the create stated no positive duration. This is the end the create
+ * states, not the end the chain committed; a surface that shows it must label
+ * it as create-derived (`ARENA_CREATE_DERIVED_END_LABEL`).
+ */
+export function auctionCreateDerivedEndsAt(view: ArenaAuctionView): number | null {
 	const duration = view.content.durationSec
 	// A create with no duration has no end to state. `0` is treated the same: an
 	// auction that lasts zero seconds is not a fact this adapter will assert.
@@ -100,6 +107,23 @@ export function auctionEndsAt(view: ArenaAuctionView): number | null {
 	// editing the title moves the canonical timestamp, and an end time that
 	// moves when a title changes is not an end time.
 	return view.rootCreatedAt + duration
+}
+
+/**
+ * The end the lot view should show: the chain's **committed end** (kind 1449)
+ * when one was read, otherwise the **create-derived** end. Together with
+ * {@link endSourceOf} this keeps the two from ever being conflated.
+ */
+export function auctionEndsAt(view: ArenaAuctionView): number | null {
+	if (view.committedEnd !== null) return view.committedEnd.endTime
+	return auctionCreateDerivedEndsAt(view)
+}
+
+/** Where a lot's displayed end comes from — the honesty flag the countdown carries. */
+export function endSourceOf(view: ArenaAuctionView): ArenaEndSource {
+	if (view.committedEnd !== null) return 'committed'
+	if (auctionCreateDerivedEndsAt(view) !== null) return 'create-derived'
+	return 'unknown'
 }
 
 export function auctionPhase(view: ArenaAuctionView, now: number): ArenaAuctionPhase {
@@ -156,6 +180,7 @@ export interface ArenaSurfaceContext {
 /** One canonical auction → the card model. */
 export function toAuctionCardModel(view: ArenaAuctionView, context: ArenaSurfaceContext): ArenaAuctionCardModel {
 	const endsAt = auctionEndsAt(view)
+	const createDerivedEndsAt = auctionCreateDerivedEndsAt(view)
 	// `verdicts` arrives sorted by height descending (`arenaAuctionRead.ts:901`),
 	// so the first entry is the highest-anchored verdict the read saw. Picking
 	// any other would state an older state over a newer one.
@@ -173,6 +198,10 @@ export function toAuctionCardModel(view: ArenaAuctionView, context: ArenaSurface
 		bidCount: view.bids.length,
 		bidsWithoutAmount: view.bidsWithoutAmount,
 		endsAt,
+		endSource: endSourceOf(view),
+		createDerivedEndsAt,
+		committedEndHeight: view.committedEnd?.height ?? null,
+		committedEndOrdinal: view.committedEnd?.extensionOrdinal ?? null,
 		phase: endsAt === null ? 'unknown' : context.now < endsAt ? 'open' : 'ended',
 		verdict,
 		verdictCount: view.verdicts.length,
@@ -215,6 +244,17 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 
 	const receipts = view.receipts.map((receipt) => toReceiptModel(receipt, context.heldParamsVersion))
 
+	// The chain's refusal of this create, verbatim. `null` when none was read —
+	// which is not "accepted", it is "no refusal read".
+	const createRefusal: ArenaCreateRefusalModel | null =
+		view.createRefusal === null
+			? null
+			: {
+					reason: view.createRefusal.reason,
+					height: view.createRefusal.height,
+					refusalEventId: view.createRefusal.refusalEventId,
+				}
+
 	// A refund receipt names a bid_id; a position is a bidder. Map each refund to
 	// the bidder of the bid it names, keeping the earliest anchored height.
 	const bidderByBidId = new Map<string, string>()
@@ -246,6 +286,7 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 		receipts,
 		refundsByBidder,
 		settleReceipt: view.settleReceipt === null ? null : toReceiptModel(view.settleReceipt, context.heldParamsVersion),
+		createRefusal,
 	}
 }
 

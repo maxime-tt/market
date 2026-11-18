@@ -41,6 +41,10 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		bidCount: 0,
 		bidsWithoutAmount: 0,
 		endsAt: 4600,
+		endSource: 'create-derived',
+		createDerivedEndsAt: 4600,
+		committedEndHeight: null,
+		committedEndOrdinal: null,
 		phase: 'open',
 		verdict: null,
 		verdictCount: 0,
@@ -63,6 +67,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		receipts: [],
 		refundsByBidder: {},
 		settleReceipt: null,
+		createRefusal: null,
 		...over,
 	}
 }
