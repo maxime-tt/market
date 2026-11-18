@@ -22,6 +22,7 @@ import {
 	ARENA_STATE_COMMITMENT_KIND,
 	ARENA_VERDICT_KIND,
 } from '@sdk/commerce/auctions/constants'
+import { ARENA_REFUSAL_BAD_CONTENT } from '@platform/web/auctions/relay/arenaAnchor'
 import {
 	ARENA_READ_KINDS,
 	ARENA_REFUSAL_BAD_IDENTITY,
@@ -338,6 +339,34 @@ describe('dedupe and order', () => {
 		const decoded = decodeArenaEvent(bad, 'wss://a')
 		expect(decoded.ok).toBe(false)
 		if (!decoded.ok) expect(decoded.refusal.reason).toBe(ARENA_REFUSAL_BAD_IDENTITY)
+	})
+
+	test('a 1440 that names its identity only in the d tag is read, with d as the auction id', () => {
+		// The chain's own client writes the identity once, in the tag. The spec
+		// says `auction_id` IS the `d` value, so a create that states it once is
+		// unambiguous — refusing it hid every lot created by that client.
+		const dOnly = createEvent({ d: 'lot-tag' }, { auction_id: undefined })
+		const decoded = decodeArenaEvent(dOnly, 'wss://a')
+		expect(decoded.ok).toBe(true)
+		if (decoded.ok && decoded.event.type === 'create') {
+			expect(decoded.event.auctionId).toBe('lot-tag')
+			expect(decoded.event.d).toBe('lot-tag')
+			expect(decoded.event.content_.auctionId).toBe('lot-tag')
+		}
+	})
+
+	test('a 1440 that names no identity at all is refused', () => {
+		const anonymous = ev({
+			id: 'anon-1',
+			kind: ARENA_AUCTION_CREATE_KIND,
+			pubkey: SELLER_A,
+			created_at: 1000,
+			tags: [],
+			content: JSON.stringify(createContent({ auction_id: undefined })),
+		})
+		const decoded = decodeArenaEvent(anonymous, 'wss://a')
+		expect(decoded.ok).toBe(false)
+		if (!decoded.ok) expect(decoded.refusal.reason).toBe(ARENA_REFUSAL_BAD_CONTENT)
 	})
 })
 

@@ -480,20 +480,28 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 		const content = parseJsonObject(event.content)
 		if (content === null) return refuse(relay, event, ARENA_REFUSAL_BAD_CONTENT, 'create content is not a JSON object')
 
-		const auctionId = asTrimmedString(content.auction_id)
-		if (auctionId === null) return refuse(relay, event, ARENA_REFUSAL_BAD_CONTENT, 'create content has no auction_id')
-
+		const contentAuctionId = asTrimmedString(content.auction_id)
 		const tagD = tagValue(event.tags, 'd')
-		// `d` and `content.auction_id` are the same fact written twice; if they
-		// disagree the event addresses two auctions and neither reading is safe.
-		if (tagD !== null && tagD !== auctionId) {
+		// The identity IS the `d` value (`MERGED-PROTOCOL-SPEC.md` §8: `auction_id`
+		// is the `d` value). A client may write it twice — the `d` tag and the
+		// content key — and must then agree, because a disagreement makes the event
+		// address two auctions and neither reading is safe. But a client may also
+		// write only the tag: the chain's own client does exactly that, and
+		// refusing it made every lot created by a conformant client invisible in
+		// this app. A create that names no `d` at all is refused: 1440 is a regular
+		// kind, so the `d` is the only stable address for later versions.
+		if (tagD === null && contentAuctionId === null) {
+			return refuse(relay, event, ARENA_REFUSAL_BAD_CONTENT, 'create states no identity (no d tag and no content.auction_id)')
+		}
+		if (tagD !== null && contentAuctionId !== null && tagD !== contentAuctionId) {
 			return refuse(
 				relay,
 				event,
 				ARENA_REFUSAL_BAD_IDENTITY,
-				`d tag ${JSON.stringify(tagD)} != content.auction_id ${JSON.stringify(auctionId)}`,
+				`d tag ${JSON.stringify(tagD)} != content.auction_id ${JSON.stringify(contentAuctionId)}`,
 			)
 		}
+		const auctionId = tagD ?? (contentAuctionId as string)
 
 		return {
 			ok: true,
@@ -503,7 +511,7 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 				d: tagD ?? auctionId,
 				auctionId,
 				supersedes: tagValue(event.tags, 'e'),
-				content_: createContentOf(content),
+				content_: { ...createContentOf(content), auctionId },
 				immutable: canonicalImmutableFields(content),
 			},
 		}
