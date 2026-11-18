@@ -11,6 +11,12 @@ export interface BidStatusDisplayInput {
 	latestLocktime: number
 	/** Host-formatted countdown, e.g. "Reclaim opens in 4m 10s"; used while reclaim has not opened. */
 	reclaimCountdownLabel: string
+	/**
+	 * The anchored height a refund receipt executed at, or `null`/absent when
+	 * none was read (`BidGroupStatusResult.refundedAtHeight`). Drives the
+	 * `refund_received` words; `null` is "no receipt read", never a height of 0.
+	 */
+	refundedAtHeight?: number | null
 }
 
 export interface BidStatusCopy {
@@ -36,7 +42,10 @@ export function getBidStatusCopy(input: BidStatusDisplayInput): BidStatusCopy {
 		case 'refund_received':
 			return {
 				label: 'Refund received',
-				helper: 'The seller settlement refund has already been claimed into your wallet.',
+				helper:
+					input.refundedAtHeight != null
+						? `The chain published a refund receipt for this bid — the sats left escrow at height ${input.refundedAtHeight}. There is nothing left to reclaim.`
+						: 'The seller settlement refund has already been claimed into your wallet.',
 				tone: 'success',
 			}
 		case 'reclaimed':

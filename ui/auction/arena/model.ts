@@ -133,6 +133,44 @@ export interface ArenaAuctionPositionModel {
 	total: number
 }
 
+/** One destination of a money receipt, as a surface may state it. */
+export interface ArenaReceiptOutputModel {
+	/** Compressed wallet pubkey, or `null` when unreadable. */
+	recipient: string | null
+	amount: number | null
+	/** The mint's keyset id, or `null`. */
+	id: string | null
+}
+
+/**
+ * One money receipt (kind 1443 refund / 1444 settle), as a surface renders it.
+ *
+ * Distinct from {@link ArenaVerdictRow} on purpose: a verdict is a **claim**,
+ * a receipt is **money that moved**. The proof secrets (`secret`/`C`/`dleq`)
+ * are deliberately absent here — this shape is display only; the claim work
+ * reads them from the read adapter's own receipt.
+ */
+export interface ArenaReceiptModel {
+	eventId: string
+	/** The 1441 event id whose escrow moved. */
+	bidId: string
+	outcome: 'refund' | 'settle'
+	height: number
+	blockHash: string
+	settledAt: number | null
+	/** The params digest in force — an opaque token, recorded, never a refusal. */
+	paramsVersion: string | null
+	/** `true` when a held params reading disagrees; `null` when no comparison was possible. */
+	paramsVersionMismatch: boolean | null
+	outputs: ArenaReceiptOutputModel[]
+	/** `Σ out[].amount` over the readable amounts; `null` when none was readable. */
+	total: number | null
+	/** How many committed destinations the move paid. */
+	destinationCount: number
+	/** Outputs whose `amount` was unreadable, so `total` is partial when > 0. */
+	outputsWithoutAmount: number
+}
+
 /** One auction in full. */
 export interface ArenaAuctionDetailModel extends ArenaAuctionCardModel {
 	description: string | null
@@ -161,6 +199,19 @@ export interface ArenaAuctionDetailModel extends ArenaAuctionCardModel {
 	rootCreatedAt: number
 	bids: ArenaAuctionBidModel[]
 	positions: ArenaAuctionPositionModel[]
+	/**
+	 * The auction's money receipts (kinds 1443/1444), earliest anchored height
+	 * first. A verdict is a claim; these are money that moved.
+	 */
+	receipts: ArenaReceiptModel[]
+	/**
+	 * The earliest refund height per bidder pubkey, for a position line. A bidder
+	 * with no refund receipt is absent — a missing receipt is *no receipt read*,
+	 * never a `null` height on the position.
+	 */
+	refundsByBidder: Record<string, number>
+	/** The lot-level settle: the earliest-anchored 1444, or `null` when none was read. */
+	settleReceipt: ArenaReceiptModel | null
 }
 
 // =========================================================================
@@ -346,6 +397,41 @@ export function shortKey(key: string | null): string {
 export function satsLabel(value: number | null): string {
 	return value === null ? 'not stated' : `${value.toLocaleString()} sats`
 }
+
+// =========================================================================
+// Money receipts
+// =========================================================================
+
+/**
+ * The one sentence a surface may say when a receipt it might have shown was
+ * **not delivered**. It is emphatically not "not paid": the read has no receipt,
+ * which is a fact about the read, not about the money.
+ */
+export const ARENA_NO_RECEIPT_LABEL = 'no receipt read'
+
+/** The per-position line a refund receipt earns, e.g. `refunded at height 400`. */
+export function refundReceiptLabel(height: number): string {
+	return `refunded at height ${height}`
+}
+
+/**
+ * The lot-level line a settle receipt earns. One destination is the seller;
+ * several is a V4V settle, and the words say how many destinations were paid —
+ * a settle that paid three recipients is not "paid to the seller".
+ */
+export function settleReceiptLabel(receipt: ArenaReceiptModel): string {
+	const amount = receipt.total === null ? 'an unstated amount of sats' : `${receipt.total.toLocaleString()} sats`
+	if (receipt.destinationCount <= 1) return `paid ${amount} to the seller at height ${receipt.height}`
+	return `paid ${amount} to ${receipt.destinationCount} destinations at height ${receipt.height}`
+}
+
+/**
+ * The one sentence a surface says about an unresolved params session: a
+ * receipt's `params_version` disagrees with the params reading the app holds.
+ * It is a **flag**, never a refusal — the money moved, and the signature, the
+ * roster and the anchor are the gate.
+ */
+export const ARENA_RECEIPT_PARAMS_MISMATCH_LABEL = 'the receipt names a different params version than the one this app holds'
 
 /** The one place the panel is allowed to say what it is not doing. */
 export const ARENA_QUORUM_DISCLAIMER =

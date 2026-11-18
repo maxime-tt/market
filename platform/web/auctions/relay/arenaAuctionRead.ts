@@ -118,6 +118,8 @@ import { createWebRelayReadContext } from '@platform/web/sdkNostrIo'
 import {
 	ARENA_AUCTION_BID_KIND,
 	ARENA_AUCTION_CREATE_KIND,
+	ARENA_AUCTION_REFUND_KIND,
+	ARENA_AUCTION_SETTLE_KIND,
 	ARENA_STATE_COMMITMENT_KIND,
 	ARENA_VERDICT_KIND,
 } from '@sdk/commerce/auctions/constants'
@@ -129,6 +131,7 @@ import {
 	type ParsedArenaStateCommitment,
 	type ParsedArenaVerdict,
 } from './arenaAnchor'
+import { ArenaReceiptError, dedupeArenaReceipts, parseArenaReceiptEvent, type ParsedArenaReceipt } from './arenaReceiptsRead'
 // Type-only: erased at runtime, so this adapter stays free of any `ui/` code.
 import type { ArenaV4vSplitRow } from '@ui/auction/arena/model'
 
@@ -165,6 +168,14 @@ export type ArenaReadRefusalName =
 	| 'arena.bad_hash'
 	| 'arena.bad_kind'
 	| 'arena.bad_outcome'
+	| 'arena.receipt.bad_kind'
+	| 'arena.receipt.bad_signature'
+	| 'arena.receipt.bad_schema'
+	| 'arena.receipt.bad_content'
+	| 'arena.receipt.unanchored'
+	| 'arena.receipt.bad_anchor'
+	| 'arena.receipt.anchor_mismatch'
+	| 'arena.receipt.signer_not_in_roster'
 
 // =========================================================================
 // The immutable allow-list for a 1440 (MERGED-PROTOCOL-SPEC.md §8)
@@ -202,15 +213,17 @@ const NUMERIC_IMMUTABLE_FIELDS: ReadonlySet<string> = new Set(['startPrice', 'mi
 // Raw event → decoded event
 // =========================================================================
 
-/** The four kinds this read subscribes to, in the one place it writes them. */
+/** The kinds this read subscribes to, in the one place it writes them. */
 export const ARENA_READ_KINDS = [
 	ARENA_AUCTION_CREATE_KIND,
 	ARENA_AUCTION_BID_KIND,
+	ARENA_AUCTION_REFUND_KIND,
+	ARENA_AUCTION_SETTLE_KIND,
 	ARENA_VERDICT_KIND,
 	ARENA_STATE_COMMITMENT_KIND,
 ] as readonly number[]
 
-/** The subscription filter: one filter, four kinds. Nothing else is ever requested. */
+/** The subscription filter: one filter, six kinds. Nothing else is ever requested. */
 export function arenaAuctionFilters(): EventFilter[] {
 	return [{ kinds: [...ARENA_READ_KINDS] }]
 }
@@ -285,7 +298,16 @@ export interface ArenaStateCommitmentEvent extends ArenaAuctionEventBase {
 	commitment: ParsedArenaStateCommitment
 }
 
-export type ArenaAuctionEvent = ArenaCreateEvent | ArenaBidEvent | ArenaVerdictEvent | ArenaStateCommitmentEvent
+/**
+ * A kind-1443/1444 money receipt, parsed and anchored. Distinct from a verdict
+ * on purpose: a verdict is a claim, a receipt is money that moved.
+ */
+export interface ArenaReceiptEvent extends ArenaAuctionEventBase {
+	type: 'receipt'
+	receipt: ParsedArenaReceipt
+}
+
+export type ArenaAuctionEvent = ArenaCreateEvent | ArenaBidEvent | ArenaVerdictEvent | ArenaStateCommitmentEvent | ArenaReceiptEvent
 
 /** One event the gate refused, with the relay that offered it. */
 export interface ArenaRefusedEvent {
@@ -506,6 +528,29 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 		}
 	}
 
+	// 1443 / 1444: the money receipts, the same discipline the params path
+	// applies to a 1448 — signature, schema, mandatory agreeing anchor. No roster
+	// is held at this seam, so membership is enforced only where a params read
+	// supplies one (`arenaReceiptsRead.ts`).
+	if (event.kind === ARENA_AUCTION_REFUND_KIND || event.kind === ARENA_AUCTION_SETTLE_KIND) {
+		try {
+			const receipt = parseArenaReceiptEvent({
+				id: event.id,
+				pubkey: event.pubkey,
+				kind: event.kind,
+				created_at: event.created_at ?? 0,
+				tags: event.tags,
+				content: event.content,
+				sig: event.sig ?? '',
+			})
+			return { ok: true, event: { ...baseOf(event, relay), type: 'receipt', receipt } }
+		} catch (error) {
+			const reason = error instanceof ArenaReceiptError ? error.refusal : 'arena.receipt.bad_content'
+			const detail = error instanceof Error ? error.message : String(error)
+			return refuse(relay, event, reason, detail)
+		}
+	}
+
 	// 1445 / 1447: stage 1 owns the shape and the mandatory anchor. A thrown
 	// refusal here is the event's verdict, and it is the answer a client MUST
 	// ignore an unanchored event with (`arenaAnchor.ts:8-13`).
@@ -603,6 +648,19 @@ export interface ArenaAuctionView {
 	/** Bids whose `amount` was not a finite number; the positions above are then incomplete. */
 	bidsWithoutAmount: number
 	verdicts: ParsedArenaVerdict[]
+	/**
+	 * The money receipts the read verified for this auction (kinds 1443/1444),
+	 * deduped by `(bidId, outcome)` at the earliest anchored height, ordered by
+	 * height ascending. A verdict is a claim; a receipt is money that moved —
+	 * these are the latter.
+	 */
+	receipts: ParsedArenaReceipt[]
+	/** The earliest-anchored refund receipt per `bidId`, for a per-bid lookup. */
+	refundForBid: Record<string, ParsedArenaReceipt>
+	/** The earliest-anchored settle receipt per `bidId`, for a per-bid lookup. */
+	settleForBid: Record<string, ParsedArenaReceipt>
+	/** The lot-level settle: the earliest-anchored 1444 this auction carries, or `null`. */
+	settleReceipt: ParsedArenaReceipt | null
 	relays: string[]
 }
 
@@ -640,6 +698,8 @@ export interface ArenaAuctionSnapshot {
 	auctions: ArenaAuctionView[]
 	/** Verdicts whose `auction` id matches no create this read saw. */
 	orphanVerdicts: ParsedArenaVerdict[]
+	/** Receipts whose `auction` id matches no create this read saw. */
+	orphanReceipts: ParsedArenaReceipt[]
 	/** State commitments, height descending then time descending, then validator pubkey. */
 	stateCommitments: ArenaStateCommitmentView[]
 	highestCommitment: ParsedArenaStateCommitment | null
@@ -782,6 +842,7 @@ export function projectArenaEvents(
 	const bids = all.filter((e): e is ArenaBidEvent => e.type === 'bid')
 	const verdictEvents = all.filter((e): e is ArenaVerdictEvent => e.type === 'verdict')
 	const commitmentEvents = all.filter((e): e is ArenaStateCommitmentEvent => e.type === 'commitment')
+	const receiptEvents = all.filter((e): e is ArenaReceiptEvent => e.type === 'receipt')
 
 	// ---- resolve 1440 versions ------------------------------------------
 	const groups = new Map<string, ArenaCreateEvent[]>()
@@ -891,6 +952,31 @@ export function projectArenaEvents(
 		else list.push(event.verdict)
 	}
 
+	// ---- receipts, grouped by auction id --------------------------------
+	// Same resolution as verdicts: a receipt's `auction_id` is a coordinate, but
+	// a bare `d` is accepted when exactly one auction carries it.
+	const receiptsByAuction = new Map<string, ParsedArenaReceipt[]>()
+	const receiptRelaysByAuction = new Map<string, Set<string>>()
+	const orphanReceipts: ParsedArenaReceipt[] = []
+	for (const event of receiptEvents) {
+		const auctionId = event.receipt.auctionId
+		const coordinate = auctionId.includes(':')
+			? auctionId
+			: (dToCoordinate.get(auctionId) ?? []).length === 1
+				? dToCoordinate.get(auctionId)![0]
+				: null
+		if (coordinate === null) {
+			orphanReceipts.push(event.receipt)
+			continue
+		}
+		const list = receiptsByAuction.get(coordinate)
+		if (list === undefined) receiptsByAuction.set(coordinate, [event.receipt])
+		else list.push(event.receipt)
+		const relays = receiptRelaysByAuction.get(coordinate) ?? new Set<string>()
+		for (const relay of event.relays) relays.add(relay)
+		receiptRelaysByAuction.set(coordinate, relays)
+	}
+
 	// ---- assemble views --------------------------------------------------
 	const auctions: ArenaAuctionView[] = []
 	for (const [key, entry] of resolved) {
@@ -915,9 +1001,26 @@ export function projectArenaEvents(
 			(a, b) => b.height - a.height || (a.validatorPubkey ?? '').localeCompare(b.validatorPubkey ?? ''),
 		)
 
+		// Dedupe the receipts by `(bidId, outcome)` at the earliest anchored
+		// height — the same move re-published later is one move.
+		const receipts = dedupeArenaReceipts(receiptsByAuction.get(entry.coordinate) ?? [])
+		const refundForBid: Record<string, ParsedArenaReceipt> = {}
+		const settleForBid: Record<string, ParsedArenaReceipt> = {}
+		let settleReceipt: ParsedArenaReceipt | null = null
+		for (const receipt of receipts) {
+			if (receipt.outcome === 'refund') {
+				if (refundForBid[receipt.bidId] === undefined) refundForBid[receipt.bidId] = receipt
+			} else if (settleForBid[receipt.bidId] === undefined) {
+				settleForBid[receipt.bidId] = receipt
+			}
+			// `receipts` is height-ascending, so the first settle is the lot-level one.
+			if (receipt.outcome === 'settle' && settleReceipt === null) settleReceipt = receipt
+		}
+
 		const relays = new Set<string>()
 		for (const relay of entry.canonical.relays) relays.add(relay)
 		for (const bid of auctionBids) for (const relay of bid.relays) relays.add(relay)
+		for (const relay of receiptRelaysByAuction.get(entry.coordinate) ?? []) relays.add(relay)
 
 		auctions.push({
 			coordinate: entry.coordinate,
@@ -934,6 +1037,10 @@ export function projectArenaEvents(
 			topBid,
 			bidsWithoutAmount,
 			verdicts,
+			receipts,
+			refundForBid,
+			settleForBid,
+			settleReceipt,
 			relays: [...relays].sort(),
 		})
 	}
@@ -1017,6 +1124,7 @@ export function projectArenaEvents(
 	return {
 		auctions,
 		orphanVerdicts,
+		orphanReceipts,
 		stateCommitments,
 		highestCommitment,
 		commitmentForks,

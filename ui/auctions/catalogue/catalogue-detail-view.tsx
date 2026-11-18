@@ -8,6 +8,10 @@ import {
 	phaseTone,
 	shortKey,
 	ARENA_UNKNOWN_END_LABEL,
+	ARENA_NO_RECEIPT_LABEL,
+	ARENA_RECEIPT_PARAMS_MISMATCH_LABEL,
+	refundReceiptLabel,
+	settleReceiptLabel,
 	type ArenaAuctionDetailModel,
 	type ArenaRelayHealth,
 	type ArenaSurfaceStatus,
@@ -223,6 +227,16 @@ export function CatalogueDetailView({
 								{model.divergent ? ' · relays disagree' : ''}
 								{leader !== null ? ` · leader ${shortKey(leader.bidder)}` : ' · no bids yet'}
 							</div>
+							{/*
+							  The money receipt, kept apart from the verdict on purpose: a
+							  verdict is a claim ("the verdict names the winner"), a receipt is
+							  money that moved. When no 1444 was read the line says "no receipt
+							  read" — never "not paid", which the read cannot know.
+							*/}
+							<p className="cat-muted" data-testid="catalogue-receipt" data-outcome={model.settleReceipt !== null ? 'settle' : 'none'}>
+								{model.settleReceipt !== null ? settleReceiptLabel(model.settleReceipt) : ARENA_NO_RECEIPT_LABEL}
+								{model.settleReceipt?.paramsVersionMismatch === true ? ` — ⚠ ${ARENA_RECEIPT_PARAMS_MISMATCH_LABEL}` : ''}
+							</p>
 						</div>
 
 						{bidPanel !== null && (
@@ -305,6 +319,11 @@ export function CatalogueDetailView({
 									<li key={position.bidder} className="cat-feed__item">
 										<span className="cat-bid-name">{shortKey(position.bidder)}</span>
 										<b>{position.total.toLocaleString()} sats</b>
+										{model.refundsByBidder[position.bidder] !== undefined && (
+											<em data-testid="catalogue-refund-receipt" data-height={model.refundsByBidder[position.bidder]}>
+												{refundReceiptLabel(model.refundsByBidder[position.bidder])}
+											</em>
+										)}
 									</li>
 								))}
 							</ul>

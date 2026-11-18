@@ -79,4 +79,29 @@ describe('resolveBidGroupStatus', () => {
 	test('latest locktime takes the max of the bid and its tokens', () => {
 		expect(resolveBidGroupStatus(base({ latestBidLocktime: 10, tokens: [token('a', 'pending', NOW + 5, 50)] })).latestLocktime).toBe(50)
 	})
+
+	test('a refund receipt makes the latest bid refund_received, with no reclaim offered', () => {
+		// Even with a token still inside its reclaim window (locked), a verified
+		// money-back receipt wins: the sats already left escrow.
+		const result = resolveBidGroupStatus(
+			base({ latestBidLocktime: NOW + 100, tokens: [token('a', 'pending', NOW + 100)], refundReceipt: { bidId: 'bid-2', height: 400 } }),
+		)
+		expect(result.status).toBe('refund_received')
+		expect(result.reclaimable).toEqual([])
+		expect(result.refundedAtHeight).toBe(400)
+	})
+
+	test('a receipt for a different bid does not turn this group green', () => {
+		const result = resolveBidGroupStatus(base({ refundReceipt: { bidId: 'bid-1', height: 400 } }))
+		expect(result.status).toBe('recorded')
+		expect(result.refundedAtHeight).toBeNull()
+	})
+
+	test('no refund receipt leaves refundedAtHeight null, and an outbid stays honest', () => {
+		const result = resolveBidGroupStatus(
+			base({ settlement: { status: 'settled', winningBidId: 'x', winnerPubkey: 'other' }, tokens: [token('a', 'pending', NOW + 60)] }),
+		)
+		expect(result.status).toBe('outbid')
+		expect(result.refundedAtHeight).toBeNull()
+	})
 })

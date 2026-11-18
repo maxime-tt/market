@@ -12,9 +12,16 @@
  * key to the pre-commit scanner.
  */
 import { describe, expect, test } from 'bun:test'
+import { finalizeEvent, getPublicKey } from 'nostr-tools'
 
 import type { EventFilter, EventStreamItem, NostrEventLike } from '@sdk/core'
-import { ARENA_AUCTION_CREATE_KIND, ARENA_STATE_COMMITMENT_KIND, ARENA_VERDICT_KIND } from '@sdk/commerce/auctions/constants'
+import {
+	ARENA_AUCTION_CREATE_KIND,
+	ARENA_AUCTION_REFUND_KIND,
+	ARENA_AUCTION_SETTLE_KIND,
+	ARENA_STATE_COMMITMENT_KIND,
+	ARENA_VERDICT_KIND,
+} from '@sdk/commerce/auctions/constants'
 import {
 	ARENA_READ_KINDS,
 	ARENA_REFUSAL_BAD_IDENTITY,
@@ -174,6 +181,55 @@ function commitmentEvent(
 	})
 }
 
+const RECEIPT_SK = new Uint8Array(32).fill(7)
+const RECEIPT_PUB = getPublicKey(RECEIPT_SK)
+
+/** A signed kind-1443/1444 receipt, built from the chain's §3 contract. */
+function receiptEvent(
+	over: {
+		kind?: number
+		auctionId?: string
+		bidId?: string
+		height?: number
+		hash?: string
+		outcome?: string
+		outputs?: unknown[]
+		created_at?: number
+	} = {},
+): NostrEventLike {
+	const kind = over.kind ?? ARENA_AUCTION_REFUND_KIND
+	const isRefund = kind === ARENA_AUCTION_REFUND_KIND
+	const auctionId = over.auctionId ?? 'lot-1'
+	const bidId = over.bidId ?? 'bid-1'
+	const height = over.height ?? 400
+	const hash = over.hash ?? 'a'.repeat(64)
+	const content = {
+		schema: isRefund ? 'arena.refund.v1' : 'arena.settle.v1',
+		auction_id: auctionId,
+		bid_id: bidId,
+		outcome: over.outcome ?? (isRefund ? 'refund' : 'settle'),
+		height,
+		block_hash: hash,
+		settled_at: 1794999999,
+		params_version: 'pv-1',
+		out: over.outputs ?? [{ recipient: 'recip', amount: 1234, id: 'keyset' }],
+	}
+	return finalizeEvent(
+		{
+			kind,
+			created_at: over.created_at ?? 1794999999,
+			tags: [
+				['auction', auctionId],
+				['bid', bidId],
+				['height', String(height)],
+				['hash', hash],
+			],
+			content: JSON.stringify(content),
+		},
+		RECEIPT_SK,
+	) as unknown as NostrEventLike
+}
+
 interface FakeRelayOptions {
 	events?: NostrEventLike[]
 	/** Throw on open. */
@@ -226,9 +282,9 @@ async function collect(stream: AsyncIterable<ArenaReadStreamItem>): Promise<Aren
 // =========================================================================
 
 describe('the read seam', () => {
-	test('asks for exactly the four auction kinds and nothing else', () => {
-		expect(arenaAuctionFilters()).toEqual([{ kinds: [1440, 1441, 1445, 1447] }])
-		expect(ARENA_READ_KINDS).toEqual([1440, 1441, 1445, 1447])
+	test('asks for exactly the six auction kinds and nothing else', () => {
+		expect(arenaAuctionFilters()).toEqual([{ kinds: [1440, 1441, 1443, 1444, 1445, 1447] }])
+		expect(ARENA_READ_KINDS).toEqual([1440, 1441, 1443, 1444, 1445, 1447])
 	})
 
 	test('opens one independent subscription per relay', async () => {
@@ -675,5 +731,82 @@ describe('projectArenaEvents', () => {
 		expect(snapshot.auctions[0].topBid).toEqual({ bidder: 'bidder-1', total: 500 })
 		// No health passed: an empty one, not a throw.
 		expect(snapshot.health.relays).toEqual([])
+	})
+})
+
+// =========================================================================
+// The money receipts are wired into the read (kinds 1443 / 1444)
+// =========================================================================
+
+describe('money receipts', () => {
+	test('a signed refund receipt decodes and attaches to its auction', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const receipt = receiptEvent({ bidId: 'bid-1', height: 400 })
+		const read = readFrom({ 'wss://a': { events: [create, receipt] } })
+		const snapshot = await read.snapshot()
+
+		expect(snapshot.auctions).toHaveLength(1)
+		const view = snapshot.auctions[0]
+		expect(view.receipts).toHaveLength(1)
+		expect(view.receipts[0].outcome).toBe('refund')
+		expect(view.receipts[0].bidId).toBe('bid-1')
+		expect(view.refundForBid['bid-1']?.height).toBe(400)
+		expect(view.settleReceipt).toBeNull()
+		// The receipt's relay is part of the auction's provenance.
+		expect(view.relays).toContain('wss://a')
+	})
+
+	test('a settle receipt is the lot-level settle and the per-bid settle lookup', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const settle = receiptEvent({ kind: ARENA_AUCTION_SETTLE_KIND, bidId: 'bid-9', height: 500 })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, settle] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		expect(view.settleReceipt?.bidId).toBe('bid-9')
+		expect(view.settleReceipt?.outcome).toBe('settle')
+		expect(view.settleForBid['bid-9']?.height).toBe(500)
+	})
+
+	test('the same move re-published at a later height is one receipt, the earliest', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const early = receiptEvent({ height: 400 })
+		const late = receiptEvent({ height: 407, created_at: 1_795_000_100 })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, late, early] } }).snapshot()
+
+		expect(snapshot.auctions[0].receipts).toHaveLength(1)
+		expect(snapshot.auctions[0].receipts[0].height).toBe(400)
+	})
+
+	test('a bad receipt is refused by name and counted in relay health, like every other kind', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const unsigned = { ...receiptEvent(), sig: '' }
+		const snapshot = await readFrom({ 'wss://a': { events: [create, unsigned] } }).snapshot()
+
+		expect(snapshot.auctions[0].receipts).toEqual([])
+		expect(snapshot.refusals.map((refusal) => refusal.reason)).toContain('arena.receipt.bad_signature')
+		expect(snapshot.health.relays[0].refusals).toBe(1)
+	})
+
+	test('a receipt whose auction no create matches is an orphan, not attached', async () => {
+		const create = createEvent({ id: 'root-1' })
+		// A bare `d` that resolves to no auction is an orphan (a full coordinate
+		// that matches no create simply never attaches, as with a verdict).
+		const orphan = receiptEvent({ auctionId: 'ghost-lot' })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, orphan] } }).snapshot()
+
+		expect(snapshot.orphanReceipts).toHaveLength(1)
+		expect(snapshot.auctions[0].receipts).toEqual([])
+	})
+
+	test('decodeArenaEvent surfaces the receipt-specific refusal name', () => {
+		const unsigned = { ...receiptEvent(), sig: '' }
+		const decoded = decodeArenaEvent(unsigned, 'wss://a')
+		expect(decoded.ok).toBe(false)
+		if (!decoded.ok) expect(decoded.refusal.reason).toBe('arena.receipt.bad_signature')
+
+		const badSchema = receiptEvent({ kind: ARENA_AUCTION_REFUND_KIND, outcome: 'settle' })
+		const decodedBad = decodeArenaEvent(badSchema, 'wss://a')
+		expect(decodedBad.ok).toBe(false)
+		if (!decodedBad.ok) expect(decodedBad.refusal.reason).toBe('arena.receipt.bad_content')
 	})
 })

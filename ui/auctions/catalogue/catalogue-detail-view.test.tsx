@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { ArenaAuctionDetailModel } from '@ui/auction/arena/model'
+import type { ArenaAuctionDetailModel, ArenaReceiptModel } from '@ui/auction/arena/model'
 import { CatalogueDetailView, CatalogueLivePip, type CatalogueDetailViewProps } from './catalogue-detail-view'
 
 /**
@@ -45,6 +45,9 @@ const model: ArenaAuctionDetailModel = {
 		{ eventId: 'b2', bidder, createdAt: 1_300, amount: 200, relays: ['r1'] },
 	],
 	positions: [{ bidder, total: 1_200 }],
+	receipts: [],
+	refundsByBidder: {},
+	settleReceipt: null,
 }
 
 const relayHealth = { answered: 2, total: 2 }
@@ -126,5 +129,67 @@ describe('CatalogueDetailView', () => {
 		const html = render({ chainClockLabel: 'Chain time as of height 207, 12 s ago — stale' })
 		expect(html).toContain('catalogue-chain-clock')
 		expect(html).toContain('Chain time as of height 207, 12 s ago — stale')
+	})
+
+	test('with no 1444 read the lot says “no receipt read”, never “not paid”', () => {
+		const html = render()
+		expect(html).toContain('catalogue-receipt')
+		expect(html).toContain('no receipt read')
+		expect(html).not.toContain('not paid')
+		expect(html).not.toContain('paid ')
+	})
+
+	test('a settle receipt renders the money line, distinct from the verdict claim', () => {
+		const settle: ArenaReceiptModel = {
+			eventId: 's1',
+			bidId: 'b2',
+			outcome: 'settle',
+			height: 900,
+			blockHash: 'f'.repeat(64),
+			settledAt: 1_500,
+			paramsVersion: 'p1',
+			paramsVersionMismatch: null,
+			outputs: [
+				{ recipient: 'seller', amount: 900, id: 'k' },
+				{ recipient: 'v4v', amount: 100, id: 'k' },
+			],
+			total: 1_000,
+			destinationCount: 2,
+			outputsWithoutAmount: 0,
+		}
+		const html = render({ model: { ...model, settleReceipt: settle } })
+		expect(html).toContain('paid 1,000 sats to 2 destinations at height 900')
+		expect(html).not.toContain('no receipt read')
+	})
+
+	test('a single-destination settle reads “to the seller”, and a mismatched params version is flagged not hidden', () => {
+		const settle: ArenaReceiptModel = {
+			eventId: 's1',
+			bidId: 'b2',
+			outcome: 'settle',
+			height: 901,
+			blockHash: 'f'.repeat(64),
+			settledAt: 1_500,
+			paramsVersion: 'p2',
+			paramsVersionMismatch: true,
+			outputs: [{ recipient: 'seller', amount: 900, id: 'k' }],
+			total: 900,
+			destinationCount: 1,
+			outputsWithoutAmount: 0,
+		}
+		const html = render({ model: { ...model, settleReceipt: settle } })
+		expect(html).toContain('paid 900 sats to the seller at height 901')
+		expect(html).toContain('different params version')
+	})
+
+	test('a refund receipt marks the bidder position “refunded at height N”', () => {
+		const html = render({ model: { ...model, refundsByBidder: { [bidder]: 400 } } })
+		expect(html).toContain('catalogue-refund-receipt')
+		expect(html).toContain('refunded at height 400')
+	})
+
+	test('with no refund receipt the position carries no refund line', () => {
+		expect(render()).not.toContain('catalogue-refund-receipt')
+		expect(render()).not.toContain('refunded at height')
 	})
 })
