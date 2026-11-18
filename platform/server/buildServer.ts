@@ -54,7 +54,7 @@ export interface BuildServerOptions {
 	 * to import here, so we accept anything Bun's route record will take.
 	 */
 	indexHtml: unknown
-	/** Loaded once at boot, then mutated by route intents; unreadable refuses boot. */
+	/** Loaded once at boot, then mutated by route intents; an invalid file refuses boot, a missing one is the empty table. */
 	routing: RouteTable
 	pageStore?: PageStore
 }

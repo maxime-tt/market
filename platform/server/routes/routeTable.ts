@@ -167,8 +167,9 @@ export function createRouteTable({ file, path, warnings = [] }: CreateRouteTable
 
 /**
  * Boot: read and validate the file, then hand the same bytes to a live table.
- * A missing, unparseable or invalid file still refuses boot (ARCHITECTURE.md
- * §4.4) — `loadRoutesFile` throws before the server exists.
+ * A **missing** file is the empty table (a fresh checkout must boot — see
+ * `loadRoutesFile`); an unparseable or invalid one still refuses boot
+ * (ARCHITECTURE.md §4.4) — it throws before the server exists.
  */
 export function loadRouteTable(path: string): RouteTable {
 	const loaded = loadRoutesFile(path)
