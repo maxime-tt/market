@@ -9,6 +9,7 @@ import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSl
 import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/storefront'
 import { BrowseNav } from '@ui/browse/browse-nav'
 import { IntroOverlay } from '@ui/browse/intro'
+import { useInstanceName } from '@platform/web/config/instanceName'
 
 /**
  * Browse URL state: ?q=&p=
@@ -50,6 +51,7 @@ const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
 	const navigate = useNavigate()
+	const instanceName = useInstanceName()
 	// The app key's own `home` page, when one has been authored. Read first and
 	// unconditionally: the hook must run in every state of this route, and the
 	// published page replaces the settled composition below without changing
@@ -104,6 +106,7 @@ function BrowseIndex() {
 			<>
 				{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
 				<BrowseNav
+					wordmarkLabel={instanceName}
 					active
 					onNavigateHome={() => navigate({ to: '/' })}
 					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}

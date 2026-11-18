@@ -63,6 +63,7 @@ import { usePriceDisplay } from '@platform/web/products/PriceDisplayHost'
 import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { useAuth } from '@platform/web/auth/authStore'
 import { npubEncode } from 'nostr-tools/nip19'
+import { useInstanceName } from '@platform/web/config/instanceName'
 
 /** The Browse URL state the host asks the route to write back. */
 export interface BrowseSearchState {
@@ -358,6 +359,7 @@ function BrowseResultCard({
  * superset and over-reports what the set actually holds.
  */
 export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
+	const instanceName = useInstanceName()
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 	const [facetsExpanded, setFacetsExpanded] = useState(false)
 	// The open family's selected option, by the variation's `d` tag. Held here
@@ -892,6 +894,7 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 
 			{/* Nav — the same element in every state */}
 			<BrowseNav
+				wordmarkLabel={instanceName}
 				active={true}
 				onNavigateHome={() => onNavigate({ q: '', p: undefined })}
 				onNavigateFeatured={onNavigateFeatured}
