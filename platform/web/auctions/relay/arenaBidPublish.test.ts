@@ -97,6 +97,9 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		rootCreatedAt: 1000,
 		bids: [],
 		positions: [],
+		receipts: [],
+		refundsByBidder: {},
+		settleReceipt: null,
 		...over,
 	}
 }
@@ -199,7 +202,14 @@ function funded(amount: number): Promise<ArenaBidFunding> {
 	return promise
 }
 
-function bid(over: { model?: ArenaAuctionDetailModel | null; raw?: string; bidder?: ArenaBidderState; status?: 'settled' | 'loading' | 'incomplete' | 'no-relays' | 'error' } = {}) {
+function bid(
+	over: {
+		model?: ArenaAuctionDetailModel | null
+		raw?: string
+		bidder?: ArenaBidderState
+		status?: 'settled' | 'loading' | 'incomplete' | 'no-relays' | 'error'
+	} = {},
+) {
 	return {
 		model: over.model === undefined ? detail() : over.model,
 		status: over.status ?? ('settled' as const),
@@ -360,9 +370,9 @@ describe('publishArenaBid — what reaches the wire', () => {
 
 	test('an ACK for a different event id is refused', async () => {
 		const wrong: ArenaBidPublisher = { publish: async (event) => ({ id: `${event.id}-other`, acks: [{ url: RELAY_A, accepted: true }] }) }
-		await expect(
-			publishArenaBid(bid(), options({ publisher: wrong, funding: await funded(1000), fundingTerms })),
-		).rejects.toBeInstanceOf(ArenaBidPublishError)
+		await expect(publishArenaBid(bid(), options({ publisher: wrong, funding: await funded(1000), fundingTerms }))).rejects.toBeInstanceOf(
+			ArenaBidPublishError,
+		)
 	})
 })
 
@@ -449,7 +459,10 @@ describe('publishArenaBid — the publish path re-checks even when the button wa
 describe('round-trip: a published 1441 is what the read adapter binds', () => {
 	/** Drive the real read over one fake relay that serves the given events. */
 	async function readBack(events: NostrEventLike[]) {
-		const openRelay: ArenaRelayOpen = (_filters: readonly EventFilter[], _options: ArenaAuctionReadInit extends never ? never : { signal?: AbortSignal }) =>
+		const openRelay: ArenaRelayOpen = (
+			_filters: readonly EventFilter[],
+			_options: ArenaAuctionReadInit extends never ? never : { signal?: AbortSignal },
+		) =>
 			(async function* () {
 				for (const event of events) yield { type: 'event', event } as EventStreamItem<NostrEventLike>
 				yield { type: 'caught-up', info: { eose: [RELAY_A], pending: [], complete: true } } as EventStreamItem<NostrEventLike>
@@ -549,10 +562,21 @@ describe('readBack — fixtures used by the round-trip', () => {
 	test('the fake relay seam drives the real read to caught-up', async () => {
 		const read = createArenaAuctionRead({
 			relays: [RELAY_A],
-			openRelay: () => async function* () {
-				yield { type: 'event', event: { id: 'cf'.repeat(32), pubkey: SELLER, created_at: 1000, kind: 1440, tags: [['d', 'lot-1']], content: JSON.stringify({ auction_id: 'lot-1', starting_bid: 1000 }) } } as EventStreamItem<NostrEventLike>
-				yield { type: 'caught-up', info: { eose: [RELAY_A], pending: [], complete: true } } as EventStreamItem<NostrEventLike>
-			},
+			openRelay: () =>
+				async function* () {
+					yield {
+						type: 'event',
+						event: {
+							id: 'cf'.repeat(32),
+							pubkey: SELLER,
+							created_at: 1000,
+							kind: 1440,
+							tags: [['d', 'lot-1']],
+							content: JSON.stringify({ auction_id: 'lot-1', starting_bid: 1000 }),
+						},
+					} as EventStreamItem<NostrEventLike>
+					yield { type: 'caught-up', info: { eose: [RELAY_A], pending: [], complete: true } } as EventStreamItem<NostrEventLike>
+				},
 			deadlineMs: 50,
 		})
 		const snapshot = await read.snapshot()

@@ -334,6 +334,12 @@ export const ARENA_VERDICT_SCHEMA = 'arena.verdict.v1'
 /** `schema` value inside a kind-1447 state commitment's JSON content. */
 export const ARENA_STATE_COMMITMENT_SCHEMA = 'arena.statecommit.v1'
 
+/** `schema` value inside a kind-1443 refund-receipt event's JSON content. */
+export const ARENA_REFUND_SCHEMA = 'arena.refund.v1'
+
+/** `schema` value inside a kind-1444 settle-receipt event's JSON content. */
+export const ARENA_SETTLE_SCHEMA = 'arena.settle.v1'
+
 /** `schema` value inside a kind-1448 escrow-params event's JSON content. */
 export const ARENA_PARAMS_SCHEMA = 'arena.params.v1'
 

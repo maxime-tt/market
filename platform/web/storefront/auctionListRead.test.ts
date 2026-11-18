@@ -10,10 +10,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 import type { EventFilter, EventStreamItem, NostrEventLike } from '@sdk/core'
-import {
-	ARENA_AUCTION_CREATE_KIND,
-	ARENA_VERDICT_KIND,
-} from '@sdk/commerce/auctions/constants'
+import { ARENA_AUCTION_CREATE_KIND, ARENA_VERDICT_KIND } from '@sdk/commerce/auctions/constants'
 import {
 	createArenaAuctionRead,
 	decodeArenaEvent,
@@ -215,6 +212,10 @@ describe('toAuctionListItem', () => {
 		topBid: null,
 		bidsWithoutAmount: 0,
 		verdicts: [],
+		receipts: [],
+		refundForBid: {},
+		settleForBid: {},
+		settleReceipt: null,
 		relays: ['wss://a'],
 	}
 
@@ -262,13 +263,11 @@ describe('selectAuctionList', () => {
 	function snapshotWith(...events: NostrEventLike[]) {
 		// Project through the real gate, so the fixtures are held to the same
 		// rules a relay would be.
-		const ok = events
-			.map((event) => decodeArenaEvent(event, 'wss://a'))
-			.flatMap((result) => (result.ok ? [result.event] : []))
+		const ok = events.map((event) => decodeArenaEvent(event, 'wss://a')).flatMap((result) => (result.ok ? [result.event] : []))
 		return projectArenaEvents(ok)
 	}
 
-	test('mine keeps only the page author\'s auctions, newest first', () => {
+	test("mine keeps only the page author's auctions, newest first", () => {
 		const snapshot = snapshotWith(
 			createEvent({ id: 'a1', pubkey: SELLER_A, created_at: 1000, d: 'one' }),
 			createEvent({ id: 'b1', pubkey: SELLER_B, created_at: 2000, d: 'two' }),

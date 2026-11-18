@@ -49,6 +49,7 @@ import {
 	type ArenaRefusedEvent,
 	type ArenaVerdictDivergence,
 } from '@platform/web/auctions/relay/arenaAuctionRead'
+import { receiptParamsVersionMismatch, type ParsedArenaReceipt } from '@platform/web/auctions/relay/arenaReceiptsRead'
 import { auctionListStatus, relayCounts } from '@platform/web/storefront/auctionListRead'
 import { arenaChainClock } from '@platform/web/auctions/relay/arenaClock'
 import type {
@@ -57,6 +58,7 @@ import type {
 	ArenaAuctionDetailModel,
 	ArenaAuctionPhase,
 	ArenaChainClockModel,
+	ArenaReceiptModel,
 	ArenaRelayHealth,
 	ArenaSurfaceStatus,
 	ArenaVerdictPanelModel,
@@ -142,6 +144,13 @@ export interface ArenaSurfaceContext {
 	status: ArenaSurfaceStatus
 	/** The snapshot's divergence list — `snapshot.verdictDivergence`. */
 	divergences?: readonly ArenaVerdictDivergence[]
+	/**
+	 * The params version the app currently holds (from a 1448 read), when it has
+	 * one. A receipt whose `params_version` differs is **flagged**, never refused:
+	 * the money moved, and the signature, the roster and the anchor are the gate.
+	 * Absent → the mismatch can't be computed, and stays `null`.
+	 */
+	heldParamsVersion?: string | null
 }
 
 /** One canonical auction → the card model. */
@@ -173,6 +182,24 @@ export function toAuctionCardModel(view: ArenaAuctionView, context: ArenaSurface
 	}
 }
 
+/** One parsed receipt → the display model. The proof secrets are not carried here. */
+export function toReceiptModel(receipt: ParsedArenaReceipt, heldParamsVersion: string | null | undefined): ArenaReceiptModel {
+	return {
+		eventId: receipt.eventId,
+		bidId: receipt.bidId,
+		outcome: receipt.outcome,
+		height: receipt.height,
+		blockHash: receipt.blockHash,
+		settledAt: receipt.settledAt,
+		paramsVersion: receipt.paramsVersion,
+		paramsVersionMismatch: receiptParamsVersionMismatch(receipt, heldParamsVersion),
+		outputs: receipt.outputs.map((output) => ({ recipient: output.recipient, amount: output.amount, id: output.id })),
+		total: receipt.total,
+		destinationCount: receipt.outputs.length,
+		outputsWithoutAmount: receipt.outputsWithoutAmount,
+	}
+}
+
 /** One canonical auction → the detail model. */
 export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfaceContext): ArenaAuctionDetailModel {
 	const bids: ArenaAuctionBidModel[] = view.bids.map((bid) => ({
@@ -185,6 +212,21 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 	const positions = Object.entries(view.positions)
 		.map(([bidder, total]) => ({ bidder, total }))
 		.sort((a, b) => b.total - a.total || a.bidder.localeCompare(b.bidder))
+
+	const receipts = view.receipts.map((receipt) => toReceiptModel(receipt, context.heldParamsVersion))
+
+	// A refund receipt names a bid_id; a position is a bidder. Map each refund to
+	// the bidder of the bid it names, keeping the earliest anchored height.
+	const bidderByBidId = new Map<string, string>()
+	for (const bid of view.bids) bidderByBidId.set(bid.eventId, bid.bidder)
+	const refundsByBidder: Record<string, number> = {}
+	for (const receipt of view.receipts) {
+		if (receipt.outcome !== 'refund') continue
+		const bidder = bidderByBidId.get(receipt.bidId)
+		if (bidder === undefined) continue
+		const prior = refundsByBidder[bidder]
+		if (prior === undefined || receipt.height < prior) refundsByBidder[bidder] = receipt.height
+	}
 
 	return {
 		...toAuctionCardModel(view, context),
@@ -201,6 +243,9 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 		rootCreatedAt: view.rootCreatedAt,
 		bids,
 		positions,
+		receipts,
+		refundsByBidder,
+		settleReceipt: view.settleReceipt === null ? null : toReceiptModel(view.settleReceipt, context.heldParamsVersion),
 	}
 }
 
