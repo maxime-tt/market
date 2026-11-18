@@ -115,7 +115,7 @@ export const BrowseNav: FC<BrowseNavProps> = ({
 						'cursor-pointer',
 					)}
 					onClick={handleWordmarkClick}
-					aria-label="Plebeian Market — Browse"
+					aria-label={`${wordmarkLabel} — Browse`}
 				>
 					{wordmarkLabel}
 				</a>
