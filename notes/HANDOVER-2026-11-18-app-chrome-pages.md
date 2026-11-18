@@ -1,4 +1,8 @@
-# HANDOVER — app-chrome pages: increments 1–6 landed, the deploy is blocked
+# HANDOVER — app-chrome pages: increments 1–6 landed and DEPLOYED
+
+> **§7 below is the update: the merge and the deploy that §4 said were blocked
+> have since been done. Read §7 before §4.** This copy on `unite/1420-all` is the
+> current one; the copy on `d7s2/app-chrome-pages` carries the pre-deploy text.
 
 **Written:** 2026-11-18, by the session that landed increments 3, 4, 5 and 6.
 **Supersedes:** the handover the killed session promised and never wrote (that
@@ -170,3 +174,40 @@ layer, no prerender for crawlers. The app-chrome page still reads its document
 from **relays**, so a cold load with the relays down shows the error state rather
 than the page — accepted in the plan, and the additive fix (seed the query cache
 from the payload) is recorded there, not built.
+
+---
+
+## 7. UPDATE — merged and deployed (2026-11-18)
+
+Everything §4 said was blocked is done. The two worktrees that blocked it are
+quiet: `~/work/wt-union-1420` was moved to a **detached HEAD** at `5655b146b` by
+the app-side lane (its 73-entry "diff" was never work — it was the *inverse* of
+already-landed app-side commits, staged by an advance-under-a-live-tree; one
+`git commit` there would have reverted that lane), and no worktree held
+`unite/1420-all` any more.
+
+- **Merged** into `unite/1420-all` as `859c96073` — **zero conflicts** (the two
+  lanes touched disjoint files; verified with a `comm -12` of both diff --name-only
+  sets before merging). 31 files, +1692/−72.
+- **A fix found uncommitted in the deployed tree** (`~/work/wt-e2e`): the
+  authoring parents did not render an `<Outlet/>`, so the page editor and the
+  route create/edit forms changed the URL and never mounted. No branch carried
+  it (`git log --all -S isOnChildRoute` → empty). Landed as `e479f3324` rather
+  than lost to the checkout.
+- **Pushed** to `fork` and `nostr`, read back identical: **`e479f3324`**.
+- **Deployed:** `~/work/wt-e2e` moved to `e479f3324` (staying detached, as it
+  was), `market-e2e.service` restarted. No `bun install` needed — no lockfile or
+  `package.json` change between `5655b146b` and the merged head. Runtime state
+  (`data/routes.json` with its one binding, `data/pages/`) was untouched.
+- **Verified live**, and in a real browser against the public host:
+  `https://market-e2e.playday.it/test` → 200, the shell carries
+  `#__AR_ROUTE__` naming `{d: test, path: /test}`, `[data-ar-served-page]` is
+  absent, `Cache-Control: no-store`, and Chromium reports
+  `storefront-page: 1`, `login-button: 1`, header and footer present, **zero
+  page errors**. `/definitely-not-bound` is still a real 404.
+- The stored `test` document predates the `chrome` field and is served with the
+  new default — exactly what §2.2 of the plan predicted. Republishing it is
+  optional and only for the document's own correctness.
+
+Still open from §5: the head-metadata question (recommend implementing), the
+`data/pages/` gitignore gap, and the `check-ui-assembler` debt.
