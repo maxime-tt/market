@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 import { PagesPage } from '@platform/web/routes-authoring/pageAuthoringPage'
 
@@ -18,5 +18,17 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/
 
 function PagesRoute() {
 	const { name } = Route.useSearch()
+	const matchRoute = useMatchRoute()
+
+	// The page editor lives at the child route `pages/$d`. A child renders only
+	// where its parent renders an <Outlet/>, so without this guard the editor
+	// navigates into view and never mounts: the URL changes and the list stays.
+	const isOnChildRoute = matchRoute({
+		to: '/dashboard/app-settings/pages/$d',
+		fuzzy: true,
+	})
+
+	if (isOnChildRoute) return <Outlet />
+
 	return <PagesPage suggestedName={name} />
 }
