@@ -47,10 +47,23 @@ import {
 } from '@sdk/commerce/payments/wallet'
 import { getMintHostname } from '@sdk/commerce/payments/display'
 import { auctionP2pkPubkeysMatch } from '@sdk/commerce/auctions/auctionP2pk'
-import { AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS } from '@sdk/commerce/auctions/constants'
+import {
+	ARENA_AUCTION_REFUND_KIND,
+	ARENA_AUCTION_SETTLE_KIND,
+	AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS,
+} from '@sdk/commerce/auctions/constants'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { KeyChain, Mint, Wallet, schnorrSignDigest, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import type { ArenaWalletSpendSigner } from '@platform/web/auctions/relay/arenaBidFunding'
+import {
+	createArenaReceiptClaims,
+	loadArenaReceiptClaimRecord,
+	saveArenaReceiptClaimRecord,
+	type ArenaReceiptClaimRun,
+	type ArenaReceiptClaims,
+	type ArenaReceiptClaimsHost,
+} from '@platform/web/auctions/relay/arenaReceiptClaims'
+import { readArenaReceipts, type ArenaReceiptEventLike } from '@platform/web/auctions/relay/arenaReceiptsRead'
 import { NDKEvent, NDKNutzap, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { fetchEventsWithTimeout, getAppNdk } from '@platform/web/ndkPublishContext'
 import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
@@ -324,6 +337,57 @@ const getAuctionReceipt = (): AuctionReceipt => {
 	auctionReceiptInstance ??= createAuctionReceipt(auctionReceiptHost)
 	return auctionReceiptInstance
 }
+
+/**
+ * Re-read the balance projection from the wallet source, WITHOUT the auction sweep. Used as the
+ * post-claim reconcile so a claim does not re-enter `syncAuctionTransfers` (which is what runs the
+ * claim) and recurse.
+ */
+const refreshBalanceProjection = async (): Promise<void> => {
+	const wallet = cashuStore.state.walletSource
+	if (!wallet) return
+	await cashuActions.refreshBalances()
+	const { totalBalance, mintBalances } = getBalancesFromState(wallet)
+	cashuStore.setState((s) => ({ ...s, totalBalance, balances: mintBalances }))
+}
+
+/**
+ * The host the receipt-claim service reads the store through: the wallet to swap into, the wallet's
+ * own P2PK key and private key (from the same single key-material cache the escrow and the reclaim
+ * leg read), the mint/keyset access for the receive, the chain-named mint when the store holds a
+ * default, and the persisted at-most-once claim record under the signed-in identity.
+ */
+const arenaReceiptClaimsHost: ArenaReceiptClaimsHost = {
+	getWallet: () => cashuStore.state.walletSource,
+	isWalletReady: () => cashuStore.state.status === 'ready',
+	mint: auctionFundsMintAccess,
+	getWalletP2pk: () => walletKeyMaterialCache?.walletP2pk ?? null,
+	getWalletPrivkey: (pubkey) => getWalletPrivkey(pubkey),
+	getExpectedMintUrl: () => cashuStore.state.defaultMint,
+	getWalletMints: () => cashuStore.state.mints ?? [],
+	getExpectedKeysetId: () => null,
+	getClaimRecord: () => loadArenaReceiptClaimRecord(getCurrentPubkey()),
+	setClaimRecord: (record) => saveArenaReceiptClaimRecord(record, getCurrentPubkey()),
+	refresh: () => refreshBalanceProjection(),
+	now: () => Date.now(),
+}
+
+/**
+ * The single receipt-claim instance the sweep delegates to; built lazily and held once, mirroring
+ * the lock, reclaim and receipt instances.
+ */
+let arenaReceiptClaimsInstance: ArenaReceiptClaims | null = null
+const getArenaReceiptClaims = (): ArenaReceiptClaims => {
+	arenaReceiptClaimsInstance ??= createArenaReceiptClaims(arenaReceiptClaimsHost)
+	return arenaReceiptClaimsInstance
+}
+
+/**
+ * The claim sweep is throttled the same way the reclaim sweep is: a full relay read of every
+ * receipt per refresh would hammer the relay, and "no receipt read" is a normal state.
+ */
+const AUCTION_RECEIPT_CLAIM_MIN_INTERVAL_MS = 60_000
+let lastReceiptClaimMs = 0
 
 /**
  * The host the two non-money auction-rail actions read the store through: wallet readiness, the
@@ -642,7 +706,6 @@ export const walletOps = {
 
 		await walletOps.syncAuctionTransfers()
 	},
-
 	/**
 	 * Register a mint with the wallet. The list is coco's, so this writes through coco (which
 	 * re-reads and re-projects its own list) rather than appending to a local copy — a local
@@ -956,8 +1019,9 @@ export const walletOps = {
 		loadAuctionMintKeysets(auctionFundsMintAccess, mintUrl),
 
 	/**
-	 * Auction transfer sweep — under the path-oracle profile this is just
-	 * the locktime-refund auto-sweep (AUCTIONS.md §8.1). The legacy
+	 * Auction transfer sweep — under the path-oracle profile this is the locktime-refund auto-sweep
+	 * (AUCTIONS.md §8.1) plus the receipt claim: the ecash the validators minted for this wallet
+	 * (kind 1443 refunds, 1444 settles) is swapped in when it appears. The legacy
 	 * `auction_refund_v1` DM ingestion has been removed: refund delivery
 	 * isn't part of the v1 path-oracle protocol because the issuer holds
 	 * no Cashu key material and can't proactively spend a loser's locked
@@ -965,6 +1029,52 @@ export const walletOps = {
 	 */
 	syncAuctionTransfers: async (): Promise<void> => {
 		await getAuctionReclaim().autoReclaimTimelockedBids()
+		// The receipt claim runs on every read, safely: it is throttled, deduped by the persisted
+		// record, and "no receipt read" is a normal state, not an error. A failure here must never
+		// break the read that called it.
+		try {
+			await walletOps.claimAuctionReceipts()
+		} catch (err) {
+			console.warn('[wallet] Receipt claim sweep failed (non-fatal):', err)
+		}
+	},
+
+	/**
+	 * Read the chain's money receipts (kinds 1443/1444) from the app's relays, keep only the ones
+	 * the read verified, and claim the `out[]` entries addressed to this wallet's own P2PK key —
+	 * swapping them into the wallet with the wallet's own spend key ({@link ArenaReceiptClaims}).
+	 *
+	 * Safe to run on every read: throttled to one sweep per minute, and a move already recorded in
+	 * the wallet's persisted state is skipped. Returns the run, or `null` when the wallet is not
+	 * ready, the sweep was throttled, or no verified receipt arrived.
+	 */
+	claimAuctionReceipts: async (options?: { force?: boolean }): Promise<ArenaReceiptClaimRun | null> => {
+		const wallet = cashuStore.state.walletSource
+		if (!wallet || cashuStore.state.status !== 'ready') return null
+
+		const nowMs = Date.now()
+		if (!options?.force && nowMs - lastReceiptClaimMs < AUCTION_RECEIPT_CLAIM_MIN_INTERVAL_MS) return null
+		lastReceiptClaimMs = nowMs
+
+		const events = await fetchEventsWithTimeout(
+			{ kinds: [ARENA_AUCTION_REFUND_KIND, ARENA_AUCTION_SETTLE_KIND] as unknown as NonNullable<NDKFilter['kinds']>[number][], limit: 200 },
+			{ timeoutMs: 6000 },
+		)
+		// Only what the read verified reaches the claim: kind, signature, schema, outcome, anchor.
+		const raw = Array.from(events).map(
+			(event): ArenaReceiptEventLike => ({
+				id: event.id,
+				pubkey: event.pubkey,
+				kind: event.kind,
+				created_at: event.created_at ?? 0,
+				tags: event.tags,
+				content: event.content,
+				sig: event.sig ?? '',
+			}),
+		)
+		const { receipts } = readArenaReceipts(raw)
+		if (receipts.length === 0) return null
+		return getArenaReceiptClaims().claimReceipts(receipts)
 	},
 
 	/**

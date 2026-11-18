@@ -70,6 +70,12 @@ import type { ArenaEscrowSendManager } from '@platform/web/auctions/relay/arenaB
 import { publishArenaBid, type ArenaBidPublisher, type ArenaBidSigner } from '@platform/web/auctions/relay/arenaBidPublish'
 import { decodeArenaEvent, projectArenaEvents } from '@platform/web/auctions/relay/arenaAuctionRead'
 import { findAuction, toAuctionDetailModel } from '@platform/web/auctions/relay/auctionSurfacesRead'
+import { readArenaReceipts, type ArenaReceiptEventLike } from '@platform/web/auctions/relay/arenaReceiptsRead'
+import {
+	createArenaReceiptClaims,
+	loadArenaReceiptClaimRecord,
+	saveArenaReceiptClaimRecord,
+} from '@platform/web/auctions/relay/arenaReceiptClaims'
 
 // =========================================================================
 // Live configuration (opt-in)
@@ -431,6 +437,325 @@ describe('live funded bid (chain + mint + relay)', () => {
 
 				// ---- 6. Name every artifact published ----
 				console.log(`WS-E live funded bid — ARTIFACTS\n${JSON.stringify(report, null, 2)}`)
+			} finally {
+				pool.close([RELAY])
+			}
+		},
+		TEST_TIMEOUT_MS,
+	)
+})
+
+// =========================================================================
+// Live acceptance — the wallet claims the refund the validators minted for it
+// =========================================================================
+
+/**
+ * A minimal `localStorage` so the claim's real user-scoped persistence
+ * (`loadUserData`/`saveUserData`) runs under bun/node exactly as it does in the
+ * browser. The record surviving between the two claim runs IS the point: a
+ * restart cannot claim twice.
+ */
+function installLocalStorageShim(): void {
+	const store = new Map<string, string>()
+	;(globalThis as unknown as { localStorage: unknown }).localStorage = {
+		getItem: (key: string) => store.get(key) ?? null,
+		setItem: (key: string, value: string) => void store.set(key, value),
+		removeItem: (key: string) => void store.delete(key),
+		clear: () => store.clear(),
+		key: (index: number) => [...store.keys()][index] ?? null,
+		get length() {
+			return store.size
+		},
+	}
+}
+
+/** A wallet source over a cashu-ts wallet and its own proof list — the shape the rails read. */
+function trackedWallet(mintUrl: string, initial: Proof[]) {
+	let held = [...initial]
+	return {
+		state: {
+			dump: () => ({ proofs: [{ mint: mintUrl, proofs: held }] }),
+			getProofs: (filter: { mint: string }) => (filter.mint === mintUrl ? held : []),
+			update: async (update: { store: Proof[]; mint: string; destroy?: Proof[] }) => {
+				const destroyed = new Set((update.destroy ?? []).map((proof) => proof.secret))
+				held = [...held.filter((proof) => !destroyed.has(proof.secret)), ...update.store]
+			},
+		},
+		getProofs: () => held,
+		balance: () => held.reduce((sum, proof) => sum + proof.amount.toNumber(), 0),
+	}
+}
+
+/** The escrow send port, bound to a tracked source so the change lands back in it. */
+function escrowManagerForSource(cashuWallet: Wallet, source: ReturnType<typeof trackedWallet>, mintUrl: string): ArenaEscrowSendManager {
+	let pending: { amount: number; options: P2PKOptions } | null = null
+	return {
+		mint: { addMint: async () => ({}) },
+		ops: {
+			send: {
+				init: async (_mintUrl, amount, request) => {
+					pending = { amount, options: request.methodData.options }
+					return { id: 'escrow' }
+				},
+				prepare: async (operation) => operation,
+				execute: async () => {
+					if (pending === null) throw new Error('the escrow send was not initialized')
+					const { amount, options } = pending
+					const held = source.getProofs()
+					const { send, keep } = await cashuWallet.send(amount, held, {}, { send: { type: 'p2pk', options } })
+					await source.state.update({ store: keep, mint: mintUrl, destroy: held })
+					pending = null
+					return { token: { proofs: send } }
+				},
+			},
+		},
+	}
+}
+
+/** Poll the relay for the receipt events whose `bid` tag is `bidId`, on a bounded deadline. */
+async function pollRelayForBidReceipts(
+	pool: SimplePool,
+	kind: number,
+	bidId: string,
+	deadlineMs: number,
+): Promise<{
+	polls: number
+	events: { id: string; pubkey: string; kind: number; created_at: number; tags: string[][]; content: string; sig: string }[]
+}> {
+	const deadline = Date.now() + deadlineMs
+	let polls = 0
+	while (Date.now() < deadline) {
+		const raw = await pool.querySync([RELAY], { kinds: [kind], limit: 100 }, { maxWait: 6000 })
+		polls += 1
+		const matches = raw.filter((event) => event.tags.some((tag) => tag[0] === 'bid' && tag[1] === bidId))
+		if (matches.length > 0) {
+			return {
+				polls,
+				events: matches.map((event) => ({
+					id: event.id,
+					pubkey: event.pubkey,
+					kind: event.kind,
+					created_at: event.created_at,
+					tags: event.tags as string[][],
+					content: event.content,
+					sig: event.sig ?? '',
+				})),
+			}
+		}
+		await sleep(1000)
+	}
+	throw new Error(`no kind-${kind} receipt for bid ${bidId} arrived on ${RELAY} within ${deadlineMs} ms (${polls} polls)`)
+}
+
+describe('live funded bid — the recipient claims the refund the validators minted for it', () => {
+	test.skipIf(!LIVE)(
+		"an outbid bidder's wallet claims its kind-1443 refund automatically, and only once",
+		async () => {
+			installLocalStorageShim()
+			const pool = new SimplePool()
+			const report: Record<string, unknown> = { relay: RELAY, chainStateUrl: CHAIN_STATE_URL }
+			try {
+				// ---- 1. The escrow terms, read the app's way ----
+				const store = createMemoryEventStore()
+				const stream: EventReadContext<NostrEventLike>['stream'] = async function* () {
+					const raw = await pool.querySync([RELAY], { kinds: [1448] }, { maxWait: 8000 })
+					for (const event of raw) yield { type: 'event', event: event as unknown as NostrEventLike }
+					yield { type: 'caught-up', info: { eose: [RELAY], pending: [], complete: true } }
+				}
+				const { params: read } = await readArenaParams({ context: createEventReadContext({ store, stream }), deadlineMs: 8000 })
+				if (read === null) throw new Error(`no anchored arena.params.v1 reading arrived on ${RELAY}`)
+				const terms: ArenaParamsTerms = read.terms
+				if (typeof terms.mint_url !== 'string' || typeof terms.keyset_id !== 'string' || typeof terms.group_key !== 'string')
+					throw new Error('the params reading is missing mint_url / keyset_id / group_key')
+				const mintUrl = terms.mint_url
+				const keysetId = terms.keyset_id
+				report.params = { eventId: read.eventId, height: read.height, mintUrl, keysetId, groupKey: terms.group_key }
+
+				// ---- 2. A lot from a fresh seller ----
+				const sellerSk = generateSecretKey()
+				const sellerPubkey = getPublicKey(sellerSk)
+				const sellerWalletPrivate = bytesToHex(generateSecretKey())
+				const sellerWallet = arenaWalletPubkey(sellerWalletPrivate)
+				const d = `wsc-claim-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+				const coordinate = `1440:${sellerPubkey}:${d}`
+				const publisher = nostrPublisher(pool)
+				const createResult = await publishArenaCreate(
+					{
+						auctionId: d,
+						title: 'WS-G live receipt-claim lot',
+						description: 'Published by scripts/auctions/live-funded-bid.test.ts.',
+						imageUrl: 'https://picsum.photos/seed/wsc-claim/200',
+						category: 'Test',
+						name: 'WS-G live',
+						startPrice: String(BID_AMOUNT_SATS),
+						minIncrement: '8',
+						mode: 'fixed',
+						windowSec: '',
+						durationSec: DURATION_SEC,
+						v4vSplit: [],
+					},
+					{
+						sellerPubkey,
+						sellerWallet,
+						signer: {
+							pubkey: sellerPubkey,
+							sign: async (template: { kind: number; created_at: number; tags: string[][]; content: string }) =>
+								finalizeEvent(template, sellerSk) as unknown as Event,
+						},
+						publisher,
+						relays: [RELAY],
+						now: nowSec(),
+					},
+				)
+				report.lot = { eventId: createResult.eventId, coordinate, seller: sellerPubkey, sellerWallet }
+				expect(createResult.outcome).toBe('accepted')
+				await pollChainUntil((state) => coordinate in state.auctions, CREATE_COMMIT_DEADLINE_MS, `the lot ${coordinate}`)
+
+				// The model both bids are assembled against, from the app's own projection.
+				const [rawCreate] = await pool.querySync([RELAY], { ids: [createResult.eventId] }, { maxWait: 8000 })
+				const decoded = decodeArenaEvent(rawCreate as unknown as NostrEventLike, RELAY)
+				if (!decoded.ok) throw new Error(`the read gate refused our own create: ${decoded.refusal}`)
+				const view = findAuction(projectArenaEvents([decoded.event]), coordinate)
+				if (view === null) throw new Error(`the projection did not deliver ${coordinate}`)
+				const model = toAuctionDetailModel(view, { now: nowSec(), status: 'settled' })
+
+				const cashuWallet = new Wallet(mintUrl)
+				await cashuWallet.loadMint()
+
+				/** Fund one bid from a fresh wallet key and publish it; poll until consensus commits it. */
+				const fundAndPublishBid = async (amount: number, label: string) => {
+					const walletPrivate = bytesToHex(generateSecretKey())
+					const walletPub = arenaWalletPubkey(walletPrivate)
+					const quote = await cashuWallet.createMintQuoteBolt11(amount)
+					let quoteState = quote.state
+					const mintDeadline = Date.now() + MINT_QUOTE_DEADLINE_MS
+					while (quoteState !== MintQuoteState.PAID && quoteState !== MintQuoteState.ISSUED) {
+						if (Date.now() > mintDeadline)
+							throw new Error(`the mint quote ${quote.quote} was not PAID/ISSUED within ${MINT_QUOTE_DEADLINE_MS} ms`)
+						await sleep(300)
+						quoteState = (await cashuWallet.checkMintQuoteBolt11(quote.quote)).state
+					}
+					const funded = await cashuWallet.mintProofsBolt11(amount, quote)
+					const source = trackedWallet(mintUrl, funded)
+					const walletSigner: ArenaWalletSpendSigner = {
+						pubkey: walletPub,
+						signDigest: (digestHex: string) => schnorrSignDigest(digestHex, walletPrivate),
+					}
+					const bidderNostrSk = generateSecretKey()
+					const bidderNostrPubkey = getPublicKey(bidderNostrSk)
+					const ports: ArenaBidFundPorts = {
+						readConfig: async () => ({
+							committee_public_key: terms.group_key as string,
+							mint_url: terms.mint_url,
+							keyset_id: terms.keyset_id,
+							keys: terms.keys,
+							settlement_safety_sec: terms.settlement_safety_sec,
+							bid_to_consensus_latency_sec: terms.bid_to_consensus_latency_sec,
+							min_window_sec: terms.min_window_sec,
+							max_window_sec: terms.max_window_sec,
+							min_duration_sec: terms.min_duration_sec,
+							max_duration_sec: terms.max_duration_sec,
+							max_proofs: terms.max_proofs,
+							threshold: terms.threshold,
+						}),
+						readWalletSigner: () => walletSigner,
+						readEscrowManager: () => escrowManagerForSource(cashuWallet, source, mintUrl),
+					}
+					const { funding, fundingTerms } = await assembleArenaBidFunding({ model, amount, now: nowSec() }, ports)
+					const bidResult = await publishArenaBid(
+						{ model, status: 'settled', bidder: { pubkey: bidderNostrPubkey, wallet: 'ready' }, raw: String(amount) },
+						{
+							signer: {
+								pubkey: bidderNostrPubkey,
+								sign: async (template: { kind: number; created_at: number; tags: string[][]; content: string }) =>
+									finalizeEvent(template, bidderNostrSk) as unknown as Event,
+							},
+							publisher,
+							relays: [RELAY],
+							now: nowSec(),
+							funding,
+							fundingTerms,
+						},
+					)
+					expect(bidResult.outcome).toBe('accepted')
+					await pollChainUntil(
+						(state) => bidResult.eventId in state.bids,
+						BID_COMMIT_DEADLINE_MS,
+						`the bid ${label} (${bidResult.eventId})`,
+					)
+					return { bidEventId: bidResult.eventId, walletPrivate, walletPub, source, quoteId: quote.quote }
+				}
+
+				// ---- 3. Bid A from wallet key K, then a HIGHER bid B from K2 ----
+				const K = await fundAndPublishBid(BID_AMOUNT_SATS, 'A')
+				report.bidA = { eventId: K.bidEventId, wallet: K.walletPub, amount: BID_AMOUNT_SATS, quoteId: K.quoteId }
+				const balanceBefore = K.source.balance()
+				expect(balanceBefore).toBe(0) // A's whole escrow left K's wallet
+
+				const B = await fundAndPublishBid(BID_AMOUNT_SATS + 8, 'B')
+				report.bidB = { eventId: B.bidEventId, wallet: B.walletPub, amount: BID_AMOUNT_SATS + 8, quoteId: B.quoteId }
+
+				// ---- 4. The read: A's kind-1443 refund, addressed to K ----
+				const refundPoll = await pollRelayForBidReceipts(pool, 1443, K.bidEventId, BID_COMMIT_DEADLINE_MS)
+				// Keep ONLY what the read verifies — kind, signature, schema, outcome, anchor.
+				const { receipts, refusals } = readArenaReceipts(refundPoll.events as ArenaReceiptEventLike[], {})
+				report.refundRead = { polls: refundPoll.polls, verifiedReceipts: receipts.length, refusals }
+				expect(receipts.length).toBeGreaterThan(0)
+				const refund = receipts.find((receipt) => receipt.outcome === 'refund' && receipt.bidId === K.bidEventId)
+				if (refund === undefined) throw new Error(`the read delivered no verified refund receipt for K's bid ${K.bidEventId}`)
+				const refundTotal = refund.outputs
+					.filter((output) => output.recipient === K.walletPub)
+					.reduce((sum, output) => sum + (output.amount ?? 0), 0)
+				report.refundReceipt = {
+					eventId: refund.eventId,
+					bidId: refund.bidId,
+					outcome: refund.outcome,
+					height: refund.height,
+					outputs: refund.outputs.map((output) => ({ recipient: output.recipient, amount: output.amount, id: output.id })),
+					refundTotal,
+				}
+				expect(refundTotal).toBeGreaterThan(0)
+
+				// ---- 5. The claim: swap K's refund into K's wallet, automatically ----
+				const claimHost = (recordPubkey: string) => ({
+					getWallet: () => K.source,
+					isWalletReady: () => true,
+					mint: { cashuWalletForMint: async () => ({ cashuWallet, keysetId }) },
+					getWalletP2pk: () => K.walletPub,
+					getWalletPrivkey: (pubkey: string) => (pubkey === K.walletPub ? K.walletPrivate : null),
+					getExpectedMintUrl: () => mintUrl,
+					getWalletMints: () => [mintUrl],
+					getExpectedKeysetId: () => keysetId,
+					getClaimRecord: () => loadArenaReceiptClaimRecord(recordPubkey),
+					setClaimRecord: (record: ReturnType<typeof loadArenaReceiptClaimRecord>) => saveArenaReceiptClaimRecord(record, recordPubkey),
+					refresh: async () => {},
+					now: () => Date.now(),
+				})
+				const claim = createArenaReceiptClaims(claimHost('claim-test-user'))
+
+				const firstRun = await claim.claimReceipts([refund])
+				const balanceAfter = K.source.balance()
+				report.claim = {
+					claimed: firstRun.claimed,
+					refusals: firstRun.refusals,
+					balanceBefore,
+					balanceAfter,
+					delta: balanceAfter - balanceBefore,
+				}
+				// The load-bearing assertion: K's balance rose by exactly the refund,
+				// with no manual action — the read delivered it and the wallet took it.
+				expect(firstRun.claimed).toHaveLength(1)
+				expect(firstRun.claimed[0].bidId).toBe(K.bidEventId)
+				expect(balanceAfter - balanceBefore).toBe(refundTotal)
+
+				// ---- 6. A second run claims nothing, silently ----
+				const secondRun = await claim.claimReceipts([refund])
+				report.secondRun = { claimed: secondRun.claimed, refusals: secondRun.refusals, balanceAfter: K.source.balance() }
+				expect(secondRun.claimed).toEqual([])
+				expect(secondRun.refusals.map((entry) => entry.refusal)).toEqual(['arena.claim.already_claimed'])
+				expect(K.source.balance()).toBe(balanceAfter)
+
+				console.log(`WS-G live receipt claim — ARTIFACTS\n${JSON.stringify(report, null, 2)}`)
 			} finally {
 				pool.close([RELAY])
 			}
