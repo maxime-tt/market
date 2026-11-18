@@ -49,6 +49,7 @@ let publishStorefrontPage: (typeof import('./storefrontPublish'))['publishStoref
 const PAGE: StorefrontPage = {
 	version: STOREFRONT_PAGE_VERSION,
 	enabled: true,
+	chrome: 'app',
 	root: { props: parseStorefrontRootProps({ title: 'Served shop' }) },
 	content: [{ type: 'Text', props: { id: 'text-1', markdown: 'A served page with a marker: NEEDLE-42.', align: 'left', width: 'normal' } }],
 }

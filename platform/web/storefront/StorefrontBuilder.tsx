@@ -86,6 +86,7 @@ function fromPuckData(data: Data, enabled: boolean): StorefrontPage {
 	return {
 		version: STOREFRONT_PAGE_VERSION,
 		enabled,
+		chrome: 'app',
 		root: { props: (data.root?.props ?? {}) as StorefrontPage['root']['props'] },
 		content: data.content as StorefrontPage['content'],
 	}

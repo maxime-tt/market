@@ -65,6 +65,7 @@ function pageWith(...blocks: StorefrontBlock[]): StorefrontPage {
 	return {
 		version: 1,
 		enabled: true,
+		chrome: 'app',
 		root: { props: { title: 'My shop', theme: 'default', palette: '', tune: STOREFRONT_TUNE_DEFAULTS } },
 		content: blocks,
 	}
