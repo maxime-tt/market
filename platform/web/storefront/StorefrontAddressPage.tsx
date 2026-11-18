@@ -28,7 +28,20 @@ import { storefrontBlockSlots } from './StorefrontBlockSlots'
  * the same empty state (relay content is untrusted until the parser accepts
  * it); a relay/transport failure surfaces as an error state with a retry.
  */
-export function StorefrontAddressPage({ dTag, author: authorProp }: { dTag: string; author?: string }) {
+export function StorefrontAddressPage({
+	dTag,
+	author: authorProp,
+	variant = 'page',
+}: {
+	dTag: string
+	author?: string
+	/**
+	 * `page` is the full-bleed surface a path of its own gets; `embedded` is the
+	 * same component inside the app frame (a bound page rendered by `__root`), so
+	 * its own waiting and empty states stop claiming a whole viewport.
+	 */
+	variant?: 'page' | 'embedded'
+}) {
 	const { data: config, isLoading: isLoadingConfig } = useConfigQuery()
 	// The app key comes from the public app config (`useConfigQuery`) when the
 	// caller does not already know it. A caller that does — the served page knows
@@ -39,18 +52,24 @@ export function StorefrontAddressPage({ dTag, author: authorProp }: { dTag: stri
 	const hasAddress = isValidHexKey(author) && dTag.length > 0
 	const { data: page, isLoading: isLoadingPage, isError, refetch } = useStorefrontAddressPage(hasAddress ? author : undefined, dTag)
 
+	// The same components and test ids in both variants; only the height claim
+	// differs. `min-h-screen` is right for a page that owns the URL, wrong inside
+	// the app frame — there the frame's header and footer already fill the
+	// viewport, so an embedded page needs a floor, not the whole screen.
+	const stateMinHeight = variant === 'embedded' ? 'min-h-[40vh]' : 'min-h-screen'
+
 	// The config read gates the page read (the query stays disabled without a
 	// valid author), so the two loads are strictly sequential: wait for the
 	// config first, then for the page. With the author supplied there is nothing
 	// to wait for but the page itself.
 	if ((needsConfig && isLoadingConfig) || (hasAddress && isLoadingPage)) {
-		return <LoadingState className="min-h-screen" label="Loading…" />
+		return <LoadingState className={stateMinHeight} label="Loading…" />
 	}
 
 	if (isError) {
 		return (
 			<ErrorState
-				className="min-h-screen"
+				className={stateMinHeight}
 				title="This page could not be loaded"
 				message="The relay holding this page did not respond. Trying again may help."
 				onRetry={() => void refetch()}
@@ -67,7 +86,7 @@ export function StorefrontAddressPage({ dTag, author: authorProp }: { dTag: stri
 	// deliberate, token-clean empty state, never a blank page or an error.
 	return (
 		<EmptyState
-			className="min-h-screen"
+			className={stateMinHeight}
 			data-testid="storefront-address-empty"
 			title="Nothing published yet"
 			description="No page has been published at this address."

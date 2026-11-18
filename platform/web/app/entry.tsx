@@ -21,10 +21,12 @@ import.meta.hot.accept()
 type ResolvedServer = ReturnType<typeof buildServer>
 let resolvedServer: ResolvedServer | undefined
 export const serverPromise: Promise<ResolvedServer> = (async () => {
-	// The routing table is read once, here, before the server exists. An
-	// unreadable or invalid table refuses boot — the site is broken, not
-	// degraded (ARCHITECTURE.md §4.4). It is read before settings discovery so
-	// a corrupt file fails immediately rather than after a relay timeout.
+	// The routing table is read once, here, before the server exists. A missing
+	// file is the empty table — a fresh checkout and a fresh deployment must
+	// boot, and the first write creates it. An unreadable or invalid table
+	// refuses boot — the site is broken, not degraded (ARCHITECTURE.md §4.4).
+	// It is read before settings discovery so a corrupt file fails immediately
+	// rather than after a relay timeout.
 	// The table stays live after boot: route intents authored through the
 	// ingest mutate this same object, and every request re-resolves against it.
 	const routing = loadRouteTable(process.env.AR_ROUTES_FILE ?? './data/routes.json')

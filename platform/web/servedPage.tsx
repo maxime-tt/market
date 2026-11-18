@@ -38,6 +38,19 @@ import { fillServedPageRegions } from './storefront/StorefrontBlockSlots'
  * them. The static content a crawler reads is therefore also what a person
  * sees, from the first paint.
  *
+ * **What this seam is not.** A bound path whose page asks for app chrome is
+ * answered by a *different* document: the ordinary SPA shell plus a
+ * `#__AR_ROUTE__` payload (`platform/server/routes/pageHtml.ts`), with no
+ * `[data-ar-served-page]` wrapper and no `#__AR_PAGE__`. This module reads only
+ * the second id, so such a document is not a served page to it — the app mounts
+ * normally and `platform/web/routes/__root.tsx` renders the page inside the
+ * real header and footer. The two ids are deliberately distinct for exactly
+ * that reason: an already-open tab holding the previous bundle receives the new
+ * shell, finds no `#__AR_PAGE__`, and mounts the ordinary app rather than
+ * hydrating an empty wrapper. **The two hydration failures above are therefore
+ * unreachable from the app-chrome path** — they are hazards of *this* seam, and
+ * this seam no longer answers every bound path.
+ *
  * A second consequence, and the reason the router is still *provided*: the
  * regions are filled with the app's own slot components, which navigate with
  * `useNavigate`/`Link`. They get the app's router through
@@ -61,8 +74,15 @@ let payload: ServedPagePayload | null = null
 let markup = ''
 let servedPath: string | null = null
 
-/** The server's own normalisation (`resolve.ts` `normalizePath`), so the two agree. */
-const normalizePath = (pathname: string) => pathname.replace(/\/+$/, '').toLowerCase()
+/**
+ * The server's own normalisation (`resolve.ts` `normalizePath`), so the two agree.
+ *
+ * Exported because the app-chrome guard (`storefront/appChromePage.ts`) asks the
+ * same question of the same server answer: two path comparisons, one rule.
+ */
+export function normalizePath(pathname: string): string {
+	return pathname.replace(/\/+$/, '').toLowerCase()
+}
 
 /**
  * The served page's payload and markup, read from the DOM the server sent.

@@ -90,6 +90,7 @@ function page(...blocks: StorefrontBlock[]): StorefrontPage {
 	return {
 		version: 1,
 		enabled: true,
+		chrome: 'app',
 		root: { props: { title: 'Satoshi’s shop', theme: 'default', palette: '', tune: STOREFRONT_TUNE_DEFAULTS } },
 		content: blocks,
 	}

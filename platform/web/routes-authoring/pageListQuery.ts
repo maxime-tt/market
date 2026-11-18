@@ -2,7 +2,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import type { NostrEventLike } from '@sdk/core'
 import { storefrontKeys } from '@sdk/core/query/queryKeyFactory'
 import { isValidHexKey } from '@sdk/core/utils/utils'
-import { STOREFRONT_PAGE_KIND, parseStorefrontPage } from '@sdk/commerce/storefront/storefrontPage'
+import { STOREFRONT_PAGE_KIND, parseStorefrontPage, type StorefrontPageChrome } from '@sdk/commerce/storefront/storefrontPage'
 import { getReadContext } from '@platform/web/readContext'
 import { selectReplaceable } from '@platform/web/storefront/storefrontQuery'
 
@@ -48,6 +48,12 @@ export interface AuthorPage {
 	title: string | null
 	/** The document's own switch. A page that does not parse is not enabled. */
 	enabled: boolean
+	/**
+	 * The document's presentation intent. A page that does not parse — or one
+	 * published before the field existed — is the app-chrome default, which is
+	 * the same answer the serve path gives it.
+	 */
+	chrome: StorefrontPageChrome
 	/** The winning event's `created_at`, for ordering. */
 	updatedAt: number
 	/** The winning event's id, so a row can be keyed on the real document. */
@@ -100,10 +106,15 @@ export async function fetchMyPages(pubkey: string): Promise<PageListResult> {
 	for (const [d, bucket] of byD) {
 		const winner = selectReplaceable(bucket)
 		if (!winner) continue
+		// One parse: the switch and the presentation intent come from the same
+		// document. A document that does not parse is neither live nor anything
+		// but the default intent.
+		const document = parseStorefrontPage(winner.content).page
 		pages.push({
 			d,
 			title: winner.tags.find((tag) => tag[0] === 'title')?.[1] ?? null,
-			enabled: parseStorefrontPage(winner.content).page?.enabled ?? false,
+			enabled: document?.enabled ?? false,
+			chrome: document?.chrome ?? 'app',
 			updatedAt: winner.created_at ?? 0,
 			eventId: winner.id,
 		})

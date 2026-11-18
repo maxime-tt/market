@@ -154,3 +154,31 @@ describe('the storefront page is just one of the pages', () => {
 		expect(result.pages[0].d).toBe(STOREFRONT_PAGE_D_TAG)
 	})
 })
+
+describe('presentation intent on a page row', () => {
+	const documentWith = (chrome: string) =>
+		JSON.stringify({
+			version: STOREFRONT_PAGE_VERSION,
+			enabled: true,
+			chrome,
+			root: { props: {} },
+			content: [{ type: 'Divider', props: { id: 'd1' } }],
+		})
+
+	test('a document that opts out reports standalone', async () => {
+		fetchResult = [pageEvent('featured', { content: documentWith('standalone') })]
+		expect((await fetchMyPages(AUTHOR)).pages[0].chrome).toBe('standalone')
+	})
+
+	test('a document that omits the field is the app-chrome default — the answer the server would give it too', async () => {
+		fetchResult = [pageEvent('featured')]
+		expect((await fetchMyPages(AUTHOR)).pages[0].chrome).toBe('app')
+	})
+
+	test('a document that does not parse is the default, and is still not enabled', async () => {
+		fetchResult = [pageEvent('featured', { content: 'not json' })]
+		const page = (await fetchMyPages(AUTHOR)).pages[0]
+		expect(page.chrome).toBe('app')
+		expect(page.enabled).toBe(false)
+	})
+})

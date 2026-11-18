@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import type { StorefrontPageChrome } from '@sdk/commerce/storefront/storefrontPage'
 import { FileText } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { ErrorState } from '@ui/shared/error-state'
@@ -49,8 +50,15 @@ import { resolveAuthor, shortPubkey } from './routeAuthoring'
 const HEADER = { icon: FileText, title: 'Pages', description: 'The pages you publish under paths of this app' }
 
 /** The list's rows, as the picker wants them: a label plus its address. */
-function toPickerPages(pubkey: string, pages: readonly { d: string; title: string | null; enabled: boolean }[]): PickerPage[] {
-	return pages.map((page) => ({ ...describePage({ author: pubkey, d: page.d }, page.enabled), d: page.d, title: page.title }))
+function toPickerPages(
+	pubkey: string,
+	pages: readonly { d: string; title: string | null; enabled: boolean; chrome: StorefrontPageChrome }[],
+): PickerPage[] {
+	return pages.map((page) => ({
+		...describePage({ author: pubkey, d: page.d }, page.enabled, page.chrome),
+		d: page.d,
+		title: page.title,
+	}))
 }
 
 /**

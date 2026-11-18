@@ -433,4 +433,68 @@ describe('round trip', () => {
 		expect(reparsed.droppedBlocks).toBe(0)
 		expect(reparsed.page).toEqual(validated.page)
 	})
+
+	test('chrome round-trips through publish validation unchanged', () => {
+		const standalone = { ...createEmptyStorefrontPage(), enabled: true, chrome: 'standalone' as const, content: [] }
+		const validated = validateStorefrontPageForPublish(standalone)
+		expect(validated.ok).toBe(true)
+		if (!validated.ok) return
+		expect(validated.page.chrome).toBe('standalone')
+
+		const reparsed = parseStorefrontPage(JSON.stringify(validated.page))
+		expect(reparsed.droppedBlocks).toBe(0)
+		expect(reparsed.page?.chrome).toBe('standalone')
+	})
+})
+
+describe('parseStorefrontPage — chrome is presentation intent, never a reason to drop a block', () => {
+	test('an explicit standalone value parses as standalone', () => {
+		const raw = documentWith([block('Divider', {})], { chrome: 'standalone' })
+		const result = parseStorefrontPage(raw)
+		expect(result.error).toBeNull()
+		expect(result.page?.chrome).toBe('standalone')
+		expect(result.page?.content).toHaveLength(1)
+	})
+
+	test('a missing chrome value defaults to app', () => {
+		const result = parseStorefrontPage(documentWith([block('Divider', {})]))
+		expect(result.page?.chrome).toBe('app')
+		expect(result.droppedBlocks).toBe(0)
+	})
+
+	test('unknown, mistyped and null values all resolve to app and drop no block', () => {
+		for (const chrome of ['iframe', 7, null]) {
+			const result = parseStorefrontPage(documentWith([block('Divider', {})], { chrome }))
+			expect(result.error).toBeNull()
+			expect(result.page?.chrome).toBe('app')
+			expect(result.page?.content).toHaveLength(1)
+			expect(result.droppedBlocks).toBe(0)
+		}
+	})
+
+	test('an unknown extra field alongside chrome does not fail the document', () => {
+		const raw = documentWith([block('Divider', {})], { chrome: 'standalone', futureField: { anything: true } })
+		const result = parseStorefrontPage(raw)
+		expect(result.error).toBeNull()
+		expect(result.page?.chrome).toBe('standalone')
+		expect(result.droppedBlocks).toBe(0)
+	})
+})
+
+describe('validateStorefrontPageForPublish — chrome', () => {
+	test('accepts both values and defaults a missing one to app', () => {
+		for (const chrome of ['app', 'standalone'] as const) {
+			const result = validateStorefrontPageForPublish({ ...createEmptyStorefrontPage(), chrome })
+			expect(result.ok).toBe(true)
+			if (result.ok) expect(result.page.chrome).toBe(chrome)
+		}
+
+		const missing = validateStorefrontPageForPublish({ version: STOREFRONT_PAGE_VERSION, enabled: true, root: { props: {} }, content: [] })
+		expect(missing.ok).toBe(true)
+		if (missing.ok) expect(missing.page.chrome).toBe('app')
+	})
+
+	test('createEmptyStorefrontPage carries the app default', () => {
+		expect(createEmptyStorefrontPage().chrome).toBe('app')
+	})
 })

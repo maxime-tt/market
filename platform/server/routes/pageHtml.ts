@@ -22,6 +22,14 @@ import type { PageMeta } from './pageStore'
  *     no CSS at all — measured on the increment-1/2 document.
  *
  * No block emits a script. There is no per-block asset and no registry.
+ *
+ * This is the **standalone** answer. A bound path whose page document asks for
+ * `chrome: 'app'` answers with the ordinary SPA shell plus `#__AR_ROUTE__`
+ * (`injectRoutePayload`, below) instead: the shell renders the app's own header
+ * and footer and the client renders the page inside them. A standalone
+ * document is still composed here and still carries the server-rendered body,
+ * which is what makes it survive a dead relay; it is now one of two answers a
+ * bound path can give, not the only one.
  */
 
 export interface PagePayload {
@@ -63,12 +71,60 @@ export function escapeHtml(value: string): string {
 	return value.replace(/[&<>"']/g, (character) => ESCAPES[character])
 }
 
-/** JSON that cannot terminate its own `<script>` element. */
-export function serializePagePayload(payload: PagePayload): string {
+/**
+ * JSON that cannot terminate its own `<script>` element. The one escaping rule;
+ * every payload script on this server (`#__AR_PAGE__` and `#__AR_ROUTE__`) is
+ * serialised through it.
+ */
+export function serializePagePayload<T extends object>(payload: T): string {
 	return JSON.stringify(payload)
 		.replace(/</g, '\\u003c')
 		.replace(/\u2028/g, '\\u2028')
 		.replace(/\u2029/g, '\\u2029')
+}
+
+/**
+ * The script id of the app-chrome payload — deliberately not `#__AR_PAGE__`.
+ *
+ * The two ids are the discriminator between the two answers a bound path can
+ * give. `#__AR_PAGE__` means *a served document*: `platform/web/frontend.tsx`
+ * sees it and mounts the app outside the router, hydrating the server's
+ * markup. `#__AR_ROUTE__` means *a shell that names a page*: the app mounts
+ * normally and `platform/web/storefront/appChromePage.ts` reads the payload so
+ * the root guard renders the page inside the real header and footer.
+ */
+export const ROUTE_PAYLOAD_SCRIPT_ID = '__AR_ROUTE__'
+
+/** The app-chrome payload: the page, and the path the server answered for. */
+export interface RoutePayload {
+	author: string
+	d: string
+	/** The request path, normalised the way the standalone arm's canonical is. */
+	path: string
+}
+
+/**
+ * The app-chrome document: the SPA shell's own bytes with the route payload
+ * inserted, and nothing else changed.
+ *
+ * Pure `string → string` so the shell's cached bytes are never mutated: the
+ * caller injects, then builds a fresh `Response` (`buildServer.ts`). The script
+ * goes immediately before `</body>`; a shell with no `</body>` (Bun's
+ * `HTMLBundle` has one, a test's `new Response('SHELL')` does not) gets it
+ * appended, which the browser hoists into the body anyway.
+ *
+ * One script element per document, and a document that already carries
+ * `#__AR_PAGE__` is returned untouched: that is a composed standalone page, and
+ * adding a second, different answer to it would leave the client choosing.
+ */
+export function injectRoutePayload(shellHtml: string, payload: RoutePayload): string {
+	if (shellHtml.includes(`id="${ROUTE_PAYLOAD_SCRIPT_ID}"`)) return shellHtml
+	if (shellHtml.includes('id="__AR_PAGE__"')) return shellHtml
+
+	const script = `<script id="${ROUTE_PAYLOAD_SCRIPT_ID}" type="application/json">${serializePagePayload(payload)}</script>`
+	const close = shellHtml.lastIndexOf('</body>')
+	if (close === -1) return shellHtml + script
+	return `${shellHtml.slice(0, close)}${script}${shellHtml.slice(close)}`
 }
 
 export function composePageHtml(options: ComposePageOptions): string {
