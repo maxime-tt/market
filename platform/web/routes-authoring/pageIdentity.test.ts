@@ -16,18 +16,21 @@ describe('page identity', () => {
 		expect(pageLabel('featured-13-11-2026')).toBe('featured-13-11-2026')
 	})
 
-	test('a described page carries its name, author, switch and default flag', () => {
-		expect(describePage({ author: AUTHOR, d: STOREFRONT_PAGE_D_TAG }, true)).toEqual({
+	test('a described page carries its name, author, switch, default flag and chrome', () => {
+		expect(describePage({ author: AUTHOR, d: STOREFRONT_PAGE_D_TAG }, true, 'app')).toEqual({
 			name: 'Storefront',
 			authorLabel: `${AUTHOR.slice(0, 8)}…${AUTHOR.slice(-4)}`,
 			enabled: true,
 			isDefault: true,
+			chrome: 'app',
 		})
-		expect(describePage({ author: AUTHOR, d: 'featured' }, false)).toEqual({
+		expect(describePage({ author: AUTHOR, d: 'featured' }, false, 'standalone')).toEqual({
 			name: 'featured',
 			authorLabel: `${AUTHOR.slice(0, 8)}…${AUTHOR.slice(-4)}`,
 			enabled: false,
 			isDefault: false,
+			// Carried through, never inferred from the name or the switch.
+			chrome: 'standalone',
 		})
 	})
 })

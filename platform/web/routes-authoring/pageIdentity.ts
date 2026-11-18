@@ -1,4 +1,4 @@
-import { STOREFRONT_PAGE_D_TAG } from '@sdk/commerce/storefront/storefrontPage'
+import { STOREFRONT_PAGE_D_TAG, type StorefrontPageChrome } from '@sdk/commerce/storefront/storefrontPage'
 import { isValidPagePath } from '@platform/server/routes/pagePaths'
 import { shortPubkey } from './routeAuthoring'
 
@@ -29,6 +29,8 @@ export interface PageLabel {
 	authorLabel: string
 	enabled: boolean
 	isDefault: boolean
+	/** The document's presentation intent — carried through, never inferred. */
+	chrome: StorefrontPageChrome
 }
 
 /** The storefront page is the one whose `d` is the reserved default. */
@@ -48,12 +50,13 @@ export function pageLabel(name: string): string {
 }
 
 /** Everything a page row or a picker row needs to name one page. */
-export function describePage(identity: PageIdentity, enabled: boolean): PageLabel {
+export function describePage(identity: PageIdentity, enabled: boolean, chrome: StorefrontPageChrome): PageLabel {
 	return {
 		name: pageLabel(identity.d),
 		authorLabel: shortPubkey(identity.author),
 		enabled,
 		isDefault: pageIsStorefront(identity.d),
+		chrome,
 	}
 }
 

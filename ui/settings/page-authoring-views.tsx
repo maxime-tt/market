@@ -1,10 +1,11 @@
-import { FileText, LayoutTemplate, Plus, Route, Search } from 'lucide-react'
+import { AppWindow, FileText, LayoutTemplate, Plus, Route, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Badge } from '../primitives/badge'
 import { Button } from '../primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../primitives/card'
 import { Input } from '../primitives/input'
 import { Label } from '../primitives/label'
+import { Switch } from '../primitives/switch'
 import { EmptyState } from '../shared/empty-state'
 import { ErrorState } from '../shared/error-state'
 import { LoadingState } from '../shared/loading-state'
@@ -34,13 +35,25 @@ import { cn } from '../utils/cn'
  * component here exposes `ref` on its root.
  */
 
-/** A page as the UI names it — the `PageLabel` the host's view model produces. */
+/**
+ * A page as the UI names it — the `PageLabel` the host's view model produces.
+ */
 export interface PageLabelView {
 	name: string
 	authorLabel: string
 	enabled: boolean
 	isDefault: boolean
+	/**
+	 * Presentation intent carried on the page document: `'app'` renders the
+	 * page inside the app's header/footer, `'standalone'` publishes it on its
+	 * own. Declared structurally here, like the rest of this shape, so `ui/`
+	 * does not import the host's document type.
+	 */
+	chrome: PageChrome
 }
+
+/** The two ways a bound page can answer. Mirrors `StorefrontPageChrome`. */
+export type PageChrome = 'app' | 'standalone'
 
 /** One row of the picker: a page label plus the address it points at. */
 export interface PickerPage extends PageLabelView {
@@ -64,7 +77,50 @@ export function PageLabelChips({ label, className }: { label: PageLabelView; cla
 			</Badge>
 			<span className="text-text-mid text-xs">{label.authorLabel}</span>
 			<StatusBadge status={label.enabled ? 'live' : 'off'} tone={label.enabled ? 'success' : 'neutral'} />
+			{/* "Why does this page look different" is answerable from the list:
+			    app chrome and standalone are two visibly different answers, and a
+			    reader who cannot see which one a row is would have to open it. */}
+			<Badge variant="outline" data-testid="page-chrome-chip">
+				{label.chrome === 'standalone' ? 'Standalone' : 'App chrome'}
+			</Badge>
 		</span>
+	)
+}
+
+/**
+ * The app-chrome switch: does this page render inside the app's header, footer,
+ * cart and navigation, or on its own? Presentational — the builder owns the
+ * state and the draft write (ADR-0007).
+ */
+export function PageChromeControl({
+	chrome,
+	onChange,
+	disabled,
+	className,
+}: {
+	chrome: PageChrome
+	onChange: (next: PageChrome) => void
+	disabled?: boolean
+	className?: string
+}) {
+	return (
+		<div className={cn('flex flex-col gap-0.5', className)}>
+			<label className="inline-flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium whitespace-nowrap">
+				<AppWindow className="size-4 text-text-mid" aria-hidden="true" />
+				<span>{chrome === 'standalone' ? 'Standalone' : 'App chrome'}</span>
+				<Switch
+					checked={chrome === 'app'}
+					onCheckedChange={(next) => onChange(next ? 'app' : 'standalone')}
+					disabled={disabled}
+					aria-label="Show the app header and footer on this page"
+					data-testid="page-chrome-toggle"
+					size="sm"
+				/>
+			</label>
+			<span className="text-text-mid max-w-64 px-2 text-xs">
+				Off publishes this page on its own, without the app&rsquo;s header, footer, cart or navigation.
+			</span>
+		</div>
 	)
 }
 
