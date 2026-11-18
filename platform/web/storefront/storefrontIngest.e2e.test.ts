@@ -49,7 +49,10 @@ let publishStorefrontPage: (typeof import('./storefrontPublish'))['publishStoref
 const PAGE: StorefrontPage = {
 	version: STOREFRONT_PAGE_VERSION,
 	enabled: true,
-	chrome: 'app',
+	// Standalone: the tests below assert the *composed document's* bytes (the
+	// marker, the coordinate, the canonical URL), and only a standalone page
+	// answers with that document. The app-chrome answer is its own test.
+	chrome: 'standalone',
 	root: { props: parseStorefrontRootProps({ title: 'Served shop' }) },
 	content: [{ type: 'Text', props: { id: 'text-1', markdown: 'A served page with a marker: NEEDLE-42.', align: 'left', width: 'normal' } }],
 }
@@ -133,5 +136,26 @@ describe('a page published from the CMS is served at its bound path', () => {
 		const withdrawn = await realFetch(`${base}/shop`)
 		expect(withdrawn.status).toBe(500)
 		expect(await withdrawn.text()).toContain('binding-target-missing')
+	})
+
+	/**
+	 * The app-chrome half of the same seam: a page left on the default chrome
+	 * (or explicitly `'app'`) answers with the SPA shell plus the `#__AR_ROUTE__`
+	 * payload the client's root guard reads, not the composed document. This is
+	 * the second fails-today proof in the increment — before the server flip the
+	 * bound path answered with the standalone document and no payload.
+	 */
+	test('a page on the default app chrome answers with the shell and the route payload', async () => {
+		await publishStorefrontPage({ ...PAGE, chrome: 'app', enabled: true })
+
+		const served = await realFetch(`${base}/shop`)
+		expect(served.status).toBe(200)
+		const html = await served.text()
+		expect(html).toContain('SHELL')
+		expect(html).toContain('id="__AR_ROUTE__"')
+		expect(html).toContain(`"d":"${STOREFRONT_PAGE_D_TAG}"`)
+		expect(html).toContain('"path":"/shop"')
+		expect(html).not.toContain('NEEDLE-42')
+		expect(served.headers.get('cache-control')).toBe('no-store')
 	})
 })
