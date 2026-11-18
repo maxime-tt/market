@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
 import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
-import { shouldRenderStorefrontPage, useStorefrontAddressPage } from '@platform/web/storefront/storefrontQuery'
 import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
 import { StorefrontRenderer } from '@ui/storefront'
 import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
@@ -10,6 +9,8 @@ import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/stor
 import { BrowseNav } from '@ui/browse/browse-nav'
 import { IntroOverlay } from '@ui/browse/intro'
 import { useInstanceName } from '@platform/web/config/instanceName'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { LEGACY_HOME_PUBKEY, useInstanceHomePage } from '@platform/web/storefront/instanceHomePage'
 
 /**
  * Browse URL state: ?q=&p=
@@ -40,24 +41,19 @@ export const Route = createFileRoute('/')({
 	staticData: { hidesAppHeader: true },
 })
 
-/**
- * The instance's own key — the identity the CMS authors pages as, and the
- * author the block slots resolve their reads against. Advertised by
- * `/api/config` as `appPublicKey`; kept here because the slots need it before
- * any page document exists.
- */
-const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91cd9c'
 
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
 	const navigate = useNavigate()
 	const instanceName = useInstanceName()
-	// The app key's own `home` page, when one has been authored. Read first and
-	// unconditionally: the hook must run in every state of this route, and the
-	// published page replaces the settled composition below without changing
-	// the renderer.
-	const { data: homeResult } = useStorefrontAddressPage(APP_PUBKEY, 'home')
-	const publishedHome = shouldRenderStorefrontPage(homeResult) ? homeResult.page : null
+	const { data: config } = useConfigQuery()
+	// This instance's own `home` page (app key, owner or an admin, newest wins;
+	// see instanceHomePage.ts), falling back to the upstream instance's. Read
+	// first and unconditionally: the hook must run in every state of this route,
+	// and the published page replaces the settled composition below without
+	// changing the renderer.
+	const publishedChoice = useInstanceHomePage()
+	const publishedHome = publishedChoice?.page ?? null
 	// The intro plays over the home once per mount; it is an overlay, so the hero
 	// renders underneath from the first paint and nothing waits on it.
 	const [introDone, setIntroDone] = useState(false)
@@ -111,7 +107,7 @@ function BrowseIndex() {
 					onNavigateHome={() => navigate({ to: '/' })}
 					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
 				/>
-				<StorefrontRenderer page={page} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
+				<StorefrontRenderer page={page} pubkey={publishedChoice?.pubkey ?? config?.appPublicKey ?? LEGACY_HOME_PUBKEY} slots={storefrontBlockSlots} />
 			</>
 		)
 	}
