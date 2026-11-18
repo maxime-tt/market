@@ -22,7 +22,6 @@ import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { walletOps } from '@platform/web/wallet/walletOps'
 import { getUser, signNostrEvent, type EventTemplate } from '@platform/web/ndkPublishContext'
 import { createWebNostrIo, webRelayPolicy } from '@platform/web/sdkNostrIo'
-import { runAuctionWinnerClaimAppAdapter } from '@platform/web/auctions/auctionWorkflowAdapters'
 import { createPrivateAuctionClaimMessageForActiveSigner } from '@platform/web/readContext'
 import { recordAuctionDeletion } from '@platform/web/auctions/auctionsQuery'
 import type { Event } from '@sdk/core/nostr-io'
@@ -36,12 +35,7 @@ import type { ArenaCreatePublishResult } from '@platform/web/auctions/relay/aren
 import {
 	publishArenaCreate,
 } from '@platform/web/auctions/relay/arenaAuctionCreate'
-import {
-	publishAuctionClaimMarkerToPrivateRelays,
-	publishRequired,
-	publishRequiredPrivateGiftWrap,
-	resolveAuctionClaimBuyerPubkey,
-} from './auctionPublishIo'
+import { publishRequired, publishRequiredPrivateGiftWrap, resolveAuctionClaimBuyerPubkey } from './auctionPublishIo'
 
 export {
 	type ArenaAuctionMode,
@@ -198,7 +192,18 @@ export const useDeleteAuctionMutation = () => {
 }
 
 // ---------------------------------------------------------------------------
-// Auction Claim Order — winner submits shipping address after settlement
+// Auction Claim Message — the winner submits delivery details to the seller
+//
+// Under the owner's ruling a win is a purchase that shows up in the orders
+// surface, and the claim is **only** a delivery-details message: a NIP-59 gift
+// wrap addressed to the seller, carrying the address and name, with **no money
+// action**. The retired kind-16 claim **order** (the public `auction-claim`
+// marker the app used to publish so a seller-side order scan could find the
+// buyer's gift wrap) is not published for an arena lot, so this path no longer
+// calls the winner-claim order workflow (`runAuctionWinnerClaimAppAdapter` /
+// `publishAuctionClaimMarkerToPrivateRelays`); the private message is the whole
+// publish. The seller finds it by the lot coordinate
+// (`fetchPrivateAuctionClaimForLot`), not by a marker order.
 // ---------------------------------------------------------------------------
 
 export interface AuctionClaimFormData {
@@ -221,16 +226,20 @@ export interface AuctionClaimFormData {
 }
 
 /**
- * Creates a Kind 16 order event that references the won auction.
- * This is identical to a normal order creation but uses an `a` tag
- * pointing at the auction coordinate and an `e` tag pointing at the
- * winning verdict event instead of product `item` tags.
+ * Publish the winner's delivery details as **one** NIP-59 gift wrap addressed
+ * to the seller. No public marker, no order event, no money action: the win is
+ * already a purchase in the orders read (projected from the arena read), and
+ * the private claim is only how the shipping address reaches the seller.
+ *
+ * Returns the gift-wrap event id; it is published to the private claim relays
+ * and fails closed on a zero-ACK publish, the same contract the marker path used.
  */
-export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): Promise<string> => {
+export const publishPrivateAuctionClaim = async (formData: AuctionClaimFormData): Promise<string> => {
 	const buyerPubkey = await resolveAuctionClaimBuyerPubkey()
 	const orderId = uuidv4()
 	const createdAt = Math.floor(Date.now() / 1000)
-	const claimFields = {
+
+	const privateClaim = await createPrivateAuctionClaimMessageForActiveSigner({
 		orderId,
 		auctionCoordinates: formData.auctionCoordinates,
 		auctionEventId: formData.auctionEventId,
@@ -242,64 +251,22 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 		email: formData.email,
 		phone: formData.phone,
 		notes: formData.notes,
-	}
-
-	const outcome = await runAuctionWinnerClaimAppAdapter({
-		claim: {
-			orderId,
-			auctionCoordinate: claimFields.auctionCoordinates,
-			auctionEventId: claimFields.auctionEventId,
-			verdictEventId: claimFields.verdictEventId,
-			buyerPubkey: claimFields.buyerPubkey,
-			sellerPubkey: claimFields.sellerPubkey,
-			finalAmount: claimFields.totalAmountSats,
-			shippingAddress: claimFields.shippingAddress,
-			email: claimFields.email,
-			phone: claimFields.phone,
-			notes: claimFields.notes,
-			createdAt,
-		},
-		ports: {
-			createPrivateDelivery: async (payload) =>
-				createPrivateAuctionClaimMessageForActiveSigner({
-					orderId: payload.orderId,
-					auctionCoordinates: payload.auctionCoordinate,
-					auctionEventId: payload.auctionEventId,
-					verdictEventId: payload.verdictEventId,
-					buyerPubkey: payload.buyerPubkey,
-					sellerPubkey: payload.sellerPubkey,
-					totalAmountSats: payload.finalAmount,
-					shippingAddress: payload.shippingAddress,
-					email: payload.email,
-					phone: payload.phone,
-					notes: payload.notes,
-					createdAt,
-				}),
-			publishPrivateDelivery: async (privateClaim) => ({
-				eventId: privateClaim.giftWrap.id,
-				acceptedRelays: await publishRequiredPrivateGiftWrap(privateClaim.giftWrap),
-			}),
-			signMarker: signNostrEvent,
-			publishMarker: publishAuctionClaimMarkerToPrivateRelays,
-		},
+		createdAt,
 	})
-	if (outcome.status === 'published') return outcome.markerEventId
-	if (outcome.status === 'failed') {
-		throw new Error(`Auction claim failed during ${outcome.phase}: ${outcome.error}`)
+
+	const acceptedRelays = await publishRequiredPrivateGiftWrap(privateClaim.giftWrap)
+	if (acceptedRelays.length === 0) {
+		throw new Error('No private relay accepted the encrypted delivery details.')
 	}
-	throw new Error(
-		`Auction claim is partial during ${outcome.phase}; encrypted delivery ${outcome.privateDeliveryEventId} was published to ` +
-			`${outcome.acceptedRelays.length} relay(s), but its public marker was not confirmed: ${outcome.error}`,
-	)
+	return privateClaim.giftWrap.id
 }
 
-export const usePublishAuctionClaimOrderMutation = () => {
+export const usePublishAuctionClaimMutation = () => {
 	const queryClient = useQueryClient()
 
 	return useMutation({
-		mutationFn: publishAuctionClaimOrder,
-		onSuccess: async (_orderId, variables) => {
-			await queryClient.invalidateQueries({ queryKey: auctionKeys.settlements(variables.auctionEventId) })
+		mutationFn: publishPrivateAuctionClaim,
+		onSuccess: async (_eventId, variables) => {
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
 			const user = await getUser()

@@ -5,7 +5,7 @@ import { Label } from '@ui/primitives/label'
 import { Textarea } from '@ui/primitives/textarea'
 import { CountryCombobox, isValidCountry } from '@ui/shared/country-combobox'
 import { CityCombobox } from '@ui/shared/city-combobox'
-import { usePublishAuctionClaimOrderMutation, type AuctionClaimFormData } from '@platform/web/auctions/auctionPublish'
+import { usePublishAuctionClaimMutation, type AuctionClaimFormData } from '@platform/web/auctions/auctionPublish'
 import { useState } from 'react'
 
 interface AuctionClaimDialogProps {
@@ -27,7 +27,7 @@ export function AuctionClaimDialog({
 	sellerPubkey,
 	finalAmount,
 }: AuctionClaimDialogProps) {
-	const claimMutation = usePublishAuctionClaimOrderMutation()
+	const claimMutation = usePublishAuctionClaimMutation()
 
 	const [name, setName] = useState('')
 	const [firstLineOfAddress, setFirstLineOfAddress] = useState('')
