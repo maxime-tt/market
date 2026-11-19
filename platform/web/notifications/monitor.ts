@@ -27,6 +27,13 @@ import {
 	type ProductScopeTag,
 } from './productNotificationScopes'
 import { LIVE_ACTIVITY_KIND, LIVE_CHAT_KIND } from '@sdk/core/nostr/nip53'
+import {
+	auctionBidScopeFilters,
+	commentTargetScopeFilters,
+	liveActivityScopeFilters,
+	type AuctionScopeTagFilter,
+	type AuctionScopeTagName,
+} from './auctionReadFilters'
 import { configStore } from '@platform/web/config/appConfigStore'
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@sdk/commerce/orders/messaging/orderSchema'
 import { fetchProductsByPubkey } from '@platform/web/products/productQuery'
@@ -155,7 +162,7 @@ const makeTaggedValueFilters = ({
 	authors,
 }: {
 	kind: NDKKind
-	tagName: '#a' | '#A' | '#e' | '#E'
+	tagName: AuctionScopeTagName
 	values: string[]
 	since?: number
 	authors?: string[]
@@ -210,63 +217,28 @@ const fetchTaggedAuctionEvents = async ({
 	return dedupeEvents(Array.from(events))
 }
 
-const fetchTaggedEvents = async ({
+/**
+ * A bounded read of one kind under the tag clauses `auctionReadFilters` plans.
+ *
+ * The clauses are separate filters, not one filter with several tags: a relay whose index refuses
+ * a long value answers a confident zero when that tag is the one its planner picks, and a separate
+ * clause cannot be poisoned by its neighbour.
+ */
+const fetchScopeEvents = async ({
 	kind,
-	tagName,
-	values,
+	scopeFilters,
 	since,
-	authors,
 }: {
 	kind: NDKKind
-	tagName: '#a' | '#A' | '#e' | '#E'
-	values: string[]
+	scopeFilters: AuctionScopeTagFilter[]
 	since?: number
-	authors?: string[]
 }): Promise<NDKEvent[]> => {
-	const filters = makeTaggedValueFilters({
-		kind,
-		tagName,
-		values,
-		since,
-		authors,
-	})
+	const authors = getTrustedAuthorsForKind(kind)
+	const filters = scopeFilters.flatMap(({ tagName, values }) => makeTaggedValueFilters({ kind, tagName, values, since, authors }))
 	if (filters.length === 0) return []
 
 	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
 	return dedupeEvents(Array.from(events))
-}
-
-const fetchAddressableCommentEvents = async ({
-	targetEventIds,
-	targetCoordinates,
-	since,
-}: {
-	targetEventIds: string[]
-	targetCoordinates: string[]
-	since?: number
-}): Promise<NDKEvent[]> => {
-	const [byCoordinates, byUpperCoordinates, byUpperEventIds] = await Promise.all([
-		fetchTaggedEvents({
-			kind: COMMENT_KIND_NDK,
-			tagName: '#a',
-			values: targetCoordinates,
-			since,
-		}),
-		fetchTaggedEvents({
-			kind: COMMENT_KIND_NDK,
-			tagName: '#A',
-			values: targetCoordinates,
-			since,
-		}),
-		fetchTaggedEvents({
-			kind: COMMENT_KIND_NDK,
-			tagName: '#E',
-			values: targetEventIds,
-			since,
-		}),
-	])
-
-	return dedupeEvents([...byCoordinates, ...byUpperCoordinates, ...byUpperEventIds])
 }
 
 /**
@@ -298,7 +270,7 @@ export const useNotificationMonitor = () => {
 		const seenVerdictEventIds = new Set<string>()
 		const scheduledAuctionLiveKeys = new Set<string>()
 		const scheduledAuctionSettlementKeys = new Set<string>()
-		const subscribedSellerAuctionRootEventIds = new Set<string>()
+		const subscribedAuctionCommentEventIds = new Set<string>()
 		const subscribedSellerAuctionCoordinates = new Set<string>()
 		const subscribedSellerLiveActivityCoordinates = new Set<string>()
 		const subscribedSellerProductEventIds = new Set<string>()
@@ -352,35 +324,39 @@ export const useNotificationMonitor = () => {
 			return (event.created_at || 0) > lastSeen
 		}
 
-		const subscribeToTaggedAuctionEvents = ({
+		/**
+		 * Live subscription half of `fetchScopeEvents`: one REQ per tag clause, so a clause the
+		 * relay's index cannot answer never poisons the clause that can.
+		 */
+		const subscribeScopeEvents = ({
 			kind,
-			tagName,
-			values,
+			scopeFilters,
 			onEvent,
 		}: {
 			kind: NDKKind
-			tagName: '#e' | '#a' | '#A' | '#E'
-			values: string[]
+			scopeFilters: AuctionScopeTagFilter[]
 			onEvent: (event: NDKEvent) => void
 		}) => {
-			if (isCancelled || values.length === 0) return
+			if (isCancelled) return
 
 			const trustedAuthors = getTrustedAuthorsForKind(kind)
 
-			for (const valueChunk of chunkValues(uniqueStrings(values), AUCTION_FILTER_CHUNK_SIZE)) {
-				const filter = {
-					kinds: [kind],
-					[tagName]: valueChunk,
-					...(trustedAuthors ? { authors: trustedAuthors } : {}),
-					since: subscriptionSince,
-				} as NDKFilter
+			for (const { tagName, values } of scopeFilters) {
+				for (const valueChunk of chunkValues(uniqueStrings(values), AUCTION_FILTER_CHUNK_SIZE)) {
+					const filter = {
+						kinds: [kind],
+						[tagName]: valueChunk,
+						...(trustedAuthors ? { authors: trustedAuthors } : {}),
+						since: subscriptionSince,
+					} as NDKFilter
 
-				const subscription = ndk.subscribe(filter, {
-					closeOnEose: false,
-				})
+					const subscription = ndk.subscribe(filter, {
+						closeOnEose: false,
+					})
 
-				subscription.on('event', onEvent)
-				subscriptionsRef.current.push(subscription)
+					subscription.on('event', onEvent)
+					subscriptionsRef.current.push(subscription)
+				}
 			}
 		}
 
@@ -492,8 +468,16 @@ export const useNotificationMonitor = () => {
 				)
 				const sellerProducts = await fetchProductsByPubkey(user.pubkey, true, 500)
 				const sellerAuctionKeyByRootEventId = new Map<string, string>()
+				// Every version id of a lot, not just the root: a comment names the version it
+				// commented on in its `E`/`e`, and the app's lot page offers the latest version.
+				const sellerAuctionKeyByEventId = new Map<string, string>()
 				const sellerAuctionKeyByCoordinate = new Map<string, string>()
 				const sellerLotRoots = new Map<string, { event: NDKEvent; identity: ArenaCreateIdentity }>()
+				// Every create version of a lot is a comment-thread root: a NIP-22 comment on a 1440
+				// carries `E` = the version it commented on, so a version the monitor does not know is
+				// a thread it cannot read. Init reads every version; a version published while the
+				// monitor runs is added by `handleOwnAuctionEvent`.
+				const sellerAuctionEventIdsByCoordinate = new Map<string, string[]>()
 				const sellerProductKeyByEventId = new Map<string, string>()
 				const sellerProductKeyByCoordinate = new Map<string, string>()
 
@@ -503,6 +487,10 @@ export const useNotificationMonitor = () => {
 
 					// Every version of a lot routes to the lot's coordinate.
 					sellerAuctionKeyByCoordinate.set(identity.coordinate, identity.coordinate)
+					sellerAuctionKeyByEventId.set(event.id, identity.coordinate)
+					const versionIds = sellerAuctionEventIdsByCoordinate.get(identity.coordinate) ?? []
+					versionIds.push(event.id)
+					sellerAuctionEventIdsByCoordinate.set(identity.coordinate, versionIds)
 					if (identity.supersedes) continue
 
 					// 1440 is regular, so the root is the EARLIEST version with no `e` tag
@@ -515,9 +503,15 @@ export const useNotificationMonitor = () => {
 
 				const sellerLots: MonitoredLot[] = []
 				const sellerPhaseWindows = new Map<string, ArenaPhaseWindow>()
+				const sellerAuctionScopes: Array<{ coordinate: string; rootEventId: string; eventIds: string[] }> = []
 				for (const [coordinate, { event, identity }] of sellerLotRoots) {
 					sellerLots.push({ coordinate, d: identity.d, key: coordinate })
 					sellerAuctionKeyByRootEventId.set(event.id, coordinate)
+					sellerAuctionScopes.push({
+						coordinate,
+						rootEventId: event.id,
+						eventIds: sellerAuctionEventIdsByCoordinate.get(coordinate) ?? [event.id],
+					})
 					const phaseWindow = arenaPhaseWindow(event)
 					if (phaseWindow) sellerPhaseWindows.set(coordinate, phaseWindow)
 				}
@@ -556,16 +550,16 @@ export const useNotificationMonitor = () => {
 				const sellerAuctionCoordinates = sellerLots.map((lot) => lot.coordinate)
 				const sellerProductEventIds = uniqueStrings(sellerProductScopes.map((scope) => scope.eventId))
 				const sellerProductCoordinates = uniqueStrings(sellerProductScopes.map((scope) => scope.coordinate))
-				const sellerBidEvents = await fetchTaggedAuctionEvents({
+				const sellerBidEvents = await fetchScopeEvents({
 					kind: AUCTION_BID_KIND_NDK,
-					auctionRootEventIds: sellerAuctionRootEventIds,
-					auctionCoordinates: sellerAuctionCoordinates,
+					scopeFilters: auctionBidScopeFilters({ rootEventIds: sellerAuctionRootEventIds }),
 					since: readMarks.getLastSeenAuctionBids() + 1,
 				})
-				const sellerLiveActivityEvents = await fetchTaggedAuctionEvents({
+				// A live activity's `a` tag is the lot's 106-character coordinate, which the relay's
+				// index refuses; its `d` is derived from that same coordinate and is indexed.
+				const sellerLiveActivityEvents = await fetchScopeEvents({
 					kind: LIVE_ACTIVITY_KIND_NDK,
-					auctionRootEventIds: [],
-					auctionCoordinates: sellerAuctionCoordinates,
+					scopeFilters: liveActivityScopeFilters(sellerAuctionCoordinates),
 				})
 				const sellerLiveActivityCoords = uniqueStrings(
 					sellerLiveActivityEvents.map((event) => getAddressableEventCoordinate(event)).filter(Boolean),
@@ -577,6 +571,7 @@ export const useNotificationMonitor = () => {
 
 					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
 						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByEventId,
 						sellerAuctionKeyByRootEventId,
 					])
 					if (auctionKey) sellerAuctionKeyByLiveActivityCoordinate.set(liveActivityCoordinate, auctionKey)
@@ -588,14 +583,22 @@ export const useNotificationMonitor = () => {
 					since: readMarks.getLastSeenAuctionComments() + 1,
 				})
 				const [sellerAuctionCommentEvents, sellerProductCommentEvents] = await Promise.all([
-					fetchAddressableCommentEvents({
-						targetEventIds: sellerAuctionRootEventIds,
-						targetCoordinates: sellerAuctionCoordinates,
+					fetchScopeEvents({
+						kind: COMMENT_KIND_NDK,
+						// Every create version of every seller lot: a 1440 is a regular kind, so a
+						// comment on it carries `E` = the version commented on, never an `a`/`A`.
+						scopeFilters: commentTargetScopeFilters({
+							targetKind: AUCTION_CREATE_KIND_NDK,
+							targetEventIds: sellerAuctionScopes.flatMap((scope) => scope.eventIds),
+						}),
 						since: readMarks.getLastSeenAuctionEventComments() + 1,
 					}),
-					fetchAddressableCommentEvents({
-						targetEventIds: sellerProductEventIds,
-						targetCoordinates: sellerProductCoordinates,
+					fetchScopeEvents({
+						kind: COMMENT_KIND_NDK,
+						scopeFilters: commentTargetScopeFilters({
+							targetKind: PRODUCT_KIND_NDK,
+							targetCoordinates: sellerProductCoordinates,
+						}),
 						since: readMarks.getLastSeenProductComments() + 1,
 					}),
 				])
@@ -628,6 +631,7 @@ export const useNotificationMonitor = () => {
 					seenAuctionThreadCommentEventIds.add(event.id)
 					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
 						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByEventId,
 						sellerAuctionKeyByRootEventId,
 					])
 					if (event.pubkey === user.pubkey || !auctionKey || !isNewAuctionEventComment(event, auctionKey)) return false
@@ -674,9 +678,17 @@ export const useNotificationMonitor = () => {
 					await ndk.fetchEvents({ kinds: [AUCTION_BID_KIND_NDK], authors: [user.pubkey], limit: AUCTION_MONITOR_LIMIT }),
 				)
 				const watchedLotsByCoordinate = new Map<string, MonitoredLot>()
+				// A bid carries `e` = its lot's root create id (64 hex, indexed) next to the
+				// 106-character `a` coordinate. The user's own bids are the only lot handles the watch
+				// list has, and they name each lot's root for free — so the read can ask by `#e`.
+				const watchedRootEventIdsByCoordinate = new Map<string, string>()
 				for (const event of ownBidEvents) {
 					const binding = arenaBidBinding(event)
-					if (!binding?.coordinate || watchedLotsByCoordinate.has(binding.coordinate)) continue
+					if (!binding?.coordinate) continue
+					if (binding.rootEventId && !watchedRootEventIdsByCoordinate.has(binding.coordinate)) {
+						watchedRootEventIdsByCoordinate.set(binding.coordinate, binding.rootEventId)
+					}
+					if (watchedLotsByCoordinate.has(binding.coordinate)) continue
 					watchedLotsByCoordinate.set(binding.coordinate, {
 						coordinate: binding.coordinate,
 						d: binding.auctionId || coordinateDTag(binding.coordinate),
@@ -684,17 +696,16 @@ export const useNotificationMonitor = () => {
 					})
 				}
 				const watchedLots = Array.from(watchedLotsByCoordinate.values())
-				const watchedCoordinates = watchedLots.map((lot) => lot.coordinate)
+				const watchedRootEventIds = Array.from(watchedRootEventIdsByCoordinate.values())
 
 				// `ArenaEventLike`, not `NDKEvent`: these rules moved to `arenaMonitorRules.ts`,
 				// whose input type is the structural shape it reads. Annotating the feed `NDKEvent`
 				// narrows `created_at` away at the filter below (2032-02's TS2339), and it is the
 				// looser type the rules were built against.
 				const watchedBidFeed: Array<{ event: ArenaEventLike; binding: ArenaBidBinding }> = []
-				for (const event of await fetchTaggedAuctionEvents({
+				for (const event of await fetchScopeEvents({
 					kind: AUCTION_BID_KIND_NDK,
-					auctionRootEventIds: [],
-					auctionCoordinates: watchedCoordinates,
+					scopeFilters: auctionBidScopeFilters({ rootEventIds: watchedRootEventIds }),
 				})) {
 					const binding = arenaBidBinding(event)
 					if (binding?.coordinate) watchedBidFeed.push({ event, binding })
@@ -797,6 +808,7 @@ export const useNotificationMonitor = () => {
 				for (const event of newSellerAuctionCommentEvents) {
 					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
 						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByEventId,
 						sellerAuctionKeyByRootEventId,
 					])
 					if (auctionKey) bulkEvents.push({ kind: 'auction-thread-comment', auctionKey, createdAt: event.created_at || nowForBulk })
@@ -889,10 +901,11 @@ export const useNotificationMonitor = () => {
 					if (!liveActivityCoordinate || subscribedSellerLiveActivityCoordinates.has(liveActivityCoordinate)) return
 					subscribedSellerLiveActivityCoordinates.add(liveActivityCoordinate)
 
-					subscribeToTaggedAuctionEvents({
+					// A live activity coordinate is `30311:<64 hex>:auction:<12 hex>` = 91 characters, so
+					// `#a` is inside the relay's index budget and needs no second clause.
+					subscribeScopeEvents({
 						kind: LIVE_CHAT_KIND_NDK,
-						tagName: '#a',
-						values: [liveActivityCoordinate],
+						scopeFilters: [{ tagName: '#a', values: [liveActivityCoordinate] }],
 						onEvent: handleSellerLiveChatEvent,
 					})
 				}
@@ -903,6 +916,7 @@ export const useNotificationMonitor = () => {
 
 					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
 						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByEventId,
 						sellerAuctionKeyByRootEventId,
 					])
 					if (!auctionKey) return
@@ -911,50 +925,48 @@ export const useNotificationMonitor = () => {
 					subscribeSellerLiveActivityCoordinate(liveActivityCoordinate)
 				}
 
-				const subscribeSellerAuctionRootScope = (auctionRootEventId: string) => {
-					if (!auctionRootEventId || subscribedSellerAuctionRootEventIds.has(auctionRootEventId)) return
-					subscribedSellerAuctionRootEventIds.add(auctionRootEventId)
+				/**
+				 * Comments on a lot are found by `E` — the create version they commented on — so every
+				 * version id is subscribed once. A 1440 is a regular kind: a NIP-22 comment on it
+				 * carries `E`/`e` and never an `a`/`A`, so those clauses would match nothing anywhere.
+				 */
+				const subscribeAuctionCommentEventIds = (eventIds: string[]) => {
+					const fresh = uniqueStrings(eventIds).filter((eventId) => !subscribedAuctionCommentEventIds.has(eventId))
+					if (fresh.length === 0) return
+					fresh.forEach((eventId) => subscribedAuctionCommentEventIds.add(eventId))
 
-					subscribeToTaggedAuctionEvents({
-						kind: AUCTION_BID_KIND_NDK,
-						tagName: '#e',
-						values: [auctionRootEventId],
-						onEvent: handleSellerBidEvent,
-					})
-					subscribeToTaggedAuctionEvents({
+					subscribeScopeEvents({
 						kind: COMMENT_KIND_NDK,
-						tagName: '#E',
-						values: [auctionRootEventId],
+						scopeFilters: commentTargetScopeFilters({ targetKind: AUCTION_CREATE_KIND_NDK, targetEventIds: fresh }),
 						onEvent: handleSellerAuctionCommentEvent,
 					})
 				}
 
-				const subscribeSellerAuctionCoordinateScope = (auctionCoordinate: string) => {
-					if (!auctionCoordinate || subscribedSellerAuctionCoordinates.has(auctionCoordinate)) return
-					subscribedSellerAuctionCoordinates.add(auctionCoordinate)
+				const subscribeSellerAuctionScope = ({
+					coordinate,
+					rootEventId,
+					eventIds,
+				}: {
+					coordinate: string
+					rootEventId: string
+					eventIds: string[]
+				}) => {
+					subscribeAuctionCommentEventIds([rootEventId, ...eventIds])
 
-					subscribeToTaggedAuctionEvents({
+					if (!coordinate || subscribedSellerAuctionCoordinates.has(coordinate)) return
+					subscribedSellerAuctionCoordinates.add(coordinate)
+
+					// Bids: `#e` is the root create id (64 hex, indexed) — the only clause a bid
+					// read can use; see `auctionBidScopeFilters`.
+					subscribeScopeEvents({
 						kind: AUCTION_BID_KIND_NDK,
-						tagName: '#a',
-						values: [auctionCoordinate],
+						scopeFilters: auctionBidScopeFilters({ rootEventIds: rootEventId ? [rootEventId] : [] }),
 						onEvent: handleSellerBidEvent,
 					})
-					subscribeToTaggedAuctionEvents({
-						kind: COMMENT_KIND_NDK,
-						tagName: '#a',
-						values: [auctionCoordinate],
-						onEvent: handleSellerAuctionCommentEvent,
-					})
-					subscribeToTaggedAuctionEvents({
-						kind: COMMENT_KIND_NDK,
-						tagName: '#A',
-						values: [auctionCoordinate],
-						onEvent: handleSellerAuctionCommentEvent,
-					})
-					subscribeToTaggedAuctionEvents({
+					// Live activity: `#d` is derived from the same coordinate by its producer.
+					subscribeScopeEvents({
 						kind: LIVE_ACTIVITY_KIND_NDK,
-						tagName: '#a',
-						values: [auctionCoordinate],
+						scopeFilters: liveActivityScopeFilters([coordinate]),
 						onEvent: handleSellerLiveActivityEvent,
 					})
 				}
@@ -965,6 +977,7 @@ export const useNotificationMonitor = () => {
 
 					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
 						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByEventId,
 						sellerAuctionKeyByRootEventId,
 					])
 					if (event.pubkey === user.pubkey || !auctionKey || !isNewAuctionEventComment(event, auctionKey)) return
@@ -988,10 +1001,9 @@ export const useNotificationMonitor = () => {
 				}
 
 				const subscribeSellerProductScope = (tagName: ProductScopeTag, value: string) => {
-					subscribeToTaggedAuctionEvents({
+					subscribeScopeEvents({
 						kind: COMMENT_KIND_NDK,
-						tagName,
-						values: [value],
+						scopeFilters: [{ tagName, values: [value] }],
 						onEvent: handleSellerProductCommentEvent,
 					})
 				}
@@ -1017,9 +1029,13 @@ export const useNotificationMonitor = () => {
 					refreshedSellerProductEventIds.add(event.id)
 
 					const { eventId, coordinate } = scope
-					void fetchAddressableCommentEvents({
-						targetEventIds: eventId ? [eventId] : [],
-						targetCoordinates: coordinate ? [coordinate] : [],
+					void fetchScopeEvents({
+						kind: COMMENT_KIND_NDK,
+						scopeFilters: commentTargetScopeFilters({
+							targetKind: PRODUCT_KIND_NDK,
+							targetEventIds: eventId ? [eventId] : [],
+							targetCoordinates: coordinate ? [coordinate] : [],
+						}),
 						since: readMarks.getLastSeenProductComments(productKey) + 1,
 					})
 						.then((events) => {
@@ -1048,19 +1064,25 @@ export const useNotificationMonitor = () => {
 
 					const auctionKey = identity.coordinate
 					sellerAuctionKeyByCoordinate.set(identity.coordinate, auctionKey)
+					sellerAuctionKeyByEventId.set(event.id, auctionKey)
+
+					// Every version is a comment-thread root, so an update adds its own `#E` scope.
+					subscribeAuctionCommentEventIds([event.id])
 
 					// A lot's scopes and its phase hang off its ROOT create: a later version (one that
 					// names a root in its `e` tag) edits display fields and announces nothing.
 					if (identity.supersedes) return
 
 					sellerAuctionKeyByRootEventId.set(event.id, auctionKey)
-					subscribeSellerAuctionRootScope(event.id)
-					subscribeSellerAuctionCoordinateScope(identity.coordinate)
+					subscribeSellerAuctionScope({
+						coordinate: identity.coordinate,
+						rootEventId: event.id,
+						eventIds: sellerAuctionEventIdsByCoordinate.get(identity.coordinate) ?? [event.id],
+					})
 
-					void fetchTaggedAuctionEvents({
+					void fetchScopeEvents({
 						kind: LIVE_ACTIVITY_KIND_NDK,
-						auctionRootEventIds: [],
-						auctionCoordinates: [identity.coordinate],
+						scopeFilters: liveActivityScopeFilters([identity.coordinate]),
 					})
 						.then((events) => {
 							events.forEach(handleSellerLiveActivityEvent)
@@ -1073,13 +1095,11 @@ export const useNotificationMonitor = () => {
 					if (phaseWindow) scheduleAuctionPhaseNotification(auctionKey, phaseWindow)
 				}
 
-				sellerAuctionRootEventIds.forEach(subscribeSellerAuctionRootScope)
-				sellerAuctionCoordinates.forEach(subscribeSellerAuctionCoordinateScope)
+				sellerAuctionScopes.forEach(subscribeSellerAuctionScope)
 				sellerLiveActivityCoords.forEach(subscribeSellerLiveActivityCoordinate)
-				subscribeToTaggedAuctionEvents({
+				subscribeScopeEvents({
 					kind: AUCTION_BID_KIND_NDK,
-					tagName: '#a',
-					values: watchedCoordinates,
+					scopeFilters: auctionBidScopeFilters({ rootEventIds: watchedRootEventIds }),
 					onEvent: handleWatchedBidEvent,
 				})
 				// Verdicts are subscribed unfiltered and bound locally: their lot reference is the
@@ -1097,22 +1117,16 @@ export const useNotificationMonitor = () => {
 
 				watchedVerdictSubscription.on('event', handleWatchedVerdictEvent)
 				subscriptionsRef.current.push(watchedVerdictSubscription)
-				subscribeToTaggedAuctionEvents({
+				subscribeScopeEvents({
 					kind: COMMENT_KIND_NDK,
-					tagName: '#a',
-					values: sellerProductCoordinates,
+					scopeFilters: commentTargetScopeFilters({ targetKind: PRODUCT_KIND_NDK, targetCoordinates: sellerProductCoordinates }),
 					onEvent: handleSellerProductCommentEvent,
 				})
-				subscribeToTaggedAuctionEvents({
+				subscribeScopeEvents({
 					kind: COMMENT_KIND_NDK,
-					tagName: '#A',
-					values: sellerProductCoordinates,
-					onEvent: handleSellerProductCommentEvent,
-				})
-				subscribeToTaggedAuctionEvents({
-					kind: COMMENT_KIND_NDK,
-					tagName: '#E',
-					values: sellerProductEventIds,
+					// A 30402 is addressable, so a comment carries `A`/`a`; `#E` stays for clients that
+					// also root a reply on the product's event id (the read layer keeps the same clause).
+					scopeFilters: [{ tagName: '#E', values: sellerProductEventIds }],
 					onEvent: handleSellerProductCommentEvent,
 				})
 
