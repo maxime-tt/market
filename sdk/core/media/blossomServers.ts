@@ -14,7 +14,7 @@
 export type BlossomServer = {
 	name: string
 	url: string
-	plan: 'free' | 'paid' | 'public'
+	plan: 'free' | 'paid' | 'public' | 'self-hosted'
 }
 
 /** The six shipped default Blossom servers (the old `BLOSSOM_SERVERS`). */
@@ -64,4 +64,27 @@ export async function getAvailableBlossomServers(timeoutMs = 3000): Promise<Blos
 
 	const results = await Promise.all(availabilityChecks)
 	return results.filter((server): server is BlossomServer => server !== null)
+}
+
+/**
+ * The instance's own Blossom server, as the uploader lists it. `BLOSSOM_SERVER`
+ * (or the setup event's `blossom_server`) names it; the label is the host.
+ */
+export function instanceBlossomServer(url: string): BlossomServer {
+	let host = url
+	try {
+		host = new URL(url).host
+	} catch {
+		// Keep the raw value; the config schema has already checked it is a URL.
+	}
+	return { name: host, url: url.replace(/\/$/, ''), plan: 'self-hosted' }
+}
+
+/**
+ * The servers the uploader may offer. An instance that runs its own Blossom
+ * server lists only that one, so uploads never leave the operator's host; an
+ * instance without one keeps the shipped defaults.
+ */
+export function resolveBlossomServers(instanceServer?: string | null): BlossomServer[] {
+	return instanceServer ? [instanceBlossomServer(instanceServer)] : DEFAULT_BLOSSOM_SERVERS
 }

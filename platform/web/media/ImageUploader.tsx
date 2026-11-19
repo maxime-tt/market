@@ -3,7 +3,8 @@ import { Input } from '@ui/primitives/input'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getMediaType } from '@ui/utils/media'
-import { uploadFileToBlossom, BLOSSOM_SERVERS } from '@platform/web/media/blossomUploadHost'
+import { uploadFileToBlossom, resolveBlossomServers } from '@platform/web/media/blossomUploadHost'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { compressImage, isCompressibleImage, formatFileSize, getCompressionStats } from '@sdk/core/media/imageCompression'
 
@@ -66,7 +67,16 @@ export function ImageUploader({
 	const [localSrc, setLocalSrc] = useState<string | null>(src)
 	const [inputValue, setInputValue] = useState(initialUrl || '')
 	const [hasInteracted, setHasInteracted] = useState(false)
-	const [selectedServer, setSelectedServer] = useState<string>(BLOSSOM_SERVERS[0].url)
+	// An instance with its own Blossom server (BLOSSOM_SERVER) offers only that
+	// server and never falls back to the public defaults.
+	const { data: config } = useConfigQuery()
+	const instanceServer = config?.blossomServer
+	const servers = resolveBlossomServers(instanceServer)
+	const [selectedServer, setSelectedServer] = useState<string>(servers[0].url)
+	useEffect(() => {
+		if (instanceServer) setSelectedServer(servers[0].url)
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [instanceServer])
 	const [compressionStatus, setCompressionStatus] = useState<string | null>(null)
 	const inputTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 	const compactInputRef = useRef<HTMLInputElement>(null)
@@ -122,7 +132,8 @@ export function ImageUploader({
 			// Step 2: Upload to Blossom
 			setIsLoading(true)
 			const result = await uploadFileToBlossom(fileToUpload, {
-				preferredServer: preferredServer || selectedServer,
+				preferredServer: instanceServer ? servers[0].url : preferredServer || selectedServer,
+				exclusive: Boolean(instanceServer),
 				onProgress: (progress) => {
 					const pct = Math.round((progress.loaded / progress.total) * 100)
 					if (debug) {
@@ -366,7 +377,7 @@ export function ImageUploader({
 								<SelectValue placeholder="Select server" />
 							</SelectTrigger>
 							<SelectContent>
-								{BLOSSOM_SERVERS.map((server) => (
+								{servers.map((server) => (
 									<SelectItem key={server.url} value={server.url}>
 										{server.name} ({server.plan})
 									</SelectItem>

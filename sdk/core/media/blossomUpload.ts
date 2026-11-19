@@ -83,6 +83,12 @@ export interface UploadOptions {
 	 */
 	onError?: (error: string, serverUrl?: string) => void
 	/**
+	 * Upload to `preferredServer` only, with no fallback to the public defaults.
+	 * Set when the instance runs its own Blossom server, so a failed upload
+	 * surfaces as an error instead of quietly landing on a third-party host.
+	 */
+	exclusive?: boolean
+	/**
 	 * Maximum number of attempts per server
 	 */
 	maxRetries?: number
@@ -103,7 +109,8 @@ export interface UploadResult {
  * (deduplicated, `plan === 'paid'` excluded — it would only answer 402 without
  * a payment handler).
  */
-export function getUploadServerOrder(preferredServer?: string): string[] {
+export function getUploadServerOrder(preferredServer?: string, exclusive = false): string[] {
+	if (exclusive) return preferredServer ? [preferredServer] : []
 	const publicDefaults = DEFAULT_BLOSSOM_SERVERS.filter((server) => server.plan === 'public').map((server) => server.url)
 	return [...new Set([preferredServer, ...publicDefaults].filter((url): url is string => url != null && url !== ''))]
 }
@@ -117,10 +124,12 @@ export function getUploadServerOrder(preferredServer?: string): string[] {
  */
 export async function uploadFileToBlossom(signer: BlossomUploadSigner, file: File, options: UploadOptions = {}): Promise<UploadResult> {
 	const attemptsPerServer = options.maxRetries ?? DEFAULT_UPLOAD_ATTEMPTS
-	const serverOrder = getUploadServerOrder(options.preferredServer)
+	const serverOrder = getUploadServerOrder(options.preferredServer, options.exclusive)
 
 	if (serverOrder.length === 0) {
-		throw new Error(`${BLOSSOM_UPLOAD_NO_SERVERS}: no preferred server and no public defaults`)
+		throw new Error(
+			`${BLOSSOM_UPLOAD_NO_SERVERS}: ${options.exclusive ? 'no instance server configured' : 'no preferred server and no public defaults'}`,
+		)
 	}
 
 	let lastError = 'unknown'

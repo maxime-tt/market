@@ -63,6 +63,13 @@ export const RESERVED_NAMES: readonly string[] = [
 	'favicon',
 	'robots',
 	'sitemap',
+	// Blossom media server paths, routed to the instance's own server
+	'upload',
+	'media',
+	'mirror',
+	'report',
+	'list',
+	'seed-media',
 ]
 
 /**
