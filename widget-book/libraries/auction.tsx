@@ -31,6 +31,8 @@ import {
 	AuctionStatusBadge,
 	AuctionTechnicalRow,
 } from '@ui/auction/auction-detail-views'
+import { ArenaLotView, type ArenaLotBidProps } from '@ui/auctions/arena-lot/arena-lot-view'
+import type { ArenaAuctionDetailModel } from '@ui/auction/arena/model'
 import type { WidgetLibrary } from '../libraries'
 
 /**
@@ -487,9 +489,117 @@ function AuctionTabViewDemo() {
 	)
 }
 
+// ---------------------------------------------------------------------------
+// Arena lot page fixtures: a lot mid-auction with three bidders.
+// ---------------------------------------------------------------------------
+const ARENA_NOW = 1_800_000_000
+const arenaKey = (c: string) => c.repeat(64)
+const arenaLotImage = `data:image/svg+xml,${encodeURIComponent(
+	'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500"><defs><radialGradient id="g" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#ff3eb5"/><stop offset=".55" stop-color="#3a1030"/><stop offset="1" stop-color="#0e0d0e"/></radialGradient></defs><rect width="400" height="500" fill="url(#g)"/><circle cx="200" cy="220" r="96" fill="none" stroke="#f7931a" stroke-width="14"/><path d="M188 160h30c22 0 34 12 34 28 0 12-7 20-17 24 13 3 22 13 22 27 0 20-15 33-40 33h-29z" fill="#f7931a"/></svg>',
+)}`
+const arenaLotModel: ArenaAuctionDetailModel = {
+	coordinate: `1440:${arenaKey('ab')}:hodl-print-07`,
+	seller: arenaKey('ab'),
+	d: 'hodl-print-07',
+	title: 'Signed HODL print, 1 of 21',
+	imageUrl: arenaLotImage,
+	startingBid: 5_000,
+	topBidTotal: 21_000,
+	bidCount: 5,
+	bidsWithoutAmount: 0,
+	endsAt: ARENA_NOW + 47,
+	phase: 'open',
+	verdict: null,
+	verdictCount: 0,
+	validatorCount: 4,
+	divergent: false,
+	relayCount: 3,
+	description:
+		'A risograph print on cotton paper, signed and numbered.\n\nShips in a tube from Cornwall. Paid in sats through Cashu ecash escrow.',
+	minIncrement: 1_000,
+	mode: 'antisnipe',
+	windowSec: 60,
+	durationSec: 600,
+	sellerWallet: null,
+	v4vSplit: null,
+	versions: 1,
+	rootEventId: 'r'.repeat(64),
+	canonicalEventId: 'c'.repeat(64),
+	rootCreatedAt: ARENA_NOW - 553,
+	bids: [
+		{ eventId: 'b1', bidder: arenaKey('c1'), createdAt: ARENA_NOW - 400, amount: 5_000, relays: ['r1'] },
+		{ eventId: 'b2', bidder: arenaKey('d2'), createdAt: ARENA_NOW - 300, amount: 8_000, relays: ['r1'] },
+		{ eventId: 'b3', bidder: arenaKey('e3'), createdAt: ARENA_NOW - 200, amount: 12_000, relays: ['r1'] },
+		{ eventId: 'b4', bidder: arenaKey('c1'), createdAt: ARENA_NOW - 90, amount: 10_000, relays: ['r1'] },
+		{ eventId: 'b5', bidder: arenaKey('d2'), createdAt: ARENA_NOW - 12, amount: 13_000, relays: ['r1'] },
+	],
+	positions: [
+		{ bidder: arenaKey('c1'), total: 15_000 },
+		{ bidder: arenaKey('d2'), total: 21_000 },
+		{ bidder: arenaKey('e3'), total: 12_000 },
+	],
+	receipts: [],
+	refundsByBidder: {},
+	settleReceipt: null,
+}
+const arenaNames: Record<string, string> = { c1: 'satsjoy', d2: 'hodlqueen', e3: 'lostwithiel' }
+const arenaRenderName = (pubkey: string) => arenaNames[pubkey.slice(0, 2)] ?? pubkey.slice(0, 8)
+
+function ArenaLotDemo({ model, now, blocked }: { model: ArenaAuctionDetailModel; now: number; blocked: boolean }) {
+	const [amount, setAmount] = useState('')
+	const own = 15_000
+	const minimum = (model.topBidTotal ?? 0) + (model.minIncrement ?? 0)
+	const raw = amount === '' ? String(minimum - own) : amount
+	const bid: ArenaLotBidProps = {
+		viewer: arenaKey('c1'),
+		check: blocked
+			? { allowed: false, reason: 'ended', amount: null, minimum, ownPosition: own }
+			: {
+					allowed: own + Number(raw) >= minimum,
+					reason: own + Number(raw) >= minimum ? 'ok' : 'below-minimum',
+					amount: Number(raw),
+					minimum,
+					ownPosition: own,
+				},
+		blockedReason: blocked ? 'ended' : null,
+		amountInput: raw,
+		onAmountChange: setAmount,
+		pending: false,
+		submission: { phase: 'idle' },
+		onSubmit: () => {},
+		onSubmitAmount: () => {},
+	}
+	return (
+		<ArenaLotView
+			model={model}
+			status="settled"
+			relayHealth={{ answered: 3, total: 3 }}
+			now={now}
+			backHref="#"
+			chainClockLabel="Chain height 4,812"
+			renderName={arenaRenderName}
+			bid={bid}
+		/>
+	)
+}
+
 export const auction: WidgetLibrary = {
 	name: 'auction',
 	entries: [
+		{
+			name: 'ArenaLotViewLive',
+			render: () => <ArenaLotDemo model={arenaLotModel} now={ARENA_NOW} blocked={false} />,
+		},
+		{
+			name: 'ArenaLotViewEnded',
+			render: () => (
+				<ArenaLotDemo
+					model={{ ...arenaLotModel, phase: 'ended', refundsByBidder: { [arenaKey('e3')]: 4_820 } }}
+					now={ARENA_NOW + 600}
+					blocked
+				/>
+			),
+		},
 		{
 			name: 'AuctionStatusBadge',
 			render: () => (
