@@ -3,6 +3,7 @@
 @import './globals-new.css';
 @import './icons.css';
 @import './arena-chrome.css';
+@import './admin-theme.css';
 
 @layer base {
 }
