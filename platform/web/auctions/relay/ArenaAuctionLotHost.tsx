@@ -46,9 +46,10 @@ import {
 	type ArenaSurfacesReadState,
 } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import { ArenaVerdictPanel } from '@ui/auction/arena/verdict-panel'
-import { CatalogueDetailView } from '@ui/auctions/catalogue/catalogue-detail-view'
+import { ArenaLotView } from '@ui/auctions/arena-lot/arena-lot-view'
+import { getNormalizedProfileDisplayName, useProfile } from '@platform/web/profiles/profileQuery'
 import { chainClockLabel, shortKey, type ArenaRelayHealth, type ArenaSurfaceStatus } from '@ui/auction/arena/model'
-import { AuctionBidHost } from '@platform/web/auctions/relay/AuctionBidHost'
+import { useAuctionBidController } from '@platform/web/auctions/relay/AuctionBidHost'
 import { arenaChainAdvancing } from '@platform/web/auctions/relay/arenaBidPublish'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { lotHref, resolveArenaLot, type ArenaLotLookup } from '@platform/web/auctions/relay/arenaLotRead'
@@ -136,6 +137,8 @@ export interface ArenaAuctionLotHostProps {
 	read: ArenaSurfacesReadState
 	/** Called after a bid reached a relay, so the route can reopen the read. */
 	onPublished: (eventId: string) => void
+	/** The "All lots" link; `null` hides it (the index features a lot on its own page). */
+	backHref?: string | null
 }
 
 /**
@@ -144,12 +147,8 @@ export interface ArenaAuctionLotHostProps {
  * When the lot is ambiguous it renders the candidates and nothing else — no
  * detail model is built, because building one would mean choosing a seller.
  */
-export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: ArenaAuctionLotHostProps) {
+export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, backHref = '/auctions' }: ArenaAuctionLotHostProps) {
 	const lookup: ArenaLotLookup = read.snapshot === null ? { kind: 'missing' } : resolveArenaLot(read.snapshot, d, seller)
-
-	if (lookup.kind === 'ambiguous') {
-		return <ArenaLotAmbiguous candidates={lookup.candidates} status={read.status} relayHealth={read.relayHealth} />
-	}
 
 	const view = lookup.kind === 'found' ? lookup.view : null
 	// `now` is projection input, so it is read once here and handed to every
@@ -171,39 +170,45 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: Arena
 					now,
 				})
 
+	// Called before any early return: hooks run in the same order on every render.
+	const bid = useAuctionBidController({ model: detail, readStatus: read.status, now, chainAdvancing, onPublished })
+
+	if (lookup.kind === 'ambiguous') {
+		return <ArenaLotAmbiguous candidates={lookup.candidates} status={read.status} relayHealth={read.relayHealth} />
+	}
+
 	return (
-		<div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6">
-			<CatalogueDetailView
-				model={detail}
-				status={read.status}
-				relayHealth={read.relayHealth}
-				now={now}
-				backHref="/auctions"
-				chainClockLabel={read.chainClock === null ? null : chainClockLabel(read.chainClock)}
-				sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} />}
-				bidPanel={
-					detail === null ? null : (
-						<AuctionBidHost model={detail} readStatus={read.status} now={now} chainAdvancing={chainAdvancing} onPublished={onPublished} />
-					)
-				}
-			/>
-			{verdicts !== null && (
-				<ArenaVerdictPanel
-					model={verdicts}
-					status={read.status}
-					relayHealth={read.relayHealth}
-					renderValidator={(pubkey) => (pubkey === null ? null : <UserCardHost pubkey={pubkey} />)}
-				/>
-			)}
-		</div>
+		<ArenaLotView
+			model={detail}
+			status={read.status}
+			relayHealth={read.relayHealth}
+			now={now}
+			backHref={backHref}
+			chainClockLabel={read.chainClock === null ? null : chainClockLabel(read.chainClock)}
+			sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} subtitle="npub" />}
+			renderName={(pubkey) => <BidderName pubkey={pubkey} />}
+			bid={detail === null ? null : bid}
+			verdicts={
+				verdicts === null ? null : (
+					<ArenaVerdictPanel
+						model={verdicts}
+						status={read.status}
+						relayHealth={read.relayHealth}
+						renderValidator={(pubkey) => (pubkey === null ? null : <UserCardHost pubkey={pubkey} />)}
+					/>
+				)
+			}
+		/>
 	)
 }
 
-/**
- * The ambiguity surface: the honest answer to a `d` that more than one seller
- * published. It names every candidate and links each to its own seller-scoped
- * address, so the reader disambiguates; the page does not.
- */
+/** A bidder's display name from their profile, or the short key while none is read. */
+function BidderName({ pubkey }: { pubkey: string }) {
+	const { data } = useProfile(pubkey)
+	const name = getNormalizedProfileDisplayName(data?.profile)
+	return <>{name && name.trim() !== '' ? name : shortKey(pubkey)}</>
+}
+
 function ArenaLotAmbiguous({
 	candidates,
 	status,

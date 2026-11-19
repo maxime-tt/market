@@ -1,0 +1,473 @@
+/* ---------------------------------------------------------------------------
+ * Arena chrome: the app header, footer and Browse surface (nav, search field,
+ * results) in the Plebeian Auctions Arena look.
+ *
+ * The root layout puts `.arena-chrome` on its wrapper for the auction routes
+ * and the home / Browse surface (platform/web/layout/appChrome.ts,
+ * `usesArenaChrome`). Every component under it keeps its own markup and
+ * tokens; this file only rebinds the token values inside the scope, the same
+ * way `.dark` does in globals.css. Colours come from the Arena demo
+ * (web/src/template.css). Fonts are the bundled ones in styles/fonts.css —
+ * nothing here is fetched from another host.
+ * ------------------------------------------------------------------------- */
+
+.arena-chrome {
+	--arena-bg: #0e0d0e;
+	--arena-surface: #1a181a;
+	--arena-surface-2: #242124;
+	--arena-ink: #f6efea;
+	--arena-muted: #a69b95;
+	--arena-line: #2f2b2f;
+	--arena-line-strong: #4a434a;
+	--arena-pink: #ff3eb5;
+	--arena-pink-hover: #ff6cc8;
+	--arena-lime: #c6ff3d;
+
+	/* Legacy shadcn-style tokens. */
+	--background: var(--arena-bg);
+	--foreground: var(--arena-ink);
+	--card: var(--arena-surface);
+	--card-foreground: var(--arena-ink);
+	--popover: var(--arena-surface);
+	--popover-foreground: var(--arena-ink);
+	--muted: var(--arena-surface-2);
+	--muted-foreground: var(--arena-muted);
+	--accent: var(--arena-surface-2);
+	--accent-foreground: var(--arena-ink);
+	--border: var(--arena-line);
+	--input: var(--arena-line);
+
+	/* Newer role tokens (Browse nav, search field, results). */
+	--bg: var(--arena-bg);
+	--surface-raised: var(--arena-surface);
+	--surface-sunken: var(--arena-bg);
+	--surface-hover: var(--arena-surface-2);
+	--fill-ink: var(--arena-pink);
+	--on-fill-ink: var(--arena-bg);
+	--fill-ink-hover: var(--arena-pink-hover);
+	--text-high: var(--arena-ink);
+	--text-mid: var(--arena-muted);
+	--border-default: var(--arena-line);
+	--border-strong: var(--arena-line-strong);
+	--focus-ring: var(--arena-pink);
+
+	--font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+	--font-display: 'Instrument Serif', Georgia, serif;
+
+	background-color: var(--arena-bg);
+	color: var(--arena-ink);
+	font-family: var(--font-body);
+	color-scheme: dark;
+}
+
+/* --- App header (auction routes) ---------------------------------------- */
+
+.arena-chrome .arena-header {
+	/* Header buttons read --primary; inside the header they become Arena's
+	   dark ghost buttons with a pink hover. */
+	--primary: var(--arena-surface);
+	--primary-foreground: var(--arena-ink);
+	--primary-foreground-hover: var(--arena-pink);
+	--primary-border: var(--arena-line);
+	--primary-border-hover: var(--arena-pink);
+	--secondary: var(--arena-pink);
+	--secondary-foreground: var(--arena-bg);
+
+	background: rgb(14 13 14 / 0.92);
+	backdrop-filter: blur(10px);
+	border-bottom: 1px solid var(--arena-line);
+	color: var(--arena-ink);
+}
+
+.arena-chrome .arena-header .btn-border-highlight {
+	border-width: 1px;
+	border-radius: 999px;
+}
+
+.arena-chrome .arena-header .btn-border-highlight.btn-active {
+	background-color: var(--arena-pink);
+	color: var(--arena-bg);
+	border-color: var(--arena-pink);
+}
+
+.arena-brand {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-size: 1.5rem;
+	font-weight: 400;
+	line-height: 1;
+	letter-spacing: -0.01em;
+	color: var(--arena-ink);
+	white-space: nowrap;
+	font-synthesis: none;
+}
+
+.arena-brand em {
+	font-style: italic;
+	color: var(--arena-pink);
+}
+
+.arena-chrome .arena-header nav a,
+.arena-chrome .arena-header .arena-nav a {
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--arena-muted);
+	transition: color 0.15s ease;
+}
+
+.arena-chrome .arena-header .arena-nav a:hover,
+.arena-chrome .arena-header .arena-nav a.text-secondary {
+	color: var(--arena-ink);
+}
+
+.arena-chrome .arena-header .arena-nav a.text-secondary {
+	box-shadow: inset 0 -2px 0 var(--arena-pink);
+	padding-bottom: 4px;
+}
+
+/* The header's product search: a dark pill instead of the pink one. */
+.arena-chrome .arena-header input {
+	background: var(--arena-surface) !important;
+	border: 1px solid var(--arena-line) !important;
+	color: var(--arena-ink) !important;
+}
+
+.arena-chrome .arena-header input::placeholder {
+	color: var(--arena-muted) !important;
+}
+
+.arena-chrome .arena-header input:focus {
+	border-color: var(--arena-pink) !important;
+	box-shadow: 0 0 0 2px rgb(255 62 181 / 0.35) !important;
+}
+
+/* --- Footer --------------------------------------------------------------- */
+
+.arena-chrome [data-slot='footer'] {
+	background: var(--arena-bg);
+	color: var(--arena-muted);
+	border-top: 1px solid var(--arena-line);
+	font-weight: 500;
+}
+
+.arena-chrome [data-slot='footer'] a:hover {
+	color: var(--arena-pink);
+}
+
+/* --- Browse nav and search (home) ---------------------------------------- */
+
+.arena-chrome [data-slot='browse-nav'] {
+	background: rgb(14 13 14 / 0.92);
+	backdrop-filter: blur(10px);
+}
+
+.arena-chrome [data-slot='wordmark-link'] {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-weight: 400;
+	font-size: 1.5rem;
+	color: var(--arena-ink);
+	font-synthesis: none;
+}
+
+.arena-chrome [data-slot='wordmark-link']:hover {
+	color: var(--arena-pink);
+}
+
+.arena-chrome [data-slot='search-field'] {
+	background: var(--arena-surface);
+	border-color: var(--arena-line);
+}
+
+.arena-chrome [data-slot='search-field']:focus-within {
+	border-color: var(--arena-pink);
+	box-shadow: 0 0 0 3px rgb(255 62 181 / 0.25);
+}
+
+/* Phones: the hero field owns its row but ~330px is not enough for the
+   placeholder, the ⌘K badge and the pill together, so the placeholder was
+   clipped. A phone has no ⌘K, so the badge goes and the field tightens. */
+@media (max-width: 639px) {
+	.arena-chrome [data-slot='search-field'][data-size='hero'] {
+		height: 56px;
+		padding-left: 18px;
+		gap: 10px;
+	}
+
+	.arena-chrome [data-slot='search-field'][data-size='hero'] [data-slot='search-kbd'] {
+		display: none;
+	}
+
+	.arena-chrome [data-slot='search-field'][data-size='hero'] input {
+		font-size: 15px;
+	}
+
+	.arena-chrome [data-slot='search-field'][data-size='hero'] [data-slot='search-go'] {
+		height: 42px;
+		padding: 0 18px;
+		font-size: 13px;
+	}
+}
+
+/* --- Login dialog ----------------------------------------------------------
+ * The dialog is portalled to <body>, outside `.arena-chrome`, so it carries
+ * its own `.arena-login` scope with the same Arena tokens. It is the same on
+ * every route: the Arena look is the brand, not a per-page skin.
+ * ------------------------------------------------------------------------- */
+
+.arena-login {
+	--arena-bg: #0e0d0e;
+	--arena-surface: #1a181a;
+	--arena-surface-2: #242124;
+	--arena-ink: #f6efea;
+	--arena-muted: #a69b95;
+	--arena-line: #2f2b2f;
+	--arena-line-strong: #4a434a;
+	--arena-pink: #ff3eb5;
+	--arena-pink-hover: #ff6cc8;
+
+	--background: var(--arena-bg);
+	--foreground: var(--arena-ink);
+	--card: var(--arena-surface);
+	--card-foreground: var(--arena-ink);
+	--popover: var(--arena-surface);
+	--popover-foreground: var(--arena-ink);
+	--muted: var(--arena-surface-2);
+	--muted-foreground: var(--arena-muted);
+	--accent: var(--arena-surface-2);
+	--accent-foreground: var(--arena-ink);
+	--border: var(--arena-line);
+	--input: var(--arena-line);
+	--ring: var(--arena-pink);
+	--primary: var(--arena-pink);
+	--primary-foreground: #111;
+	--secondary: var(--arena-surface-2);
+	--secondary-foreground: var(--arena-ink);
+
+	--bg: var(--arena-bg);
+	--surface-raised: var(--arena-surface-2);
+	--surface-sunken: var(--arena-bg);
+	--surface-hover: var(--arena-surface-2);
+	--fill-ink: var(--arena-pink);
+	--on-fill-ink: #111;
+	--fill-accent: var(--arena-pink);
+	--text-high: var(--arena-ink);
+	--text-mid: var(--arena-muted);
+	--border-default: var(--arena-line);
+	--border-strong: var(--arena-line-strong);
+	--focus-ring: var(--arena-pink);
+
+	background: var(--arena-surface) !important;
+	color: var(--arena-ink);
+	border: 1px solid var(--arena-line) !important;
+	border-radius: 20px !important;
+	box-shadow: 0 30px 80px rgb(0 0 0 / 0.6) !important;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+	color-scheme: dark;
+}
+
+.arena-login-head {
+	border-bottom: 1px solid var(--arena-line);
+	background: radial-gradient(120% 140% at 0% 0%, rgb(255 62 181 / 0.14), transparent 60%);
+}
+
+.arena-login-eyebrow {
+	font-family: 'JetBrains Mono', ui-monospace, monospace;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--arena-pink);
+	margin-bottom: 6px;
+}
+
+.arena-login-title {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-weight: 400;
+	font-size: 2.25rem;
+	line-height: 1;
+	letter-spacing: -0.02em;
+	color: var(--arena-ink);
+	font-synthesis: none;
+}
+
+.arena-login-title em {
+	font-style: italic;
+	color: var(--arena-pink);
+}
+
+.arena-login-lede {
+	margin-top: 8px;
+	font-size: 0.875rem;
+	color: var(--arena-muted);
+}
+
+.arena-login .arena-login-tabs,
+.arena-login .arena-login-subtabs {
+	gap: 4px;
+	padding: 4px;
+	margin-top: 18px;
+	border-radius: 14px;
+	background: var(--arena-bg);
+	border: 1px solid var(--arena-line);
+}
+
+.arena-login .arena-login-subtabs {
+	margin-top: 14px;
+	border-radius: 12px;
+}
+
+.arena-login .arena-login-tab,
+.arena-login .arena-login-subtab {
+	padding: 9px 6px;
+	border: 0;
+	border-radius: 10px !important;
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	color: var(--arena-muted);
+	background: transparent;
+}
+
+.arena-login .arena-login-subtab {
+	padding: 7px 6px;
+	font-size: 12px;
+}
+
+.arena-login .arena-login-tab:hover,
+.arena-login .arena-login-subtab:hover {
+	color: var(--arena-ink);
+}
+
+.arena-login .arena-login-tab[data-state='active'],
+.arena-login .arena-login-subtab[data-state='active'] {
+	background: var(--arena-surface-2);
+	color: var(--arena-ink);
+	box-shadow: inset 0 -2px 0 var(--arena-pink) !important;
+}
+
+.arena-login [data-slot='button'] {
+	border-radius: 12px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	transition:
+		transform 0.15s ease,
+		filter 0.2s,
+		box-shadow 0.2s;
+}
+
+.arena-login [data-slot='button'][data-variant='default'] {
+	background: var(--arena-pink);
+	color: #111;
+	height: 44px;
+}
+
+.arena-login [data-slot='button'][data-variant='default']:not(:disabled):hover {
+	filter: brightness(1.06);
+	box-shadow: 0 6px 18px rgb(255 62 181 / 0.35);
+}
+
+.arena-login [data-slot='button'][data-variant='default']:not(:disabled):active {
+	transform: scale(0.97);
+}
+
+.arena-login [data-slot='button'][data-variant='outline'] {
+	background: var(--arena-bg);
+	border: 1px solid var(--arena-line);
+	color: var(--arena-ink);
+}
+
+.arena-login [data-slot='button'][data-variant='outline']:hover {
+	border-color: var(--arena-pink);
+	color: var(--arena-pink);
+}
+
+.arena-login input,
+.arena-login textarea,
+.arena-login [data-slot='select-trigger'] {
+	background: var(--arena-bg) !important;
+	border: 1px solid var(--arena-line) !important;
+	border-radius: 12px;
+	color: var(--arena-ink) !important;
+}
+
+.arena-login input:focus,
+.arena-login textarea:focus,
+.arena-login [data-slot='select-trigger']:focus {
+	border-color: var(--arena-pink) !important;
+	box-shadow: 0 0 0 2px rgb(255 62 181 / 0.3) !important;
+	outline: none;
+}
+
+.arena-login input::placeholder {
+	color: var(--arena-muted) !important;
+}
+
+.arena-login [data-slot='checkbox'] {
+	border-color: var(--arena-line-strong);
+	border-radius: 5px;
+}
+
+.arena-login [data-slot='checkbox'][data-state='checked'] {
+	background: var(--arena-pink);
+	border-color: var(--arena-pink);
+	color: #111;
+}
+
+.arena-login [data-slot='dialog-close'],
+.arena-login > button:last-child {
+	color: var(--arena-muted);
+	opacity: 1;
+}
+
+.arena-login > button:last-child:hover {
+	color: var(--arena-pink);
+}
+
+/* --- Dashboard title bar ----------------------------------------------------
+ * The strip under the header that reads "Dashboard" (or the open section on a
+ * phone). Arena surface, ink serif title, a hairline instead of a black slab.
+ * ------------------------------------------------------------------------- */
+
+.arena-dash-title {
+	background: #0e0d0e;
+	color: #f6efea;
+	border-bottom: 1px solid #2f2b2f;
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-weight: 400;
+	letter-spacing: -0.01em;
+	font-synthesis: none;
+}
+
+.arena-dash-title::before {
+	content: '';
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	margin-right: 4px;
+	border-radius: 999px;
+	background: #ff3eb5;
+	box-shadow: 0 0 12px rgb(255 62 181 / 0.6);
+	flex-shrink: 0;
+}
+
+@media (max-width: 1023px) {
+	.arena-dash-title::before {
+		display: none;
+	}
+}
+
+/* Over the light dashboard the translucent Arena header reads grey, so the
+   dashboard's own Arena scope paints it solid. */
+.arena-chrome.arena-header-solid .arena-header {
+	background: #0e0d0e;
+}
+
+.arena-dash-title button,
+.arena-dash-title a {
+	color: #ff3eb5;
+	opacity: 1;
+}
+
+.arena-dash-title button:hover,
+.arena-dash-title a:hover {
+	color: #ff6cc8;
+}

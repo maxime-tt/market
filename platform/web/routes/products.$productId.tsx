@@ -28,6 +28,7 @@ import { addToBlacklistProducts, removeFromBlacklistProducts } from '@platform/w
 import { addToFeaturedProducts, removeFromFeaturedProducts } from '@platform/web/featured/featuredPublish'
 import { useBlacklistSettings } from '@platform/web/config/blacklistBinding'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useInstanceName } from '@platform/web/config/instanceName'
 import { useFeaturedProducts } from '@platform/web/featured/featuredQueries'
 import { useAmIAdmin } from '@platform/web/app-settings/appSettingsQuery'
 import { useTestLabelForCoordinate } from '@platform/web/config/testLabelsBinding'
@@ -88,13 +89,15 @@ interface MetaTagsConfig {
 	url: string
 	price?: number
 	currency?: string
+	/** The instance's own name (see platform/web/config/instanceName.ts). */
+	siteName: string
 	/** When false, skip all meta/title injection (e.g. NSFW-gated products). */
 	enabled?: boolean
 }
 
 function useDocumentMeta(config: MetaTagsConfig) {
 	useEffect(() => {
-		const { title, description, image, url, price, currency, enabled = true } = config
+		const { title, description, image, url, price, currency, siteName, enabled = true } = config
 		if (!enabled) return
 		const createdElements: HTMLElement[] = []
 
@@ -118,14 +121,14 @@ function useDocumentMeta(config: MetaTagsConfig) {
 		}
 
 		// Set document title
-		document.title = `${title} | Plebeian Market`
+		document.title = `${title} | ${siteName}`
 
 		// Open Graph tags
 		addMeta({ property: 'og:type', content: 'product' })
 		addMeta({ property: 'og:title', content: title })
 		addMeta({ property: 'og:description', content: description })
 		addMeta({ property: 'og:url', content: url })
-		addMeta({ property: 'og:site_name', content: 'Plebeian Market' })
+		addMeta({ property: 'og:site_name', content: siteName })
 		if (image) {
 			addMeta({ property: 'og:image', content: image })
 		}
@@ -165,7 +168,7 @@ function useDocumentMeta(config: MetaTagsConfig) {
 			// duplicates can never survive (A→B→A guard).
 			removeOwnedOgMetaTags(document.head)
 		}
-	}, [config.title, config.description, config.image, config.url, config.price, config.currency, config.enabled])
+	}, [config.title, config.description, config.image, config.url, config.price, config.currency, config.siteName, config.enabled])
 }
 
 declare module '@tanstack/react-router' {
@@ -441,6 +444,7 @@ function RouteComponent() {
 
 	// Get app config
 	const { data: config } = useConfigQuery()
+	const instanceName = useInstanceName()
 	const appPubkey = config?.appPublicKey || ''
 
 	// Get entity permissions
@@ -513,6 +517,7 @@ function RouteComponent() {
 		url: productUrl,
 		price,
 		currency: priceTag?.[2] || 'SATS',
+		siteName: instanceName,
 	})
 
 	// Keep this route resilient during relay warmup: don't error-boundary the whole page for transient misses.

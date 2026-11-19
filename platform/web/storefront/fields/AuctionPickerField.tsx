@@ -9,7 +9,7 @@ import { useStorefrontContext } from '@ui/storefront/StorefrontContext'
  * not agree to honour (the same rule `ProductGrid` follows), and a coordinate
  * still resolves after the seller edits display fields.
  *
- * The list is the author's own auctions, read over the same adapter the block
+ * The list is every auction the read delivers (the author's own first), read over the same adapter the block
  * renders — so the editor offers exactly the auctions the published page can
  * resolve, and an existing value that no longer reads stays visible and
  * removable rather than being silently rewritten.
@@ -35,12 +35,17 @@ export function AuctionPickerField({
 	const { pubkey } = useStorefrontContext()
 	const read = useAuctionListRead()
 	const now = Math.floor(Date.now() / 1000)
+	// Every auction the read delivered, the author's own first. "Hand-picked" is
+	// curation (the card keeps its own seller), and a home page is written by an
+	// operator key that sells nothing, so an own-auctions-only list would leave
+	// it nothing to pick.
 	const mine = (read.snapshot?.auctions ?? [])
-		.filter((auction) => auction.seller === pubkey)
 		.map((auction) => {
 			const item = toAuctionListItem(auction, now)
-			return { coordinate: item.coordinate, label: item.title ?? item.d }
+			const own = auction.seller === pubkey
+			return { coordinate: item.coordinate, label: item.title ?? item.d, own }
 		})
+		.sort((a, b) => Number(b.own) - Number(a.own))
 
 	const known = new Set(mine.map((auction) => auction.coordinate))
 	const unresolved = value.filter((coordinate) => !known.has(coordinate))
@@ -55,14 +60,14 @@ export function AuctionPickerField({
 			<span>{label}</span>
 
 			{read.status === 'loading' && mine.length === 0 && (
-				<span className="font-normal">Reading your auctions from relays…</span>
+				<span className="font-normal">Reading auctions from relays…</span>
 			)}
-			{read.status === 'no-relays' && <span className="font-normal">No relay answered, so your auctions could not be read.</span>}
+			{read.status === 'no-relays' && <span className="font-normal">No relay answered, so auctions could not be read.</span>}
 			{read.status === 'incomplete' && mine.length === 0 && (
 				<span className="font-normal">The read stopped before every relay answered; no auctions were delivered.</span>
 			)}
-			{read.status === 'settled' && mine.length === 0 && <span className="font-normal">You have no auctions on the relays yet.</span>}
-			{read.status === 'error' && <span className="font-normal">Your auctions could not be loaded right now.</span>}
+			{read.status === 'settled' && mine.length === 0 && <span className="font-normal">There are no auctions on the relays yet.</span>}
+			{read.status === 'error' && <span className="font-normal">Auctions could not be loaded right now.</span>}
 
 			{value.length > 0 && (
 				<ol className="flex flex-col gap-1 font-normal" data-testid="auction-picker-selected">
@@ -89,7 +94,10 @@ export function AuctionPickerField({
 							<li key={auction.coordinate}>
 								<button type="button" className={rowClassName} aria-pressed={selected} disabled={readOnly} onClick={() => toggle(auction.coordinate)}>
 									<span aria-hidden>{selected ? '✓' : '+'}</span>
-									<span className="truncate">{auction.label}</span>
+									<span className="truncate">
+										{auction.label}
+										{auction.own ? ' (yours)' : ''}
+									</span>
 								</button>
 							</li>
 						)

@@ -367,3 +367,131 @@ This ADR is the design anchor. The following sub-ADRs fill in the detail, each a
 4. **Modules are independent.** The component registry, page definition, routing, publishing gate, and compilation pipeline can each be developed, reviewed, and shipped on their own timelines.
 
 5. **Sub-ADRs for detail.** This ADR captures the vision and architecture. Every concrete format, kind number, binding syntax, and protocol detail is a sub-ADR decision, defined collaboratively.
+
+---
+
+## Amendment (2026-11-19): Roadmap — author-supplied tokens, any font, and third-party components
+
+**Status:** roadmap / clarification. This changes no V1 decision and implements
+nothing. It records the distance between the shipped V1 seed set and the V2 this
+ADR already designs for, names the constraint that governs that distance, and
+sets a staged path with a gate on each stage.
+
+### Why this amendment exists
+
+Module 1 (above) says the closed V1 registry is the seed set and that "in V2+,
+anyone can make a component — the registry opens to third-party discovery via
+Nostr events and Blossom-hosted component assets." The theme layer is closed in
+the same words and for the same reason: a free colour picker is "an open-ended
+surface (arbitrary CSS injected into every page on the app)", and
+`sdk/config/storefront/storefrontThemes.ts` states that *nothing in that file is
+author-controlled*.
+
+Three capabilities an author will reasonably expect of a CMS are therefore
+absent, and the distance to each is not the same:
+
+| Expectation | Shipped today | Where it belongs |
+| --- | --- | --- |
+| Insert a pre-made token set and customise it | choose a `theme` id, a `palette` key, and six bounded `tune` numbers | token *values* supplied by the author, validated by a per-property grammar |
+| Choose a font | fonts are bundled; `platform/web/app/noThirdPartyHosts.test.ts` fails the build on any external font host; a theme's `fonts` string is display-only | a curated family registry, then allowlisted content-addressed font assets |
+| Components from any provider (Plebeian a trusted origin) | 13 fixed block types | an open registry of declarative descriptors, with Plebeian's key as a registry authority |
+
+The governing doctrine already exists and is cited rather than restated:
+`method/prompts/constitution.md`, section "Napplets, nsites, CMS, and remotely
+defined UI overlay" — a closed component registry unless an accepted
+architecture authorizes third-party components; never execute arbitrary remote
+JavaScript from a page definition; verify asset hashes and authorship; separate
+page authorship, component-registry authority, vanity-route authority,
+publish-gate proof, and hosting availability; allowlist URL schemes and
+destinations and enforce CSP.
+
+### What the client guarantees today
+
+- The page is a closed Zod union of 13 block types
+  (`sdk/commerce/storefront/storefrontPage.ts`), rendered by an exhaustive switch
+  whose `default` asserts `never` (`ui/storefront/StorefrontRenderer.tsx`).
+  Adding a block type without a case there is a compile error, not a blank space.
+- Every block is `{ type, props: { id, … } }` — Puck's own shape, so editor
+  state *is* the persisted document and there is no translation layer.
+- Parsing tolerates partial failure at two levels: an unknown block type or a
+  failing prop drops that block (counted in `droppedBlocks`); a bad root prop
+  (`theme`, `palette`) falls back to that field's default. Only a wrong
+  `version`, unparseable JSON, or a non-object top level is total failure.
+- Style reaches the DOM only as inline CSS custom properties on one wrapper
+  element (`StorefrontRoot`), computed from the closed registry plus six clamped
+  numbers (`storefrontThemes.ts` `storefrontThemeCssVars`/`storefrontTuneCssVars`).
+  No block carries `style`/`className`; no author string becomes CSS.
+- URLs are gated by `isSafeHref` / `isSafeMediaSrc`: absolute `https:` or an
+  in-app `/` path; `//`, `javascript:`, `data:`, `blob:`, `file:` and bare
+  `http:` fail.
+- Data-bound blocks resolve against the page author only; a document has no
+  field that could name another author's catalogue.
+
+### Control inventory at the time of writing
+
+| Control | State | Evidence |
+| --- | --- | --- |
+| URL scheme gate | present | `storefrontPage.ts` `isSafeHref` / `isSafeMediaSrc` |
+| Build-time third-party-host guard | present | `platform/web/app/noThirdPartyHosts.test.ts` (bans tracker hosts, and any external font or stylesheet load) |
+| Asset host allowlist | **absent** | `storefrontPage.ts`: "No such allowlist exists in this repository yet, so the scheme gate is the whole boundary today"; `blossom_server` / `nip96_server` carry no protocol refinement |
+| CSP (any) | **absent** | no `Content-Security-Policy` in source; the deployment adds only `nosniff` and `X-Frame-Options DENY` |
+| Subresource integrity | **absent** | no `integrity=` on any script or stylesheet |
+| HTML sanitizer | absent by design | markdown is tokenised to React elements; no `dangerouslySetInnerHTML` on the relay path |
+| Manifest / capability registry | present (instance-level) | `platform/extensions/registry.ts` — `id`, `version`, `capabilities`, `runtimes`, public/private config schemas, lifecycle |
+| Cross-origin sandbox | **absent** | no iframe or worker sandbox anywhere in the tree |
+
+### The tier model
+
+The tiers are cumulative: each adds a source of authored input, and the tier
+below sets the ceiling the one above may rely on.
+
+- **A — closed sets (shipped).** The author names an id and bounded numbers; every
+  value that reaches the DOM is an app string. No new attack surface.
+- **A+ — typed token bag.** The author supplies token *values*, each validated
+  against a per-property grammar (colour parsed, dimension bounded, composition
+  from a closed model) and applied through the CSSOM (`setProperty` on a known
+  property), never by string concatenation. Hard rules: no URL-bearing token, and
+  a cap on token count. This is the "insert a pre-made set, then customise"
+  capability, and it needs no CSP.
+- **B — allowlisted, integrity-pinned assets.** Bytes from another origin: font
+  files, media, and — only if a later decision allows it — a stylesheet. Requires
+  a host allowlist, `font-src`/`style-src` in a CSP, and hash verification; for CSS
+  also a real parser plus a sanitizer that strips `@import`, cross-origin `url()`,
+  `image-set` and `@font-face` sources. Per doctrine, content-addressed integrity
+  is neither authorization nor safety.
+- **D — component registry.** Providers publish declarative descriptors
+  (namespaced id such as `@plebeian/product-grid`, prop schema, data contract,
+  capabilities). The two shipped precedents are the `.cms.tsx` sidecar and the
+  instance extension manifest. Descriptors compose app-shipped primitives; the app
+  owns *how*. This is the safe form of "components from any provider", and where
+  "Plebeian as a trusted origin" becomes literal: a registry-authority key list.
+- **C — remote executable code.** Only inside a cross-origin sandbox, and only
+  with an accepted ADR. The app's own origin holds wallet material, so same-origin
+  execution is out of bounds, and no sandbox primitive exists today.
+
+### Staged path
+
+| Stage | Deliverable | Gate |
+| --- | --- | --- |
+| 0 | a motion tune axis and closed animation presets as block props | additive; no version bump |
+| 1 | token sets as first-class editable objects (tier A+) | schema addition; per-field tolerant |
+| 2 | a curated bundled font-family registry; then allowlisted content-addressed fonts | a deliberate change to `noThirdPartyHosts.test.ts`; a licensing decision |
+| 3 | component registry v1 — in-tree declarative descriptors rendering shipped primitives | a registry-authority list; render-time limits |
+| 4 | remote discovery — descriptors as Nostr events, assets from Blossom | an accepted ADR, plus the CSP, the allowlist, and the size/depth/node/cycle/query/media limits named in the constitution |
+| 5 | a cross-origin sandbox for provider code | an accepted architecture; the constitution treats executable remote UI as a separate concern |
+
+### Mechanics that constrain every stage
+
+- **Additive fields do not bump the version.** `chrome` set the precedent, and
+  `parseStorefrontRootProps` falls back per field, so a new tune axis or root prop
+  is safe for older clients.
+- **A new block type is dropped by older clients.** `parseStorefrontPage` counts
+  such blocks in `droppedBlocks`, so an open registry (stage 3) must decide the
+  version story, not only the registry shape.
+- **The exhaustive switch is the safety property.** It is coordinated across five
+  files (schema union, renderer switch, barrel, CMS registry, sidebar category),
+  plus two more for a data-bound block. A runtime registry replaces that
+  compile-time check with a schema check; that trade is the real work of stage 3.
+- **Authority is separate from integrity.** A verified hash proves bytes, not
+  intent; the registry-authority list is the authorization, and the constitution
+  requires the two to stay distinct.

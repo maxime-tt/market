@@ -35,6 +35,7 @@ import {
 	arenaListEmptyMessage,
 	arenaListPartialNotice,
 	arenaListSortOptions,
+	pickFeaturedCard,
 	selectArenaListCards,
 	type ArenaListSort,
 } from './ArenaAuctionsListHost'
@@ -297,10 +298,11 @@ describe('the controls that cannot do anything are gone, not inert', () => {
 
 		expect(markup).not.toContain('Show test listings')
 		expect(markup).not.toContain('>All<')
-		// The one control on the page is the filter/sort popover, and it is a real
-		// control (its panel opens), not an inert label.
-		expect(markup).toContain('Filter &amp; Sort')
-		expect(markup).toContain('aria-haspopup="dialog"')
+		// The controls on the page are the Arena sort chips and the hide-ended
+		// toggle, each a real pressed/unpressed button, not an inert label.
+		expect(markup).toContain('data-slot="catalogue-toolbar"')
+		expect(markup).toContain('Hide ended')
+		expect(markup).toContain('aria-pressed="true"')
 	})
 
 	test('the sort vocabulary is only what the arena card model carries', () => {
@@ -459,5 +461,19 @@ describe('ADR-0009 — test-labeled lots are hidden from the auction list', () =
 
 		// `open-lot` is SELLER's; OtherSeller's same `d` is a different coordinate.
 		expect(select().cards.map((card) => card.d)).toEqual(['open-lot', 'endless-lot', 'ended-lot'])
+	})
+})
+
+describe('pickFeaturedCard', () => {
+	const card = (d: string, phase: 'open' | 'ended', endsAt: number | null) =>
+		({ d, phase, endsAt, coordinate: `1440:s:${d}`, seller: 's' }) as unknown as Parameters<typeof pickFeaturedCard>[0][number]
+	test('features the open lot that closes soonest', () => {
+		expect(pickFeaturedCard([card('a', 'open', 500), card('b', 'open', 200), card('c', 'ended', 50)], 100)?.d).toBe('b')
+	})
+	test('falls back to the first card when nothing is open', () => {
+		expect(pickFeaturedCard([card('x', 'ended', 50), card('y', 'ended', 60)], 100)?.d).toBe('x')
+	})
+	test('features nothing when the list is empty', () => {
+		expect(pickFeaturedCard([], 100)).toBeNull()
 	})
 })

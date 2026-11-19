@@ -34,6 +34,7 @@
  * grid's read stays the search stream.
  */
 
+import { HeaderAccountControls } from '@platform/web/layout/Header'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { BrowseNav } from '@ui/browse/browse-nav'
 import { SearchField } from '@ui/browse/search-field'
@@ -61,8 +62,9 @@ import {
 } from '@platform/web/profiles/profileQuery'
 import { usePriceDisplay } from '@platform/web/products/PriceDisplayHost'
 import { copyToClipboard } from '@platform/web/utils/clipboard'
-import { useAuth } from '@platform/web/auth/authStore'
 import { npubEncode } from 'nostr-tools/nip19'
+import { useInstanceName } from '@platform/web/config/instanceName'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 
 /** The Browse URL state the host asks the route to write back. */
 export interface BrowseSearchState {
@@ -201,15 +203,6 @@ function elideNpub(pubkey: string): string | undefined {
 	} catch {
 		return undefined
 	}
-}
-
-/** The account chip the nav and the idle screen share. */
-function AccountChip({ initial }: { initial: string }) {
-	return (
-		<span data-slot="account-trigger" className="flex items-center gap-2 text-sm text-text-mid" title="Account">
-			<span className="size-7 rounded-full bg-fill-ink text-on-fill-ink grid place-items-center text-xs font-bold">{initial}</span>
-		</span>
-	)
 }
 
 /**
@@ -358,6 +351,8 @@ function BrowseResultCard({
  * superset and over-reports what the set actually holds.
  */
 export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
+	const instanceName = useInstanceName()
+	const { data: config } = useConfigQuery()
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 	const [facetsExpanded, setFacetsExpanded] = useState(false)
 	// The open family's selected option, by the variation's `d` tag. Held here
@@ -374,8 +369,6 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 
 	const scrolled = usePageScrolled()
 
-	const { user } = useAuth()
-
 	// The facet probe: the term with NO filter, so the pill list cannot rotate as
 	// the visitor selects one of its pills. It is now always scoped, because
 	// there is no empty-term state for it to run against the whole index.
@@ -390,7 +383,7 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 	 * UI used to show a skeleton for seconds.
 	 */
 	const progress = searchQuery.progress ?? null
-	const products: BrowseProduct[] = result ? result.products : progress?.products ?? []
+	const products: BrowseProduct[] = result ? result.products : (progress?.products ?? [])
 	const isStreamingProducts = !result && products.length > 0
 
 	// The idle index's own feed: one bounded stream that supplies the wall
@@ -440,8 +433,7 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 	useEffect(() => {
 		if (detailCoordinate) recordListingEvent('listing_view', detailCoordinate)
 	}, [detailCoordinate])
-	const familyAddress =
-		openProduct && openProduct.familyRole !== 'parent' ? undefined : (openProduct?.familyAddress ?? detailCoordinate)
+	const familyAddress = openProduct && openProduct.familyRole !== 'parent' ? undefined : (openProduct?.familyAddress ?? detailCoordinate)
 
 	const familyQuery = useBrowseFamilyChildren(familyAddress, openProduct?.relays)
 	const family = familyQuery.data?.family ?? null
@@ -471,9 +463,6 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 	useEffect(() => {
 		setSelectedVariant(undefined)
 	}, [p])
-
-	/** The signed-in pubkey's initial, or nothing when signed out. */
-	const accountInitial = user?.pubkey ? user.pubkey.slice(0, 2).toUpperCase() : undefined
 
 	/**
 	 * A product's real deep link on this surface: the route's own `?q=` plus
@@ -582,7 +571,7 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 	// read's own relay frames while it is still going. Both are the same
 	// vocabulary (answered / not answered), so the indicator's in-flight counts
 	// are the read's counts, not a placeholder.
-	const eoseRelays = result ? result.eose : progress?.relaysAnswered ?? []
+	const eoseRelays = result ? result.eose : (progress?.relaysAnswered ?? [])
 	const pendingRelays = result
 		? result.pending
 		: (progress?.relaysSeen ?? []).filter((relay) => !(progress?.relaysAnswered ?? []).includes(relay))
@@ -682,7 +671,9 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 		input.setSelectionRange(input.value.length, input.value.length)
 	}, [isIdle, q])
 
-	const accountSlot = accountInitial ? <AccountChip initial={accountInitial} /> : null
+	// The header's own account controls (sign-in, or dashboard, profile and sign-out):
+	// this surface replaces the header, so it has no other way in.
+	const accountSlot = <HeaderAccountControls />
 
 	/**
 	 * The nav band's compact field, and when it is the one on screen.
@@ -892,6 +883,8 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 
 			{/* Nav — the same element in every state */}
 			<BrowseNav
+				wordmarkLabel={instanceName}
+				logoSrc={config?.picture}
 				active={true}
 				onNavigateHome={() => onNavigate({ q: '', p: undefined })}
 				onNavigateFeatured={onNavigateFeatured}

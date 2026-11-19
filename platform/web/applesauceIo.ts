@@ -27,7 +27,7 @@ import type { Filter } from 'nostr-tools'
 import type { EventStreamItem } from '@sdk/core/event-store'
 import type { SignerCapability } from '@sdk/core/signer'
 
-import { getWriteRelays, ndkStore } from '@platform/web/ndk/ndkStore'
+import { getMainRelay, getWriteRelays, isAppRelayWritesOnly, ndkStore } from '@platform/web/ndk/ndkStore'
 
 // ---------------------------------------------------------------------------
 // The port's contract — moved verbatim from the retired `io-types.ts`.
@@ -157,6 +157,12 @@ function relayUrls(override?: string[]): string[] {
 }
 
 function writeRelayUrls(override?: string[]): string[] {
+	// A write-locked instance never publishes past its own relay, even when a
+	// caller names other relays.
+	if (isAppRelayWritesOnly()) {
+		const main = getMainRelay()
+		return main ? [main] : []
+	}
 	if (override && override.length > 0) return override
 	return getWriteRelays()
 }

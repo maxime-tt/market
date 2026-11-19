@@ -27,7 +27,7 @@ describe('Catalogue preset', () => {
 
 	test('fonts, radius and easing match the extraction', () => {
 		expect(CATALOGUE_FONTS.serif).toContain('Instrument Serif')
-		expect(CATALOGUE_FONTS.sans).toContain('DM Sans')
+		expect(CATALOGUE_FONTS.sans).toContain('Plus Jakarta Sans')
 		expect(CATALOGUE_FONTS.mono).toContain('JetBrains Mono')
 		expect(CATALOGUE_RADIUS).toBe('14px')
 		expect(CATALOGUE_EASE).toBe('cubic-bezier(.2, .8, .2, 1)')

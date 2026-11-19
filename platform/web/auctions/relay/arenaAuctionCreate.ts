@@ -23,7 +23,7 @@
  * kind:     1440                          (regular kind: the relay replaces nothing)
  * tags:     ["d", <d>]                    the auction's identity within its seller
  *           ["e", <root event id>]        only on an edit: the version it supersedes
- * content:  {"auction_id":<d>, "title":…, "description":…, "image":…, "category":…,
+ * content:  {"auction_id":<d>, "title":…, "description":…, "image":…, ["media":[…],] "category":…,
  *            "name":…, "startPrice":…, "minIncrement":…, "mode":"fixed"|"antisnipe",
  *            "windowSec":…, "durationSec":…, "sellerWallet":…, "v4vSplit":[…]}
  * ```
@@ -56,6 +56,7 @@
  * failure whatever the transport resolved with.
  */
 
+import type { LotMediaItem } from '@sdk/commerce/auctions/lotMedia'
 import { getEventHash } from 'nostr-tools/pure'
 import type { Event } from '@sdk/core/nostr-io'
 import type { ArenaV4vSplitRow } from '@sdk/commerce/auctions/auctionPublishValidation'
@@ -89,8 +90,13 @@ export interface ArenaCreateContent {
 	auction_id: string
 	title: string
 	description: string
-	/** The lot's image URL. */
+	/** The lot's main photo URL: the gallery's first item. */
 	image: string
+	/**
+	 * Gallery items after `image` (photos, video, live). Display field, so an edit may
+	 * change it. Omitted from the wire when empty, so a one-photo lot is unchanged.
+	 */
+	media?: LotMediaItem[]
 	category: string
 	/** The seller's display name for the lot. */
 	name: string
@@ -191,6 +197,7 @@ export function buildArenaCreateDraft(form: ArenaCreateValidationInput, options:
 					title: value.title,
 					description: value.description,
 					image: value.image,
+					...(value.media.length > 0 ? { media: value.media } : {}),
 					category: value.category,
 					name: value.name,
 					startPrice: value.startPrice,
@@ -207,6 +214,7 @@ export function buildArenaCreateDraft(form: ArenaCreateValidationInput, options:
 					title: value.title,
 					description: value.description,
 					image: value.image,
+					...(value.media.length > 0 ? { media: value.media } : {}),
 					category: value.category,
 					name: value.name,
 					...immutableFieldsOf(edit.content, edit.eventId),

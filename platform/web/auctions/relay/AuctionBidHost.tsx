@@ -66,7 +66,7 @@ import { authStore, getActiveSignerCapability } from '@platform/web/auth/authSto
 import { createWebNostrIo, webRelayPolicy } from '@platform/web/sdkNostrIo'
 import { createWebArenaParamsRead } from '@platform/web/auctions/relay/arenaParamsRead'
 import { resolveEscrowMintUrl } from '@platform/web/chainMint'
-import { getReadContext } from '@platform/web/readContext'
+import { getAppRelayUrl, getReadContext } from '@platform/web/readContext'
 import type { ArenaBidFunding, ArenaBidFundingTerms } from '@platform/web/auctions/relay/arenaBidFunding'
 import { arenaEscrowSendOverCoco } from '@platform/web/auctions/relay/arenaEscrowCocoSend'
 import { ArenaBidFundError, assembleArenaBidFunding, type ArenaBidFundPorts } from '@platform/web/auctions/relay/arenaBidFund'
@@ -113,10 +113,26 @@ function withEscrowLockedNote(state: ArenaBidSubmissionState): ArenaBidSubmissio
  * migration has produced the spend key, and `readEscrowManager` answers `null`
  * until Coco is ready — both are refusals, never substitutes.
  */
+/**
+ * Where the escrow terms are read from: the instance relay alone, when there is one.
+ *
+ * Why: this instance's validator committee publishes its kind-1448 terms to the
+ * instance relay. Reading every query relay broke bidding two ways: the bounded
+ * read ends at the first relay that is caught up, so a fast empty public relay
+ * ended it before the instance relay's terms arrived; and public relays carry
+ * other committees' terms at higher heights, which the newest-height selection
+ * would have preferred, locking a bid to a key this instance's validators do
+ * not hold. Without an instance relay the query relays are the only option.
+ */
+export function arenaParamsRelays(appRelayUrl: string | undefined, queryRelays: readonly string[]): string[] {
+	const pinned = appRelayUrl?.trim()
+	return pinned ? [pinned] : [...queryRelays]
+}
+
 const arenaBidFundPorts: ArenaBidFundPorts = {
 	readConfig: async () => {
 		const read = createWebArenaParamsRead({
-			relays: [...webRelayPolicy('query')],
+			relays: arenaParamsRelays(getAppRelayUrl(), webRelayPolicy('query')),
 			store: getReadContext().store as unknown as EventStorePort<Event>,
 		})
 		const { params } = await read()
@@ -192,7 +208,33 @@ function useArenaBidder(): ArenaBidderState {
 	return useMemo(() => ({ pubkey, wallet }), [pubkey, wallet])
 }
 
-export function AuctionBidHost({ model, readStatus, now, chainAdvancing = null, resetKey, className, onPublished }: AuctionBidHostProps) {
+/** Everything a bid surface needs from the host: the check, the input and the publish. */
+export interface AuctionBidController {
+	viewer: string | null
+	check: ReturnType<typeof checkArenaBid> | null
+	blockedReason: ReturnType<typeof arenaBidBlock>
+	amountInput: string
+	onAmountChange: (value: string) => void
+	pending: boolean
+	submission: ArenaBidSubmissionState
+	onSubmit: () => void
+	/** Submit a specific delta at once (the Arena swipe), through the same publish path. */
+	onSubmitAmount: (raw: string) => void
+}
+
+/**
+ * The bid state and the publish, without a view. `AuctionBidHost` renders it
+ * through the catalogue `ArenaBidPanel`; the Arena lot page renders it through
+ * its own ladder, input and swipe. Both share every check and every refusal.
+ */
+export function useAuctionBidController({
+	model,
+	readStatus,
+	now,
+	chainAdvancing = null,
+	resetKey,
+	onPublished,
+}: Omit<AuctionBidHostProps, 'className'>): AuctionBidController {
 	const bidder = useArenaBidder()
 	const [amountInput, setAmountInput] = useState('')
 	const [pending, setPending] = useState(false)
@@ -273,98 +315,122 @@ export function AuctionBidHost({ model, readStatus, now, chainAdvancing = null, 
 		})
 	}, [model, readStatus, chainAdvancing, escrowLocktime])
 
-	const onSubmit = useCallback(async () => {
-		if (pending) return
-		const raw = amountInput === '' ? prefill : amountInput
-		setPending(true)
-		setSubmission({ phase: 'publishing', amount: check?.amount ?? 0 })
-		// Non-null once the escrow was actually locked: a failure after that point
-		// means the bidder's money is committed at the mint, and the panel has to
-		// say so (see `withEscrowLockedNote`).
-		let funding: ArenaBidFunding | null = null
-		let fundingTerms: ArenaBidFundingTerms | null = null
-		try {
-			const capability = getActiveSignerCapability()
-			const pubkey = bidder.pubkey
-			if (capability === null || pubkey === null) {
-				setSubmission({ phase: 'failed', amount: check?.amount ?? 0, reason: 'No signer is available.' })
-				return
-			}
-			const relays = [...webRelayPolicy('query')]
-			const io = createWebNostrIo()
-			// ONE clock reading for the locktime floor and for the event's
-			// `created_at`, so the escrow is written against the same instant the
-			// bid is published at. A second reading would let the two disagree.
-			const nowSec = Math.floor(Date.now() / 1000)
-			// The escrow first, and only for a bid the check has already allowed:
-			// money is never locked for a bid that is about to be refused, and a
-			// bid is never published without its escrow. `check.amount` is the same
-			// parse `publishArenaBid` performs on `raw`, so the amount locked is
-			// the amount the event names. When the check is not allowed — or names
-			// no amount — the publish path's own refusal is the honest answer and
-			// no lock is attempted.
-			if (model !== null && check !== null && check.allowed && check.amount !== null) {
-				// Resolve (and, on a fresh wallet, create) the spend key before the escrow reads
-				// the synchronous signer. The ensure retries, so a wallet that was not ready at
-				// login is not stranded; if it still fails, `readWalletSigner` answers null and
-				// the assembly refuses with `fund.wallet-signer-missing`.
-				try {
-					await walletOps.ensureAuctionWalletKey()
-				} catch (keyErr) {
-					console.warn('[wallet] Auction spend key is not available:', keyErr)
+	const submitRaw = useCallback(
+		async (raw: string) => {
+			if (pending) return
+			// The check is re-run on the exact raw being published, so an amount
+			// handed in by the swipe is held to the same rules as a typed one.
+			const check = model !== null ? checkArenaBid({ model, status: readStatus, now, bidder, raw }) : null
+			setPending(true)
+			setSubmission({ phase: 'publishing', amount: check?.amount ?? 0 })
+			// Non-null once the escrow was actually locked: a failure after that point
+			// means the bidder's money is committed at the mint, and the panel has to
+			// say so (see `withEscrowLockedNote`).
+			let funding: ArenaBidFunding | null = null
+			let fundingTerms: ArenaBidFundingTerms | null = null
+			try {
+				const capability = getActiveSignerCapability()
+				const pubkey = bidder.pubkey
+				if (capability === null || pubkey === null) {
+					setSubmission({ phase: 'failed', amount: check?.amount ?? 0, reason: 'No signer is available.' })
+					return
 				}
-				const assembled = await assembleArenaBidFunding({ model, amount: check.amount, now: nowSec }, arenaBidFundPorts)
-				funding = assembled.funding
-				fundingTerms = assembled.fundingTerms
-				// The escrow's own locktime, from the funds that were actually
-				// locked — held so the diagnosis can state it if the chain does not
-				// accept the bid.
-				setEscrowLocktime(assembled.funding.locktime)
-			}
-			const result = await publishArenaBid(
-				{ model, status: readStatus, bidder, raw },
-				{
-					signer: {
-						pubkey,
-						sign: async (template) => {
-							const signature = await capability.signEvent({ ...template, pubkey })
-							return signature as unknown as Event
+				const relays = [...webRelayPolicy('query')]
+				const io = createWebNostrIo()
+				// ONE clock reading for the locktime floor and for the event's
+				// `created_at`, so the escrow is written against the same instant the
+				// bid is published at. A second reading would let the two disagree.
+				const nowSec = Math.floor(Date.now() / 1000)
+				// The escrow first, and only for a bid the check has already allowed:
+				// money is never locked for a bid that is about to be refused, and a
+				// bid is never published without its escrow. `check.amount` is the same
+				// parse `publishArenaBid` performs on `raw`, so the amount locked is
+				// the amount the event names. When the check is not allowed — or names
+				// no amount — the publish path's own refusal is the honest answer and
+				// no lock is attempted.
+				if (model !== null && check !== null && check.allowed && check.amount !== null) {
+					// Resolve (and, on a fresh wallet, create) the spend key before the escrow reads
+					// the synchronous signer. The ensure retries, so a wallet that was not ready at
+					// login is not stranded; if it still fails, `readWalletSigner` answers null and
+					// the assembly refuses with `fund.wallet-signer-missing`.
+					try {
+						await walletOps.ensureAuctionWalletKey()
+					} catch (keyErr) {
+						console.warn('[wallet] Auction spend key is not available:', keyErr)
+					}
+					const assembled = await assembleArenaBidFunding({ model, amount: check.amount, now: nowSec }, arenaBidFundPorts)
+					funding = assembled.funding
+					fundingTerms = assembled.fundingTerms
+					// The escrow's own locktime, from the funds that were actually
+					// locked — held so the diagnosis can state it if the chain does not
+					// accept the bid.
+					setEscrowLocktime(assembled.funding.locktime)
+				}
+				const result = await publishArenaBid(
+					{ model, status: readStatus, bidder, raw },
+					{
+						signer: {
+							pubkey,
+							sign: async (template) => {
+								const signature = await capability.signEvent({ ...template, pubkey })
+								return signature as unknown as Event
+							},
 						},
+						// `NostrIo` is never closed: it shares the app's pool (`sdkNostrIo.ts:18`).
+						publisher: { publish: (event) => io.publish(event) },
+						relays,
+						now: nowSec,
+						// The locked escrow and its two pre-signed templates, plus the
+						// terms they were built against. `publishArenaBid` re-verifies
+						// the payload against those terms before a signature exists.
+						funding,
+						fundingTerms,
 					},
-					// `NostrIo` is never closed: it shares the app's pool (`sdkNostrIo.ts:18`).
-					publisher: { publish: (event) => io.publish(event) },
-					relays,
-					now: nowSec,
-					// The locked escrow and its two pre-signed templates, plus the
-					// terms they were built against. `publishArenaBid` re-verifies
-					// the payload against those terms before a signature exists.
-					funding,
-					fundingTerms,
-				},
-			)
-			setSubmission(result.state)
-			onPublished?.(result.eventId)
-		} catch (error) {
-			const failed = submissionFromError(error, check?.amount ?? 0)
-			// An assembly refusal is thrown before any money moves; anything after
-			// the lock is a different fact for the bidder, and it is said plainly.
-			setSubmission(funding !== null && !(error instanceof ArenaBidFundError) ? withEscrowLockedNote(failed) : failed)
-		} finally {
-			setPending(false)
-		}
-	}, [amountInput, prefill, pending, check, model, readStatus, bidder, onPublished])
+				)
+				setSubmission(result.state)
+				onPublished?.(result.eventId)
+			} catch (error) {
+				const failed = submissionFromError(error, check?.amount ?? 0)
+				// An assembly refusal is thrown before any money moves; anything after
+				// the lock is a different fact for the bidder, and it is said plainly.
+				setSubmission(funding !== null && !(error instanceof ArenaBidFundError) ? withEscrowLockedNote(failed) : failed)
+			} finally {
+				setPending(false)
+			}
+		},
+		[pending, model, readStatus, now, bidder, onPublished],
+	)
 
+	const effectiveInput = amountInput === '' ? prefill : amountInput
+	return {
+		viewer: bidder.pubkey,
+		check,
+		blockedReason,
+		amountInput: effectiveInput,
+		onAmountChange: setAmountInput,
+		pending,
+		submission,
+		onSubmit: () => void submitRaw(effectiveInput),
+		onSubmitAmount: (raw: string) => {
+			setAmountInput(raw)
+			void submitRaw(raw)
+		},
+	}
+}
+
+export function AuctionBidHost({ className, ...props }: AuctionBidHostProps) {
+	const bid = useAuctionBidController(props)
 	return (
 		<ArenaBidPanel
-			model={model}
-			readStatus={readStatus}
-			check={check}
-			blockedReason={blockedReason}
-			amountInput={amountInput === '' ? prefill : amountInput}
-			onAmountChange={setAmountInput}
-			pending={pending}
-			submission={submission}
-			onSubmit={() => void onSubmit()}
+			model={props.model}
+			readStatus={props.readStatus}
+			check={bid.check}
+			blockedReason={bid.blockedReason}
+			amountInput={bid.amountInput}
+			onAmountChange={bid.onAmountChange}
+			pending={bid.pending}
+			submission={bid.submission}
+			onSubmit={bid.onSubmit}
 			className={className}
 		/>
 	)

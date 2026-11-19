@@ -2,13 +2,16 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
 import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
-import { shouldRenderStorefrontPage, useStorefrontAddressPage } from '@platform/web/storefront/storefrontQuery'
 import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
 import { StorefrontRenderer } from '@ui/storefront'
 import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
 import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/storefront'
 import { BrowseNav } from '@ui/browse/browse-nav'
+import { HeaderAccountControls } from '@platform/web/layout/Header'
 import { IntroOverlay } from '@ui/browse/intro'
+import { useInstanceName } from '@platform/web/config/instanceName'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { LEGACY_HOME_PUBKEY, useInstanceHomePage } from '@platform/web/storefront/instanceHomePage'
 
 /**
  * Browse URL state: ?q=&p=
@@ -39,23 +42,18 @@ export const Route = createFileRoute('/')({
 	staticData: { hidesAppHeader: true },
 })
 
-/**
- * The instance's own key — the identity the CMS authors pages as, and the
- * author the block slots resolve their reads against. Advertised by
- * `/api/config` as `appPublicKey`; kept here because the slots need it before
- * any page document exists.
- */
-const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91cd9c'
-
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
 	const navigate = useNavigate()
-	// The app key's own `home` page, when one has been authored. Read first and
-	// unconditionally: the hook must run in every state of this route, and the
-	// published page replaces the settled composition below without changing
-	// the renderer.
-	const { data: homeResult } = useStorefrontAddressPage(APP_PUBKEY, 'home')
-	const publishedHome = shouldRenderStorefrontPage(homeResult) ? homeResult.page : null
+	const instanceName = useInstanceName()
+	const { data: config } = useConfigQuery()
+	// This instance's own `home` page (app key, owner or an admin, newest wins;
+	// see instanceHomePage.ts), falling back to the upstream instance's. Read
+	// first and unconditionally: the hook must run in every state of this route,
+	// and the published page replaces the settled composition below without
+	// changing the renderer.
+	const { choice: publishedChoice, loading: homeLoading } = useInstanceHomePage()
+	const publishedHome = publishedChoice?.page ?? null
 	// The intro plays over the home once per mount; it is an overlay, so the hero
 	// renders underneath from the first paint and nothing waits on it.
 	const [introDone, setIntroDone] = useState(false)
@@ -81,10 +79,13 @@ function BrowseIndex() {
 		const homePage = {
 			version: STOREFRONT_PAGE_VERSION,
 			enabled: true,
-			root: { props: { title: '', theme: 'default' as const, palette: 'concrete' } },
+			root: { props: { title: '', theme: 'arena' as const, palette: 'arena' } },
 			content: [
 				{ type: 'Search' as const, props: { id: 'home-search', placeholder: 'Search the marketplace', size: 'lg' as const } },
-				{ type: 'ProductRow' as const, props: { id: 'home-row', productDTags: ['orange-flock-black-orange-edition-high-top-sneakers-ma5ond'] } },
+				{
+					type: 'ProductRow' as const,
+					props: { id: 'home-row', productDTags: ['orange-flock-black-orange-edition-high-top-sneakers-ma5ond'] },
+				},
 				{
 					type: 'Categories' as const,
 					props: {
@@ -99,16 +100,32 @@ function BrowseIndex() {
 				},
 			],
 		}
-		const page = publishedHome ?? (parseStorefrontPage(JSON.stringify(homePage)).page as never)
+		const page = arenaHome(publishedHome ?? (parseStorefrontPage(JSON.stringify(homePage)).page as never))
 		return (
 			<>
 				{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
 				<BrowseNav
+					wordmarkLabel={instanceName}
+					logoSrc={config?.picture}
 					active
 					onNavigateHome={() => navigate({ to: '/' })}
 					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+					accountSlot={<HeaderAccountControls />}
 				/>
-				<StorefrontRenderer page={page} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
+				{homeLoading ? (
+					// Hold the space while the published page is read: drawing the built-in
+					// composition here flashed a stand-in page before the real one.
+					<div data-testid="home-page-loading" aria-busy="true" className="flex min-h-[60vh] items-center justify-center">
+						<span className="sr-only">Loading the home page</span>
+						<span aria-hidden className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent opacity-40" />
+					</div>
+				) : (
+					<StorefrontRenderer
+						page={page}
+						pubkey={publishedChoice?.pubkey ?? config?.appPublicKey ?? LEGACY_HOME_PUBKEY}
+						slots={storefrontBlockSlots}
+					/>
+				)}
 			</>
 		)
 	}
@@ -132,4 +149,17 @@ function BrowseIndex() {
 			onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
 		/>
 	)
+}
+
+/**
+ * The home page renders in the Arena theme so it sits inside the Arena chrome
+ * (dark nav, search and footer; see `usesArenaChrome`). A published page that
+ * picked a theme of its own keeps it; one left on the unthemed `default` —
+ * including the upstream instance's page this one falls back to — is drawn
+ * in Arena instead of as a light page inside a dark frame.
+ */
+function arenaHome<P extends { root: { props: { theme?: string; palette?: string } } }>(page: P): P {
+	const theme = page.root.props.theme
+	if (theme && theme !== 'default') return page
+	return { ...page, root: { ...page.root, props: { ...page.root.props, theme: 'arena', palette: 'arena' } } }
 }

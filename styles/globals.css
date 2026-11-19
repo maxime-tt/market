@@ -11,60 +11,15 @@
 
 @plugin "tailwindcss-animate";
 
-@font-face {
-	font-family: 'reglisse';
-	src: url('../platform/web/app/assets/fonts/Reglisse_Fill.otf') format('opentype');
-	font-weight: 700;
-	font-style: normal;
-	font-display: swap;
-	font-synthesis: none;
-}
-
-@font-face {
-	font-family: 'IBM Plex Mono';
-	src: url('../platform/web/app/assets/fonts/IBMPlexMono-Regular.ttf') format('truetype');
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: 'IBM Plex Mono';
-	src: url('../platform/web/app/assets/fonts/IBMPlexMono-Medium.ttf') format('truetype');
-	font-weight: 500;
-	font-style: normal;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: 'IBM Plex Mono';
-	src: url('../platform/web/app/assets/fonts/IBMPlexMono-SemiBold.ttf') format('truetype');
-	font-weight: 600;
-	font-style: normal;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: 'IBM Plex Mono';
-	src: url('../platform/web/app/assets/fonts/IBMPlexMono-Bold.ttf') format('truetype');
-	font-weight: 700;
-	font-style: normal;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: 'theylive';
-	src: url('../platform/web/app/assets/fonts/theylive.otf') format('opentype');
-	font-weight: normal;
-	font-style: normal;
-	font-display: swap;
-	font-synthesis: none;
-}
+/* The old Reglisse, theylive and IBM Plex Mono faces are retired: the brand
+   uses the bundled Arena faces declared in styles/fonts.css. */
 
 @theme {
-	--font-sans: 'IBM Plex Mono', monospace;
-	--font-heading: 'reglisse', sans-serif;
-	--font-theylive: 'theylive', sans-serif;
+	/* Brand faces (Arena): body, display and figures. All bundled, see fonts.css. */
+	--font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+	--font-heading: 'Instrument Serif', Georgia, serif;
+	--font-theylive: 'Instrument Serif', Georgia, serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
 	/* Custom colors */
 	--color-secondary-black: var(--secondary-black);
@@ -156,19 +111,20 @@
 	--ease-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
 }
 
-/* Add specific styling for headings using the reglisse font */
+/* Display headings use the Arena display face (Instrument Serif, one weight). */
 .font-heading {
 	font-family: var(--font-heading);
-	font-weight: 700;
-	letter-spacing: 0.2rem;
+	font-weight: 400;
+	letter-spacing: -0.01em;
+	line-height: 1.05;
 	font-synthesis: none;
 }
 
-/* Add specific styling for theylive font */
+/* Former theylive display titles now use the Arena display face too. */
 .font-theylive {
 	font-family: var(--font-theylive);
-	font-weight: normal;
-	letter-spacing: 0.1em;
+	font-weight: 400;
+	letter-spacing: -0.01em;
 	font-synthesis: none;
 }
 
@@ -261,8 +217,8 @@ button {
 
 	/* Font roles (F4) — declared at :root so `font-body` / `font-header`
 	   resolve outside `.theme-new`; values mirror styles/globals-new.css. */
-	--font-body: 'IBM Plex Mono', monospace;
-	--font-header: 'reglisse', sans-serif;
+	--font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+	--font-header: 'Instrument Serif', Georgia, serif;
 
 	/* Additional custom colors */
 	--light-gray: #ebebeb;
@@ -385,8 +341,8 @@ button {
 	--ring: hsl(240 4.9% 83.9%);
 
 	/* Font roles (F4) — scheme-stable; mirrors the :root declaration. */
-	--font-body: 'IBM Plex Mono', monospace;
-	--font-header: 'reglisse', sans-serif;
+	--font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+	--font-header: 'Instrument Serif', Georgia, serif;
 
 	--chart-1: hsl(220 70% 50%);
 	--chart-2: hsl(160 60% 45%);

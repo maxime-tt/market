@@ -26,7 +26,7 @@ import { createMemoryHistory, createRootRoute, createRoute, createRouter, Router
 import { createElement, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { BrowseNav } from '@ui/browse/browse-nav'
-import { hidesAppHeader } from './appChrome'
+import { hidesAppHeader, usesArenaChrome } from './appChrome'
 
 /** The marker the stubbed legacy header renders with, and nothing else does. */
 const LEGACY_HEADER_MARKER = 'data-testid="legacy-app-header"'
@@ -35,6 +35,9 @@ const LEGACY_HEADER_MARKER = 'data-testid="legacy-app-header"'
 // stubs rather than the browser-bound originals.
 mock.module('@platform/web/layout/Header', () => ({
 	Header: () => createElement('header', { 'data-testid': 'legacy-app-header' }),
+	// `routes/index` imports this alongside `Header` for the Browse nav's account
+	// slot; a factory missing it makes the ESM link fail before the test runs.
+	HeaderAccountControls: () => null,
 }))
 mock.module('@platform/web/app/useRootRedirects', () => ({ useRootRedirects: () => {} }))
 mock.module('@platform/web/app/useDocumentIdentity', () => ({ useDocumentIdentity: () => {} }))
@@ -91,7 +94,10 @@ describe('root frame chrome', () => {
 		expect(browseRoute.options.staticData).toEqual({ hidesAppHeader: true })
 
 		// The surface's own chrome, as Browse draws it.
-		const markup = await renderRouteFrame(browseRoute.options.staticData, createElement(BrowseNav, { active: true }))
+		const markup = await renderRouteFrame(
+			browseRoute.options.staticData,
+			createElement(BrowseNav, { wordmarkLabel: 'Test Market', active: true }),
+		)
 
 		expect(markup).toContain('widget-browse-nav')
 		expect(markup.split('<nav').length - 1).toBe(1)
@@ -177,5 +183,19 @@ describe('hidesAppHeader', () => {
 		// One opting-out match anywhere in the chain hides it.
 		expect(hidesAppHeader([{ staticData: { hidesAppHeader: true } }])).toBe(true)
 		expect(hidesAppHeader([{}, { staticData: { hidesAppHeader: true } }, {}])).toBe(true)
+	})
+})
+
+describe('usesArenaChrome', () => {
+	test('the auction routes and the home / Browse surface use the Arena chrome', () => {
+		expect(usesArenaChrome('/')).toBe(true)
+		expect(usesArenaChrome('/auctions')).toBe(true)
+		expect(usesArenaChrome('/auctions/live-arena-1')).toBe(true)
+	})
+
+	test('every other page keeps the default chrome', () => {
+		for (const path of ['/products', '/products/x', '/dashboard', '/auctionsx', '/community', '/profile/abc']) {
+			expect(usesArenaChrome(path)).toBe(false)
+		}
 	})
 })

@@ -45,3 +45,14 @@ export interface AppChromeMatch {
 export function hidesAppHeader(matches: ReadonlyArray<AppChromeMatch>): boolean {
 	return matches.some((match) => match.staticData?.hidesAppHeader === true)
 }
+
+/**
+ * Whether a path renders in the Arena chrome (`styles/arena-chrome.css`): the
+ * auction routes and the home / Browse surface at `/`. The root layout puts
+ * `.arena-chrome` on its wrapper for these paths, which rebinds the theme
+ * tokens to Arena's dark values for the header, footer, Browse nav and search
+ * field without changing their markup.
+ */
+export function usesArenaChrome(pathname: string): boolean {
+	return pathname === '/' || pathname === '/auctions' || pathname.startsWith('/auctions/')
+}

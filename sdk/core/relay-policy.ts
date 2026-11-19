@@ -51,6 +51,8 @@ export interface ComputeNdkConfigInput {
 	overrideRelays?: string[]
 	/** Bun-side flag forcing local-relay-only behavior. */
 	localRelayOnly?: boolean
+	/** Server-set: writes go to the app relay only and outbox is off; reads are unchanged. */
+	appRelayWritesOnly?: boolean
 }
 
 /**
@@ -70,10 +72,12 @@ export function resolveMainRelay(stage: Stage | undefined, appRelay?: string): s
  * always computed together at NDK init time.
  */
 export function computeNdkConfig(input: ComputeNdkConfigInput): NdkConfigComputed {
-	const { stage, appRelay, publicRelays, overrideRelays, localRelayOnly } = input
+	const { stage, appRelay, publicRelays, overrideRelays, localRelayOnly, appRelayWritesOnly } = input
 	const mainRelay = resolveMainRelay(stage, appRelay)
 
-	const enableOutbox = stage !== 'staging' && stage !== 'development' && !localRelayOnly
+	// Outbox discovery publishes to (and reads from) relays nobody configured,
+	// so it is off wherever writes are confined to the app relay.
+	const enableOutbox = stage !== 'staging' && stage !== 'development' && !localRelayOnly && !appRelayWritesOnly
 
 	const explicitRelayUrls = resolveExplicitRelays({
 		stage,
@@ -83,7 +87,11 @@ export function computeNdkConfig(input: ComputeNdkConfigInput): NdkConfigCompute
 		localRelayOnly,
 	})
 	const writeRelayUrls =
-		stage === 'staging' || stage === 'development' || localRelayOnly ? (mainRelay ? [mainRelay] : []) : explicitRelayUrls
+		stage === 'staging' || stage === 'development' || localRelayOnly || appRelayWritesOnly
+			? mainRelay
+				? [mainRelay]
+				: []
+			: explicitRelayUrls
 
 	// Zap monitoring needs the dedicated zap relays on top of the read set —
 	// derived here so the zap relay set is covered by the same policy tests

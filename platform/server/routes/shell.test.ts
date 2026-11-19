@@ -6,14 +6,14 @@ describe('readShellAssets — the bundle URLs, read from the shell bytes', () =>
 	test('reads the module script and every stylesheet, in document order', () => {
 		const assets = readShellAssets(
 			'<!doctype html><html><head>' +
-				'<link rel="preconnect" href="https://fonts.gstatic.com">' +
-				'<link href="https://fonts.googleapis.com/css2?family=DM+Sans&display=swap" rel="stylesheet">' +
+				'<link rel="preload" href="/fonts/body.woff2" as="font">' +
+				'<link href="/fonts.css" rel="stylesheet">' +
 				'<link rel="stylesheet" crossorigin href="/chunk-a.css">' +
 				'</head><body><script type="module" crossorigin src="/chunk-a.js" data-bun-dev-server-script></script>' +
 				'<script>var beacon = 1</script></body></html>',
 		)
 		expect(assets.bootstrapSrc).toBe('/chunk-a.js')
-		expect(assets.stylesheetHrefs).toEqual(['https://fonts.googleapis.com/css2?family=DM+Sans&display=swap', '/chunk-a.css'])
+		expect(assets.stylesheetHrefs).toEqual(['/fonts.css', '/chunk-a.css'])
 	})
 
 	test('a shell with no bundle reports absence rather than a guessed path', () => {

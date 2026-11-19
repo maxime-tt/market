@@ -19,6 +19,8 @@
  * is the single place that parses them, and it refuses by name rather than coercing.
  */
 
+import type { LotMediaItem } from './lotMedia'
+
 /** The protocol's two auction modes (`mode` in the create content). */
 export type ArenaAuctionMode = 'fixed' | 'antisnipe'
 
@@ -36,8 +38,8 @@ export interface AuctionV4vSplitRowInput {
 }
 
 /**
- * The auction-create form's state. One image, one category, one name: the create content
- * has a single `image`, a single `category` and a single `name`, so the form does too.
+ * The auction-create form's state: a main photo plus an optional gallery, one category,
+ * one name, matching the create content's `image`, `media`, `category` and `name`.
  */
 export interface AuctionFormData {
 	/** The `d` tag — the auction's identity within its seller. */
@@ -46,6 +48,11 @@ export interface AuctionFormData {
 	description: string
 	/** The lot's image URL (`image` in the create content). */
 	imageUrl: string
+	/**
+	 * Gallery items after the main photo (`media` in the create content): more photos,
+	 * a video, or a live stream URL. Empty means the lot has one photo.
+	 */
+	media: LotMediaItem[]
 	/** Free-text category (`category` in the create content). */
 	category: string
 	/** The seller's display name for the lot (`name` in the create content). */

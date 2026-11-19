@@ -103,3 +103,46 @@
 		transform: none;
 	}
 }
+
+/* ---------------------------------------------------------------------------
+ * Font roles. The registry's `fonts` string stays a label; a theme whose
+ * families are bundled (styles/fonts.css) maps them onto the app's own font
+ * roles here, so every block's `font-header` / `font-body` / `font-mono`
+ * follows without knowing a theme exists. Themes not listed keep the app's
+ * families.
+ * ------------------------------------------------------------------------- */
+
+/* Arena: Instrument Serif headings and JetBrains Mono figures, as in Plebeian
+   Auctions Arena (web/src/template.css). The body is Plus Jakarta Sans in place
+   of Arena's DM Sans, which Google commissioned. Instrument Serif has a single
+   400 weight; it is set at 400 rather than letting the browser fake a bold. */
+[data-storefront-theme='arena'] {
+	--font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+	--font-header: 'Instrument Serif', Georgia, serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
+	font-family: var(--font-body);
+}
+
+[data-storefront-theme='arena'] .font-header {
+	font-weight: 400;
+	letter-spacing: -0.01em;
+	font-synthesis: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Product cards. The shared card (ProductCardHost) paints `bg-white` for the
+ * app's own grids, but inside a themed page its text inherits the palette's
+ * foreground — pale on a dark palette — so titles and prices sat pale-on-white.
+ * Inside a storefront the card takes the palette's card roles instead, so text
+ * and surface always come from the same palette.
+ * ------------------------------------------------------------------------- */
+[data-storefront-theme] [data-testid='product-card'] {
+	background-color: var(--card);
+	color: var(--card-foreground);
+	border-color: var(--border);
+}
+
+[data-storefront-theme] [data-testid='product-card'] h2 {
+	color: var(--card-foreground);
+	border-color: var(--border);
+}

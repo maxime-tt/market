@@ -71,6 +71,14 @@ const withStubbedFetch = async <T>(stub: (url: URL, init: RequestInit) => Respon
 }
 
 describe('getUploadServerOrder', () => {
+	test('exclusive: the preferred server only, no public fallback', () => {
+		expect(getUploadServerOrder('https://reckless.plebeian.app', true)).toEqual(['https://reckless.plebeian.app'])
+	})
+
+	test('exclusive without a server: an empty chain', () => {
+		expect(getUploadServerOrder(undefined, true)).toEqual([])
+	})
+
 	test('puts the preferred server first, then the public defaults', () => {
 		const order = getUploadServerOrder('https://preferred.example')
 		expect(order[0]).toBe('https://preferred.example')

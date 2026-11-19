@@ -1,4 +1,5 @@
 import { getReadContext } from '@platform/web/readContext'
+import type { EventReadContext } from '@sdk/core/event-store'
 import type { NostrEventLike } from '@sdk/core'
 import {
 	STOREFRONT_PAGE_D_TAG,
@@ -72,13 +73,17 @@ export function selectReplaceable(events: NostrEventLike[]): NostrEventLike | nu
  * previously cached page, rather than committing a null-shaped success that
  * would flash the profile fallback over a page that does exist.
  */
-export async function fetchStorefrontPage(pubkey: string, dTag: string = STOREFRONT_PAGE_D_TAG): Promise<StorefrontPageResult> {
+export async function fetchStorefrontPage(
+	pubkey: string,
+	dTag: string = STOREFRONT_PAGE_D_TAG,
+	context: Pick<EventReadContext, 'fetch'> = getReadContext(),
+): Promise<StorefrontPageResult> {
 	if (!isValidHexKey(pubkey) || dTag.length === 0) return EMPTY_RESULT
 
 	// Read-seam justification (ADR-READ-SEAM-STREAMS §8): a single mounted page is a
 	// single-entity/detail read — one addressable coordinate (author, kind, `d`) — so a
 	// bounded `fetch` is the doctrine-sanctioned class here, not a stream.
-	const events = await getReadContext().fetch([
+	const events = await context.fetch([
 		{
 			kinds: [STOREFRONT_PAGE_KIND],
 			authors: [pubkey],
