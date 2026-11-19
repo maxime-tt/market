@@ -10,16 +10,24 @@
  *   a memory router with the one destination it links to.
  * - `useSearchPreviewTerm` is the debounce, and a debounce needs a real commit
  *   and wall-clock time, so that section installs happy-dom (the pattern
- *   `platform/web/browse/browseIndexFeed.render.test.tsx` uses).
+ *   `platform/web/browse/browseIndexFeed.render.test.tsx` uses). The typing case
+ *   mounts the real popover, so it also proves the panel never takes focus.
  *
  * The browse read and the price profile hosts are stubbed at their module
  * boundaries: this file is about the dropdown's own rendering and timing, not
  * about re-testing the search stream or the price resolution.
+ *
+ * **Run this file isolated** (the repository's own runner does:
+ * `test:unit` = `bun test --isolate`). In a shared process, a preceding file
+ * that mounts the app shell (`platform/web/layout/AppBar.test.tsx`,
+ * `appChrome.test.tsx`) leaves Radix's popover unable to mount its content at
+ * all — reproduced with a standalone `<Popover open>` content, no component of
+ * this file involved — so the panel assertions fail for a harness reason.
  */
 
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router'
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 import type { Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BrowseProduct } from '@platform/web/browse/browseQuery'
@@ -36,6 +44,7 @@ import type { SearchPreviewState } from './SearchPreview'
  */
 interface HappyWindow {
 	document: Document
+	Event: typeof globalThis.Event
 }
 
 /** happy-dom is in the lockfile as the `@tiptap/html` peer; it is not a direct dependency. */
@@ -46,6 +55,7 @@ const { Window } = (await import(HAPPY_DOM)) as { Window: new (options: { url: s
 const win = new Window({ url: 'http://localhost/' })
 const globals = globalThis as Record<string, unknown>
 const installedGlobals: string[] = []
+const overriddenGlobals = new Map<string, unknown>()
 
 globals.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -63,10 +73,26 @@ for (const key of Object.getOwnPropertyNames(win)) {
 	}
 }
 
+/*
+ * `Event` and `CustomEvent` are the exception to the rule above. Bun already
+ * defines both, so the loop skips them — but happy-dom's `EventTarget.dispatchEvent`
+ * rejects an event that is not one of its own, and Radix's dismissable layer
+ * dispatches a `CustomEvent` when the popover mounts. Without happy-dom's
+ * classes installed, that dispatch throws and the panel never settles. They are
+ * restored in `afterAll`, since the rest of the process must keep Bun's.
+ */
+for (const key of ['Event', 'CustomEvent'] as const) {
+	const value = Reflect.get(win, key)
+	if (typeof value !== 'function') continue
+	overriddenGlobals.set(key, globals[key])
+	Object.defineProperty(globalThis, key, { value, configurable: true, writable: true })
+}
+
 const doc = globals.document as Document
 
 afterAll(() => {
 	for (const key of installedGlobals) delete globals[key]
+	for (const [key, value] of overriddenGlobals) Object.defineProperty(globalThis, key, { value, configurable: true, writable: true })
 	delete globals.IS_REACT_ACT_ENVIRONMENT
 })
 
@@ -302,5 +328,135 @@ describe('useSearchPreviewTerm', () => {
 			latest.current.dismiss()
 		})
 		expect(latest.current.open).toBe(false)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Typing must keep the keyboard in the field while the panel opens
+//
+// The regression this pins: Radix's `FocusScope` focuses the panel container as
+// soon as the popover mounts unless the open-auto-focus is prevented, so the
+// term stopped after the first key or two and the caret left the field. The
+// panel mounts on the *first* keystroke (`open` is set at once; only the read is
+// debounced), which is why the loss showed up mid-word.
+// ---------------------------------------------------------------------------
+
+describe('SearchPreview keeps focus in the field', () => {
+	let container: HTMLDivElement
+	let root: Root
+	/** Every element any code asked the browser to focus, in order. */
+	let focusRequests: Element[]
+	/** The unpatched method, captured per test so the prototype is left as it was. */
+	let originalFocus: typeof HTMLElement.prototype.focus
+
+	/** A preview whose query state is owned here, so the field's value tracks typing. */
+	function ControlledSearchPreview() {
+		const [query, setQuery] = useState('')
+		return createElement(SearchPreview, { query, onChange: setQuery, onGo: () => {} })
+	}
+
+	/** The preview inside the one router destination its rows link to. */
+	function routerFor(component: () => unknown) {
+		const rootRoute = createRootRoute({ component: () => component() as ReactElement })
+		rootRoute.addChildren([
+			createRoute({
+				getParentRoute: () => rootRoute,
+				path: '/',
+				validateSearch: (search: Record<string, unknown>) => search as { q: string; p?: string },
+				component: () => null,
+			}),
+		])
+		return createRouter({ routeTree: rootRoute, history: createMemoryHistory({ initialEntries: ['/'] }) })
+	}
+
+	beforeEach(() => {
+		previewHits = [PRODUCT]
+		doc.body.innerHTML = ''
+		container = doc.createElement('div')
+		doc.body.appendChild(container)
+		root = createRoot(container)
+		focusRequests = []
+		// Record the *request* as well as the outcome: happy-dom's `focus()` on a
+		// non-focusable container is not the same as a browser's, and the
+		// regression is about the request.
+		originalFocus = HTMLElement.prototype.focus
+		HTMLElement.prototype.focus = function focusRecording(this: HTMLElement, options?: FocusOptions) {
+			focusRequests.push(this)
+			return originalFocus.call(this, options)
+		}
+	})
+
+	afterEach(() => {
+		HTMLElement.prototype.focus = originalFocus
+		act(() => root.unmount())
+	})
+
+	/** Types a cumulative term the way a browser does (see the setter note below). */
+	async function type(input: HTMLInputElement, term: string): Promise<void> {
+		// The write must go through the prototype's own setter, not the instance
+		// one: React installs a per-node value tracker whose setter records what
+		// was written, so a plain `input.value = …` is invisible to its change
+		// detection (the browser's own updates bypass that setter). This is the
+		// `setNativeValue` dance the DOM testing libraries document.
+		const prototypeValue = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set
+		await act(async () => {
+			prototypeValue?.call(input, term)
+			input.dispatchEvent(new win.Event('input', { bubbles: true }))
+		})
+	}
+
+	/** The slot of whatever the document says is focused (a compact failure diff). */
+	function activeSlot(): string | null {
+		return (doc.activeElement as Element | null)?.getAttribute('data-slot') ?? null
+	}
+
+	/** Every focus request aimed at something other than the field, by tag. */
+	function strayFocusRequests(input: HTMLInputElement): string[] {
+		return focusRequests.filter((element) => element !== input).map((element) => (element as Element).tagName)
+	}
+
+	/** Waits past the debounce window under `act`. */
+	async function pastDebounce(): Promise<void> {
+		const { promise, resolve } = Promise.withResolvers<void>()
+		setTimeout(resolve, 300)
+		await act(async () => {
+			await promise
+		})
+	}
+
+	test('a typed term lands whole, with the panel open and the caret still in the field', async () => {
+		const router = routerFor(ControlledSearchPreview)
+		await router.load()
+		await act(async () => {
+			root.render(createElement(RouterProvider, { router }))
+		})
+
+		const input = container.querySelector('input')
+		if (!input) throw new Error('no field input')
+		await act(async () => {
+			input.focus()
+		})
+		expect(activeSlot()).toBe('search-field-input')
+
+		// Key by key: the panel opens on the first one (the read is debounced, the
+		// panel is not) — the moment focus used to be taken out of the field. The
+		// term must land whole, and nothing but the field may be asked to focus.
+		for (const term of ['b', 'bi', 'bit', 'bitc', 'bitco', 'bitcoin']) {
+			await type(input, term)
+			expect(activeSlot()).toBe('search-field-input')
+			expect(strayFocusRequests(input)).toEqual([])
+		}
+
+		// The term is intact while the read is still debouncing…
+		expect(input.value).toBe('bitcoin')
+
+		await pastDebounce()
+
+		// …and after it lands and the panel re-renders with the rows.
+		expect(activeSlot()).toBe('search-field-input')
+		expect(input.value).toBe('bitcoin')
+		expect(doc.body.textContent ?? '').toContain('See all results for “bitcoin”')
+		expect(doc.body.textContent ?? '').toContain('Ceramic Bowl')
+		expect(strayFocusRequests(input)).toEqual([])
 	})
 })
