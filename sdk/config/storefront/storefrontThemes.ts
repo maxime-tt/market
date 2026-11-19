@@ -1160,7 +1160,7 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 		description:
 			'Community-first e-commerce. Leads with live and featured auctions, then categories you can click into, featured products, seller shops and well-reviewed favourites.',
 		forWho: 'Community marketplace',
-		fonts: 'Anton \u00b7 DM Sans \u00b7 JetBrains Mono',
+		fonts: 'Anton \u00b7 Plus Jakarta Sans \u00b7 JetBrains Mono',
 		tune: { radiusPx: 12, shadow: 0.3, glass: 0.6, spacing: 1, texture: 0, handmade: 0 },
 		palettes: [
 			{
@@ -1382,7 +1382,7 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 		description:
 			'Dark and game-like, from the Plebeian Auctions Arena. Near-black panels with big rounded corners, hot-pink calls to action and lime highlights for what is live.',
 		forWho: 'Live auctions and drops',
-		fonts: 'Instrument Serif \u00b7 DM Sans \u00b7 JetBrains Mono',
+		fonts: 'Instrument Serif \u00b7 Plus Jakarta Sans \u00b7 JetBrains Mono',
 		tune: { radiusPx: 22, shadow: 0.45, glass: 0.15, spacing: 1, texture: 0, handmade: 0 },
 		palettes: [
 			{

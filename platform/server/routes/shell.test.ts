@@ -6,7 +6,7 @@ describe('readShellAssets — the bundle URLs, read from the shell bytes', () =>
 	test('reads the module script and every stylesheet, in document order', () => {
 		const assets = readShellAssets(
 			'<!doctype html><html><head>' +
-				'<link rel="preload" href="/fonts/dm-sans.woff2" as="font">' +
+				'<link rel="preload" href="/fonts/body.woff2" as="font">' +
 				'<link href="/fonts.css" rel="stylesheet">' +
 				'<link rel="stylesheet" crossorigin href="/chunk-a.css">' +
 				'</head><body><script type="module" crossorigin src="/chunk-a.js" data-bun-dev-server-script></script>' +

@@ -1,9 +1,10 @@
 Bundled web fonts, all under the SIL Open Font License 1.1 (full text below).
 Served from this app, never from a third-party font host. Files are the
-latin subsets published by Fontsource (https://fontsource.org).
+latin subsets. Plus Jakarta Sans and Young Serif are from the designers'
+own GitHub releases; the others are from Fontsource (https://fontsource.org).
 
-- DM Sans: Copyright 2014 The DM Sans Project Authors (https://github.com/googlefonts/dm-fonts)
-- Fraunces: Copyright 2020 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces)
+- Plus Jakarta Sans: Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans)
+- Young Serif: Copyright 2023 The Young Serif Project Authors (https://github.com/noirblancrouge/YoungSerif)
 - Bricolage Grotesque: Copyright 2022 The Bricolage Grotesque Project Authors (https://github.com/ateliertriay/bricolage)
 - Instrument Serif: Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif)
 - JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
