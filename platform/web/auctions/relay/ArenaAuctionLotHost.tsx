@@ -146,6 +146,12 @@ export interface ArenaAuctionLotHostProps {
 	read: ArenaSurfacesReadState
 	/** Called after a bid reached a relay, so the route can reopen the read. */
 	onPublished: (eventId: string) => void
+	/**
+	 * Reopen the read on demand. The bid panel polls this while the chain has not
+	 * settled a published bid, so a chain that advances later resolves the panel
+	 * instead of leaving a stale freshness window as a claim about the chain.
+	 */
+	onRefresh: () => void
 }
 
 /**
@@ -154,7 +160,7 @@ export interface ArenaAuctionLotHostProps {
  * When the lot is ambiguous it renders the candidates and nothing else — no
  * detail model is built, because building one would mean choosing a seller.
  */
-export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: ArenaAuctionLotHostProps) {
+export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, onRefresh }: ArenaAuctionLotHostProps) {
 	const lookup: ArenaLotLookup = read.snapshot === null ? { kind: 'missing' } : resolveArenaLot(read.snapshot, d, seller)
 
 	if (lookup.kind === 'ambiguous') {
@@ -169,9 +175,11 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: Arena
 	const verdicts = view === null ? null : toVerdictPanelModel(view, context)
 	// Whether the chain is advancing — fresh kind-1447 commitments across several
 	// blocks — is the signal the bid panel needs to tell "the chain did not accept
-	// the bid" from "the chain is stuck" (the three-state diagnosis). It is
-	// derived here, from the commitments the read already holds, and passed down;
-	// the panel never reads a relay itself.
+	// the bid" from "the chain has not settled it". It is derived here, from the
+	// commitments the read already holds, and passed down; the panel never reads a
+	// relay itself. `onRefresh` is the same reopen the publish path uses: the panel
+	// polls it while the chain has not settled a bid, because a one-shot read's
+	// freshness decays by itself (`AuctionBidHost.tsx`, the poll timer).
 	const chainAdvancing =
 		read.snapshot === null
 			? null
@@ -193,7 +201,14 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: Arena
 				sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} />}
 				bidPanel={
 					detail === null ? null : (
-						<AuctionBidHost model={detail} readStatus={read.status} now={now} chainAdvancing={chainAdvancing} onPublished={onPublished} />
+						<AuctionBidHost
+							model={detail}
+							readStatus={read.status}
+							now={now}
+							chainAdvancing={chainAdvancing}
+							onPublished={onPublished}
+							onRefresh={onRefresh}
+						/>
 					)
 				}
 			/>

@@ -51,11 +51,17 @@ import type { ArenaAuctionDetailModel } from './model'
 /**
  * What the surface may say about a bid the bidder just submitted.
  *
- * Six states, not two (`AGENTS.md:41-46`): "signed locally", "some relays
- * acknowledged", "no relay acknowledged" and "a relay acknowledged but nothing
- * has come back on the read" are different facts, and collapsing them into
+ * Seven states, not two (`AGENTS.md:41-46`): "signed locally", "some relays
+ * acknowledged", "no relay acknowledged", "a relay acknowledged but nothing has
+ * come back on the read", "the chain has not decided yet", and "the chain has
+ * demonstrably stopped committing" are different facts, and collapsing them into
  * "success/failure" would hide the one case a bidder most needs to know about —
  * a bid that was accepted by one relay out of three.
+ *
+ * **Waiting is not failing.** `unconfirmed` is the state for "the app has not
+ * yet read a verdict", and it says so; only a zero-ACK publish and a signing
+ * failure are failures (`isArenaBidSubmissionUnsuccessful`), and the chain's
+ * *demonstrated* stall is its own state, with the window that demonstrates it.
  */
 export type ArenaBidSubmissionState =
 	/** Nothing submitted since this page loaded. */
@@ -75,6 +81,18 @@ export type ArenaBidSubmissionState =
 	 */
 	| { phase: 'not-accepted'; amount: number; eventId: string; locktime: number | null; reclaimable: boolean }
 	/**
+	 * The bid is on the relay, the chain has committed nothing that shows whether
+	 * it took it, and the app has **not** seen the chain advance. This is a
+	 * *waiting* state, never a failure: no verdict exists yet, so nothing is
+	 * claimed about the bid and the surface keeps reading.
+	 *
+	 * `acceptedBy`/`totalRelays` are the relay ACKs it has carried since
+	 * `presumed` (the app never drops a fact it holds), and `watchingSince`
+	 * (unix seconds) is when the app began waiting — the window the stall claim
+	 * is measured over (`arenaBidPublish.ts` `ARENA_CHAIN_STALLED_AFTER_SEC`).
+	 */
+	| { phase: 'unconfirmed'; amount: number; eventId: string; acceptedBy: string[]; totalRelays: number; watchingSince: number }
+	/**
 	 * The chain **recorded** a refusal of this bid (a kind-1450 naming its event
 	 * id). `reason` is the chain's own words, verbatim. Only a bid refused at
 	 * delivery is recorded; one refused at admission leaves no record, and the
@@ -82,11 +100,13 @@ export type ArenaBidSubmissionState =
 	 */
 	| { phase: 'refused'; amount: number; eventId: string; reason: string; locktime: number | null; reclaimable: boolean }
 	/**
-	 * The bid is on the relay but not in committed state and the chain is **not**
-	 * advancing: that is an infrastructure problem, not the bid. The panel makes
-	 * no claim about the bid itself.
+	 * The bid is on the relay but not in committed state and the app has read the
+	 * chain's committed state stand still for long enough to demonstrate that the
+	 * chain is not advancing: that is an infrastructure problem, not the bid.
+	 * `stalledForSec` is the window the app itself watched — the only thing that
+	 * makes the claim true — and the panel states it in words.
 	 */
-	| { phase: 'infrastructure'; amount: number; eventId: string }
+	| { phase: 'infrastructure'; amount: number; eventId: string; stalledForSec: number }
 	/** Signed and offered, but **no** relay ACKed. Published nowhere — fail closed. */
 	| { phase: 'unpublished'; amount: number; eventId: string | null; reason: string }
 	/** Signing failed, or the wallet refused; nothing was published and nothing was signed. */
@@ -220,13 +240,24 @@ export function submissionLine(
 				tone: 'warning',
 			}
 		}
-		case 'infrastructure':
+		case 'unconfirmed':
+			return {
+				title: 'Waiting for the chain to confirm…',
+				detail: `The relays have your bid${state.acceptedBy.length > 0 ? ` (${state.acceptedBy.length} of ${state.totalRelays} acknowledged it)` : ''}. The chain has not published committed state showing whether it took the bid, so this app has no verdict yet — and no verdict is not a refusal: nothing here says the bid was refused, and it may still be accepted. This view keeps reading until the chain’s committed state settles it.`,
+				tone: 'neutral',
+			}
+		case 'infrastructure': {
+			// The claim is the app's own observation, and it says how long it
+			// watched: a missed freshness window in one read is not this, and only
+			// a window long enough to demonstrate a stall reaches here
+			// (`arenaBidPublish.ts` `ARENA_CHAIN_STALLED_AFTER_SEC`).
+			const minutes = Math.max(1, Math.round(state.stalledForSec / 60))
 			return {
 				title: 'The chain is not advancing.',
-				detail:
-					'The relays have your bid, but the chain has published no fresh blocks, so this app cannot say whether the bid will be accepted. This is an infrastructure problem, not a problem with your bid — nothing here says the bid was refused.',
+				detail: `The relays have your bid, but this app has read the chain’s committed state for ${minutes} minutes without seeing it advance, so it cannot say whether the bid will be accepted. This is an infrastructure problem, not a problem with your bid — nothing here says the bid was refused.`,
 				tone: 'warning',
 			}
+		}
 		case 'unpublished':
 			return {
 				title: 'Your bid was not published — no relay accepted it.',

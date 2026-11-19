@@ -58,7 +58,7 @@
  * app assumed it.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import type { EventStorePort } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
@@ -74,11 +74,11 @@ import { cashuStore } from '@platform/web/wallet/cashuStore'
 import { walletOps } from '@platform/web/wallet/walletOps'
 import { ArenaBidPanel, type ArenaBidSubmissionState } from '@ui/auction/arena/bid-panel'
 import {
+	ARENA_BID_SETTLE_POLL_MS,
 	arenaBidBlock,
 	checkArenaBid,
-	diagnosePublishedBid,
+	nextPublishedBidState,
 	publishArenaBid,
-	settleSubmissionFromRead,
 	submissionFromError,
 	type ArenaBidderState,
 } from '@platform/web/auctions/relay/arenaBidPublish'
@@ -165,10 +165,13 @@ export interface AuctionBidHostProps {
 	/**
 	 * Whether the chain is advancing — fresh kind-1447 commitments across several
 	 * blocks — as the lot host derived it from the read. `null` when no read has
-	 * settled. This is the signal the three-state diagnosis needs: a published
-	 * bid that is not in committed state is "the chain did not accept it" when
-	 * this is `true`, and "infrastructure" when it is `false`. The host never
-	 * invents the value (`arenaBidPublish.ts` `arenaChainAdvancing`).
+	 * settled. This is the signal the diagnosis needs: a published bid that is
+	 * not in committed state is "the chain did not accept it" when this is
+	 * `true`, and otherwise "the chain has not settled it yet" — which only
+	 * becomes "the chain is not advancing" once the app has watched a window long
+	 * enough to demonstrate it (`arenaBidPublish.ts`
+	 * `ARENA_CHAIN_STALLED_AFTER_SEC`). The host never invents the value
+	 * (`arenaBidPublish.ts` `arenaChainAdvancing`).
 	 */
 	chainAdvancing?: boolean | null
 	/** Bumped by the route when it wants the panel to forget its last submission. */
@@ -176,6 +179,15 @@ export interface AuctionBidHostProps {
 	className?: string
 	/** Called after a bid reached at least one relay, so the route can re-read. */
 	onPublished?: (eventId: string) => void
+	/**
+	 * Reopen the read. **Required, and polled**: while the chain has not settled a
+	 * published bid the panel asks for a fresh read every
+	 * `ARENA_BID_SETTLE_POLL_MS`, and the stall claim it may eventually make is
+	 * measured over the reads those requests produced. A host that could not
+	 * reopen the read could not honestly say the chain was watched at all, so this
+	 * is not optional (see the timer below for the reasoning).
+	 */
+	onRefresh: () => void
 }
 
 /** The viewer, from the auth session: identity and wallet readiness are separate facts. */
@@ -192,13 +204,13 @@ function useArenaBidder(): ArenaBidderState {
 	return useMemo(() => ({ pubkey, wallet }), [pubkey, wallet])
 }
 
-export function AuctionBidHost({ model, readStatus, now, chainAdvancing = null, resetKey, className, onPublished }: AuctionBidHostProps) {
+export function AuctionBidHost({ model, readStatus, now, chainAdvancing = null, resetKey, className, onPublished, onRefresh }: AuctionBidHostProps) {
 	const bidder = useArenaBidder()
 	const [amountInput, setAmountInput] = useState('')
 	const [pending, setPending] = useState(false)
 	const [submission, setSubmission] = useState<ArenaBidSubmissionState>({ phase: 'idle' })
 	// The escrow locktime this host funded the last bid against, held so the
-	// three-state diagnosis can state it when the chain does not accept the bid.
+	// diagnosis can state it when the chain does not accept the bid.
 	// `null` until a bid is funded; never invented.
 	const [escrowLocktime, setEscrowLocktime] = useState<number | null>(null)
 
@@ -221,57 +233,48 @@ export function AuctionBidHost({ model, readStatus, now, chainAdvancing = null, 
 		model !== null ? checkArenaBid({ model, status: readStatus, now, bidder, raw: amountInput === '' ? prefill : amountInput }) : null
 
 	// A bid acknowledged by a relay becomes "seen" only when the read serves it.
-	// When a reopened read serves it, its escrow is committed — say nothing more.
-	// When a reopened read does NOT serve it (and a settled read has told us
-	// whether the chain is advancing), the three-state diagnosis decides: the
-	// chain did not accept it, or the chain is stuck. Never a reason it cannot see.
+	// Until a read has settled the question — the read serves the bid (seen), the
+	// chain refused it in its own words (refused), the chain advanced without
+	// taking it (not-accepted), or the chain's committed state has demonstrably
+	// stood still (infrastructure) — the panel stays in `unconfirmed` and says so.
+	// A partial read may simply not have arrived yet: it is never diagnosed from.
 	useEffect(() => {
-		setSubmission((previous) => {
-			if (previous.phase !== 'presumed') return previous
-			const upgraded = settleSubmissionFromRead(previous, model)
-			if (upgraded.phase === 'seen') {
-				setEscrowLocktime(null)
-				return upgraded
-			}
-			// Still presumed: only a settled read can diagnose an absence (a
-			// partial read may simply not have arrived yet), and only when the
-			// chain's own advance state is known.
-			if (readStatus !== 'settled' || chainAdvancing === null || model === null) return previous
-			const diagnosis = diagnosePublishedBid({
-				eventId: previous.eventId,
-				seenInRead: model.bids.some((bid) => bid.eventId === previous.eventId),
-				// A receipt (1443/1444) naming the bid is committed state too.
-				namedByReceipt: model.receipts.some((receipt) => receipt.bidId === previous.eventId),
-				chainAdvancing,
-				escrowLocktime,
-				// The chain's recorded refusal of this bid, verbatim, or null. Only a
-				// bid refused at delivery is recorded; a bid refused at admission
-				// leaves no record, and no reason is ever invented for it.
-				refusalReason: model.bidRefusals[previous.eventId]?.reason ?? null,
-			})
-			if (diagnosis.state === 'committed') return upgraded
-			if (diagnosis.state === 'refused') {
-				return {
-					phase: 'refused',
-					amount: previous.amount,
-					eventId: previous.eventId,
-					reason: diagnosis.reason ?? '',
-					locktime: diagnosis.escrowLocktime,
-					reclaimable: diagnosis.reclaimable,
-				}
-			}
-			if (diagnosis.state === 'not-accepted') {
-				return {
-					phase: 'not-accepted',
-					amount: previous.amount,
-					eventId: previous.eventId,
-					locktime: diagnosis.escrowLocktime,
-					reclaimable: diagnosis.reclaimable,
-				}
-			}
-			return { phase: 'infrastructure', amount: previous.amount, eventId: previous.eventId }
-		})
-	}, [model, readStatus, chainAdvancing, escrowLocktime])
+		setSubmission((previous) =>
+			nextPublishedBidState({ previous, model, readStatus, chainAdvancing, escrowLocktime, now }),
+		)
+	}, [model, readStatus, chainAdvancing, escrowLocktime, now])
+
+	// Once the read has served the bid, the escrow locktime has done its job (it
+	// exists only to state a lock the chain did not take).
+	useEffect(() => {
+		if (submission.phase === 'seen') setEscrowLocktime(null)
+	}, [submission.phase])
+
+	// **Polling is what makes the chain's advance observable.** The read is
+	// one-shot (`auctionSurfacesRead.ts`: "Consume one live read to its caught-up
+	// marker"), so a snapshot's freshness decays with the wall clock while the
+	// page stays open: without a reopen, a missed freshness window would become a
+	// permanent claim about the chain. While the chain has not settled the bid,
+	// the panel therefore asks its host for a fresh read on a timer, and every
+	// read re-runs the state machine above — so a chain that advances later
+	// resolves the panel to the chain's own outcome, and the stall claim needs a
+	// window the app has actually watched (`ARENA_CHAIN_STALLED_AFTER_SEC`).
+	// It stops the moment a conclusion is reached: seen, refused, not-accepted
+	// and infrastructure are all grounded in a read, not in elapsed time.
+	//
+	// The callback is held in a ref: a caller that passes a fresh closure each
+	// render (the route does) must not restart the timer every render, or the
+	// interval would never elapse.
+	const unsettled = submission.phase === 'presumed' || submission.phase === 'unconfirmed'
+	const onRefreshRef = useRef(onRefresh)
+	useEffect(() => {
+		onRefreshRef.current = onRefresh
+	}, [onRefresh])
+	useEffect(() => {
+		if (!unsettled) return
+		const id = setInterval(() => onRefreshRef.current(), ARENA_BID_SETTLE_POLL_MS)
+		return () => clearInterval(id)
+	}, [unsettled])
 
 	const onSubmit = useCallback(async () => {
 		if (pending) return

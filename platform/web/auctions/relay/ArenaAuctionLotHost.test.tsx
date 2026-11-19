@@ -146,6 +146,7 @@ function render(read: ArenaSurfacesReadState, over: { d?: string; seller?: strin
 			now: over.now ?? 2000,
 			read,
 			onPublished: (_eventId: string) => {},
+			onRefresh: () => {},
 		}) as ReactNode,
 	)
 }

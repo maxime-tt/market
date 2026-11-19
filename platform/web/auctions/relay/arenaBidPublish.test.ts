@@ -31,13 +31,16 @@ import {
 } from '@platform/web/auctions/relay/arenaAuctionRead'
 import type { ArenaAuctionDetailModel } from '@ui/auction/arena/model'
 import type { ArenaBidderState } from '@ui/auction/arena/bid-rules'
+import type { ArenaBidSubmissionState } from '@ui/auction/arena/bid-panel'
 import {
+	ARENA_BID_SETTLE_POLL_MS,
+	ARENA_CHAIN_STALLED_AFTER_SEC,
 	ArenaBidPublishError,
 	arenaChainAdvancing,
 	buildArenaBidContent,
 	diagnosePublishedBid,
+	nextPublishedBidState,
 	publishArenaBid,
-	settleSubmissionFromRead,
 	submissionFromError,
 	type ArenaBidPublishOptions,
 	type ArenaBidPublisher,
@@ -543,15 +546,35 @@ describe('round-trip: a published 1441 is what the read adapter binds', () => {
 		const pub = publisher([{ url: RELAY_A, accepted: true }])
 		const result = await publishArenaBid(bid({ raw: '1100' }), options({ publisher: pub, funding: await funded(1100), fundingTerms }))
 
-		// Before the read: the model has no bids → still presumed.
+		// Before the read has settled: nothing may be concluded, so it stays
+		// presumed however the calls below would eventually land.
 		const before = toAuctionDetailModel(projectArenaEvents([gated(createEvent())]).auctions[0], { now: NOW, status: 'settled' })
-		expect(settleSubmissionFromRead(result.state, before).phase).toBe('presumed')
+		expect(
+			nextPublishedBidState({ previous: result.state, model: before, readStatus: 'loading', chainAdvancing: null, escrowLocktime: null, now: NOW }),
+		).toMatchObject({ phase: 'presumed' })
 
-		// After the read: the model carries the bid → seen.
+		// After the read: the model carries the bid → seen, from the ACKs the
+		// submission has carried since the publish.
 		const after = projectArenaEvents([gated(createEvent()), gated(pub.sent[0] as unknown as NostrEventLike)])
 		const model = toAuctionDetailModel(after.auctions[0], { now: NOW, status: 'settled' })
-		const seen = settleSubmissionFromRead(result.state, model)
-		expect(seen).toMatchObject({ phase: 'seen', eventId: result.eventId, amount: 1100 })
+		const seen = nextPublishedBidState({
+			previous: result.state,
+			model,
+			readStatus: 'settled',
+			chainAdvancing: true,
+			escrowLocktime: null,
+			now: NOW,
+		})
+		// The ACK facts the submission carried since the publish are the ones the
+		// panel then states — not re-derived from this read.
+		if (result.state.phase !== 'presumed') throw new Error('the publish path did not answer presumed')
+		expect(seen).toMatchObject({
+			phase: 'seen',
+			eventId: result.eventId,
+			amount: 1100,
+			acceptedBy: result.state.acceptedBy,
+			totalRelays: result.state.totalRelays,
+		})
 	})
 
 	test('a zero-ACK bid never becomes seen, because it was never published', async () => {
@@ -564,10 +587,12 @@ describe('round-trip: a published 1441 is what the read adapter binds', () => {
 		}
 		expect(state).toMatchObject({ phase: 'unpublished' })
 		// The relay refused it, so a read that somehow served it would still not
-		// turn a failed publish into a placed bid: the state is `unpublished` and
-		// `settleSubmissionFromRead` only upgrades `presumed`.
+		// turn a failed publish into a placed bid: the state is `unpublished`, and
+		// `nextPublishedBidState` only moves a published bid.
 		const before = toAuctionDetailModel(projectArenaEvents([gated(createEvent())]).auctions[0], { now: NOW, status: 'settled' })
-		expect(settleSubmissionFromRead(state!, before).phase).toBe('unpublished')
+		expect(nextPublishedBidState({ previous: state!, model: before, readStatus: 'settled', chainAdvancing: true, escrowLocktime: null, now: NOW }).phase).toBe(
+			'unpublished',
+		)
 	})
 })
 
@@ -626,7 +651,7 @@ describe('arenaChainAdvancing', () => {
 	})
 })
 
-describe('diagnosePublishedBid — four states, and never an invented reason', () => {
+describe('diagnosePublishedBid — five states, and never an invented reason', () => {
 	test('a refusal the chain recorded is stated with the chain’s own words', () => {
 		const diagnosis = diagnosePublishedBid({
 			eventId: 'b1',
@@ -718,7 +743,7 @@ describe('diagnosePublishedBid — four states, and never an invented reason', (
 		expect(diagnosis.reclaimable).toBe(false)
 	})
 
-	test('published, not committed, chain not advancing → infrastructure, not a claim about the bid', () => {
+	test('published, not committed, chain not advancing → unconfirmed, never a claim about the chain or the bid', () => {
 		const diagnosis = diagnosePublishedBid({
 			eventId: 'b1',
 			seenInRead: false,
@@ -726,8 +751,59 @@ describe('diagnosePublishedBid — four states, and never an invented reason', (
 			chainAdvancing: false,
 			escrowLocktime: 2_000,
 		})
-		expect(diagnosis.state).toBe('infrastructure')
+		expect(diagnosis.state).toBe('unconfirmed')
+		expect(diagnosis.reason).toBeNull()
 		expect(diagnosis.reclaimable).toBe(false)
+	})
+
+	test('a window shorter than the stall horizon is still unconfirmed — the horizon is the claim', () => {
+		for (const observedStallSec of [0, 1, 60, 899, null]) {
+			const diagnosis = diagnosePublishedBid({
+				eventId: 'b1',
+				seenInRead: false,
+				namedByReceipt: false,
+				chainAdvancing: false,
+				escrowLocktime: 2_000,
+				observedStallSec,
+			})
+			expect(diagnosis.state).toBe('unconfirmed')
+		}
+	})
+
+	test('a chain watched standing still for the full stall horizon is infrastructure, and makes no claim about the bid', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: false,
+			escrowLocktime: 2_000,
+			observedStallSec: ARENA_CHAIN_STALLED_AFTER_SEC,
+		})
+		expect(diagnosis.state).toBe('infrastructure')
+		expect(diagnosis.reason).toBeNull()
+		expect(diagnosis.reclaimable).toBe(false)
+	})
+
+	test('the stall horizon is the protocol’s own 900 s safety scale', () => {
+		// `ARENA_CHAIN_CLOCK_STALE_AFTER_SEC` (`arenaClock.ts:44`) is 900 s, pinned
+		// on `SettlementSafetySec = 900 s` and the 60…900 s anti-snipe window
+		// (`sdk/commerce/auctions/auctionPublishValidation.ts:38`). A stall claim
+		// below that horizon is not demonstrable, so the two must not drift apart.
+		expect(ARENA_CHAIN_STALLED_AFTER_SEC).toBe(900)
+	})
+
+	test('a refusal outranks the stall claim — the chain put it in committed state and said why', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: false,
+			escrowLocktime: null,
+			refusalReason: 'bid already recorded',
+			observedStallSec: ARENA_CHAIN_STALLED_AFTER_SEC * 10,
+		})
+		expect(diagnosis.state).toBe('refused')
+		expect(diagnosis.reason).toBe('bid already recorded')
 	})
 
 	test('the only reason a diagnosis carries is the chain’s, verbatim', () => {
@@ -754,5 +830,94 @@ describe('diagnosePublishedBid — four states, and never an invented reason', (
 			refusalReason: 'bid already recorded',
 		})
 		expect(refused.reason).toBe('bid already recorded')
+	})
+})
+
+// =========================================================================
+// The panel's state machine over successive reads
+//
+// The defect this pins, measured live 2026-11-19: the read is one-shot, so a
+// snapshot's freshness decays with the wall clock, and the panel used to turn
+// that decay into "The chain is not advancing" while the chain was in fact
+// advancing and the bid **was** admitted. A missed freshness window must stay an
+// honest "waiting", keep reading, and resolve to the chain's own outcome.
+// =========================================================================
+
+describe('nextPublishedBidState — what one read says about a published bid', () => {
+	const published: ArenaBidSubmissionState = { phase: 'presumed', amount: 1_100, eventId: 'bid-1', acceptedBy: [RELAY_A], totalRelays: 2 }
+	/** One settled read, as the host would hand it to the state machine. */
+	const read = (over: Partial<Parameters<typeof nextPublishedBidState>[0]> = {}) =>
+		nextPublishedBidState({
+			previous: published,
+			model: detail(),
+			readStatus: 'settled',
+			chainAdvancing: false,
+			escrowLocktime: 5_000,
+			now: NOW,
+			...over,
+		})
+
+	test('a settled read with no bid and no advance is a waiting state, never an alarm', () => {
+		const state = read()
+		expect(state).toMatchObject({ phase: 'unconfirmed', eventId: 'bid-1', amount: 1_100, watchingSince: NOW })
+		// It carries the ACK facts on, so the bid can still be shown as served.
+		expect(state).toMatchObject({ acceptedBy: [RELAY_A], totalRelays: 2 })
+	})
+
+	test('an unsettled read says nothing at all — the state stands, as the same object', () => {
+		expect(read({ readStatus: 'loading', chainAdvancing: null, model: null })).toBe(published)
+		expect(read({ readStatus: 'incomplete' })).toBe(published)
+		expect(read({ chainAdvancing: null })).toBe(published)
+		expect(read({ model: null })).toBe(published)
+	})
+
+	test('a state that is not a published bid is returned untouched', () => {
+		const idle: ArenaBidSubmissionState = { phase: 'idle' }
+		expect(read({ previous: idle })).toBe(idle)
+	})
+
+	test('the alarm needs the watched horizon — one second short is still waiting, at the horizon it is a stall', () => {
+		const waiting = read()
+		const short = read({ previous: waiting, now: NOW + ARENA_CHAIN_STALLED_AFTER_SEC - 1 })
+		expect(short).toBe(waiting)
+		const stalled = read({ previous: waiting, now: NOW + ARENA_CHAIN_STALLED_AFTER_SEC })
+		expect(stalled).toMatchObject({ phase: 'infrastructure', eventId: 'bid-1', stalledForSec: ARENA_CHAIN_STALLED_AFTER_SEC })
+	})
+
+	test('a clock that steps backwards cannot shorten a window already watched', () => {
+		const waiting = read()
+		const backwards = read({ previous: waiting, now: NOW - 500 })
+		expect(backwards).toBe(waiting)
+	})
+
+	test('a chain that advances later resolves the panel to the chain’s own outcome, not the alarm', () => {
+		// First read: the chain's committed state has not moved at all.
+		const waiting = read()
+		expect(waiting.phase).toBe('unconfirmed')
+		// A later polled read — three horizons later, so the alarm would be
+		// allowed — serves the bid: the panel is `seen` (the bid is counted), and
+		// the infrastructure claim is never reached.
+		const served = read({
+			previous: waiting,
+			model: detail({ bids: [{ eventId: 'bid-1', bidder: BIDDER, createdAt: NOW, amount: 1_100, relays: [RELAY_A] }] }),
+			now: NOW + ARENA_CHAIN_STALLED_AFTER_SEC * 3,
+		})
+		expect(served).toMatchObject({ phase: 'seen', eventId: 'bid-1', amount: 1_100, acceptedBy: [RELAY_A], totalRelays: 2 })
+	})
+
+	test('a chain that advances without taking the bid is the chain’s decision, not an infrastructure problem', () => {
+		const decided = read({ previous: read(), chainAdvancing: true, now: NOW + 30 })
+		expect(decided).toMatchObject({ phase: 'not-accepted', eventId: 'bid-1', locktime: 5_000, reclaimable: true })
+	})
+
+	test('a refusal the read delivers is stated in the chain’s own words, from any waiting state', () => {
+		const model = detail({ bidRefusals: { 'bid-1': { reason: 'locktime below the floor for this lot', height: 900, refusalEventId: 'ev-refusal' } } })
+		const refused = read({ previous: read(), model, chainAdvancing: true })
+		expect(refused).toMatchObject({ phase: 'refused', reason: 'locktime below the floor for this lot', locktime: 5_000, reclaimable: true })
+	})
+
+	test('the poll interval is a cadence, not a hammer', () => {
+		expect(ARENA_BID_SETTLE_POLL_MS).toBeGreaterThanOrEqual(10_000)
+		expect(ARENA_BID_SETTLE_POLL_MS).toBeLessThanOrEqual(60_000)
 	})
 })

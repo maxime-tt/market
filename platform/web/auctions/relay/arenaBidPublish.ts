@@ -104,7 +104,7 @@
 import { getEventHash } from 'nostr-tools/pure'
 import type { Event, NostrIo } from '@sdk/core/nostr-io'
 import { ARENA_AUCTION_BID_KIND } from '@sdk/commerce/auctions/constants'
-import type { ArenaAuctionDetailModel } from '@ui/auction/arena/model'
+import type { ArenaAuctionDetailModel, ArenaSurfaceStatus } from '@ui/auction/arena/model'
 import {
 	arenaBidBlock,
 	checkArenaBid,
@@ -430,34 +430,179 @@ export async function publishArenaBid(
 }
 
 // =========================================================================
-// The read-back: presumed → seen
+// The read-back: what one read says about a published bid
 // =========================================================================
 
 /**
- * Upgrade a `presumed` submission to `seen` once the read delivered the bid.
+ * How long, in **seconds**, the app must read the chain's committed state stand
+ * still before it may call the chain stalled and say so.
  *
- * The read's own bid list is the only proof that a relay is *serving* the bid;
- * an ACK is a promise a relay made. Both are recorded, and the panel shows the
- * second only when it is true.
+ * ## Why the claim needs a window at all
+ *
+ * The app's only window into the chain is the kind-1447 state commitments its
+ * read delivers, and that read is **one-shot**: it is consumed to its caught-up
+ * marker and closed (`auctionSurfacesRead.ts`, "Consume one live read to its
+ * caught-up marker"), so its freshness decays with the wall clock while the
+ * reader stays open. "This snapshot holds no fresh commitment" is therefore a
+ * fact about the app's *read*, never a fact about the chain — measured live
+ * 2026-11-19: the arena nodes committed every 10 s and the chain advanced a
+ * block a minute, while `relay.playday.it` served no kind-1447 at all for 36
+ * minutes, and a bid the chain **admitted** was diagnosed "the chain is not
+ * advancing".
+ *
+ * What the app can demonstrate is its own reading: it reopens the read on a
+ * timer ({@link ARENA_BID_SETTLE_POLL_MS}) and can see whether committed state
+ * moves across those reads. Only after it has watched for the protocol's own
+ * longest rule horizon and seen nothing move may it say the chain has not
+ * advanced — and then it says exactly that, with the window it watched.
+ *
+ * ## Why 900 s
+ *
+ * 900 s is that horizon. `ARENA_CHAIN_CLOCK_STALE_AFTER_SEC`
+ * (`arenaClock.ts:44-49`) is 900 s because `SettlementSafetySec = 900 s` and the
+ * anti-snipe window tops out at 900 s
+ * (`sdk/commerce/auctions/auctionPublishValidation.ts:38`). Below it, a
+ * commitment arriving late is still consistent with every rule this app has, so
+ * a stall claim below it would not be demonstrable; at or past it, no rule the
+ * app holds can be underwritten against the chain's committed state at all.
  */
-export function settleSubmissionFromRead(state: ArenaBidSubmissionState, model: ArenaAuctionDetailModel | null): ArenaBidSubmissionState {
-	if (state.phase !== 'presumed' || model === null) return state
-	const seen = model.bids.some((bid) => bid.eventId === state.eventId)
-	if (!seen) return state
-	return { phase: 'seen', amount: state.amount, eventId: state.eventId, acceptedBy: state.acceptedBy, totalRelays: state.totalRelays }
+export const ARENA_CHAIN_STALLED_AFTER_SEC = 900
+
+/**
+ * How often, in **milliseconds**, the bid panel asks its host to reopen the lot
+ * read while a published bid is not settled. Measured on the arena nodes
+ * 2026-11-19: they commit every 10 s (`-commit-max-interval=10s`), and one lot
+ * read can take up to its 8 s deadline (`createWebRelayReadContext`, default
+ * `deadlineMs: 8000`) — so one reopen per 15 s keeps every decision within about
+ * 25 s of the chain's own, without holding a read open continuously.
+ */
+export const ARENA_BID_SETTLE_POLL_MS = 15_000
+
+/**
+ * The state a published bid moves to, from the read the host has just consumed.
+ *
+ * Pure: the host owns the read, the timer and the render; this owns which state
+ * follows from which facts, so the whole machine is decidable in a test.
+ *
+ * The order of the checks **is** the honesty order:
+ *
+ * 1. **Possession first.** If the read serves the bid (`model.bids`), it is
+ *    `seen`: a relay is holding it, whatever the chain has not yet said. Event-id
+ *    equality, never a fuzzy match.
+ * 2. **Nothing else is a fact until a read settles.** With no model, a
+ *    non-settled read, or no `chainAdvancing` yet, the state stands as it is:
+ *    the app has not read enough to say anything, and a read in progress is
+ *    never dressed up as an answer.
+ * 3. **Then the diagnosis** (`diagnosePublishedBid`) — the chain's *recorded*
+ *    refusal in its own words; else the chain advancing while the bid is absent
+ *    (it saw the bid and did not take it); else the app has **not** seen the
+ *    chain advance, which is *not* the same as the chain having stalled. That
+ *    last case stays `unconfirmed` and keeps reading until it has watched
+ *    committed state stand still for {@link ARENA_CHAIN_STALLED_AFTER_SEC};
+ *    only then is the chain stalled enough to say so.
+ *
+ * `unconfirmed` carries the instant the app began waiting (`watchingSince`) so
+ * the window is a fact in the state rather than a ref beside it, and a state
+ * that does not change is returned as the **same object** — a host calling this
+ * on every tick does not re-render for it.
+ */
+export function nextPublishedBidState(input: {
+	/** The state the panel holds. Anything that is not a published bid is returned unchanged. */
+	previous: ArenaBidSubmissionState
+	/** The read the host has just consumed, or `null` when none has. */
+	model: ArenaAuctionDetailModel | null
+	/** The read's own status. Only a settled read may be diagnosed from. */
+	readStatus: ArenaSurfaceStatus
+	/** `arenaChainAdvancing` on this read; `null` before any read has settled. */
+	chainAdvancing: boolean | null
+	/** The escrow locktime the bid was funded against, or `null`. */
+	escrowLocktime: number | null
+	/** Unix seconds — the route's own ticking clock. */
+	now: number
+}): ArenaBidSubmissionState {
+	const previous = input.previous
+	if (previous.phase !== 'presumed' && previous.phase !== 'unconfirmed') return previous
+
+	// 1. Possession: the read serves the bid, so a relay is holding it. This is
+	//    true from either unsettled state, and it does not wait for a settled
+	//    read — the read would not carry the bid at all if it had not arrived.
+	if (input.model !== null && input.model.bids.some((bid) => bid.eventId === previous.eventId)) {
+		return { phase: 'seen', amount: previous.amount, eventId: previous.eventId, acceptedBy: previous.acceptedBy, totalRelays: previous.totalRelays }
+	}
+
+	// 2. The app has read nothing it may diagnose from. Say nothing new.
+	if (input.model === null || input.readStatus !== 'settled' || input.chainAdvancing === null) return previous
+
+	// 3. The window the app has itself watched: from the first settled read that
+	//    told it the chain was not advancing, to now. Never negative (a clock
+	//    that steps back must not shorten a window that was watched).
+	const observedStallSec = previous.phase === 'unconfirmed' ? Math.max(0, input.now - previous.watchingSince) : 0
+	const diagnosis = diagnosePublishedBid({
+		eventId: previous.eventId,
+		seenInRead: false,
+		namedByReceipt: input.model.receipts.some((receipt) => receipt.bidId === previous.eventId),
+		chainAdvancing: input.chainAdvancing,
+		escrowLocktime: input.escrowLocktime,
+		refusalReason: input.model.bidRefusals[previous.eventId]?.reason ?? null,
+		observedStallSec,
+	})
+
+	switch (diagnosis.state) {
+		// Committed state the read names but does not serve (a receipt): the app
+		// says nothing new here — the bid itself is what the polling read is for.
+		case 'committed':
+			return previous
+		case 'refused':
+			return {
+				phase: 'refused',
+				amount: previous.amount,
+				eventId: previous.eventId,
+				reason: diagnosis.reason ?? '',
+				locktime: diagnosis.escrowLocktime,
+				reclaimable: diagnosis.reclaimable,
+			}
+		case 'not-accepted':
+			return {
+				phase: 'not-accepted',
+				amount: previous.amount,
+				eventId: previous.eventId,
+				locktime: diagnosis.escrowLocktime,
+				reclaimable: diagnosis.reclaimable,
+			}
+		case 'infrastructure':
+			return { phase: 'infrastructure', amount: previous.amount, eventId: previous.eventId, stalledForSec: observedStallSec }
+		case 'unconfirmed':
+			// Already waiting: the same state object, so the window keeps running
+			// from its own start and the host is not asked to re-render for it.
+			return previous.phase === 'unconfirmed'
+				? previous
+				: {
+						phase: 'unconfirmed',
+						amount: previous.amount,
+						eventId: previous.eventId,
+						acceptedBy: previous.acceptedBy,
+						totalRelays: previous.totalRelays,
+						watchingSince: input.now,
+					}
+	}
 }
 
 // =========================================================================
-// The three-state diagnosis — a published bid the chain did not take
+// The diagnosis — a published bid the chain has not taken
 //
 // Owner ruling (`notes/DECISION-2026-11-18-refused-bids-are-not-committed.md`):
 // a refused bid is never committed, and the chain publishes **no** 1450 for one.
 // So the app never invents a reason. It diagnoses from what it already reads:
 // whether the bid is in committed state, and whether the chain is advancing.
+//
+// "Not advancing in this snapshot" is not "the chain is stalled": the read is
+// one-shot and its freshness decays by itself (`nextPublishedBidState`), so the
+// stall claim needs a window the app has itself watched
+// (`ARENA_CHAIN_STALLED_AFTER_SEC`) and everything short of it is `unconfirmed`.
 // =========================================================================
 
 /**
- * The three states a bid the app published can be in, and nothing else.
+ * The states a bid the app published can be in, and nothing else.
  *
  * - `refused` — the chain **recorded** a refusal of this bid (a kind-1450 naming
  *   the bid's event id, with the chain's own reason). Only a bid refused **at
@@ -469,12 +614,17 @@ export function settleSubmissionFromRead(state: ArenaBidSubmissionState, model: 
  *   is advancing: the chain saw it and did not accept it. **This is not a
  *   network problem** and must not read like one. The escrow is still locked
  *   until its locktime, so the surface states the locktime and the reclaim.
- * - `infrastructure` — it is published and not committed, but the chain is
- *   **not advancing** (no fresh commitments across several blocks): that is an
- *   infrastructure problem, not the bid. The honest statement is that, and the
- *   app makes no claim about the bid.
+ * - `unconfirmed` — it is published, not committed, and the app has **not** seen
+ *   the chain advance: no verdict exists yet, and no verdict is not a refusal.
+ *   The honest statement is that the app is still reading; a bid may still be
+ *   admitted, so nothing is said about it and nothing is given up.
+ * - `infrastructure` — it is published and not committed, and the app has read
+ *   the chain's committed state stand still for
+ *   {@link ARENA_CHAIN_STALLED_AFTER_SEC}: no rule the app holds can be
+ *   underwritten against the chain's state, which is an infrastructure problem
+ *   and not a fact about the bid.
  */
-export type ArenaBidDiagnosisState = 'committed' | 'refused' | 'not-accepted' | 'infrastructure'
+export type ArenaBidDiagnosisState = 'committed' | 'refused' | 'not-accepted' | 'unconfirmed' | 'infrastructure'
 
 /** One diagnosis, with the facts it rests on and no invented reason. */
 export interface ArenaBidDiagnosis {
@@ -531,12 +681,19 @@ export function arenaChainAdvancing(input: {
 
 /**
  * Diagnose a bid the app published. **Never invents a reason** — it decides one
- * of three states from the facts the read already holds.
+ * of five states from the facts the read already holds.
  *
  * - committed (in the read's bids, or a receipt names it) → `committed`, say nothing;
+ * - published, not committed, a refusal names it → `refused`, in the chain's own words;
  * - published, not committed, chain advancing → `not-accepted`, with the locktime
  *   and the reclaim affordance;
- * - published, not committed, chain not advancing → `infrastructure`.
+ * - published, not committed, not advancing, and the app has watched committed
+ *   state stand still for less than {@link ARENA_CHAIN_STALLED_AFTER_SEC} →
+ *   `unconfirmed`: no verdict yet, and not a refusal;
+ * - …and for at least that window → `infrastructure`. **"Not advancing in this
+ *   snapshot" is not that window**: the app's read is one-shot and its own
+ *   freshness decays, so only the window it has itself watched makes the claim
+ *   true (`nextPublishedBidState` is what runs the clock).
  *
  * A bid that was never published (no event id, or a failed submission) is not
  * diagnosed here: this function is only about a bid that reached a relay.
@@ -557,6 +714,13 @@ export function diagnosePublishedBid(input: {
 	 * has no record and therefore no reason — which is not the same as accepted.
 	 */
 	refusalReason?: string | null
+	/**
+	 * Seconds the app has itself read the chain's committed state without seeing
+	 * it advance, or `null`/absent when it has not begun observing. A caller
+	 * that has no window (one probe, no clock) gets `unconfirmed`, never the
+	 * stall claim: the absence of a window is not evidence of a stall.
+	 */
+	observedStallSec?: number | null
 }): ArenaBidDiagnosis {
 	if (input.seenInRead || input.namedByReceipt) {
 		return { state: 'committed', eventId: input.eventId, escrowLocktime: input.escrowLocktime, reason: null, reclaimable: false }
@@ -584,6 +748,12 @@ export function diagnosePublishedBid(input: {
 			// unknown deadline would be a button that cannot be honoured.
 			reclaimable: input.escrowLocktime !== null,
 		}
+	}
+	const observedStallSec = typeof input.observedStallSec === 'number' ? Math.max(0, input.observedStallSec) : null
+	if (observedStallSec === null || observedStallSec < ARENA_CHAIN_STALLED_AFTER_SEC) {
+		// No window, or a window too short to demonstrate a stall: the app has no
+		// verdict and says so. Nothing about the bid is claimed.
+		return { state: 'unconfirmed', eventId: input.eventId, escrowLocktime: input.escrowLocktime, reason: null, reclaimable: false }
 	}
 	return {
 		state: 'infrastructure',
