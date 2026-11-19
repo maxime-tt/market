@@ -1,5 +1,5 @@
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
-import { RouterProvider, createRouter } from '@tanstack/react-router'
+import { RouterContextProvider, RouterProvider, createRouter } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { StrictMode, useEffect } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
@@ -104,7 +104,11 @@ function App() {
 						<AppProviders>
 							<AppMonitors />
 							<RouterProvider router={router} />
-							<AppOverlays />
+							{/* Overlays sit outside RouterProvider so they survive navigation, but the
+							    cart sheet renders router links, so give them the router context. */}
+							<RouterContextProvider router={router}>
+								<AppOverlays />
+							</RouterContextProvider>
 						</AppProviders>
 						<UpdateAvailableDialog open={showUpdateDialog} onDismiss={dismissUpdate} onReload={handleReload} />
 					</ThemeMigrationWrapper>

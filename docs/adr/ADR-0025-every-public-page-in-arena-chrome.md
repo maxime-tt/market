@@ -38,7 +38,8 @@ half-finished.
    `rounded-md` corner become pills. Storefront themes and the admin console
    are excluded.
 4. **Hand fixes where it shows.** Community, collections, search, posts and
-   setup titles use `font-heading`; their cards, filter bars and hero
+   setup titles use `font-heading`; the cart sheet gets a serif title,
+   hairlines, pill buttons and a calm notice; their cards, filter bars and hero
    fallbacks use role tokens; long post text wraps.
 
 ## Consequences
@@ -48,6 +49,9 @@ half-finished.
 - The class map is a bridge, not a licence: new code uses role tokens
   (see `docs/theming.md`), and pages lose their legacy classes as they are
   touched.
+- The overlays (cart sheet, dialogs, toasts) sit outside `RouterProvider`
+  but are wrapped in `RouterContextProvider`, so router links inside them
+  work. Before this, Add to cart crashed the page when the cart sheet opened.
 - Messages live in the dashboard, so they follow the console theme.
 - When ADR-0023 lands, the Arena values come from the theme registry and the
   same map serves every theme.
