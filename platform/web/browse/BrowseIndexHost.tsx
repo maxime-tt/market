@@ -64,6 +64,7 @@ import { usePriceDisplay } from '@platform/web/products/PriceDisplayHost'
 import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { npubEncode } from 'nostr-tools/nip19'
 import { useInstanceName } from '@platform/web/config/instanceName'
+import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 
 /** The Browse URL state the host asks the route to write back. */
 export interface BrowseSearchState {
@@ -351,6 +352,7 @@ function BrowseResultCard({
  */
 export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
 	const instanceName = useInstanceName()
+	const { data: config } = useConfigQuery()
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 	const [facetsExpanded, setFacetsExpanded] = useState(false)
 	// The open family's selected option, by the variation's `d` tag. Held here
@@ -882,6 +884,7 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 			{/* Nav — the same element in every state */}
 			<BrowseNav
 				wordmarkLabel={instanceName}
+				logoSrc={config?.picture}
 				active={true}
 				onNavigateHome={() => onNavigate({ q: '', p: undefined })}
 				onNavigateFeatured={onNavigateFeatured}

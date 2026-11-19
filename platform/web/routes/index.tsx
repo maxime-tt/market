@@ -106,6 +106,7 @@ function BrowseIndex() {
 				{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
 				<BrowseNav
 					wordmarkLabel={instanceName}
+					logoSrc={config?.picture}
 					active
 					onNavigateHome={() => navigate({ to: '/' })}
 					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}

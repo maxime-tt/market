@@ -35,6 +35,9 @@ const LEGACY_HEADER_MARKER = 'data-testid="legacy-app-header"'
 // stubs rather than the browser-bound originals.
 mock.module('@platform/web/layout/Header', () => ({
 	Header: () => createElement('header', { 'data-testid': 'legacy-app-header' }),
+	// `routes/index` imports this alongside `Header` for the Browse nav's account
+	// slot; a factory missing it makes the ESM link fail before the test runs.
+	HeaderAccountControls: () => null,
 }))
 mock.module('@platform/web/app/useRootRedirects', () => ({ useRootRedirects: () => {} }))
 mock.module('@platform/web/app/useDocumentIdentity', () => ({ useDocumentIdentity: () => {} }))
@@ -91,7 +94,10 @@ describe('root frame chrome', () => {
 		expect(browseRoute.options.staticData).toEqual({ hidesAppHeader: true })
 
 		// The surface's own chrome, as Browse draws it.
-		const markup = await renderRouteFrame(browseRoute.options.staticData, createElement(BrowseNav, { active: true }))
+		const markup = await renderRouteFrame(
+			browseRoute.options.staticData,
+			createElement(BrowseNav, { wordmarkLabel: 'Test Market', active: true }),
+		)
 
 		expect(markup).toContain('widget-browse-nav')
 		expect(markup.split('<nav').length - 1).toBe(1)
