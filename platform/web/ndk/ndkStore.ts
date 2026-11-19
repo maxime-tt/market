@@ -167,9 +167,14 @@ export function getBugRelay(): string | undefined {
  * `computeNdkConfig` for callers that only need the write set.
  * Staging/development → main relay only; production → all connected.
  */
+/** True when this instance's server confined browser writes to the app relay. */
+export function isAppRelayWritesOnly(): boolean {
+	return configStore.state.config.appRelayWritesOnly === true
+}
+
 export function getWriteRelays(): string[] {
 	const stage = getCurrentStage()
-	if (stage === 'staging' || stage === 'development') {
+	if (stage === 'staging' || stage === 'development' || isAppRelayWritesOnly()) {
 		const mainRelay = getMainRelay()
 		return mainRelay ? [mainRelay] : []
 	}
@@ -187,6 +192,9 @@ export function getWriteRelaySet(): NDKRelaySet | undefined {
 	if (!ndk) return undefined
 
 	const stage = getCurrentStage()
+	if (isAppRelayWritesOnly()) {
+		return NDKRelaySet.fromRelayUrls(getWriteRelays(), ndk)
+	}
 	if (stage === 'staging') {
 		const writeRelays = getWriteRelays()
 		console.log(`📝 Staging mode: restricting writes to ${writeRelays.join(', ')}`)
@@ -427,6 +435,7 @@ export const ndkActions = {
 			publicRelays: configStore.state.config.publicRelays,
 			overrideRelays: relays,
 			localRelayOnly: isBunLocalRelayOnly(),
+			appRelayWritesOnly: isAppRelayWritesOnly(),
 		})
 
 		// AI Guardrails are an NDK dev-time educational tool (shipped off by
@@ -713,6 +722,8 @@ export const ndkActions = {
 	},
 
 	publishEvent: async (event: NDKEvent, relaySet?: NDKRelaySet): Promise<Set<any>> => {
+		// A write-locked instance ignores a caller's relay set: nothing leaves the app relay.
+		if (isAppRelayWritesOnly()) relaySet = getWriteRelaySet()
 		relaySet ??= getWriteRelaySet()
 		return event.publish(relaySet)
 	},

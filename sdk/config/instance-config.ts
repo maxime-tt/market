@@ -38,6 +38,12 @@ export interface PublicAppConfig extends InstanceConfig {
 	needsSetup: boolean
 	serverReady: boolean
 	externalZapRelaysEnabled: boolean
+	/**
+	 * Server-set (`APP_RELAY_WRITES_ONLY=true`): the browser publishes only to
+	 * the app relay and runs no outbox discovery, while still reading the public
+	 * set. For test instances whose auctions and bids must stay off public relays.
+	 */
+	appRelayWritesOnly?: boolean
 }
 
 export type MarketConfigSource = Pick<
