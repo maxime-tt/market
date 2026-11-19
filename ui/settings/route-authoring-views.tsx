@@ -4,6 +4,7 @@ import { Button } from '../primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../primitives/card'
 import { Input } from '../primitives/input'
 import { Label } from '../primitives/label'
+import { Switch } from '../primitives/switch'
 import { EmptyState } from '../shared/empty-state'
 import { Notice } from '../shared/notice'
 import { cn } from '../utils/cn'
@@ -40,8 +41,29 @@ export interface RouteBindingRow {
 	updatedAtLabel: string
 	updatedByLabel: string
 	warning: string | null
+	/** The AppBar label when the binding is pinned into the nav; null when it is not. */
+	navLabel: string | null
+	/** The AppBar sort key when pinned; null when it is not. */
+	navOrder: number | null
 	author: string
 	d: string
+}
+
+/**
+ * The nav-pin half of the binding form: whether the path is pinned into the
+ * AppBar's navigation, and the label and order it is pinned with. Grouped
+ * because the three values are one thing — a pin is a pair, never a label
+ * without an order — and every form that composes `RouteBindingForm` threads
+ * them through untouched.
+ */
+export interface RouteNavFields {
+	showInNav: boolean
+	navLabel: string
+	/** Held as typed: the field is a number input, the value is still a string. */
+	navOrder: string
+	onShowInNavChange: (value: boolean) => void
+	onNavLabelChange: (value: string) => void
+	onNavOrderChange: (value: string) => void
 }
 
 export interface RouteBindingFormProps {
@@ -51,6 +73,7 @@ export interface RouteBindingFormProps {
 	onPathChange: (value: string) => void
 	/** The page picker, rendered by the host because it owns the relay read. */
 	pagePicker: ReactNode
+	nav: RouteNavFields
 	errors: string[]
 	/** A non-blocking, pre-submit notice — e.g. that the path is compiled in. */
 	notice?: string | null
@@ -69,6 +92,7 @@ export function RouteBindingForm({
 	path,
 	onPathChange,
 	pagePicker,
+	nav,
 	errors,
 	notice = null,
 	pending,
@@ -78,6 +102,16 @@ export function RouteBindingForm({
 	onCancel,
 	className,
 }: RouteBindingFormProps) {
+	// Pinning starts from the path: it is the name the admin already typed, so
+	// turning the switch on does not open a form that cannot be submitted.
+	const changeShowInNav = (next: boolean) => {
+		nav.onShowInNavChange(next)
+		if (next && nav.navLabel.trim().length === 0) nav.onNavLabelChange(path.trim())
+	}
+	// The field says what is wrong as it is typed; `validateDraft` says the same
+	// thing again at submit, because the form must not depend on the field.
+	const navOrderInvalid = nav.navOrder.trim().length > 0 && !/^-?\d+$/.test(nav.navOrder.trim())
+
 	return (
 		<Card className={className}>
 			<CardHeader>
@@ -110,6 +144,62 @@ export function RouteBindingForm({
 					<p className="text-text-mid text-xs">
 						The path is pointed at this page. It is not moved or copied, and pointing at it does not publish it.
 					</p>
+				</div>
+
+				<div className="space-y-3 border-t border-border-default pt-4">
+					<div className="flex items-start justify-between gap-3">
+						<div className="space-y-1">
+							<Label htmlFor="route-show-in-nav">Show in navigation</Label>
+							<p className="text-text-mid text-xs">
+								A pinned route appears in the app&rsquo;s navigation, ordered by its number. The path itself does not change.
+							</p>
+						</div>
+						<Switch
+							id="route-show-in-nav"
+							checked={nav.showInNav}
+							onCheckedChange={changeShowInNav}
+							disabled={pending}
+							aria-label="Show this path in the app navigation"
+							data-testid="route-show-in-nav"
+						/>
+					</div>
+
+					{nav.showInNav && (
+						<div className="grid gap-3 sm:grid-cols-2">
+							<div className="space-y-2">
+								<Label htmlFor="route-nav-label">Nav label</Label>
+								<Input
+									id="route-nav-label"
+									value={nav.navLabel}
+									disabled={pending}
+									maxLength={24}
+									placeholder={path.trim() || 'Featured'}
+									onChange={(event) => nav.onNavLabelChange(event.target.value)}
+								/>
+								<p className="text-text-mid text-xs">The words in the navigation. Up to 24 characters; it starts as the path.</p>
+							</div>
+							<div className="space-y-2">
+								<Label htmlFor="route-nav-order">Nav order</Label>
+								<Input
+									id="route-nav-order"
+									type="number"
+									step={1}
+									value={nav.navOrder}
+									disabled={pending}
+									placeholder="1"
+									aria-invalid={navOrderInvalid}
+									onChange={(event) => nav.onNavOrderChange(event.target.value)}
+								/>
+								{navOrderInvalid ? (
+									<p role="alert" className="text-error text-xs">
+										Nav order must be a whole number.
+									</p>
+								) : (
+									<p className="text-text-mid text-xs">Ascending: 1 is shown before 2.</p>
+								)}
+							</div>
+						</div>
+					)}
 				</div>
 
 				{notice && (
@@ -148,6 +238,7 @@ export function RouteCreateForm({
 	path,
 	onPathChange,
 	pagePicker,
+	nav,
 	errors,
 	notice,
 	pending,
@@ -157,6 +248,7 @@ export function RouteCreateForm({
 	path: string
 	onPathChange: (value: string) => void
 	pagePicker: ReactNode
+	nav: RouteNavFields
 	errors: string[]
 	notice?: string | null
 	pending: boolean
@@ -170,6 +262,7 @@ export function RouteCreateForm({
 			path={path}
 			onPathChange={onPathChange}
 			pagePicker={pagePicker}
+			nav={nav}
 			errors={errors}
 			notice={notice}
 			pending={pending}
@@ -185,6 +278,7 @@ export function RouteCreateForm({
 export function RouteEditCard({
 	path,
 	pagePicker,
+	nav,
 	errors,
 	pending,
 	onSubmit,
@@ -193,6 +287,7 @@ export function RouteEditCard({
 }: {
 	path: string
 	pagePicker: ReactNode
+	nav: RouteNavFields
 	errors: string[]
 	pending: boolean
 	onSubmit: () => void
@@ -206,6 +301,7 @@ export function RouteEditCard({
 			path={path}
 			onPathChange={() => {}}
 			pagePicker={pagePicker}
+			nav={nav}
 			errors={errors}
 			pending={pending}
 			submitLabel="Save target"
@@ -246,6 +342,11 @@ export function RouteBindingsList({ rows, pendingPath, onEdit, onRemove, onEditP
 									</p>
 								)}
 								<p className="text-text-mid text-xs">{row.targetLabel}</p>
+								{row.navLabel !== null && row.navOrder !== null && (
+									<p className="text-text-mid text-xs">
+										In nav: <strong>{row.navLabel}</strong> ({row.navOrder})
+									</p>
+								)}
 								<p className="text-text-mid text-xs">
 									Updated {row.updatedAtLabel} by {row.updatedByLabel}
 								</p>
