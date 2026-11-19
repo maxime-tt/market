@@ -122,4 +122,25 @@ describe('route intent — the signed record of a binding', () => {
 		expect(bad({ type: 'series', series: 'NO', author: AUTHOR })).toContain('/target/series')
 		expect(bad({ type: 'series', series: 'featured', author: 'nope' })).toContain('/target/author')
 	})
+
+	test('an intent carrying a nav pin parses and its content emits it', () => {
+		const intent = setIntent({ nav: { label: 'Featured', order: 2 } })
+		expect(routeIntentContent(intent)).toContain('"nav":{"label":"Featured","order":2}')
+
+		const result = parse(intent, 'shop')
+		expect(result.error).toBeNull()
+		expect(result.intent?.nav).toEqual({ label: 'Featured', order: 2 })
+
+		const event = buildRouteIntentEvent(intent, 1_800_000_000)
+		expect(parseRouteIntent(event.content, event.tags[0][1]).intent?.nav).toEqual({ label: 'Featured', order: 2 })
+	})
+
+	test('a malformed nav pin is refused by field pointer', () => {
+		const content = (nav: unknown) =>
+			JSON.stringify({ version: 1, action: 'set', path: 'shop', target: { type: 'page', author: AUTHOR, d: 'storefront-page' }, nav })
+		expect(parseRouteIntent(content('Featured')).error).toContain('/nav: expected an object')
+		expect(parseRouteIntent(content({ label: '', order: 1 })).error).toContain('/nav/label')
+		expect(parseRouteIntent(content({ label: 'a'.repeat(25), order: 1 })).error).toContain('/nav/label')
+		expect(parseRouteIntent(content({ label: 'Featured', order: 1.5 })).error).toContain('/nav/order')
+	})
 })

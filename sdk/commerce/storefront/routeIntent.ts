@@ -52,12 +52,22 @@ export interface RouteIntentSeriesTarget {
 
 export type RouteIntentTarget = RouteIntentPageTarget | RouteIntentSeriesTarget
 
+/** The optional nav pin authored alongside a `set` target (§7.2). */
+export interface RouteIntentNav {
+	/** The label the AppBar shows. Non-empty, ≤ 24 chars. */
+	label: string
+	/** Ascending sort key; the AppBar orders pinned entries by it. */
+	order: number
+}
+
 export interface RouteIntent {
 	version: typeof ROUTE_INTENT_VERSION
 	action: RouteIntentAction
 	path: string
 	/** Present for `set`, `null` for `remove`. */
 	target: RouteIntentTarget | null
+	/** Present when the authored binding is pinned into the AppBar nav; never on `remove`. */
+	nav?: RouteIntentNav
 }
 
 export interface RouteIntentParseResult {
@@ -92,7 +102,8 @@ export function isValidIntentDTag(value: unknown): value is string {
 export function validateIntentPath(value: unknown): string | null {
 	if (typeof value !== 'string' || value.length === 0) return '/path: expected a non-empty string'
 	if (value.includes('/')) return `/path: ${JSON.stringify(value)}: only a top-level name can be authored in this increment`
-	if (!isValidRouteName(value)) return `/path: ${JSON.stringify(value)} does not match the name grammar (3-30 lowercase alphanumerics, "_" or "-")`
+	if (!isValidRouteName(value))
+		return `/path: ${JSON.stringify(value)} does not match the name grammar (3-30 lowercase alphanumerics, "_" or "-")`
 	if (isUrlSpaceName(value)) return `/path: app-owned-name: ${value} is part of the URL space and cannot be re-pointed`
 	return null
 }
@@ -115,7 +126,7 @@ export function parseRouteIntent(content: string, dTag?: string): RouteIntentPar
 	if (!isRecord(parsed)) return { intent: null, error: '/ : expected a JSON object' }
 
 	for (const key of Object.keys(parsed)) {
-		if (!['version', 'action', 'path', 'target'].includes(key)) return { intent: null, error: `/${key}: unknown field` }
+		if (!['version', 'action', 'path', 'target', 'nav'].includes(key)) return { intent: null, error: `/${key}: unknown field` }
 	}
 
 	if (parsed.version !== ROUTE_INTENT_VERSION) {
@@ -142,6 +153,17 @@ export function parseRouteIntent(content: string, dTag?: string): RouteIntentPar
 		return { intent: { version: ROUTE_INTENT_VERSION, action, path, target: null }, error: null }
 	}
 
+	const rawNav = parsed.nav
+	let nav: RouteIntentNav | undefined
+	if (rawNav !== undefined) {
+		if (!isRecord(rawNav)) return { intent: null, error: '/nav: expected an object' }
+		if (typeof rawNav.label !== 'string' || rawNav.label.length === 0 || rawNav.label.length > 24) {
+			return { intent: null, error: '/nav/label: expected a non-empty string of at most 24 characters' }
+		}
+		if (!Number.isInteger(rawNav.order)) return { intent: null, error: '/nav/order: expected an integer' }
+		nav = { label: rawNav.label, order: rawNav.order as number }
+	}
+
 	const target = parsed.target
 	if (!isRecord(target)) return { intent: null, error: '/target: expected an object' }
 
@@ -153,7 +175,13 @@ export function parseRouteIntent(content: string, dTag?: string): RouteIntentPar
 			return { intent: null, error: '/target/author: expected 64 lowercase hex' }
 		}
 		return {
-			intent: { version: ROUTE_INTENT_VERSION, action, path, target: { type: 'series', series: target.series, author: target.author } },
+			intent: {
+				version: ROUTE_INTENT_VERSION,
+				action,
+				path,
+				target: { type: 'series', series: target.series, author: target.author },
+				...(nav ? { nav } : {}),
+			},
 			error: null,
 		}
 	}
@@ -167,7 +195,13 @@ export function parseRouteIntent(content: string, dTag?: string): RouteIntentPar
 	if (!isValidIntentDTag(target.d)) return { intent: null, error: '/target/d: expected a non-empty page d tag' }
 
 	return {
-		intent: { version: ROUTE_INTENT_VERSION, action, path, target: { type: 'page', author: target.author, d: target.d } },
+		intent: {
+			version: ROUTE_INTENT_VERSION,
+			action,
+			path,
+			target: { type: 'page', author: target.author, d: target.d },
+			...(nav ? { nav } : {}),
+		},
 		error: null,
 	}
 }
@@ -179,6 +213,7 @@ export function routeIntentContent(intent: RouteIntent): string {
 		action: intent.action,
 		path: intent.path,
 		...(intent.target ? { target: intent.target } : {}),
+		...(intent.nav ? { nav: intent.nav } : {}),
 	})
 }
 
