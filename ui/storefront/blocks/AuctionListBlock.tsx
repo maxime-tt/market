@@ -1,5 +1,6 @@
 import { cn } from '@ui/utils/cn'
 import { useStorefrontContext } from '../StorefrontContext'
+import { isSafeMediaSrc } from '@sdk/commerce/storefront/storefrontPage'
 import { StorefrontEditorHint, StorefrontSection, StorefrontSectionTitle } from './shared'
 
 /**
@@ -52,6 +53,8 @@ export interface AuctionListItem {
 	/** The auction's `d` tag. */
 	d: string
 	title: string | null
+	/** The lot's cover image (`image` on the wire), or `null`. Re-gated before rendering. */
+	imageUrl?: string | null
 	startingBid: number | null
 	/** Summed from the bid **deltas** — a derived view, not the outcome. */
 	topBidTotal: number | null
@@ -101,13 +104,29 @@ function phaseLabel(item: AuctionListItem): string {
 
 function AuctionCard({ item, auctionHref }: { item: AuctionListItem; auctionHref: (coordinate: string) => string }) {
 	const label = item.title?.trim() || item.d
+	// Relay content is untrusted: only `https:` or in-app paths reach an <img>.
+	const image = item.imageUrl && isSafeMediaSrc(item.imageUrl) ? item.imageUrl : null
 	return (
 		<article
 			data-testid={`storefront-auction-${item.d}`}
 			data-phase={item.phase}
 			data-verdict={item.verdict ?? 'unknown'}
-			className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4"
+			className="flex flex-col gap-2 overflow-hidden rounded-lg border border-border bg-card p-4"
 		>
+			<a href={auctionHref(item.coordinate)} className="-mx-4 -mt-4 mb-2 block aspect-square overflow-hidden bg-muted" tabIndex={-1} aria-hidden="true">
+				{image ? (
+					<img
+						src={image}
+						alt=""
+						loading="lazy"
+						referrerPolicy="no-referrer"
+						data-testid={`storefront-auction-${item.d}-image`}
+						className="h-full w-full object-cover transition-transform duration-200 hover:scale-105"
+					/>
+				) : (
+					<span className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">No image published</span>
+				)}
+			</a>
 			<a href={auctionHref(item.coordinate)} className="font-header text-lg font-semibold text-foreground hover:underline">
 				{label}
 			</a>
@@ -169,7 +188,7 @@ export function AuctionListBlock({
 	}
 
 	return (
-		<StorefrontSection width="wide" className={cn('py-10', isEditing && 'pointer-events-none')}>
+		<StorefrontSection className={cn('py-10', isEditing && 'pointer-events-none')}>
 			<StorefrontSectionTitle title={title} />
 
 			<div data-testid="storefront-auction-list" data-state={status}>

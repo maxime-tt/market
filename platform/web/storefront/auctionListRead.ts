@@ -104,6 +104,7 @@ export function toAuctionListItem(view: ArenaAuctionView, now: number): AuctionL
 		seller: view.seller,
 		d: view.d,
 		title: view.content.title,
+		imageUrl: view.content.image,
 		startingBid: view.content.startPrice,
 		topBidTotal: view.topBid?.total ?? null,
 		bidCount: view.bids.length,

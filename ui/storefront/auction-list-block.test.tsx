@@ -193,3 +193,14 @@ describe('AuctionListBlock — picked references', () => {
 		expect(editing).toContain('pointer-events-none')
 	})
 })
+describe('auction card image', () => {
+	test('an https cover image renders; an unsafe one falls back to the placeholder', () => {
+		const ok = render({ status: 'settled', auctions: [auction({ imageUrl: 'https://example.test/lot.jpg' })] })
+		expect(ok).toContain('data-testid="storefront-auction-lot-1-image"')
+		expect(ok).toContain('src="https://example.test/lot.jpg"')
+
+		const bad = render({ status: 'settled', auctions: [auction({ imageUrl: 'javascript:alert(1)' })] })
+		expect(bad).not.toContain('storefront-auction-lot-1-image')
+		expect(bad).toContain('No image published')
+	})
+})
