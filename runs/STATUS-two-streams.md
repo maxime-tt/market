@@ -1,0 +1,225 @@
+# Two streams — live status (managed from this session)
+
+Owner's standing instruction, 2026-11-13: **stay on custom routes (A) and the auctions front end (B).**
+Everything else — the union runs, the catalogue branches, the preserved work, the intro — is parked,
+recorded only so it is not lost. Not to be opened, verified or tidied by either stream.
+
+## A — the custom-route unblocker
+
+`runs/2026-11-13-admin-routes/`
+
+- [x] **Bound frozen** — `order.md` (`aaab6ef51`). Every premise in it is a claim to test.
+- [x] **ACL recorded** — `ruling-acl.md` (`1eecebd4b`). Three tiers: admin full control of the app and
+      its pages; editor per-path grants; premium/paid reserves a path as part of their store. This
+      closed the run's expiry question — `validUntil` is a reservation's term, so admin and editor
+      routes are permanent.
+- [x] **Research axis 1 complete** — `research/01-current-surface.md`. No premise drift at the base.
+      Three findings that change the work's weight: the app key is a **server-side secret** (so the
+      server is the ACL's enforcement point); the paid tier is **largely already built** as a zap
+      purchase path; a **vanity dashboard surface already exists**.
+- [x] **Research axes 2 and 3 complete** — `research/02-target-and-gaps.md` (36 KB) and
+      `research/03-consumers-and-acceptance.md` (43 KB), each with a committed evidence generator.
+- [x] **Composer brief written** — `composer-brief.md`. One writer, so the design stays coherent
+      rather than becoming a committee.
+- [ ] **Next:** dispatch the composer to write `proposal.md` + `order-increment-1.md`. That proposal is
+      the owner's redirection point. Then increment 1 on its own branch, then the adversarial pass.
+
+**Carried forward, awaiting the owner:** who *signs* a self-service reservation; self-service vs
+admin-approved; what proves entitlement and whether it fails closed or open; precedence between an
+admin route, an editor grant and a reservation on the same path; lapse and renewal; whether "domain"
+means a route name or real DNS; naming rules. Plus five negative paths the acceptance must assert.
+
+## B — the auctions front end
+
+`runs/2026-11-13-auctions-ui/`
+
+- [x] **Bound frozen** — `order.md` (`6a9f9118b`). The owner's own 8-item list plus the binding rulings
+      (read path 100% Nostr; the chain is the consensus layer only; validators publish signed verdicts
+      to the relay; the front end never contacts a validator; regular 1xxx kinds; the frozen
+      1440-series allocation; retire rather than migrate).
+- [x] **Increment 1, B1 — COMPLETE, verified, pushed.** `d7s2/auctions-read-adapter` @ `7f8e1275d`
+      (fork + nostr, read back from both). Two files, 1,971 insertions:
+      `platform/web/auctions/relay/arenaAuctionRead.ts` + its test. **The orchestrator re-ran the tests
+      itself: 31 pass, 0 fail, 94 expect() calls.** Read-only — no UI, no publish, no validator.
+      One independent subscription per relay, so relays can be **diffed for equivocation** instead of
+      pooled blind; the diff is exposed (`verdictDivergence`, `commitmentForks`, per-event `relays[]`
+      provenance). 1440 "latest wins" is explicit: root = earliest for `(seller, d)`; a later version
+      counts only if its `e` names that root; accepted only if all eleven frozen fields are unchanged;
+      a rejected update surfaces with the field that moved. Also proven against **real local relays**
+      (two live + one dead port): four events, a 45 ms bounded read, correct partial results and
+      health. Its report names what it could not verify: no browser, no hostile relay with real
+      signatures, no quorum (that is stage 3's business).
+- [x] **Increment 1, B2 — COMPLETE, and the premise was wrong in an instructive way.**
+      `d7s2/home-test-dep-fix` @ `8ad4127c5` (fork + nostr). **The cause was not a repo defect:**
+      `@getalby/sdk` is declared (`package.json:50`) and locked, but was simply **never installed in
+      the local tree** — a stale/incomplete install. So that branch carries **documentation and
+      evidence only, with no code change to merge.** The orchestrator then ran the frozen install in
+      the **main checkout**, where the net actually matters, and confirmed `BrowseIndexHost.test.tsx`
+      runs: **42 pass, 0 fail**.
+- [x] **Scope fence added** — the intro and every earlier-work branch are marked parked; a child
+      wandering there is a scope violation.
+- [x] **Item 2, the auction block — COMPLETE, verified, pushed.** `d7s2/auction-block` @ `9b37ef09d`
+      (fork + nostr, read back from both). 14 files, 1,418 insertions: the block, its platform-side read
+      (`auctionListRead.ts`), an `AuctionPickerField`, the CMS registry entry, and the renderer wiring.
+      **The orchestrator re-ran the tests itself: 32 pass / 0 fail, and the storefront suites it touches
+      107 pass / 0 fail isolated.** The typecheck held at exactly **205** — no new errors. Its degraded
+      states are honest: `loading` never claims a count, `incomplete` says a relay did not answer,
+      `no-relays` and `error` are named, an auction with no duration reports its end as **unknown**, and
+      an unverified on-chain state says so rather than inferring one.
+- [~] **Item 3, the read half, in flight** — the auction card, detail view and verdict panel on the 1440
+      series, ported from the 30408 presentation but reading through the verified adapter. The verdict
+      panel must show per-validator verdicts with divergence flagged and **must not infer a winner**
+      (quorum is not implemented). The bid flow is deliberately held back to the next slice, because it
+      renders inside the detail view this slice builds — a real dependency, not caution.
+- [x] **The chain so far, all on top of the union:** `auctions-1440-kinds` = union+23,
+      `auctions-read-adapter` = union+24, `auction-block` = union+25. Nothing merges until the parts are
+      tested (owner's option 1).
+- [ ] **Next:** verify and push item 3's read half, then stage 3's write half (the bid flow), then stage
+      4 (wiring into the app experience).
+
+## A process lesson, recorded because it cost us twice
+
+**Children must WRITE their report to a file in the run directory, not only report back.** Two slices
+finished without a written report and their completion messages did not arrive, so their reservations
+and self-declared gaps were lost — the parent could verify the code but not the child's own account of
+what it could *not* verify. Every subsequent brief now names an exact report path under the run
+directory, and says why.
+
+## Premise corrections the children found, and the orchestrator verified
+
+- **The typecheck baseline is 205 on a clean tree, not 522.** The 522 in both orders was an artifact of
+  the **dirty main checkout**, which typechecks untracked scratch files and stale packages. B1 measured
+  205, B2 independently reported the same drop, and the orchestrator confirmed 205 with **0 errors in
+  the new files**. Corrected in both orders. Two related traps are recorded there: a fresh worktree with
+  no `node_modules` makes `bunx` fetch typescript@latest and report **15215** errors; symlinking the
+  main checkout's `node_modules` reports **334** because `@cashu/cashu-ts`'s `.d.ts` relative imports
+  break through the symlink. Always `bun install --frozen-lockfile` in a fresh worktree first.
+- **The browse suite needs `--isolate`.** Measured by the orchestrator: `bun test --isolate
+  platform/web/browse/` → **168 pass, 0 fail**; without it → **153 pass, 15 fail**, all in
+  `BrowseIndexHost` and `useBrowseIndexFeed`. Pre-existing cross-file state bleed, not a regression from
+  this run — and neither number may be quoted alone.
+- **`AGENTS.md` does not state the "read seam" or a `ui`/`platform` split by those names.** B1 said so
+  rather than inventing a rule, and cited the rules that do exist (`sdk/AGENTS.md:38-53`, the
+  stream-first read doctrine; `ui/AGENTS.md:18-28`, the enforced hard boundary via
+  `ui/boundary.test.ts`) to justify the placement it chose.
+
+## The integration target — corrected
+
+**`unite/1420-all`, never `master`.** The repo's own notes name it the integration branch
+(`notes/MERGE-NDK-STRUCTURAL.md:4`, `notes/HANDOVER-CMS-INTEGRATION.md:6-7`), every `d7s2/*` feature
+branch is cut off it, and `notes/POST-D7-BACKLOG.md:51` records "PR #1420 has never seen D7" — PR #1420
+is the union PR. The `wt-union-1420` worktree already holds `unite/1420-all` clean, and the tip is
+`d4aba3db6` on fork, nostr and origin alike.
+
+Measured ancestry, which is the reassuring part: **every line of this work sits on top of that tip** —
+`d7s2/auctions-1440-kinds` = union + 23, `d7s2/auctions-read-adapter` = union + 24,
+`d7s2/home-test-dep-fix` = union + 31, `master` = union + 33 (all run/docs commits). Union-ahead-of-any-
+of-them = 0. **So nothing needs rebasing; only the merge target was ever wrong.** Merging into `master`
+would never have reached the PR, because `master` is itself just a line sitting on top of the union.
+
+`gh` is unauthenticated in this checkout, so the PR's own head and base could not be queried; the
+identification rests on the repo's notes, the branch name and the measured ancestry.
+
+## The merge plan — decided
+
+**Option 1: merge the whole chain into `unite/1420-all` once the parts are ready and tested** (owner,
+2026-11-13). Not piecemeal, and never into `master`. So the PR receives one coherent auctions increment
+rather than three partial ones. Sequenced: stage 1 (kind map) → stage 2 (read adapter, verified) →
+item 2 (the auction block) → item 3 (the auction surfaces on `1440`) → then the chain merges to the
+union and the PR picks it up. Nothing merges until the parts are tested; nothing deploys.
+
+## Boundary between the two
+
+- Item 4 of B's list — the home's addressing gap — **belongs to A**, and is in flight there.
+  A child in either stream that starts solving it is duplicating the other.
+- Neither stream deploys. No live unit is restarted by either.
+
+## How to check either stream without interrupting it
+
+```sh
+tail -f /home/admin_maxime/.hermes/profiles/maxime/cache/delegation/live/<delegation-id>/task-N.log
+```
+
+The streams' artifacts live under `runs/2026-11-13-admin-routes/` and `runs/2026-11-13-auctions-ui/`;
+their evidence files are regenerated by committed scripts, never hand-edited.
+
+## Latest — 2026-11-13, evening
+
+**The upstream auction protocol was rebased and consolidated, and stream B's integration did NOT
+align.** Verified before dispatching any implementation, so nothing was built on stale shapes:
+`runs/2026-11-13-auctions-ui/FINDING-protocol-drift.md`. The two breaks are the immutable field list
+(zero field names in common with the protocol — so `sellerWallet`, `mode` and the V4V split are
+accepted by our gate when the protocol refuses them) and the bid's missing funding payload (a 2-of-2
+NUT-11 lock plus pre-signed `outcome_templates` are now REQUIRED, so our bids would be refused).
+
+**Stream B chain, all verified and pushed, all on top of `unite/1420-all`:**
+`auctions-1440-kinds` (+23) → `auctions-read-adapter` (+24) → `auction-block` (+25) →
+`auction-surfaces` (+26) → `auction-bid` (+27).
+
+**Three slices in flight (parallel, no contention):**
+
+- **A — increment 1**: the file-backed routing table + the local page store, resolved server-side and
+  served with no relay round-trip (`d7s2/routing-page-store`, off the union tip).
+- **B — read realignment**: the field sets, the `(seller, d)` supersession rule with the root `e` tag,
+  the verdict reader's anchor/roster/schema (`d7s2/arena-realign-read`, off the chain tip).
+- **B — bid funding**: the five-tag 2-of-2 lock, the pre-signed settle/refund templates, the 32-byte
+  nonce and the locktime floor — **instructed to assess feasibility first and stop and report rather
+  than fake a signature**, because the app may not hold a wallet spend key able to pre-sign a digest
+  (`d7s2/arena-bid-funding`).
+
+**Not yet verified, delegated rather than assumed:** the verdict schema string, the roster `p` tag, the
+append-only latest-per-validator rule, and whether the app can pre-sign a template digest at all.
+
+**Also:** master still proxies to `/api/demo/reservation` (`auctionsProtocol.ts:34,94`, wired at
+`buildServer.ts:12`) and the old client posts to it (`client.ts:241`) — dead against the consolidated
+protocol, and part of the retired implementation, so it goes with stage 5 rather than being patched.
+
+## Latest — 2026-11-14, evening
+
+**All three slices that were in flight are landed, verified and pushed.** The child
+that built them died mid-run (its own transcripts stop at 22:30 on 2026-11-13) and
+never wrote a report; the work survived uncommitted in three worktrees. The parent
+session finished them and **re-measured every number itself** — the reports
+(`report-increment-1.md`, `report-realign-read.md`, `report-bid-funding.md`) say
+which numbers are the parent's and none are inherited.
+
+| slice | branch @ commit | pushed | evidence |
+|---|---|---|---|
+| **A — increment 1**: the routing table + page store, served with no relay on the read path | `d7s2/routing-page-store` @ `690a35d23` | fork + nostr | 66 pass / 0 fail; typecheck 205 (baseline); **boots with a dead relay, ingests, serves the page body and meta with no JS, 404s an unmatched path, byte-identical twice** |
+| **B — read realignment**: the frozen field set, the supersession rule, the verdict fold | `d7s2/arena-realign-read` @ `7621a35e4` | fork + nostr | 480 pass / 1 skip / 0 fail; typecheck 205 |
+| **B — bid funding**: the five-tag 2-of-2 lock, the two pre-signed templates, the nonce and the locktime floor | `d7s2/arena-bid-funding` @ `b01ce21d6` | fork + nostr | 520 pass / 1 skip / 0 fail (auctions + wallet); typecheck 205 |
+
+**Fixed while finishing them, each measured rather than asserted:** 26 red tests from
+one off-by-one in the escrow-lock parser; 10 new type errors (5 from a `never`-typed
+helper that TypeScript would not narrow after, 1 from the read slice's own test
+annotation, and the rest downstream of the funding requirement); 13 pre-existing
+publish tests that had to be given a real escrow once funding became mandatory.
+
+**The feasibility question is answered: the app CAN pre-sign a template digest.**
+`walletOps.getAuctionBidWalletSigner()` exposes the wallet spend key as a surface
+that signs a 32-byte digest and nothing else; `schnorrSignDigest` from cashu-ts does
+the signing. The private key is never handed to the funding module, and it answers
+`null` until the key migration has produced the pair.
+
+**Two corrections to the plan, both measured.** (1) E3's boot command curls `/x`,
+which the shared name grammar refuses (3–30 characters) — the end-to-end run uses
+`shop`; the implementation is right and the plan's example is wrong. (2)
+`format:check` fails on the base as well (35 files, all pre-existing, none of ours).
+
+**Where the next work starts — one gap, named in two places:**
+
+- **`ArenaAuctionDetailModel` still speaks the retired vocabulary** (`fundingMode`,
+  `locktimeSeconds`, `lateBid*`, `reserve`) and does not carry the protocol's
+  `sellerWallet`, `v4vSplit`, `mode`, `windowSec`/`durationSec`. The events are read
+  and gated correctly; the **view model** is not realigned. Realigning it is the
+  next increment on B's read path.
+- **A funded bid cannot yet be placed in the app.** `AuctionBidHost.tsx` passes
+  `funding: null`, so the publish path refuses by name (`bid.unfunded`) and the
+  panel says so — deliberately, rather than publishing an unfunded 1441. Closing it
+  needs the **mint-side escrow send** (the app's existing lock is the retired 30408
+  path) plus the committee key from `GET /api/config` and the terms above.
+
+**Not verified, and stated as such:** E10b (hydration parity, a browser criterion)
+and the live protocol test (skipped without `AUCTIONS_LIVE=1`). Nothing is deployed;
+no live unit was restarted.
+

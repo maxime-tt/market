@@ -1,0 +1,2044 @@
+=== 01-current-surface evidence ===
+generated: 2026-11-13T10:28:04Z
+generator: runs/2026-11-13-admin-routes/research/evidence/01-current-surface.sh
+
+
+### SECTION 0 — base identity
+
+$ git rev-parse HEAD
+aaab6ef515f84467ae238dafe07dd267c3097e43
+
+$ git rev-parse --abbrev-ref HEAD
+master
+
+$ git status --porcelain | wc -l
+699
+
+$ git log -1 --format='%H %ci %s'
+aaab6ef515f84467ae238dafe07dd267c3097e43 2026-11-13 10:23:53 +0000 run(admin-routes): freeze the work order for the custom-route unblocker
+
+
+### SECTION 0b — drift: HEAD vs the pinned base
+
+$ git merge-base --is-ancestor 2326938b3 HEAD && echo 'PINNED BASE IS AN ANCESTOR OF HEAD' || echo 'BASE IS NOT AN ANCESTOR'
+PINNED BASE IS AN ANCESTOR OF HEAD
+
+$ git log --oneline 2326938b3..HEAD
+aaab6ef51 run(admin-routes): freeze the work order for the custom-route unblocker
+
+$ git diff --name-only 2326938b3 HEAD
+runs/2026-11-13-admin-routes/order.md
+
+$ git diff --stat 2326938b3 HEAD | tail -2
+ runs/2026-11-13-admin-routes/order.md | 140 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 140 insertions(+)
+
+
+### SECTION 1 — inventory: every tracked file whose name says vanity
+
+$ git ls-files | grep -i vanity
+docs/vanity-urls.md
+platform/server/VanityManager.ts
+platform/web/app/useVanitySync.ts
+platform/web/config/vanityBinding.ts
+platform/web/config/vanityStore.ts
+platform/web/routes/$vanityName.tsx
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx
+sdk/config/vanity.ts
+sdk/core/curation/vanityRead.ts
+sdk/core/curation/vanityReadWorkflows.test.ts
+
+$ git grep -c -i vanity -- . | sort -t: -k2 -rn | head -20
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:64
+sdk/config/vanity.ts:56
+platform/web/config/vanityBinding.ts:45
+platform/server/VanityManager.ts:45
+sdk/core/curation/vanityRead.ts:42
+sdk/core/curation/curationRead.test.ts:39
+docs/vanity-urls.md:37
+platform/web/routeTree.gen.ts:34
+docs/zap-purchase-manager.md:30
+docs/adr/ADR-0006-cms-and-nostr-native-page-building.md:26
+docs/adr/ADR-019-unified-storefront-identity-and-page-builder.md:20
+platform/web/config/vanityStore.ts:18
+platform/web/routes/$vanityName.tsx:15
+platform/server/EventHandler.ts:14
+sdk/core/curation/vanityReadWorkflows.test.ts:13
+runs/union-1420/gate-logs/d1-seam-read-context-1445.log:13
+runs/union-1420/gate-logs/d1-seam-read-context-1440.log:13
+sdk/core/curation/index.ts:11
+platform/web/app/useVanitySync.ts:10
+platform/web/storefront/StorefrontBuilder.tsx:8
+
+$ git grep -n -i vanity -- . | wc -l
+602
+
+
+### SECTION 2 — the registry definition (kind, d tag, tag shape)
+
+$ nl -ba sdk/core/curation/vanityRead.ts | sed -n "1,45 p"
+     1	import { readThroughStore, type EventReadContext } from '../event-store/read'
+     2	import type { NostrEventLike } from '../nostr/eventLike'
+     3	import type { CurationFilter, CurationListEvent } from './curationRead'
+     4	
+     5	export const VANITY_REGISTRY = { kind: 30000, dTag: 'vanity-urls' } as const
+     6	
+     7	export interface VanityEntry {
+     8		vanityName: string
+     9		pubkey: string
+    10		validUntil: number
+    11	}
+    12	
+    13	export interface VanitySettings<E = CurationListEvent> {
+    14		entries: VanityEntry[]
+    15		lastUpdated: number
+    16		event: E | null
+    17	}
+    18	
+    19	const nowInSeconds = () => Math.floor(Date.now() / 1000)
+    20	
+    21	export function buildVanityRegistryFilter(appPubkey: string, limit?: number): CurationFilter {
+    22		return {
+    23			kinds: [VANITY_REGISTRY.kind],
+    24			authors: [appPubkey],
+    25			'#d': [VANITY_REGISTRY.dTag],
+    26			...(limit !== undefined && { limit }),
+    27		}
+    28	}
+    29	
+    30	/** `["vanity", name, pubkey, validUntil]` tags; names are lowercased. */
+    31	export function readVanityEntries(tags: string[][]): VanityEntry[] {
+    32		return tags
+    33			.filter((tag) => tag[0] === 'vanity' && tag[1] && tag[2] && tag[3])
+    34			.map((tag) => ({ vanityName: tag[1].toLowerCase(), pubkey: tag[2], validUntil: parseInt(tag[3]) || 0 }))
+    35	}
+    36	
+    37	/** Parses the newest registry event; no events yields an empty registry. */
+    38	export function parseVanitySettings<E extends CurationListEvent>(events: readonly E[]): VanitySettings<E> {
+    39		if (events.length === 0) return { entries: [], lastUpdated: 0, event: null }
+    40		const latestEvent = [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+    41		return { entries: readVanityEntries(latestEvent.tags), lastUpdated: latestEvent.created_at ?? 0, event: latestEvent }
+    42	}
+    43	
+    44	export function isVanityAvailable(
+    45		vanitySettings: VanitySettings<unknown> | null | undefined,
+
+$ nl -ba sdk/core/curation/vanityRead.ts | sed -n "44,102 p"
+    44	export function isVanityAvailable(
+    45		vanitySettings: VanitySettings<unknown> | null | undefined,
+    46		vanityName: string,
+    47		now = nowInSeconds(),
+    48	): boolean {
+    49		if (!vanityName) return false
+    50		if (!vanitySettings || !vanitySettings.entries) return true
+    51		const existing = vanitySettings.entries.find((e) => e.vanityName === vanityName.toLowerCase())
+    52		if (!existing) return true
+    53		return existing.validUntil < now
+    54	}
+    55	
+    56	export function resolveVanity(
+    57		vanitySettings: VanitySettings<unknown> | null | undefined,
+    58		vanityName: string,
+    59		now = nowInSeconds(),
+    60	): VanityEntry | null {
+    61		if (!vanitySettings || !vanitySettings.entries || !vanityName) return null
+    62		const entry = vanitySettings.entries.find((e) => e.vanityName === vanityName.toLowerCase())
+    63		if (!entry || entry.validUntil < now) return null
+    64		return entry
+    65	}
+    66	
+    67	export function getVanityForPubkey(
+    68		vanitySettings: VanitySettings<unknown> | null | undefined,
+    69		pubkey: string,
+    70		now = nowInSeconds(),
+    71	): VanityEntry | null {
+    72		if (!vanitySettings || !vanitySettings.entries || !pubkey) return null
+    73		return vanitySettings.entries.find((e) => e.pubkey === pubkey && e.validUntil > now) || null
+    74	}
+    75	
+    76	export function getExpiredVanityForPubkey(
+    77		vanitySettings: VanitySettings<unknown> | null | undefined,
+    78		pubkey: string,
+    79		now = nowInSeconds(),
+    80	): VanityEntry[] {
+    81		if (!vanitySettings || !vanitySettings.entries || !pubkey) return []
+    82		return vanitySettings.entries.filter((e) => e.pubkey === pubkey && e.validUntil <= now)
+    83	}
+    84	
+    85	/**
+    86	 * Discovery read: the app's vanity registry (kind 30000, `d=vanity-urls`), merged through the
+    87	 * host's `EventReadContext` so superseded and author-deleted versions never surface. Throws when
+    88	 * no app pubkey is supplied; no published registry yields an empty settings record.
+    89	 */
+    90	export async function readVanitySettingsWorkflow<E extends NostrEventLike>(
+    91		context: EventReadContext<E>,
+    92		appPubkey?: string,
+    93	): Promise<VanitySettings<E> | null> {
+    94		if (!appPubkey) throw new Error('App pubkey is required')
+    95	
+    96		const events = await readThroughStore(context, [buildVanityRegistryFilter(appPubkey, 1)])
+    97		const eventArray = Array.from(events)
+    98	
+    99		if (eventArray.length === 0) console.log(`No vanity registry found for app pubkey: ${appPubkey}`)
+   100	
+   101		return parseVanitySettings(eventArray)
+   102	}
+
+$ nl -ba platform/server/VanityManager.ts | sed -n "57,75 p"
+    57	export interface VanityEntry extends ZapPurchaseEntry {
+    58		vanityName: string
+    59	}
+    60	
+    61	export class VanityManagerImpl extends ZapPurchaseManager<VanityEntry> {
+    62		private pubkeyToVanity: Map<string, string> = new Map() // Reverse lookup
+    63	
+    64		constructor(eventSigner: EventSigner) {
+    65			super(
+    66				{
+    67					zapLabel: 'vanity-register',
+    68					registryEventKind: 30000,
+    69					registryDTag: 'vanity-urls',
+    70					pricing: VANITY_PRICING,
+    71				},
+    72				eventSigner,
+    73			)
+    74		}
+    75	
+
+$ nl -ba platform/server/VanityManager.ts | sed -n "97,117 p"
+    97		protected extractEntriesFromEvent(event: NostrEvent): Array<{ key: string; entry: VanityEntry }> {
+    98			return event.tags
+    99				.filter((tag) => tag[0] === 'vanity' && tag[1] && tag[2] && tag[3])
+   100				.map((tag) => ({
+   101					key: tag[1].toLowerCase(),
+   102					entry: {
+   103						vanityName: tag[1].toLowerCase(),
+   104						pubkey: tag[2],
+   105						validUntil: parseInt(tag[3]) || 0,
+   106					},
+   107				}))
+   108		}
+   109	
+   110		protected buildRegistryTags(entries: Map<string, VanityEntry>): string[][] {
+   111			return Array.from(entries.values()).map((entry) => ['vanity', entry.vanityName, entry.pubkey, entry.validUntil.toString()])
+   112		}
+   113	
+   114		protected createEntry(key: string, pubkey: string, validUntil: number): VanityEntry {
+   115			return { vanityName: key, pubkey, validUntil }
+   116		}
+   117	
+
+$ nl -ba platform/server/ZapPurchaseManager.ts | sed -n "392,419 p"
+   392		//Publish the current registry as a signed Nostr event to connected relays.
+   393		protected async publishRegistry(): Promise<void> {
+   394			if (!this.ndk) {
+   395				console.error(`[${this.config.registryDTag}] NDK not available, cannot publish registry`)
+   396				return
+   397			}
+   398	
+   399			const event = new NDKEvent(this.ndk)
+   400			event.kind = this.config.registryEventKind
+   401			event.content = ''
+   402			event.created_at = Math.floor(Date.now() / 1000)
+   403	
+   404			const tags: string[][] = [['d', this.config.registryDTag]]
+   405			tags.push(...this.buildRegistryTags(this.registry))
+   406			event.tags = tags
+   407	
+   408			try {
+   409				const signedEvent = this.eventSigner.signEvent(event.rawEvent())
+   410				if (signedEvent) {
+   411					const ndkEvent = new NDKEvent(this.ndk, signedEvent)
+   412					await ndkEvent.publish()
+   413					console.log(`[${this.config.registryDTag}] Registry published: ${signedEvent.id}`)
+   414				}
+   415			} catch (error) {
+   416				console.error(`[${this.config.registryDTag}] Failed to publish registry:`, error)
+   417			}
+   418		}
+   419	}
+
+
+### SECTION 3 — the author: who signs the registry event
+
+$ nl -ba platform/server/EventSigner.ts | sed -n "1,31 p"
+     1	import type { NostrEvent } from '@nostr-dev-kit/ndk'
+     2	import { getPublicKey } from 'nostr-tools'
+     3	import { finalizeEvent, type UnsignedEvent } from 'nostr-tools/pure'
+     4	
+     5	export class EventSigner {
+     6		private appPrivateKey: string
+     7		private privateBytes: Uint8Array
+     8		private appPubkey: string
+     9	
+    10		constructor(appPrivateKey: string) {
+    11			this.appPrivateKey = appPrivateKey
+    12			this.privateBytes = new Uint8Array(Buffer.from(appPrivateKey, 'hex'))
+    13			this.appPubkey = getPublicKey(this.privateBytes)
+    14		}
+    15	
+    16		public signEvent(event: NostrEvent): NostrEvent {
+    17			const unsignedEvent: UnsignedEvent = {
+    18				kind: event.kind as number,
+    19				created_at: event.created_at,
+    20				tags: event.tags,
+    21				content: event.content,
+    22				pubkey: this.appPubkey,
+    23			}
+    24	
+    25			return finalizeEvent(unsignedEvent, this.privateBytes)
+    26		}
+    27	
+    28		public getAppPubkey(): string {
+    29			return this.appPubkey
+    30		}
+    31	}
+
+$ nl -ba platform/server/EventHandler.ts | sed -n "55,82 p"
+    55			return EventHandler.instance
+    56		}
+    57	
+    58		public async initialize(config: EventHandlerConfig): Promise<void> {
+    59			if (this.isInitialized) {
+    60				throw new Error('EventHandler is already initialized')
+    61			}
+    62	
+    63			// Initialize core components
+    64			this.adminManager = new AdminManagerImpl(config.adminPubkeys)
+    65			this.editorManager = new EditorManagerImpl()
+    66			this.bootstrapManager = new BootstrapManagerImpl(
+    67				this.adminManager,
+    68				config.adminPubkeys.length,
+    69				config.hasExistingSetup,
+    70				config.allowPublicBootstrap,
+    71			)
+    72			this.eventSigner = new EventSigner(config.appPrivateKey)
+    73			this.eventValidator = new EventValidator(config.appPrivateKey, this.adminManager, this.editorManager, this.bootstrapManager)
+    74			this.ndkService = new NDKService(this.eventSigner.getAppPubkey(), this.adminManager, this.editorManager, this.bootstrapManager)
+    75			this.blacklistManager = new BlacklistManagerImpl(this.eventSigner, this.ndkService)
+    76			this.vanityManager = new VanityManagerImpl(this.eventSigner)
+    77			this.nip05Manager = new Nip05ManagerImpl(this.eventSigner)
+    78	
+    79			// Register all zap purchase managers
+    80			this.purchaseManagers = [this.vanityManager, this.nip05Manager]
+    81	
+    82			// Initialize NDK service and load existing data with timeout
+
+$ nl -ba platform/server/EventHandler.ts | sed -n "100,130 p"
+   100	
+   101			try {
+   102				this.ndkService.startSubscriptions()
+   103			} catch (e) {
+   104				console.warn('⚠️ Starting NDK service subscriptions failed, continuing anyway:', e)
+   105			}
+   106	
+   107			// Set up NDK for blacklist and vanity managers
+   108			if (config.relayUrl) {
+   109				this.ndk = new NDK({ explicitRelayUrls: [config.relayUrl] })
+   110				try {
+   111					await Promise.race([
+   112						this.ndk.connect(),
+   113						new Promise((_, reject) => setTimeout(() => reject(new Error('App relay NDK connect timeout')), 10000)),
+   114					])
+   115	
+   116					// Initialize blacklist
+   117					this.blacklistManager.setNDK(this.ndk)
+   118					await this.blacklistManager.loadExistingBlacklist(this.eventSigner.getAppPubkey())
+   119	
+   120					// Initialize vanity
+   121					this.vanityManager.setNDK(this.ndk)
+   122					await this.vanityManager.loadExistingVanityRegistry(this.eventSigner.getAppPubkey())
+   123	
+   124					// Initialize NIP-05
+   125					this.nip05Manager.setNDK(this.ndk)
+   126					await this.nip05Manager.loadExistingNip05Registry(this.eventSigner.getAppPubkey())
+   127	
+   128					// Subscribe to zap receipts for all purchase managers (app relay)
+   129					this.subscribeToZapPurchases(this.ndk, 'App relay')
+   130				} catch (e) {
+
+$ nl -ba platform/server/EventHandler.ts | sed -n "231,262 p"
+   231			// Handle special event types that update internal state
+   232			// Note: handleSpecialEvents is async for blacklist processing, but we don't await to maintain sync API
+   233			this.handleSpecialEvents(event).catch((error) => {
+   234				console.error('Error handling special event:', error)
+   235			})
+   236	
+   237			// Sign the event
+   238			const signedEvent = this.eventSigner.signEvent(event)
+   239	
+   240			return {
+   241				originalEvent: event,
+   242				signedEvent,
+   243				validationResult,
+   244			}
+   245		}
+   246	
+   247		private async handleSpecialEvents(event: NostrEvent): Promise<void> {
+   248			const isSetupEvent = event.kind === 31990 && event.content.includes('"name":')
+   249			const isAdminListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'admins')
+   250			const isEditorListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'editors')
+   251			const isBlacklistEvent = event.kind === 10000
+   252	
+   253			if (isSetupEvent) {
+   254				this.bootstrapManager.handleSetupEvent(event)
+   255			} else if (isAdminListEvent) {
+   256				console.log('Admin list event accepted, updating internal admin list')
+   257				this.adminManager.updateFromEvent(event)
+   258			} else if (isEditorListEvent) {
+   259				console.log('Editor list event accepted, updating internal editor list')
+   260				this.editorManager.updateFromEvent(event)
+   261			} else if (isBlacklistEvent) {
+   262				console.log('Blacklist event accepted, processing blacklist update')
+
+
+### SECTION 4 — expiry semantics
+
+$ nl -ba sdk/config/vanity.ts | sed -n "91,120 p"
+    91	export const vanityActions = {
+    92		/**
+    93		 * Update the vanity store with new data
+    94		 */
+    95		setVanity: (entries: VanityEntry[], lastUpdated?: number) => {
+    96			const now = Math.floor(Date.now() / 1000)
+    97			const entriesMap = new Map<string, VanityEntry>()
+    98			const pubkeyToVanity = new Map<string, string>()
+    99	
+   100			for (const entry of entries) {
+   101				// Skip expired entries
+   102				if (entry.validUntil < now) {
+   103					continue
+   104				}
+   105	
+   106				const normalizedName = entry.vanityName.toLowerCase()
+   107				entriesMap.set(normalizedName, entry)
+   108				pubkeyToVanity.set(entry.pubkey, normalizedName)
+   109			}
+   110	
+   111			vanityState.set((state) => ({
+   112				...state,
+   113				entries: entriesMap,
+   114				pubkeyToVanity,
+   115				lastUpdated: lastUpdated || Date.now(),
+   116				isLoaded: true,
+   117			}))
+   118		},
+   119	
+   120		/**
+
+$ nl -ba sdk/config/vanity.ts | sed -n "130,205 p"
+   130		/**
+   131		 * Resolve a vanity name to a pubkey
+   132		 */
+   133		resolveVanity: (vanityName: string): VanityEntry | null => {
+   134			const { entries } = vanityState.get()
+   135			const entry = entries.get(vanityName.toLowerCase())
+   136	
+   137			if (!entry) return null
+   138	
+   139			// Check if expired
+   140			if (entry.validUntil < Math.floor(Date.now() / 1000)) {
+   141				return null
+   142			}
+   143	
+   144			return entry
+   145		},
+   146	
+   147		/**
+   148		 * Check if a vanity name is available
+   149		 */
+   150		isVanityAvailable: (vanityName: string): boolean => {
+   151			const normalized = vanityName.toLowerCase()
+   152	
+   153			// Check reserved names
+   154			if (RESERVED_NAMES.has(normalized)) return false
+   155	
+   156			// Check format validity
+   157			if (!vanityActions.isValidVanityName(normalized)) return false
+   158	
+   159			const { entries } = vanityState.get()
+   160			const entry = entries.get(normalized)
+   161	
+   162			if (!entry) return true
+   163	
+   164			// Available if expired
+   165			return entry.validUntil < Math.floor(Date.now() / 1000)
+   166		},
+   167	
+   168		/**
+   169		 * Validate vanity name format
+   170		 */
+   171		isValidVanityName: (name: string): boolean => {
+   172			// Allow alphanumeric, hyphens, underscores, 3-30 characters
+   173			const regex = /^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/
+   174			return regex.test(name.toLowerCase())
+   175		},
+   176	
+   177		/**
+   178		 * Check if a name is reserved
+   179		 */
+   180		isReservedName: (vanityName: string): boolean => {
+   181			return RESERVED_NAMES.has(vanityName.toLowerCase())
+   182		},
+   183	
+   184		/**
+   185		 * Get vanity URL for a pubkey
+   186		 */
+   187		getVanityForPubkey: (pubkey: string): VanityEntry | null => {
+   188			const { pubkeyToVanity, entries } = vanityState.get()
+   189			const vanityName = pubkeyToVanity.get(pubkey)
+   190	
+   191			if (!vanityName) return null
+   192	
+   193			return vanityActions.resolveVanity(vanityName)
+   194		},
+   195	
+   196		/**
+   197		 * Get all active vanity entries
+   198		 */
+   199		getAllVanityEntries: (): VanityEntry[] => {
+   200			const { entries } = vanityState.get()
+   201			const now = Math.floor(Date.now() / 1000)
+   202	
+   203			return Array.from(entries.values()).filter((entry) => entry.validUntil > now)
+   204		},
+   205	
+
+$ nl -ba platform/server/ZapPurchaseManager.ts | sed -n "90,110 p"
+    90		// Handle a registry event (rebuild in-memory state from a Nostr event).
+    91		// Called when a registry kind(kind 30000)) event is received.
+    92		public async handleRegistryEvent(event: NostrEvent): Promise<void> {
+    93			console.log(`[${this.config.registryDTag}] Processing registry event: ${event.id}`)
+    94	
+    95			const entries = this.extractEntriesFromEvent(event)
+    96	
+    97			this.registry.clear()
+    98			const now = Math.floor(Date.now() / 1000)
+    99	
+   100			for (const { key, entry } of entries) {
+   101				if (entry.validUntil >= now) {
+   102					this.registry.set(key, entry)
+   103				}
+   104			}
+   105	
+   106			this.onRegistryRebuilt?.()
+   107			console.log(`[${this.config.registryDTag}] Registry updated: ${this.registry.size} active entries`)
+   108		}
+   109	
+   110		// Handle a zap receipt (kind 9735) and register the purchase if valid.
+
+$ nl -ba platform/server/ZapPurchaseManager.ts | sed -n "186,207 p"
+   186			// Calculate validity, extending if same owner renews
+   187			const now = Math.floor(Date.now() / 1000)
+   188			let validUntil = now + validitySeconds
+   189	
+   190			const existing = this.registry.get(key)
+   191			if (existing && existing.pubkey === requesterPubkey && existing.validUntil > now) {
+   192				validUntil = existing.validUntil + validitySeconds
+   193			}
+   194	
+   195			console.log(`[${this.config.registryDTag}] Registration valid until: ${new Date(validUntil * 1000).toISOString()}`)
+   196	
+   197			// Create and store the entry
+   198			const entry = this.createEntry(key, requesterPubkey, validUntil)
+   199			this.registry.set(key, entry)
+   200			this.onEntryRegistered?.(key, entry)
+   201	
+   202			await this.publishRegistry()
+   203	
+   204			console.log(
+   205				`[${this.config.registryDTag}] Registered: ${key} -> ${requesterPubkey} (valid until ${new Date(validUntil * 1000).toISOString()})`,
+   206			)
+   207		}
+
+$ nl -ba platform/server/ZapPurchaseManager.ts | sed -n "238,262 p"
+   238		// Get all active (non-expired) entries.
+   239		public getAllEntries(): TEntry[] {
+   240			const now = Math.floor(Date.now() / 1000)
+   241			return Array.from(this.registry.values()).filter((e) => e.validUntil > now)
+   242		}
+   243	
+   244		// Get an entry by registry key, or null if not found or expired.
+   245		public getEntry(key: string): TEntry | null {
+   246			const entry = this.registry.get(key)
+   247			if (!entry) return null
+   248			if (entry.validUntil < Math.floor(Date.now() / 1000)) return null
+   249			return entry
+   250		}
+   251	
+   252		// Find the first active entry for a given pubkey.
+   253		public getEntryForPubkey(pubkey: string): TEntry | null {
+   254			const now = Math.floor(Date.now() / 1000)
+   255			for (const entry of Array.from(this.registry.values())) {
+   256				if (entry.pubkey === pubkey && entry.validUntil > now) {
+   257					return entry
+   258				}
+   259			}
+   260			return null
+   261		}
+   262	
+
+$ nl -ba platform/server/VanityManager.ts | sed -n "46,56 p"
+    46	// Pricing tiers: amount in sats -> validity in days (or seconds for dev)
+    47	export const VANITY_PRICING: Record<string, PricingTier> = {
+    48		...(process.env.NODE_ENV === 'development'
+    49			? {
+    50					dev: { sats: 10, days: 0, seconds: 90, label: '90 Seconds (Dev)' },
+    51				}
+    52			: {}),
+    53		'6mo': { sats: 10000, days: 180, label: '6 Months' },
+    54		'1yr': { sats: 18000, days: 365, label: '1 Year' },
+    55	}
+    56	
+
+$ git grep -n 'VANITY_PRICING' -- platform | grep -v '\.test\.'
+platform/server/VanityManager.ts:47:export const VANITY_PRICING: Record<string, PricingTier> = {
+platform/server/VanityManager.ts:70:				pricing: VANITY_PRICING,
+platform/server/index.ts:8:export { VanityManagerImpl, VANITY_PRICING, type VanityEntry } from './VanityManager'
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:15:import { VANITY_PRICING } from '@platform/server/VanityManager'
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:172:	const handleZap = async (tier: (typeof VANITY_PRICING)[string]) => {
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:351:										{Object.entries(VANITY_PRICING).map(([key, tier]) => (
+
+
+### SECTION 5 — writers: the only code path that publishes kind 30000 d=vanity-urls
+
+$ git grep -n 'vanity-urls' -- . | grep -v '\.test\.' | grep -v '^docs/'
+platform/server/VanityManager.ts:69:				registryDTag: 'vanity-urls',
+platform/server/VanityManager.ts:138:	 * Handle vanity registry event (kind 30000 with d=vanity-urls).
+platform/web/config/vanityBinding.ts:75:// `d=vanity-urls` registry from the relays. The read logic is framework-free
+platform/web/config/vanityBinding.ts:87: * Fetches vanity registry (kind 30000 with d=vanity-urls) for the app
+runs/2026-11-13-admin-routes/order.md:41:  - `sdk/core/curation/vanityRead.ts:5` — `export const VANITY_REGISTRY = { kind: 30000, dTag: 'vanity-urls' }`
+runs/union-1420/gate-logs/d1-seam-read-context-1440.log:2137:(pass) vanity registry > filter targets the vanity-urls list with optional limit [0.06ms]
+runs/union-1420/gate-logs/d1-seam-read-context-1445.log:2137:(pass) vanity registry > filter targets the vanity-urls list with optional limit [0.08ms]
+sdk/core/curation/vanityRead.ts:5:export const VANITY_REGISTRY = { kind: 30000, dTag: 'vanity-urls' } as const
+sdk/core/curation/vanityRead.ts:86: * Discovery read: the app's vanity registry (kind 30000, `d=vanity-urls`), merged through the
+
+$ git grep -n 'registryDTag' -- platform/server
+platform/server/EventHandler.ts:270:				event.tags.some((tag) => tag[0] === 'd' && tag[1] === manager.config.registryDTag)
+platform/server/EventHandler.ts:272:				console.log(`Registry event accepted for [${manager.config.registryDTag}]`)
+platform/server/Nip05Manager.ts:50:				registryDTag: 'nip05-names',
+platform/server/VanityManager.ts:69:				registryDTag: 'vanity-urls',
+platform/server/ZapPurchaseManager.ts:56:	registryDTag: string
+platform/server/ZapPurchaseManager.ts:93:		console.log(`[${this.config.registryDTag}] Processing registry event: ${event.id}`)
+platform/server/ZapPurchaseManager.ts:107:		console.log(`[${this.config.registryDTag}] Registry updated: ${this.registry.size} active entries`)
+platform/server/ZapPurchaseManager.ts:129:			console.log(`[${this.config.registryDTag}] Skipping old zap receipt (${eventAge}s old): ${eventId}`)
+platform/server/ZapPurchaseManager.ts:141:			console.error(`[${this.config.registryDTag}] Failed to parse zap request from receipt`)
+platform/server/ZapPurchaseManager.ts:149:		console.log(`[${this.config.registryDTag}] Processing purchase zap receipt: ${eventId}`)
+platform/server/ZapPurchaseManager.ts:154:			console.error(`[${this.config.registryDTag}] No registry key found in zap request`)
+platform/server/ZapPurchaseManager.ts:163:			console.error(`[${this.config.registryDTag}] Validation failed: ${validationError}`)
+platform/server/ZapPurchaseManager.ts:170:			console.error(`[${this.config.registryDTag}] No bolt11 found in zap receipt`)
+platform/server/ZapPurchaseManager.ts:178:		console.log(`[${this.config.registryDTag}] Zap amount: ${amountSats} sats`)
+platform/server/ZapPurchaseManager.ts:182:			console.error(`[${this.config.registryDTag}] Insufficient amount: ${amountSats} sats`)
+platform/server/ZapPurchaseManager.ts:195:		console.log(`[${this.config.registryDTag}] Registration valid until: ${new Date(validUntil * 1000).toISOString()}`)
+platform/server/ZapPurchaseManager.ts:205:			`[${this.config.registryDTag}] Registered: ${key} -> ${requesterPubkey} (valid until ${new Date(validUntil * 1000).toISOString()})`,
+platform/server/ZapPurchaseManager.ts:212:			console.warn(`[${this.config.registryDTag}] NDK not available, cannot load existing registry`)
+platform/server/ZapPurchaseManager.ts:222:				'#d': [this.config.registryDTag],
+platform/server/ZapPurchaseManager.ts:229:				console.log(`[${this.config.registryDTag}] Loaded existing registry`)
+platform/server/ZapPurchaseManager.ts:231:				console.log(`[${this.config.registryDTag}] No existing registry found`)
+platform/server/ZapPurchaseManager.ts:234:			console.error(`[${this.config.registryDTag}] Error loading existing registry:`, error)
+platform/server/ZapPurchaseManager.ts:395:			console.error(`[${this.config.registryDTag}] NDK not available, cannot publish registry`)
+platform/server/ZapPurchaseManager.ts:404:		const tags: string[][] = [['d', this.config.registryDTag]]
+platform/server/ZapPurchaseManager.ts:413:				console.log(`[${this.config.registryDTag}] Registry published: ${signedEvent.id}`)
+platform/server/ZapPurchaseManager.ts:416:			console.error(`[${this.config.registryDTag}] Failed to publish registry:`, error)
+
+$ nl -ba platform/server/http/zapPurchase.ts | sed -n "13,60 p"
+    13	export const zapPurchaseRoutes: BunRoutes = {
+    14		'/api/zapPurchase': {
+    15			POST: async (req) => {
+    16				console.log('📨 /api/zapPurchase request received')
+    17	
+    18				let body: ZapPurchaseInvoiceRequestBody
+    19				try {
+    20					body = (await req.json()) as ZapPurchaseInvoiceRequestBody
+    21				} catch {
+    22					return jsonError('Invalid JSON body', 400)
+    23				}
+    24	
+    25				const { amountSats, registryKey, zapRequest } = body
+    26				const zapLabel = zapRequest?.tags?.find((t) => t[0] === 'L')?.[1]
+    27				if (!zapLabel) {
+    28					return jsonError('zapRequest missing L tag', 400)
+    29				}
+    30	
+    31				const manager = getEventHandler().getPurchaseManager(zapLabel)
+    32				if (!manager) {
+    33					return jsonError(`Unknown purchase type: ${zapLabel}`, 400)
+    34				}
+    35	
+    36				try {
+    37					const appPubkey = getAppPublicKeyOrThrow()
+    38					const lightningIdentifier = await getAppLightningIdentifier()
+    39	
+    40					console.log(`⚡ Creating ${zapLabel} invoice:`, { registryKey, amountSats })
+    41	
+    42					const result = await manager.generateInvoice(
+    43						{ amountSats, registryKey, zapRequest },
+    44						appPubkey,
+    45						lightningIdentifier,
+    46						toLnurlpEndpoint,
+    47					)
+    48	
+    49					console.log(`✅ ${zapLabel} invoice created`)
+    50					return Response.json(result)
+    51				} catch (error) {
+    52					console.error(`${zapLabel} invoice error:`, error)
+    53					if (error instanceof ZapInvoiceError) {
+    54						return jsonError(error.message, error.status)
+    55					}
+    56					return jsonError(error instanceof Error ? error.message : 'Failed to create invoice', 500)
+    57				}
+    58			},
+    59		},
+    60	}
+
+$ nl -ba platform/web/payments/zapPurchase.ts | sed -n "21,81 p"
+    21	export async function zapPurchase(opts: ZapPurchaseInvoiceOptions): Promise<ZapPurchaseInvoiceResult> {
+    22		const { ndk, appPubkey, appRelay, zapLabel, registryTag, registryKey, amountSats } = opts
+    23	
+    24		// Build and sign a kind-9734 zap request
+    25		const zapRequest = new NDKEvent(ndk)
+    26		zapRequest.kind = 9734
+    27		zapRequest.content = ''
+    28		zapRequest.tags = [
+    29			['p', appPubkey],
+    30			['amount', (amountSats * 1000).toString()],
+    31			['L', zapLabel],
+    32			[registryTag, registryKey],
+    33			['relays', ...Array.from(new Set([appRelay, ...ZAP_RELAYS].filter(Boolean)))],
+    34		]
+    35	
+    36		await zapRequest.sign()
+    37	
+    38		const invoiceId = `${zapLabel}-${registryKey}-${amountSats}-${Date.now()}`
+    39	
+    40		const res = await fetch('/api/zapPurchase', {
+    41			method: 'POST',
+    42			headers: { 'Content-Type': 'application/json' },
+    43			body: JSON.stringify({
+    44				amountSats,
+    45				registryKey,
+    46				zapRequest: zapRequest.rawEvent(),
+    47			}),
+    48		})
+    49	
+    50		if (!res.ok) {
+    51			const text = await res.text().catch(() => '')
+    52			throw new Error(text || `Failed to create invoice (${res.status})`)
+    53		}
+    54	
+    55		const data = (await res.json()) as { pr?: string; error?: string }
+    56		if (!data.pr) {
+    57			throw new Error(data.error || 'Failed to create invoice')
+    58		}
+    59	
+    60		return { pr: data.pr, invoiceId }
+    61	}
+    62	
+    63	// Shared context every purchase helper needs.
+    64	export interface PurchaseContext {
+    65		ndk: NDK
+    66		appPubkey: string
+    67		appRelay: string
+    68	}
+    69	
+    70	export async function purchaseVanityForPubkey(
+    71		ctx: PurchaseContext,
+    72		options: { name: string; amountSats: number },
+    73	): Promise<ZapPurchaseInvoiceResult> {
+    74		return zapPurchase({
+    75			...ctx,
+    76			zapLabel: 'vanity-register',
+    77			registryTag: 'vanity',
+    78			registryKey: options.name.toLowerCase(),
+    79			amountSats: options.amountSats,
+    80		})
+    81	}
+
+$ git grep -n 'vanity' -- sdk/core/curation/curationPublish.ts || echo 'NONE: no SDK publisher for the vanity registry'
+NONE: no SDK publisher for the vanity registry
+
+$ git grep -n 'vanity' -- sdk/core/curation/index.ts
+sdk/core/curation/index.ts:70:} from './vanityRead'
+sdk/core/curation/index.ts:71:export type { VanityEntry, VanitySettings } from './vanityRead'
+
+
+### SECTION 6 — readers: SDK read, React binding, store adapter, route, sync hook
+
+$ nl -ba platform/web/config/vanityBinding.ts | sed -n "72,129 p"
+    72	// --- the vanity relay read (store drain D1, slice 2) ---------------------------------------------
+    73	//
+    74	// Separate concern from the state bridge above: `useVanitySettings` reads the app's kind-30000
+    75	// `d=vanity-urls` registry from the relays. The read logic is framework-free
+    76	// (`readVanitySettingsWorkflow`, `sdk/commerce/curation`); this binding owns the react-query hook,
+    77	// the live invalidation subscription, and resolves the port from
+    78	// `platform/web/readContext.ts`, so no part of the read imports `@/lib/stores/ndk`. The query
+    79	// key is literal-identical to the pre-drain value.
+    80	
+    81	export { getExpiredVanityForPubkey, getVanityForPubkey, isVanityAvailable, resolveVanity }
+    82	export type { VanityEntry } from '@sdk/core/curation'
+    83	
+    84	export type VanitySettings = SdkVanitySettings<NostrEventLike>
+    85	
+    86	/**
+    87	 * Fetches vanity registry (kind 30000 with d=vanity-urls) for the app
+    88	 */
+    89	export const fetchVanitySettings = async (appPubkey?: string): Promise<VanitySettings | null> =>
+    90		readVanitySettingsWorkflow(createNdkReadContext(), appPubkey)
+    91	
+    92	/**
+    93	 * Hook to fetch vanity settings for the app
+    94	 */
+    95	export const useVanitySettings = (appPubkey?: string) => {
+    96		const queryClient = useQueryClient()
+    97		const ndk = getAppNdk()
+    98	
+    99		// Set up a live subscription to monitor vanity changes
+   100		useEffect(() => {
+   101			if (!appPubkey || !ndk) return
+   102	
+   103			const vanityFilter = buildVanityRegistryFilter(appPubkey)
+   104	
+   105			const subscription = ndk.subscribe(vanityFilter, {
+   106				closeOnEose: false,
+   107			})
+   108	
+   109			// Event handler for vanity updates
+   110			subscription.on('event', () => {
+   111				queryClient.invalidateQueries({ queryKey: configKeys.vanity(appPubkey) })
+   112			})
+   113	
+   114			// Clean up subscription when unmounting
+   115			return () => {
+   116				subscription.stop()
+   117			}
+   118		}, [appPubkey, ndk, queryClient])
+   119	
+   120		return useQuery({
+   121			queryKey: configKeys.vanity(appPubkey || ''),
+   122			queryFn: () => fetchVanitySettings(appPubkey),
+   123			enabled: !!appPubkey,
+   124			staleTime: 30000,
+   125			refetchOnMount: true,
+   126			refetchOnWindowFocus: true,
+   127			refetchOnReconnect: true,
+   128		})
+   129	}
+
+$ nl -ba platform/web/config/vanityStore.ts | sed -n "1,40 p"
+     1	/**
+     2	 * platform/web/config/vanityStore.ts — the platform home of the temporary vanity `@tanstack/store`
+     3	 * adapter.
+     4	 *
+     5	 * The vanity state and actions live in `@sdk/config/vanity` (rebuilt on `sdk/core/state`). Two call
+     6	 * sites want a store-shaped object (`.state`, `.subscribe`) rather than the SDK primitive's
+     7	 * `get`/`subscribe`, so this file bridges the two with a one-way mirror (`vanityState.subscribe`).
+     8	 * Nothing writes this store directly, so no write-through is needed.
+     9	 *
+    10	 * The READ path (`useStore(vanityStore, selector)` in `platform/web/routes/$vanityName.tsx`) and the
+    11	 * non-reactive `useVanity()` accessor now resolve here. Moved out of `src/lib/stores/vanity.ts` in
+    12	 * Wave E adapter drain W-E3.1; that file is the src/ shim. The adapter is TEMPORARY: it is deleted
+    13	 * when the `useStore` call sites are rewired to the reactive binding
+    14	 * (`platform/web/config/vanityBinding.ts`, `useVanityState`).
+    15	 */
+    16	export * from '@sdk/config/vanity'
+    17	
+    18	import { Store } from '@tanstack/store'
+    19	import { vanityActions, vanityState } from '@sdk/config/vanity'
+    20	import type { VanityState } from '@sdk/config/vanity'
+    21	
+    22	/**
+    23	 * The `@tanstack/store` view of the SDK vanity state: it starts at the current state and the SDK store
+    24	 * pushes every change into it, so `useStore(vanityStore, selector)` and `vanityStore.state` render the
+    25	 * live value. One-way mirror — no consumer writes it.
+    26	 */
+    27	export const vanityStore = new Store<VanityState>(vanityState.get())
+    28	vanityState.subscribe((state) => vanityStore.setState(() => state))
+    29	
+    30	/**
+    31	 * Non-reactive accessor: the current vanity state merged with the actions. Kept for the call sites
+    32	 * that read it imperatively; a component that must re-render on a vanity change uses the reactive
+    33	 * binding in the platform layer instead.
+    34	 */
+    35	export const useVanity = () => {
+    36		return {
+    37			...vanityState.get(),
+    38			...vanityActions,
+    39		}
+    40	}
+
+$ nl -ba platform/web/app/useVanitySync.ts | sed -n "1,25 p"
+     1	import { vanityActions } from '@platform/web/config/vanityStore'
+     2	import { useVanitySettings } from '@platform/web/config/vanityBinding'
+     3	import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+     4	import { useEffect } from 'react'
+     5	
+     6	/**
+     7	 * Hook to sync the vanity store with the latest vanity data
+     8	 * This should be called once at the app level to keep the store in sync
+     9	 */
+    10	export const useVanitySync = () => {
+    11		const { data: config } = useConfigQuery()
+    12		const { data: vanitySettings, isLoading } = useVanitySettings(config?.appPublicKey)
+    13	
+    14		useEffect(() => {
+    15			if (!vanitySettings || isLoading) return
+    16	
+    17			// Update the vanity store with the latest data
+    18			vanityActions.setVanity(vanitySettings.entries || [], vanitySettings.lastUpdated)
+    19		}, [vanitySettings, isLoading])
+    20	
+    21		return {
+    22			isLoading,
+    23			isLoaded: vanityActions.isVanityLoaded(),
+    24		}
+    25	}
+
+$ git grep -n 'useVanitySync' -- platform/web
+platform/web/app/AppMonitors.tsx:5:import { useVanitySync } from '@platform/web/app/useVanitySync'
+platform/web/app/AppMonitors.tsx:23:	useVanitySync()
+platform/web/app/useVanitySync.ts:10:export const useVanitySync = () => {
+
+$ git grep -n 'vanityState\|vanityStore\|useVanityState\|vanityActions' -- platform ui sdk | grep -v '\.test\.'
+platform/web/app/useVanitySync.ts:1:import { vanityActions } from '@platform/web/config/vanityStore'
+platform/web/app/useVanitySync.ts:18:		vanityActions.setVanity(vanitySettings.entries || [], vanitySettings.lastUpdated)
+platform/web/app/useVanitySync.ts:23:		isLoaded: vanityActions.isVanityLoaded(),
+platform/web/config/vanityBinding.ts:17: * the temporary `vanityStore` adapter in `src/lib/stores/vanity.ts` — so consumers migrate to `useVanityState`
+platform/web/config/vanityBinding.ts:26:import { vanityState } from '@sdk/config/vanity'
+platform/web/config/vanityBinding.ts:54:export function createVanityBinding(state = vanityState): VanityBinding {
+platform/web/config/vanityBinding.ts:68:export function useVanityState(): VanityState {
+platform/web/config/vanityStore.ts:2: * platform/web/config/vanityStore.ts — the platform home of the temporary vanity `@tanstack/store`
+platform/web/config/vanityStore.ts:7: * `get`/`subscribe`, so this file bridges the two with a one-way mirror (`vanityState.subscribe`).
+platform/web/config/vanityStore.ts:10: * The READ path (`useStore(vanityStore, selector)` in `platform/web/routes/$vanityName.tsx`) and the
+platform/web/config/vanityStore.ts:14: * (`platform/web/config/vanityBinding.ts`, `useVanityState`).
+platform/web/config/vanityStore.ts:19:import { vanityActions, vanityState } from '@sdk/config/vanity'
+platform/web/config/vanityStore.ts:24: * pushes every change into it, so `useStore(vanityStore, selector)` and `vanityStore.state` render the
+platform/web/config/vanityStore.ts:27:export const vanityStore = new Store<VanityState>(vanityState.get())
+platform/web/config/vanityStore.ts:28:vanityState.subscribe((state) => vanityStore.setState(() => state))
+platform/web/config/vanityStore.ts:37:		...vanityState.get(),
+platform/web/config/vanityStore.ts:38:		...vanityActions,
+platform/web/routes/$vanityName.tsx:4:import { vanityActions, vanityStore } from '@platform/web/config/vanityStore'
+platform/web/routes/$vanityName.tsx:15:	const isLoaded = useStore(vanityStore, (s) => s.isLoaded)
+platform/web/routes/$vanityName.tsx:16:	const lastUpdated = useStore(vanityStore, (s) => s.lastUpdated)
+platform/web/routes/$vanityName.tsx:20:		const entry = vanityActions.resolveVanity(vanityName)
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:14:import { vanityActions } from '@platform/web/config/vanityStore'
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:78:		if (!vanityActions.isValidVanityName(normalized)) {
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:89:		if (vanityActions.isReservedName(normalized)) {
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx:102:			const available = vanityActions.isVanityAvailable(normalized)
+sdk/config/vanity.ts:6: * `VanityEntry`, `VanityState` and `vanityActions` keep every method and the same semantics — so a consumer
+sdk/config/vanity.ts:48:export const vanityState: StateStore<VanityState> = createStateStore<VanityState>({ initial: initialState })
+sdk/config/vanity.ts:91:export const vanityActions = {
+sdk/config/vanity.ts:111:		vanityState.set((state) => ({
+sdk/config/vanity.ts:124:		vanityState.set((state) => ({
+sdk/config/vanity.ts:134:		const { entries } = vanityState.get()
+sdk/config/vanity.ts:157:		if (!vanityActions.isValidVanityName(normalized)) return false
+sdk/config/vanity.ts:159:		const { entries } = vanityState.get()
+sdk/config/vanity.ts:188:		const { pubkeyToVanity, entries } = vanityState.get()
+sdk/config/vanity.ts:193:		return vanityActions.resolveVanity(vanityName)
+sdk/config/vanity.ts:200:		const { entries } = vanityState.get()
+sdk/config/vanity.ts:210:		return vanityState.get().isLoaded
+sdk/config/vanity.ts:217:		return vanityState.get().lastUpdated
+
+$ nl -ba sdk/core/query/queryKeyFactory.ts | sed -n "100,112 p"
+   100	export const configKeys = {
+   101		all: ['config'] as const,
+   102		appRelay: () => [...configKeys.all, 'appRelay'] as const,
+   103		admins: (appPubkey: string) => [...configKeys.all, 'admins', appPubkey] as const,
+   104		editors: (appPubkey: string) => [...configKeys.all, 'editors', appPubkey] as const,
+   105		blacklist: (appPubkey: string) => [...configKeys.all, 'blacklist', appPubkey] as const,
+   106		vanity: (appPubkey: string) => [...configKeys.all, 'vanity', appPubkey] as const,
+   107		nip05: (appPubkey: string) => [...configKeys.all, 'nip05', appPubkey] as const,
+   108		featuredProducts: (appPubkey: string) => [...configKeys.all, 'featuredProducts', appPubkey] as const,
+   109		featuredCollections: (appPubkey: string) => [...configKeys.all, 'featuredCollections', appPubkey] as const,
+   110		featuredAuctions: (appPubkey: string) => [...configKeys.all, 'featuredAuctions', appPubkey] as const,
+   111		featuredUsers: (appPubkey: string) => [...configKeys.all, 'featuredUsers', appPubkey] as const,
+   112	} as const
+
+$ nl -ba platform/web/app/AppMonitors.tsx | sed -n "1,30 p"
+     1	import { useAuctionWinMonitor } from '@platform/web/auctions/useAuctionWinMonitor'
+     2	import { useBlacklistSync } from '@platform/web/app/useBlacklistSync'
+     3	import { useNip05Sync } from '@platform/web/app/useNip05Sync'
+     4	import { useNotificationMonitor } from '@platform/web/notifications/monitor'
+     5	import { useVanitySync } from '@platform/web/app/useVanitySync'
+     6	
+     7	/**
+     8	 * Host wiring: runs the app-wide sync and notification monitors. Renders nothing.
+     9	 *
+    10	 * None of these hooks depend on router context, so they mount above
+    11	 * `RouterProvider` in `frontend.tsx` and keep running across navigations. The
+    12	 * overlays they drive live in `AppOverlays`.
+    13	 *
+    14	 * The notification pipeline needs no lifecycle kick. The legacy store's `initialize()` set nothing but an
+    15	 * `isInitialized` flag (it did not load read state — the store read its `lastSeenTimestamps` at module
+    16	 * import), and the mechanism's read marks seed synchronously at module load
+    17	 * (`platform/web/notifications/readMarks.ts`). So `useNotificationMonitor` gates only on an authenticated
+    18	 * user, and `initialize()` was deleted with the store in store-drain C3.
+    19	 */
+    20	export function AppMonitors() {
+    21		// Store <-> relay/query sync for instance-managed lists.
+    22		useBlacklistSync()
+    23		useVanitySync()
+    24		useNip05Sync()
+    25	
+    26		// Notification pipeline: watch once an authenticated user is present.
+    27		useNotificationMonitor()
+    28		useAuctionWinMonitor()
+    29	
+    30		return null
+
+
+### SECTION 7 — resolution today: the route and its two targets
+
+$ nl -ba platform/web/routes/$vanityName.tsx | sed -n "1,42 p"
+     1	import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
+     2	import { StorefrontOrProfilePage } from '@platform/web/storefront/StorefrontOrProfilePage'
+     3	import { LoadingState } from '@ui/shared/loading-state'
+     4	import { vanityActions, vanityStore } from '@platform/web/config/vanityStore'
+     5	import { createFileRoute } from '@tanstack/react-router'
+     6	import { useMemo } from 'react'
+     7	import { useStore } from '@tanstack/react-store'
+     8	
+     9	export const Route = createFileRoute('/$vanityName')({
+    10		component: VanityRouteComponent,
+    11	})
+    12	
+    13	function VanityRouteComponent() {
+    14		const { vanityName } = Route.useParams()
+    15		const isLoaded = useStore(vanityStore, (s) => s.isLoaded)
+    16		const lastUpdated = useStore(vanityStore, (s) => s.lastUpdated)
+    17	
+    18		// Resolve vanity URL to pubkey
+    19		const resolvedPubkey = useMemo(() => {
+    20			const entry = vanityActions.resolveVanity(vanityName)
+    21			return entry?.pubkey ?? null
+    22		}, [vanityName, isLoaded, lastUpdated])
+    23	
+    24		// Loading state while store syncs
+    25		if (!isLoaded) {
+    26			return <LoadingState className="min-h-screen" label="Loading…" />
+    27		}
+    28	
+    29		// Vanity URL resolved - render the storefront page (or the standard profile fallback)
+    30		if (resolvedPubkey) {
+    31			return <StorefrontOrProfilePage profileId={resolvedPubkey} />
+    32		}
+    33	
+    34		// Vanity resolution found nothing: the SAME segment is then a generic page
+    35		// address on the app key (owner ruling, HANDOVER-CMS-INTEGRATION §6.1 — the
+    36		// app router maps a path to a page event by address). The segment is handed
+    37		// over verbatim as the `d` tag: `/featured` and `/featured-2026-11-03` take
+    38		// this identical path, with no date or prefix special-casing anywhere. An
+    39		// explicitly registered vanity name keeps precedence, which is why the
+    40		// lookup order is vanity first, app-key page second.
+    41		return <StorefrontAddressPage dTag={vanityName} />
+    42	}
+
+$ nl -ba platform/web/storefront/StorefrontOrProfilePage.tsx | sed -n "1,68 p"
+     1	import { ProfilePage } from '@platform/web/profiles/ProfilePage'
+     2	import { StorefrontRenderer } from '@ui/storefront'
+     3	import { LoadingState } from '@ui/shared/loading-state'
+     4	import { isValidHexKey } from '@sdk/core/utils/utils'
+     5	import { profileByIdentifierQueryOptions } from '@platform/web/profiles/profileQuery'
+     6	import { useStore } from '@tanstack/react-store'
+     7	import { authStore } from '@platform/web/auth/authStore'
+     8	import { shouldRenderStorefrontPage, useStorefrontPage } from './storefrontQuery'
+     9	import { storefrontBlockSlots } from './StorefrontBlockSlots'
+    10	import { loadStorefrontDraft } from './draftStorage'
+    11	import { useQuery } from '@tanstack/react-query'
+    12	
+    13	/**
+    14	 * Resolution point for any URL that names a person: the custom page if the
+    15	 * author built one and switched it on, the standard profile otherwise.
+    16	 *
+    17	 * Three layers of fallback, per ADR-0006:
+    18	 *   1. resolve the identifier to a pubkey;
+    19	 *   2. fetch that pubkey's storefront page and render it if valid and enabled;
+    20	 *   3. otherwise render `ProfilePage` unchanged.
+    21	 *
+    22	 * A storefront that fails to parse is not an error state for the visitor — it
+    23	 * is simply the profile page. The author is the one who needs to know, and
+    24	 * they find out in the builder, which validates strictly before signing.
+    25	 */
+    26	export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
+    27		const { user } = useStore(authStore)
+    28		const isDraftPreview = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('preview') === 'draft'
+    29		// npub, nprofile and NIP-05 identifiers all have to become a hex pubkey
+    30		// before a page can be addressed. Hex skips the lookup; everything else
+    31		// borrows the profile query `ProfilePage` is about to run anyway, so the
+    32		// resolution costs no extra relay round trip.
+    33		const needsResolution = !isValidHexKey(profileId)
+    34		const profileOptions = profileByIdentifierQueryOptions(profileId)
+    35		const { data: profileData, isLoading: isResolvingProfile } = useQuery({
+    36			...profileOptions,
+    37			enabled: profileOptions.enabled && needsResolution,
+    38		})
+    39	
+    40		const pubkey = needsResolution ? (profileData?.user?.pubkey ?? '') : profileId
+    41	
+    42		const { data: storefront, isLoading: isLoadingStorefront } = useStorefrontPage(pubkey)
+    43		const isAuthorPreview = isDraftPreview && isValidHexKey(pubkey) && user?.pubkey === pubkey
+    44		const previewPage = isAuthorPreview ? (loadStorefrontDraft(pubkey) ?? storefront?.page ?? null) : null
+    45	
+    46		// The preview URL is intentionally local to the signed-in author: it reads
+    47		// their validated local draft (or their stored page when no draft exists),
+    48		// without publishing or exposing that draft to other visitors.
+    49		if (previewPage && previewPage.content.length > 0) {
+    50			return <StorefrontRenderer page={previewPage} pubkey={pubkey} slots={storefrontBlockSlots} />
+    51		}
+    52	
+    53		// Both queries are in flight concurrently, so this waits on the slower of
+    54		// two requests that would have happened regardless. Deciding before they
+    55		// settle would flash the profile page and then replace it, which reads as a
+    56		// bug to the visitor and undoes the author's first impression.
+    57		const isDeciding = (needsResolution && isResolvingProfile) || (pubkey.length > 0 && isLoadingStorefront)
+    58	
+    59		if (isDeciding) {
+    60			return <LoadingState className="min-h-screen" label="Loading…" />
+    61		}
+    62	
+    63		if (shouldRenderStorefrontPage(storefront) && storefront.pubkey) {
+    64			return <StorefrontRenderer page={storefront.page} pubkey={storefront.pubkey} slots={storefrontBlockSlots} />
+    65		}
+    66	
+    67		return <ProfilePage profileId={profileId} />
+    68	}
+
+$ nl -ba platform/web/storefront/StorefrontAddressPage.tsx | sed -n "1,68 p"
+     1	import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+     2	import { EmptyState } from '@ui/shared/empty-state'
+     3	import { ErrorState } from '@ui/shared/error-state'
+     4	import { LoadingState } from '@ui/shared/loading-state'
+     5	import { StorefrontRenderer } from '@ui/storefront'
+     6	import { isValidHexKey } from '@sdk/core/utils/utils'
+     7	import { shouldRenderStorefrontPage, useStorefrontAddressPage } from './storefrontQuery'
+     8	import { storefrontBlockSlots } from './StorefrontBlockSlots'
+     9	
+    10	/**
+    11	 * The generic kind-30024 address page (owner ruling, HANDOVER §6.1): the app
+    12	 * router maps a path segment to a page event by address, and this host is the
+    13	 * one resolver + renderer for every such path.
+    14	 *
+    15	 * The caller hands over the path segment as the `d` tag — verbatim. There is
+    16	 * deliberately no date parsing and no `featured-` prefix handling anywhere in
+    17	 * the path: `/featured` resolves to `(app key, 'featured')` and
+    18	 * `/featured-2026-11-03` to `(app key, 'featured-2026-11-03')` through this
+    19	 * identical code path, so a page deployed under any other `d` needs zero new
+    20	 * machinery.
+    21	 *
+    22	 * The app key comes from the public app config (`useConfigQuery`); it is never
+    23	 * hard-coded here and adds no settings field. This lane adds no app-key
+    24	 * publishing surface, so the coordinate is usually absent: that renders a
+    25	 * deliberate empty state, not an error. A page that fails to parse degrades to
+    26	 * the same empty state (relay content is untrusted until the parser accepts
+    27	 * it); a relay/transport failure surfaces as an error state with a retry.
+    28	 */
+    29	export function StorefrontAddressPage({ dTag }: { dTag: string }) {
+    30		const { data: config, isLoading: isLoadingConfig } = useConfigQuery()
+    31		const author = config?.appPublicKey ?? ''
+    32		const hasAddress = isValidHexKey(author) && dTag.length > 0
+    33		const { data: page, isLoading: isLoadingPage, isError, refetch } = useStorefrontAddressPage(hasAddress ? author : undefined, dTag)
+    34	
+    35		// The config read gates the page read (the query stays disabled without a
+    36		// valid author), so the two loads are strictly sequential: wait for the
+    37		// config first, then for the page.
+    38		if (isLoadingConfig || (hasAddress && isLoadingPage)) {
+    39			return <LoadingState className="min-h-screen" label="Loading…" />
+    40		}
+    41	
+    42		if (isError) {
+    43			return (
+    44				<ErrorState
+    45					className="min-h-screen"
+    46					title="This page could not be loaded"
+    47					message="The relay holding this page did not respond. Trying again may help."
+    48					onRetry={() => void refetch()}
+    49					retryTestId="storefront-address-retry"
+    50				/>
+    51			)
+    52		}
+    53	
+    54		if (shouldRenderStorefrontPage(page) && page.pubkey) {
+    55			return <StorefrontRenderer page={page.page} pubkey={page.pubkey} slots={storefrontBlockSlots} />
+    56		}
+    57	
+    58		// Absent, disabled, zero-block and unparseable pages all land here: a
+    59		// deliberate, token-clean empty state, never a blank page or an error.
+    60		return (
+    61			<EmptyState
+    62				className="min-h-screen"
+    63				data-testid="storefront-address-empty"
+    64				title="Nothing published yet"
+    65				description="No page has been published at this address."
+    66			/>
+    67		)
+    68	}
+
+$ nl -ba platform/web/storefront/storefrontQuery.ts | sed -n "62,102 p"
+    62	/**
+    63	 * Fetches and validates one addressable page: `(author, kind 30024, d)`.
+    64	 *
+    65	 * The `d` tag defaults to the profile storefront's own coordinate; the generic
+    66	 * address route (HANDOVER §6.1) passes the path segment verbatim — there is no
+    67	 * date parsing and no prefix handling anywhere in this read, because the
+    68	 * segment IS the `d` tag.
+    69	 *
+    70	 * Returns the empty result for an author who has no page. Relay/transport
+    71	 * failures are allowed to reject so React Query reports `isError` and keeps any
+    72	 * previously cached page, rather than committing a null-shaped success that
+    73	 * would flash the profile fallback over a page that does exist.
+    74	 */
+    75	export async function fetchStorefrontPage(pubkey: string, dTag: string = STOREFRONT_PAGE_D_TAG): Promise<StorefrontPageResult> {
+    76		if (!isValidHexKey(pubkey) || dTag.length === 0) return EMPTY_RESULT
+    77	
+    78		// Read-seam justification (ADR-READ-SEAM-STREAMS §8): a single mounted page is a
+    79		// single-entity/detail read — one addressable coordinate (author, kind, `d`) — so a
+    80		// bounded `fetch` is the doctrine-sanctioned class here, not a stream.
+    81		const events = await getReadContext().fetch([
+    82			{
+    83				kinds: [STOREFRONT_PAGE_KIND],
+    84				authors: [pubkey],
+    85				'#d': [dTag],
+    86			},
+    87		])
+    88	
+    89		// Defence in depth: a relay may answer a filter with events that do not
+    90		// match it. Author and `d` decide the address, so re-check both rather than
+    91		// rendering whatever came back.
+    92		const addressed = events.filter(
+    93			(event) =>
+    94				event.kind === STOREFRONT_PAGE_KIND && event.pubkey === pubkey && event.tags.some((tag) => tag[0] === 'd' && tag[1] === dTag),
+    95		)
+    96	
+    97		const event = selectReplaceable(addressed)
+    98		if (!event) return EMPTY_RESULT
+    99	
+   100		const parsed = parseStorefrontPage(event.content)
+   101		return { event, pubkey: event.pubkey, ...parsed }
+   102	}
+
+$ nl -ba platform/web/storefront/storefrontQuery.ts | sed -n "119,155 p"
+   119	/**
+   120	 * Query options for the generic address coordinate: `(author, kind 30024, d)`.
+   121	 *
+   122	 * This is the read behind the generic address route (HANDOVER §6.1): the `d`
+   123	 * tag arrives verbatim from the path segment, so `/featured` and
+   124	 * `/featured-2026-11-03` are plain coordinates here — no route-level date or
+   125	 * prefix logic exists. The sdk key factory has no per-`d` member and this lane
+   126	 * must not edit `sdk/`, so the address key is composed from `storefrontKeys.all`.
+   127	 */
+   128	export const storefrontAddressPageQueryOptions = (pubkey: string, dTag: string) =>
+   129		queryOptions({
+   130			queryKey: [...storefrontKeys.all, 'address', pubkey, dTag] as const,
+   131			queryFn: () => fetchStorefrontPage(pubkey, dTag),
+   132			enabled: isValidHexKey(pubkey) && dTag.length > 0,
+   133			// Same cadence as the profile page read: pages change rarely and sit on
+   134			// the critical path of the address route.
+   135			staleTime: 2 * 60 * 1000,
+   136		})
+   137	
+   138	/** One addressable page by `(author, d)`. Resolve the author (e.g. the app key) first. */
+   139	export function useStorefrontAddressPage(pubkey: string | undefined, dTag: string) {
+   140		return useQuery(storefrontAddressPageQueryOptions(pubkey ?? '', dTag))
+   141	}
+   142	
+   143	/**
+   144	 * True when this author's page should replace the default profile view.
+   145	 *
+   146	 * Both conditions matter: the document must have parsed, and the author must
+   147	 * have switched it on. A page that parsed to zero surviving blocks is also
+   148	 * refused — an empty page is worse for a visitor than the profile they expected.
+   149	 */
+   150	export function shouldRenderStorefrontPage(result: StorefrontPageResult | undefined): result is StorefrontPageResult & {
+   151		page: StorefrontPage
+   152	} {
+   153		return Boolean(result?.page?.enabled && result.page.content.length > 0)
+   154	}
+   155	
+
+$ nl -ba platform/web/routeTree.gen.ts | sed -n "70,80 p"
+    70	const DashboardLayoutRoute = DashboardLayoutRouteImport.update({
+    71		id: '/_dashboard-layout',
+    72		getParentRoute: () => rootRouteImport,
+    73	} as any)
+    74	const VanityNameRoute = VanityNameRouteImport.update({
+    75		id: '/$vanityName',
+    76		path: '/$vanityName',
+    77		getParentRoute: () => rootRouteImport,
+    78	} as any)
+    79	const IndexRoute = IndexRouteImport.update({
+    80		id: '/',
+
+$ nl -ba platform/web/routeTree.gen.ts | sed -n "290,302 p"
+   290	const DashboardLayoutDashboardProductsAuctionsAuctionIdRoute = DashboardLayoutDashboardProductsAuctionsAuctionIdRouteImport.update({
+   291		id: '/$auctionId',
+   292		path: '/$auctionId',
+   293		getParentRoute: () => DashboardLayoutDashboardProductsAuctionsRoute,
+   294	} as any)
+   295	
+   296	export interface FileRoutesByFullPath {
+   297		'/': typeof IndexRoute
+   298		'/$vanityName': typeof VanityNameRoute
+   299		'/checkout': typeof CheckoutRoute
+   300		'/setup': typeof SetupRoute
+   301		'/auctions/$auctionId': typeof AuctionsAuctionIdRoute
+   302		'/collection/$collectionId': typeof CollectionCollectionIdRoute
+
+$ nl -ba platform/web/routes/sellerRoute.test.tsx | sed -n "40,65 p"
+    40	describe('seller links resolve to the seller page route', () => {
+    41		test('the href a seller name is given resolves to /profile/$profileId with the pubkey', async () => {
+    42			// Exactly what the card/panel/strip render for a seller name.
+    43			const href = `/profile/${encodeURIComponent(SELLER_PUBKEY)}`
+    44	
+    45			const matches = await resolve(href)
+    46			const last = matches[matches.length - 1]!
+    47	
+    48			expect(last.routeId).toBe('/profile/$profileId')
+    49			expect(last.params.profileId).toBe(SELLER_PUBKEY)
+    50		})
+    51	
+    52		test('a bare hex path is NOT captured by the single-segment vanity route', async () => {
+    53			const ids = (await resolve(`/profile/${SELLER_PUBKEY}`)).map((match) => match.routeId)
+    54	
+    55			expect(ids).not.toContain('/$vanityName')
+    56		})
+    57	
+    58		test('the vanity route still owns a single segment, so the two do not compete', async () => {
+    59			const vanity = await resolve('/some-vanity-name')
+    60			const last = vanity[vanity.length - 1]!
+    61	
+    62			expect(last.routeId).toBe('/$vanityName')
+    63			expect(last.params.vanityName).toBe('some-vanity-name')
+    64		})
+    65	
+
+
+### SECTION 8 — the home coordinate and the storefront publish coordinate (order premises 3 and 4)
+
+$ nl -ba platform/web/routes/index.tsx | sed -n "42,60 p"
+    42	/**
+    43	 * The instance's own key — the identity the CMS authors pages as, and the
+    44	 * author the block slots resolve their reads against. Advertised by
+    45	 * `/api/config` as `appPublicKey`; kept here because the slots need it before
+    46	 * any page document exists.
+    47	 */
+    48	const APP_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91cd9c'
+    49	
+    50	function BrowseIndex() {
+    51		const { q, p } = Route.useSearch()
+    52		const navigate = useNavigate()
+    53		// The app key's own `home` page, when one has been authored. Read first and
+    54		// unconditionally: the hook must run in every state of this route, and the
+    55		// published page replaces the settled composition below without changing
+    56		// the renderer.
+    57		const { data: homeResult } = useStorefrontAddressPage(APP_PUBKEY, 'home')
+    58		const publishedHome = shouldRenderStorefrontPage(homeResult) ? homeResult.page : null
+    59		// The intro plays over the home once per mount; it is an overlay, so the hero
+    60		// renders underneath from the first paint and nothing waits on it.
+
+$ nl -ba platform/web/routes/index.tsx | sed -n "74,115 p"
+    74		if (!q.trim() && !p) {
+    75			// The home composition is the CMS block set (owner ruling): a `Search`
+    76			// block, a hand-picked `ProductRow` and the flat `Categories` list,
+    77			// rendered inside the browse chrome. It is expressed as a page document
+    78			// so the same renderer that draws published pages draws this one — when
+    79			// the app key's own `home` page resolves, this constant is replaced by it
+    80			// and nothing else changes.
+    81			const homePage = {
+    82				version: STOREFRONT_PAGE_VERSION,
+    83				enabled: true,
+    84				root: { props: { title: '', theme: 'default' as const, palette: 'concrete' } },
+    85				content: [
+    86					{ type: 'Search' as const, props: { id: 'home-search', placeholder: 'Search the marketplace', size: 'lg' as const } },
+    87					{ type: 'ProductRow' as const, props: { id: 'home-row', productDTags: ['orange-flock-black-orange-edition-high-top-sneakers-ma5ond'] } },
+    88					{
+    89						type: 'Categories' as const,
+    90						props: {
+    91							id: 'home-cats',
+    92							title: 'Browse by category',
+    93							categories: [
+    94								{ label: 'Art', key: 'art' },
+    95								{ label: 'Clothing', key: 'clothing' },
+    96								{ label: 'Bitcoin', key: 'bitcoin' },
+    97							],
+    98						},
+    99					},
+   100				],
+   101			}
+   102			const page = publishedHome ?? (parseStorefrontPage(JSON.stringify(homePage)).page as never)
+   103			return (
+   104				<>
+   105					{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
+   106					<BrowseNav
+   107						active
+   108						onNavigateHome={() => navigate({ to: '/' })}
+   109						onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+   110					/>
+   111					<StorefrontRenderer page={page} pubkey={APP_PUBKEY} slots={storefrontBlockSlots} />
+   112				</>
+   113			)
+   114		}
+   115	
+
+$ nl -ba platform/web/storefront/storefrontPublish.ts | sed -n "10,71 p"
+    10	/**
+    11	 * Publishing a user's storefront page (ADR-0006).
+    12	 *
+    13	 * Event shape, stated explicitly per the publish-state rule:
+    14	 *
+    15	 *   kind    30024 — addressable, one page per pubkey
+    16	 *   d       `storefront-page` — the addressable identifier
+    17	 *   author  the logged-in user's own pubkey. The app key is NOT involved: page
+    18	 *           content is user speech, and the app must not be its author.
+    19	 *   content JSON `{ version, enabled, root, content }`, validated by
+    20	 *           `validateStorefrontPageForPublish` BEFORE signing
+    21	 *   relays  the host's configured write relays
+    22	 *
+    23	 * There is no payment, server round trip, or app-side gate on this write. That
+    24	 * is deliberate (ADR-0006): the *name* at which a page is reachable is rented
+    25	 * and arbitrated, but the page itself is the author's and stays reachable by
+    26	 * pubkey whether or not a name is held.
+    27	 *
+    28	 * This is not a high-sensitivity publish — it moves no funds and carries no
+    29	 * payment lifecycle. It is, however, the input to a renderer that runs in a
+    30	 * wallet-bearing app, which is why validation happens here and again on read
+    31	 * (`parseStorefrontPage`): the relay round trip means the bytes we render are
+    32	 * never provably the bytes we signed.
+    33	 */
+    34	
+    35	/** Human-readable title tag, so other clients can list the page without parsing content. */
+    36	const TITLE_TAG = 'title'
+    37	
+    38	export interface PublishStorefrontPageResult {
+    39		eventId: string
+    40		pubkey: string
+    41		/** Relays that acknowledged the event. Never empty — a zero-ACK publish throws. */
+    42		publishedRelays: string[]
+    43	}
+    44	
+    45	/**
+    46	 * Builds the unsigned event for a page. Exported for tests and for callers that
+    47	 * want to inspect what would be signed without signing it.
+    48	 *
+    49	 * @throws if the page fails strict validation. Refusing here rather than
+    50	 * dropping bad blocks is the point: the author gets told, instead of publishing
+    51	 * a page that silently renders with holes in it.
+    52	 */
+    53	export function buildStorefrontPageEvent(page: StorefrontPage): EventTemplate {
+    54		const validation = validateStorefrontPageForPublish(page)
+    55		if (!validation.ok) {
+    56			throw new Error(`Storefront page is not valid: ${validation.errors.join(', ')}`)
+    57		}
+    58	
+    59		const validated = validation.page
+    60		const tags: string[][] = [['d', STOREFRONT_PAGE_D_TAG]]
+    61	
+    62		const title = validated.root.props.title.trim()
+    63		if (title.length > 0) tags.push([TITLE_TAG, title])
+    64	
+    65		return {
+    66			kind: STOREFRONT_PAGE_KIND,
+    67			created_at: Math.floor(Date.now() / 1000),
+    68			content: JSON.stringify(validated),
+    69			tags,
+    70		}
+    71	}
+
+
+### SECTION 9 — dashboard surfaces that exist today
+
+$ git ls-files 'platform/web/routes/_dashboard-layout/**' | sort
+platform/web/routes/_dashboard-layout/dashboard/about.tsx
+platform/web/routes/_dashboard-layout/dashboard/account/making-payments.tsx
+platform/web/routes/_dashboard-layout/dashboard/account/network.tsx
+platform/web/routes/_dashboard-layout/dashboard/account/nostr-address.tsx
+platform/web/routes/_dashboard-layout/dashboard/account/preferences.tsx
+platform/web/routes/_dashboard-layout/dashboard/account/profile-page.tsx
+platform/web/routes/_dashboard-layout/dashboard/account/profile.tsx
+platform/web/routes/_dashboard-layout/dashboard/account/receiving-payments.tsx
+platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx
+platform/web/routes/_dashboard-layout/dashboard/account/your-purchases.tsx
+platform/web/routes/_dashboard-layout/dashboard/app-settings/app-miscelleneous.tsx
+platform/web/routes/_dashboard-layout/dashboard/app-settings/blacklists.tsx
+platform/web/routes/_dashboard-layout/dashboard/app-settings/featured-items.tsx
+platform/web/routes/_dashboard-layout/dashboard/app-settings/team.tsx
+platform/web/routes/_dashboard-layout/dashboard/index.tsx
+platform/web/routes/_dashboard-layout/dashboard/orders/$orderId.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/auctions.$auctionId.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/auctions.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/bids.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/collections/$collectionId.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/collections/new.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/collections.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/migration-tool.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/products/$productId.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/products/new.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/products.tsx
+platform/web/routes/_dashboard-layout/dashboard/products/shipping-options.tsx
+platform/web/routes/_dashboard-layout/dashboard/sales/circular-economy.tsx
+platform/web/routes/_dashboard-layout/dashboard/sales/messages/$pubkey.tsx
+platform/web/routes/_dashboard-layout/dashboard/sales/messages.tsx
+platform/web/routes/_dashboard-layout/dashboard/sales/sales.tsx
+
+$ for f in platform/web/routes/_dashboard-layout/dashboard/app-settings/*.tsx platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx; do echo "--- $f"; grep -n -E 'amIAdmin|amIEditor|amIOwner|AccessDenied|permission|createFileRoute' "$f"; done
+--- platform/web/routes/_dashboard-layout/dashboard/app-settings/app-miscelleneous.tsx
+19:import { createFileRoute } from '@tanstack/react-router'
+24:export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/app-miscelleneous')({
+58:	const { amIOwner, isLoading: isRoleLoading } = useUserRole(config?.appPublicKey)
+61:	const canManageSettings = amIOwner
+191:				<div className="text-muted-foreground">You don't have permission to manage these settings.</div>
+--- platform/web/routes/_dashboard-layout/dashboard/app-settings/blacklists.tsx
+6:	SettingsAccessDenied,
+30:import { createFileRoute } from '@tanstack/react-router'
+35:export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/blacklists')({
+112:	const { amIAdmin, amIEditor, isLoading: isLoadingPermissions } = useUserRole(config?.appPublicKey)
+238:	if (!amIAdmin && !amIEditor) {
+240:			<SettingsAccessDenied
+242:				message="You don't have permission to manage blacklists."
+471:							{amIAdmin ? <Shield className="w-5 h-5 text-blue-600" /> : <Shield className="w-5 h-5 text-purple-600" />}
+473:								<div className="font-medium">{amIAdmin ? 'Administrator' : 'Editor'}</div>
+475:									{amIAdmin
+--- platform/web/routes/_dashboard-layout/dashboard/app-settings/featured-items.tsx
+7:	SettingsAccessDenied,
+42:import { createFileRoute } from '@tanstack/react-router'
+47:export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/featured-items')({
+155:	const { amIAdmin, amIEditor, isLoading: isLoadingPermissions } = useUserRole(config?.appPublicKey)
+588:	if (!amIAdmin && !amIEditor) {
+590:			<SettingsAccessDenied
+592:				message="You don't have permission to manage featured items."
+935:							{amIAdmin ? <Star className="w-5 h-5 text-blue-600" /> : <Star className="w-5 h-5 text-purple-600" />}
+937:								<div className="font-medium">{amIAdmin ? 'Administrator' : 'Editor'}</div>
+939:									{amIAdmin
+--- platform/web/routes/_dashboard-layout/dashboard/app-settings/team.tsx
+6:	SettingsAccessDenied,
+36:import { createFileRoute } from '@tanstack/react-router'
+40:export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/team')({
+49:	const { amIAdmin, amIOwner, isLoading: isLoadingPermissions } = useUserRole(config?.appPublicKey)
+157:		if (targetRole === 'editor' && amIOwner) {
+165:		if (targetRole === 'user' && amIAdmin) {
+175:		if (targetRole === 'admin' && amIOwner && targetPubkey !== adminSettings?.owner) {
+183:		if (targetRole === 'editor' && amIAdmin) {
+193:		if (targetRole !== 'owner' && targetRole !== 'user' && amIAdmin) {
+209:	if (!amIAdmin) {
+211:			<SettingsAccessDenied
+213:				message="You don't have permission to manage team settings."
+253:				{amIOwner && (
+260:				{amIAdmin && (
+267:				<TeamPermissionsCard isOwner={amIOwner} />
+--- platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx
+1:import { createFileRoute } from '@tanstack/react-router'
+23:export const Route = createFileRoute('/_dashboard-layout/dashboard/account/vanity-url')({
+
+$ nl -ba platform/web/routes/_dashboard-layout/dashboard/account/profile-page.tsx | sed -n "1,28 p"
+     1	import { createFileRoute } from '@tanstack/react-router'
+     2	import { useStore } from '@tanstack/react-store'
+     3	import { StorefrontBuilder } from '@platform/web/storefront/StorefrontBuilder'
+     4	import { authStore } from '@platform/web/auth/authStore'
+     5	import { LoadingState } from '@ui/shared/loading-state'
+     6	import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
+     7	
+     8	export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profile-page')({
+     9		component: () => {
+    10			useDashboardTitle('Storefront')
+    11			const user = useStore(authStore, (state) => state.user)
+    12			const pubkey = user?.pubkey
+    13	
+    14			// The author's pubkey comes from the auth store rather than a route param:
+    15			// there is exactly one page a signed-in user can edit — their own — and taking
+    16			// it from the URL would invite an "edit somebody else's page" shape the signer
+    17			// would then refuse anyway.
+    18			//
+    19			// `_dashboard-layout` already renders the login prompt for signed-out visitors,
+    20			// so this branch only handles the case where auth is present but the pubkey
+    21			// has not arrived yet.
+    22			if (!pubkey) {
+    23				return <LoadingState className="p-8" label="Loading your account…" />
+    24			}
+    25	
+    26			return <StorefrontBuilder pubkey={pubkey} />
+    27		},
+    28	})
+
+$ nl -ba platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx | sed -n "33,60 p"
+    33	function VanityUrlComponent() {
+    34		useDashboardTitle('Vanity URL')
+    35		const ndk = ndkActions.getNDK()
+    36		const pubkey = ndk?.activeUser?.pubkey
+    37	
+    38		const { data: config } = useConfigQuery()
+    39		const { data: vanitySettings, isLoading } = useVanitySettings(config?.appPublicKey)
+    40	
+    41		const [vanityName, setVanityName] = useState('')
+    42		const [isChecking, setIsChecking] = useState(false)
+    43	
+    44		// Get current user's vanity URL
+    45		const currentVanity = useMemo(() => {
+    46			if (!pubkey || !vanitySettings) return null
+    47			return getVanityForPubkey(vanitySettings, pubkey)
+    48		}, [pubkey, vanitySettings])
+    49	
+    50		// Get expired vanity URLs for renewal
+    51		const expiredVanities = useMemo(() => {
+    52			if (!pubkey || !vanitySettings) return []
+    53			return getExpiredVanityForPubkey(vanitySettings, pubkey)
+    54		}, [pubkey, vanitySettings])
+    55	
+    56		// Validation state
+    57		const [validationState, setValidationState] = useState<{
+    58			isValid: boolean
+    59			isAvailable: boolean | null
+    60			message: string
+
+$ nl -ba platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx | sed -n "172,200 p"
+   172		const handleZap = async (tier: (typeof VANITY_PRICING)[string]) => {
+   173			if (!pubkey || !config?.appPublicKey) {
+   174				toast.error('App configuration missing')
+   175				return
+   176			}
+   177	
+   178			if (!validationState.isValid || validationState.isAvailable === false) {
+   179				toast.error('Please choose a valid and available vanity name')
+   180				return
+   181			}
+   182	
+   183			try {
+   184				const { pr, invoiceId } = await purchaseVanityForPubkey(
+   185					{ ndk, appPubkey: config.appPublicKey, appRelay: config.appRelay },
+   186					{ name: vanityName, amountSats: tier.sats },
+   187				)
+   188	
+   189				setPaymentState({
+   190					isOpen: true,
+   191					invoice: pr,
+   192					amount: tier.sats,
+   193					invoiceId: invoiceId,
+   194				})
+   195			} catch (error) {
+   196				console.error('Payment error:', error)
+   197				toast.error(error instanceof Error ? error.message : 'Failed to create payment')
+   198			}
+   199		}
+   200	
+
+$ nl -ba platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx | sed -n "310,330 p"
+   310	
+   311							{/* Register New Vanity URL */}
+   312							<Card id="vanity-register-section">
+   313								<CardHeader>
+   314									<CardTitle>{currentVanity ? 'Change or Extend' : 'Register'} Vanity URL</CardTitle>
+   315									<CardDescription>Choose a custom URL for your profile. This will be your shareable link.</CardDescription>
+   316								</CardHeader>
+   317								<CardContent className="space-y-6">
+   318									<div className="space-y-2">
+   319										<Label htmlFor="vanityName">Vanity Name</Label>
+   320										<div className="flex items-center gap-2">
+   321											<span className="text-muted-foreground">{window.location.host}/</span>
+   322											<Input
+   323												id="vanityName"
+   324												value={vanityName}
+   325												onChange={(e) => setVanityName(e.target.value.toLowerCase())}
+   326												placeholder="your-name"
+   327												className="flex-1"
+   328											/>
+   329										</div>
+   330										{(validationState.message || isChecking) && (
+
+$ grep -n -i 'vanity' ui/nav/model.ts
+142:			item('/dashboard/account/vanity-url', '✨', 'Vanity URL'),
+
+$ git grep -n 'vanity' -- platform/web/storefront/StorefrontBuilder.tsx
+platform/web/storefront/StorefrontBuilder.tsx:20:import { getVanityForPubkey, useVanitySettings } from '@platform/web/config/vanityBinding'
+platform/web/storefront/StorefrontBuilder.tsx:97:	const { data: vanitySettings } = useVanitySettings(config?.appPublicKey)
+platform/web/storefront/StorefrontBuilder.tsx:99:	const vanityEntry = useMemo(() => getVanityForPubkey(vanitySettings, pubkey), [vanitySettings, pubkey])
+platform/web/storefront/StorefrontBuilder.tsx:101:	const liveHref = vanityEntry ? `/${vanityEntry.vanityName}?preview=draft` : `/profile/${pubkey}?preview=draft`
+platform/web/storefront/StorefrontBuilder.tsx:387:									{vanityEntry || nip05Entry ? (
+platform/web/storefront/StorefrontBuilder.tsx:389:											{[vanityEntry && `${hostname}/${vanityEntry.vanityName}`, nip05Entry && `${nip05Entry.username}@${hostname}`]
+platform/web/storefront/StorefrontBuilder.tsx:395:											href="/dashboard/account/vanity-url"
+platform/web/storefront/StorefrontBuilder.tsx:505:			vanityEntry,
+
+
+### SECTION 10 — admin/editor gating: how the app decides
+
+$ nl -ba sdk/core/curation/curationLists.ts | sed -n "1,16 p"
+     1	import type { UnsignedEventData } from '../publishing'
+     2	import type { Result } from '../result'
+     3	import { failure, success } from '../result'
+     4	
+     5	export const MUTE_LIST_KIND = 10000
+     6	
+     7	export const CURATION_LISTS = {
+     8		admins: { kind: 30000, dTag: 'admins', itemTag: 'p' },
+     9		editors: { kind: 30000, dTag: 'editors', itemTag: 'p' },
+    10		featuredProducts: { kind: 30405, dTag: 'featured_products', itemTag: 'a', itemKind: 30402 },
+    11		featuredCollections: { kind: 30003, dTag: 'featured_collections', itemTag: 'a', itemKind: 30405 },
+    12		featuredAuctions: { kind: 30409, dTag: 'featured_auctions', itemTag: 'a', itemKind: 30408 },
+    13		featuredUsers: { kind: 30000, dTag: 'featured_users', itemTag: 'p' },
+    14	} as const
+    15	
+    16	export type CurationListKey = keyof typeof CURATION_LISTS
+
+$ nl -ba sdk/core/curation/curationRead.ts | sed -n "65,83 p"
+    65	export function buildCurationListFilter(list: CurationListKey, appPubkey: string): CurationFilter {
+    66		const spec = CURATION_LISTS[list]
+    67		return { kinds: [spec.kind], authors: [appPubkey], '#d': [spec.dTag] }
+    68	}
+    69	
+    70	export function buildBlacklistFilter(appPubkey: string): CurationFilter {
+    71		return { kinds: [MUTE_LIST_KIND], authors: [appPubkey] }
+    72	}
+    73	
+    74	/** Owner is the first listed admin, falling back to the app pubkey. */
+    75	export function parseAdminSettings<E extends CurationListEvent>(event: E, appPubkey: string): AdminSettings<E> {
+    76		const admins = readCurationListItems('admins', event.tags)
+    77		return { admins, owner: admins[0] || appPubkey, lastUpdated: event.created_at ?? 0, event }
+    78	}
+    79	
+    80	export function parseEditorSettings<E extends CurationListEvent>(event: E | null): EditorSettings<E> {
+    81		if (!event) return { editors: [], lastUpdated: 0, event: null }
+    82		return { editors: readCurationListItems('editors', event.tags), lastUpdated: event.created_at ?? 0, event }
+    83	}
+
+$ nl -ba sdk/core/curation/curationRead.ts | sed -n "145,165 p"
+   145		}
+   146	}
+   147	
+   148	export function isAdmin(adminSettings: AdminSettings<unknown> | null | undefined, pubkey: string): boolean {
+   149		if (!adminSettings || !pubkey) return false
+   150		return adminSettings.admins.includes(pubkey)
+   151	}
+   152	
+   153	export function isOwner(adminSettings: AdminSettings<unknown> | null | undefined, pubkey: string): boolean {
+   154		if (!adminSettings || !pubkey) return false
+   155		return adminSettings.owner === pubkey
+   156	}
+   157	
+   158	export function isEditor(editorSettings: EditorSettings<unknown> | null | undefined, pubkey: string): boolean {
+   159		if (!editorSettings || !pubkey) return false
+   160		return editorSettings.editors.includes(pubkey)
+   161	}
+   162	
+   163	export function isBlacklisted(blacklistSettings: BlacklistSettings<unknown> | null | undefined, pubkey: string): boolean {
+   164		if (!blacklistSettings || !pubkey) return false
+   165		return blacklistSettings.blacklistedPubkeys.includes(pubkey)
+
+$ nl -ba platform/web/app-settings/appSettingsQuery.ts | sed -n "105,125 p"
+   105	/**
+   106	 * Hook to check if the current user is an admin
+   107	 */
+   108	export const useAmIAdmin = (appPubkey?: string) => {
+   109		const { data: adminSettings, isLoading } = useAdminSettings(appPubkey)
+   110		const ndk = getAppNdk()
+   111		const currentUserPubkey = ndk?.activeUser?.pubkey
+   112	
+   113		const amIAdmin = isAdmin(adminSettings, currentUserPubkey || '')
+   114		const amIOwner = isOwner(adminSettings, currentUserPubkey || '')
+   115	
+   116		return {
+   117			amIAdmin,
+   118			amIOwner,
+   119			isLoading,
+   120			adminSettings,
+   121			currentUserPubkey,
+   122		}
+   123	}
+   124	
+   125	/**
+
+$ nl -ba platform/web/app-settings/appSettingsQuery.ts | sed -n "190,217 p"
+   190	
+   191	/**
+   192	 * Hook to check comprehensive user role status (admin, editor, etc.)
+   193	 */
+   194	export const useUserRole = (appPubkey?: string) => {
+   195		const { data: adminSettings, isLoading: isLoadingAdmins } = useAdminSettings(appPubkey)
+   196		const { data: editorSettings, isLoading: isLoadingEditors } = useEditorSettings(appPubkey)
+   197		const ndk = getAppNdk()
+   198		const currentUserPubkey = ndk?.activeUser?.pubkey
+   199	
+   200		const amIAdmin = isAdmin(adminSettings, currentUserPubkey || '')
+   201		const amIOwner = isOwner(adminSettings, currentUserPubkey || '')
+   202		const amIEditor = isEditor(editorSettings, currentUserPubkey || '')
+   203	
+   204		// Determine the user's highest role
+   205		const userRole = getUserRoleForPubkey(adminSettings, editorSettings, currentUserPubkey || '')
+   206	
+   207		return {
+   208			amIAdmin,
+   209			amIOwner,
+   210			amIEditor,
+   211			userRole,
+   212			isLoading: isLoadingAdmins || isLoadingEditors,
+   213			adminSettings,
+   214			editorSettings,
+   215			currentUserPubkey,
+   216		}
+   217	}
+
+$ nl -ba platform/server/AdminManager.ts | sed -n "18,40 p"
+    18		public isAdmin(pubkey: string): boolean {
+    19			return this.adminPubkeys.has(pubkey)
+    20		}
+    21	
+    22		public getAdmins(): Set<string> {
+    23			return new Set(this.adminPubkeys)
+    24		}
+    25	
+    26		public updateFromEvent(event: NostrEvent | NDKEvent): void {
+    27			try {
+    28				// Extract admin pubkeys from 'p' tags in the admin list event
+    29				const newAdmins = event.tags.filter((tag) => tag[0] === 'p' && tag[1] && tag[1].length === 64).map((tag) => tag[1])
+    30	
+    31				// Replace the current admin list with the new one
+    32				this.adminPubkeys.clear()
+    33				newAdmins.forEach((pubkey) => this.adminPubkeys.add(pubkey))
+    34	
+    35				console.log(`Updated admin list with ${newAdmins.length} admins:`, newAdmins)
+    36			} catch (error) {
+    37				console.error('Failed to update admin list from event:', error)
+    38			}
+    39		}
+    40	
+
+$ nl -ba platform/server/EditorManager.ts | sed -n "18,40 p"
+    18		public isEditor(pubkey: string): boolean {
+    19			return this.editorPubkeys.has(pubkey)
+    20		}
+    21	
+    22		public getEditors(): Set<string> {
+    23			return new Set(this.editorPubkeys)
+    24		}
+    25	
+    26		public updateFromEvent(event: NostrEvent | NDKEvent): void {
+    27			try {
+    28				// Extract editor pubkeys from 'p' tags in the editor list event
+    29				const newEditors = event.tags.filter((tag) => tag[0] === 'p' && tag[1] && tag[1].length === 64).map((tag) => tag[1])
+    30	
+    31				// Replace the current editor list with the new one
+    32				this.editorPubkeys.clear()
+    33				newEditors.forEach((pubkey) => this.editorPubkeys.add(pubkey))
+    34	
+    35				console.log(`Updated editor list with ${newEditors.length} editors:`, newEditors)
+    36			} catch (error) {
+    37				console.error('Failed to update editor list from event:', error)
+    38			}
+    39		}
+    40	
+
+$ nl -ba platform/server/EventValidator.ts | sed -n "19,95 p"
+    19		public validateEvent(event: NostrEvent): EventValidationResult {
+    20			const eventType = this.getEventType(event)
+    21	
+    22			switch (eventType) {
+    23				case 'setup':
+    24					return this.validateSetupEvent(event)
+    25				case 'adminList':
+    26				case 'editorList':
+    27					return this.validateRoleListEvent(event)
+    28				case 'blacklist':
+    29					return this.validateBlacklistEvent(event)
+    30				default:
+    31					return this.validateGeneralEvent(event)
+    32			}
+    33		}
+    34	
+    35		private getEventType(event: NostrEvent): string {
+    36			if (event.kind === 31990 && event.content.includes('"name":')) {
+    37				return 'setup'
+    38			}
+    39			if (event.kind === 30000) {
+    40				const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+    41				if (dTag === 'admins') return 'adminList'
+    42				if (dTag === 'editors') return 'editorList'
+    43			}
+    44			if (event.kind === 10000) {
+    45				return 'blacklist'
+    46			}
+    47			return 'general'
+    48		}
+    49	
+    50		private validateSetupEvent(event: NostrEvent): EventValidationResult {
+    51			const appPubkey = getPublicKey(bytesFromHex(this.appPrivateKey))
+    52	
+    53			if (!this.bootstrapManager.isBootstrapMode() && event.pubkey !== appPubkey && !this.adminManager.isAdmin(event.pubkey)) {
+    54				return {
+    55					isValid: false,
+    56					reason: 'Setup event rejected: not in bootstrap mode and not signed by app or admin',
+    57				}
+    58			}
+    59	
+    60			return { isValid: true }
+    61		}
+    62	
+    63		private validateRoleListEvent(event: NostrEvent): EventValidationResult {
+    64			if (!this.bootstrapManager.isBootstrapMode() && !this.adminManager.isAdmin(event.pubkey)) {
+    65				return {
+    66					isValid: false,
+    67					reason: 'Role list event rejected: not in bootstrap mode and not from admin',
+    68				}
+    69			}
+    70	
+    71			return { isValid: true }
+    72		}
+    73	
+    74		private validateBlacklistEvent(event: NostrEvent): EventValidationResult {
+    75			if (!this.adminManager.isAdmin(event.pubkey) && !this.editorManager.isEditor(event.pubkey)) {
+    76				return {
+    77					isValid: false,
+    78					reason: 'Blacklist event rejected: not from admin or editor',
+    79				}
+    80			}
+    81	
+    82			return { isValid: true }
+    83		}
+    84	
+    85		private validateGeneralEvent(event: NostrEvent): EventValidationResult {
+    86			if (!this.adminManager.isAdmin(event.pubkey)) {
+    87				return {
+    88					isValid: false,
+    89					reason: 'General event rejected: not from admin',
+    90				}
+    91			}
+    92	
+    93			return { isValid: true }
+    94		}
+    95	}
+
+$ nl -ba platform/server/EventHandler.ts | sed -n "240,262 p"
+   240			return {
+   241				originalEvent: event,
+   242				signedEvent,
+   243				validationResult,
+   244			}
+   245		}
+   246	
+   247		private async handleSpecialEvents(event: NostrEvent): Promise<void> {
+   248			const isSetupEvent = event.kind === 31990 && event.content.includes('"name":')
+   249			const isAdminListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'admins')
+   250			const isEditorListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'editors')
+   251			const isBlacklistEvent = event.kind === 10000
+   252	
+   253			if (isSetupEvent) {
+   254				this.bootstrapManager.handleSetupEvent(event)
+   255			} else if (isAdminListEvent) {
+   256				console.log('Admin list event accepted, updating internal admin list')
+   257				this.adminManager.updateFromEvent(event)
+   258			} else if (isEditorListEvent) {
+   259				console.log('Editor list event accepted, updating internal editor list')
+   260				this.editorManager.updateFromEvent(event)
+   261			} else if (isBlacklistEvent) {
+   262				console.log('Blacklist event accepted, processing blacklist update')
+
+$ nl -ba platform/web/curationContext.ts | sed -n "20,36 p"
+    20	
+    21	export type { NdkClient }
+    22	
+    23	/** Curation lists go to the app server, which re-signs them with the app key. */
+    24	export function createAppSettingsPublishContext(ndk: NdkClient, signer: SignerCapability) {
+    25		return createSignerPublishContext(signer, (event) => submitAppSettingsEvent(event))
+    26	}
+    27	
+    28	/** Lists live under the app pubkey; without one, fall back to the signer's own pubkey. */
+    29	export async function resolveListOwner(signer: SignerCapability, appPubkey?: string): Promise<string> {
+    30		const currentUserPubkey = await signer.getPublicKey()
+    31		if (!currentUserPubkey) {
+    32			throw new Error('Unable to get current user pubkey')
+    33		}
+    34		return appPubkey || currentUserPubkey
+    35	}
+    36	
+
+$ nl -ba platform/web/app-settings/appSettingsPublish.ts | sed -n "60,105 p"
+    60			'owner-protected': 'Cannot demote the owner',
+    61			'last-admin': 'Cannot demote the last admin',
+    62		},
+    63		demoteEditorToUser: { 'not-editor': 'User is not currently an editor' },
+    64	}
+    65	
+    66	async function publishRoleList(list: 'admins' | 'editors', items: string[], signer: SignerCapability, ndk: NDK): Promise<string> {
+    67		const outcome = await publishCurationListWorkflow(await createAppSettingsPublishContext(ndk, signer), list, items)
+    68		if (!outcome.ok) throw new Error(curationIssueMessage(outcome))
+    69		return outcome.event.id
+    70	}
+    71	
+    72	/** Reads one role list by its NIP-33 address; `null` when no list event exists. */
+    73	async function fetchRoleList(ndk: NDK, owner: string, list: 'admins' | 'editors'): Promise<string[] | null> {
+    74		const event = await ndk.fetchEvent(naddrFromAddress(CURATION_LISTS[list].kind, owner, CURATION_LISTS[list].dTag))
+    75		return event ? readCurationListItems(list, event.tags) : null
+    76	}
+    77	
+    78	async function fetchRoleState(owner: string): Promise<RoleListsState> {
+    79		const adminSettings = await fetchAdminSettings(owner)
+    80		const editorSettings = await fetchEditorSettings(owner)
+    81		return { admins: adminSettings?.admins ?? null, editors: editorSettings?.editors ?? null, owner: adminSettings?.owner }
+    82	}
+    83	
+    84	/** Plans the change with the SDK role rules, then publishes the admin list before the editor list. */
+    85	async function applyRoleChange(
+    86		change: RoleChange,
+    87		state: RoleListsState,
+    88		userPubkey: string,
+    89		signer: SignerCapability,
+    90		ndk: NDK,
+    91	): Promise<{ adminEventId?: string; editorEventId?: string }> {
+    92		const plan = planRoleChange(change, state, userPubkey)
+    93		if (!plan.ok) throw new Error(ROLE_ISSUE_OVERRIDES[change]?.[plan.error] ?? ROLE_ISSUE_MESSAGES[plan.error])
+    94	
+    95		const outcome = await publishRoleChangeWorkflow(await createAppSettingsPublishContext(ndk, signer), plan.value)
+    96		if (!outcome.ok) throw new Error(curationIssueMessage(outcome))
+    97		return { adminEventId: outcome.adminEvent?.id, editorEventId: outcome.editorEvent?.id }
+    98	}
+    99	
+   100	/**
+   101	 * Publishes an updated admin list through WebSocket interface
+   102	 */
+   103	export const publishAdminList = (adminData: AdminListData, signer: SignerCapability, ndk: NDK): Promise<string> =>
+   104		publishRoleList('admins', adminData.admins ?? [], signer, ndk)
+   105	
+
+$ nl -ba platform/web/app/useRootRedirects.ts | sed -n "20,50 p"
+    20	export function useRootRedirects() {
+    21		const config = useStore(configStore, (s) => s.config)
+    22		const navigate = useNavigate()
+    23		const location = useLocation()
+    24		const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
+    25	
+    26		const { pathname } = window.location
+    27		const isSetupPage = location.pathname === '/setup'
+    28		const isAdminRoute = pathname.startsWith('/dashboard/app-settings')
+    29	
+    30		useEffect(() => {
+    31			if (config?.needsSetup && !isSetupPage) {
+    32				navigate({ to: '/setup' })
+    33			} else if (!config?.needsSetup && isSetupPage) {
+    34				navigate({ to: '/' })
+    35			}
+    36		}, [config, navigate, isSetupPage])
+    37	
+    38		useEffect(() => {
+    39			if (isLoadingAdmin) return
+    40			if (isAdminRoute && !amIAdmin) {
+    41				navigate({ to: '/dashboard' })
+    42			}
+    43		}, [isAdminRoute, amIAdmin, isLoadingAdmin, navigate])
+    44	}
+
+
+### SECTION 11 — drift check: the docs against the code
+
+$ git grep -n -E 'api/vanity/invoice|404|useStorefrontSync' -- docs/vanity-urls.md
+docs/vanity-urls.md:81:4. Dashboard calls `/api/vanity/invoice` endpoint to generate Lightning invoice
+docs/vanity-urls.md:93:4. If not found/expired → shows 404 page with option to return home
+docs/vanity-urls.md:220:### POST `/api/vanity/invoice`
+
+$ git grep -rn 'api/vanity' -- platform || echo 'NONE: no /api/vanity route exists'
+NONE: no /api/vanity route exists
+
+$ nl -ba docs/vanity-urls.md | sed -n "88,94 p"
+    88	## Resolution Flow
+    89	
+    90	1. User navigates to `/{vanityName}`
+    91	2. `$vanityName.tsx` route resolves via `vanityActions.resolveVanity()`
+    92	3. If found and valid → renders profile page directly (mirror route)
+    93	4. If not found/expired → shows 404 page with option to return home
+    94	
+
+
+=== end of evidence ===
