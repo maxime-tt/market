@@ -122,6 +122,8 @@ export interface ArenaAuctionLotHostProps {
 	read: ArenaSurfacesReadState
 	/** Called after a bid reached a relay, so the route can reopen the read. */
 	onPublished: (eventId: string) => void
+	/** The "All lots" link; `null` hides it (the index features a lot on its own page). */
+	backHref?: string | null
 }
 
 /**
@@ -130,7 +132,7 @@ export interface ArenaAuctionLotHostProps {
  * When the lot is ambiguous it renders the candidates and nothing else — no
  * detail model is built, because building one would mean choosing a seller.
  */
-export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: ArenaAuctionLotHostProps) {
+export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, backHref = '/auctions' }: ArenaAuctionLotHostProps) {
 	const lookup: ArenaLotLookup = read.snapshot === null ? { kind: 'missing' } : resolveArenaLot(read.snapshot, d, seller)
 
 	const view = lookup.kind === 'found' ? lookup.view : null
@@ -153,7 +155,7 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: Arena
 			status={read.status}
 			relayHealth={read.relayHealth}
 			now={now}
-			backHref="/auctions"
+			backHref={backHref}
 			chainClockLabel={read.chainClock === null ? null : chainClockLabel(read.chainClock)}
 			sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} subtitle="npub" />}
 			renderName={(pubkey) => <BidderName pubkey={pubkey} />}

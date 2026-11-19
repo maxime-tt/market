@@ -26,7 +26,7 @@ import { createMemoryHistory, createRootRoute, createRoute, createRouter, Router
 import { createElement, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { BrowseNav } from '@ui/browse/browse-nav'
-import { hidesAppHeader } from './appChrome'
+import { hidesAppHeader, usesArenaChrome } from './appChrome'
 
 /** The marker the stubbed legacy header renders with, and nothing else does. */
 const LEGACY_HEADER_MARKER = 'data-testid="legacy-app-header"'
@@ -177,5 +177,19 @@ describe('hidesAppHeader', () => {
 		// One opting-out match anywhere in the chain hides it.
 		expect(hidesAppHeader([{ staticData: { hidesAppHeader: true } }])).toBe(true)
 		expect(hidesAppHeader([{}, { staticData: { hidesAppHeader: true } }, {}])).toBe(true)
+	})
+})
+
+describe('usesArenaChrome', () => {
+	test('the auction routes and the home / Browse surface use the Arena chrome', () => {
+		expect(usesArenaChrome('/')).toBe(true)
+		expect(usesArenaChrome('/auctions')).toBe(true)
+		expect(usesArenaChrome('/auctions/live-arena-1')).toBe(true)
+	})
+
+	test('every other page keeps the default chrome', () => {
+		for (const path of ['/products', '/products/x', '/dashboard', '/auctionsx', '/community', '/profile/abc']) {
+			expect(usesArenaChrome(path)).toBe(false)
+		}
 	})
 })
