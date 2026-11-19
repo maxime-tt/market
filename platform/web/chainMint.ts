@@ -30,7 +30,8 @@ import { fetchMintKeysets } from '@sdk/commerce/auctions/validation'
 import type { ChainMintResolution, ChainMintTerms } from '@sdk/commerce/payments/chainMint'
 import { resolveChainMintFrom } from '@sdk/commerce/payments/chainMint'
 import { createWebArenaParamsRead } from '@platform/web/auctions/relay/arenaParamsRead'
-import { getReadContext } from '@platform/web/readContext'
+import { getAppRelayUrl, getReadContext } from '@platform/web/readContext'
+import { arenaParamsRelays } from '@platform/web/auctions/relay/arenaParamsRelays'
 import { webRelayPolicy } from '@platform/web/sdkNostrIo'
 
 /**
@@ -93,10 +94,11 @@ async function readConfiguredMints(): Promise<readonly string[]> {
  * identity reads nothing and the mint is resolved without chain verification.
  */
 function chainRelays(): string[] {
-	const configured = [...webRelayPolicy('query')]
-	if (configured.length > 0) return configured
-	const appRelay = configStore.get().config.appRelay
-	return appRelay ? [appRelay] : []
+	// The instance relay first, alone: the committee publishes its terms there,
+	// and public relays carry other committees' terms (whose mint may be a
+	// loopback address on their own host) — see `arenaParamsRelays`.
+	const appRelay = getAppRelayUrl() ?? configStore.get().config.appRelay
+	return arenaParamsRelays(appRelay, webRelayPolicy('query'))
 }
 
 /** The production read of the chain's terms; `null` when no anchored reading arrived. */
