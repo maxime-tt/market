@@ -79,13 +79,14 @@ export interface AppBarViewProps {
  * Below `sm` the bar is TWO rows (`grid-rows-[auto_auto]`): the brand and the
  * account cluster keep the first row and their `auto | 1fr | auto` tracks, and
  * the search slot leaves the middle track for a full-width second row of its
- * own (`col-start-1 col-end-3 row-start-2`, back to the middle track from `sm`).
- * Measured before: in the shared phone row the field resolved to 27px with a
- * 0-width input, because the brand (203px) and the rigid 88px account cluster
- * ate it; on its own row it gets the bar's whole inner width (~358px at 390px,
- * still capped at 560px). The row is an `auto` track, so when no field is
- * mounted (`searchSlot` absent, or a page field hiding the header's) it
- * collapses to nothing and the bar stays one row tall.
+ * own (`col-start-1 col-end-4 row-start-2` — all three tracks, so the row is the
+ * bar's full inner width and not the two-thirds a `col-end-3` span leaves; back
+ * to the middle track from `sm`). Measured before: in the shared phone row the
+ * field resolved to 27px with a 0-width input, because the brand (203px) and the
+ * rigid 88px account cluster ate it; on its own row it gets the whole inner
+ * width (~358px at 390px, still capped at 560px). The row is an `auto` track, so
+ * when no field is mounted (`searchSlot` absent, or a page field hiding the
+ * header's) it collapses to nothing and the bar stays one row tall.
  *
  * The nav list appears from `xl`: a third of the bar has to hold brand + nav
  * before a symmetric row is honest, and below that a centred field would either
@@ -154,7 +155,7 @@ export const AppBarView: FC<AppBarViewProps> = ({ brand, navItems, searchSlot, a
 				 */
 				<div
 					data-slot="search-slot"
-					className="col-start-1 col-end-3 row-start-2 flex w-full min-w-0 items-center justify-center sm:col-start-2 sm:col-end-3 sm:row-start-1"
+					className="col-start-1 col-end-4 row-start-2 flex w-full min-w-0 items-center justify-center sm:col-start-2 sm:col-end-3 sm:row-start-1"
 				>
 					{searchSlot}
 				</div>

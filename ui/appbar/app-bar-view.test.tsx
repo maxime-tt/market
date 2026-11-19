@@ -141,10 +141,12 @@ describe('AppBarView', () => {
 		expect(bar).toContain('min-h-16')
 
 		// The search leaves the middle track for a full-width second row on a
-		// phone, and returns to the middle track from `sm` up.
+		// phone — all three tracks, so the row is the bar's whole inner width and
+		// not the two-thirds a `col-end-3` span left (~250px of 358px at 390px) —
+		// and returns to the middle track from `sm` up.
 		const slot = openingTag(markup, 'data-slot="search-slot"')
 		expect(slot).toContain('col-start-1')
-		expect(slot).toContain('col-end-3')
+		expect(slot).toContain('col-end-4')
 		expect(slot).toContain('row-start-2')
 		expect(slot).toContain('sm:col-start-2')
 		expect(slot).toContain('sm:col-end-3')

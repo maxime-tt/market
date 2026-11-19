@@ -253,7 +253,23 @@ export const SearchPreview: FC<SearchPreviewProps> = ({ query, onChange, onGo, c
 					<SearchField size="nav" value={query} onChange={handleChange} onGo={handleGo} announce={false} />
 				</div>
 			</PopoverAnchor>
-			<PopoverContent data-testid="search-preview-panel" align="center" sideOffset={8} className={CONTENT_CLASS}>
+			<PopoverContent
+				data-testid="search-preview-panel"
+				align="center"
+				sideOffset={8}
+				className={CONTENT_CLASS}
+				/*
+				 * The preview is a passive panel: the field keeps focus for the whole
+				 * interaction. Radix's `FocusScope` would otherwise focus the panel's
+				 * own container as soon as it mounts (its first tabbable is stripped —
+				 * the rows are links — so it falls through to focusing the container),
+				 * which swallows every keystroke after the first one, and hand focus
+				 * back to a previous element on close. Preventing both keeps the caret
+				 * in the input, including for the Enter that opens the full results.
+				 */
+				onOpenAutoFocus={(event) => event.preventDefault()}
+				onCloseAutoFocus={(event) => event.preventDefault()}
+			>
 				<SearchPreviewPanel state={state} />
 			</PopoverContent>
 		</Popover>
