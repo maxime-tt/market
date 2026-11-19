@@ -29,6 +29,11 @@ export function useServiceWorker(): {
 		if (process.env.NODE_ENV !== 'production') return
 
 		let cancelled = false
+		// A first visit has no controller yet. The new worker's clients.claim()
+		// then fires controllerchange, and reloading there would boot the whole
+		// app twice on every first visit (ADR-0026). Only a real update, where an
+		// older worker was already in control, reloads.
+		const hadController = !!navigator.serviceWorker.controller
 		let intervalId: ReturnType<typeof setInterval> | null = null
 
 		navigator.serviceWorker
@@ -63,6 +68,7 @@ export function useServiceWorker(): {
 		// once so the page picks up the new assets. Guard with sessionStorage
 		// to avoid an infinite reload loop if controllerchange fires repeatedly.
 		const onControllerChange = () => {
+			if (!hadController) return
 			if (sessionStorage.getItem('sw-reload')) return
 			sessionStorage.setItem('sw-reload', 'true')
 			window.location.reload()
