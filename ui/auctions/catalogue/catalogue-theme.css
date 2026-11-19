@@ -39,8 +39,9 @@
 
 .cat__ticker {
 	overflow: hidden;
-	margin: -6px -24px 16px;
-	border-block: 1px solid var(--cat-line);
+	/* Butts against the header's bottom border, so only one line shows. */
+	margin: -20px -24px 16px;
+	border-bottom: 1px solid var(--cat-line);
 	background: color-mix(in oklab, var(--cat-bg) 70%, var(--cat-surface));
 	color: var(--cat-muted);
 	font-family: var(--cat-mono);
@@ -479,7 +480,7 @@
 	}
 
 	.cat__ticker {
-		margin: -4px -14px 14px;
+		margin: -14px -14px 14px;
 	}
 
 	.cat__panel {
