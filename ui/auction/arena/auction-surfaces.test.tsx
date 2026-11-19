@@ -21,10 +21,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import {
 	ARENA_QUORUM_DISCLAIMER,
 	ARENA_UNKNOWN_END_LABEL,
+	ARENA_VERDICT_ABSENT_LABEL,
+	ARENA_VERDICT_NOT_CLOSED_LABEL,
+	ARENA_VERDICT_PHASE_UNKNOWN_LABEL,
+	ARENA_VERDICT_READING_LABEL,
 	bidCountLabel,
 	phaseLabel,
 	priceLine,
 	readStateMessage,
+	verdictEmptyLabel,
 	type ArenaAuctionCardModel,
 	type ArenaVerdictPanelModel,
 	type ArenaVerdictRow,
@@ -78,6 +83,7 @@ function verdictRow(over: Partial<ArenaVerdictRow> = {}): ArenaVerdictRow {
 function panel(over: Partial<ArenaVerdictPanelModel> = {}): ArenaVerdictPanelModel {
 	return {
 		auctionId: COORD,
+		phase: 'open',
 		rows: [],
 		validatorCount: 0,
 		outcomes: [],
@@ -128,11 +134,60 @@ describe('card formatters', () => {
 // =========================================================================
 
 describe('ArenaVerdictPanel — no quorum is inferred, ever', () => {
-	test('the quorum disclaimer is present with zero verdicts', () => {
-		const html = render(createElement(ArenaVerdictPanel, { model: panel(), status: 'settled', relayHealth: HEALTH }))
-		expect(html).toContain(ARENA_QUORUM_DISCLAIMER)
+	test('verdictEmptyLabel states the phase only once the read has settled', () => {
+		expect(verdictEmptyLabel('open', 'loading')).toBe(ARENA_VERDICT_READING_LABEL)
+		expect(verdictEmptyLabel('ended', 'incomplete')).toBe(ARENA_VERDICT_READING_LABEL)
+		expect(verdictEmptyLabel('unknown', 'error')).toBe(ARENA_VERDICT_READING_LABEL)
+		expect(verdictEmptyLabel('open', 'settled')).toBe(ARENA_VERDICT_NOT_CLOSED_LABEL)
+		expect(verdictEmptyLabel('ended', 'settled')).toBe(ARENA_VERDICT_ABSENT_LABEL)
+		expect(verdictEmptyLabel('unknown', 'settled')).toBe(ARENA_VERDICT_PHASE_UNKNOWN_LABEL)
+	})
+
+	test('an open lot with no verdicts states the lot has not closed, and never an absence', () => {
+		const html = render(createElement(ArenaVerdictPanel, { model: panel({ phase: 'open' }), status: 'settled', relayHealth: HEALTH }))
+		expect(html).toContain(ARENA_VERDICT_NOT_CLOSED_LABEL)
+		expect(html).toContain('still open')
+		expect(html).toContain('publish a verdict when the chain closes a lot')
+		expect(html).not.toContain('No validator published a verdict')
+		expect(html).not.toContain('That is an absence')
+		expect(html).not.toContain(ARENA_QUORUM_DISCLAIMER)
+	})
+
+	test('a closed lot with no verdicts keeps the absence sentence, and no disclaimer', () => {
+		const html = render(createElement(ArenaVerdictPanel, { model: panel({ phase: 'ended' }), status: 'settled', relayHealth: HEALTH }))
+		expect(html.replace(/&quot;/g, '"')).toContain(ARENA_VERDICT_ABSENT_LABEL)
 		expect(html).toContain('No validator published a verdict')
 		expect(html).toContain('That is an absence, not a verdict')
+		expect(html).not.toContain(ARENA_VERDICT_NOT_CLOSED_LABEL)
+		expect(html).not.toContain(ARENA_QUORUM_DISCLAIMER)
+	})
+
+	test('a lot with no readable end says so rather than claiming it closed', () => {
+		const html = render(createElement(ArenaVerdictPanel, { model: panel({ phase: 'unknown' }), status: 'settled', relayHealth: HEALTH }))
+		expect(html).toContain(ARENA_VERDICT_PHASE_UNKNOWN_LABEL)
+		expect(html).toContain('whether the chain has closed it is unknown')
+		expect(html).not.toContain('No validator published a verdict')
+		expect(html).not.toContain(ARENA_QUORUM_DISCLAIMER)
+	})
+
+	test('a closed lot with verdicts lists them, counts the validators, and explains the list', () => {
+		const html = render(
+			createElement(ArenaVerdictPanel, {
+				model: panel({
+					phase: 'ended',
+					rows: [verdictRow({ validator: V1 }), verdictRow({ validator: V2, outcome: 'cancelled', height: 120 })],
+					validatorCount: 2,
+					outcomes: ['cancelled', 'winner'],
+				}),
+				status: 'settled',
+				relayHealth: HEALTH,
+			}),
+		)
+		expect(html).toContain('data-slot="arena-verdict-row"')
+		expect(html).toContain('2 verdicts')
+		expect(html).toContain('2 validators')
+		expect(html).toContain(ARENA_QUORUM_DISCLAIMER)
+		expect(html).not.toContain('No validator published a verdict')
 	})
 
 	test('the disclaimer survives a single verdict — one verdict is not a quorum', () => {
@@ -153,6 +208,7 @@ describe('ArenaVerdictPanel — no quorum is inferred, ever', () => {
 		expect(html).toContain('No verdict has been read yet')
 		expect(html).toContain('not &quot;no verdict&quot;')
 		expect(html).not.toContain('No validator published a verdict')
+		expect(html).not.toContain(ARENA_QUORUM_DISCLAIMER)
 	})
 
 	test('validators publishing different outcomes are shown as disagreeing, not resolved', () => {

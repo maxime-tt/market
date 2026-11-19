@@ -319,6 +319,13 @@ export interface ArenaVerdictRelayDivergence {
 
 export interface ArenaVerdictPanelModel {
 	auctionId: string
+	/**
+	 * The lot's phase, from the same end the countdown shows
+	 * ({@link ArenaAuctionCardModel.endsAt}). The panel needs it to say *why*
+	 * it has no rows: an open lot has no verdict yet because the chain has not
+	 * closed it, which is a fact about the lot, not an absence in the read.
+	 */
+	phase: ArenaAuctionPhase
 	rows: ArenaVerdictRow[]
 	/** Distinct validator keys among `rows`, ignoring rows with no `p` tag. */
 	validatorCount: number
@@ -540,9 +547,54 @@ export function settleReceiptLabel(receipt: ArenaReceiptModel): string {
  */
 export const ARENA_RECEIPT_PARAMS_MISMATCH_LABEL = 'the receipt names a different params version than the one this app holds'
 
-/** The one place the panel is allowed to say what it is not doing. */
+/**
+ * The one place the panel is allowed to say what it is not doing. It is
+ * rendered **with the verdict rows** — it explains the list on screen. It is
+ * never the empty state: "quorum is not implemented" over zero rows reads as a
+ * product admission rather than a property of the list.
+ */
 export const ARENA_QUORUM_DISCLAIMER =
 	'Quorum is not implemented. This panel lists the verdicts validators published to the relay — it does not tally them, does not choose a winner, and does not confirm that any money moved.'
+
+/**
+ * The empty-state sentence for a lot that has **not closed**. A verdict does not
+ * exist yet because the chain has not closed the lot — never phrased as an
+ * absence in the read, which would imply the absence is informative.
+ */
+export const ARENA_VERDICT_NOT_CLOSED_LABEL =
+	'This lot is still open. Validators publish a verdict when the chain closes a lot, so there is no verdict to read yet.'
+
+/**
+ * The empty-state sentence for a lot that **has closed** and still carried no
+ * verdict. Reserved for that case: on an open lot it would imply the absence
+ * says something about the outcome.
+ */
+export const ARENA_VERDICT_ABSENT_LABEL =
+	'No validator published a verdict for this auction that these relays carried. That is an absence, not a verdict of "no outcome".'
+
+/**
+ * The empty-state sentence when the read cannot say whether the lot closed: no
+ * end was stated, so neither "still open" nor "closed" is supportable.
+ */
+export const ARENA_VERDICT_PHASE_UNKNOWN_LABEL =
+	'This lot states no end that could be read, so whether the chain has closed it is unknown. These relays carried no verdict for it.'
+
+/** The empty-state sentence while the read is unfinished — never a no-data notice. */
+export const ARENA_VERDICT_READING_LABEL = 'No verdict has been read yet — the read has not finished, so this is not "no verdict".'
+
+/**
+ * The sentence the verdict panel states when it holds no rows. The read state
+ * wins over the phase: a read that has not settled has not delivered the whole
+ * picture, so it may not render a no-data notice. Once it has settled, the lot's
+ * phase decides — an open lot has no verdict yet, a closed lot's silence is an
+ * absence, and an unknown end states that it is unknown.
+ */
+export function verdictEmptyLabel(phase: ArenaAuctionPhase, status: ArenaSurfaceStatus): string {
+	if (status !== 'settled') return ARENA_VERDICT_READING_LABEL
+	if (phase === 'open') return ARENA_VERDICT_NOT_CLOSED_LABEL
+	if (phase === 'ended') return ARENA_VERDICT_ABSENT_LABEL
+	return ARENA_VERDICT_PHASE_UNKNOWN_LABEL
+}
 
 // =========================================================================
 // The honesty sentences a list/card surface may state

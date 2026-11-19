@@ -550,11 +550,19 @@ describe('toVerdictPanelModel', () => {
 		expect(panel.validatorCount).toBe(1)
 	})
 
-	test('no verdicts is an empty panel, which the view must read as unknown', () => {
+	test('no verdicts is an empty panel that carries the lot phase, not a chain absence', () => {
+		// The create states 3600s at 1000, so the lot ends at 4600; `CONTEXT.now` is 2000.
 		const panel = toVerdictPanelModel(onlyAuction(snapshotOf([createEvent()])), CONTEXT)
 		expect(panel.rows).toEqual([])
 		expect(panel.outcomes).toEqual([])
 		expect(panel.validatorCount).toBe(0)
+		expect(panel.phase).toBe('open')
+	})
+
+	test('the phase is judged at the projection instant, so a passed end reads as ended', () => {
+		const auction = onlyAuction(snapshotOf([createEvent()]))
+		expect(toVerdictPanelModel(auction, { ...CONTEXT, now: 4600 }).phase).toBe('ended')
+		expect(toVerdictPanelModel(auction, { ...CONTEXT, now: 4599 }).phase).toBe('open')
 	})
 })
 
