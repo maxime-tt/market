@@ -143,21 +143,6 @@ describe('ArenaLotView', () => {
 		expect(html).toContain('Sign in to bid')
 	})
 
-	test('a signed-out viewer with sign-in wired gets live, full-colour controls', () => {
-		const html = render({
-			bid: bid({
-				viewer: null,
-				blockedReason: 'no-wallet',
-				check: { allowed: false, reason: 'no-wallet', amount: null, minimum: 1_600, ownPosition: null },
-				onSignIn: () => {},
-			}),
-		})
-		const place = html.match(/<button[^>]*data-testid="arena-lot-place"[^>]*>/)?.[0] ?? ''
-		expect(place).not.toContain('disabled')
-		expect(html).toContain('Swipe to bid')
-		expect(html).not.toMatch(/<button[^>]*disabled[^>]*aria-label="Next/)
-	})
-
 	test('a missing lot renders the read state, not a zero', () => {
 		const html = render({ model: null, status: 'loading' })
 		expect(html).toContain('arena-lot-state')

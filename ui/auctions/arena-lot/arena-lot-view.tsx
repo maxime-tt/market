@@ -52,12 +52,6 @@ export interface ArenaLotBidProps {
 	onSubmit: () => void
 	/** Publish this exact delta (the swipe), through the same check and path. */
 	onSubmitAmount: (raw: string) => void
-	/**
-	 * Opens sign-in. When the only thing stopping a bid is that nobody is signed
-	 * in, the controls stay live and full colour (as in the Arena demo) and every
-	 * bid action routes here instead of rendering greyed out.
-	 */
-	onSignIn?: () => void
 }
 
 export interface ArenaLotViewProps {
@@ -315,9 +309,8 @@ export function ArenaLotView({
 	// Closed for good: the controls would offer nothing, so only the reason shows.
 	// Other blocks (sign in, own lot) keep the controls visible but inert.
 	const closedForGood = bid !== null && (bid.blockedReason === 'ended' || bid.blockedReason === 'concluded')
-	const signIn = bid !== null && bid.blockedReason === 'no-wallet' && bid.onSignIn ? bid.onSignIn : null
-	const controlsDisabled = bid === null || (hardBlocked && signIn === null) || bid.pending
-	const submitDisabled = signIn !== null ? false : controlsDisabled || bid.check === null || !bid.check.allowed
+	const controlsDisabled = bid === null || hardBlocked || bid.pending
+	const submitDisabled = controlsDisabled || bid.check === null || !bid.check.allowed
 	const invalidCopy =
 		bid !== null && bid.check !== null && !bid.check.allowed && !hardBlocked ? bidBlockedCopy(bid.check.reason, bid.check) : null
 	const line = bid === null ? null : submissionLine(bid.submission)
@@ -494,8 +487,7 @@ export function ArenaLotView({
 									className="arn-custom"
 									onSubmit={(e) => {
 										e.preventDefault()
-										if (signIn !== null) signIn()
-										else if (!submitDisabled) bid.onSubmit()
+										if (!submitDisabled) bid.onSubmit()
 									}}
 								>
 									<label className="arn-amount" data-invalid={invalidCopy !== null && bid.amountInput.trim() !== ''}>
@@ -525,12 +517,12 @@ export function ArenaLotView({
 									</p>
 								)}
 
-								{(!hardBlocked || signIn !== null) && next !== null && (
+								{!hardBlocked && next !== null && (
 									<SwipeToBid
 										label="Swipe to bid"
 										amount={sats(next.target)}
 										disabled={controlsDisabled}
-										onConfirm={() => (signIn !== null ? signIn() : bid.onSubmitAmount(String(next.delta)))}
+										onConfirm={() => bid.onSubmitAmount(String(next.delta))}
 									/>
 								)}
 
@@ -723,11 +715,7 @@ export function ArenaLotView({
 						<b>{priceValue === null ? 'not stated' : `${sats(priceValue)} sats`}</b>
 						<span className="arn-sticky__time">{ended ? 'Closed' : clock}</span>
 					</div>
-					{live && signIn !== null ? (
-						<button className="arn-btn" type="button" onClick={signIn}>
-							Sign in to bid
-						</button>
-					) : live && bid !== null && !hardBlocked && next !== null ? (
+					{live && bid !== null && !hardBlocked && next !== null ? (
 						<a
 							className="arn-btn"
 							href="#arn-bid"

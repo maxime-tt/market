@@ -58,7 +58,6 @@
  * app assumed it.
  */
 
-import { uiActions } from '@platform/web/app/uiStore'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import type { EventStorePort } from '@sdk/core'
@@ -186,8 +185,6 @@ export interface AuctionBidController {
 	onSubmit: () => void
 	/** Submit a specific delta at once (the Arena swipe), through the same publish path. */
 	onSubmitAmount: (raw: string) => void
-	/** Opens the login dialog; the Arena lot routes signed-out bid actions here. */
-	onSignIn: () => void
 }
 
 /**
@@ -325,7 +322,6 @@ export function useAuctionBidController({
 			setAmountInput(raw)
 			void submitRaw(raw)
 		},
-		onSignIn: () => uiActions.openDialog('login'),
 	}
 }
 
