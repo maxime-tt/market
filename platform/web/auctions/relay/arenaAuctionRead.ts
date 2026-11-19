@@ -112,6 +112,7 @@
  * if a constraint failure is invisible).
  */
 
+import { parseLotMedia, type LotMediaItem } from '@sdk/commerce/auctions/lotMedia'
 import type { EventFilter, EventStorePort, EventStreamItem, NostrEventLike } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
 import { createWebRelayReadContext } from '@platform/web/sdkNostrIo'
@@ -267,6 +268,8 @@ export interface ArenaCreateContent {
 	description: string | null
 	/** The lot's image URL (`image` on the wire). */
 	image: string | null
+	/** Gallery items after `image` (`media` on the wire); unsafe entries are dropped. */
+	media: LotMediaItem[]
 	/** The opening price (`startPrice` on the wire); `null` when unstated. */
 	startPrice: number | null
 	minIncrement: number | null
@@ -430,6 +433,7 @@ function createContentOf(content: Record<string, unknown>): ArenaCreateContent {
 		title: asTrimmedString(content.title),
 		description: asTrimmedString(content.description),
 		image: asTrimmedString(content.image),
+		media: parseLotMedia(content.media),
 		startPrice: asFiniteNumber(content.startPrice),
 		minIncrement: asFiniteNumber(content.minIncrement),
 		mode: asTrimmedString(content.mode),

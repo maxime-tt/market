@@ -16,6 +16,7 @@
  */
 import { Button } from '@ui/primitives/button'
 import { ImageUploader } from '@platform/web/media/ImageUploader'
+import { LOT_MEDIA_MAX_EXTRA, type LotMediaItem, type LotMediaType } from '@sdk/commerce/auctions/lotMedia'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import {
 	auctionFormToCreateInput,
@@ -50,6 +51,7 @@ const INITIAL_FORM: AuctionFormData = {
 	title: '',
 	description: '',
 	imageUrl: '',
+	media: [],
 	category: '',
 	name: '',
 	startPrice: '',
@@ -67,6 +69,7 @@ const VALIDATION_FIELD_LABELS: Record<AuctionPublishValidationField, string> = {
 	title: 'Title',
 	description: 'Description',
 	image: 'Image',
+	media: 'Gallery',
 	startPrice: 'Starting Bid',
 	minIncrement: 'Bid Increment',
 	mode: 'Closing Rule',
@@ -94,6 +97,160 @@ function isMeaningfulDraft(formData: AuctionFormData): boolean {
 	return formData.title.trim().length > 0 || formData.imageUrl.trim().length > 0
 }
 
+/**
+ * The lot's media: the main photo (`image`), then a gallery of more photos and
+ * optional video or live stream links (`media`). Photos come first on the lot
+ * page, in the order set here; video and live items follow them.
+ */
+function MediaTab({
+	formData,
+	setFormData,
+	validationMessages,
+}: {
+	formData: AuctionFormData
+	setFormData: (updater: (prev: AuctionFormData) => AuctionFormData) => void
+	validationMessages: ValidationMessages
+}) {
+	const media = formData.media ?? []
+	const photos = media.filter((item) => item.type === 'image')
+	const streams = media.filter((item) => item.type !== 'image')
+	const [addingPhoto, setAddingPhoto] = useState(true)
+	const write = (nextPhotos: LotMediaItem[], nextStreams: LotMediaItem[]) =>
+		setFormData((prev) => ({ ...prev, media: [...nextPhotos, ...nextStreams] }))
+	const movePhoto = (from: number, to: number) => {
+		if (to < 0 || to >= photos.length) return
+		const next = [...photos]
+		;[next[from], next[to]] = [next[to], next[from]]
+		write(next, streams)
+	}
+	const full = media.length >= LOT_MEDIA_MAX_EXTRA
+
+	return (
+		<div className="space-y-6">
+			<div className="space-y-3">
+				<Label className="text-base font-medium">Main photo</Label>
+				<p className="text-text-mid">Shown first and on the auction card. We recommend a square image of 1600x1600 and under 2mb.</p>
+				{validationMessages.image && <p className="text-xs text-error">{validationMessages.image}</p>}
+				<ImageUploader
+					src={formData.imageUrl || null}
+					index={0}
+					imagesLength={1}
+					forSingle
+					initialUrl={formData.imageUrl}
+					onUrlChange={(url) => setFormData((prev) => ({ ...prev, imageUrl: url }))}
+					onSave={({ url }) => setFormData((prev) => ({ ...prev, imageUrl: url }))}
+					onDelete={() => setFormData((prev) => ({ ...prev, imageUrl: '' }))}
+				/>
+			</div>
+
+			<div className="space-y-3">
+				<Label className="text-base font-medium">More photos</Label>
+				<p className="text-text-mid">
+					Optional. These show as thumbnails under the main photo, in this order. Up to {LOT_MEDIA_MAX_EXTRA} gallery items.
+				</p>
+				{validationMessages.media && <p className="text-xs text-error">{validationMessages.media}</p>}
+				{photos.map((photo, i) => (
+					<ImageUploader
+						key={`${photo.url}:${i}`}
+						src={photo.url}
+						index={i}
+						imagesLength={photos.length}
+						onSave={({ url, index }) =>
+							write(
+								photos.map((p, j) => (j === index ? { ...p, url } : p)),
+								streams,
+							)
+						}
+						onDelete={(index) =>
+							write(
+								photos.filter((_, j) => j !== index),
+								streams,
+							)
+						}
+						onPromote={(index) => movePhoto(index, index - 1)}
+						onDemote={(index) => movePhoto(index, index + 1)}
+					/>
+				))}
+				{addingPhoto && !full && (
+					<ImageUploader
+						key={`new-photo-${photos.length}`}
+						src={null}
+						index={-1}
+						imagesLength={0}
+						initialUrl=""
+						onSave={({ url }) => {
+							write([...photos, { type: 'image', url }], streams)
+							setAddingPhoto(true)
+						}}
+						onDelete={() => setAddingPhoto(false)}
+					/>
+				)}
+				{!addingPhoto && !full && (
+					<Button type="button" variant="outline" size="sm" onClick={() => setAddingPhoto(true)}>
+						Add another photo
+					</Button>
+				)}
+			</div>
+
+			<div className="space-y-3">
+				<Label className="text-base font-medium">Video and live stream</Label>
+				<p className="text-text-mid">Optional. Paste an https:// link to a video file (MP4 or WebM) or a live stream.</p>
+				{streams.map((item, i) => (
+					<div key={i} className="flex items-center gap-2" data-testid="auction-media-stream-row">
+						<Select
+							value={item.type}
+							onValueChange={(type) =>
+								write(
+									photos,
+									streams.map((s, j) => (j === i ? { ...s, type: type as LotMediaType } : s)),
+								)
+							}
+						>
+							<SelectTrigger className="w-36 shrink-0" aria-label="Media type">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="video">Video</SelectItem>
+								<SelectItem value="live">Live stream</SelectItem>
+							</SelectContent>
+						</Select>
+						<Input
+							value={item.url}
+							placeholder="https://"
+							aria-label="Video or stream URL"
+							onChange={(e) =>
+								write(
+									photos,
+									streams.map((s, j) => (j === i ? { ...s, url: e.target.value } : s)),
+								)
+							}
+						/>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							aria-label="Remove"
+							onClick={() =>
+								write(
+									photos,
+									streams.filter((_, j) => j !== i),
+								)
+							}
+						>
+							<Trash2 className="h-4 w-4" />
+						</Button>
+					</div>
+				))}
+				{!full && (
+					<Button type="button" variant="outline" size="sm" onClick={() => write(photos, [...streams, { type: 'video', url: '' }])}>
+						Add video or live stream
+					</Button>
+				)}
+			</div>
+		</div>
+	)
+}
+
 /** The committed split: rows of role + recipient + basis points, total capped at 10000. */
 function SplitTab({
 	formData,
@@ -119,8 +276,8 @@ function SplitTab({
 			<div className="space-y-1">
 				<Label className="text-base font-medium">Value split</Label>
 				<p className="text-sm text-text-mid">
-					Optional. Each row pays a fixed share of the hammer price, in basis points (1% = 100 bps). The rows may
-					allocate at most {AUCTION_V4V_TOTAL_BPS} bps between them; the seller keeps the remainder.
+					Optional. Each row pays a fixed share of the hammer price, in basis points (1% = 100 bps). The rows may allocate at most{' '}
+					{AUCTION_V4V_TOTAL_BPS} bps between them; the seller keeps the remainder.
 				</p>
 				<p className="text-xs text-text-mid">
 					Allocated: {allocated} / {AUCTION_V4V_TOTAL_BPS} bps
@@ -130,10 +287,7 @@ function SplitTab({
 			{rows.map((row, index) => (
 				<div key={index} className="flex flex-col gap-2 rounded-lg border border-border-default bg-surface-sunken px-3 py-3">
 					<div className="flex items-center gap-2">
-						<Select
-							value={row.role}
-							onValueChange={(value) => update(index, { role: value === 'v4v' ? 'v4v' : 'validator' })}
-						>
+						<Select value={row.role} onValueChange={(value) => update(index, { role: value === 'v4v' ? 'v4v' : 'validator' })}>
 							<SelectTrigger className="w-40">
 								<SelectValue />
 							</SelectTrigger>
@@ -244,7 +398,7 @@ export function AuctionFormContent() {
 		!validationMessages.durationSec &&
 		!validationMessages.mode &&
 		!validationMessages.windowSec
-	const hasValidImage = !validationMessages.image
+	const hasValidImage = !validationMessages.image && !validationMessages.media
 
 	const canSubmit = validationIssues.length === 0
 
@@ -292,7 +446,7 @@ export function AuctionFormContent() {
 			case 'auction':
 				return missingLabels(['startPrice', 'minIncrement', 'durationSec', 'mode', 'windowSec'])
 			case 'image':
-				return missingLabels(['image'])
+				return missingLabels(['image', 'media'])
 			case 'split':
 				return missingLabels(['v4vSplit'])
 			default:
@@ -333,7 +487,7 @@ export function AuctionFormContent() {
 		{ value: 'name', label: 'Name', showAsterisk: !hasValidName },
 		{ value: 'auction', label: 'Auction', showAsterisk: !hasValidBidding },
 		{ value: 'category', label: 'Category', showAsterisk: false },
-		{ value: 'image', label: 'Image', showAsterisk: !hasValidImage },
+		{ value: 'image', label: 'Media', showAsterisk: !hasValidImage },
 		{ value: 'split', label: 'Split', showAsterisk: !tabValid.split },
 	]
 
@@ -373,20 +527,7 @@ export function AuctionFormContent() {
 							<AuctionCategoryTab formData={formData} setFormData={setFormData} mainCategories={PRODUCT_CATEGORIES} />
 						</TabsContent>
 						<TabsContent value="image" className="mt-4">
-							<div className="space-y-3">
-								<p className="text-text-mid">The lot has one image. We recommend a square image of 1600x1600 and under 2mb.</p>
-								{validationMessages.image && <p className="text-xs text-error">{validationMessages.image}</p>}
-								<ImageUploader
-									src={formData.imageUrl || null}
-									index={0}
-									imagesLength={1}
-									forSingle
-									initialUrl={formData.imageUrl}
-									onUrlChange={(url) => setFormData((prev) => ({ ...prev, imageUrl: url }))}
-									onSave={({ url }) => setFormData((prev) => ({ ...prev, imageUrl: url }))}
-									onDelete={() => setFormData((prev) => ({ ...prev, imageUrl: '' }))}
-								/>
-							</div>
+							<MediaTab formData={formData} setFormData={setFormData} validationMessages={validationMessages} />
 						</TabsContent>
 						<TabsContent value="split" className="mt-4">
 							<SplitTab formData={formData} setFormData={setFormData} errors={splitErrors} />
@@ -411,9 +552,7 @@ export function AuctionFormContent() {
 						</Button>
 					</div>
 				)}
-				{publishError && (
-					<p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{publishError}</p>
-				)}
+				{publishError && <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{publishError}</p>}
 				{currentTabErrors.length > 0 && (
 					<ul className="mb-3 max-h-28 overflow-y-auto space-y-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">
 						{currentTabErrors.map((err, i) => (

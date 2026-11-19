@@ -23,6 +23,7 @@
  * There is no `reserve` rule because the protocol has no reserve: the owner has deferred
  * it, and a knob that silently does nothing is worse than no knob.
  */
+import { LOT_MEDIA_MAX_EXTRA, parseLotMediaItem, type LotMediaItem } from './lotMedia'
 import type { ArenaAuctionMode, AuctionFormData, AuctionV4vSplitRowInput, ArenaV4vSplitRole } from './auctionForm'
 
 /** Shortest auction the protocol accepts, in seconds. */
@@ -62,6 +63,10 @@ export type ArenaCreateRefusal =
 	| 'create.no-title'
 	| 'create.no-description'
 	| 'create.no-image'
+	/** A gallery item has an unknown type or an unsafe URL. */
+	| 'create.bad-media'
+	/** More gallery items than `LOT_MEDIA_MAX_EXTRA`. */
+	| 'create.too-much-media'
 	/** No duration was supplied at all. */
 	| 'create.no-duration'
 	/** A duration was supplied but is outside 20…259200. */
@@ -95,6 +100,7 @@ export type AuctionPublishValidationField =
 	| 'title'
 	| 'description'
 	| 'image'
+	| 'media'
 	| 'startPrice'
 	| 'minIncrement'
 	| 'mode'
@@ -117,6 +123,8 @@ export interface ArenaCreateValidationInput {
 	title?: string | null
 	description?: string | null
 	imageUrl?: string | null
+	/** Gallery items after the primary image (`media` in the create content). */
+	media?: readonly { type: string; url: string }[] | null
 	category?: string | null
 	name?: string | null
 	startPrice?: string | number | null
@@ -138,6 +146,8 @@ export interface ArenaCreateValue {
 	title: string
 	description: string
 	image: string
+	/** Gallery items after `image`; empty means the lot has one photo. */
+	media: LotMediaItem[]
 	category: string
 	name: string
 	startPrice: number
@@ -168,8 +178,7 @@ export class ArenaCreateRefusalError extends Error {
 const HEX64 = /^[0-9a-f]{64}$/
 const UNSIGNED_INTEGER = /^\d+$/
 
-const text = (value: string | number | null | undefined): string =>
-	value === null || value === undefined ? '' : String(value).trim()
+const text = (value: string | number | null | undefined): string => (value === null || value === undefined ? '' : String(value).trim())
 
 /** A non-negative safe integer from a string/number, or null. Never rounds, never coerces junk to 0. */
 const parseInteger = (value: string | number | null | undefined): number | null => {
@@ -231,6 +240,18 @@ export function normalizeArenaCreateInput(
 	const image = text(input.imageUrl)
 	if (image === '') refuse('image', 'create.no-image', 'At least one image is required')
 
+	// --- gallery: blank rows are ignored, anything else must be safe ------
+	const media: LotMediaItem[] = []
+	const mediaRows = (input.media ?? []).filter((row) => text(row?.url) !== '')
+	mediaRows.forEach((row, index) => {
+		const item = parseLotMediaItem(row)
+		if (item) media.push(item)
+		else refuse('media', 'create.bad-media', 'Each gallery item needs an https:// URL and a type of photo, video or live.', index)
+	})
+	if (mediaRows.length > LOT_MEDIA_MAX_EXTRA) {
+		refuse('media', 'create.too-much-media', `A lot can have up to ${LOT_MEDIA_MAX_EXTRA} gallery items after the main photo.`)
+	}
+
 	// --- money ---------------------------------------------------------
 	const startPriceText = text(input.startPrice)
 	const startPrice = parseInteger(input.startPrice)
@@ -268,7 +289,12 @@ export function normalizeArenaCreateInput(
 	if (mode === 'antisnipe') {
 		const windowText = text(input.windowSec)
 		const parsedWindow = parseInteger(input.windowSec)
-		if (windowText === '' || parsedWindow === null || parsedWindow < AUCTION_MIN_ANTISNIPE_WINDOW_SEC || parsedWindow > AUCTION_MAX_ANTISNIPE_WINDOW_SEC) {
+		if (
+			windowText === '' ||
+			parsedWindow === null ||
+			parsedWindow < AUCTION_MIN_ANTISNIPE_WINDOW_SEC ||
+			parsedWindow > AUCTION_MAX_ANTISNIPE_WINDOW_SEC
+		) {
 			refuse(
 				'windowSec',
 				'create.window-out-of-range',
@@ -299,7 +325,12 @@ export function normalizeArenaCreateInput(
 		}
 		const allocationBps = parseInteger(row.allocationBps)
 		if (allocationBps === null || allocationBps <= 0) {
-			refuse('v4vSplit', 'create.split-bps-not-positive', 'A split allocation must be a whole number of basis points above zero.', row.index)
+			refuse(
+				'v4vSplit',
+				'create.split-bps-not-positive',
+				'A split allocation must be a whole number of basis points above zero.',
+				row.index,
+			)
 			continue
 		}
 		seenRecipients.add(row.recipientPubkey)
@@ -313,7 +344,11 @@ export function normalizeArenaCreateInput(
 	// --- the seller's wallet -------------------------------------------
 	const sellerWallet = (context.sellerWallet ?? '').trim()
 	if (sellerWallet === '') {
-		refuse('sellerWallet', 'create.no-seller-wallet', 'The wallet spend key could not be prepared, so the auction cannot name a seller wallet. Open the wallet, make sure it is ready, and try again.')
+		refuse(
+			'sellerWallet',
+			'create.no-seller-wallet',
+			'The wallet spend key could not be prepared, so the auction cannot name a seller wallet. Open the wallet, make sure it is ready, and try again.',
+		)
 	}
 
 	if (issues.length > 0) return { ok: false, issues }
@@ -325,6 +360,7 @@ export function normalizeArenaCreateInput(
 			title,
 			description,
 			image,
+			media,
 			category: text(input.category),
 			name: text(input.name),
 			startPrice: startPrice as number,
@@ -354,10 +390,7 @@ export const getArenaCreateIssues = (
  * The value, or a throw carrying the first refusal's **name**. The publish path uses
  * this: it refuses with a name, never with prose it has to re-parse.
  */
-export const validateArenaCreateInput = (
-	input: ArenaCreateValidationInput,
-	context: ArenaCreateValidationContext,
-): ArenaCreateValue => {
+export const validateArenaCreateInput = (input: ArenaCreateValidationInput, context: ArenaCreateValidationContext): ArenaCreateValue => {
 	const result = normalizeArenaCreateInput(input, context)
 	if (result.ok) return result.value
 	const first = result.issues[0]
@@ -370,6 +403,7 @@ export const auctionFormToCreateInput = (formData: AuctionFormData): ArenaCreate
 	title: formData.title,
 	description: formData.description,
 	imageUrl: formData.imageUrl,
+	media: formData.media ?? [],
 	category: formData.category,
 	name: formData.name,
 	startPrice: formData.startPrice,

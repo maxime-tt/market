@@ -20,6 +20,7 @@ const formData: AuctionFormData = {
 	title: 'Vintage Leica',
 	description: 'Film camera',
 	imageUrl: 'https://img.example/leica.png',
+	media: [],
 	category: 'Art',
 	name: 'Studio Nord',
 	startPrice: '1000',

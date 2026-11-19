@@ -849,3 +849,36 @@ describe('money receipts', () => {
 		if (!decodedBad.ok) expect(decodedBad.refusal.reason).toBe('arena.receipt.bad_content')
 	})
 })
+
+describe('the lot gallery on read', () => {
+	test('content.media is parsed, unsafe items dropped', async () => {
+		const read = readFrom({
+			'wss://a': {
+				events: [
+					createEvent(
+						{ id: 'g1' },
+						{
+							image: 'https://img.example/front.jpg',
+							media: [
+								{ type: 'image', url: 'https://img.example/side.jpg' },
+								{ type: 'image', url: 'javascript:alert(1)' },
+								{ type: 'live', url: 'https://img.example/live.m3u8' },
+							],
+						},
+					),
+				],
+			},
+		})
+		const snapshot = await read.snapshot()
+		expect(snapshot.auctions[0].content.media).toEqual([
+			{ type: 'image', url: 'https://img.example/side.jpg' },
+			{ type: 'live', url: 'https://img.example/live.m3u8' },
+		])
+	})
+
+	test('a create without media reads as an empty gallery', async () => {
+		const read = readFrom({ 'wss://a': { events: [createEvent({ id: 'g2' })] } })
+		const snapshot = await read.snapshot()
+		expect(snapshot.auctions[0].content.media).toEqual([])
+	})
+})

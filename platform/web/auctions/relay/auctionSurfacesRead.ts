@@ -34,6 +34,7 @@
  *    say so.
  */
 
+import { lotGallery } from '@sdk/commerce/auctions/lotMedia'
 import { useEffect, useMemo, useState } from 'react'
 import type { EventStorePort } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
@@ -231,6 +232,7 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 	return {
 		...toAuctionCardModel(view, context),
 		description: view.content.description,
+		media: lotGallery(view.content.image, view.content.media),
 		minIncrement: view.content.minIncrement,
 		mode: view.content.mode,
 		windowSec: view.content.windowSec,

@@ -126,7 +126,22 @@ describe('the create content and tags', () => {
 		expect(snakeKeys).toEqual(['auction_id'])
 
 		// And none of the retired tag protocol's field names appear anywhere in the content.
-		for (const retired of ['starting_bid', 'bid_increment', 'reserve', 'auditors', 'p2pk_xpub', 'min_bid_curve', 'settlement_grace', 'settlement_policy', 'schema', 'shipping_option', 'spec', 'price', 'start_at', 'end_at']) {
+		for (const retired of [
+			'starting_bid',
+			'bid_increment',
+			'reserve',
+			'auditors',
+			'p2pk_xpub',
+			'min_bid_curve',
+			'settlement_grace',
+			'settlement_policy',
+			'schema',
+			'shipping_option',
+			'spec',
+			'price',
+			'start_at',
+			'end_at',
+		]) {
 			expect(json).not.toContain(retired)
 		}
 	})
@@ -405,5 +420,36 @@ describe('publishing', () => {
 			now: NOW,
 		})
 		expect(pub.sent[0].created_at).toBe(NOW)
+	})
+})
+
+describe('the lot gallery', () => {
+	test('a one-photo lot writes no media key', () => {
+		expect('media' in build().content).toBe(false)
+	})
+
+	test('gallery items land in content.media in order, blank rows dropped', () => {
+		const draft = build({
+			media: [
+				{ type: 'image', url: 'https://img.example/side.jpg' },
+				{ type: 'image', url: '  ' },
+				{ type: 'video', url: 'https://img.example/demo.mp4' },
+			],
+		})
+		expect(draft.content.media).toEqual([
+			{ type: 'image', url: 'https://img.example/side.jpg' },
+			{ type: 'video', url: 'https://img.example/demo.mp4' },
+		])
+		expect(JSON.parse(draft.contentJson).media).toHaveLength(2)
+	})
+
+	test('an unsafe gallery URL is refused by name', () => {
+		expect(refusalOf(() => build({ media: [{ type: 'image', url: 'http://img.example/x.jpg' }] }))).toBe('create.bad-media')
+		expect(refusalOf(() => build({ media: [{ type: 'gif', url: 'https://img.example/x.gif' }] }))).toBe('create.bad-media')
+	})
+
+	test('too many gallery items is refused by name', () => {
+		const media = Array.from({ length: 13 }, (_, i) => ({ type: 'image', url: `https://img.example/${i}.jpg` }))
+		expect(refusalOf(() => build({ media }))).toBe('create.too-much-media')
 	})
 })

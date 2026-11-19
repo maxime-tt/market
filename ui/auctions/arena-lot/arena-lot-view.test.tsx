@@ -34,6 +34,7 @@ const model: ArenaAuctionDetailModel = {
 	divergent: false,
 	relayCount: 2,
 	description: 'A described lot.',
+	media: [],
 	minIncrement: 100,
 	mode: 'antisnipe',
 	windowSec: 60,
@@ -152,5 +153,32 @@ describe('ArenaLotView', () => {
 	test('no third-party hosts or Google in the view', () => {
 		const html = render()
 		expect(html).not.toMatch(/https?:\/\//)
+	})
+})
+
+describe('arena lot gallery', () => {
+	const photo = (n: number) => ({ type: 'image' as const, url: `https://img.example/${n}.jpg` })
+
+	test('one photo shows the stage and no thumbnails', () => {
+		const html = render({ model: { ...model, imageUrl: photo(1).url, media: [photo(1)] } })
+		expect(html).toContain('src="https://img.example/1.jpg"')
+		expect(html).not.toContain('data-testid="arena-lot-thumbs"')
+	})
+
+	test('several items show clickable thumbnails under the stage, the first selected', () => {
+		const media = [photo(1), photo(2), photo(3), { type: 'video' as const, url: 'https://img.example/v.mp4' }]
+		const html = render({ model: { ...model, imageUrl: photo(1).url, media } })
+		expect(html).toContain('data-testid="arena-lot-thumbs"')
+		expect(html.match(/class="arn-thumb[ "]/g)).toHaveLength(4)
+		expect(html).toContain('aria-pressed="true"')
+		expect(html).toContain('Video 4 of 4')
+		expect(html).toContain('1 / 4')
+		expect(html.indexOf('arena-lot-stage')).toBeLessThan(html.indexOf('arena-lot-thumbs'))
+	})
+
+	test('a host that sends no media list still shows imageUrl', () => {
+		const { media: _drop, ...rest } = { ...model, imageUrl: photo(9).url }
+		const html = render({ model: rest as typeof model })
+		expect(html).toContain('src="https://img.example/9.jpg"')
 	})
 })
