@@ -173,9 +173,20 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, backHre
 	const view = lookup.kind === 'found' ? lookup.view : null
 	// `now` is projection input, so it is read once here and handed to every
 	// projection and to the panel below — one instant, one page.
-	const context = { now, status: read.status, divergences: read.snapshot?.verdictDivergence }
-	const detail = view === null ? null : toAuctionDetailModel(view, context)
-	const verdicts = view === null ? null : toVerdictPanelModel(view, context)
+	//
+	// The projections are memoized on the facts they derive from, and the detail
+	// model's **identity** is part of the bid panel's contract: the panel's state
+	// machine runs in an effect keyed on the model (`AuctionBidHost.tsx`), so an
+	// object rebuilt on every render re-runs that effect on every render. That is
+	// only harmless while the state machine hands back the same object for a
+	// state that did not change — which it now does — but a stable model keeps
+	// the effect from running at all for a render that moved nothing. `view` is
+	// the snapshot's own object and the divergences belong to the snapshot, so
+	// these keys change only when the read or the clock really moved.
+	const divergences = read.snapshot?.verdictDivergence
+	const context = useMemo(() => ({ now, status: read.status, divergences }), [now, read.status, divergences])
+	const detail = useMemo(() => (view === null ? null : toAuctionDetailModel(view, context)), [view, context])
+	const verdicts = useMemo(() => (view === null ? null : toVerdictPanelModel(view, context)), [view, context])
 	// Whether the chain is advancing — fresh kind-1447 commitments across several
 	// blocks — is the signal the bid panel needs to tell "the chain did not accept
 	// the bid" from "the chain has not settled it". It is derived here, from the

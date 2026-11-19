@@ -538,6 +538,10 @@ export function nextPublishedBidState(input: {
 	//    position/highBid, which is what the panel then states.
 	const admission = input.model?.admissions[previous.eventId]
 	if (admission !== undefined) {
+		// Reached only from an unsettled state: `admitted` is already returned
+		// unchanged by the guard above, so this is always the transition that
+		// states the chain's fact for the first time.
+		//
 		// The ACK count is a fact this submission carries through `presumed`,
 		// `seen` and `unconfirmed`. The two concluded states (`not-accepted`,
 		// `infrastructure`) leave it behind, so a late admission fact arriving from
@@ -586,6 +590,14 @@ export function nextPublishedBidState(input: {
 	//    true from either unsettled state, and it does not wait for a settled
 	//    read — the read would not carry the bid at all if it had not arrived.
 	if (input.model !== null && input.model.bids.some((bid) => bid.eventId === previous.eventId)) {
+		// The same-object contract the admission branch gets from the guard above:
+		// `seen` carries the ACK facts it arrived with and the read adds nothing to
+		// them, so a panel already at `seen` hands back its own object. This is the
+		// branch a delivery reaches first, and a fresh object here is the loop the
+		// lot page died on before the host memoized its projections: the effect
+		// keyed on the model (`AuctionBidHost.tsx`) re-runs whenever the model's
+		// identity moves, and a new state object schedules the next render.
+		if (previous.phase === 'seen') return previous
 		return { phase: 'seen', amount: previous.amount, eventId: previous.eventId, acceptedBy: previous.acceptedBy, totalRelays: previous.totalRelays }
 	}
 
