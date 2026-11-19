@@ -146,10 +146,22 @@ describe('usesArenaChrome', () => {
 		expect(usesArenaChrome('/auctions/live-arena-1')).toBe(true)
 		expect(usesArenaChrome('/products')).toBe(true)
 		expect(usesArenaChrome('/products/x')).toBe(true)
+		for (const path of [
+			'/community',
+			'/collection/abc',
+			'/search/products',
+			'/checkout',
+			'/setup',
+			'/posts',
+			'/profile/abc',
+			'/dashboardx',
+		]) {
+			expect(usesArenaChrome(path)).toBe(true)
+		}
 	})
 
-	test('every other page keeps the default chrome', () => {
-		for (const path of ['/productsx', '/dashboard', '/auctionsx', '/community', '/profile/abc']) {
+	test('only the dashboard keeps its own console theme', () => {
+		for (const path of ['/dashboard', '/dashboard/account/profile', '/dashboard/sales/messages']) {
 			expect(usesArenaChrome(path)).toBe(false)
 		}
 	})

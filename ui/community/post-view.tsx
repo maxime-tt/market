@@ -37,7 +37,11 @@ export interface PostViewProps {
  */
 export function PostView({ post, author, isLoadingAuthor, permalinkHref, showJson = false, className, ref }: PostViewProps) {
 	return (
-		<div ref={ref} data-slot="post-view" className={cn('rounded-lg border p-4', className)}>
+		<div
+			ref={ref}
+			data-slot="post-view"
+			className={cn('rounded-2xl border border-border-default bg-surface-raised p-4 min-w-0', className)}
+		>
 			<div className="mb-3 flex items-center">
 				{isLoadingAuthor ? (
 					<div className="h-10 w-10 animate-pulse rounded-full bg-muted" />
@@ -59,8 +63,8 @@ export function PostView({ post, author, isLoadingAuthor, permalinkHref, showJso
 					<div className="text-xs text-muted-foreground">{new Date(post.createdAt * 1000).toLocaleString()}</div>
 				</div>
 			</div>
-			<p>{post.content}</p>
-			<UiLink href={permalinkHref} className="mt-2 mb-2 block text-sm text-primary underline">
+			<p className="text-text-high [overflow-wrap:anywhere]">{post.content}</p>
+			<UiLink href={permalinkHref} className="mt-2 mb-2 block text-sm text-fill-ink underline">
 				{post.id.slice(0, 8)}...
 			</UiLink>
 			{showJson && <pre className="mt-4 rounded-lg bg-surface-sunken p-4 whitespace-pre-wrap">{JSON.stringify(post, null, 2)}</pre>}

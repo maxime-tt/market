@@ -171,7 +171,7 @@ function CommunityRoute() {
 	const renderHomepageHero = () => (
 		<div className="z-20 relative flex flex-col justify-center items-center lg:col-span-2 mt-16 lg:mt-0 text-white text-center">
 			<div className="flex justify-center items-center h-24 lg:h-32">
-				<h1 className="font-theylive text-4xl lg:text-5xl transition-opacity duration-500">Browse Collections</h1>
+				<h1 className="font-heading text-5xl lg:text-6xl transition-opacity duration-500">Browse Collections</h1>
 			</div>
 
 			<div className="flex flex-col gap-6 items-center">
@@ -205,7 +205,7 @@ function CommunityRoute() {
 	const renderCollectionsHero = () => (
 		<div className="z-20 relative flex flex-col justify-center items-center lg:col-span-2 mt-16 lg:mt-0 text-white text-center">
 			<div className="flex justify-center items-center h-24 lg:h-32">
-				<h1 className="font-theylive text-4xl lg:text-5xl transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
+				<h1 className="font-heading text-5xl lg:text-6xl transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
 			</div>
 
 			<div className="flex flex-col gap-6">
@@ -240,7 +240,7 @@ function CommunityRoute() {
 				// Homepage hero styling with random collection background
 				<div
 					data-testid="community-hero"
-					className={`relative hero-container ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					className={`relative hero-container ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-surface-hover'}`}
 					style={heroBackgroundStyle(marketBackgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
@@ -257,7 +257,7 @@ function CommunityRoute() {
 				// Collection hero styling (existing collection page style)
 				<div
 					data-testid="community-hero"
-					className={`relative hero-container ${backgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					className={`relative hero-container ${backgroundImageUrl ? 'bg-hero-image' : 'bg-surface-hover'}`}
 					style={heroBackgroundStyle(backgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
@@ -286,7 +286,7 @@ function CommunityRoute() {
 								data-testid="community-collections-error"
 							/>
 						) : collections.length === 0 ? (
-							<div className="col-span-full py-8 text-gray-500 text-center" data-testid="community-collections-empty">
+							<div className="col-span-full py-8 text-text-mid text-center" data-testid="community-collections-empty">
 								No collections found
 							</div>
 						) : (
@@ -311,7 +311,7 @@ function CommunityRoute() {
 								data-testid="community-merchants-error"
 							/>
 						) : filteredMerchantPubkeys.length === 0 ? (
-							<div className="col-span-full py-8 text-gray-500 text-center" data-testid="community-merchants-empty">
+							<div className="col-span-full py-8 text-text-mid text-center" data-testid="community-merchants-empty">
 								No merchants found
 							</div>
 						) : (

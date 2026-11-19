@@ -88,12 +88,12 @@ function SearchProductsPage() {
 
 	return (
 		<div className="container mx-auto px-4 py-6">
-			<h1 className="text-2xl font-heading mb-4">
+			<h1 className="font-heading text-[2rem] sm:text-[2.6rem] mb-4">
 				Search results for: <span className="text-secondary">{q}</span>
 			</h1>
 
 			{/* Filter and Sort Bar */}
-			<div className="bg-gray-50 rounded-lg p-4 mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+			<div className="bg-surface-raised border border-border-default rounded-2xl p-4 mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
 				{/* Sort Radio Buttons */}
 				<div className="flex items-center gap-2">
 					<Label className="text-sm font-medium">Sort by:</Label>

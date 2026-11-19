@@ -55,8 +55,8 @@ function RouteComponent() {
 	if (!collection) {
 		return (
 			<div className="flex flex-col justify-center items-center gap-4 h-[50vh]">
-				<h1 className="font-bold text-2xl">Collection Not Found</h1>
-				<p className="text-gray-600">The collection you're looking for doesn't exist.</p>
+				<h1 className="font-heading text-4xl">Collection not found</h1>
+				<p className="text-text-mid">The collection you're looking for doesn't exist.</p>
 			</div>
 		)
 	}
@@ -181,7 +181,7 @@ function RouteComponent() {
 					</Button>
 				)}
 				<div
-					className={`relative hero-container-small ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-black'}`}
+					className={`relative hero-container-small ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-surface-sunken'}`}
 					style={heroBackgroundStyle(marketBackgroundImageUrl)}
 				>
 					<div className="hero-overlays">
@@ -191,15 +191,15 @@ function RouteComponent() {
 
 					<div className="hero-content">
 						<div className="z-20 relative flex flex-col justify-center items-center lg:col-span-2 mt-16 lg:mt-0 text-white text-center">
-							<h1 className="font-heading text-2xl sm:text-left text-center">{title}</h1>
+							<h1 className="font-heading text-4xl lg:text-5xl sm:text-left text-center">{title}</h1>
 							<div className="flex flex-col justify-center items-center lg:col-span-2 font-medium text-md text-white text-center">
 								{summary}
 							</div>
 						</div>
 					</div>
 				</div>
-				<div className="flex flex-row justify-between items-center bg-black px-4 py-2">
-					<UserCardHost pubkey={pubkey} size="md" className="[&>h2]:text-white" />
+				<div className="flex flex-row justify-between items-center bg-surface-raised border-b border-border-default px-4 py-3">
+					<UserCardHost pubkey={pubkey} size="md" className="[&>h2]:text-text-high" />
 					{!isSmallScreen && (
 						<div className="flex gap-2">
 							{user && <ZapButton event={user} />}
@@ -260,7 +260,7 @@ function RouteComponent() {
 						</ItemGrid>
 					) : (
 						<div className="flex flex-col justify-center items-center h-full">
-							<span className="font-heading text-2xl">No products found</span>
+							<span className="font-heading text-3xl">No products here yet</span>
 						</div>
 					)}
 				</div>

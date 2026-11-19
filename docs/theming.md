@@ -4,8 +4,8 @@ A quick tour of how the market gets its look, and where to change it.
 
 ## The short version
 
-- **Public site** (home, auctions, products, the header, login and wallet)
-  uses the **Arena** theme.
+- **Public site** (every page outside the dashboard, plus the header, login,
+  wallet and cart) uses the **Arena** theme.
 - **Dashboard and admin** use the **admin console** theme: Glass, Solid or
   Minimal, with your own colour (Teal by default) and mode (light by default).
 - **Storefront pages** built in the Puck editor use a **storefront theme**
@@ -39,15 +39,17 @@ A scope is a class that rebinds token values for everything inside it.
 
 | Scope                     | Where                                   | File                      |
 | ------------------------- | --------------------------------------- | ------------------------- |
-| `.arena-chrome`           | routes in `usesArenaChrome`             | `styles/arena-chrome.css` |
+| `.arena-chrome`           | every public page, and `<body>` there   | `styles/arena-chrome.css` |
 | `.arena-login`            | portalled login and wallet dialogs      | `styles/arena-chrome.css` |
 | `.arena-wallet-dialog`    | wallet deposit and send dialogs         | `styles/arena-chrome.css` |
 | `.admin-console`          | dashboard, settings, page editor chrome | `styles/admin-theme.css`  |
 | `[data-storefront-theme]` | Puck page preview and public pages      | storefront theme registry |
 
-To move a route onto Arena, add it to `usesArenaChrome` in
-`platform/web/layout/appChrome.ts`, swap any raw colours for tokens, add a
-test case in `appChrome.test.tsx`, and check it on desktop and phone.
+New public pages are Arena automatically; only `/dashboard` is left out
+(`usesArenaChrome` in `platform/web/layout/appChrome.ts`). Older pages still
+carry a few raw colours, which a small class map in `styles/arena-chrome.css`
+covers. When you touch one of those pages, swap the raw colours for tokens and
+check it on desktop and phone.
 
 ## Storefront themes and Puck
 
@@ -67,7 +69,7 @@ any theme.
 
 ## Where this is heading
 
-ADR-0023 plans one token set for the header, wallet and storefront, with
+ADR-0023 (accepted) sets out one token set for the header, wallet and storefront, with
 themes saved as small Nostr events (validated colours, a bundled font,
 tune numbers, no raw CSS) and edited in Theme Studio with a contrast check.
 
@@ -76,3 +78,4 @@ tune numbers, no raw CSS) and edited in Theme Studio with a contrast check.
 - [ADR-0022](adr/ADR-0022-admin-console-theme.md): admin console theme
 - [ADR-0023](adr/ADR-0023-one-theme-for-app-chrome-and-storefront.md): one theme for chrome and storefront
 - [ADR-0024](adr/ADR-0024-products-pages-in-arena-chrome.md): products pages in Arena
+- [ADR-0025](adr/ADR-0025-every-public-page-in-arena-chrome.md): every public page in Arena
