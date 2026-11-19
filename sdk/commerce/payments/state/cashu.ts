@@ -30,6 +30,7 @@ import { initializeCoco, Manager, getEncodedToken, getMintQuoteAmount, getMintQu
 import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { getMintHostname } from '../display'
+import type { ChainMintResolution, ChainMintResolver } from '../chainMint'
 import { LEGACY_PENDING_TOKENS_KEY } from '../wallet/legacyStorage'
 import { loadUserData, removeUserData, saveUserData, type SaveUserDataOptions } from '../wallet/storage'
 import type { PendingToken } from '../wallet/types'
@@ -64,6 +65,20 @@ const AUCTION_MINT_QUOTE_FEE_ABSOLUTE_CAP_SATS = 2000
 
 // Re-export for backward compatibility
 export type { PendingToken }
+
+/**
+ * What the assembly may inject into the store.
+ *
+ * The wallet's first mint is the chain's mint, and the chain's committed `mint_url` can be a
+ * loopback URL a browser may not reach. Deciding which origin to use — and verifying it serves
+ * the chain's keyset — is `@sdk/commerce/payments/chainMint`'s job, wired by the host
+ * (`@platform/web/chainMint`), so this module (which holds no relay read and no config read)
+ * never guesses a mint.
+ */
+export interface CashuStoreOptions {
+	/** The chain-mint resolver; absent means seeding the first mint is not attempted. */
+	resolveMintSeed?: ChainMintResolver
+}
 
 /**
  * A deposit's lifecycle. These are DISTINCT states on purpose — a deposit that has been
@@ -145,6 +160,13 @@ export interface CashuState {
 	 * this field is a projection of coco's state and not a second authority.
 	 */
 	mints: string[]
+	/**
+	 * Why the wallet's first mint was not seeded, or a notice that it was seeded without full
+	 * verification — `null` when nothing needed seeding or the seed landed cleanly. Set by
+	 * {@link cashuActions.seedMintsIfEmpty} from the resolver's own refusal/notice, so a caller
+	 * never has to re-derive why the mint list is empty. It is a flag, not a second mint authority.
+	 */
+	mintSeedError: string | null
 	// Track pending send operations that have generated tokens
 	pendingTokens: PendingToken[]
 	/**
@@ -168,6 +190,7 @@ const initialState: CashuState = {
 	balances: {},
 	totalBalance: 0,
 	mints: [],
+	mintSeedError: null,
 	pendingTokens: [],
 	depositPhase: 'idle',
 	depositStatus: 'idle',
@@ -176,7 +199,7 @@ const initialState: CashuState = {
 	defaultMint: typeof localStorage !== 'undefined' ? localStorage.getItem(DEFAULT_MINT_KEY) : null,
 }
 
-export const createCashuStore = (getPubkey: () => string | null) => {
+export const createCashuStore = (getPubkey: () => string | null, options: CashuStoreOptions = {}) => {
 	const cashuState: StateStore<CashuState> = createStateStore<CashuState>({ initial: initialState })
 
 	function generateId(): string {
@@ -371,6 +394,10 @@ export const createCashuStore = (getPubkey: () => string | null) => {
 
 				// Load the mint list coco itself holds
 				await cashuActions.syncMints()
+
+				// A fresh identity holds no mint, so nothing can be deposited and the deposit form
+				// has nothing to offer. Register the chain's mint before the wallet is used.
+				await cashuActions.seedMintsIfEmpty()
 			} catch (err) {
 				console.error('[cashu] Failed to initialize:', err)
 				cashuState.set((s) => ({
@@ -414,6 +441,57 @@ export const createCashuStore = (getPubkey: () => string | null) => {
 				await cashuState.get().walletSource?.hydrate()
 			} catch (err) {
 				console.error('[cashu] Failed to read mints from coco:', err)
+			}
+		},
+
+		/**
+		 * Register the chain's mint when coco holds none.
+		 *
+		 * `syncMints` is the only writer of the mint list, and a fresh identity legitimately holds
+		 * no mint — so without this the wallet can never deposit and the deposit form offers
+		 * nothing. The mint is **not** chosen here: the assembly supplies
+		 * {@link CashuStoreOptions.resolveMintSeed}, which derives the chain's mint from the
+		 * anchored terms, stands the instance's configured browser-reachable origin in for a
+		 * loopback URL, and verifies the mint serves the chain's keyset.
+		 *
+		 * A refusal registers nothing and is recorded in `mintSeedError` by its name, because
+		 * seeding a mint that is not the chain's would lock deposited funds to the wrong escrow.
+		 * A success that could not be fully verified carries the resolver's notice in the same
+		 * field, so a qualified seed is never silent.
+		 */
+		seedMintsIfEmpty: async (): Promise<void> => {
+			const state = cashuState.get()
+			const manager = state.manager
+			if (!manager || state.mints.length > 0) return
+
+			const resolveMintSeed = options.resolveMintSeed
+			if (!resolveMintSeed) return
+
+			let result: ChainMintResolution
+			try {
+				result = await resolveMintSeed()
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err)
+				console.error('[cashu] Mint seed resolution failed:', message)
+				cashuState.set((s) => ({ ...s, mintSeedError: `chain.mint.resolution-failed: ${message}` }))
+				return
+			}
+
+			if (!result.ok) {
+				console.error(`[cashu] Mint seed refused (${result.refusal}):`, result.message)
+				cashuState.set((s) => ({ ...s, mintSeedError: `${result.refusal}: ${result.message}` }))
+				return
+			}
+
+			try {
+				await manager.mint.addMint(result.mintUrl, { trusted: true })
+				cashuState.set((s) => ({ ...s, mintSeedError: result.notice ?? null }))
+				console.log('[cashu] Seeded wallet mint:', result.mintUrl, result.keysetId, result.notice ?? '')
+				await cashuActions.syncMints()
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err)
+				console.error('[cashu] Failed to register the seeded mint:', result.mintUrl, message)
+				cashuState.set((s) => ({ ...s, mintSeedError: `chain.mint.register-failed: ${message}` }))
 			}
 		},
 

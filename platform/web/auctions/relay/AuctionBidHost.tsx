@@ -65,6 +65,7 @@ import type { Event } from '@sdk/core/nostr-io'
 import { authStore, getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createWebNostrIo, webRelayPolicy } from '@platform/web/sdkNostrIo'
 import { createWebArenaParamsRead } from '@platform/web/auctions/relay/arenaParamsRead'
+import { resolveEscrowMintUrl } from '@platform/web/chainMint'
 import { getReadContext } from '@platform/web/readContext'
 import type { ArenaBidFunding, ArenaBidFundingTerms } from '@platform/web/auctions/relay/arenaBidFunding'
 import { arenaEscrowSendOverCoco } from '@platform/web/auctions/relay/arenaEscrowCocoSend'
@@ -120,9 +121,17 @@ const arenaBidFundPorts: ArenaBidFundPorts = {
 		})
 		const { params } = await read()
 		if (params === null) throw new Error('no anchored arena.params.v1 reading is available on the configured relays')
+		// The escrow locks at a mint, not at a URL: the chain's committed `mint_url` can be a
+		// loopback URL a browser may not reach, and coco refuses a mint it cannot read as
+		// untrusted. `resolveEscrowMintUrl` substitutes the configured browser-reachable origin
+		// of the chain's keyset (never a mint whose keyset disagrees) — the same resolution the
+		// wallet's own first mint goes through. A refusal is returned to the caller rather than
+		// locked at the unreachable URL.
+		const escrowMint = await resolveEscrowMintUrl({ mintUrl: params.terms.mint_url, keysetId: params.terms.keyset_id })
+		if (!escrowMint.ok) throw new Error(`${escrowMint.refusal}: ${escrowMint.message}`)
 		return {
 			committee_public_key: params.terms.group_key,
-			mint_url: params.terms.mint_url,
+			mint_url: escrowMint.mintUrl,
 			keyset_id: params.terms.keyset_id,
 			keys: params.terms.keys,
 			settlement_safety_sec: params.terms.settlement_safety_sec,

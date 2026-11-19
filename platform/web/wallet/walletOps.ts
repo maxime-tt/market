@@ -605,6 +605,10 @@ export const walletOps = {
 					balance: cashuStore.state.totalBalance,
 					mints: cashuStore.state.mints,
 					balances: cashuStore.state.balances,
+					// Why the wallet's first mint could not be seeded (or was seeded without full
+					// verification) — the store's own flag, so a proof run can see the resolved
+					// path instead of inferring it from the mint list.
+					mintSeedError: cashuStore.state.mintSeedError,
 				}),
 				getDepositStatus: () => ({
 					depositStatus: cashuStore.state.depositStatus,
