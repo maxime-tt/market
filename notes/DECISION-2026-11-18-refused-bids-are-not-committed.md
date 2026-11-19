@@ -83,3 +83,29 @@ Phase F (reading kinds 1449/1450) proceeds unchanged: a **create** refusal is co
 so a refused lot can be named, and so is a **bid** refusal the chain decided at delivery. For a bid with
 no recorded refusal the app implements the three-state diagnosis above and states no reason it cannot
 see.
+
+## Amendment, 2026-11-19: "no fresh commitments" needs a watched window
+
+The bullet above ("**The chain is not advancing** — no fresh commitments: that **is** an infrastructure
+problem") was implemented as written and produced a **false** alarm on a real bid. Measured live
+2026-11-19: the arena nodes committed every 10 s and the chain advanced a block a minute, while
+`relay.playday.it` served no kind-1447 at all for 36 minutes — and a bid the chain **admitted** was
+reported to its bidder as "The chain is not advancing".
+
+The cause is that the app's read is **one-shot** (`auctionSurfacesRead.ts`: consumed to its caught-up
+marker and closed), so a snapshot's freshness decays with the wall clock while the page stays open.
+"No fresh commitment **in this snapshot**" is a fact about the app's read, never about the chain.
+
+So the ruling stands but its evidence is tightened. The panel now:
+
+- stays in an honest **`unconfirmed`** state ("waiting for the chain to confirm") and **keeps reading**
+  (one reopen per `ARENA_BID_SETTLE_POLL_MS` = 15 s, `arenaBidPublish.ts`) while the chain has not
+  settled the bid, which is what lets a chain that advances later resolve the panel to the chain's own
+  outcome (`seen` / `not-accepted` / `refused`);
+- claims the infrastructure problem only after it has **watched committed state stand still for
+  `ARENA_CHAIN_STALLED_AFTER_SEC` = 900 s** — the protocol's own longest rule horizon
+  (`arenaClock.ts:44-49`: `SettlementSafetySec = 900 s`, anti-snipe ≤ 900 s) — and states that window in
+  words, so the claim is about what the app observed rather than about a snapshot's age.
+
+The rest of the ruling is unchanged: a refusal is stated in the chain's own words, and the app invents
+no reason it cannot verify.

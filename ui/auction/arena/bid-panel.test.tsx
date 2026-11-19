@@ -288,11 +288,33 @@ describe('submissionLine — what the bidder is told between click and relay', (
 		expect(line.detail).toContain('Do not bid the same amount again')
 	})
 
-	test('infrastructure blames the chain, not the bid', () => {
-		const line = submissionLine({ phase: 'infrastructure', amount: 1000, eventId: 'ev-1' })!
+	test('infrastructure blames the chain, not the bid, and states the window it watched', () => {
+		const line = submissionLine({ phase: 'infrastructure', amount: 1000, eventId: 'ev-1', stalledForSec: 900 })!
 		expect(line.title).toContain('The chain is not advancing.')
+		expect(line.detail).toContain('read the chain’s committed state for 15 minutes')
 		expect(line.detail).toContain('infrastructure problem, not a problem with your bid')
 		expect(line.detail).toContain('nothing here says the bid was refused')
+	})
+
+	test('waiting for the chain is not a failure: it claims no verdict and no infrastructure', () => {
+		const line = submissionLine({
+			phase: 'unconfirmed',
+			amount: 1000,
+			eventId: 'ev-1',
+			acceptedBy: ['wss://a'],
+			totalRelays: 2,
+			watchingSince: 1_700_000_000,
+		})!
+		expect(line.title).toContain('Waiting for the chain to confirm')
+		expect(line.detail).toContain('no verdict is not a refusal')
+		expect(line.detail).toContain('nothing here says the bid was refused')
+		expect(line.detail).toContain('keeps reading')
+		expect(line.detail).not.toContain('infrastructure problem')
+		// Neutral: the app is still reading, so nothing is presented as a failure.
+		expect(line.tone).toBe('neutral')
+		expect(isArenaBidSubmissionUnsuccessful({ phase: 'unconfirmed', amount: 1000, eventId: 'ev-1', acceptedBy: ['wss://a'], totalRelays: 2, watchingSince: 1 })).toBe(
+			false,
+		)
 	})
 
 	test('only unpublished and failed are unsuccessful — a recorded refusal is a fact, not a retry', () => {
@@ -301,16 +323,17 @@ describe('submissionLine — what the bidder is told between click and relay', (
 			{ phase: 'publishing', amount: 1 },
 			{ phase: 'presumed', amount: 1, eventId: 'e', acceptedBy: ['a'], totalRelays: 1 },
 			{ phase: 'seen', amount: 1, eventId: 'e', acceptedBy: ['a'], totalRelays: 1 },
+			{ phase: 'unconfirmed', amount: 1, eventId: 'e', acceptedBy: ['a'], totalRelays: 1, watchingSince: 1 },
 			{ phase: 'not-accepted', amount: 1, eventId: 'e', locktime: null, reclaimable: false },
 			{ phase: 'refused', amount: 1, eventId: 'e', reason: 'x', locktime: null, reclaimable: false },
-			{ phase: 'infrastructure', amount: 1, eventId: 'e' },
+			{ phase: 'infrastructure', amount: 1, eventId: 'e', stalledForSec: 900 },
 			{ phase: 'unpublished', amount: 1, eventId: 'e', reason: 'x' },
 			{ phase: 'failed', amount: 1, reason: 'x' },
 		]
-		// A published-but-not-committed bid, and a bid the chain recorded a
-		// refusal for, are *recorded* facts, not retryable failures: the escrow is
-		// locked until its locktime, so retrying the same amount would lock a
-		// second one.
+		// A published-but-not-committed bid, a bid the chain has not decided yet,
+		// and a bid the chain recorded a refusal for are *recorded* facts, not
+		// retryable failures: the escrow is locked until its locktime, so retrying
+		// the same amount would lock a second one.
 		expect(states.filter(isArenaBidSubmissionUnsuccessful).map((state) => state.phase)).toEqual(['unpublished', 'failed'])
 	})
 

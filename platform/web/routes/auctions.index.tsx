@@ -64,7 +64,15 @@ function AuctionsRoute() {
 			}}
 			onCreate={handleCreateAuction}
 			renderFeatured={(card) => (
-				<ArenaAuctionLotHost d={card.d} seller={card.seller} now={now} read={read} onPublished={() => bumpRefresh()} backHref={null} />
+				<ArenaAuctionLotHost
+					d={card.d}
+					seller={card.seller}
+					now={now}
+					read={read}
+					onPublished={() => bumpRefresh()}
+					onRefresh={() => bumpRefresh()}
+					backHref={null}
+				/>
 			)}
 		/>
 	)

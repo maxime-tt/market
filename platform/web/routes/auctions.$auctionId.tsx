@@ -46,6 +46,11 @@ function AuctionDetailRoute() {
 	// this lot, not the whole-arena firehose. A bid the app published exists, for
 	// this page, only once a relay serves it — so a successful publish bumps this
 	// key and reopens the read (see `useArenaLotRead`).
+	//
+	// The bid panel polls the same bump while the chain has not settled a
+	// published bid (`AuctionBidHost.tsx` `ARENA_BID_SETTLE_POLL_MS`): one read's
+	// freshness decays with the wall clock, so a page that never re-read could
+	// only ever turn its own staleness into a claim about the chain.
 	const [refreshKey, bumpRefresh] = useReducer((key: number) => key + 1, 0)
 	const read = useArenaLotRead({ d: auctionId, seller: seller ?? null, refreshKey })
 
@@ -56,6 +61,7 @@ function AuctionDetailRoute() {
 			now={now}
 			read={read}
 			onPublished={() => bumpRefresh()}
+			onRefresh={() => bumpRefresh()}
 		/>
 	)
 }
