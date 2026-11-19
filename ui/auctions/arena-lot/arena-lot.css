@@ -542,6 +542,13 @@
 	font-family: var(--arn-mono);
 	font-size: 16px;
 }
+/* The position a step reaches — stated under the delta the button publishes. */
+.arn-ladder em,
+.arn-ladder__reaches {
+	font-size: 11px;
+	font-style: normal;
+	opacity: 0.7;
+}
 .arn-custom {
 	display: flex;
 	gap: 8px;
@@ -632,6 +639,12 @@
 }
 .arn-swipe__label b {
 	font-family: var(--arn-mono);
+}
+/* The position the published delta reaches — secondary to the number itself. */
+.arn-swipe__label em {
+	font-style: normal;
+	font-weight: 600;
+	opacity: 0.8;
 }
 .arn-swipe__fill {
 	position: absolute;

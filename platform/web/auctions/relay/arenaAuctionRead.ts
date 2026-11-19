@@ -862,11 +862,21 @@ export interface ArenaAuctionView {
 	versions: number
 	bids: ArenaBidView[]
 	/**
-	 * Per-bidder position, summed from the bid **deltas**. A *derived view*, not
+	 * Per-bidder position: the sum of the bidder's **live** legs. A bid is a
+	 * **delta** added to a position (R1-A); a leg a kind-1443 refund receipt names
+	 * is dead and is not summed (see the assembly below for the rule and the
+	 * invariant it assumes). `null` means the position is **not known** — a leg's
+	 * liveness could not be determined because the read could not vouch for the
+	 * refund receipts it read — and is never a partial sum. A *derived view*, not
 	 * an outcome: the authority on who won is the 1445 verdict, and the
 	 * authority on whether money moved is the mint (`REPLY` §4.2).
 	 */
-	positions: Record<string, number>
+	positions: Record<string, number | null>
+	/**
+	 * The best derived position, or `null` when no top position can be named —
+	 * no bids, or at least one bidder whose position is unknown (`null` above),
+	 * who could be above the best known one.
+	 */
 	topBid: { bidder: string; total: number } | null
 	/** Bids whose `amount` was not a finite number; the positions above are then incomplete. */
 	bidsWithoutAmount: number
@@ -1307,21 +1317,6 @@ export function projectArenaEvents(
 	const auctions: ArenaAuctionView[] = []
 	for (const [key, entry] of resolved) {
 		const auctionBids = [...(bidsByKey.get(key) ?? [])].sort((a, b) => a.createdAt - b.createdAt || a.eventId.localeCompare(b.eventId))
-		const positions: Record<string, number> = {}
-		let bidsWithoutAmount = 0
-		for (const bid of auctionBids) {
-			if (bid.amount === null) {
-				bidsWithoutAmount += 1
-				continue
-			}
-			positions[bid.bidder] = (positions[bid.bidder] ?? 0) + bid.amount
-		}
-		let topBid: { bidder: string; total: number } | null = null
-		for (const [bidder, total] of Object.entries(positions)) {
-			if (topBid === null || total > topBid.total || (total === topBid.total && bidder < topBid.bidder)) {
-				topBid = { bidder, total }
-			}
-		}
 
 		const verdicts = [...(verdictsByAuction.get(entry.coordinate) ?? [])].sort(
 			(a, b) => b.height - a.height || (a.validatorPubkey ?? '').localeCompare(b.validatorPubkey ?? ''),
@@ -1342,6 +1337,60 @@ export function projectArenaEvents(
 			// `receipts` is height-ascending, so the first settle is the lot-level one.
 			if (receipt.outcome === 'settle' && settleReceipt === null) settleReceipt = receipt
 		}
+
+		// ---- positions, from the bidder's LIVE legs -------------------------
+		// A bid is a **delta** added to its bidder's position (R1-A), so a position
+		// is the sum of that bidder's legs. Not every leg is live:
+		//
+		// - a leg whose bid id a kind-1443 **refund receipt** names is dead — the
+		//   chain voided it and returned the escrow — and is excluded
+		//   (`refundForBid`, built from `arenaReceiptsRead.ts` above). Summing it
+		//   is what made this read report a 645/646 floor over a chain floor of 532.
+		// - a leg with no refund receipt is live **only when the read can vouch for
+		//   the receipt set it read**. A relay still pending, one whose subscription
+		//   threw, or a read the caller aborted leaves a refund unread, so the
+		//   absence of a receipt is not evidence of liveness. The position is then
+		//   `null` — *not known* — never a partial sum, and the lot's top position
+		//   is not known either (which the surfaces already have vocabulary for:
+		//   `topBid === null` → `ArenaBidFloor.kind === 'unknown'` → `read-incomplete`).
+		//
+		// Invariant this relies on: the chain publishes a **1443 refund naming the
+		// bid id** for every leg it voids (read here through `arenaReceiptsRead.ts`),
+		// and its coming **admission publication** names every bid it admits and the
+		// bidder's resulting position. Until that publication is on the wire the
+		// receipt is the only evidence of a dead leg, and a complete read is the
+		// only warrant that no refund was missed. Chain side:
+		// `~/work/wt-validator` `docs/PLAN-2026-11-19-additive-rebid-chain.md` §6-1.
+		const receiptsComplete = health.pending.length === 0 && health.failed.length === 0 && !health.aborted
+		const positions: Record<string, number | null> = {}
+		let bidsWithoutAmount = 0
+		for (const bid of auctionBids) {
+			if (bid.amount === null) {
+				bidsWithoutAmount += 1
+				continue
+			}
+			if (refundForBid[bid.eventId] !== undefined) continue
+			if (!receiptsComplete) {
+				positions[bid.bidder] = null
+				continue
+			}
+			positions[bid.bidder] = (positions[bid.bidder] ?? 0) + bid.amount
+		}
+		// The top position is only nameable when **every** position is known: a
+		// rival whose position is unknown could be above the best known one, so
+		// naming a top would be a claim the read cannot support.
+		let topBid: { bidder: string; total: number } | null = null
+		let positionsUnknown = false
+		for (const [bidder, total] of Object.entries(positions)) {
+			if (total === null) {
+				positionsUnknown = true
+				continue
+			}
+			if (topBid === null || total > topBid.total || (total === topBid.total && bidder < topBid.bidder)) {
+				topBid = { bidder, total }
+			}
+		}
+		if (positionsUnknown) topBid = null
 
 		const relays = new Set<string>()
 		for (const relay of entry.canonical.relays) relays.add(relay)

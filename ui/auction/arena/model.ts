@@ -15,9 +15,13 @@ import type { StatusTone } from '../../shared/status-badge'
  * The adapter reports what the relay said. A create with no
  * `duration_seconds` has **no end time** — not a zero-length auction. A bid
  * whose `amount` is not a number contributes **no** position — it does not
- * contribute zero. A verdict that was never published is **unknown**, which is
- * not the same claim as "no outcome". Every `null` below carries that meaning,
- * and the views say so in words rather than rendering a `0`.
+ * contribute zero. A leg a kind-1443 refund receipt names is dead and
+ * contributes no position either; a leg whose liveness the read could not
+ * determine (`arenaAuctionRead.ts`) makes its bidder's position **unknown** —
+ * not a partial sum, and not a `0`. A verdict that was never published is
+ * **unknown**, which is not the same claim as "no outcome". Every `null` below
+ * carries that meaning, and the views say so in words rather than rendering a
+ * `0`.
  */
 
 // =========================================================================
@@ -76,9 +80,12 @@ export interface ArenaAuctionCardModel {
 	imageUrl: string | null
 	startingBid: number | null
 	/**
-	 * The best **derived** position: bid *deltas* summed per bidder. Not the
-	 * outcome — the 1445 verdict is the authority on who won, and the mint is
-	 * the authority on whether money moved.
+	 * The best **derived** position: bid *deltas* summed per bidder over the
+	 * bidder's **live** legs. Not the outcome — the 1445 verdict is the authority
+	 * on who won, and the mint is the authority on whether money moved. `null`
+	 * when no top can be named: no bids, or a bidder whose position is not known
+	 * (a leg's liveness could not be determined) who could be above the best
+	 * known one.
 	 */
 	topBidTotal: number | null
 	bidCount: number
@@ -166,7 +173,13 @@ export interface ArenaAuctionBidModel {
 /** One derived per-bidder position. */
 export interface ArenaAuctionPositionModel {
 	bidder: string
-	total: number
+	/**
+	 * The sum of the bidder's **live** legs, or `null` when the position is not
+	 * known: a leg's liveness could not be determined (the read could not vouch
+	 * for the refund receipts it read). `null` is never a `0` — a surface says so
+	 * in words ({@link ARENA_POSITION_UNKNOWN_LABEL}).
+	 */
+	total: number | null
 }
 
 /** One destination of a money receipt, as a surface may state it. */
@@ -523,6 +536,13 @@ export function satsLabel(value: number | null): string {
  */
 export const ARENA_NO_RECEIPT_LABEL = 'no receipt read'
 
+/**
+ * The line a position earns when it could not be determined: a leg whose
+ * liveness the read could not establish (a refund receipt may exist that the
+ * read did not see). Never a number, and never `0`.
+ */
+export const ARENA_POSITION_UNKNOWN_LABEL = 'position not known'
+
 /** The per-position line a refund receipt earns, e.g. `refunded at height 400`. */
 export function refundReceiptLabel(height: number): string {
 	return `refunded at height ${height}`
@@ -660,6 +680,10 @@ export function priceLine(model: ArenaAuctionCardModel): string {
 		const n = model.bidsWithoutAmount
 		return `${n} ${n === 1 ? 'bid carries' : 'bids carry'} no readable amount — total unknown`
 	}
+	// Bids were read, every amount parsed, and there is still no top: a bidder's
+	// position could not be determined, so the rank is unknown. Never fall through
+	// to "No bids", which would state there were none.
+	if (model.bidCount > 0) return 'Bids were read, but no top position is known'
 	if (model.startingBid !== null) return `No bids · starting ${model.startingBid.toLocaleString()} sats`
 	return 'No bid amount stated'
 }

@@ -241,7 +241,16 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 	}))
 	const positions = Object.entries(view.positions)
 		.map(([bidder, total]) => ({ bidder, total }))
-		.sort((a, b) => b.total - a.total || a.bidder.localeCompare(b.bidder))
+		// Known positions rank first, best first; a bidder whose position is not
+		// known (`total === null`) sorts last — never as a `0`, which would place
+		// them below everyone and read as a position the read never computed.
+		.sort((a, b) => {
+			if (a.total === null || b.total === null) {
+				if (a.total === b.total) return a.bidder.localeCompare(b.bidder)
+				return a.total === null ? 1 : -1
+			}
+			return b.total - a.total || a.bidder.localeCompare(b.bidder)
+		})
 
 	const receipts = view.receipts.map((receipt) => toReceiptModel(receipt, context.heldParamsVersion))
 

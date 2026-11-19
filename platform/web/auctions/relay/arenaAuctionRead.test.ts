@@ -591,6 +591,44 @@ describe('bids', () => {
 		expect(snapshot.auctions[0].topBid).toEqual({ bidder: 'bidder-1', total: 700 })
 		expect(snapshot.auctions[0].bidsWithoutAmount).toBe(0)
 	})
+
+	test('a leg a refund receipt names is dead and is not summed into the position', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const live = bidEvent({ id: 'bid-live', e: 'root-1', amount: 500, pubkey: 'bidder-1', created_at: 1100 })
+		const voided = bidEvent({ id: 'bid-voided', e: 'root-1', amount: 100, pubkey: 'bidder-1', created_at: 1200 })
+		// The chain refunded `bid-voided`: kind 1443, naming that bid id.
+		const refund = receiptEvent({ bidId: 'bid-voided', height: 400 })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, live, voided, refund] } }).snapshot()
+
+		expect(snapshot.auctions[0].refundForBid['bid-voided']?.height).toBe(400)
+		// The deltas alone would sum to 600; the dead leg is not part of a position.
+		expect(snapshot.auctions[0].positions).toEqual({ 'bidder-1': 500 })
+		expect(snapshot.auctions[0].topBid).toEqual({ bidder: 'bidder-1', total: 500 })
+		// Both legs are still read as bids — the refund excludes, it does not erase.
+		expect(snapshot.auctions[0].bids).toHaveLength(2)
+	})
+
+	test('a leg whose liveness the read cannot establish leaves the position unknown, never a partial sum', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const leg = bidEvent({ id: 'bid-1', e: 'root-1', amount: 500, pubkey: 'bidder-1' })
+
+		// `wss://broken` threw. A 1443 refund for this leg could have been on it, so
+		// the read cannot say the leg is live: the position is unknown, not 500.
+		const partial = await readFrom({
+			'wss://a': { events: [create, leg] },
+			'wss://broken': { fail: 'connection refused' },
+		}).snapshot()
+		expect(partial.health.failed).toEqual(['wss://broken'])
+		expect(partial.auctions[0].positions).toEqual({ 'bidder-1': null })
+		// No top position can be named either: an unknown position could be the top.
+		expect(partial.auctions[0].topBid).toBeNull()
+
+		// The same events with every relay answering: the leg is live and it sums.
+		const whole = await readFrom({ 'wss://a': { events: [create, leg] } }).snapshot()
+		expect(whole.health.failed).toEqual([])
+		expect(whole.auctions[0].positions).toEqual({ 'bidder-1': 500 })
+		expect(whole.auctions[0].topBid).toEqual({ bidder: 'bidder-1', total: 500 })
+	})
 })
 
 describe('verdicts and commitments', () => {

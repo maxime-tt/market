@@ -21,6 +21,7 @@ import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointer
 import {
 	ARENA_ESCROW_COPY,
 	ARENA_NO_RECEIPT_LABEL,
+	ARENA_POSITION_UNKNOWN_LABEL,
 	antisnipeBehaviourLabel,
 	readStateMessage,
 	refundReceiptLabel,
@@ -104,32 +105,40 @@ export function arenaRingOffset(remaining: number, durationSec: number | null): 
 export interface ArenaLadderStep {
 	key: 'next' | 'jump' | 'big'
 	label: string
-	/** The position the bidder would reach. */
+	/** The position this step reaches — stated *beside* the published number. */
 	target: number
-	/** The delta to publish to reach it. */
+	/** The delta this step publishes — **the number the button displays**. */
 	delta: number
 }
 
 /**
  * NEXT / JUMP / BIG MOVE, as in the demo, on this lot's real floor.
  *
- * Bids are deltas on a position, so each button names the position it reaches
- * and publishes `target − ownPosition`. The step is the published minimum
+ * Bids are deltas on a position, so each button names **the delta it publishes**
+ * and the **position that delta reaches**. The step is the published minimum
  * increment; a lot that published none steps by 5% of the floor, which only
  * picks suggested amounts — the floor itself is still the check's.
+ *
+ * The one bidder `arenaBidFloor` returns the **top** as the floor for is the
+ * bidder already at or above it (`bid-rules.ts`, "a bidder improving their OWN
+ * standing need only reach the top"). Reaching that same floor would publish
+ * `max(1, minimum − own) = 1`: a legal self-raise under R2-A, and not a step. So
+ * for that bidder the step reaches one increment **above their own position**,
+ * and the same check holds the resulting delta to the floor like any other.
  */
 export function arenaLadder(check: Pick<ArenaBidCheck, 'minimum' | 'ownPosition'> | null, minIncrement: number | null): ArenaLadderStep[] {
 	if (check === null || check.minimum === null) return []
 	const min = check.minimum
 	const step = minIncrement !== null && minIncrement > 0 ? minIncrement : Math.max(1, Math.round(min * 0.05))
 	const own = check.ownPosition ?? 0
+	const first = own >= min ? own + step : min
 	const make = (key: ArenaLadderStep['key'], label: string, target: number): ArenaLadderStep => ({
 		key,
 		label,
 		target,
 		delta: Math.max(1, target - own),
 	})
-	return [make('next', 'Next', min), make('jump', 'Jump', min + 2 * step), make('big', 'Big move', min + 5 * step)]
+	return [make('next', 'Next', first), make('jump', 'Jump', min + 2 * step), make('big', 'Big move', min + 5 * step)]
 }
 
 /** Short relative time for the feeds: `now`, `45s`, `3m`, `2h`, `4d`. */
@@ -150,17 +159,28 @@ function avatarColour(pubkey: string): string {
 	return AVATAR_COLOURS[h % AVATAR_COLOURS.length]!
 }
 
-/** Each bid with the bidder's running position after it, newest first. */
+/**
+ * Each bid with the bidder's running position after it, newest first.
+ *
+ * A leg a kind-1443 refund receipt names is **dead** — the chain voided it — so
+ * it adds nothing: the running position after it is what it was before, and the
+ * newest row for a bidder shows the same number the read's own `positions` and
+ * the panel's floor use. An unreadable `amount` still yields `null` (`arenaBidRows`
+ * cannot invent a size), which is why the feed says "unreadable" rather than a
+ * number for that row.
+ */
 export function arenaBidRows(
 	model: ArenaAuctionDetailModel,
 ): Array<{ eventId: string; bidder: string; createdAt: number; amount: number | null; position: number | null }> {
+	const refundedBidIds = new Set(model.receipts.filter((r) => r.outcome === 'refund').map((r) => r.bidId))
 	const running = new Map<string, number>()
 	const rows = [...model.bids]
 		.sort((a, b) => a.createdAt - b.createdAt)
 		.map((b) => {
 			const amount = typeof b.amount === 'number' && Number.isFinite(b.amount) ? b.amount : null
+			const added = refundedBidIds.has(b.eventId) ? 0 : amount
 			const prev = running.get(b.bidder) ?? 0
-			const position = amount === null ? null : prev + amount
+			const position = added === null ? null : prev + added
 			if (position !== null) running.set(b.bidder, position)
 			return { eventId: b.eventId, bidder: b.bidder, createdAt: b.createdAt, amount, position }
 		})
@@ -279,8 +299,27 @@ function LiveBadge({ live }: { live: boolean }) {
 	)
 }
 
-/** Drag the knob to the end to publish. Keyboard: Enter or Space. */
-function SwipeToBid({ label, amount, disabled, onConfirm }: { label: string; amount: string; disabled: boolean; onConfirm: () => void }) {
+/**
+ * Drag the knob to the end to publish. Keyboard: Enter or Space.
+ *
+ * `amount` is the delta this control **publishes** and the number it **shows** —
+ * one value, never a target shown over a delta published (`bid.onSubmitAmount`
+ * takes exactly `String(amount)`). `reaches` states the position that delta
+ * lands on.
+ */
+function SwipeToBid({
+	label,
+	amount,
+	reaches,
+	disabled,
+	onConfirm,
+}: {
+	label: string
+	amount: number
+	reaches: number
+	disabled: boolean
+	onConfirm: () => void
+}) {
 	const track = useRef<HTMLDivElement>(null)
 	const [x, setX] = useState(0)
 	const [dragging, setDragging] = useState(false)
@@ -304,6 +343,7 @@ function SwipeToBid({ label, amount, disabled, onConfirm }: { label: string; amo
 		setX(0)
 	}
 
+	const reached = `reaching your position ${sats(reaches)} sats`
 	return (
 		<div
 			ref={track}
@@ -311,8 +351,9 @@ function SwipeToBid({ label, amount, disabled, onConfirm }: { label: string; amo
 			role="button"
 			tabIndex={disabled ? -1 : 0}
 			aria-disabled={disabled}
-			aria-label={`${label} ${amount} sats`}
+			aria-label={`${label} ${sats(amount)} sats, ${reached}`}
 			data-testid="arena-lot-swipe"
+			data-publishes={amount}
 			onKeyDown={(e) => {
 				if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
 					e.preventDefault()
@@ -322,7 +363,8 @@ function SwipeToBid({ label, amount, disabled, onConfirm }: { label: string; amo
 		>
 			<div className="arn-swipe__fill" style={{ width: x + 50 }} />
 			<span className="arn-swipe__label">
-				{label} <b>{amount}</b>
+				{label} <b>{sats(amount)}</b>
+				<em> · your position {sats(reaches)}</em>
 			</span>
 			<span
 				className="arn-swipe__knob"
@@ -381,10 +423,25 @@ export function ArenaLotView({
 	const ringLabel =
 		model.endsAt === null ? 'End not stated' : ended ? 'Closed' : model.mode === 'antisnipe' ? 'Bids reset the clock' : 'Until close'
 
-	const positions = [...model.positions].sort((a, b) => b.total - a.total)
-	const leader = positions[0] ?? null
-	const hasBids = model.bidCount > 0 && model.topBidTotal !== null
+	// Known positions rank first, best first; a `null` total means the read could
+	// not determine that bidder's position (`arenaAuctionRead.ts`), so they are
+	// not ranked and are never shown as a `0`.
+	const positions = [...model.positions].sort((a, b) => {
+		if (a.total === null || b.total === null) {
+			if (a.total === b.total) return a.bidder.localeCompare(b.bidder)
+			return a.total === null ? 1 : -1
+		}
+		return b.total - a.total || a.bidder.localeCompare(b.bidder)
+	})
+	const positionsUnknown = model.positions.some((p) => p.total === null)
+	// The leader is named only when the top is known: `topBidTotal === null` with
+	// bids read means a bidder's position is unknown, and that bidder could be
+	// above `positions[0]`.
+	const leader = positionsUnknown ? null : (positions[0] ?? null)
+	const hasBids = model.bidCount > 0
 	const priceLabel = !hasBids ? 'Starting bid' : ended ? 'Top bid at close' : 'Current bid'
+	// With bids read and no known top, the line says "not known" rather than
+	// falling back to the starting bid, which would state there were no bids.
 	const priceValue = hasBids ? model.topBidTotal : model.startingBid
 
 	const rows = arenaBidRows(model)
@@ -523,12 +580,18 @@ export function ArenaLotView({
 										<span className="arn-muted">{ended ? 'held the top position' : 'holds the top position'}</span>
 									</>
 								) : (
-									<span className="arn-muted">{ended ? 'No bids were read' : 'No bids yet. Open the arena.'}</span>
+									<span className="arn-muted">
+										{ended ? 'No bids were read' : positionsUnknown ? 'The top position is not known' : 'No bids yet. Open the arena.'}
+									</span>
 								)}
 							</div>
 							{viewerPos !== null && (
 								<div className="arn-muted" style={{ marginTop: 4 }}>
-									{leader?.bidder === viewer ? 'You hold the top position.' : `Your position: ${sats(viewerPos.total)} sats.`}
+									{viewerPos.total === null
+										? `Your ${ARENA_POSITION_UNKNOWN_LABEL} — one of your legs could not be read as live.`
+										: leader?.bidder === viewer
+											? 'You hold the top position.'
+											: `Your position: ${sats(viewerPos.total)} sats.`}
 								</div>
 							)}
 						</div>
@@ -556,10 +619,13 @@ export function ArenaLotView({
 													className={String(step.delta) === bid.amountInput.trim() ? 'is-on' : undefined}
 													disabled={controlsDisabled}
 													onClick={() => bid.onAmountChange(String(step.delta))}
-													aria-label={`${step.label}: reach ${sats(step.target)} sats`}
+													aria-label={`${step.label}: bid ${sats(step.delta)} sats, reaching your position ${sats(step.target)} sats`}
+													data-publishes={step.delta}
+													data-reaches={step.target}
 												>
 													<small>{step.label}</small>
-													<b>{sats(step.target)}</b>
+													<b>{sats(step.delta)}</b>
+													<em className="arn-ladder__reaches">→ your position {sats(step.target)}</em>
 												</button>
 											))}
 								</div>
@@ -601,7 +667,8 @@ export function ArenaLotView({
 								{!hardBlocked && next !== null && (
 									<SwipeToBid
 										label="Swipe to bid"
-										amount={sats(next.target)}
+										amount={next.delta}
+										reaches={next.target}
 										disabled={controlsDisabled}
 										onConfirm={() => bid.onSubmitAmount(String(next.delta))}
 									/>
@@ -726,17 +793,17 @@ export function ArenaLotView({
 					<ol>
 						{positions.length === 0 && <li className="arn-empty">Nobody has a position yet.</li>}
 						{positions.map((p, i) => (
-							<li key={p.bidder} className={i === 0 ? 'arn-lb is-first' : 'arn-lb'}>
-								<span className="arn-lb__rank">{i + 1}</span>
+							<li key={p.bidder} className={p.total !== null && i === 0 ? 'arn-lb is-first' : 'arn-lb'}>
+								<span className="arn-lb__rank">{p.total === null ? '–' : i + 1}</span>
 								<Avatar pubkey={p.bidder} />
 								<span className="arn-bid__name">
 									{name(p.bidder)}
 									{p.bidder === viewer && <em className="arn-pill arn-pill--you">you</em>}
 								</span>
 								<span className="arn-lb__bar">
-									<i style={{ width: `${maxPos > 0 ? Math.max(4, (p.total / maxPos) * 100) : 0}%` }} />
+									<i style={{ width: `${p.total !== null && maxPos > 0 ? Math.max(4, (p.total / maxPos) * 100) : 0}%` }} />
 								</span>
-								<span className="arn-lb__amt">{sats(p.total)}</span>
+								<span className="arn-lb__amt">{p.total === null ? ARENA_POSITION_UNKNOWN_LABEL : sats(p.total)}</span>
 							</li>
 						))}
 					</ol>

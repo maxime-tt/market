@@ -672,8 +672,9 @@ export const useNotificationMonitor = () => {
 
 				// Watched scope: the lots this user has bid on. A 1441's amount is a DELTA added to the
 				// bidder's position, so "a higher bid" is only meaningful on summed positions: read every
-				// bid for the watched lots and project positions the way the read adapter does, then
-				// compare totals.
+				// bid for the watched lots and sum them per bidder here. This lane reads no kind-1443
+				// refunds, so it sums every leg, while the lot read (`arenaAuctionRead.ts`) sums only the
+				// live ones — the read stays the authority on a position.
 				const ownBidEvents = Array.from(
 					await ndk.fetchEvents({ kinds: [AUCTION_BID_KIND_NDK], authors: [user.pubkey], limit: AUCTION_MONITOR_LIMIT }),
 				)
