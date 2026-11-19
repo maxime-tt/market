@@ -211,6 +211,18 @@
 	padding-top: 6px;
 }
 
+/* The lot's ticker sits flush under the header: one dividing line. */
+.cat__featured .arn-ticker {
+	margin-top: -20px;
+	border-top: 0;
+}
+
+@media (max-width: 760px) {
+	.cat__featured .arn-ticker {
+		margin-top: -12px;
+	}
+}
+
 /* The index shows the demo's three panels only; the leaderboard, lot notes
    and verdicts stay on the lot's own page. */
 .cat__featured .arn-board,
