@@ -186,7 +186,7 @@ function DashboardLayout() {
 		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
 			{/* Header - responsive for mobile/desktop */}
 			<div className="lg:hidden top-[8.5rem] z-10 sticky">
-				<h1 className="relative flex justify-center items-center gap-2 bg-secondary-black p-4 font-heading text-secondary text-center">
+				<h1 className="arena-dash-title relative flex justify-center items-center gap-2 p-4 font-heading text-center">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
 					{!showSidebar && isMobile && <BackButton variant="icon" ariaLabel="Back to sidebar" onClick={handleBackToSidebar} />}
 
@@ -218,7 +218,7 @@ function DashboardLayout() {
 			</div>
 
 			<div className="hidden lg:block">
-				<h1 className="relative flex justify-center lg:justify-start items-center gap-2 bg-secondary-black px-4 py-2 font-heading text-secondary text-center">
+				<h1 className="arena-dash-title relative flex justify-center lg:justify-start items-center gap-2 px-6 py-3 font-heading text-center">
 					Dashboard
 				</h1>
 			</div>

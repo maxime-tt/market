@@ -266,8 +266,17 @@ export function Header() {
 	const isCommunityPage = location.pathname === '/community'
 	const isCollectionPage = location.pathname.startsWith('/collection/')
 	const isNostrPage = location.pathname === '/nostr'
-	// Auction routes render the dark Arena header (styles/arena-chrome.css).
-	const arena = isAuctionPage
+	const isDashboardPage = location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/')
+	// Auction and dashboard routes render the dark Arena header
+	// (styles/arena-chrome.css). The auction routes sit inside the root
+	// `.arena-chrome` wrapper; the dashboard does not (its panels keep their own
+	// look), so the header carries its own Arena scope there.
+	const arena = isAuctionPage || isDashboardPage
+	const ownArenaScope = isDashboardPage && !isAuctionPage
+	const brandName = (config?.displayName || config?.name || 'Plebeian Market').trim()
+	const brandSplit = brandName.lastIndexOf(' ')
+	const brandLead = brandSplit > 0 ? brandName.slice(0, brandSplit) : ''
+	const brandTail = brandSplit > 0 ? brandName.slice(brandSplit + 1) : brandName
 	const shouldUseTransparentHeader = isProductPage || isAuctionPage || isHomepage || isProfilePage || isCommunityPage || isCollectionPage
 
 	// Scroll detection for pages with transparent headers
@@ -333,7 +342,7 @@ export function Header() {
 		uiActions.toggleMobileMenu()
 	}
 
-	return (
+	const header = (
 		<header
 			className={
 				arena
@@ -350,7 +359,8 @@ export function Header() {
 						)}
 						{arena && (
 							<span className="arena-brand hidden md:inline">
-								Plebeian <em>Auctions</em>
+								{brandLead && `${brandLead} `}
+								<em>{brandTail}</em>
 							</span>
 						)}
 					</Link>
@@ -461,5 +471,15 @@ export function Header() {
 			{/* Mobile Menu */}
 			<MobileMenu />
 		</header>
+	)
+
+	// `display: contents` keeps the header sticky against the page while the
+	// wrapper still hands the Arena tokens down to it.
+	return ownArenaScope ? (
+		<div className="arena-chrome" style={{ display: 'contents' }} data-testid="arena-header-scope">
+			{header}
+		</div>
+	) : (
+		header
 	)
 }

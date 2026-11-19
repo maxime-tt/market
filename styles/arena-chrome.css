@@ -421,3 +421,36 @@
 .arena-login > button:last-child:hover {
 	color: var(--arena-pink);
 }
+
+/* --- Dashboard title bar ----------------------------------------------------
+ * The strip under the header that reads "Dashboard" (or the open section on a
+ * phone). Arena surface, ink serif title, a hairline instead of a black slab.
+ * ------------------------------------------------------------------------- */
+
+.arena-dash-title {
+	background: #0e0d0e;
+	color: #f6efea;
+	border-bottom: 1px solid #2f2b2f;
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-weight: 400;
+	letter-spacing: -0.01em;
+	font-synthesis: none;
+}
+
+.arena-dash-title::before {
+	content: '';
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	margin-right: 4px;
+	border-radius: 999px;
+	background: #ff3eb5;
+	box-shadow: 0 0 12px rgb(255 62 181 / 0.6);
+	flex-shrink: 0;
+}
+
+@media (max-width: 1023px) {
+	.arena-dash-title::before {
+		display: none;
+	}
+}
