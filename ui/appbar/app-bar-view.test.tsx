@@ -123,6 +123,52 @@ describe('AppBarView', () => {
 		expect(openingTag(markup, 'data-slot="account-slot"')).toContain('justify-self-end')
 	})
 
+	test('on a phone the search takes its own full-width row, and the row collapses when empty', () => {
+		const markup = renderToStaticMarkup(
+			createElement(AppBarView, {
+				brand: BRAND,
+				navItems: NAV,
+				searchSlot: createElement('div', { 'data-slot': 'test-search' }, 'search'),
+				accountSlot: createElement('div', { 'data-slot': 'test-account' }, 'account'),
+			}),
+		)
+		const bar = openingTag(markup, 'data-slot="app-bar"')
+
+		// Two rows below `sm`; one from `sm` up.
+		expect(bar).toContain('grid-rows-[auto_auto]')
+		expect(bar).toContain('sm:grid-rows-1')
+		// A `min-h`, not a fixed `h`: the phone bar grows by the field's own row.
+		expect(bar).toContain('min-h-16')
+
+		// The search leaves the middle track for a full-width second row on a
+		// phone, and returns to the middle track from `sm` up.
+		const slot = openingTag(markup, 'data-slot="search-slot"')
+		expect(slot).toContain('col-start-1')
+		expect(slot).toContain('col-end-3')
+		expect(slot).toContain('row-start-2')
+		expect(slot).toContain('sm:col-start-2')
+		expect(slot).toContain('sm:col-end-3')
+		expect(slot).toContain('sm:row-start-1')
+		// The phone-safety rules stay on the slot.
+		expect(slot).toContain('min-w-0')
+		expect(slot).toContain('w-full')
+
+		// The brand and the account cluster stay on the first row.
+		expect(openingTag(markup, 'data-slot="app-bar-left"')).toContain('row-start-1')
+		expect(openingTag(markup, 'data-slot="account-slot"')).toContain('row-start-1')
+
+		// No field mounted ⇒ no second row and no extra height: the row is an
+		// empty `auto` track, and the slot itself is not rendered.
+		const bare = renderToStaticMarkup(createElement(AppBarView, { brand: BRAND, accountSlot: createElement('div', null, 'account') }))
+		expect(bare).not.toContain('data-slot="search-slot"')
+	})
+
+	test('the brand can shrink, so a long instance name ellipsises instead of shearing', () => {
+		const markup = renderToStaticMarkup(createElement(AppBarView, { brand: BRAND }))
+		expect(openingTag(markup, 'data-slot="brand"')).toContain('min-w-0')
+		expect(openingTag(markup, 'data-slot="brand"')).not.toContain('shrink-0')
+	})
+
 	test('accepts custom className', () => {
 		const markup = renderToStaticMarkup(createElement(AppBarView, { brand: BRAND, className: 'custom-class' }))
 		expect(markup).toContain('custom-class')

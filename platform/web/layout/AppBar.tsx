@@ -24,7 +24,10 @@
  *   for a path the operator invented.
  * - **Search** is the same `SearchField` the idle hero uses, at `size="nav"`. It
  *   navigates to `/?q=`, the route that validates the term and hands it to the
- *   Browse host, so the bar has one search and every route has it.
+ *   Browse host, so the bar has one search and every route has it. While typing
+ *   it shows a compact results preview (`SearchPreview`), anchored under the
+ *   field. It withdraws entirely when a page field is mounted — see
+ *   `ui/browse/search-presence.tsx`.
  * - **Account** is the one auth-aware menu (`platform/web/layout/AccountMenu.tsx`):
  *   a sign-in action when signed out; profile, wallet, dashboard, cart, the
  *   currency submenu and sign-out when signed in.
@@ -50,9 +53,10 @@ import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { AccountMenu } from '@platform/web/layout/AccountMenu'
 import { MOBILE_MENU_ID, MobileMenu } from '@platform/web/layout/MobileMenu'
 import { navItems } from '@platform/web/layout/navItems'
+import { SearchPreview } from '@platform/web/layout/SearchPreview'
 import { useRouteTable } from '@platform/web/routes-authoring/routeTableQuery'
 import { AppBarView } from '@ui/appbar/app-bar-view'
-import { SearchField } from '@ui/browse/search-field'
+import { usePageSearchFieldCount } from '@ui/browse/search-presence'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -84,6 +88,13 @@ export const AppBar: FC<AppBarProps> = ({ className }) => {
 	const { mobileMenuOpen } = useStore(uiStore)
 	const navigate = useNavigate()
 	const location = useLocation()
+	/**
+	 * How many page-level search fields are mounted. The bar's own field is only
+	 * drawn at zero: a page that shows a search of its own (the CMS `Search`
+	 * block, the browse idle hero) already has one, and two on a screen is one
+	 * too many. See `ui/browse/search-presence.tsx` for the seam.
+	 */
+	const pageSearchFieldCount = usePageSearchFieldCount()
 
 	/**
 	 * The term the URL already holds. The bar's field and the page's `?q=` are
@@ -113,12 +124,14 @@ export const AppBar: FC<AppBarProps> = ({ className }) => {
 			data-testid="home-link"
 			data-slot="wordmark-link"
 			aria-label={`${instanceName} — Browse`}
-			className="inline-flex items-center gap-2 font-display text-[20px] leading-tight tracking-[-0.01em] font-bold text-fill-ink hover:text-fill-ink-hover transition-colors cursor-pointer"
+			className="inline-flex min-w-0 max-w-full items-center gap-2 truncate font-display text-[20px] leading-tight tracking-[-0.01em] font-bold text-fill-ink hover:text-fill-ink-hover transition-colors cursor-pointer"
 		>
-			{/* The instance's own logo, sized to sit inside the `h-16` bar. The
-			    text stays and remains the visible title. */}
+			{/* The instance's own logo, sized to sit inside the bar's `min-h-16`
+			    height. The text stays and remains the visible title. */}
 			{config?.picture && <img src={config.picture} alt={config.displayName || config.name} className="h-8 w-8 shrink-0 object-contain" />}
-			{instanceName}
+			{/* The name ellipsises rather than shearing when an operator's instance
+			    name outgrows the brand lane. */}
+			<span className="truncate">{instanceName}</span>
 		</Link>
 	)
 
@@ -152,7 +165,14 @@ export const AppBar: FC<AppBarProps> = ({ className }) => {
 				className={className}
 				brand={brand}
 				navItems={nav}
-				searchSlot={<SearchField size="nav" value={query} onChange={setQuery} onGo={submitSearch} />}
+				searchSlot={
+					/*
+					 * Only when no page field is mounted. The bar's own field opts out
+					 * of the presence registry (`announce={false}` inside `SearchPreview`),
+					 * so it can never hide itself the moment it draws.
+					 */
+					pageSearchFieldCount === 0 ? <SearchPreview query={query} onChange={setQuery} onGo={submitSearch} /> : null
+				}
 				accountSlot={
 					<div className="flex items-center gap-2">
 						{/*
