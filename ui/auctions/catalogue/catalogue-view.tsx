@@ -68,6 +68,10 @@ export interface CatalogueViewProps {
 function formatRemaining(endsAt: number, now: number): string {
 	const seconds = Math.max(0, endsAt - now)
 	if (seconds === 0) return 'ended'
+	const days = Math.floor(seconds / 86400)
+	const hours = Math.floor((seconds % 86400) / 3600)
+	if (days > 0) return `${days}d ${hours}h`
+	if (hours > 0) return `${hours}h ${String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')}m`
 	const minutes = Math.floor(seconds / 60)
 	const rest = seconds % 60
 	return minutes > 0 ? `${minutes}m ${String(rest).padStart(2, '0')}s` : `${rest}s`
