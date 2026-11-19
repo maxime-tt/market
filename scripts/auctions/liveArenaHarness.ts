@@ -83,9 +83,7 @@ export async function pollChainUntil(
 		if (found(last)) return { polls, state: last }
 		await sleep(1000)
 	}
-	throw new Error(
-		`the chain did not commit ${what} within ${deadlineMs} ms (${polls} polls, last height ${last?.height ?? 'unknown'})`,
-	)
+	throw new Error(`the chain did not commit ${what} within ${deadlineMs} ms (${polls} polls, last height ${last?.height ?? 'unknown'})`)
 }
 
 // =========================================================================
@@ -273,7 +271,6 @@ export async function readChainAdvancing(
 	}
 	const fresh = options.freshWithinSec ?? 120
 	const age = newestTime === null ? null : options.now - newestTime
-	const advancing =
-		heights.size >= (options.minDistinctHeights ?? 2) && age !== null && age >= 0 && age <= fresh
+	const advancing = heights.size >= (options.minDistinctHeights ?? 2) && age !== null && age >= 0 && age <= fresh
 	return { advancing, heights: [...heights].sort((a, b) => a - b), newestTime, events: raw.length }
 }

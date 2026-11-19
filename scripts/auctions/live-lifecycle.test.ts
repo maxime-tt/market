@@ -47,12 +47,14 @@ import type { NostrEventLike } from '@sdk/core'
 import { createEventReadContext, createMemoryEventStore, type EventReadContext } from '@sdk/core/event-store'
 import { NIP59_GIFT_WRAP_KIND } from '@sdk/core/nostr/nip59'
 import { ORDER_PROCESS_KIND } from '@sdk/commerce/orders/messaging/orderSchema'
-import { ARENA_AUCTION_BID_KIND, ARENA_AUCTION_CREATE_KIND, ARENA_LOT_STATE_KIND, ARENA_REFUSED_KIND } from '@sdk/commerce/auctions/constants'
-import { getArenaCreateIssues } from '@sdk/commerce/auctions/auctionPublishValidation'
 import {
-	arenaWalletPubkey,
-	type ArenaWalletSpendSigner,
-} from '@platform/web/auctions/relay/arenaBidFunding'
+	ARENA_AUCTION_BID_KIND,
+	ARENA_AUCTION_CREATE_KIND,
+	ARENA_LOT_STATE_KIND,
+	ARENA_REFUSED_KIND,
+} from '@sdk/commerce/auctions/constants'
+import { getArenaCreateIssues } from '@sdk/commerce/auctions/auctionPublishValidation'
+import { arenaWalletPubkey, type ArenaWalletSpendSigner } from '@platform/web/auctions/relay/arenaBidFunding'
 import { readArenaParams, type ArenaParamsTerms } from '@platform/web/auctions/relay/arenaParamsRead'
 import { arenaCreateRulesFromParams, publishArenaCreate } from '@platform/web/auctions/relay/arenaAuctionCreate'
 import { assembleArenaBidFunding, type ArenaBidFundPorts } from '@platform/web/auctions/relay/arenaBidFund'
@@ -132,10 +134,26 @@ const publisher = (pool: SimplePool) => nostrPublisher(pool, RELAY)
 async function fetchRawById(pool: SimplePool, id: string): Promise<RawRelayEvent | null> {
 	const [raw] = await pool.querySync([RELAY], { ids: [id] }, { maxWait: 8000 })
 	if (raw === undefined) return null
-	return { id: raw.id, pubkey: raw.pubkey, kind: raw.kind, created_at: raw.created_at, tags: raw.tags as string[][], content: raw.content, sig: raw.sig ?? '' }
+	return {
+		id: raw.id,
+		pubkey: raw.pubkey,
+		kind: raw.kind,
+		created_at: raw.created_at,
+		tags: raw.tags as string[][],
+		content: raw.content,
+		sig: raw.sig ?? '',
+	}
 }
 
-const asRaw = (event: { id: string; pubkey: string; kind: number; created_at: number; tags: readonly string[][]; content: string; sig?: string }): RawRelayEvent => ({
+const asRaw = (event: {
+	id: string
+	pubkey: string
+	kind: number
+	created_at: number
+	tags: readonly string[][]
+	content: string
+	sig?: string
+}): RawRelayEvent => ({
 	id: event.id,
 	pubkey: event.pubkey,
 	kind: event.kind,
@@ -167,7 +185,12 @@ describe('live lifecycle (chain + mint + relay)', () => {
 		async () => {
 			installLocalStorageShim()
 			const pool = new SimplePool()
-			const report: Record<string, unknown> = { relay: RELAY, chainStateUrl: CHAIN_STATE_URL, durationSec: DURATION_SEC, windowSec: WINDOW_SEC }
+			const report: Record<string, unknown> = {
+				relay: RELAY,
+				chainStateUrl: CHAIN_STATE_URL,
+				durationSec: DURATION_SEC,
+				windowSec: WINDOW_SEC,
+			}
 			try {
 				// ---- 1. The escrow terms, read the app's own way, from the relay ----
 				const store = createMemoryEventStore()
@@ -250,7 +273,14 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				const createDerivedEnd = committedLot.endAt
 				expect(committedLot.mode).toBe('antisnipe')
 				expect(committedLot.windowSec).toBe(WINDOW_SEC)
-				report.lot = { eventId: createResult.eventId, coordinate, seller: sellerPubkey, sellerWallet, createDerivedEnd, createdHeight: createCommit.state.height }
+				report.lot = {
+					eventId: createResult.eventId,
+					coordinate,
+					seller: sellerPubkey,
+					sellerWallet,
+					createDerivedEnd,
+					createdHeight: createCommit.state.height,
+				}
 
 				// The model the bids are assembled against, from the app's own projection.
 				const createRaw = await fetchRawById(pool, createResult.eventId)
@@ -267,7 +297,8 @@ describe('live lifecycle (chain + mint + relay)', () => {
 					let quoteState = quote.state
 					const mintDeadline = Date.now() + MINT_QUOTE_DEADLINE_MS
 					while (quoteState !== MintQuoteState.PAID && quoteState !== MintQuoteState.ISSUED) {
-						if (Date.now() > mintDeadline) throw new Error(`the mint quote ${quote.quote} was not PAID/ISSUED within ${MINT_QUOTE_DEADLINE_MS} ms`)
+						if (Date.now() > mintDeadline)
+							throw new Error(`the mint quote ${quote.quote} was not PAID/ISSUED within ${MINT_QUOTE_DEADLINE_MS} ms`)
 						await sleep(300)
 						quoteState = (await cashuWallet.checkMintQuoteBolt11(quote.quote)).state
 					}
@@ -489,7 +520,12 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				report.extensionWindow = { remainingSecAtBid: remaining, windowSec: WINDOW_SEC }
 
 				const BExtend = await fundAndPublishBid(BID_EXTEND_SATS, 'B-extend', B.nostrSk)
-				report.bidExtend = { eventId: BExtend.bidEventId, wallet: BExtend.walletPub, amount: BID_EXTEND_SATS, committedHeight: BExtend.committedHeight }
+				report.bidExtend = {
+					eventId: BExtend.bidEventId,
+					wallet: BExtend.walletPub,
+					amount: BID_EXTEND_SATS,
+					committedHeight: BExtend.committedHeight,
+				}
 
 				// The kind-1449 the validator published for the moved end, read from the relay.
 				const lotStateEvents = await pool.querySync([RELAY], { kinds: [ARENA_LOT_STATE_KIND], limit: 300 }, { maxWait: 8000 })
@@ -522,7 +558,12 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				if (endView === null) throw new Error(`the projection did not deliver ${coordinate} after the extension`)
 				expect(endSourceOf(endView)).toBe('committed')
 				expect(auctionEndsAt(endView)).toBe(committedEnd.endTime)
-				report.lotView = { endSource: endSourceOf(endView), endsAt: auctionEndsAt(endView), createDerivedEnd, committedEnd: committedEnd.endTime }
+				report.lotView = {
+					endSource: endSourceOf(endView),
+					endsAt: auctionEndsAt(endView),
+					createDerivedEnd,
+					committedEnd: committedEnd.endTime,
+				}
 
 				// ---- 7. The lot closes on the committed end ----
 				const closedState = await pollChainUntil(
@@ -534,7 +575,12 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				const closedLot = closedState.state.auctions[coordinate] as { status: string; highBid: string; endAt: number }
 				expect(closedLot.status).not.toBe('open')
 				expect(closedLot.highBid).toBe(BExtend.bidEventId)
-				report.lotClosed = { status: closedLot.status, highBid: closedLot.highBid, endAt: closedLot.endAt, height: closedState.state.height }
+				report.lotClosed = {
+					status: closedLot.status,
+					highBid: closedLot.highBid,
+					endAt: closedLot.endAt,
+					height: closedState.state.height,
+				}
 
 				// ---- 8. A verdict (1445) names B, anchored ----
 				const verdictPollDeadline = Date.now() + BID_COMMIT_DEADLINE_MS
@@ -591,7 +637,8 @@ describe('live lifecycle (chain + mint + relay)', () => {
 					getWalletMints: () => [mintUrl],
 					getExpectedKeysetId: () => keysetId,
 					getClaimRecord: () => loadArenaReceiptClaimRecord('lifecycle-seller'),
-					setClaimRecord: (record: ReturnType<typeof loadArenaReceiptClaimRecord>) => saveArenaReceiptClaimRecord(record, 'lifecycle-seller'),
+					setClaimRecord: (record: ReturnType<typeof loadArenaReceiptClaimRecord>) =>
+						saveArenaReceiptClaimRecord(record, 'lifecycle-seller'),
 					refresh: async () => {},
 					now: () => Date.now(),
 				}
@@ -624,7 +671,12 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				const privateClaim = createPrivateAuctionClaimMessage({ ...claimFields, senderPrivateKey: B.nostrSk })
 				// The public marker the seller's order surfaces key on — money-free, PII-free.
 				const markerEvent = finalizeEvent(
-					{ kind: ORDER_PROCESS_KIND, created_at: nowSec(), tags: buildAuctionClaimPublicMarkerTags(claimFields), content: 'auction claim' },
+					{
+						kind: ORDER_PROCESS_KIND,
+						created_at: nowSec(),
+						tags: buildAuctionClaimPublicMarkerTags(claimFields),
+						content: 'auction claim',
+					},
 					B.nostrSk,
 				) as unknown as Event
 				await publisher(pool).publish(privateClaim.giftWrap as unknown as Event)
@@ -655,7 +707,9 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				// The app's public marker binds the private payload (one mechanism, no PII in the marker).
 				const markerFields = getAuctionClaimPublicMarkerFields(markerEvent as unknown as { pubkey?: string; tags: string[][] })
 				expect(markerFields).not.toBeNull()
-				expect(privateAuctionClaimMatchesPublicMarker(decrypted.payload, markerEvent as unknown as { pubkey?: string; tags: string[][] })).toBe(true)
+				expect(
+					privateAuctionClaimMatchesPublicMarker(decrypted.payload, markerEvent as unknown as { pubkey?: string; tags: string[][] }),
+				).toBe(true)
 				report.claimMessage = {
 					giftWrapId: giftWrapRaw.id,
 					markerEventId: markerEvent.id,
