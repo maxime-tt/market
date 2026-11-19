@@ -51,40 +51,71 @@ import type { ArenaAuctionDetailModel } from './model'
 /**
  * What the surface may say about a bid the bidder just submitted.
  *
- * Seven states, not two (`AGENTS.md:41-46`): "signed locally", "some relays
- * acknowledged", "no relay acknowledged", "a relay acknowledged but nothing has
- * come back on the read", "the chain has not decided yet", and "the chain has
- * demonstrably stopped committing" are different facts, and collapsing them into
- * "success/failure" would hide the one case a bidder most needs to know about —
- * a bid that was accepted by one relay out of three.
+ * Not two states (`AGENTS.md:41-46`): "the escrow is being locked", "the escrow
+ * is locked and the event is being offered", "some relays acknowledged", "no
+ * relay acknowledged", "a relay acknowledged but nothing has come back on the
+ * read", "the chain admitted it", "the chain has not decided yet", and "the
+ * chain has demonstrably stopped committing" are different facts, and collapsing
+ * them into "success/failure" would hide the one case a bidder most needs to
+ * know about.
+ *
+ * **The stepper's facts.** The three steps of the submission stepper
+ * ({@link bidSubmissionStepper}) each rest on their own fact and nothing else:
+ *
+ * - **lock** — the app's own funding step completed ({@link phase: 'locking'}
+ *   while it runs, past it once the escrow is locked);
+ * - **relay publish** — at least one relay ACKed the signed event
+ *   (`presumed` and everything after it carry `acceptedBy`);
+ * - **validator confirmation** — an `arena.bidadmit.v1` fact names this bid id
+ *   ({@link phase: 'admitted'}). No ACK, no timeout and no `highAmount` reaches
+ *   it.
  *
  * **Waiting is not failing.** `unconfirmed` is the state for "the app has not
- * yet read a verdict", and it says so; only a zero-ACK publish and a signing
- * failure are failures (`isArenaBidSubmissionUnsuccessful`), and the chain's
- * *demonstrated* stall is its own state, with the window that demonstrates it.
+ * yet read the chain's word", and it says so; only a zero-ACK publish and a
+ * signing failure are failures (`isArenaBidSubmissionUnsuccessful`), and the
+ * chain's *demonstrated* stall is its own state, with the window that
+ * demonstrates it.
  */
 export type ArenaBidSubmissionState =
 	/** Nothing submitted since this page loaded. */
 	| { phase: 'idle' }
-	/** The event is signed and being offered to relays; nothing is ACKed yet. */
+	/** The app's own funding step is running: the escrow lock is being written at the mint. */
+	| { phase: 'locking'; amount: number }
+	/** The escrow is locked and the signed event is being offered to relays; nothing is ACKed yet. */
 	| { phase: 'publishing'; amount: number }
 	/** ≥1 relay ACKed the event, but the read has not yet delivered it back. **Presumed, not seen.** */
 	| { phase: 'presumed'; amount: number; eventId: string; acceptedBy: string[]; totalRelays: number }
 	/** The read delivered the bid back: the relays hold it. Still not an outcome (`bid-rules.ts`). */
 	| { phase: 'seen'; amount: number; eventId: string; acceptedBy: string[]; totalRelays: number }
 	/**
+	 * The chain **admitted** this bid: an `arena.bidadmit.v1` fact (kind 1449)
+	 * names this bid id, anchored at the bid's own committed height. This is the
+	 * only state in which the panel may say the bid is in, and it carries the
+	 * chain's own `position`/`highBid` for the bid.
+	 */
+	| {
+			phase: 'admitted'
+			amount: number
+			eventId: string
+			acceptedBy: string[]
+			totalRelays: number
+			/** The chain's admission fact for this bid, as the panel states it. */
+			admission: { position: number; highBid: string; height: number; blockHash: string }
+	  }
+	/**
 	 * The bid is on the relay but **not** in committed state while the chain is
-	 * advancing: the chain saw it and did not accept it. **Not** a network
-	 * problem. The escrow is locked until `locktime`, and the bidder can reclaim
-	 * the funds through the lock's refund path. The panel never invents a reason
-	 * (the chain publishes no 1450 for a refused bid, by ruling).
+	 * advancing, and **no `arena.bidadmit.v1` fact read names this bid**: the chain
+	 * has not admitted it. **Not** a network problem. The escrow is locked until
+	 * `locktime`, and the bidder can reclaim the funds through the lock's refund
+	 * path. The panel never invents a reason — see the seam note on the
+	 * `not-accepted` copy in {@link submissionLine}.
 	 */
 	| { phase: 'not-accepted'; amount: number; eventId: string; locktime: number | null; reclaimable: boolean }
 	/**
 	 * The bid is on the relay, the chain has committed nothing that shows whether
-	 * it took it, and the app has **not** seen the chain advance. This is a
-	 * *waiting* state, never a failure: no verdict exists yet, so nothing is
-	 * claimed about the bid and the surface keeps reading.
+	 * it admitted it, and the app has **not** seen the chain advance. This is a
+	 * *waiting* state, never a failure: no admission fact exists yet, so nothing
+	 * is claimed about the bid and the surface keeps reading.
 	 *
 	 * `acceptedBy`/`totalRelays` are the relay ACKs it has carried since
 	 * `presumed` (the app never drops a fact it holds), and `watchingSince`
@@ -107,14 +138,188 @@ export type ArenaBidSubmissionState =
 	 * makes the claim true — and the panel states it in words.
 	 */
 	| { phase: 'infrastructure'; amount: number; eventId: string; stalledForSec: number }
-	/** Signed and offered, but **no** relay ACKed. Published nowhere — fail closed. */
-	| { phase: 'unpublished'; amount: number; eventId: string | null; reason: string }
-	/** Signing failed, or the wallet refused; nothing was published and nothing was signed. */
-	| { phase: 'failed'; amount: number; reason: string }
+	/**
+	 * Signed and offered, but **no** relay ACKed. Published nowhere — fail closed.
+	 * `escrowLocked` is `true` when the escrow lock had already completed before
+	 * the publish failed — the one fact the stepper's lock step rests on.
+	 */
+	| { phase: 'unpublished'; amount: number; eventId: string | null; reason: string; escrowLocked?: boolean }
+	/**
+	 * Signing failed, or the wallet refused; nothing was published and nothing was
+	 * signed. `escrowLocked` as on `unpublished`.
+	 */
+	| { phase: 'failed'; amount: number; reason: string; escrowLocked?: boolean }
 
 /** The submission is over and did not land: the bidder may retry the same amount. */
 export function isArenaBidSubmissionUnsuccessful(state: ArenaBidSubmissionState): boolean {
 	return state.phase === 'unpublished' || state.phase === 'failed'
+}
+
+// =========================================================================
+// The submission stepper
+//
+// Three steps, in order: the app's own escrow lock, the signed event reaching a
+// relay, and the chain's admission fact naming this bid. Each step's success
+// rests on its OWN fact and nothing else — an ACK never lights the validator
+// step, a timeout never lights it, and `highAmount` never lights it. The step in
+// progress is the one a surface animates.
+// =========================================================================
+
+/** The three steps, in the order they happen. */
+export const ARENA_BID_STEP_KEYS = ['lock', 'publish', 'admit'] as const
+
+export type ArenaBidStepKey = (typeof ARENA_BID_STEP_KEYS)[number]
+
+/** A step's status: done (its own fact holds), active (in progress), pending, or failed. */
+export type ArenaBidStepStatus = 'done' | 'active' | 'pending' | 'failed'
+
+export interface ArenaBidStep {
+	key: ArenaBidStepKey
+	/** The word the step is named by — the same three names the protocol uses. */
+	label: string
+	status: ArenaBidStepStatus
+	/** The one sentence this step states about itself, from its own fact only. */
+	detail: string
+}
+
+export interface ArenaBidStepper {
+	steps: ArenaBidStep[]
+	/** The step in progress (the one to animate), or `null` when none is. */
+	active: ArenaBidStepKey | null
+	/** True only when all three steps are done — the one state in which the bid is in. */
+	complete: boolean
+}
+
+const STEP_LABELS: Record<ArenaBidStepKey, string> = {
+	lock: 'Lock',
+	publish: 'Relay publish',
+	admit: 'Validator confirmation',
+}
+
+const STEP_DETAILS = {
+	lockActive: 'Locking the escrow at the mint…',
+	lockDone: 'The escrow for this bid is locked at the mint.',
+	lockPending: 'The escrow lock has not started.',
+	lockMissing: 'This submission reached no escrow lock.',
+	publishActive: 'Offering the signed bid to the relays…',
+	publishPending: 'No relay has acknowledged the signed event.',
+	publishCarried: 'The relays stored this signed bid; this view no longer holds the ACK count.',
+	publishFailed: 'No relay accepted the signed event.',
+	admitActive: 'Waiting for the chain’s admission fact (arena.bidadmit.v1) naming this bid…',
+	admitPending: 'No admission fact names this bid yet.',
+	admitFailed: 'The chain recorded a refusal of this bid.',
+} as const
+
+/**
+ * Can this state carry the relay-ACK count? `presumed` and everything after it
+ * do — except an `admitted` state that arrived from a concluded one, which
+ * leaves the count behind (`arenaBidPublish.ts` `nextPublishedBidState`): `null`
+ * then says "this view does not hold the number", never "no relay stored it".
+ */
+function acceptedCount(state: ArenaBidSubmissionState): { accepted: number; total: number } | null {
+	switch (state.phase) {
+		case 'presumed':
+		case 'seen':
+		case 'unconfirmed':
+			return { accepted: state.acceptedBy.length, total: state.totalRelays }
+		case 'admitted':
+			return state.acceptedBy.length === 0 && state.totalRelays === 0
+				? null
+				: { accepted: state.acceptedBy.length, total: state.totalRelays }
+		default:
+			return null
+	}
+}
+
+function publishDetail(acks: { accepted: number; total: number } | null): string {
+	if (acks === null) return STEP_DETAILS.publishPending
+	return `A relay acknowledged the signed bid (${acks.accepted} of ${acks.total}). That is storage, not admission.`
+}
+
+/**
+ * The stepper for a submission, or `null` when nothing has been submitted and
+ * there is nothing to step through.
+ *
+ * Every status comes from the state's own fact for that step:
+ *
+ * - `lock` is `done` in every phase past the local funding step and `active`
+ *   only while it runs; a failure that reached no lock says so.
+ * - `publish` is `done` only when the state carries relay ACKs (≥1).
+ * - `admit` is `done` **only** in `admitted`, the one phase an
+ *   `arena.bidadmit.v1` fact produced. An ACK, a timeout or a `highAmount`
+ *   never reaches it; `refused` fails it (the chain said no, in its words).
+ */
+export function bidSubmissionStepper(state: ArenaBidSubmissionState): ArenaBidStepper | null {
+	if (state.phase === 'idle') return null
+
+	const acks = acceptedCount(state)
+	const published = acks !== null && acks.accepted > 0
+	const admitted = state.phase === 'admitted'
+
+	const step = (key: ArenaBidStepKey, status: ArenaBidStepStatus, detail: string): ArenaBidStep => ({
+		key,
+		label: STEP_LABELS[key],
+		status,
+		detail,
+	})
+
+	let lock: ArenaBidStep
+	let publish: ArenaBidStep
+	let admit: ArenaBidStep
+	let active: ArenaBidStepKey | null
+
+	switch (state.phase) {
+		case 'locking':
+			lock = step('lock', 'active', STEP_DETAILS.lockActive)
+			publish = step('publish', 'pending', STEP_DETAILS.publishPending)
+			admit = step('admit', 'pending', STEP_DETAILS.admitPending)
+			active = 'lock'
+			break
+		case 'publishing':
+			lock = step('lock', 'done', STEP_DETAILS.lockDone)
+			publish = step('publish', 'active', STEP_DETAILS.publishActive)
+			admit = step('admit', 'pending', STEP_DETAILS.admitPending)
+			active = 'publish'
+			break
+		case 'admitted':
+			lock = step('lock', 'done', STEP_DETAILS.lockDone)
+			publish = step('publish', 'done', acks === null ? STEP_DETAILS.publishCarried : publishDetail(acks))
+			admit = step(
+				'admit',
+				'done',
+				`The chain admitted this bid at height ${state.admission.height} — position ${state.admission.position.toLocaleString()} sats.`,
+			)
+			active = null
+			break
+		case 'refused':
+			lock = step('lock', 'done', STEP_DETAILS.lockDone)
+			publish = step('publish', 'done', STEP_DETAILS.publishPending)
+			admit = step('admit', 'failed', STEP_DETAILS.admitFailed)
+			active = null
+			break
+		case 'unpublished':
+			lock = state.escrowLocked === true ? step('lock', 'done', STEP_DETAILS.lockDone) : step('lock', 'pending', STEP_DETAILS.lockMissing)
+			publish = step('publish', 'failed', STEP_DETAILS.publishFailed)
+			admit = step('admit', 'pending', STEP_DETAILS.admitPending)
+			active = null
+			break
+		case 'failed':
+			lock = state.escrowLocked === true ? step('lock', 'done', STEP_DETAILS.lockDone) : step('lock', 'pending', STEP_DETAILS.lockMissing)
+			publish = step('publish', 'pending', STEP_DETAILS.publishPending)
+			admit = step('admit', 'pending', STEP_DETAILS.admitPending)
+			active = null
+			break
+		default:
+			// `presumed`, `seen`, `unconfirmed`, `not-accepted`, `infrastructure`:
+			// the bid is on the relays and the app is waiting for the chain's word.
+			lock = step('lock', 'done', STEP_DETAILS.lockDone)
+			publish = step('publish', 'done', publishDetail(acks))
+			admit = step('admit', 'active', STEP_DETAILS.admitActive)
+			active = 'admit'
+			break
+	}
+
+	return { steps: [lock, publish, admit], active, complete: lock.status === 'done' && published && admitted }
 }
 
 // =========================================================================
@@ -189,23 +394,36 @@ export function submissionLine(
 	switch (state.phase) {
 		case 'idle':
 			return null
+		case 'locking':
+			return {
+				title: `Locking ${state.amount.toLocaleString()} sats in escrow…`,
+				detail: 'The app is writing this bid’s escrow lock at the mint. Nothing has been published yet.',
+				tone: 'neutral',
+			}
 		case 'publishing':
 			return {
 				title: `Publishing ${state.amount.toLocaleString()} sats…`,
-				detail: 'The bid is signed and being offered to every relay this app writes to. Nothing has been acknowledged yet.',
+				detail:
+					'The escrow is locked and the signed bid is being offered to every relay this app writes to. Nothing has been acknowledged yet, and a relay acknowledgment is not the chain taking the bid.',
 				tone: 'neutral',
 			}
 		case 'presumed':
 			return {
-				title: `Bid presumed placed — ${state.acceptedBy.length} of ${state.totalRelays} relays acknowledged it.`,
-				detail: `Your signed bid was accepted by ${state.acceptedBy.length === 1 ? 'a relay' : 'relays'}, so it is presumed to be on the network. This view has not read it back yet; it will say so when it has. “Accepted by a relay” is not “won”, and no money has moved.`,
-				tone: 'warning',
+				title: `Bid on the relays — ${state.acceptedBy.length} of ${state.totalRelays} relays acknowledged it.`,
+				detail: `Your signed bid was stored by ${state.acceptedBy.length === 1 ? 'a relay' : 'relays'}, so it is on the network this app writes to. That is storage, not admission: the chain has not yet published an admission fact naming this bid. This view keeps reading until the chain admits it or demonstrably does not.`,
+				tone: 'neutral',
 			}
 		case 'seen':
 			return {
-				title: `Bid seen on the read — ${state.acceptedBy.length} of ${state.totalRelays} relays acknowledged it.`,
+				title: `Bid on the relays — ${state.acceptedBy.length} of ${state.totalRelays} relays acknowledged it.`,
 				detail:
-					'The relays that answered delivered your bid back, and it is counted in the bids below. That is storage, not an outcome: the verdict names a winner and the chain decides.',
+					'The relays that answered delivered your bid back to this view. That is storage, not admission: the chain decides, and this view has not read an admission fact naming this bid yet. It keeps reading.',
+				tone: 'neutral',
+			}
+		case 'admitted':
+			return {
+				title: `The chain admitted this bid — your position is ${state.admission.position.toLocaleString()} sats.`,
+				detail: `An admission fact (arena.bidadmit.v1) names this bid, anchored at height ${state.admission.height}. This is the chain’s own record that it took the bid, and the position it belongs to. It is not a win: the verdict names the winner when the lot closes, and no money has moved.`,
 				tone: 'success',
 			}
 		case 'refused': {
@@ -223,10 +441,16 @@ export function submissionLine(
 			}
 		}
 		case 'not-accepted': {
-			// The chain is advancing and this bid is not in committed state: the
-			// chain saw it and did not accept it. This is emphatically NOT a network
-			// problem, and the app states no reason — the chain publishes none for a
-			// refused bid, by ruling.
+			// The chain is advancing, this bid is not in committed state, and no
+			// admission fact names it: the chain has not admitted this bid. This is
+			// emphatically NOT a network problem.
+			//
+			// SEAM — the refusal reason. The owner has not yet ruled on publishing a
+			// refusal fact (`arena.bidrefuse.v1`, the counterpart of the admission
+			// fact), so the chain publishes no reason the app can read for a bid it
+			// did not admit, and this app states none. Do NOT invent a reason and do
+			// NOT implement that publication here. When the ruling lands, the reason
+			// is stated in the chain's own words and this copy changes with it.
 			const locktimeCopy =
 				state.locktime !== null
 					? ` Your escrow stays locked until ${new Date(state.locktime * 1000).toISOString()}, after which the lock's own refund path returns the funds to your wallet.`
@@ -235,15 +459,15 @@ export function submissionLine(
 				? ' You can reclaim the locked sats once that locktime has passed.'
 				: ' Do not bid the same amount again from this wallet — that would lock a second escrow.'
 			return {
-				title: 'The chain did not accept this bid.',
-				detail: `The chain is advancing and this bid is not in committed state, so it saw the bid and did not take it. This is not a network problem, and this app does not know the reason — the chain recorded no refusal for it, and this app will not invent one.${locktimeCopy}${reclaimCopy}`,
+				title: 'The chain has not admitted this bid.',
+				detail: `The chain is advancing and no admission fact (arena.bidadmit.v1) names this bid, so it has not recorded taking it. This is not a network problem. The chain publishes no reason here, and this app will not invent one — a refusal fact the chain does not publish leaves this app silent on the reason.${locktimeCopy}${reclaimCopy}`,
 				tone: 'warning',
 			}
 		}
 		case 'unconfirmed':
 			return {
-				title: 'Waiting for the chain to confirm…',
-				detail: `The relays have your bid${state.acceptedBy.length > 0 ? ` (${state.acceptedBy.length} of ${state.totalRelays} acknowledged it)` : ''}. The chain has not published committed state showing whether it took the bid, so this app has no verdict yet — and no verdict is not a refusal: nothing here says the bid was refused, and it may still be accepted. This view keeps reading until the chain’s committed state settles it.`,
+				title: 'Waiting for the chain to admit the bid…',
+				detail: `The relays have your bid${state.acceptedBy.length > 0 ? ` (${state.acceptedBy.length} of ${state.totalRelays} acknowledged it)` : ''}. No admission fact (arena.bidadmit.v1) names this bid yet, so this app has nothing from the chain — and no admission fact is not a refusal: nothing here says the bid was refused, and it may still be admitted. This view keeps reading.`,
 				tone: 'neutral',
 			}
 		case 'infrastructure': {
@@ -254,7 +478,7 @@ export function submissionLine(
 			const minutes = Math.max(1, Math.round(state.stalledForSec / 60))
 			return {
 				title: 'The chain is not advancing.',
-				detail: `The relays have your bid, but this app has read the chain’s committed state for ${minutes} minutes without seeing it advance, so it cannot say whether the bid will be accepted. This is an infrastructure problem, not a problem with your bid — nothing here says the bid was refused.`,
+				detail: `The relays have your bid, but this app has read the chain’s committed state for ${minutes} minutes without seeing it advance, so it cannot say whether the bid will be admitted. This is an infrastructure problem, not a problem with your bid — nothing here says the bid was refused.`,
 				tone: 'warning',
 			}
 		}
@@ -277,6 +501,50 @@ export function submissionLine(
 // The view
 // =========================================================================
 
+/**
+ * The three-step submission stepper. Its step statuses come only from
+ * {@link bidSubmissionStepper} — this component decides no fact, it only shows
+ * one. The step in progress carries an animated indicator (`animate-spin`); each
+ * step states its own fact, never another step's.
+ */
+export function BidStepper({ stepper, className }: { stepper: ArenaBidStepper; className?: string }) {
+	return (
+		<ol
+			data-slot="arena-bid-stepper"
+			data-active={stepper.active ?? 'none'}
+			data-complete={stepper.complete ? 'true' : 'false'}
+			className={cn('flex flex-col gap-2', className)}
+		>
+			{stepper.steps.map((step, index) => (
+				<li key={step.key} data-slot="arena-bid-step" data-step={step.key} data-status={step.status} className="flex items-start gap-3">
+					<span
+						aria-hidden="true"
+						className={cn(
+							'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold',
+							step.status === 'done' && 'border-success bg-success-muted text-success-muted-foreground',
+							step.status === 'active' && 'border-focus text-focus',
+							step.status === 'failed' && 'border-error bg-error-muted text-error',
+							step.status === 'pending' && 'border-border-default text-text-mid',
+						)}
+					>
+						{step.status === 'active' ? (
+							<span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" role="progressbar" aria-label={`${step.label} in progress`} />
+						) : step.status === 'done' ? (
+							'✓'
+						) : (
+							index + 1
+						)}
+					</span>
+					<span className="min-w-0">
+						<span className="block text-xs font-medium">{step.label}</span>
+						<span className="block text-[11px] text-text-mid opacity-90">{step.detail}</span>
+					</span>
+				</li>
+			))}
+		</ol>
+	)
+}
+
 export function ArenaBidPanel({
 	model,
 	readStatus,
@@ -296,6 +564,7 @@ export function ArenaBidPanel({
 	const floor = model !== null ? bidFloorLabel(model, check) : null
 	const invalidCopy = check !== null && !check.allowed && !hardBlocked ? bidBlockedCopy(check.reason, check) : null
 	const line = submissionLine(submission)
+	const stepper = bidSubmissionStepper(submission)
 
 	return (
 		<section
@@ -362,6 +631,8 @@ export function ArenaBidPanel({
 					{invalidCopy}
 				</p>
 			)}
+
+			{stepper !== null && <BidStepper stepper={stepper} className="rounded-lg bg-surface-sunken px-3 py-2" />}
 
 			{line !== null && (
 				<div

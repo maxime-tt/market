@@ -70,6 +70,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		settleReceipt: null,
 		createRefusal: null,
 		bidRefusals: {},
+		admissions: {},
 		...over,
 	}
 }

@@ -359,6 +359,16 @@ export const ARENA_PARAMS_SCHEMA = 'arena.params.v1'
 /** `schema` value inside a kind-1449 lot-state (committed end) event's JSON content. */
 export const ARENA_LOT_SCHEMA = 'arena.lot.v1'
 
+/**
+ * `schema` value inside a kind-1449 **bid-admission** event's JSON content — the
+ * chain's own record that it ADMITTED one bid (R4). Kind 1449 carries **two**
+ * schemas (`arena.lot.v1`, a lot's committed end; `arena.bidadmit.v1`, a single
+ * bid's admission), so a reader dispatches on `content.schema`, never on the
+ * kind alone. Chain side: `~/work/wt-validator` `chain/lotevents.go`
+ * (`BidAdmitSchema`, `BuildBidAdmitEvent`, `ParseBidAdmitEvent`).
+ */
+export const ARENA_BID_ADMIT_SCHEMA = 'arena.bidadmit.v1'
+
 /** `schema` value inside a kind-1450 refusal event's JSON content. */
 export const ARENA_REFUSED_SCHEMA = 'arena.refused.v1'
 

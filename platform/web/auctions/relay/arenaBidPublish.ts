@@ -521,7 +521,66 @@ export function nextPublishedBidState(input: {
 	now: number
 }): ArenaBidSubmissionState {
 	const previous = input.previous
-	if (previous.phase !== 'presumed' && previous.phase !== 'unconfirmed') return previous
+	// `seen` is included: the read holding the bid is not the end of the story —
+	// the panel keeps watching for the chain's admission fact, which may arrive
+	// after the relay read first served the bid (a late admission fact must still
+	// advance the panel). `not-accepted` and `infrastructure` are included for the
+	// same reason: the chain's admission fact may land later than the read that
+	// first made the app conclude otherwise.
+	const inFlight = previous.phase === 'presumed' || previous.phase === 'seen' || previous.phase === 'unconfirmed'
+	const concluded = previous.phase === 'not-accepted' || previous.phase === 'infrastructure'
+	if (!inFlight && !concluded) return previous
+
+	// 0. The chain's admission fact. This is checked FIRST and from any state:
+	//    an `arena.bidadmit.v1` fact that names this bid id is the chain saying
+	//    it took the bid, and it outranks every weaker signal below (a relay ACK,
+	//    the read holding the bid, an elapsed window). It carries the chain's own
+	//    position/highBid, which is what the panel then states.
+	const admission = input.model?.admissions[previous.eventId]
+	if (admission !== undefined) {
+		// The ACK count is a fact this submission carries through `presumed`,
+		// `seen` and `unconfirmed`. The two concluded states (`not-accepted`,
+		// `infrastructure`) leave it behind, so a late admission fact arriving from
+		// one of them carries no count — the panel then states the admission and
+		// its position, never an ACK number it does not hold (`acceptedCount`).
+		const acks =
+			previous.phase === 'presumed' || previous.phase === 'seen' || previous.phase === 'unconfirmed'
+				? { acceptedBy: previous.acceptedBy, totalRelays: previous.totalRelays }
+				: { acceptedBy: [], totalRelays: 0 }
+		return {
+			phase: 'admitted',
+			amount: previous.amount,
+			eventId: previous.eventId,
+			acceptedBy: acks.acceptedBy,
+			totalRelays: acks.totalRelays,
+			admission: {
+				position: admission.position,
+				highBid: admission.highBid,
+				height: admission.height,
+				blockHash: admission.blockHash,
+			},
+		}
+	}
+
+	// A conclusion is not re-litigated tick over tick: only the chain's own
+	// admission fact above, or a refusal a later read delivers, moves it. Without
+	// this the panel would flap between not-accepted, unconfirmed and
+	// infrastructure as reads came and went, and a later read that merely serves
+	// the bid again would drag it back to `seen`.
+	if (concluded) {
+		const refusalReason = input.model?.bidRefusals[previous.eventId]?.reason ?? null
+		if (input.readStatus === 'settled' && typeof refusalReason === 'string' && refusalReason.trim() !== '') {
+			return {
+				phase: 'refused',
+				amount: previous.amount,
+				eventId: previous.eventId,
+				reason: refusalReason,
+				locktime: input.escrowLocktime,
+				reclaimable: input.escrowLocktime !== null,
+			}
+		}
+		return previous
+	}
 
 	// 1. Possession: the read serves the bid, so a relay is holding it. This is
 	//    true from either unsettled state, and it does not wait for a settled
@@ -541,6 +600,7 @@ export function nextPublishedBidState(input: {
 		eventId: previous.eventId,
 		seenInRead: false,
 		namedByReceipt: input.model.receipts.some((receipt) => receipt.bidId === previous.eventId),
+		admission: null,
 		chainAdvancing: input.chainAdvancing,
 		escrowLocktime: input.escrowLocktime,
 		refusalReason: input.model.bidRefusals[previous.eventId]?.reason ?? null,
@@ -548,9 +608,13 @@ export function nextPublishedBidState(input: {
 	})
 
 	switch (diagnosis.state) {
-		// Committed state the read names but does not serve (a receipt): the app
-		// says nothing new here — the bid itself is what the polling read is for.
+		// Nothing new to say: the read knows the bid but the panel already shows
+		// the stronger fact (admitted / seen), both of which returned earlier.
 		case 'committed':
+			return previous
+		case 'admitted':
+			// Unreachable here: `nextPublishedBidState` returns `admitted` from the
+			// admission fact before it ever diagnoses. Kept so the switch stays total.
 			return previous
 		case 'refused':
 			return {
@@ -604,33 +668,46 @@ export function nextPublishedBidState(input: {
 /**
  * The states a bid the app published can be in, and nothing else.
  *
+ * - `admitted` — the chain **admitted** this bid: an `arena.bidadmit.v1` fact
+ *   (kind 1449) names this bid id, anchored at the bid's own committed height,
+ *   and carries the chain's own `position`/`highBid`. This is the **only** state
+ *   in which the bid is in — a relay ACK, a timeout and a `highAmount` never
+ *   produce it.
  * - `refused` — the chain **recorded** a refusal of this bid (a kind-1450 naming
  *   the bid's event id, with the chain's own reason). Only a bid refused **at
  *   delivery** is recorded; one refused at admission leaves no record. The
  *   reason is the chain's, verbatim — never re-worded.
  * - `committed` — the bid is in committed state (the read serves it, or a
  *   receipt names it): the bid is live. Say nothing.
- * - `not-accepted` — it was published and is **not** committed while the chain
- *   is advancing: the chain saw it and did not accept it. **This is not a
- *   network problem** and must not read like one. The escrow is still locked
- *   until its locktime, so the surface states the locktime and the reclaim.
- * - `unconfirmed` — it is published, not committed, and the app has **not** seen
- *   the chain advance: no verdict exists yet, and no verdict is not a refusal.
- *   The honest statement is that the app is still reading; a bid may still be
- *   admitted, so nothing is said about it and nothing is given up.
+ * - `not-accepted` — it was published, no admission fact names it, and the chain
+ *   is advancing: the chain has **not admitted** it. **This is not a network
+ *   problem** and must not read like one. The escrow is still locked until its
+ *   locktime, so the surface states the locktime and the reclaim. The reason is
+ *   deliberately absent — see the SEAM note in `bid-panel.tsx` (`submissionLine`,
+ *   `not-accepted`): the owner has not ruled on publishing a refusal fact.
+ * - `unconfirmed` — it is published, no admission fact names it, and the app has
+ *   **not** seen the chain advance: nothing from the chain yet, and no admission
+ *   fact is not a refusal. The honest statement is that the app is still
+ *   reading; a bid may still be admitted, so nothing is said about it and
+ *   nothing is given up.
  * - `infrastructure` — it is published and not committed, and the app has read
  *   the chain's committed state stand still for
  *   {@link ARENA_CHAIN_STALLED_AFTER_SEC}: no rule the app holds can be
  *   underwritten against the chain's state, which is an infrastructure problem
  *   and not a fact about the bid.
  */
-export type ArenaBidDiagnosisState = 'committed' | 'refused' | 'not-accepted' | 'unconfirmed' | 'infrastructure'
+export type ArenaBidDiagnosisState = 'admitted' | 'committed' | 'refused' | 'not-accepted' | 'unconfirmed' | 'infrastructure'
 
 /** One diagnosis, with the facts it rests on and no invented reason. */
 export interface ArenaBidDiagnosis {
 	state: ArenaBidDiagnosisState
 	/** The bid event id the diagnosis is about. */
 	eventId: string
+	/**
+	 * The chain's admission fact, verbatim — set only for `admitted` (an
+	 * `arena.bidadmit.v1` fact naming the bid). `null` in every other state.
+	 */
+	admission: { position: number; highBid: string; height: number; blockHash: string } | null
 	/**
 	 * The escrow locktime (unix seconds) the bid was funded against, when the
 	 * app held it — the instant the funds become reclaimable through the lock's
@@ -681,15 +758,18 @@ export function arenaChainAdvancing(input: {
 
 /**
  * Diagnose a bid the app published. **Never invents a reason** — it decides one
- * of five states from the facts the read already holds.
+ * state from the facts the read already holds.
  *
+ * - an `arena.bidadmit.v1` fact names it → `admitted`, with the chain's own
+ *   position/highBid. This is checked FIRST: the chain's word outranks every
+ *   weaker signal, and is the only one that may say the bid is in;
  * - committed (in the read's bids, or a receipt names it) → `committed`, say nothing;
  * - published, not committed, a refusal names it → `refused`, in the chain's own words;
- * - published, not committed, chain advancing → `not-accepted`, with the locktime
- *   and the reclaim affordance;
+ * - published, not committed, no admission fact, chain advancing → `not-accepted`
+ *   (the chain has not admitted it), with the locktime and the reclaim affordance;
  * - published, not committed, not advancing, and the app has watched committed
  *   state stand still for less than {@link ARENA_CHAIN_STALLED_AFTER_SEC} →
- *   `unconfirmed`: no verdict yet, and not a refusal;
+ *   `unconfirmed`: nothing from the chain yet, and not a refusal;
  * - …and for at least that window → `infrastructure`. **"Not advancing in this
  *   snapshot" is not that window**: the app's read is one-shot and its own
  *   freshness decays, so only the window it has itself watched makes the claim
@@ -704,6 +784,12 @@ export function diagnosePublishedBid(input: {
 	seenInRead: boolean
 	/** `true` when a receipt (1443/1444) names the bid event id. */
 	namedByReceipt: boolean
+	/**
+	 * The chain's admission fact for this bid (an `arena.bidadmit.v1` fact naming
+	 * its event id), or `null`/absent when no fact names it. This is the one
+	 * input that yields `admitted`; nothing else does.
+	 */
+	admission?: { position: number; highBid: string; height: number; blockHash: string } | null
 	/** `true` when the chain is advancing (`arenaChainAdvancing`). */
 	chainAdvancing: boolean
 	/** The escrow locktime the bid was funded against, or `null`. */
@@ -722,8 +808,28 @@ export function diagnosePublishedBid(input: {
 	 */
 	observedStallSec?: number | null
 }): ArenaBidDiagnosis {
+	// The chain admitted the bid. This is the affirmative fact, and it is checked
+	// before every weaker one: an ACK, a receipt, a held bid or an elapsed window
+	// can never say this, and none of them outranks it.
+	if (input.admission !== undefined && input.admission !== null) {
+		return {
+			state: 'admitted',
+			eventId: input.eventId,
+			admission: input.admission,
+			escrowLocktime: input.escrowLocktime,
+			reason: null,
+			reclaimable: false,
+		}
+	}
 	if (input.seenInRead || input.namedByReceipt) {
-		return { state: 'committed', eventId: input.eventId, escrowLocktime: input.escrowLocktime, reason: null, reclaimable: false }
+		return {
+			state: 'committed',
+			eventId: input.eventId,
+			admission: null,
+			escrowLocktime: input.escrowLocktime,
+			reason: null,
+			reclaimable: false,
+		}
 	}
 	// The chain put it in committed state and refused it. That is a fact, and the
 	// reason is the chain's own words — the app adds none.
@@ -732,6 +838,7 @@ export function diagnosePublishedBid(input: {
 		return {
 			state: 'refused',
 			eventId: input.eventId,
+			admission: null,
 			escrowLocktime: input.escrowLocktime,
 			reason: refusalReason,
 			reclaimable: input.escrowLocktime !== null,
@@ -741,6 +848,7 @@ export function diagnosePublishedBid(input: {
 		return {
 			state: 'not-accepted',
 			eventId: input.eventId,
+			admission: null,
 			escrowLocktime: input.escrowLocktime,
 			reason: null,
 			// Reclaimable only once the lock's own refund path is reachable, and
@@ -751,13 +859,21 @@ export function diagnosePublishedBid(input: {
 	}
 	const observedStallSec = typeof input.observedStallSec === 'number' ? Math.max(0, input.observedStallSec) : null
 	if (observedStallSec === null || observedStallSec < ARENA_CHAIN_STALLED_AFTER_SEC) {
-		// No window, or a window too short to demonstrate a stall: the app has no
-		// verdict and says so. Nothing about the bid is claimed.
-		return { state: 'unconfirmed', eventId: input.eventId, escrowLocktime: input.escrowLocktime, reason: null, reclaimable: false }
+		// No window, or a window too short to demonstrate a stall: the app has
+		// nothing from the chain and says so. Nothing about the bid is claimed.
+		return {
+			state: 'unconfirmed',
+			eventId: input.eventId,
+			admission: null,
+			escrowLocktime: input.escrowLocktime,
+			reason: null,
+			reclaimable: false,
+		}
 	}
 	return {
 		state: 'infrastructure',
 		eventId: input.eventId,
+		admission: null,
 		escrowLocktime: input.escrowLocktime,
 		reason: null,
 		reclaimable: false,

@@ -98,6 +98,9 @@ function withEscrowLockedNote(state: ArenaBidSubmissionState): ArenaBidSubmissio
 	if (state.phase !== 'failed' && state.phase !== 'unpublished') return state
 	return {
 		...state,
+		// The escrow lock had completed before this failure: the one fact the
+		// stepper's lock step states. Without it the panel would claim no lock.
+		escrowLocked: true,
 		reason: `${state.reason} This bid's escrow is locked at the mint but the bid was not published, so those funds come back only through the lock's refund path after its locktime — do not bid the same amount again from this wallet.`,
 	}
 }
@@ -272,28 +275,37 @@ export function useAuctionBidController({
 		)
 	}, [model, readStatus, chainAdvancing, escrowLocktime, now])
 
-	// Once the read has served the bid, the escrow locktime has done its job (it
-	// exists only to state a lock the chain did not take).
+	// Once the chain has admitted the bid, the escrow locktime has done its job:
+	// it exists only to state a lock the chain did NOT take. Keeping it past
+	// admission would let a later `not-accepted` (or a refusal) state a lock the
+	// chain's own fact has already discharged.
 	useEffect(() => {
-		if (submission.phase === 'seen') setEscrowLocktime(null)
+		if (submission.phase === 'admitted') setEscrowLocktime(null)
 	}, [submission.phase])
 
-	// **Polling is what makes the chain's advance observable.** The read is
+	// **Polling is what makes the chain's admission fact land.** The read is
 	// one-shot (`auctionSurfacesRead.ts`: "Consume one live read to its caught-up
 	// marker"), so a snapshot's freshness decays with the wall clock while the
 	// page stays open: without a reopen, a missed freshness window would become a
-	// permanent claim about the chain. While the chain has not settled the bid,
-	// the panel therefore asks its host for a fresh read on a timer, and every
-	// read re-runs the state machine above — so a chain that advances later
-	// resolves the panel to the chain's own outcome, and the stall claim needs a
-	// window the app has actually watched (`ARENA_CHAIN_STALLED_AFTER_SEC`).
-	// It stops the moment a conclusion is reached: seen, refused, not-accepted
-	// and infrastructure are all grounded in a read, not in elapsed time.
+	// permanent claim about the chain, and an admission fact published after the
+	// first read would never be seen. While the chain has not settled the bid —
+	// not admitted, not refused — the panel therefore asks its host for a fresh
+	// read on a timer, and every read re-runs the state machine above. `seen` is
+	// included (the relays holding the bid is not the end of the story, the
+	// chain's admission fact is), and so are `not-accepted` and `infrastructure`:
+	// the chain's admission fact may land after the read that first made the app
+	// conclude otherwise, and `nextPublishedBidState` lets that fact correct the
+	// conclusion. It stops only on the chain's own word: `admitted` or `refused`.
 	//
 	// The callback is held in a ref: a caller that passes a fresh closure each
 	// render (the route does) must not restart the timer every render, or the
 	// interval would never elapse.
-	const unsettled = submission.phase === 'presumed' || submission.phase === 'unconfirmed'
+	const unsettled =
+		submission.phase === 'presumed' ||
+		submission.phase === 'seen' ||
+		submission.phase === 'unconfirmed' ||
+		submission.phase === 'not-accepted' ||
+		submission.phase === 'infrastructure'
 	const onRefreshRef = useRef(onRefresh)
 	useEffect(() => {
 		onRefreshRef.current = onRefresh
@@ -311,7 +323,12 @@ export function useAuctionBidController({
 			// handed in by the swipe is held to the same rules as a typed one.
 			const check = model !== null ? checkArenaBid({ model, status: readStatus, now, bidder, raw }) : null
 			setPending(true)
-			setSubmission({ phase: 'publishing', amount: check?.amount ?? 0 })
+			const submissionAmount = check?.amount ?? 0
+			// The app's own funding step is step 1 of the stepper. State it while it
+			// runs; move to `publishing` only once the escrow is actually locked. A
+			// bid the check did not allow locks nothing, so it starts at publish.
+			const willLock = model !== null && check !== null && check.allowed && check.amount !== null
+			setSubmission(willLock ? { phase: 'locking', amount: submissionAmount } : { phase: 'publishing', amount: submissionAmount })
 			// Non-null once the escrow was actually locked: a failure after that point
 			// means the bidder's money is committed at the mint, and the panel has to
 			// say so (see `withEscrowLockedNote`).
@@ -354,6 +371,9 @@ export function useAuctionBidController({
 					// locked — held so the diagnosis can state it if the chain does not
 					// accept the bid.
 					setEscrowLocktime(assembled.funding.locktime)
+					// The lock is written: step 1 of the stepper is done, and the signed
+					// event is now being offered (step 2).
+					setSubmission({ phase: 'publishing', amount: submissionAmount })
 				}
 				const result = await publishArenaBid(
 					{ model, status: readStatus, bidder, raw },
@@ -376,7 +396,9 @@ export function useAuctionBidController({
 						fundingTerms,
 					},
 				)
-				setSubmission(result.state)
+				// A zero-ACK publish (`unpublished`) still carries the lock fact when
+				// the escrow was locked first, so the stepper can state step 1.
+				setSubmission(funding !== null ? withEscrowLockedNote(result.state) : result.state)
 				onPublished?.(result.eventId)
 			} catch (error) {
 				const failed = submissionFromError(error, check?.amount ?? 0)

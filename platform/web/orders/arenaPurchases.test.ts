@@ -61,6 +61,8 @@ function view(over: Partial<ArenaAuctionView> = {}): ArenaAuctionView {
 		committedEnds: [],
 		createRefusal: null,
 		bidRefusals: [],
+		admissions: [],
+		admissionForBid: {},
 		relays: ['wss://relay.playday.it'],
 		...over,
 	}

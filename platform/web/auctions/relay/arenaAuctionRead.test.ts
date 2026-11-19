@@ -284,6 +284,52 @@ function lotStateEvent(
 	) as unknown as NostrEventLike
 }
 
+/** A signed kind-1449 bid admission, built from the chain's live shape (R4). */
+function bidAdmitEvent(
+	over: {
+		auctionId?: string
+		bidId?: string
+		bidder?: string
+		amount?: number
+		position?: number
+		highBid?: string
+		height?: number
+		hash?: string
+		created_at?: number
+	} = {},
+): NostrEventLike {
+	const auctionId = over.auctionId ?? ARENA_CONTENT_COORD
+	const bidId = over.bidId ?? 'a5fe7c6b27eff87d88d23f79b94e6f73cca8762c03db7e0e080b462839a778fe'
+	const height = over.height ?? 3437
+	const hash = over.hash ?? '7bc7495aa6e679d003d495f934287dfde352b6552dc2960bac77cbdac8636edf'
+	const content: Record<string, unknown> = {
+		schema: 'arena.bidadmit.v1',
+		auction_id: auctionId,
+		bid_id: bidId,
+		bidder: over.bidder ?? '72e53882afc932d3cc34b67d4bc686d59d20bdea36f6a916fcf6eea2974d4ed5',
+		amount: over.amount ?? 100,
+		position: over.position ?? 105,
+		high_bid: over.highBid ?? '50b13a5c47715c3f42ebc3fad3c4a9b5f78e5f48e4bd5f43f3c168d5216abe59',
+		height,
+		block_hash: hash,
+	}
+	return finalizeEvent(
+		{
+			kind: 1449,
+			created_at: over.created_at ?? 1795021737,
+			tags: [
+				['e', bidId],
+				['auction', auctionId],
+				['height', String(height)],
+				['hash', hash],
+				['p', LOT_STATE_PUB],
+			],
+			content: JSON.stringify(content),
+		},
+		LOT_STATE_SK,
+	) as unknown as NostrEventLike
+}
+
 /** A signed kind-1450 refusal, built from the chain's live shape (§4). */
 function refusedEvent(
 	over: {
@@ -1407,6 +1453,66 @@ describe('the state half — the committed end (1449) and refusals (1450)', () =
 		const snapshot = await readFrom({ 'wss://a': { events: [create, orphan] } }).snapshot()
 		expect(snapshot.orphanLotStates).toHaveLength(1)
 		expect(snapshot.auctions[0].committedEnd).toBeNull()
+	})
+
+	test('decodeArenaEvent dispatches kind 1449 on the schema: admission vs committed end', () => {
+		const decodedAdmit = decodeArenaEvent(bidAdmitEvent({ auctionId: '1440:seller-alice:lot-1' }), 'wss://a')
+		expect(decodedAdmit.ok).toBe(true)
+		if (decodedAdmit.ok) expect(decodedAdmit.event.type).toBe('bid-admit')
+
+		// The lot schema stays a committed end — the same kind, the other fact.
+		const decodedLot = decodeArenaEvent(lotStateEvent({ auctionId: '1440:seller-alice:lot-1' }), 'wss://a')
+		expect(decodedLot.ok).toBe(true)
+		if (decodedLot.ok) expect(decodedLot.event.type).toBe('lot-state')
+	})
+
+	test('a tampered admission is refused by its own name, never read as a committed end', () => {
+		const unsigned = { ...bidAdmitEvent(), sig: '' }
+		const decoded = decodeArenaEvent(unsigned, 'wss://a')
+		expect(decoded.ok).toBe(false)
+		if (!decoded.ok) expect(decoded.refusal.reason).toBe('arena.bid_admit.bad_signature')
+	})
+
+	test('the admission attaches to its lot, keyed by bid id, and carries the chain’s position', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const bid = bidEvent({ a: `1440:${SELLER_A}:lot-1`, amount: 100, created_at: 1100, id: 'bid-1' })
+		const admission = bidAdmitEvent({
+			auctionId: '1440:seller-alice:lot-1',
+			bidId: 'bid-1',
+			amount: 100,
+			position: 105,
+			height: 3437,
+		})
+		const snapshot = await readFrom({ 'wss://a': { events: [create, bid, admission] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		expect(view.admissions).toHaveLength(1)
+		expect(view.admissions[0].bidId).toBe('bid-1')
+		expect(view.admissions[0].position).toBe(105)
+		expect(view.admissions[0].highBid).toBe('50b13a5c47715c3f42ebc3fad3c4a9b5f78e5f48e4bd5f43f3c168d5216abe59')
+		expect(view.admissions[0].height).toBe(3437)
+		expect(view.admissionForBid['bid-1'].position).toBe(105)
+		// An admission is not a committed end: the two schemas never mix.
+		expect(view.committedEnd).toBeNull()
+	})
+
+	test('the admission dedupes per bid id at the earliest anchored height', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const early = bidAdmitEvent({ auctionId: '1440:seller-alice:lot-1', bidId: 'bid-1', height: 3437 })
+		const late = bidAdmitEvent({ auctionId: '1440:seller-alice:lot-1', bidId: 'bid-1', height: 3490, created_at: 1_795_021_900 })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, late, early] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		expect(view.admissions).toHaveLength(1)
+		expect(view.admissions[0].height).toBe(3437)
+	})
+
+	test('an admission whose coordinate matches no create is an orphan admission, not attached', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const orphan = bidAdmitEvent({ auctionId: 'ghost-lot' })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, orphan] } }).snapshot()
+		expect(snapshot.orphanAdmissions).toHaveLength(1)
+		expect(snapshot.auctions[0].admissions).toEqual([])
 	})
 })
 

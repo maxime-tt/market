@@ -58,6 +58,7 @@ import type {
 	ArenaAuctionCardModel,
 	ArenaAuctionDetailModel,
 	ArenaAuctionPhase,
+	ArenaBidAdmissionModel,
 	ArenaChainClockModel,
 	ArenaCreateRefusalModel,
 	ArenaEndSource,
@@ -277,6 +278,25 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 		}
 	}
 
+	// The chain's admissions of this lot's bids, keyed by the admitted bid's
+	// event id — the map a submission consults. The read keeps them deduped by bid
+	// id at the earliest anchored height, so a re-publication never shadows the
+	// height the bid was admitted at.
+	const admissions: Record<string, ArenaBidAdmissionModel> = {}
+	for (const admit of view.admissions) {
+		admissions[admit.bidId] = {
+			bidId: admit.bidId,
+			bidder: admit.bidder,
+			amount: admit.amount,
+			position: admit.position,
+			highBid: admit.highBid,
+			height: admit.height,
+			blockHash: admit.blockHash,
+			eventId: admit.eventId,
+			validatorPubkey: admit.signerPubkey,
+		}
+	}
+
 	// A refund receipt names a bid_id; a position is a bidder. Map each refund to
 	// the bidder of the bid it names, keeping the earliest anchored height.
 	const bidderByBidId = new Map<string, string>()
@@ -311,6 +331,7 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 		settleReceipt: view.settleReceipt === null ? null : toReceiptModel(view.settleReceipt, context.heldParamsVersion),
 		createRefusal,
 		bidRefusals,
+		admissions,
 	}
 }
 
