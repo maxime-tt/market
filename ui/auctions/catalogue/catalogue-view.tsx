@@ -95,6 +95,7 @@ export interface CatalogueLotCardProps {
  * contract for tests and the assembler; the `data-state` mirrors the read state.
  */
 export function CatalogueLotCard({ card, status, now, href }: CatalogueLotCardProps) {
+	const timer = card.endsAt !== null ? formatRemaining(card.endsAt, now) : ARENA_UNKNOWN_END_LABEL
 	return (
 		<a
 			data-slot="arena-auction-card"
@@ -104,19 +105,30 @@ export function CatalogueLotCard({ card, status, now, href }: CatalogueLotCardPr
 			className="cat__card"
 			href={href}
 		>
-			<div className="cat__shot">{card.imageUrl ? <img src={card.imageUrl} alt="" /> : null}</div>
-			<span className="cat__lot">Lot · {card.d}</span>
-			<h2 className="cat__card-title">{lotLabel(card)}</h2>
-			<div className="cat__meta">
-				<span className="cat__price">{priceLine(card)}</span>
-				<span className="cat__timer">{card.endsAt !== null ? formatRemaining(card.endsAt, now) : ARENA_UNKNOWN_END_LABEL}</span>
+			<div className="cat__shot">
+				{card.imageUrl ? <img src={card.imageUrl} alt="" loading="lazy" /> : <span className="cat__shot-empty">No image published</span>}
+				{card.phase === 'open' && card.endsAt !== null && (
+					<span className="cat__live">
+						<i />
+						LIVE
+					</span>
+				)}
+				{card.phase === 'ended' && <span className="cat__ended">ENDED</span>}
 			</div>
-			{card.divergent && <p className="cat__divergence">Relays disagree about this auction.</p>}
-			<span className="cat__state">
-				{phaseLabel(card.phase)}
-				{card.verdict !== null ? ` · ${card.verdict}` : ''}
-				{card.divergent ? ' · relays disagree' : ''} · {bidCountLabel(card.bidCount, status)}
-			</span>
+			<div className="cat__body">
+				<span className="cat__lot">Lot · {card.d}</span>
+				<h2 className="cat__card-title">{lotLabel(card)}</h2>
+				{card.divergent && <p className="cat__divergence">Relays disagree about this auction.</p>}
+				<div className="cat__meta">
+					<span className="cat__price">{priceLine(card)}</span>
+					<span className="cat__timer">{timer}</span>
+				</div>
+				<span className="cat__state">
+					{phaseLabel(card.phase)}
+					{card.verdict !== null ? ` · ${card.verdict}` : ''}
+					{card.divergent ? ' · relays disagree' : ''} · {bidCountLabel(card.bidCount, status)}
+				</span>
+			</div>
 		</a>
 	)
 }
@@ -163,16 +175,45 @@ export function CatalogueCards({ cards, status, relayHealth, now, hrefFor, mode 
 }
 
 export function CatalogueView({ cards, status, relayHealth, now, hrefFor, mode = 'light', toolbar, onCreate, notice, empty }: CatalogueViewProps) {
+	const openCount = cards.filter((card) => card.phase === 'open' && card.endsAt !== null).length
+	const countLabel = `${cards.length} ${cards.length === 1 ? 'lot' : 'lots'}${status === 'settled' ? '' : ' so far'}`
+	// The ticker repeats its items once so the -50% scroll loops seamlessly.
+	const tickerItems = cards.slice(0, 8)
 	return (
-		<div className="cat" style={catalogueCssVars(mode)}>
+		<div className="cat cat--page" style={catalogueCssVars(mode)}>
 			<div className="cat__wrap">
+				{tickerItems.length > 0 && (
+					<div className="cat__ticker" aria-hidden="true">
+						<div className="cat__ticker-track">
+							{[0, 1].map((copy) =>
+								tickerItems.map((card) => (
+									<span key={`${copy}-${card.coordinate}`}>
+										{lotLabel(card)} <b>{priceLine(card)}</b>
+									</span>
+								)),
+							)}
+							<span>
+								Escrow in <b>Cashu ecash</b>
+							</span>
+						</div>
+					</div>
+				)}
+
 				<header className="cat__head">
-					<div className="cat__head-text">
+					<div>
+						<div className="cat__tags">
+							{openCount > 0 && (
+								<span className="cat__live">
+									<i />
+									LIVE · {openCount}
+								</span>
+							)}
+							<span className="cat__tag" data-testid="catalogue-count">
+								{countLabel}
+							</span>
+							<span className="cat__tag">Escrow in Cashu ecash</span>
+						</div>
 						<h1 className="cat__title">Auctions</h1>
-						<span className="cat__sub" data-testid="catalogue-count">
-							{cards.length} {cards.length === 1 ? 'lot' : 'lots'}
-							{status === 'settled' ? '' : ' so far'}
-						</span>
 					</div>
 					{onCreate && (
 						<button type="button" className="cat__cta" data-slot="catalogue-create" onClick={onCreate}>
@@ -181,23 +222,29 @@ export function CatalogueView({ cards, status, relayHealth, now, hrefFor, mode =
 					)}
 				</header>
 
-				{toolbar}
-
 				<p className="cat__banner" data-testid="catalogue-escrow-notice">
 					Sats are locked in escrow until the lot closes: they go to the seller if you win, and come back to you otherwise.
 				</p>
 
-				{notice}
-
-				{cards.length === 0 && empty ? (
-					empty
-				) : (
-					<div className="cat__grid" data-testid="catalogue-grid">
-						{cards.map((card) => (
-							<CatalogueLotCard key={card.coordinate} card={card} status={status} now={now} href={hrefFor(card)} />
-						))}
+				<section className="cat__panel">
+					<div className="cat__panel-head">
+						<h2>On the block</h2>
+						<span className="cat__sub">Lots read from your relays</span>
 					</div>
-				)}
+
+					{toolbar}
+					{notice}
+
+					{cards.length === 0 && empty ? (
+						empty
+					) : (
+						<div className="cat__grid" data-testid="catalogue-grid">
+							{cards.map((card) => (
+								<CatalogueLotCard key={card.coordinate} card={card} status={status} now={now} href={hrefFor(card)} />
+							))}
+						</div>
+					)}
+				</section>
 			</div>
 		</div>
 	)
@@ -218,15 +265,9 @@ export interface CatalogueToolbarProps {
 export function CatalogueToolbar({ sortOptions, sort, onSortChange, hideEnded, onToggleHideEnded }: CatalogueToolbarProps) {
 	return (
 		<div className="cat__toolbar" data-slot="catalogue-toolbar" role="toolbar" aria-label="Sort and filter lots">
-			<div className="cat__chips" role="group" aria-label="Sort">
+			<div className="cat__seg" role="group" aria-label="Sort">
 				{sortOptions.map((option) => (
-					<button
-						key={option.value}
-						type="button"
-						className="cat__chip"
-						aria-pressed={sort === option.value}
-						onClick={() => onSortChange(option.value)}
-					>
+					<button key={option.value} type="button" aria-pressed={sort === option.value} onClick={() => onSortChange(option.value)}>
 						{option.title}
 					</button>
 				))}
