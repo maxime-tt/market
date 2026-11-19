@@ -15,10 +15,12 @@
  */
 
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { uiActions } from '@platform/web/app/uiStore'
+import { SearchPresenceContext } from '@ui/browse/search-presence'
 import type { NavBinding } from './navItems'
 
 /** The instance config the bar reads; each case may change the gated settings. */
@@ -49,7 +51,7 @@ afterAll(() => {
 const { AppBar } = await import('./AppBar')
 
 /** Renders the bar inside a router that has every destination it links to. */
-async function renderBar(path = '/'): Promise<string> {
+async function renderBar(path = '/', pageSearchFieldCount = 0): Promise<string> {
 	const rootRoute = createRootRoute({ component: () => createElement(AppBar) })
 	rootRoute.addChildren([
 		createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => null }),
@@ -61,7 +63,20 @@ async function renderBar(path = '/'): Promise<string> {
 	const router = createRouter({ routeTree: rootRoute, history: createMemoryHistory({ initialEntries: [path] }) })
 	await router.load()
 
-	return renderToStaticMarkup(createElement(RouterProvider, { router }))
+	// The bar's search is a `SearchPreview`, which owns a browse-search query, so
+	// the frame's read needs a query client; the presence count is stated rather
+	// than mounted, since a registration is an effect and a server render runs none.
+	return renderToStaticMarkup(
+		createElement(
+			QueryClientProvider,
+			{ client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
+			createElement(
+				SearchPresenceContext.Provider,
+				{ value: { count: pageSearchFieldCount, register: () => () => {} } },
+				createElement(RouterProvider, { router }),
+			),
+		),
+	)
 }
 
 beforeEach(() => {
@@ -181,6 +196,23 @@ describe('AppBar search', () => {
 		const markup = await renderBar('/products?q=ceramic')
 
 		expect(markup).not.toContain('value="ceramic"')
+	})
+
+	test('withdraws its field when a page field is registered', async () => {
+		// The CMS `Search` block and the browse idle hero announce themselves, so
+		// the bar draws no second search: no field, and no middle track either
+		// (which is also what collapses the phone bar's second row).
+		const markup = await renderBar('/', 1)
+
+		expect(markup).not.toContain('data-testid="widget-search-field"')
+		expect(markup).not.toContain('data-slot="search-slot"')
+	})
+
+	test('draws its own field when no page field is registered', async () => {
+		const markup = await renderBar('/', 0)
+
+		expect(markup.split('data-testid="widget-search-field"').length - 1).toBe(1)
+		expect(markup).toContain('data-slot="search-slot"')
 	})
 })
 

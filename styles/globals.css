@@ -787,6 +787,32 @@ button {
 		border: 2px solid var(--ring) !important;
 	}
 
+	/* The one search pill owns its focus decoration (`ui/browse/search-field.tsx`).
+	 *
+	 * The wrap draws the ring (`focus-within:shadow-[…--focus-ring]` on its root,
+	 * and `[data-slot='search-field']:focus-within` in arena-chrome.css), so the
+	 * inner `<input>` must draw none of its own: without this rule the
+	 * `input:focus-visible` border above (2px `--ring`) — and the `*:focus-visible`
+	 * border before it — would put a box around the text inside the pill. Each
+	 * declaration carries `!important` to beat both, and the selector is more
+	 * specific than either; the `.arena-chrome .arena-header` pair is more
+	 * specific than arena-chrome.css's own `input:focus` rule, which is
+	 * unlayered and would otherwise win.
+	 *
+	 * `outline` is a transparent 2px rather than `none` (Tailwind's
+	 * `outline-hidden`): in forced-colors mode the UA recolours it into a visible
+	 * indicator, so clearing the pill's own border does not leave a
+	 * forced-colors keyboard user with no focus indicator at all. */
+	[data-slot='search-field'] input:focus,
+	[data-slot='search-field'] input:focus-visible,
+	.arena-chrome .arena-header [data-slot='search-field'] input:focus,
+	.arena-chrome .arena-header [data-slot='search-field'] input:focus-visible {
+		outline: 2px solid transparent !important;
+		outline-offset: 2px !important;
+		box-shadow: none !important;
+		border: 0 !important;
+	}
+
 	/* Custom utility classes */
 	.bg-off-black {
 		background-color: var(--off-black);

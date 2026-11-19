@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FC, KeyboardEvent, MutableRefObject, Ref } from 'react'
 import { cn } from '../utils/cn'
 import { SEARCH_FIELD_CARET_CSS } from './art'
+import { useAnnounceSearchField } from './search-presence'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -54,6 +55,14 @@ export interface SearchFieldProps {
 	shortcut?: boolean
 	/** Show submitted state: text + caret, no input. */
 	submitted?: boolean
+	/**
+	 * Announce this field's presence to the page-search-presence context while
+	 * it is mounted. Defaults to true: a page field (the CMS `Search` block, the
+	 * browse idle hero) is a page's search, and the frame's bar retreats while
+	 * one is shown. The **header's own field** passes `false` — it must never
+	 * count itself, or the bar would hide its own field the moment it drew it.
+	 */
+	announce?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -123,10 +132,15 @@ export const SearchField: FC<SearchFieldProps> = ({
 	size = 'nav',
 	shortcut,
 	submitted,
+	announce = true,
 }) => {
 	const hasValue = value.length > 0
 	const sizing = SIZE_CLASSES[size]
 	const showShortcut = shortcut ?? size === 'hero'
+
+	// Announce this field to the page's presence context while it is mounted, so
+	// the frame's bar can retreat. The header's own field opts out.
+	useAnnounceSearchField(announce)
 
 	/** The input this instance owns; the shortcut focuses it, the host may too. */
 	const ownInput = useRef<HTMLInputElement | null>(null)
@@ -171,16 +185,40 @@ export const SearchField: FC<SearchFieldProps> = ({
 		onClear?.()
 	}
 
+	/**
+	 * The pill *is* the input's surface. A press anywhere on it — the padding,
+	 * the search glyph, the empty run right of the text — focuses the field; the
+	 * browser's own press would otherwise drop focus to the body because the
+	 * wrap is not focusable.
+	 *
+	 * The controls keep their own targets (their handlers run first, and focusing
+	 * the input afterwards is what the owner asked for); the input's own presses
+	 * are already aimed at it. The decoration is the wrap's, not the input's —
+	 * see the `input`'s classes and the exemption rule in `styles/globals.css`.
+	 */
+	const handleRootClick = () => {
+		ownInput.current?.focus()
+	}
+
 	return (
 		<div
 			ref={ref}
 			data-slot="search-field"
 			data-size={size}
 			data-testid="widget-search-field"
+			onClick={handleRootClick}
 			className={cn(
 				'relative',
 				'flex',
 				'items-center',
+				// The pill reads as the input's surface: its padding, glyph and the
+				// empty run all take a text cursor and hand focus to the input.
+				'cursor-text',
+				// Clip instead of paint: when the bar squeezes the field (a phone
+				// with a long instance name, a narrow two-row bar), the `shrink-0`
+				// glyph, clear button and go pill must not spill past the pill and
+				// draw over the account cluster beside it.
+				'overflow-hidden',
 				'bg-surface-raised',
 				'border',
 				'border-border-strong',
@@ -205,10 +243,16 @@ export const SearchField: FC<SearchFieldProps> = ({
 				<path d="M15.5 15.5 21 21" />
 			</svg>
 
-			{/* Query text input */}
+			{/* Query text input.
+			    The inner field draws no focus decoration of its own: the pill wrap
+			    owns the ring (`focus-within` above), and `styles/globals.css`
+			    clears the border this file's global `input:focus-visible` rule
+			    would otherwise draw. `outline-hidden` (not `outline-none`) keeps
+			    a transparent outline so forced-colors mode can still show one. */}
 			{!submitted ? (
 				<input
 					ref={handleInputRef}
+					data-slot="search-field-input"
 					type="text"
 					value={value}
 					onChange={(e) => onChange(e.target.value)}
@@ -219,7 +263,7 @@ export const SearchField: FC<SearchFieldProps> = ({
 						'flex-1',
 						'min-w-0',
 						'bg-transparent',
-						'outline-none',
+						'outline-hidden',
 						'leading-tight',
 						'text-text-high',
 						'placeholder:text-text-mid',
