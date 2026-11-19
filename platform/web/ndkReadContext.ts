@@ -148,7 +148,31 @@ export function getConfiguredRelayUrls(): string[] {
 export async function fetchEventByNaddr(naddr: string): Promise<NDKEvent | null> {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
-	return await ndk.fetchEvent(naddr)
+	return await withReadTimeout(ndk.fetchEvent(naddr), null)
+}
+
+/**
+ * How long a one-shot read waits before settling with what has arrived. NDK's
+ * own `fetchEvent(s)` waits for every relay to send EOSE, so one relay that
+ * never answers (a 503, a dropped socket) leaves the caller, and any Suspense
+ * boundary above it, on "Loading..." forever. Every read here settles in time.
+ */
+export const READ_TIMEOUT_MS = 6000
+
+function withReadTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = READ_TIMEOUT_MS): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => resolve(fallback), timeoutMs)
+		promise.then(
+			(value) => {
+				clearTimeout(timer)
+				resolve(value)
+			},
+			(error) => {
+				clearTimeout(timer)
+				reject(error)
+			},
+		)
+	})
 }
 
 /**
@@ -158,7 +182,11 @@ export async function fetchEventByNaddr(naddr: string): Promise<NDKEvent | null>
 export async function fetchEventById(id: string): Promise<NDKEvent | null> {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
-	return await ndk.fetchEvent(id)
+	if (/^[0-9a-f]{64}$/.test(id)) {
+		const events = await ndkActions.fetchEventsWithTimeout({ ids: [id] }, { timeoutMs: READ_TIMEOUT_MS })
+		return events.values().next().value ?? null
+	}
+	return await withReadTimeout(ndk.fetchEvent(id), null)
 }
 
 /**
@@ -168,7 +196,7 @@ export async function fetchEventById(id: string): Promise<NDKEvent | null> {
 export async function fetchEventsByFilter(filter: NDKFilter): Promise<NDKEvent[]> {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
-	const events = await ndk.fetchEvents(filter)
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: READ_TIMEOUT_MS })
 	return Array.from(events)
 }
 

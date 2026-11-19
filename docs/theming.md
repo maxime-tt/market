@@ -15,6 +15,12 @@ All fonts are bundled in `styles/fonts.css`. Nothing is loaded from Google
 or any other third-party host, and nothing tracks visitors. Please keep it
 that way.
 
+The font files live in `platform/web/app/assets/fonts` and are served from
+our own origin at `/fonts/<face>.woff2`, with the stylesheet at `/fonts.css`
+(ADR-0026). Point new `@font-face` rules at `/fonts/...`; don't import
+`fonts.css` into `styles/index.css`, or the bundler will inline every face
+into the main stylesheet again.
+
 ## Tokens: the one rule
 
 Write components with role tokens, never raw colours:

@@ -36,6 +36,28 @@ export const serveStatic = async (path: string): Promise<Response> => {
 	}
 }
 
+const FONT_DIR = join(process.cwd(), 'platform/web/app/assets/fonts')
+const FONT_FILE = /^[a-z0-9][a-z0-9-]*\.woff2$/i
+
+/**
+ * The bundled web fonts (ADR-0026). They are served as plain files, not
+ * inlined into the main stylesheet, so a page paints before they arrive
+ * (`font-display: swap`) and only the faces a page uses are downloaded.
+ * Nothing comes from a third-party host.
+ */
+export const serveFont = async (name: string): Promise<Response> => {
+	const f = FONT_FILE.test(name) ? file(join(FONT_DIR, name)) : null
+	if (!f || !(await f.exists())) return new Response('File not found', { status: 404 })
+	return new Response(f, {
+		headers: { 'Content-Type': 'font/woff2', 'Cache-Control': 'public, max-age=604800' },
+	})
+}
+
+export const serveFontStylesheet = (): Response =>
+	new Response(file(join(process.cwd(), 'styles/fonts.css')), {
+		headers: { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
+	})
+
 // Bun's path-parameterised handler receives a `BunRequest<Path>` whose
 // `params` is typed `Record<string, string>` after we erase the literal
 // path generics through our merged BunRoutes record. We read `params.file`
@@ -45,4 +67,6 @@ export const staticRoutes: BunRoutes = {
 	'/manifest.json': () => serveStatic('manifest.json'),
 	'/sw.js': () => serveStatic('sw.js'),
 	'/favicon.ico': () => serveStatic('favicon.ico'),
+	'/fonts.css': () => serveFontStylesheet(),
+	'/fonts/:file': (req) => serveFont(req.params?.file ?? ''),
 }
