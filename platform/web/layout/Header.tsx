@@ -476,7 +476,7 @@ export function Header() {
 	// `display: contents` keeps the header sticky against the page while the
 	// wrapper still hands the Arena tokens down to it.
 	return ownArenaScope ? (
-		<div className="arena-chrome" style={{ display: 'contents' }} data-testid="arena-header-scope">
+		<div className="arena-chrome arena-header-solid" style={{ display: 'contents' }} data-testid="arena-header-scope">
 			{header}
 		</div>
 	) : (

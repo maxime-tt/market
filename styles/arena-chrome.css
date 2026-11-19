@@ -454,3 +454,9 @@
 		display: none;
 	}
 }
+
+/* Over the light dashboard the translucent Arena header reads grey, so the
+   dashboard's own Arena scope paints it solid. */
+.arena-chrome.arena-header-solid .arena-header {
+	background: #0e0d0e;
+}

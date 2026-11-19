@@ -182,10 +182,11 @@ function DashboardLayout() {
 	const emoji = findNavEmoji(DASHBOARD_NAV, location.pathname)
 	const showTitle = showsPageTitle(DASHBOARD_NAV, location.pathname, needsBackButton)
 
+	// Offsets match the Arena header: 61px tall on desktop, 117px on a phone (with its search row).
 	return (
-		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
+		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-61px)]">
 			{/* Header - responsive for mobile/desktop */}
-			<div className="lg:hidden top-[8.5rem] z-10 sticky">
+			<div className="lg:hidden top-[117px] z-10 sticky">
 				<h1 className="arena-dash-title relative flex justify-center items-center gap-2 p-4 font-heading text-center">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
 					{!showSidebar && isMobile && <BackButton variant="icon" ariaLabel="Back to sidebar" onClick={handleBackToSidebar} />}
@@ -251,7 +252,7 @@ function DashboardLayout() {
 					{(!showSidebar || !isMobile) && (
 						<div
 							className={`w-full lg:flex-1 lg:max-w-[67rem] lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
-								isMessageDetailView && isMobile ? 'h-[calc(100vh-8.5rem)]' : ''
+								isMessageDetailView && isMobile ? 'h-[calc(100vh-117px)]' : ''
 							} ${location.pathname === '/dashboard/account/profile-page' ? 'lg:max-w-none' : ''}`}
 						>
 							{/* Desktop back button and title - fixed to top of container */}
