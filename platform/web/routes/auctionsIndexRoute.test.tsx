@@ -20,6 +20,7 @@ import { arenaAuctionHref } from '@platform/web/auctions/relay/ArenaAuctionsList
 interface Match {
 	routeId: string
 	params: Record<string, string>
+	search: Record<string, unknown>
 }
 
 /** Resolve a path against the app's own route tree, as the router would. */
@@ -29,7 +30,11 @@ async function resolve(path: string): Promise<Match[]> {
 		history: createMemoryHistory({ initialEntries: [path] }),
 	})
 	await router.load()
-	return router.state.matches.map((match) => ({ routeId: match.routeId, params: match.params as Record<string, string> }))
+	return router.state.matches.map((match) => ({
+		routeId: match.routeId,
+		params: match.params as Record<string, string>,
+		search: match.search as Record<string, unknown>,
+	}))
 }
 
 describe('the auctions index route and the links it renders', () => {
@@ -52,5 +57,22 @@ describe('the auctions index route and the links it renders', () => {
 		const last = (await resolve(arenaAuctionHref('my lot'))).at(-1)!
 		expect(last.routeId).toBe('/auctions/$auctionId')
 		expect(last.params.auctionId).toBe('my lot')
+	})
+
+	test('the card href carries the seller, and the detail route parses it as `?seller=`', async () => {
+		const href = arenaAuctionHref('lot-1', 'seller-alice')
+		expect(href).toBe('/auctions/lot-1?seller=seller-alice')
+
+		const last = (await resolve(href)).at(-1)!
+		expect(last.routeId).toBe('/auctions/$auctionId')
+		expect(last.params.auctionId).toBe('lot-1')
+		expect(last.search).toEqual({ seller: 'seller-alice' })
+	})
+
+	test('an escaped `d` and seller still arrive decoded on the detail route', async () => {
+		const last = (await resolve(arenaAuctionHref('my lot', 'seller alice'))).at(-1)!
+		expect(last.routeId).toBe('/auctions/$auctionId')
+		expect(last.params.auctionId).toBe('my lot')
+		expect(last.search).toEqual({ seller: 'seller alice' })
 	})
 })

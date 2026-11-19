@@ -157,7 +157,7 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 							status={arenaRead.status}
 							relayHealth={arenaRead.relayHealth}
 							now={now}
-							hrefFor={(card) => arenaAuctionHref(card.d)}
+							hrefFor={(card) => arenaAuctionHref(card.d, card.seller)}
 						/>
 					</div>
 				</section>

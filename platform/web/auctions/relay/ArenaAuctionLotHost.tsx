@@ -38,7 +38,12 @@ import type { EventStorePort } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
 import { getReadContext } from '@platform/web/readContext'
 import { webRelayPolicy } from '@platform/web/sdkNostrIo'
-import { arenaLotFilters, createWebArenaAuctionRead, type ArenaAuctionView } from '@platform/web/auctions/relay/arenaAuctionRead'
+import {
+	arenaLotFilters,
+	arenaLotFollowUpFilters,
+	createWebArenaAuctionRead,
+	type ArenaAuctionView,
+} from '@platform/web/auctions/relay/arenaAuctionRead'
 import {
 	collectArenaSurfacesRead,
 	toAuctionDetailModel,
@@ -91,6 +96,13 @@ export function useArenaLotRead(init: ArenaLotReadInit): ArenaSurfacesReadState 
 			// `d === null` is the whole-arena read the auctions index needs (its list
 			// and its featured lot); a lot page names its lot and asks for that one.
 			filters: d === null ? undefined : arenaLotFilters(seller, d),
+			// A bid's `a` value is 106 chars (…:uuid), which the relay's index
+			// refuses, so its bids are only findable by the bid's `e` = the create's
+			// event id — knowable only after the create arrives. The base REQ keeps
+			// `#a` for relays that index it; this second REQ adds `#e`. The
+			// whole-arena read already asks for every bid kind, so it has no
+			// follow-up to add.
+			followUpFilters: d === null ? undefined : arenaLotFollowUpFilters(seller, d),
 		})
 
 		void collectArenaSurfacesRead(read, {
@@ -139,8 +151,14 @@ export interface ArenaAuctionLotHostProps {
 	read: ArenaSurfacesReadState
 	/** Called after a bid reached a relay, so the route can reopen the read. */
 	onPublished: (eventId: string) => void
-	/** The "All lots" link; `null` hides it (the index features a lot on its own page). */
+/** The "All lots" link; `null` hides it (the index features a lot on its own page). */
 	backHref?: string | null
+	/**
+	 * Reopen the read on demand. The bid panel polls this while the chain has not
+	 * settled a published bid, so a chain that advances later resolves the panel
+	 * instead of leaving a stale freshness window as a claim about the chain.
+	 */
+	onRefresh: () => void
 }
 
 /**
@@ -149,7 +167,7 @@ export interface ArenaAuctionLotHostProps {
  * When the lot is ambiguous it renders the candidates and nothing else — no
  * detail model is built, because building one would mean choosing a seller.
  */
-export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, backHref = '/auctions' }: ArenaAuctionLotHostProps) {
+export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, backHref = '/auctions', onRefresh }: ArenaAuctionLotHostProps) {
 	const lookup: ArenaLotLookup = read.snapshot === null ? { kind: 'missing' } : resolveArenaLot(read.snapshot, d, seller)
 
 	const view = lookup.kind === 'found' ? lookup.view : null
@@ -160,9 +178,11 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, backHre
 	const verdicts = view === null ? null : toVerdictPanelModel(view, context)
 	// Whether the chain is advancing — fresh kind-1447 commitments across several
 	// blocks — is the signal the bid panel needs to tell "the chain did not accept
-	// the bid" from "the chain is stuck" (the three-state diagnosis). It is
-	// derived here, from the commitments the read already holds, and passed down;
-	// the panel never reads a relay itself.
+	// the bid" from "the chain has not settled it". It is derived here, from the
+	// commitments the read already holds, and passed down; the panel never reads a
+	// relay itself. `onRefresh` is the same reopen the publish path uses: the panel
+	// polls it while the chain has not settled a bid, because a one-shot read's
+	// freshness decays by itself (`AuctionBidHost.tsx`, the poll timer).
 	const chainAdvancing =
 		read.snapshot === null
 			? null
@@ -173,7 +193,7 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, backHre
 				})
 
 	// Called before any early return: hooks run in the same order on every render.
-	const bid = useAuctionBidController({ model: detail, readStatus: read.status, now, chainAdvancing, onPublished })
+	const bid = useAuctionBidController({ model: detail, readStatus: read.status, now, chainAdvancing, onPublished, onRefresh })
 
 	if (lookup.kind === 'ambiguous') {
 		return <ArenaLotAmbiguous candidates={lookup.candidates} status={read.status} relayHealth={read.relayHealth} />

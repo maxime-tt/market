@@ -19,6 +19,7 @@ import {
 	ARENA_AUCTION_CREATE_KIND,
 	ARENA_AUCTION_REFUND_KIND,
 	ARENA_AUCTION_SETTLE_KIND,
+	ARENA_LOT_STATE_KIND,
 	ARENA_STATE_COMMITMENT_KIND,
 	ARENA_VERDICT_KIND,
 } from '@sdk/commerce/auctions/constants'
@@ -31,12 +32,16 @@ import {
 	ARENA_REFUSAL_UNBOUND_BID,
 	ARENA_REFUSAL_UNEXPECTED_KIND,
 	arenaAuctionFilters,
+	arenaLotBidFilters,
+	arenaLotFilters,
+	arenaLotFollowUpFilters,
 	createArenaAuctionRead,
 	decodeArenaEvent,
 	findImmutableChange,
 	projectArenaEvents,
 	type ArenaAuctionRead,
 	type ArenaRelayOpen,
+	type ArenaRelayOpenFactory,
 	type ArenaRelayOpenOptions,
 	type ArenaReadStreamItem,
 } from './arenaAuctionRead'
@@ -1140,6 +1145,284 @@ describe('the state half — the committed end (1449) and refusals (1450)', () =
 		const snapshot = await readFrom({ 'wss://a': { events: [create, orphan] } }).snapshot()
 		expect(snapshot.orphanLotStates).toHaveLength(1)
 		expect(snapshot.auctions[0].committedEnd).toBeNull()
+	})
+})
+
+// =========================================================================
+// A lot's bids: #a and #e
+// =========================================================================
+
+/**
+ * A relay shaped like the measured one: the `#a` coordinate (106 chars for a
+ * UUID `d`) is not in its index, so a base query answers only the create; the
+ * bid is answerable only through the `#e` filter (the create's 64-hex id).
+ */
+function lotRelay(options: { create: NostrEventLike | null; bid: NostrEventLike | null }): {
+	open: ArenaRelayOpenFactory
+	calls: (readonly EventFilter[])[]
+} {
+	const calls: (readonly EventFilter[])[] = []
+	const open: ArenaRelayOpenFactory =
+		(url: string): ArenaRelayOpen =>
+		(filters: readonly EventFilter[]) => ({
+			async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+				calls.push(filters)
+				const byEvent = filters.some((filter) => (filter['#e'] ?? []).includes(options.create?.id ?? ''))
+				const events = byEvent ? (options.bid === null ? [] : [options.bid]) : options.create === null ? [] : [options.create]
+				for (const event of events) yield { type: 'event', event } as EventStreamItem<NostrEventLike>
+				yield { type: 'caught-up', info: { eose: [url], pending: [], complete: false } } as EventStreamItem<NostrEventLike>
+			},
+		})
+	return { open, calls }
+}
+
+describe('a lot read whose bids are only findable by #e', () => {
+	const ROOT = 'root-1'
+	const COORD = '1440:seller-alice:lot-1'
+	const create = createEvent({ id: ROOT })
+	const bid = bidEvent({ auctionId: 'lot-1', amount: 500, a: COORD, e: ROOT })
+
+	test('keeps #a and adds the #e variant when the create event id is known', () => {
+		const filters = arenaLotFilters(SELLER_A, 'lot-1', ROOT)
+		expect(filters).toContainEqual({ kinds: [1441], '#a': [COORD] })
+		expect(filters).toContainEqual({ kinds: [1441], '#e': [ROOT] })
+	})
+
+	test('a lot with no event id keeps #a and states no #e filter at all', () => {
+		const filters = arenaLotFilters(SELLER_A, 'lot-1')
+		expect(filters).toContainEqual({ kinds: [1441], '#a': [COORD] })
+		expect(filters.some((filter) => filter['#e'] !== undefined)).toBe(false)
+		// `null` and the empty string are both "no id", never an empty `'#e': []`.
+		expect(arenaLotBidFilters(SELLER_A, 'lot-1', null)).toEqual([{ kinds: [1441], '#a': [COORD] }])
+		expect(arenaLotBidFilters(SELLER_A, 'lot-1', '')).toEqual([{ kinds: [1441], '#a': [COORD] }])
+	})
+
+	test('a bare d has no coordinate, so #e is the only bid filter once the create is known', () => {
+		expect(arenaLotFilters(null, 'lot-1', ROOT)).toEqual([
+			{ kinds: [1440], '#d': ['lot-1'] },
+			{ kinds: [1441], '#e': [ROOT] },
+		])
+		expect(arenaLotFilters(null, 'lot-1')).toEqual([{ kinds: [1440], '#d': ['lot-1'] }])
+	})
+
+	test('the read opens a second REQ with #e and delivers the bid before caught-up', async () => {
+		const relay = lotRelay({ create, bid })
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 1000,
+			filters: arenaLotFilters(SELLER_A, 'lot-1'),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, 'lot-1'),
+			openRelay: relay.open,
+		})
+		const items = await collect(read.events())
+
+		// Two REQs: the base one keeps #a; the follow-up is the #e variant alone.
+		expect(relay.calls).toHaveLength(2)
+		expect(relay.calls[0]).toContainEqual({ kinds: [1441], '#a': [COORD] })
+		expect(relay.calls[1]).toEqual([{ kinds: [1441], '#e': [ROOT] }])
+
+		const events = items.filter((item) => item.type === 'events').flatMap((item) => item.events)
+		expect(events.map((event) => event.id)).toEqual([ROOT, bid.id])
+
+		// The caught-up marker — where a page's collector stops reading — comes
+		// after the follow-up's bid, so a bounded read sees it too.
+		const types = items.map((item) => item.type)
+		expect(types.lastIndexOf('events')).toBeLessThan(types.indexOf('caught-up'))
+	})
+
+	test('a lot whose create never arrives opens no second subscription', async () => {
+		const relay = lotRelay({ create: null, bid })
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 1000,
+			filters: arenaLotFilters(SELLER_A, 'lot-1'),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, 'lot-1'),
+			openRelay: relay.open,
+		})
+		await read.snapshot()
+		expect(relay.calls).toHaveLength(1)
+	})
+})
+
+// =========================================================================
+// A seller-less lot URL: the coordinate is the create's, found on read
+// =========================================================================
+
+/**
+ * A relay answering by filter semantics, not by call order: a `#d` query is
+ * answered with the create, an `#e` query with the bids, and an `#auction`
+ * coordinate query with the receipts, verdicts and committed ends — the three
+ * tags the relay actually indexes. That is what makes the seller-less case
+ * measurable here: the base REQ cannot carry the coordinate (nobody knows the
+ * seller yet), so the verdicts can only arrive if a coordinate REQ is opened
+ * after the create.
+ */
+function coordinateLotRelay(options: {
+	d: string
+	create: NostrEventLike | null
+	bids?: NostrEventLike[]
+	coordinateEvents?: NostrEventLike[]
+}): { open: ArenaRelayOpenFactory; calls: (readonly EventFilter[])[] } {
+	const calls: (readonly EventFilter[])[] = []
+	const open: ArenaRelayOpenFactory =
+		(url: string): ArenaRelayOpen =>
+		(filters: readonly EventFilter[]) => ({
+			async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+				calls.push(filters)
+				const answers: NostrEventLike[] = []
+				const add = (event: NostrEventLike | null | undefined): void => {
+					if (event && !answers.includes(event)) answers.push(event)
+				}
+				for (const filter of filters) {
+					if ((filter['#d'] ?? []).includes(options.d)) add(options.create)
+					if ((filter['#e'] ?? []).length > 0) for (const bid of options.bids ?? []) add(bid)
+					if ((filter['#auction'] ?? []).length > 0) for (const event of options.coordinateEvents ?? []) add(event)
+				}
+				for (const event of answers) yield { type: 'event', event } as EventStreamItem<NostrEventLike>
+				yield { type: 'caught-up', info: { eose: [url], pending: [], complete: false } } as EventStreamItem<NostrEventLike>
+			},
+		})
+	return { open, calls }
+}
+
+const BARE_D = 'lot-1'
+const BARE_COORD = '1440:seller-alice:lot-1'
+
+/** The four things the issue measured on the live lot: a create, a bid, two verdicts, a receipt, a committed end. */
+const BARE_CREATE = createEvent({ id: 'bare-root', d: BARE_D })
+const BARE_BID = bidEvent({ auctionId: BARE_D, amount: 500, e: 'bare-root', id: 'bare-bid' })
+const BARE_VERDICT_HIGH = verdictEvent({ auctionId: BARE_COORD, validator: 'validator-1', height: 3032, outcome: 'reserve_not_met' })
+const BARE_VERDICT_LOW = verdictEvent({ auctionId: BARE_COORD, validator: 'validator-2', height: 3030, outcome: 'reserve_not_met' })
+const BARE_RECEIPT = receiptEvent({ auctionId: BARE_COORD, bidId: 'bare-bid', kind: ARENA_AUCTION_REFUND_KIND })
+const BARE_LOT_STATE = lotStateEvent({ auctionId: BARE_COORD, height: 3032 })
+
+const COORDINATE_FILTER = {
+	kinds: [ARENA_AUCTION_REFUND_KIND, ARENA_AUCTION_SETTLE_KIND, ARENA_VERDICT_KIND, ARENA_LOT_STATE_KIND],
+	'#auction': [BARE_COORD],
+}
+
+describe('a lot URL with no seller reads its coordinate once the create arrives', () => {
+	const coordinateEvents = [BARE_VERDICT_HIGH, BARE_VERDICT_LOW, BARE_RECEIPT, BARE_LOT_STATE]
+
+	test('opens the #auction follow-up after the create and delivers verdicts, receipt and committed end', async () => {
+		const relay = coordinateLotRelay({ d: BARE_D, create: BARE_CREATE, bids: [BARE_BID], coordinateEvents })
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 1000,
+			filters: arenaLotFilters(null, BARE_D),
+			followUpFilters: arenaLotFollowUpFilters(null, BARE_D),
+			openRelay: relay.open,
+		})
+		const snapshot = await read.snapshot()
+
+		// The base REQ asks for the create and nothing else — a bare `d` cannot name
+		// the coordinate. Without the follow-up this is the whole read, which is the
+		// 0-verdict page.
+		expect(relay.calls[0]).toEqual([{ kinds: [1440], '#d': [BARE_D] }])
+
+		// The second REQ, opened because the create named its seller.
+		expect(relay.calls).toHaveLength(2)
+		expect(relay.calls[1]).toContainEqual(COORDINATE_FILTER)
+		// The `#e` bid filter rides in the same second REQ, as before.
+		expect(relay.calls[1]).toContainEqual({ kinds: [1441], '#e': ['bare-root'] })
+
+		const view = snapshot.auctions[0]
+		expect(view.coordinate).toBe(BARE_COORD)
+		// Newest height first, ties to the validator key: the two verdicts are read
+		// (they are what the panel counts) …
+		expect(view.verdicts.map((verdict) => [verdict.validatorPubkey, verdict.height])).toEqual([
+			['validator-1', 3032],
+			['validator-2', 3030],
+		])
+		// … the money receipt and the committed end are read from the same REQ …
+		expect(view.receipts).toHaveLength(1)
+		expect(view.receipts[0].auctionId).toBe(BARE_COORD)
+		expect(view.committedEnd?.auctionId).toBe(BARE_COORD)
+		// … and so is the bid.
+		expect(view.bids.map((bid) => bid.eventId)).toEqual(['bare-bid'])
+	})
+
+	test('delivers the coordinate data before caught-up, so a bounded read sees it', async () => {
+		const relay = coordinateLotRelay({ d: BARE_D, create: BARE_CREATE, coordinateEvents })
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 1000,
+			filters: arenaLotFilters(null, BARE_D),
+			followUpFilters: arenaLotFollowUpFilters(null, BARE_D),
+			openRelay: relay.open,
+		})
+		const items = await collect(read.events())
+
+		const verdictIds = items
+			.filter((item) => item.type === 'events')
+			.flatMap((item) => item.events)
+			.filter((event) => event.type === 'verdict')
+			.map((event) => event.id)
+		expect(verdictIds).toHaveLength(2)
+
+		const types = items.map((item) => item.type)
+		expect(types.lastIndexOf('events')).toBeLessThan(types.indexOf('caught-up'))
+	})
+
+	test('a bare `d` whose create never arrives opens no coordinate REQ', async () => {
+		const relay = coordinateLotRelay({ d: BARE_D, create: null, coordinateEvents })
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 1000,
+			filters: arenaLotFilters(null, BARE_D),
+			followUpFilters: arenaLotFollowUpFilters(null, BARE_D),
+			openRelay: relay.open,
+		})
+		await read.snapshot()
+		expect(relay.calls).toHaveLength(1)
+	})
+
+	test("the coordinate is the create's own signer, never a seller the URL guessed", async () => {
+		// The read is seller-less, so any create carrying this `d` is accepted —
+		// and the coordinate it opens must be that create's, or the REQ would ask
+		// for another seller's lot.
+		const otherCreate = createEvent({ id: 'other-root', d: BARE_D, pubkey: SELLER_B })
+		const followUp = arenaLotFollowUpFilters(null, BARE_D)
+		const decoded = decodeArenaEvent(otherCreate, 'wss://limited')
+		expect(decoded.ok).toBe(true)
+		if (!decoded.ok) return
+
+		expect(followUp([decoded.event])).toContainEqual({
+			kinds: [ARENA_AUCTION_REFUND_KIND, ARENA_AUCTION_SETTLE_KIND, ARENA_VERDICT_KIND, ARENA_LOT_STATE_KIND],
+			'#auction': [`1440:${SELLER_B}:${BARE_D}`],
+		})
+	})
+})
+
+describe('a seller-known lot read never sends the coordinate filter twice', () => {
+	test('the follow-up is the #e bid filter alone; the coordinate filter stays in the base REQ', async () => {
+		const relay = coordinateLotRelay({ d: BARE_D, create: BARE_CREATE, bids: [BARE_BID], coordinateEvents: [BARE_VERDICT_HIGH] })
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 1000,
+			filters: arenaLotFilters(SELLER_A, BARE_D),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, BARE_D),
+			openRelay: relay.open,
+		})
+		await read.snapshot()
+
+		expect(relay.calls).toHaveLength(2)
+		expect(relay.calls[0]).toContainEqual(COORDINATE_FILTER)
+		expect(relay.calls[1]).toEqual([{ kinds: [1441], '#e': ['bare-root'] }])
+
+		// Exactly one REQ carries the coordinate, across the whole read.
+		const coordinateFilters = relay.calls.flat().filter((filter) => filter['#auction'] !== undefined)
+		expect(coordinateFilters).toHaveLength(1)
+	})
+
+	test('a create signed by another seller is not this lot: no follow-up from it', () => {
+		const followUp = arenaLotFollowUpFilters(SELLER_A, BARE_D)
+		const otherCreate = createEvent({ id: 'other-root', d: BARE_D, pubkey: SELLER_B })
+		const decoded = decodeArenaEvent(otherCreate, 'wss://limited')
+		expect(decoded.ok).toBe(true)
+		if (!decoded.ok) return
+
+		expect(followUp([decoded.event])).toEqual([])
 	})
 })
 

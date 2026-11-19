@@ -12,7 +12,7 @@ import {
 	type PayWithNwcParams,
 } from '@platform/web/payments/paymentPublish'
 import { LightningAddress, type Invoice, type NostrProvider } from '@getalby/lightning-tools'
-import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { nip04, nip19 } from 'nostr-tools'
 import { toast } from 'sonner'
@@ -22,10 +22,11 @@ import { getNdkEventStore } from '@platform/web/readContext'
 import { readPaymentDetailEventsWorkflow } from '@sdk/commerce/payments'
 import { buildAddressableDeletion, signAndPublish } from '@sdk/core/publishing'
 import { createSignerPublishContext } from '@platform/web/sdkSigner'
+import { walletDetailEventsFor, walletDetailReadFilters } from '@platform/web/payments/walletDetailRead'
 
 /**
- * G5: no SDK constant names NIP-78 application data (30078); the
- * `NDKKind.AppSpecificData` enum member used here answers the same number.
+ * G5: no SDK constant names NIP-78 application data (30078). The wallet-detail read takes the
+ * same number from `walletDetailRead.ts`.
  */
 const PAYMENT_DETAILS_KIND = 30078
 
@@ -73,7 +74,8 @@ export interface WalletDetail {
 	valueNumeric: number
 	valueString: string
 	updatedAt: Date
-	paymentDetailId: string
+	/** The `d` tag of the payment detail this record tracks (never its event id). */
+	paymentDetailDTag: string
 }
 
 /**
@@ -572,27 +574,31 @@ export const useDeletePaymentDetail = () => {
 // ===============================
 
 /**
- * Fetches wallet details for on-chain index tracking
+ * Fetches the wallet detail that tracks on-chain index state for one payment detail.
+ *
+ * The record names the payment detail with `a: 30078:<user pubkey>:<payment detail d tag>` — 107
+ * characters, past the relay's 100-character tag index budget — so the `#a` clause is answered
+ * with a confident zero on a relay whose store follows that rule. `walletDetailReadFilters` adds
+ * the indexed `l` label and `walletDetailEventsFor` binds the result to this payment detail; see
+ * `walletDetailRead.ts`.
  */
-export const fetchWalletDetail = async (userPubkey: string, paymentDetailId: string): Promise<WalletDetail | null> => {
+export const fetchWalletDetail = async (userPubkey: string, paymentDetailDTag: string): Promise<WalletDetail | null> => {
 	try {
 		const ndk = getAppNdk()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		// Fetch wallet detail events
-		const events = await ndk.fetchEvents({
-			kinds: [NDKKind.AppSpecificData],
-			'#l': ['wallet_detail'],
-			'#a': [`30078:${userPubkey}:${paymentDetailId}`],
-		})
+		const target = { userPubkey, paymentDetailDTag }
+		const filters = walletDetailReadFilters(target)
+		if (filters.length === 0) return null
 
-		if (!events || events.size === 0) {
-			return null
-		}
+		const events = await ndk.fetchEvents(filters)
+		if (!events) return null
+
+		const matches = walletDetailEventsFor(events, target)
+		if (matches.length === 0) return null
 
 		// Get the most recent event
-		const eventArray = Array.from(events)
-		const mostRecentEvent = eventArray.reduce((latest, current) =>
+		const mostRecentEvent = matches.reduce((latest, current) =>
 			(current.created_at || 0) > (latest.created_at || 0) ? current : latest,
 		)
 
@@ -620,7 +626,7 @@ export const fetchWalletDetail = async (userPubkey: string, paymentDetailId: str
 				valueNumeric: parseInt(parsedContent.value || '0'),
 				valueString: parsedContent.value || '0',
 				updatedAt: new Date((mostRecentEvent.created_at || 0) * 1000),
-				paymentDetailId,
+				paymentDetailDTag,
 			}
 		} catch (error) {
 			console.error('Error decrypting wallet details:', error)
@@ -635,11 +641,11 @@ export const fetchWalletDetail = async (userPubkey: string, paymentDetailId: str
 /**
  * React query hook for fetching wallet details
  */
-export const useWalletDetail = (userPubkey: string, paymentDetailId: string) => {
+export const useWalletDetail = (userPubkey: string, paymentDetailDTag: string) => {
 	return useQuery({
-		queryKey: walletDetailsKeys.onChainIndex(userPubkey, paymentDetailId),
-		queryFn: () => fetchWalletDetail(userPubkey, paymentDetailId),
-		enabled: isValidHexKey(userPubkey) && !!paymentDetailId,
+		queryKey: walletDetailsKeys.onChainIndex(userPubkey, paymentDetailDTag),
+		queryFn: () => fetchWalletDetail(userPubkey, paymentDetailDTag),
+		enabled: isValidHexKey(userPubkey) && !!paymentDetailDTag,
 	})
 }
 

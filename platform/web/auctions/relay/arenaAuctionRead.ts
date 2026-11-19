@@ -272,21 +272,59 @@ export function arenaAuctionFilters(): EventFilter[] {
 }
 
 /**
+ * The bid filters for **one lot**: the `#a` coordinate, and — when the lot's
+ * create event id is known — the `#e` variant as well.
+ *
+ * `#e` is not an optimisation. A bid's `a` value is
+ * `1440:<64 hex>:<36-char uuid>` = 106 characters, and the relay's event store
+ * refuses to index a tag value longer than 100
+ * (`fiatjaf.com/nostr@…/eventstore/boltdb/helpers.go:243`), so a `#a` query is
+ * answered from the index with a confident zero. A bid's `e` is the create's
+ * 64-hex event id, which the same store does index (`indexTag32`). Two filters
+ * in one REQ are ORed, so a relay that indexes either tag answers — and `#a`
+ * stays for the relays that do index it.
+ */
+export function arenaLotBidFilters(seller: string | null, d: string, eventId: string | null = null): EventFilter[] {
+	const filters: EventFilter[] = []
+	if (seller !== null && seller !== '') {
+		filters.push({ kinds: [ARENA_AUCTION_BID_KIND], '#a': [arenaAuctionCoordinate(seller, d)] })
+	}
+	if (eventId !== null && eventId !== '') {
+		filters.push({ kinds: [ARENA_AUCTION_BID_KIND], '#e': [eventId] })
+	}
+	return filters
+}
+
+/** The `#e` bid filter for a lot whose create event id is known; empty when no id is. */
+export function arenaLotBidByEventFilters(eventIds: readonly string[]): EventFilter[] {
+	const ids = eventIds.filter((id) => id !== '')
+	if (ids.length === 0) return []
+	return [{ kinds: [ARENA_AUCTION_BID_KIND], '#e': [...ids] }]
+}
+
+/**
  * The subscription filters for **one lot**, so a detail page resolves the lot
  * instead of the whole-arena firehose. The identity is `(seller, d)`: a 1440 is
  * matched by its `d` tag, and the coordinate-tagged kinds (a bid's `a`, a
  * receipt's / verdict's / committed end's `auction`) by
- * `1440:<seller>:<d>`. With no seller the coordinate is not addressable, so only
- * the create is asked for — the `?seller=` disambiguator is what makes the rest
- * readable (`arenaLotRead.ts`), and the route passes it through when the address
- * carries it.
+ * `1440:<seller>:<d>`. With no seller the coordinate is not knowable yet, so
+ * this first REQ asks for the create alone: the create carries its seller, and
+ * the coordinate REQ is the follow-up ({@link arenaLotFollowUpFilters}). A bare
+ * `d` therefore reads its verdicts, receipts and committed end too — the
+ * `?seller=` disambiguator only spares the read that second REQ.
+ *
+ * `eventId` is the lot's create event id when the caller already knows it; it
+ * adds the `#e` bid filter ({@link arenaLotBidFilters}). A read that starts
+ * before the create is known leaves it out and subscribes the `#e` variant as a
+ * follow-up ({@link arenaLotFollowUpFilters}).
  */
-export function arenaLotFilters(seller: string | null, d: string): EventFilter[] {
-	if (seller === null || seller === '') return [{ kinds: [ARENA_AUCTION_CREATE_KIND], '#d': [d] }]
+export function arenaLotFilters(seller: string | null, d: string, eventId: string | null = null): EventFilter[] {
+	const bids = arenaLotBidFilters(seller, d, eventId)
+	if (seller === null || seller === '') return [{ kinds: [ARENA_AUCTION_CREATE_KIND], '#d': [d] }, ...bids]
 	const coordinate = arenaAuctionCoordinate(seller, d)
 	return [
 		{ kinds: [ARENA_AUCTION_CREATE_KIND], '#d': [d] },
-		{ kinds: [ARENA_AUCTION_BID_KIND], '#a': [coordinate] },
+		...bids,
 		{
 			kinds: [ARENA_AUCTION_REFUND_KIND, ARENA_AUCTION_SETTLE_KIND, ARENA_VERDICT_KIND, ARENA_LOT_STATE_KIND],
 			'#auction': [coordinate],
@@ -296,6 +334,59 @@ export function arenaLotFilters(seller: string | null, d: string): EventFilter[]
 		// whole-arena read uses rather than dropping the clock from the page.
 		{ kinds: [ARENA_STATE_COMMITMENT_KIND], limit: 60 },
 	]
+}
+
+/**
+ * The second subscription a lot read needs: both identities a create carries are
+ * only knowable **after** the create has been read.
+ *
+ * - A bid's `#e` tag names the create's **event id** (its `a` coordinate is 106
+ *   chars, which the relay's index refuses — see {@link arenaLotBidFilters}).
+ * - Every coordinate-tagged kind (a receipt's / verdict's / committed end's
+ *   `auction`) names the create's **`(seller, d)` coordinate**, and a bare-`d`
+ *   address does not carry the seller. With a seller known that coordinate is in
+ *   the base REQ already; without one, `#d` matches the create and nothing else,
+ *   so the verdicts and receipts of a seller-less lot URL would never be asked
+ *   for at all. The create's own signer IS the seller, so the coordinate becomes
+ *   addressable the moment the create arrives.
+ *
+ * The read opens the base subscription first ({@link arenaLotFilters}); once a
+ * create for this `d` arrives, the returned set is subscribed as a second REQ.
+ * With a known seller it is the `#e` bid filter alone (the coordinate filter is
+ * never sent twice); with no seller it carries the `#e` bid filter **and** the
+ * coordinate filter, so receipts (1443/1444), verdicts (1445) and the committed
+ * end (1449) are read together as they are on a seller-known lot. No create yet
+ * → no extra filter, never an empty one.
+ */
+export function arenaLotFollowUpFilters(
+	seller: string | null,
+	d: string,
+): (events: readonly ArenaAuctionEvent[]) => readonly EventFilter[] {
+	const sellerKnown = seller !== null && seller !== ''
+	return (events) => {
+		const ids: string[] = []
+		const coordinates: string[] = []
+		for (const event of events) {
+			if (event.type !== 'create' || event.d !== d) continue
+			if (sellerKnown && event.pubkey !== seller) continue
+			if (!ids.includes(event.id)) ids.push(event.id)
+			if (!sellerKnown) {
+				// `event.pubkey` is the seller the create was signed by: the same value
+				// `projectArenaEvents` groups the lot under (`entry.root.pubkey`).
+				const coordinate = arenaAuctionCoordinate(event.pubkey, event.d)
+				if (!coordinates.includes(coordinate)) coordinates.push(coordinate)
+			}
+		}
+		const filters = arenaLotBidByEventFilters(ids)
+		if (coordinates.length === 0) return filters
+		return [
+			...filters,
+			{
+				kinds: [ARENA_AUCTION_REFUND_KIND, ARENA_AUCTION_SETTLE_KIND, ARENA_VERDICT_KIND, ARENA_LOT_STATE_KIND],
+				'#auction': coordinates,
+			},
+		]
+	}
 }
 
 /** The fields a decoded event always has, whatever its kind. */
@@ -1441,6 +1532,14 @@ export interface ArenaAuctionReadInit {
 	 * lot instead of the firehose.
 	 */
 	filters?: readonly EventFilter[]
+	/**
+	 * Filters that only become knowable **after** an event has been read — a
+	 * lot's create event id, which its bids' indexed `#e` tag needs. Called with
+	 * every event the read has decoded so far; the first non-empty set is
+	 * subscribed once per relay as a second REQ, and the read's caught-up waits
+	 * for it. Absent → one subscription per relay, exactly as before.
+	 */
+	followUpFilters?: (events: readonly ArenaAuctionEvent[]) => readonly EventFilter[]
 }
 
 export type ArenaReadStreamItem =
@@ -1496,7 +1595,7 @@ interface MutableHealth {
 	refusals: number
 	eose: boolean
 	error: string | null
-	/** The read boundary was reached for this relay (counted once in `settledCount`). */
+	/** The read boundary was reached for this relay (once per relay, for health). */
 	settled: boolean
 	/** The transport gave up on this relay (its never-EOSE fallback), which is not an answer. */
 	givenUp: boolean
@@ -1543,8 +1642,18 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 				for (const url of relays) {
 					mutable.set(url, { url, status: 'ok', events: 0, refusals: 0, eose: false, error: null, settled: false, givenUp: false })
 				}
-				let settledCount = 0
 				let doneCount = 0
+				// Subscriptions, not relays: a follow-up filter opens a second REQ on
+				// the same relay, and the caught-up marker must wait for every REQ that
+				// was opened — otherwise a bounded read closes before the follow-up's
+				// bids arrive. Without `followUpFilters` the two counts are identical.
+				let openSubscriptions = 0
+				let settledSubscriptions = 0
+				const subscriptions = new Set<{ url: string; settled: boolean }>()
+				/** Filter sets already subscribed: the base set, plus every follow-up. */
+				const openedFilters = new Set<string>()
+				const seenEvents: ArenaAuctionEvent[] = []
+				const seenIds = new Set<string>()
 
 				function healthSnapshot(): ArenaReadHealth {
 					aborted = controller.signal.aborted
@@ -1552,14 +1661,14 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 				}
 
 				/**
-				 * One settle per relay: the read boundary is reached once, and
-				 * `settledCount` counts it once, so the caught-up marker is emitted once.
+				 * One settle per relay: the read boundary is reached once for health, so a
+				 * relay's own teardown cannot upgrade a `timeout` it never earned. The
+				 * caught-up marker counts *subscriptions* instead (see below).
 				 */
 				function settle(url: string, status: ArenaRelayStatus, error: string | null = null): void {
 					const entry = mutable.get(url)
 					if (entry === undefined || entry.settled) return
 					entry.settled = true
-					settledCount += 1
 					entry.status = status
 					entry.error = error
 					push({ kind: 'settled', relay: url })
@@ -1585,12 +1694,45 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 					push({ kind: 'settled', relay: url })
 				}
 
-				function pump(url: string): void {
+				/** Mark one subscription's boundary reached; the caught-up gate counts these. */
+				function markSubscriptionSettled(subscription: { url: string; settled: boolean }): void {
+					if (subscription.settled) return
+					subscription.settled = true
+					settledSubscriptions += 1
+				}
+
+				/**
+				 * A second REQ for a filter set that only became knowable after an
+				 * event was read (`init.followUpFilters`). One subscription per distinct
+				 * set per relay; the base set is already open and never repeated. Called
+				 * before the event is pushed, so the caught-up gate counts the new REQ
+				 * before the main loop may drain the batch.
+				 */
+				function openFollowUps(event: ArenaAuctionEvent): void {
+					const followUp = init.followUpFilters
+					if (followUp === undefined) return
+					if (seenIds.has(event.id)) return
+					seenIds.add(event.id)
+					seenEvents.push(event)
+					const filters = followUp(seenEvents)
+					if (filters.length === 0) return
+					const key = JSON.stringify(filters)
+					if (openedFilters.has(key)) return
+					openedFilters.add(key)
+					for (const url of relays) pump(url, filters)
+					// A follow-up opened after the base pumps ended: the read is not done.
+					allDone = false
+				}
+
+				function pump(url: string, filters: readonly EventFilter[]): void {
 					const entry = mutable.get(url)
+					const subscription = { url, settled: false }
+					subscriptions.add(subscription)
+					openSubscriptions += 1
 					void (async () => {
 						try {
 							const source = init.openRelay(url)
-							for await (const item of source(init.filters ?? arenaAuctionFilters(), {
+							for await (const item of source(filters, {
 								signal: controller.signal,
 								bounded,
 							})) {
@@ -1610,6 +1752,7 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 									// bounded read cannot tell "empty" from "unreachable". A live read can.
 									if (bounded) {
 										settle(url, 'ok')
+										markSubscriptionSettled(subscription)
 										return
 									}
 									// Live read: only a relay that has actually spoken is settled
@@ -1621,8 +1764,12 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 									// the transport's 8 s fallback; the relay that carries the lot was
 									// recorded `timeout`, the read closed, and the notice said no
 									// relay answered for a lot that exists.
-									if (eoseReported || (entry?.events ?? 0) > 0) answer(url)
-									else if (entry !== undefined) entry.givenUp = true
+									if (eoseReported || (entry?.events ?? 0) > 0) {
+										answer(url)
+										// The relay answered this REQ; its boundary is reached even
+										// though the live stream keeps delivering.
+										markSubscriptionSettled(subscription)
+									} else if (entry !== undefined) entry.givenUp = true
 									continue
 								}
 								const decoded = decodeArenaEvent(item.event, url)
@@ -1631,6 +1778,7 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 									else entry.refusals += 1
 								}
 								if (decoded.ok) {
+									openFollowUps(decoded.event)
 									push({ kind: 'event', relay: url, event: decoded.event })
 									// A relay the transport had given up on that then delivers has
 									// answered: the late event is the answer.
@@ -1640,11 +1788,14 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 							if (bounded && entry !== undefined) entry.eose = true
 							const answeredOnEnd = bounded || entry?.eose === true || (entry?.events ?? 0) > 0
 							settle(url, answeredOnEnd ? 'ok' : 'closed')
+							markSubscriptionSettled(subscription)
 						} catch (error) {
 							settle(url, 'error', error instanceof Error ? error.message : String(error))
+							markSubscriptionSettled(subscription)
 						} finally {
+							markSubscriptionSettled(subscription)
 							doneCount += 1
-							if (doneCount >= relays.length) allDone = true
+							allDone = doneCount >= openSubscriptions
 							push({ kind: 'wake' })
 						}
 					})()
@@ -1667,16 +1818,22 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 						// made a read that received events report `no-relays`.
 						settle(entry.url, entry.eose || entry.events > 0 ? 'ok' : 'timeout')
 					}
+					// A follow-up REQ that never answered must not hold the read open past
+					// its deadline either; its subscription is dropped with the read.
+					for (const subscription of subscriptions) markSubscriptionSettled(subscription)
 					push({ kind: 'wake' })
 				}, deadlineMs)
 
-				for (const url of relays) pump(url)
+				const baseFilters = init.filters ?? arenaAuctionFilters()
+				openedFilters.add(JSON.stringify(baseFilters))
+				for (const url of relays) pump(url, baseFilters)
 
 				try {
 					while (true) {
 						aborted = controller.signal.aborted
 						if (controller.signal.aborted && !caughtUpEmitted) {
 							for (const entry of mutable.values()) if (!entry.settled) settle(entry.url, 'closed')
+							for (const subscription of subscriptions) markSubscriptionSettled(subscription)
 						}
 						if (queue.length === 0) {
 							if (allDone) break
@@ -1696,7 +1853,10 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 						if (events.length > 0) yield { type: 'events', events }
 						if (refusals.length > 0) yield { type: 'refused', refusals }
 
-						const settleMarker = settledCount >= relays.length
+						// Every subscription that was opened — the base one per relay and any
+						// follow-up — must have reached its boundary. Without follow-ups this
+						// is exactly one subscription per relay.
+						const settleMarker = settledSubscriptions >= openSubscriptions
 						if (settleMarker && !caughtUpEmitted) {
 							caughtUpEmitted = true
 							yield { type: 'caught-up', health: healthSnapshot() }
@@ -1764,6 +1924,8 @@ export interface WebArenaAuctionReadInit {
 	deadlineMs?: number
 	/** The subscription filters. Defaults to the whole arena ({@link arenaAuctionFilters}). */
 	filters?: readonly EventFilter[]
+	/** Filters that only become knowable after an event is read ({@link arenaLotFollowUpFilters}). */
+	followUpFilters?: (events: readonly ArenaAuctionEvent[]) => readonly EventFilter[]
 }
 
 /**
@@ -1777,6 +1939,7 @@ export function createWebArenaAuctionRead(init: WebArenaAuctionReadInit): ArenaA
 		relays: init.relays,
 		deadlineMs: init.deadlineMs,
 		filters: init.filters,
+		followUpFilters: init.followUpFilters,
 		openRelay: (url) => {
 			const context = createWebRelayReadContext(init.store, [url], {
 				deadlineMs: init.deadlineMs ?? DEFAULT_DEADLINE_MS,
