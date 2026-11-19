@@ -7,6 +7,7 @@ import { StorefrontRenderer } from '@ui/storefront'
 import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
 import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/storefront'
 import { BrowseNav } from '@ui/browse/browse-nav'
+import { HeaderAccountControls } from '@platform/web/layout/Header'
 import { IntroOverlay } from '@ui/browse/intro'
 import { useInstanceName } from '@platform/web/config/instanceName'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
@@ -40,7 +41,6 @@ export const Route = createFileRoute('/')({
 	 */
 	staticData: { hidesAppHeader: true },
 })
-
 
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
@@ -82,7 +82,10 @@ function BrowseIndex() {
 			root: { props: { title: '', theme: 'arena' as const, palette: 'arena' } },
 			content: [
 				{ type: 'Search' as const, props: { id: 'home-search', placeholder: 'Search the marketplace', size: 'lg' as const } },
-				{ type: 'ProductRow' as const, props: { id: 'home-row', productDTags: ['orange-flock-black-orange-edition-high-top-sneakers-ma5ond'] } },
+				{
+					type: 'ProductRow' as const,
+					props: { id: 'home-row', productDTags: ['orange-flock-black-orange-edition-high-top-sneakers-ma5ond'] },
+				},
 				{
 					type: 'Categories' as const,
 					props: {
@@ -106,8 +109,13 @@ function BrowseIndex() {
 					active
 					onNavigateHome={() => navigate({ to: '/' })}
 					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+					accountSlot={<HeaderAccountControls />}
 				/>
-				<StorefrontRenderer page={page} pubkey={publishedChoice?.pubkey ?? config?.appPublicKey ?? LEGACY_HOME_PUBKEY} slots={storefrontBlockSlots} />
+				<StorefrontRenderer
+					page={page}
+					pubkey={publishedChoice?.pubkey ?? config?.appPublicKey ?? LEGACY_HOME_PUBKEY}
+					slots={storefrontBlockSlots}
+				/>
 			</>
 		)
 	}

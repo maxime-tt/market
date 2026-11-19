@@ -195,6 +195,34 @@ export function BugReportButton({ className }: BugReportButtonProps) {
 	)
 }
 
+/**
+ * The header's account controls on their own: sign-in when signed out; the
+ * dashboard, profile and sign-out buttons when signed in. The home and Browse
+ * surfaces draw their own nav (`BrowseNav`) instead of this header, so they
+ * mount these in its account slot; without them the home had no way to sign in.
+ */
+export function HeaderAccountControls() {
+	const { isAuthenticated, isAuthenticating } = useStore(authStore)
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm'
+
+	return (
+		<div className="flex items-center gap-2" data-testid="header-account-controls">
+			{isAuthenticated && <DashboardButton />}
+			{isAuthenticating ? (
+				<Button className="relative p-2 btn-border-highlight" data-testid="auth-loading">
+					<Loader2 className="w-4 h-4 animate-spin" />
+				</Button>
+			) : isAuthenticated ? (
+				<ProfileButton />
+			) : (
+				<LoginButton />
+			)}
+			{isAuthenticated && !isMobile && <LogoutButton />}
+		</div>
+	)
+}
+
 export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating, user } = useStore(authStore)
@@ -308,7 +336,9 @@ export function Header() {
 	return (
 		<header
 			className={
-				arena ? 'arena-header sticky top-0 z-50 px-4' : `sticky top-0 z-50 text-white px-4 ${isNostrPage ? 'bg-black' : getHeaderBackground()}`
+				arena
+					? 'arena-header sticky top-0 z-50 px-4'
+					: `sticky top-0 z-50 text-white px-4 ${isNostrPage ? 'bg-black' : getHeaderBackground()}`
 			}
 			style={arena || isNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
 		>
