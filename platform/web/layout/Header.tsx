@@ -10,6 +10,7 @@ import { authActions, authStore } from '@platform/web/auth/authStore'
 import { appNotificationsBinding, appUnseenCounts } from '@platform/web/notifications'
 import { uiActions, uiStore } from '@platform/web/app/uiStore'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useInstanceName } from '@platform/web/config/instanceName'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, LogOut, Menu, Wallet, X } from 'lucide-react'
@@ -273,7 +274,9 @@ export function Header() {
 	// look), so the header carries its own Arena scope there.
 	const arena = isAuctionPage || isDashboardPage
 	const ownArenaScope = isDashboardPage && !isAuctionPage
-	const brandName = (config?.displayName || config?.name || 'Plebeian Market').trim()
+	// The instance names itself in exactly one place (`useInstanceName`); the
+	// Arena brand only splits that name into lead + emphasis here.
+	const brandName = useInstanceName()
 	const brandSplit = brandName.lastIndexOf(' ')
 	const brandLead = brandSplit > 0 ? brandName.slice(0, brandSplit) : ''
 	const brandTail = brandSplit > 0 ? brandName.slice(brandSplit + 1) : brandName

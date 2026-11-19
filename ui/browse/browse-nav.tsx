@@ -14,8 +14,20 @@ import { cn } from '../utils/cn'
 // ---------------------------------------------------------------------------
 
 export interface BrowseNavProps {
-	/** Label for the Browse wordmark link. Defaults to "Plebeian Market". */
-	wordmarkLabel?: string
+	/**
+	 * Label for the Browse wordmark link. Required, with no default: the visible
+	 * title must be the operator's instance name (see
+	 * `platform/web/config/instanceName.ts`), so a hardcoded marketplace name
+	 * cannot reappear here.
+	 */
+	wordmarkLabel: string
+	/**
+	 * Logo rendered inside the wordmark anchor, before the text. Pass the
+	 * instance's `config.picture`; omitted means text only.
+	 */
+	logoSrc?: string
+	/** Alt text for {@link logoSrc}. Defaults to the wordmark label. */
+	logoAlt?: string
 	/**
 	 * Which destination is current. `browse` marks the wordmark (the wordmark
 	 * *is* the Browse link); `featured` marks the `Featured` link with the
@@ -50,7 +62,9 @@ export interface BrowseNavProps {
  * The wordmark uses `--fill-ink` for the label and brand-pink for "Market".
  */
 export const BrowseNav: FC<BrowseNavProps> = ({
-	wordmarkLabel = 'Plebeian Market',
+	wordmarkLabel,
+	logoSrc,
+	logoAlt,
 	currentPage = 'browse',
 	active = true,
 	onNavigateHome,
@@ -104,6 +118,9 @@ export const BrowseNav: FC<BrowseNavProps> = ({
 					data-current={currentPage === 'browse'}
 					aria-current={currentPage === 'browse' ? 'page' : undefined}
 					className={cn(
+						'inline-flex',
+						'items-center',
+						'gap-2',
 						'font-display',
 						'text-[20px]',
 						'leading-tight',
@@ -117,6 +134,9 @@ export const BrowseNav: FC<BrowseNavProps> = ({
 					onClick={handleWordmarkClick}
 					aria-label={`${wordmarkLabel} — Browse`}
 				>
+					{/* The instance's own logo, sized to sit inside the `h-16` bar. The
+					    text stays and remains the visible title. */}
+					{logoSrc && <img src={logoSrc} alt={logoAlt ?? wordmarkLabel} className="h-8 w-8 shrink-0 object-contain" />}
 					{wordmarkLabel}
 				</a>
 				<a
