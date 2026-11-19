@@ -210,7 +210,10 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 			// The `enabled` flag is still taken from the existing document if one
 			// exists — arriving at the wizard (e.g. because every block failed to
 			// parse) must not quietly switch a previously-live page back on.
-			setEnabled(existing?.enabled ?? false)
+			// A brand-new home page starts Public: its only purpose is to be the
+			// front page, and a Private home page is silently skipped in favour
+			// of the fallback. Other new pages still start Private.
+			setEnabled(existing?.enabled ?? dTag === HOME_PAGE_D_TAG)
 			setChrome(existing?.chrome ?? 'app')
 			setMode('wizard')
 		}
@@ -218,7 +221,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 
 	const handleWizardComplete = useCallback(
 		(page: StorefrontPage) => {
-			setEnabled(page.enabled)
+			setEnabled(page.enabled || (dTag === HOME_PAGE_D_TAG && !published?.page))
 			setChrome(page.chrome)
 			setIsDirty(true)
 			const data = toPuckData(page)
@@ -231,7 +234,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 			saveStorefrontDraft(pubkey, dTag, page)
 			setMode('editor')
 		},
-		[dTag, pubkey],
+		[dTag, pubkey, published],
 	)
 
 	const handleChange = useCallback(
@@ -295,11 +298,13 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 				setIsDirty(false)
 				// Report the relays that actually acknowledged. "Published" on its
 				// own would be a claim about retention we cannot make.
-				toast.success(
-					enabled
-						? `Page published to ${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'}`
-						: `Saved to ${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'} (page is switched off)`,
-				)
+				const relays = `${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'}`
+				if (enabled) toast.success(`Page published to ${relays}`)
+				else if (dTag === HOME_PAGE_D_TAG)
+					// The home page is the one place Private silently changes what
+					// visitors see (the fallback home keeps showing), so say so.
+					toast.warning('Saved as Private. Switch to Public to show it on the homepage.', { duration: 10000 })
+				else toast.success(`Saved to ${relays} (page is switched off)`)
 			} catch (error) {
 				const message = error instanceof Error ? error.message : 'Could not publish the page'
 				setErrors([message])
@@ -453,6 +458,11 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 										This is the homepage. Publishing it updates the front page; no route needed.
 									</span>
 								)}
+								{isHomePage && !enabled && (
+									<span className="text-xs font-medium text-destructive" data-testid="storefront-home-private">
+										Private: visitors won't see this page. Switch to Public before publishing.
+									</span>
+								)}
 								{liveHref ? (
 									<Button variant="outline" size="sm" asChild data-testid="storefront-view-live">
 										<a href={liveHref} target="_blank" rel="noopener noreferrer">
@@ -583,6 +593,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 		[
 			dTag,
 			handleDiscardDraft,
+			enabled,
 			isDirty,
 			isFullscreen,
 			isHomePage,
