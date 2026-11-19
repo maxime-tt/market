@@ -1068,3 +1068,74 @@ describe('nextPublishedBidState — an admission fact advances the panel', () =>
 		if (next.phase === 'not-accepted') expect(next.reclaimable).toBe(true)
 	})
 })
+
+// =========================================================================
+// The same-object contract on the phases a delivery reaches
+//
+// The defect this pins, measured live on the served host 2026-11-19 (deploy
+// `34fdb1d81`): the lot page died with React error #185 ("Maximum update depth
+// exceeded") the instant the read delivered a bid that the chain had in fact
+// admitted. `ArenaAuctionLotHost.tsx:195` projects `toAuctionDetailModel(view,
+// context)` on every render, so the model handed to `useAuctionBidController`
+// is a fresh object each pass, and that hook runs this machine in an effect
+// keyed on the model. The machine's own contract says a state that does not
+// change is returned as the SAME object — a host calling it on every tick must
+// not re-render for it — and `seen`, the branch a delivery reaches first, was
+// the one branch that allocated a fresh object for an unchanged state, so a
+// single delivery re-triggered the effect forever.
+//
+// These are the exact facts that branch is handed, twice, with a NEW model
+// object each pass (the host's own shape): the second call must hand back the
+// panel's own object.
+// =========================================================================
+
+describe('nextPublishedBidState — a state that did not change is the same object', () => {
+	const admission = { position: 1105, highBid: 'high-1', height: 3490, blockHash: 'ab'.repeat(32) }
+	const admissionFact = { ...admission, bidId: 'b1', bidder: BIDDER, amount: 1000, eventId: 'admit-1', validatorPubkey: 'v1' }
+	const served = () => detail({ bids: [{ eventId: 'b1', bidder: BIDDER, createdAt: 1, amount: 1000, relays: [RELAY_A] }] })
+	const admitted = () => detail({ admissions: { b1: admissionFact } })
+	const presumed: ArenaBidSubmissionState = { phase: 'presumed', amount: 1000, eventId: 'b1', acceptedBy: [RELAY_A], totalRelays: 2 }
+	const call = (previous: ArenaBidSubmissionState, model: ArenaAuctionDetailModel, now = 10_000) =>
+		nextPublishedBidState({ previous, model, readStatus: 'settled', chainAdvancing: true, escrowLocktime: 2_000, now })
+
+	test('a read that keeps serving the bid returns the panel’s own seen object', () => {
+		const seen = call(presumed, served())
+		expect(seen.phase).toBe('seen')
+		// The same facts, a fresh model: the state did not change, so neither may
+		// the object — otherwise React re-renders and the effect re-runs.
+		expect(call(seen, served())).toBe(seen)
+		expect(call(seen, served(), 10_001)).toBe(seen)
+	})
+
+	// This one passed before the fix: `admitted` is not one of the phases the
+	// machine re-evaluates at all — the `inFlight`/`concluded` guard above the
+	// admission branch returns it unchanged, and the branch below is therefore
+	// only ever reached from an unsettled state. It is pinned here so that guard
+	// is not removed on the way to "simplifying" the machine, which would put the
+	// admitted phase back into the same loop the seen phase was in.
+	test('a read that keeps naming the bid in its admissions leaves an admitted panel untouched', () => {
+		const state = call(presumed, admitted())
+		expect(state.phase).toBe('admitted')
+		expect(call(state, admitted())).toBe(state)
+		expect(call(state, admitted(), 10_001)).toBe(state)
+	})
+
+	test('a delivered bid settles on the second pass and every pass after it', () => {
+		// Exactly the host's shape: a new model object per pass.
+		let state: ArenaBidSubmissionState = presumed
+		state = call(state, served())
+		expect(state.phase).toBe('seen')
+		for (let pass = 0; pass < 5; pass += 1) {
+			const next = call(state, served())
+			expect(next).toBe(state)
+			state = next
+		}
+		// …and the admission fact still moves it, once.
+		const advanced = call(state, admitted())
+		expect(advanced.phase).toBe('admitted')
+		for (let pass = 0; pass < 5; pass += 1) {
+			const next = call(advanced, admitted())
+			expect(next).toBe(advanced)
+		}
+	})
+})
