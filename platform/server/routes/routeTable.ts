@@ -1,4 +1,4 @@
-import type { RouteIntent, RouteIntentTarget } from '@sdk/commerce/storefront/routeIntent'
+import type { RouteIntent, RouteIntentNav, RouteIntentTarget } from '@sdk/commerce/storefront/routeIntent'
 import {
 	RoutesFileError,
 	ROUTES_FILE_VERSION,
@@ -7,6 +7,7 @@ import {
 	validateRoutesFile,
 	writeAtomic,
 	type Binding,
+	type BindingNav,
 	type RouteTarget,
 	type RouteWarning,
 	type RoutesFile,
@@ -88,6 +89,12 @@ function sameTarget(existing: RouteTarget, incoming: RouteIntentTarget): boolean
 	return false
 }
 
+/** Whether the existing nav already equals the intent's — a no-write check on the pin alone. */
+function sameNav(existing: BindingNav | undefined, incoming: RouteIntentNav | undefined): boolean {
+	if (!existing || !incoming) return existing === undefined && incoming === undefined
+	return existing.label === incoming.label && existing.order === incoming.order
+}
+
 /**
  * Applies an intent to a table in memory and on disk.
  *
@@ -135,13 +142,14 @@ export function createRouteTable({ file, path, warnings = [] }: CreateRouteTable
 			const target = intent.target
 			if (!target) return { ok: false, violations: ['/target: a set intent must name a page or series target'] }
 
-			if (existing && sameTarget(existing.target, target)) {
+			if (existing && sameTarget(existing.target, target) && sameNav(existing.nav, intent.nav)) {
 				return { ok: true, changed: false, warnings: currentWarnings }
 			}
 
 			const binding: Binding = {
 				kind: 'admin',
 				path: intent.path,
+				...(intent.nav ? { nav: intent.nav } : {}),
 				target: toRouteTarget(target),
 				updatedAt: meta.createdAt,
 				updatedBy: meta.pubkey,

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
-import { ROUTE_INTENT_VERSION, type RouteIntent } from '@sdk/commerce/storefront/routeIntent'
+import { ROUTE_INTENT_VERSION, type RouteIntent, type RouteIntentNav } from '@sdk/commerce/storefront/routeIntent'
 import { validateRoutesFile } from './routeFile'
 import { createRouteTable, loadRouteTable } from './routeTable'
 
@@ -44,11 +44,12 @@ function tableFile(bindings: unknown[] = []): string {
 	return path
 }
 
-const set = (path: string, d = 'storefront-page', author = AUTHOR): RouteIntent => ({
+const set = (path: string, d = 'storefront-page', author = AUTHOR, nav?: RouteIntentNav): RouteIntent => ({
 	version: ROUTE_INTENT_VERSION,
 	action: 'set',
 	path,
 	target: { type: 'page', author, d },
+	...(nav ? { nav } : {}),
 })
 
 const remove = (path: string): RouteIntent => ({ version: ROUTE_INTENT_VERSION, action: 'remove', path, target: null })
@@ -117,6 +118,32 @@ describe('the live routing table', () => {
 		const seq = table.current().seq
 
 		expect(table.apply(set('shop'), at(1_800_000_000))).toMatchObject({ ok: true, changed: false })
+		expect(table.current().seq).toBe(seq)
+	})
+
+	test('a nav-only change writes even though the target is unchanged, and persists', () => {
+		const path = tableFile()
+		const table = loadRouteTable(path)
+		table.apply(set('shop'), at(1_800_000_000))
+
+		const applied = table.apply(set('shop', 'storefront-page', AUTHOR, { label: 'Shop', order: 1 }), at(1_800_000_100))
+		expect(applied).toMatchObject({ ok: true, changed: true })
+		expect(table.current().bindings[0].target).toMatchObject({ d: 'storefront-page' })
+		expect(table.current().bindings[0].nav).toEqual({ label: 'Shop', order: 1 })
+
+		expect(loadRouteTable(path).current().bindings[0].nav).toEqual({ label: 'Shop', order: 1 })
+	})
+
+	test('re-applying the same nav is already satisfied and writes nothing', () => {
+		const path = tableFile()
+		const table = loadRouteTable(path)
+		table.apply(set('shop', 'storefront-page', AUTHOR, { label: 'Shop', order: 1 }), at(1_800_000_000))
+		const seq = table.current().seq
+
+		expect(table.apply(set('shop', 'storefront-page', AUTHOR, { label: 'Shop', order: 1 }), at(1_800_000_000))).toMatchObject({
+			ok: true,
+			changed: false,
+		})
 		expect(table.current().seq).toBe(seq)
 	})
 

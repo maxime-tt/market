@@ -200,6 +200,34 @@ describe('routeFile — load and validate', () => {
 		expect(file.bindings[0].target).toEqual({ type: 'series', series: 'featured', author: AUTHOR })
 	})
 
+	test('a binding carrying a nav pin round-trips through validation and serialization', () => {
+		const file = load(base({ bindings: [binding('featured', { nav: { label: 'Featured', order: 1 } })] }))
+		expect(file.bindings[0].nav).toEqual({ label: 'Featured', order: 1 })
+		expect(validateRoutesFile(JSON.parse(serializeRoutesFile(file))).file.bindings[0].nav).toEqual({ label: 'Featured', order: 1 })
+	})
+
+	test('a malformed nav pin is refused by field pointer', () => {
+		expect(captureViolations(base({ bindings: [binding('featured', { nav: 'Featured' })] }))).toContain(
+			'/bindings/0/nav: expected an object',
+		)
+		expect(captureViolations(base({ bindings: [binding('featured', { nav: { label: '', order: 1 } })] }))).toContain(
+			'/bindings/0/nav/label',
+		)
+		expect(captureViolations(base({ bindings: [binding('featured', { nav: { label: 'a'.repeat(25), order: 1 } })] }))).toContain(
+			'/bindings/0/nav/label',
+		)
+		expect(captureViolations(base({ bindings: [binding('featured', { nav: { label: 'Featured', order: 1.5 } })] }))).toContain(
+			'/bindings/0/nav/order',
+		)
+	})
+
+	test('nav on a lease is refused — a pinned lease would outlive its term', () => {
+		const violations = captureViolations(
+			base({ bindings: [binding('shop', { meaning: 'lease', expiresAt: 1900000000, nav: { label: 'Shop', order: 1 } })] }),
+		)
+		expect(violations).toContain('/bindings/0/nav: nav is only valid on a permanent binding')
+	})
+
 	test('grants are still refused; a MALFORMED series target is refused by field pointer', () => {
 		const grants = captureViolations({ ...base(), grants: { [OTHER]: ['featured-*'] } })
 		expect(grants).toContain('increment 4')
