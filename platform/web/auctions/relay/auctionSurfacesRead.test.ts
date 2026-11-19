@@ -125,8 +125,6 @@ function verdictEvent(
 interface FakeRelayOptions {
 	events?: NostrEventLike[]
 	fail?: string
-	/** Yield `events`, then hold the stream open until the read aborts it. */
-	hang?: boolean
 }
 
 function commitmentEvent(over: { height?: number; appHash?: string; validator?: string; time?: number | null } = {}): NostrEventLike {
@@ -245,29 +243,20 @@ function refusedEvent(over: { refusedEventId?: string; reason?: string; height?:
 }
 
 function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
-	return (_filters: readonly EventFilter[], opts: ArenaRelayOpenOptions) => ({
+	return (_filters: readonly EventFilter[], _opts: ArenaRelayOpenOptions) => ({
 		async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
 			if (options.fail) throw new Error(options.fail)
 			for (const event of options.events ?? []) yield { type: 'event', event }
-			if (options.hang) {
-				if (!opts.signal?.aborted) {
-					const { promise, resolve } = Promise.withResolvers<void>()
-					opts.signal?.addEventListener('abort', () => resolve())
-					await promise
-				}
-				return
-			}
 			yield { type: 'caught-up', info: { eose: [url], pending: [], complete: false } }
 		},
 	})
 }
 
-function readFrom(relays: Record<string, FakeRelayOptions>, quietMs?: number): ArenaAuctionRead {
+function readFrom(relays: Record<string, FakeRelayOptions>): ArenaAuctionRead {
 	return createArenaAuctionRead({
 		relays: Object.keys(relays),
 		openRelay: (url) => fakeRelay(url, relays[url] ?? {}),
 		deadlineMs: 2000,
-		quietMs,
 	})
 }
 
@@ -280,7 +269,6 @@ function health(over: Partial<ArenaReadHealth> = {}): ArenaReadHealth {
 		refused: [],
 		unreachable: [],
 		pending: [],
-		reading: [],
 		failed: [],
 		noRelaysReachable: relays.length === 0,
 		empty: true,
@@ -721,26 +709,12 @@ describe('collectArenaSurfacesRead', () => {
 		expect(state.snapshot?.auctions).toEqual([])
 	})
 
-	test('progress carries the live health, and the finished read states its own word', async () => {
-		const seen: { status: string; answered: number; total: number }[] = []
-		// `wss://mute` never speaks: at the batch the read is still waiting on it.
-		const read = readFrom(
-			{ 'wss://a': { events: [createEvent({ id: 'create-1' })], hang: true }, 'wss://mute': { hang: true } },
-			40,
-		)
-		const state = await collectArenaSurfacesRead(read, {
-			onProgress: (progress) => seen.push({ status: progress.status, ...progress.relayHealth }),
-		})
-
+	test('progress arrives while reading, flagged loading and never as a count of what exists', async () => {
+		const seen: string[] = []
+		const read = readFrom({ 'wss://a': { events: [createEvent({ id: 'create-1' })] } })
+		await collectArenaSurfacesRead(read, { onProgress: (state) => seen.push(state.status) })
 		expect(seen.length).toBeGreaterThan(0)
-		// One relay answered, one silent: mid-flight the surface is reading a
-		// partial picture — `incomplete`, with the live counts.
-		expect(seen.every((progress) => progress.status === 'incomplete')).toBe(true)
-		expect(seen.every((progress) => progress.answered === 1 && progress.total === 2)).toBe(true)
-		// The quiet bound accounts for the silent relay, so the read is over — and
-		// the same relay is now a gap in a finished read, which is `incomplete`.
-		expect(state.status).toBe('incomplete')
-		expect(state.relayHealth).toEqual({ answered: 1, total: 2 })
+		expect(seen.every((status) => status === 'loading')).toBe(true)
 	})
 
 	test('a refused create never reaches a surface', async () => {

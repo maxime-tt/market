@@ -23,7 +23,6 @@ import {
 import {
 	auctionListStatus,
 	collectAuctionListRead,
-	relayCounts,
 	selectAuctionList,
 	toAuctionListItem,
 	type AuctionListSelection,
@@ -141,12 +140,11 @@ function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
 	})
 }
 
-function readFrom(relays: Record<string, FakeRelayOptions>, quietMs?: number): ArenaAuctionRead {
+function readFrom(relays: Record<string, FakeRelayOptions>): ArenaAuctionRead {
 	return createArenaAuctionRead({
 		relays: Object.keys(relays),
 		openRelay: (url) => fakeRelay(url, relays[url] ?? {}),
 		deadlineMs: 2000,
-		quietMs,
 	})
 }
 
@@ -163,7 +161,6 @@ function health(over: Partial<ArenaReadHealth> = {}): ArenaReadHealth {
 		refused: [],
 		unreachable: [],
 		pending: [],
-		reading: [],
 		failed: [],
 		noRelaysReachable: relays.length === 0,
 		empty: true,
@@ -199,49 +196,6 @@ describe('auctionListStatus', () => {
 
 	test('no relay reachable → its own state, not "no auctions"', () => {
 		expect(auctionListStatus(health({ noRelaysReachable: true }))).toBe('no-relays')
-	})
-
-	test('a relay still being read is loading — the read has not stopped', () => {
-		// `reading` is the live "still waiting on" set: the read has not heard from
-		// this relay and has not given up on it. `incomplete` would say the read
-		// stopped, which is a claim about a finished read.
-		const h = health({
-			relays: [{ url: 'wss://a', status: 'reading', events: 0, refusals: 0, eose: false, error: null }],
-			pending: ['wss://a'],
-			reading: ['wss://a'],
-		})
-		expect(auctionListStatus(h)).toBe('loading')
-	})
-
-	test('one relay answered and another is still being read is incomplete, with the live counts', () => {
-		// The plan's I2 acceptance: mid-flight with one relay answered and one
-		// silent, the state is `incomplete` — the page is reading a partial
-		// picture. `loading` is only "nothing has arrived yet".
-		const h = health({
-			relays: [
-				{ url: 'wss://a', status: 'ok', events: 3, refusals: 0, eose: true, error: null },
-				{ url: 'wss://b', status: 'reading', events: 0, refusals: 0, eose: false, error: null },
-			],
-			answered: ['wss://a'],
-			pending: ['wss://b'],
-			reading: ['wss://b'],
-		})
-		expect(auctionListStatus(h)).toBe('incomplete')
-		expect(relayCounts(h)).toEqual({ answered: 1, total: 2 })
-	})
-
-	test('the read is over with a relay unanswered → incomplete', () => {
-		// The same two-relay health, once nothing is still being read: every
-		// subscription reached its boundary, so the gaps are now the whole picture.
-		const h = health({
-			relays: [
-				{ url: 'wss://a', status: 'ok', events: 3, refusals: 0, eose: true, error: null },
-				{ url: 'wss://b', status: 'timeout', events: 0, refusals: 0, eose: false, error: null },
-			],
-			answered: ['wss://a'],
-			pending: ['wss://b'],
-		})
-		expect(auctionListStatus(h)).toBe('incomplete')
 	})
 
 	test('an aborted read is incomplete even if every relay had answered', () => {
@@ -484,26 +438,12 @@ describe('collectAuctionListRead', () => {
 		expect(state.snapshot!.refusals.length).toBeGreaterThan(0)
 	})
 
-	test('progress carries the live health of the batch, and the finished read says what is missing', async () => {
-		const seen: { status: string; answered: number; total: number }[] = []
-		const read = readFrom(
-			{ 'wss://a': { events: [createEvent({ id: 'root', d: 'lot-1' })], hang: true }, 'wss://mute': { hang: true } },
-			40,
-		)
-		const state = await collectAuctionListRead(read, {
-			onProgress: (progress) => seen.push({ status: progress.status, ...progress.relayHealth }),
+	test('progress is reported while the read runs, with the status still "loading"', async () => {
+		const seen: string[] = []
+		await collectAuctionListRead(readFrom({ 'wss://a': { events: [createEvent({ id: 'root', d: 'lot-1' })] } }), {
+			onProgress: (state) => seen.push(state.status),
 		})
-
 		expect(seen.length).toBeGreaterThan(0)
-		// `wss://a` has answered and `wss://mute` has not, so the page is reading a
-		// partial picture — `incomplete`, with the live counts. `loading` is
-		// reserved for "nothing has arrived yet" (see the status unit tests).
-		expect(seen.every((progress) => progress.status === 'incomplete')).toBe(true)
-		expect(seen.every((progress) => progress.answered === 1 && progress.total === 2)).toBe(true)
-		// Once the quiet bound has accounted for the silent relay the read is over,
-		// and the same relay is a gap in a finished read — the other sentence.
-		expect(state.status).toBe('incomplete')
-		expect(state.relayHealth).toEqual({ answered: 1, total: 2 })
-		expect(state.snapshot!.auctions).toHaveLength(1)
+		expect(seen.every((status) => status === 'loading')).toBe(true)
 	})
 })
