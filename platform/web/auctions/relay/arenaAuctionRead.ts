@@ -145,6 +145,14 @@ import {
 	type ParsedArenaRefusal,
 	type ParsedArenaLotState,
 } from './arenaLotStateRead'
+import {
+	ArenaBidAdmitError,
+	dedupeArenaBidAdmits,
+	isArenaBidAdmitSchema,
+	parseArenaBidAdmitEvent,
+	type ArenaBidAdmitEventLike,
+	type ParsedArenaBidAdmit,
+} from './arenaBidAdmitRead'
 // Type-only: erased at runtime, so this adapter stays free of any `ui/` code.
 import type { ArenaV4vSplitRow } from '@ui/auction/arena/model'
 
@@ -197,6 +205,15 @@ export type ArenaReadRefusalName =
 	| 'arena.lot_state.bad_anchor'
 	| 'arena.lot_state.anchor_mismatch'
 	| 'arena.lot_state.signer_not_in_roster'
+	| 'arena.bid_admit.bad_kind'
+	| 'arena.bid_admit.bad_signature'
+	| 'arena.bid_admit.bad_schema'
+	| 'arena.bid_admit.bad_content'
+	| 'arena.bid_admit.unanchored'
+	| 'arena.bid_admit.bad_anchor'
+	| 'arena.bid_admit.anchor_mismatch'
+	| 'arena.bid_admit.p_tag_mismatch'
+	| 'arena.bid_admit.signer_not_in_roster'
 
 // =========================================================================
 // The immutable allow-list for a 1440 (MERGED-PROTOCOL-SPEC.md §8)
@@ -480,6 +497,16 @@ export interface ArenaLotStateEvent extends ArenaAuctionEventBase {
 	lotState: ParsedArenaLotState
 }
 
+/**
+ * A kind-1449 **bid admission**: the chain's own record that it admitted one
+ * bid, carrying the position the bid belongs to. The other schema of the same
+ * kind as {@link ArenaLotStateEvent}; dispatched on `content.schema`.
+ */
+export interface ArenaBidAdmitEvent extends ArenaAuctionEventBase {
+	type: 'bid-admit'
+	admit: ParsedArenaBidAdmit
+}
+
 /** A kind-1450 **refusal**: a create the chain refused, with the chain's own reason. */
 export interface ArenaRefusedFactEvent extends ArenaAuctionEventBase {
 	type: 'refused-fact'
@@ -493,6 +520,7 @@ export type ArenaAuctionEvent =
 	| ArenaStateCommitmentEvent
 	| ArenaReceiptEvent
 	| ArenaLotStateEvent
+	| ArenaBidAdmitEvent
 	| ArenaRefusedFactEvent
 
 /** One event the gate refused, with the relay that offered it. */
@@ -746,10 +774,11 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 		}
 	}
 
-	// 1449 / 1450: the chain's state half — a lot's committed end and a create's
-	// refusal, the same discipline the receipts and params paths apply to a 1443
-	// and a 1448: signature, kind, schema, mandatory agreeing anchor, and a
-	// tag-vs-content cross-check. No roster is held at this seam.
+	// 1449 / 1450: the chain's state half — a lot's committed end, a bid's
+	// admission, and a create's refusal, the same discipline the receipts and
+	// params paths apply to a 1443 and a 1448: signature, kind, schema, mandatory
+	// agreeing anchor, and a tag-vs-content cross-check. No roster is held at this
+	// seam.
 	if (event.kind === ARENA_LOT_STATE_KIND || event.kind === ARENA_REFUSED_KIND) {
 		try {
 			const like: ArenaLotStateEventLike = {
@@ -762,13 +791,24 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 				sig: event.sig ?? '',
 			}
 			if (event.kind === ARENA_LOT_STATE_KIND) {
+				// Kind 1449 carries two schemas. The schema, not the kind, says
+				// which fact an event is — so a bid admission is read as one and a
+				// committed end as the other, and each parser refuses the other's
+				// shape by name (`arenaBidAdmitRead.ts` / `arenaLotStateRead.ts`).
+				if (isArenaBidAdmitSchema(event.content)) {
+					const admit = parseArenaBidAdmitEvent(like as ArenaBidAdmitEventLike)
+					return { ok: true, event: { ...baseOf(event, relay), type: 'bid-admit', admit } }
+				}
 				const lotState = parseArenaLotStateEvent(like)
 				return { ok: true, event: { ...baseOf(event, relay), type: 'lot-state', lotState } }
 			}
 			const refusal = parseArenaRefusalEvent(like)
 			return { ok: true, event: { ...baseOf(event, relay), type: 'refused-fact', refusal } }
 		} catch (error) {
-			const reason = error instanceof ArenaLotStateError ? error.refusal : 'arena.lot_state.bad_content'
+			const reason =
+				error instanceof ArenaLotStateError || error instanceof ArenaBidAdmitError
+					? error.refusal
+					: 'arena.lot_state.bad_content'
 			const detail = error instanceof Error ? error.message : String(error)
 			return refuse(relay, event, reason, detail)
 		}
@@ -921,6 +961,15 @@ export interface ArenaAuctionView {
 	 * entry is *no refusal read*, never "accepted".
 	 */
 	bidRefusals: ArenaRefusedCreateFact[]
+	/**
+	 * The chain's **admission facts** for this lot's bids (kind 1449,
+	 * `arena.bidadmit.v1`), deduped by bid id at the earliest anchored height,
+	 * ordered by anchored height ascending. This is the one fact that says the
+	 * chain took a bid — an ACK, a timeout or a `highAmount` is not it.
+	 */
+	admissions: ParsedArenaBidAdmit[]
+	/** The admission that names a bid id, for a per-bid lookup — the one thing a bid panel needs. */
+	admissionForBid: Record<string, ParsedArenaBidAdmit>
 	relays: string[]
 }
 
@@ -984,6 +1033,8 @@ export interface ArenaAuctionSnapshot {
 	orphanReceipts: ParsedArenaReceipt[]
 	/** Committed ends (kind 1449) whose coordinate matches no create this read saw. */
 	orphanLotStates: ParsedArenaLotState[]
+	/** Bid admissions (kind 1449, `arena.bidadmit.v1`) whose coordinate matches no create this read saw. */
+	orphanAdmissions: ParsedArenaBidAdmit[]
 	/** Every create the chain refused (kind 1450), deduped at the earliest anchored height. */
 	refusedCreates: ArenaRefusedCreateFact[]
 	/** State commitments, height descending then time descending, then validator pubkey. */
@@ -1134,6 +1185,7 @@ export function projectArenaEvents(
 	const commitmentEvents = all.filter((e): e is ArenaStateCommitmentEvent => e.type === 'commitment')
 	const receiptEvents = all.filter((e): e is ArenaReceiptEvent => e.type === 'receipt')
 	const lotStateEvents = all.filter((e): e is ArenaLotStateEvent => e.type === 'lot-state')
+	const bidAdmitEvents = all.filter((e): e is ArenaBidAdmitEvent => e.type === 'bid-admit')
 	const refusedFactEvents = all.filter((e): e is ArenaRefusedFactEvent => e.type === 'refused-fact')
 
 	// ---- resolve 1440 versions ------------------------------------------
@@ -1295,6 +1347,33 @@ export function projectArenaEvents(
 		lotStateRelaysByAuction.set(coordinate, relays)
 	}
 
+	// ---- bid admissions (1449, `arena.bidadmit.v1`), grouped by coordinate ---
+	// Same resolution as verdicts, receipts and committed ends: an admission's
+	// `auction_id` is a coordinate, but a bare `d` is accepted when exactly one
+	// auction carries it. Dedupe is by bid id at the earliest anchored height — a
+	// bid is announced once.
+	const admitsByAuction = new Map<string, ParsedArenaBidAdmit[]>()
+	const admitRelaysByAuction = new Map<string, Set<string>>()
+	const orphanAdmissions: ParsedArenaBidAdmit[] = []
+	for (const event of bidAdmitEvents) {
+		const auctionId = event.admit.auctionId
+		const coordinate = auctionId.includes(':')
+			? auctionId
+			: (dToCoordinate.get(auctionId) ?? []).length === 1
+				? dToCoordinate.get(auctionId)![0]
+				: null
+		if (coordinate === null) {
+			orphanAdmissions.push(event.admit)
+			continue
+		}
+		const list = admitsByAuction.get(coordinate)
+		if (list === undefined) admitsByAuction.set(coordinate, [event.admit])
+		else list.push(event.admit)
+		const relays = admitRelaysByAuction.get(coordinate) ?? new Set<string>()
+		for (const relay of event.relays) relays.add(relay)
+		admitRelaysByAuction.set(coordinate, relays)
+	}
+
 	// A refusal (a 1450) names a **create event id**, not a coordinate, so it is
 	// deduped by `(event_id, reason)` at the earliest anchored height and kept at
 	// the snapshot, where a surface that has the create's event id can find it.
@@ -1397,6 +1476,7 @@ export function projectArenaEvents(
 		for (const bid of auctionBids) for (const relay of bid.relays) relays.add(relay)
 		for (const relay of receiptRelaysByAuction.get(entry.coordinate) ?? []) relays.add(relay)
 		for (const relay of lotStateRelaysByAuction.get(entry.coordinate) ?? []) relays.add(relay)
+		for (const relay of admitRelaysByAuction.get(entry.coordinate) ?? []) relays.add(relay)
 
 		// The committed ends, deduped by `(auction_id, end_time)` at the earliest
 		// anchored height, ordered by height ascending; the highest-anchored one
@@ -1417,6 +1497,18 @@ export function projectArenaEvents(
 			const refusal = refusedCreateByEventId.get(bid.eventId)
 			if (refusal === undefined || refusal.refusedKind !== ARENA_AUCTION_BID_KIND) continue
 			bidRefusals.push(refusal)
+		}
+
+		// **Bid admissions**: the chain's record that it took a bid (kind 1449,
+		// `arena.bidadmit.v1`), deduped by bid id at the earliest anchored height.
+		// The chain publishes nothing about a leg it never admitted or one it
+		// immediately outbid (`~/work/wt-validator`
+		// `docs/ADDITIVE-REBID-2026-11-19-RESULT.md` §2), so an absence here is *no
+		// admission read* — never a refusal, and never "the chain rejected it".
+		const admissions = dedupeArenaBidAdmits(admitsByAuction.get(entry.coordinate) ?? [])
+		const admissionForBid: Record<string, ParsedArenaBidAdmit> = {}
+		for (const admit of admissions) {
+			if (admissionForBid[admit.bidId] === undefined) admissionForBid[admit.bidId] = admit
 		}
 
 		auctions.push({
@@ -1442,6 +1534,8 @@ export function projectArenaEvents(
 			committedEnds,
 			createRefusal,
 			bidRefusals,
+			admissions,
+			admissionForBid,
 			relays: [...relays].sort(),
 		})
 	}
@@ -1527,6 +1621,7 @@ export function projectArenaEvents(
 		orphanVerdicts,
 		orphanReceipts,
 		orphanLotStates,
+		orphanAdmissions,
 		refusedCreates,
 		stateCommitments,
 		highestCommitment,

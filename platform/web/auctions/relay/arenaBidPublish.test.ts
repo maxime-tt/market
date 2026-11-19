@@ -112,6 +112,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		settleReceipt: null,
 		createRefusal: null,
 		bidRefusals: {},
+		admissions: {},
 		...over,
 	}
 }
@@ -819,8 +820,10 @@ describe('diagnosePublishedBid — five states, and never an invented reason', (
 				chainAdvancing,
 				escrowLocktime: null,
 			})
-			expect(Object.keys(diagnosis).sort()).toEqual(['escrowLocktime', 'eventId', 'reason', 'reclaimable', 'state'])
+			expect(Object.keys(diagnosis).sort()).toEqual(['admission', 'escrowLocktime', 'eventId', 'reason', 'reclaimable', 'state'])
 			expect(diagnosis.reason).toBeNull()
+			// The app diagnoses from no admission either: this loop passes no fact.
+			expect(diagnosis.admission).toBeNull()
 		}
 		const refused = diagnosePublishedBid({
 			eventId: 'b1',
@@ -920,5 +923,148 @@ describe('nextPublishedBidState — what one read says about a published bid', (
 	test('the poll interval is a cadence, not a hammer', () => {
 		expect(ARENA_BID_SETTLE_POLL_MS).toBeGreaterThanOrEqual(10_000)
 		expect(ARENA_BID_SETTLE_POLL_MS).toBeLessThanOrEqual(60_000)
+	})
+})
+
+// =========================================================================
+// The admission fact — the only thing that may say the bid is in
+// =========================================================================
+
+describe('diagnosePublishedBid — the admission fact outranks every weaker signal', () => {
+	const admission = { position: 1105, highBid: 'high-1', height: 3490, blockHash: 'ab'.repeat(32) }
+
+	test('an arena.bidadmit.v1 fact naming the bid is admitted, with the chain’s own position', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			admission,
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+		})
+		expect(diagnosis.state).toBe('admitted')
+		expect(diagnosis.admission).toEqual(admission)
+		// Nothing to reclaim: the bid is live.
+		expect(diagnosis.reclaimable).toBe(false)
+		expect(diagnosis.reason).toBeNull()
+	})
+
+	test('admission outranks the read holding the bid, a receipt, a refusal and an advancing chain', () => {
+		for (const over of [
+			{ seenInRead: true, namedByReceipt: false },
+			{ seenInRead: false, namedByReceipt: true },
+			{ seenInRead: false, namedByReceipt: false, refusalReason: 'late' },
+			{ seenInRead: false, namedByReceipt: false, chainAdvancing: true },
+		]) {
+			const diagnosis = diagnosePublishedBid({
+				eventId: 'b1',
+				chainAdvancing: false,
+				escrowLocktime: null,
+				admission,
+				...over,
+			})
+			expect(diagnosis.state).toBe('admitted')
+		}
+	})
+
+	test('no admission fact yields no admitted state — an ACK and a timeout never reach it', () => {
+		for (const admission of [null, undefined]) {
+			const diagnosis = diagnosePublishedBid({
+				eventId: 'b1',
+				seenInRead: false,
+				namedByReceipt: false,
+				admission,
+				chainAdvancing: true,
+				escrowLocktime: null,
+			})
+			expect(diagnosis.state).toBe('not-accepted')
+			expect(diagnosis.admission).toBeNull()
+		}
+	})
+})
+
+describe('nextPublishedBidState — an admission fact advances the panel', () => {
+	const admission = { position: 1105, highBid: 'high-1', height: 3490, blockHash: 'ab'.repeat(32) }
+	const presumed: ArenaBidSubmissionState = { phase: 'presumed', amount: 1000, eventId: 'b1', acceptedBy: [RELAY_A], totalRelays: 2 }
+	const seen: ArenaBidSubmissionState = { phase: 'seen', amount: 1000, eventId: 'b1', acceptedBy: [RELAY_A], totalRelays: 2 }
+
+	test('a read naming the bid in its admissions turns presumed into admitted, not seen', () => {
+		const next = nextPublishedBidState({
+			previous: presumed,
+			model: detail({ admissions: { b1: { ...admission, bidId: 'b1', bidder: BIDDER, amount: 1000, eventId: 'admit-1', validatorPubkey: 'v1' } } }),
+			readStatus: 'settled',
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+			now: 10_000,
+		})
+		expect(next.phase).toBe('admitted')
+		if (next.phase === 'admitted') {
+			expect(next.admission.position).toBe(1105)
+			expect(next.admission.highBid).toBe('high-1')
+			expect(next.admission.height).toBe(3490)
+			expect(next.acceptedBy).toEqual([RELAY_A])
+		}
+	})
+
+	test('a read that holds the bid but names no admission keeps the panel at seen — storage is not admission', () => {
+		const next = nextPublishedBidState({
+			previous: presumed,
+			model: detail({ bids: [{ eventId: 'b1', bidder: BIDDER, createdAt: 1, amount: 1000, relays: [RELAY_A] }] }),
+			readStatus: 'settled',
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+			now: 10_000,
+		})
+		expect(next.phase).toBe('seen')
+	})
+
+	test('a late admission fact advances a panel already at seen', () => {
+		const next = nextPublishedBidState({
+			previous: seen,
+			model: detail({
+				bids: [{ eventId: 'b1', bidder: BIDDER, createdAt: 1, amount: 1000, relays: [RELAY_A] }],
+				admissions: { b1: { ...admission, bidId: 'b1', bidder: BIDDER, amount: 1000, eventId: 'admit-1', validatorPubkey: 'v1' } },
+			}),
+			readStatus: 'settled',
+			chainAdvancing: true,
+			escrowLocktime: null,
+			now: 10_000,
+		})
+		expect(next.phase).toBe('admitted')
+	})
+
+	test('a late admission fact also corrects a panel that had concluded not-accepted', () => {
+		const notAccepted: ArenaBidSubmissionState = { phase: 'not-accepted', amount: 1000, eventId: 'b1', locktime: 2_000, reclaimable: true }
+		const without = nextPublishedBidState({
+			previous: notAccepted,
+			model: detail({}),
+			readStatus: 'settled',
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+			now: 10_000,
+		})
+		expect(without).toBe(notAccepted) // the same object: no flap, no re-render
+		const withFact = nextPublishedBidState({
+			previous: notAccepted,
+			model: detail({ admissions: { b1: { ...admission, bidId: 'b1', bidder: BIDDER, amount: 1000, eventId: 'admit-1', validatorPubkey: 'v1' } } }),
+			readStatus: 'settled',
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+			now: 10_000,
+		})
+		expect(withFact.phase).toBe('admitted')
+	})
+
+	test('with no admission fact and an advancing chain, a published bid reads as not admitted', () => {
+		const next = nextPublishedBidState({
+			previous: presumed,
+			model: detail({}),
+			readStatus: 'settled',
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+			now: 10_000,
+		})
+		expect(next.phase).toBe('not-accepted')
+		if (next.phase === 'not-accepted') expect(next.reclaimable).toBe(true)
 	})
 })

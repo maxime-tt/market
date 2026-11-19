@@ -178,6 +178,41 @@ function lotStateEvent(over: { auctionId?: string; endTime?: number; extensions?
 	) as unknown as NostrEventLike
 }
 
+/** A signed kind-1449 bid admission for a lot (the chain's live shape, R4). */
+function bidAdmitEvent(
+	over: { auctionId?: string; bidId?: string; amount?: number; position?: number; highBid?: string; height?: number } = {},
+): NostrEventLike {
+	const auctionId = over.auctionId ?? '1440:seller-alice:lot-1'
+	const bidId = over.bidId ?? 'bid-1'
+	const height = over.height ?? 3437
+	const hash = '7bc7495aa6e679d003d495f934287dfde352b6552dc2960bac77cbdac8636edf'
+	return finalizeEvent(
+		{
+			kind: 1449,
+			created_at: 1_795_021_737,
+			tags: [
+				['e', bidId],
+				['auction', auctionId],
+				['height', String(height)],
+				['hash', hash],
+				['p', LOT_STATE_PUB],
+			],
+			content: JSON.stringify({
+				schema: 'arena.bidadmit.v1',
+				auction_id: auctionId,
+				bid_id: bidId,
+				bidder: 'bidder-one',
+				amount: over.amount ?? 100,
+				position: over.position ?? 105,
+				high_bid: over.highBid ?? 'high-leg-1',
+				height,
+				block_hash: hash,
+			}),
+		},
+		LOT_STATE_SK,
+	) as unknown as NostrEventLike
+}
+
 /** A signed kind-1450 refusal of a create (the chain's live shape, §4). */
 function refusedEvent(over: { refusedEventId?: string; reason?: string; height?: number; refusedKind?: number } = {}): NostrEventLike {
 	const refusedEventId = over.refusedEventId ?? 'create-root'
@@ -413,6 +448,30 @@ describe('the committed end and the create refusal', () => {
 	test('a lot with no refusal read has a null createRefusal, never an invented reason', () => {
 		const auction = onlyAuction(snapshotOf([createEvent({ id: 'create-root' })]))
 		expect(toAuctionDetailModel(auction, CONTEXT).createRefusal).toBeNull()
+	})
+
+	test('a bid the chain admitted carries the admission, keyed by the bid’s event id', () => {
+		const bid = bidEvent({ pubkey: BIDDER_ONE, amount: 100 })
+		const auction = onlyAuction(
+			snapshotOf([
+				createEvent({ id: 'create-root' }),
+				bid,
+				bidAdmitEvent({ bidId: bid.id, amount: 100, position: 105, highBid: 'high-leg-1', height: 3437 }),
+			]),
+		)
+		const detail = toAuctionDetailModel(auction, CONTEXT)
+		expect(detail.admissions[bid.id]?.position).toBe(105)
+		expect(detail.admissions[bid.id]?.highBid).toBe('high-leg-1')
+		expect(detail.admissions[bid.id]?.height).toBe(3437)
+		expect(detail.admissions[bid.id]?.bidId).toBe(bid.id)
+		// An admission is not a committed end, and an end is not an admission.
+		expect(auction.committedEnd).toBeNull()
+	})
+
+	test('a bid with no admission read has no entry — absence is not a refusal', () => {
+		const bid = bidEvent({ pubkey: BIDDER_ONE, amount: 100 })
+		const auction = onlyAuction(snapshotOf([createEvent({ id: 'create-root' }), bid]))
+		expect(toAuctionDetailModel(auction, CONTEXT).admissions).toEqual({})
 	})
 })
 

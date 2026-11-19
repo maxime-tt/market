@@ -290,6 +290,18 @@ export interface ArenaAuctionDetailModel extends ArenaAuctionCardModel {
 	 * for it (owner ruling, `notes/DECISION-2026-11-18-refused-bids-are-not-committed.md`).
 	 */
 	bidRefusals: Record<string, ArenaCreateRefusalModel>
+	/**
+	 * The chain's **admissions** of this lot's bids (kind 1449,
+	 * `arena.bidadmit.v1`), keyed by the admitted bid's event id. This is the one
+	 * map a bid submission consults to know the chain took the bid, and it carries
+	 * the chain's own `position`/`highBid` at the bid's height.
+	 *
+	 * An absent entry is *no admission read* — never "the chain rejected it". The
+	 * chain publishes nothing about a leg it never admitted or one it immediately
+	 * outbid (`~/work/wt-validator` `docs/ADDITIVE-REBID-2026-11-19-RESULT.md` §2),
+	 * so the absence is a fact about what the chain published, not a verdict.
+	 */
+	admissions: Record<string, ArenaBidAdmissionModel>
 }
 
 /** The chain's refusal of a create, as a surface may state it. */
@@ -300,6 +312,38 @@ export interface ArenaCreateRefusalModel {
 	height: number
 	/** The refusal event's id. */
 	refusalEventId: string
+}
+
+/**
+ * The chain's **admission** of one bid (kind 1449, `arena.bidadmit.v1`), as a
+ * surface may state it. This is the one fact that says the chain took the bid;
+ * an ACK, a timeout or a `highAmount` is not it.
+ *
+ * `position` is the position the bid **belongs to** — the sum of its bidder's
+ * live legs, and the number the chain's floor was compared against. `highBid` is
+ * the leg that set that position (the chain's `Winner` on close); a leg that was
+ * alone for a moment carries the position at publication, which a surface can
+ * tell apart by `highBid === bidId`.
+ */
+export interface ArenaBidAdmissionModel {
+	/** The admitted bid's event id. */
+	bidId: string
+	/** The bidder's pubkey. */
+	bidder: string
+	/** This leg's delta, in sats. */
+	amount: number
+	/** The position the bid belongs to (≥ `amount`). */
+	position: number
+	/** The leg that set that position. */
+	highBid: string
+	/** The bid's own committed height (the anchor). */
+	height: number
+	/** The anchored block hash. */
+	blockHash: string
+	/** The admission event's id. */
+	eventId: string
+	/** The signing validator. */
+	validatorPubkey: string
 }
 
 // =========================================================================

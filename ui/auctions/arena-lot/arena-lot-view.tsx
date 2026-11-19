@@ -33,7 +33,7 @@ import {
 	type ArenaSurfaceStatus,
 } from '@ui/auction/arena/model'
 import { bidBlockedCopy, type ArenaBidBlockedReason, type ArenaBidCheck } from '@ui/auction/arena/bid-rules'
-import { bidButtonLabel, bidFloorLabel, submissionLine, type ArenaBidSubmissionState } from '@ui/auction/arena/bid-panel'
+import { bidButtonLabel, bidFloorLabel, bidSubmissionStepper, submissionLine, type ArenaBidSubmissionState } from '@ui/auction/arena/bid-panel'
 
 // =========================================================================
 // Props
@@ -459,6 +459,7 @@ export function ArenaLotView({
 	const invalidCopy =
 		bid !== null && bid.check !== null && !bid.check.allowed && !hardBlocked ? bidBlockedCopy(bid.check.reason, bid.check) : null
 	const line = bid === null ? null : submissionLine(bid.submission)
+	const stepper = bid === null ? null : bidSubmissionStepper(bid.submission)
 	const next = ladder[0] ?? null
 	const maxPos = leader?.total ?? 0
 
@@ -672,6 +673,33 @@ export function ArenaLotView({
 										disabled={controlsDisabled}
 										onConfirm={() => bid.onSubmitAmount(String(next.delta))}
 									/>
+								)}
+
+								{stepper !== null && (
+									<ol
+										className="arn-steps"
+										data-slot="arena-bid-stepper"
+										data-active={stepper.active ?? 'none'}
+										data-complete={stepper.complete ? 'true' : 'false'}
+									>
+										{stepper.steps.map((step, index) => (
+											<li key={step.key} data-slot="arena-bid-step" data-step={step.key} data-status={step.status}>
+												<span className={`arn-steps__dot is-${step.status}`} aria-hidden="true">
+													{step.status === 'active' ? (
+														<span className="arn-steps__spin" role="progressbar" aria-label={`${step.label} in progress`} />
+													) : step.status === 'done' ? (
+														'✓'
+													) : (
+														index + 1
+													)}
+												</span>
+												<span className="arn-steps__body">
+													<b>{step.label}</b>
+													<small>{step.detail}</small>
+												</span>
+											</li>
+										))}
+									</ol>
 								)}
 
 								{line !== null && (

@@ -15,11 +15,14 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
 	ArenaBidPanel,
+	BidStepper,
 	bidButtonLabel,
 	bidFloorLabel,
+	bidSubmissionStepper,
 	isArenaBidSubmissionUnsuccessful,
 	submissionLine,
 	type ArenaBidSubmissionState,
+	type ArenaBidStepper,
 } from './bid-panel'
 import { CatalogueDetailView } from '@ui/auctions/catalogue/catalogue-detail-view'
 import { ARENA_BID_ADVISORY, checkArenaBid, type ArenaBidCheck, type ArenaBidderState } from './bid-rules'
@@ -71,6 +74,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		settleReceipt: null,
 		createRefusal: null,
 		bidRefusals: {},
+		admissions: {},
 		...over,
 	}
 }
@@ -220,18 +224,20 @@ describe('submissionLine — what the bidder is told between click and relay', (
 		expect(line.detail).toContain('Nothing has been acknowledged yet')
 	})
 
-	test('presumed names the ACK count and refuses to call it an outcome', () => {
+	test('presumed names the ACK count and refuses to call it an admission', () => {
 		const line = submissionLine({ phase: 'presumed', amount: 1000, eventId: 'ev-1', acceptedBy: ['wss://a'], totalRelays: 3 })!
-		expect(line.title).toContain('Bid presumed placed — 1 of 3 relays acknowledged it.')
-		expect(line.detail).toContain('not “won”')
-		expect(line.detail).toContain('no money has moved')
-		expect(line.tone).toBe('warning')
+		expect(line.title).toContain('Bid on the relays — 1 of 3 relays acknowledged it.')
+		expect(line.detail).toContain('That is storage, not admission')
+		expect(line.detail).toContain('keeps reading')
+		expect(line.tone).toBe('neutral')
 	})
 
-	test('seen is storage, not an outcome', () => {
+	test('seen is storage, not admission — the chain has not admitted it yet', () => {
 		const line = submissionLine({ phase: 'seen', amount: 1000, eventId: 'ev-1', acceptedBy: ['wss://a', 'wss://b'], totalRelays: 2 })!
-		expect(line.title).toContain('Bid seen on the read')
-		expect(line.detail).toContain('That is storage, not an outcome')
+		expect(line.title).toContain('Bid on the relays')
+		expect(line.detail).toContain('That is storage, not admission')
+		expect(line.detail).toContain('not read an admission fact naming this bid yet')
+		expect(line.title).not.toContain('admitted')
 	})
 
 	test('unpublished is a failure that names the relays’ answer', () => {
@@ -255,11 +261,12 @@ describe('submissionLine — what the bidder is told between click and relay', (
 		expect(submissionLine({ phase: 'idle' })).toBeNull()
 	})
 
-	test('not-accepted says the chain did not take it, names the locktime, and says no network', () => {
+	test('not-accepted says the chain has not admitted the bid, names the locktime, and says no network', () => {
 		const line = submissionLine({ phase: 'not-accepted', amount: 1000, eventId: 'ev-1', locktime: 1_794_999_999, reclaimable: true })!
-		expect(line.title).toContain('The chain did not accept this bid.')
+		expect(line.title).toContain('The chain has not admitted this bid.')
 		expect(line.detail).toContain('not a network problem')
-		expect(line.detail).toContain('the chain recorded no refusal for it')
+		expect(line.detail).toContain('no admission fact (arena.bidadmit.v1) names this bid')
+		expect(line.detail).toContain('will not invent one')
 		expect(line.detail).toContain('2026-11-18T11:06:39.000Z')
 		expect(line.detail).toContain('reclaim the locked sats')
 		expect(line.tone).toBe('warning')
@@ -296,7 +303,7 @@ describe('submissionLine — what the bidder is told between click and relay', (
 		expect(line.detail).toContain('nothing here says the bid was refused')
 	})
 
-	test('waiting for the chain is not a failure: it claims no verdict and no infrastructure', () => {
+	test('waiting for the chain is not a failure: it claims no admission and no infrastructure', () => {
 		const line = submissionLine({
 			phase: 'unconfirmed',
 			amount: 1000,
@@ -305,8 +312,8 @@ describe('submissionLine — what the bidder is told between click and relay', (
 			totalRelays: 2,
 			watchingSince: 1_700_000_000,
 		})!
-		expect(line.title).toContain('Waiting for the chain to confirm')
-		expect(line.detail).toContain('no verdict is not a refusal')
+		expect(line.title).toContain('Waiting for the chain to admit the bid')
+		expect(line.detail).toContain('no admission fact is not a refusal')
 		expect(line.detail).toContain('nothing here says the bid was refused')
 		expect(line.detail).toContain('keeps reading')
 		expect(line.detail).not.toContain('infrastructure problem')
@@ -398,5 +405,142 @@ describe('CatalogueDetailView — the bid slot', () => {
 		)
 		expect(html).not.toContain('arena-auction-detail-bid')
 		expect(html).not.toContain('arena-bid-panel')
+	})
+})
+
+// =========================================================================
+// The submission stepper
+// =========================================================================
+
+describe('bidSubmissionStepper — each step advances on its own fact', () => {
+	test('nothing submitted means no stepper at all', () => {
+		expect(bidSubmissionStepper({ phase: 'idle' })).toBeNull()
+	})
+
+	test('while the escrow is being locked the lock step is active and nothing else has succeeded', () => {
+		const stepper = bidSubmissionStepper({ phase: 'locking', amount: 1000 })!
+		expect(stepper.steps.map((step) => [step.key, step.status])).toEqual([
+			['lock', 'active'],
+			['publish', 'pending'],
+			['admit', 'pending'],
+		])
+		expect(stepper.active).toBe('lock')
+		expect(stepper.complete).toBe(false)
+	})
+
+	test('a lock alone does not light the publish step; an ACK alone does not light the admission step', () => {
+		const publishing = bidSubmissionStepper({ phase: 'publishing', amount: 1000 })!
+		expect(publishing.steps.map((step) => [step.key, step.status])).toEqual([
+			['lock', 'done'],
+			['publish', 'active'],
+			['admit', 'pending'],
+		])
+		expect(publishing.complete).toBe(false)
+
+		// The relay ACK is a storage fact, not an admission fact.
+		const presumed = bidSubmissionStepper({ phase: 'presumed', amount: 1000, eventId: 'ev-1', acceptedBy: ['wss://a'], totalRelays: 2 })!
+		expect(presumed.steps.map((step) => [step.key, step.status])).toEqual([
+			['lock', 'done'],
+			['publish', 'done'],
+			['admit', 'active'],
+		])
+		expect(presumed.active).toBe('admit')
+		expect(presumed.complete).toBe(false)
+	})
+
+	test('it never says the bid is in without an admission fact — seen and unconfirmed keep the admission step active', () => {
+		const seen: ArenaBidSubmissionState = { phase: 'seen', amount: 1000, eventId: 'ev-1', acceptedBy: ['wss://a'], totalRelays: 1 }
+		const unconfirmed: ArenaBidSubmissionState = {
+			phase: 'unconfirmed',
+			amount: 1000,
+			eventId: 'ev-1',
+			acceptedBy: ['wss://a'],
+			totalRelays: 1,
+			watchingSince: 1_700_000_000,
+		}
+		for (const state of [seen, unconfirmed]) {
+			const stepper = bidSubmissionStepper(state)!
+			expect(stepper.complete).toBe(false)
+			expect(stepper.steps.find((step) => step.key === 'admit')!.status).toBe('active')
+			// And the sentence the panel shows states no admission.
+			const line = submissionLine(state)!
+			expect(line.title).not.toContain('admitted this bid')
+			expect(line.tone).not.toBe('success')
+		}
+	})
+
+	test('an admission fact completes the stepper, and the admission step states the chain’s position', () => {
+		const stepper = bidSubmissionStepper({
+			phase: 'admitted',
+			amount: 1000,
+			eventId: 'ev-1',
+			acceptedBy: ['wss://a'],
+			totalRelays: 1,
+			admission: { position: 1105, highBid: 'high-1', height: 3490, blockHash: 'ab'.repeat(32) },
+		})!
+		expect(stepper.steps.map((step) => [step.key, step.status])).toEqual([
+			['lock', 'done'],
+			['publish', 'done'],
+			['admit', 'done'],
+		])
+		expect(stepper.complete).toBe(true)
+		expect(stepper.active).toBeNull()
+		expect(stepper.steps[2].detail).toContain('height 3490')
+		expect(stepper.steps[2].detail).toContain('1,105 sats')
+	})
+
+	test('a recorded refusal fails the admission step, in its own words', () => {
+		const stepper = bidSubmissionStepper({ phase: 'refused', amount: 1000, eventId: 'ev-1', reason: 'late', locktime: null, reclaimable: false })!
+		expect(stepper.steps.find((step) => step.key === 'admit')!.status).toBe('failed')
+		expect(stepper.complete).toBe(false)
+	})
+
+	test('a zero-ACK publish keeps the publish step failed and states whether the lock happened', () => {
+		const withoutLock = bidSubmissionStepper({ phase: 'unpublished', amount: 1000, eventId: null, reason: 'no relay' })!
+		expect(withoutLock.steps.find((step) => step.key === 'lock')!.status).toBe('pending')
+		expect(withoutLock.steps.find((step) => step.key === 'publish')!.status).toBe('failed')
+
+		const withLock = bidSubmissionStepper({ phase: 'unpublished', amount: 1000, eventId: null, reason: 'no relay', escrowLocked: true })!
+		expect(withLock.steps.find((step) => step.key === 'lock')!.status).toBe('done')
+	})
+})
+
+describe('BidStepper — the rendered indicator', () => {
+	test('the active step carries a spinning progress indicator and the others do not', () => {
+		const stepper: ArenaBidStepper = bidSubmissionStepper({
+			phase: 'presumed',
+			amount: 1000,
+			eventId: 'ev-1',
+			acceptedBy: ['wss://a'],
+			totalRelays: 2,
+		})!
+		const html = renderToStaticMarkup(createElement(BidStepper, { stepper }))
+		expect(html).toContain('data-slot="arena-bid-stepper"')
+		expect(html).toContain('data-active="admit"')
+		expect(html).toContain('data-step="admit" data-status="active"')
+		expect(html).toContain('animate-spin')
+		expect(html).toContain('role="progressbar"')
+		// The done lock step shows a tick, not a spinner.
+		expect(html).toContain('data-step="lock" data-status="done"')
+	})
+
+	test('the panel renders the stepper for a submission and omits it when idle', () => {
+		const withSteps = panel({ submission: { phase: 'publishing', amount: 1000 } })
+		expect(withSteps).toContain('data-slot="arena-bid-stepper"')
+		expect(withSteps).toContain('Relay publish')
+		expect(withSteps).toContain('Validator confirmation')
+		expect(withSteps).toContain('data-active="publish"')
+
+		const idle = panel({ submission: { phase: 'idle' } })
+		expect(idle).not.toContain('data-slot="arena-bid-stepper"')
+	})
+
+	test('the stepper’s admission step is never done in markup unless the state is admitted', () => {
+		const html = panel({
+			submission: { phase: 'seen', amount: 1000, eventId: 'ev-1', acceptedBy: ['wss://a'], totalRelays: 1 },
+		})
+		expect(html).toContain('data-step="admit" data-status="active"')
+		expect(html).not.toContain('data-step="admit" data-status="done"')
+		expect(html).not.toContain('data-complete="true"')
 	})
 })
