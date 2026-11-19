@@ -14,6 +14,9 @@
 	/* Values come from `catalogue-preset.ts` (catalogueCssVars), which carries the
 	 * extraction's citations; the stylesheet only consumes them. */
 	font-family: var(--cat-serif);
+	/* Own ink, so a card's title never inherits a surrounding theme's text
+	   colour (a light title on a light card inside the dark Arena chrome). */
+	color: var(--cat-ink);
 	min-height: 100vh;
 }
 

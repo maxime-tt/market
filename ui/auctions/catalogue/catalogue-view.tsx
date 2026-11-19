@@ -1,5 +1,5 @@
 import './catalogue-theme.css'
-import { catalogueCssVars } from './catalogue-preset'
+import { catalogueCssVars, type CatalogueMode } from './catalogue-preset'
 import {
 	bidCountLabel,
 	priceLine,
@@ -37,6 +37,8 @@ import {
  * eventually disagree with the first.
  */
 export interface CatalogueViewProps {
+	/** Light (default) or the Arena dark tokens (`catalogue-preset.ts`). */
+	mode?: CatalogueMode
 	/** The lots the host selected, already projected to the read-model. */
 	cards: readonly ArenaAuctionCardModel[]
 	/** The read's five-word state, so a count never reads as a finished verdict. */
@@ -111,6 +113,8 @@ export function CatalogueLotCard({ card, status, now, href }: CatalogueLotCardPr
 }
 
 export interface CatalogueCardsProps {
+	/** Light (default) or the Arena dark tokens (`catalogue-preset.ts`). */
+	mode?: CatalogueMode
 	/** The lots to render, already projected to the read-model. */
 	cards: readonly ArenaAuctionCardModel[]
 	/** The read's five-word state. */
@@ -131,9 +135,9 @@ export interface CatalogueCardsProps {
  * `.cat` token root, with the page's full-viewport `min-height` overridden to 0
  * so the tokens apply without the section claiming a screen.
  */
-export function CatalogueCards({ cards, status, relayHealth, now, hrefFor }: CatalogueCardsProps) {
+export function CatalogueCards({ cards, status, relayHealth, now, hrefFor, mode = 'light' }: CatalogueCardsProps) {
 	return (
-		<div className="cat" style={{ ...catalogueCssVars('light'), minHeight: 0 }}>
+		<div className="cat" style={{ ...catalogueCssVars(mode), minHeight: 0 }}>
 			<div
 				className="cat__grid"
 				data-testid="catalogue-grid"
@@ -149,9 +153,9 @@ export function CatalogueCards({ cards, status, relayHealth, now, hrefFor }: Cat
 	)
 }
 
-export function CatalogueView({ cards, status, relayHealth, now, hrefFor }: CatalogueViewProps) {
+export function CatalogueView({ cards, status, relayHealth, now, hrefFor, mode = 'light' }: CatalogueViewProps) {
 	return (
-		<div className="cat" style={catalogueCssVars('light')}>
+		<div className="cat" style={catalogueCssVars(mode)}>
 			<div className="cat__wrap">
 				<p className="cat__banner" data-testid="catalogue-escrow-notice">
 					Sats are locked in escrow until the lot closes: they go to the seller if you win, and come back to you otherwise.

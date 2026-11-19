@@ -359,7 +359,14 @@ export function ArenaAuctionsListHost({
 							{partialNotice}
 						</p>
 					)}
-					<CatalogueView cards={cards} status={status} relayHealth={relayHealth} now={now} hrefFor={(card) => arenaAuctionHref(card.d)} />
+					<CatalogueView
+						mode="dark"
+						cards={cards}
+						status={status}
+						relayHealth={relayHealth}
+						now={now}
+						hrefFor={(card) => arenaAuctionHref(card.d)}
+					/>
 				</>
 			) : filteredToNothing ? (
 				<div
