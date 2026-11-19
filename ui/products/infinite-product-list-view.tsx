@@ -69,7 +69,11 @@ export function InfiniteProductListView<TProduct extends InfiniteProductListItem
 			<div className={cn('w-full max-w-full overflow-hidden', className)} ref={ref}>
 				{title && (
 					<div className="mb-4">
-						{typeof title === 'string' ? <h1 className="text-xl text-center sm:text-2xl sm:text-left">{title}</h1> : title}
+						{typeof title === 'string' ? (
+							<h1 className="font-heading text-[2rem] sm:text-[2.6rem] text-center sm:text-left">{title}</h1>
+						) : (
+							title
+						)}
 					</div>
 				)}
 				<LoadingState label="Loading products..." className="min-h-[60vh]" data-testid="infinite-product-list-loading" />
@@ -92,7 +96,11 @@ export function InfiniteProductListView<TProduct extends InfiniteProductListItem
 			{/* Title */}
 			{title && (
 				<div className="mb-4">
-					{typeof title === 'string' ? <h1 className="text-xl text-center sm:text-2xl sm:text-left">{title}</h1> : title}
+					{typeof title === 'string' ? (
+						<h1 className="font-heading text-[2rem] sm:text-[2.6rem] text-center sm:text-left">{title}</h1>
+					) : (
+						title
+					)}
 				</div>
 			)}
 

@@ -13,11 +13,18 @@
 
 /**
  * Whether a path renders in the Arena chrome (`styles/arena-chrome.css`): the
- * auction routes and the home / Browse surface at `/`. The root layout puts
+ * home / Browse surface at `/`, the auction routes, and the product list and
+ * product pages (ADR-0024). The root layout puts
  * `.arena-chrome` on its wrapper for these paths, which rebinds the theme
  * tokens to Arena's dark values for the app bar, the footer, the Browse nav and
  * the search field without changing their markup.
  */
 export function usesArenaChrome(pathname: string): boolean {
-	return pathname === '/' || pathname === '/auctions' || pathname.startsWith('/auctions/')
+	return (
+		pathname === '/' ||
+		pathname === '/auctions' ||
+		pathname.startsWith('/auctions/') ||
+		pathname === '/products' ||
+		pathname.startsWith('/products/')
+	)
 }

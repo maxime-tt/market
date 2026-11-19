@@ -205,7 +205,12 @@ function ProductsRoute() {
 			</div>
 
 			<div className="flex flex-col gap-6 items-center">
-				<Button variant="secondary" size="lg" onClick={handleStartSelling} className="bg-focus rounded hover:bg-focus-foreground-hover">
+				<Button
+					variant="secondary"
+					size="lg"
+					onClick={handleStartSelling}
+					className="bg-fill-ink hover:bg-fill-ink-hover px-6 rounded-full h-11 font-semibold text-on-fill-ink text-xs tracking-[0.06em]"
+				>
 					<span className="flex items-center gap-2">
 						<span className="size-6 i-nostr" />
 						Start Selling
@@ -278,7 +283,7 @@ function ProductsRoute() {
 			{isHomepageSlide ? (
 				// Homepage hero styling with random product background
 				<div
-					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? 'bg-hero-image' : 'bg-surface-hover'}`}
 					style={heroBackgroundStyle(marketBackgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
@@ -294,7 +299,7 @@ function ProductsRoute() {
 			) : (
 				// Product hero styling (existing product page style)
 				<div
-					className={`relative hero-container-carousel ${backgroundImageUrl ? 'bg-hero-image' : 'bg-gray-700'}`}
+					className={`relative hero-container-carousel ${backgroundImageUrl ? 'bg-hero-image' : 'bg-surface-hover'}`}
 					style={heroBackgroundStyle(backgroundImageUrl)}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
@@ -309,7 +314,7 @@ function ProductsRoute() {
 				</div>
 			)}
 			{/* Tag Filter Bar */}
-			<div className="top-0 z-20 sticky bg-off-black shadow-sm border-b">
+			<div className="top-0 z-20 sticky bg-surface-sunken/90 backdrop-blur border-border-default border-b">
 				<div className="flex justify-between items-center gap-4 px-4 py-3">
 					<div className="flex-1 overflow-x-auto">
 						<div className="flex items-center gap-2 min-w-max">

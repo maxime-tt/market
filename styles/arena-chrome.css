@@ -2,9 +2,10 @@
  * Arena chrome: the app header, footer and Browse surface (nav, search field,
  * results) in the Plebeian Auctions Arena look.
  *
- * The root layout puts `.arena-chrome` on its wrapper for the auction routes
- * and the home / Browse surface (platform/web/layout/appChrome.ts,
- * `usesArenaChrome`). Every component under it keeps its own markup and
+ * The root layout puts `.arena-chrome` on its wrapper for the home / Browse
+ * surface, the auction routes and the products routes (`/products`,
+ * `/products/*`) — see platform/web/layout/appChrome.ts, `usesArenaChrome`,
+ * and ADR-0024. ADR-0023 plans to feed these values from the theme registry. Every component under it keeps its own markup and
  * tokens; this file only rebinds the token values inside the scope, the same
  * way `.dark` does in globals.css. Colours come from the Arena demo
  * (web/src/template.css). Fonts are the bundled ones in styles/fonts.css —

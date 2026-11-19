@@ -11,6 +11,8 @@ Accepted — Plebeian Reckless test instance
 ## Related
 
 - ADR-019: Unified storefront identity and page builder
+- ADR-0023: One theme for app chrome and storefront
+- ADR-0024: Products pages in the Arena chrome
 - `styles/admin-theme.css` — the console scope and its tokens
 - `ui/admin-theme/` — appearance model and the Appearance control
 - `platform/web/admin-theme/useAdminAppearance.ts` — per-admin storage
@@ -72,5 +74,12 @@ Business at the front, party at the back:
 - Legacy hard-coded utility classes (for example `bg-white`, `border-black`,
   `bg-pink-500`) are remapped inside the console only, never inside the
   preview, so older screens follow the console theme without edits.
+- **Icons, not emoji.** Dashboard stats and quick actions use lucide icons
+  on a small rounded tile (`ui/dashboard/dashboard-icon-tile.tsx`) tinted
+  with `fill-accent`, so they follow each admin's colour.
+- **Image uploader.** `ImageUploader` is one rounded card with a dashed drop
+  zone, a pill server picker and a borderless URL row, all in tokens. It
+  takes an `aspect` (`video`, `banner` for profile headers, `square` for
+  avatars) so the preview matches the real shape.
 - Owners may later be allowed to customise the console default. Until then it
   is the same for every instance.

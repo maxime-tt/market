@@ -87,6 +87,10 @@ When you first start the application:
    bun seed
    ```
 
+## Theming
+
+The public site, dashboard and storefront pages each have their own theme, all with bundled fonts and no third-party hosts. See the [theming guide](docs/theming.md) for tokens, scopes and Puck blocks.
+
 ## React Query
 
 This project uses TanStack React Query (v5) for data fetching, caching, and state management. React Query helps with:
