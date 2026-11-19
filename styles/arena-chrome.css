@@ -634,3 +634,43 @@
 		border-color: var(--arena-line);
 	}
 }
+
+/* --- Cart and other sheets ----------------------------------------------------
+ * Sheets are portalled onto <body>, which carries `.arena-chrome` on public
+ * pages. Hairline borders, a serif title, pill buttons and a calm notice.
+ * ------------------------------------------------------------------------- */
+
+.arena-chrome [data-slot='sheet-content'],
+.arena-chrome [data-slot='sheet-content'] * {
+	border-color: var(--arena-line);
+}
+
+.arena-chrome [data-slot='sheet-content'] {
+	background: var(--arena-bg);
+}
+
+.arena-chrome [data-slot='sheet-title'] {
+	font-family: var(--font-display);
+	font-weight: 400;
+	font-size: 30px;
+	line-height: 1.05;
+	letter-spacing: -0.01em;
+}
+
+.arena-chrome [data-slot='sheet-content'] [data-slot='button'] {
+	border-radius: 999px;
+}
+
+.arena-chrome [data-slot='sheet-content'] .border-error-border {
+	border-color: color-mix(in srgb, var(--color-error, #ef4444) 60%, transparent);
+}
+
+.arena-chrome [data-slot='sheet-content'] .bg-warning-muted {
+	background: var(--arena-surface);
+	border-radius: 16px;
+	border-left-color: var(--arena-lime);
+}
+
+.arena-chrome [data-slot='sheet-content'] .bg-warning-muted .text-warning-foreground {
+	color: var(--arena-ink);
+}
