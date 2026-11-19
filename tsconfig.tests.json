@@ -1,0 +1,14 @@
+{
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"tsBuildInfoFile": "./.tscache/tests.tsbuildinfo"
+	},
+	"include": [
+		"**/*.test.ts",
+		"**/*.test.tsx",
+		"e2e/**/*.ts",
+		"widget-book/**/*.ts",
+		"widget-book/**/*.tsx",
+		"scripts/**/*.ts"
+	]
+}

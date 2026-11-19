@@ -1,0 +1,17 @@
+{
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"tsBuildInfoFile": "./.tscache/src.tsbuildinfo"
+	},
+	"include": [
+		"sdk/**/*.ts",
+		"sdk/**/*.tsx",
+		"ui/**/*.ts",
+		"ui/**/*.tsx",
+		"platform/**/*.ts",
+		"platform/**/*.tsx",
+		"contextvm/**/*.ts",
+		"styles/**/*.ts"
+	],
+	"exclude": ["**/*.test.ts", "**/*.test.tsx"]
+}

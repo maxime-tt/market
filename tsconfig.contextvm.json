@@ -1,0 +1,7 @@
+{
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"tsBuildInfoFile": "./.tscache/contextvm.tsbuildinfo"
+	},
+	"include": ["contextvm/**/*.ts", "contextvm/**/*.tsx"]
+}

@@ -1,0 +1,7 @@
+{
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"tsBuildInfoFile": "./.tscache/ui.tsbuildinfo"
+	},
+	"include": ["ui/**/*.ts", "ui/**/*.tsx"]
+}
