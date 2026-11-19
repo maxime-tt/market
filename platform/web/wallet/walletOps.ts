@@ -110,6 +110,9 @@ export interface WalletDevAuctionBidResult {
 
 const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')
 
+/** The wallet's unit. coco defaults to `sat`; the app is sat-only, so it is named once here. */
+const WALLET_UNIT = 'sat'
+
 const getDevTestMintCandidates = (preferredMintUrl?: string): string[] => {
 	const normalizedPreferredMint = preferredMintUrl ? normalizeMintUrl(preferredMintUrl) : ''
 	const preferred = normalizedPreferredMint && WALLET_DEV_TEST_MINTS.includes(normalizedPreferredMint) ? [normalizedPreferredMint] : []
@@ -847,15 +850,22 @@ export const walletOps = {
 				const { cashuWallet, keysetId } = await createCashuWalletForMint(targetMint)
 				// cashu-ts v5: create the BOLT11 quote on the mint client, then mint from it
 				// through the wallet's method-specific helper.
-				const quote = await cashuWallet.mint.createMintQuoteBolt11({ amount: mintAmount, unit: 'sat' })
+				const quote = await cashuWallet.mint.createMintQuoteBolt11({ amount: mintAmount, unit: WALLET_UNIT })
 				const proofs = await cashuWallet.mintProofsBolt11(mintAmount, quote, keysetId ? { keysetId } : undefined)
 
 				if (!proofs.length) {
 					throw new Error('Mint returned no proofs')
 				}
 
+				// cashu-ts v5 mints a proof as `{ id, amount, secret, C, dleq? }`: it carries
+				// neither the unit nor the proof state. The store's write path is coco's own
+				// proof repository (`cashuWalletSource.state.update` → coco `proofRepository`),
+				// which rejects a unit-less proof outright — `normalizeUnit(proof.unit)` throws
+				// "Unit is required" — and only counts a proof whose `state` is `ready` toward
+				// the balance. So the two fields coco's own `mapProofToCoreProof` attaches are
+				// stamped here, at the point where these proofs enter coco.
 				await wallet.state.update({
-					store: proofs,
+					store: proofs.map((proof) => ({ ...proof, unit: WALLET_UNIT, state: 'ready' as const })),
 					mint: targetMint,
 				})
 
