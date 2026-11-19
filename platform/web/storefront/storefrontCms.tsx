@@ -477,6 +477,7 @@ export const storefrontCmsConfig: Config = {
 					options: [
 						{ label: 'My auctions', value: 'mine' },
 						{ label: 'Hand-picked', value: 'picked' },
+						{ label: 'All marketplace auctions', value: 'all' },
 					],
 				},
 				auctionCoordinates: {

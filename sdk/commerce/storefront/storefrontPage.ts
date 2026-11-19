@@ -330,8 +330,12 @@ export const AuctionListBlockSchema = z.object({
 	props: z.object({
 		...blockBase,
 		title: shortText.default(''),
-		/** `mine` = the page author's auctions; `picked` = the explicit coordinates below. */
-		source: z.enum(['mine', 'picked']).default('mine'),
+		/**
+		 * `mine` = the page author's auctions; `picked` = the explicit
+		 * coordinates below; `all` = every auction the read delivers, live ones
+		 * first (a marketplace front page, whose author sells nothing).
+		 */
+		source: z.enum(['mine', 'picked', 'all']).default('mine'),
 		/** Ordered explicit references, used when `source` is `picked`. */
 		auctionCoordinates: z.array(auctionCoordinateRef).max(30).default([]),
 		limit: z.number().int().min(1).max(30).default(6),
