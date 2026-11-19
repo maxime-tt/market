@@ -231,6 +231,8 @@ function health(over: Partial<ArenaReadHealth> = {}): ArenaReadHealth {
 		relays,
 		eose: [],
 		answered: [],
+		refused: [],
+		unreachable: [],
 		pending: [],
 		failed: [],
 		noRelaysReachable: relays.length === 0,
@@ -619,16 +621,20 @@ describe('collectArenaSurfacesRead', () => {
 		expect(card.relayCount).toBe(2)
 	})
 
-	test('one dead relay keeps the data and reports the read incomplete', async () => {
+	test('one dead relay keeps the data and is accounted, so the read settles', async () => {
 		const read = readFrom({
 			'wss://a': { events: [createEvent({ id: 'create-1' })] },
 			'wss://b': { fail: 'connection refused' },
 		})
 		const state = await collectArenaSurfacesRead(read)
-		expect(state.status).toBe('incomplete')
+		// The connection failure is an answer about that relay, not silence: the
+		// read has nothing left to wait on, so the surface may state the lot's phase.
+		expect(state.status).toBe('settled')
 		expect(state.relayHealth).toEqual({ answered: 1, total: 2 })
 		expect(state.snapshot?.auctions).toHaveLength(1)
 		expect(state.snapshot?.health.failed).toEqual(['wss://b'])
+		expect(state.snapshot?.health.unreachable).toEqual(['wss://b'])
+		expect(state.snapshot?.health.pending).toEqual([])
 	})
 
 	test('no relays configured answers "nothing", not "no auctions"', async () => {

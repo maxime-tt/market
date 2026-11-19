@@ -24,9 +24,13 @@
  * ## What "honest" means at this seam
  *
  * {@link auctionListStatus} maps the read's health to one of five states and
- * never invents a sixth. `incomplete` is returned whenever any relay did not
- * answer — including a relay that closed without EOSE — because a read that
- * has not heard from every relay has no verdict about what exists.
+ * never invents a sixth. `incomplete` is returned while any relay has **not been
+ * heard from at all** — a relay that refused the subscription (a `CLOSED` naming
+ * a filter error, a refusal `NOTICE`) or that could not be reached has answered
+ * the question "will you serve this read?" and is a settled fact about that
+ * relay, not silence. A read that has not heard from a relay it may still hear
+ * from has no verdict about what exists; one that has heard from every relay is
+ * `settled` and may state the lot's phase.
  *
  * The end time is derived from the **root** create's `created_at`
  * (`rootCreatedAt`, added to the view for this reason): the canonical version's
@@ -74,7 +78,10 @@ export interface AuctionListData {
  * The read's health as the one word the block renders.
  *
  * Order matters: `aborted` outranks everything (the result is partial by
- * construction), then "nobody answered", then any relay still pending.
+ * construction), then "nobody answered", then any relay still **unheard from**.
+ * A relay that refused the subscription or that could not be reached is not in
+ * `pending` — it is accounted for — so a read in which every relay is answered,
+ * refused or unreachable is `settled`.
  */
 export function auctionListStatus(health: ArenaReadHealth): AuctionListStatus {
 	if (health.aborted) return 'incomplete'

@@ -55,13 +55,18 @@
  * | condition                       | what happens                                                        | what the caller sees |
  * | ------------------------------- | ------------------------------------------------------------------- | -------------------- |
  * | no relay configured             | nothing is opened                                                   | `caught-up` at once; `health.noRelaysReachable === true`; `auctions: []` |
- * | every relay unreachable/errors  | each pump fails independently, nothing throws out of the read        | empty snapshot, `health.relays[*].status === 'error'` |
- * | one relay down, others healthy  | the dead pump ends, the others keep delivering; no stall             | full data; `health.relays[dead].status === 'error'`, `health.pending` names it |
+ * | every relay unreachable/errors  | each pump fails independently, nothing throws out of the read        | empty snapshot, `health.relays[*].status === 'unreachable'`/`'error'` |
+ * | one relay down, others healthy  | the dead pump ends, the others keep delivering; no stall             | full data; `health.relays[dead].status === 'unreachable'`, `health.unreachable` names it |
  * | one relay slow / never EOSE     | it is dropped at `deadlineMs`, the others already delivered          | partial data at the deadline; that relay is `'timeout'`, in `health.pending` |
+ * | one relay refuses the filter    | it CLOSEs with a reason (or NOTICEs a refusal); no follow-up REQ is opened on it | `health.relays[refuser].status === 'refused'`; `health.refused` names it; **not** pending |
  * | one relay lying                 | its events go through the same gate as everyone's: wrong kind, bad JSON, missing anchor, a 1440 update that changes an immutable field | dropped and counted in `health.relays[relay].refusals` + `snapshot.refusals`; never in `auctions` |
  *
- * `health.answered` is the field that answers "did this relay answer?". Two
- * measured caveats, both pinned by tests rather than papered over:
+ * `health.answered` is the field that answers "did this relay deliver data?".
+ * `health.pending` is the field that answers "is a relay still to be heard
+ * from?" — and it names **only** the silent ones. A relay that refused the
+ * subscription, or that could not be reached, is a settled fact about that relay
+ * (`health.refused` / `health.unreachable`) and never holds the read open. Three
+ * measured caveats, all pinned by tests rather than papered over:
  *
  * - the web transport does not always surface EOSE, so `health.eose` may be
  *   empty on a healthy read; a relay that delivered events is `answered`
@@ -69,7 +74,12 @@
  * - on a **bounded** read (`snapshot`) the transport's `fetchEvents` turns a
  *   connection failure into an empty array, so a silent relay is
  *   indistinguishable from an empty one. `events()` is the live read and keeps
- *   the distinction; reach for it when it matters.
+ *   the distinction; reach for it when it matters;
+ * - the refusal/unreachable classification is the **transport's**, kept a margin
+ *   under this read's deadline (`TRANSPORT_SETTLE_MARGIN_MS`) so it arrives
+ *   before the read gives up on a relay. Without that margin the two timers race
+ *   and a relay that had already answered "no" is recorded `timeout` — the bug
+ *   this distinction exists to kill.
  *
  * `snapshot()` therefore **never rejects** because of the network; it resolves
  * with what arrived and a `health` that says what did not. It rejects only when
@@ -795,11 +805,28 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 // The projection: decoded events → canonical auction state
 // =========================================================================
 
-export type ArenaRelayStatus = 'ok' | 'timeout' | 'error' | 'closed'
+/**
+ * What the read learned about one relay.
+ *
+ * Two of these are **settled facts about the relay** and not silence, which is
+ * the distinction this enum exists for:
+ *
+ * - `ok` — it answered (an event, or an EOSE);
+ * - `refused` — it answered with a refusal (`CLOSED` naming a filter error, or a
+ *   refusal `NOTICE`/relay-closed `ERROR`): it cannot serve this subscription;
+ * - `unreachable` — the connection failed or never established, after the
+ *   transport's own retries;
+ * - `timeout` — it never said anything by the deadline. **Only this one is
+ *   silence**, and only this one keeps a read `incomplete`;
+ * - `error` — the pump threw (a connection failure the transport did not name);
+ * - `closed` — the stream ended without answering and without either of the
+ *   above (the pre-read default too).
+ */
+export type ArenaRelayStatus = 'ok' | 'refused' | 'unreachable' | 'timeout' | 'error' | 'closed'
 
 export interface ArenaRelayHealth {
 	url: string
-	/** `ok`: answered. `timeout`: hit the deadline. `error`: the pump threw. `closed`: ended without EOSE. */
+	/** See {@link ArenaRelayStatus}. */
 	status: ArenaRelayStatus
 	events: number
 	refusals: number
@@ -819,7 +846,15 @@ export interface ArenaReadHealth {
 	eose: string[]
 	/** Relays that answered in the only sense that matters: an event, or an EOSE. */
 	answered: string[]
-	/** Relays that neither answered nor produced data — the ones that stalled. */
+	/** Relays that answered with a refusal: they cannot serve this subscription. */
+	refused: string[]
+	/** Relays whose connection failed or never established — unreachable, not silent. */
+	unreachable: string[]
+	/**
+	 * Relays we have **not heard from at all** — the only ones that keep a read
+	 * `incomplete`. A relay that refused, or that could not be reached, is
+	 * accounted for and is *not* here (see {@link refused} / {@link unreachable}).
+	 */
 	pending: string[]
 	/** Relays whose subscription threw. */
 	failed: string[]
@@ -1080,11 +1115,20 @@ function summarizeHealth(relays: ArenaRelayHealth[], aborted: boolean): ArenaRea
 	// relay that streams events and then drops is `answered` and `failed`). A
 	// read that received events must never report `no-relays`.
 	const answered = relays.filter((r) => r.status === 'ok' || r.events > 0).map((r) => r.url)
-	const pending = relays.filter((r) => !answered.includes(r.url)).map((r) => r.url)
+	// A relay that answered with a refusal, or that could not be reached, has
+	// **answered the question "will you serve this subscription?"**. It is a
+	// settled fact about that relay — not silence — so it must not hold the read
+	// open. `timeout` (and the pre-read `closed`) are the silence.
+	const refused = relays.filter((r) => r.status === 'refused').map((r) => r.url)
+	const unreachable = relays.filter((r) => r.status === 'unreachable' || r.status === 'error').map((r) => r.url)
+	const accountedFor = new Set([...answered, ...refused, ...unreachable])
+	const pending = relays.filter((r) => !accountedFor.has(r.url)).map((r) => r.url)
 	return {
 		relays,
 		eose,
 		answered,
+		refused,
+		unreachable,
 		pending,
 		failed,
 		noRelaysReachable: relays.length === 0 || answered.length === 0,
@@ -1522,8 +1566,10 @@ export interface ArenaAuctionReadInit {
 	openRelay: ArenaRelayOpenFactory
 	/**
 	 * Per-relay settle deadline, in ms. A relay that has not answered by then is
-	 * dropped and reported `'timeout'`; the read returns what it already has.
-	 * Defaults to 8000, matching `createWebRelayReadContext`'s own default.
+	 * dropped and reported `'timeout'`; the read returns what it already has. The
+	 * production transport is given a slightly shorter bound
+	 * ({@link TRANSPORT_SETTLE_MARGIN_MS}) so its refusal/unreachable
+	 * classification arrives before this deadline. Defaults to 8000.
 	 */
 	deadlineMs?: number
 	/**
@@ -1550,8 +1596,9 @@ export type ArenaReadStreamItem =
 export interface ArenaAuctionRead {
 	/**
 	 * Live read: opens synchronously, delivers decoded events in batches as
-	 * relays produce them, emits one `caught-up` once every relay has answered,
-	 * failed or been dropped at the deadline — then keeps delivering. A relay the
+	 * relays produce them, emits one `caught-up` once every relay has been
+	 * **accounted for** — it answered, refused the subscription, was unreachable,
+	 * or was dropped at the deadline — then keeps delivering. A relay the
 	 * transport gave up on but which then answers is counted as answered. Ends
 	 * when aborted or `close()`d.
 	 */
@@ -1676,10 +1723,10 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 
 				/**
 				 * A relay that **answered**: settle it `'ok'`, or upgrade a relay already
-				 * given up on (`'timeout'`/`'closed'`) when it answers late — the answer is
-				 * a fact, the give-up was a guess. Only an event or an EOSE reaches here;
-				 * a stream merely ending does not, so a relay dropped at the deadline
-				 * cannot be upgraded by its own teardown.
+				 * given up on (`'timeout'`, `'refused'`, `'unreachable'`) when it answers
+				 * late — the answer is a fact, the give-up was a guess. Only an event or
+				 * an EOSE reaches here; a stream merely ending does not, so a relay
+				 * dropped at the deadline cannot be upgraded by its own teardown.
 				 */
 				function answer(url: string): void {
 					const entry = mutable.get(url)
@@ -1719,7 +1766,14 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 					const key = JSON.stringify(filters)
 					if (openedFilters.has(key)) return
 					openedFilters.add(key)
-					for (const url of relays) pump(url, filters)
+					for (const url of relays) {
+						// A relay that refused the base subscription (or that could not be
+						// reached) cannot serve a follow-up REQ either: opening one asks a
+						// closed door, and the refusal is already a settled fact.
+						const entry = mutable.get(url)
+						if (entry !== undefined && (entry.status === 'refused' || entry.status === 'unreachable' || entry.status === 'error')) continue
+						pump(url, filters)
+					}
 					// A follow-up opened after the base pumps ended: the read is not done.
 					allDone = false
 				}
@@ -1755,21 +1809,33 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 										markSubscriptionSettled(subscription)
 										return
 									}
-									// Live read: only a relay that has actually spoken is settled
-									// here. A marker with no EOSE and nothing delivered is the
-									// transport giving up, not the relay answering — its stream is
-									// still live, so keep reading rather than recording a `timeout`
-									// the relay never earned. Measured 2026-11-19 on the live page:
-									// the app relay's first kind-1440 EVENT arrived at 8759 ms, after
-									// the transport's 8 s fallback; the relay that carries the lot was
-									// recorded `timeout`, the read closed, and the notice said no
-									// relay answered for a lot that exists.
+									// Live read: a relay that has actually spoken is settled here.
+									// A relay that refused the subscription, or that could not be
+									// reached, has also answered — with "no" — and is a settled fact
+									// about it, so it must not hold the read open
+									// (`sdk/core/event-store/read.ts`, `CaughtUpInfo.refused` /
+									// `.unreachable`). A relay the transport merely gave up on but
+									// which is still connected and silent is *not* settled: it could
+									// still answer. Measured 2026-11-19 on the live page: the app
+									// relay's first kind-1440 EVENT arrived at 8759 ms, after the
+									// transport's 8 s fallback; recording that relay `timeout` closed
+									// the read and the notice said no relay answered for a lot that
+									// exists.
 									if (eoseReported || (entry?.events ?? 0) > 0) {
 										answer(url)
 										// The relay answered this REQ; its boundary is reached even
 										// though the live stream keeps delivering.
 										markSubscriptionSettled(subscription)
-									} else if (entry !== undefined) entry.givenUp = true
+									} else {
+										const refusal = item.info.refused?.find((fact) => fact.relay === url)
+										if (refusal !== undefined) {
+											settle(url, 'refused', refusal.reason)
+											markSubscriptionSettled(subscription)
+										} else if (item.info.unreachable?.includes(url) === true) {
+											settle(url, 'unreachable')
+											markSubscriptionSettled(subscription)
+										} else if (entry !== undefined) entry.givenUp = true
+									}
 									continue
 								}
 								const decoded = decodeArenaEvent(item.event, url)
@@ -1787,6 +1853,11 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 							}
 							if (bounded && entry !== undefined) entry.eose = true
 							const answeredOnEnd = bounded || entry?.eose === true || (entry?.events ?? 0) > 0
+							// The stream ended without an EOSE and without an event. That is
+							// **not** an answer: a transport that failed to connect records
+							// `unreachable` for the relay itself before its stream ends, so an
+							// unclassified end here stays `'closed'` (silence) and the deadline
+							// decides — never an upgrade to "answered".
 							settle(url, answeredOnEnd ? 'ok' : 'closed')
 							markSubscriptionSettled(subscription)
 						} catch (error) {
@@ -1929,12 +2000,30 @@ export interface WebArenaAuctionReadInit {
 }
 
 /**
+ * The transport's per-relay settle bound, kept a margin **under** the read's
+ * deadline. At that bound the transport classifies each relay it has not heard
+ * from: a relay whose socket never opened is `unreachable`, a relay that
+ * connected and stayed silent is `pending`. The read needs that verdict before
+ * it gives up, or the two timers race and a relay that had already answered "no"
+ * is recorded `timeout` — which is the bug this margin kills (measured
+ * 2026-11-19: the read's 8 s deadline and the transport's 8 s fallback fired
+ * within 8 ms of each other).
+ */
+export const TRANSPORT_SETTLE_MARGIN_MS = 1200
+
+/** The transport's per-relay settle bound for a read with `deadlineMs`; never under a second. */
+function transportDeadline(deadlineMs: number): number {
+	return Math.max(1000, deadlineMs - TRANSPORT_SETTLE_MARGIN_MS)
+}
+
+/**
  * The production read: one `EventReadContext` **per relay** over the SDK seam
  * (`platform/web/sdkNostrIo.ts` → `sdk/core/nostr-io`), which is what makes the
  * per-relay diff possible. This is the only import of a transport in this
  * module, and it is deliberately at the edge rather than inside the reducer.
  */
 export function createWebArenaAuctionRead(init: WebArenaAuctionReadInit): ArenaAuctionRead {
+	const deadlineMs = init.deadlineMs ?? DEFAULT_DEADLINE_MS
 	return createArenaAuctionRead({
 		relays: init.relays,
 		deadlineMs: init.deadlineMs,
@@ -1942,7 +2031,9 @@ export function createWebArenaAuctionRead(init: WebArenaAuctionReadInit): ArenaA
 		followUpFilters: init.followUpFilters,
 		openRelay: (url) => {
 			const context = createWebRelayReadContext(init.store, [url], {
-				deadlineMs: init.deadlineMs ?? DEFAULT_DEADLINE_MS,
+				// The transport settles and classifies first; the read's own deadline
+				// stays the bound a silent relay is held to.
+				deadlineMs: transportDeadline(deadlineMs),
 			})
 			return (filters, options) => context.stream(filters, options)
 		},

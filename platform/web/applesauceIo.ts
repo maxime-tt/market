@@ -20,11 +20,12 @@
  * instead. Unregistered access fails closed with a typed refusal rather than
  * falling back to any bridge.
  */
-import { RelayGroup, RelayPool } from 'applesauce-relay'
+import { RelayGroup, RelayPool, type Relay } from 'applesauce-relay'
 import type { GroupReqMessage } from 'applesauce-relay'
+import { normalizeURL } from 'applesauce-core/helpers/url'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { Filter } from 'nostr-tools'
-import type { EventStreamItem } from '@sdk/core/event-store'
+import type { CaughtUpRefusal, EventStreamItem } from '@sdk/core/event-store'
 import type { SignerCapability } from '@sdk/core/signer'
 
 import { getMainRelay, getWriteRelays, isAppRelayWritesOnly, ndkStore } from '@platform/web/ndk/ndkStore'
@@ -366,6 +367,30 @@ export const applesauceIo: NostrIo = {
 }
 
 /**
+ * The connection truth of one relay, as the transport's own pool can see it.
+ * Used at the settle bound to tell a relay that never connected (unreachable)
+ * from one that connected and stayed silent (pending).
+ */
+export interface RelayConnectorState {
+	/** The relay's socket is open. */
+	connected: boolean
+	/** The last connection error the pool recorded, or null. */
+	error: unknown
+}
+
+/**
+ * A `NOTICE` that says the relay will not serve the REQ — as opposed to a
+ * courtesy notice ("welcome", an upgrade hint), which is not an answer either
+ * way. Deliberately narrow: a notice that matches settles the relay `refused`.
+ * Measured live 2026-11-19: `relay.minibits.cash` answers a `#auction` REQ with
+ * `NOTICE ["ERROR: bad req: unindexed tag filter"]` and never CLOSEs.
+ */
+const RELAY_REFUSAL_NOTICE = /bad req|unindexed|does not (?:accept|request)|\bdenied\b|\brestricted\b|not (?:allowed|supported)/i
+
+/** The last relay-refusal notice per relay, or null. Injectable; defaults to the shared pool's relay. */
+export type RelayNoticeSource = (url: string) => ObservableLike<string> | null
+
+/**
  * The live relay source behind `EventReadContext.stream`.
  *
  * One `req()` to the group: emits each EVENT as it arrives and a single `caught-up` marker when every relay
@@ -374,15 +399,73 @@ export const applesauceIo: NostrIo = {
  * the marker). Events are admitted by the consumer (`createStoreStream`), so duplicates are dropped at the
  * store's admission point — `req()` (the only group call that surfaces per-relay EOSE messages) does not
  * take an `eventStore` dedup param, so the `asAsyncEventStoreActions` facade is not used on this path.
+ *
+ * ## A relay that cannot serve the REQ is settled, not pending
+ *
+ * The marker's `pending` keeps its original meaning — every relay that did not
+ * reach EOSE — but two of those are **settled facts**, not silence, and are
+ * named so a consumer can account for them rather than wait:
+ *
+ * - `refused`: the relay answered with a refusal (a `CLOSED` with a reason, or a
+ *   relay-refusal `ERROR`/`NOTICE`). Measured live 2026-11-19:
+ *   `sendit.nosflare.com` → `restricted: this relay does not accept REQs`,
+ *   `relay.nostr.net` → `bad req: error parsing #auction: unindexed tag filter`,
+ *   `relay.minibits.cash` → a refusal `NOTICE` and no CLOSE.
+ * - `unreachable`: the connection failed or never established — the pool
+ *   reported a connection error, or, at the settle bound, the relay's own
+ *   socket is not connected. Measured live 2026-11-19: `relay.damus.io` 503s its
+ *   upgrade, and `nostr.mom` / `nos.lol` never open a socket.
+ *
+ * A relay that is connected at the bound but has said nothing stays in `pending`
+ * — it may still answer, so the consumer must keep waiting for it. This is the
+ * transport's own classification, kept a margin under the read's deadline by
+ * the caller (`createWebArenaAuctionRead`), so a consumer sees it before it
+ * gives up on the read.
  */
 export function createRelayStream(
 	filters: NostrFilter | NostrFilter[],
-	options: { relayUrls?: readonly string[]; timeoutMs?: number; signal?: AbortSignal; group?: RelayRequestGroup } = {},
+	options: {
+		relayUrls?: readonly string[]
+		timeoutMs?: number
+		signal?: AbortSignal
+		group?: RelayRequestGroup
+		/** Connection truth for the settle bound. Defaults to the shared pool's relay when no `group` is injected. */
+		relayState?: (url: string) => RelayConnectorState | null
+		/** Per-relay NOTICE stream. Defaults to the shared pool's relay when no `group` is injected. */
+		notices?: RelayNoticeSource
+	} = {},
 ): AsyncIterable<EventStreamItem<NostrEvent>> {
 	const urls = [...(options.relayUrls ?? relayUrls())]
 	const list = asFilters(filters)
 	const timeoutMs = options.timeoutMs ?? 8000
 	const group = options.group ?? getPool()
+	// The pool's Relay instance is only reachable when this stream owns the pool
+	// (`group` defaults to it). A test hands its own `group` and, if it wants the
+	// classification, its own probes — reaching into the real pool from a test
+	// would open a socket (ADR-0005).
+	const poolRelay = (url: string): Relay | null => {
+		const pool = getPool() as unknown as { relay?: (u: string) => Relay }
+		return typeof pool.relay === 'function' ? pool.relay(url) : null
+	}
+	const relayState =
+		options.relayState ??
+		(options.group === undefined
+			? (url: string) => {
+					const relay = poolRelay(url)
+					return relay === null ? null : { connected: relay.connected, error: relay.error$.value }
+				}
+			: null)
+	const notices = options.notices ?? (options.group === undefined ? (url: string) => poolRelay(url)?.notice$ ?? null : null)
+	// The pool reports `from` normalized (a trailing slash); a consumer knows the
+	// configured URL. Map back so a refusal names the relay the consumer asked for.
+	const canonical = new Map(urls.map((url) => [normalizeURL(url), url]))
+	const asKnown = (from: string): string => {
+		try {
+			return canonical.get(normalizeURL(from)) ?? from
+		} catch {
+			return from
+		}
+	}
 	return {
 		async *[Symbol.asyncIterator]() {
 			if (urls.length === 0) {
@@ -395,45 +478,87 @@ export function createRelayStream(
 			const settled = new Set<string>()
 			const eose: string[] = []
 			const pending: string[] = []
+			const refused: CaughtUpRefusal[] = []
+			const unreachable: string[] = []
 			let caughtUp = false
 			const push = (item: EventStreamItem<NostrEvent>) => {
 				queue.push(item)
 				wake?.()
 				wake = null
 			}
-			const markSettled = (url: string, status: 'eose' | 'closed') => {
+			const markSettled = (url: string, status: 'eose' | 'refused' | 'unreachable' | 'pending', reason = '') => {
 				if (settled.has(url)) return
 				settled.add(url)
 				if (status === 'eose') eose.push(url)
+				// `pending` keeps its contract: every relay that did not reach EOSE.
 				else pending.push(url)
+				if (status === 'refused') refused.push({ relay: url, reason })
+				if (status === 'unreachable') unreachable.push(url)
 				if (!caughtUp && settled.size >= urls.length) {
 					caughtUp = true
-					push({ type: 'caught-up', info: { eose: [...eose], pending: [...pending], complete: false } })
+					push({
+						type: 'caught-up',
+						info: { eose: [...eose], pending: [...pending], complete: false, refused: [...refused], unreachable: [...unreachable] },
+					})
 				}
 			}
-			const subscription = group
-				.req(urls, list, { resubscribe: false, reconnect: SUBSCRIBE_RECONNECT })
-				.subscribe({
-					next: (message) => {
-						if (message.type === 'EVENT') push({ type: 'event', event: message.event as NostrEvent })
-						else if (message.type === 'EOSE') markSettled(message.from, 'eose')
-						else if (message.type === 'CLOSED' || message.type === 'ERROR') markSettled(message.from, 'closed')
-					},
-					error: () => {
-						finished = true
-						wake?.()
-						wake = null
-					},
-					complete: () => {
-						finished = true
-						wake?.()
-						wake = null
-					},
-				})
-			// Never-EOSE fallback: settle the remaining relays so a bounded read cannot hang.
+			const noticeSubscriptions: { unsubscribe(): void }[] = []
+			const subscription = group.req(urls, list, { resubscribe: false, reconnect: SUBSCRIBE_RECONNECT }).subscribe({
+				next: (message) => {
+					if (message.type === 'EVENT') push({ type: 'event', event: message.event as NostrEvent })
+					else if (message.type === 'EOSE') markSettled(asKnown(message.from), 'eose')
+					else if (message.type === 'CLOSED') markSettled(asKnown(message.from), 'refused', message.reason)
+					else if (message.type === 'ERROR') {
+						// The group maps a relay's per-REQ `CLOSED`-derived error to
+						// `ERROR` (a relay answering "no"), and a connection failure to a
+						// generic error. Only the former is a refusal.
+						const error = message.error
+						const name = (error as { name?: string } | null)?.name
+						if (name === 'RelayClosedError' || name === 'AuthRequiredError') {
+							markSettled(asKnown(message.from), 'refused', error instanceof Error ? error.message : String(error))
+						} else markSettled(asKnown(message.from), 'unreachable')
+					}
+				},
+				error: () => {
+					for (const url of urls) if (!settled.has(url)) markSettled(url, 'unreachable')
+					finished = true
+					wake?.()
+					wake = null
+				},
+				complete: () => {
+					for (const url of urls) if (!settled.has(url)) markSettled(url, 'unreachable')
+					finished = true
+					wake?.()
+					wake = null
+				},
+			})
+			// A refusal NOTICE is an answer: the relay will not serve this REQ.
+			if (notices !== null) {
+				for (const url of urls) {
+					const source = notices(url)
+					if (source === null) continue
+					noticeSubscriptions.push(
+						source.subscribe({
+							next: (text) => {
+								if (RELAY_REFUSAL_NOTICE.test(text)) markSettled(url, 'refused', text)
+							},
+							error: () => {},
+							complete: () => {},
+						}),
+					)
+				}
+			}
+			// Never-EOSE fallback: settle the remaining relays so a bounded read cannot hang,
+			// naming the ones that never connected (unreachable) apart from the ones that did
+			// and stayed silent (pending — a relay that could still answer).
 			const timer = setTimeout(() => {
 				if (caughtUp) return
-				for (const url of urls) if (!settled.has(url)) markSettled(url, 'closed')
+				for (const url of urls) {
+					if (settled.has(url)) continue
+					const state = relayState?.(url) ?? null
+					if (state !== null && state.connected === false) markSettled(url, 'unreachable')
+					else markSettled(url, 'pending')
+				}
 			}, timeoutMs)
 			const onAbort = () => {
 				finished = true
@@ -456,6 +581,7 @@ export function createRelayStream(
 				clearTimeout(timer)
 				options.signal?.removeEventListener('abort', onAbort)
 				subscription.unsubscribe()
+				for (const notice of noticeSubscriptions) notice.unsubscribe()
 			}
 		},
 	}

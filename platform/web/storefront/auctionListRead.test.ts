@@ -102,6 +102,12 @@ function verdictEvent(over: { auctionId?: string; outcome?: string; height?: num
 interface FakeRelayOptions {
 	events?: NostrEventLike[]
 	fail?: string
+	/** The relay answered the REQ with a refusal; the caught-up marker names it `refused`. */
+	refused?: string
+	/** The relay's connection never established; the caught-up marker names it `unreachable`. */
+	unreachable?: boolean
+	/** The relay settled without answering and without a connection verdict: it stays pending. */
+	silent?: boolean
 }
 
 function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
@@ -109,7 +115,17 @@ function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
 		async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
 			if (options.fail) throw new Error(options.fail)
 			for (const event of options.events ?? []) yield { type: 'event', event }
-			yield { type: 'caught-up', info: { eose: [url], pending: [], complete: false } }
+			yield {
+				type: 'caught-up',
+				info:
+					options.refused !== undefined
+						? { eose: [], pending: [url], complete: false, refused: [{ relay: url, reason: options.refused }] }
+						: options.unreachable === true
+							? { eose: [], pending: [url], complete: false, unreachable: [url] }
+							: options.silent === true
+								? { eose: [], pending: [url], complete: false }
+								: { eose: [url], pending: [], complete: false },
+			}
 		},
 	})
 }
@@ -132,6 +148,8 @@ function health(over: Partial<ArenaReadHealth> = {}): ArenaReadHealth {
 		relays,
 		eose: [],
 		answered: [],
+		refused: [],
+		unreachable: [],
 		pending: [],
 		failed: [],
 		noRelaysReachable: relays.length === 0,
@@ -351,16 +369,53 @@ describe('collectAuctionListRead', () => {
 		expect(state.relayHealth).toEqual({ answered: 0, total: 0 })
 	})
 
-	test('one dead relay beside a healthy one → incomplete, data kept', async () => {
+	test('one dead relay beside a healthy one is accounted, and the read settles', async () => {
+		// A relay whose connection failed has answered "no": it is a settled fact,
+		// not silence, so it does not hold the read open (`arenaAuctionRead.ts`,
+		// `summarizeHealth`). The data the other relay delivered is kept.
 		const state = await collectAuctionListRead(
 			readFrom({
 				'wss://a': { events: [createEvent({ id: 'root', d: 'lot-1' })] },
 				'wss://b': { fail: 'connection refused' },
 			}),
 		)
-		expect(state.status).toBe('incomplete')
+		expect(state.status).toBe('settled')
+		expect(state.snapshot?.health.unreachable).toEqual(['wss://b'])
+		expect(state.snapshot?.health.pending).toEqual([])
 		const { items } = selectAuctionList(state.snapshot!, selection({ now: 1000 }))
 		expect(items).toHaveLength(1)
+	})
+
+	test('every relay answered, refused or unreachable reports settled', async () => {
+		// The three ways a relay stops being pending: it answered, it refused the
+		// filter, or it could not be reached. All three are answers, so the read
+		// has no relay left to wait on and settles — which is what lets a surface
+		// state the lot's phase instead of a partial-read sentence.
+		const state = await collectAuctionListRead(
+			readFrom({
+				'wss://answered': { events: [createEvent({ id: 'root', d: 'lot-1' })] },
+				'wss://refuser': { refused: 'bad req: error parsing #auction: unindexed tag filter' },
+				'wss://gone': { unreachable: true },
+			}),
+		)
+		expect(state.status).toBe('settled')
+		expect(state.snapshot?.health.answered).toEqual(['wss://answered'])
+		expect(state.snapshot?.health.refused).toEqual(['wss://refuser'])
+		expect(state.snapshot?.health.unreachable).toEqual(['wss://gone'])
+		expect(state.snapshot?.health.pending).toEqual([])
+	})
+
+	test('a genuinely silent relay inside the deadline keeps the read incomplete', async () => {
+		// The honesty rule: a relay the transport never heard from could still
+		// answer, so the read may not render a no-data notice.
+		const state = await collectAuctionListRead(
+			readFrom({
+				'wss://answered': { events: [createEvent({ id: 'root', d: 'lot-1' })] },
+				'wss://mute': { silent: true },
+			}),
+		)
+		expect(state.status).toBe('incomplete')
+		expect(state.snapshot?.health.pending).toEqual(['wss://mute'])
 	})
 
 	test('a relay that lies is refused by the gate and never becomes an auction', async () => {

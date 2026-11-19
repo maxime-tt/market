@@ -71,8 +71,9 @@ export interface AuctionListItem {
  * The state of the read that produced the list.
  *
  * `loading`  — still running; the items are what arrived so far.
- * `settled`  — every relay answered; an empty list is a verdict.
- * `incomplete` — the read stopped without every relay answering.
+ * `settled`  — every relay has been accounted for (it answered, refused the
+ *              subscription, or could not be reached); an empty list is a verdict.
+ * `incomplete` — a relay has not been heard from at all, so the read is partial.
  * `no-relays` — nothing answered; this is not "no auctions".
  * `error`    — the read threw, or no host supplied the data.
  */

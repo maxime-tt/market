@@ -32,8 +32,10 @@ import type { StatusTone } from '../../shared/status-badge'
  * read and two vocabularies for one truth is how a page starts lying:
  *
  * - `loading`   — still running; anything shown is what arrived *so far*;
- * - `settled`   — every relay answered, so an empty result is a verdict;
- * - `incomplete` — the read stopped without every relay answering;
+ * - `settled`   — every relay has been accounted for (answered, refused the
+ *                 subscription, or unreachable), so an empty result is a verdict;
+ * - `incomplete` — the read stopped while some relay had not been heard from at
+ *                 all;
  * - `no-relays` — nothing answered; this is not "there is no auction";
  * - `error`     — the read threw, or no host supplied data.
  */
