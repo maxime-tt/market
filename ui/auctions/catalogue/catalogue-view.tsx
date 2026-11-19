@@ -55,6 +55,12 @@ export interface CatalogueViewProps {
 	onCreate?: () => void
 	/** A read-state note above the grid (partial read). */
 	notice?: ReactNode
+	/**
+	 * The Arena demo's three-panel lot (media, clock and bid, bids/chat/chain),
+	 * rendered above the list. When present it replaces the list's own ticker,
+	 * title and escrow note, so the page carries one h1: the featured lot's.
+	 */
+	featured?: ReactNode
 	/** Rendered in place of the grid when there are no cards to show. */
 	empty?: ReactNode
 }
@@ -174,15 +180,32 @@ export function CatalogueCards({ cards, status, relayHealth, now, hrefFor, mode 
 	)
 }
 
-export function CatalogueView({ cards, status, relayHealth, now, hrefFor, mode = 'light', toolbar, onCreate, notice, empty }: CatalogueViewProps) {
+export function CatalogueView({
+	cards,
+	status,
+	relayHealth,
+	now,
+	hrefFor,
+	mode = 'light',
+	toolbar,
+	onCreate,
+	notice,
+	empty,
+	featured,
+}: CatalogueViewProps) {
 	const openCount = cards.filter((card) => card.phase === 'open' && card.endsAt !== null).length
 	const countLabel = `${cards.length} ${cards.length === 1 ? 'lot' : 'lots'}${status === 'settled' ? '' : ' so far'}`
 	// The ticker repeats its items once so the -50% scroll loops seamlessly.
 	const tickerItems = cards.slice(0, 8)
 	return (
-		<div className="cat cat--page" style={catalogueCssVars(mode)}>
+		<div className={`cat cat--page${featured ? ' cat--featured' : ''}`} style={catalogueCssVars(mode)}>
+			{featured && (
+				<div className="cat__featured" data-slot="catalogue-featured">
+					{featured}
+				</div>
+			)}
 			<div className="cat__wrap">
-				{tickerItems.length > 0 && (
+				{!featured && tickerItems.length > 0 && (
 					<div className="cat__ticker" aria-hidden="true">
 						<div className="cat__ticker-track">
 							{[0, 1].map((copy) =>
@@ -199,37 +222,46 @@ export function CatalogueView({ cards, status, relayHealth, now, hrefFor, mode =
 					</div>
 				)}
 
-				<header className="cat__head">
-					<div>
-						<div className="cat__tags">
-							{openCount > 0 && (
-								<span className="cat__live">
-									<i />
-									LIVE · {openCount}
-								</span>
+				{!featured && (
+					<>
+						<header className="cat__head">
+							<div>
+								<div className="cat__tags">
+									{openCount > 0 && (
+										<span className="cat__live">
+											<i />
+											LIVE · {openCount}
+										</span>
+									)}
+									<span className="cat__tag" data-testid="catalogue-count">
+										{countLabel}
+									</span>
+									<span className="cat__tag">Escrow in Cashu ecash</span>
+								</div>
+								<h1 className="cat__title">Auctions</h1>
+							</div>
+							{onCreate && (
+								<button type="button" className="cat__cta" data-slot="catalogue-create" onClick={onCreate}>
+									Create auction
+								</button>
 							)}
-							<span className="cat__tag" data-testid="catalogue-count">
-								{countLabel}
-							</span>
-							<span className="cat__tag">Escrow in Cashu ecash</span>
-						</div>
-						<h1 className="cat__title">Auctions</h1>
-					</div>
-					{onCreate && (
-						<button type="button" className="cat__cta" data-slot="catalogue-create" onClick={onCreate}>
-							Create auction
-						</button>
-					)}
-				</header>
+						</header>
 
-				<p className="cat__banner" data-testid="catalogue-escrow-notice">
-					Sats are locked in escrow until the lot closes: they go to the seller if you win, and come back to you otherwise.
-				</p>
+						<p className="cat__banner" data-testid="catalogue-escrow-notice">
+							Sats are locked in escrow until the lot closes: they go to the seller if you win, and come back to you otherwise.
+						</p>
+					</>
+				)}
 
 				<section className="cat__panel">
 					<div className="cat__panel-head">
 						<h2>On the block</h2>
-						<span className="cat__sub">Lots read from your relays</span>
+						<span className="cat__sub">{featured ? `${countLabel} · escrow in Cashu ecash` : 'Lots read from your relays'}</span>
+						{featured && onCreate && (
+							<button type="button" className="cat__cta cat__cta--panel" data-slot="catalogue-create" onClick={onCreate}>
+								Create auction
+							</button>
+						)}
 					</div>
 
 					{toolbar}

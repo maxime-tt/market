@@ -65,7 +65,7 @@ import { fetchTestLabels, useTestLabelState } from '@platform/web/config/testLab
 import { filterTestLabeledItems } from '@sdk/config/testLabelFilters'
 import { CatalogueEmpty, CatalogueToolbar, CatalogueView } from '@ui/auctions/catalogue/catalogue-view'
 import type { ArenaAuctionCardModel, ArenaRelayHealth, ArenaSurfaceStatus } from '@ui/auction/arena/model'
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 
 // =========================================================================
 // The link shape — the `d` tag only, the existing contract
@@ -284,6 +284,19 @@ export interface ArenaAuctionsListHostProps {
 	onReset: () => void
 	/** Opens the create-auction drawer (or the login dialog); the route decides. */
 	onCreate?: () => void
+	/**
+	 * Renders the featured lot (the Arena three-panel view) for the card the
+	 * list picks: the open lot closing soonest, else the newest lot shown.
+	 */
+	renderFeatured?: (card: ArenaAuctionCardModel) => ReactNode
+}
+
+/** The open lot that closes soonest; failing that, the first card in list order. */
+export function pickFeaturedCard(cards: readonly ArenaAuctionCardModel[], now: number): ArenaAuctionCardModel | null {
+	const open = cards
+		.filter((card) => card.phase === 'open' && card.endsAt !== null && card.endsAt > now)
+		.sort((a, b) => (a.endsAt as number) - (b.endsAt as number))
+	return open[0] ?? cards[0] ?? null
 }
 
 /**
@@ -303,6 +316,7 @@ export function ArenaAuctionsListHost({
 	onToggleHideEnded,
 	onReset,
 	onCreate,
+	renderFeatured,
 }: ArenaAuctionsListHostProps) {
 	const { showTestListings } = useTestLabelState()
 
@@ -331,6 +345,7 @@ export function ArenaAuctionsListHost({
 		divergences: snapshot?.verdictDivergence,
 	})
 
+	const featuredCard = pickFeaturedCard(cards, now)
 	const partialNotice = arenaListPartialNotice(status)
 	const appliedFilterCount = (hideEnded ? 1 : 0) + (sort === 'newest' ? 0 : 1)
 	// Settled, lots exist, none visible: the filter did this, not the relays.
@@ -380,6 +395,7 @@ export function ArenaAuctionsListHost({
 			onCreate={onCreate}
 			notice={notice}
 			empty={empty}
+			featured={featuredCard !== null && renderFeatured ? renderFeatured(featuredCard) : undefined}
 		/>
 	)
 }

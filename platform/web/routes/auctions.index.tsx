@@ -1,10 +1,10 @@
 import { ArenaAuctionsListHost, type ArenaListSort } from '@platform/web/auctions/relay/ArenaAuctionsListHost'
-import { useArenaSurfacesRead } from '@platform/web/auctions/relay/auctionSurfacesRead'
+import { ArenaAuctionLotHost, useArenaLotRead } from '@platform/web/auctions/relay/ArenaAuctionLotHost'
 import { uiActions } from '@platform/web/app/uiStore'
 import { authStore } from '@platform/web/auth/authStore'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 
 /**
  * `/auctions` — the auctions index, read from the arena 1440 series.
@@ -22,14 +22,21 @@ export const Route = createFileRoute('/auctions/')({
 })
 
 function AuctionsRoute() {
-	const read = useArenaSurfacesRead()
+	// Reopenable read: a bid placed on the featured lot bumps the key so the
+	// page shows it once a relay serves it.
+	const [refreshKey, bumpRefresh] = useReducer((key: number) => key + 1, 0)
+	const read = useArenaLotRead(refreshKey)
 	const { isAuthenticated } = useStore(authStore)
 	const [sort, setSort] = useState<ArenaListSort>('newest')
 	const [hideEnded, setHideEnded] = useState(false)
 
-	// Projection input, not read input: fixed for this render, so the page does
-	// not reopen a subscription when the clock ticks.
-	const now = Math.floor(Date.now() / 1000)
+	// One ticking clock for the page: the featured lot's ring and the cards'
+	// phases read the same instant. Projection input only; it never reopens the read.
+	const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+	useEffect(() => {
+		const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000)
+		return () => clearInterval(id)
+	}, [])
 
 	const handleCreateAuction = () => {
 		if (isAuthenticated) {
@@ -54,6 +61,9 @@ function AuctionsRoute() {
 				setHideEnded(false)
 			}}
 			onCreate={handleCreateAuction}
+			renderFeatured={(card) => (
+				<ArenaAuctionLotHost d={card.d} seller={card.seller} now={now} read={read} onPublished={() => bumpRefresh()} />
+			)}
 		/>
 	)
 }

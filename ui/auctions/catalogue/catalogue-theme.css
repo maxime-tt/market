@@ -202,6 +202,20 @@
 	margin-bottom: 14px;
 }
 
+/* Featured lot on the index: the lot page's own wrap supplies the padding. */
+.cat__featured .arn-wrap {
+	padding-bottom: 8px;
+}
+
+.cat--featured .cat__wrap {
+	padding-top: 6px;
+}
+
+.cat__cta--panel {
+	margin-left: auto;
+	align-self: center;
+}
+
 .cat__panel-head h2 {
 	margin: 0;
 	font-family: var(--cat-serif);
@@ -481,6 +495,21 @@
 
 	.cat__ticker {
 		margin: -14px -14px 14px;
+	}
+
+	.cat__panel-head {
+		flex-wrap: wrap;
+	}
+
+	.cat__cta--panel {
+		width: 100%;
+		margin-left: 0;
+		order: 3;
+	}
+
+	/* Room for the lot's fixed swipe-to-bid bar. */
+	.cat--featured .cat__wrap {
+		padding-bottom: 120px;
 	}
 
 	.cat__panel {
