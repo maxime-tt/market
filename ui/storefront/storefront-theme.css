@@ -128,3 +128,21 @@
 	letter-spacing: -0.01em;
 	font-synthesis: none;
 }
+
+/* ---------------------------------------------------------------------------
+ * Product cards. The shared card (ProductCardHost) paints `bg-white` for the
+ * app's own grids, but inside a themed page its text inherits the palette's
+ * foreground — pale on a dark palette — so titles and prices sat pale-on-white.
+ * Inside a storefront the card takes the palette's card roles instead, so text
+ * and surface always come from the same palette.
+ * ------------------------------------------------------------------------- */
+[data-storefront-theme] [data-testid='product-card'] {
+	background-color: var(--card);
+	color: var(--card-foreground);
+	border-color: var(--border);
+}
+
+[data-storefront-theme] [data-testid='product-card'] h2 {
+	color: var(--card-foreground);
+	border-color: var(--border);
+}
