@@ -2,16 +2,16 @@
  * platform/web/layout/AccountMenu.tsx — the AppBar's one account surface.
  *
  * A single auth-aware dropdown (`ui/primitives/dropdown-menu.tsx`) mounted in the bar's account slot. It
- * subsumes the legacy cluster (`HeaderAccountControls`: dashboard, profile, sign-out, cart, wallet, currency)
+ * subsumes the legacy header's account cluster (dashboard, profile, sign-out, cart, wallet, currency)
  * with one trigger and one menu, at every width — the small-screen gating that hid the wallet, dashboard and
- * sign-out on phones (`Header.tsx`) is gone, because a dropdown works at any size.
+ * sign-out on phones (the deleted `Header.tsx`) is gone, because a dropdown works at any size.
  *
  * - **Signed out** the menu holds one item, "Sign in", firing the same action the old login button did.
  * - **Signed in** it holds the identity header (avatar, npub, how the session is signed in), profile, wallet,
  *   dashboard (with the unseen-notifications badge), cart (with its item count), the currency submenu and
  *   sign-out.
  * - **Currency** is a submenu over `CURRENCIES`, checked against `uiStore.selectedCurrency` and writing
- *   through `uiActions.setCurrency` — the same setter and persistence `CurrencyDropdown` used.
+ *   through `uiActions.setCurrency` — the same setter and persistence the standalone currency dropdown used.
  * - **Wallet** opens the Coco wallet panel (`CocoWalletPanelHost`). The panel is NOT embedded in the menu
  *   content: a Radix menu content is `role="menu"` with roving focus and printable-key typeahead on its root,
  *   so a panel with real `<Input>`s inside it cannot be typed in (the first letter matching an item moves
