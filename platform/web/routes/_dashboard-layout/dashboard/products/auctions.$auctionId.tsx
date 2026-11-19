@@ -6,26 +6,28 @@
  * scoped to its seller, so a bare `d` can name more than one lot and the reader
  * may disambiguate with `?seller=<pubkey>` (`arenaLotRead.ts`). The route itself
  * is an assembler and nothing else: it owns the URL, the one clock the page
- * ticks, and the read, and renders
+ * ticks, and the read's reopen key, and renders
  * `platform/web/dashboard/SellerAuctionLotHost.tsx`, which resolves the `d` the
  * same way the public detail route does and composes the Layout A detail
- * (`CatalogueDetailView`) +
- * `ArenaVerdictPanel`.
+ * (`CatalogueDetailView`) + `ArenaVerdictPanel`.
+ *
+ * The read is **lot-scoped** (`arenaLotFilters`, via `useArenaLotRead`): it asks
+ * the relays for this one lot rather than subscribing to the whole-arena
+ * firehose, which is the subscription the app relay is slow to answer. It is
+ * also reopenable: the retry affordance bumps the key, so a read that ended
+ * without every relay answering can be run again without a page reload. The
+ * parent list route does not mount its own read while this route is on screen.
  *
  * The 30408 pipeline this route used to drive (`auctionQueryOptions`, streaming
  * bids, verdicts, settlements, path releases, `30408:` coordinates,
  * `AuctionCountdownHost`, `AuctionVerdictPanelHost`, the manual settlement and
- * the cashu reclaim flow) is gone. The read is `useArenaSurfacesRead` — the
- * same one-shot read the list pages use — rather than the reopenable lot read:
- * nothing on a read-only page publishes, so there is no refresh key to bump, and
- * the reopenable variant lives in a module that imports the bid host, which a
- * read-only route has no reason to load.
+ * the cashu reclaim flow) is gone.
  */
 
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { z } from 'zod'
-import { useArenaSurfacesRead } from '@platform/web/auctions/relay/auctionSurfacesRead'
+import { useArenaLotRead } from '@platform/web/auctions/relay/ArenaAuctionLotHost'
 import { SellerAuctionLotHost } from '@platform/web/dashboard/SellerAuctionLotHost'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 
@@ -53,7 +55,11 @@ function DashboardAuctionDetailRoute() {
 		return () => clearInterval(id)
 	}, [])
 
-	const read = useArenaSurfacesRead()
+	// The reopen key: the retry affordance bumps it and the read runs again.
+	const [refreshKey, bumpRefresh] = useReducer((key: number) => key + 1, 0)
+	const read = useArenaLotRead({ d: auctionId, seller: seller ?? null, refreshKey })
 
-	return <SellerAuctionLotHost d={auctionId} seller={seller ?? null} now={now} read={read} />
+	return (
+		<SellerAuctionLotHost d={auctionId} seller={seller ?? null} now={now} read={read} onRetry={() => bumpRefresh()} />
+	)
 }

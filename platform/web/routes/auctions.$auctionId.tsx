@@ -42,11 +42,12 @@ function AuctionDetailRoute() {
 		return () => clearInterval(id)
 	}, [])
 
-	// The surfaces read is one-shot. A bid the app published exists, for this
-	// page, only once a relay serves it — so a successful publish bumps this key
-	// and reopens the read (see `useArenaLotRead`).
+	// The read is one-shot and **lot-scoped** (`arenaLotFilters`): it asks for
+	// this lot, not the whole-arena firehose. A bid the app published exists, for
+	// this page, only once a relay serves it — so a successful publish bumps this
+	// key and reopens the read (see `useArenaLotRead`).
 	const [refreshKey, bumpRefresh] = useReducer((key: number) => key + 1, 0)
-	const read = useArenaLotRead(refreshKey)
+	const read = useArenaLotRead({ d: auctionId, seller: seller ?? null, refreshKey })
 
 	return (
 		<ArenaAuctionLotHost

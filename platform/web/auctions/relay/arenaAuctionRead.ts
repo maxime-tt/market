@@ -270,6 +270,33 @@ export function arenaAuctionFilters(): EventFilter[] {
 	]
 }
 
+/**
+ * The subscription filters for **one lot**, so a detail page resolves the lot
+ * instead of the whole-arena firehose. The identity is `(seller, d)`: a 1440 is
+ * matched by its `d` tag, and the coordinate-tagged kinds (a bid's `a`, a
+ * receipt's / verdict's / committed end's `auction`) by
+ * `1440:<seller>:<d>`. With no seller the coordinate is not addressable, so only
+ * the create is asked for — the `?seller=` disambiguator is what makes the rest
+ * readable (`arenaLotRead.ts`), and the route passes it through when the address
+ * carries it.
+ */
+export function arenaLotFilters(seller: string | null, d: string): EventFilter[] {
+	if (seller === null || seller === '') return [{ kinds: [ARENA_AUCTION_CREATE_KIND], '#d': [d] }]
+	const coordinate = arenaAuctionCoordinate(seller, d)
+	return [
+		{ kinds: [ARENA_AUCTION_CREATE_KIND], '#d': [d] },
+		{ kinds: [ARENA_AUCTION_BID_KIND], '#a': [coordinate] },
+		{
+			kinds: [ARENA_AUCTION_REFUND_KIND, ARENA_AUCTION_SETTLE_KIND, ARENA_VERDICT_KIND, ARENA_LOT_STATE_KIND],
+			'#auction': [coordinate],
+		},
+		// The chain clock is not lot-scoped (a 1447 names only its height and
+		// hash), and the detail shows it: keep the same small window the
+		// whole-arena read uses rather than dropping the clock from the page.
+		{ kinds: [ARENA_STATE_COMMITMENT_KIND], limit: 60 },
+	]
+}
+
 /** The fields a decoded event always has, whatever its kind. */
 export interface ArenaAuctionEventBase {
 	id: string
@@ -953,8 +980,12 @@ function emptyHealth(relays: readonly string[], aborted = false): ArenaReadHealt
 function summarizeHealth(relays: ArenaRelayHealth[], aborted: boolean): ArenaReadHealth {
 	const eose = relays.filter((r) => r.eose).map((r) => r.url)
 	const failed = relays.filter((r) => r.status === 'error').map((r) => r.url)
-	const answered = relays.filter((r) => r.status === 'ok').map((r) => r.url)
-	const pending = relays.filter((r) => r.status !== 'ok').map((r) => r.url)
+	// `answered` is the field a caller trusts, so it means what it says: a relay
+	// that delivered an event answered, whatever its transport did afterwards (a
+	// relay that streams events and then drops is `answered` and `failed`). A
+	// read that received events must never report `no-relays`.
+	const answered = relays.filter((r) => r.status === 'ok' || r.events > 0).map((r) => r.url)
+	const pending = relays.filter((r) => !answered.includes(r.url)).map((r) => r.url)
 	return {
 		relays,
 		eose,
@@ -1400,6 +1431,12 @@ export interface ArenaAuctionReadInit {
 	 * Defaults to 8000, matching `createWebRelayReadContext`'s own default.
 	 */
 	deadlineMs?: number
+	/**
+	 * The subscription filters. Defaults to {@link arenaAuctionFilters} (the whole
+	 * arena); a lot detail passes {@link arenaLotFilters} so the read resolves one
+	 * lot instead of the firehose.
+	 */
+	filters?: readonly EventFilter[]
 }
 
 export type ArenaReadStreamItem =
@@ -1410,8 +1447,10 @@ export type ArenaReadStreamItem =
 export interface ArenaAuctionRead {
 	/**
 	 * Live read: opens synchronously, delivers decoded events in batches as
-	 * relays produce them, emits one `caught-up` once every relay has answered
-	 * or failed, then keeps delivering. Ends when aborted or `close()`d.
+	 * relays produce them, emits one `caught-up` once every relay has answered,
+	 * failed or been dropped at the deadline — then keeps delivering. A relay the
+	 * transport gave up on but which then answers is counted as answered. Ends
+	 * when aborted or `close()`d.
 	 */
 	events(options?: { signal?: AbortSignal }): AsyncIterable<ArenaReadStreamItem>
 	/**
@@ -1453,6 +1492,10 @@ interface MutableHealth {
 	refusals: number
 	eose: boolean
 	error: string | null
+	/** The read boundary was reached for this relay (counted once in `settledCount`). */
+	settled: boolean
+	/** The transport gave up on this relay (its never-EOSE fallback), which is not an answer. */
+	givenUp: boolean
 }
 
 export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuctionRead {
@@ -1494,7 +1537,7 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 
 				const mutable = new Map<string, MutableHealth>()
 				for (const url of relays) {
-					mutable.set(url, { url, status: 'ok', events: 0, refusals: 0, eose: false, error: null })
+					mutable.set(url, { url, status: 'ok', events: 0, refusals: 0, eose: false, error: null, settled: false, givenUp: false })
 				}
 				let settledCount = 0
 				let doneCount = 0
@@ -1504,12 +1547,37 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 					return summarizeHealth([...mutable.values()], aborted)
 				}
 
+				/**
+				 * One settle per relay: the read boundary is reached once, and
+				 * `settledCount` counts it once, so the caught-up marker is emitted once.
+				 */
 				function settle(url: string, status: ArenaRelayStatus, error: string | null = null): void {
 					const entry = mutable.get(url)
-					if (entry === undefined || entry.status !== 'ok') return
+					if (entry === undefined || entry.settled) return
+					entry.settled = true
+					settledCount += 1
 					entry.status = status
 					entry.error = error
-					settledCount += 1
+					push({ kind: 'settled', relay: url })
+				}
+
+				/**
+				 * A relay that **answered**: settle it `'ok'`, or upgrade a relay already
+				 * given up on (`'timeout'`/`'closed'`) when it answers late — the answer is
+				 * a fact, the give-up was a guess. Only an event or an EOSE reaches here;
+				 * a stream merely ending does not, so a relay dropped at the deadline
+				 * cannot be upgraded by its own teardown.
+				 */
+				function answer(url: string): void {
+					const entry = mutable.get(url)
+					if (entry === undefined) return
+					if (!entry.settled) {
+						settle(url, 'ok')
+						return
+					}
+					if (entry.status === 'ok') return
+					entry.status = 'ok'
+					entry.error = null
 					push({ kind: 'settled', relay: url })
 				}
 
@@ -1518,7 +1586,7 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 					void (async () => {
 						try {
 							const source = init.openRelay(url)
-							for await (const item of source(arenaAuctionFilters(), {
+							for await (const item of source(init.filters ?? arenaAuctionFilters(), {
 								signal: controller.signal,
 								bounded,
 							})) {
@@ -1533,12 +1601,24 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 									const eoseReported = item.info.eose.length > 0
 									if (entry !== undefined) entry.eose = eoseReported
 									// A bounded read that returns without throwing counts as answered:
-									// the transport's `fetchEvents` swallows a connection failure into an
-									// empty array (measured on a dead port, 2026-11-13), so a bounded
-									// read cannot tell "empty" from "unreachable". A live read can.
-									const answered = eoseReported || (entry?.events ?? 0) > 0 || bounded
-									settle(url, answered ? 'ok' : 'timeout')
-									if (bounded) return
+									// the transport's bounded path swallows a connection failure into
+									// an empty answer (measured on a dead port, 2026-11-13), so a
+									// bounded read cannot tell "empty" from "unreachable". A live read can.
+									if (bounded) {
+										settle(url, 'ok')
+										return
+									}
+									// Live read: only a relay that has actually spoken is settled
+									// here. A marker with no EOSE and nothing delivered is the
+									// transport giving up, not the relay answering — its stream is
+									// still live, so keep reading rather than recording a `timeout`
+									// the relay never earned. Measured 2026-11-19 on the live page:
+									// the app relay's first kind-1440 EVENT arrived at 8759 ms, after
+									// the transport's 8 s fallback; the relay that carries the lot was
+									// recorded `timeout`, the read closed, and the notice said no
+									// relay answered for a lot that exists.
+									if (eoseReported || (entry?.events ?? 0) > 0) answer(url)
+									else if (entry !== undefined) entry.givenUp = true
 									continue
 								}
 								const decoded = decodeArenaEvent(item.event, url)
@@ -1546,8 +1626,12 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 									if (decoded.ok) entry.events += 1
 									else entry.refusals += 1
 								}
-								if (decoded.ok) push({ kind: 'event', relay: url, event: decoded.event })
-								else push({ kind: 'refusal', relay: url, refusal: decoded.refusal })
+								if (decoded.ok) {
+									push({ kind: 'event', relay: url, event: decoded.event })
+									// A relay the transport had given up on that then delivers has
+									// answered: the late event is the answer.
+									if (entry?.givenUp === true) answer(url)
+								} else push({ kind: 'refusal', relay: url, refusal: decoded.refusal })
 							}
 							if (bounded && entry !== undefined) entry.eose = true
 							const answeredOnEnd = bounded || entry?.eose === true || (entry?.events ?? 0) > 0
@@ -1573,7 +1657,11 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 
 				const deadline = setTimeout(() => {
 					for (const entry of mutable.values()) {
-						if (entry.status === 'ok' && !entry.eose) settle(entry.url, 'timeout')
+						if (entry.settled) continue
+						// A relay that delivered events (or an EOSE) answered, even when its
+						// transport never surfaced the EOSE — settling it `timeout` is what
+						// made a read that received events report `no-relays`.
+						settle(entry.url, entry.eose || entry.events > 0 ? 'ok' : 'timeout')
 					}
 					push({ kind: 'wake' })
 				}, deadlineMs)
@@ -1584,7 +1672,7 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 					while (true) {
 						aborted = controller.signal.aborted
 						if (controller.signal.aborted && !caughtUpEmitted) {
-							for (const entry of mutable.values()) if (entry.status === 'ok') settle(entry.url, 'closed')
+							for (const entry of mutable.values()) if (!entry.settled) settle(entry.url, 'closed')
 						}
 						if (queue.length === 0) {
 							if (allDone) break
@@ -1670,6 +1758,8 @@ export interface WebArenaAuctionReadInit {
 	/** The shared event store. Admission stays the store's job (`sdk/AGENTS.md:42-45`). */
 	store: EventStorePort<Event>
 	deadlineMs?: number
+	/** The subscription filters. Defaults to the whole arena ({@link arenaAuctionFilters}). */
+	filters?: readonly EventFilter[]
 }
 
 /**
@@ -1682,6 +1772,7 @@ export function createWebArenaAuctionRead(init: WebArenaAuctionReadInit): ArenaA
 	return createArenaAuctionRead({
 		relays: init.relays,
 		deadlineMs: init.deadlineMs,
+		filters: init.filters,
 		openRelay: (url) => {
 			const context = createWebRelayReadContext(init.store, [url], {
 				deadlineMs: init.deadlineMs ?? DEFAULT_DEADLINE_MS,
