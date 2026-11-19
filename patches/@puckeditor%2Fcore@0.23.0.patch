@@ -1,0 +1,49 @@
+diff --git a/dist/chunk-55V3NZVF.mjs b/dist/chunk-55V3NZVF.mjs
+index 01fc32e03adc11d014291a99cc8dbee1806880f8..f024988fb7e7a51d4fd014ef83ebc0b9aac022a1 100644
+--- a/dist/chunk-55V3NZVF.mjs
++++ b/dist/chunk-55V3NZVF.mjs
+@@ -8295,7 +8295,7 @@ import { useEffect as useEffect22, useInsertionEffect } from "react";
+ 
+ // puck-runtime-css:puck-runtime-css
+ init_react_import();
+-var defaultUiStyles = `@import "https://rsms.me/inter/inter.css";
++var defaultUiStyles = `
+ 
+ /* styles/color.css */
+ @layer puck-tokens {
+diff --git a/dist/index.css b/dist/index.css
+index 22940ac6d1072f7da7a6f9235c5e128ff127c48c..2e81bcf8a5f227b1a7eae4646edef1a327b3d157 100644
+--- a/dist/index.css
++++ b/dist/index.css
+@@ -1,4 +1,4 @@
+-@import "https://rsms.me/inter/inter.css";
++
+ 
+ /* styles/color.css */
+ @layer puck-tokens {
+diff --git a/dist/index.js b/dist/index.js
+index aebc9c0e4d4eed1a407ea72d0d1469d16544d834..e69a59e41c857dd8d5fd4a12b09e27cc3c89c22a 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -12774,7 +12774,7 @@ var import_react81 = require("react");
+ 
+ // puck-runtime-css:puck-runtime-css
+ init_react_import();
+-var defaultUiStyles = `@import "https://rsms.me/inter/inter.css";
++var defaultUiStyles = `
+ 
+ /* styles/color.css */
+ @layer puck-tokens {
+diff --git a/dist/no-external.js b/dist/no-external.js
+index af3fa6755f42679605e6805aa46fdeb90df48281..fc224f6a23ef4ab0addb3ae5239de3c8acf40a77 100644
+--- a/dist/no-external.js
++++ b/dist/no-external.js
+@@ -12774,7 +12774,7 @@ var import_react81 = require("react");
+ 
+ // puck-runtime-css:puck-runtime-css
+ init_react_import();
+-var defaultUiStyles = `@import "https://rsms.me/inter/inter.css";
++var defaultUiStyles = `
+ 
+ /* styles/color.css */
+ @layer puck-tokens {
