@@ -206,3 +206,218 @@
 		font-size: 13px;
 	}
 }
+
+/* --- Login dialog ----------------------------------------------------------
+ * The dialog is portalled to <body>, outside `.arena-chrome`, so it carries
+ * its own `.arena-login` scope with the same Arena tokens. It is the same on
+ * every route: the Arena look is the brand, not a per-page skin.
+ * ------------------------------------------------------------------------- */
+
+.arena-login {
+	--arena-bg: #0e0d0e;
+	--arena-surface: #1a181a;
+	--arena-surface-2: #242124;
+	--arena-ink: #f6efea;
+	--arena-muted: #a69b95;
+	--arena-line: #2f2b2f;
+	--arena-line-strong: #4a434a;
+	--arena-pink: #ff3eb5;
+	--arena-pink-hover: #ff6cc8;
+
+	--background: var(--arena-bg);
+	--foreground: var(--arena-ink);
+	--card: var(--arena-surface);
+	--card-foreground: var(--arena-ink);
+	--popover: var(--arena-surface);
+	--popover-foreground: var(--arena-ink);
+	--muted: var(--arena-surface-2);
+	--muted-foreground: var(--arena-muted);
+	--accent: var(--arena-surface-2);
+	--accent-foreground: var(--arena-ink);
+	--border: var(--arena-line);
+	--input: var(--arena-line);
+	--ring: var(--arena-pink);
+	--primary: var(--arena-pink);
+	--primary-foreground: #111;
+	--secondary: var(--arena-surface-2);
+	--secondary-foreground: var(--arena-ink);
+
+	--bg: var(--arena-bg);
+	--surface-raised: var(--arena-surface-2);
+	--surface-sunken: var(--arena-bg);
+	--surface-hover: var(--arena-surface-2);
+	--fill-ink: var(--arena-pink);
+	--on-fill-ink: #111;
+	--fill-accent: var(--arena-pink);
+	--text-high: var(--arena-ink);
+	--text-mid: var(--arena-muted);
+	--border-default: var(--arena-line);
+	--border-strong: var(--arena-line-strong);
+	--focus-ring: var(--arena-pink);
+
+	background: var(--arena-surface) !important;
+	color: var(--arena-ink);
+	border: 1px solid var(--arena-line) !important;
+	border-radius: 20px !important;
+	box-shadow: 0 30px 80px rgb(0 0 0 / 0.6) !important;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+	color-scheme: dark;
+}
+
+.arena-login-head {
+	border-bottom: 1px solid var(--arena-line);
+	background: radial-gradient(120% 140% at 0% 0%, rgb(255 62 181 / 0.14), transparent 60%);
+}
+
+.arena-login-eyebrow {
+	font-family: 'JetBrains Mono', ui-monospace, monospace;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--arena-pink);
+	margin-bottom: 6px;
+}
+
+.arena-login-title {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-weight: 400;
+	font-size: 2.25rem;
+	line-height: 1;
+	letter-spacing: -0.02em;
+	color: var(--arena-ink);
+	font-synthesis: none;
+}
+
+.arena-login-title em {
+	font-style: italic;
+	color: var(--arena-pink);
+}
+
+.arena-login-lede {
+	margin-top: 8px;
+	font-size: 0.875rem;
+	color: var(--arena-muted);
+}
+
+.arena-login .arena-login-tabs,
+.arena-login .arena-login-subtabs {
+	gap: 4px;
+	padding: 4px;
+	margin-top: 18px;
+	border-radius: 14px;
+	background: var(--arena-bg);
+	border: 1px solid var(--arena-line);
+}
+
+.arena-login .arena-login-subtabs {
+	margin-top: 14px;
+	border-radius: 12px;
+}
+
+.arena-login .arena-login-tab,
+.arena-login .arena-login-subtab {
+	padding: 9px 6px;
+	border: 0;
+	border-radius: 10px !important;
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	color: var(--arena-muted);
+	background: transparent;
+}
+
+.arena-login .arena-login-subtab {
+	padding: 7px 6px;
+	font-size: 12px;
+}
+
+.arena-login .arena-login-tab:hover,
+.arena-login .arena-login-subtab:hover {
+	color: var(--arena-ink);
+}
+
+.arena-login .arena-login-tab[data-state='active'],
+.arena-login .arena-login-subtab[data-state='active'] {
+	background: var(--arena-surface-2);
+	color: var(--arena-ink);
+	box-shadow: inset 0 -2px 0 var(--arena-pink) !important;
+}
+
+.arena-login [data-slot='button'] {
+	border-radius: 12px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	transition:
+		transform 0.15s ease,
+		filter 0.2s,
+		box-shadow 0.2s;
+}
+
+.arena-login [data-slot='button'][data-variant='default'] {
+	background: var(--arena-pink);
+	color: #111;
+	height: 44px;
+}
+
+.arena-login [data-slot='button'][data-variant='default']:not(:disabled):hover {
+	filter: brightness(1.06);
+	box-shadow: 0 6px 18px rgb(255 62 181 / 0.35);
+}
+
+.arena-login [data-slot='button'][data-variant='default']:not(:disabled):active {
+	transform: scale(0.97);
+}
+
+.arena-login [data-slot='button'][data-variant='outline'] {
+	background: var(--arena-bg);
+	border: 1px solid var(--arena-line);
+	color: var(--arena-ink);
+}
+
+.arena-login [data-slot='button'][data-variant='outline']:hover {
+	border-color: var(--arena-pink);
+	color: var(--arena-pink);
+}
+
+.arena-login input,
+.arena-login textarea,
+.arena-login [data-slot='select-trigger'] {
+	background: var(--arena-bg) !important;
+	border: 1px solid var(--arena-line) !important;
+	border-radius: 12px;
+	color: var(--arena-ink) !important;
+}
+
+.arena-login input:focus,
+.arena-login textarea:focus,
+.arena-login [data-slot='select-trigger']:focus {
+	border-color: var(--arena-pink) !important;
+	box-shadow: 0 0 0 2px rgb(255 62 181 / 0.3) !important;
+	outline: none;
+}
+
+.arena-login input::placeholder {
+	color: var(--arena-muted) !important;
+}
+
+.arena-login [data-slot='checkbox'] {
+	border-color: var(--arena-line-strong);
+	border-radius: 5px;
+}
+
+.arena-login [data-slot='checkbox'][data-state='checked'] {
+	background: var(--arena-pink);
+	border-color: var(--arena-pink);
+	color: #111;
+}
+
+.arena-login [data-slot='dialog-close'],
+.arena-login > button:last-child {
+	color: var(--arena-muted);
+	opacity: 1;
+}
+
+.arena-login > button:last-child:hover {
+	color: var(--arena-pink);
+}
