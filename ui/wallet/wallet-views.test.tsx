@@ -59,13 +59,13 @@ describe('ReceiveEcashModalView', () => {
 
 	test('shows the token form with a disabled receive button', () => {
 		const text = collectText(ReceiveEcashModalView(receiveBase))
-		expect(text).toContain('Receive eCash')
-		expect(text).toContain('Scan or paste a Cashu token to receive eCash')
+		expect(text).toContain('Receive ecash')
+		expect(text).toContain('Scan or paste a Cashu token to receive ecash')
 		expect(text).toContain('Scan QR')
 	})
 
 	test('shows the success state, the scanner state and an error', () => {
-		expect(collectText(ReceiveEcashModalView({ ...receiveBase, isSuccess: true }))).toContain('eCash Received!')
+		expect(collectText(ReceiveEcashModalView({ ...receiveBase, isSuccess: true }))).toContain('ecash Received!')
 		expect(collectText(ReceiveEcashModalView({ ...receiveBase, showScanner: true }))).toContain('Cancel')
 		expect(collectText(ReceiveEcashModalView({ ...receiveBase, error: 'Invalid Cashu token' }))).toContain('Invalid Cashu token')
 	})
@@ -99,7 +99,7 @@ describe('SendEcashModalView', () => {
 
 	test('shows the amount form with the wallet balance and mint hostname', () => {
 		const text = collectText(SendEcashModalView(sendBase))
-		expect(text).toContain('Send eCash')
+		expect(text).toContain('Send ecash')
 		expect(text).toContain('Balance: 3,000 sats')
 		expect(text).toContain('mint.example.test')
 		expect(text).toContain('Generate Token')
@@ -114,8 +114,8 @@ describe('SendEcashModalView', () => {
 	})
 
 	test('names the insufficient-balance / error message', () => {
-		expect(collectText(SendEcashModalView({ ...sendBase, error: 'Failed to generate eCash token' }))).toContain(
-			'Failed to generate eCash token',
+		expect(collectText(SendEcashModalView({ ...sendBase, error: 'Failed to generate ecash token' }))).toContain(
+			'Failed to generate ecash token',
 		)
 	})
 })
@@ -199,7 +199,7 @@ describe('DepositLightningModalView', () => {
 	test('shows the amount/mint form', () => {
 		const text = collectText(DepositLightningModalView(depositBase))
 		expect(text).toContain('Deposit Lightning')
-		expect(text).toContain('Generate a Lightning invoice to mint eCash')
+		expect(text).toContain('Generate a Lightning invoice to mint ecash')
 		expect(text).toContain('mint.example.test')
 		expect(text).toContain('Generate Invoice')
 	})
@@ -299,26 +299,28 @@ const nip60Base: Nip60WalletViewProps = {
 describe('Nip60WalletView', () => {
 	test('renders the wallet panel with balance, actions and mints', () => {
 		const markup = renderToStaticMarkup(<Nip60WalletView {...nip60Base} />)
-		expect(markup).toContain('Balance')
-		expect(markup).toContain('3,000 sats')
+		expect(markup).toContain('Wallet')
+		expect(markup).toContain('3,000')
+		expect(markup).toContain('sats')
 		expect(markup).toContain('Deposit')
 		expect(markup).toContain('Withdraw')
-		expect(markup).toContain('Receive eCash')
-		expect(markup).toContain('Send eCash')
+		expect(markup).toContain('Receive ecash')
+		expect(markup).toContain('Send ecash')
 		expect(markup).toContain('mint.example.test')
-		// The dark panel uses the semantic ink surface, not a raw palette class.
+		// The panel follows the public theme through role tokens; the one pink action is the semantic ink fill.
 		expect(markup).toContain('bg-fill-ink')
+		expect(markup).toContain('font-heading')
 		expect(markup).not.toContain('text-white')
 		expect(markup).not.toContain('bg-gray-')
 	})
 
 	test('gates the dev tools on the dev flag', () => {
-		expect(renderToStaticMarkup(<Nip60WalletView {...nip60Base} />)).not.toContain('Auction Test Tools')
-		expect(renderToStaticMarkup(<Nip60WalletView {...nip60Base} walletDevMode />)).toContain('Auction Test Tools')
+		expect(renderToStaticMarkup(<Nip60WalletView {...nip60Base} />)).not.toContain('Auction test tools')
+		expect(renderToStaticMarkup(<Nip60WalletView {...nip60Base} walletDevMode />)).toContain('Auction test tools')
 	})
 
 	test('renders the unauthenticated and error states', () => {
-		expect(renderToStaticMarkup(<Nip60WalletView {...nip60Base} isAuthenticated={false} />)).toContain('Please log in to view your wallet')
+		expect(renderToStaticMarkup(<Nip60WalletView {...nip60Base} isAuthenticated={false} />)).toContain('Sign in to see your wallet')
 		expect(renderToStaticMarkup(<Nip60WalletView {...nip60Base} status="error" error="Wallet failed" />)).toContain('Wallet failed')
 		expect(renderToStaticMarkup(<Nip60WalletView {...nip60Base} status="initializing" />)).toContain('animate-spin')
 	})

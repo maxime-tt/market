@@ -45,7 +45,13 @@ Business at the front, party at the back:
 5. **The site header is out of scope.** It belongs to Maxime's AppBar work and
    is not restyled by the console.
 6. **The wallet popup follows the public theme**, as it is part of the
-   shopper's experience.
+   shopper's experience. The panel (`ui/wallet/nip60-wallet-view.tsx`) is
+   written in role tokens only and the account menu mounts it inside the
+   `.arena-chrome` scope; the four Lightning / Cashu ecash dialogs it opens are
+   portalled, so they carry the login dialog's `.arena-login` scope plus
+   `.arena-wallet-dialog` (pill buttons, serif title) from
+   `styles/arena-chrome.css`. The same look applies on the dashboard, because
+   the wallet is never inside `.admin-console`.
 7. **No third-party assets.** The console uses the bundled InterVariable font
    and lucide icons; nothing is loaded from Google or any other host.
 

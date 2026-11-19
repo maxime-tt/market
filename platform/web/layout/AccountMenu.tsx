@@ -32,7 +32,7 @@ import { Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Coins, LayoutDashboard, Loader2, LogOut, ShoppingBag, User, Wallet } from 'lucide-react'
 import { nip19 } from 'nostr-tools'
-import { useState, type FC, type ReactNode } from 'react'
+import { useRef, useState, type FC, type ReactNode } from 'react'
 import { CURRENCIES } from '@sdk/config/constants'
 import type { AuthSignerType } from '@sdk/core/auth'
 import { uiActions, uiStore, type SupportedCurrency } from '@platform/web/app/uiStore'
@@ -144,6 +144,13 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 	 * Local state only; nothing else reads it.
 	 */
 	const [walletOpen, setWalletOpen] = useState(false)
+	/**
+	 * Opening the panel straight from the item's `onSelect` lost it: the menu then closed and returned focus
+	 * to its trigger, which sits outside the just-opened popover, so the popover's focus-outside dismissal
+	 * shut it in the same tick (the "Wallet" item did nothing). The item now only marks the intent; the panel
+	 * opens once the menu has finished closing, in place of the menu's focus return.
+	 */
+	const walletRequested = useRef(false)
 
 	const totalItems = Object.values(cart.products).reduce((total, product) => total + product.amount, 0)
 	const pubkey = user?.pubkey ?? null
@@ -191,7 +198,18 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 					<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
 				</PopoverAnchor>
 
-				<DropdownMenuContent data-testid="account-menu-content" align="end" sideOffset={8} className={CONTENT_CLASS}>
+				<DropdownMenuContent
+					data-testid="account-menu-content"
+					align="end"
+					sideOffset={8}
+					className={CONTENT_CLASS}
+					onCloseAutoFocus={(event) => {
+						if (!walletRequested.current) return
+						walletRequested.current = false
+						event.preventDefault()
+						setWalletOpen(true)
+					}}
+				>
 					{isAuthenticated && pubkey ? (
 						<>
 							{/* Identity: who, and how the session is signed in. */}
@@ -211,7 +229,13 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 								</Link>
 							</DropdownMenuItem>
 
-							<DropdownMenuItem data-testid="wallet-button" className={ITEM_CLASS} onSelect={() => setWalletOpen(true)}>
+							<DropdownMenuItem
+								data-testid="wallet-button"
+								className={ITEM_CLASS}
+								onSelect={() => {
+									walletRequested.current = true
+								}}
+							>
 								<Wallet className={ICON_CLASS} aria-hidden />
 								<span>Wallet</span>
 							</DropdownMenuItem>
@@ -285,7 +309,10 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 				align="end"
 				sideOffset={8}
 				// The panel is portalled too, so it carries the same scope as the menu it opens from.
-				className={cn(ARENA_SCOPE, 'w-[calc(100vw-2rem)] rounded-lg bg-primary md:w-96')}
+				className={cn(
+					ARENA_SCOPE,
+					'w-[calc(100vw-2rem)] rounded-3xl border border-border-default bg-surface-raised p-5 text-text-high shadow-2xl md:w-[400px]',
+				)}
 			>
 				<CocoWalletPanelHost />
 			</PopoverContent>
