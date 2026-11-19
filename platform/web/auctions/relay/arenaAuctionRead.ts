@@ -307,10 +307,11 @@ export function arenaLotBidByEventFilters(eventIds: readonly string[]): EventFil
  * instead of the whole-arena firehose. The identity is `(seller, d)`: a 1440 is
  * matched by its `d` tag, and the coordinate-tagged kinds (a bid's `a`, a
  * receipt's / verdict's / committed end's `auction`) by
- * `1440:<seller>:<d>`. With no seller the coordinate is not addressable, so only
- * the create is asked for — the `?seller=` disambiguator is what makes the rest
- * readable (`arenaLotRead.ts`), and the route passes it through when the address
- * carries it.
+ * `1440:<seller>:<d>`. With no seller the coordinate is not knowable yet, so
+ * this first REQ asks for the create alone: the create carries its seller, and
+ * the coordinate REQ is the follow-up ({@link arenaLotFollowUpFilters}). A bare
+ * `d` therefore reads its verdicts, receipts and committed end too — the
+ * `?seller=` disambiguator only spares the read that second REQ.
  *
  * `eventId` is the lot's create event id when the caller already knows it; it
  * adds the `#e` bid filter ({@link arenaLotBidFilters}). A read that starts
@@ -336,25 +337,55 @@ export function arenaLotFilters(seller: string | null, d: string, eventId: strin
 }
 
 /**
- * The second subscription a lot read needs: a bid's `#e` tag names the create's
- * event id, which is only knowable **after** the create has been read. The read
- * opens the base subscription first ({@link arenaLotFilters}); once a create for
- * this `(seller, d)` arrives, the returned filter set is subscribed as a second
- * REQ — so a lot whose bids are only findable by `#e` still finds them. No
- * create yet → no extra filter, never an empty one.
+ * The second subscription a lot read needs: both identities a create carries are
+ * only knowable **after** the create has been read.
+ *
+ * - A bid's `#e` tag names the create's **event id** (its `a` coordinate is 106
+ *   chars, which the relay's index refuses — see {@link arenaLotBidFilters}).
+ * - Every coordinate-tagged kind (a receipt's / verdict's / committed end's
+ *   `auction`) names the create's **`(seller, d)` coordinate**, and a bare-`d`
+ *   address does not carry the seller. With a seller known that coordinate is in
+ *   the base REQ already; without one, `#d` matches the create and nothing else,
+ *   so the verdicts and receipts of a seller-less lot URL would never be asked
+ *   for at all. The create's own signer IS the seller, so the coordinate becomes
+ *   addressable the moment the create arrives.
+ *
+ * The read opens the base subscription first ({@link arenaLotFilters}); once a
+ * create for this `d` arrives, the returned set is subscribed as a second REQ.
+ * With a known seller it is the `#e` bid filter alone (the coordinate filter is
+ * never sent twice); with no seller it carries the `#e` bid filter **and** the
+ * coordinate filter, so receipts (1443/1444), verdicts (1445) and the committed
+ * end (1449) are read together as they are on a seller-known lot. No create yet
+ * → no extra filter, never an empty one.
  */
 export function arenaLotFollowUpFilters(
 	seller: string | null,
 	d: string,
 ): (events: readonly ArenaAuctionEvent[]) => readonly EventFilter[] {
+	const sellerKnown = seller !== null && seller !== ''
 	return (events) => {
 		const ids: string[] = []
+		const coordinates: string[] = []
 		for (const event of events) {
 			if (event.type !== 'create' || event.d !== d) continue
-			if (seller !== null && seller !== '' && event.pubkey !== seller) continue
+			if (sellerKnown && event.pubkey !== seller) continue
 			if (!ids.includes(event.id)) ids.push(event.id)
+			if (!sellerKnown) {
+				// `event.pubkey` is the seller the create was signed by: the same value
+				// `projectArenaEvents` groups the lot under (`entry.root.pubkey`).
+				const coordinate = arenaAuctionCoordinate(event.pubkey, event.d)
+				if (!coordinates.includes(coordinate)) coordinates.push(coordinate)
+			}
 		}
-		return arenaLotBidByEventFilters(ids)
+		const filters = arenaLotBidByEventFilters(ids)
+		if (coordinates.length === 0) return filters
+		return [
+			...filters,
+			{
+				kinds: [ARENA_AUCTION_REFUND_KIND, ARENA_AUCTION_SETTLE_KIND, ARENA_VERDICT_KIND, ARENA_LOT_STATE_KIND],
+				'#auction': coordinates,
+			},
+		]
 	}
 }
 
