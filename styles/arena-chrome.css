@@ -181,3 +181,28 @@
 	border-color: var(--arena-pink);
 	box-shadow: 0 0 0 3px rgb(255 62 181 / 0.25);
 }
+
+/* Phones: the hero field owns its row but ~330px is not enough for the
+   placeholder, the ⌘K badge and the pill together, so the placeholder was
+   clipped. A phone has no ⌘K, so the badge goes and the field tightens. */
+@media (max-width: 639px) {
+	.arena-chrome [data-slot='search-field'][data-size='hero'] {
+		height: 56px;
+		padding-left: 18px;
+		gap: 10px;
+	}
+
+	.arena-chrome [data-slot='search-field'][data-size='hero'] [data-slot='search-kbd'] {
+		display: none;
+	}
+
+	.arena-chrome [data-slot='search-field'][data-size='hero'] input {
+		font-size: 15px;
+	}
+
+	.arena-chrome [data-slot='search-field'][data-size='hero'] [data-slot='search-go'] {
+		height: 42px;
+		padding: 0 18px;
+		font-size: 13px;
+	}
+}
