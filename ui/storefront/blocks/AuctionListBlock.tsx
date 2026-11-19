@@ -37,7 +37,7 @@ import { StorefrontEditorHint, StorefrontSection, StorefrontSectionTitle } from 
 export interface AuctionListBlockProps {
 	title: string
 	/** `mine` = the page author's auctions; `picked` = the explicit coordinates below. */
-	source: 'mine' | 'picked'
+	source: 'mine' | 'picked' | 'all'
 	/** Ordered `1440:<seller>:<d>` references, used when `source` is `picked`. */
 	auctionCoordinates: string[]
 	limit: number

@@ -52,7 +52,7 @@ import type { AuctionListItem, AuctionListStatus } from '@ui/storefront/blocks/A
 
 export interface AuctionListSelection {
 	/** `mine` = the page author's auctions; `picked` = the explicit coordinates. */
-	source: 'mine' | 'picked'
+	source: 'mine' | 'picked' | 'all'
 	/** The page author, from the page event — never from the document. */
 	seller: string
 	/** Ordered `1440:<seller>:<d>` references, used when `source` is `picked`. */
@@ -133,6 +133,15 @@ export function selectAuctionList(
 				.map((auction) => toAuctionListItem(auction, selection.now)),
 			missing: [],
 		}
+	}
+
+	if (selection.source === 'all') {
+		// Live first, soonest-ending at the top (what a visitor can still bid on),
+		// then everything else in the read's own newest-first order.
+		const projected = snapshot.auctions.map((auction) => toAuctionListItem(auction, selection.now))
+		const live = projected.filter((item) => item.phase === 'open').sort((a, b) => (a.endsAt ?? Infinity) - (b.endsAt ?? Infinity))
+		const rest = projected.filter((item) => item.phase !== 'open')
+		return { items: [...live, ...rest].slice(0, limit), missing: [] }
 	}
 
 	const byCoordinate = new Map(snapshot.auctions.map((auction) => [auction.coordinate, auction]))
