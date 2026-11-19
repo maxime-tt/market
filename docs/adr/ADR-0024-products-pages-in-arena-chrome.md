@@ -43,6 +43,4 @@ square black-bordered buttons and a sans-serif title.
 - Shared views (`ProductCardHost`, `SelectableBadge`, `SocialButtons`)
   now follow whichever scope they sit in. Outside Arena they fall back to the
   default role tokens, so they still look right elsewhere.
-- Still on the old theme: community, collections, search, cart, checkout,
-  setup and messages. Each moves over the same way: add the route, swap
-  classes for tokens, check screenshots.
+- The rest of the public site followed in ADR-0025.

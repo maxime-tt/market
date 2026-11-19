@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — Plebeian Reckless test instance
+Accepted — Plebeian Reckless test instance. Work tracked in the Theme Studio issue on PlebeianApp/PlebeianMarketV2Test.
 
 ## Date
 
@@ -14,6 +14,7 @@ Proposed — Plebeian Reckless test instance
 - ADR-019: Unified storefront identity and page builder
 - ADR-0022: Admin console theme (the "mullet")
 - ADR-0024: Products pages in the Arena chrome
+- ADR-0025: Every public page in the Arena chrome
 - `styles/arena-chrome.css` — today's hand-written Arena scope
 - `sdk/config/storefront/storefrontThemes.ts` — storefront theme registry
 - `platform/web/storefront/storefrontCms.tsx` — Puck block registry

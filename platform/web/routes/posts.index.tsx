@@ -14,7 +14,7 @@ function PostsRoute() {
 
 	return (
 		<div className="p-4">
-			<h1 className="text-2xl font-bold mb-4">Nostr Posts</h1>
+			<h1 className="font-heading text-[2rem] sm:text-[2.6rem] mb-4">Nostr Posts</h1>
 			<div className="space-y-4">
 				{posts.map((post) => (
 					<PostView key={post.id} post={post} />

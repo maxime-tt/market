@@ -12,19 +12,13 @@
  */
 
 /**
- * Whether a path renders in the Arena chrome (`styles/arena-chrome.css`): the
- * home / Browse surface at `/`, the auction routes, and the product list and
- * product pages (ADR-0024). The root layout puts
- * `.arena-chrome` on its wrapper for these paths, which rebinds the theme
- * tokens to Arena's dark values for the app bar, the footer, the Browse nav and
- * the search field without changing their markup.
+ * Whether a path renders in the Arena chrome (`styles/arena-chrome.css`).
+ * Every public page does (ADR-0024, ADR-0025); only the dashboard keeps its
+ * own admin console theme (ADR-0022). The root layout puts `.arena-chrome` on
+ * its wrapper, and on `<body>` for portalled pop-ups such as the cart, for
+ * these paths. That rebinds the theme tokens to Arena's values without
+ * changing any markup.
  */
 export function usesArenaChrome(pathname: string): boolean {
-	return (
-		pathname === '/' ||
-		pathname === '/auctions' ||
-		pathname.startsWith('/auctions/') ||
-		pathname === '/products' ||
-		pathname.startsWith('/products/')
-	)
+	return !(pathname === '/dashboard' || pathname.startsWith('/dashboard/'))
 }

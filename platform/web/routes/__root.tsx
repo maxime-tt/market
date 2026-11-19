@@ -10,6 +10,7 @@ import { ServedPage, servedPageForPath } from '@platform/web/servedPage'
 import { appChromePageForPath } from '@platform/web/storefront/appChromePage'
 import { BoundPathPage } from '@platform/web/storefront/BoundPathPage'
 import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
+import { useEffect } from 'react'
 
 /**
  * The router's root route. It is a lean assembler: the app-wide monitors,
@@ -75,10 +76,20 @@ function RootLayout() {
 	// Auction routes and the home / Browse surface render in the Arena chrome
 	// (dark header, footer and search); see `usesArenaChrome`.
 	const arena = usesArenaChrome(location.pathname)
+	// Portalled pop-ups (cart sheet, menus, dialogs) mount on <body>, outside
+	// the wrapper, so the scope goes on <body> too while a public page is shown.
+	useEffect(() => {
+		document.body.classList.toggle('arena-chrome', arena)
+		return () => document.body.classList.remove('arena-chrome')
+	}, [arena])
 
 	// Setup renders without the app chrome.
 	if (isSetupPage) {
-		return appPage ? <BoundPathPage payload={appPage} /> : served ? <ServedPage payload={served} /> : <Outlet />
+		return (
+			<div className="relative flex flex-col min-h-screen arena-chrome">
+				{appPage ? <BoundPathPage payload={appPage} /> : served ? <ServedPage payload={served} /> : <Outlet />}
+			</div>
+		)
 	}
 
 	return (

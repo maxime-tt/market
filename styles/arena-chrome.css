@@ -2,10 +2,10 @@
  * Arena chrome: the app header, footer and Browse surface (nav, search field,
  * results) in the Plebeian Auctions Arena look.
  *
- * The root layout puts `.arena-chrome` on its wrapper for the home / Browse
- * surface, the auction routes and the products routes (`/products`,
- * `/products/*`) — see platform/web/layout/appChrome.ts, `usesArenaChrome`,
- * and ADR-0024. ADR-0023 plans to feed these values from the theme registry. Every component under it keeps its own markup and
+ * The root layout puts `.arena-chrome` on its wrapper, and on <body>, for
+ * every public page; only the dashboard is left out (ADR-0025). See
+ * platform/web/layout/appChrome.ts, `usesArenaChrome`. ADR-0023 will feed
+ * these values from the theme registry. Every component under it keeps its own markup and
  * tokens; this file only rebinds the token values inside the scope, the same
  * way `.dark` does in globals.css. Colours come from the Arena demo
  * (web/src/template.css). Fonts are the bundled ones in styles/fonts.css —
@@ -557,4 +557,80 @@
 
 .arena-dash-title .arena-dash-toggle:hover {
 	color: #ffffff;
+}
+
+/* --- Older public pages -------------------------------------------------------
+ * Every public page now renders in the Arena scope (ADR-0025). Pages written
+ * before the role tokens still carry a few hard-coded colours; these map them
+ * onto Arena values, the same way the admin console does for the dashboard.
+ * Never inside a storefront theme (it keeps its own look) or the console.
+ * New code should use tokens directly; see docs/theming.md.
+ * ------------------------------------------------------------------------- */
+
+.arena-chrome
+	:is(.bg-white, .lg\:bg-white, .bg-gray-50, .bg-gray-100, .bg-light-gray, .bg-tertiary, .bg-muted\/40):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	background-color: var(--arena-surface);
+}
+
+.arena-chrome
+	:is(.hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover, .hover\:bg-white:hover, .bg-gray-200):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	background-color: var(--arena-surface-2);
+}
+
+.arena-chrome
+	:is(.border-black, .lg\:border-black, .border-gray-100, .border-gray-200, .border-gray-300):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	border-color: var(--arena-line);
+}
+
+.arena-chrome
+	:is(.text-black, .text-gray-900, .text-gray-800):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	color: var(--arena-ink);
+}
+
+.arena-chrome
+	:is(.text-gray-700, .text-gray-600, .text-gray-500, .text-gray-400, .text-muted-foreground):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	color: var(--arena-muted);
+}
+
+/* The old black and banner buttons become the one pink action. */
+.arena-chrome
+	:is(.btn-black, .btn-product-banner, .bg-pink-500, .bg-pink-600, .bg-brand-pink):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	background-color: var(--arena-pink);
+	color: var(--arena-bg);
+	border-color: transparent;
+}
+
+.arena-chrome
+	:is(.btn-black, .btn-product-banner):hover:not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	background-color: var(--arena-pink-hover);
+}
+
+/* Pill buttons on page content, as on the products pages. Only buttons still
+   on the primitive's default corner (`rounded-md`); custom shapes are kept. */
+.arena-chrome
+	main
+	[data-slot='button'].rounded-md:not(:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)) {
+	border-radius: 999px;
+}
+
+/* Bare `border` utilities default to currentColor; give them the hairline in
+   the base layer so explicit border colours still win. */
+@layer base {
+	.arena-chrome main *:not(:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)) {
+		border-color: var(--arena-line);
+	}
 }
