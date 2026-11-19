@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_BLOSSOM_SERVERS, checkBlossomServerAvailability, getAvailableBlossomServers } from './blossomServers'
+import {
+	DEFAULT_BLOSSOM_SERVERS,
+	checkBlossomServerAvailability,
+	getAvailableBlossomServers,
+	instanceBlossomServer,
+	resolveBlossomServers,
+} from './blossomServers'
 
 /**
  * Pure-function probes for the server-list half of the media capability:
@@ -87,5 +93,22 @@ describe('getAvailableBlossomServers', () => {
 		} finally {
 			globalThis.fetch = original
 		}
+	})
+})
+
+describe('resolveBlossomServers', () => {
+	test('an instance with its own server lists only that server', () => {
+		expect(resolveBlossomServers('https://reckless.plebeian.app/')).toEqual([
+			{ name: 'reckless.plebeian.app', url: 'https://reckless.plebeian.app', plan: 'self-hosted' },
+		])
+	})
+
+	test('an instance without one keeps the shipped defaults', () => {
+		expect(resolveBlossomServers(undefined)).toBe(DEFAULT_BLOSSOM_SERVERS)
+		expect(resolveBlossomServers('')).toBe(DEFAULT_BLOSSOM_SERVERS)
+	})
+
+	test('labels the server by host', () => {
+		expect(instanceBlossomServer('https://media.example.org').name).toBe('media.example.org')
 	})
 })
