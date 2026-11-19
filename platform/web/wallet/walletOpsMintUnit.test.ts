@@ -18,6 +18,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Amount, Wallet, type Proof } from '@cashu/cashu-ts'
 
+import {
+	createCocoWalletSource,
+	type CashuProofRepository,
+	type CashuWalletSource,
+	type StoredProof,
+} from '@sdk/commerce/payments/wallet/cashuWalletSource'
 import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
 import { walletOps } from '@platform/web/wallet/walletOps'
 
@@ -48,7 +54,8 @@ interface CapturedRequest {
 
 let quoteRequests: CapturedRequest[]
 let mintShouldRefuse: boolean
-let updateCalls: Array<{ store: Proof[]; mint: string }>
+let saved: Array<{ mintUrl: string; proofs: StoredProof[] }>
+let walletSource: CashuWalletSource
 let originalLoadMint: typeof Wallet.prototype.loadMint | undefined
 let originalMintProofsBolt11: typeof Wallet.prototype.mintProofsBolt11 | undefined
 let originalFetch: typeof globalThis.fetch | undefined
@@ -58,7 +65,7 @@ let originalRefresh: typeof walletOps.refresh | undefined
 beforeEach(() => {
 	quoteRequests = []
 	mintShouldRefuse = false
-	updateCalls = []
+	saved = []
 	process.env.APP_NIP60_DEV_MODE = 'true'
 
 	originalLoadMint = Wallet.prototype.loadMint
@@ -103,21 +110,24 @@ beforeEach(() => {
 		throw new Error(`unexpected fetch in test: ${url}`)
 	}) as typeof globalThis.fetch
 
-	// The mint list and the balance projection are not under test; `mints: []` makes the helper
-	// register the mint, and the coco write is replaced so no manager is needed.
+	// The real coco-backed source, with a fake repository in coco's place: the mint path is
+	// exercised through the same write boundary the app uses, so the stamping under test is the
+	// production one, not a stand-in that happens to stamp.
+	const repository: CashuProofRepository = {
+		saveProofs: async (mintUrl, proofs) => {
+			saved.push({ mintUrl, proofs })
+		},
+		getReadyProofs: async () => [],
+		deleteProofs: async () => {},
+	}
+	walletSource = createCocoWalletSource({ getMints: () => [MINT], proofs: repository })
+
 	cashuStore.setState((s) => ({
 		...s,
 		status: 'ready',
 		defaultMint: MINT,
 		mints: [MINT],
-		walletSource: {
-			mints: [MINT],
-			state: {
-				update: async (update: { store: Proof[]; mint: string }) => {
-					updateCalls.push(update)
-				},
-			},
-		} as never,
+		walletSource,
 	}))
 	cashuActions.addMint = async (): Promise<void> => {}
 	walletOps.refresh = async (): Promise<void> => {}
@@ -144,11 +154,14 @@ describe('walletOps.mintTestEcash', () => {
 		expect(quoteRequests).toHaveLength(1)
 		expect(quoteRequests[0]?.body).toEqual({ amount: 100, unit: 'sat' })
 
-		// cashu-ts proofs carry no unit/state; the store's write path (coco) needs both.
-		expect(updateCalls).toHaveLength(1)
-		expect(updateCalls[0]?.mint).toBe(MINT)
-		expect(updateCalls[0]?.store).toHaveLength(1)
-		expect(updateCalls[0]?.store[0]).toMatchObject({ secret: 'minted', unit: 'sat', state: 'ready' })
+		// cashu-ts proofs carry no unit/state; the write boundary stamps both before coco sees
+		// them, so nothing at the call site has to remember either field.
+		expect(saved).toHaveLength(1)
+		expect(saved[0]?.mintUrl).toBe(MINT)
+		expect(saved[0]?.proofs).toHaveLength(1)
+		expect(saved[0]?.proofs[0]).toMatchObject({ secret: 'minted', unit: 'sat', state: 'ready' })
+		// And the stamped proof counts toward the source's balance.
+		expect(walletSource.state.getProofs({ mint: MINT })).toHaveLength(1)
 	})
 
 	test('a refused quote reports the mint\'s own error verbatim', async () => {
@@ -157,6 +170,6 @@ describe('walletOps.mintTestEcash', () => {
 		await expect(walletOps.mintTestEcash(100, MINT, { allowFallback: false })).rejects.toThrow(
 			`${MINT}: unit 'usd' not supported in any keyset.`,
 		)
-		expect(updateCalls).toHaveLength(0)
+		expect(saved).toHaveLength(0)
 	})
 })

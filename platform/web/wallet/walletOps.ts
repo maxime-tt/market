@@ -857,15 +857,11 @@ export const walletOps = {
 					throw new Error('Mint returned no proofs')
 				}
 
-				// cashu-ts v5 mints a proof as `{ id, amount, secret, C, dleq? }`: it carries
-				// neither the unit nor the proof state. The store's write path is coco's own
-				// proof repository (`cashuWalletSource.state.update` → coco `proofRepository`),
-				// which rejects a unit-less proof outright — `normalizeUnit(proof.unit)` throws
-				// "Unit is required" — and only counts a proof whose `state` is `ready` toward
-				// the balance. So the two fields coco's own `mapProofToCoreProof` attaches are
-				// stamped here, at the point where these proofs enter coco.
+				// cashu-ts v5 proofs carry neither `unit` nor `state`; the store's write boundary
+				// (`cashuWalletSource.state.update` → coco `proofRepository`) stamps both, so no
+				// caller has to. See `stampProof` in `@sdk/commerce/payments/wallet/cashuWalletSource`.
 				await wallet.state.update({
-					store: proofs.map((proof) => ({ ...proof, unit: WALLET_UNIT, state: 'ready' as const })),
+					store: proofs,
 					mint: targetMint,
 				})
 

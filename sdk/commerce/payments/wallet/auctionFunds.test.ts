@@ -19,9 +19,11 @@ import {
 	createAuctionReclaim,
 	formatReclaimWaitSeconds,
 	getAuctionReclaimReadyAt,
+	receiveTokenIntoWallet,
 	AUCTION_RECLAIM_SKEW_BUFFER_SECONDS,
 } from '@sdk/commerce/payments/wallet/auctionFunds'
-import type { AuctionFundsWallet, AuctionReclaimHost } from '@sdk/commerce/payments/wallet/auctionFunds'
+import type { AuctionFundsMintAccess, AuctionFundsWallet, AuctionReclaimHost } from '@sdk/commerce/payments/wallet/auctionFunds'
+import { createCocoWalletSource, type CashuProofRepository, type StoredProof } from '@sdk/commerce/payments/wallet/cashuWalletSource'
 import type { PendingToken } from '@sdk/commerce/payments/wallet/types'
 
 // ---------- localStorage polyfill (as in preLockRecoveryRecordBound.test.ts) ----------
@@ -354,5 +356,37 @@ describe('reclaim timing helpers', () => {
 		expect(formatReclaimWaitSeconds(30)).toBe('30s')
 		expect(formatReclaimWaitSeconds(90)).toBe('2m')
 		expect(formatReclaimWaitSeconds(7200)).toBe('2h')
+	})
+})
+
+// ---------- receive: the coco write boundary ----------
+
+describe('receiveTokenIntoWallet — the coco write boundary', () => {
+	test('a received token crosses the boundary stamped and counts toward the source balance', async () => {
+		const saved: Array<{ mintUrl: string; proofs: StoredProof[] }> = []
+		const repository: CashuProofRepository = {
+			saveProofs: async (mintUrl, proofs) => {
+				saved.push({ mintUrl, proofs })
+			},
+			getReadyProofs: async () => [],
+			deleteProofs: async () => {},
+		}
+		const wallet = createCocoWalletSource({ getMints: () => [MINT], proofs: repository })
+		// A cashu-ts proof as `receive()` returns it: no unit, no state.
+		const tokenProof: Proof = { id: '00', amount: Amount.from(21), secret: 'received-secret', C: '02' + '7'.repeat(64) }
+		const mint: AuctionFundsMintAccess = {
+			cashuWalletForMint: async () => ({
+				cashuWallet: { receive: async () => [tokenProof] } as unknown as Wallet,
+				keysetId: undefined,
+			}),
+		}
+
+		const result = await receiveTokenIntoWallet({ wallet, mint, token: 'cashuB-token', mintUrl: MINT })
+
+		expect(result).toEqual({ amount: 21, mintUrl: MINT })
+		// The boundary stamped the proof before coco's repository saw it.
+		expect(saved).toEqual([{ mintUrl: MINT, proofs: [{ ...tokenProof, unit: 'sat', state: 'ready' }] }])
+		// And it is spendable: the source's mirror — what a balance read counts — holds it.
+		expect(wallet.state.getProofs({ mint: MINT })).toEqual([{ ...tokenProof, unit: 'sat', state: 'ready' }])
 	})
 })

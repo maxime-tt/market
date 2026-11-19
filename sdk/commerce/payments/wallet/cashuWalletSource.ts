@@ -28,14 +28,38 @@
 import type { Proof } from '@cashu/cashu-ts'
 import type { AuctionFundsWallet } from './auctionFunds'
 
+/** The unit the app's wallet is denominated in. coco's own default; named once here. */
+export const WALLET_PROOF_UNIT = 'sat'
+
+/** coco's proof lifecycle states. Declared here for the same structural reason as the port. */
+export type CoreProofState = 'inflight' | 'ready' | 'spent'
+
+/**
+ * A proof as coco's repository stores it: cashu-ts's `Proof` plus the two fields coco's own
+ * `mapProofToCoreProof` attaches (`unit`, `state`). The repository's `saveProofs` runs
+ * `normalizeUnit(proof.unit)` and throws "Unit is required" for a cashu-ts proof, which carries
+ * neither field; its balance queries only count `ready` proofs. So the write boundary stamps
+ * both, and every caller — the dev mint, the receive path, the auction lock — is covered.
+ */
+export interface StoredProof extends Proof {
+	unit: string
+	state: CoreProofState
+}
+
+/**
+ * A proof a caller hands to the boundary: cashu-ts's shape, or one already read back from coco
+ * (which carries its own `unit`/`state`). The boundary preserves both when present.
+ */
+export type IncomingProof = Proof & { unit?: string; state?: CoreProofState }
+
 /**
  * The repository surface this source needs. Declared structurally rather than imported from
  * coco so the pin's `ProofRepository` satisfies it without this module depending on the package
  * name — the same reason `./proofs.ts` declares `WalletProofSource` structurally.
  */
 export interface CashuProofRepository {
-	saveProofs(mintUrl: string, proofs: Proof[]): Promise<void>
-	getReadyProofs(mintUrl: string): Promise<Proof[]>
+	saveProofs(mintUrl: string, proofs: StoredProof[]): Promise<void>
+	getReadyProofs(mintUrl: string): Promise<StoredProof[]>
 	deleteProofs(mintUrl: string, secrets: string[]): Promise<void>
 }
 
@@ -68,11 +92,24 @@ export interface CashuWalletSource extends AuctionFundsWallet {
 const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')
 
 /** Dedupe by secret — the same proof cannot be held twice. */
-const dedupeBySecret = (proofs: Proof[]): Proof[] => {
-	const bySecret = new Map<string, Proof>()
+const dedupeBySecret = <T extends Proof>(proofs: T[]): T[] => {
+	const bySecret = new Map<string, T>()
 	for (const proof of proofs) bySecret.set(proof.secret, proof)
 	return Array.from(bySecret.values())
 }
+
+/**
+ * Stamp the two fields coco's repository requires, without overwriting a proof that already
+ * carries them. A cashu-ts proof has neither `unit` nor `state`; coco's `saveProofs` rejects
+ * it (`normalizeUnit(proof.unit)` throws "Unit is required") and its balance only counts
+ * `ready`. A proof read back from coco arrives with its own unit and lifecycle state, so
+ * preserving those is what keeps a re-written proof from being corrupted.
+ */
+const stampProof = (proof: IncomingProof): StoredProof => ({
+	...proof,
+	unit: proof.unit ?? WALLET_PROOF_UNIT,
+	state: proof.state ?? 'ready',
+})
 
 /**
  * Build the coco-backed wallet source.
@@ -81,9 +118,9 @@ const dedupeBySecret = (proofs: Proof[]): Proof[] => {
  * proofs", which fails closed (a lock refuses for lack of balance) rather than inventing money.
  */
 export const createCocoWalletSource = (ports: CashuWalletSourcePorts): CashuWalletSource => {
-	const readyByMint = new Map<string, Proof[]>()
+	const readyByMint = new Map<string, StoredProof[]>()
 
-	const read = (mintUrl: string): Proof[] => readyByMint.get(normalizeMintUrl(mintUrl)) ?? []
+	const read = (mintUrl: string): StoredProof[] => readyByMint.get(normalizeMintUrl(mintUrl)) ?? []
 
 	const source: CashuWalletSource = {
 		get mints(): string[] {
@@ -99,10 +136,15 @@ export const createCocoWalletSource = (ports: CashuWalletSourcePorts): CashuWall
 			// `includeDeleted: false` are already satisfied: a spent or deleted proof is not here.
 			getProofs: (filter) => read(filter.mint),
 
+			// The one write boundary between cashu-ts and coco: every caller — the dev mint,
+			// the receive path, the auction lock — hands its proofs here, and this is where
+			// the unit and state coco's repository requires are stamped. Callers never have
+			// to remember either field, and a proof that already carries them is preserved.
 			update: async (update) => {
 				const mint = normalizeMintUrl(update.mint)
-				if (update.store?.length) {
-					await ports.proofs.saveProofs(mint, update.store)
+				const stored = (update.store ?? []).map(stampProof)
+				if (stored.length) {
+					await ports.proofs.saveProofs(mint, stored)
 				}
 				if (update.destroy?.length) {
 					await ports.proofs.deleteProofs(
@@ -112,7 +154,10 @@ export const createCocoWalletSource = (ports: CashuWalletSourcePorts): CashuWall
 				}
 				const destroyed = new Set((update.destroy ?? []).map((proof) => proof.secret))
 				const kept = read(mint).filter((proof) => !destroyed.has(proof.secret))
-				readyByMint.set(mint, dedupeBySecret([...kept, ...(update.store ?? [])]))
+				// The mirror answers "what is spendable", so it holds only what coco would
+				// report as ready: a proof stamped (or already) inflight/spent is not here.
+				const ready = stored.filter((proof) => proof.state === 'ready')
+				readyByMint.set(mint, dedupeBySecret([...kept, ...ready]))
 			},
 		},
 
