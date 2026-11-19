@@ -88,7 +88,9 @@ export function useArenaLotRead(init: ArenaLotReadInit): ArenaSurfacesReadState 
 		const read = createWebArenaAuctionRead({
 			relays,
 			store: getReadContext().store as unknown as EventStorePort<Event>,
-			filters: arenaLotFilters(seller, d),
+			// `d === null` is the whole-arena read the auctions index needs (its list
+			// and its featured lot); a lot page names its lot and asks for that one.
+			filters: d === null ? undefined : arenaLotFilters(seller, d),
 		})
 
 		void collectArenaSurfacesRead(read, {
@@ -118,8 +120,8 @@ export function useArenaLotRead(init: ArenaLotReadInit): ArenaSurfacesReadState 
 }
 
 export interface ArenaLotReadInit {
-	/** The route param: the auction's `d` tag. */
-	d: string
+	/** The route param: the auction's `d` tag, or `null` for the whole-arena read (the index). */
+	d: string | null
 	/** The `?seller=` disambiguator, or `null` for the bare `d` address. */
 	seller: string | null
 	/** Bumped to reopen the read: a published bid, or the page's retry. */

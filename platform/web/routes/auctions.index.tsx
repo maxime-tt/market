@@ -25,7 +25,9 @@ function AuctionsRoute() {
 	// Reopenable read: a bid placed on the featured lot bumps the key so the
 	// page shows it once a relay serves it.
 	const [refreshKey, bumpRefresh] = useReducer((key: number) => key + 1, 0)
-	const read = useArenaLotRead(refreshKey)
+	// The whole arena (`d: null`): the index lists every lot, so it must not ask
+	// for one lot's filters.
+	const read = useArenaLotRead({ d: null, seller: null, refreshKey })
 	const { isAuthenticated } = useStore(authStore)
 	const [sort, setSort] = useState<ArenaListSort>('newest')
 	const [hideEnded, setHideEnded] = useState(false)
