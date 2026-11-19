@@ -53,6 +53,7 @@ const model: ArenaAuctionDetailModel = {
 	refundsByBidder: {},
 	settleReceipt: null,
 	createRefusal: null,
+	bidRefusals: {},
 }
 
 const relayHealth = { answered: 2, total: 2 }

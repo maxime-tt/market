@@ -219,6 +219,7 @@ describe('toAuctionListItem', () => {
 		committedEnd: null,
 		committedEnds: [],
 		createRefusal: null,
+		bidRefusals: [],
 		relays: ['wss://a'],
 	}
 

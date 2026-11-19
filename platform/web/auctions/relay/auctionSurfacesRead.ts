@@ -255,6 +255,18 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 					refusalEventId: view.createRefusal.refusalEventId,
 				}
 
+	// The chain's refusals of this lot's bids, keyed by the refused bid's event
+	// id (a 1450 carries `event_id`, and the only bids it can name for this lot
+	// are this lot's own). Verbatim reasons only.
+	const bidRefusals: Record<string, ArenaCreateRefusalModel> = {}
+	for (const refusal of view.bidRefusals) {
+		bidRefusals[refusal.createEventId] = {
+			reason: refusal.reason,
+			height: refusal.height,
+			refusalEventId: refusal.refusalEventId,
+		}
+	}
+
 	// A refund receipt names a bid_id; a position is a bidder. Map each refund to
 	// the bidder of the bid it names, keeping the earliest anchored height.
 	const bidderByBidId = new Map<string, string>()
@@ -287,6 +299,7 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 		refundsByBidder,
 		settleReceipt: view.settleReceipt === null ? null : toReceiptModel(view.settleReceipt, context.heldParamsVersion),
 		createRefusal,
+		bidRefusals,
 	}
 }
 

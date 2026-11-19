@@ -1013,6 +1013,41 @@ describe('the state half — the committed end (1449) and refusals (1450)', () =
 		expect(snapshot.refusedCreates[0].reason).toBe('startPrice out of range (1..10000000)')
 	})
 
+	test('a 1450 naming a BID lands as that bid’s refusal, with the chain’s words', async () => {
+		// The chain records a bid it refused at delivery (the late family, the
+		// block-time locktime floor, a duplicate) as a 1450 naming the kind-1441.
+		// A bid refused at admission leaves no record — so this list is a fact
+		// about what the chain said, never an inference about what it did not.
+		const create = createEvent({ id: 'root-1' })
+		const bid = bidEvent({ a: `1440:${SELLER_A}:lot-1`, amount: 100, created_at: 1100, id: 'bid-1' })
+		const refusal = refusedEvent({
+			refusedEventId: 'bid-1',
+			refusedKind: 1441,
+			reason: 'locktime below the floor for this lot: 1794924019 is under 1794924021',
+		})
+		const snapshot = await readFrom({ 'wss://a': { events: [create, bid, refusal] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		expect(view.bidRefusals).toHaveLength(1)
+		expect(view.bidRefusals[0].createEventId).toBe('bid-1')
+		expect(view.bidRefusals[0].reason).toBe('locktime below the floor for this lot: 1794924019 is under 1794924021')
+		// A bid refusal is not the lot's create refusal.
+		expect(view.createRefusal).toBeNull()
+	})
+
+	test('a create refusal is not attributed to a bid, and a bid refusal needs the bid', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const bid = bidEvent({ a: `1440:${SELLER_A}:lot-1`, amount: 100, created_at: 1100, id: 'bid-1' })
+		// A 1440 refusal, and a 1441 refusal for a bid this lot does not hold.
+		const createRefusal = refusedEvent({ refusedEventId: 'root-1', refusedKind: 1440 })
+		const otherBidRefusal = refusedEvent({ refusedEventId: 'bid-elsewhere', refusedKind: 1441 })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, bid, createRefusal, otherBidRefusal] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		expect(view.bidRefusals).toEqual([])
+		expect(view.createRefusal?.reason).toBe('title required (max 120 chars)')
+	})
+
 	test('the refusal dedupes by (event_id, reason) at the earliest anchored height', async () => {
 		const create = createEvent({ id: 'root-1' })
 		const early = refusedEvent({ refusedEventId: 'root-1', height: 1745 })

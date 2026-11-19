@@ -459,6 +459,10 @@ export function settleSubmissionFromRead(state: ArenaBidSubmissionState, model: 
 /**
  * The three states a bid the app published can be in, and nothing else.
  *
+ * - `refused` — the chain **recorded** a refusal of this bid (a kind-1450 naming
+ *   the bid's event id, with the chain's own reason). Only a bid refused **at
+ *   delivery** is recorded; one refused at admission leaves no record. The
+ *   reason is the chain's, verbatim — never re-worded.
  * - `committed` — the bid is in committed state (the read serves it, or a
  *   receipt names it): the bid is live. Say nothing.
  * - `not-accepted` — it was published and is **not** committed while the chain
@@ -470,7 +474,7 @@ export function settleSubmissionFromRead(state: ArenaBidSubmissionState, model: 
  *   infrastructure problem, not the bid. The honest statement is that, and the
  *   app makes no claim about the bid.
  */
-export type ArenaBidDiagnosisState = 'committed' | 'not-accepted' | 'infrastructure'
+export type ArenaBidDiagnosisState = 'committed' | 'refused' | 'not-accepted' | 'infrastructure'
 
 /** One diagnosis, with the facts it rests on and no invented reason. */
 export interface ArenaBidDiagnosis {
@@ -483,6 +487,12 @@ export interface ArenaBidDiagnosis {
 	 * own refund path. `null` when the app did not hold it (never a guess).
 	 */
 	escrowLocktime: number | null
+	/**
+	 * The chain's own reason for refusing this bid, verbatim — set only for
+	 * `refused` (a kind-1450 naming the bid). `null` in every state the app
+	 * diagnoses itself: the app never supplies a reason the chain did not state.
+	 */
+	reason: string | null
 	/**
 	 * `true` only in `not-accepted` **and** when the locktime is known: the bid
 	 * was not taken by the chain and its funds are locked by real sats until
@@ -541,22 +551,47 @@ export function diagnosePublishedBid(input: {
 	chainAdvancing: boolean
 	/** The escrow locktime the bid was funded against, or `null`. */
 	escrowLocktime: number | null
+	/**
+	 * The chain's recorded refusal of this bid (kind-1450 naming its event id),
+	 * verbatim, or `null` when no refusal was read. A bid refused at admission
+	 * has no record and therefore no reason — which is not the same as accepted.
+	 */
+	refusalReason?: string | null
 }): ArenaBidDiagnosis {
 	if (input.seenInRead || input.namedByReceipt) {
-		return { state: 'committed', eventId: input.eventId, escrowLocktime: input.escrowLocktime, reclaimable: false }
+		return { state: 'committed', eventId: input.eventId, escrowLocktime: input.escrowLocktime, reason: null, reclaimable: false }
+	}
+	// The chain put it in committed state and refused it. That is a fact, and the
+	// reason is the chain's own words — the app adds none.
+	const refusalReason = input.refusalReason
+	if (typeof refusalReason === 'string' && refusalReason.trim() !== '') {
+		return {
+			state: 'refused',
+			eventId: input.eventId,
+			escrowLocktime: input.escrowLocktime,
+			reason: refusalReason,
+			reclaimable: input.escrowLocktime !== null,
+		}
 	}
 	if (input.chainAdvancing) {
 		return {
 			state: 'not-accepted',
 			eventId: input.eventId,
 			escrowLocktime: input.escrowLocktime,
+			reason: null,
 			// Reclaimable only once the lock's own refund path is reachable, and
 			// only when the locktime is known: a reclaim affordance with an
 			// unknown deadline would be a button that cannot be honoured.
 			reclaimable: input.escrowLocktime !== null,
 		}
 	}
-	return { state: 'infrastructure', eventId: input.eventId, escrowLocktime: input.escrowLocktime, reclaimable: false }
+	return {
+		state: 'infrastructure',
+		eventId: input.eventId,
+		escrowLocktime: input.escrowLocktime,
+		reason: null,
+		reclaimable: false,
+	}
 }
 
 /** What an error thrown by {@link publishArenaBid} means for the panel. */

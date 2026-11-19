@@ -780,6 +780,15 @@ export interface ArenaAuctionView {
 	 * create's event id), or `null` when none was read.
 	 */
 	createRefusal: ArenaRefusedCreateFact | null
+	/**
+	 * The chain's refusals of this lot's **bids** (1450 events naming a kind-1441),
+	 * one per refused bid event id, at the earliest anchored height.
+	 *
+	 * Only a bid the chain refused **at delivery** appears here. A bid refused at
+	 * admission is discarded in `CheckTx` and leaves no record — so an absent
+	 * entry is *no refusal read*, never "accepted".
+	 */
+	bidRefusals: ArenaRefusedCreateFact[]
 	relays: string[]
 }
 
@@ -1222,6 +1231,18 @@ export function projectArenaEvents(
 		// The chain's refusal of this create, keyed on the root create's event id
 		// (a 1450 names the create, never a version).
 		const createRefusal = refusedCreateByEventId.get(entry.root.id) ?? null
+		// **Bid** refusals: the chain records a bid it refused *at delivery* (the
+		// late family, the block-time locktime floor, a duplicate bid) as a 1450
+		// naming the kind-1441. A bid refused at admission (no proof of funds, a
+		// bad escrow signature) is discarded in `CheckTx` and never recorded —
+		// that absence is not a refusal, and this list never claims one.
+		// Owner ruling: `notes/DECISION-2026-11-18-refused-bids-are-not-committed.md`.
+		const bidRefusals: ArenaRefusedCreateFact[] = []
+		for (const bid of auctionBids) {
+			const refusal = refusedCreateByEventId.get(bid.eventId)
+			if (refusal === undefined || refusal.refusedKind !== ARENA_AUCTION_BID_KIND) continue
+			bidRefusals.push(refusal)
+		}
 
 		auctions.push({
 			coordinate: entry.coordinate,
@@ -1245,6 +1266,7 @@ export function projectArenaEvents(
 			committedEnd,
 			committedEnds,
 			createRefusal,
+			bidRefusals,
 			relays: [...relays].sort(),
 		})
 	}

@@ -255,6 +255,17 @@ export interface ArenaAuctionDetailModel extends ArenaAuctionCardModel {
 	 * this must state the chain's words, never "not found".
 	 */
 	createRefusal: ArenaCreateRefusalModel | null
+	/**
+	 * The chain's refusals of this lot's **bids**, keyed by the refused bid's
+	 * event id, with the chain's own reason verbatim.
+	 *
+	 * A bid is named here only when the chain refused it **at delivery** (the
+	 * late family, the block-time locktime floor, a duplicate). A bid refused at
+	 * admission is discarded in `CheckTx` and leaves no record, so an absent
+	 * entry is *no refusal read* — never "accepted", and never a reason invented
+	 * for it (owner ruling, `notes/DECISION-2026-11-18-refused-bids-are-not-committed.md`).
+	 */
+	bidRefusals: Record<string, ArenaCreateRefusalModel>
 }
 
 /** The chain's refusal of a create, as a surface may state it. */

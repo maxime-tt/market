@@ -235,8 +235,22 @@ export function AuctionBidHost({ model, readStatus, now, chainAdvancing = null, 
 				namedByReceipt: model.receipts.some((receipt) => receipt.bidId === previous.eventId),
 				chainAdvancing,
 				escrowLocktime,
+				// The chain's recorded refusal of this bid, verbatim, or null. Only a
+				// bid refused at delivery is recorded; a bid refused at admission
+				// leaves no record, and no reason is ever invented for it.
+				refusalReason: model.bidRefusals[previous.eventId]?.reason ?? null,
 			})
 			if (diagnosis.state === 'committed') return upgraded
+			if (diagnosis.state === 'refused') {
+				return {
+					phase: 'refused',
+					amount: previous.amount,
+					eventId: previous.eventId,
+					reason: diagnosis.reason ?? '',
+					locktime: diagnosis.escrowLocktime,
+					reclaimable: diagnosis.reclaimable,
+				}
+			}
 			if (diagnosis.state === 'not-accepted') {
 				return {
 					phase: 'not-accepted',

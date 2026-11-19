@@ -179,7 +179,7 @@ function lotStateEvent(over: { auctionId?: string; endTime?: number; extensions?
 }
 
 /** A signed kind-1450 refusal of a create (the chain's live shape, §4). */
-function refusedEvent(over: { refusedEventId?: string; reason?: string; height?: number } = {}): NostrEventLike {
+function refusedEvent(over: { refusedEventId?: string; reason?: string; height?: number; refusedKind?: number } = {}): NostrEventLike {
 	const refusedEventId = over.refusedEventId ?? 'create-root'
 	const reason = over.reason ?? 'title required (max 120 chars)'
 	const height = over.height ?? 1749
@@ -197,7 +197,7 @@ function refusedEvent(over: { refusedEventId?: string; reason?: string; height?:
 			content: JSON.stringify({
 				schema: 'arena.refused.v1',
 				event_id: refusedEventId,
-				kind: 1440,
+				kind: over.refusedKind ?? 1440,
 				reason,
 				height,
 				block_hash: hash,
@@ -380,6 +380,34 @@ describe('the committed end and the create refusal', () => {
 		const detail = toAuctionDetailModel(auction, CONTEXT)
 		expect(detail.createRefusal?.reason).toBe('startPrice out of range (1..10000000)')
 		expect(detail.createRefusal?.height).toBe(1749)
+	})
+
+	test('a bid the chain refused at delivery carries that bid’s reason, keyed by its event id', () => {
+		// 24 of the 36 live 1450s name a kind-1441 (measured 2026-11-18): a bid the
+		// chain decided at delivery IS committed state, and its reason is shown.
+		const bid = bidEvent({ pubkey: BIDDER_ONE, amount: 100 })
+		const auction = onlyAuction(
+			snapshotOf([
+				createEvent({ id: 'create-root' }),
+				bid,
+				refusedEvent({
+					refusedEventId: bid.id,
+					refusedKind: 1441,
+					reason: 'locktime below the floor for this lot: 1794924019 is under 1794924021',
+				}),
+			]),
+		)
+		const detail = toAuctionDetailModel(auction, CONTEXT)
+		expect(detail.bidRefusals[bid.id]?.reason).toBe('locktime below the floor for this lot: 1794924019 is under 1794924021')
+		expect(detail.bidRefusals[bid.id]?.height).toBe(1749)
+		// A bid refusal is not the lot's create refusal.
+		expect(detail.createRefusal).toBeNull()
+	})
+
+	test('a bid with no refusal read has no entry — no reason is invented for it', () => {
+		const bid = bidEvent({ pubkey: BIDDER_ONE, amount: 100 })
+		const auction = onlyAuction(snapshotOf([createEvent({ id: 'create-root' }), bid]))
+		expect(toAuctionDetailModel(auction, CONTEXT).bidRefusals).toEqual({})
 	})
 
 	test('a lot with no refusal read has a null createRefusal, never an invented reason', () => {

@@ -69,6 +69,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		refundsByBidder: {},
 		settleReceipt: null,
 		createRefusal: null,
+		bidRefusals: {},
 		...over,
 	}
 }
@@ -257,10 +258,27 @@ describe('submissionLine — what the bidder is told between click and relay', (
 		const line = submissionLine({ phase: 'not-accepted', amount: 1000, eventId: 'ev-1', locktime: 1_794_999_999, reclaimable: true })!
 		expect(line.title).toContain('The chain did not accept this bid.')
 		expect(line.detail).toContain('not a network problem')
-		expect(line.detail).toContain('does not publish one for a refused bid')
+		expect(line.detail).toContain('the chain recorded no refusal for it')
 		expect(line.detail).toContain('2026-11-18T11:06:39.000Z')
 		expect(line.detail).toContain('reclaim the locked sats')
 		expect(line.tone).toBe('warning')
+	})
+
+	test('refused states the chain’s own reason, verbatim, and never a re-worded one', () => {
+		const reason = 'locktime below the floor for this lot: 1794924019 is under 1794924021'
+		const line = submissionLine({
+			phase: 'refused',
+			amount: 1000,
+			eventId: 'ev-1',
+			reason,
+			locktime: 1_794_999_999,
+			reclaimable: true,
+		})!
+		expect(line.title).toContain('The chain refused this bid.')
+		expect(line.detail).toContain(reason)
+		expect(line.detail).toContain('2026-11-18T11:06:39.000Z')
+		expect(line.detail).toContain('reclaim the locked sats')
+		expect(line.tone).toBe('error')
 	})
 
 	test('not-accepted with no locktime says so, and does not promise a reclaim', () => {
@@ -276,19 +294,22 @@ describe('submissionLine — what the bidder is told between click and relay', (
 		expect(line.detail).toContain('nothing here says the bid was refused')
 	})
 
-	test('only unpublished and failed are unsuccessful — presumed, not-accepted and infrastructure are not', () => {
+	test('only unpublished and failed are unsuccessful — a recorded refusal is a fact, not a retry', () => {
 		const states: ArenaBidSubmissionState[] = [
 			{ phase: 'idle' },
 			{ phase: 'publishing', amount: 1 },
 			{ phase: 'presumed', amount: 1, eventId: 'e', acceptedBy: ['a'], totalRelays: 1 },
 			{ phase: 'seen', amount: 1, eventId: 'e', acceptedBy: ['a'], totalRelays: 1 },
 			{ phase: 'not-accepted', amount: 1, eventId: 'e', locktime: null, reclaimable: false },
+			{ phase: 'refused', amount: 1, eventId: 'e', reason: 'x', locktime: null, reclaimable: false },
 			{ phase: 'infrastructure', amount: 1, eventId: 'e' },
 			{ phase: 'unpublished', amount: 1, eventId: 'e', reason: 'x' },
 			{ phase: 'failed', amount: 1, reason: 'x' },
 		]
-		// A published-but-not-committed bid is a *recorded* fact, not a retryable
-		// failure: retrying the same amount would lock a second escrow.
+		// A published-but-not-committed bid, and a bid the chain recorded a
+		// refusal for, are *recorded* facts, not retryable failures: the escrow is
+		// locked until its locktime, so retrying the same amount would lock a
+		// second one.
 		expect(states.filter(isArenaBidSubmissionUnsuccessful).map((state) => state.phase)).toEqual(['unpublished', 'failed'])
 	})
 

@@ -75,6 +75,13 @@ export type ArenaBidSubmissionState =
 	 */
 	| { phase: 'not-accepted'; amount: number; eventId: string; locktime: number | null; reclaimable: boolean }
 	/**
+	 * The chain **recorded** a refusal of this bid (a kind-1450 naming its event
+	 * id). `reason` is the chain's own words, verbatim. Only a bid refused at
+	 * delivery is recorded; one refused at admission leaves no record, and the
+	 * panel never supplies a reason the chain did not state.
+	 */
+	| { phase: 'refused'; amount: number; eventId: string; reason: string; locktime: number | null; reclaimable: boolean }
+	/**
 	 * The bid is on the relay but not in committed state and the chain is **not**
 	 * advancing: that is an infrastructure problem, not the bid. The panel makes
 	 * no claim about the bid itself.
@@ -181,6 +188,20 @@ export function submissionLine(
 					'The relays that answered delivered your bid back, and it is counted in the bids below. That is storage, not an outcome: the verdict names a winner and the chain decides.',
 				tone: 'success',
 			}
+		case 'refused': {
+			const locktimeCopy =
+				state.locktime !== null
+					? ` Your escrow stays locked until ${new Date(state.locktime * 1000).toISOString()}, after which the lock's own refund path returns the funds to your wallet.`
+					: ' The escrow locktime is not known to this view.'
+			const reclaimCopy = state.reclaimable
+				? ' You can reclaim the locked sats once that locktime has passed.'
+				: ' Do not bid the same amount again from this wallet — that would lock a second escrow.'
+			return {
+				title: 'The chain refused this bid.',
+				detail: `The chain recorded its refusal in committed state and gave this reason, in its own words: “${state.reason}”.${locktimeCopy}${reclaimCopy}`,
+				tone: 'error',
+			}
+		}
 		case 'not-accepted': {
 			// The chain is advancing and this bid is not in committed state: the
 			// chain saw it and did not accept it. This is emphatically NOT a network
@@ -195,7 +216,7 @@ export function submissionLine(
 				: ' Do not bid the same amount again from this wallet — that would lock a second escrow.'
 			return {
 				title: 'The chain did not accept this bid.',
-				detail: `The chain is advancing and this bid is not in committed state, so it saw the bid and did not take it. This is not a network problem and this app does not know the reason — the chain does not publish one for a refused bid.${locktimeCopy}${reclaimCopy}`,
+				detail: `The chain is advancing and this bid is not in committed state, so it saw the bid and did not take it. This is not a network problem, and this app does not know the reason — the chain recorded no refusal for it, and this app will not invent one.${locktimeCopy}${reclaimCopy}`,
 				tone: 'warning',
 			}
 		}

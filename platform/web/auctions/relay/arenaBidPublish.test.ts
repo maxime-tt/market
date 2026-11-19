@@ -107,6 +107,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		refundsByBidder: {},
 		settleReceipt: null,
 		createRefusal: null,
+		bidRefusals: {},
 		...over,
 	}
 }
@@ -618,7 +619,49 @@ describe('arenaChainAdvancing', () => {
 	})
 })
 
-describe('diagnosePublishedBid — three states, and never a reason', () => {
+describe('diagnosePublishedBid — four states, and never an invented reason', () => {
+	test('a refusal the chain recorded is stated with the chain’s own words', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+			refusalReason: 'locktime below the floor for this lot: 1794924019 is under 1794924021',
+		})
+		expect(diagnosis.state).toBe('refused')
+		expect(diagnosis.reason).toBe('locktime below the floor for this lot: 1794924019 is under 1794924021')
+		expect(diagnosis.reclaimable).toBe(true)
+	})
+
+	test('a refusal always outranks the absence states — the chain put it in committed state', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: false,
+			escrowLocktime: null,
+			refusalReason: 'bid already recorded',
+		})
+		expect(diagnosis.state).toBe('refused')
+		expect(diagnosis.reclaimable).toBe(false)
+	})
+
+	test('no reason is invented when no refusal was read — and an empty one is no reason', () => {
+		for (const refusalReason of [null, undefined, '   ']) {
+			const diagnosis = diagnosePublishedBid({
+				eventId: 'b1',
+				seenInRead: false,
+				namedByReceipt: false,
+				chainAdvancing: true,
+				escrowLocktime: 2_000,
+				refusalReason,
+			})
+			expect(diagnosis.state).toBe('not-accepted')
+			expect(diagnosis.reason).toBeNull()
+		}
+	})
+
 	test('seen in the read is committed: say nothing', () => {
 		const diagnosis = diagnosePublishedBid({
 			eventId: 'b1',
@@ -680,7 +723,10 @@ describe('diagnosePublishedBid — three states, and never a reason', () => {
 		expect(diagnosis.reclaimable).toBe(false)
 	})
 
-	test('no diagnosis carries a reason field — the app never invents one', () => {
+	test('the only reason a diagnosis carries is the chain’s, verbatim', () => {
+		// The shape gained `reason` when the chain's *recorded* refusals were
+		// read (a 1450 naming the bid). It is `null` in every state the app
+		// diagnoses itself — the app still invents nothing, and this pins that.
 		for (const chainAdvancing of [true, false]) {
 			const diagnosis = diagnosePublishedBid({
 				eventId: 'b1',
@@ -689,7 +735,17 @@ describe('diagnosePublishedBid — three states, and never a reason', () => {
 				chainAdvancing,
 				escrowLocktime: null,
 			})
-			expect(Object.keys(diagnosis).sort()).toEqual(['escrowLocktime', 'eventId', 'reclaimable', 'state'])
+			expect(Object.keys(diagnosis).sort()).toEqual(['escrowLocktime', 'eventId', 'reason', 'reclaimable', 'state'])
+			expect(diagnosis.reason).toBeNull()
 		}
+		const refused = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: true,
+			escrowLocktime: null,
+			refusalReason: 'bid already recorded',
+		})
+		expect(refused.reason).toBe('bid already recorded')
 	})
 })
