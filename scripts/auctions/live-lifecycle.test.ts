@@ -1,9 +1,10 @@
 /**
  * `scripts/auctions/live-lifecycle.test.ts` — the Phase E **lifecycle** live
  * end-to-end: one opt-in test that walks create → A funds and bids → B outbids
- * → A is refunded → B extends inside the anti-snipe window → the lot closes →
- * a verdict names B → a settle receipt pays the seller → the seller claims →
- * B's own claim message reaches the seller → a create the published rules
+ * → A is refunded → a distinct sniper bids inside the anti-snipe window (the
+ * chain voids a rebid from its own leader) → the lot closes → a verdict names
+ * the sniper → a settle receipt pays the seller → the seller claims → the
+ * sniper's own claim message reaches the seller → a create the published rules
  * refuse is named verbatim.
  *
  * ## Every step is asserted from the wire, never from the app's optimism
@@ -104,11 +105,11 @@ const CREATE_COMMIT_DEADLINE_MS = 60_000
 const BID_COMMIT_DEADLINE_MS = 90_000
 const MINT_QUOTE_DEADLINE_MS = 30_000
 /** Long enough for the whole walk (a short lot, an extension, a close, a settle, a claim). */
-const TEST_TIMEOUT_MS = 420_000
+const TEST_TIMEOUT_MS = 600_000
 
 /** A short lot with an anti-snipe window so the extension step has something to move. */
-const DURATION_SEC = 120
-const WINDOW_SEC = 60
+const DURATION_SEC = 240
+const WINDOW_SEC = 120
 
 const START_PRICE_SATS = 64
 const MIN_INCREMENT_SATS = 8
@@ -185,6 +186,8 @@ describe('live lifecycle (chain + mint + relay)', () => {
 		async () => {
 			installLocalStorageShim()
 			const pool = new SimplePool()
+			const T0 = Date.now()
+			const mark = (label: string) => console.log(`[lifecycle] ${label} t+${((Date.now() - T0) / 1000).toFixed(1)}s`)
 			const report: Record<string, unknown> = {
 				relay: RELAY,
 				chainStateUrl: CHAIN_STATE_URL,
@@ -327,7 +330,7 @@ describe('live lifecycle (chain + mint + relay)', () => {
 						readEscrowManager: () => escrowManagerForSource(cashuWallet, source, mintUrl),
 					}
 					const { funding, fundingTerms } = await assembleArenaBidFunding({ model, amount, now: nowSec() }, ports)
-					return { funding, fundingTerms, source, walletPrivate, walletPub, quoteId: quote.quote }
+					return { funding, fundingTerms, source, preLockProofs: funded, walletPrivate, walletPub, quoteId: quote.quote }
 				}
 
 				/** Publish one funded bid through the app's own path and poll until consensus commits it. */
@@ -360,12 +363,22 @@ describe('live lifecycle (chain + mint + relay)', () => {
 						BID_COMMIT_DEADLINE_MS,
 						`the bid ${label} (${bidResult.eventId})`,
 					)
-					return { ...lock, bidEventId: bidResult.eventId, nostrSk, nostrPubkey: bidderNostrPubkey, committedHeight: commit.state.height }
+					// The bid's OWN committed height: the chain's live height at poll time can
+					// already be one block ahead of the block the bid landed in.
+					const committedBid = commit.state.bids[bidResult.eventId] as { height?: number } | undefined
+					return {
+						...lock,
+						bidEventId: bidResult.eventId,
+						nostrSk,
+						nostrPubkey: bidderNostrPubkey,
+						committedHeight: committedBid?.height ?? commit.state.height,
+					}
 				}
 
 				const fundAndPublishBid = async (amount: number, label: string, nostrSk = generateSecretKey()) =>
 					publishFundedBid(amount, label, await lockEscrow(amount), nostrSk)
 
+				mark('create committed')
 				// ---- 3. A funds and bids: the escrow is locked at the mint and committed ----
 				const A = await fundAndPublishBid(BID_A_SATS, 'A')
 				const aCommit = await fetchChainState(CHAIN_STATE_URL)
@@ -373,17 +386,21 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				expect(aCommitted.auction).toBe(coordinate)
 				expect(aCommitted.wallet).toBe(A.walletPub)
 				expect(aCommitted.amount).toBe(BID_A_SATS)
-				const aEscrow = await checkProofsSpent(mintUrl, A.funding.proofs)
+				const aEscrow = await checkProofsSpent(mintUrl, A.preLockProofs)
 				expect(aEscrow.allSpent).toBe(true)
+				// The escrow proofs themselves are held (locked to the committee), not spent —
+				// they are redeemed by the committee at settle/refund.
+				const aLocked = await checkProofsSpent(mintUrl, A.funding.proofs)
 				report.bidA = {
 					eventId: A.bidEventId,
 					wallet: A.walletPub,
 					amount: BID_A_SATS,
 					committedHeight: A.committedHeight,
-					mintProofsSpent: aEscrow.allSpent,
-					mintStates: [...aEscrow.states.entries()],
+					mintInputProofsSpent: aEscrow.allSpent,
+					mintEscrowProofsState: [...aLocked.states.entries()],
 				}
 
+				mark('A committed')
 				// ---- 4. B outbids A: A's kind-1443 refund, and A's balance returns while the lot is OPEN ----
 				const B = await fundAndPublishBid(BID_B_SATS, 'B')
 				report.bidB = { eventId: B.bidEventId, wallet: B.walletPub, amount: BID_B_SATS, committedHeight: B.committedHeight }
@@ -444,6 +461,7 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				expect(A.source.balance()).toBe(balanceAfter)
 				report.claimASecondRun = { claimed: secondRun.claimed, refusals: secondRun.refusals, balance: A.source.balance() }
 
+				mark('B committed + refund read + claimed')
 				// ---- 5. A bid the chain refused at ADMISSION: no 1450, and the three-state diagnosis ----
 				// The chain discards an admission-refused bid in CheckTx with no record (owner
 				// ruling). Lock a FRESH escrow (unspent, so the only failure can be the escrow
@@ -503,11 +521,15 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				expect(diagnosis.reclaimable).toBe(true)
 				report.admissionDiagnosis = diagnosis
 
-				// ---- 6. B bids inside the anti-snipe window: the committed end MOVES ----
-				// The chain extends when a bid lands with less than `windowSec` left; wait for the
-				// chain's own clock to put us comfortably inside the window.
+				mark('admission probe done')
+				// ---- 6. A bid inside the anti-snipe window moves the COMMITTED end ----
+				// The chain extends when a bid lands with less than `windowSec` left, and it
+				// VOIDS a rebid from the current leader ("you are already the highest bidder",
+				// chain/app.go:740). So the sniper is a distinct identity from B, who leads
+				// here. The chain's clock advances in coarse blocks, so target a band well
+				// inside the window rather than a single instant.
 				const extendDeadline = Date.now() + DURATION_SEC * 1000
-				const windowTarget = Math.max(8, Math.floor(WINDOW_SEC / 3))
+				const windowTarget = Math.max(15, WINDOW_SEC - 60)
 				let remaining = Number.POSITIVE_INFINITY
 				while (remaining > windowTarget) {
 					if (Date.now() > extendDeadline) throw new Error('the lot closed before the extension bid could land')
@@ -515,23 +537,30 @@ describe('live lifecycle (chain + mint + relay)', () => {
 					const lot = state.auctions[coordinate] as { endAt: number; status: string }
 					if (lot.status !== 'open') throw new Error(`the lot is ${lot.status} before the extension bid`)
 					remaining = lot.endAt - state.time
-					if (remaining > windowTarget) await sleep(2000)
+					if (remaining > windowTarget) await sleep(1000)
 				}
 				report.extensionWindow = { remainingSecAtBid: remaining, windowSec: WINDOW_SEC }
 
-				const BExtend = await fundAndPublishBid(BID_EXTEND_SATS, 'B-extend', B.nostrSk)
-				report.bidExtend = {
-					eventId: BExtend.bidEventId,
-					wallet: BExtend.walletPub,
+				const Sniper = await fundAndPublishBid(BID_EXTEND_SATS, 'sniper')
+				report.bidSniper = {
+					eventId: Sniper.bidEventId,
+					wallet: Sniper.walletPub,
+					bidder: Sniper.nostrPubkey,
 					amount: BID_EXTEND_SATS,
-					committedHeight: BExtend.committedHeight,
+					committedHeight: Sniper.committedHeight,
 				}
 
 				// The kind-1449 the validator published for the moved end, read from the relay.
-				const lotStateEvents = await pool.querySync([RELAY], { kinds: [ARENA_LOT_STATE_KIND], limit: 300 }, { maxWait: 8000 })
-				const movedRawCandidate = lotStateEvents.find((event) => event.tags.some((tag) => tag[0] === 'auction' && tag[1] === coordinate))
-				if (movedRawCandidate === undefined) throw new Error(`no kind-1449 committed end arrived for ${coordinate}`)
-				const movedRawEvent = asRaw(movedRawCandidate)
+				// Poll: it is published in the same pass as the commit, but not instantly.
+				const movedEndDeadline = Date.now() + BID_COMMIT_DEADLINE_MS
+				let movedRawEvent: RawRelayEvent | null = null
+				while (movedRawEvent === null && Date.now() < movedEndDeadline) {
+					const lotStateEvents = await pool.querySync([RELAY], { kinds: [ARENA_LOT_STATE_KIND], limit: 300 }, { maxWait: 8000 })
+					const movedRawCandidate = lotStateEvents.find((event) => event.tags.some((tag) => tag[0] === 'auction' && tag[1] === coordinate))
+					if (movedRawCandidate !== undefined) movedRawEvent = asRaw(movedRawCandidate)
+					else await sleep(2000)
+				}
+				if (movedRawEvent === null) throw new Error(`no kind-1449 committed end arrived for ${coordinate}`)
 				const stateHalf = decodeArenaEvent(movedRawEvent as unknown as NostrEventLike, RELAY)
 				if (!stateHalf.ok || stateHalf.event.type !== 'lot-state') throw new Error('the 1449 did not decode as lot-state')
 				const committedEnd = stateHalf.event.lotState
@@ -543,14 +572,14 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				// first extension, so it is 1.
 				expect(committedEnd.extensionOrdinal).toBe(1)
 				// The anchor is the bid's own committed height.
-				expect(committedEnd.height).toBe(BExtend.committedHeight)
+				expect(committedEnd.height).toBe(Sniper.committedHeight)
 				report.committedEnd = {
 					eventId: committedEnd.eventId,
 					endTime: committedEnd.endTime,
 					originalEndTime: committedEnd.originalEndTime,
 					extensionOrdinal: committedEnd.extensionOrdinal,
 					anchorHeight: committedEnd.height,
-					bidCommittedHeight: BExtend.committedHeight,
+					bidCommittedHeight: Sniper.committedHeight,
 				}
 
 				// The app's lot view must use the COMMITTED end, not the create-derived one.
@@ -565,6 +594,7 @@ describe('live lifecycle (chain + mint + relay)', () => {
 					committedEnd: committedEnd.endTime,
 				}
 
+				mark('extension + committed-end read')
 				// ---- 7. The lot closes on the committed end ----
 				const closedState = await pollChainUntil(
 					CHAIN_STATE_URL,
@@ -574,7 +604,7 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				)
 				const closedLot = closedState.state.auctions[coordinate] as { status: string; highBid: string; endAt: number }
 				expect(closedLot.status).not.toBe('open')
-				expect(closedLot.highBid).toBe(BExtend.bidEventId)
+				expect(closedLot.highBid).toBe(Sniper.bidEventId)
 				report.lotClosed = {
 					status: closedLot.status,
 					highBid: closedLot.highBid,
@@ -590,7 +620,7 @@ describe('live lifecycle (chain + mint + relay)', () => {
 					const match = raw.find(
 						(event) =>
 							event.tags.some((tag) => tag[0] === 'auction' && tag[1] === coordinate) &&
-							event.tags.some((tag) => tag[0] === 'bid' && tag[1] === BExtend.bidEventId),
+							event.tags.some((tag) => tag[0] === 'bid' && tag[1] === Sniper.bidEventId),
 					)
 					if (match !== undefined) {
 						const heightTag = match.tags.find((tag) => tag[0] === 'height')?.[1]
@@ -600,63 +630,91 @@ describe('live lifecycle (chain + mint + relay)', () => {
 					}
 					await sleep(1500)
 				}
-				if (winnerVerdict === null) throw new Error(`no kind-1445 winner verdict for bid ${BExtend.bidEventId} arrived`)
+				if (winnerVerdict === null) throw new Error(`no kind-1445 winner verdict for bid ${Sniper.bidEventId} arrived`)
 				expect(winnerVerdict.height).toBeGreaterThan(0)
 				report.winnerVerdict = winnerVerdict
 
-				// ---- 9. A settle receipt (1444) records B's settlement, one out[] per destination ----
-				const settlePoll = await pollRelayForBidReceipts(pool, RELAY, 1444, BExtend.bidEventId, BID_COMMIT_DEADLINE_MS)
-				const settleRead = readArenaReceipts(settlePoll.events as ArenaReceiptEventLike[], {})
-				expect(settleRead.receipts.length).toBeGreaterThan(0)
-				const settle = settleRead.receipts.find((receipt) => receipt.outcome === 'settle' && receipt.bidId === BExtend.bidEventId)
-				if (settle === undefined) throw new Error(`the read delivered no verified settle receipt for B's bid ${BExtend.bidEventId}`)
-				expect(settle.outputs.length).toBeGreaterThanOrEqual(1)
-				const sellerOutputs = settle.outputs.filter((output) => output.recipient === sellerWallet)
-				expect(sellerOutputs.length).toBeGreaterThanOrEqual(1)
-				const sellerPayout = sellerOutputs.reduce((sum, output) => sum + (output.amount ?? 0), 0)
-				expect(sellerPayout).toBeGreaterThan(0)
-				report.settleReceipt = {
-					eventId: settle.eventId,
-					bidId: settle.bidId,
-					height: settle.height,
-					outputs: settle.outputs.map((output) => ({ recipient: output.recipient, amount: output.amount })),
-					destinations: settle.outputs.length,
-					sellerPayout,
+				// ---- 9. A settle receipt (1444) SHOULD record the winner's settlement. ----
+				// MEASURED CHAIN DEFECT (owner forensics, live committed state): 12 bids have a
+				// due outcome with NO settlement (9 winners awaiting settle, 3 losers awaiting
+				// refund, 888 sats total), and EVERY unsettled escrow was funded with EXACTLY 2
+				// proofs while every settled escrow has 1, 3, 5 or 6 — the counts do not overlap.
+				// The mint answers POST /v1/swap with HTTP 400 for those attempts (mint journal
+				// "Exception: 72/80" then "/v1/swap 400") and the chain's settler retries forever
+				// (settle-journal.jsonl: 618 failed attempts). Neither side logs the refusal
+				// detail. NOT the cause: the FROST group key (03be47f1…) and the keyset
+				// (0102b930f4dc…) are unchanged — no key rotation. So the winner will NEVER settle
+				// while the chain has this defect. The assertion below is NOT weakened: it stays
+				// and FAILS with the defect named. The walk continues so every other step is still
+				// exercised, and the escrow this leaves locked is THROWAWAY-WITH-CONSEQUENCE.
+				const settlePoll = await pollRelayForBidReceipts(pool, RELAY, 1444, Sniper.bidEventId, 25_000).catch(() => null)
+				const settleRead = settlePoll === null ? null : readArenaReceipts(settlePoll.events as ArenaReceiptEventLike[], {})
+				const settle = settleRead?.receipts.find((receipt) => receipt.outcome === 'settle' && receipt.bidId === Sniper.bidEventId)
+				const winnerState = (await fetchChainState(CHAIN_STATE_URL)).bids[Sniper.bidEventId] as
+					| { status?: string; settled?: string | null }
+					| undefined
+				report.settleReceipt =
+					settle === undefined
+						? {
+								reached: false,
+								bidId: Sniper.bidEventId,
+								coordinate,
+								committedStatus: winnerState?.status ?? null,
+								committedSettled: winnerState?.settled ?? null,
+								defect: 'the chain settler cannot complete a 2-proof escrow: POST /v1/swap -> 400, retried forever',
+							}
+						: {
+								reached: true,
+								eventId: settle.eventId,
+								bidId: settle.bidId,
+								height: settle.height,
+								outputs: settle.outputs.map((output) => ({ recipient: output.recipient, amount: output.amount })),
+								destinations: settle.outputs.length,
+							}
+
+				// The seller's claim path runs only when a settle receipt exists to claim: with no
+				// receipt there is no money to move, and a claim that found nothing would assert
+				// nothing. Blocked, not skipped — recorded by name.
+				if (settle !== undefined) {
+					expect(settle.outputs.length).toBeGreaterThanOrEqual(1)
+					const sellerOutputs = settle.outputs.filter((output) => output.recipient === sellerWallet)
+					expect(sellerOutputs.length).toBeGreaterThanOrEqual(1)
+					const sellerPayout = sellerOutputs.reduce((sum, output) => sum + (output.amount ?? 0), 0)
+					expect(sellerPayout).toBeGreaterThan(0)
+					const sellerSource = trackedWallet(mintUrl, [] as Proof[])
+					const sellerBalanceBefore = sellerSource.balance()
+					const sellerClaimHost = {
+						getWallet: () => sellerSource,
+						isWalletReady: () => true,
+						mint: { cashuWalletForMint: async () => ({ cashuWallet, keysetId }) },
+						getWalletP2pk: () => sellerWallet,
+						getWalletPrivkey: (pubkey: string) => (pubkey === sellerWallet ? sellerWalletPrivate : null),
+						getExpectedMintUrl: () => mintUrl,
+						getWalletMints: () => [mintUrl],
+						getExpectedKeysetId: () => keysetId,
+						getClaimRecord: () => loadArenaReceiptClaimRecord('lifecycle-seller'),
+						setClaimRecord: (record: ReturnType<typeof loadArenaReceiptClaimRecord>) =>
+							saveArenaReceiptClaimRecord(record, 'lifecycle-seller'),
+						refresh: async () => {},
+						now: () => Date.now(),
+					}
+					const sellerClaim = createArenaReceiptClaims(sellerClaimHost)
+					const sellerRun = await sellerClaim.claimReceipts([settle])
+					expect(sellerRun.claimed).toHaveLength(1)
+					expect(sellerSource.balance() - sellerBalanceBefore).toBe(sellerPayout)
+					report.sellerClaim = { claimed: sellerRun.claimed, balanceBefore: sellerBalanceBefore, balanceAfter: sellerSource.balance() }
+				} else {
+					report.sellerClaim = { reached: false, reason: 'blocked by the chain settle defect — no kind-1444 to claim' }
 				}
 
-				// The seller's own claim path: the payout reaches the seller's wallet.
-				const sellerSource = trackedWallet(mintUrl, [] as Proof[])
-				const sellerBalanceBefore = sellerSource.balance()
-				const sellerClaimHost = {
-					getWallet: () => sellerSource,
-					isWalletReady: () => true,
-					mint: { cashuWalletForMint: async () => ({ cashuWallet, keysetId }) },
-					getWalletP2pk: () => sellerWallet,
-					getWalletPrivkey: (pubkey: string) => (pubkey === sellerWallet ? sellerWalletPrivate : null),
-					getExpectedMintUrl: () => mintUrl,
-					getWalletMints: () => [mintUrl],
-					getExpectedKeysetId: () => keysetId,
-					getClaimRecord: () => loadArenaReceiptClaimRecord('lifecycle-seller'),
-					setClaimRecord: (record: ReturnType<typeof loadArenaReceiptClaimRecord>) =>
-						saveArenaReceiptClaimRecord(record, 'lifecycle-seller'),
-					refresh: async () => {},
-					now: () => Date.now(),
-				}
-				const sellerClaim = createArenaReceiptClaims(sellerClaimHost)
-				const sellerRun = await sellerClaim.claimReceipts([settle])
-				const sellerBalanceAfter = sellerSource.balance()
-				expect(sellerRun.claimed).toHaveLength(1)
-				expect(sellerBalanceAfter - sellerBalanceBefore).toBe(sellerPayout)
-				report.sellerClaim = { claimed: sellerRun.claimed, balanceBefore: sellerBalanceBefore, balanceAfter: sellerBalanceAfter }
-
-				// ---- 10. B's claim message reaches the seller, and the fulfilment surface shows it ----
+				// ---- 10. The sniper's claim message reaches the seller, and the fulfilment surface shows it ----
 				const orderId = `wsl-order-${Date.now().toString(36)}`
 				const claimFields = {
 					orderId,
 					auctionCoordinates: coordinate,
 					auctionEventId: createResult.eventId,
 					verdictEventId: winnerVerdict.eventId,
-					buyerPubkey: B.nostrPubkey,
+					buyerPubkey: Sniper.nostrPubkey,
 					sellerPubkey,
 					totalAmountSats: BID_EXTEND_SATS,
 					shippingAddress: {
@@ -668,7 +726,7 @@ describe('live lifecycle (chain + mint + relay)', () => {
 					},
 					createdAt: nowSec(),
 				}
-				const privateClaim = createPrivateAuctionClaimMessage({ ...claimFields, senderPrivateKey: B.nostrSk })
+				const privateClaim = createPrivateAuctionClaimMessage({ ...claimFields, senderPrivateKey: Sniper.nostrSk })
 				// The public marker the seller's order surfaces key on — money-free, PII-free.
 				const markerEvent = finalizeEvent(
 					{
@@ -677,7 +735,7 @@ describe('live lifecycle (chain + mint + relay)', () => {
 						tags: buildAuctionClaimPublicMarkerTags(claimFields),
 						content: 'auction claim',
 					},
-					B.nostrSk,
+					Sniper.nostrSk,
 				) as unknown as Event
 				await publisher(pool).publish(privateClaim.giftWrap as unknown as Event)
 				await publisher(pool).publish(markerEvent)
@@ -694,12 +752,12 @@ describe('live lifecycle (chain + mint + relay)', () => {
 					}
 					await sleep(1500)
 				}
-				if (giftWrapRaw === null) throw new Error(`B's claim gift wrap never reached the seller ${sellerPubkey}`)
+				if (giftWrapRaw === null) throw new Error(`the sniper's claim gift wrap never reached the seller ${sellerPubkey}`)
 				const decrypted = decryptPrivateAuctionClaimMessage({
 					giftWrap: giftWrapRaw as unknown as Event,
 					recipientPrivateKey: sellerSk,
 					expectedSellerPubkey: sellerPubkey,
-					expectedBuyerPubkey: B.nostrPubkey,
+					expectedBuyerPubkey: Sniper.nostrPubkey,
 				})
 				expect(decrypted.payload.shippingAddress.name).toBe(SHIPPING_NAME)
 				expect(decrypted.payload.shippingAddress.firstLineOfAddress).toBe(SHIPPING_FIRST_LINE)
@@ -720,10 +778,16 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				}
 
 				// The seller's fulfilment surface: WHO won, and the ADDRESS. The React component is
-				// not rendered here; these are its pure helpers over the same wire reading.
-				const fulfilmentView = findAuction(projectRaws([createRaw, movedRawEvent]).snapshot, coordinate)
-				expect(winningBidderOf(fulfilmentView)).toBe(B.nostrPubkey)
-				expect(winningVerdictOf(fulfilmentView)?.bidId).toBe(BExtend.bidEventId)
+				// not rendered here; these are its pure helpers over the same wire reading — the
+				// create, the committed end, the bids and the winner verdict, all from the relay.
+				const fulfilmentRaws: RawRelayEvent[] = [createRaw, movedRawEvent]
+				for (const id of [A.bidEventId, B.bidEventId, Sniper.bidEventId, winnerVerdict.eventId]) {
+					const raw = await fetchRawById(pool, id)
+					if (raw !== null) fulfilmentRaws.push(raw)
+				}
+				const fulfilmentView = findAuction(projectRaws(fulfilmentRaws).snapshot, coordinate)
+				expect(winningBidderOf(fulfilmentView)).toBe(Sniper.nostrPubkey)
+				expect(winningVerdictOf(fulfilmentView)?.bidId).toBe(Sniper.bidEventId)
 				const renderedAddress = formatClaimAddress(decrypted.payload.shippingAddress)
 				expect(renderedAddress).toContain(SHIPPING_NAME)
 				expect(renderedAddress).toContain(SHIPPING_FIRST_LINE)
@@ -809,7 +873,39 @@ describe('live lifecycle (chain + mint + relay)', () => {
 					refusalEventId: refusedModel.createRefusal?.refusalEventId ?? null,
 				}
 
+				// ---- THE SETTLE ASSERTION, last so every other step is exercised first ----
+				// It is NOT weakened and NOT skipped: while the chain's 2-proof-escrow defect
+				// stands, this fails — naming the defect — and the run is red for the right
+				// reason. The escrows this walk leaves locked are throwaway-with-consequence.
+				report.throwaway = {
+					coordinate,
+					seller: sellerPubkey,
+					bids: {
+						A: { eventId: A.bidEventId, amount: BID_A_SATS, note: 'outbid; refunded and claimed' },
+						B: { eventId: B.bidEventId, amount: BID_B_SATS, note: 'outbid leader; loser refund due at close' },
+						sniper: {
+							eventId: Sniper.bidEventId,
+							amount: BID_EXTEND_SATS,
+							note: 'WINNING escrow locked at the mint, never settled — throwaway-with-consequence',
+						},
+					},
+					admissionProbeEscrow: {
+						eventId: admissionRefusedId,
+						amount: ADMISSION_SATS,
+						note: 'the admission-refused bid\u2019s escrow, locked at the mint and never spent — throwaway',
+					},
+				}
 				console.log(`WS-E live lifecycle — ARTIFACTS\n${JSON.stringify(report, null, 2)}`)
+
+				expect(
+					settle !== undefined,
+					`the chain settled no kind-1444 receipt for the winning bid ${Sniper.bidEventId} ` +
+						`(committed status ${winnerState?.status ?? 'unknown'}, settled ${JSON.stringify(winnerState?.settled ?? null)}): ` +
+						`MEASURED CHAIN DEFECT — 12 bids are DUE with no settlement (9 winners, 3 losers, 888 sats), every unsettled ` +
+						`escrow is funded with EXACTLY 2 proofs while every settled escrow has 1/3/5/6 (the counts do not overlap), ` +
+						`the mint answers POST /v1/swap 400, and the chain's settler retries forever. Not key rotation (group key ` +
+						`03be47f1…, keyset 0102b930f4dc…). The lifecycle cannot complete until the chain settles 2-proof escrows.`,
+				).toBe(true)
 			} finally {
 				pool.close([RELAY])
 			}
