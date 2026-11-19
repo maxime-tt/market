@@ -26,7 +26,7 @@
 
 import { createStateStore } from '../../../core/state'
 import type { StateStore } from '../../../core/state'
-import { initializeCoco, Manager, getEncodedToken, getMintQuoteAmount, getMintQuoteAvailableAmount, sumAmounts } from '@cashu/coco-core'
+import { initializeCoco, Manager, getEncodedToken, sumAmounts } from '@cashu/coco-core'
 import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { getMintHostname } from '../display'
@@ -38,10 +38,12 @@ import { createCocoWalletSource, type CashuWalletSource } from '../wallet/cashuW
 import {
 	type CocoDepositQuote,
 	DEPOSIT_CONFIRMATION_TIMEOUT_LABEL,
+	type DepositMintQuoteClient,
 	createCocoDepositQuote,
 	getDepositConfirmationTimeoutMessage,
 	toCocoDepositManager,
 } from '../wallet/depositQuote'
+import { createCashuMintQuoteClient } from '../wallet/depositMintQuoteClient'
 
 const CASHU_SEED_KEY = 'cashu_wallet_seed'
 const PENDING_TOKENS_KEY = 'cashu_pending_tokens'
@@ -178,6 +180,13 @@ export interface CashuState {
 	depositStatus: CashuDepositStatus
 	depositInvoice: string | null
 	activeDeposit: CocoDepositQuote | null
+	/**
+	 * The mint side of a deposit: the client that creates the invoice and reads the mint's own
+	 * state of the quote. The wallet's watch cannot see every payment (see
+	 * `@sdk/commerce/payments/wallet/depositQuote`), so the deposit observes the mint itself and
+	 * hands a paid quote to the wallet. Set at init; `null` means no deposit can be started.
+	 */
+	depositMintQuotes: DepositMintQuoteClient | null
 	/** The mint a deposit falls back to when the caller names none. */
 	defaultMint: string | null
 }
@@ -196,6 +205,7 @@ const initialState: CashuState = {
 	depositStatus: 'idle',
 	depositInvoice: null,
 	activeDeposit: null,
+	depositMintQuotes: null,
 	defaultMint: typeof localStorage !== 'undefined' ? localStorage.getItem(DEFAULT_MINT_KEY) : null,
 }
 
@@ -385,6 +395,9 @@ export const createCashuStore = (getPubkey: () => string | null, options: CashuS
 					...s,
 					manager,
 					walletSource,
+					// The deposit's own read of the mint. It is built here, with the manager, because a
+					// deposit cannot be started without both.
+					depositMintQuotes: createCashuMintQuoteClient(),
 					status: 'ready',
 					pendingTokens,
 				}))
@@ -737,56 +750,6 @@ export const createCashuStore = (getPubkey: () => string | null, options: CashuS
 		},
 
 		/**
-		 * Create a mint quote (for deposits)
-		 */
-		createMintQuote: async (mintUrl: string, amount: number) => {
-			const manager = cashuState.get().manager
-			if (!manager) {
-				throw new Error('Wallet not initialized')
-			}
-
-			// Ensure mint is added
-			try {
-				await manager.mint.addMint(mintUrl, { trusted: true })
-			} catch {
-				// Mint might already exist
-			}
-
-			console.log('[cashu] Creating mint quote:', { mintUrl, amount })
-			// coco 2.0 keeps canonical quote state: `quotes.mint.create` returns the durable
-			// MintQuote (quote id, invoice, expiry). Redemption is a separate mint operation.
-			return manager.quotes.mint.create({ mintUrl, method: 'bolt11', amount })
-		},
-
-		/**
-		 * Redeem a mint quote (after payment)
-		 */
-		redeemMintQuote: async (mintUrl: string, quoteId: string) => {
-			const manager = cashuState.get().manager
-			if (!manager) {
-				throw new Error('Wallet not initialized')
-			}
-
-			console.log('[cashu] Redeeming mint quote:', { mintUrl, quoteId })
-
-			// coco 2.0 puts redemption in the mint operation lifecycle: read the canonical
-			// quote, prepare the operation against it (the quote's own amount is what is
-			// minted) and execute. The amount comes from the quote, never from the caller,
-			// and a quote that cannot be read is refused rather than redeemed blind.
-			const quote = await manager.quotes.mint.get({ mintUrl, quoteId })
-			if (!quote) {
-				throw new Error(`No mint quote ${quoteId} at ${mintUrl}`)
-			}
-			const amount = getMintQuoteAmount(quote) ?? getMintQuoteAvailableAmount(quote)
-			const prepared = await manager.ops.mint.prepare({
-				quote: { mintUrl, quoteId, method: 'bolt11' },
-				amount,
-			})
-			await manager.ops.mint.execute(prepared)
-			await cashuActions.refreshBalances()
-		},
-
-		/**
 		 * Melt (withdraw to Lightning)
 		 */
 		melt: async (mintUrl: string, invoice: string) => {
@@ -840,8 +803,9 @@ export const createCashuStore = (getPubkey: () => string | null, options: CashuS
 				await cashuActions.initialize()
 			}
 			const cashuManager = cashuState.get().manager
-			if (!cashuManager) {
-				console.warn('[cashu] Cannot deposit without a coco manager')
+			const depositMintQuotes = cashuState.get().depositMintQuotes
+			if (!cashuManager || !depositMintQuotes) {
+				console.warn('[cashu] Cannot deposit without a coco manager and a mint quote client')
 				return null
 			}
 
@@ -881,7 +845,11 @@ export const createCashuStore = (getPubkey: () => string | null, options: CashuS
 					depositAmount = requestedAmount + getAuctionDepositFeePadding(requestedAmount)
 				}
 
-				const deposit = createCocoDepositQuote({ manager: toCocoDepositManager(cashuManager), mintUrl: targetMint, amount: depositAmount })
+				const deposit = createCocoDepositQuote({
+					manager: toCocoDepositManager(cashuManager, depositMintQuotes),
+					mintUrl: targetMint,
+					amount: depositAmount,
+				})
 				// #3: Wrap deposit.start() in a 15s timeout so a hung mint quote request doesn't
 				// leave the user staring at a spinner indefinitely.
 				const invoice = await withTimeout(deposit.start(), CASHU_DEPOSIT_CONFIRMATION_TIMEOUT_MS, 'deposit invoice creation')
@@ -1020,9 +988,14 @@ export const createCashuStore = (getPubkey: () => string | null, options: CashuS
 		 */
 		cancelDeposit: (options?: { preserveRecovery?: boolean }): void => {
 			const preserveRecovery = options?.preserveRecovery ?? false
+			const current = cashuState.get()
+			// Preserve only a session that still has a payment to reconcile; terminal and idle
+			// sessions have no quote left to keep.
+			const recoverable = current.depositStatus === 'pending' || current.depositStatus === 'awaiting_confirmation_retry'
+			const preserve = preserveRecovery && current.activeDeposit !== null && recoverable
+
 			cashuState.set((s) => {
-				const recoverable = s.depositStatus === 'pending' || s.depositStatus === 'awaiting_confirmation_retry'
-				if (preserveRecovery && s.activeDeposit && recoverable) {
+				if (preserve) {
 					// Keep activeDeposit / depositInvoice / depositStatus — the reconciliation handle
 					// for the SAME Lightning payment.
 					return { ...s, error: null }
@@ -1036,6 +1009,10 @@ export const createCashuStore = (getPubkey: () => string | null, options: CashuS
 					error: null,
 				}
 			})
+
+			// A fully cleared session has no reconciliation left, so its engine goes with it: the
+			// deposit reads the mint while it is open, and nothing else would stop that read.
+			if (!preserve) current.activeDeposit?.dispose()
 		},
 
 		/**

@@ -13,16 +13,17 @@
  *   the wait times out — wallet acknowledgement is not settlement (AGENTS.md), so this module
  *   never calls it success.
  *
- * coco 1.0's quote service has no single-quote read (`getMintQuote` lives on its repository, not
- * on `manager.quotes`), so the adapter is event-driven: it settles on
- * `mint-quote:state-changed` for its own quote id. `check()` nudges coco's processor with
- * `requeuePaidMintQuotes` — the same call a caller would otherwise make by hand — and then
- * waits on the event.
+ * The engine settles on `mint-quote:state-changed` for its own quote id. Two things feed that
+ * channel: the wallet's own `mint-quote:updated` observations, and — because the wallet's watch
+ * cannot see every payment, see {@link DepositMintQuoteClient} — the deposit's own read of the
+ * mint. `check()` nudges both (through `requeuePaidMintQuotes`) and then waits on the event.
  *
  * The timeout rejection carries the same message the NIP-60 deposit path classifies, so a
  * caller can keep mapping "we ran out of patience" to `awaiting_confirmation_retry` rather than
  * to a failure. `getDepositConfirmationTimeoutMessage` is the only place that string is built.
  */
+
+import type { MintQuoteBolt11Response } from '@cashu/cashu-ts'
 
 /** The states a BOLT11 mint quote moves through, as the mint reports them. */
 export type DepositQuoteState = 'UNPAID' | 'PAID' | 'ISSUED'
@@ -40,22 +41,59 @@ export interface CocoDepositManager {
 }
 
 /**
- * The coco 2.0 surface {@link toCocoDepositManager} adapts, declared structurally so this
- * module keeps its coco-free contract (the real `@cashu/coco-core` `Manager` satisfies it).
+ * The mint's answer for one BOLT11 quote, in the shape the wallet's own import consumes.
  *
- * coco 2.0 keeps quotes as durable canonical state (`quotes.mint.create`) and reports each
- * observation on a `mint-quote:updated` event; redemption moved into the mint *operation*
- * lifecycle, and paid quotes are re-offered to the processor through the manager's
- * `requeuePaidMintQuotes`.
+ * `payload` is the mint's response verbatim: `manager.quotes.mint.import` persists it as the
+ * wallet's canonical record of the quote, so it is passed through untouched rather than
+ * re-derived here.
+ */
+export interface MintQuoteObservation {
+	readonly state: DepositQuoteState
+	readonly payload: MintQuoteBolt11Response
+}
+
+/**
+ * The mint side of a deposit: create the invoice, then read the mint's own state of the quote.
+ *
+ * The deposit reads the mint itself because the wallet's own watch cannot see this payment. A
+ * BOLT11 mint quote settles within the same second as it was created whenever the mint pays it
+ * immediately (a FakeWallet-backed mint — the local e2e mint and the deployed one — does), so
+ * the quote's `updated_at` does not advance between the `UNPAID` and the `PAID` observation.
+ * coco 2.0 classifies a changed accounting under an unchanged `updated_at` as
+ * `ignored-conflicting-accounting` and keeps the stale `UNPAID` record: no `mint-quote:updated`
+ * is emitted, `requeuePaidMintQuotes` has no operation to re-offer, and `ops.mint.prepare`
+ * refuses with a zero claimable amount. A wallet that only waits therefore never redeems the
+ * quote, and the deposit times out while the payment sits paid at the mint.
+ *
+ * So the deposit asks the mint, and hands a paid observation to the wallet itself
+ * ({@link CocoMintQuoteManager.quotes.mint.import}) — as the FIRST record of that quote it is
+ * accepted, and the wallet's own operation processor redeems it from there.
+ */
+export interface DepositMintQuoteClient {
+	/** Create a BOLT11 quote at the mint. The wallet must hold no record of it yet. */
+	createMintQuote(input: { mintUrl: string; amount: number }): Promise<{
+		quoteId: string
+		request: string
+		expiry?: number
+	}>
+	/** Read the mint's own state of the quote, including the payload the wallet's import consumes. */
+	checkMintQuote(input: { mintUrl: string; quoteId: string }): Promise<MintQuoteObservation>
+}
+
+/**
+ * The coco 2.0 surface {@link toCocoDepositManager} uses for the wallet side of a deposit,
+ * declared structurally so this module keeps its coco-free contract (the real `@cashu/coco-core`
+ * `Manager` satisfies it).
+ *
+ * Redemption lives in coco's mint *operation* lifecycle, and that lifecycle is driven from the
+ * canonical quote: `quotes.mint.import` is the one call that records the mint's observation, and
+ * coco's operation processor claims a paid quote from that record on its own.
+ * `requeuePaidMintQuotes` re-offers a quote the wallet already tracks to the same processor.
  */
 export interface CocoMintQuoteManager {
 	quotes: {
 		mint: {
-			create(input: { mintUrl: string; method: 'bolt11'; amount: number }): Promise<{
-				quoteId: string
-				request: string
-				expiry: number | null
-			}>
+			import(input: { mintUrl: string; method: 'bolt11'; quote: MintQuoteBolt11Response }): Promise<unknown>
 		}
 	}
 	requeuePaidMintQuotes(mintUrl?: string): Promise<{ requeued: string[] }>
@@ -65,30 +103,185 @@ export interface CocoMintQuoteManager {
 	): () => void
 }
 
+/** How {@link toCocoDepositManager} paces its own reads of the mint. */
+export interface CocoDepositManagerOptions {
+	/** How often the deposit re-reads the mint while a quote session is open. */
+	readonly observeIntervalMs?: number
+	/**
+	 * How long one observation window lasts. The deposit re-arms it whenever the engine asks it to
+	 * check, so a quote nobody is looking at costs a bounded number of reads rather than a
+	 * perpetual poll.
+	 */
+	readonly observeWindowMs?: number
+}
+
+const DEFAULT_OBSERVE_INTERVAL_MS = 3_000
+const DEFAULT_OBSERVE_WINDOW_MS = 60_000
+
+/** One deposit watching one quote. */
+interface DepositObservationSession {
+	readonly mintUrl: string
+	readonly quoteId: string
+	/** The quote's own window, in Unix milliseconds, or `null` when the mint sets none. */
+	readonly expiryAt: number | null
+	state: DepositQuoteState
+}
+
 /**
- * Adapt a coco 2.0 manager to the {@link CocoDepositManager} contract this module settles on.
+ * Adapt coco 2.0's manager plus a mint-side client to the {@link CocoDepositManager} contract
+ * this module settles on.
  *
- * The deposit engine is event-driven over coco's mint-quote state channel — a design from coco
- * 1.0, where `manager.quotes.createMintQuote` plus a `mint-quote:state-changed` event was the
- * whole surface. coco 2.0 renames both, so this factory is the seam: it creates the quote
- * through `quotes.mint.create`, re-offers paid quotes through `requeuePaidMintQuotes`, and
- * projects each `mint-quote:updated` observation onto the `{ mintUrl, quoteId, state }` event.
- * The state is coco's own BOLT11 projection, so `ISSUED` keeps meaning exactly what it meant:
- * the proofs exist.
+ * The deposit engine is event-driven over a mint-quote state channel — a design from coco 1.0,
+ * where `manager.quotes.createMintQuote` plus a `mint-quote:state-changed` event was the whole
+ * surface. This factory is the seam: it creates the invoice at the mint, reads the mint's own
+ * state into that channel (handing a paid observation to the wallet first, so redemption is
+ * already in flight when `PAID` is announced), re-offers tracked quotes through
+ * `requeuePaidMintQuotes`, and projects the wallet's `mint-quote:updated` observations into the
+ * same channel. `ISSUED` keeps meaning exactly what it meant: the proofs exist.
  */
-export const toCocoDepositManager = (manager: CocoMintQuoteManager): CocoDepositManager => ({
-	quotes: {
-		createMintQuote: async (mintUrl, amount) => {
-			const quote = await manager.quotes.mint.create({ mintUrl, method: 'bolt11', amount })
-			return { quote: quote.quoteId, request: quote.request, expiry: quote.expiry ?? undefined }
+export const toCocoDepositManager = (
+	manager: CocoMintQuoteManager,
+	mintClient: DepositMintQuoteClient,
+	options: CocoDepositManagerOptions = {},
+): CocoDepositManager => {
+	const observeIntervalMs = options.observeIntervalMs ?? DEFAULT_OBSERVE_INTERVAL_MS
+	const observeWindowMs = options.observeWindowMs ?? DEFAULT_OBSERVE_WINDOW_MS
+
+	const listeners: Array<(payload: { mintUrl: string; quoteId: string; state: DepositQuoteState }) => void> = []
+	/** The one quote this deposit follows. A deposit is one quote by definition. */
+	let session: DepositObservationSession | null = null
+	let timer: ReturnType<typeof setTimeout> | null = null
+	let observeUntil = 0
+	/** Quotes whose paid observation already went to the wallet — never hand one over twice. */
+	const handedOver = new Set<string>()
+	/** The last state announced per quote, so the wallet's echo of a state we emitted is not repeated. */
+	const announced = new Map<string, DepositQuoteState>()
+
+	const announce = (active: DepositObservationSession, next: DepositQuoteState): void => {
+		const key = `${active.mintUrl}::${active.quoteId}`
+		if (announced.get(key) === next) return
+		announced.set(key, next)
+		active.state = next
+		const payload = { mintUrl: active.mintUrl, quoteId: active.quoteId, state: next }
+		for (const listener of listeners) {
+			try {
+				listener(payload)
+			} catch (error) {
+				console.error('[deposit] mint quote state listener threw:', error)
+			}
+		}
+	}
+
+	const stopTimer = (): void => {
+		if (!timer) return
+		clearTimeout(timer)
+		timer = null
+	}
+
+	/** Read the mint once, hand a paid observation to the wallet, announce the state. */
+	const observeOnce = async (): Promise<void> => {
+		const active = session
+		if (!active) return
+
+		let observation: MintQuoteObservation
+		try {
+			observation = await mintClient.checkMintQuote({ mintUrl: active.mintUrl, quoteId: active.quoteId })
+		} catch (error) {
+			// A mint we cannot reach is not a failed deposit: the next read retries, and the
+			// wallet's own event channel may still report the state.
+			console.error('[deposit] reading the mint quote failed (will retry):', error)
+			return
+		}
+
+		// The paid observation goes to the wallet BEFORE the state is announced: the engine
+		// settles on `ISSUED`, which the mint reports only once the wallet has minted the proofs,
+		// so the hand-off has to be in flight before anyone treats the payment as good.
+		const key = `${active.mintUrl}::${active.quoteId}`
+		if (observation.state !== 'UNPAID' && !handedOver.has(key)) {
+			try {
+				await manager.quotes.mint.import({ mintUrl: active.mintUrl, method: 'bolt11', quote: observation.payload })
+				handedOver.add(key)
+			} catch (error) {
+				console.error('[deposit] handing the paid quote to the wallet failed (will retry):', error)
+			}
+		}
+
+		// A newer deposit may have replaced the session while the mint was answering.
+		if (session !== active) return
+		announce(active, observation.state)
+	}
+
+	/** Whether the observer still has a reason to run. */
+	const keepObserving = (): boolean => {
+		const active = session
+		if (!active) return false
+		if (active.state === 'ISSUED') return false
+		if (active.expiryAt !== null && Date.now() >= active.expiryAt) return false
+		return Date.now() < observeUntil
+	}
+
+	const step = async (): Promise<void> => {
+		await observeOnce()
+		if (!keepObserving()) {
+			stopTimer()
+			return
+		}
+		timer = setTimeout(() => {
+			timer = null
+			void step()
+		}, observeIntervalMs)
+	}
+
+	/** (Re)start one observation window, beginning with an immediate read. */
+	const arm = async (): Promise<void> => {
+		if (!session) return
+		observeUntil = Date.now() + observeWindowMs
+		stopTimer()
+		await step()
+	}
+
+	return {
+		quotes: {
+			createMintQuote: async (mintUrl, amount) => {
+				const quote = await mintClient.createMintQuote({ mintUrl, amount })
+				announced.clear()
+				handedOver.clear()
+				session = {
+					mintUrl,
+					quoteId: quote.quoteId,
+					expiryAt: typeof quote.expiry === 'number' ? quote.expiry * 1000 : null,
+					state: 'UNPAID',
+				}
+				announced.set(`${mintUrl}::${quote.quoteId}`, 'UNPAID')
+				void arm()
+				return { quote: quote.quoteId, request: quote.request, expiry: quote.expiry }
+			},
+			requeuePaidMintQuotes: async (mintUrl) => {
+				// The engine calls this at the start of every check, which is also the moment to look
+				// at the mint again: a check that only nudged the wallet would miss the payment this
+				// deposit exists to catch.
+				await arm()
+				return manager.requeuePaidMintQuotes(mintUrl)
+			},
 		},
-		requeuePaidMintQuotes: (mintUrl) => manager.requeuePaidMintQuotes(mintUrl),
-	},
-	on: (_event, handler) =>
-		manager.on('mint-quote:updated', (payload) => {
-			handler({ mintUrl: payload.mintUrl, quoteId: payload.quoteId, state: payload.quote.state ?? 'UNPAID' })
-		}),
-})
+		on: (_event, handler) => {
+			listeners.push(handler)
+			const stopProjecting = manager.on('mint-quote:updated', (payload) => {
+				handler({ mintUrl: payload.mintUrl, quoteId: payload.quoteId, state: payload.quote.state ?? 'UNPAID' })
+			})
+			return () => {
+				const index = listeners.indexOf(handler)
+				if (index >= 0) listeners.splice(index, 1)
+				stopProjecting()
+				// The engine's last listener leaving is its `dispose()`: stop reading the mint.
+				if (listeners.length === 0) {
+					stopTimer()
+					session = null
+				}
+			}
+		},
+	}
+}
 
 /** What a caller is told when a deposit resolves or fails. `undefined` means "settled". */
 export type DepositListener = (error?: Error) => void

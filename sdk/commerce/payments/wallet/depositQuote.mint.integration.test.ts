@@ -6,6 +6,7 @@ import path from 'node:path'
 import { MemoryRepositories, initializeCoco, type Manager } from '@cashu/coco-core'
 
 import { createCocoDepositQuote, toCocoDepositManager } from '@sdk/commerce/payments/wallet/depositQuote'
+import { createCashuMintQuoteClient } from '@sdk/commerce/payments/wallet/depositMintQuoteClient'
 
 /**
  * I4 — the deposit lifecycle against a real local mint.
@@ -14,8 +15,15 @@ import { createCocoDepositQuote, toCocoDepositManager } from '@sdk/commerce/paym
  * This suite is the other half: a real nutshell mint (FakeWallet backend, which settles
  * instantly) + a real coco over in-memory repositories, so the paid → issued transition is the
  * mint's own answer rather than an assumption. What it proves end to end is the property the
- * deposit UI depends on: `check()` resolves only once the proofs exist, and they are spendable
- * afterwards.
+ * deposit UI depends on: the payment is noticed without anything nudging the wallet by hand,
+ * the proofs are minted, and they are spendable afterwards.
+ *
+ * This is also the regression this suite exists for: a FakeWallet mint settles the invoice in
+ * the same second the quote was created, so the quote's `updated_at` never advances and the
+ * wallet's own observation of the payment is rejected as a conflicting accounting. A deposit
+ * that only waited for the wallet would sit paid-but-unredeemed forever
+ * (`awaiting_confirmation_retry` with a zero balance) — this suite failed exactly that way
+ * before the deposit started reading the mint itself.
  *
  * The mint is spawned and torn down here, on its own port, so the suite neither needs nor
  * disturbs anything already listening on the e2e default (3338).
@@ -100,12 +108,27 @@ afterAll(async () => {
 })
 
 describe('a real deposit over a real mint', () => {
-	test('check() resolves only once the mint has issued the proofs', async () => {
+	test('settles on its own once the mint reports the quote paid', async () => {
 		if (!manager) throw new Error('coco manager not initialised')
 
-		// The deposit engine settles on coco's mint-quote state channel, so the real manager is
-		// adapted onto that contract (coco 2.0 renamed it; see `toCocoDepositManager`).
-		const deposit = createCocoDepositQuote({ manager: toCocoDepositManager(manager), mintUrl: MINT_URL, amount: DEPOSIT_AMOUNT })
+		// The deposit engine settles on a mint-quote state channel; the wallet side comes from
+		// coco, the mint side from the deposit's own client (`./depositMintQuoteClient`).
+		const deposit = createCocoDepositQuote({
+			manager: toCocoDepositManager(manager, createCashuMintQuoteClient()),
+			mintUrl: MINT_URL,
+			amount: DEPOSIT_AMOUNT,
+		})
+
+		// The app's confirmation window is exactly this: the deposit's own outcome listeners, with
+		// no manual check. Nothing below nudges the wallet.
+		const settlement = Promise.withResolvers<void>()
+		deposit.on('success', () => settlement.resolve())
+		deposit.on('error', (error) =>
+			settlement.reject(error instanceof Error ? error : new Error(typeof error === 'string' ? error : 'deposit failed')),
+		)
+		const states: string[] = []
+		deposit.on('state', (state) => states.push(state))
+
 		try {
 			const invoice = await deposit.start()
 
@@ -118,11 +141,17 @@ describe('a real deposit over a real mint', () => {
 			const before = await manager.wallet.balances.byMint()
 			expect(before[MINT_URL]?.spendable.toNumber() ?? 0).toBe(0)
 
-			await deposit.check(60_000)
+			await settlement.promise
 
-			// The deposit's definition of success: the proofs exist and are spendable.
+			// The deposit's definition of success: the proofs exist and are spendable. The wallet
+			// minted them itself, from the paid observation the deposit handed it.
 			const after = await manager.wallet.balances.byMint()
 			expect(after[MINT_URL]?.spendable.toNumber()).toBe(DEPOSIT_AMOUNT)
+
+			// The payment was observed as paid before it was reported issued — a deposit that
+			// jumps straight to issued would not have read the mint at all.
+			expect(states).toContain('UNPAID')
+			expect(states[states.length - 1]).toBe('ISSUED')
 		} finally {
 			deposit.dispose()
 		}

@@ -21,7 +21,7 @@ const BOLT11_INVOICE_2000_SATS =
 
 type QuoteState = 'UNPAID' | 'PAID' | 'ISSUED'
 
-/** An in-memory coco: a quote repository and one event bus, all the deposit adapter reads. */
+/** An in-memory coco plus an in-memory mint: the two parties a deposit talks to. */
 const installFakeCoco = () => {
 	let handler: ((payload: { mintUrl: string; quoteId: string; quote: { state: QuoteState } }) => void) | undefined
 	const issued = new Set<string>()
@@ -32,6 +32,36 @@ const installFakeCoco = () => {
 
 	const emit = (quoteId: string, state: QuoteState) => handler?.({ mintUrl: TEST_MINT, quoteId, quote: { state } })
 
+	const quoteState = (quoteId: string): QuoteState => {
+		if (issued.has(quoteId)) return 'ISSUED'
+		return paid.has(quoteId) ? 'PAID' : 'UNPAID'
+	}
+
+	/**
+	 * The mint side. The deposit creates the invoice and reads the mint's own state here — it
+	 * does not go through coco, because a mint that settles a quote within its creation second
+	 * makes coco reject the paid observation (see `@sdk/commerce/payments/wallet/depositQuote`).
+	 */
+	const depositMintQuotes = {
+		createMintQuote: async () => {
+			created += 1
+			const quoteId = `mock-quote-${created}`
+			quoteIds.push(quoteId)
+			const expiry = expireNextQuote ? Math.floor(Date.now() / 1000) - 1 : Math.floor(Date.now() / 1000) + 3600
+			expireNextQuote = false
+			return { quoteId, request: BOLT11_INVOICE_2000_SATS, expiry }
+		},
+		checkMintQuote: async ({ quoteId }: { quoteId: string }) => ({
+			state: quoteState(quoteId),
+			payload: { quote: quoteId },
+		}),
+	}
+
+	/**
+	 * The wallet side: handing a paid observation over (`quotes.mint.import` — the wallet mints
+	 * from it in production, which the `ISSUED` event below stands in for), the processor nudge,
+	 * and the wallet's own event bus.
+	 */
 	const manager = {
 		mint: {
 			addMint: async () => {
@@ -41,14 +71,7 @@ const installFakeCoco = () => {
 		quotes: {
 			// coco 2.0 keeps canonical quotes under `quotes.mint`.
 			mint: {
-				create: async () => {
-					created += 1
-					const quoteId = `mock-quote-${created}`
-					quoteIds.push(quoteId)
-					const expiry = expireNextQuote ? Math.floor(Date.now() / 1000) - 1 : Math.floor(Date.now() / 1000) + 3600
-					expireNextQuote = false
-					return { quoteId, request: BOLT11_INVOICE_2000_SATS, expiry }
-				},
+				import: async () => ({}),
 			},
 		},
 		// coco 2.0 moved the processor nudge onto the manager.
@@ -68,7 +91,12 @@ const installFakeCoco = () => {
 		},
 	}
 
-	cashuStore.setState((s) => ({ ...s, manager: manager as never, status: 'ready' }))
+	cashuStore.setState((s) => ({
+		...s,
+		manager: manager as never,
+		depositMintQuotes: depositMintQuotes as never,
+		status: 'ready',
+	}))
 
 	return {
 		latestQuoteId: () => quoteIds[quoteIds.length - 1],
@@ -85,10 +113,13 @@ const installFakeCoco = () => {
 	}
 }
 
-const resetStore = () =>
+const resetStore = () => {
+	// A deposit that is still active is still reading the mint; abandoning it stops the read.
+	cashuStore.state.activeDeposit?.dispose()
 	cashuStore.setState((state) => ({
 		...state,
 		manager: null,
+		depositMintQuotes: null,
 		status: 'idle',
 		depositPhase: 'idle',
 		depositStatus: 'idle',
@@ -96,6 +127,7 @@ const resetStore = () =>
 		depositInvoice: null,
 		error: null,
 	}))
+}
 
 afterEach(resetStore)
 

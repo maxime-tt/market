@@ -49,9 +49,8 @@ interface QuoteControl {
 }
 
 /**
- * An in-memory coco: a quote repository and one event bus, which is all the deposit adapter
- * reads. Nothing here reaches the network, so the store's real flow runs end to end while the
- * mint stays fictional.
+ * An in-memory coco plus an in-memory mint: the two parties a deposit talks to. Nothing here
+ * reaches the network, so the store's real flow runs end to end while the mint stays fictional.
  */
 const installFakeCoco = () => {
 	let handler: ((payload: { mintUrl: string; quoteId: string; quote: { state: QuoteState } }) => void) | undefined
@@ -63,31 +62,47 @@ const installFakeCoco = () => {
 
 	const emit = (quoteId: string, state: QuoteState) => handler?.({ mintUrl: TEST_MINT, quoteId, quote: { state } })
 
+	/**
+	 * The mint side: the deposit creates the invoice here and reads the mint's own state of the
+	 * quote (see `@sdk/commerce/payments/wallet/depositQuote` for why that is the deposit's job
+	 * rather than the wallet's watch).
+	 */
+	const depositMintQuotes = {
+		createMintQuote: async () => {
+			created += 1
+			const quoteId = `mock-quote-${created}`
+			quotes.push({
+				quoteId,
+				markPaid: () => paid.add(quoteId),
+				emitIssued: () => {
+					issued.add(quoteId)
+					emit(quoteId, 'ISSUED')
+				},
+			})
+			// The engine reads a quote's window once, when it is created — so a quote can only
+			// be born already expired, which is how a mint that never saw the payment looks.
+			const expiry = expireNextQuote ? Math.floor(Date.now() / 1000) - 1 : Math.floor(Date.now() / 1000) + 3600
+			expireNextQuote = false
+			return { quoteId, request: BOLT11_INVOICE_2000_SATS, expiry }
+		},
+		checkMintQuote: async ({ quoteId }: { quoteId: string }) => ({
+			state: issued.has(quoteId) ? 'ISSUED' : paid.has(quoteId) ? 'PAID' : 'UNPAID',
+			payload: { quote: quoteId },
+		}),
+	}
+
+	/**
+	 * The wallet side: handing a paid observation over (`quotes.mint.import`), the processor
+	 * nudge, and the wallet's own event bus. A quote the test marked paid is issued when the
+	 * engine nudges — that is the wallet minting from the observation the deposit handed it.
+	 */
 	const manager = {
 		quotes: {
 			// coco 2.0 keeps canonical quotes under `quotes.mint`.
 			mint: {
-				create: async () => {
-					created += 1
-					const quoteId = `mock-quote-${created}`
-					quotes.push({
-						quoteId,
-						markPaid: () => paid.add(quoteId),
-						emitIssued: () => {
-							issued.add(quoteId)
-							emit(quoteId, 'ISSUED')
-						},
-					})
-					// The engine reads a quote's window once, when it is created — so a quote can only
-					// be born already expired, which is how a mint that never saw the payment looks.
-					const expiry = expireNextQuote ? Math.floor(Date.now() / 1000) - 1 : Math.floor(Date.now() / 1000) + 3600
-					expireNextQuote = false
-					return { quoteId, request: BOLT11_INVOICE_2000_SATS, expiry }
-				},
+				import: async () => ({}),
 			},
 		},
-		// coco 2.0 moved the processor nudge onto the manager, and reports quote observations on
-		// `mint-quote:updated`. A quote the test marked paid is issued when the engine nudges.
 		requeuePaidMintQuotes: async () => {
 			for (const quote of quotes) {
 				if (!paid.has(quote.quoteId) || issued.has(quote.quoteId)) continue
@@ -103,7 +118,12 @@ const installFakeCoco = () => {
 		},
 	}
 
-	cashuStore.setState((s) => ({ ...s, manager: manager as never, status: 'ready' }))
+	cashuStore.setState((s) => ({
+		...s,
+		manager: manager as never,
+		depositMintQuotes: depositMintQuotes as never,
+		status: 'ready',
+	}))
 
 	return {
 		quotes,
@@ -142,9 +162,12 @@ const startMockDeposit = async (options?: { quoteExpired?: boolean }): Promise<R
 }
 
 afterEach(() => {
+	// A deposit that is still open is still reading the mint; ending the test abandons it.
+	cashuStore.state.activeDeposit?.dispose()
 	cashuStore.setState((state) => ({
 		...state,
 		manager: null,
+		depositMintQuotes: null,
 		status: 'idle',
 		activeDeposit: null,
 		depositInvoice: null,
