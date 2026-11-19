@@ -52,7 +52,7 @@ function BrowseIndex() {
 	// first and unconditionally: the hook must run in every state of this route,
 	// and the published page replaces the settled composition below without
 	// changing the renderer.
-	const publishedChoice = useInstanceHomePage()
+	const { choice: publishedChoice, loading: homeLoading } = useInstanceHomePage()
 	const publishedHome = publishedChoice?.page ?? null
 	// The intro plays over the home once per mount; it is an overlay, so the hero
 	// renders underneath from the first paint and nothing waits on it.
@@ -111,11 +111,20 @@ function BrowseIndex() {
 					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
 					accountSlot={<HeaderAccountControls />}
 				/>
-				<StorefrontRenderer
-					page={page}
-					pubkey={publishedChoice?.pubkey ?? config?.appPublicKey ?? LEGACY_HOME_PUBKEY}
-					slots={storefrontBlockSlots}
-				/>
+				{homeLoading ? (
+					// Hold the space while the published page is read: drawing the built-in
+					// composition here flashed a stand-in page before the real one.
+					<div data-testid="home-page-loading" aria-busy="true" className="flex min-h-[60vh] items-center justify-center">
+						<span className="sr-only">Loading the home page</span>
+						<span aria-hidden className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent opacity-40" />
+					</div>
+				) : (
+					<StorefrontRenderer
+						page={page}
+						pubkey={publishedChoice?.pubkey ?? config?.appPublicKey ?? LEGACY_HOME_PUBKEY}
+						slots={storefrontBlockSlots}
+					/>
+				)}
 			</>
 		)
 	}

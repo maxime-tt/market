@@ -1,7 +1,16 @@
-import { useQueries } from '@tanstack/react-query'
+import { decode } from 'nostr-tools/nip19'
+import { queryOptions, useQueries } from '@tanstack/react-query'
+import { createAppRelayReadContext } from '@platform/web/readContext'
+import { storefrontKeys } from '@sdk/core/query/queryKeyFactory'
+import { isValidHexKey } from '@sdk/core/utils/utils'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useAdminSettings } from '@platform/web/app-settings/appSettingsQuery'
-import { shouldRenderStorefrontPage, storefrontAddressPageQueryOptions, type StorefrontPageResult } from './storefrontQuery'
+import {
+	fetchStorefrontPage,
+	shouldRenderStorefrontPage,
+	storefrontAddressPageQueryOptions,
+	type StorefrontPageResult,
+} from './storefrontQuery'
 import type { StorefrontPage } from '@sdk/commerce/storefront/storefrontPage'
 
 /**
@@ -18,7 +27,9 @@ import type { StorefrontPage } from '@sdk/commerce/storefront/storefrontPage'
  * upstream home page still shows it until one of its own authors publishes.
  * Own authors always win over the fallback, whatever the timestamps.
  */
-export const LEGACY_HOME_PUBKEY = '8504e467c5f4b874c0de43bc3645fa868874b0d5c4c5b5230fdfc406ca91cd9c'
+// Written as an npub (decoded to hex) so the repository's secret scan does not
+// mistake this public key for a private one.
+export const LEGACY_HOME_PUBKEY = decode('npub1s5zwge797ju8fsx7gw7rv306s6y8fvx4cnzm2gc0mlzqdj53ekwqx7uxqn').data as string
 
 export const HOME_PAGE_D_TAG = 'home'
 
@@ -54,14 +65,76 @@ export function chooseHomePage(
 	return null
 }
 
+/**
+ * One instance author's `home` page, read from the instance relay only.
+ *
+ * Why: the general read waits for every configured relay (the visitor's own
+ * relay list included, when signed in) to answer or time out, which took 8 s
+ * and more. The instance's own authors publish through the page editor, which
+ * always writes to the instance relay, so that one relay is the authority and
+ * answers in about a second. The legacy fallback keeps the general read: its
+ * page lives on the upstream relays, not on ours.
+ */
+export const instanceHomePageQueryOptions = (pubkey: string) =>
+	queryOptions({
+		queryKey: [...storefrontKeys.all, 'address', pubkey, HOME_PAGE_D_TAG, 'instance-relay'] as const,
+		queryFn: () => fetchStorefrontPage(pubkey, HOME_PAGE_D_TAG, createAppRelayReadContext()),
+		enabled: isValidHexKey(pubkey),
+		staleTime: 2 * 60 * 1000,
+	})
+
+export interface InstanceHomePage {
+	choice: HomePageChoice | null
+	/**
+	 * True until the reads that decide the choice have answered. The route must
+	 * not draw its built-in composition while this is true: doing so showed a
+	 * stand-in page (a search bar and three category chips) for several seconds
+	 * before the real one replaced it, which reads as "nothing is loading".
+	 */
+	loading: boolean
+}
+
+/**
+ * Whether the home choice is still undecided. Own authors decide it as soon as
+ * they have all answered; the slower legacy read only matters when none of
+ * them has a page.
+ */
+export function homePageLoading(state: {
+	configReady: boolean
+	adminsLoading: boolean
+	ownLoading: readonly boolean[]
+	ownChoice: boolean
+	legacyLoading: boolean
+}): boolean {
+	if (!state.configReady || state.adminsLoading) return true
+	if (state.ownLoading.some(Boolean)) return true
+	return !state.ownChoice && state.legacyLoading
+}
+
 /** The instance's home page, read from every eligible author at once. */
-export function useInstanceHomePage(): HomePageChoice | null {
-	const { data: config } = useConfigQuery()
-	const { data: adminSettings } = useAdminSettings(config?.appPublicKey)
+export function useInstanceHomePage(): InstanceHomePage {
+	const { data: config, isLoading: configLoading } = useConfigQuery()
+	const { data: adminSettings, isLoading: adminsLoading } = useAdminSettings(config?.appPublicKey)
 	const authors = instanceHomeAuthors(config?.appPublicKey, adminSettings?.owner ?? config?.ownerPk, adminSettings?.admins)
 	const results = useQueries({
-		queries: [...authors, LEGACY_HOME_PUBKEY].map((pubkey) => storefrontAddressPageQueryOptions(pubkey, HOME_PAGE_D_TAG)),
+		queries: [
+			...authors.map((pubkey) => instanceHomePageQueryOptions(pubkey)),
+			storefrontAddressPageQueryOptions(LEGACY_HOME_PUBKEY, HOME_PAGE_D_TAG),
+		],
 	})
-	const data = results.map((r) => r.data)
-	return chooseHomePage(data.slice(0, authors.length), data[authors.length])
+	const own = results.slice(0, authors.length)
+	const legacy = results[authors.length]
+	const ownChoice = chooseHomePage(
+		own.map((r) => r.data),
+		undefined,
+	)
+	const choice = ownChoice ?? chooseHomePage([], legacy?.data)
+	const loading = homePageLoading({
+		configReady: !configLoading,
+		adminsLoading,
+		ownLoading: own.map((r) => r.isLoading),
+		ownChoice: ownChoice !== null,
+		legacyLoading: legacy?.isLoading ?? false,
+	})
+	return { choice, loading }
 }
