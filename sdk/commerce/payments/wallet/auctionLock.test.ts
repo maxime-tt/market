@@ -545,8 +545,9 @@ describe('lockAuctionBidFunds — the coco write boundary', () => {
 		await createAuctionLock(host).lockAuctionBidFunds(baseParams({ amount: 500 }))
 
 		// The change proof crossed the boundary stamped — no caller had to remember its unit.
-		expect(saved).toEqual([{ mintUrl: MINT, proofs: [{ ...change, unit: 'sat', state: 'ready' }] }])
+		const stamped: StoredProof = { ...change, unit: 'sat', state: 'ready' }
+		expect(saved).toEqual([{ mintUrl: MINT, proofs: [stamped] }])
 		// The spent input is gone and the stamped change is spendable, so it counts.
-		expect(wallet.state.getProofs({ mint: MINT })).toEqual([{ ...change, unit: 'sat', state: 'ready' }])
+		expect(wallet.state.getProofs({ mint: MINT })).toEqual([stamped])
 	})
 })

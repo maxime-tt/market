@@ -385,8 +385,9 @@ describe('receiveTokenIntoWallet — the coco write boundary', () => {
 
 		expect(result).toEqual({ amount: 21, mintUrl: MINT })
 		// The boundary stamped the proof before coco's repository saw it.
-		expect(saved).toEqual([{ mintUrl: MINT, proofs: [{ ...tokenProof, unit: 'sat', state: 'ready' }] }])
+		const stamped: StoredProof = { ...tokenProof, unit: 'sat', state: 'ready' }
+		expect(saved).toEqual([{ mintUrl: MINT, proofs: [stamped] }])
 		// And it is spendable: the source's mirror — what a balance read counts — holds it.
-		expect(wallet.state.getProofs({ mint: MINT })).toEqual([{ ...tokenProof, unit: 'sat', state: 'ready' }])
+		expect(wallet.state.getProofs({ mint: MINT })).toEqual([stamped])
 	})
 })
