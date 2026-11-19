@@ -17,7 +17,12 @@
  *   so a panel with real `<Input>`s inside it cannot be typed in (the first letter matching an item moves
  *   focus out of the field) and its portalled dialogs fight the menu's focus scope. Instead the item opens
  *   the unchanged host in a `Popover` anchored to this same trigger — the pattern the legacy header used —
- *   so the wallet stays one click deep from the account menu without losing a working surface.
+ *   so the wallet stays one click deep from the account menu without losing a working surface. The panel is
+ *   a surface of its own and outlives the menu that opens it: the menu is modal, so on its way out it first
+ *   pulls focus back into its own content and then restores focus to the trigger, and a popover that reads
+ *   those as "the user went elsewhere" unmounts the panel a frame after it appears. The panel therefore
+ *   dismisses on Escape and on a press outside it, never on focus arriving elsewhere, and the menu hands
+ *   focus to the panel it opened instead of taking it back.
  *
  * Styling is the widget role vocabulary (`bg-surface-raised`, `text-text-high`, `border-border-default`,
  * `bg-fill-ink`/`text-on-fill-ink` for the highlight), not the primitive's shadcn defaults: the token classes
@@ -32,7 +37,7 @@ import { Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Coins, LayoutDashboard, Loader2, LogOut, ShoppingBag, User, Wallet } from 'lucide-react'
 import { nip19 } from 'nostr-tools'
-import { useState, type FC, type ReactNode } from 'react'
+import { useRef, useState, type FC, type ReactNode } from 'react'
 import { CURRENCIES } from '@sdk/config/constants'
 import type { AuthSignerType } from '@sdk/core/auth'
 import { uiActions, uiStore, type SupportedCurrency } from '@platform/web/app/uiStore'
@@ -145,12 +150,25 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 	 */
 	const [walletOpen, setWalletOpen] = useState(false)
 
+	/**
+	 * The panel is opened by a menu item, so Radix has no `PopoverTrigger` holding the panel's focus contract.
+	 * These hold it instead: the trigger the panel is anchored to (where focus returns when the panel closes
+	 * itself), the panel's own node (what the menu hands focus to), and the one menu close that is a handoff
+	 * to the panel rather than a plain close.
+	 */
+	const triggerRef = useRef<HTMLButtonElement>(null)
+	const panelRef = useRef<HTMLDivElement>(null)
+	const walletHandoffRef = useRef(false)
+	/** True once a press outside closed the panel, so the close leaves focus where the user put it. */
+	const dismissedByPressRef = useRef(false)
+
 	const totalItems = Object.values(cart.products).reduce((total, product) => total + product.amount, 0)
 	const pubkey = user?.pubkey ?? null
 
 	/** Signed out, the trigger is still a menu button — opening it is how a signed-out visitor signs in. */
 	const trigger = (
 		<button
+			ref={triggerRef}
 			type="button"
 			data-testid="account-menu-trigger"
 			data-slot="account-menu-trigger"
@@ -181,17 +199,30 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 
 	return (
 		<Popover open={walletOpen} onOpenChange={setWalletOpen}>
-			<DropdownMenu>
-				<PopoverAnchor
-					data-slot="account-menu-anchor"
-					className="inline-flex"
-					// Opening the account menu closes the wallet panel, so the two surfaces never co-render.
-					onPointerDown={() => setWalletOpen(false)}
-				>
+			{/* Opening the account menu closes the wallet panel, so the two surfaces never co-render. The menu
+			    reports every open — pointer, Enter or Space on the trigger — where a pointer handler on the
+			    anchor only saw the mouse. */}
+			<DropdownMenu onOpenChange={(open) => { if (open) setWalletOpen(false) }}>
+				<PopoverAnchor data-slot="account-menu-anchor" className="inline-flex">
 					<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
 				</PopoverAnchor>
 
-				<DropdownMenuContent data-testid="account-menu-content" align="end" sideOffset={8} className={CONTENT_CLASS}>
+				<DropdownMenuContent
+					data-testid="account-menu-content"
+					align="end"
+					sideOffset={8}
+					className={CONTENT_CLASS}
+					// The wallet item opens a surface of its own, and that surface owns the focus while it is up.
+					// The menu's usual close restore would take focus back to the trigger the instant the panel
+					// appeared (its trap has already pulled focus into its own content by then), so this one
+					// close hands focus to the panel instead. Every other item keeps the restore.
+					onCloseAutoFocus={(event) => {
+						if (!walletHandoffRef.current) return
+						walletHandoffRef.current = false
+						event.preventDefault()
+						panelRef.current?.focus()
+					}}
+				>
 					{isAuthenticated && pubkey ? (
 						<>
 							{/* Identity: who, and how the session is signed in. */}
@@ -211,7 +242,14 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 								</Link>
 							</DropdownMenuItem>
 
-							<DropdownMenuItem data-testid="wallet-button" className={ITEM_CLASS} onSelect={() => setWalletOpen(true)}>
+							<DropdownMenuItem
+								data-testid="wallet-button"
+								className={ITEM_CLASS}
+								onSelect={() => {
+									walletHandoffRef.current = true
+									setWalletOpen(true)
+								}}
+							>
 								<Wallet className={ICON_CLASS} aria-hidden />
 								<span>Wallet</span>
 							</DropdownMenuItem>
@@ -280,12 +318,29 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 			</DropdownMenu>
 
 			<PopoverContent
+				ref={panelRef}
 				data-testid="wallet-panel"
 				aria-label="Wallet"
 				align="end"
 				sideOffset={8}
 				// The panel is portalled too, so it carries the same scope as the menu it opens from.
 				className={cn(ARENA_SCOPE, 'w-[calc(100vw-2rem)] rounded-lg bg-primary md:w-96')}
+				// The menu that opened this panel moves focus on its way out: its focus trap pulls focus back
+				// into its own content as the panel takes it, and its close restore then returns focus to the
+				// trigger. A popover reads any focus arriving outside itself as "the user went elsewhere" and
+				// dismisses, so the panel was unmounted by the menu that opened it. This surface is dismissed
+				// by Escape or by a press outside it; focus moving is not one of its dismissal gestures.
+				onFocusOutside={(event) => event.preventDefault()}
+				// A press outside dismisses the panel and leaves focus where the user put it; any other close
+				// (Escape, or the menu reopening) returns focus to the trigger the panel is anchored to.
+				onInteractOutside={(event) => {
+					if (!event.defaultPrevented) dismissedByPressRef.current = true
+				}}
+				onCloseAutoFocus={(event) => {
+					event.preventDefault()
+					if (!dismissedByPressRef.current) triggerRef.current?.focus()
+					dismissedByPressRef.current = false
+				}}
 			>
 				<CocoWalletPanelHost />
 			</PopoverContent>
