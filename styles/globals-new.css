@@ -32,8 +32,8 @@
 	   so no request leaves for a font host. The generic family stays as the
 	   fallback while they load. */
 	--font-body: 'Plus Jakarta Sans', sans-serif;
-	--font-header: 'Young Serif', serif;
-	--font-theylive: 'theylive', sans-serif;
+	--font-header: 'Instrument Serif', Georgia, serif;
+	--font-theylive: 'Instrument Serif', Georgia, serif;
 
 	/* ── Surface tokens ───────────────────────────────────────────────── */
 	--background: oklch(1 0 0);
