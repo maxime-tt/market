@@ -22,6 +22,7 @@ import type {
 	AuthSessionHandle,
 	AuthSessionSnapshot,
 	AuthSessionStartInput,
+	AuthSignerType,
 	AuthState,
 } from '@sdk/core/auth'
 import type { SessionStartInput, SignerSession, SignerCapability } from '@sdk/core/signer'
@@ -341,6 +342,15 @@ export const authActions = {
  */
 export function getCurrentPubkey(): string | null {
 	return machine.getCurrentPubkey()
+}
+
+/**
+ * How the live session is signed in (`extension`, `nsec`, `ncryptsec`, `bunker`), or `null` while signed out
+ * or when the session was not started by the machine. The same value rides on `authStore.state.signerType`,
+ * which is what the account menu renders.
+ */
+export function getSignerType(): AuthSignerType | null {
+	return machine.getSignerType()
 }
 
 /**

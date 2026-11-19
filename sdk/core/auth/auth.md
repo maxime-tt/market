@@ -37,6 +37,7 @@ contract:
   types:
     [
       AuthUser,
+      AuthSignerType,
       AuthState,
       AuthKeyValueStorage,
       AuthSessionStartInput,
@@ -67,7 +68,7 @@ consumers:
   - '`src/lib/stores/auth.ts`, the behaviour-identical adapter that supplies the ports and re-exports the legacy surface'
   - '`platform/web/auth/authBinding.ts`, the public platform surface new hosts use'
 naming:
-  reserves: the state machine's own vocabulary — the five auth flags, the storage keys, the lane start input, the session handle and the port surface
+  reserves: the state machine's own vocabulary — the five auth flags, the signer-type vocabulary, the storage keys, the lane start input, the session handle and the port surface
   does_not: no store, query or component name appears here — every cross-store effect is an injected port; no marketplace noun appears anywhere
 source:
   decision: owner ruling 2026-10-28 — I.1 splits the auth state machine out of `src/lib/stores/auth.ts` so the login/logout/migrate flow is portable; the machine lives in `sdk/core/`, the port wiring stays with the host
@@ -89,6 +90,13 @@ lazily. Auth identity is a protocol capability with no marketplace noun, so it b
 `@nostr-dev-kit/`. It names no store and no component: the NDK guard, the notification clear, the wallet
 teardown, the cart clear, the terms dialog and the key encryption are all `AuthPorts` methods. It owns no
 storage policy either — the storage seam is three methods over five keys whose names are a public contract.
+
+**The signer type.** `AuthState.signerType` names the lane the live session was started on — `extension`,
+`nsec`, `ncryptsec` or `bunker` — so a host can say _how_ the user signed in without re-deriving it from
+storage. It is session metadata, not identity: `AuthUser` stays `{ pubkey }`. The machine records the lane
+before it starts the session (the session's identity snapshot arrives during that call) and reports `null`
+when it has no lane to vouch for — signed out, a failed lane, or a snapshot from a session it did not start.
+`getSignerType()` is the non-reactive read beside `getCurrentPubkey()`.
 
 **The localStorage key contract.** `nostr_connect_url`, `nostr_local_signer_key`,
 `nostr_local_encrypted_signer_key` (the `pubkey:ncryptsec` record), `nostr_auto_login`, `nostr_user_pubkey`.

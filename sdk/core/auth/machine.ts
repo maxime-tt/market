@@ -17,6 +17,7 @@ import {
 	type AuthSessionHandle,
 	type AuthSessionSnapshot,
 	type AuthSessionStartInput,
+	type AuthSignerType,
 	type AuthState,
 	type AuthUser,
 	type Nip46LoginOptions,
@@ -26,6 +27,8 @@ export interface AuthMachine {
 	getState(): AuthState
 	subscribe(listener: (state: AuthState) => void): () => void
 	getCurrentPubkey(): string | null
+	/** The lane the live session was started on, or `null` while signed out / not started here. */
+	getSignerType(): AuthSignerType | null
 	getNeedsMigration(): boolean
 	getAvailableNostrExtensions(): string[]
 	getAuthFromLocalStorageAndLogin(): Promise<void>
@@ -69,12 +72,21 @@ export function createAuthMachine(deps: {
 	/** The lazy session handle. Constructed on the first login action, never at import time. */
 	let handle: AuthSessionHandle | undefined
 
+	/**
+	 * The lane the session currently under the machine was started on. It is set before the start call, so
+	 * the identity snapshot the session emits *during* that call already carries the lane, and cleared when
+	 * no session started here owns the identity — the observer then reports `signerType: null` rather than
+	 * guessing.
+	 */
+	let startedLane: AuthSignerType | null = null
+
 	/** The identity observer the host's session factory reports snapshots through — the legacy `observeSession` body. */
 	const onSnapshot = (snapshot: AuthSessionSnapshot): void => {
 		setState((state) => ({
 			...state,
 			user: snapshot.pubkey ? { pubkey: snapshot.pubkey } : null,
 			isAuthenticated: snapshot.state === 'active',
+			signerType: snapshot.pubkey ? startedLane : null,
 		}))
 	}
 
@@ -87,7 +99,18 @@ export function createAuthMachine(deps: {
 	const startFreshSession = async (input: AuthSessionStartInput): Promise<string | undefined> => {
 		const session = ensureSession()
 		await session.endSession()
-		return session.startFreshSession(input)
+		startedLane = input.lane
+		try {
+			const pubkey = await session.startFreshSession(input)
+			// The session normally reports the identity through `onSnapshot` while it starts; a lane that
+			// resolves without emitting still gets its lane recorded here, so the two reads cannot disagree.
+			if (pubkey) setState((state) => ({ ...state, signerType: startedLane }))
+			else startedLane = null
+			return pubkey
+		} catch (error) {
+			startedLane = null
+			throw error
+		}
 	}
 
 	const auth: AuthMachine = {
@@ -101,6 +124,8 @@ export function createAuthMachine(deps: {
 		},
 
 		getCurrentPubkey: () => state.user?.pubkey ?? null,
+
+		getSignerType: () => state.signerType,
 
 		getNeedsMigration: () => {
 			const authData = deps.storage.get(K.localEncryptedSignerKey)
@@ -313,6 +338,7 @@ export function createAuthMachine(deps: {
 
 			deps.ports.clearCart()
 
+			startedLane = null
 			setState(() => INITIAL_AUTH_STATE)
 		},
 
