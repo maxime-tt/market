@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { ARENA_AUCTION_KINDS, ARENA_PARAMS_KIND, ARENA_STATE_COMMITMENT_KIND, ARENA_VERDICT_KIND } from '@sdk/commerce/auctions/constants'
+import {
+	ARENA_AUCTION_KINDS,
+	ARENA_LOT_STATE_KIND,
+	ARENA_PARAMS_KIND,
+	ARENA_REFUSED_KIND,
+	ARENA_STATE_COMMITMENT_KIND,
+	ARENA_VERDICT_KIND,
+} from '@sdk/commerce/auctions/constants'
 import {
 	ARENA_REFUSAL_BAD_HEIGHT,
 	ARENA_REFUSAL_BAD_HASH,
@@ -91,10 +98,14 @@ describe('ARENA_AUCTION_KINDS', () => {
 			fundingAbort: 1446,
 			stateCommitment: 1447,
 			params: 1448,
+			lotState: 1449,
+			refused: 1450,
 		})
 		expect(ARENA_VERDICT_KIND).toBe(1445)
 		expect(ARENA_STATE_COMMITMENT_KIND).toBe(1447)
 		expect(ARENA_PARAMS_KIND).toBe(1448)
+		expect(ARENA_LOT_STATE_KIND).toBe(1449)
+		expect(ARENA_REFUSED_KIND).toBe(1450)
 	})
 })
 

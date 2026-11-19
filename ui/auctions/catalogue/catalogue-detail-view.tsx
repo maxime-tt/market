@@ -4,10 +4,13 @@ import { catalogueCssVars } from './catalogue-preset'
 import { bidCountLabel, priceLine, readStateMessage } from '@ui/auction/arena/model'
 import {
 	antisnipeBehaviourLabel,
+	createRefusalLabel,
 	phaseLabel,
 	phaseTone,
 	shortKey,
 	ARENA_UNKNOWN_END_LABEL,
+	ARENA_CREATE_DERIVED_END_LABEL,
+	ARENA_NO_COMMITTED_END_LABEL,
 	ARENA_NO_RECEIPT_LABEL,
 	ARENA_RECEIPT_PARAMS_MISMATCH_LABEL,
 	refundReceiptLabel,
@@ -165,6 +168,12 @@ export function CatalogueDetailView({
 					Sats are locked in escrow until the lot closes: they go to the seller if you win, and come back to you otherwise.
 				</p>
 
+				{model.createRefusal !== null && (
+					<p role="alert" className="cat__banner" data-testid="catalogue-create-refused" data-height={model.createRefusal.height}>
+						{createRefusalLabel(model.createRefusal.reason)}
+					</p>
+				)}
+
 				<nav className="cat-crumbs" aria-label="Breadcrumb">
 					{backHref !== null ? (
 						<a href={backHref} className="cat-crumbs__back" data-testid="catalogue-back">
@@ -217,7 +226,13 @@ export function CatalogueDetailView({
 									<div className="cat-timer__value" data-testid="catalogue-timer">
 										{model.endsAt !== null ? formatRemaining(model.endsAt, now) : ARENA_UNKNOWN_END_LABEL}
 									</div>
-									<div className="cat-muted">{model.endsAt !== null ? 'create-derived end' : 'the create stated no duration'}</div>
+									<div className="cat-muted" data-testid="catalogue-end-source" data-source={model.endSource}>
+										{model.endsAt === null
+											? 'the create stated no duration'
+											: model.endSource === 'committed'
+												? `committed end${model.committedEndHeight !== null ? ` at height ${model.committedEndHeight}` : ''}${model.committedEndOrdinal !== null ? ` — extension ${model.committedEndOrdinal} of this lot` : ''}`
+												: `${ARENA_CREATE_DERIVED_END_LABEL} — ${ARENA_NO_COMMITTED_END_LABEL}`}
+									</div>
 								</div>
 							</div>
 

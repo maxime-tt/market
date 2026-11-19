@@ -54,6 +54,13 @@ export interface ArenaRelayHealth {
  */
 export type ArenaAuctionPhase = 'open' | 'ended' | 'unknown'
 
+/**
+ * Where a lot's displayed end came from. This is the distinction the increment
+ * exists for: the create-derived end is what the create states, and the
+ * committed end is what the chain has actually committed after a bid moved it.
+ */
+export type ArenaEndSource = 'committed' | 'create-derived' | 'unknown'
+
 // =========================================================================
 // Card
 // =========================================================================
@@ -77,8 +84,37 @@ export interface ArenaAuctionCardModel {
 	bidCount: number
 	/** Bids whose `amount` was not a finite number, so the positions above are incomplete. */
 	bidsWithoutAmount: number
-	/** `root.created_at + duration_seconds`, or `null` when the create stated no positive duration. */
+	/**
+	 * The end the countdown uses: the **committed end** (kind 1449) when the
+	 * chain published one, otherwise the create-derived end
+	 * (`root.created_at + duration_seconds`). `null` when neither is known.
+	 * {@link ArenaAuctionCardModel.endSource} says which it is — the two must
+	 * never be presented as one.
+	 */
 	endsAt: number | null
+	/**
+	 * Where {@link ArenaAuctionCardModel.endsAt} came from:
+	 * `committed` a kind-1449 the chain published (the end a bid moved to),
+	 * `create-derived` the create's own `root.created_at + duration_seconds`,
+	 * `unknown` neither. Never blur these: a create-derived end shown as
+	 * committed would state a deadline the chain has already moved.
+	 */
+	endSource: ArenaEndSource
+	/**
+	 * The create-derived end (`root.created_at + duration_seconds`), or `null`
+	 * when the create stated no positive duration. Carried **always**, so a
+	 * surface can label the create-derived end as such even when a committed end
+	 * overrides it in the countdown.
+	 */
+	createDerivedEndsAt: number | null
+	/** The anchored height of the committed end, or `null` when none was read. */
+	committedEndHeight: number | null
+	/**
+	 * The **per-bid ordinal** of the extension that produced the committed end —
+	 * NOT the lot's running count. `null` when no committed end was read, or the
+	 * event stated none. Never render as "extended N times".
+	 */
+	committedEndOrdinal: number | null
 	phase: ArenaAuctionPhase
 	/** The relay-reported verdict outcome, or `null` when none was read. */
 	verdict: string | null
@@ -212,6 +248,34 @@ export interface ArenaAuctionDetailModel extends ArenaAuctionCardModel {
 	refundsByBidder: Record<string, number>
 	/** The lot-level settle: the earliest-anchored 1444, or `null` when none was read. */
 	settleReceipt: ArenaReceiptModel | null
+	/**
+	 * The chain's refusal of this lot's **create** (a kind-1450 naming the root
+	 * create's event id), with the chain's own reason verbatim, or `null` when
+	 * the chain did not refuse it (or no 1450 was read). A surface that shows
+	 * this must state the chain's words, never "not found".
+	 */
+	createRefusal: ArenaCreateRefusalModel | null
+	/**
+	 * The chain's refusals of this lot's **bids**, keyed by the refused bid's
+	 * event id, with the chain's own reason verbatim.
+	 *
+	 * A bid is named here only when the chain refused it **at delivery** (the
+	 * late family, the block-time locktime floor, a duplicate). A bid refused at
+	 * admission is discarded in `CheckTx` and leaves no record, so an absent
+	 * entry is *no refusal read* — never "accepted", and never a reason invented
+	 * for it (owner ruling, `notes/DECISION-2026-11-18-refused-bids-are-not-committed.md`).
+	 */
+	bidRefusals: Record<string, ArenaCreateRefusalModel>
+}
+
+/** The chain's refusal of a create, as a surface may state it. */
+export interface ArenaCreateRefusalModel {
+	/** The chain's own reason, verbatim — never invented, never re-worded. */
+	reason: string
+	/** The anchored height the refusal names. */
+	height: number
+	/** The refusal event's id. */
+	refusalEventId: string
 }
 
 // =========================================================================
@@ -338,6 +402,38 @@ export function chainClockLabel(clock: ArenaChainClockModel): string {
 
 /** The one sentence a surface may say about an auction with no stated end. */
 export const ARENA_UNKNOWN_END_LABEL = 'End time unknown'
+
+/** The one phrase a surface appends to a create-derived end, so it is never read as the committed end. */
+export const ARENA_CREATE_DERIVED_END_LABEL = 'create-derived end'
+
+/** The one phrase a surface appends when no committed end (kind 1449) was read for this lot. */
+export const ARENA_NO_COMMITTED_END_LABEL = 'no committed end read'
+
+/**
+ * The line a surface states for a lot whose end the chain committed (kind 1449):
+ * the end, the height of the bid that moved it, and — when the event named one —
+ * the **per-bid ordinal** of the extension. The ordinal is never rendered as
+ * "extended N times": it is the ordinal that belongs to *this* end.
+ *
+ * `committedEndsAt` and `height` are what the read delivered; `ordinal` is
+ * `null` when the event stated none, in which case the ordinal clause is
+ * omitted rather than guessed.
+ */
+export function committedEndLabel(committedEndsAt: number, height: number, ordinal: number | null): string {
+	const end = new Date(committedEndsAt * 1000).toISOString()
+	if (ordinal === null) return `end moved to ${end} by a bid at height ${height}`
+	return `end moved to ${end} by a bid at height ${height} — extension ${ordinal} of this lot`
+}
+
+/**
+ * The one sentence a surface says when the chain **refused a create**. The
+ * reason is the chain's own words, verbatim: `the chain refused this listing:
+ * <reason>`. Never "not found", never a re-worded reason — the app diagnoses
+ * from committed state and never invents a reason.
+ */
+export function createRefusalLabel(reason: string): string {
+	return `the chain refused this listing: ${reason}`
+}
 
 /**
  * The one sentence a surface may say about anti-snipe, or `null` when the

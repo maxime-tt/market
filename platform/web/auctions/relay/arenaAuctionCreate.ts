@@ -59,6 +59,8 @@
 import { getEventHash } from 'nostr-tools/pure'
 import type { Event } from '@sdk/core/nostr-io'
 import type { ArenaV4vSplitRow } from '@sdk/commerce/auctions/auctionPublishValidation'
+import type { ArenaCreateRules } from '@sdk/commerce/auctions/auctionPublishValidation'
+import type { ArenaParamsTerms } from '@platform/web/auctions/relay/arenaParamsRead'
 import { ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
 import {
 	auctionFormToCreateInput,
@@ -145,10 +147,10 @@ export interface ArenaCreateBuildOptions {
 const isHex64 = (value: unknown): value is string => typeof value === 'string' && HEX64.test(value)
 
 /** Copy the immutable fields off the root, refusing a root that cannot supply them. */
-function immutableFieldsOf(root: ArenaCreateContent, editEventId: string): Pick<
-	ArenaCreateContent,
-	'startPrice' | 'minIncrement' | 'mode' | 'windowSec' | 'durationSec' | 'sellerWallet' | 'v4vSplit'
-> {
+function immutableFieldsOf(
+	root: ArenaCreateContent,
+	editEventId: string,
+): Pick<ArenaCreateContent, 'startPrice' | 'minIncrement' | 'mode' | 'windowSec' | 'durationSec' | 'sellerWallet' | 'v4vSplit'> {
 	if (!isHex64(editEventId)) {
 		throw new ArenaCreateRefusalError(
 			'create.bad-auction-id',
@@ -177,42 +179,46 @@ function immutableFieldsOf(root: ArenaCreateContent, editEventId: string): Pick<
  * Pure: the draft for a create (or, with `editOf`, a supersession). Throws
  * `ArenaCreateRefusalError` — never guesses and never fills a missing field in.
  */
-export function buildArenaCreateDraft(
-	form: ArenaCreateValidationInput,
-	options: ArenaCreateBuildOptions,
-): ArenaCreateDraft {
+export function buildArenaCreateDraft(form: ArenaCreateValidationInput, options: ArenaCreateBuildOptions): ArenaCreateDraft {
 	const value: ArenaCreateValue = validateArenaCreateInput(form, { sellerWallet: options.sellerWallet })
 	const d = value.auctionId
 	const edit = options.editOf ?? null
 
-	const content: ArenaCreateContent = edit === null
-		? {
-				auction_id: d,
-				title: value.title,
-				description: value.description,
-				image: value.image,
-				category: value.category,
-				name: value.name,
-				startPrice: value.startPrice,
-				minIncrement: value.minIncrement,
-				mode: value.mode,
-				windowSec: value.windowSec,
-				durationSec: value.durationSec,
-				sellerWallet: value.sellerWallet,
-				v4vSplit: value.v4vSplit,
-			}
-		: {
-				// Display is mutable; money, time and cryptography are not.
-				auction_id: d,
-				title: value.title,
-				description: value.description,
-				image: value.image,
-				category: value.category,
-				name: value.name,
-				...immutableFieldsOf(edit.content, edit.eventId),
-			}
+	const content: ArenaCreateContent =
+		edit === null
+			? {
+					auction_id: d,
+					title: value.title,
+					description: value.description,
+					image: value.image,
+					category: value.category,
+					name: value.name,
+					startPrice: value.startPrice,
+					minIncrement: value.minIncrement,
+					mode: value.mode,
+					windowSec: value.windowSec,
+					durationSec: value.durationSec,
+					sellerWallet: value.sellerWallet,
+					v4vSplit: value.v4vSplit,
+				}
+			: {
+					// Display is mutable; money, time and cryptography are not.
+					auction_id: d,
+					title: value.title,
+					description: value.description,
+					image: value.image,
+					category: value.category,
+					name: value.name,
+					...immutableFieldsOf(edit.content, edit.eventId),
+				}
 
-	const tags: string[][] = edit === null ? [['d', d]] : [['d', d], ['e', edit.eventId]]
+	const tags: string[][] =
+		edit === null
+			? [['d', d]]
+			: [
+					['d', d],
+					['e', edit.eventId],
+				]
 
 	return {
 		d,
@@ -224,10 +230,7 @@ export function buildArenaCreateDraft(
 }
 
 /** The form's own entry point: the same draft, from the editor's state. */
-export function buildArenaCreateDraftFromForm(
-	formData: AuctionFormData,
-	options: ArenaCreateBuildOptions,
-): ArenaCreateDraft {
+export function buildArenaCreateDraftFromForm(formData: AuctionFormData, options: ArenaCreateBuildOptions): ArenaCreateDraft {
 	return buildArenaCreateDraft(auctionFormToCreateInput(formData), options)
 }
 
@@ -236,9 +239,36 @@ export function buildArenaCreateDraftFromForm(
  * seam: `'not-checked-here'` stands in for the seller wallet so the editor can render
  * every *form* message while the publish path is the only place that asks the wallet and
  * refuses `create.no-seller-wallet`.
+ *
+ * `rules` are the chain's published create rules (kind 1448, from
+ * `arenaParamsRead.ts`), so the editor's pre-flight is the chain's own rules and
+ * not a second hardcoded copy. Omitting `rules` (or a `null` rule) means the
+ * editor simply cannot check that rule — it never substitutes a default.
  */
-export function arenaCreateFormIssues(formData: AuctionFormData) {
-	return getArenaCreateIssues(auctionFormToCreateInput(formData), { sellerWallet: 'not-checked-here' })
+export function arenaCreateFormIssues(formData: AuctionFormData, rules?: ArenaCreateRules | null) {
+	return getArenaCreateIssues(auctionFormToCreateInput(formData), { sellerWallet: 'not-checked-here', rules })
+}
+
+/**
+ * The chain's published create rules, mapped from a kind-1448 params reading
+ * (`arenaParamsRead.ts` terms) to the rule shape the pre-flight consumes. This
+ * is a **mapping, not a rule**: every value is carried straight through, and a
+ * term the reading did not carry is left `null` so the pre-flight cannot check
+ * it. There is no default and no second copy of the chain's numbers here.
+ */
+export function arenaCreateRulesFromParams(terms: ArenaParamsTerms): ArenaCreateRules {
+	return {
+		max_title_chars: terms.max_title_chars,
+		max_description_chars: terms.max_description_chars,
+		max_image_chars: terms.max_image_chars,
+		max_category_chars: terms.max_category_chars,
+		max_name_chars: terms.max_name_chars,
+		image_rule: terms.image_rule,
+		start_price_min: terms.start_price_min,
+		start_price_max: terms.start_price_max,
+		increment_min: terms.increment_min,
+		increment_max: terms.increment_max,
+	}
 }
 
 // =========================================================================
@@ -301,7 +331,9 @@ export async function publishArenaCreate(
 		throw new Error(`The seller pubkey must be 64 hex, got ${JSON.stringify(options.sellerPubkey)}`)
 	}
 	if (options.signer.pubkey !== options.sellerPubkey) {
-		throw new Error(`The signer is ${options.signer.pubkey}, not the seller ${options.sellerPubkey}: a create must be signed by its seller.`)
+		throw new Error(
+			`The signer is ${options.signer.pubkey}, not the seller ${options.sellerPubkey}: a create must be signed by its seller.`,
+		)
 	}
 
 	const draft = buildArenaCreateDraft(form, options)
@@ -336,7 +368,8 @@ export async function publishArenaCreate(
 	const acceptedBy = outcome.acks.filter((ack) => ack.accepted).map((ack) => ack.url)
 	const rejected = outcome.acks.filter((ack) => !ack.accepted).map((ack) => ({ url: ack.url, message: ack.message ?? null }))
 	if (acceptedBy.length === 0) {
-		const named = rejected.length > 0 ? rejected.map((r) => `${r.url}${r.message ? ` (${r.message})` : ''}`).join('; ') : 'no relay answered'
+		const named =
+			rejected.length > 0 ? rejected.map((r) => `${r.url}${r.message ? ` (${r.message})` : ''}`).join('; ') : 'no relay answered'
 		throw new Error(`No relay accepted the auction create (kind ${ARENA_AUCTION_CREATE_KIND}, id ${event.id}): ${named}`)
 	}
 

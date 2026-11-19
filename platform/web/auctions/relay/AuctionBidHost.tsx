@@ -75,6 +75,7 @@ import { ArenaBidPanel, type ArenaBidSubmissionState } from '@ui/auction/arena/b
 import {
 	arenaBidBlock,
 	checkArenaBid,
+	diagnosePublishedBid,
 	publishArenaBid,
 	settleSubmissionFromRead,
 	submissionFromError,
@@ -152,6 +153,15 @@ export interface AuctionBidHostProps {
 	readStatus: ArenaSurfaceStatus
 	/** Unix seconds. The route already ticks a clock for the surfaces; pass the same one. */
 	now: number
+	/**
+	 * Whether the chain is advancing — fresh kind-1447 commitments across several
+	 * blocks — as the lot host derived it from the read. `null` when no read has
+	 * settled. This is the signal the three-state diagnosis needs: a published
+	 * bid that is not in committed state is "the chain did not accept it" when
+	 * this is `true`, and "infrastructure" when it is `false`. The host never
+	 * invents the value (`arenaBidPublish.ts` `arenaChainAdvancing`).
+	 */
+	chainAdvancing?: boolean | null
 	/** Bumped by the route when it wants the panel to forget its last submission. */
 	resetKey?: string | number
 	className?: string
@@ -173,15 +183,20 @@ function useArenaBidder(): ArenaBidderState {
 	return useMemo(() => ({ pubkey, wallet }), [pubkey, wallet])
 }
 
-export function AuctionBidHost({ model, readStatus, now, resetKey, className, onPublished }: AuctionBidHostProps) {
+export function AuctionBidHost({ model, readStatus, now, chainAdvancing = null, resetKey, className, onPublished }: AuctionBidHostProps) {
 	const bidder = useArenaBidder()
 	const [amountInput, setAmountInput] = useState('')
 	const [pending, setPending] = useState(false)
 	const [submission, setSubmission] = useState<ArenaBidSubmissionState>({ phase: 'idle' })
+	// The escrow locktime this host funded the last bid against, held so the
+	// three-state diagnosis can state it when the chain does not accept the bid.
+	// `null` until a bid is funded; never invented.
+	const [escrowLocktime, setEscrowLocktime] = useState<number | null>(null)
 
 	useEffect(() => {
 		setSubmission({ phase: 'idle' })
 		setAmountInput('')
+		setEscrowLocktime(null)
 	}, [resetKey, model?.coordinate])
 
 	// Pre-fill with the floor, the retired panel's behaviour: a bidder who types
@@ -197,9 +212,57 @@ export function AuctionBidHost({ model, readStatus, now, resetKey, className, on
 		model !== null ? checkArenaBid({ model, status: readStatus, now, bidder, raw: amountInput === '' ? prefill : amountInput }) : null
 
 	// A bid acknowledged by a relay becomes "seen" only when the read serves it.
+	// When a reopened read serves it, its escrow is committed — say nothing more.
+	// When a reopened read does NOT serve it (and a settled read has told us
+	// whether the chain is advancing), the three-state diagnosis decides: the
+	// chain did not accept it, or the chain is stuck. Never a reason it cannot see.
 	useEffect(() => {
-		setSubmission((previous) => settleSubmissionFromRead(previous, model))
-	}, [model])
+		setSubmission((previous) => {
+			if (previous.phase !== 'presumed') return previous
+			const upgraded = settleSubmissionFromRead(previous, model)
+			if (upgraded.phase === 'seen') {
+				setEscrowLocktime(null)
+				return upgraded
+			}
+			// Still presumed: only a settled read can diagnose an absence (a
+			// partial read may simply not have arrived yet), and only when the
+			// chain's own advance state is known.
+			if (readStatus !== 'settled' || chainAdvancing === null || model === null) return previous
+			const diagnosis = diagnosePublishedBid({
+				eventId: previous.eventId,
+				seenInRead: model.bids.some((bid) => bid.eventId === previous.eventId),
+				// A receipt (1443/1444) naming the bid is committed state too.
+				namedByReceipt: model.receipts.some((receipt) => receipt.bidId === previous.eventId),
+				chainAdvancing,
+				escrowLocktime,
+				// The chain's recorded refusal of this bid, verbatim, or null. Only a
+				// bid refused at delivery is recorded; a bid refused at admission
+				// leaves no record, and no reason is ever invented for it.
+				refusalReason: model.bidRefusals[previous.eventId]?.reason ?? null,
+			})
+			if (diagnosis.state === 'committed') return upgraded
+			if (diagnosis.state === 'refused') {
+				return {
+					phase: 'refused',
+					amount: previous.amount,
+					eventId: previous.eventId,
+					reason: diagnosis.reason ?? '',
+					locktime: diagnosis.escrowLocktime,
+					reclaimable: diagnosis.reclaimable,
+				}
+			}
+			if (diagnosis.state === 'not-accepted') {
+				return {
+					phase: 'not-accepted',
+					amount: previous.amount,
+					eventId: previous.eventId,
+					locktime: diagnosis.escrowLocktime,
+					reclaimable: diagnosis.reclaimable,
+				}
+			}
+			return { phase: 'infrastructure', amount: previous.amount, eventId: previous.eventId }
+		})
+	}, [model, readStatus, chainAdvancing, escrowLocktime])
 
 	const onSubmit = useCallback(async () => {
 		if (pending) return
@@ -244,6 +307,10 @@ export function AuctionBidHost({ model, readStatus, now, resetKey, className, on
 				const assembled = await assembleArenaBidFunding({ model, amount: check.amount, now: nowSec }, arenaBidFundPorts)
 				funding = assembled.funding
 				fundingTerms = assembled.fundingTerms
+				// The escrow's own locktime, from the funds that were actually
+				// locked — held so the diagnosis can state it if the chain does not
+				// accept the bid.
+				setEscrowLocktime(assembled.funding.locktime)
 			}
 			const result = await publishArenaBid(
 				{ model, status: readStatus, bidder, raw },

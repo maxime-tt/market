@@ -231,6 +231,92 @@ function receiptEvent(
 	) as unknown as NostrEventLike
 }
 
+const LOT_STATE_SK = new Uint8Array(32).fill(13)
+const LOT_STATE_PUB = getPublicKey(LOT_STATE_SK)
+
+const ARENA_CONTENT_COORD = '1440:seller-alice:lot-1'
+
+/** A signed kind-1449 committed end, built from the chain's live shape (§4). */
+function lotStateEvent(
+	over: {
+		auctionId?: string
+		endTime?: number
+		originalEndTime?: number | null
+		extensions?: number
+		height?: number
+		hash?: string
+		created_at?: number
+	} = {},
+): NostrEventLike {
+	const auctionId = over.auctionId ?? ARENA_CONTENT_COORD
+	const endTime = over.endTime ?? 1795021627
+	const originalEndTime = over.originalEndTime === undefined ? 1795021615 : over.originalEndTime
+	const height = over.height ?? 1734
+	const hash = over.hash ?? 'a8e25d2044c0be17413f822a4e867af5b4332f599c760dc6da180f604cb9542f'
+	const content: Record<string, unknown> = {
+		schema: 'arena.lot.v1',
+		auction_id: auctionId,
+		end_time: endTime,
+		extensions: over.extensions ?? 1,
+		height,
+		block_hash: hash,
+	}
+	if (originalEndTime !== null) content.original_end_time = originalEndTime
+	return finalizeEvent(
+		{
+			kind: 1449,
+			created_at: over.created_at ?? 1795021527,
+			tags: [
+				['auction', auctionId],
+				['height', String(height)],
+				['hash', hash],
+				['p', LOT_STATE_PUB],
+			],
+			content: JSON.stringify(content),
+		},
+		LOT_STATE_SK,
+	) as unknown as NostrEventLike
+}
+
+/** A signed kind-1450 refusal, built from the chain's live shape (§4). */
+function refusedEvent(
+	over: {
+		refusedEventId?: string
+		reason?: string
+		refusedKind?: number
+		height?: number
+		hash?: string
+		created_at?: number
+	} = {},
+): NostrEventLike {
+	const refusedEventId = over.refusedEventId ?? 'root-1'
+	const reason = over.reason ?? 'title required (max 120 chars)'
+	const height = over.height ?? 1749
+	const hash = over.hash ?? '0210e491ea9750bc2673d5d5ab3cfad2adabab56dff0bf095ff2bc5fa9ba8fb6'
+	const content = {
+		schema: 'arena.refused.v1',
+		event_id: refusedEventId,
+		kind: over.refusedKind ?? 1440,
+		reason,
+		height,
+		block_hash: hash,
+	}
+	return finalizeEvent(
+		{
+			kind: 1450,
+			created_at: over.created_at ?? 1795021902,
+			tags: [
+				['e', refusedEventId],
+				['height', String(height)],
+				['hash', hash],
+				['p', LOT_STATE_PUB],
+			],
+			content: JSON.stringify(content),
+		},
+		LOT_STATE_SK,
+	) as unknown as NostrEventLike
+}
+
 interface FakeRelayOptions {
 	events?: NostrEventLike[]
 	/** Throw on open. */
@@ -283,19 +369,22 @@ async function collect(stream: AsyncIterable<ArenaReadStreamItem>): Promise<Aren
 // =========================================================================
 
 describe('the read seam', () => {
-	test('asks for exactly the six auction kinds and nothing else', () => {
+	test('asks for exactly the eight auction kinds and nothing else', () => {
 		// One filter per kind group, each with its own limit: a single combined
 		// filter is answered with the newest events across all kinds, which the
 		// chain's 10 s commitments then fill entirely (measured live: 36 lots on
-		// the relay, one lot on the page).
+		// the relay, one lot on the page). The two state-half kinds (1449 the
+		// committed end, 1450 a create's refusal) get their own budgets too.
 		expect(arenaAuctionFilters()).toEqual([
 			{ kinds: [1440], limit: 500 },
 			{ kinds: [1441], limit: 500 },
 			{ kinds: [1443, 1444], limit: 200 },
 			{ kinds: [1445], limit: 200 },
 			{ kinds: [1447], limit: 60 },
+			{ kinds: [1449], limit: 200 },
+			{ kinds: [1450], limit: 200 },
 		])
-		expect(ARENA_READ_KINDS).toEqual([1440, 1441, 1443, 1444, 1445, 1447])
+		expect(ARENA_READ_KINDS).toEqual([1440, 1441, 1443, 1444, 1445, 1447, 1449, 1450])
 	})
 
 	test('opens one independent subscription per relay', async () => {
@@ -847,5 +936,160 @@ describe('money receipts', () => {
 		const decodedBad = decodeArenaEvent(badSchema, 'wss://a')
 		expect(decodedBad.ok).toBe(false)
 		if (!decodedBad.ok) expect(decodedBad.refusal.reason).toBe('arena.receipt.bad_content')
+	})
+})
+
+// =========================================================================
+// The state half is wired into the read (kinds 1449 / 1450)
+// =========================================================================
+
+describe('the state half — the committed end (1449) and refusals (1450)', () => {
+	test('a committed end attaches to its auction and the lot view can read it', async () => {
+		const create = createEvent({ id: 'root-1' })
+		// The 1449's auction_id is the full coordinate the read produces.
+		const lotState = lotStateEvent({ auctionId: '1440:seller-alice:lot-1', endTime: 1_000_500, height: 690, extensions: 1 })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, lotState] } }).snapshot()
+
+		expect(snapshot.auctions).toHaveLength(1)
+		const view = snapshot.auctions[0]
+		expect(view.committedEnd?.endTime).toBe(1_000_500)
+		expect(view.committedEnd?.height).toBe(690)
+		expect(view.committedEnd?.extensionOrdinal).toBe(1)
+		expect(view.committedEnds).toHaveLength(1)
+		// The committed end is NOT the create-derived end.
+		expect(view.rootCreatedAt + (view.content.durationSec ?? 0)).not.toBe(1_000_500)
+		expect(view.relays).toContain('wss://a')
+	})
+
+	test('the committed end at the highest anchored height wins, deduped by (auction_id, end_time)', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const first = lotStateEvent({
+			auctionId: '1440:seller-alice:lot-1',
+			endTime: 1_000_000,
+			originalEndTime: 1_000_000,
+			extensions: 0,
+			height: 690,
+		})
+		const second = lotStateEvent({
+			auctionId: '1440:seller-alice:lot-1',
+			endTime: 1_000_012,
+			originalEndTime: 1_000_000,
+			extensions: 1,
+			height: 720,
+		})
+		// A validator re-publishes the second end at a later height: one fact.
+		const secondRepublished = lotStateEvent({
+			auctionId: '1440:seller-alice:lot-1',
+			endTime: 1_000_012,
+			originalEndTime: 1_000_000,
+			extensions: 1,
+			height: 724,
+			created_at: 1_795_021_600,
+		})
+		const snapshot = await readFrom({ 'wss://a': { events: [create, first, second, secondRepublished] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		expect(view.committedEnds).toHaveLength(2)
+		expect(view.committedEnd?.endTime).toBe(1_000_012)
+		expect(view.committedEnd?.height).toBe(720)
+		expect(view.committedEnd?.extensionOrdinal).toBe(1)
+	})
+
+	test('no 1449 for the lot leaves committedEnd null, never the create-derived end', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const snapshot = await readFrom({ 'wss://a': { events: [create] } }).snapshot()
+		expect(snapshot.auctions[0].committedEnd).toBeNull()
+		expect(snapshot.auctions[0].committedEnds).toEqual([])
+	})
+
+	test('a 1450 naming the create lands as the createRefusal and at the snapshot', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const refusal = refusedEvent({ refusedEventId: 'root-1', reason: 'startPrice out of range (1..10000000)' })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, refusal] } }).snapshot()
+
+		expect(snapshot.auctions[0].createRefusal?.reason).toBe('startPrice out of range (1..10000000)')
+		expect(snapshot.refusedCreates).toHaveLength(1)
+		expect(snapshot.refusedCreates[0].createEventId).toBe('root-1')
+		expect(snapshot.refusedCreates[0].reason).toBe('startPrice out of range (1..10000000)')
+	})
+
+	test('a 1450 naming a BID lands as that bid’s refusal, with the chain’s words', async () => {
+		// The chain records a bid it refused at delivery (the late family, the
+		// block-time locktime floor, a duplicate) as a 1450 naming the kind-1441.
+		// A bid refused at admission leaves no record — so this list is a fact
+		// about what the chain said, never an inference about what it did not.
+		const create = createEvent({ id: 'root-1' })
+		const bid = bidEvent({ a: `1440:${SELLER_A}:lot-1`, amount: 100, created_at: 1100, id: 'bid-1' })
+		const refusal = refusedEvent({
+			refusedEventId: 'bid-1',
+			refusedKind: 1441,
+			reason: 'locktime below the floor for this lot: 1794924019 is under 1794924021',
+		})
+		const snapshot = await readFrom({ 'wss://a': { events: [create, bid, refusal] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		expect(view.bidRefusals).toHaveLength(1)
+		expect(view.bidRefusals[0].createEventId).toBe('bid-1')
+		expect(view.bidRefusals[0].reason).toBe('locktime below the floor for this lot: 1794924019 is under 1794924021')
+		// A bid refusal is not the lot's create refusal.
+		expect(view.createRefusal).toBeNull()
+	})
+
+	test('a create refusal is not attributed to a bid, and a bid refusal needs the bid', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const bid = bidEvent({ a: `1440:${SELLER_A}:lot-1`, amount: 100, created_at: 1100, id: 'bid-1' })
+		// A 1440 refusal, and a 1441 refusal for a bid this lot does not hold.
+		const createRefusal = refusedEvent({ refusedEventId: 'root-1', refusedKind: 1440 })
+		const otherBidRefusal = refusedEvent({ refusedEventId: 'bid-elsewhere', refusedKind: 1441 })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, bid, createRefusal, otherBidRefusal] } }).snapshot()
+
+		const view = snapshot.auctions[0]
+		expect(view.bidRefusals).toEqual([])
+		expect(view.createRefusal?.reason).toBe('title required (max 120 chars)')
+	})
+
+	test('the refusal dedupes by (event_id, reason) at the earliest anchored height', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const early = refusedEvent({ refusedEventId: 'root-1', height: 1745 })
+		const late = refusedEvent({ refusedEventId: 'root-1', height: 1749, created_at: 1_795_021_950 })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, late, early] } }).snapshot()
+
+		expect(snapshot.refusedCreates).toHaveLength(1)
+		expect(snapshot.refusedCreates[0].height).toBe(1745)
+	})
+
+	test('a bad 1449 is refused by its own name and counted in relay health', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const unsignedLotState = { ...lotStateEvent(), sig: '' }
+		const snapshot = await readFrom({ 'wss://a': { events: [create, unsignedLotState] } }).snapshot()
+
+		expect(snapshot.auctions[0].committedEnd).toBeNull()
+		expect(snapshot.refusals.map((refusal) => refusal.reason)).toContain('arena.lot_state.bad_signature')
+		expect(snapshot.health.relays[0].refusals).toBe(1)
+	})
+
+	test('a bad 1450 is refused by its own name', () => {
+		const unsigned = { ...refusedEvent(), sig: '' }
+		const decoded = decodeArenaEvent(unsigned, 'wss://a')
+		expect(decoded.ok).toBe(false)
+		if (!decoded.ok) expect(decoded.refusal.reason).toBe('arena.lot_state.bad_signature')
+	})
+
+	test('decodeArenaEvent decodes a 1449 and a 1450 to their own event types', () => {
+		const decodedLot = decodeArenaEvent(lotStateEvent({ auctionId: '1440:seller-alice:lot-1' }), 'wss://a')
+		expect(decodedLot.ok).toBe(true)
+		if (decodedLot.ok) expect(decodedLot.event.type).toBe('lot-state')
+
+		const decodedRefusal = decodeArenaEvent(refusedEvent(), 'wss://a')
+		expect(decodedRefusal.ok).toBe(true)
+		if (decodedRefusal.ok) expect(decodedRefusal.event.type).toBe('refused-fact')
+	})
+
+	test('a 1449 whose bare d matches no create is an orphan, not attached', async () => {
+		const create = createEvent({ id: 'root-1' })
+		const orphan = lotStateEvent({ auctionId: 'ghost-lot' })
+		const snapshot = await readFrom({ 'wss://a': { events: [create, orphan] } }).snapshot()
+		expect(snapshot.orphanLotStates).toHaveLength(1)
+		expect(snapshot.auctions[0].committedEnd).toBeNull()
 	})
 })

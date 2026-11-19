@@ -23,6 +23,10 @@ const model: ArenaAuctionDetailModel = {
 	bidCount: 2,
 	bidsWithoutAmount: 0,
 	endsAt: 1_600,
+	endSource: 'create-derived',
+	createDerivedEndsAt: 1_600,
+	committedEndHeight: null,
+	committedEndOrdinal: null,
 	phase: 'open',
 	verdict: null,
 	verdictCount: 0,
@@ -48,6 +52,8 @@ const model: ArenaAuctionDetailModel = {
 	receipts: [],
 	refundsByBidder: {},
 	settleReceipt: null,
+	createRefusal: null,
+	bidRefusals: {},
 }
 
 const relayHealth = { answered: 2, total: 2 }
@@ -191,5 +197,45 @@ describe('CatalogueDetailView', () => {
 	test('with no refund receipt the position carries no refund line', () => {
 		expect(render()).not.toContain('catalogue-refund-receipt')
 		expect(render()).not.toContain('refunded at height')
+	})
+})
+
+// =========================================================================
+// The committed end and the create refusal on the lot detail
+// =========================================================================
+
+describe('CatalogueDetailView — the committed end and the create refusal', () => {
+	test('a create-derived end is labelled as create-derived', () => {
+		const html = render()
+		expect(html).toContain('catalogue-end-source')
+		expect(html).toContain('create-derived end')
+	})
+
+	test('a committed end names the height and the per-bid ordinal, not a count', () => {
+		const html = render({
+			model: {
+				...model,
+				endsAt: 1_800,
+				endSource: 'committed',
+				createDerivedEndsAt: 1_600,
+				committedEndHeight: 690,
+				committedEndOrdinal: 2,
+			},
+		})
+		expect(html).toContain('committed end at height 690')
+		expect(html).toContain('extension 2 of this lot')
+		expect(html).not.toContain('extended 2 times')
+	})
+
+	test('a lot whose create the chain refused renders the chain’s reason verbatim', () => {
+		const html = render({
+			model: { ...model, createRefusal: { reason: 'title required (max 120 chars)', height: 1749, refusalEventId: 'ref-1' } },
+		})
+		expect(html).toContain('catalogue-create-refused')
+		expect(html).toContain('the chain refused this listing: title required (max 120 chars)')
+	})
+
+	test('a lot with no refusal read renders no refusal banner', () => {
+		expect(render()).not.toContain('catalogue-create-refused')
 	})
 })

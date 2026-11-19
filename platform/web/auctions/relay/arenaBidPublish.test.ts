@@ -33,7 +33,9 @@ import type { ArenaAuctionDetailModel } from '@ui/auction/arena/model'
 import type { ArenaBidderState } from '@ui/auction/arena/bid-rules'
 import {
 	ArenaBidPublishError,
+	arenaChainAdvancing,
 	buildArenaBidContent,
+	diagnosePublishedBid,
 	publishArenaBid,
 	settleSubmissionFromRead,
 	submissionFromError,
@@ -78,6 +80,10 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		bidCount: 0,
 		bidsWithoutAmount: 0,
 		endsAt: 4600,
+		endSource: 'create-derived',
+		createDerivedEndsAt: 4600,
+		committedEndHeight: null,
+		committedEndOrdinal: null,
 		phase: 'open',
 		verdict: null,
 		verdictCount: 0,
@@ -100,6 +106,8 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		receipts: [],
 		refundsByBidder: {},
 		settleReceipt: null,
+		createRefusal: null,
+		bidRefusals: {},
 		...over,
 	}
 }
@@ -582,5 +590,162 @@ describe('readBack — fixtures used by the round-trip', () => {
 		const snapshot = await read.snapshot()
 		expect(snapshot.auctions).toHaveLength(1)
 		expect(snapshot.health.answered).toEqual([RELAY_A])
+	})
+})
+
+// =========================================================================
+// The three-state diagnosis — never invents a reason
+// =========================================================================
+
+describe('arenaChainAdvancing', () => {
+	test('two distinct heights, the newest fresh, is advancing', () => {
+		expect(arenaChainAdvancing({ heights: [120, 130], newestTime: 1_000, now: 1_030 })).toBe(true)
+	})
+
+	test('one height is not "several blocks"', () => {
+		expect(arenaChainAdvancing({ heights: [120], newestTime: 1_000, now: 1_030 })).toBe(false)
+	})
+
+	test('a stale newest time is not advancing — the honest answer when the chain is stuck', () => {
+		expect(arenaChainAdvancing({ heights: [120, 130], newestTime: 1_000, now: 1_500 })).toBe(false)
+	})
+
+	test('no time at all is not advancing, never assumed', () => {
+		expect(arenaChainAdvancing({ heights: [120, 130], newestTime: null, now: 1_030 })).toBe(false)
+	})
+
+	test('a future newest time is refused rather than trusted', () => {
+		expect(arenaChainAdvancing({ heights: [120, 130], newestTime: 2_000, now: 1_000 })).toBe(false)
+	})
+})
+
+describe('diagnosePublishedBid — four states, and never an invented reason', () => {
+	test('a refusal the chain recorded is stated with the chain’s own words', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+			refusalReason: 'locktime below the floor for this lot: 1794924019 is under 1794924021',
+		})
+		expect(diagnosis.state).toBe('refused')
+		expect(diagnosis.reason).toBe('locktime below the floor for this lot: 1794924019 is under 1794924021')
+		expect(diagnosis.reclaimable).toBe(true)
+	})
+
+	test('a refusal always outranks the absence states — the chain put it in committed state', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: false,
+			escrowLocktime: null,
+			refusalReason: 'bid already recorded',
+		})
+		expect(diagnosis.state).toBe('refused')
+		expect(diagnosis.reclaimable).toBe(false)
+	})
+
+	test('no reason is invented when no refusal was read — and an empty one is no reason', () => {
+		for (const refusalReason of [null, undefined, '   ']) {
+			const diagnosis = diagnosePublishedBid({
+				eventId: 'b1',
+				seenInRead: false,
+				namedByReceipt: false,
+				chainAdvancing: true,
+				escrowLocktime: 2_000,
+				refusalReason,
+			})
+			expect(diagnosis.state).toBe('not-accepted')
+			expect(diagnosis.reason).toBeNull()
+		}
+	})
+
+	test('seen in the read is committed: say nothing', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: true,
+			namedByReceipt: false,
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+		})
+		expect(diagnosis.state).toBe('committed')
+		expect(diagnosis.reclaimable).toBe(false)
+	})
+
+	test('a receipt naming the bid is committed too', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: true,
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+		})
+		expect(diagnosis.state).toBe('committed')
+	})
+
+	test('published, not committed, chain advancing → not-accepted, with the locktime and reclaim', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: true,
+			escrowLocktime: 2_000,
+		})
+		expect(diagnosis.state).toBe('not-accepted')
+		expect(diagnosis.escrowLocktime).toBe(2_000)
+		expect(diagnosis.reclaimable).toBe(true)
+	})
+
+	test('not-accepted with an unknown locktime is not reclaimable — no affordance the app cannot honour', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: true,
+			escrowLocktime: null,
+		})
+		expect(diagnosis.state).toBe('not-accepted')
+		expect(diagnosis.escrowLocktime).toBeNull()
+		expect(diagnosis.reclaimable).toBe(false)
+	})
+
+	test('published, not committed, chain not advancing → infrastructure, not a claim about the bid', () => {
+		const diagnosis = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: false,
+			escrowLocktime: 2_000,
+		})
+		expect(diagnosis.state).toBe('infrastructure')
+		expect(diagnosis.reclaimable).toBe(false)
+	})
+
+	test('the only reason a diagnosis carries is the chain’s, verbatim', () => {
+		// The shape gained `reason` when the chain's *recorded* refusals were
+		// read (a 1450 naming the bid). It is `null` in every state the app
+		// diagnoses itself — the app still invents nothing, and this pins that.
+		for (const chainAdvancing of [true, false]) {
+			const diagnosis = diagnosePublishedBid({
+				eventId: 'b1',
+				seenInRead: false,
+				namedByReceipt: false,
+				chainAdvancing,
+				escrowLocktime: null,
+			})
+			expect(Object.keys(diagnosis).sort()).toEqual(['escrowLocktime', 'eventId', 'reason', 'reclaimable', 'state'])
+			expect(diagnosis.reason).toBeNull()
+		}
+		const refused = diagnosePublishedBid({
+			eventId: 'b1',
+			seenInRead: false,
+			namedByReceipt: false,
+			chainAdvancing: true,
+			escrowLocktime: null,
+			refusalReason: 'bid already recorded',
+		})
+		expect(refused.reason).toBe('bid already recorded')
 	})
 })

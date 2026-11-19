@@ -49,6 +49,7 @@ import { ArenaVerdictPanel } from '@ui/auction/arena/verdict-panel'
 import { CatalogueDetailView } from '@ui/auctions/catalogue/catalogue-detail-view'
 import { chainClockLabel, shortKey, type ArenaRelayHealth, type ArenaSurfaceStatus } from '@ui/auction/arena/model'
 import { AuctionBidHost } from '@platform/web/auctions/relay/AuctionBidHost'
+import { arenaChainAdvancing } from '@platform/web/auctions/relay/arenaBidPublish'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { lotHref, resolveArenaLot, type ArenaLotLookup } from '@platform/web/auctions/relay/arenaLotRead'
 
@@ -142,6 +143,19 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: Arena
 	const context = { now, status: read.status, divergences: read.snapshot?.verdictDivergence }
 	const detail = view === null ? null : toAuctionDetailModel(view, context)
 	const verdicts = view === null ? null : toVerdictPanelModel(view, context)
+	// Whether the chain is advancing — fresh kind-1447 commitments across several
+	// blocks — is the signal the bid panel needs to tell "the chain did not accept
+	// the bid" from "the chain is stuck" (the three-state diagnosis). It is
+	// derived here, from the commitments the read already holds, and passed down;
+	// the panel never reads a relay itself.
+	const chainAdvancing =
+		read.snapshot === null
+			? null
+			: arenaChainAdvancing({
+					heights: read.snapshot.stateCommitments.map((commitment) => commitment.height),
+					newestTime: read.snapshot.highestCommitment?.time ?? null,
+					now,
+				})
 
 	return (
 		<div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6">
@@ -153,7 +167,11 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished }: Arena
 				backHref="/auctions"
 				chainClockLabel={read.chainClock === null ? null : chainClockLabel(read.chainClock)}
 				sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} />}
-				bidPanel={detail === null ? null : <AuctionBidHost model={detail} readStatus={read.status} now={now} onPublished={onPublished} />}
+				bidPanel={
+					detail === null ? null : (
+						<AuctionBidHost model={detail} readStatus={read.status} now={now} chainAdvancing={chainAdvancing} onPublished={onPublished} />
+					)
+				}
 			/>
 			{verdicts !== null && (
 				<ArenaVerdictPanel

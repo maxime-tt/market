@@ -308,8 +308,19 @@ export const ARENA_STATE_COMMITMENT_KIND = 1447 as AuctionKind
 export const ARENA_PARAMS_KIND = 1448 as AuctionKind
 
 /**
- * The nine arena 1440-series kinds in one frozen record — the single place
- * the numbers are written, so a future renumber is one edit. Matches the
+ * Kind 1449 — the lot's **committed end** (`arena.lot.v1`), published by the
+ * validator that committed the bid which moved it, **while the lot is still
+ * open**. Anchor (height + block_hash) is MANDATORY; the `extensions` field is
+ * the per-bid ORDINAL, never the lot's running count.
+ */
+export const ARENA_LOT_STATE_KIND = 1449 as AuctionKind
+
+/** Kind 1450 — a **create** the chain refused (`arena.refused.v1`), with the chain's own reason. Anchor (height + block_hash) is MANDATORY. */
+export const ARENA_REFUSED_KIND = 1450 as AuctionKind
+
+/**
+ * The arena 1440-series kinds in one frozen record — the single place the
+ * numbers are written, so a future renumber is one edit. Matches the
  * "one exported map" rule in the decision note.
  */
 export const ARENA_AUCTION_KINDS = {
@@ -322,6 +333,8 @@ export const ARENA_AUCTION_KINDS = {
 	fundingAbort: ARENA_FUNDING_ABORT_KIND,
 	stateCommitment: ARENA_STATE_COMMITMENT_KIND,
 	params: ARENA_PARAMS_KIND,
+	lotState: ARENA_LOT_STATE_KIND,
+	refused: ARENA_REFUSED_KIND,
 } as const
 
 export type ArenaAuctionKind = (typeof ARENA_AUCTION_KINDS)[keyof typeof ARENA_AUCTION_KINDS]
@@ -342,6 +355,12 @@ export const ARENA_SETTLE_SCHEMA = 'arena.settle.v1'
 
 /** `schema` value inside a kind-1448 escrow-params event's JSON content. */
 export const ARENA_PARAMS_SCHEMA = 'arena.params.v1'
+
+/** `schema` value inside a kind-1449 lot-state (committed end) event's JSON content. */
+export const ARENA_LOT_SCHEMA = 'arena.lot.v1'
+
+/** `schema` value inside a kind-1450 refusal event's JSON content. */
+export const ARENA_REFUSED_SCHEMA = 'arena.refused.v1'
 
 /** The only `outcome` values a kind-1445 verdict may carry. */
 export const ARENA_VERDICT_OUTCOMES = ['winner', 'reserve_not_met', 'cancelled', 'aborted'] as const

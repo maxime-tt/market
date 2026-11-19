@@ -9,7 +9,11 @@ import {
 	ARENA_CHAIN_CLOCK_REGRESSION_LABEL,
 	ARENA_CHAIN_CLOCK_STALE_LABEL,
 	ARENA_CHAIN_CLOCK_UNKNOWN_LABEL,
+	ARENA_CREATE_DERIVED_END_LABEL,
+	ARENA_NO_COMMITTED_END_LABEL,
 	chainClockLabel,
+	committedEndLabel,
+	createRefusalLabel,
 	type ArenaChainClockModel,
 } from './model'
 
@@ -61,5 +65,32 @@ describe('chainClockLabel', () => {
 		expect(chainClockLabel(clock({ refusedHeights: [30], regressionRefused: true }))).toBe(
 			'Chain time as of height 42, 7 s ago — refused forked height 30 — ' + ARENA_CHAIN_CLOCK_REGRESSION_LABEL,
 		)
+	})
+})
+
+// =========================================================================
+// The committed end and the create refusal — the one sentence each
+// =========================================================================
+
+describe('committedEndLabel / createRefusalLabel', () => {
+	test('a committed end names the end and the bid height', () => {
+		expect(committedEndLabel(1_795_021_627, 1734, null)).toBe('end moved to 2026-11-18T17:07:07.000Z by a bid at height 1734')
+	})
+
+	test('with a per-bid ordinal the line says "extension N of this lot", never "extended N times"', () => {
+		const line = committedEndLabel(1_795_021_627, 1734, 2)
+		expect(line).toContain('extension 2 of this lot')
+		expect(line).not.toContain('extended')
+	})
+
+	test('a create refusal states the chain’s own reason verbatim, never "not found"', () => {
+		const line = createRefusalLabel('title required (max 120 chars)')
+		expect(line).toBe('the chain refused this listing: title required (max 120 chars)')
+		expect(line).not.toContain('not found')
+	})
+
+	test('the labels the surfaces use name the two end sources and the missing committed end', () => {
+		expect(ARENA_CREATE_DERIVED_END_LABEL).toBe('create-derived end')
+		expect(ARENA_NO_COMMITTED_END_LABEL).toBe('no committed end read')
 	})
 })

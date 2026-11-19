@@ -120,6 +120,8 @@ import {
 	ARENA_AUCTION_CREATE_KIND,
 	ARENA_AUCTION_REFUND_KIND,
 	ARENA_AUCTION_SETTLE_KIND,
+	ARENA_LOT_STATE_KIND,
+	ARENA_REFUSED_KIND,
 	ARENA_STATE_COMMITMENT_KIND,
 	ARENA_VERDICT_KIND,
 } from '@sdk/commerce/auctions/constants'
@@ -132,6 +134,16 @@ import {
 	type ParsedArenaVerdict,
 } from './arenaAnchor'
 import { ArenaReceiptError, dedupeArenaReceipts, parseArenaReceiptEvent, type ParsedArenaReceipt } from './arenaReceiptsRead'
+import {
+	ArenaLotStateError,
+	dedupeArenaRefusals,
+	dedupeArenaLotStates,
+	parseArenaRefusalEvent,
+	parseArenaLotStateEvent,
+	type ArenaLotStateEventLike,
+	type ParsedArenaRefusal,
+	type ParsedArenaLotState,
+} from './arenaLotStateRead'
 // Type-only: erased at runtime, so this adapter stays free of any `ui/` code.
 import type { ArenaV4vSplitRow } from '@ui/auction/arena/model'
 
@@ -176,6 +188,14 @@ export type ArenaReadRefusalName =
 	| 'arena.receipt.bad_anchor'
 	| 'arena.receipt.anchor_mismatch'
 	| 'arena.receipt.signer_not_in_roster'
+	| 'arena.lot_state.bad_kind'
+	| 'arena.lot_state.bad_signature'
+	| 'arena.lot_state.bad_schema'
+	| 'arena.lot_state.bad_content'
+	| 'arena.lot_state.unanchored'
+	| 'arena.lot_state.bad_anchor'
+	| 'arena.lot_state.anchor_mismatch'
+	| 'arena.lot_state.signer_not_in_roster'
 
 // =========================================================================
 // The immutable allow-list for a 1440 (MERGED-PROTOCOL-SPEC.md §8)
@@ -221,9 +241,11 @@ export const ARENA_READ_KINDS = [
 	ARENA_AUCTION_SETTLE_KIND,
 	ARENA_VERDICT_KIND,
 	ARENA_STATE_COMMITMENT_KIND,
+	ARENA_LOT_STATE_KIND,
+	ARENA_REFUSED_KIND,
 ] as readonly number[]
 
-/** The subscription filters: six kinds, one budget each. Nothing else is ever requested. */
+/** The subscription filters: eight kinds, one budget each. Nothing else is ever requested. */
 export function arenaAuctionFilters(): EventFilter[] {
 	// One filter per kind group, each with an explicit limit. A relay caps a
 	// filter's response (khatru answers at most 500 events), so a SINGLE combined
@@ -240,6 +262,11 @@ export function arenaAuctionFilters(): EventFilter[] {
 		// The clock needs the newest few readings, not the history: this kind is
 		// published every ~10 s by every validator.
 		{ kinds: [ARENA_STATE_COMMITMENT_KIND], limit: 60 },
+		// The state half: a lot's committed end and a create's refusal, one per
+		// validator. A 1449 is published only while a lot is open, so a modest
+		// budget carries the open lots' ends; a 1450 is rare.
+		{ kinds: [ARENA_LOT_STATE_KIND], limit: 200 },
+		{ kinds: [ARENA_REFUSED_KIND], limit: 200 },
 	]
 }
 
@@ -322,7 +349,30 @@ export interface ArenaReceiptEvent extends ArenaAuctionEventBase {
 	receipt: ParsedArenaReceipt
 }
 
-export type ArenaAuctionEvent = ArenaCreateEvent | ArenaBidEvent | ArenaVerdictEvent | ArenaStateCommitmentEvent | ArenaReceiptEvent
+/**
+ * A kind-1449 **committed end** for a lot: the end the chain committed when a
+ * bid moved it, published while the lot is still open. Distinct from the
+ * create-derived end the lot page computes from the create.
+ */
+export interface ArenaLotStateEvent extends ArenaAuctionEventBase {
+	type: 'lot-state'
+	lotState: ParsedArenaLotState
+}
+
+/** A kind-1450 **refusal**: a create the chain refused, with the chain's own reason. */
+export interface ArenaRefusedFactEvent extends ArenaAuctionEventBase {
+	type: 'refused-fact'
+	refusal: ParsedArenaRefusal
+}
+
+export type ArenaAuctionEvent =
+	| ArenaCreateEvent
+	| ArenaBidEvent
+	| ArenaVerdictEvent
+	| ArenaStateCommitmentEvent
+	| ArenaReceiptEvent
+	| ArenaLotStateEvent
+	| ArenaRefusedFactEvent
 
 /** One event the gate refused, with the relay that offered it. */
 export interface ArenaRefusedEvent {
@@ -574,6 +624,34 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 		}
 	}
 
+	// 1449 / 1450: the chain's state half — a lot's committed end and a create's
+	// refusal, the same discipline the receipts and params paths apply to a 1443
+	// and a 1448: signature, kind, schema, mandatory agreeing anchor, and a
+	// tag-vs-content cross-check. No roster is held at this seam.
+	if (event.kind === ARENA_LOT_STATE_KIND || event.kind === ARENA_REFUSED_KIND) {
+		try {
+			const like: ArenaLotStateEventLike = {
+				id: event.id,
+				pubkey: event.pubkey,
+				kind: event.kind,
+				created_at: event.created_at ?? 0,
+				tags: event.tags,
+				content: event.content,
+				sig: event.sig ?? '',
+			}
+			if (event.kind === ARENA_LOT_STATE_KIND) {
+				const lotState = parseArenaLotStateEvent(like)
+				return { ok: true, event: { ...baseOf(event, relay), type: 'lot-state', lotState } }
+			}
+			const refusal = parseArenaRefusalEvent(like)
+			return { ok: true, event: { ...baseOf(event, relay), type: 'refused-fact', refusal } }
+		} catch (error) {
+			const reason = error instanceof ArenaLotStateError ? error.refusal : 'arena.lot_state.bad_content'
+			const detail = error instanceof Error ? error.message : String(error)
+			return refuse(relay, event, reason, detail)
+		}
+	}
+
 	// 1445 / 1447: stage 1 owns the shape and the mandatory anchor. A thrown
 	// refusal here is the event's verdict, and it is the answer a client MUST
 	// ignore an unanchored event with (`arenaAnchor.ts:8-13`).
@@ -684,6 +762,33 @@ export interface ArenaAuctionView {
 	settleForBid: Record<string, ParsedArenaReceipt>
 	/** The lot-level settle: the earliest-anchored 1444 this auction carries, or `null`. */
 	settleReceipt: ParsedArenaReceipt | null
+	/**
+	 * The lot's **committed end** as the chain published it (kind 1449), at the
+	 * highest anchored height, or `null` when no 1449 named this lot. `null` is
+	 * *no committed end read* — never the create-derived end, which the card
+	 * model computes separately and labels as such.
+	 */
+	committedEnd: ParsedArenaLotState | null
+	/**
+	 * Every committed end read for this lot, ordered by anchored height
+	 * ascending. Empty when none was read; a surface can see the per-bid ordinal
+	 * history here.
+	 */
+	committedEnds: ParsedArenaLotState[]
+	/**
+	 * The chain's refusal of this lot's **create** (a 1450 naming the root
+	 * create's event id), or `null` when none was read.
+	 */
+	createRefusal: ArenaRefusedCreateFact | null
+	/**
+	 * The chain's refusals of this lot's **bids** (1450 events naming a kind-1441),
+	 * one per refused bid event id, at the earliest anchored height.
+	 *
+	 * Only a bid the chain refused **at delivery** appears here. A bid refused at
+	 * admission is discarded in `CheckTx` and leaves no record — so an absent
+	 * entry is *no refusal read*, never "accepted".
+	 */
+	bidRefusals: ArenaRefusedCreateFact[]
 	relays: string[]
 }
 
@@ -716,6 +821,28 @@ export interface ArenaStateCommitmentView extends ParsedArenaStateCommitment {
 	relays: string[]
 }
 
+/**
+ * A create the chain **refused** (a kind-1450 naming a create's event id), with
+ * the chain's own reason verbatim. Distinct from {@link ArenaRejectedCreate},
+ * which is a create this read refused locally: this one the **chain** refused.
+ */
+export interface ArenaRefusedCreateFact {
+	/** The refusal event id. */
+	refusalEventId: string
+	/** The create event id the chain refused. */
+	createEventId: string
+	/** The refused event's kind (1440 for a create), or `null` when unreadable. */
+	refusedKind: number | null
+	/** The chain's own reason, verbatim — never invented, never re-worded. */
+	reason: string
+	/** The anchored height the refusal names. */
+	height: number
+	/** The anchored block hash the refusal names. */
+	blockHash: string
+	/** The signing validator. */
+	validatorPubkey: string
+}
+
 export interface ArenaAuctionSnapshot {
 	/** Canonical auctions, `created_at` descending (tie: lowest event id first). */
 	auctions: ArenaAuctionView[]
@@ -723,6 +850,10 @@ export interface ArenaAuctionSnapshot {
 	orphanVerdicts: ParsedArenaVerdict[]
 	/** Receipts whose `auction` id matches no create this read saw. */
 	orphanReceipts: ParsedArenaReceipt[]
+	/** Committed ends (kind 1449) whose coordinate matches no create this read saw. */
+	orphanLotStates: ParsedArenaLotState[]
+	/** Every create the chain refused (kind 1450), deduped at the earliest anchored height. */
+	refusedCreates: ArenaRefusedCreateFact[]
 	/** State commitments, height descending then time descending, then validator pubkey. */
 	stateCommitments: ArenaStateCommitmentView[]
 	highestCommitment: ParsedArenaStateCommitment | null
@@ -866,6 +997,8 @@ export function projectArenaEvents(
 	const verdictEvents = all.filter((e): e is ArenaVerdictEvent => e.type === 'verdict')
 	const commitmentEvents = all.filter((e): e is ArenaStateCommitmentEvent => e.type === 'commitment')
 	const receiptEvents = all.filter((e): e is ArenaReceiptEvent => e.type === 'receipt')
+	const lotStateEvents = all.filter((e): e is ArenaLotStateEvent => e.type === 'lot-state')
+	const refusedFactEvents = all.filter((e): e is ArenaRefusedFactEvent => e.type === 'refused-fact')
 
 	// ---- resolve 1440 versions ------------------------------------------
 	const groups = new Map<string, ArenaCreateEvent[]>()
@@ -1000,6 +1133,50 @@ export function projectArenaEvents(
 		receiptRelaysByAuction.set(coordinate, relays)
 	}
 
+	// ---- committed ends (1449) and refusals (1450), grouped by coordinate ---
+	// Same resolution as verdicts and receipts: a 1449's `auction_id` is a
+	// coordinate, but a bare `d` is accepted when exactly one auction carries it.
+	// Dedupe is by `(auction_id, end_time)` at the earliest anchored height.
+	const lotStatesByAuction = new Map<string, ParsedArenaLotState[]>()
+	const lotStateRelaysByAuction = new Map<string, Set<string>>()
+	const orphanLotStates: ParsedArenaLotState[] = []
+	for (const event of lotStateEvents) {
+		const auctionId = event.lotState.auctionId
+		const coordinate = auctionId.includes(':')
+			? auctionId
+			: (dToCoordinate.get(auctionId) ?? []).length === 1
+				? dToCoordinate.get(auctionId)![0]
+				: null
+		if (coordinate === null) {
+			orphanLotStates.push(event.lotState)
+			continue
+		}
+		const list = lotStatesByAuction.get(coordinate)
+		if (list === undefined) lotStatesByAuction.set(coordinate, [event.lotState])
+		else list.push(event.lotState)
+		const relays = lotStateRelaysByAuction.get(coordinate) ?? new Set<string>()
+		for (const relay of event.relays) relays.add(relay)
+		lotStateRelaysByAuction.set(coordinate, relays)
+	}
+
+	// A refusal (a 1450) names a **create event id**, not a coordinate, so it is
+	// deduped by `(event_id, reason)` at the earliest anchored height and kept at
+	// the snapshot, where a surface that has the create's event id can find it.
+	const refusedCreates: ArenaRefusedCreateFact[] = dedupeArenaRefusals(refusedFactEvents.map((event) => event.refusal)).map((refusal) => ({
+		refusalEventId: refusal.eventId,
+		createEventId: refusal.refusedEventId,
+		refusedKind: refusal.refusedKind,
+		reason: refusal.reason,
+		height: refusal.height,
+		blockHash: refusal.blockHash,
+		validatorPubkey: refusal.signerPubkey,
+	}))
+	const refusedCreateByEventId = new Map<string, ArenaRefusedCreateFact>()
+	for (const fact of refusedCreates) {
+		const prior = refusedCreateByEventId.get(fact.createEventId)
+		if (prior === undefined || fact.height < prior.height) refusedCreateByEventId.set(fact.createEventId, fact)
+	}
+
 	// ---- assemble views --------------------------------------------------
 	const auctions: ArenaAuctionView[] = []
 	for (const [key, entry] of resolved) {
@@ -1044,6 +1221,28 @@ export function projectArenaEvents(
 		for (const relay of entry.canonical.relays) relays.add(relay)
 		for (const bid of auctionBids) for (const relay of bid.relays) relays.add(relay)
 		for (const relay of receiptRelaysByAuction.get(entry.coordinate) ?? []) relays.add(relay)
+		for (const relay of lotStateRelaysByAuction.get(entry.coordinate) ?? []) relays.add(relay)
+
+		// The committed ends, deduped by `(auction_id, end_time)` at the earliest
+		// anchored height, ordered by height ascending; the highest-anchored one
+		// is the chain's latest word on where the end is.
+		const committedEnds = dedupeArenaLotStates(lotStatesByAuction.get(entry.coordinate) ?? [])
+		const committedEnd = committedEnds.length === 0 ? null : committedEnds[committedEnds.length - 1]
+		// The chain's refusal of this create, keyed on the root create's event id
+		// (a 1450 names the create, never a version).
+		const createRefusal = refusedCreateByEventId.get(entry.root.id) ?? null
+		// **Bid** refusals: the chain records a bid it refused *at delivery* (the
+		// late family, the block-time locktime floor, a duplicate bid) as a 1450
+		// naming the kind-1441. A bid refused at admission (no proof of funds, a
+		// bad escrow signature) is discarded in `CheckTx` and never recorded —
+		// that absence is not a refusal, and this list never claims one.
+		// Owner ruling: `notes/DECISION-2026-11-18-refused-bids-are-not-committed.md`.
+		const bidRefusals: ArenaRefusedCreateFact[] = []
+		for (const bid of auctionBids) {
+			const refusal = refusedCreateByEventId.get(bid.eventId)
+			if (refusal === undefined || refusal.refusedKind !== ARENA_AUCTION_BID_KIND) continue
+			bidRefusals.push(refusal)
+		}
 
 		auctions.push({
 			coordinate: entry.coordinate,
@@ -1064,6 +1263,10 @@ export function projectArenaEvents(
 			refundForBid,
 			settleForBid,
 			settleReceipt,
+			committedEnd,
+			committedEnds,
+			createRefusal,
+			bidRefusals,
 			relays: [...relays].sort(),
 		})
 	}
@@ -1148,6 +1351,8 @@ export function projectArenaEvents(
 		auctions,
 		orphanVerdicts,
 		orphanReceipts,
+		orphanLotStates,
+		refusedCreates,
 		stateCommitments,
 		highestCommitment,
 		commitmentForks,

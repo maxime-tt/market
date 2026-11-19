@@ -5,13 +5,21 @@ nothing from this.
 
 ## The rule
 
-**No refused bid is ever committed to the chain.** Bid admission stays strict: a bid that fails
-`CheckTx` is discarded there and leaves no state. The chain's block space must not be purchasable by
-spamming bids, and the cheapest attack — many low-value or fake bids — is exactly what strict
+**A bid refused at admission is never committed to the chain.** Bid admission stays strict: a bid that
+fails `CheckTx` is discarded there and leaves no state. The chain's block space must not be purchasable
+by spamming bids, and the cheapest attack — many low-value or fake bids — is exactly what strict
 admission refuses for free.
 
-The chain therefore publishes **no** kind-1450 for a refused bid, and the app must never present one.
-This is deliberate, not a gap to close.
+**The boundary, measured on the live relay (2026-11-18, 36 kind-1450 events): 24 name a kind-1441.** The
+chain *does* record a bid it refuses **at delivery** — the late family, the block-time locktime floor
+(`locktime below the floor for this lot: 1794924019 is under 1794924021`), a duplicate
+(`bid already recorded`). What it never records is a bid refused at **admission**, where the dry run
+rejects before a block exists and there is no committed state to anchor a refusal to. So:
+
+- a refusal the chain **recorded** is committed state, and the app **must** state it, with the chain's
+  own words verbatim (kind 1450 naming the bid);
+- an **absent** refusal is *no refusal read* — never "accepted", and never a reason the app supplies.
+  That is not a gap to close; it is the ruling.
 
 ## Why (the taxonomy the ruling rests on)
 
@@ -24,12 +32,13 @@ The failures a bid can hit fall into two groups, and the dangerous ones and the 
    These are the attack surface, and they are cheap to reject at admission. An honest client cannot
    produce them — they are version skew or malice.
 2. **State-dependent failures** — decided against committed state: below the current minimum, lot
-   closed, seller bidding, already the highest, and the race case (published a second before the
-   end, so it lands under the minimum). These are legitimate bids whose funds are real and locked.
-   **This class already has a home:** it is the late-bid family, admitted as `late: …`, recorded in
-   committed state, and refunded through the receipts (`1443`).
+   closed, seller bidding, already the highest, the block-time locktime floor, a duplicate bid, and the
+   race case (published a second before the end, so it lands under the minimum). These are legitimate
+   bids whose funds are real and locked, and they are admitted as `late: …` or decided at delivery, so
+   they **are** recorded in committed state and published as kind-1450 — the app states the chain's
+   reason verbatim.
 
-So the cases a user needs explained are already recorded, and the cases that are not recorded are the
+So the cases a user needs explained are recorded and shown, and the cases that are not recorded are the
 ones no honest client can reach.
 
 ## What the app does instead (option C, with the diagnosis made explicit)
@@ -39,11 +48,13 @@ from what it already reads — no new chain mechanism:
 
 - **Committed** — the bid is in committed state (or a receipt names it): the bid is live. Nothing to
   say.
+- **Refused and recorded** — a kind-1450 names the bid's event id: the app states the chain's reason
+  verbatim, with the escrow's locktime and the reclaim affordance.
 - **On the relay, not committed, and the chain is advancing** (fresh kind-1447 commitments across
-  several blocks): the chain saw it and did not accept it. That is **not** a network problem, and the
-  app must say so — "the chain has not accepted this bid" — with the escrow's locktime and the
-  existing reclaim affordance, because the funds are locked until then and the bidder can take them
-  back.
+  several blocks): the chain saw it and did not accept it, and recorded no refusal. That is **not** a
+  network problem, and the app must say so — "the chain did not accept this bid" — while stating that it
+  does not know why and will not invent a reason, with the escrow's locktime and the existing reclaim
+  affordance, because the funds are locked until then and the bidder can take them back.
 - **The chain is not advancing** — no fresh commitments: that **is** an infrastructure problem, and
   the honest statement is that, not a claim about the bid.
 
@@ -69,5 +80,6 @@ Two constraints are recorded with it so they are not discovered later:
 ## What this changes for the app lane
 
 Phase F (reading kinds 1449/1450) proceeds unchanged: a **create** refusal is committed and published,
-so a refused lot can be named. For **bids**, the app implements the three-state diagnosis above and
-says nothing about a reason it cannot see.
+so a refused lot can be named, and so is a **bid** refusal the chain decided at delivery. For a bid with
+no recorded refusal the app implements the three-state diagnosis above and states no reason it cannot
+see.

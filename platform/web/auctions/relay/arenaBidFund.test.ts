@@ -229,6 +229,26 @@ describe('a funded bid is assembled from the lock and the terms', () => {
 		expect(escrow.sent[0].options.locktime).toBe(END_AT + 900 + 15)
 	})
 
+	test('the locktime floor follows the committed end when the lot carries one', async () => {
+		// The lot view's `endsAt` is the chain's committed end when a 1449 was
+		// read (auctionSurfacesRead.ts), so a floor derived from it is derived
+		// from the committed end, not the create-derived one. A stale client that
+		// locked against the old end would be refused by the chain *after* the
+		// money was locked.
+		const committedEnd = END_AT + 12 // the end an anti-snipe bid moved it to
+		const escrow = escrowDouble()
+		const result = await assembleArenaBidFunding(
+			{ model: fixedLot({ mode: 'fixed', endsAt: committedEnd }), amount: 64, now: NOW },
+			ports({ manager: escrow.manager }),
+		)
+		const floor = arenaBidLocktimeFloor({ mode: 'fixed', endAt: committedEnd, now: NOW })
+		expect(floor).toBe(committedEnd + 900 + 15)
+		expect(escrow.sent[0].options.locktime).toBe(floor)
+		// And the floor is strictly above the one the create-derived end would give.
+		expect(floor).toBeGreaterThan(arenaBidLocktimeFloor({ mode: 'fixed', endAt: END_AT, now: NOW }))
+		expect(verifyArenaBidFunding(result.funding, result.fundingTerms)).toBe(floor)
+	})
+
 	test('the committed v4v split reaches the settle template as its own outputs', async () => {
 		const v4vSplit = [{ role: 'v4v', recipientPubkey: V4V, allocationBps: 500 }]
 		const escrow = escrowDouble()

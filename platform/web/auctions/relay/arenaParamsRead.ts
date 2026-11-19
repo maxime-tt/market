@@ -138,6 +138,25 @@ export interface ArenaParamsTerms {
 	max_proofs: number | null
 	threshold: number | null
 	validators: ArenaParamsValidator[] | null
+	/**
+	 * The **create-content rules** the chain publishes as code (`ParamsContent`
+	 * only — deliberately not on `Params`, so `params_version` does not move).
+	 * The app's create pre-flight reads these rather than hardcoding a second
+	 * copy of the chain's rules: a rule change on the chain reaches the form
+	 * without a client edit. Every one is `null` when the relay did not carry it,
+	 * and a `null` rule means the pre-flight cannot check it — never a default.
+	 */
+	max_title_chars: number | null
+	max_description_chars: number | null
+	max_image_chars: number | null
+	max_category_chars: number | null
+	max_name_chars: number | null
+	/** The **name** of the image rule (`"same-site-or-https"`), not a pattern. `null` when unstated. */
+	image_rule: string | null
+	start_price_min: number | null
+	start_price_max: number | null
+	increment_min: number | null
+	increment_max: number | null
 }
 
 export interface ParsedArenaParams {
@@ -370,6 +389,16 @@ export function parseArenaParamsEvent(event: ArenaParamsEventLike): ParsedArenaP
 			max_proofs: asCount(content.max_proofs),
 			threshold: asCount(content.threshold),
 			validators,
+			max_title_chars: asCount(content.max_title_chars),
+			max_description_chars: asCount(content.max_description_chars),
+			max_image_chars: asCount(content.max_image_chars),
+			max_category_chars: asCount(content.max_category_chars),
+			max_name_chars: asCount(content.max_name_chars),
+			image_rule: asNonEmptyString(content.image_rule),
+			start_price_min: asCount(content.start_price_min),
+			start_price_max: asCount(content.start_price_max),
+			increment_min: asCount(content.increment_min),
+			increment_max: asCount(content.increment_max),
 		},
 	}
 }
