@@ -9,11 +9,12 @@ import gsap from 'gsap'
  * frame — there is no second layout to keep in sync, and no way for the
  * animation to delay data (the brief's non-negotiable).
  *
- * The search pill is not a stub: when the overlay mounts it is measured onto
- * the page's own mounted field (`positionHandoffPill`), so the fade reveals the
- * identical element in place. If no field is mounted the pill stays hidden
- * rather than promising one. The measure is taken once, at mount — the overlay
- * and the page commit in the same frame, so the field is already in the DOM.
+ * The search pill is not a stub: at the search beat it is measured onto the
+ * page's own mounted field (`positionHandoffPill`), re-measured whenever the
+ * page's field mounts during a slow read, and once more as the fade begins — so
+ * the fade reveals the identical element in place. The page's field is preferred
+ * over the nav band's. If nothing is mounted at the beat the pill stays hidden
+ * rather than promising a field that is not there.
  *
  * `prefers-reduced-motion` is handled before anything renders: a visitor who
  * asks for reduced motion gets the hero's first frame and no timeline at all.
@@ -171,11 +172,19 @@ export function IntroOverlay({ stats, enabled = true, onDone }: IntroOverlayProp
 		}
 		const root = rootRef.current
 		if (!root) return
-		// Line the pill up with the page's real field before the beats run, so the
-		// overlay's fade reveals the identical element. No field mounted → the pill
-		// stays hidden (the `else` below) rather than promising a bar the page
-		// cannot hand back.
-		const target = positionHandoffPill(searchRef.current)
+
+		/*
+		 * The page's own field does not exist yet in a slow read — the home page is
+		 * read from relays while the intro plays, so the bar's field is the only one
+		 * mounted at the start. Align on the beat that shows the pill, keep watching
+		 * for the page's field to mount, and take a final measurement as the fade
+		 * begins. `fadeStarted` closes the window: moving the pill once the fade is
+		 * running would flicker it, so the fade's own start is the last alignment.
+		 */
+		let fadeStarted = false
+		let observer: MutationObserver | null = null
+		let searchTween: gsap.core.Tween | null = null
+
 		const timeline = gsap.timeline({
 			defaults: { ease: 'power2.out' },
 			onComplete: () => {
@@ -187,15 +196,55 @@ export function IntroOverlay({ stats, enabled = true, onDone }: IntroOverlayProp
 			.fromTo(root, { opacity: 1 }, { opacity: 1, duration: 0.08 })
 			.fromTo(wordRef.current, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.45 })
 			.fromTo(marketRef.current, { opacity: 0 }, { opacity: 1, duration: 0.35, delay: 0.1 })
-		if (target) {
-			timeline.fromTo(searchRef.current, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.4 })
-		} else {
-			// Nothing to meet: hold the same duration so the later beats keep their
-			// place, and leave the pill out rather than faking a field.
-			timeline.to(searchRef.current, { opacity: 0, duration: 0.4 })
+
+		// The search beat. Align to whatever is mounted *now* — the page's field if
+		// it has arrived, else the bar's — and reveal only if there is a real field
+		// to meet. The no-op tween holds the beat's 0.4s so the later beats keep
+		// their place whether or not the pill appears.
+		timeline.call(() => {
+			const pill = searchRef.current
+			if (!pill) return
+			if (positionHandoffPill(pill)) {
+				searchTween = gsap.fromTo(pill, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' })
+			} else {
+				// Nothing to meet: keep the pill out rather than faking a field.
+				gsap.set(pill, { opacity: 0 })
+			}
+		})
+		timeline.to({}, { duration: 0.4 })
+
+		timeline.fromTo(statsRef.current, { opacity: 0 }, { opacity: 1, duration: 0.3 })
+
+		// The fade. Take the last honest measurement — the page's field may have
+		// mounted a moment ago — then stop following.
+		timeline.to(root, {
+			opacity: 0,
+			duration: 0.45,
+			delay: 0.25,
+			onStart: () => {
+				fadeStarted = true
+				observer?.disconnect()
+				positionHandoffPill(searchRef.current)
+			},
+		})
+
+		/*
+		 * Follow the page's field as it mounts (and the bar's as it unmounts). A
+		 * field's arrival/removal is a child-list change; the styles gsap writes are
+		 * attributes, which this observer does not watch, so there is no feedback
+		 * loop. Bounded: it only ever writes the pill's box once per change and is
+		 * disconnected the instant the fade starts.
+		 */
+		if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+			observer = new MutationObserver(() => {
+				if (!fadeStarted) positionHandoffPill(searchRef.current)
+			})
+			observer.observe(document.body, { childList: true, subtree: true })
 		}
-		timeline.fromTo(statsRef.current, { opacity: 0 }, { opacity: 1, duration: 0.3 }).to(root, { opacity: 0, duration: 0.45, delay: 0.25 })
+
 		return () => {
+			observer?.disconnect()
+			searchTween?.kill()
 			timeline.kill()
 		}
 	}, [enabled, done, onDone])
