@@ -382,6 +382,7 @@
 
 .arena-login input,
 .arena-login textarea,
+.arena-login select,
 .arena-login [data-slot='select-trigger'] {
 	background: var(--arena-bg) !important;
 	border: 1px solid var(--arena-line) !important;
@@ -391,6 +392,7 @@
 
 .arena-login input:focus,
 .arena-login textarea:focus,
+.arena-login select:focus,
 .arena-login [data-slot='select-trigger']:focus {
 	border-color: var(--arena-pink) !important;
 	box-shadow: 0 0 0 2px rgb(255 62 181 / 0.3) !important;
@@ -420,6 +422,75 @@
 
 .arena-login > button:last-child:hover {
 	color: var(--arena-pink);
+}
+
+/* --- Wallet dialogs ----------------------------------------------------------
+ * Deposit / Withdraw (Lightning) and Receive / Send (Cashu ecash) open from the
+ * header wallet panel. They share the login dialog's portalled Arena scope and
+ * add the panel's pill buttons and a serif title, so the whole wallet reads as
+ * one surface with the Search button's pink as its single action colour.
+ * ------------------------------------------------------------------------- */
+
+.arena-wallet-dialog {
+	padding: 24px;
+}
+
+.arena-wallet-dialog [data-slot='dialog-title'] {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-weight: 400;
+	font-size: 30px;
+	line-height: 1.05;
+	letter-spacing: -0.01em;
+}
+
+.arena-wallet-dialog [data-slot='dialog-description'] {
+	color: var(--arena-muted);
+}
+
+.arena-wallet-dialog label {
+	color: var(--arena-muted);
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.arena-wallet-dialog [data-slot='button'] {
+	border-radius: 999px;
+	height: 40px;
+	padding-inline: 18px;
+	font-size: 12px;
+	letter-spacing: 0.06em;
+}
+
+.arena-wallet-dialog [data-slot='button'][data-size='icon'] {
+	width: 40px;
+	padding-inline: 0;
+}
+
+.arena-wallet-dialog [data-slot='button'][data-variant='default']:disabled {
+	background: var(--arena-surface-2);
+	color: var(--arena-muted);
+	opacity: 1;
+}
+
+.arena-wallet-dialog [data-slot='button'][data-variant='ghost'] {
+	background: transparent;
+	color: var(--arena-muted);
+}
+
+.arena-wallet-dialog [data-slot='button'][data-variant='ghost']:hover {
+	background: var(--arena-surface-2);
+	color: var(--arena-ink);
+}
+
+.arena-wallet-dialog input,
+.arena-wallet-dialog select {
+	height: 44px;
+}
+
+.arena-wallet-dialog textarea {
+	border-radius: 16px;
 }
 
 /* --- Dashboard title bar ----------------------------------------------------

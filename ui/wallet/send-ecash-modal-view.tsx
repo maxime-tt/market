@@ -38,7 +38,7 @@ class QRErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNo
 }
 
 /**
- * Send eCash — the presentational half of the retired
+ * Send ecash — the presentational half of the retired
  * `src/feature/wallet/components/SendEcashModal.tsx`.
  *
  * Props-only: the host owns the amount/mint fields, the generate action, the
@@ -94,13 +94,13 @@ export function SendEcashModalView({
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-			<DialogContent className="sm:max-w-md">
+			<DialogContent className="arena-login arena-wallet-dialog sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
-						<Send className="w-5 h-5 text-fill-accent" />
-						Send eCash
+						<Send className="w-5 h-5 text-fill-ink" />
+						Send ecash
 					</DialogTitle>
-					<DialogDescription>Generate a Cashu token to send eCash (Balance: {totalBalance.toLocaleString()} sats)</DialogDescription>
+					<DialogDescription>Generate a Cashu token to send ecash (Balance: {totalBalance.toLocaleString()} sats)</DialogDescription>
 				</DialogHeader>
 
 				{view === 'token' && generatedToken ? (

@@ -97,13 +97,20 @@ export interface Nip60WalletViewProps {
 }
 
 // Button appearance class definitions (semantic roles over the dark ink surface).
-const classNameGhost = 'hover:bg-on-fill-ink/10 text-on-fill-ink/70 hover:text-on-fill-ink'
-const classNameSubtle = 'bg-on-fill-ink/5 hover:bg-on-fill-ink/10 text-on-fill-ink/70 hover:text-on-fill-ink'
-const classNameMuted = 'bg-on-fill-ink/10 hover:bg-on-fill-ink/20 text-on-fill-ink'
-const classNameActive = 'bg-on-fill-ink/20 text-on-fill-ink'
-const classNameSuccess = 'bg-success text-success-foreground hover:bg-success/90'
-const classNameWarning = 'bg-warning text-warning-foreground hover:bg-warning/90'
-const classNameDestructive = 'bg-transparent hover:bg-error/20 text-error hover:text-error/80'
+/*
+ * The panel wears the public (Reckless / Arena) theme through the role tokens the host's scope rebinds:
+ * `surface-*`, `text-high` / `text-mid`, `border-*`, and `fill-ink` for the one pink action — the same pill as
+ * the bar's Search button. No hard-coded colours, so another instance theme restyles it too.
+ */
+const classNameGhost = 'bg-transparent shadow-none text-text-mid hover:bg-surface-hover hover:text-text-high'
+const classNamePill = 'h-10 rounded-full px-4 text-xs font-semibold tracking-[0.06em] shadow-none'
+const classNamePrimary = cn(classNamePill, 'bg-fill-ink text-on-fill-ink hover:bg-fill-ink-hover')
+const classNameOutline = cn(classNamePill, 'border border-border-strong bg-transparent text-text-high hover:bg-surface-hover')
+const classNameQuiet = cn(classNamePill, 'bg-surface-hover text-text-high hover:bg-surface-sunken')
+const classNameChip =
+	'h-8 rounded-full border border-border-default bg-transparent px-3 text-xs font-medium normal-case tracking-normal text-text-mid shadow-none hover:bg-surface-hover hover:text-text-high'
+const classNameChipActive = 'border-border-strong bg-surface-hover text-text-high'
+const classNameDestructive = 'bg-transparent shadow-none hover:bg-error/15 text-error hover:text-error'
 
 export function Nip60WalletView({
 	isAuthenticated,
@@ -145,66 +152,80 @@ export function Nip60WalletView({
 }: Nip60WalletViewProps) {
 	if (!isAuthenticated) {
 		return (
-			<div className="bg-fill-ink p-4 rounded-lg text-on-fill-ink/70 text-center">
-				<p>Please log in to view your wallet</p>
+			<div className="py-6 text-text-mid text-sm text-center">
+				<p>Sign in to see your wallet</p>
 			</div>
 		)
 	}
 
 	if (status === 'idle' || status === 'initializing') {
 		return (
-			<div className="flex justify-center items-center bg-fill-ink p-4 rounded-lg">
-				<Loader2 className="w-6 h-6 text-on-fill-ink/70 animate-spin" />
+			<div className="flex justify-center items-center py-8">
+				<Loader2 className="w-6 h-6 text-text-mid animate-spin" />
 			</div>
 		)
 	}
 
 	if (status === 'error') {
 		return (
-			<div className="bg-fill-ink p-4 rounded-lg text-error text-center">
+			<div className="py-6 text-error text-sm text-center">
 				<p>{error}</p>
 			</div>
 		)
 	}
 
 	return (
-		<div className="bg-fill-ink p-4 rounded-lg max-w-full overflow-hidden text-on-fill-ink">
-			<div className="relative mb-4 text-center">
-				<div className="top-0 right-0 absolute flex gap-1">
-					<Button className={classNameGhost} size="icon" onClick={onRefresh} disabled={isRefreshing} title="Refresh & sync wallet">
-						<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-					</Button>
+		<div data-slot="wallet-view" className="max-w-full overflow-hidden text-text-high">
+			{/* Balance */}
+			<div className="flex justify-between items-start gap-3 mb-5">
+				<div className="min-w-0">
+					<p className="mb-2 font-semibold text-[11px] text-text-mid uppercase tracking-[0.14em]">Wallet</p>
+					<p className="flex items-baseline gap-2" data-testid="wallet-balance">
+						<span className="font-heading font-normal text-[56px] text-text-high leading-none tracking-[-0.01em]">
+							{totalBalance.toLocaleString()}
+						</span>
+						<span className="text-text-mid text-base">sats</span>
+					</p>
+					<p className="mt-2 text-text-mid text-xs">
+						Cashu ecash · {mints.length} {mints.length === 1 ? 'mint' : 'mints'}
+					</p>
 				</div>
-				<p className="mb-1 text-on-fill-ink/70 text-sm">Balance</p>
-				<p className="font-bold text-on-fill-ink text-2xl">{totalBalance.toLocaleString()} sats</p>
+				<Button
+					className={cn(classNameGhost, 'rounded-full w-9 h-9 shrink-0')}
+					size="icon"
+					onClick={onRefresh}
+					disabled={isRefreshing}
+					title="Refresh & sync wallet"
+					aria-label="Refresh and sync wallet"
+				>
+					<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+				</Button>
 			</div>
 
-			{/* Action Buttons */}
-			<div className="gap-2 grid grid-cols-2 mb-4">
-				<Button className={classNameSuccess} size="sm" onClick={() => onOpenModal('deposit')}>
+			{/* Actions: Lightning in and out, Cashu ecash across */}
+			<div className="gap-2 grid grid-cols-2 mb-5">
+				<Button className={classNamePrimary} onClick={() => onOpenModal('deposit')}>
 					<Zap className="w-4 h-4" />
 					Deposit
 				</Button>
-				<Button className={classNameWarning} size="sm" onClick={() => onOpenModal('withdraw')} disabled={totalBalance === 0}>
+				<Button className={classNameOutline} onClick={() => onOpenModal('withdraw')} disabled={totalBalance === 0}>
 					<Zap className="w-4 h-4" />
 					Withdraw
 				</Button>
-				<Button className={classNameMuted} size="sm" onClick={() => onOpenModal('receive')}>
+				<Button className={classNameQuiet} onClick={() => onOpenModal('receive')}>
 					<QrCode className="w-4 h-4" />
-					Receive eCash
+					Receive ecash
 				</Button>
-				<Button className={classNameMuted} size="sm" onClick={() => onOpenModal('send')} disabled={totalBalance === 0}>
+				<Button className={classNameQuiet} onClick={() => onOpenModal('send')} disabled={totalBalance === 0}>
 					<Send className="w-4 h-4" />
-					Send eCash
+					Send ecash
 				</Button>
 			</div>
 
 			{walletDevMode && (
-				<div className="mb-4 rounded-lg border border-warning-border bg-warning-muted p-3 space-y-2">
-					<p className="text-xs uppercase tracking-wide text-warning-muted-foreground font-semibold">Auction Test Tools</p>
-					<p className="text-xs text-warning-muted-foreground/80">
-						Available in local development for seeded auctions and fallback testnut mints.
-					</p>
+				<div className="space-y-2 bg-surface-sunken mb-5 p-3 border border-border-default rounded-2xl">
+					<p className="font-semibold text-[11px] text-text-mid uppercase tracking-[0.14em]">Auction test tools</p>
+					<p className="text-text-mid text-xs">Available in local development for seeded auctions and fallback testnut mints.</p>
 
 					<div className="flex gap-2">
 						<Input
@@ -239,12 +260,12 @@ export function Nip60WalletView({
 					</div>
 
 					{lastDevMint && (
-						<p className="text-2xs text-warning-muted-foreground/90">
+						<p className="text-2xs text-text-mid">
 							Last mint: {lastDevMint.amount.toLocaleString()} sats via {getMintHostname(lastDevMint.mintUrl)}
 						</p>
 					)}
 					{lastDevBid && (
-						<p className="text-2xs text-warning-muted-foreground/90 break-words">
+						<p className="text-2xs text-text-mid break-words">
 							Last bid: {lastDevBid.bidAmount.toLocaleString()} sats on {lastDevBid.auctionTitle}
 						</p>
 					)}
@@ -252,41 +273,46 @@ export function Nip60WalletView({
 			)}
 
 			{/* Toggle Row: Mints, Pending */}
-			<div className="pt-2 overflow-hidden">
+			<div className="pt-4 border-border-default border-t overflow-hidden">
 				{/* Toggle buttons row */}
-				<div className="flex gap-1 mb-2">
+				<div className="flex gap-2 mb-3">
 					<Button
-						className={cn(openSection === 'mints' ? classNameActive : classNameSubtle, 'flex-1 gap-1.5 px-2')}
+						className={cn(classNameChip, openSection === 'mints' && classNameChipActive, 'gap-1.5')}
 						size="sm"
 						onClick={() => onOpenSectionChange(openSection === 'mints' ? null : 'mints')}
 						title="Manage mints"
 					>
-						<Landmark className="w-4 h-4 shrink-0" />
-						<span className="text-xs">{mints.length}</span>
+						<Landmark className="w-3.5 h-3.5 shrink-0" />
+						<span>Mints</span>
+						<span className="text-text-high">{mints.length}</span>
 					</Button>
 					{activePendingTokens.length > 0 && (
 						<Button
-							className={cn(openSection === 'pending' ? classNameActive : classNameSubtle, 'flex-1 gap-1.5 px-2')}
+							className={cn(classNameChip, openSection === 'pending' && classNameChipActive, 'gap-1.5')}
 							size="sm"
 							onClick={() => onOpenSectionChange(openSection === 'pending' ? null : 'pending')}
 							title="Pending tokens"
 						>
-							<Clock className="w-4 h-4 shrink-0" />
-							<span className="text-xs">{activePendingTokens.length}</span>
+							<Clock className="w-3.5 h-3.5 shrink-0" />
+							<span>Pending</span>
+							<span className="text-text-high">{activePendingTokens.length}</span>
 						</Button>
 					)}
 				</div>
 
 				{/* Content panels */}
 				{openSection === 'mints' && (
-					<div className="space-y-2 pt-2 border-on-fill-ink/10 border-t overflow-hidden">
+					<div className="space-y-2 overflow-hidden">
 						{mints.map((mint) => (
-							<div key={mint} className="flex justify-between items-center gap-2 text-sm">
-								<span className="min-w-0 text-on-fill-ink/80 truncate" title={mint}>
+							<div
+								key={mint}
+								className="flex justify-between items-center gap-2 bg-surface-sunken px-3 py-2 border border-border-default rounded-xl text-sm"
+							>
+								<span className="min-w-0 text-text-high truncate" title={mint}>
 									{getMintHostname(mint)}
 								</span>
 								<div className="flex items-center gap-1 shrink-0">
-									{balances[mint] !== undefined && <span className="text-on-fill-ink/70 text-xs">{balances[mint].toLocaleString()}</span>}
+									{balances[mint] !== undefined && <span className="text-text-mid text-xs">{balances[mint].toLocaleString()} sats</span>}
 								</div>
 							</div>
 						))}
@@ -297,9 +323,15 @@ export function Nip60WalletView({
 								onChange={(e) => onNewMintUrlChange(e.target.value)}
 								onKeyDown={(e) => e.key === 'Enter' && onAddMint()}
 								placeholder="https://mint.example.com"
-								className="flex-1 min-w-0 h-8 text-sm"
+								className="flex-1 bg-surface-sunken border-border-default rounded-full min-w-0 h-9 text-sm"
 							/>
-							<Button className={cn(classNameMuted, 'px-2 h-8 shrink-0')} size="sm" onClick={onAddMint} disabled={!newMintUrl.trim()}>
+							<Button
+								className={cn(classNameQuiet, 'px-0 w-9 h-9 shrink-0')}
+								size="sm"
+								onClick={onAddMint}
+								disabled={!newMintUrl.trim()}
+								aria-label="Add mint"
+							>
 								<Plus className="w-4 h-4" />
 							</Button>
 						</div>
@@ -307,29 +339,37 @@ export function Nip60WalletView({
 				)}
 
 				{openSection === 'pending' && (
-					<div className="space-y-2 pt-2 border-on-fill-ink/10 border-t max-h-48 overflow-y-auto">
+					<div className="space-y-2 max-h-48 overflow-y-auto">
 						{activePendingTokens.map((token) => (
-							<div key={token.id} className="flex justify-between items-center gap-2 bg-on-fill-ink/5 p-2 rounded-lg">
+							<div
+								key={token.id}
+								className="flex justify-between items-center gap-2 bg-surface-sunken px-3 py-2 border border-border-default rounded-xl"
+							>
 								<div className="min-w-0">
-									<p className="font-medium text-on-fill-ink text-sm">{token.amount.toLocaleString()} sats</p>
-									<p className="text-on-fill-ink/70 text-xs truncate">
+									<p className="font-medium text-text-high text-sm">{token.amount.toLocaleString()} sats</p>
+									<p className="text-text-mid text-xs truncate">
 										{getMintHostname(token.mintUrl)} • {new Date(token.createdAt).toLocaleDateString()}
 									</p>
 								</div>
 								<div className="flex gap-0.5 shrink-0">
 									<Button
-										className={cn(classNameGhost, 'w-7 h-7')}
+										className={cn(classNameGhost, 'rounded-full w-7 h-7')}
 										size="icon"
 										onClick={() => onViewingTokenChange(token)}
 										title="View token"
 									>
 										<Eye className="w-3.5 h-3.5" />
 									</Button>
-									<Button className={cn(classNameGhost, 'w-7 h-7')} size="icon" onClick={() => onCopyToken(token.token)} title="Copy token">
+									<Button
+										className={cn(classNameGhost, 'rounded-full w-7 h-7')}
+										size="icon"
+										onClick={() => onCopyToken(token.token)}
+										title="Copy token"
+									>
 										<Copy className="w-3.5 h-3.5" />
 									</Button>
 									<Button
-										className={cn(classNameGhost, 'w-7 h-7')}
+										className={cn(classNameGhost, 'rounded-full w-7 h-7')}
 										size="icon"
 										onClick={() => onReclaim(token)}
 										disabled={isReclaiming === token.id}
@@ -338,7 +378,7 @@ export function Nip60WalletView({
 										{isReclaiming === token.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
 									</Button>
 									<Button
-										className={cn(classNameDestructive, 'w-7 h-7')}
+										className={cn(classNameDestructive, 'rounded-full w-7 h-7')}
 										size="icon"
 										onClick={() => onTokenPendingRemovalChange(token)}
 										title="Remove from list"
