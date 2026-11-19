@@ -44,6 +44,7 @@ export const configRoutes: BunRoutes = {
 				cvmServerPubkey: resolveCvmServerPubkey(),
 				needsSetup: !appSettings,
 				serverReady: isEventHandlerReady(),
+				appRelayWritesOnly: process.env.APP_RELAY_WRITES_ONLY === 'true',
 				externalZapRelaysEnabled: stage === 'production' || (stage === 'development' && process.env.LOCAL_RELAY_ONLY !== 'true'),
 				// Read from the SERVER's environment: the client cannot see the server's
 				// loopback, so the host resolves the provider and the base it must post to.
