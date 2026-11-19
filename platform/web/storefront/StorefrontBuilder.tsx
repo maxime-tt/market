@@ -42,7 +42,9 @@ import { storefrontCmsConfig } from './storefrontCms'
 import { usePublishStorefrontPage, useStorefrontPage } from './storefrontQuery'
 import { clearStorefrontDraft, loadStorefrontDraft, saveStorefrontDraft } from './draftStorage'
 
-import '@puckeditor/core/puck.css'
+// no-external.css is Puck's stylesheet without its @import of Inter from
+// a third-party host; Inter is bundled in styles/fonts.css instead.
+import '@puckeditor/core/no-external.css'
 
 /**
  * The page builder.

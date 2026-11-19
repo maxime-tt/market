@@ -79,3 +79,38 @@
 	font-style: normal;
 	font-display: swap;
 }
+
+/* Inter, for the Puck page editor's own UI. Puck's default stylesheet imports
+   it from a third-party host; the app uses @puckeditor/core/no-external.css and serves it
+   here instead. Declared under both names Puck's CSS asks for. */
+@font-face {
+	font-family: 'Inter';
+	src: url('../platform/web/app/assets/fonts/inter-latin-opsz-normal.woff2') format('woff2-variations');
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Inter';
+	src: url('../platform/web/app/assets/fonts/inter-latin-opsz-italic.woff2') format('woff2-variations');
+	font-weight: 100 900;
+	font-style: italic;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'InterVariable';
+	src: url('../platform/web/app/assets/fonts/inter-latin-opsz-normal.woff2') format('woff2-variations');
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'InterVariable';
+	src: url('../platform/web/app/assets/fonts/inter-latin-opsz-italic.woff2') format('woff2-variations');
+	font-weight: 100 900;
+	font-style: italic;
+	font-display: swap;
+}
