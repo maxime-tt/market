@@ -311,6 +311,8 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
  * Rows are kept **one per published verdict event**, in the read's own order
  * (height descending, then validator key). Nothing is merged per validator and
  * nothing is counted into a quorum, because there is no quorum rule to apply.
+ * The projection also carries the lot's {@link ArenaVerdictPanelModel.phase},
+ * so an empty panel can say *why* it has no rows.
  */
 export function toVerdictPanelModel(view: ArenaAuctionView, context: ArenaSurfaceContext): ArenaVerdictPanelModel {
 	const rows: ArenaVerdictRow[] = view.verdicts.map((verdict) => ({
@@ -325,6 +327,10 @@ export function toVerdictPanelModel(view: ArenaAuctionView, context: ArenaSurfac
 
 	return {
 		auctionId: view.coordinate,
+		// The same end the countdown uses, judged at the same instant: the panel
+		// states the lot's phase when it holds no rows, so an open lot says it has
+		// not closed rather than implying a chain absence.
+		phase: auctionPhase(view, context.now),
 		rows,
 		validatorCount: validatorKeys(view.verdicts).length,
 		outcomes: outcomesOf(view.verdicts),

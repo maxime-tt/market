@@ -5,6 +5,7 @@ import {
 	ARENA_QUORUM_DISCLAIMER,
 	readStateMessage,
 	shortKey,
+	verdictEmptyLabel,
 	verdictTone,
 	type ArenaRelayHealth,
 	type ArenaSurfaceStatus,
@@ -33,11 +34,15 @@ import {
  *   relay — the equivocation signal a single pooled subscription cannot see;
  * - when the validators themselves published different outcomes, that they
  *   disagree, without choosing between them;
- * - the {@link ARENA_QUORUM_DISCLAIMER}, always, in every state — including when
- *   a single verdict is on screen, because one verdict is not a quorum.
+ * - the {@link ARENA_QUORUM_DISCLAIMER}, **with the rows it explains** — what
+ *   the list is and is not. It is not the empty state: with no verdict on
+ *   screen the disclaimer would read as "this product lacks quorum" rather
+ *   than as a property of the list.
  *
  * "No verdict published" and "verdict unknown" are rendered as different
- * sentences, and neither is rendered as "no outcome".
+ * sentences, and neither is rendered as "no outcome". An empty panel states the
+ * lot's phase instead of implying an absence in the chain: an open lot has no
+ * verdict yet because it has not closed, so the read is not silent about it.
  */
 
 export interface ArenaVerdictPanelProps {
@@ -104,7 +109,6 @@ export function ArenaVerdictPanel({ model, status, relayHealth, renderValidator,
 					</div>
 				)}
 				{counts && <p className="text-[11px] text-text-mid opacity-80">{counts}</p>}
-				<p className="rounded-lg bg-warning-muted px-3 py-2 text-[11px] text-warning-muted-foreground">{ARENA_QUORUM_DISCLAIMER}</p>
 			</div>
 		)
 	}
@@ -119,6 +123,7 @@ export function ArenaVerdictPanel({ model, status, relayHealth, renderValidator,
 			ref={ref}
 			data-slot="arena-verdict-panel"
 			data-state={status}
+			data-phase={model.phase}
 			data-outcomes={model.outcomes.join(',') || 'none'}
 			data-divergent={model.divergence !== null}
 			className={cn('space-y-3 rounded-xl border border-border-default bg-surface-sunken/40 p-4', className)}
@@ -129,10 +134,6 @@ export function ArenaVerdictPanel({ model, status, relayHealth, renderValidator,
 					{verdictLabel} · {validatorLabel}
 				</p>
 			</div>
-
-			<p data-slot="arena-verdict-quorum" className="rounded-lg bg-warning-muted px-3 py-2 text-[11px] text-warning-muted-foreground">
-				{ARENA_QUORUM_DISCLAIMER}
-			</p>
 
 			{duplicates && (
 				<p className="text-[11px] text-text-mid">
@@ -176,18 +177,22 @@ export function ArenaVerdictPanel({ model, status, relayHealth, renderValidator,
 			{model.rows.length === 0 ? (
 				<p
 					data-slot="arena-verdict-empty"
+					data-phase={model.phase}
 					className="rounded-lg border border-dashed border-border-default bg-surface-raised p-3 text-xs text-text-mid"
 				>
-					{status === 'settled'
-						? 'No validator published a verdict for this auction that these relays carried. That is an absence, not a verdict of "no outcome".'
-						: 'No verdict has been read yet — the read has not finished, so this is not "no verdict".'}
+					{verdictEmptyLabel(model.phase, status)}
 				</p>
 			) : (
-				<ol className="space-y-1.5">
-					{model.rows.map((row, index) => (
-						<VerdictRow key={`${row.validator ?? 'anonymous'}-${row.height}-${index}`} row={row} renderValidator={renderValidator} />
-					))}
-				</ol>
+				<>
+					<ol className="space-y-1.5">
+						{model.rows.map((row, index) => (
+							<VerdictRow key={`${row.validator ?? 'anonymous'}-${row.height}-${index}`} row={row} renderValidator={renderValidator} />
+						))}
+					</ol>
+					<p data-slot="arena-verdict-quorum" className="rounded-lg bg-warning-muted px-3 py-2 text-[11px] text-warning-muted-foreground">
+						{ARENA_QUORUM_DISCLAIMER}
+					</p>
+				</>
 			)}
 
 			{counts && <p className="text-[11px] text-text-mid opacity-80">{counts}</p>}
