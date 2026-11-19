@@ -38,7 +38,12 @@ import type { EventStorePort } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
 import { getReadContext } from '@platform/web/readContext'
 import { webRelayPolicy } from '@platform/web/sdkNostrIo'
-import { arenaLotFilters, createWebArenaAuctionRead, type ArenaAuctionView } from '@platform/web/auctions/relay/arenaAuctionRead'
+import {
+	arenaLotFilters,
+	arenaLotFollowUpFilters,
+	createWebArenaAuctionRead,
+	type ArenaAuctionView,
+} from '@platform/web/auctions/relay/arenaAuctionRead'
 import {
 	collectArenaSurfacesRead,
 	toAuctionDetailModel,
@@ -88,6 +93,11 @@ export function useArenaLotRead(init: ArenaLotReadInit): ArenaSurfacesReadState 
 			relays,
 			store: getReadContext().store as unknown as EventStorePort<Event>,
 			filters: arenaLotFilters(seller, d),
+			// A bid's `a` value is 106 chars (…:uuid), which the relay's index
+			// refuses, so its bids are only findable by the bid's `e` = the create's
+			// event id — knowable only after the create arrives. The base REQ keeps
+			// `#a` for relays that index it; this second REQ adds `#e`.
+			followUpFilters: arenaLotFollowUpFilters(seller, d),
 		})
 
 		void collectArenaSurfacesRead(read, {
