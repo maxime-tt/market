@@ -112,11 +112,12 @@
  * families.
  * ------------------------------------------------------------------------- */
 
-/* Arena: Instrument Serif headings, DM Sans body, JetBrains Mono figures, as in
-   Plebeian Auctions Arena (web/src/template.css). Instrument Serif has a single
+/* Arena: Instrument Serif headings and JetBrains Mono figures, as in Plebeian
+   Auctions Arena (web/src/template.css). The body is Plus Jakarta Sans in place
+   of Arena's DM Sans, which Google commissioned. Instrument Serif has a single
    400 weight; it is set at 400 rather than letting the browser fake a bold. */
 [data-storefront-theme='arena'] {
-	--font-body: 'DM Sans', system-ui, sans-serif;
+	--font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
 	--font-header: 'Instrument Serif', Georgia, serif;
 	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
 	font-family: var(--font-body);

@@ -93,4 +93,20 @@ describe('no Google or tracker hosts in shipped sources', () => {
 		}
 		expect(hits).toEqual([])
 	})
+
+	test('no font family that Google made or commissioned is named', async () => {
+		// Local copies still count: the app ships open-licence families from
+		// independent designers only (styles/fonts.css). Matches quoted family
+		// names, so a comment explaining a replacement does not trip it.
+		const GOOGLE_FAMILIES = /["'](DM Sans|DM Serif[^"']*|DM Mono|Fraunces|Roboto[^"']*|Noto [^"']*|Google Sans[^"']*|Product Sans|Material (Icons|Symbols)[^"']*)["']/
+		const hits: string[] = []
+		for (const root of ROOTS) {
+			for await (const path of new Glob(`${root}/**/*.{html,css,ts,tsx}`).scan('.')) {
+				if (path === SELF || path.includes('node_modules')) continue
+				const m = (await Bun.file(path).text()).match(GOOGLE_FAMILIES)
+				if (m) hits.push(`${path}: ${m[0]}`)
+			}
+		}
+		expect(hits).toEqual([])
+	})
 })

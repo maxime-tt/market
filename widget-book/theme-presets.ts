@@ -52,8 +52,8 @@ export const THEME_PRESETS: ThemePreset[] = [
 			'--border': 'oklch(0.9 0.012 340)',
 			'--input': 'oklch(0.66 0.03 340)',
 			'--ring': 'oklch(0.58 0.15 350)',
-			'--font-body': "'DM Sans', sans-serif",
-			'--font-header': "'Fraunces', serif",
+			'--font-body': "'Plus Jakarta Sans', sans-serif",
+			'--font-header': "'Young Serif', serif",
 			/* Tier-1 roles — the D Phase 0 live values, byte-identical to
 			   styles/globals-new.css. */
 			'--bg': 'oklch(1 0 0)',
@@ -95,7 +95,7 @@ export const THEME_PRESETS: ThemePreset[] = [
 			'--border': 'oklch(0.88 0.01 90)',
 			'--input': 'oklch(0.8 0.01 90)',
 			'--ring': 'oklch(0.4 0.02 90)',
-			'--font-body': "'DM Sans', sans-serif",
+			'--font-body': "'Plus Jakarta Sans', sans-serif",
 			'--font-header': "'Instrument Serif', serif",
 			/* Tier-1 roles — mirrors of the semantic keys above. */
 			'--bg': 'oklch(0.98 0.005 90)',
@@ -179,7 +179,7 @@ export const THEME_PRESETS: ThemePreset[] = [
 			'--border': 'oklch(0.9 0.005 90)',
 			'--input': 'oklch(0.82 0.005 90)',
 			'--ring': 'oklch(0.5 0.06 250)',
-			'--font-body': "'DM Sans', sans-serif",
+			'--font-body': "'Plus Jakarta Sans', sans-serif",
 			'--font-header': "'JetBrains Mono', monospace",
 			/* Tier-1 roles — mirrors of the semantic keys above. */
 			'--bg': 'oklch(0.99 0.002 90)',

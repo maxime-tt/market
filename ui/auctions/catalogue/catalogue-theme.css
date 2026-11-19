@@ -33,7 +33,7 @@
 	border-radius: var(--cat-radius);
 	background: var(--cat-surface-2);
 	color: var(--cat-muted);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 13px;
 }
 
@@ -59,7 +59,7 @@
 
 .cat__sub {
 	color: var(--cat-muted);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 13px;
 }
 
@@ -97,7 +97,7 @@
 }
 
 .cat__lot {
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 11px;
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
@@ -118,7 +118,7 @@
 	margin-top: auto;
 	padding-top: 10px;
 	border-top: 1px solid var(--cat-line);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 13px;
 }
 
@@ -141,7 +141,7 @@
 	padding: 48px 0;
 	text-align: center;
 	color: var(--cat-muted);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
 /* ---------------------------------------------------------------------------
@@ -159,7 +159,7 @@
 	gap: 8px;
 	margin: 6px 0 18px;
 	color: var(--cat-muted);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 12.5px;
 }
 
@@ -229,7 +229,7 @@
 	border-radius: 99px;
 	background: rgba(27, 23, 24, 0.72);
 	color: #fff;
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 10px;
 	letter-spacing: 0.08em;
 }
@@ -252,7 +252,7 @@
 	align-items: center;
 	gap: 8px;
 	color: var(--cat-muted);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 12px;
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
@@ -296,7 +296,7 @@
 
 .cat-label {
 	color: var(--cat-muted);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 12px;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
@@ -317,7 +317,7 @@
 
 .cat-muted {
 	color: var(--cat-muted);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 13px;
 }
 
@@ -340,7 +340,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 12.5px;
 	color: var(--cat-muted);
 }
@@ -369,7 +369,7 @@
 .cat-mystatus {
 	padding: 9px 12px;
 	border-radius: 10px;
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 13px;
 	font-weight: 600;
 }
@@ -403,7 +403,7 @@
 	background: transparent;
 	padding: 6px 14px;
 	border-radius: 99px;
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 13px;
 	color: var(--cat-muted);
 	cursor: pointer;
@@ -452,7 +452,7 @@
 }
 
 .cat-amount-field span {
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 13px;
 	color: var(--cat-muted);
 }
@@ -463,7 +463,7 @@
 	padding: 0 20px;
 	background: var(--cat-accent);
 	color: var(--cat-accent-ink);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 14px;
 	font-weight: 600;
 	cursor: pointer;
@@ -485,7 +485,7 @@
 	color: var(--cat-ink);
 	border-radius: 99px;
 	padding: 6px 12px;
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 12.5px;
 	cursor: pointer;
 }
@@ -497,7 +497,7 @@
 .cat-hint {
 	margin: 0;
 	color: var(--cat-muted);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 12.5px;
 	line-height: 1.5;
 }
@@ -510,14 +510,14 @@
 .cat-error {
 	margin: 0;
 	color: var(--cat-lose);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 12.5px;
 }
 
 .cat-success {
 	margin: 0;
 	color: var(--cat-win);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 12.5px;
 }
 
@@ -532,7 +532,7 @@
 	color: var(--cat-ink);
 	border-radius: 99px;
 	padding: 8px 14px;
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 12.5px;
 	cursor: pointer;
 }
@@ -550,7 +550,7 @@
 
 .cat-meta dt {
 	color: var(--cat-muted);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 12px;
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
@@ -579,7 +579,7 @@
 }
 
 .cat-col p {
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 13.5px;
 	line-height: 1.6;
 	color: var(--cat-ink);
@@ -604,7 +604,7 @@
 	gap: 12px;
 	padding: 7px 0;
 	border-bottom: 1px solid var(--cat-line);
-	font-family: 'DM Sans', system-ui, sans-serif;
+	font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 	font-size: 13px;
 }
 
