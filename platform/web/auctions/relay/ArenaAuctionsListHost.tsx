@@ -29,8 +29,8 @@
  *
  * ## What this page offers, and what it deliberately does not
  *
- * The filter bar is the same `AuctionFiltersView` the route used before, but its
- * vocabulary is now **only what the arena read-model can support**: "hide ended
+ * The filter bar is the Arena `CatalogueToolbar` (sort chips and a hide-ended
+ * toggle), and its vocabulary is now **only what the arena read-model can support**: "hide ended
  * auctions" (a real `phase` filter) and a real sort over fields the card model
  * actually carries. The retired controls are gone rather than left inert:
  *
@@ -63,10 +63,8 @@ import type { ArenaAuctionSnapshot, ArenaAuctionView, ArenaVerdictDivergence } f
 import { auctionEndsAt, toAuctionCardModel } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import { fetchTestLabels, useTestLabelState } from '@platform/web/config/testLabelsBinding'
 import { filterTestLabeledItems } from '@sdk/config/testLabelFilters'
-import { CatalogueView } from '@ui/auctions/catalogue/catalogue-view'
-import { AuctionFiltersView } from '@ui/auction/auction-list-views'
+import { CatalogueEmpty, CatalogueToolbar, CatalogueView } from '@ui/auctions/catalogue/catalogue-view'
 import type { ArenaAuctionCardModel, ArenaRelayHealth, ArenaSurfaceStatus } from '@ui/auction/arena/model'
-import { Button } from '@ui/wrappers/button'
 import { useEffect } from 'react'
 
 // =========================================================================
@@ -284,6 +282,8 @@ export interface ArenaAuctionsListHostProps {
 	onSortChange: (value: string) => void
 	onToggleHideEnded: () => void
 	onReset: () => void
+	/** Opens the create-auction drawer (or the login dialog); the route decides. */
+	onCreate?: () => void
 }
 
 /**
@@ -302,6 +302,7 @@ export function ArenaAuctionsListHost({
 	onSortChange,
 	onToggleHideEnded,
 	onReset,
+	onCreate,
 }: ArenaAuctionsListHostProps) {
 	const { showTestListings } = useTestLabelState()
 
@@ -335,67 +336,50 @@ export function ArenaAuctionsListHost({
 	// Settled, lots exist, none visible: the filter did this, not the relays.
 	const filteredToNothing = status === 'settled' && total > 0 && cards.length === 0
 
-	return (
-		<div className="flex flex-col gap-4">
-			<AuctionFiltersView
-				appliedFilterCount={appliedFilterCount}
-				hideEnded={hideEnded}
-				sort={sort}
-				sortOptions={arenaListSortOptions}
-				onToggleHideEnded={onToggleHideEnded}
-				onSortChange={onSortChange}
-				onReset={onReset}
-			/>
+	const toolbar = (
+		<CatalogueToolbar
+			sortOptions={arenaListSortOptions}
+			sort={sort}
+			onSortChange={onSortChange}
+			hideEnded={hideEnded}
+			onToggleHideEnded={onToggleHideEnded}
+		/>
+	)
+	const notice =
+		cards.length > 0 && partialNotice !== null ? (
+			<p data-slot="arena-auctions-list-notice" data-state={status} role="status" className="cat__note">
+				{partialNotice}
+			</p>
+		) : null
+	const empty = filteredToNothing ? (
+		<CatalogueEmpty
+			state="filtered"
+			title="No auctions match the current filter"
+			detail="Every relay answered and the lots were read — the filter above is hiding them all."
+			actionLabel={appliedFilterCount > 0 ? 'Reset filters' : undefined}
+			onAction={onReset}
+		/>
+	) : (
+		<CatalogueEmpty
+			state={status}
+			title={arenaListEmptyMessage(status).title}
+			detail={arenaListEmptyMessage(status).detail}
+			footnote={relayHealth.total > 0 ? `${relayHealth.answered} of ${relayHealth.total} relays answered` : undefined}
+		/>
+	)
 
-			{cards.length > 0 ? (
-				<>
-					{partialNotice !== null && (
-						<p
-							data-slot="arena-auctions-list-notice"
-							data-state={status}
-							role="status"
-							className="rounded-md border border-dashed border-border-default bg-surface-sunken px-4 py-3 text-sm text-text-mid"
-						>
-							{partialNotice}
-						</p>
-					)}
-					<CatalogueView
-						mode="dark"
-						cards={cards}
-						status={status}
-						relayHealth={relayHealth}
-						now={now}
-						hrefFor={(card) => arenaAuctionHref(card.d)}
-					/>
-				</>
-			) : filteredToNothing ? (
-				<div
-					data-slot="arena-auctions-list-empty"
-					data-state="filtered"
-					className="flex min-h-[40vh] flex-col items-center justify-center gap-2 py-16 text-center"
-				>
-					<h2 className="text-xl font-semibold">No auctions match the current filter</h2>
-					<p className="text-text-mid">Every relay answered and the lots were read — the filter above is hiding them all.</p>
-					<Button variant="outline" onClick={onReset}>
-						Reset filters
-					</Button>
-				</div>
-			) : (
-				<div
-					data-slot="arena-auctions-list-empty"
-					data-state={status}
-					role="status"
-					className="flex min-h-[40vh] flex-col items-center justify-center gap-2 py-16 text-center"
-				>
-					<h2 className="text-xl font-semibold">{arenaListEmptyMessage(status).title}</h2>
-					<p className="text-text-mid">{arenaListEmptyMessage(status).detail}</p>
-					{relayHealth.total > 0 && (
-						<p className="text-xs text-text-mid opacity-80">
-							{relayHealth.answered} of {relayHealth.total} relays answered
-						</p>
-					)}
-				</div>
-			)}
-		</div>
+	return (
+		<CatalogueView
+			mode="dark"
+			cards={cards}
+			status={status}
+			relayHealth={relayHealth}
+			now={now}
+			hrefFor={(card) => arenaAuctionHref(card.d)}
+			toolbar={toolbar}
+			onCreate={onCreate}
+			notice={notice}
+			empty={empty}
+		/>
 	)
 }

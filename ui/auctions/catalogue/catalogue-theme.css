@@ -47,10 +47,141 @@
 
 .cat__head {
 	display: flex;
-	align-items: baseline;
+	align-items: center;
 	justify-content: space-between;
+	flex-wrap: wrap;
 	gap: 16px;
 	margin-bottom: 18px;
+}
+
+.cat__head-text {
+	display: flex;
+	align-items: baseline;
+	gap: 14px;
+}
+
+.cat__cta,
+.cat__chip {
+	font-family: var(--cat-sans);
+	text-transform: none;
+	cursor: pointer;
+	transition:
+		background 0.15s var(--cat-ease),
+		border-color 0.15s var(--cat-ease),
+		color 0.15s var(--cat-ease);
+}
+
+.cat__cta {
+	height: 42px;
+	padding: 0 20px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--cat-pink);
+	color: #111111;
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.cat__cta:hover {
+	background: var(--cat-pink-deep);
+	color: #ffffff;
+}
+
+.cat__cta:focus-visible,
+.cat__chip:focus-visible {
+	outline: 2px solid var(--cat-pink);
+	outline-offset: 2px;
+}
+
+.cat__toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-bottom: 18px;
+}
+
+.cat__chips {
+	display: flex;
+	gap: 8px;
+	overflow-x: auto;
+	scrollbar-width: none;
+	max-width: 100%;
+}
+
+.cat__chip {
+	flex-shrink: 0;
+	height: 34px;
+	padding: 0 14px;
+	border: 1px solid var(--cat-line);
+	border-radius: 999px;
+	background: var(--cat-surface);
+	color: var(--cat-muted);
+	font-size: 13px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.cat__chip:hover {
+	color: var(--cat-ink);
+	border-color: var(--cat-muted);
+}
+
+.cat__chip[aria-pressed='true'] {
+	background: var(--cat-ink);
+	border-color: var(--cat-ink);
+	color: var(--cat-bg);
+}
+
+.cat__chip--toggle[aria-pressed='true'] {
+	background: var(--cat-lime);
+	border-color: var(--cat-lime);
+	color: #111111;
+}
+
+.cat__note {
+	margin: -8px 0 18px;
+	padding: 10px 14px;
+	border: 1px dashed var(--cat-line);
+	border-radius: var(--cat-radius);
+	color: var(--cat-muted);
+	font-family: var(--cat-sans);
+	font-size: 13px;
+}
+
+.cat__empty {
+	display: flex;
+	min-height: 40vh;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 48px 16px;
+	border: 1px solid var(--cat-line);
+	border-radius: var(--cat-radius);
+	background: var(--cat-surface);
+	text-align: center;
+}
+
+.cat__empty-title {
+	margin: 0;
+	font-size: 30px;
+	font-weight: 400;
+	line-height: 1.1;
+}
+
+.cat__empty-detail,
+.cat__empty-foot {
+	margin: 0;
+	max-width: 46ch;
+	color: var(--cat-muted);
+	font-family: var(--cat-sans);
+	font-size: 14px;
+}
+
+.cat__empty-foot {
+	font-size: 12px;
 }
 
 .cat__title {

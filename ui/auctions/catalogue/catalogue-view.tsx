@@ -1,4 +1,5 @@
 import './catalogue-theme.css'
+import type { ReactNode } from 'react'
 import { catalogueCssVars, type CatalogueMode } from './catalogue-preset'
 import {
 	bidCountLabel,
@@ -48,6 +49,14 @@ export interface CatalogueViewProps {
 	now: number
 	/** Host-resolved link target for one lot. */
 	hrefFor: (card: ArenaAuctionCardModel) => string
+	/** The sort / hide-ended controls under the title ({@link CatalogueToolbar}). */
+	toolbar?: ReactNode
+	/** The "Create auction" call to action beside the title; omitted when absent. */
+	onCreate?: () => void
+	/** A read-state note above the grid (partial read). */
+	notice?: ReactNode
+	/** Rendered in place of the grid when there are no cards to show. */
+	empty?: ReactNode
 }
 
 function formatRemaining(endsAt: number, now: number): string {
@@ -153,28 +162,106 @@ export function CatalogueCards({ cards, status, relayHealth, now, hrefFor, mode 
 	)
 }
 
-export function CatalogueView({ cards, status, relayHealth, now, hrefFor, mode = 'light' }: CatalogueViewProps) {
+export function CatalogueView({ cards, status, relayHealth, now, hrefFor, mode = 'light', toolbar, onCreate, notice, empty }: CatalogueViewProps) {
 	return (
 		<div className="cat" style={catalogueCssVars(mode)}>
 			<div className="cat__wrap">
+				<header className="cat__head">
+					<div className="cat__head-text">
+						<h1 className="cat__title">Auctions</h1>
+						<span className="cat__sub" data-testid="catalogue-count">
+							{cards.length} {cards.length === 1 ? 'lot' : 'lots'}
+							{status === 'settled' ? '' : ' so far'}
+						</span>
+					</div>
+					{onCreate && (
+						<button type="button" className="cat__cta" data-slot="catalogue-create" onClick={onCreate}>
+							Create auction
+						</button>
+					)}
+				</header>
+
+				{toolbar}
+
 				<p className="cat__banner" data-testid="catalogue-escrow-notice">
 					Sats are locked in escrow until the lot closes: they go to the seller if you win, and come back to you otherwise.
 				</p>
 
-				<header className="cat__head">
-					<h1 className="cat__title">Auctions</h1>
-					<span className="cat__sub" data-testid="catalogue-count">
-						{cards.length} {cards.length === 1 ? 'lot' : 'lots'}
-						{status === 'settled' ? '' : ' so far'}
-					</span>
-				</header>
+				{notice}
 
-				<div className="cat__grid" data-testid="catalogue-grid">
-					{cards.map((card) => (
-						<CatalogueLotCard key={card.coordinate} card={card} status={status} now={now} href={hrefFor(card)} />
-					))}
-				</div>
+				{cards.length === 0 && empty ? (
+					empty
+				) : (
+					<div className="cat__grid" data-testid="catalogue-grid">
+						{cards.map((card) => (
+							<CatalogueLotCard key={card.coordinate} card={card} status={status} now={now} href={hrefFor(card)} />
+						))}
+					</div>
+				)}
 			</div>
+		</div>
+	)
+}
+
+export interface CatalogueToolbarProps {
+	sortOptions: readonly { value: string; title: string }[]
+	sort: string
+	onSortChange: (value: string) => void
+	hideEnded: boolean
+	onToggleHideEnded: () => void
+}
+
+/**
+ * The list's sort and hide-ended controls as Arena chips. Each chip is a real
+ * button: the pressed one is the current sort, and "Hide ended" is a toggle.
+ */
+export function CatalogueToolbar({ sortOptions, sort, onSortChange, hideEnded, onToggleHideEnded }: CatalogueToolbarProps) {
+	return (
+		<div className="cat__toolbar" data-slot="catalogue-toolbar" role="toolbar" aria-label="Sort and filter lots">
+			<div className="cat__chips" role="group" aria-label="Sort">
+				{sortOptions.map((option) => (
+					<button
+						key={option.value}
+						type="button"
+						className="cat__chip"
+						aria-pressed={sort === option.value}
+						onClick={() => onSortChange(option.value)}
+					>
+						{option.title}
+					</button>
+				))}
+			</div>
+			<button type="button" className="cat__chip cat__chip--toggle" aria-pressed={hideEnded} onClick={onToggleHideEnded}>
+				Hide ended
+			</button>
+		</div>
+	)
+}
+
+export interface CatalogueEmptyProps {
+	title: string
+	detail: string
+	/** A small footnote, e.g. how many relays answered. */
+	footnote?: string
+	/** Optional action, e.g. resetting the filters. */
+	actionLabel?: string
+	onAction?: () => void
+	/** The read state, for tests. */
+	state: string
+}
+
+/** The empty state inside the catalogue frame. */
+export function CatalogueEmpty({ title, detail, footnote, actionLabel, onAction, state }: CatalogueEmptyProps) {
+	return (
+		<div className="cat__empty" data-slot="arena-auctions-list-empty" data-state={state} role="status">
+			<h2 className="cat__empty-title">{title}</h2>
+			<p className="cat__empty-detail">{detail}</p>
+			{footnote && <p className="cat__empty-foot">{footnote}</p>}
+			{actionLabel && onAction && (
+				<button type="button" className="cat__chip" onClick={onAction}>
+					{actionLabel}
+				</button>
+			)}
 		</div>
 	)
 }

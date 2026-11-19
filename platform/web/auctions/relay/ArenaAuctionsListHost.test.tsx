@@ -297,10 +297,11 @@ describe('the controls that cannot do anything are gone, not inert', () => {
 
 		expect(markup).not.toContain('Show test listings')
 		expect(markup).not.toContain('>All<')
-		// The one control on the page is the filter/sort popover, and it is a real
-		// control (its panel opens), not an inert label.
-		expect(markup).toContain('Filter &amp; Sort')
-		expect(markup).toContain('aria-haspopup="dialog"')
+		// The controls on the page are the Arena sort chips and the hide-ended
+		// toggle, each a real pressed/unpressed button, not an inert label.
+		expect(markup).toContain('data-slot="catalogue-toolbar"')
+		expect(markup).toContain('Hide ended')
+		expect(markup).toContain('aria-pressed="true"')
 	})
 
 	test('the sort vocabulary is only what the arena card model carries', () => {

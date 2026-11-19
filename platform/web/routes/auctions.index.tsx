@@ -2,7 +2,6 @@ import { ArenaAuctionsListHost, type ArenaListSort } from '@platform/web/auction
 import { useArenaSurfacesRead } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import { uiActions } from '@platform/web/app/uiStore'
 import { authStore } from '@platform/web/auth/authStore'
-import { Button } from '@ui/wrappers/button'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
@@ -41,33 +40,20 @@ function AuctionsRoute() {
 	}
 
 	return (
-		<div className="px-4 py-6 sm:px-8">
-			<div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-				<div className="flex flex-col gap-1">
-					<h1 className="font-heading text-2xl sm:text-3xl">Auctions</h1>
-					<p className="max-w-xl text-sm text-text-mid">
-						Live lots read from your relays. Each card states what the read knows — and says so when it does not know.
-					</p>
-				</div>
-				<Button variant="secondary" onClick={handleCreateAuction}>
-					Create Auction
-				</Button>
-			</div>
-
-			<ArenaAuctionsListHost
-				snapshot={read.snapshot}
-				status={read.status}
-				relayHealth={read.relayHealth}
-				now={now}
-				sort={sort}
-				hideEnded={hideEnded}
-				onSortChange={(value) => setSort(value as ArenaListSort)}
-				onToggleHideEnded={() => setHideEnded((prev) => !prev)}
-				onReset={() => {
-					setSort('newest')
-					setHideEnded(false)
-				}}
-			/>
-		</div>
+		<ArenaAuctionsListHost
+			snapshot={read.snapshot}
+			status={read.status}
+			relayHealth={read.relayHealth}
+			now={now}
+			sort={sort}
+			hideEnded={hideEnded}
+			onSortChange={(value) => setSort(value as ArenaListSort)}
+			onToggleHideEnded={() => setHideEnded((prev) => !prev)}
+			onReset={() => {
+				setSort('newest')
+				setHideEnded(false)
+			}}
+			onCreate={handleCreateAuction}
+		/>
 	)
 }
