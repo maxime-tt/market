@@ -1,7 +1,7 @@
 import { AuctionWonModal } from '@platform/web/auctions/AuctionWonModal'
 import { FooterHost } from '@platform/web/layout/FooterHost'
-import { hidesAppHeader, usesArenaChrome } from '@platform/web/layout/appChrome'
-import { Header } from '@platform/web/layout/Header'
+import { usesArenaChrome } from '@platform/web/layout/appChrome'
+import { AppBar } from '@platform/web/layout/AppBar'
 import { Pattern } from '@ui/shared/pattern'
 import { usePageViews } from '@platform/web/analytics/usePageViews'
 import { useDocumentIdentity } from '@platform/web/app/useDocumentIdentity'
@@ -9,14 +9,13 @@ import { useRootRedirects } from '@platform/web/app/useRootRedirects'
 import { ServedPage, servedPageForPath } from '@platform/web/servedPage'
 import { appChromePageForPath } from '@platform/web/storefront/appChromePage'
 import { BoundPathPage } from '@platform/web/storefront/BoundPathPage'
-import { createRootRoute, Outlet, useLocation, useMatches } from '@tanstack/react-router'
+import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
 
 /**
  * The router's root route. It is a lean assembler: the app-wide monitors,
  * providers and overlays live in `platform/web/app/` (mounted above
  * `RouterProvider` in `frontend.tsx`), and the two redirect guards run through
- * `useRootRedirects`. All this file owns is the page frame — the legacy header
- * (skipped on routes that draw their own nav, see `layout/appChrome.ts`), routed
+ * `useRootRedirects`. All this file owns is the page frame — the app bar, routed
  * content, the footer — plus `AuctionWonModal`, which needs router context
  * (`useLocation`) and so cannot move above the router.
  */
@@ -51,19 +50,6 @@ function RootLayout() {
 	 */
 	const appPage = appChromePageForPath(location.pathname)
 
-	/**
-	 * A route that draws its own page nav — Browse renders `BrowseNav` — opts out
-	 * of the legacy header here, so exactly one nav renders. The decision is
-	 * route metadata (`staticData.hidesAppHeader`), not a pathname check in this
-	 * frame, so every state of that route inherits it; see `appChrome.ts`.
-	 *
-	 * A bound page overrides it: the header the route opted out of is the app's
-	 * frame, and a page rendered *inside* that frame must have it. (Without this,
-	 * a page bound at `/` — whose route hides the header — would render with no
-	 * nav at all.)
-	 */
-	const headerHidden = useMatches({ select: (matches) => hidesAppHeader(matches) }) && !appPage
-
 	useDocumentIdentity()
 	useRootRedirects()
 	// One page view per navigation, query string dropped (see the module).
@@ -97,7 +83,7 @@ function RootLayout() {
 
 	return (
 		<div className={arena ? 'relative flex flex-col min-h-screen arena-chrome' : 'relative flex flex-col min-h-screen'}>
-			{!headerHidden && <Header />}
+			<AppBar />
 
 			<main className="flex flex-col flex-grow">
 				{appPage ? <BoundPathPage payload={appPage} /> : served ? <ServedPage payload={served} /> : <Outlet />}

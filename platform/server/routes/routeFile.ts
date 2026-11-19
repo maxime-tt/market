@@ -73,6 +73,14 @@ export interface SeriesTarget {
 
 export type RouteTarget = PageTarget | RenderTarget | SeriesTarget
 
+/** The optional nav pin an operator attaches to a permanent binding (§7). */
+export interface BindingNav {
+	/** The label the AppBar shows. Non-empty, ≤ 24 chars. */
+	label: string
+	/** Ascending sort key; the AppBar orders pinned entries by it. */
+	order: number
+}
+
 export interface Binding {
 	kind: 'admin'
 	path: string
@@ -80,6 +88,8 @@ export interface Binding {
 	holder?: string
 	leaseId?: string
 	expiresAt?: number
+	/** Present when the operator pinned the page into the AppBar nav. */
+	nav?: BindingNav
 	target: RouteTarget
 	updatedAt: number
 	updatedBy: string
@@ -267,6 +277,32 @@ export function validateRoutesFile(candidate: unknown, source = '<memory>'): { f
 				violations.push(`${base}/updatedBy: expected 64 lowercase hex or "instance"`)
 			}
 
+			// The per-binding reconstruction below names every field it keeps, so
+			// `nav` must be validated here or it is silently dropped on write.
+			const navBase = POINTER(base, 'nav')
+			let nav: BindingNav | undefined
+			if (raw.nav !== undefined) {
+				if (!isRecord(raw.nav)) {
+					violations.push(`${navBase}: expected an object`)
+				} else {
+					const { label, order } = raw.nav
+					let navValid = true
+					if (typeof label !== 'string' || label.length === 0 || label.length > 24) {
+						violations.push(`${POINTER(navBase, 'label')}: expected a non-empty string of at most 24 characters`)
+						navValid = false
+					}
+					if (!Number.isInteger(order)) {
+						violations.push(`${POINTER(navBase, 'order')}: expected an integer`)
+						navValid = false
+					}
+					if (meaning === 'lease') {
+						violations.push(`${navBase}: nav is only valid on a permanent binding`)
+						navValid = false
+					}
+					if (navValid) nav = { label: label as string, order: order as number }
+				}
+			}
+
 			const target = raw.target
 			if (!isRecord(target)) {
 				violations.push(`${base}/target: expected an object`)
@@ -300,6 +336,7 @@ export function validateRoutesFile(candidate: unknown, source = '<memory>'): { f
 							...(isPositiveInteger(expiresAt) ? { expiresAt } : {}),
 						}
 					: {}),
+				...(nav ? { nav } : {}),
 				target: targetObject,
 				updatedAt: isPositiveInteger(raw.updatedAt) ? (raw.updatedAt as number) : 0,
 				updatedBy: typeof raw.updatedBy === 'string' ? raw.updatedBy : 'instance',

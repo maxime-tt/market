@@ -13,7 +13,7 @@
  * No `@/` specifiers by design (D3D4-CONTRACT rev 2.4 §2: M2 is a hard pre-filter).
  */
 import { AuthMachineNotRegisteredError, INITIAL_AUTH_STATE } from '@sdk/core/auth'
-import type { AuthMachine, AuthState } from '@sdk/core/auth'
+import type { AuthMachine, AuthSignerType, AuthState } from '@sdk/core/auth'
 import { useSyncExternalStore } from 'react'
 
 /** The one machine, registered by the adapter. Module-level on purpose: there is exactly one identity. */
@@ -48,6 +48,7 @@ export function useAuthState(): AuthState {
 export const authBinding = {
 	getState: (): AuthState => requireMachine().getState(),
 	getCurrentPubkey: (): string | null => requireMachine().getCurrentPubkey(),
+	getSignerType: (): AuthSignerType | null => requireMachine().getSignerType(),
 	getNeedsMigration: (): boolean => requireMachine().getNeedsMigration(),
 	getAvailableNostrExtensions: (): string[] => requireMachine().getAvailableNostrExtensions(),
 	subscribe: (listener: (state: AuthState) => void): (() => void) => requireMachine().subscribe(listener),

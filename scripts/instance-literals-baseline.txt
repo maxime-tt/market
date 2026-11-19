@@ -13,8 +13,6 @@ platform/server/appSettings.ts|plebeian-market|2
 platform/server/server-bootstrap-persistence.test.ts|plebeian-market|1
 platform/web/app/index.html|Plebeian Market|1
 platform/web/layout/FooterHost.test.ts|Plebeian Market|2
-platform/web/messaging/BugReportModal.tsx|plebian2beta|2
-platform/web/messaging/bugReportQuery.ts|plebian2beta|1
 platform/web/nip89.ts|Plebeian Market|3
 platform/web/nip89.ts|plebeian.market|2
 platform/web/routes/products.$productId.tsx|Plebeian Market|2

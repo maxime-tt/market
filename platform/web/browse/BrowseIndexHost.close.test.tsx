@@ -91,7 +91,7 @@ function renderClose(options: { q?: string; p?: string; onNavigate: (search: Bro
 			q: options.q ?? 'ceramic',
 			p: options.p ?? 'ceramic-ball',
 			onNavigate: options.onNavigate,
-			onNavigateFeatured: () => {},
+			onWhyPlebeian: () => {},
 		}),
 	)
 }

@@ -3,9 +3,11 @@ import { test, expect } from '../fixtures'
 test.use({ scenario: 'base' })
 
 test.describe('Navigation', () => {
-	test('homepage loads and shows header', async ({ page }) => {
+	test('homepage loads and shows the app bar', async ({ page }) => {
 		await page.goto('/')
-		await expect(page.locator('header')).toBeVisible()
+		// The bar is the frame's, mounted on every route; its testid is the stable
+		// contract (the legacy `<header>` it replaced was route-dependent).
+		await expect(page.getByTestId('widget-app-bar')).toBeVisible()
 	})
 
 	test('products page loads', async ({ page }) => {
@@ -35,9 +37,9 @@ test.describe('Navigation', () => {
 	test('dashboard products link navigates correctly', async ({ merchantPage }) => {
 		await merchantPage.goto('/dashboard')
 
-		// Click the sidebar Products link (not the header one)
+		// Click the sidebar Products link (not the app bar one)
 		await merchantPage
-			.locator('nav')
+			.locator('[data-slot="sidebar-nav"]')
 			.getByRole('link', { name: /Products/i })
 			.click()
 		await expect(merchantPage).toHaveURL(/\/dashboard\/products/)

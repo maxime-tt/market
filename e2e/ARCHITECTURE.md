@@ -1275,7 +1275,7 @@ The Bun dev server fetches `appSettings` (Kind 31990) at startup and caches the 
 Playwright's strict mode throws when a locator resolves to multiple elements:
 
 - `getByText('SALES')` matched 5 elements (sidebar, header, etc.) → Use `getByRole('heading', { name: 'SALES' })`
-- `getByRole('link', { name: /Products/i }).first()` matched header link → Scope: `locator('nav').getByRole('link', { name: /Products/i })`
+- `getByRole('link', { name: /Products/i }).first()` matched header link → Scope: `locator('[data-slot="sidebar-nav"]').getByRole('link', { name: /Products/i })`. (`locator('nav')` stopped being unambiguous when the frame's app bar started rendering the primary nav list on every route.)
 - `.or()` can match both alternatives → Remove `.or()` if one side is sufficient
 
 ### Product Form Requirements

@@ -26,8 +26,13 @@ let searchData: BrowseSearchResult | null = null
 let searchLoading = false
 let searchError = false
 /** The still-running read's snapshot: the products delivered so far (null once nothing has arrived). */
-let searchProgress: { products: BrowseProduct[]; eventsDelivered: number; relaysAnswered: string[]; relaysSeen: string[]; complete: false } | null =
-	null
+let searchProgress: {
+	products: BrowseProduct[]
+	eventsDelivered: number
+	relaysAnswered: string[]
+	relaysSeen: string[]
+	complete: false
+} | null = null
 let facetsData: BrowseFacet[] | null = null
 let facetsEnabled = false
 let facetsQueryArg = ''
@@ -176,15 +181,35 @@ function familyEvent(dTag: string, tags: string[][], kindId: string): NostrEvent
 }
 
 const FAMILY_CHILDREN_DATA: BrowseFamilyChildren = (() => {
-	const parent = familyEvent('trail-runner', [['type', 'variable'], ['title', 'Trail Runner'], ['price', '100', 'SATS']], 'evt-trail-runner')
+	const parent = familyEvent(
+		'trail-runner',
+		[
+			['type', 'variable'],
+			['title', 'Trail Runner'],
+			['price', '100', 'SATS'],
+		],
+		'evt-trail-runner',
+	)
 	const child42 = familyEvent(
 		'trail-runner-42',
-		[['type', 'variation'], ['a', FAMILY_ADDRESS], ['spec', 'size', '42'], ['price', '120', 'SATS'], ['stock', '2']],
+		[
+			['type', 'variation'],
+			['a', FAMILY_ADDRESS],
+			['spec', 'size', '42'],
+			['price', '120', 'SATS'],
+			['stock', '2'],
+		],
 		'evt-child-42',
 	)
 	const child43 = familyEvent(
 		'trail-runner-43',
-		[['type', 'variation'], ['a', FAMILY_ADDRESS], ['spec', 'size', '43'], ['price', '120', 'SATS'], ['stock', '0']],
+		[
+			['type', 'variation'],
+			['a', FAMILY_ADDRESS],
+			['spec', 'size', '43'],
+			['price', '120', 'SATS'],
+			['stock', '0'],
+		],
 		'evt-child-43',
 	)
 	const family = prepareProductFamilyCatalog([parent, child42, child43]).families[0]
@@ -197,7 +222,7 @@ function renderHost(options: { q?: string; p?: string } = {}) {
 			q: options.q ?? 'ceramic',
 			p: options.p,
 			onNavigate: () => {},
-			onNavigateFeatured: () => {},
+			onWhyPlebeian: () => {},
 		}),
 	)
 }
@@ -627,81 +652,45 @@ describe('BrowseIndexHost listing truth', () => {
 })
 
 // ---------------------------------------------------------------------------
-// The search field — one element, in every state
+// The search field — the host's page field, and only that
 // ---------------------------------------------------------------------------
 
 /**
- * The structure the typing fix rests on, asserted where markup can see it.
+ * The host no longer draws a nav band: the frame's `AppBar` owns the persistent
+ * field in every state, which is why typing cannot unmount the focused input
+ * when the first character flips the page.
  *
- * Focus itself is not visible in a string; `BrowseIndexHost.search-focus.test.tsx`
- * proves that against a real DOM. What *is* visible here — and what made the
- * focus loss possible in the first place — is where the field lives: before the
- * fix each state branch carried its own field, so the first keystroke unmounted
- * the focused input. These assertions pin the invariant that replaced it: the
- * nav band and its field are rendered once, by the host, outside the branch.
+ * What the host still owns is the idle hero's large field — page content, the
+ * idle frame's own affordance. These assertions pin that split: no bar, no
+ * compact field, one hero field on the idle state and none on results.
  */
 describe('BrowseIndexHost search field', () => {
-	/** The nav's search slot — from its own attribute through the end of the nav. */
-	const navSlot = (markup: string) => {
-		const at = markup.indexOf('data-slot="search-slot"')
-		expect(at).toBeGreaterThan(-1)
-		return markup.slice(at, markup.indexOf('</nav>', at))
-	}
-
-	/** The search field's opening tag, where its classes live. */
-	const fieldRoot = (markup: string) => {
-		const at = markup.indexOf('data-slot="search-field"')
-		expect(at).toBeGreaterThan(-1)
-		return markup.slice(markup.lastIndexOf('<', at), markup.indexOf('>', at))
-	}
-
-	/** The `<input>` element a field renders — the node focus lives on. */
-	const inputElement = (markup: string) => {
-		const at = markup.indexOf('<input')
-		expect(at).toBeGreaterThan(-1)
-		return markup.slice(at, markup.indexOf('/>', at) + 2)
-	}
-
-	test('the nav band renders exactly once in every state', () => {
+	test('the host draws no nav band of its own in any state', () => {
 		for (const state of [{ q: '' }, { q: 'ceramic' }, { q: '', p: 'ceramic-ball' }, { q: 'pottery' }]) {
 			const markup = renderHost(state)
-			expect(markup.split('data-testid="widget-browse-nav"').length - 1).toBe(1)
-			expect(markup.split('data-slot="search-slot"').length - 1).toBe(1)
+			expect(markup).not.toContain('data-testid="widget-app-bar"')
+			expect(markup).not.toContain('data-slot="search-slot"')
+			expect(markup).not.toContain('<nav')
 		}
 	})
 
-	test('the nav field is the same element in the idle tree and the results tree', () => {
-		const idle = navSlot(renderHost({ q: '' }))
-		const results = navSlot(renderHost({ q: 'ceramic' }))
-
-		// The same input, attribute for attribute — the only difference the two
-		// states may have is the text it holds, never the element the caret is in.
-		const identity = (markup: string) => inputElement(markup).replace(/ value="[^"]*"/, '')
-		expect(identity(idle)).toBe(identity(results))
-
-		// Hidden while the idle hero's own large field is the one on screen…
-		expect(fieldRoot(idle)).toContain('hidden')
-		// …and visible the moment the page leaves the idle state.
-		expect(fieldRoot(results)).not.toContain('hidden')
-	})
-
-	test('the compact field is the one on screen when a product is open beside the home', () => {
-		const markup = renderHost({ q: '', p: 'ceramic-ball' })
-		const slot = navSlot(markup)
-		expect(fieldRoot(slot)).not.toContain('hidden')
-	})
-
-	test('the idle hero gets the large field; a results state keeps only the compact one', () => {
+	test('the idle hero gets the large field; a results state renders no field at all', () => {
 		const idle = renderHost({ q: '' })
 		expect(idle).toContain('data-testid="widget-browse-idle-search"')
 		expect(idle).toContain('data-size="hero"')
 		expect(idle).toContain('h-[70px]')
 
+		// A search state has no page-level field: the term lives in the bar above
+		// the page, which is mounted by the frame, not by this host.
 		const results = renderHost({ q: 'ceramic' })
 		expect(results).not.toContain('data-testid="widget-browse-idle-search"')
 		expect(results).not.toContain('data-size="hero"')
-		expect(results).toContain('data-size="nav"')
-		expect(results).toContain('h-10')
+		expect(results).not.toContain('data-testid="widget-search-field"')
+	})
+
+	test('the open-product state keeps the hero field beneath its panel', () => {
+		const markup = renderHost({ q: '', p: 'ceramic-ball' })
+		expect(markup).toContain('data-testid="widget-browse-idle-search"')
 	})
 
 	test("the hero placeholder states this index's loaded count, never the frame's market total", () => {
@@ -824,7 +813,12 @@ describe('BrowseIndexHost streaming results', () => {
 	})
 
 	test('a read that stopped without a verdict says so, and never states a count as the answer', () => {
-		searchData = { products: [CERAMIC_BALL], eose: ['wss://a'], pending: ['wss://b'], incomplete: { reason: 'timeout', eventsDelivered: 1 } }
+		searchData = {
+			products: [CERAMIC_BALL],
+			eose: ['wss://a'],
+			pending: ['wss://b'],
+			incomplete: { reason: 'timeout', eventsDelivered: 1 },
+		}
 		searchLoading = false
 		searchProgress = null
 

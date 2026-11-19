@@ -25,6 +25,10 @@ export interface BindingRow {
 	updatedByLabel: string
 	/** The `compiled-in-path` warning for this binding, or null. */
 	warning: string | null
+	/** The label the AppBar shows when this binding is pinned into the nav; null when it is not. */
+	navLabel: string | null
+	/** The AppBar's ascending sort key when this binding is pinned; null when it is not. */
+	navOrder: number | null
 	/** The author and `d` the edit form starts from. */
 	author: string
 	d: string
@@ -36,6 +40,12 @@ export interface BindingDraft {
 	author: string
 	/** The target page's `d`. Set together with `author`, never alone. */
 	d: string
+	/** Whether this binding is pinned into the AppBar nav (the "Show in navigation" control). */
+	showInNav: boolean
+	/** The nav label, as typed. Required and at most 24 characters when `showInNav`. */
+	navLabel: string
+	/** The nav order, as typed — form inputs are strings, and the validator coerces it to an integer. */
+	navOrder: string
 }
 
 export interface DraftValidation {
@@ -59,6 +69,11 @@ export function formatUpdatedAt(updatedAt: number): string {
 
 export function describeBinding(binding: Binding, warnings: RouteTableWarning[] = []): BindingRow {
 	const target = binding.target
+	// The table arrives over the wire and `fetchRouteTable` does not validate the
+	// binding shape (plan §7.6), so a malformed `nav` reads as "not pinned": a
+	// half-rendered pin would be a lie about what the AppBar shows.
+	const nav = binding.nav
+	const pinned = nav !== undefined && typeof nav.label === 'string' && nav.label.length > 0 && Number.isInteger(nav.order)
 	return {
 		path: binding.path,
 		targetLabel:
@@ -74,6 +89,8 @@ export function describeBinding(binding: Binding, warnings: RouteTableWarning[] 
 		updatedAtLabel: formatUpdatedAt(binding.updatedAt),
 		updatedByLabel: shortPubkey(binding.updatedBy),
 		warning: warnings.find((warning) => warning.path === binding.path)?.message ?? null,
+		navLabel: pinned ? nav.label : null,
+		navOrder: pinned ? nav.order : null,
 		author: target.type === 'page' ? target.author : '',
 		d: target.type === 'page' ? target.d : '',
 	}
@@ -132,6 +149,17 @@ export function validateDraft(draft: BindingDraft, boundPaths: string[], editing
 		errors.push('That page address cannot be used: it is longer than 512 characters or contains a NUL.')
 	}
 
+	// The pin is a pair: a label the AppBar can render and an integer it can
+	// sort by. Both are checked whenever the binding is pinned, so an admin
+	// never signs a `nav` the server's intent parser would refuse.
+	const navLabel = draft.navLabel.trim()
+	const navOrder = draft.navOrder.trim()
+	if (draft.showInNav) {
+		if (navLabel.length === 0) errors.push('Enter a nav label.')
+		else if (navLabel.length > 24) errors.push('A nav label is at most 24 characters.')
+		if (!/^-?\d+$/.test(navOrder)) errors.push('Nav order must be a whole number.')
+	}
+
 	if (errors.length > 0 || !author.hex) return { errors, intent: null }
 
 	return {
@@ -141,6 +169,7 @@ export function validateDraft(draft: BindingDraft, boundPaths: string[], editing
 			action: 'set',
 			path,
 			target: { type: 'page', author: author.hex, d: draft.d },
+			...(draft.showInNav ? { nav: { label: navLabel, order: Number.parseInt(navOrder, 10) } } : {}),
 		},
 	}
 }
@@ -156,8 +185,16 @@ export function removeIntent(path: string): RouteIntent {
  * and they arrive from the picker (or the Advanced paste field) already
  * resolved, so there is no default `d` to pre-fill.
  */
-export const EMPTY_DRAFT: BindingDraft = { path: '', author: '', d: '' }
+export const EMPTY_DRAFT: BindingDraft = { path: '', author: '', d: '', showInNav: false, navLabel: '', navOrder: '' }
 
 export function draftFromRow(row: BindingRow): BindingDraft {
-	return { path: row.path, author: row.author, d: row.d }
+	const pinned = row.navLabel !== null && row.navOrder !== null
+	return {
+		path: row.path,
+		author: row.author,
+		d: row.d,
+		showInNav: pinned,
+		navLabel: row.navLabel ?? '',
+		navOrder: row.navOrder === null ? '' : String(row.navOrder),
+	}
 }

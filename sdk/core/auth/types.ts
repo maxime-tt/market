@@ -12,6 +12,14 @@ export interface AuthUser {
 	pubkey: string
 }
 
+/**
+ * How the live session is signed in — the machine's own lane vocabulary, one member per
+ * `AuthSessionStartInput` lane. The SDK signer also offers a `nostrconnect` lane, but this app never starts
+ * a session on it (the NIP-46 connect flow approves a key and logs in through the `bunker` lane), so naming
+ * it here would be a value the machine could never report truthfully.
+ */
+export type AuthSignerType = 'extension' | 'nsec' | 'ncryptsec' | 'bunker'
+
 /** The auth flags the app renders on. Shape is byte-compatible with `src/lib/stores/auth.ts`. */
 export interface AuthState {
 	user: AuthUser | null
@@ -19,6 +27,12 @@ export interface AuthState {
 	needsDecryptionPassword: boolean
 	isAuthenticating: boolean
 	needsMigration: boolean
+	/**
+	 * The lane the live session was started on. `null` while signed out, and also whenever the machine did
+	 * not start the session itself — it will not claim a lane it cannot vouch for. This is session metadata,
+	 * not part of the identity: `AuthUser` deliberately stays `{ pubkey }`.
+	 */
+	signerType: AuthSignerType | null
 }
 
 export const INITIAL_AUTH_STATE: AuthState = {
@@ -27,6 +41,7 @@ export const INITIAL_AUTH_STATE: AuthState = {
 	needsDecryptionPassword: false,
 	isAuthenticating: false,
 	needsMigration: false,
+	signerType: null,
 }
 
 /** The five localStorage keys the legacy store owned. The names are a public contract; do not change them. */

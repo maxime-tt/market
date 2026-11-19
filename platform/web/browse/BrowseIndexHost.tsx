@@ -23,10 +23,12 @@
  *   left click is intercepted and opens the panel in place; modifier-clicks and
  *   middle-click behave as normal links.
  *
- * One tree, never one branch per state: the nav band and its search field are
- * rendered outside the state branch, so typing cannot unmount the focused input
- * when the first character flips the page. The home's own large field hands its
- * caret to the nav field on that same commit.
+ * One tree, never one branch per state: the frame's `AppBar` owns the search
+ * field in every state (it is mounted once by the root layout and never
+ * unmounts), so typing cannot unmount the focused input when the first character
+ * flips the page. The home's own large field is the idle frame's affordance and
+ * is page content: it commits the same `q`, and it is the only branch-scoped
+ * search on the surface.
  *
  * The product panel's read is the single-entity `useBrowseProductDetail` (a
  * `fetch` by coordinate), aimed at the relays the search hit was seen on and
@@ -34,9 +36,7 @@
  * grid's read stays the search stream.
  */
 
-import { HeaderAccountControls } from '@platform/web/layout/Header'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { BrowseNav } from '@ui/browse/browse-nav'
+import { useEffect, useState, type ReactNode } from 'react'
 import { SearchField } from '@ui/browse/search-field'
 import { ProductCard, type CardPresentation } from '@ui/browse/product-card'
 import { BrowseIdle } from '@ui/browse/browse-idle'
@@ -63,8 +63,6 @@ import {
 import { usePriceDisplay } from '@platform/web/products/PriceDisplayHost'
 import { copyToClipboard } from '@platform/web/utils/clipboard'
 import { npubEncode } from 'nostr-tools/nip19'
-import { useInstanceName } from '@platform/web/config/instanceName'
-import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 
 /** The Browse URL state the host asks the route to write back. */
 export interface BrowseSearchState {
@@ -81,7 +79,11 @@ interface BrowseIndexHostProps {
 	/** The open product (the listing's kind-30402 `d` tag) from the route's `?p=`. */
 	p: string | undefined
 	onNavigate: (search: BrowseSearchState) => void
-	onNavigateFeatured: () => void
+	/**
+	 * The idle hero's "Why Plebeian?" CTA. Page content, not chrome: the app bar
+	 * owns the nav destinations; this is the home's own link.
+	 */
+	onWhyPlebeian: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -150,41 +152,6 @@ interface BucketFrameFields {
 	truncated?: boolean
 	scanned?: number
 	candidateCount?: number
-}
-
-// ---------------------------------------------------------------------------
-// Scroll — the one place the page listens to it
-// ---------------------------------------------------------------------------
-
-/**
- * How far the page scrolls before the nav band takes the search over.
- *
- * The idle frame homes the search in the hero's title block; the results frame
- * embeds the compact one in the nav band. The handoff is scroll position, so
- * one pixel past the top is already "scrolled" — the hero field is sticky
- * enough in sight at 8px that nothing appears to jump.
- */
-const NAV_SEARCH_HANDOFF_PX = 8
-
-/**
- * Whether the page has scrolled past `threshold`.
- *
- * Read in a passive listener and stored as a boolean, so a scroll burst
- * re-renders nothing once the flag has flipped.
- */
-function usePageScrolled(threshold = NAV_SEARCH_HANDOFF_PX): boolean {
-	const [scrolled, setScrolled] = useState(false)
-
-	useEffect(() => {
-		const read = () => setScrolled(window.scrollY > threshold)
-		// A restored scroll position (back/forward) is already past the top on
-		// mount, so the first read is not optional.
-		read()
-		window.addEventListener('scroll', read, { passive: true })
-		return () => window.removeEventListener('scroll', read)
-	}, [threshold])
-
-	return scrolled
 }
 
 // ---------------------------------------------------------------------------
@@ -350,9 +317,7 @@ function BrowseResultCard({
  * carries no buckets, because a facet count is computed over a candidate
  * superset and over-reports what the set actually holds.
  */
-export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: BrowseIndexHostProps) {
-	const instanceName = useInstanceName()
-	const { data: config } = useConfigQuery()
+export function BrowseIndexHost({ q, p, onNavigate, onWhyPlebeian }: BrowseIndexHostProps) {
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 	const [facetsExpanded, setFacetsExpanded] = useState(false)
 	// The open family's selected option, by the variation's `d` tag. Held here
@@ -360,14 +325,6 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 	// panel, never a navigation. `undefined` means "no explicit choice", which
 	// the SDK resolves to the first available variation.
 	const [selectedVariant, setSelectedVariant] = useState<string | undefined>(undefined)
-
-	/** The nav field's input and the hero's — the two ends of the handoff. */
-	const navSearchInput = useRef<HTMLInputElement>(null)
-	const heroSearchInput = useRef<HTMLInputElement>(null)
-	/** Which field must take the caret on the next commit, set by the other one. */
-	const focusTarget = useRef<'nav' | 'hero' | null>(null)
-
-	const scrolled = usePageScrolled()
 
 	// The facet probe: the term with NO filter, so the pill list cannot rotate as
 	// the visitor selects one of its pills. It is now always scoped, because
@@ -485,28 +442,12 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 
 	// Handlers
 	/**
-	 * The nav field's change. Emptying it returns the idle screen, where this
-	 * field is hidden unless the page has scrolled — so the hero's field, the
-	 * one actually on screen, takes the caret (see the layout effect below).
+	 * Going somewhere from the hero. The first character typed in the hero's
+	 * field ends the idle state; the term is written to `?q=`, which is the only
+	 * place the browse state lives. The app bar's own field is mounted by the
+	 * frame and never unmounts, so it is already showing the same term above
+	 * this page.
 	 */
-	const handleSearchChange = (value: string) => {
-		focusTarget.current = value.trim().length === 0 && !scrolled ? 'hero' : null
-		onNavigate({ q: value, p: undefined })
-	}
-
-	/**
-	 * The hero field's own change. The first character typed there ends the idle
-	 * state, and the hero — the input with it — unmounts in the same commit. The
-	 * character survives in the URL, but focus does not, so the query would
-	 * accept exactly one character per click. The nav field (rendered by this
-	 * host, outside every branch) is already mounted; the layout effect below
-	 * moves focus into it before the next keystroke.
-	 */
-	const handleHeroSearchChange = (value: string) => {
-		focusTarget.current = value.trim().length > 0 ? 'nav' : null
-		onNavigate({ q: value, p: undefined })
-	}
-
 	const handleSearchGo = () => {
 		onNavigate({ q, p: undefined })
 	}
@@ -626,16 +567,7 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 	// The disclosure is NOT conditioned on the buckets: a capped scan with no
 	// surviving buckets still has to say so, or a person reads silence as
 	// completeness.
-	const truncationNotice = (
-		<ScanTruncationNotice
-			truncated={scanTruncated}
-			scanned={frame?.scanned}
-			total={frame?.candidateCount}
-			// The way past the cap is a narrower query, so the affordance is the
-			// field itself — the nav one, which is mounted in every state.
-			onRefine={() => navSearchInput.current?.focus()}
-		/>
-	)
+	const truncationNotice = <ScanTruncationNotice truncated={scanTruncated} scanned={frame?.scanned} total={frame?.candidateCount} />
 
 	// Empty state hints — real data only
 	const EMPTY_HINTS = [{ label: 'local index empty' }]
@@ -648,55 +580,6 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 	 * can leave the home.
 	 */
 	const isIdle = !q.trim()
-
-	/**
-	 * Focus handoff across the idle ↔ results change.
-	 *
-	 * The hero's large field lives on the idle screen and unmounts with it; the
-	 * nav's compact field is rendered by this host, outside every branch, so it
-	 * is already mounted when the branch flips. Whichever field the visitor was
-	 * typing in dies or hides, so the other one takes the caret on the same
-	 * commit — before the next keystroke, and with the caret at the end of the
-	 * text the character just wrote.
-	 */
-	useLayoutEffect(() => {
-		const target = focusTarget.current
-		if (!target) return
-		focusTarget.current = null
-
-		const input = target === 'nav' ? navSearchInput.current : heroSearchInput.current
-		if (!input || !input.isConnected) return
-		input.focus()
-		// The caret belongs after the character that got us here, not at 0.
-		input.setSelectionRange(input.value.length, input.value.length)
-	}, [isIdle, q])
-
-	// The header's own account controls (sign-in, or dashboard, profile and sign-out):
-	// this surface replaces the header, so it has no other way in.
-	const accountSlot = <HeaderAccountControls />
-
-	/**
-	 * The nav band's compact field, and when it is the one on screen.
-	 *
-	 * The idle frame homes the search in the hero; the results and split frames
-	 * put it in the nav band. So the compact instance shows on every search
-	 * state, on the home once the page has scrolled past the hero's field, and
-	 * on the home with a product open beside it (the split frame — the hero may
-	 * be scrolled out inside the master pane).
-	 *
-	 * It is rendered unconditionally — hidden, never unmounted — because the
-	 * element holding the caret must not be remounted by a state change.
-	 */
-	const navSearchHidden = isIdle && !scrolled && !p
-	const navSearch = (
-		<SearchField
-			value={q}
-			onChange={handleSearchChange}
-			onGo={handleSearchGo}
-			inputRef={navSearchInput}
-			className={navSearchHidden ? 'hidden' : undefined}
-		/>
-	)
 
 	/**
 	 * The hero's placeholder states what this index loaded — the frame's
@@ -826,15 +709,14 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 					<SearchField
 						value={q}
 						placeholder={heroPlaceholder}
-						onChange={handleHeroSearchChange}
+						onChange={(value) => onNavigate({ q: value, p: undefined })}
 						onGo={handleSearchGo}
-						inputRef={heroSearchInput}
 						size="hero"
 					/>
 				}
 				onSelectProduct={(id) => onNavigate({ q: '', p: id })}
 				onBrowseProducts={handleBrowseProducts}
-				onWhyPlebeian={onNavigateFeatured}
+				onWhyPlebeian={onWhyPlebeian}
 				stripsAbove={wall.slice(0, IDLE_WALL_ABOVE)}
 				stripsBelow={wall.slice(IDLE_WALL_ABOVE)}
 			/>
@@ -871,26 +753,14 @@ export function BrowseIndexHost({ q, p, onNavigate, onNavigateFeatured }: Browse
 
 	// Render — one tree, two states
 	//
-	// The nav band and its search field are rendered once, above the branch.
-	// They must not live inside it: `q` changes on every keystroke, so a field
-	// nested in a `isIdle ? … : …` branch is unmounted by the first character,
-	// which is the bug this structure exists to prevent. The hero's own large
-	// field is the only branch-scoped one, and the handoff above covers it.
+	// The frame's `AppBar` draws the nav band and its search field, once, above
+	// every route. This host draws only the page: `q` still changes on every
+	// keystroke, and the hero's own large field is the only branch-scoped field
+	// on the surface.
 	return (
 		<div className="min-h-screen bg-background">
 			{/* Page-level art mount: the SVG sprite + the eight material classes */}
 			<ProductArtMount />
-
-			{/* Nav — the same element in every state */}
-			<BrowseNav
-				wordmarkLabel={instanceName}
-				logoSrc={config?.picture}
-				active={true}
-				onNavigateHome={() => onNavigate({ q: '', p: undefined })}
-				onNavigateFeatured={onNavigateFeatured}
-				searchSlot={navSearch}
-				accountSlot={accountSlot}
-			/>
 
 			{isIdle ? (
 				panel ? (

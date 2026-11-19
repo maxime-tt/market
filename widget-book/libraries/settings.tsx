@@ -80,6 +80,8 @@ const bindingRows = [
 		updatedAtLabel: '13 Nov 2026',
 		updatedByLabel: 'npub1admin…',
 		warning: null,
+		navLabel: 'Featured',
+		navOrder: 1,
 		author: 'a'.repeat(64),
 		d: 'featured-13-11-2026',
 	},
@@ -91,10 +93,21 @@ const bindingRows = [
 		updatedAtLabel: '12 Nov 2026',
 		updatedByLabel: 'npub1admin…',
 		warning: 'shop is also a page compiled into this build.',
+		navLabel: null,
+		navOrder: null,
 		author: 'a'.repeat(64),
 		d: 'storefront-page',
 	},
 ]
+
+const navFields = {
+	showInNav: false,
+	navLabel: '',
+	navOrder: '',
+	onShowInNavChange: () => {},
+	onNavLabelChange: () => {},
+	onNavOrderChange: () => {},
+}
 
 const pickerProps = {
 	pages: pickerPages,
@@ -419,6 +432,7 @@ export const settings: WidgetLibrary = {
 						path="featured"
 						onPathChange={() => {}}
 						pagePicker={<PagePicker {...pickerProps} />}
+						nav={navFields}
 						errors={[]}
 						pending={false}
 						onSubmit={() => {}}
@@ -434,6 +448,7 @@ export const settings: WidgetLibrary = {
 						path="shop"
 						onPathChange={() => {}}
 						pagePicker={<PagePicker {...pickerProps} />}
+						nav={navFields}
 						errors={[]}
 						notice="This path is also a page compiled into this build. The binding wins while it exists."
 						pending={false}
@@ -449,6 +464,7 @@ export const settings: WidgetLibrary = {
 					<RouteEditCard
 						path="featured"
 						pagePicker={<PagePicker {...pickerProps} />}
+						nav={navFields}
 						errors={[]}
 						pending={false}
 						onSubmit={() => {}}

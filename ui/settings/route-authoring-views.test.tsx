@@ -8,6 +8,7 @@ import {
 	RouteBindingsList,
 	RouteRemovalConfirm,
 	type RouteBindingRow,
+	type RouteNavFields,
 } from './route-authoring-views'
 
 const row = (over: Partial<RouteBindingRow> = {}): RouteBindingRow => ({
@@ -16,8 +17,20 @@ const row = (over: Partial<RouteBindingRow> = {}): RouteBindingRow => ({
 	updatedAtLabel: '2027-01-15',
 	updatedByLabel: 'abcdef12…3456',
 	warning: null,
+	navLabel: null,
+	navOrder: null,
 	author: 'a'.repeat(64),
 	d: 'storefront-page',
+	...over,
+})
+
+const nav = (over: Partial<RouteNavFields> = {}): RouteNavFields => ({
+	showInNav: false,
+	navLabel: '',
+	navOrder: '',
+	onShowInNavChange: () => {},
+	onNavLabelChange: () => {},
+	onNavOrderChange: () => {},
 	...over,
 })
 
@@ -41,10 +54,7 @@ describe('route authoring views', () => {
 	test('the populated state renders each binding with its target, author and date', () => {
 		const markup = renderToStaticMarkup(
 			createElement(RouteBindingsList, {
-				rows: [
-					row(),
-					row({ path: 'featured', targetLabel: 'page 11111111…2222 / home', updatedByLabel: 'the instance (at boot)' }),
-				],
+				rows: [row(), row({ path: 'featured', targetLabel: 'page 11111111…2222 / home', updatedByLabel: 'the instance (at boot)' })],
 				pendingPath: null,
 				onEdit: () => {},
 				onRemove: () => {},
@@ -72,6 +82,16 @@ describe('route authoring views', () => {
 		expect(markup.match(/is also a page compiled into this build/g)).toHaveLength(1)
 	})
 
+	test('a pinned row says how it is pinned into the nav, and an unpinned row says nothing', () => {
+		const markup = renderToStaticMarkup(
+			createElement(RouteBindingsList, { rows: [row({ navLabel: 'Shop', navOrder: 2 }), row({ path: 'featured' })], pendingPath: null }),
+		)
+		expect(markup).toContain('In nav:')
+		expect(markup).toContain('Shop')
+		expect(markup).toContain('(2)')
+		expect(markup.match(/In nav:/g)).toHaveLength(1)
+	})
+
 	test('a row whose removal is in flight disables its own controls', () => {
 		const markup = renderToStaticMarkup(
 			createElement(RouteBindingsList, { rows: [row()], pendingPath: 'shop', onEdit: () => {}, onRemove: () => {} }),
@@ -84,12 +104,14 @@ describe('route authoring views', () => {
 			createElement(RouteBindingForm, {
 				title: 'Retarget /shop',
 				description: 'Choose the page this path should serve.',
-				values: { path: 'shop', author: 'a'.repeat(64), d: 'home' },
+				path: 'shop',
+				onPathChange: () => {},
+				pagePicker: null,
+				nav: nav({ showInNav: true, navLabel: 'Shop', navOrder: '1' }),
 				errors: ['shop is already bound. Edit that binding instead of creating a second one.'],
 				pending: false,
 				submitLabel: 'Save target',
 				editing: true,
-				onChange: () => {},
 				onSubmit: () => {},
 				onCancel: () => {},
 			}),
@@ -105,23 +127,73 @@ describe('route authoring views', () => {
 			createElement(RouteBindingForm, {
 				title: 'Bind a path',
 				description: 'Point a path at a page you have published.',
-				values: { path: '', author: '', d: 'storefront-page' },
+				path: '',
+				onPathChange: () => {},
+				pagePicker: null,
+				nav: nav(),
 				errors: [],
 				pending: false,
 				submitLabel: 'Bind path',
 				editing: false,
-				onChange: () => {},
 				onSubmit: () => {},
 			}),
 		)
 		expect(markup).toContain('It becomes the URL: /your-name.')
 		expect(markup).toContain('Bind path')
+		expect(markup).toContain('Show in navigation')
+		// The nav fields stay out of the way until the pin is on.
+		expect(markup).not.toContain('route-nav-label')
 		expect(markup).not.toContain('role="alert"')
 		expect(markup).not.toContain('Cancel')
 	})
 
+	test('turning the pin on asks for a label and an order, the label starting as the path', () => {
+		const markup = renderToStaticMarkup(
+			createElement(RouteBindingForm, {
+				title: 'Bind a path',
+				description: 'Point a path at a page you have published.',
+				path: 'shop',
+				onPathChange: () => {},
+				pagePicker: null,
+				nav: nav({ showInNav: true, navLabel: 'shop', navOrder: '1' }),
+				errors: [],
+				pending: false,
+				submitLabel: 'Bind path',
+				editing: false,
+				onSubmit: () => {},
+			}),
+		)
+		expect(markup).toContain('route-nav-label')
+		expect(markup).toContain('Nav label')
+		expect(markup).toContain('Nav order')
+		expect(markup).toContain('value="shop"')
+		expect(markup).toContain('type="number"')
+	})
+
+	test('a fractional order is called out at the order field', () => {
+		const markup = renderToStaticMarkup(
+			createElement(RouteBindingForm, {
+				title: 'Bind a path',
+				description: 'Point a path at a page you have published.',
+				path: 'shop',
+				onPathChange: () => {},
+				pagePicker: null,
+				nav: nav({ showInNav: true, navLabel: 'Shop', navOrder: '1.5' }),
+				errors: [],
+				pending: false,
+				submitLabel: 'Bind path',
+				editing: false,
+				onSubmit: () => {},
+			}),
+		)
+		expect(markup).toContain('Nav order must be a whole number.')
+		expect(markup).toContain('aria-invalid="true"')
+	})
+
 	test('removal asks first and names the path it takes away', () => {
-		const markup = renderToStaticMarkup(createElement(RouteRemovalConfirm, { path: 'shop', pending: false, onConfirm: () => {}, onCancel: () => {} }))
+		const markup = renderToStaticMarkup(
+			createElement(RouteRemovalConfirm, { path: 'shop', pending: false, onConfirm: () => {}, onCancel: () => {} }),
+		)
 		expect(markup).toContain('/shop')
 		expect(markup).toContain('stops resolving to it')
 		expect(markup).toContain('Keep it')
