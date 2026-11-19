@@ -65,7 +65,7 @@ import type { Event } from '@sdk/core/nostr-io'
 import { authStore, getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { createWebNostrIo, webRelayPolicy } from '@platform/web/sdkNostrIo'
 import { createWebArenaParamsRead } from '@platform/web/auctions/relay/arenaParamsRead'
-import { getReadContext } from '@platform/web/readContext'
+import { getAppRelayUrl, getReadContext } from '@platform/web/readContext'
 import type { ArenaBidFunding, ArenaBidFundingTerms } from '@platform/web/auctions/relay/arenaBidFunding'
 import { arenaEscrowSendOverCoco } from '@platform/web/auctions/relay/arenaEscrowCocoSend'
 import { ArenaBidFundError, assembleArenaBidFunding, type ArenaBidFundPorts } from '@platform/web/auctions/relay/arenaBidFund'
@@ -111,10 +111,26 @@ function withEscrowLockedNote(state: ArenaBidSubmissionState): ArenaBidSubmissio
  * migration has produced the spend key, and `readEscrowManager` answers `null`
  * until Coco is ready — both are refusals, never substitutes.
  */
+/**
+ * Where the escrow terms are read from: the instance relay alone, when there is one.
+ *
+ * Why: this instance's validator committee publishes its kind-1448 terms to the
+ * instance relay. Reading every query relay broke bidding two ways: the bounded
+ * read ends at the first relay that is caught up, so a fast empty public relay
+ * ended it before the instance relay's terms arrived; and public relays carry
+ * other committees' terms at higher heights, which the newest-height selection
+ * would have preferred, locking a bid to a key this instance's validators do
+ * not hold. Without an instance relay the query relays are the only option.
+ */
+export function arenaParamsRelays(appRelayUrl: string | undefined, queryRelays: readonly string[]): string[] {
+	const pinned = appRelayUrl?.trim()
+	return pinned ? [pinned] : [...queryRelays]
+}
+
 const arenaBidFundPorts: ArenaBidFundPorts = {
 	readConfig: async () => {
 		const read = createWebArenaParamsRead({
-			relays: [...webRelayPolicy('query')],
+			relays: arenaParamsRelays(getAppRelayUrl(), webRelayPolicy('query')),
 			store: getReadContext().store as unknown as EventStorePort<Event>,
 		})
 		const { params } = await read()
