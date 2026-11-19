@@ -104,7 +104,7 @@ function renderHost(search: { q: string; p?: string }, onNavigate: (state: Brows
 			q: search.q,
 			p: search.p,
 			onNavigate,
-			onNavigateFeatured: () => {},
+			onWhyPlebeian: () => {},
 		}),
 	)
 }

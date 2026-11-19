@@ -6,10 +6,7 @@ import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddres
 import { StorefrontRenderer } from '@ui/storefront'
 import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
 import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/storefront'
-import { BrowseNav } from '@ui/browse/browse-nav'
-import { HeaderAccountControls } from '@platform/web/layout/Header'
 import { IntroOverlay } from '@ui/browse/intro'
-import { useInstanceName } from '@platform/web/config/instanceName'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { LEGACY_HOME_PUBKEY, useInstanceHomePage } from '@platform/web/storefront/instanceHomePage'
 
@@ -32,20 +29,11 @@ const browseSearchSchema = z.object({
 export const Route = createFileRoute('/')({
 	component: BrowseIndex,
 	validateSearch: browseSearchSchema,
-	/**
-	 * The Browse surface draws its own nav (`BrowseNav`, rendered by
-	 * `BrowseIndexHost` in every state — idle, results, split view), so the root
-	 * layout must not stack the legacy app header above it. Declared here, on the
-	 * route, because it is a property of this surface: every search state
-	 * (`?q=`, `?p=`) inherits it. See `platform/web/layout/appChrome.ts`.
-	 */
-	staticData: { hidesAppHeader: true },
 })
 
 function BrowseIndex() {
 	const { q, p } = Route.useSearch()
 	const navigate = useNavigate()
-	const instanceName = useInstanceName()
 	const { data: config } = useConfigQuery()
 	// This instance's own `home` page (app key, owner or an admin, newest wins;
 	// see instanceHomePage.ts), falling back to the upstream instance's. Read
@@ -104,14 +92,6 @@ function BrowseIndex() {
 		return (
 			<>
 				{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
-				<BrowseNav
-					wordmarkLabel={instanceName}
-					logoSrc={config?.picture}
-					active
-					onNavigateHome={() => navigate({ to: '/' })}
-					onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
-					accountSlot={<HeaderAccountControls />}
-				/>
 				{homeLoading ? (
 					// Hold the space while the published page is read: drawing the built-in
 					// composition here flashed a stand-in page before the real one.
@@ -146,7 +126,7 @@ function BrowseIndex() {
 					},
 				})
 			}}
-			onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
+			onWhyPlebeian={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
 		/>
 	)
 }

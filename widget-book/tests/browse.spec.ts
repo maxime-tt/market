@@ -13,11 +13,11 @@ test.describe('browse library', () => {
 		await expect(page.getByTestId('library-browse')).toBeVisible()
 	})
 
-	test('browse-nav entries', async ({ page }) => {
+	test('app-bar entries', async ({ page }) => {
 		await page.goto('/?library=browse')
-		await expect(page.getByTestId('widget-browse-nav-default')).toBeVisible()
-		await expect(page.getByTestId('widget-browse-nav-inactive')).toBeVisible()
-		await expect(page.getByTestId('widget-browse-nav-with-slots')).toBeVisible()
+		await expect(page.getByTestId('widget-app-bar-default')).toBeVisible()
+		await expect(page.getByTestId('widget-app-bar-with-slots')).toBeVisible()
+		await expect(page.getByTestId('widget-app-bar-current')).toBeVisible()
 	})
 
 	test('search-field entries', async ({ page }) => {
@@ -113,15 +113,15 @@ test.describe('browse library', () => {
 		await expect(page.getByTestId('widget-category-rows-loading').locator('[data-slot="skeleton-card"]').first()).toBeVisible()
 	})
 
-	test('the featured nav marks its destination current', async ({ page }) => {
+	test('the bar marks its current destination', async ({ page }) => {
 		await page.goto('/?library=browse')
-		const entry = page.getByTestId('widget-browse-nav-featured-current')
-		const featured = entry.getByTestId('widget-browse-nav-featured')
-		await expect(featured).toHaveAttribute('aria-current', 'page')
-		await expect(featured).toHaveAttribute('href', '/featured')
-		await expect(featured).toHaveClass(/border-b-2 border-fill-ink/)
-		// the marker is on exactly one destination: the wordmark is not current
-		await expect(entry.getByTestId('widget-browse-nav-wordmark')).not.toHaveAttribute('aria-current', 'page')
+		const entry = page.getByTestId('widget-app-bar-current')
+		const products = entry.getByTestId('widget-app-bar-nav-products')
+		await expect(products).toHaveAttribute('aria-current', 'page')
+		await expect(products).toHaveAttribute('href', '/products')
+		await expect(products).toHaveClass(/text-text-high/)
+		// the marker is on exactly one destination
+		await expect(entry.getByTestId('widget-app-bar-nav-community')).not.toHaveAttribute('aria-current', 'page')
 	})
 
 	test('the row card presentation renders without a top rule', async ({ page }) => {
