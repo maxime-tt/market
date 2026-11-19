@@ -5,8 +5,8 @@ import type { TuneSettings } from '@ui/theme/tune'
  * Demo presets for the widget book. Each preset is one token record — colours,
  * fonts, and the six tune dimensions. The CMS will store the same shape.
  *
- * Fonts are loaded by `widget-book/index.html` from Google Fonts. Licensing is
- * a production decision; the harness only needs representative families.
+ * Fonts are bundled with the app (`styles/fonts.css`, SIL OFL 1.1), so the
+ * presets render the same families the app serves.
  *
  * Two layers are carried per preset, deliberately mirrored:
  *   • the semantic keys (`--background`, `--card`, `--primary`, …) that the

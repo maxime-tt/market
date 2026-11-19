@@ -57,8 +57,8 @@ export function HeroBlock({ title, subtitle, imageUrl, ctaLabel, ctaHref, align,
 				backgroundPosition: 'center',
 			}}
 		>
-			// Letterbox below is scheme-stable (parked-scheme-black); the scrim // keeps text legible over an arbitrary photograph without asking
-			// the author to think about contrast (parked-scrim).
+			{/* Letterbox below is scheme-stable (parked-scheme-black); the scrim keeps text legible over an arbitrary photograph without asking
+			    the author to think about contrast (parked-scrim). */}
 			{image && <div className="absolute inset-0 bg-black/45" aria-hidden />}
 			<StorefrontSection className={cn('relative flex flex-col gap-4 py-16', alignClass[align])}>
 				{title.trim().length > 0 && <h1 className="font-header text-4xl font-bold sm:text-5xl">{title}</h1>}

@@ -397,6 +397,7 @@ export const STOREFRONT_THEME_IDS = [
 	'acct',
 	'pleb',
 	'brut',
+	'arena',
 ] as const
 export type StorefrontThemeId = (typeof STOREFRONT_THEME_IDS)[number]
 
@@ -413,6 +414,9 @@ export type StorefrontThemeId = (typeof STOREFRONT_THEME_IDS)[number]
 export const STOREFRONT_PALETTE_KEYS = [
 	'acid',
 	'arcade',
+	'arena',
+	'arena-day',
+	'arena-lime',
 	'beetroot',
 	'blueprint',
 	'brutal',
