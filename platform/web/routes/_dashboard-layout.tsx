@@ -4,6 +4,7 @@ import { SidebarNav } from '@ui/nav/sidebar-nav'
 import {
 	DASHBOARD_NAV,
 	findNavEmoji,
+	isEditorWorkspaceRoute,
 	isFullBleedRoute,
 	resolveBackTarget,
 	resolveNavView,
@@ -26,6 +27,7 @@ import { appNotificationsBinding, appUnseenCounts } from '@platform/web/notifica
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 export const Route = createFileRoute('/_dashboard-layout')({
@@ -139,6 +141,15 @@ function DashboardLayout() {
 	const backTarget = resolveBackTarget(location.pathname)
 	const needsBackButton = !!backTarget && !isMobile
 	const fullBleed = isFullBleedRoute(DASHBOARD_NAV, location.pathname)
+	// The page builders fold the dashboard menu away on desktop so the editor
+	// columns and the live preview get the whole width. The menu stays one
+	// click away and folds again whenever the route changes.
+	const workspace = !isMobile && isEditorWorkspaceRoute(location.pathname)
+	const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
+	React.useEffect(() => {
+		setWorkspaceMenuOpen(false)
+	}, [location.pathname])
+	const showDesktopMenu = !workspace || workspaceMenuOpen
 
 	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
 	React.useEffect(() => {
@@ -221,15 +232,33 @@ function DashboardLayout() {
 			<div className="hidden lg:block">
 				<h1 className="arena-dash-title relative flex justify-center lg:justify-start items-center gap-2 px-6 py-3 font-heading text-center">
 					Dashboard
+					{workspace && (
+						<button
+							type="button"
+							onClick={() => setWorkspaceMenuOpen((open) => !open)}
+							aria-expanded={workspaceMenuOpen}
+							aria-controls="dashboard-menu"
+							className="inline-flex items-center gap-2 ml-auto px-3 py-1.5 border border-white/25 hover:border-white/60 rounded-md text-sm transition-colors arena-dash-toggle"
+							data-testid="dashboard-menu-toggle"
+						>
+							{workspaceMenuOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
+							<span>{workspaceMenuOpen ? 'Hide menu' : 'Show menu'}</span>
+						</button>
+					)}
 				</h1>
 			</div>
 
 			{/* Main container - responsive layout */}
-			<div className="lg:flex lg:flex-1 lg:gap-6 lg:px-6 lg:pt-6 lg:pb-4 lg:max-w-none lg:min-h-0 lg:overflow-hidden">
-				<div ref={parent} className="lg:flex lg:gap-6 lg:w-full">
+			<div
+				className={cn(
+					'lg:flex lg:flex-1 lg:gap-6 lg:px-6 lg:pt-6 lg:pb-4 lg:max-w-none lg:min-h-0 lg:overflow-hidden',
+					workspace && 'lg:px-3 lg:pt-3 lg:pb-3',
+				)}
+			>
+				<div ref={parent} className={cn('lg:flex lg:gap-6 lg:w-full', workspace && 'lg:gap-3')}>
 					{/* Sidebar - responsive behavior */}
-					{(showSidebar || !isMobile) && (
-						<aside className="lg:flex-shrink-0 lg:bg-white lg:border lg:border-black lg:rounded w-full lg:w-80 lg:max-h-full lg:overflow-y-auto">
+					{(isMobile ? showSidebar : showDesktopMenu) && (
+						<aside id="dashboard-menu" className="lg:flex-shrink-0 lg:bg-white lg:border lg:border-black lg:rounded w-full lg:w-80 lg:max-h-full lg:overflow-y-auto">
 							<SidebarNav
 								sections={navSections}
 								onNavigate={handleSidebarItemClick}
@@ -253,7 +282,7 @@ function DashboardLayout() {
 						<div
 							className={`w-full lg:flex-1 lg:max-w-[67rem] lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
 								isMessageDetailView && isMobile ? 'h-[calc(100vh-117px)]' : ''
-							} ${location.pathname === '/dashboard/account/profile-page' ? 'lg:max-w-none' : ''}`}
+							} ${workspace ? 'lg:max-w-none' : ''}`}
 						>
 							{/* Desktop back button and title - fixed to top of container */}
 							{needsBackButton && (

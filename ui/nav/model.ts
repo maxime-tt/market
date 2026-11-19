@@ -314,6 +314,19 @@ export function resolveBackTarget(pathname: string, rules: readonly NavBackRule[
 	return null
 }
 
+/**
+ * Whether the route is a full-page editor workspace (the Puck page builders).
+ *
+ * These need every pixel for the three editor columns plus the live preview,
+ * so on desktop the shell folds the dashboard menu away and drops the content
+ * panel's max width. The page list itself (`/dashboard/app-settings/pages`)
+ * is an ordinary settings page and keeps the menu.
+ */
+export function isEditorWorkspaceRoute(pathname: string): boolean {
+	if (pathname === '/dashboard/account/profile-page') return true
+	return /^\/dashboard\/app-settings\/pages\/[^/]+\/?$/.test(pathname)
+}
+
 /** Whether the route's content renders edge-to-edge instead of inside the padded panel. */
 export function isFullBleedRoute(model: readonly NavSection[], pathname: string): boolean {
 	return findNavItem(model, pathname)?.fullBleed ?? false
