@@ -1,6 +1,5 @@
 import { CurrencyDropdown } from '@platform/web/layout/CurrencyDropdown'
 import { MobileMenu } from '@platform/web/layout/MobileMenu'
-import { ProductSearch } from '@platform/web/products/ProductSearch'
 import { Button } from '@ui/primitives/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@ui/primitives/popover'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/primitives/tooltip'
@@ -197,10 +196,9 @@ export function BugReportButton({ className }: BugReportButtonProps) {
 }
 
 /**
- * The header's account controls on their own: sign-in when signed out; the
- * dashboard, profile and sign-out buttons when signed in. The home and Browse
- * surfaces draw their own nav (`BrowseNav`) instead of this header, so they
- * mount these in its account slot; without them the home had no way to sign in.
+ * The account cluster on its own: sign-in when signed out; the dashboard,
+ * profile and sign-out buttons when signed in. The frame's `AppBar` mounts it in
+ * its account slot, so every route has the same way in.
  */
 export function HeaderAccountControls() {
 	const { isAuthenticated, isAuthenticating } = useStore(authStore)
@@ -409,9 +407,6 @@ export function Header() {
 					</div>
 				</section>
 				<div className="flex items-center gap-2 lg:gap-4">
-					<div className="hidden lg:block flex-1">
-						<ProductSearch />
-					</div>
 					<div className="flex items-center gap-2">
 						{/* Connection-status pill — only renders when relay connectivity
 							is not healthy. Click to manually retry. */}
@@ -466,9 +461,6 @@ export function Header() {
 						)}
 					</div>
 				</div>
-			</div>
-			<div className="lg:hidden flex-1 pb-4">
-				<ProductSearch />
 			</div>
 
 			{/* Mobile Menu */}

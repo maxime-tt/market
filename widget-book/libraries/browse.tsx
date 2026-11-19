@@ -2,13 +2,13 @@
  * widget-book/libraries/browse.tsx — Browse foundation widget library.
  *
  * One entry per state of every new ui/ view.
- * Covers: browse-nav, search-field, art module, product-card, product-strip,
+ * Covers: app-bar, search-field, art module, product-card, product-strip,
  * account-pane, list-row, list-detail, relay-indicator, dead-search-error.
  */
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { BrowseNav } from '@ui/browse/browse-nav'
+import { AppBarView } from '@ui/appbar/app-bar-view'
 import { SearchField } from '@ui/browse/search-field'
 import { ProductArt, ProductSprite } from '@ui/browse/art'
 import { ProductCard, ProductContextMenu } from '@ui/browse/product-card'
@@ -84,32 +84,61 @@ const STRIP_ITEMS = PRODUCTS.slice(0, 6).map((p, i) => ({
 	href: `/?p=strip-${i}`,
 }))
 
-// ---- browse-nav entries ----
+// ---- app-bar entries ----
 
 /**
- * The gallery's demo title. `BrowseNav.wordmarkLabel` is required and has no
- * default (the app reads the operator's instance name), and this catalogue has
- * no instance config, so the entries name themselves the way the shipped
- * default instance does.
+ * The gallery's demo title. The bar's brand is a slot the host fills from
+ * `useInstanceName()`; this catalogue has no instance config, so the entries
+ * name themselves the way the shipped default instance does.
  */
 const DEMO_WORDMARK = 'Plebeian Market'
 
-const BrowseNavDefault = () => (
-	<BrowseNav wordmarkLabel={DEMO_WORDMARK} active={true} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+/** The brand slot: the wordmark anchor (logo + title), as the host builds it. */
+const demoBrand = (label = DEMO_WORDMARK) => (
+	<a
+		href="/"
+		data-slot="wordmark-link"
+		data-testid="widget-app-bar-wordmark"
+		aria-label={`${label} — Browse`}
+		className="inline-flex items-center gap-2 font-display text-[20px] leading-tight tracking-[-0.01em] font-bold text-fill-ink hover:text-fill-ink-hover transition-colors cursor-pointer"
+	>
+		{label}
+	</a>
 )
 
-const BrowseNavInactive = () => (
-	<BrowseNav wordmarkLabel={DEMO_WORDMARK} active={false} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
-)
+/** The built-in destinations, as `platform/web/layout/navItems.ts` supplies them. */
+const DEMO_NAV = [
+	{ label: 'Products', href: '/products' },
+	{ label: 'Auctions', href: '/auctions' },
+	{ label: 'Community', href: '/community' },
+]
 
-const BrowseNavWithSlots = () => {
+/** The nav slot; `current` marks the destination the bar would call active. */
+const demoNavItems = (current?: string) =>
+	DEMO_NAV.map((item) => (
+		<a
+			key={item.href}
+			href={item.href}
+			data-testid={`widget-app-bar-nav-${item.label.toLowerCase()}`}
+			aria-current={item.label === current ? 'page' : undefined}
+			className={
+				item.label === current
+					? 'text-sm font-medium text-text-high transition-colors cursor-pointer'
+					: 'text-sm font-medium text-text-mid transition-colors hover:text-text-high cursor-pointer'
+			}
+		>
+			{item.label}
+		</a>
+	))
+
+const AppBarDefault = () => <AppBarView brand={demoBrand()} navItems={demoNavItems()} />
+
+const AppBarWithSlots = () => {
 	const [query, setQuery] = useState('ceramic')
 	return (
-		<BrowseNav
-			wordmarkLabel={DEMO_WORDMARK}
-			active={true}
-			onNavigateHome={() => {}}
-			onNavigateFeatured={() => {}}
+		<AppBarView
+			brand={demoBrand()}
+			navItems={demoNavItems()}
 			searchSlot={<SearchField value={query} onChange={setQuery} onGo={() => {}} />}
 			accountSlot={
 				<div className="flex items-center gap-2 text-sm text-text-mid">
@@ -120,6 +149,9 @@ const BrowseNavWithSlots = () => {
 		/>
 	)
 }
+
+/** One destination marked current — the state the bar derives from the location. */
+const AppBarCurrent = () => <AppBarView brand={demoBrand()} navItems={demoNavItems('Products')} />
 
 // ---- search-field entries ----
 
@@ -332,7 +364,7 @@ const IDLE_ITEMS: StripItem[] = [
 
 const BrowseIdleDefault = () => (
 	<div className="h-[500px]">
-		<BrowseNav wordmarkLabel={DEMO_WORDMARK} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+		<AppBarView brand={demoBrand()} navItems={demoNavItems()} />
 		<BrowseIdle stripsAbove={IDLE_ITEMS} stripsBelow={IDLE_ITEMS} />
 	</div>
 )
@@ -343,28 +375,23 @@ const BrowseIdleDefault = () => (
  */
 const BrowseIdleWithStats = () => (
 	<div className="h-[500px]">
-		<BrowseNav wordmarkLabel={DEMO_WORDMARK} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+		<AppBarView brand={demoBrand()} navItems={demoNavItems()} />
 		<BrowseIdle stats={{ products: 1208, sellers: 38, postedLast24h: 412, relays: 38 }} stripsAbove={IDLE_ITEMS} stripsBelow={IDLE_ITEMS} />
 	</div>
 )
 
-/** The Featured destination marked current (frame RBtsnyppDS). */
-const BrowseNavFeatured = () => (
-	<BrowseNav wordmarkLabel={DEMO_WORDMARK} currentPage="featured" onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
-)
-
 /**
  * The idle screen with its search populated: the hero's large field and the
- * nav's compact one are the same query, exactly as the host wires them.
+ * bar's compact one are the same query, exactly as the frame and the host wire
+ * them.
  */
 const BrowseIdleWithSearch = () => {
 	const [query, setQuery] = useState('ceramic')
 	return (
 		<div className="h-[500px]">
-			<BrowseNav
-				wordmarkLabel={DEMO_WORDMARK}
-				onNavigateHome={() => {}}
-				onNavigateFeatured={() => {}}
+			<AppBarView
+				brand={demoBrand()}
+				navItems={demoNavItems()}
 				searchSlot={<SearchField value={query} onChange={setQuery} onGo={() => {}} />}
 			/>
 			<BrowseIdle searchSlot={<SearchField value={query} onChange={setQuery} onGo={() => {}} size="hero" />} onWhyPlebeian={() => {}} />
@@ -1094,11 +1121,10 @@ const SplitViewDefault = () => (
 export const browse: WidgetLibrary = {
 	name: 'browse',
 	entries: [
-		// browse-nav
-		{ name: 'browse-nav-default', render: BrowseNavDefault },
-		{ name: 'browse-nav-inactive', render: BrowseNavInactive },
-		{ name: 'browse-nav-with-slots', render: BrowseNavWithSlots },
-		{ name: 'browse-nav-featured-current', render: BrowseNavFeatured },
+		// app-bar
+		{ name: 'app-bar-default', render: AppBarDefault },
+		{ name: 'app-bar-with-slots', render: AppBarWithSlots },
+		{ name: 'app-bar-current', render: AppBarCurrent },
 		// search-field
 		{ name: 'search-field-empty', render: SearchFieldEmpty },
 		{ name: 'search-field-with-value', render: SearchFieldWithValue },
