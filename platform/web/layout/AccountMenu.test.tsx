@@ -2,11 +2,12 @@
  * platform/web/layout/AccountMenu.test.tsx — the AppBar's account dropdown.
  *
  * The unit suite has no DOM renderer (see `ui/shared/use-copy-to-clipboard.test.tsx`): components are
- * rendered with `react-dom/server`. A Radix dropdown's content lives in a portal, and
- * `@radix-ui/react-portal` renders nothing on the server, so the content tree would be invisible to
- * `renderToStaticMarkup`. This file therefore replaces **only** `@ui/primitives/dropdown-menu` with a
- * pass-through that keeps the roles, the props and the class names the menu hands down — the tree asserted
- * below is the menu's own, not a copy of it.
+ * rendered with `react-dom/server`. A Radix dropdown's content — and the wallet popover's — lives in a
+ * portal, and `@radix-ui/react-portal` renders nothing on the server, so those trees would be invisible
+ * to `renderToStaticMarkup`. This file therefore replaces **only** `@ui/primitives/dropdown-menu` and
+ * `@ui/primitives/popover` with pass-throughs that keep the roles, the props and the class names the
+ * menu hands down — the tree asserted below is the menu's own, not a copy of it. (It is the menu's only
+ * consumer of the popover primitive in this app.)
  *
  * Everything the menu reads is real: `authStore` (the `@tanstack/store` mirror of the `sdk/core/auth`
  * machine), `uiStore`/`uiActions`, `cartStore` and the notifications binding. That is deliberate — the
@@ -88,6 +89,23 @@ mock.module('@ui/primitives/dropdown-menu', () => ({
 
 mock.module('@platform/web/wallet/CocoWalletPanelHost', () => ({
 	CocoWalletPanelHost: () => createElement('div', { 'data-testid': 'wallet-panel-stub' }),
+}))
+
+/** The wallet surface is portalled too; same stand-in rule as the dropdown above. */
+mock.module('@ui/primitives/popover', () => ({
+	Popover: ({ children }: { children?: ReactNode }) => createElement(Fragment, null, children),
+	PopoverAnchor: (props: { children?: ReactNode; className?: string; 'data-slot'?: string; onPointerDown?: () => void }) =>
+		createElement(
+			'div',
+			{ 'data-slot': props['data-slot'], className: props.className, onPointerDown: props.onPointerDown },
+			props.children,
+		),
+	PopoverContent: (props: { children?: ReactNode; className?: string; 'data-testid'?: string; 'aria-label'?: string }) =>
+		createElement(
+			'div',
+			{ 'data-testid': props['data-testid'], 'aria-label': props['aria-label'], className: props.className },
+			props.children,
+		),
 }))
 
 afterAll(() => {
@@ -249,6 +267,39 @@ describe('AccountMenu — signed in', () => {
 		expect(markup).toContain('text-text-high')
 		// The item highlight is the ink fill, merged over the primitive's `focus:bg-accent`.
 		expect(markup).toContain('focus:bg-fill-ink')
+	})
+
+	test('every portalled surface carries the arena token scope', async () => {
+		signIn()
+		const markup = await renderMenu()
+
+		/** The opening tag of the element that carries `marker`. */
+		const openingTag = (marker: string): string => {
+			const at = markup.indexOf(marker)
+			return at === -1 ? '' : markup.slice(markup.lastIndexOf('<', at), markup.indexOf('>', at))
+		}
+
+		// Both menu surfaces live in a portal, outside the layout's `.arena-chrome` wrapper:
+		// without the scope on themselves they open with the light token defaults under a
+		// dark Arena bar. Content and currency sub-content, pinned by role and count.
+		const menus = [...markup.matchAll(/role="menu"/g)].map(({ index }) => {
+			const at = index ?? 0
+			return markup.slice(markup.lastIndexOf('<', at), markup.indexOf('>', at))
+		})
+		expect(menus).toHaveLength(2)
+		for (const menu of menus) expect(menu).toContain('arena-chrome')
+
+		// And the wallet popover the menu opens, which is a third portal.
+		expect(openingTag('data-testid="wallet-panel"')).toContain('arena-chrome')
+	})
+
+	test('separates the groups with the strong line, which the dark surface can show', async () => {
+		signIn()
+		const markup = await renderMenu()
+
+		const separators = [...markup.matchAll(/<hr[^>]*>/g)].map(([tag]) => tag)
+		expect(separators).toHaveLength(2)
+		for (const separator of separators) expect(separator).toContain('bg-border-strong')
 	})
 
 	test('the cart and sign-out items fire their actions', async () => {

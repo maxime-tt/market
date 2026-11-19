@@ -1,8 +1,10 @@
 /**
  * platform/web/layout/MobileMenu.tsx — the small-screen nav overlay.
  *
- * Below `sm` the bar's nav list is hidden (the view's `hidden sm:flex`) and this
- * overlay carries the same destinations instead, behind the bar's menu button.
+ * Below `xl` the bar's nav list is hidden (the view's `hidden xl:flex` — the list
+ * only appears once a third of the bar can hold it beside a centred search field)
+ * and this overlay carries the same destinations instead, behind the bar's menu
+ * button.
  * It reads the *same* list as the bar — `platform/web/layout/navItems.ts`,
  * called with the same live routing table — so the two surfaces cannot disagree
  * about what the nav holds or in what order. It used to keep its own literal

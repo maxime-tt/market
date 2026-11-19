@@ -59,6 +59,34 @@ export interface AppBarViewProps {
  *
  * The bar is the document's `header` and its nav list is the page's `nav`, so a
  * consuming route renders exactly one of each (`appChrome.test.tsx` pins that).
+ *
+ * ## The search is centred in the BAR, not in the space left over
+ *
+ * The three slots are three grid tracks, and from `sm` up the tracks are *equal*
+ * (`minmax(0,1fr)` each). Equal side tracks are the whole mechanism: the middle
+ * track's centre is then the bar's centre by construction, whatever the brand,
+ * the nav and the account cluster happen to measure. The field itself is capped
+ * at 560px (`SearchField`'s own `max-w-[560px]`) and centred inside its track, so
+ * past that cap it stays on the centre line instead of filling it.
+ *
+ * Why not the tempting `grid-cols-[minmax(0,1fr)_minmax(0,560px)_minmax(0,1fr)]`?
+ * It does not centre *and* it breaks: grid hands a track with a definite maximum
+ * (`560px`) the free space before the flexible ones, so the side tracks collapse
+ * (measured: `0px 288px 0px` on a 360px bar) and the brand/nav paint over the
+ * field. Equal tracks spread the deficit instead: the field shrinks with the bar
+ * and the side clusters keep their lanes.
+ *
+ * Below `sm` the tracks are `auto | 1fr | auto` — the phone shape the bar has
+ * always had. On a 360px phone the brand (logo + name) and the account cluster
+ * already fill the bar, so reserving the brand's width on both sides would leave
+ * the field at zero and the wordmark clipped; the field keeps the leftover width
+ * there (and `min-w-0`, so it can never widen the page).
+ *
+ * The nav list appears from `xl`: a third of the bar has to hold brand + nav
+ * before a symmetric row is honest, and below that a centred field would either
+ * shrink to nothing or have the list drawn over it. Where it does appear it wraps
+ * inside its lane rather than clipping, and the left track clips (rather than
+ * painting over the field) if an operator's instance name ever outgrows it.
  */
 export const AppBarView: FC<AppBarViewProps> = ({ brand, navItems, searchSlot, accountSlot, className, ref }) => {
 	return (
@@ -67,7 +95,11 @@ export const AppBarView: FC<AppBarViewProps> = ({ brand, navItems, searchSlot, a
 			data-slot="app-bar"
 			data-testid="widget-app-bar"
 			className={cn(
-				'flex',
+				'grid',
+				// Phone: brand | field | account — the brand keeps its width.
+				'grid-cols-[auto_minmax(0,1fr)_auto]',
+				// From `sm`: three equal tracks, so the middle one is the bar's centre.
+				'sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]',
 				'items-center',
 				'gap-5',
 				'px-4',
@@ -83,36 +115,37 @@ export const AppBarView: FC<AppBarViewProps> = ({ brand, navItems, searchSlot, a
 				className,
 			)}
 		>
-			{/* Left: brand */}
-			<div data-slot="brand" className="flex items-center gap-3 shrink-0">
-				{brand}
+			{/* Left track: brand, then the nav list (the host's `mobile-menu-button` covers phones) */}
+			<div data-slot="app-bar-left" className="col-start-1 flex min-w-0 items-center gap-5 overflow-hidden">
+				<div data-slot="brand" className="flex shrink-0 items-center gap-3">
+					{brand}
+				</div>
+
+				{navItems && (
+					<nav data-slot="app-bar-nav" className="hidden xl:flex min-w-0 flex-wrap items-center gap-x-6 gap-y-1">
+						{navItems}
+					</nav>
+				)}
 			</div>
 
-			{/* Nav list — below `sm` the mobile menu carries the same list instead */}
-			{navItems && (
-				<nav data-slot="app-bar-nav" className="hidden sm:flex items-center gap-6">
-					{navItems}
-				</nav>
-			)}
-
-			{/* Centre: search slot */}
+			{/* Middle track: the search, centred inside it */}
 			{searchSlot && (
 				/*
-				 * `min-w-0` is load-bearing, not cosmetic: a flex item's automatic
-				 * minimum is its content's min-content width, so without it this slot
+				 * `min-w-0` is load-bearing, not cosmetic: a grid item's automatic
+				 * minimum is its content's min-content width, so without it this track
 				 * refuses to shrink below the field inside it (560px) and the whole
 				 * page is pushed out to 822px on a phone. It must sit on the *wrapper*
 				 * — a `min-w-0` on the field alone cannot beat an ancestor that still
 				 * refuses to shrink.
 				 */
-				<div data-slot="search-slot" className="flex-1 flex justify-center min-w-0">
+				<div data-slot="search-slot" className="col-start-2 flex w-full min-w-0 items-center justify-center">
 					{searchSlot}
 				</div>
 			)}
 
-			{/* Right: account slot */}
+			{/* Right track: the account cluster, pinned to the bar's end */}
 			{accountSlot && (
-				<div data-slot="account-slot" className="ml-auto">
+				<div data-slot="account-slot" className="col-start-3 justify-self-end">
 					{accountSlot}
 				</div>
 			)}

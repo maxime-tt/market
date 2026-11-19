@@ -29,9 +29,11 @@
  *   a sign-in action when signed out; profile, wallet, dashboard, cart, the
  *   currency submenu and sign-out when signed in.
  * - **Small screens** reach the same destinations through `MobileMenu`, opened by
- *   the bar's own trigger (`sm:hidden`, the width at which the view hides the nav
- *   list). The trigger rides in the account cluster because that is the bar's
- *   right-hand group; the overlay itself is a second surface, not a second list.
+ *   the bar's own trigger (`xl:hidden`, the width at which the view shows the nav
+ *   list — a third of the bar has to hold brand + list before the list can sit
+ *   beside a centred search field). The trigger rides in the account cluster
+ *   because that is the bar's right-hand group; the overlay itself is a second
+ *   surface, not a second list.
  *
  * Nothing here branches on the path for styling: the bar is written against the
  * widget role tokens, and `.arena-chrome` rebinds those to the arena's dark
@@ -154,9 +156,10 @@ export const AppBar: FC<AppBarProps> = ({ className }) => {
 				accountSlot={
 					<div className="flex items-center gap-2">
 						{/*
-						 * Below `sm` the view hides the nav list (`hidden sm:flex`), so this
-						 * is the only way to the destinations on a phone. It opens the
-						 * overlay that carries the same list.
+						 * Below `xl` the view hides the nav list (`hidden xl:flex`), so this
+						 * is the only way to the destinations until the bar is wide enough
+						 * to hold the list beside a centred field. It opens the overlay
+						 * that carries the same list.
 						 */}
 						<button
 							type="button"
@@ -165,7 +168,7 @@ export const AppBar: FC<AppBarProps> = ({ className }) => {
 							aria-expanded={mobileMenuOpen}
 							aria-controls={MOBILE_MENU_ID}
 							onClick={() => uiActions.toggleMobileMenu()}
-							className="inline-flex sm:hidden h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border-default bg-surface-raised text-text-high transition-colors hover:bg-fill-ink hover:text-on-fill-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+							className="inline-flex xl:hidden h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border-default bg-surface-raised text-text-high transition-colors hover:bg-fill-ink hover:text-on-fill-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
 						>
 							{mobileMenuOpen ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
 						</button>

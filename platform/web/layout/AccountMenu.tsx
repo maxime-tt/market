@@ -61,8 +61,16 @@ import { cn } from '@ui/utils/cn'
 // Presentation vocabulary
 // ---------------------------------------------------------------------------
 
+/**
+ * The Arena token *scope* (`styles/arena-chrome.css`, imported globally). The menu is portalled to
+ * `<body>`, outside the layout's `.arena-chrome` wrapper, so without this class the content inherits
+ * the light token defaults and opens light under a bar that is Arena-dark. It rebinds the tokens the
+ * menu already uses — it is not a second set of values, and nothing here copies a colour.
+ */
+const ARENA_SCOPE = 'arena-chrome'
+
 /** The menu surface, in widget tokens (the primitive's shadcn skin is merged before these). */
-const CONTENT_CLASS = 'w-64 min-w-0 border border-border-default bg-surface-raised p-1 text-text-high shadow-xl'
+const CONTENT_CLASS = cn(ARENA_SCOPE, 'w-64 min-w-0 border border-border-default bg-surface-raised p-1 text-text-high shadow-xl')
 
 /** One row: the token highlight instead of the primitive's `accent`. */
 const ITEM_CLASS =
@@ -70,7 +78,15 @@ const ITEM_CLASS =
 
 const SUB_TRIGGER_CLASS = cn(ITEM_CLASS, 'data-[state=open]:bg-fill-ink data-[state=open]:text-on-fill-ink [&>svg]:ml-auto [&>svg]:size-4')
 
-const SUB_CONTENT_CLASS = 'w-32 border border-border-default bg-surface-raised p-1 text-text-high shadow-xl'
+const SUB_CONTENT_CLASS = cn(ARENA_SCOPE, 'w-32 border border-border-default bg-surface-raised p-1 text-text-high shadow-xl')
+
+/**
+ * The separator: `border-strong`, not `border-default`. Inside the Arena scope the default hairline
+ * sits a step above the surface and reads as no line at all between two groups of rows; the strong
+ * line is the same token pair at a value the dark surface can show, and the light chrome keeps the
+ * same relationship one step darker. Both are widget role tokens — no colour is written here.
+ */
+const SEPARATOR_CLASS = 'bg-border-strong'
 
 /** Icon size inside a row (the primitive sizes bare `<svg>` to 4, the token colour is set here). */
 const ICON_CLASS = 'size-4 shrink-0 text-text-mid'
@@ -186,7 +202,7 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 									<span className="block truncate text-xs text-text-mid">{signerType ? SIGNER_TYPE_LABELS[signerType] : 'Signed in'}</span>
 								</span>
 							</DropdownMenuLabel>
-							<DropdownMenuSeparator className="bg-border-default" />
+							<DropdownMenuSeparator className={SEPARATOR_CLASS} />
 
 							<DropdownMenuItem asChild className={ITEM_CLASS}>
 								<Link to="/profile/$profileId" params={{ profileId: pubkey }} data-testid="profile-button">
@@ -239,7 +255,7 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 								</DropdownMenuSubContent>
 							</DropdownMenuSub>
 
-							<DropdownMenuSeparator className="bg-border-default" />
+							<DropdownMenuSeparator className={SEPARATOR_CLASS} />
 
 							<DropdownMenuItem
 								data-testid="logout-button"
@@ -268,7 +284,8 @@ export const AccountMenu: FC<AccountMenuProps> = ({ className }) => {
 				aria-label="Wallet"
 				align="end"
 				sideOffset={8}
-				className="w-[calc(100vw-2rem)] rounded-lg bg-primary md:w-96"
+				// The panel is portalled too, so it carries the same scope as the menu it opens from.
+				className={cn(ARENA_SCOPE, 'w-[calc(100vw-2rem)] rounded-lg bg-primary md:w-96')}
 			>
 				<CocoWalletPanelHost />
 			</PopoverContent>
