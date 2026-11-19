@@ -40,6 +40,7 @@ import { toast } from 'sonner'
 import { StorefrontSetupWizard } from './StorefrontSetupWizard'
 import { storefrontCmsConfig } from './storefrontCms'
 import { usePublishStorefrontPage, useStorefrontPage } from './storefrontQuery'
+import { HOME_PAGE_D_TAG } from './instanceHomePage'
 import { clearStorefrontDraft, loadStorefrontDraft, saveStorefrontDraft } from './draftStorage'
 
 // no-external.css is Puck's stylesheet without its @import of Inter from
@@ -85,13 +86,29 @@ function toPuckData(page: StorefrontPage): Data {
 	return { root: { props: page.root.props }, content: page.content } as Data
 }
 
+/**
+ * A category's key is the search word its chip links to. Authors mostly type
+ * only the label, and an empty key fails the page schema, so a blank key takes
+ * the label's lower-cased text.
+ */
+function fillCategoryKeys(content: Data['content']): Data['content'] {
+	return content.map((block) => {
+		if (block.type !== 'Categories' || !Array.isArray(block.props?.categories)) return block
+		const categories = (block.props.categories as { label?: string; key?: string }[]).map((category) => ({
+			...category,
+			key: category.key?.trim() || (category.label ?? '').trim().toLowerCase(),
+		}))
+		return { ...block, props: { ...block.props, categories } }
+	})
+}
+
 function fromPuckData(data: Data, enabled: boolean, chrome: StorefrontPageChrome): StorefrontPage {
 	return {
 		version: STOREFRONT_PAGE_VERSION,
 		enabled,
 		chrome,
 		root: { props: (data.root?.props ?? {}) as StorefrontPage['root']['props'] },
-		content: data.content as StorefrontPage['content'],
+		content: fillCategoryKeys(data.content) as StorefrontPage['content'],
 	}
 }
 
@@ -102,6 +119,9 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 	// Derived, never passed: the storefront page is the one whose address is the
 	// reserved default. Everything address-specific in the chrome hangs off this.
 	const isStorefront = dTag === STOREFRONT_PAGE_D_TAG
+	// A page named `home` by an operator key is what `/` renders
+	// (instanceHomePage.ts); it needs no route binding.
+	const isHomePage = dTag === HOME_PAGE_D_TAG
 
 	// The claimed name (if any) is bought on separate dashboard pages today — see
 	// ADR-019 — but the builder is where an author actually needs to know it: it
@@ -117,7 +137,13 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 	// page's live URL is the path it is bound to, which this editor does not
 	// know; it is set by whoever does (the Routes list's "View the page"). So the
 	// link is absent here rather than wrong.
-	const liveHref = isStorefront ? (vanityEntry ? `/${vanityEntry.vanityName}?preview=draft` : `/profile/${pubkey}?preview=draft`) : null
+	const liveHref = isStorefront
+		? vanityEntry
+			? `/${vanityEntry.vanityName}?preview=draft`
+			: `/profile/${pubkey}?preview=draft`
+		: isHomePage
+			? '/'
+			: null
 
 	const [mode, setMode] = useState<BuilderMode>('loading')
 	const [initialData, setInitialData] = useState<Data | null>(null)
@@ -422,6 +448,11 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 							className="grid grid-cols-1 items-center gap-3 border-b px-4 py-3 sm:grid-cols-[1fr_auto_1fr]"
 						>
 							<div className="flex flex-col items-start gap-1">
+								{isHomePage && (
+									<span className="text-xs font-medium text-foreground" data-testid="storefront-home-page">
+										This is the homepage. Publishing it updates the front page; no route needed.
+									</span>
+								)}
 								{liveHref ? (
 									<Button variant="outline" size="sm" asChild data-testid="storefront-view-live">
 										<a href={liveHref} target="_blank" rel="noopener noreferrer">
@@ -554,6 +585,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 			handleDiscardDraft,
 			isDirty,
 			isFullscreen,
+			isHomePage,
 			isStorefront,
 			liveHref,
 			nip05Entry,
