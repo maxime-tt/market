@@ -4,7 +4,7 @@ import { ProductSearch } from '@platform/web/products/ProductSearch'
 import { Button } from '@ui/primitives/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@ui/primitives/popover'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/primitives/tooltip'
-import { Nip60WalletHost } from '@platform/web/wallet/Nip60WalletHost'
+import { CocoWalletPanelHost } from '@platform/web/wallet/CocoWalletPanelHost'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { authActions, authStore } from '@platform/web/auth/authStore'
 import { appNotificationsBinding, appUnseenCounts } from '@platform/web/notifications'
@@ -158,7 +158,7 @@ function WalletButton() {
 			</PopoverTrigger>
 
 			<PopoverContent className="bg-primary rounded-lg w-[calc(100vw-2rem)] md:w-96" align="end">
-				<Nip60WalletHost />
+				<CocoWalletPanelHost />
 			</PopoverContent>
 		</Popover>
 	)
