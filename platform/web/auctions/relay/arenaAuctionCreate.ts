@@ -23,7 +23,7 @@
  * kind:     1440                          (regular kind: the relay replaces nothing)
  * tags:     ["d", <d>]                    the auction's identity within its seller
  *           ["e", <root event id>]        only on an edit: the version it supersedes
- * content:  {"auction_id":<d>, "title":…, "description":…, "image":…, "category":…,
+ * content:  {"auction_id":<d>, "title":…, "description":…, "image":…, ["media":[…],] "category":…,
  *            "name":…, "startPrice":…, "minIncrement":…, "mode":"fixed"|"antisnipe",
  *            "windowSec":…, "durationSec":…, "sellerWallet":…, "v4vSplit":[…]}
  * ```
@@ -56,6 +56,7 @@
  * failure whatever the transport resolved with.
  */
 
+import type { LotMediaItem } from '@sdk/commerce/auctions/lotMedia'
 import { getEventHash } from 'nostr-tools/pure'
 import type { Event } from '@sdk/core/nostr-io'
 import type { ArenaV4vSplitRow } from '@sdk/commerce/auctions/auctionPublishValidation'
@@ -87,8 +88,13 @@ export interface ArenaCreateContent {
 	auction_id: string
 	title: string
 	description: string
-	/** The lot's image URL. */
+	/** The lot's main photo URL: the gallery's first item. */
 	image: string
+	/**
+	 * Gallery items after `image` (photos, video, live). Display field, so an edit may
+	 * change it. Omitted from the wire when empty, so a one-photo lot is unchanged.
+	 */
+	media?: LotMediaItem[]
 	category: string
 	/** The seller's display name for the lot. */
 	name: string
@@ -145,10 +151,10 @@ export interface ArenaCreateBuildOptions {
 const isHex64 = (value: unknown): value is string => typeof value === 'string' && HEX64.test(value)
 
 /** Copy the immutable fields off the root, refusing a root that cannot supply them. */
-function immutableFieldsOf(root: ArenaCreateContent, editEventId: string): Pick<
-	ArenaCreateContent,
-	'startPrice' | 'minIncrement' | 'mode' | 'windowSec' | 'durationSec' | 'sellerWallet' | 'v4vSplit'
-> {
+function immutableFieldsOf(
+	root: ArenaCreateContent,
+	editEventId: string,
+): Pick<ArenaCreateContent, 'startPrice' | 'minIncrement' | 'mode' | 'windowSec' | 'durationSec' | 'sellerWallet' | 'v4vSplit'> {
 	if (!isHex64(editEventId)) {
 		throw new ArenaCreateRefusalError(
 			'create.bad-auction-id',
@@ -177,42 +183,48 @@ function immutableFieldsOf(root: ArenaCreateContent, editEventId: string): Pick<
  * Pure: the draft for a create (or, with `editOf`, a supersession). Throws
  * `ArenaCreateRefusalError` — never guesses and never fills a missing field in.
  */
-export function buildArenaCreateDraft(
-	form: ArenaCreateValidationInput,
-	options: ArenaCreateBuildOptions,
-): ArenaCreateDraft {
+export function buildArenaCreateDraft(form: ArenaCreateValidationInput, options: ArenaCreateBuildOptions): ArenaCreateDraft {
 	const value: ArenaCreateValue = validateArenaCreateInput(form, { sellerWallet: options.sellerWallet })
 	const d = value.auctionId
 	const edit = options.editOf ?? null
 
-	const content: ArenaCreateContent = edit === null
-		? {
-				auction_id: d,
-				title: value.title,
-				description: value.description,
-				image: value.image,
-				category: value.category,
-				name: value.name,
-				startPrice: value.startPrice,
-				minIncrement: value.minIncrement,
-				mode: value.mode,
-				windowSec: value.windowSec,
-				durationSec: value.durationSec,
-				sellerWallet: value.sellerWallet,
-				v4vSplit: value.v4vSplit,
-			}
-		: {
-				// Display is mutable; money, time and cryptography are not.
-				auction_id: d,
-				title: value.title,
-				description: value.description,
-				image: value.image,
-				category: value.category,
-				name: value.name,
-				...immutableFieldsOf(edit.content, edit.eventId),
-			}
+	const content: ArenaCreateContent =
+		edit === null
+			? {
+					auction_id: d,
+					title: value.title,
+					description: value.description,
+					image: value.image,
+					...(value.media.length > 0 ? { media: value.media } : {}),
+					category: value.category,
+					name: value.name,
+					startPrice: value.startPrice,
+					minIncrement: value.minIncrement,
+					mode: value.mode,
+					windowSec: value.windowSec,
+					durationSec: value.durationSec,
+					sellerWallet: value.sellerWallet,
+					v4vSplit: value.v4vSplit,
+				}
+			: {
+					// Display is mutable; money, time and cryptography are not.
+					auction_id: d,
+					title: value.title,
+					description: value.description,
+					image: value.image,
+					...(value.media.length > 0 ? { media: value.media } : {}),
+					category: value.category,
+					name: value.name,
+					...immutableFieldsOf(edit.content, edit.eventId),
+				}
 
-	const tags: string[][] = edit === null ? [['d', d]] : [['d', d], ['e', edit.eventId]]
+	const tags: string[][] =
+		edit === null
+			? [['d', d]]
+			: [
+					['d', d],
+					['e', edit.eventId],
+				]
 
 	return {
 		d,
@@ -224,10 +236,7 @@ export function buildArenaCreateDraft(
 }
 
 /** The form's own entry point: the same draft, from the editor's state. */
-export function buildArenaCreateDraftFromForm(
-	formData: AuctionFormData,
-	options: ArenaCreateBuildOptions,
-): ArenaCreateDraft {
+export function buildArenaCreateDraftFromForm(formData: AuctionFormData, options: ArenaCreateBuildOptions): ArenaCreateDraft {
 	return buildArenaCreateDraft(auctionFormToCreateInput(formData), options)
 }
 
@@ -301,7 +310,9 @@ export async function publishArenaCreate(
 		throw new Error(`The seller pubkey must be 64 hex, got ${JSON.stringify(options.sellerPubkey)}`)
 	}
 	if (options.signer.pubkey !== options.sellerPubkey) {
-		throw new Error(`The signer is ${options.signer.pubkey}, not the seller ${options.sellerPubkey}: a create must be signed by its seller.`)
+		throw new Error(
+			`The signer is ${options.signer.pubkey}, not the seller ${options.sellerPubkey}: a create must be signed by its seller.`,
+		)
 	}
 
 	const draft = buildArenaCreateDraft(form, options)
@@ -336,7 +347,8 @@ export async function publishArenaCreate(
 	const acceptedBy = outcome.acks.filter((ack) => ack.accepted).map((ack) => ack.url)
 	const rejected = outcome.acks.filter((ack) => !ack.accepted).map((ack) => ({ url: ack.url, message: ack.message ?? null }))
 	if (acceptedBy.length === 0) {
-		const named = rejected.length > 0 ? rejected.map((r) => `${r.url}${r.message ? ` (${r.message})` : ''}`).join('; ') : 'no relay answered'
+		const named =
+			rejected.length > 0 ? rejected.map((r) => `${r.url}${r.message ? ` (${r.message})` : ''}`).join('; ') : 'no relay answered'
 		throw new Error(`No relay accepted the auction create (kind ${ARENA_AUCTION_CREATE_KIND}, id ${event.id}): ${named}`)
 	}
 

@@ -171,9 +171,20 @@ export interface ArenaReceiptModel {
 	outputsWithoutAmount: number
 }
 
+/** One gallery item: a photo, a recorded video, or a live stream. */
+export interface ArenaLotMediaItem {
+	type: 'image' | 'video' | 'live'
+	url: string
+}
+
 /** One auction in full. */
 export interface ArenaAuctionDetailModel extends ArenaAuctionCardModel {
 	description: string | null
+	/**
+	 * The whole gallery in display order: the main photo (`imageUrl`) first, then the
+	 * create's `media` items. Empty when the lot published no safe image.
+	 */
+	media: ArenaLotMediaItem[]
 	minIncrement: number | null
 	/** `fixed` | `antisnipe`, or `null` when the create stated no mode. */
 	mode: string | null

@@ -168,7 +168,8 @@ function AuctionListItemSeenDemo() {
 const AUCTION_FORM_DATA: AuctionFormData = {
 	auctionId: 'handmade-mug',
 	title: 'Handmade mug',
-	description: 'Wheel-thrown, food-safe glaze.',
+	imageUrl: 'https://img.example/mug.png',
+	media: [],
 	imageUrl: 'https://img.example/mug.png',
 	category: 'Collectibles',
 	name: 'Studio Nord',
@@ -503,6 +504,7 @@ const arenaLotModel: ArenaAuctionDetailModel = {
 	d: 'hodl-print-07',
 	title: 'Signed HODL print, 1 of 21',
 	imageUrl: arenaLotImage,
+	media: [{ type: 'image', url: arenaLotImage }],
 	startingBid: 5_000,
 	topBidTotal: 21_000,
 	bidCount: 5,

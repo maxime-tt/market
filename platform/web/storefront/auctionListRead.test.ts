@@ -198,6 +198,7 @@ describe('toAuctionListItem', () => {
 			title: 'A lot',
 			description: null,
 			image: null,
+			media: [],
 			startPrice: 1000,
 			minIncrement: 10,
 			mode: 'fixed',

@@ -27,6 +27,7 @@ import {
 	settleReceiptLabel,
 	shortKey,
 	type ArenaAuctionDetailModel,
+	type ArenaLotMediaItem,
 	type ArenaRelayHealth,
 	type ArenaSurfaceStatus,
 } from '@ui/auction/arena/model'
@@ -179,6 +180,93 @@ function Avatar({ pubkey }: { pubkey: string }) {
 		<span className="arn-av" style={{ background: avatarColour(pubkey) }} aria-hidden="true">
 			{pubkey.slice(0, 1)}
 		</span>
+	)
+}
+
+/** The gallery to show: the model's `media`, or the lone `imageUrl` when a host sent no list. */
+export function lotGalleryOf(model: Pick<ArenaAuctionDetailModel, 'imageUrl'> & { media?: ArenaLotMediaItem[] }): ArenaLotMediaItem[] {
+	if (model.media && model.media.length > 0) return model.media
+	return model.imageUrl !== null ? [{ type: 'image', url: model.imageUrl }] : []
+}
+
+const MEDIA_LABEL: Record<ArenaLotMediaItem['type'], string> = { image: 'Photo', video: 'Video', live: 'Live stream' }
+
+/**
+ * The lot's media: one stage and, when there is more than one item, a row of
+ * clickable thumbnails under it (scrolls sideways when it overflows). Photos are
+ * the common case; a video plays with controls, a live stream starts muted.
+ */
+function LotGallery({ media, title, live }: { media: ArenaLotMediaItem[]; title: string | null; live: boolean }) {
+	const [index, setIndex] = useState(0)
+	const thumbs = useRef<HTMLDivElement>(null)
+	const count = media.length
+	const current = count > 0 ? media[Math.min(index, count - 1)] : null
+	const select = (next: number) => {
+		const i = (next + count) % count
+		setIndex(i)
+		const el = thumbs.current?.children[i] as HTMLElement | undefined
+		el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+	}
+	const alt = title ?? 'Lot photo'
+	return (
+		<>
+			<div className="arn-screen" data-testid="arena-lot-stage">
+				{current === null ? (
+					<div className="arn-screen__empty">No image published</div>
+				) : current.type === 'image' ? (
+					<img key={current.url} src={current.url} alt={count > 1 ? `${alt}, photo ${index + 1} of ${count}` : alt} />
+				) : (
+					<video
+						key={current.url}
+						className="arn-screen__video"
+						src={current.url}
+						controls
+						playsInline
+						preload="metadata"
+						autoPlay={current.type === 'live'}
+						muted={current.type === 'live'}
+						aria-label={`${alt}, ${MEDIA_LABEL[current.type].toLowerCase()}`}
+					/>
+				)}
+				<LiveBadge live={live} />
+				{count > 1 && (
+					<>
+						<button type="button" className="arn-nav is-prev" aria-label="Previous" onClick={() => select(index - 1)}>
+							‹
+						</button>
+						<button type="button" className="arn-nav is-next" aria-label="Next" onClick={() => select(index + 1)}>
+							›
+						</button>
+						<span className="arn-count" aria-hidden="true">
+							{index + 1} / {count}
+						</span>
+					</>
+				)}
+			</div>
+			{count > 1 && (
+				<div className="arn-thumbs" ref={thumbs} role="group" aria-label="Lot gallery" data-testid="arena-lot-thumbs">
+					{media.map((item, i) => (
+						<button
+							key={`${item.type}:${item.url}:${i}`}
+							type="button"
+							className={`arn-thumb${i === index ? ' is-on' : ''}`}
+							aria-label={`${MEDIA_LABEL[item.type]} ${i + 1} of ${count}`}
+							aria-pressed={i === index}
+							onClick={() => select(i)}
+						>
+							{item.type === 'image' ? (
+								<img src={item.url} alt="" loading="lazy" />
+							) : (
+								<span className={`arn-thumb__tile is-${item.type}`}>
+									<i aria-hidden="true">{item.type === 'live' ? '' : '▶'}</i>
+									{item.type === 'live' ? 'LIVE' : 'VIDEO'}
+								</span>
+							)}
+						</button>
+					))}
+				</div>
+			)}
+		</>
 	)
 }
 
@@ -381,14 +469,7 @@ export function ArenaLotView({
 
 				<div className="arn-grid">
 					<section className="arn-panel" aria-label="Lot media">
-						<div className="arn-screen">
-							{model.imageUrl !== null ? (
-								<img src={model.imageUrl} alt={model.title ?? 'Lot photo'} />
-							) : (
-								<div className="arn-screen__empty">No image published</div>
-							)}
-							<LiveBadge live={live} />
-						</div>
+						<LotGallery key={model.coordinate} media={lotGalleryOf(model)} title={model.title} live={live} />
 						<div className="arn-strip">
 							<span>Signed listing</span>
 							<span>·</span>
