@@ -1,5 +1,7 @@
 # Market Frontend
 
+New to the site? The [user guide](docs/guide/README.md) walks through shopping, auctions, the wallet and selling, with screenshots.
+
 To install dependencies:
 
 ```bash
