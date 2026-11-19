@@ -79,7 +79,7 @@ function BrowseIndex() {
 		const homePage = {
 			version: STOREFRONT_PAGE_VERSION,
 			enabled: true,
-			root: { props: { title: '', theme: 'default' as const, palette: 'concrete' } },
+			root: { props: { title: '', theme: 'arena' as const, palette: 'arena' } },
 			content: [
 				{ type: 'Search' as const, props: { id: 'home-search', placeholder: 'Search the marketplace', size: 'lg' as const } },
 				{ type: 'ProductRow' as const, props: { id: 'home-row', productDTags: ['orange-flock-black-orange-edition-high-top-sneakers-ma5ond'] } },
@@ -97,7 +97,7 @@ function BrowseIndex() {
 				},
 			],
 		}
-		const page = publishedHome ?? (parseStorefrontPage(JSON.stringify(homePage)).page as never)
+		const page = arenaHome(publishedHome ?? (parseStorefrontPage(JSON.stringify(homePage)).page as never))
 		return (
 			<>
 				{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
@@ -131,4 +131,17 @@ function BrowseIndex() {
 			onNavigateFeatured={() => navigate({ to: '/$vanityName', params: { vanityName: 'featured' } })}
 		/>
 	)
+}
+
+/**
+ * The home page renders in the Arena theme so it sits inside the Arena chrome
+ * (dark nav, search and footer; see `usesArenaChrome`). A published page that
+ * picked a theme of its own keeps it; one left on the unthemed `default` —
+ * including the upstream instance's page this one falls back to — is drawn
+ * in Arena instead of as a light page inside a dark frame.
+ */
+function arenaHome<P extends { root: { props: { theme?: string; palette?: string } } }>(page: P): P {
+	const theme = page.root.props.theme
+	if (theme && theme !== 'default') return page
+	return { ...page, root: { ...page.root, props: { ...page.root.props, theme: 'arena', palette: 'arena' } } }
 }

@@ -238,6 +238,8 @@ export function Header() {
 	const isCommunityPage = location.pathname === '/community'
 	const isCollectionPage = location.pathname.startsWith('/collection/')
 	const isNostrPage = location.pathname === '/nostr'
+	// Auction routes render the dark Arena header (styles/arena-chrome.css).
+	const arena = isAuctionPage
 	const shouldUseTransparentHeader = isProductPage || isAuctionPage || isHomepage || isProfilePage || isCommunityPage || isCollectionPage
 
 	// Scroll detection for pages with transparent headers
@@ -305,15 +307,24 @@ export function Header() {
 
 	return (
 		<header
-			className={`sticky top-0 z-50 text-white px-4 ${isNostrPage ? 'bg-black' : getHeaderBackground()}`}
-			style={isNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
+			className={
+				arena ? 'arena-header sticky top-0 z-50 px-4' : `sticky top-0 z-50 text-white px-4 ${isNostrPage ? 'bg-black' : getHeaderBackground()}`
+			}
+			style={arena || isNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
 		>
-			<div className="flex justify-between items-center py-4 max-w-full h-full container">
+			<div className={cn('flex justify-between items-center max-w-full h-full container', arena ? 'py-2.5' : 'py-4')}>
 				<section className="inline-flex items-center">
-					<Link to="/" data-testid="home-link">
-						{config?.picture && <img src={config.picture} alt={config.displayName || config.name} className="px-2 w-16" />}
+					<Link to="/" data-testid="home-link" className={arena ? 'inline-flex items-center gap-2' : undefined}>
+						{config?.picture && (
+							<img src={config.picture} alt={config.displayName || config.name} className={arena ? 'px-1 w-11' : 'px-2 w-16'} />
+						)}
+						{arena && (
+							<span className="arena-brand hidden md:inline">
+								Plebeian <em>Auctions</em>
+							</span>
+						)}
 					</Link>
-					<div className="hidden sm:flex gap-8 mx-8">
+					<div className={arena ? 'arena-nav hidden sm:flex items-center gap-6 mx-6' : 'hidden sm:flex gap-8 mx-8'}>
 						<Link
 							to="/products"
 							className="hover:text-secondary"
