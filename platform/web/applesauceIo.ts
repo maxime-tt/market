@@ -21,6 +21,7 @@
  * falling back to any bridge.
  */
 import { RelayGroup, RelayPool } from 'applesauce-relay'
+import type { GroupReqMessage } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { Filter } from 'nostr-tools'
 import type { EventStreamItem } from '@sdk/core/event-store'
@@ -162,6 +163,27 @@ function writeRelayUrls(override?: string[]): string[] {
 
 function asFilters(filter: NostrFilter | NostrFilter[]): NostrFilter[] {
 	return Array.isArray(filter) ? filter : [filter]
+}
+
+// ---------------------------------------------------------------------------
+// The relay-group seam `createRelayStream` subscribes through.
+// ---------------------------------------------------------------------------
+
+/** The part of an RxJS observable the live source uses. */
+export interface ObservableLike<T> {
+	subscribe(observer: { next: (value: T) => void; error: (error: unknown) => void; complete: () => void }): {
+		unsubscribe(): void
+	}
+}
+
+/**
+ * The one call the live source makes on a relay pool — `RelayPool.req`. Typed
+ * structurally (not as `RelayPool`) so a host that is not the app's shared pool
+ * can be handed to the source: a test drives per-relay messages without a socket
+ * (ADR-0005: unit tests make no network calls).
+ */
+export interface RelayRequestGroup {
+	req(relays: string[], filters: NostrFilter[], options: unknown): ObservableLike<GroupReqMessage>
 }
 
 /**
@@ -349,11 +371,12 @@ export const applesauceIo: NostrIo = {
  */
 export function createRelayStream(
 	filters: NostrFilter | NostrFilter[],
-	options: { relayUrls?: readonly string[]; timeoutMs?: number; signal?: AbortSignal } = {},
+	options: { relayUrls?: readonly string[]; timeoutMs?: number; signal?: AbortSignal; group?: RelayRequestGroup } = {},
 ): AsyncIterable<EventStreamItem<NostrEvent>> {
 	const urls = [...(options.relayUrls ?? relayUrls())]
 	const list = asFilters(filters)
 	const timeoutMs = options.timeoutMs ?? 8000
+	const group = options.group ?? getPool()
 	return {
 		async *[Symbol.asyncIterator]() {
 			if (urls.length === 0) {
@@ -382,7 +405,7 @@ export function createRelayStream(
 					push({ type: 'caught-up', info: { eose: [...eose], pending: [...pending], complete: false } })
 				}
 			}
-			const subscription = getPool()
+			const subscription = group
 				.req(urls, list, { resubscribe: false, reconnect: SUBSCRIBE_RECONNECT })
 				.subscribe({
 					next: (message) => {

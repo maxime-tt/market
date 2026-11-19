@@ -799,6 +799,55 @@ describe('resilience', () => {
 		expect(snapshot.health.relays[0].status).toBe('ok')
 		expect(snapshot.health.empty).toBe(true)
 	})
+
+	test('a relay delivering after the deadline is counted as answered', async () => {
+		// The transport's per-relay deadline (its never-EOSE fallback, `deadlineMs`)
+		// fires first: measured live 2026-11-19, the relay that carries the lot sent
+		// its first kind-1440 EVENT at 8759 ms, after the 8 s fallback. The late
+		// answer is the answer — the give-up was a guess.
+		const read = createArenaAuctionRead({
+			relays: ['wss://late'],
+			deadlineMs: 60_000,
+			openRelay: (url) => (_filters: readonly EventFilter[], _opts: ArenaRelayOpenOptions) => ({
+				async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+					yield { type: 'caught-up', info: { eose: [], pending: [url], complete: false } }
+					yield { type: 'event', event: createEvent({ id: 'root-1' }) }
+					yield { type: 'caught-up', info: { eose: [url], pending: [], complete: false } }
+				},
+			}),
+		})
+
+		const items = await collect(read.events())
+		const caughtUp = items.find((i) => i.type === 'caught-up')
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(items.filter((i) => i.type === 'events')).toHaveLength(1)
+		expect(caughtUp.health.answered).toEqual(['wss://late'])
+		expect(caughtUp.health.pending).toEqual([])
+		expect(caughtUp.health.relays[0].status).toBe('ok')
+	})
+
+	test('a read that received events does not report no-relays', async () => {
+		// The relay delivered, then went quiet: no EOSE, no further answer, and the
+		// read's deadline is what ends it. Recording it `timeout` made the health say
+		// "no relay answered" for a read that plainly received events.
+		const read = readFrom({ 'wss://slow': { events: [createEvent({ id: 'root-1' })], hang: true } }, 40)
+
+		// A hanging relay never ends its own stream, so the read is closed at its
+		// caught-up marker — what a page surface does (`collectArenaSurfacesRead`).
+		const items: ArenaReadStreamItem[] = []
+		for await (const item of read.events()) {
+			items.push(item)
+			if (item.type === 'caught-up') read.close()
+		}
+
+		const caughtUp = items.find((i) => i.type === 'caught-up')
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(items.filter((i) => i.type === 'events')).toHaveLength(1)
+		expect(caughtUp.health.relays[0].status).toBe('ok')
+		expect(caughtUp.health.answered).toEqual(['wss://slow'])
+		expect(caughtUp.health.pending).toEqual([])
+		expect(caughtUp.health.noRelaysReachable).toBe(false)
+	})
 })
 
 // =========================================================================

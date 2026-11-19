@@ -38,7 +38,7 @@ import type { EventStorePort } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
 import { getReadContext } from '@platform/web/readContext'
 import { webRelayPolicy } from '@platform/web/sdkNostrIo'
-import { createWebArenaAuctionRead, type ArenaAuctionView } from '@platform/web/auctions/relay/arenaAuctionRead'
+import { arenaLotFilters, createWebArenaAuctionRead, type ArenaAuctionView } from '@platform/web/auctions/relay/arenaAuctionRead'
 import {
 	collectArenaSurfacesRead,
 	toAuctionDetailModel,
@@ -62,16 +62,19 @@ const EMPTY_READ: ArenaSurfacesReadState = {
 }
 
 /**
- * The surfaces read, reopenable by `refreshKey`.
+ * The lot read, reopenable by `refreshKey`.
  *
  * A near-twin of `useArenaSurfacesRead` (`auctionSurfacesRead.ts:306-342`) with
- * one extra dependency: the key. The read logic is **not** duplicated — both
- * shells call the same {@link collectArenaSurfacesRead} over the same
- * `createWebArenaAuctionRead`; only the reopen trigger is added. A route that
- * could not bump a key could watch a just-published bid never appear, because
- * the read it closed after settling would never look again.
+ * two differences: the key, and **lot-scoped filters**. The read logic is **not**
+ * duplicated — both shells call the same {@link collectArenaSurfacesRead} over
+ * the same `createWebArenaAuctionRead`; the lot detail asks for one lot
+ * (`arenaLotFilters`) instead of subscribing to the whole-arena firehose, which
+ * is the subscription the app relay is slow to answer. A route that could not
+ * bump a key could watch a just-published bid never appear, because the read it
+ * closed after settling would never look again.
  */
-export function useArenaLotRead(refreshKey: number): ArenaSurfacesReadState {
+export function useArenaLotRead(init: ArenaLotReadInit): ArenaSurfacesReadState {
+	const { d, seller, refreshKey } = init
 	const [state, setState] = useState<ArenaSurfacesReadState>(EMPTY_READ)
 
 	const relays = useMemo(() => [...webRelayPolicy('query')], [])
@@ -84,6 +87,7 @@ export function useArenaLotRead(refreshKey: number): ArenaSurfacesReadState {
 		const read = createWebArenaAuctionRead({
 			relays,
 			store: getReadContext().store as unknown as EventStorePort<Event>,
+			filters: arenaLotFilters(seller, d),
 		})
 
 		void collectArenaSurfacesRead(read, {
@@ -105,10 +109,20 @@ export function useArenaLotRead(refreshKey: number): ArenaSurfacesReadState {
 			read.close()
 		}
 		// `relays` is memoized (stable); `relaysKey` re-subscribes if the set
-		// itself changes; `refreshKey` is the deliberate reopen.
-	}, [relays, relaysKey, refreshKey])
+		// itself changes; `refreshKey` is the deliberate reopen; the lot identity
+		// decides which filters are asked for.
+	}, [relays, relaysKey, refreshKey, d, seller])
 
 	return state
+}
+
+export interface ArenaLotReadInit {
+	/** The route param: the auction's `d` tag. */
+	d: string
+	/** The `?seller=` disambiguator, or `null` for the bare `d` address. */
+	seller: string | null
+	/** Bumped to reopen the read: a published bid, or the page's retry. */
+	refreshKey: number
 }
 
 export interface ArenaAuctionLotHostProps {

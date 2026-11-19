@@ -1,6 +1,5 @@
-import { createRelayStream, getApplesauceRelayPool } from '@platform/web/applesauceIo'
+import { createRelayStream, getApplesauceRelayPool, type RelayRequestGroup } from '@platform/web/applesauceIo'
 import { getWriteRelays, ndkStore } from '@platform/web/ndk/ndkStore'
-import { createPoolRelayPort, type NostrFilter, type NostrRelayPort } from '@sdk/core'
 import { createNostrIo, relayPoolAdapter, type Event, type NostrIo, type PoolPort, type RelayPolicy } from '@sdk/core/nostr-io'
 import { createEventReadContext, createStoreStream, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
 
@@ -20,35 +19,51 @@ export function createWebNostrIo(): NostrIo {
 	return createNostrIo({ pool: getWebPoolPort(), policy: webRelayPolicy })
 }
 
-export function createWebRelayPort(options: { deadlineMs?: number } = {}): NostrRelayPort<Event> {
-	return createPoolRelayPort(getWebPoolPort(), options)
+export interface WebRelayReadOptions {
+	/** The read's own hard deadline, in ms. Default 8000. */
+	deadlineMs?: number
+	/**
+	 * The relay group the read subscribes through. Defaults to the app's shared
+	 * applesauce pool. Injectable so a unit test can drive per-relay messages
+	 * without a socket (ADR-0005).
+	 */
+	group?: RelayRequestGroup
 }
 
-/** Read context over the SDK seam with explicit relays; pair it with a store from `ndkReadContext`/`applesauceReadContext`. */
+/**
+ * Read context over the app's relay group, with explicit relays; pair it with a
+ * store from `ndkReadContext`/`applesauceReadContext`.
+ *
+ * **A bounded read ends only when every named relay has settled.** The bounded
+ * `fetch` path this replaces went through the SDK seam's `query` →
+ * `relayPoolAdapter.request`, which maps a relay's `CLOSED`/`ERROR` to a throw on
+ * the group's own stream (`sdk/core/nostr-io/ts/relay-adapter.ts:134-140`), so the
+ * first relay to refuse ends the whole read (`sdk/core/nostr-io/ts/index.ts`, the
+ * `error` arm of `query`). Measured live 2026-11-19: two of the seven configured
+ * relays refuse in milliseconds (`sendit.nosflare.com` NOTICE-denied,
+ * `relay.damus.io` 503), and the read resolved in ~15 ms with zero events — 167 ms
+ * before `relay.playday.it`'s first kind-1448 EVENT. The live source
+ * (`createRelayStream`) tracks each named relay's own EOSE/CLOSED/ERROR and emits
+ * its caught-up marker only when all of them have settled — with the read's
+ * deadline (`timeoutMs`, and the caller's own `AbortSignal`) as the hard bound,
+ * so a read over several relays cannot be ended by one of them settling.
+ */
 export function createWebRelayReadContext(
 	store: EventStorePort<Event>,
 	relayUrls: readonly string[] = webRelayPolicy('query'),
-	options: { deadlineMs?: number } = { deadlineMs: 8000 },
+	options: WebRelayReadOptions = { deadlineMs: 8000 },
 ): EventReadContext<Event> {
 	return createEventReadContext({
 		store,
 		stream: createStoreStream({
 			store,
-			source: (filters, opts) => {
-				if (opts?.bounded) {
-					const port = createWebRelayPort(options)
-					return (async function* () {
-						for (const event of await port.fetchEvents(filters as readonly NostrFilter[], relayUrls))
-							yield { type: 'event' as const, event }
-						yield { type: 'caught-up' as const, info: { eose: [], pending: [], complete: true } }
-					})()
-				}
-				return createRelayStream(filters as unknown as Parameters<typeof createRelayStream>[0], {
+			source: (filters, opts) =>
+				createRelayStream(filters as unknown as Parameters<typeof createRelayStream>[0], {
 					relayUrls,
 					timeoutMs: options.deadlineMs,
 					signal: opts?.signal,
-				})
-			},
+					group: options.group,
+				}),
 		}),
 	})
 }

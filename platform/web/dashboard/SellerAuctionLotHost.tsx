@@ -36,6 +36,7 @@ import { chainClockLabel, shortKey, type ArenaRelayHealth, type ArenaSurfaceStat
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { AuctionFulfilmentHost } from '@platform/web/dashboard/AuctionFulfilmentHost'
 import { sellerAuctionHref } from '@platform/web/dashboard/sellerAuctionHref'
+import { Button } from '@ui/wrappers/button'
 
 export interface SellerAuctionLotHostProps {
 	/** The route param: the auction's `d` tag. */
@@ -46,6 +47,22 @@ export interface SellerAuctionLotHostProps {
 	now: number
 	/** The read state, from `useArenaSurfacesRead` / `useArenaLotRead`. */
 	read: ArenaSurfacesReadState
+	/**
+	 * Reopen the read. Offered only when the read ended without an answer — a
+	 * partial or dead read is the one state where running it again is the honest
+	 * next step (`readStateMessage` says the same). A settled read is a verdict
+	 * and is not offered a retry.
+	 */
+	onRetry?: () => void
+}
+
+/** The read states a retry can change: not loading, not a settled verdict. */
+const RETRYABLE: Record<ArenaSurfaceStatus, boolean> = {
+	loading: false,
+	settled: false,
+	incomplete: true,
+	'no-relays': true,
+	error: true,
 }
 
 /**
@@ -54,7 +71,7 @@ export interface SellerAuctionLotHostProps {
  * When the lot is ambiguous it renders the candidates and nothing else — no
  * detail model is built, because building one would mean choosing a seller.
  */
-export function SellerAuctionLotHost({ d, seller, now, read }: SellerAuctionLotHostProps) {
+export function SellerAuctionLotHost({ d, seller, now, read, onRetry }: SellerAuctionLotHostProps) {
 	const lookup: ArenaLotLookup = read.snapshot === null ? { kind: 'missing' } : resolveArenaLot(read.snapshot, d, seller)
 
 	if (lookup.kind === 'ambiguous') {
@@ -82,6 +99,13 @@ export function SellerAuctionLotHost({ d, seller, now, read }: SellerAuctionLotH
 				chainClockLabel={read.chainClock === null ? null : chainClockLabel(read.chainClock)}
 				sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} />}
 			/>
+			{view === null && onRetry !== undefined && RETRYABLE[read.status] && (
+				<div className="flex justify-center">
+					<Button variant="outline" data-testid="seller-lot-retry" onClick={onRetry}>
+						Retry the read
+					</Button>
+				</div>
+			)}
 			{verdicts !== null && (
 				<ArenaVerdictPanel
 					model={verdicts}

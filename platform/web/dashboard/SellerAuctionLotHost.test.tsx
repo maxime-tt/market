@@ -122,13 +122,17 @@ function readState(events: NostrEventLike[], status: ArenaSurfaceStatus, relayHe
 	return { snapshot: snapshotOf(events), status, relayHealth, chainClock: null }
 }
 
-function render(read: ArenaSurfacesReadState, over: { d?: string; seller?: string | null; now?: number } = {}): string {
+function render(
+	read: ArenaSurfacesReadState,
+	over: { d?: string; seller?: string | null; now?: number; onRetry?: () => void } = {},
+): string {
 	return renderToStaticMarkup(
 		createElement(SellerAuctionLotHost, {
 			d: over.d ?? 'lot-1',
 			seller: over.seller ?? null,
 			now: over.now ?? 2000,
 			read,
+			onRetry: over.onRetry,
 		}) as ReactNode,
 	)
 }
@@ -189,6 +193,19 @@ describe('SellerAuctionLotHost — not found only from a settled read', () => {
 		const markup = render({ snapshot: null, status: 'loading', relayHealth: { answered: 0, total: 0 }, chainClock: null })
 		expect(markup).toContain('Reading this auction from relays')
 		expect(markup).not.toContain('No such auction was read.')
+	})
+
+	test('a retry is offered when the read did not answer, and never on a settled verdict', () => {
+		// The states a retry can change: the read ended without every relay
+		// answering, so running it again is the honest next step.
+		for (const status of ['incomplete', 'no-relays', 'error'] as ArenaSurfaceStatus[]) {
+			expect(render(readState([], status), { onRetry: () => {} })).toContain('data-testid="seller-lot-retry"')
+		}
+		// A settled read is a verdict, and a read still running has nothing to retry.
+		expect(render(readState([], 'settled'), { onRetry: () => {} })).not.toContain('seller-lot-retry')
+		expect(render(readState([], 'loading'), { onRetry: () => {} })).not.toContain('seller-lot-retry')
+		// No handler wired (the public route), no affordance.
+		expect(render(readState([], 'no-relays'))).not.toContain('seller-lot-retry')
 	})
 })
 
