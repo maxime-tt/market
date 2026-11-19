@@ -45,6 +45,7 @@ import {
 	type ArenaRelayOpenOptions,
 	type ArenaReadStreamItem,
 } from './arenaAuctionRead'
+import { auctionListStatus } from '@platform/web/storefront/auctionListRead'
 
 // =========================================================================
 // Fixtures
@@ -330,6 +331,13 @@ interface FakeRelayOptions {
 	hang?: boolean
 	/** Emit a caught-up that lists this relay as pending (never answered). */
 	silent?: boolean
+	/**
+	 * The relay answered the REQ with a refusal (`CLOSED` naming a filter error,
+	 * or a refusal `NOTICE`): the caught-up marker names it `refused`.
+	 */
+	refused?: string
+	/** The relay's connection never established: the caught-up marker names it `unreachable`. */
+	unreachable?: boolean
 }
 
 function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
@@ -349,7 +357,14 @@ function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
 			}
 			yield {
 				type: 'caught-up',
-				info: options.silent ? { eose: [], pending: [url], complete: false } : { eose: [url], pending: [], complete: false },
+				info:
+					options.refused !== undefined
+						? { eose: [], pending: [url], complete: false, refused: [{ relay: url, reason: options.refused }] }
+						: options.unreachable === true
+							? { eose: [], pending: [url], complete: false, unreachable: [url] }
+							: options.silent
+								? { eose: [], pending: [url], complete: false }
+								: { eose: [url], pending: [], complete: false },
 			} as EventStreamItem<NostrEventLike>
 		},
 	})
@@ -697,10 +712,105 @@ describe('resilience', () => {
 		const snapshot = await read.snapshot()
 		expect(snapshot.auctions).toHaveLength(1)
 		expect(snapshot.health.failed).toEqual(['wss://dead'])
-		expect(snapshot.health.pending).toContain('wss://dead')
+		// A connection that failed is a settled fact about that relay, not silence:
+		// it is accounted `unreachable`, so it does not hold the read open.
+		expect(snapshot.health.unreachable).toEqual(['wss://dead'])
+		expect(snapshot.health.pending).not.toContain('wss://dead')
 		expect(snapshot.health.eose).toEqual(['wss://alive'])
 		expect(snapshot.health.noRelaysReachable).toBe(false)
 		expect(snapshot.health.relays.find((r) => r.url === 'wss://dead')?.error).toBe('connection refused')
+	})
+
+	test('a relay that CLOSEs with a filter error is accounted for, not left pending', async () => {
+		// Measured live 2026-11-19: nos.lol / nostr.mom / relay.nostr.net answer a
+		// `#auction` REQ with `CLOSED … bad req: error parsing #auction: unindexed
+		// tag filter`. The relay cannot serve the subscription — it has answered
+		// the question, so the read must not keep waiting on it.
+		const read = readFrom({
+			'wss://refuser': { refused: 'bad req: error parsing #auction: unindexed tag filter' },
+			'wss://alive': { events: [createEvent({ id: 'root-1' })] },
+		})
+
+		const items = await collect(read.events())
+		const caughtUp = items.find((i) => i.type === 'caught-up')
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(caughtUp.health.refused).toEqual(['wss://refuser'])
+		expect(caughtUp.health.pending).toEqual([])
+		expect(caughtUp.health.unreachable).toEqual([])
+		expect(caughtUp.health.relays.find((r) => r.url === 'wss://refuser')?.status).toBe('refused')
+		// The relay's own reason is kept, verbatim, for an operator log.
+		expect(caughtUp.health.relays.find((r) => r.url === 'wss://refuser')?.error).toBe(
+			'bad req: error parsing #auction: unindexed tag filter',
+		)
+		// Every relay is accounted for, so the read settles and the surface may
+		// state the lot's phase instead of a partial-read sentence.
+		expect(auctionListStatus(caughtUp.health)).toBe('settled')
+	})
+
+	test('a relay whose connection failed and was not recovered is accounted for', async () => {
+		// Measured live 2026-11-19: relay.damus.io 503s its WebSocket upgrade, and
+		// nostr.mom / nos.lol never open a socket. The transport names them
+		// `unreachable` at its settle bound; the read must not leave them pending.
+		const read = readFrom({
+			'wss://never': { unreachable: true },
+			'wss://alive': { events: [createEvent({ id: 'root-1' })] },
+		})
+
+		const items = await collect(read.events())
+		const caughtUp = items.find((i) => i.type === 'caught-up')
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(caughtUp.health.unreachable).toEqual(['wss://never'])
+		expect(caughtUp.health.pending).toEqual([])
+		expect(caughtUp.health.relays.find((r) => r.url === 'wss://never')?.status).toBe('unreachable')
+		expect(auctionListStatus(caughtUp.health)).toBe('settled')
+	})
+
+	test('a genuinely silent relay inside the deadline still yields incomplete', async () => {
+		// The honesty rule survives: a relay the transport has not classified — it
+		// connected and said nothing — could still answer, so the read stays
+		// incomplete rather than rendering a no-data verdict.
+		const read = readFrom(
+			{
+				'wss://mute': { silent: true, hang: true },
+				'wss://alive': { events: [createEvent({ id: 'root-1' })] },
+			},
+			60,
+		)
+
+		const items: ArenaReadStreamItem[] = []
+		for await (const item of read.events()) {
+			items.push(item)
+			if (item.type === 'caught-up') read.close()
+		}
+		const caughtUp = items.find((i) => i.type === 'caught-up')
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(caughtUp.health.pending).toEqual(['wss://mute'])
+		expect(caughtUp.health.refused).toEqual([])
+		expect(caughtUp.health.unreachable).toEqual([])
+		expect(auctionListStatus(caughtUp.health)).toBe('incomplete')
+	})
+
+	test('a refused relay receives no follow-up REQ', async () => {
+		// `arenaLotFollowUpFilters` opens a second REQ once the create is known —
+		// but only on relays that can still serve it. A relay that refused the base
+		// subscription must not be asked again.
+		const opened = new Map<string, number>()
+		const create = createEvent({ id: 'root-1', d: 'lot-1' })
+		const read = createArenaAuctionRead({
+			relays: ['wss://refuser', 'wss://alive'],
+			deadlineMs: 5000,
+			filters: arenaLotFilters(SELLER_A, 'lot-1'),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, 'lot-1'),
+			openRelay: (url) => (filters, opts) => {
+				opened.set(url, (opened.get(url) ?? 0) + 1)
+				return fakeRelay(url, url === 'wss://refuser' ? { refused: 'bad req: unindexed tag filter' } : { events: [create] })(filters, opts)
+			},
+		})
+
+		await collect(read.events())
+		// The base REQ on both relays, plus the follow-up REQ on the alive relay only.
+		expect(opened.get('wss://refuser')).toBe(1)
+		expect(opened.get('wss://alive')).toBe(2)
 	})
 
 	test('one slow relay is dropped at the deadline and the partial result is returned', async () => {

@@ -92,6 +92,8 @@ function healthOf(over: Partial<ArenaReadHealth> = {}): ArenaReadHealth {
 		relays: [],
 		eose: [],
 		answered: [],
+		refused: [],
+		unreachable: [],
 		pending: [],
 		failed: [],
 		noRelaysReachable: false,

@@ -11,12 +11,35 @@ export type EventStreamItem<E extends NostrEventLike = NostrEventLike> =
 	| { type: 'event'; event: E }
 	| { type: 'caught-up'; info: CaughtUpInfo }
 
+/** One relay that told the subscriber it will not serve this subscription. */
+export interface CaughtUpRefusal {
+	/** The relay URL, as the source named it. */
+	relay: string
+	/** The relay's own reason, verbatim (`CLOSED`'s reason, or the refusal `ERROR`/`NOTICE` text). */
+	reason: string
+}
+
 /** Which relays reached EOSE before the caught-up marker, and which did not. */
 export interface CaughtUpInfo {
 	eose: string[]
 	pending: string[]
 	/** True when the stream was a bounded read (the relay source closed after the marker). */
 	complete: boolean
+	/**
+	 * Relays that **answered with a refusal**: a `CLOSED` naming a filter error, a
+	 * relay-refusal `ERROR`, or a refusal `NOTICE` ("bad req: … unindexed tag
+	 * filter"). A refusal is a settled fact about that relay — it is not silence,
+	 * and a consumer may stop waiting on it. Optional: a source that cannot tell a
+	 * refusal from a timeout omits it, and an absent list means "none reported".
+	 */
+	refused?: CaughtUpRefusal[]
+	/**
+	 * Relays whose **connection failed or never established** — after the source's
+	 * own retries, or by the source's connection-state probe at its settle bound.
+	 * A settled fact like `refused`; the relay is unreachable for this read rather
+	 * than silent. Optional, on the same terms as `refused`.
+	 */
+	unreachable?: string[]
 }
 
 export interface EventStreamOptions {

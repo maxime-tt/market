@@ -28,6 +28,7 @@ export {
 } from './read'
 export type {
 	CaughtUpInfo,
+	CaughtUpRefusal,
 	EventReadContext,
 	EventReadContextParts,
 	EventStreamItem,
