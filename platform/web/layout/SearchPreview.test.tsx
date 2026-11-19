@@ -27,7 +27,7 @@
 
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router'
-import { createElement, useState } from 'react'
+import { createElement, useState, type ReactElement } from 'react'
 import type { Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BrowseProduct } from '@platform/web/browse/browseQuery'
