@@ -12,10 +12,21 @@ import {
 	resolveAuthor,
 	shortPubkey,
 	validateDraft,
+	type BindingDraft,
 } from './routeAuthoring'
 
 const AUTHOR = 'a'.repeat(64)
 const ADMIN = 'b'.repeat(64)
+
+const draft = (over: Partial<BindingDraft> = {}): BindingDraft => ({
+	path: 'shop',
+	author: AUTHOR,
+	d: 'storefront-page',
+	showInNav: false,
+	navLabel: '',
+	navOrder: '',
+	...over,
+})
 
 const binding = (over: Partial<Binding> = {}): Binding => ({
 	kind: 'admin',
@@ -36,9 +47,20 @@ describe('the authoring view model', () => {
 			updatedAtLabel: '2027-01-15',
 			updatedByLabel: `${ADMIN.slice(0, 8)}…${ADMIN.slice(-4)}`,
 			warning: null,
+			navLabel: null,
+			navOrder: null,
 			author: AUTHOR,
 			d: 'storefront-page',
 		})
+	})
+
+	test('a pinned binding carries its nav label and order, and a malformed pin reads as not pinned', () => {
+		const pinned = describeBinding(binding({ nav: { label: 'Shop', order: 2 } }))
+		expect(pinned).toMatchObject({ navLabel: 'Shop', navOrder: 2 })
+
+		// The table is read over the wire; `fetchRouteTable` does not validate it.
+		const malformed = describeBinding(binding({ nav: { label: '', order: 1.5 } }))
+		expect(malformed).toMatchObject({ navLabel: null, navOrder: null })
 	})
 
 	test('rows are sorted by path so the list does not reorder itself', () => {
@@ -61,7 +83,23 @@ describe('the authoring view model', () => {
 	})
 
 	test('a row can seed the edit form', () => {
-		expect(draftFromRow(describeBinding(binding()))).toEqual({ path: 'shop', author: AUTHOR, d: 'storefront-page' })
+		expect(draftFromRow(describeBinding(binding()))).toEqual({
+			path: 'shop',
+			author: AUTHOR,
+			d: 'storefront-page',
+			showInNav: false,
+			navLabel: '',
+			navOrder: '',
+		})
+	})
+
+	test('a pinned row seeds the edit form with the pin, and an unpinned row leaves it off', () => {
+		expect(draftFromRow(describeBinding(binding({ nav: { label: 'Shop', order: 3 } })))).toMatchObject({
+			showInNav: true,
+			navLabel: 'Shop',
+			navOrder: '3',
+		})
+		expect(draftFromRow(describeBinding(binding({ nav: { label: 'Shop', order: 0 } }))).showInNav).toBe(true)
 	})
 
 	test('the author may be an npub or a hex key; both become the stored hex form', () => {
@@ -81,27 +119,26 @@ describe('the authoring view model', () => {
 	})
 
 	test('the path rules match the ones the server will enforce', () => {
-		const draft = { path: 'SHOP', author: AUTHOR, d: 'storefront-page' }
-		expect(validateDraft(draft, []).errors[0]).toContain('name grammar')
-		expect(validateDraft({ ...draft, path: 'api' }, []).errors[0]).toContain('URL space')
-		expect(validateDraft({ ...draft, path: 'shop/featured' }, []).errors[0]).toContain('top-level name')
-		expect(validateDraft({ ...draft, path: ' shop' }, []).errors[0]).toContain('may not begin or end with a space')
+		expect(validateDraft(draft({ path: 'SHOP' }), []).errors[0]).toContain('name grammar')
+		expect(validateDraft(draft({ path: 'api' }), []).errors[0]).toContain('URL space')
+		expect(validateDraft(draft({ path: 'shop/featured' }), []).errors[0]).toContain('top-level name')
+		expect(validateDraft(draft({ path: ' shop' }), []).errors[0]).toContain('may not begin or end with a space')
 	})
 
 	test('a path that is already bound is refused, and says which row to edit', () => {
-		const errors = validateDraft({ path: 'shop', author: AUTHOR, d: 'storefront-page' }, ['shop']).errors
+		const errors = validateDraft(draft({ path: 'shop' }), ['shop']).errors
 		expect(errors[0]).toContain('already bound')
 		// Retargeting that same binding is not a collision with itself.
-		expect(validateDraft({ path: 'shop', author: AUTHOR, d: 'home' }, ['shop'], 'shop').intent).not.toBeNull()
+		expect(validateDraft(draft({ path: 'shop', d: 'home' }), ['shop'], 'shop').intent).not.toBeNull()
 	})
 
 	test('the d tag is required and bounded', () => {
-		expect(validateDraft({ path: 'shop', author: AUTHOR, d: '  ' }, []).errors[0]).toContain('Choose the page this path should serve')
-		expect(validateDraft({ path: 'shop', author: AUTHOR, d: 'x'.repeat(513) }, []).errors[0]).toContain('cannot be used')
+		expect(validateDraft(draft({ d: '  ' }), []).errors[0]).toContain('Choose the page this path should serve')
+		expect(validateDraft(draft({ d: 'x'.repeat(513) }), []).errors[0]).toContain('cannot be used')
 	})
 
 	test('a valid draft produces the intent the server parses, with the tag as its address', () => {
-		const { intent } = validateDraft({ path: 'shop', author: nip19.npubEncode(AUTHOR), d: 'storefront-page' }, [])
+		const { intent } = validateDraft(draft({ author: nip19.npubEncode(AUTHOR) }), [])
 		expect(intent).toEqual({
 			version: 1,
 			action: 'set',
@@ -111,6 +148,56 @@ describe('the authoring view model', () => {
 		const parsed = parseRouteIntent(routeIntentContent(intent!), intent!.path)
 		expect(parsed.error).toBeNull()
 		expect(parsed.intent?.target).toEqual({ type: 'page', author: AUTHOR, d: 'storefront-page' })
+	})
+
+	test('an unpinned draft carries no nav, even if a stale label and order are left in the form', () => {
+		const { intent } = validateDraft(draft({ navLabel: 'Shop', navOrder: '2' }), [])
+		expect(intent).toEqual({
+			version: 1,
+			action: 'set',
+			path: 'shop',
+			target: { type: 'page', author: AUTHOR, d: 'storefront-page' },
+		})
+		expect(intent).not.toHaveProperty('nav')
+	})
+
+	test('a pinned draft carries the nav pair, and the signed document round-trips it', () => {
+		const { intent } = validateDraft(draft({ showInNav: true, navLabel: '  Shop  ', navOrder: ' 2 ' }), [])
+		expect(intent).toEqual({
+			version: 1,
+			action: 'set',
+			path: 'shop',
+			target: { type: 'page', author: AUTHOR, d: 'storefront-page' },
+			nav: { label: 'Shop', order: 2 },
+		})
+		const parsed = parseRouteIntent(routeIntentContent(intent!), intent!.path)
+		expect(parsed.error).toBeNull()
+		expect(parsed.intent?.nav).toEqual({ label: 'Shop', order: 2 })
+	})
+
+	test('a pinned draft without a label names the label field', () => {
+		const { errors, intent } = validateDraft(draft({ showInNav: true, navLabel: '   ', navOrder: '1' }), [])
+		expect(intent).toBeNull()
+		expect(errors).toContain('Enter a nav label.')
+		expect(errors.join(' ')).not.toContain('Nav order')
+	})
+
+	test('a pinned draft whose order is not a whole number names the order field', () => {
+		for (const navOrder of ['', '1.5', 'one', '2e3', '  ']) {
+			const { errors, intent } = validateDraft(draft({ showInNav: true, navLabel: 'Shop', navOrder }), [])
+			expect(intent).toBeNull()
+			expect(errors).toEqual(['Nav order must be a whole number.'])
+		}
+		// A negative or zero order is still an integer the AppBar can sort by.
+		expect(validateDraft(draft({ showInNav: true, navLabel: 'Shop', navOrder: '-1' }), []).intent?.nav).toEqual({
+			label: 'Shop',
+			order: -1,
+		})
+	})
+
+	test('a nav label longer than the AppBar allows names the label field', () => {
+		const errors = validateDraft(draft({ showInNav: true, navLabel: 'x'.repeat(25), navOrder: '1' }), []).errors
+		expect(errors).toEqual(['A nav label is at most 24 characters.'])
 	})
 
 	test('a removal intent names only the path', () => {

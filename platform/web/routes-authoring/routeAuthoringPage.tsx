@@ -24,7 +24,7 @@ import { useAmIAdmin } from '@platform/web/app-settings/appSettingsQuery'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { PagePickerField } from './pageAuthoringPage'
-import { describeBindings, removeIntent, validateDraft, type BindingRow } from './routeAuthoring'
+import { describeBindings, draftFromRow, removeIntent, validateDraft, type BindingRow } from './routeAuthoring'
 import { usePublishRouteIntent, useRouteTable } from './routeTableQuery'
 
 /**
@@ -174,9 +174,17 @@ export function RouteCreatePage() {
 
 	const [path, setPath] = useState('')
 	const [page, setPage] = useState({ author: '', d: '' })
+	const [showInNav, setShowInNav] = useState(false)
+	const [navLabel, setNavLabel] = useState('')
+	const [navOrder, setNavOrder] = useState('')
 	const [errors, setErrors] = useState<string[]>([])
 
 	const boundPaths = useMemo(() => (table.data?.bindings ?? []).map((binding) => binding.path), [table.data])
+
+	const draft = useMemo(
+		() => ({ path, author: page.author, d: page.d, showInNav, navLabel, navOrder }),
+		[path, page, showInNav, navLabel, navOrder],
+	)
 
 	// The compile-in collision, before the write rather than only after it. The
 	// server's own warning still arrives with the result; this is the notice the
@@ -188,7 +196,7 @@ export function RouteCreatePage() {
 	}, [path])
 
 	const submit = useCallback(async () => {
-		const validation = validateDraft({ path, author: page.author, d: page.d }, boundPaths)
+		const validation = validateDraft(draft, boundPaths)
 		if (!validation.intent) {
 			setErrors(validation.errors)
 			return
@@ -205,7 +213,7 @@ export function RouteCreatePage() {
 			setErrors([message])
 			toast.error(message)
 		}
-	}, [boundPaths, navigate, page, path, publish])
+	}, [boundPaths, draft, navigate, publish])
 
 	if (isLoadingAdmin) return <SettingsLoadingSkeleton />
 
@@ -238,6 +246,14 @@ export function RouteCreatePage() {
 							disabled={publish.isPending}
 						/>
 					}
+					nav={{
+						showInNav,
+						navLabel,
+						navOrder,
+						onShowInNavChange: setShowInNav,
+						onNavLabelChange: setNavLabel,
+						onNavOrderChange: setNavOrder,
+					}}
 					errors={errors}
 					notice={notice}
 					pending={publish.isPending}
@@ -268,19 +284,32 @@ export function RouteEditPage({ path }: { path: string }) {
 	const row = useMemo(() => rows.find((candidate) => candidate.path === path) ?? null, [rows, path])
 
 	const [page, setPage] = useState({ author: '', d: '' })
+	const [showInNav, setShowInNav] = useState(false)
+	const [navLabel, setNavLabel] = useState('')
+	const [navOrder, setNavOrder] = useState('')
 	const [errors, setErrors] = useState<string[]>([])
-	// Seed the picker from the binding once per path. Re-seeding on every render
-	// would fight the admin's own selection while the table query re-settles.
+	// Seed the picker and the pin from the binding once per path. Re-seeding on
+	// every render would fight the admin's own selection while the table query
+	// re-settles — and an edit that cleared the pin must stay cleared.
 	const seededFor = useRef<string | null>(null)
 	useEffect(() => {
 		if (!row || seededFor.current === row.path) return
 		seededFor.current = row.path
-		setPage({ author: row.author, d: row.d })
+		const seed = draftFromRow(row)
+		setPage({ author: seed.author, d: seed.d })
+		setShowInNav(seed.showInNav)
+		setNavLabel(seed.navLabel)
+		setNavOrder(seed.navOrder)
 	}, [row])
+
+	const draft = useMemo(
+		() => ({ path, author: page.author, d: page.d, showInNav, navLabel, navOrder }),
+		[path, page, showInNav, navLabel, navOrder],
+	)
 
 	const submit = useCallback(async () => {
 		const validation = validateDraft(
-			{ path, author: page.author, d: page.d },
+			draft,
 			rows.map((candidate) => candidate.path),
 			path,
 		)
@@ -298,7 +327,7 @@ export function RouteEditPage({ path }: { path: string }) {
 			setErrors([message])
 			toast.error(message)
 		}
-	}, [navigate, page, path, publish, rows])
+	}, [draft, navigate, path, publish, rows])
 
 	if (isLoadingAdmin) return <SettingsLoadingSkeleton />
 
@@ -347,6 +376,14 @@ export function RouteEditPage({ path }: { path: string }) {
 							disabled={publish.isPending}
 						/>
 					}
+					nav={{
+						showInNav,
+						navLabel,
+						navOrder,
+						onShowInNavChange: setShowInNav,
+						onNavLabelChange: setNavLabel,
+						onNavOrderChange: setNavOrder,
+					}}
 					errors={errors}
 					pending={publish.isPending}
 					onSubmit={() => void submit()}
