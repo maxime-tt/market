@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { chooseHomePage, instanceHomeAuthors, LEGACY_HOME_PUBKEY } from './instanceHomePage'
+import { chooseHomePage, homePageLoading, instanceHomeAuthors, LEGACY_HOME_PUBKEY } from './instanceHomePage'
 import type { StorefrontPageResult } from './storefrontQuery'
 
 const APP = 'a'.repeat(64)
@@ -42,5 +42,27 @@ describe('chooseHomePage', () => {
 
 	test('a switched-off page does not count', () => {
 		expect(chooseHomePage([result(OWNER, 100, false)], undefined)).toBeNull()
+	})
+})
+
+describe('homePageLoading', () => {
+	const base = { configReady: true, adminsLoading: false, ownLoading: [false, false], ownChoice: false, legacyLoading: false }
+
+	test('waits for config and the admin list before deciding', () => {
+		expect(homePageLoading({ ...base, configReady: false })).toBe(true)
+		expect(homePageLoading({ ...base, adminsLoading: true })).toBe(true)
+	})
+
+	test('waits while any own author is still answering', () => {
+		expect(homePageLoading({ ...base, ownLoading: [false, true] })).toBe(true)
+	})
+
+	test('an own page decides it without waiting for the slow legacy read', () => {
+		expect(homePageLoading({ ...base, ownChoice: true, legacyLoading: true })).toBe(false)
+	})
+
+	test('with no own page, waits for the legacy fallback', () => {
+		expect(homePageLoading({ ...base, legacyLoading: true })).toBe(true)
+		expect(homePageLoading(base)).toBe(false)
 	})
 })
