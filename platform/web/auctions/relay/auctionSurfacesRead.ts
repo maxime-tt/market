@@ -407,6 +407,17 @@ export async function collectArenaSurfacesRead(
 		})
 	}
 
+	/** Project with the batch's own health and publish it — the live state, not a hardcoded `loading`. */
+	const publish = (health: ArenaReadHealth): void => {
+		refresh(health)
+		options.onProgress?.({
+			snapshot,
+			status: arenaSurfaceStatus(health),
+			relayHealth: arenaSurfaceRelayCounts(health),
+			chainClock,
+		})
+	}
+
 	try {
 		for await (const item of read.events({ signal: options.signal })) {
 			if (item.type === 'events') {
@@ -415,17 +426,12 @@ export async function collectArenaSurfacesRead(
 					if (prior === undefined) byId.set(event.id, event)
 					else for (const relay of event.relays) if (!prior.relays.includes(relay)) prior.relays.push(relay)
 				}
-				refresh(snapshot.health)
-				options.onProgress?.({
-					snapshot,
-					status: 'loading',
-					relayHealth: arenaSurfaceRelayCounts(snapshot.health),
-					chainClock,
-				})
+				publish(item.health)
 				continue
 			}
 			if (item.type === 'refused') {
 				refusals.push(...item.refusals)
+				publish(item.health)
 				continue
 			}
 			refresh(item.health)

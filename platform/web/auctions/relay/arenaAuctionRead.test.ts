@@ -355,11 +355,12 @@ function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
 	})
 }
 
-function readFrom(relays: Record<string, FakeRelayOptions>, deadlineMs = 5000): ArenaAuctionRead {
+function readFrom(relays: Record<string, FakeRelayOptions>, deadlineMs = 5000, quietMs?: number): ArenaAuctionRead {
 	return createArenaAuctionRead({
 		relays: Object.keys(relays),
 		openRelay: (url) => fakeRelay(url, relays[url] ?? {}),
 		deadlineMs,
+		quietMs,
 	})
 }
 
@@ -367,6 +368,25 @@ async function collect(stream: AsyncIterable<ArenaReadStreamItem>): Promise<Aren
 	const items: ArenaReadStreamItem[] = []
 	for await (const item of stream) items.push(item)
 	return items
+}
+
+/**
+ * Collect a live read to its caught-up marker and close it — exactly what a page
+ * surface does. Needed for the quiet-bound cases: a relay that never speaks and
+ * never ends leaves the read open past its marker, so the iteration must be
+ * ended by the reader.
+ */
+async function collectToCaughtUp(
+	stream: AsyncIterable<ArenaReadStreamItem>,
+	read: ArenaAuctionRead,
+): Promise<{ items: ArenaReadStreamItem[]; elapsedMs: number }> {
+	const started = Date.now()
+	const items: ArenaReadStreamItem[] = []
+	for await (const item of stream) {
+		items.push(item)
+		if (item.type === 'caught-up') read.close()
+	}
+	return { items, elapsedMs: Date.now() - started }
 }
 
 // =========================================================================
@@ -869,6 +889,78 @@ describe('resilience', () => {
 		expect(caughtUp.health.relays[0].status).toBe('ok')
 	})
 
+	test('a subscription that speaks nothing stops holding the read at the quiet bound', async () => {
+		// The plan's I1: one relay that never speaks must not hold the whole read to
+		// the 8 s deadline. Measured live 2026-11-19, before this: the lot read's
+		// caught-up came at 8 006–8 025 ms with its data delivered at 89–103 ms.
+		const read = readFrom(
+			{ 'wss://app': { events: [createEvent({ id: 'root-1' })] }, 'wss://mute': { hang: true } },
+			5000,
+			40,
+		)
+		const { items, elapsedMs } = await collectToCaughtUp(read.events(), read)
+		const caughtUp = items.find((item) => item.type === 'caught-up')
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+
+		expect(elapsedMs).toBeLessThan(1000)
+		expect(caughtUp.health.reading).toEqual([])
+		expect(caughtUp.health.answered).toEqual(['wss://app'])
+		// A genuinely silent relay inside the deadline is `incomplete` — named, never
+		// `error`, and never silently `settled`.
+		expect(caughtUp.health.pending).toEqual(['wss://mute'])
+		expect(caughtUp.health.noRelaysReachable).toBe(false)
+		expect(caughtUp.health.failed).toEqual([])
+		expect(caughtUp.health.relays.find((relay) => relay.url === 'wss://mute')?.status).toBe('timeout')
+		expect(caughtUp.health.relays.find((relay) => relay.url === 'wss://app')?.status).toBe('ok')
+	})
+
+	test('a follow-up REQ whose relay never answers does not hold the read either', async () => {
+		// The second REQ a lot read opens once the create arrives. Its relay already
+		// answered the base REQ, so a silent follow-up must settle on its own quiet
+		// bound and must not re-open the relay's accounting.
+		const seller = SELLER_A
+		const d = 'lot-1'
+		const baseFilters = arenaLotFilters(seller, d)
+		const baseKey = JSON.stringify(baseFilters)
+		const opened: string[] = []
+		const read = createArenaAuctionRead({
+			relays: ['wss://app'],
+			deadlineMs: 5000,
+			quietMs: 40,
+			filters: baseFilters,
+			followUpFilters: arenaLotFollowUpFilters(seller, d),
+			openRelay: () => (filters: readonly EventFilter[], opts: ArenaRelayOpenOptions) => ({
+				async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+					const key = JSON.stringify(filters)
+					opened.push(key)
+					if (key === baseKey) {
+						yield { type: 'event', event: createEvent({ id: 'root-1' }) } as EventStreamItem<NostrEventLike>
+						return
+					}
+					// The follow-up REQ: silence, forever.
+					if (!opts.signal?.aborted) {
+						const { promise, resolve } = Promise.withResolvers<void>()
+						opts.signal?.addEventListener('abort', () => resolve())
+						await promise
+					}
+				},
+			}),
+		})
+
+		const { items, elapsedMs } = await collectToCaughtUp(read.events(), read)
+		const caughtUp = items.find((item) => item.type === 'caught-up')
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+
+		expect(opened).toHaveLength(2)
+		expect(opened[1]).not.toBe(baseKey)
+		expect(elapsedMs).toBeLessThan(1000)
+		// The relay answered on the base REQ: the silent follow-up does not undo it.
+		expect(caughtUp.health.answered).toEqual(['wss://app'])
+		expect(caughtUp.health.pending).toEqual([])
+		expect(caughtUp.health.reading).toEqual([])
+		expect(caughtUp.health.relays[0].status).toBe('ok')
+	})
+
 	test('a read that received events does not report no-relays', async () => {
 		// The relay delivered, then went quiet: no EOSE, no further answer, and the
 		// read's deadline is what ends it. Recording it `timeout` made the health say
@@ -907,6 +999,28 @@ describe('the live stream', () => {
 		expect(events.length).toBeGreaterThan(0)
 		expect(caughtUp).toHaveLength(1)
 		expect(items.filter((i) => i.type === 'caught-up')).toHaveLength(1)
+	})
+
+	test('an events batch carries the live health as of that batch', async () => {
+		// The whole point of the live health: mid-read, a consumer must be able to
+		// say what answered and what is still being waited on — never a hardcoded
+		// word beside a health that has not seen a relay.
+		const read = readFrom(
+			{ 'wss://app': { events: [createEvent({ id: 'root-1' })], hang: true }, 'wss://mute': { hang: true } },
+			5000,
+			200,
+		)
+		const { items } = await collectToCaughtUp(read.events(), read)
+		const batch = items.find((item) => item.type === 'events')
+		if (batch?.type !== 'events') throw new Error('no events batch')
+
+		expect(batch.health.answered).toEqual(['wss://app'])
+		expect(batch.health.reading).toEqual(['wss://mute'])
+		expect(batch.health.pending).toEqual(['wss://mute'])
+		expect(batch.health.noRelaysReachable).toBe(false)
+		expect(batch.health.eose).toEqual([])
+		expect(batch.health.relays.find((relay) => relay.url === 'wss://mute')?.status).toBe('reading')
+		expect(batch.health.relays.find((relay) => relay.url === 'wss://app')?.events).toBe(1)
 	})
 
 	test('close() ends an open read that would otherwise wait forever', async () => {

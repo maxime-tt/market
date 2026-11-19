@@ -73,11 +73,25 @@ export interface AuctionListData {
 /**
  * The read's health as the one word the block renders.
  *
- * Order matters: `aborted` outranks everything (the result is partial by
- * construction), then "nobody answered", then any relay still pending.
+ * Order matters, and each branch is a different claim:
+ *
+ * 1. `aborted` outranks everything — the result is partial by construction;
+ * 2. `noRelaysReachable` — nobody answered **and nobody is still being read**;
+ * 3. `reading` non-empty — the read is still running: `loading` is the only word
+ *    whose sentence is true while it runs ("anything shown is what arrived so
+ *    far"). `incomplete` says *the read stopped*, which is a claim about a
+ *    finished read, so it is reserved for one;
+ * 4. any relay still unanswered on a read that is over — `incomplete`;
+ * 5. otherwise every relay answered — `settled`, the only state where an empty
+ *    result is a verdict.
  */
 export function auctionListStatus(health: ArenaReadHealth): AuctionListStatus {
 	if (health.aborted) return 'incomplete'
+	// `loading` is the one case where nothing has arrived yet: no relay has
+	// answered and at least one is still being read. Once a relay answers the
+	// page is reading a partial picture, which is `incomplete` — a different
+	// claim, and the one the plan's I2 asks for.
+	if (health.answered.length === 0 && health.reading.length > 0) return 'loading'
 	if (health.noRelaysReachable) return 'no-relays'
 	if (health.pending.length > 0) return 'incomplete'
 	return 'settled'
@@ -175,6 +189,11 @@ const EMPTY_STATE: AuctionListReadState = {
  * Ends the subscription: this is a page section, not a live feed, and the read
  * module's live read keeps the dead-relay distinction that `snapshot()` loses.
  * Never throws for network reasons — a failed relay is health, not an error.
+ *
+ * Every progress batch carries the **read's own health as of that batch** (the
+ * `events`/`refused` items carry it), so the state published mid-read says what
+ * has answered and what is still being waited on instead of a hardcoded
+ * `loading` beside a health that never saw a relay.
  */
 export async function collectAuctionListRead(
 	read: ReturnType<typeof createWebArenaAuctionRead>,
@@ -184,6 +203,11 @@ export async function collectAuctionListRead(
 	const refusals: ArenaRefusedEvent[] = []
 	let snapshot = projectArenaEvents([])
 
+	const publish = (health: ArenaReadHealth): void => {
+		snapshot = projectArenaEvents([...byId.values()], health, refusals)
+		options.onProgress?.({ snapshot, status: auctionListStatus(health), relayHealth: relayCounts(health) })
+	}
+
 	try {
 		for await (const item of read.events({ signal: options.signal })) {
 			if (item.type === 'events') {
@@ -192,12 +216,12 @@ export async function collectAuctionListRead(
 					if (prior === undefined) byId.set(event.id, event)
 					else for (const relay of event.relays) if (!prior.relays.includes(relay)) prior.relays.push(relay)
 				}
-				snapshot = projectArenaEvents([...byId.values()], snapshot.health, refusals)
-				options.onProgress?.({ snapshot, status: 'loading', relayHealth: relayCounts(snapshot.health) })
+				publish(item.health)
 				continue
 			}
 			if (item.type === 'refused') {
 				refusals.push(...item.refusals)
+				publish(item.health)
 				continue
 			}
 			snapshot = projectArenaEvents([...byId.values()], item.health, refusals)

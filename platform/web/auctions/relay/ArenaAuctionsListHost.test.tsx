@@ -93,6 +93,7 @@ function healthOf(over: Partial<ArenaReadHealth> = {}): ArenaReadHealth {
 		eose: [],
 		answered: [],
 		pending: [],
+		reading: [],
 		failed: [],
 		noRelaysReachable: false,
 		empty: true,
