@@ -104,10 +104,8 @@
 
 .cat__chips {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 8px;
-	overflow-x: auto;
-	scrollbar-width: none;
-	max-width: 100%;
 }
 
 .cat__chip {
