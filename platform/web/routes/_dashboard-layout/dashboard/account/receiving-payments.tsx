@@ -338,8 +338,9 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 		}
 	}, [isOpen])
 
-	// Get wallet detail for on-chain extended public keys
-	const walletDetailQuery = useWalletDetail(user?.pubkey || '', paymentDetail?.id || '')
+	// Get wallet detail for on-chain extended public keys. The record is scoped by the payment
+	// detail's `d` tag (its coordinate), not by the event id.
+	const walletDetailQuery = useWalletDetail(user?.pubkey || '', paymentDetail?.dTag || '')
 
 	const resetForm = useCallback(() => {
 		setEditedPaymentDetail({
