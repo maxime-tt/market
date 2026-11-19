@@ -28,10 +28,9 @@
 
 .theme-new {
 	/* ── Font tokens (semantic rename per ADR §1a) ─────────────────────── */
-	/* Phase 0: the warm-editorial fonts are loaded from Google Fonts in
-	   platform/web/app/index.html and widget-book/index.html (DM Sans ≤4
-	   weights, Fraunces ≤4 weights, display=swap). The generic family stays
-	   so an offline/CSP'd host still renders. */
+	/* The warm-editorial fonts are bundled with the app (styles/fonts.css),
+	   so no request leaves for a font host. The generic family stays as the
+	   fallback while they load. */
 	--font-body: 'DM Sans', sans-serif;
 	--font-header: 'Fraunces', serif;
 	--font-theylive: 'theylive', sans-serif;

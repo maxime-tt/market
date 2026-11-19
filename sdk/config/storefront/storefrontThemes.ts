@@ -32,8 +32,9 @@ type CSSProperties = Record<string, string>
  * (https://github.com/ChiefmonkeyArt/plebeian-arena-auctions, web/src/template.css):
  * its dark custom properties (`--bg`, `--surface`, `--surface-2`, `--ink`,
  * `--muted`, `--line`, `--pink`, `--lime`, `--orange`) converted to oklch, and its
- * light layout-A colours as the Daylight palette. Fonts are a display string
- * here, as for every layout; the engine does not load per-theme fonts.
+ * light layout-A colours as the Daylight palette. `fonts` is a display string,
+ * as for every layout; Arena's three families are bundled (styles/fonts.css)
+ * and mapped onto the font roles in ui/storefront/storefront-theme.css.
  *
  * Security: nothing in this file is author-controlled. A published page names a
  * *layout id* and a *palette key*, both of which are closed sets declared in
