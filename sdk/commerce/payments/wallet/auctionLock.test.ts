@@ -37,6 +37,7 @@ import type {
 	AuctionReceiveHost,
 	LockAuctionBidFundsParams,
 } from '@sdk/commerce/payments/wallet/auctionFunds'
+import { createCocoWalletSource, type CashuProofRepository, type StoredProof } from '@sdk/commerce/payments/wallet/cashuWalletSource'
 import type { PendingToken } from '@sdk/commerce/payments/wallet/types'
 
 // ---------- localStorage polyfill (the inherited modules read it) ----------
@@ -98,7 +99,7 @@ interface SendCall {
  * secret. cashu-ts v5 retired `Wallet.swap`; the lock now mints its fresh P2PK outputs through
  * `Wallet.send(amount, proofs, config, { send: { type: 'p2pk', options } })`.
  */
-const makeMint = (options: { returnPubkey?: string; sendError?: Error; dropDleq?: boolean } = {}) => {
+const makeMint = (options: { returnPubkey?: string; sendError?: Error; dropDleq?: boolean; keep?: Proof[] } = {}) => {
 	const sendCalls: SendCall[] = []
 	const cashuWallet = {
 		send: async (
@@ -119,7 +120,7 @@ const makeMint = (options: { returnPubkey?: string; sendError?: Error; dropDleq?
 				C: '02' + '7'.repeat(64),
 				...(options.dropDleq ? {} : { dleq: { e: 'aa', s: 'bb', r: 'cc' } }),
 			}
-			return { send: [locked], keep: [] }
+			return { send: [locked], keep: options.keep ?? [] }
 		},
 	} as unknown as Wallet
 	const mint: AuctionFundsMintAccess = {
@@ -514,5 +515,38 @@ describe('loadAuctionMintKeysets', () => {
 			},
 		}
 		await expect(loadAuctionMintKeysets(mint, MINT)).resolves.toEqual([])
+	})
+})
+
+// ---------- lock: the coco write boundary ----------
+
+describe('lockAuctionBidFunds — the coco write boundary', () => {
+	test('the lock reconciles its change through the boundary, stamped, so it counts toward the balance', async () => {
+		const change: Proof = { id: KEYSET_ID, amount: Amount.from(400), secret: 'change-secret', C: '02' + '7'.repeat(64) }
+		const { mint } = makeMint({ keep: [change] })
+		const saved: Array<{ mintUrl: string; proofs: StoredProof[] }> = []
+		const repository: CashuProofRepository = {
+			saveProofs: async (mintUrl, proofs) => {
+				saved.push({ mintUrl, proofs })
+			},
+			// The wallet the lock spends from holds one 1,000-sat input, as coco would report it.
+			getReadyProofs: async () => [{ ...inputProof(1_000), unit: 'sat', state: 'ready' }],
+			deleteProofs: async () => {},
+		}
+		const wallet = createCocoWalletSource({ getMints: () => [MINT], proofs: repository })
+		await wallet.hydrate()
+		const { host } = makeLockHost({
+			wallet,
+			mint,
+			balances: { totalBalance: 1_000, mintBalances: { [MINT]: 1_000 } },
+			defaultMint: MINT,
+		})
+
+		await createAuctionLock(host).lockAuctionBidFunds(baseParams({ amount: 500 }))
+
+		// The change proof crossed the boundary stamped — no caller had to remember its unit.
+		expect(saved).toEqual([{ mintUrl: MINT, proofs: [{ ...change, unit: 'sat', state: 'ready' }] }])
+		// The spent input is gone and the stamped change is spendable, so it counts.
+		expect(wallet.state.getProofs({ mint: MINT })).toEqual([{ ...change, unit: 'sat', state: 'ready' }])
 	})
 })

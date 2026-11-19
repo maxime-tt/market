@@ -110,6 +110,9 @@ export interface WalletDevAuctionBidResult {
 
 const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')
 
+/** The wallet's unit. coco defaults to `sat`; the app is sat-only, so it is named once here. */
+const WALLET_UNIT = 'sat'
+
 const getDevTestMintCandidates = (preferredMintUrl?: string): string[] => {
 	const normalizedPreferredMint = preferredMintUrl ? normalizeMintUrl(preferredMintUrl) : ''
 	const preferred = normalizedPreferredMint && WALLET_DEV_TEST_MINTS.includes(normalizedPreferredMint) ? [normalizedPreferredMint] : []
@@ -847,13 +850,16 @@ export const walletOps = {
 				const { cashuWallet, keysetId } = await createCashuWalletForMint(targetMint)
 				// cashu-ts v5: create the BOLT11 quote on the mint client, then mint from it
 				// through the wallet's method-specific helper.
-				const quote = await cashuWallet.mint.createMintQuoteBolt11({ amount: mintAmount, unit: 'sat' })
+				const quote = await cashuWallet.mint.createMintQuoteBolt11({ amount: mintAmount, unit: WALLET_UNIT })
 				const proofs = await cashuWallet.mintProofsBolt11(mintAmount, quote, keysetId ? { keysetId } : undefined)
 
 				if (!proofs.length) {
 					throw new Error('Mint returned no proofs')
 				}
 
+				// cashu-ts v5 proofs carry neither `unit` nor `state`; the store's write boundary
+				// (`cashuWalletSource.state.update` → coco `proofRepository`) stamps both, so no
+				// caller has to. See `stampProof` in `@sdk/commerce/payments/wallet/cashuWalletSource`.
 				await wallet.state.update({
 					store: proofs,
 					mint: targetMint,
