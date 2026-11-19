@@ -171,3 +171,58 @@ describe('validateStorefrontThemeSelection — the pairing the schema cannot che
 		expect(validateStorefrontThemeSelection({ theme: 'not-a-layout', palette: 'holo-night' })).toHaveLength(1)
 	})
 })
+
+/**
+ * Arena is adapted from the Plebeian Auctions Arena C layout. These pin what
+ * makes it that theme rather than another dark one, and check that every
+ * text-on-surface pair it ships reads at WCAG AA (4.5:1).
+ */
+describe('arena theme', () => {
+	/** oklch → WCAG relative luminance, via linear sRGB (no gamma round-trip needed). */
+	function luminance(oklch: string): number {
+		const [L, C, h] = oklch.slice(6, -1).split(' ').map(Number)
+		const hr = (h * Math.PI) / 180
+		const a = C * Math.cos(hr)
+		const b = C * Math.sin(hr)
+		const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+		const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+		const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
+		const clamp = (x: number) => Math.max(0, Math.min(1, x))
+		const r = clamp(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s)
+		const g = clamp(-1.2684380041 * l + 2.6097574051 * m - 0.3413193965 * s)
+		const bl = clamp(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)
+		return 0.2126 * r + 0.7152 * g + 0.0722 * bl
+	}
+	function contrast(x: string, y: string): number {
+		const [hi, lo] = [luminance(x), luminance(y)].sort((p, q) => q - p)
+		return (hi + 0.05) / (lo + 0.05)
+	}
+
+	const arena = STOREFRONT_THEMES.arena
+
+	test('defaults to the dark Arena palette with its big panel corners', () => {
+		expect(arena.palettes[0].key).toBe('arena')
+		expect(arena.palettes[0].dark).toBe(true)
+		expect(arena.tune.radiusPx).toBe(22)
+	})
+
+	test('keeps the hot pink the auction app and the market share', () => {
+		expect(arena.tokens.primary).toBe('oklch(0.688 0.249 348.0)')
+	})
+
+	test('offers its own colourways plus the shared Brutalist and Neon pair', () => {
+		for (const key of ['arena', 'arena-lime', 'sats-orange', 'arena-day', 'brutal', 'neon'] as const) {
+			expect(isPaletteInTheme('arena', key), key).toBe(true)
+		}
+	})
+
+	test('every palette reads at WCAG AA for body text and buttons', () => {
+		for (const palette of arena.palettes) {
+			const t = palette.tokens
+			expect(contrast(t.foreground, t.background), `${palette.key} text`).toBeGreaterThanOrEqual(4.5)
+			expect(contrast(t.cardForeground, t.card), `${palette.key} card`).toBeGreaterThanOrEqual(4.5)
+			expect(contrast(t.primaryForeground, t.primary), `${palette.key} button`).toBeGreaterThanOrEqual(4.5)
+			expect(contrast(t.mutedForeground, t.background), `${palette.key} muted`).toBeGreaterThanOrEqual(4.5)
+		}
+	})
+})

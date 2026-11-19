@@ -125,5 +125,8 @@
 		"tailwindcss": "^4.3.0",
 		"tailwindcss-animate": "^1.0.7",
 		"ws": "^8.20.1"
+	},
+	"patchedDependencies": {
+		"@puckeditor/core@0.23.0": "patches/@puckeditor%2Fcore@0.23.0.patch"
 	}
 }

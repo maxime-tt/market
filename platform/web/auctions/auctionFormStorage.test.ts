@@ -50,6 +50,7 @@ const baseDraft: Omit<AuctionFormDraft, 'pubkey' | 'savedAt'> = {
 		title: 'Vintage Camera',
 		description: 'A beautiful vintage camera in great condition.',
 		imageUrl: 'https://example.com/camera.jpg',
+		media: [{ type: 'image', url: 'https://example.com/camera-back.jpg' }],
 		category: 'Photography',
 		name: 'Studio Nord',
 		startPrice: '5000',

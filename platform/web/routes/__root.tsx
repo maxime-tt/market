@@ -1,6 +1,6 @@
 import { AuctionWonModal } from '@platform/web/auctions/AuctionWonModal'
 import { FooterHost } from '@platform/web/layout/FooterHost'
-import { hidesAppHeader } from '@platform/web/layout/appChrome'
+import { hidesAppHeader, usesArenaChrome } from '@platform/web/layout/appChrome'
 import { Header } from '@platform/web/layout/Header'
 import { Pattern } from '@ui/shared/pattern'
 import { usePageViews } from '@platform/web/analytics/usePageViews'
@@ -86,6 +86,9 @@ function RootLayout() {
 	 * back, which is the first navigation.
 	 */
 	const served = servedPageForPath(location.pathname)
+	// Auction routes and the home / Browse surface render in the Arena chrome
+	// (dark header, footer and search); see `usesArenaChrome`.
+	const arena = usesArenaChrome(location.pathname)
 
 	// Setup renders without the app chrome.
 	if (isSetupPage) {
@@ -93,13 +96,13 @@ function RootLayout() {
 	}
 
 	return (
-		<div className="relative flex flex-col min-h-screen">
+		<div className={arena ? 'relative flex flex-col min-h-screen arena-chrome' : 'relative flex flex-col min-h-screen'}>
 			{!headerHidden && <Header />}
 
 			<main className="flex flex-col flex-grow">
 				{appPage ? <BoundPathPage payload={appPage} /> : served ? <ServedPage payload={served} /> : <Outlet />}
 			</main>
-			<Pattern pattern="page" />
+			{!arena && <Pattern pattern="page" />}
 			{!isDashboardPage && !isCheckoutPage && <FooterHost />}
 
 			<AuctionWonModal />

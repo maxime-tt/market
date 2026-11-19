@@ -3,6 +3,7 @@ import { Alert, AlertDescription } from '@ui/primitives/alert'
 import { Button } from '@ui/primitives/button'
 import { useBugReportsInfiniteScroll } from '@platform/web/app/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@platform/web/media/blossomUploadHost'
+import { getConfig } from '@platform/web/config/publicConfigQuery'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { getBugRelay, ndkActions } from '@platform/web/ndk/ndkStore'
 import { publishNostrEvent } from '@platform/web/ndkPublishContext'
@@ -92,7 +93,9 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 			// Use the merged blossom upload function
 			const result = await uploadFileToBlossom(file, {
-				preferredServer: BLOSSOM_SERVERS[0].url, // Use first available server
+				// The instance's own server when it runs one (no public fallback), else the first default.
+				preferredServer: getConfig()?.blossomServer ?? BLOSSOM_SERVERS[0].url,
+				exclusive: Boolean(getConfig()?.blossomServer),
 				onProgress: (progress: { loaded: number; total: number }) => {
 					const pct = Math.round((progress.loaded / progress.total) * 100)
 					console.log(`Upload progress: ${pct}%`)

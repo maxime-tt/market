@@ -147,3 +147,27 @@ describe('computeNdkConfig', () => {
 		expect(config.enableOutbox).toBe(false)
 	})
 })
+
+describe('appRelayWritesOnly', () => {
+	test('production writes go to the app relay only, reads keep the public set, outbox is off', () => {
+		const config = computeNdkConfig({
+			stage: 'production',
+			appRelay: 'wss://relay.reckless.example',
+			publicRelays: ['wss://public-a.example', 'wss://public-b.example'],
+			appRelayWritesOnly: true,
+		})
+		expect(config.writeRelayUrls).toEqual(['wss://relay.reckless.example'])
+		expect(config.explicitRelayUrls).toContain('wss://public-a.example')
+		expect(config.enableOutbox).toBe(false)
+	})
+
+	test('unset leaves production writes on the full read set', () => {
+		const config = computeNdkConfig({
+			stage: 'production',
+			appRelay: 'wss://relay.reckless.example',
+			publicRelays: ['wss://public-a.example'],
+		})
+		expect(config.writeRelayUrls).toEqual(config.explicitRelayUrls)
+		expect(config.enableOutbox).toBe(true)
+	})
+})

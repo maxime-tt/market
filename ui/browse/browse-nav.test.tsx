@@ -16,27 +16,35 @@ import { ProductArt, ProductSprite, MATERIAL_CSS, MATERIAL_CLASSES } from './art
 // BrowseNav
 // ---------------------------------------------------------------------------
 
+/**
+ * The operator-configured title. `wordmarkLabel` is required and has no default,
+ * so every render here passes it explicitly: the nav must never fall back to a
+ * hardcoded marketplace name.
+ */
+const WORDMARK = 'Test Market'
+
 describe('BrowseNav', () => {
 	test('renders wordmark link and Featured link', () => {
-		const markup = renderToStaticMarkup(createElement(BrowseNav, { active: true }))
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK, active: true }))
 		expect(markup).toContain('widget-browse-nav')
 		expect(markup).toContain('widget-browse-nav-wordmark')
 		expect(markup).toContain('widget-browse-nav-featured')
 	})
 
 	test('applies active status attribute', () => {
-		const markup = renderToStaticMarkup(createElement(BrowseNav, { active: true }))
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK, active: true }))
 		expect(markup).toContain('data-status="active"')
 	})
 
 	test('applies inactive status attribute', () => {
-		const markup = renderToStaticMarkup(createElement(BrowseNav, { active: false }))
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK, active: false }))
 		expect(markup).toContain('data-status="inactive"')
 	})
 
 	test('renders search slot', () => {
 		const markup = renderToStaticMarkup(
 			createElement(BrowseNav, {
+				wordmarkLabel: WORDMARK,
 				active: true,
 				searchSlot: createElement('div', { 'data-slot': 'test-search' }, 'search'),
 			}),
@@ -46,7 +54,9 @@ describe('BrowseNav', () => {
 	})
 
 	test('the search slot can shrink, so nothing in it can widen the page', () => {
-		const markup = renderToStaticMarkup(createElement(BrowseNav, { active: true, searchSlot: createElement('div', null, 'f') }))
+		const markup = renderToStaticMarkup(
+			createElement(BrowseNav, { wordmarkLabel: WORDMARK, active: true, searchSlot: createElement('div', null, 'f') }),
+		)
 
 		// A flex item's automatic minimum is its content's min-content width, so
 		// without `min-w-0` this slot refuses to shrink below the search field
@@ -60,7 +70,7 @@ describe('BrowseNav', () => {
 	})
 
 	test('the Featured link yields its width to the field on a phone', () => {
-		const markup = renderToStaticMarkup(createElement(BrowseNav, { active: true }))
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK, active: true }))
 		const featured = markup.slice(markup.indexOf('data-slot="featured-link"'), markup.indexOf('>Featured<'))
 		expect(featured).toContain('hidden sm:block')
 	})
@@ -68,6 +78,7 @@ describe('BrowseNav', () => {
 	test('renders account slot', () => {
 		const markup = renderToStaticMarkup(
 			createElement(BrowseNav, {
+				wordmarkLabel: WORDMARK,
 				active: true,
 				accountSlot: createElement('div', { 'data-slot': 'test-account' }, 'account'),
 			}),
@@ -76,7 +87,7 @@ describe('BrowseNav', () => {
 	})
 
 	test('accepts custom className', () => {
-		const markup = renderToStaticMarkup(createElement(BrowseNav, { className: 'custom-class' }))
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK, className: 'custom-class' }))
 		expect(markup).toContain('custom-class')
 	})
 
@@ -84,6 +95,7 @@ describe('BrowseNav', () => {
 		let called = false
 		renderToStaticMarkup(
 			createElement(BrowseNav, {
+				wordmarkLabel: WORDMARK,
 				active: true,
 				onNavigateHome: () => {
 					called = true
@@ -93,6 +105,7 @@ describe('BrowseNav', () => {
 		// The handler is attached; verify the anchor exists
 		const markup = renderToStaticMarkup(
 			createElement(BrowseNav, {
+				wordmarkLabel: WORDMARK,
 				active: true,
 				onNavigateHome: () => {
 					called = true
@@ -106,6 +119,7 @@ describe('BrowseNav', () => {
 	test('Featured link fires onNavigateFeatured', () => {
 		const markup = renderToStaticMarkup(
 			createElement(BrowseNav, {
+				wordmarkLabel: WORDMARK,
 				active: true,
 				onNavigateFeatured: () => {},
 			}),
@@ -117,15 +131,41 @@ describe('BrowseNav', () => {
 	})
 
 	test('marks the current destination', () => {
-		const browseMarkup = renderToStaticMarkup(createElement(BrowseNav, {}))
+		const browseMarkup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK }))
 		expect(browseMarkup).toContain('aria-current="page"')
 		expect(browseMarkup).toContain('data-current="true"')
 
-		const featuredMarkup = renderToStaticMarkup(createElement(BrowseNav, { currentPage: 'featured' }))
+		const featuredMarkup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK, currentPage: 'featured' }))
 		expect(featuredMarkup).toContain('aria-current="page"')
 		// The featured state moves the marker onto the Featured link and adds the
 		// frame's ink underline.
 		expect(featuredMarkup).toContain('border-b-2 border-fill-ink')
+	})
+
+	test('renders the operator-configured wordmark label', () => {
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK }))
+		expect(markup).toContain(`aria-label="${WORDMARK} — Browse"`)
+		expect(markup).toContain(`>${WORDMARK}</a>`)
+	})
+
+	test('renders the instance logo when logoSrc is given', () => {
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK, logoSrc: '/images/logo.svg' }))
+
+		// The logo lives inside the wordmark anchor, before the text.
+		const anchor = markup.slice(markup.indexOf('data-slot="wordmark-link"'), markup.indexOf('</a>'))
+		expect(anchor).toContain('<img src="/images/logo.svg"')
+		expect(anchor).toContain(`alt="${WORDMARK}"`)
+		expect(anchor).toContain(WORDMARK)
+	})
+
+	test('renders no image without logoSrc', () => {
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK }))
+		expect(markup).not.toContain('<img')
+	})
+
+	test('logoAlt overrides the logo alt text', () => {
+		const markup = renderToStaticMarkup(createElement(BrowseNav, { wordmarkLabel: WORDMARK, logoSrc: '/logo.svg', logoAlt: 'Market logo' }))
+		expect(markup).toContain('alt="Market logo"')
 	})
 })
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isSafeHref } from '@sdk/commerce/storefront/storefrontPage'
 
 export const WebUrlSchema = z
 	.string()
@@ -8,6 +9,20 @@ export const RelayUrlSchema = z
 	.string()
 	.url()
 	.refine((value) => ['ws:', 'wss:'].includes(new URL(value).protocol), 'Must use WS or WSS')
+
+/**
+ * An instance's own image reference — the app-settings `picture` and `banner`.
+ *
+ * These are not arbitrary web URLs. A self-hosted instance must be able to point
+ * at its own bundled art (`/images/logo.svg`, served by the app) instead of a
+ * third-party marketplace's logo, so the rule is the storefront's own media gate
+ * (`isSafeHref`), not a second one: an absolute `https:` URL or an in-app
+ * absolute path. `javascript:`, `data:`, `blob:`, bare `http:` and
+ * protocol-relative `//host` are all refused.
+ */
+export const InstanceImageUrlSchema = z
+	.string()
+	.refine(isSafeHref, { message: 'Must be an https:// URL or an in-app path starting with /' })
 
 export const SocialLinksSchema = z.object({
 	twitter: WebUrlSchema.optional(),
@@ -20,8 +35,8 @@ export const SocialLinksSchema = z.object({
 export const AppSettingsSchema = z.object({
 	name: z.string(),
 	displayName: z.string(),
-	picture: z.string().url(),
-	banner: z.string().url(),
+	picture: InstanceImageUrlSchema,
+	banner: InstanceImageUrlSchema,
 	ownerPk: z.string(),
 	allowRegister: z.boolean(),
 	defaultCurrency: z.string(),

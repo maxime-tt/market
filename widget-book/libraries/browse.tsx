@@ -86,14 +86,27 @@ const STRIP_ITEMS = PRODUCTS.slice(0, 6).map((p, i) => ({
 
 // ---- browse-nav entries ----
 
-const BrowseNavDefault = () => <BrowseNav active={true} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+/**
+ * The gallery's demo title. `BrowseNav.wordmarkLabel` is required and has no
+ * default (the app reads the operator's instance name), and this catalogue has
+ * no instance config, so the entries name themselves the way the shipped
+ * default instance does.
+ */
+const DEMO_WORDMARK = 'Plebeian Market'
 
-const BrowseNavInactive = () => <BrowseNav active={false} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+const BrowseNavDefault = () => (
+	<BrowseNav wordmarkLabel={DEMO_WORDMARK} active={true} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+)
+
+const BrowseNavInactive = () => (
+	<BrowseNav wordmarkLabel={DEMO_WORDMARK} active={false} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+)
 
 const BrowseNavWithSlots = () => {
 	const [query, setQuery] = useState('ceramic')
 	return (
 		<BrowseNav
+			wordmarkLabel={DEMO_WORDMARK}
 			active={true}
 			onNavigateHome={() => {}}
 			onNavigateFeatured={() => {}}
@@ -319,7 +332,7 @@ const IDLE_ITEMS: StripItem[] = [
 
 const BrowseIdleDefault = () => (
 	<div className="h-[500px]">
-		<BrowseNav onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+		<BrowseNav wordmarkLabel={DEMO_WORDMARK} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
 		<BrowseIdle stripsAbove={IDLE_ITEMS} stripsBelow={IDLE_ITEMS} />
 	</div>
 )
@@ -330,13 +343,15 @@ const BrowseIdleDefault = () => (
  */
 const BrowseIdleWithStats = () => (
 	<div className="h-[500px]">
-		<BrowseNav onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+		<BrowseNav wordmarkLabel={DEMO_WORDMARK} onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
 		<BrowseIdle stats={{ products: 1208, sellers: 38, postedLast24h: 412, relays: 38 }} stripsAbove={IDLE_ITEMS} stripsBelow={IDLE_ITEMS} />
 	</div>
 )
 
 /** The Featured destination marked current (frame RBtsnyppDS). */
-const BrowseNavFeatured = () => <BrowseNav currentPage="featured" onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+const BrowseNavFeatured = () => (
+	<BrowseNav wordmarkLabel={DEMO_WORDMARK} currentPage="featured" onNavigateHome={() => {}} onNavigateFeatured={() => {}} />
+)
 
 /**
  * The idle screen with its search populated: the hero's large field and the
@@ -347,6 +362,7 @@ const BrowseIdleWithSearch = () => {
 	return (
 		<div className="h-[500px]">
 			<BrowseNav
+				wordmarkLabel={DEMO_WORDMARK}
 				onNavigateHome={() => {}}
 				onNavigateFeatured={() => {}}
 				searchSlot={<SearchField value={query} onChange={setQuery} onGo={() => {}} />}

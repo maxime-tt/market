@@ -1,6 +1,8 @@
+@import './fonts.css';
 @import './globals.css';
 @import './globals-new.css';
 @import './icons.css';
+@import './arena-chrome.css';
 
 @layer base {
 }

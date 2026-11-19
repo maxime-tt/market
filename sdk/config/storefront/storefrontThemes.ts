@@ -28,6 +28,14 @@ type CSSProperties = Record<string, string>
  * five `default`…`mono` entries predate that and are kept unchanged so pages
  * published against them keep validating and keep rendering identically.
  *
+ * `arena` is adapted from the C Arena layout of Plebeian Auctions Arena
+ * (https://github.com/ChiefmonkeyArt/plebeian-arena-auctions, web/src/template.css):
+ * its dark custom properties (`--bg`, `--surface`, `--surface-2`, `--ink`,
+ * `--muted`, `--line`, `--pink`, `--lime`, `--orange`) converted to oklch, and its
+ * light layout-A colours as the Daylight palette. `fonts` is a display string,
+ * as for every layout; Arena's three families are bundled (styles/fonts.css)
+ * and mapped onto the font roles in ui/storefront/storefront-theme.css.
+ *
  * Security: nothing in this file is author-controlled. A published page names a
  * *layout id* and a *palette key*, both of which are closed sets declared in
  * `@sdk/commerce/storefront/storefrontPage`, plus six *bounded numbers*. Every value that
@@ -1152,7 +1160,7 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 		description:
 			'Community-first e-commerce. Leads with live and featured auctions, then categories you can click into, featured products, seller shops and well-reviewed favourites.',
 		forWho: 'Community marketplace',
-		fonts: 'Anton \u00b7 DM Sans \u00b7 JetBrains Mono',
+		fonts: 'Anton \u00b7 Plus Jakarta Sans \u00b7 JetBrains Mono',
 		tune: { radiusPx: 12, shadow: 0.3, glass: 0.6, spacing: 1, texture: 0, handmade: 0 },
 		palettes: [
 			{
@@ -1364,6 +1372,137 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 					muted: 'oklch(0.523 0.112 64.4)',
 					mutedForeground: 'oklch(0.290 0.066 116.0)',
 					border: 'oklch(0.000 0.000 0.0)',
+				},
+			},
+		],
+	},
+	arena: {
+		id: 'arena',
+		label: 'Arena',
+		description:
+			'Dark and game-like, from the Plebeian Auctions Arena. Near-black panels with big rounded corners, hot-pink calls to action and lime highlights for what is live.',
+		forWho: 'Live auctions and drops',
+		fonts: 'Instrument Serif \u00b7 Plus Jakarta Sans \u00b7 JetBrains Mono',
+		tune: { radiusPx: 22, shadow: 0.45, glass: 0.15, spacing: 1, texture: 0, handmade: 0 },
+		palettes: [
+			{
+				key: 'arena',
+				label: 'Arena',
+				dark: true,
+				shared: false,
+				swatch: ['#0E0D0E', '#FF3EB5', '#C6FF3D'],
+				shadowRgb: '0,0,0',
+				tokens: {
+					background: 'oklch(0.161 0.003 325.7)',
+					foreground: 'oklch(0.956 0.010 58.2)',
+					card: 'oklch(0.212 0.005 325.8)',
+					cardForeground: 'oklch(0.956 0.010 58.2)',
+					primary: 'oklch(0.688 0.249 348.0)',
+					primaryForeground: 'oklch(0.178 0.000 0.0)',
+					secondary: 'oklch(0.928 0.216 125.2)',
+					muted: 'oklch(0.252 0.007 325.8)',
+					mutedForeground: 'oklch(0.697 0.016 50.7)',
+					border: 'oklch(0.295 0.009 325.8)',
+				},
+			},
+			{
+				key: 'arena-lime',
+				label: 'Lime',
+				dark: true,
+				shared: false,
+				swatch: ['#0E0D0E', '#C6FF3D', '#FF3EB5'],
+				shadowRgb: '0,0,0',
+				tokens: {
+					background: 'oklch(0.161 0.003 325.7)',
+					foreground: 'oklch(0.956 0.010 58.2)',
+					card: 'oklch(0.212 0.005 325.8)',
+					cardForeground: 'oklch(0.956 0.010 58.2)',
+					primary: 'oklch(0.928 0.216 125.2)',
+					primaryForeground: 'oklch(0.178 0.000 0.0)',
+					secondary: 'oklch(0.688 0.249 348.0)',
+					muted: 'oklch(0.252 0.007 325.8)',
+					mutedForeground: 'oklch(0.697 0.016 50.7)',
+					border: 'oklch(0.295 0.009 325.8)',
+				},
+			},
+			{
+				key: 'sats-orange',
+				label: 'Sats Orange',
+				dark: true,
+				shared: false,
+				swatch: ['#0E0D0E', '#F7931A', '#C6FF3D'],
+				shadowRgb: '0,0,0',
+				tokens: {
+					background: 'oklch(0.161 0.003 325.7)',
+					foreground: 'oklch(0.956 0.010 58.2)',
+					card: 'oklch(0.212 0.005 325.8)',
+					cardForeground: 'oklch(0.956 0.010 58.2)',
+					primary: 'oklch(0.752 0.166 62.6)',
+					primaryForeground: 'oklch(0.178 0.000 0.0)',
+					secondary: 'oklch(0.928 0.216 125.2)',
+					muted: 'oklch(0.252 0.007 325.8)',
+					mutedForeground: 'oklch(0.697 0.016 50.7)',
+					border: 'oklch(0.295 0.009 325.8)',
+				},
+			},
+			{
+				key: 'arena-day',
+				label: 'Daylight',
+				dark: false,
+				shared: false,
+				swatch: ['#F4ECE3', '#C8157F', '#F7931A'],
+				shadowRgb: '27,23,24',
+				tokens: {
+					background: 'oklch(0.947 0.015 70.9)',
+					foreground: 'oklch(0.210 0.007 0.7)',
+					card: 'oklch(0.992 0.006 75.4)',
+					cardForeground: 'oklch(0.210 0.007 0.7)',
+					primary: 'oklch(0.553 0.219 352.2)',
+					primaryForeground: 'oklch(1.000 0.000 89.9)',
+					secondary: 'oklch(0.752 0.166 62.6)',
+					muted: 'oklch(0.920 0.023 65.4)',
+					mutedForeground: 'oklch(0.505 0.020 55.9)',
+					border: 'oklch(0.875 0.026 67.5)',
+				},
+			},
+			{
+				key: 'brutal',
+				label: 'Brutalist',
+				dark: false,
+				shared: true,
+				swatch: ['#ffffff', '#000000', '#ff3d00'],
+				shadowRgb: '0,0,0',
+				tokens: {
+					background: 'oklch(1.000 0.000 89.9)',
+					foreground: 'oklch(0.000 0.000 0.0)',
+					card: 'oklch(1.000 0.000 89.9)',
+					cardForeground: 'oklch(0.000 0.000 0.0)',
+					primary: 'oklch(0.654 0.235 34.0)',
+					primaryForeground: 'oklch(0.000 0.000 0.0)',
+					secondary: 'oklch(0.452 0.313 264.1)',
+					muted: 'oklch(0.550 0.000 49.4)',
+					mutedForeground: 'oklch(0.289 0.000 89.9)',
+					border: 'oklch(0.000 0.000 0.0)',
+				},
+			},
+			{
+				key: 'neon',
+				label: 'Neon',
+				dark: true,
+				shared: true,
+				swatch: ['#07070c', '#39ff14', '#ff2bd6'],
+				shadowRgb: '0,0,0',
+				tokens: {
+					background: 'oklch(0.131 0.012 284.7)',
+					foreground: 'oklch(0.970 0.015 286.1)',
+					card: 'oklch(0.183 0.020 284.2)',
+					cardForeground: 'oklch(0.970 0.015 286.1)',
+					primary: 'oklch(0.871 0.286 141.5)',
+					primaryForeground: 'oklch(0.131 0.012 284.7)',
+					secondary: 'oklch(0.691 0.282 338.1)',
+					muted: 'oklch(0.198 0.025 284.1)',
+					mutedForeground: 'oklch(0.696 0.044 285.2)',
+					border: 'oklch(0.280 0.042 283.3)',
 				},
 			},
 		],

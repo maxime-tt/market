@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { parseMarketConfig, type PublicConfigSchemaVersion } from '../core'
 import { BUG_RELAY, DEFAULT_PUBLIC_RELAYS, DEFAULT_TRUSTED_MINTS, type Stage } from './constants'
-import { RelayUrlSchema, SocialLinksSchema, WebUrlSchema, type AppSettings, type SocialLinks } from './schemas/app'
+import { InstanceImageUrlSchema, RelayUrlSchema, SocialLinksSchema, WebUrlSchema, type AppSettings, type SocialLinks } from './schemas/app'
 
 export interface InstanceConfig {
 	name: string
@@ -38,6 +38,12 @@ export interface PublicAppConfig extends InstanceConfig {
 	needsSetup: boolean
 	serverReady: boolean
 	externalZapRelaysEnabled: boolean
+	/**
+	 * Server-set (`APP_RELAY_WRITES_ONLY=true`): the browser publishes only to
+	 * the app relay and runs no outbox discovery, while still reading the public
+	 * set. For test instances whose auctions and bids must stay off public relays.
+	 */
+	appRelayWritesOnly?: boolean
 }
 
 export type MarketConfigSource = Pick<
@@ -63,8 +69,8 @@ export function toMarketConfig(config: MarketConfigSource): ReturnType<typeof pa
 const InstanceConfigEnvironmentSchema = z.object({
 	name: z.string().min(1).optional(),
 	displayName: z.string().min(1).optional(),
-	picture: WebUrlSchema.optional(),
-	banner: WebUrlSchema.optional(),
+	picture: InstanceImageUrlSchema.optional(),
+	banner: InstanceImageUrlSchema.optional(),
 	ownerPk: z
 		.string()
 		.regex(/^[0-9a-fA-F]{64}$/)
@@ -88,7 +94,11 @@ const InstanceConfigEnvironmentSchema = z.object({
 export const DEFAULT_INSTANCE_CONFIG: InstanceConfig = {
 	name: 'Plebeian Market',
 	displayName: 'Plebeian Market',
-	picture: 'https://plebeian.market/images/logo.svg',
+	// The bundled logo, served by this instance (`/images/:file`, see
+	// platform/server/http/static.ts). The old default pointed at the upstream
+	// project's host, so every self-hosted instance inherited another
+	// marketplace's brand and a cross-origin fetch.
+	picture: '/images/logo.svg',
 	banner: 'https://plebeian.market/banner.png',
 	allowRegister: true,
 	defaultCurrency: 'USD',

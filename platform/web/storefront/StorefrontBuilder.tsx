@@ -40,9 +40,12 @@ import { toast } from 'sonner'
 import { StorefrontSetupWizard } from './StorefrontSetupWizard'
 import { storefrontCmsConfig } from './storefrontCms'
 import { usePublishStorefrontPage, useStorefrontPage } from './storefrontQuery'
+import { HOME_PAGE_D_TAG } from './instanceHomePage'
 import { clearStorefrontDraft, loadStorefrontDraft, saveStorefrontDraft } from './draftStorage'
 
-import '@puckeditor/core/puck.css'
+// no-external.css is Puck's stylesheet without its @import of Inter from
+// a third-party host; Inter is bundled in styles/fonts.css instead.
+import '@puckeditor/core/no-external.css'
 
 /**
  * The page builder.
@@ -83,13 +86,29 @@ function toPuckData(page: StorefrontPage): Data {
 	return { root: { props: page.root.props }, content: page.content } as Data
 }
 
+/**
+ * A category's key is the search word its chip links to. Authors mostly type
+ * only the label, and an empty key fails the page schema, so a blank key takes
+ * the label's lower-cased text.
+ */
+function fillCategoryKeys(content: Data['content']): Data['content'] {
+	return content.map((block) => {
+		if (block.type !== 'Categories' || !Array.isArray(block.props?.categories)) return block
+		const categories = (block.props.categories as { label?: string; key?: string }[]).map((category) => ({
+			...category,
+			key: category.key?.trim() || (category.label ?? '').trim().toLowerCase(),
+		}))
+		return { ...block, props: { ...block.props, categories } }
+	})
+}
+
 function fromPuckData(data: Data, enabled: boolean, chrome: StorefrontPageChrome): StorefrontPage {
 	return {
 		version: STOREFRONT_PAGE_VERSION,
 		enabled,
 		chrome,
 		root: { props: (data.root?.props ?? {}) as StorefrontPage['root']['props'] },
-		content: data.content as StorefrontPage['content'],
+		content: fillCategoryKeys(data.content) as StorefrontPage['content'],
 	}
 }
 
@@ -100,6 +119,9 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 	// Derived, never passed: the storefront page is the one whose address is the
 	// reserved default. Everything address-specific in the chrome hangs off this.
 	const isStorefront = dTag === STOREFRONT_PAGE_D_TAG
+	// A page named `home` by an operator key is what `/` renders
+	// (instanceHomePage.ts); it needs no route binding.
+	const isHomePage = dTag === HOME_PAGE_D_TAG
 
 	// The claimed name (if any) is bought on separate dashboard pages today — see
 	// ADR-019 — but the builder is where an author actually needs to know it: it
@@ -115,7 +137,13 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 	// page's live URL is the path it is bound to, which this editor does not
 	// know; it is set by whoever does (the Routes list's "View the page"). So the
 	// link is absent here rather than wrong.
-	const liveHref = isStorefront ? (vanityEntry ? `/${vanityEntry.vanityName}?preview=draft` : `/profile/${pubkey}?preview=draft`) : null
+	const liveHref = isStorefront
+		? vanityEntry
+			? `/${vanityEntry.vanityName}?preview=draft`
+			: `/profile/${pubkey}?preview=draft`
+		: isHomePage
+			? '/'
+			: null
 
 	const [mode, setMode] = useState<BuilderMode>('loading')
 	const [initialData, setInitialData] = useState<Data | null>(null)
@@ -182,7 +210,10 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 			// The `enabled` flag is still taken from the existing document if one
 			// exists — arriving at the wizard (e.g. because every block failed to
 			// parse) must not quietly switch a previously-live page back on.
-			setEnabled(existing?.enabled ?? false)
+			// A brand-new home page starts Public: its only purpose is to be the
+			// front page, and a Private home page is silently skipped in favour
+			// of the fallback. Other new pages still start Private.
+			setEnabled(existing?.enabled ?? dTag === HOME_PAGE_D_TAG)
 			setChrome(existing?.chrome ?? 'app')
 			setMode('wizard')
 		}
@@ -190,7 +221,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 
 	const handleWizardComplete = useCallback(
 		(page: StorefrontPage) => {
-			setEnabled(page.enabled)
+			setEnabled(page.enabled || (dTag === HOME_PAGE_D_TAG && !published?.page))
 			setChrome(page.chrome)
 			setIsDirty(true)
 			const data = toPuckData(page)
@@ -203,7 +234,7 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 			saveStorefrontDraft(pubkey, dTag, page)
 			setMode('editor')
 		},
-		[dTag, pubkey],
+		[dTag, pubkey, published],
 	)
 
 	const handleChange = useCallback(
@@ -267,11 +298,13 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 				setIsDirty(false)
 				// Report the relays that actually acknowledged. "Published" on its
 				// own would be a claim about retention we cannot make.
-				toast.success(
-					enabled
-						? `Page published to ${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'}`
-						: `Saved to ${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'} (page is switched off)`,
-				)
+				const relays = `${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'}`
+				if (enabled) toast.success(`Page published to ${relays}`)
+				else if (dTag === HOME_PAGE_D_TAG)
+					// The home page is the one place Private silently changes what
+					// visitors see (the fallback home keeps showing), so say so.
+					toast.warning('Saved as Private. Switch to Public to show it on the homepage.', { duration: 10000 })
+				else toast.success(`Saved to ${relays} (page is switched off)`)
 			} catch (error) {
 				const message = error instanceof Error ? error.message : 'Could not publish the page'
 				setErrors([message])
@@ -420,6 +453,16 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 							className="grid grid-cols-1 items-center gap-3 border-b px-4 py-3 sm:grid-cols-[1fr_auto_1fr]"
 						>
 							<div className="flex flex-col items-start gap-1">
+								{isHomePage && (
+									<span className="text-xs font-medium text-foreground" data-testid="storefront-home-page">
+										This is the homepage. Publishing it updates the front page; no route needed.
+									</span>
+								)}
+								{isHomePage && !enabled && (
+									<span className="text-xs font-medium text-destructive" data-testid="storefront-home-private">
+										Private: visitors won't see this page. Switch to Public before publishing.
+									</span>
+								)}
 								{liveHref ? (
 									<Button variant="outline" size="sm" asChild data-testid="storefront-view-live">
 										<a href={liveHref} target="_blank" rel="noopener noreferrer">
@@ -550,8 +593,10 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 		[
 			dTag,
 			handleDiscardDraft,
+			enabled,
 			isDirty,
 			isFullscreen,
+			isHomePage,
 			isStorefront,
 			liveHref,
 			nip05Entry,

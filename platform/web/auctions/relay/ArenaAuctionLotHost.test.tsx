@@ -32,13 +32,28 @@ import type { ArenaSurfaceStatus } from '@ui/auction/arena/model'
 
 // The bid panel drags in the wallet, the signer and the escrow ports; the test
 // only needs to know it was wired and handed the resolved model.
+// The stub records what the host handed it, and answers a signed-out viewer.
+const bidCalls: Array<{ coordinate: string | null; readStatus: string }> = []
 mock.module('@platform/web/auctions/relay/AuctionBidHost', () => ({
-	AuctionBidHost: (props: { model: { coordinate: string } | null; readStatus: string }) =>
-		createElement('div', {
-			'data-testid': 'bid-host-stub',
-			'data-coordinate': props.model?.coordinate ?? 'none',
-			'data-read-status': props.readStatus,
-		}),
+	useAuctionBidController: (props: { model: { coordinate: string } | null; readStatus: string }) => {
+		bidCalls.push({ coordinate: props.model?.coordinate ?? null, readStatus: props.readStatus })
+		return {
+			viewer: null,
+			check: null,
+			blockedReason: 'no-wallet',
+			amountInput: '',
+			onAmountChange: () => {},
+			pending: false,
+			submission: { phase: 'idle' },
+			onSubmit: () => {},
+			onSubmitAmount: () => {},
+		}
+	},
+}))
+
+mock.module('@platform/web/profiles/profileQuery', () => ({
+	useProfile: () => ({ data: undefined }),
+	getNormalizedProfileDisplayName: () => '',
 }))
 
 mock.module('@platform/web/profiles/userCardHosts', () => ({
@@ -199,13 +214,12 @@ describe('resolveArenaLot', () => {
 
 describe('ArenaAuctionLotHost — a found lot', () => {
 	test('renders the detail with the bid panel in its slot and the verdict panel', () => {
+		bidCalls.length = 0
 		const markup = render(readState([createEvent()], 'settled'))
-		expect(markup).toContain('data-slot="arena-auction-detail"')
-		expect(markup).toContain('data-slot="arena-auction-detail-bid"')
-		expect(markup).toContain('data-testid="bid-host-stub"')
-		// The bid host was handed the resolved model and the read's own status.
-		expect(markup).toContain('data-coordinate="1440:seller-alice:lot-1"')
-		expect(markup).toContain('data-read-status="settled"')
+		expect(markup).toContain('data-slot="arena-lot"')
+		// The bid controller was handed the resolved model and the read's own status.
+		expect(bidCalls.at(-1)).toEqual({ coordinate: '1440:seller-alice:lot-1', readStatus: 'settled' })
+		expect(markup).toContain('Sign in to bid')
 		expect(markup).toContain('data-slot="arena-verdict-panel"')
 		// The seller identity is host-injected, not a raw key.
 		expect(markup).toContain('data-testid="user-card-stub"')
@@ -229,7 +243,6 @@ describe('ArenaAuctionLotHost — a found lot', () => {
 		expect(markup).toContain('1,000 sats')
 		expect(markup).toContain('Minimum increment')
 		expect(markup).toContain('25 sats')
-		expect(markup).toContain('antisnipe')
 		expect(markup).toContain('Anti-snipe')
 	})
 
@@ -241,9 +254,9 @@ describe('ArenaAuctionLotHost — a found lot', () => {
 
 	test('a read bid and its derived position are shown, never as the outcome', () => {
 		const markup = render(readState([createEvent(), bidEvent({ amount: 100 })], 'settled'))
-		expect(markup).toContain('+100 sats')
-		expect(markup).toContain('Positions (derived)')
-		expect(markup).toContain('the verdict names the winner')
+		expect(markup).toContain('Leaderboard')
+		expect(markup).toContain('holds the top position')
+		expect(markup).toContain('>100<')
 	})
 })
 
@@ -255,7 +268,7 @@ describe('ArenaAuctionLotHost — an empty read', () => {
 	test('settled says "no such auction" and renders no bid panel', () => {
 		const markup = render(readState([], 'settled'))
 		expect(markup).toContain('No such auction was read.')
-		expect(markup).not.toContain('data-testid="bid-host-stub"')
+		expect(markup).not.toContain('arena-lot-ladder')
 		expect(markup).not.toContain('data-slot="arena-verdict-panel"')
 	})
 
@@ -302,8 +315,8 @@ describe('ArenaAuctionLotHost — an ambiguous d', () => {
 		expect(markup).toContain(`/auctions/lot-1?seller=${SELLER_A}`)
 		expect(markup).toContain(`/auctions/lot-1?seller=${SELLER_B}`)
 		// It refused: no lot was chosen, so no detail and no bid panel.
-		expect(markup).not.toContain('data-slot="arena-auction-detail"')
-		expect(markup).not.toContain('data-testid="bid-host-stub"')
+		expect(markup).not.toContain('data-slot="arena-lot"')
+		expect(markup).not.toContain('arena-lot-ladder')
 	})
 
 	test('the ?seller param disambiguates to exactly one lot', () => {
@@ -315,7 +328,7 @@ describe('ArenaAuctionLotHost — an ambiguous d', () => {
 			{ seller: SELLER_B },
 		)
 		expect(markup).not.toContain('data-slot="arena-lot-ambiguous"')
-		expect(markup).toContain('data-slot="arena-auction-detail"')
+		expect(markup).toContain('data-slot="arena-lot"')
 		expect(markup).toContain('Bob lot')
 		expect(markup).not.toContain('Alice lot')
 	})

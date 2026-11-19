@@ -4,12 +4,13 @@ import { ProductSearch } from '@platform/web/products/ProductSearch'
 import { Button } from '@ui/primitives/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@ui/primitives/popover'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/primitives/tooltip'
-import { Nip60WalletHost } from '@platform/web/wallet/Nip60WalletHost'
+import { CocoWalletPanelHost } from '@platform/web/wallet/CocoWalletPanelHost'
 import { useBreakpoint } from '@platform/web/app/useBreakpoint'
 import { authActions, authStore } from '@platform/web/auth/authStore'
 import { appNotificationsBinding, appUnseenCounts } from '@platform/web/notifications'
 import { uiActions, uiStore } from '@platform/web/app/uiStore'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
+import { useInstanceName } from '@platform/web/config/instanceName'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, LogOut, Menu, Wallet, X } from 'lucide-react'
@@ -158,7 +159,7 @@ function WalletButton() {
 			</PopoverTrigger>
 
 			<PopoverContent className="bg-primary rounded-lg w-[calc(100vw-2rem)] md:w-96" align="end">
-				<Nip60WalletHost />
+				<CocoWalletPanelHost />
 			</PopoverContent>
 		</Popover>
 	)
@@ -192,6 +193,34 @@ export function BugReportButton({ className }: BugReportButtonProps) {
 			</TooltipButton>
 			<BugReportModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onReopen={() => setIsModalOpen(true)} />
 		</>
+	)
+}
+
+/**
+ * The header's account controls on their own: sign-in when signed out; the
+ * dashboard, profile and sign-out buttons when signed in. The home and Browse
+ * surfaces draw their own nav (`BrowseNav`) instead of this header, so they
+ * mount these in its account slot; without them the home had no way to sign in.
+ */
+export function HeaderAccountControls() {
+	const { isAuthenticated, isAuthenticating } = useStore(authStore)
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm'
+
+	return (
+		<div className="flex items-center gap-2" data-testid="header-account-controls">
+			{isAuthenticated && <DashboardButton />}
+			{isAuthenticating ? (
+				<Button className="relative p-2 btn-border-highlight" data-testid="auth-loading">
+					<Loader2 className="w-4 h-4 animate-spin" />
+				</Button>
+			) : isAuthenticated ? (
+				<ProfileButton />
+			) : (
+				<LoginButton />
+			)}
+			{isAuthenticated && !isMobile && <LogoutButton />}
+		</div>
 	)
 }
 
@@ -238,6 +267,19 @@ export function Header() {
 	const isCommunityPage = location.pathname === '/community'
 	const isCollectionPage = location.pathname.startsWith('/collection/')
 	const isNostrPage = location.pathname === '/nostr'
+	const isDashboardPage = location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/')
+	// Auction and dashboard routes render the dark Arena header
+	// (styles/arena-chrome.css). The auction routes sit inside the root
+	// `.arena-chrome` wrapper; the dashboard does not (its panels keep their own
+	// look), so the header carries its own Arena scope there.
+	const arena = isAuctionPage || isDashboardPage
+	const ownArenaScope = isDashboardPage && !isAuctionPage
+	// The instance names itself in exactly one place (`useInstanceName`); the
+	// Arena brand only splits that name into lead + emphasis here.
+	const brandName = useInstanceName()
+	const brandSplit = brandName.lastIndexOf(' ')
+	const brandLead = brandSplit > 0 ? brandName.slice(0, brandSplit) : ''
+	const brandTail = brandSplit > 0 ? brandName.slice(brandSplit + 1) : brandName
 	const shouldUseTransparentHeader = isProductPage || isAuctionPage || isHomepage || isProfilePage || isCommunityPage || isCollectionPage
 
 	// Scroll detection for pages with transparent headers
@@ -303,17 +345,29 @@ export function Header() {
 		uiActions.toggleMobileMenu()
 	}
 
-	return (
+	const header = (
 		<header
-			className={`sticky top-0 z-50 text-white px-4 ${isNostrPage ? 'bg-black' : getHeaderBackground()}`}
-			style={isNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
+			className={
+				arena
+					? 'arena-header sticky top-0 z-50 px-4'
+					: `sticky top-0 z-50 text-white px-4 ${isNostrPage ? 'bg-black' : getHeaderBackground()}`
+			}
+			style={arena || isNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
 		>
-			<div className="flex justify-between items-center py-4 max-w-full h-full container">
+			<div className={cn('flex justify-between items-center max-w-full h-full container', arena ? 'py-2.5' : 'py-4')}>
 				<section className="inline-flex items-center">
-					<Link to="/" data-testid="home-link">
-						{config?.picture && <img src={config.picture} alt={config.displayName || config.name} className="px-2 w-16" />}
+					<Link to="/" data-testid="home-link" className={arena ? 'inline-flex items-center gap-2' : undefined}>
+						{config?.picture && (
+							<img src={config.picture} alt={config.displayName || config.name} className={arena ? 'px-1 w-11' : 'px-2 w-16'} />
+						)}
+						{arena && (
+							<span className="arena-brand hidden md:inline">
+								{brandLead && `${brandLead} `}
+								<em>{brandTail}</em>
+							</span>
+						)}
 					</Link>
-					<div className="hidden sm:flex gap-8 mx-8">
+					<div className={arena ? 'arena-nav hidden sm:flex items-center gap-6 mx-6' : 'hidden sm:flex gap-8 mx-8'}>
 						<Link
 							to="/products"
 							className="hover:text-secondary"
@@ -420,5 +474,15 @@ export function Header() {
 			{/* Mobile Menu */}
 			<MobileMenu />
 		</header>
+	)
+
+	// `display: contents` keeps the header sticky against the page while the
+	// wrapper still hands the Arena tokens down to it.
+	return ownArenaScope ? (
+		<div className="arena-chrome arena-header-solid" style={{ display: 'contents' }} data-testid="arena-header-scope">
+			{header}
+		</div>
+	) : (
+		header
 	)
 }

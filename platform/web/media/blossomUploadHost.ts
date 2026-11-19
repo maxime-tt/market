@@ -28,6 +28,8 @@ export {
 	DEFAULT_BLOSSOM_SERVERS as BLOSSOM_SERVERS,
 	checkBlossomServerAvailability,
 	getAvailableBlossomServers,
+	instanceBlossomServer,
+	resolveBlossomServers,
 } from '@sdk/core/media/blossomServers'
 export type { BlossomServer } from '@sdk/core/media/blossomServers'
 export type { ImetaTag, UploadOptions, UploadResult } from '@sdk/core/media/blossomUpload'

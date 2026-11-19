@@ -14,6 +14,7 @@
  * Everything is coerced on read, never trusted: a draft is user-editable text in a shared
  * origin's storage.
  */
+import { parseLotMedia } from '@sdk/commerce/auctions/lotMedia'
 import type { AuctionFormData, AuctionV4vSplitRowInput } from '@platform/web/auctions/auctionPublish'
 
 export type AuctionFormDraft = {
@@ -64,6 +65,7 @@ function validateDraft(raw: unknown): AuctionFormDraft | null {
 		title: str(fd.title),
 		description: str(fd.description),
 		imageUrl: str(fd.imageUrl),
+		media: parseLotMedia(fd.media),
 		category: str(fd.category),
 		name: str(fd.name),
 		startPrice: str(fd.startPrice),

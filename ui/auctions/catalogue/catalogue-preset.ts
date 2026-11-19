@@ -80,7 +80,7 @@ export const CATALOGUE_DARK: CatalogueTokens = {
 /** Font stacks, verbatim from the extraction (S:9-11). */
 export const CATALOGUE_FONTS = {
 	serif: "'Instrument Serif', 'Times New Roman', serif",
-	sans: "'DM Sans', system-ui, sans-serif",
+	sans: "'Plus Jakarta Sans', system-ui, sans-serif",
 	mono: "'JetBrains Mono', ui-monospace, monospace",
 } as const
 

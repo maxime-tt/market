@@ -198,6 +198,7 @@ describe('toAuctionListItem', () => {
 			title: 'A lot',
 			description: null,
 			image: null,
+			media: [],
 			startPrice: 1000,
 			minIncrement: 10,
 			mode: 'fixed',
@@ -298,6 +299,17 @@ describe('selectAuctionList', () => {
 		expect(items.map((item) => item.coordinate)).toEqual(['1440:seller-bob:two', '1440:seller-alice:one'])
 		expect(items[0].seller).toBe(SELLER_B)
 		expect(missing).toEqual(['1440:seller-bob:absent'])
+	})
+
+	test('all lists every seller, live soonest-ending first, then the rest', () => {
+		const snapshot = snapshotWith(
+			createEvent({ id: 'a1', pubkey: SELLER_A, created_at: 1000, d: 'ended' }, { durationSec: 100 }),
+			createEvent({ id: 'b1', pubkey: SELLER_B, created_at: 2000, d: 'late' }, { durationSec: 3600 }),
+			createEvent({ id: 'b2', pubkey: SELLER_B, created_at: 2100, d: 'soon' }, { durationSec: 600 }),
+		)
+		const { items, missing } = selectAuctionList(snapshot, selection({ source: 'all', seller: SELLER_A, now: 2500 }))
+		expect(items.map((item) => item.d)).toEqual(['soon', 'late', 'ended'])
+		expect(missing).toEqual([])
 	})
 
 	test('limit truncates but does not reorder', () => {

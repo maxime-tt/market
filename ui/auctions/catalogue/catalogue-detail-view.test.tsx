@@ -34,6 +34,7 @@ const model: ArenaAuctionDetailModel = {
 	divergent: false,
 	relayCount: 2,
 	description: 'A described lot.',
+	media: [],
 	minIncrement: 100,
 	mode: 'antisnipe',
 	windowSec: 60,

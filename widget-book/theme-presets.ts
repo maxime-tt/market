@@ -5,8 +5,8 @@ import type { TuneSettings } from '@ui/theme/tune'
  * Demo presets for the widget book. Each preset is one token record — colours,
  * fonts, and the six tune dimensions. The CMS will store the same shape.
  *
- * Fonts are loaded by `widget-book/index.html` from Google Fonts. Licensing is
- * a production decision; the harness only needs representative families.
+ * Fonts are bundled with the app (`styles/fonts.css`, SIL OFL 1.1), so the
+ * presets render the same families the app serves.
  *
  * Two layers are carried per preset, deliberately mirrored:
  *   • the semantic keys (`--background`, `--card`, `--primary`, …) that the
@@ -52,8 +52,8 @@ export const THEME_PRESETS: ThemePreset[] = [
 			'--border': 'oklch(0.9 0.012 340)',
 			'--input': 'oklch(0.66 0.03 340)',
 			'--ring': 'oklch(0.58 0.15 350)',
-			'--font-body': "'DM Sans', sans-serif",
-			'--font-header': "'Fraunces', serif",
+			'--font-body': "'Plus Jakarta Sans', sans-serif",
+			'--font-header': "'Young Serif', serif",
 			/* Tier-1 roles — the D Phase 0 live values, byte-identical to
 			   styles/globals-new.css. */
 			'--bg': 'oklch(1 0 0)',
@@ -95,7 +95,7 @@ export const THEME_PRESETS: ThemePreset[] = [
 			'--border': 'oklch(0.88 0.01 90)',
 			'--input': 'oklch(0.8 0.01 90)',
 			'--ring': 'oklch(0.4 0.02 90)',
-			'--font-body': "'DM Sans', sans-serif",
+			'--font-body': "'Plus Jakarta Sans', sans-serif",
 			'--font-header': "'Instrument Serif', serif",
 			/* Tier-1 roles — mirrors of the semantic keys above. */
 			'--bg': 'oklch(0.98 0.005 90)',
@@ -179,7 +179,7 @@ export const THEME_PRESETS: ThemePreset[] = [
 			'--border': 'oklch(0.9 0.005 90)',
 			'--input': 'oklch(0.82 0.005 90)',
 			'--ring': 'oklch(0.5 0.06 250)',
-			'--font-body': "'DM Sans', sans-serif",
+			'--font-body': "'Plus Jakarta Sans', sans-serif",
 			'--font-header': "'JetBrains Mono', monospace",
 			/* Tier-1 roles — mirrors of the semantic keys above. */
 			'--bg': 'oklch(0.99 0.002 90)',

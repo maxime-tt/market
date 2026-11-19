@@ -43,6 +43,39 @@ describe('AppSettingsSchema instance fields', () => {
 		expect(() => AppSettingsSchema.parse({ ...existingSettings, publicRelays: ['https://relay.example.com'] })).toThrow()
 		expect(() => AppSettingsSchema.parse({ ...existingSettings, termsUrl: 'ftp://market.example.com/terms' })).toThrow()
 	})
+
+	test('accepts an in-app absolute path or an https URL for picture and banner', () => {
+		// The shipped default logo is now the instance's own bundled asset, so the
+		// two image fields must accept an in-app path as well as an https URL.
+		const result = AppSettingsSchema.parse({
+			...existingSettings,
+			picture: '/images/logo.svg',
+			banner: 'https://cdn.example.com/banner.png',
+		})
+
+		expect(result.picture).toBe('/images/logo.svg')
+		expect(result.banner).toBe('https://cdn.example.com/banner.png')
+	})
+
+	test('rejects an unsafe picture or banner reference', () => {
+		const unsafe = [
+			'javascript:alert(1)',
+			'data:image/svg+xml,<svg/>',
+			'blob:https://example.com/x',
+			'http://example.com/logo.svg',
+			'//evil.example/logo.svg',
+		]
+
+		for (const value of unsafe) {
+			expect(() => AppSettingsSchema.parse({ ...existingSettings, picture: value })).toThrow()
+			expect(() => AppSettingsSchema.parse({ ...existingSettings, banner: value })).toThrow()
+		}
+	})
+
+	test('the shipped picture default is an in-app path the schema accepts', () => {
+		expect(DEFAULT_INSTANCE_CONFIG.picture).toBe('/images/logo.svg')
+		expect(() => AppSettingsSchema.parse({ ...existingSettings, picture: DEFAULT_INSTANCE_CONFIG.picture })).not.toThrow()
+	})
 })
 
 describe('resolveInstanceConfig', () => {
@@ -108,6 +141,10 @@ describe('resolveInstanceConfig', () => {
 		expect(result.bugRelay).toBe(DEFAULT_INSTANCE_CONFIG.bugRelay)
 	})
 
+	test('resolves the shipped in-app logo when no source sets one', () => {
+		expect(resolveInstanceConfig(null).picture).toBe('/images/logo.svg')
+	})
+
 	test('returns copies of mutable defaults', () => {
 		const first = resolveInstanceConfig(null)
 		first.publicRelays.push('wss://mutated.example.com')
@@ -162,6 +199,12 @@ describe('parseInstanceConfigEnvironment', () => {
 		expect(result.publicRelays).toEqual(['wss://one.example.com', 'ws://localhost:10547'])
 		expect(result.trustedMints).toEqual(['https://mint.example.com'])
 		expect(result.socialLinks).toEqual({ github: 'https://github.com/example/market' })
+	})
+
+	test('accepts an in-app picture path but still refuses unsafe schemes', () => {
+		expect(parseInstanceConfigEnvironment({ INSTANCE_PICTURE_URL: '/images/logo.svg' }).picture).toBe('/images/logo.svg')
+		expect(() => parseInstanceConfigEnvironment({ INSTANCE_PICTURE_URL: 'javascript:alert(1)' })).toThrow()
+		expect(() => parseInstanceConfigEnvironment({ INSTANCE_BANNER_URL: '//evil.example/banner.png' })).toThrow()
 	})
 
 	test('rejects malformed environment values', () => {

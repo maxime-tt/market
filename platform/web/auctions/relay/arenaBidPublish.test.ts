@@ -91,6 +91,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		divergent: false,
 		relayCount: 2,
 		description: null,
+		media: [],
 		minIncrement: 100,
 		mode: 'fixed',
 		windowSec: null,

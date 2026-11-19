@@ -1,11 +1,10 @@
 import { ArenaAuctionsListHost, type ArenaListSort } from '@platform/web/auctions/relay/ArenaAuctionsListHost'
-import { useArenaSurfacesRead } from '@platform/web/auctions/relay/auctionSurfacesRead'
+import { ArenaAuctionLotHost, useArenaLotRead } from '@platform/web/auctions/relay/ArenaAuctionLotHost'
 import { uiActions } from '@platform/web/app/uiStore'
 import { authStore } from '@platform/web/auth/authStore'
-import { Button } from '@ui/wrappers/button'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 
 /**
  * `/auctions` — the auctions index, read from the arena 1440 series.
@@ -23,14 +22,23 @@ export const Route = createFileRoute('/auctions/')({
 })
 
 function AuctionsRoute() {
-	const read = useArenaSurfacesRead()
+	// Reopenable read: a bid placed on the featured lot bumps the key so the
+	// page shows it once a relay serves it.
+	const [refreshKey, bumpRefresh] = useReducer((key: number) => key + 1, 0)
+	// The whole arena (`d: null`): the index lists every lot, so it must not ask
+	// for one lot's filters.
+	const read = useArenaLotRead({ d: null, seller: null, refreshKey })
 	const { isAuthenticated } = useStore(authStore)
 	const [sort, setSort] = useState<ArenaListSort>('newest')
 	const [hideEnded, setHideEnded] = useState(false)
 
-	// Projection input, not read input: fixed for this render, so the page does
-	// not reopen a subscription when the clock ticks.
-	const now = Math.floor(Date.now() / 1000)
+	// One ticking clock for the page: the featured lot's ring and the cards'
+	// phases read the same instant. Projection input only; it never reopens the read.
+	const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+	useEffect(() => {
+		const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000)
+		return () => clearInterval(id)
+	}, [])
 
 	const handleCreateAuction = () => {
 		if (isAuthenticated) {
@@ -41,33 +49,23 @@ function AuctionsRoute() {
 	}
 
 	return (
-		<div className="px-4 py-6 sm:px-8">
-			<div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-				<div className="flex flex-col gap-1">
-					<h1 className="font-heading text-2xl sm:text-3xl">Auctions</h1>
-					<p className="max-w-xl text-sm text-text-mid">
-						Live lots read from your relays. Each card states what the read knows — and says so when it does not know.
-					</p>
-				</div>
-				<Button variant="secondary" onClick={handleCreateAuction}>
-					Create Auction
-				</Button>
-			</div>
-
-			<ArenaAuctionsListHost
-				snapshot={read.snapshot}
-				status={read.status}
-				relayHealth={read.relayHealth}
-				now={now}
-				sort={sort}
-				hideEnded={hideEnded}
-				onSortChange={(value) => setSort(value as ArenaListSort)}
-				onToggleHideEnded={() => setHideEnded((prev) => !prev)}
-				onReset={() => {
-					setSort('newest')
-					setHideEnded(false)
-				}}
-			/>
-		</div>
+		<ArenaAuctionsListHost
+			snapshot={read.snapshot}
+			status={read.status}
+			relayHealth={read.relayHealth}
+			now={now}
+			sort={sort}
+			hideEnded={hideEnded}
+			onSortChange={(value) => setSort(value as ArenaListSort)}
+			onToggleHideEnded={() => setHideEnded((prev) => !prev)}
+			onReset={() => {
+				setSort('newest')
+				setHideEnded(false)
+			}}
+			onCreate={handleCreateAuction}
+			renderFeatured={(card) => (
+				<ArenaAuctionLotHost d={card.d} seller={card.seller} now={now} read={read} onPublished={() => bumpRefresh()} backHref={null} />
+			)}
+		/>
 	)
 }

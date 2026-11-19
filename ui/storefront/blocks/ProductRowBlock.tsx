@@ -67,9 +67,11 @@ export function ProductRowBlock({ productDTags, products, isLoading, isError, re
 
 	return (
 		<StorefrontSection className={cn('py-8', isEditing && 'pointer-events-none')}>
-			<div className="flex gap-4 overflow-x-auto pb-2">
+			{/* Fixed-width cards: flex-1 let each card grow to its own content
+			    (long titles, wrapped buttons), so a row came out ragged. */}
+			<div className="flex snap-x items-stretch gap-4 overflow-x-auto pb-2">
 				{resolved.map((product) => (
-					<div key={getProductId(product)} className="flex-none shrink-0 sm:flex-1 sm:basis-64">
+					<div key={getProductId(product)} className="flex w-60 flex-none shrink-0 snap-start sm:w-64 [&>*]:h-full">
 						{renderProduct(product)}
 					</div>
 				))}
