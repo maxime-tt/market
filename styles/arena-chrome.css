@@ -471,3 +471,18 @@
 .arena-dash-title a:hover {
 	color: #ff6cc8;
 }
+
+/* The page builders' "Show menu" control in the dashboard title bar: a quiet
+   utility button, not a pink Arena link, and never in the display serif. */
+.arena-dash-title .arena-dash-toggle {
+	color: #f6efea;
+	font-family: 'InterVariable', system-ui, sans-serif;
+	font-weight: 500;
+	text-transform: none;
+	letter-spacing: 0;
+	word-spacing: normal;
+}
+
+.arena-dash-title .arena-dash-toggle:hover {
+	color: #ffffff;
+}

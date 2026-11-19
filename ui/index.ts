@@ -192,6 +192,7 @@ export {
 	findNavEmoji,
 	findNavItem,
 	isFullBleedRoute,
+	isEditorWorkspaceRoute,
 	isNavItemActive,
 	navItemLabel,
 	resolveBackTarget,

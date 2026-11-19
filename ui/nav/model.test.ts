@@ -4,6 +4,7 @@ import {
 	findNavEmoji,
 	findNavItem,
 	isFullBleedRoute,
+	isEditorWorkspaceRoute,
 	isNavItemActive,
 	navItemLabel,
 	resolveBackTarget,
@@ -236,6 +237,21 @@ describe('isFullBleedRoute', () => {
 	test('is false for routes outside the navigation', () => {
 		expect(isFullBleedRoute(DASHBOARD_NAV, '/dashboard')).toBe(false)
 		expect(isFullBleedRoute(DASHBOARD_NAV, '/checkout')).toBe(false)
+	})
+})
+
+describe('isEditorWorkspaceRoute', () => {
+	test('is true for the two page builders', () => {
+		expect(isEditorWorkspaceRoute('/dashboard/app-settings/pages/home')).toBe(true)
+		expect(isEditorWorkspaceRoute('/dashboard/app-settings/pages/about-us/')).toBe(true)
+		expect(isEditorWorkspaceRoute('/dashboard/account/profile-page')).toBe(true)
+	})
+
+	test('is false for the page list and ordinary settings pages', () => {
+		expect(isEditorWorkspaceRoute('/dashboard/app-settings/pages')).toBe(false)
+		expect(isEditorWorkspaceRoute('/dashboard/app-settings/pages/')).toBe(false)
+		expect(isEditorWorkspaceRoute('/dashboard/app-settings/routes')).toBe(false)
+		expect(isEditorWorkspaceRoute('/dashboard/account/profile')).toBe(false)
 	})
 })
 
