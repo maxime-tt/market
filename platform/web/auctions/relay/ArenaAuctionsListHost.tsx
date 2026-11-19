@@ -60,6 +60,7 @@
  */
 
 import type { ArenaAuctionSnapshot, ArenaAuctionView, ArenaVerdictDivergence } from '@platform/web/auctions/relay/arenaAuctionRead'
+import { lotHref } from '@platform/web/auctions/relay/arenaLotRead'
 import { auctionEndsAt, toAuctionCardModel } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import { fetchTestLabels, useTestLabelState } from '@platform/web/config/testLabelsBinding'
 import { filterTestLabeledItems } from '@sdk/config/testLabelFilters'
@@ -68,19 +69,26 @@ import type { ArenaAuctionCardModel, ArenaRelayHealth, ArenaSurfaceStatus } from
 import { useEffect, type ReactNode } from 'react'
 
 // =========================================================================
-// The link shape — the `d` tag only, the existing contract
+// The link shape — the `d` tag, plus its seller
 // =========================================================================
 
 /**
- * `/auctions/<d>`.
+ * `/auctions/<d>?seller=<seller>`.
  *
  * The route's param is the `d` tag (`auctions.$auctionId.tsx` reads it as the
- * auction id), so the seller and the kind do not belong in the URL. This mirrors
- * `auctionHref` in `platform/web/storefront/StorefrontBlockSlots.tsx` — the same
- * contract, deliberately not a second convention.
+ * auction id); a `d` is only unique within its seller, so the seller rides along
+ * as the `?seller=` disambiguator the route parses. This is `lotHref`
+ * (`arenaLotRead.ts`) — the address a candidate lot is linked at when a `d` names
+ * more than one lot — reused rather than re-spelled, so there is one shape.
+ *
+ * The seller is not decoration: the coordinate-tagged kinds (a bid's `a`, a
+ * receipt's / verdict's / committed end's `auction`) are addressable only as
+ * `1440:<seller>:<d>`. A card model always carries its seller, so a lot card
+ * never builds a seller-less address.
  */
-export function arenaAuctionHref(d: string): string {
-	return `/auctions/${encodeURIComponent(d)}`
+export function arenaAuctionHref(d: string, seller: string | null = null): string {
+	if (seller === null || seller === '') return `/auctions/${encodeURIComponent(d)}`
+	return lotHref(d, seller)
 }
 
 // =========================================================================
@@ -390,7 +398,7 @@ export function ArenaAuctionsListHost({
 			status={status}
 			relayHealth={relayHealth}
 			now={now}
-			hrefFor={(card) => arenaAuctionHref(card.d)}
+			hrefFor={(card) => arenaAuctionHref(card.d, card.seller)}
 			toolbar={toolbar}
 			onCreate={onCreate}
 			notice={notice}

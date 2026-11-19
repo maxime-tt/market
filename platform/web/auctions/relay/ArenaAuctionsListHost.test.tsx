@@ -19,10 +19,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { ARENA_AUCTION_BID_KIND, ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
 import { testLabelActions } from '@sdk/config/test-labels'
 import type { NostrEventLike } from '@sdk/core'
-import {
-	findAuction,
-	toAuctionDetailModel,
-} from '@platform/web/auctions/relay/auctionSurfacesRead'
+import { findAuction, toAuctionDetailModel } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import {
 	decodeArenaEvent,
 	projectArenaEvents,
@@ -240,21 +237,34 @@ describe('ArenaAuctionsListHost — read states', () => {
 })
 
 // =========================================================================
-// Card href — the `d` tag only
+// Card href — the `d` tag, scoped by its seller
 // =========================================================================
 
-describe('the card href is the auction\'s `d` tag', () => {
-	test('a lot links to /auctions/<d>, never to the seller or the coordinate', () => {
+describe("the card href carries the auction's `d` tag and its seller", () => {
+	test('a lot links to /auctions/<d>?seller=<seller>, never to the coordinate', () => {
 		const markup = renderHost({ snapshot: ONE_LOT })
-		expect(markup).toContain('href="/auctions/lot-1"')
-		// The seller key and the full coordinate appear nowhere in a link.
+		expect(markup).toContain(`href="/auctions/lot-1?seller=${SELLER}"`)
+		// The seller is a query parameter, never a second path segment; the full
+		// coordinate appears nowhere in a link.
 		expect(markup).not.toContain(`href="/auctions/${SELLER}`)
 		expect(markup).not.toContain('href="/auctions/1440:')
 	})
 
-	test('a `d` needing escaping is escaped, and the helper is the one shape', () => {
+	test("every card carries its own seller, not the list's first one", () => {
+		const both = snapshotOf([createEvent({ d: 'lot-1', seller: SELLER }), createEvent({ d: 'lot-2', seller: OTHER_SELLER })])
+		const markup = renderHost({ snapshot: both })
+		expect(markup).toContain(`href="/auctions/lot-1?seller=${SELLER}"`)
+		expect(markup).toContain(`href="/auctions/lot-2?seller=${OTHER_SELLER}"`)
+	})
+
+	test('a `d` needing escaping is escaped, and the seller is encoded too', () => {
+		expect(arenaAuctionHref('lot-1', SELLER)).toBe(`/auctions/lot-1?seller=${SELLER}`)
+		expect(arenaAuctionHref('a b/c', SELLER)).toBe(`/auctions/a%20b%2Fc?seller=${SELLER}`)
+		expect(arenaAuctionHref('a b/c', 'seller/alice')).toBe('/auctions/a%20b%2Fc?seller=seller%2Falice')
+		// A card with no seller still yields the plain address rather than `?seller=`.
 		expect(arenaAuctionHref('lot-1')).toBe('/auctions/lot-1')
-		expect(arenaAuctionHref('a b/c')).toBe('/auctions/a%20b%2Fc')
+		expect(arenaAuctionHref('lot-1', '')).toBe('/auctions/lot-1')
+		expect(arenaAuctionHref('lot-1', null)).toBe('/auctions/lot-1')
 	})
 })
 
@@ -323,7 +333,7 @@ describe('sort', () => {
 	const dispatch = (sort: ArenaListSort, snapshot: ArenaAuctionSnapshot = OPEN_AND_ENDED) =>
 		selectArenaListCards(snapshot, { now: NOW, status: 'settled', sort, hideEnded: false }).cards.map((card) => card.d)
 
-	test('newest first is the root create\'s time, newest lot first', () => {
+	test("newest first is the root create's time, newest lot first", () => {
 		expect(dispatch('newest')).toEqual(['open-lot', 'endless-lot', 'ended-lot'])
 	})
 
@@ -362,7 +372,7 @@ describe('sort', () => {
 // =========================================================================
 
 describe('divergence is surfaced', () => {
-	test('the list passes the snapshot\'s divergence list into the card projection', () => {
+	test("the list passes the snapshot's divergence list into the card projection", () => {
 		// Detection itself is covered by `auctionSurfacesRead.test.ts`; what is
 		// under test here is that the list hands the read's own list to the
 		// projection instead of dropping it.
