@@ -10,7 +10,7 @@ import { STOREFRONT_THEMES } from '@sdk/config/storefront/storefrontThemes'
 import { StorefrontBlockView, StorefrontRoot } from '@ui/storefront'
 import { usePuck, type Config, type Data } from '@puckeditor/core'
 import { storefrontBlockSlots } from './StorefrontBlockSlots'
-import { CollectionPickerField, ProductPickerField } from './fields/ItemPickerField'
+import { CollectionPickerField, ProductPickerField, ProductRowPickerField } from './fields/ItemPickerField'
 import { AuctionPickerField } from './fields/AuctionPickerField'
 import { ThemePaletteStrip, ThemeSwatchGrid, ThemeTunePanel } from './fields/ThemePickerField'
 
@@ -413,11 +413,16 @@ export const storefrontCmsConfig: Config = {
 			label: 'Product row',
 			fields: {
 				productDTags: {
-					type: 'array',
+					type: 'custom',
 					label: 'Products (ordered)',
-					max: 60,
-					getItemSummary: (item: string) => item || 'Product',
-					defaultItemProps: { id: '' },
+					render: ({ value, onChange, readOnly }) => (
+						<ProductRowPickerField
+							label="Products (ordered)"
+							value={Array.isArray(value) ? (value as string[]).filter((entry) => typeof entry === 'string') : []}
+							onChange={onChange}
+							readOnly={readOnly}
+						/>
+					),
 				},
 			},
 			defaultProps: { productDTags: [] },
@@ -453,7 +458,7 @@ export const storefrontCmsConfig: Config = {
 					getItemSummary: (item: { label?: string }) => item?.label || 'Category',
 					arrayFields: {
 						label: { type: 'text', label: 'Label' },
-						key: { type: 'text', label: 'Category key' },
+						key: { type: 'text', label: 'Search word (blank uses the label)' },
 					},
 					defaultItemProps: { label: 'Category', key: '' },
 				},
