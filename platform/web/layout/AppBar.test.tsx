@@ -29,9 +29,6 @@ let configData: { displayName?: string; name?: string; picture?: string; appSett
 // stubs rather than the browser-bound originals.
 mock.module('@platform/web/config/publicConfigQuery', () => ({ useConfigQuery: () => ({ data: configData }) }))
 mock.module('@platform/web/config/instanceName', () => ({ useInstanceName: () => 'Test Market' }))
-mock.module('@platform/web/layout/Header', () => ({
-	HeaderAccountControls: () => createElement('div', { 'data-testid': 'account-controls-stub' }),
-}))
 
 afterAll(() => {
 	mock.restore()
@@ -139,10 +136,12 @@ describe('AppBar search', () => {
 })
 
 describe('AppBar account slot', () => {
-	test('renders the account controls on the right', async () => {
+	test('renders the real account menu on the right', async () => {
+		// Not stubbed: the slot's contract is that the bar alone mounts the account surface, so the
+		// assertion is about the components meeting, not about a marker.
 		const markup = await renderBar('/products')
 
 		expect(markup).toContain('data-slot="account-slot"')
-		expect(markup).toContain('data-testid="account-controls-stub"')
+		expect(markup).toContain('data-testid="account-menu-trigger"')
 	})
 })

@@ -21,8 +21,9 @@
  * - **Search** is the same `SearchField` the idle hero uses, at `size="nav"`. It
  *   navigates to `/?q=`, the route that validates the term and hands it to the
  *   Browse host, so the bar has one search and every route has it.
- * - **Account** is the existing `HeaderAccountControls` for now (sign-in when
- *   signed out; dashboard, profile and sign-out when signed in).
+ * - **Account** is the one auth-aware menu (`platform/web/layout/AccountMenu.tsx`):
+ *   a sign-in action when signed out; profile, wallet, dashboard, cart, the
+ *   currency submenu and sign-out when signed in.
  *
  * Nothing here branches on the path for styling: the bar is written against the
  * widget role tokens, and `.arena-chrome` rebinds those to the arena's dark
@@ -33,7 +34,7 @@ import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState, type FC } from 'react'
 import { useInstanceName } from '@platform/web/config/instanceName'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
-import { HeaderAccountControls } from '@platform/web/layout/Header'
+import { AccountMenu } from '@platform/web/layout/AccountMenu'
 import { navItems } from '@platform/web/layout/navItems'
 import { AppBarView } from '@ui/appbar/app-bar-view'
 import { SearchField } from '@ui/browse/search-field'
@@ -112,7 +113,7 @@ export const AppBar: FC<AppBarProps> = ({ className }) => {
 			brand={brand}
 			navItems={nav}
 			searchSlot={<SearchField size="nav" value={query} onChange={setQuery} onGo={submitSearch} />}
-			accountSlot={<HeaderAccountControls />}
+			accountSlot={<AccountMenu />}
 		/>
 	)
 }

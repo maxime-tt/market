@@ -333,3 +333,96 @@ describe('auth machine — the error strings the callers match', () => {
 		expect(harness.machine.getState().isAuthenticating).toBe(false)
 	})
 })
+
+describe('auth machine — the signer type', () => {
+	test('starts null and is exposed through getSignerType', () => {
+		const harness = createHarness()
+
+		expect(harness.machine.getState().signerType).toBeNull()
+		expect(harness.machine.getSignerType()).toBeNull()
+	})
+
+	test('reports the lane of every login action: nsec, extension, bunker, ncryptsec', async () => {
+		const nsec = createHarness({ resolvePubkey: () => 'nsec-pubkey' })
+		await nsec.machine.loginWithPrivateKey('nsec1example')
+		expect(nsec.machine.getSignerType()).toBe('nsec')
+		expect(nsec.machine.getState().signerType).toBe('nsec')
+
+		const extension = createHarness({ resolvePubkey: () => 'extension-pubkey' })
+		await extension.machine.loginWithExtension()
+		expect(extension.machine.getSignerType()).toBe('extension')
+
+		const bunker = createHarness({ resolvePubkey: () => 'bunker-pubkey' })
+		await bunker.machine.loginWithNip46('bunker://example', { privateKey: 'client-key' })
+		expect(bunker.machine.getSignerType()).toBe('bunker')
+
+		const encrypted = createHarness({
+			storage: { [K.localEncryptedSignerKey]: 'pubkey:ncryptsec-value' },
+			resolvePubkey: () => 'encrypted-pubkey',
+		})
+		await encrypted.machine.decryptAndLogin('password')
+		expect(encrypted.machine.getSignerType()).toBe('ncryptsec')
+		// The lane is what was started, not what the storage record looks like.
+		expect(encrypted.startCalls.map((input) => input.lane)).toEqual(['ncryptsec'])
+	})
+
+	test('reports the lane an auto-login took', async () => {
+		const harness = createHarness({
+			storage: { [K.autoLogin]: 'true', [K.localSignerKey]: 'client-key', [K.connectUrl]: 'bunker://example' },
+			resolvePubkey: () => 'bunker-pubkey',
+		})
+
+		await harness.machine.getAuthFromLocalStorageAndLogin()
+
+		expect(harness.startCalls.map((input) => input.lane)).toEqual(['bunker'])
+		expect(harness.machine.getSignerType()).toBe('bunker')
+		expect(harness.machine.getState().isAuthenticated).toBe(true)
+	})
+
+	test('an identity snapshot carries the lane of the session that emitted it, and idle clears it', async () => {
+		const harness = createHarness({ resolvePubkey: () => 'lane-pubkey' })
+		await harness.machine.loginWithExtension()
+
+		harness.emit({ pubkey: 'observed-pubkey', state: 'active' })
+		expect(harness.machine.getState().signerType).toBe('extension')
+		expect(harness.machine.getCurrentPubkey()).toBe('observed-pubkey')
+
+		harness.emit({ state: 'idle' })
+		expect(harness.machine.getState().signerType).toBeNull()
+	})
+
+	test('a snapshot that arrives after the machine stopped owning the session reports no lane instead of guessing', async () => {
+		const harness = createHarness({ resolvePubkey: () => 'lane-pubkey' })
+		await harness.machine.loginWithPrivateKey('nsec1example')
+		harness.machine.logout()
+
+		// A late `active` snapshot from the session the logout ended: the identity is reported, but the
+		// machine no longer has a lane to vouch for, so it must not claim the old one.
+		harness.emit({ pubkey: 'stale-pubkey', state: 'active' })
+
+		expect(harness.machine.getState().user).toEqual({ pubkey: 'stale-pubkey' })
+		expect(harness.machine.getState().isAuthenticated).toBe(true)
+		expect(harness.machine.getState().signerType).toBeNull()
+		expect(harness.machine.getSignerType()).toBeNull()
+	})
+
+	test('a lane that resolves no identity leaves no lane behind', async () => {
+		const harness = createHarness({ resolvePubkey: () => undefined })
+
+		await expect(harness.machine.loginWithPrivateKey('nsec1example')).rejects.toThrow('The private key lane did not resolve an identity')
+
+		expect(harness.machine.getSignerType()).toBeNull()
+		expect(harness.machine.getState().signerType).toBeNull()
+	})
+
+	test('logout resets the lane with the rest of the state', async () => {
+		const harness = createHarness()
+		await harness.machine.loginWithPrivateKey('nsec1example')
+		expect(harness.machine.getSignerType()).toBe('nsec')
+
+		harness.machine.logout()
+
+		expect(harness.machine.getSignerType()).toBeNull()
+		expect(harness.machine.getState()).toBe(INITIAL_AUTH_STATE)
+	})
+})
