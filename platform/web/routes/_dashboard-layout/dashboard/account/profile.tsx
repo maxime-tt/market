@@ -226,7 +226,8 @@ function ProfileComponent() {
 									initialUrl={profile.banner}
 									onSave={handleHeaderImageSave}
 									onDelete={handleImageDelete}
-									imageDimensionText="dimensions: 2000px High x 400px Wide"
+									imageDimensionText="Recommended: 2000 × 400 px (wide banner)"
+									aspect="banner"
 								/>
 							</div>
 
@@ -242,7 +243,8 @@ function ProfileComponent() {
 									initialUrl={profile.image}
 									onSave={handleProfileImageSave}
 									onDelete={handleImageDelete}
-									imageDimensionText="dimensions: 200px High x 200px Wide"
+									imageDimensionText="Recommended: 400 × 400 px"
+									aspect="square"
 								/>
 							</div>
 

@@ -140,14 +140,16 @@ describe('a page bound to this path', () => {
 })
 
 describe('usesArenaChrome', () => {
-	test('the auction routes and the home / Browse surface use the Arena chrome', () => {
+	test('the home / Browse surface, the auction routes and the product routes use the Arena chrome', () => {
 		expect(usesArenaChrome('/')).toBe(true)
 		expect(usesArenaChrome('/auctions')).toBe(true)
 		expect(usesArenaChrome('/auctions/live-arena-1')).toBe(true)
+		expect(usesArenaChrome('/products')).toBe(true)
+		expect(usesArenaChrome('/products/x')).toBe(true)
 	})
 
 	test('every other page keeps the default chrome', () => {
-		for (const path of ['/products', '/products/x', '/dashboard', '/auctionsx', '/community', '/profile/abc']) {
+		for (const path of ['/productsx', '/dashboard', '/auctionsx', '/community', '/profile/abc']) {
 			expect(usesArenaChrome(path)).toBe(false)
 		}
 	})

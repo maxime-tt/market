@@ -72,7 +72,7 @@ export function ReactionButtonView({
 				<TooltipButton
 					variant={variant ?? 'outline'}
 					size="icon"
-					className={'border-2 rounded focus:outline-none ' + classNameVariant + ' ' + className}
+					className={'border rounded-full focus:outline-none ' + classNameVariant + ' ' + className}
 					{...props}
 					type="button"
 					data-testid="reaction-button"
@@ -147,7 +147,7 @@ export function ZapButtonView({
 			variant={variant ?? 'default'}
 			size="icon"
 			className={cn(
-				'group gap-2 bg-transparent hover:bg-focus border-2 border-focus rounded text-focus hover:text-focus-foreground hover:animate-pulse',
+				'group gap-2 bg-transparent hover:bg-focus border border-focus rounded-full text-focus hover:text-focus-foreground hover:animate-pulse',
 				className,
 			)}
 			{...props}
@@ -180,7 +180,9 @@ export function ShareButtonView({ onPress, className, variant, ...props }: Share
 		<TooltipButton
 			variant={variant ?? 'outline'}
 			size="icon"
-			className={'border-foreground rounded border-2 bg-transparent hover:bg-foreground hover:text-background ' + className}
+			className={
+				'border-border-strong text-foreground rounded-full border bg-transparent hover:border-fill-ink hover:text-fill-ink ' + className
+			}
 			tooltip="Share"
 			{...props}
 			onClick={onPress}
@@ -202,7 +204,9 @@ export function CommentButtonView({ icon, tooltip, onPress, onPointerDown, class
 		<TooltipButton
 			variant={variant ?? 'outline'}
 			size="icon"
-			className={'border-foreground rounded border-2 bg-transparent hover:bg-foreground hover:text-background ' + className}
+			className={
+				'border-border-strong text-foreground rounded-full border bg-transparent hover:border-fill-ink hover:text-fill-ink ' + className
+			}
 			type="button"
 			{...props}
 			tooltip={tooltip ?? 'Comment'}

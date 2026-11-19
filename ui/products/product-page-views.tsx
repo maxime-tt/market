@@ -125,7 +125,7 @@ export function ProductPurchasePanel({
 							<div className="flex flex-shrink-0 items-center gap-2">
 								<Button
 									variant="outline"
-									className="text-text-high"
+									className="border-border-strong bg-transparent rounded-full text-text-high hover:text-fill-ink hover:border-fill-ink"
 									size="icon"
 									onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
 									disabled={quantity <= 1}
@@ -134,7 +134,7 @@ export function ProductPurchasePanel({
 									<Minus className="h-6 w-6" />
 								</Button>
 								<Input
-									className="w-12 bg-bg text-center font-medium text-text-high"
+									className="bg-surface-sunken border-border-strong rounded-full w-14 font-medium text-text-high text-center"
 									value={quantity}
 									onChange={(event) => {
 										const value = parseInt(event.target.value)
@@ -147,7 +147,7 @@ export function ProductPurchasePanel({
 								/>
 								<Button
 									variant="outline"
-									className="text-text-high"
+									className="border-border-strong bg-transparent rounded-full text-text-high hover:text-fill-ink hover:border-fill-ink"
 									size="icon"
 									onClick={() => onQuantityChange(Math.min(stock || quantity + 1, quantity + 1))}
 									disabled={quantity >= (stock || quantity)}
@@ -156,13 +156,18 @@ export function ProductPurchasePanel({
 									<Plus className="h-6 w-6" />
 								</Button>
 							</div>
-							<Button variant="secondary" onClick={onAddToCart} disabled={isOutOfStock || visibility === 'hidden'}>
+							<Button
+								variant="secondary"
+								className="bg-fill-ink hover:bg-fill-ink-hover px-6 rounded-full font-semibold text-on-fill-ink text-xs tracking-[0.06em]"
+								onClick={onAddToCart}
+								disabled={isOutOfStock || visibility === 'hidden'}
+							>
 								{addToCartLabel(visibility, isOutOfStock)}
 							</Button>
 						</div>
 					)}
 					{canEdit && (
-						<Button variant="secondary" onClick={onEdit} className="flex items-center gap-2">
+						<Button variant="secondary" onClick={onEdit} className="flex items-center gap-2 rounded-full">
 							<Edit className="h-5 w-5" />
 							<span>Edit Product</span>
 						</Button>

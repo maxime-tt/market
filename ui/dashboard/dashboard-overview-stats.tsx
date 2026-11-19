@@ -1,5 +1,7 @@
 import { getProductVisibility, type ProductReadEvent } from '@sdk/commerce/discovery'
 import { getOrderRecipientPubkey, type OrderReadEvent } from '@sdk/commerce/orders'
+import { Banknote, MessagesSquare, Package, ShoppingBag } from 'lucide-react'
+import { DashboardIconTile } from './dashboard-icon-tile'
 
 export interface DashboardOverviewOrder {
 	order: OrderReadEvent & { pubkey?: string }
@@ -14,10 +16,10 @@ export interface DashboardOverviewStatsProps {
 }
 
 const metrics = [
-	{ key: 'listings', label: 'Active Listings', detail: 'total products', icon: '📦' },
-	{ key: 'sales', label: 'Sales', detail: 'Orders received', icon: '💰' },
-	{ key: 'purchases', label: 'Purchases', detail: 'Orders placed', icon: '🛍️' },
-	{ key: 'messages', label: 'Messages', detail: 'Conversations', icon: '✉️' },
+	{ key: 'listings', label: 'Active Listings', detail: 'total products', icon: Package },
+	{ key: 'sales', label: 'Sales', detail: 'Orders received', icon: Banknote },
+	{ key: 'purchases', label: 'Purchases', detail: 'Orders placed', icon: ShoppingBag },
+	{ key: 'messages', label: 'Messages', detail: 'Conversations', icon: MessagesSquare },
 ] as const
 
 /** SDK-backed dashboard counts; fetching, identity, and loading state come from the route. */
@@ -35,19 +37,17 @@ export function DashboardOverviewStats({ products, orders, userPubkey, conversat
 	return (
 		<section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" aria-label="Dashboard overview statistics">
 			{metrics.map((metric) => (
-				<article key={metric.key} className="rounded-lg border bg-surface-raised text-text-high shadow-sm">
+				<article key={metric.key} className="rounded-2xl border border-border-default bg-surface-raised text-text-high shadow-sm">
 					<div className="flex items-center justify-between p-6 pb-2">
 						<h2 className="text-sm font-medium">{metric.label}</h2>
-						<span className="text-2xl" aria-hidden="true">
-							{metric.icon}
-						</span>
+						<DashboardIconTile icon={metric.icon} />
 					</div>
 					<div className="p-6 pt-2">
 						{isLoading ? (
 							<div className="h-8 w-20 animate-pulse rounded bg-surface-sunken" aria-label={`Loading ${metric.label}`} />
 						) : (
 							<>
-								<div className="text-2xl font-bold">{values[metric.key]}</div>
+								<div className="text-3xl font-semibold tabular-nums tracking-tight">{values[metric.key]}</div>
 								<p className="text-xs text-text-mid">{metric.key === 'listings' ? `${products.length} ${metric.detail}` : metric.detail}</p>
 							</>
 						)}

@@ -84,7 +84,7 @@ export function ProductCardView({
 			</div>
 
 			<div className="flex flex-grow flex-col gap-2 p-2">
-				<h2 className="overflow-hidden truncate whitespace-nowrap border-b border-[var(--light-gray)] pb-2 text-sm font-medium">{title}</h2>
+				<h2 className="overflow-hidden truncate whitespace-nowrap border-b border-border-default pb-2 text-sm font-medium">{title}</h2>
 
 				<div className="flex items-center justify-between">
 					{priceTag &&
