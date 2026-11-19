@@ -176,7 +176,9 @@ export const AppBar: FC<AppBarProps> = ({ className }) => {
 				accountSlot={
 					<div className="flex items-center gap-2">
 						{/*
-						 * Below `xl` the view hides the nav list (`hidden xl:flex`), so this
+						 * Below `xl` the view hides the nav list (`hidden xl:flex`), and from
+						 * `xl` it also hands the list here when it does not fit beside the
+						 * brand (`data-nav-fits="false"`, see `ui/appbar/use-nav-fit.ts`), so this
 						 * is the only way to the destinations until the bar is wide enough
 						 * to hold the list beside a centred field. It opens the overlay
 						 * that carries the same list.
@@ -188,7 +190,7 @@ export const AppBar: FC<AppBarProps> = ({ className }) => {
 							aria-expanded={mobileMenuOpen}
 							aria-controls={MOBILE_MENU_ID}
 							onClick={() => uiActions.toggleMobileMenu()}
-							className="inline-flex xl:hidden h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border-default bg-surface-raised text-text-high transition-colors hover:bg-fill-ink hover:text-on-fill-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+							className="inline-flex xl:hidden xl:group-data-[nav-fits=false]/appbar:inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border-default bg-surface-raised text-text-high transition-colors hover:bg-fill-ink hover:text-on-fill-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
 						>
 							{mobileMenuOpen ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
 						</button>

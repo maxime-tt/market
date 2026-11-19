@@ -16,8 +16,21 @@ describe('parseAdminAppearance', () => {
 		})
 	})
 
-	test('falls back field by field, including styles that are not available yet', () => {
-		expect(parseAdminAppearance({ style: 'minimal', color: 'pink', mode: 'auto' })).toEqual({ style: 'glass', color: 'teal', mode: 'auto' })
+	test('falls back field by field', () => {
+		expect(parseAdminAppearance({ style: 'brutalist', color: 'pink', mode: 'auto' })).toEqual({
+			style: 'glass',
+			color: 'teal',
+			mode: 'auto',
+		})
+	})
+
+	test('keeps Solid and Minimal now that they ship', () => {
+		expect(parseAdminAppearance({ style: 'solid', color: 'ocean', mode: 'dark' })).toEqual({ style: 'solid', color: 'ocean', mode: 'dark' })
+		expect(parseAdminAppearance({ style: 'minimal', color: 'teal', mode: 'light' })).toEqual({
+			style: 'minimal',
+			color: 'teal',
+			mode: 'light',
+		})
 	})
 })
 

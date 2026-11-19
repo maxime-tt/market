@@ -17,6 +17,8 @@ export interface AppearanceControlProps {
 	resolvedMode: ResolvedAdminMode
 	onChange: (patch: Partial<AdminAppearance>) => void
 	className?: string
+	/** Icon-only trigger, for the phone title bar. */
+	compact?: boolean
 }
 
 /**
@@ -24,7 +26,7 @@ export interface AppearanceControlProps {
  * else. Rendered inline rather than through a portal so the panel stays inside
  * the admin theme scope it is changing.
  */
-export function AppearanceControl({ value, resolvedMode, onChange, className }: AppearanceControlProps) {
+export function AppearanceControl({ value, resolvedMode, onChange, className, compact = false }: AppearanceControlProps) {
 	const [open, setOpen] = useState(false)
 	const rootRef = useRef<HTMLDivElement>(null)
 	const panelId = useId()
@@ -49,14 +51,15 @@ export function AppearanceControl({ value, resolvedMode, onChange, className }: 
 		<div ref={rootRef} className={cn('relative', className)} data-slot="admin-appearance">
 			<button
 				type="button"
-				className="admin-chip"
+				className={cn('admin-chip', compact && 'admin-chip-compact')}
+				aria-label={compact ? 'Appearance' : undefined}
 				aria-expanded={open}
 				aria-controls={panelId}
 				onClick={() => setOpen((next) => !next)}
 				data-testid="admin-appearance-toggle"
 			>
 				<Palette className="w-4 h-4" aria-hidden="true" />
-				<span>Appearance</span>
+				{!compact && <span>Appearance</span>}
 			</button>
 			{open && (
 				<div id={panelId} role="dialog" aria-label="Dashboard appearance" className="admin-popover" data-testid="admin-appearance-panel">

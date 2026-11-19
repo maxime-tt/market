@@ -20,7 +20,7 @@
  */
 
 /* ── Colour presets: accent + background glow, light and dark ─────────── */
-.admin-console {
+:is(.admin-console, .admin-portal) {
 	--a-acc-light: #0b7d72;
 	--a-acc-dark: #2dd4bf;
 	--a-accfg-dark: #04201d;
@@ -31,7 +31,7 @@
 	--a-b2-dark: #11305e;
 	--a-b3-dark: #0b4a33;
 }
-.admin-console[data-admin-color='ocean'] {
+:is(.admin-console, .admin-portal)[data-admin-color='ocean'] {
 	--a-acc-light: #2563eb;
 	--a-acc-dark: #60a5fa;
 	--a-accfg-dark: #06142e;
@@ -42,7 +42,7 @@
 	--a-b2-dark: #0b4660;
 	--a-b3-dark: #2a1f66;
 }
-.admin-console[data-admin-color='emerald'] {
+:is(.admin-console, .admin-portal)[data-admin-color='emerald'] {
 	--a-acc-light: #15803d;
 	--a-acc-dark: #4ade80;
 	--a-accfg-dark: #052010;
@@ -53,7 +53,7 @@
 	--a-b2-dark: #33470e;
 	--a-b3-dark: #0b4640;
 }
-.admin-console[data-admin-color='violet'] {
+:is(.admin-console, .admin-portal)[data-admin-color='violet'] {
 	--a-acc-light: #7c3aed;
 	--a-acc-dark: #a78bfa;
 	--a-accfg-dark: #170a33;
@@ -64,7 +64,7 @@
 	--a-b2-dark: #5a1849;
 	--a-b3-dark: #1b2a66;
 }
-.admin-console[data-admin-color='sunset'] {
+:is(.admin-console, .admin-portal)[data-admin-color='sunset'] {
 	--a-acc-light: #c2410c;
 	--a-acc-dark: #fb923c;
 	--a-accfg-dark: #2a1004;
@@ -75,7 +75,7 @@
 	--a-b2-dark: #5a1630;
 	--a-b3-dark: #4d3a08;
 }
-.admin-console[data-admin-color='graphite'] {
+:is(.admin-console, .admin-portal)[data-admin-color='graphite'] {
 	--a-acc-light: #334155;
 	--a-acc-dark: #cbd5e1;
 	--a-accfg-dark: #0f172a;
@@ -88,8 +88,8 @@
 }
 
 /* ── Mode: neutrals, and which preset half is live ───────────────────── */
-.admin-console,
-.admin-console[data-admin-mode='light'] {
+:is(.admin-console, .admin-portal),
+:is(.admin-console, .admin-portal)[data-admin-mode='light'] {
 	--admin-acc: var(--a-acc-light);
 	--admin-accfg: #ffffff;
 	--admin-b1: var(--a-b1-light);
@@ -110,7 +110,7 @@
 	--admin-shadow-pop: 0 20px 50px rgb(20 40 60 / 0.18);
 	color-scheme: light;
 }
-.admin-console[data-admin-mode='dark'] {
+:is(.admin-console, .admin-portal)[data-admin-mode='dark'] {
 	--admin-acc: var(--a-acc-dark);
 	--admin-accfg: var(--a-accfg-dark);
 	--admin-b1: var(--a-b1-dark);
@@ -133,7 +133,7 @@
 }
 
 /* ── Role tokens the app already reads, rebound for the console ──────── */
-.admin-console {
+:is(.admin-console, .admin-portal) {
 	--background: var(--admin-bg);
 	--foreground: var(--admin-fg);
 	--card: var(--admin-glass-2);
@@ -204,7 +204,16 @@
 	--puck-color-focus-ring: var(--admin-acc);
 	--puck-color-selection-border: var(--admin-acc);
 	--puck-color-selection-bg: color-mix(in srgb, var(--admin-acc) 12%, transparent);
+}
 
+/* Pop-ups opened from inside the console (tagged `.admin-portal`, see
+   useAdminPortalTheme.ts) carry the same tokens, but none of the layout. */
+.admin-portal {
+	color: var(--admin-fg);
+	font-family: var(--font-body);
+}
+
+.admin-console {
 	position: relative;
 	isolation: isolate;
 	min-height: calc(100vh - 64px);
@@ -233,6 +242,66 @@
 	box-shadow: var(--admin-shadow);
 	backdrop-filter: blur(22px) saturate(1.4);
 	-webkit-backdrop-filter: blur(22px) saturate(1.4);
+}
+
+/* ── Solid: opaque cards on a quietly tinted ground ──────────────────── */
+:is(.admin-console, .admin-portal)[data-admin-style='solid']:not([data-admin-mode='dark']) {
+	--admin-bg: color-mix(in srgb, var(--admin-acc) 5%, #f2f4f6);
+	--admin-line: rgb(15 30 45 / 0.13);
+	--admin-glass: #ffffff;
+	--admin-glass-2: #ffffff;
+	--admin-glass-border: rgb(15 30 45 / 0.13);
+	--admin-hover: color-mix(in srgb, var(--admin-acc) 7%, #ffffff);
+	--admin-shadow: 0 1px 2px rgb(15 30 45 / 0.06), 0 4px 14px rgb(15 30 45 / 0.05);
+}
+:is(.admin-console, .admin-portal)[data-admin-style='solid'][data-admin-mode='dark'] {
+	--admin-bg: color-mix(in srgb, var(--admin-acc) 5%, #0a0e13);
+	--admin-glass: #171f27;
+	--admin-glass-2: #171f27;
+	--admin-glass-border: rgb(255 255 255 / 0.1);
+	--admin-hover: color-mix(in srgb, var(--admin-acc) 12%, #171f27);
+	--admin-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.3);
+}
+.admin-console[data-admin-style='solid'] .admin-panel {
+	background: var(--admin-glass-2);
+	border: 1px solid var(--admin-glass-border);
+	border-radius: 12px;
+	box-shadow: var(--admin-shadow);
+}
+
+/* ── Minimal: no panels, hairlines and white space ───────────────────── */
+:is(.admin-console, .admin-portal)[data-admin-style='minimal']:not([data-admin-mode='dark']) {
+	--admin-bg: #ffffff;
+	--admin-line: rgb(0 0 0 / 0.09);
+	--admin-line-strong: rgb(0 0 0 / 0.22);
+	--admin-glass: #ffffff;
+	--admin-glass-2: #ffffff;
+	--admin-glass-border: rgb(0 0 0 / 0.09);
+	--admin-hover: #f2f3f4;
+}
+:is(.admin-console, .admin-portal)[data-admin-style='minimal'][data-admin-mode='dark'] {
+	--admin-bg: #0b0b0c;
+	--admin-line: rgb(255 255 255 / 0.09);
+	--admin-glass: #0b0b0c;
+	--admin-glass-2: #0b0b0c;
+	--admin-glass-border: rgb(255 255 255 / 0.09);
+	--admin-hover: #18181b;
+}
+:is(.admin-console, .admin-portal)[data-admin-style='minimal'] {
+	--radius: 8px;
+	--radius-lg: 8px;
+	--radius-xl: 10px;
+}
+.admin-console[data-admin-style='minimal'] .admin-panel {
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+}
+@media (min-width: 1024px) {
+	.admin-console[data-admin-style='minimal'] .admin-sidebar {
+		border-right: 1px solid var(--admin-line);
+	}
 }
 
 /* ── Title bar ───────────────────────────────────────────────────────── */
@@ -517,4 +586,58 @@
 
 	color: var(--foreground);
 	font-family: var(--font-body);
+}
+
+/* ── Style accents: chips, active menu item, title dot ───────────────── */
+.admin-console[data-admin-style='solid'] .admin-chip,
+.admin-console[data-admin-style='solid'] .arena-dash-title .arena-dash-toggle,
+.admin-console[data-admin-style='minimal'] .admin-chip,
+.admin-console[data-admin-style='minimal'] .arena-dash-title .arena-dash-toggle {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	border-color: var(--admin-line-strong);
+	border-radius: 8px;
+}
+.admin-console[data-admin-style='minimal'] .admin-chip,
+.admin-console[data-admin-style='minimal'] .arena-dash-title .arena-dash-toggle {
+	background: transparent;
+	border-color: var(--admin-line);
+}
+.admin-console[data-admin-style='solid'] [data-slot='sidebar-nav'] nav > a[data-status='active'] {
+	background: color-mix(in srgb, var(--admin-acc) 12%, transparent);
+	border-color: transparent;
+	color: var(--admin-acc);
+	box-shadow: none;
+}
+.admin-console[data-admin-style='minimal'] [data-slot='sidebar-nav'] nav > a {
+	border-radius: 0 6px 6px 0;
+}
+.admin-console[data-admin-style='minimal'] [data-slot='sidebar-nav'] nav > a[data-status='active'] {
+	background: var(--admin-hover);
+	border-color: transparent;
+	box-shadow: inset 2px 0 0 var(--admin-acc);
+}
+.admin-console[data-admin-style='solid'] .arena-dash-title::before,
+.admin-console[data-admin-style='minimal'] .arena-dash-title::before {
+	box-shadow: none;
+}
+.admin-console[data-admin-style='solid'] .admin-popover,
+.admin-console[data-admin-style='minimal'] .admin-popover {
+	background: var(--admin-solid);
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	border-radius: 12px;
+}
+
+/* ── Phone title bar ─────────────────────────────────────────────────── */
+/* It is sticky, so it needs a ground of its own or the page scrolls
+   visibly through the title. */
+.admin-console .admin-titlebar-mobile {
+	background: color-mix(in srgb, var(--admin-bg) 82%, transparent);
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	border-bottom: 1px solid var(--admin-line);
+}
+.admin-console .admin-chip-compact {
+	padding: 0.5rem;
 }

@@ -81,8 +81,12 @@ describe('AppBarView', () => {
 		// can sit beside a centred field; below that the host's menu carries it.
 		expect(nav).toContain('hidden')
 		expect(nav).toContain('xl:flex')
-		// It wraps inside its lane instead of clipping a destination.
-		expect(nav).toContain('flex-wrap')
+		// It never wraps or clips: when it does not fit whole beside the brand it
+		// steps aside (invisible, out of flow) and the host's menu carries it.
+		expect(nav).toContain('flex-nowrap')
+		expect(nav).toContain('whitespace-nowrap')
+		expect(nav).toContain('xl:group-data-[nav-fits=false]/appbar:invisible')
+		expect(openingTag(markup, 'data-slot="app-bar"')).toContain('group/appbar')
 	})
 
 	test('omits the nav list when no items are given', () => {

@@ -28,9 +28,11 @@ Business at the front, party at the back:
 
 1. **Public site** keeps the instance theme, unchanged.
 2. **Dashboard, admin and settings** render inside `.admin-console`, one fixed
-   professional theme, the same on every instance. The first style is
-   **Glass**. Solid and Minimal are reserved for later passes and are shown as
-   "Coming soon".
+   professional design system, the same on every instance, in three styles:
+   **Glass** (translucent panels on a soft colour glow, the default),
+   **Solid** (opaque cards on a quietly tinted ground) and **Minimal** (no
+   panels, hairlines and white space). All three share the same colour and
+   mode controls.
 3. **Each admin chooses their own appearance**: style, colour and mode. Teal is
    the default colour, light is the default mode, and Auto follows the system
    setting. The choice lives in that admin's browser
@@ -49,9 +51,18 @@ Business at the front, party at the back:
 
 ## Consequences
 
-- Dialogs, popovers and menus that render through a portal sit outside
-  `.admin-console` and still use the public tokens. They can be brought into
-  the console later by giving the portal container the console attributes.
+- Dialogs, popovers, menus and selects render through portals outside
+  `.admin-console`. While the dashboard is mounted, each new pop-up whose
+  opener sits inside the console (its `aria-controls` trigger, or the element
+  focused just before it opened) is tagged `.admin-portal` with the admin's
+  attributes and gets the console tokens. Pop-ups opened from the header (the
+  account menu, the wallet popup) or from the editor preview keep the public
+  theme. Legacy utility remaps do not apply inside portals.
+- The site header publishes its measured height as `--app-bar-h`; the
+  dashboard's sticky title and full-height panes use it instead of fixed
+  offsets. From `xl` the header shows its nav links inline only when the brand
+  and the whole list fit its left lane; otherwise the menu button carries them,
+  so the instance name is never truncated and no link wraps.
 - Legacy hard-coded utility classes (for example `bg-white`, `border-black`,
   `bg-pink-500`) are remapped inside the console only, never inside the
   preview, so older screens follow the console theme without edits.

@@ -12,7 +12,7 @@ export const ADMIN_STYLES = ['glass', 'solid', 'minimal'] as const
 export type AdminStyle = (typeof ADMIN_STYLES)[number]
 
 /** Styles an admin can pick today. Solid and Minimal follow in later passes. */
-export const AVAILABLE_ADMIN_STYLES: readonly AdminStyle[] = ['glass']
+export const AVAILABLE_ADMIN_STYLES: readonly AdminStyle[] = ['glass', 'solid', 'minimal']
 
 export const ADMIN_COLORS = ['teal', 'ocean', 'emerald', 'violet', 'sunset', 'graphite'] as const
 export type AdminColor = (typeof ADMIN_COLORS)[number]

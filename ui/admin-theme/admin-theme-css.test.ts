@@ -28,7 +28,7 @@ describe('admin-theme.css', () => {
 	})
 
 	test('every role token the console rebinds is restored for the preview', () => {
-		const console_ = block(adminCss, '.admin-console', '\n\t--background:')
+		const console_ = block(adminCss, ':is(.admin-console, .admin-portal)', '\n\t--background:')
 		const reset = block(adminCss, '.admin-console [data-storefront-theme]')
 		for (const name of console_.keys()) {
 			if (name.startsWith('--puck-') || name.startsWith('--radius')) continue
