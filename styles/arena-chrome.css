@@ -460,3 +460,14 @@
 .arena-chrome.arena-header-solid .arena-header {
 	background: #0e0d0e;
 }
+
+.arena-dash-title button,
+.arena-dash-title a {
+	color: #ff3eb5;
+	opacity: 1;
+}
+
+.arena-dash-title button:hover,
+.arena-dash-title a:hover {
+	color: #ff6cc8;
+}
