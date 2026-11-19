@@ -1,0 +1,7 @@
+{
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"tsBuildInfoFile": "./.tscache/platform.tsbuildinfo"
+	},
+	"include": ["platform/**/*.ts", "platform/**/*.tsx"]
+}

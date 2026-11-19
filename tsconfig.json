@@ -1,20 +1,7 @@
 {
+	"extends": "./tsconfig.base.json",
 	"compilerOptions": {
-		"jsx": "react-jsx",
-		"allowJs": true,
-		"strict": true,
-		"strictNullChecks": true,
-		"moduleResolution": "bundler",
-		"module": "preserve",
-		"target": "ESNext",
-		"allowImportingTsExtensions": true,
-		"verbatimModuleSyntax": true,
-		"noEmit": true,
-		"paths": {
-			"@sdk/*": ["./sdk/*"],
-			"@ui/*": ["./ui/*"],
-			"@platform/*": ["./platform/*"]
-		}
+		"tsBuildInfoFile": "./.tscache/root.tsbuildinfo"
 	},
 	"include": ["**/*.ts", "**/*.tsx", "scripts/**/*.ts"]
 }

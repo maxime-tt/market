@@ -38,6 +38,13 @@
 		"test:unit": "bun test --isolate $(find contextvm sdk -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort) $(find ui platform styles -type f \\( -name '*.test.ts' -o -name '*.test.tsx' \\) ! -path 'platform/web/app/ws.test.ts' ! -path 'platform/web/products/newProduct.test.ts' | sort)",
 		"test:unit:watch": "bun test --watch --isolate $(find contextvm sdk -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort) $(find ui platform styles -type f \\( -name '*.test.ts' -o -name '*.test.tsx' \\) ! -path 'platform/web/app/ws.test.ts' ! -path 'platform/web/products/newProduct.test.ts' | sort)",
 		"test:integration": "bun test $(find sdk -type f -name '*.integration.test.ts' | sort)",
+		"typecheck": "bunx tsc --noEmit -p tsconfig.json",
+		"typecheck:src": "bunx tsc --noEmit -p tsconfig.src.json",
+		"typecheck:tests": "bunx tsc --noEmit -p tsconfig.tests.json",
+		"typecheck:sdk": "bunx tsc --noEmit -p tsconfig.sdk.json",
+		"typecheck:ui": "bunx tsc --noEmit -p tsconfig.ui.json",
+		"typecheck:platform": "bunx tsc --noEmit -p tsconfig.platform.json",
+		"typecheck:contextvm": "bunx tsc --noEmit -p tsconfig.contextvm.json",
 		"prepare": "ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit 2>/dev/null; chmod +x scripts/git-hooks/pre-commit 2>/dev/null; true"
 	},
 	"dependencies": {
