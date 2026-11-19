@@ -45,6 +45,8 @@ const SELLER = arenaWalletPubkey(SELLER_SK)
 const V4V = arenaWalletPubkey(V4V_SK)
 
 const KEYSET = '009a1f293253e41e'
+/** The pinned keyset's keys: the standard power-of-two denominations, 1 … 2048. */
+const KEYSET_KEYS = Object.fromEntries(Array.from({ length: 12 }, (_, bit) => [String(1 << bit), `02${'0'.repeat(64)}`]))
 const OTHER_KEYSET = '00ffeeddccbbaa99'
 const MINT = 'https://mint.test/Bitcoin'
 const NOW = 1_700_000_000
@@ -71,6 +73,9 @@ const fixedLot = (over: Partial<ArenaBidFundTerms> = {}): ArenaBidFundTerms => (
 const config = (over: Partial<ArenaBidFundConfig> = {}): ArenaBidFundConfig => ({
 	committee_public_key: COMMITTEE,
 	cashu_mint_url: MINT,
+	keyset_id: KEYSET,
+	// The mint's keyset keys: the denominations every payout is decomposed into.
+	keys: KEYSET_KEYS,
 	// The two locktime terms the relay commits; the assembly refuses without them.
 	settlement_safety_sec: 900,
 	bid_to_consensus_latency_sec: 15,
@@ -201,6 +206,7 @@ describe('a funded bid is assembled from the lock and the terms', () => {
 			sellerWallet: SELLER,
 			committeeKey: COMMITTEE,
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			minLocktime: floor,
 			v4vSplit: undefined,
 		})
@@ -261,10 +267,20 @@ describe('a funded bid is assembled from the lock and the terms', () => {
 			const parsed = JSON.parse(output.secret) as [string, { data: string }]
 			return { recipient: parsed[1].data, amount: output.amount }
 		})
-		// 500 bps of 1000 sats, with the seller taking the remainder (spec §6).
+		// 500 bps of 1000 sats, with the seller taking the remainder (spec §6),
+		// each recipient's amount decomposed into single-denomination outputs:
+		// 50 = 32+16+2 and 950 = 512+256+128+32+16+4+2.
 		expect(destinations).toEqual([
-			{ recipient: V4V, amount: 50 },
-			{ recipient: SELLER, amount: 950 },
+			{ recipient: V4V, amount: 32 },
+			{ recipient: V4V, amount: 16 },
+			{ recipient: V4V, amount: 2 },
+			{ recipient: SELLER, amount: 512 },
+			{ recipient: SELLER, amount: 256 },
+			{ recipient: SELLER, amount: 128 },
+			{ recipient: SELLER, amount: 32 },
+			{ recipient: SELLER, amount: 16 },
+			{ recipient: SELLER, amount: 4 },
+			{ recipient: SELLER, amount: 2 },
 		])
 		expect(verifyArenaBidFunding(result.funding, result.fundingTerms)).toBe(result.funding.locktime)
 	})
@@ -351,6 +367,22 @@ describe('every precondition refuses by name, before any money moves', () => {
 		},
 		{ name: 'the amount is zero', refusal: 'fund.amount-invalid', amount: 0 },
 		{ name: 'the amount is fractional', refusal: 'fund.amount-invalid', amount: 10.5 },
+		{
+			name: 'the relay commits no mint keyset keys',
+			refusal: 'fund.keyset-keys-missing',
+			ports: () => ports({ config: config({ keys: null }) }),
+		},
+		{
+			name: 'the relay commits a keyset with no usable denominations',
+			refusal: 'fund.keyset-keys-missing',
+			ports: () => ports({ config: config({ keys: {} }) }),
+		},
+		{
+			name: 'an amount the mint keyset cannot represent',
+			refusal: 'fund.amount-unrepresentable',
+			ports: () => ports({ config: config({ keys: { '2': KEYSET_KEYS['2'], '4': KEYSET_KEYS['4'] } }) }),
+			amount: 3,
+		},
 	]
 
 	for (const testCase of cases) {

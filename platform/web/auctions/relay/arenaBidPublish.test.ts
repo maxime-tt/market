@@ -160,6 +160,8 @@ const WALLET = arenaWalletPubkey(WALLET_SK)
 const COMMITTEE = arenaWalletPubkey('22'.repeat(32))
 const ESCROW_SELLER = arenaWalletPubkey('33'.repeat(32))
 const KEYSET = '009a1f293253e41e'
+/** The pinned keyset's keys: the standard power-of-two denominations, 1 … 2048. */
+const KEYSET_KEYS = Object.fromEntries(Array.from({ length: 12 }, (_, bit) => [String(1 << bit), `02${'0'.repeat(64)}`]))
 const LOCKTIME = 1_800_000_000
 const FIXTURE_C = `02${'ab'.repeat(32)}`
 
@@ -187,6 +189,7 @@ const fundingTerms: ArenaBidFundingTerms = {
 	sellerWallet: ESCROW_SELLER,
 	committeeKey: COMMITTEE,
 	keysetId: KEYSET,
+	keys: KEYSET_KEYS,
 	minLocktime: LOCKTIME,
 }
 
@@ -202,6 +205,7 @@ function funded(amount: number): Promise<ArenaBidFunding> {
 			bidderWallet: WALLET,
 			committeeKey: COMMITTEE,
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			minLocktime: LOCKTIME,
 			signer: walletSigner,
 		})
@@ -292,11 +296,14 @@ describe('publishArenaBid — what reaches the wire', () => {
 		// same lock, and together exactly the amount the bid names.
 		expect(content.proofs).toHaveLength(6)
 		expect(content.proofs.reduce((sum: number, proof: { amount: number }) => sum + proof.amount, 0)).toBe(1000)
-		// The settle pays the seller, the refund pays the bidder's wallet — the
-		// only two destinations the committee can ever move this money to.
-		expect(content.outcome_templates.settle.outputs).toMatchObject([{ amount: 1000 }])
+		// The settle pays the seller and the refund pays the bidder's wallet — the
+		// only two destinations the committee can ever move this money to — and
+		// both are decomposed into the mint's single-denomination outputs
+		// (1,000 sats = 512+256+128+64+32+8). A non-denomination output could
+		// never be signed by the mint, so the escrow could never settle or refund.
+		expect(content.outcome_templates.settle.outputs.map((output: { amount: number }) => output.amount)).toEqual([512, 256, 128, 64, 32, 8])
 		expect(content.outcome_templates.settle.bidder_signature).toMatch(/^[0-9a-f]{128}$/)
-		expect(content.outcome_templates.refund.outputs).toMatchObject([{ amount: 1000 }])
+		expect(content.outcome_templates.refund.outputs.map((output: { amount: number }) => output.amount)).toEqual([512, 256, 128, 64, 32, 8])
 		expect(content.outcome_templates.refund.bidder_signature).toMatch(/^[0-9a-f]{128}$/)
 		expect(result).toMatchObject({ outcome: 'accepted', acceptedBy: [RELAY_A, RELAY_B], totalRelays: 2 })
 		expect(result.state).toMatchObject({ phase: 'presumed', amount: 1000, acceptedBy: [RELAY_A, RELAY_B] })
