@@ -158,9 +158,14 @@ export interface ArenaPositionBid extends ArenaBidBinding {
 }
 
 /**
- * Sum bid deltas into per-lot, per-bidder positions — the same derivation `projectArenaEvents`
- * makes from `ArenaBidView[]`. A bid with no readable amount contributes nothing (it is counted on
+ * Sum bid deltas into per-lot, per-bidder positions — the notification lane's own approximation,
+ * from the bids it reads. A bid with no readable amount contributes nothing (it is counted on
  * the read path as `bidsWithoutAmount`; a notification rule has nothing to say about it).
+ *
+ * This is **not** the lot read's position (`arenaAuctionRead.ts`): that one sums only a bidder's
+ * **live** legs — a leg a kind-1443 refund receipt names is dead — and reports `null` when a leg's
+ * liveness cannot be established. This lane reads no receipts (its subscription is kinds
+ * 1441/1445), so it cannot make that distinction here; the read stays the surface's authority.
  */
 export function arenaBidPositions(bids: readonly ArenaPositionBid[]): Record<string, Record<string, number>> {
 	const positions: Record<string, Record<string, number>> = {}

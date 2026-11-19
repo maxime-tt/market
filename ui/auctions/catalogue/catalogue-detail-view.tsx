@@ -12,6 +12,7 @@ import {
 	ARENA_CREATE_DERIVED_END_LABEL,
 	ARENA_NO_COMMITTED_END_LABEL,
 	ARENA_NO_RECEIPT_LABEL,
+	ARENA_POSITION_UNKNOWN_LABEL,
 	ARENA_RECEIPT_PARAMS_MISMATCH_LABEL,
 	refundReceiptLabel,
 	settleReceiptLabel,
@@ -154,8 +155,19 @@ export function CatalogueDetailView({
 
 	const ended = model.phase === 'ended'
 	const label = model.title?.trim() || model.d
-	const positions = [...model.positions].sort((a, b) => b.total - a.total || a.bidder.localeCompare(b.bidder))
-	const leader = positions[0] ?? null
+	// Known positions rank first, best first; a `null` total is a position the
+	// read could not determine, so it never ranks and never shows as a `0`.
+	const positions = [...model.positions].sort((a, b) => {
+		if (a.total === null || b.total === null) {
+			if (a.total === b.total) return a.bidder.localeCompare(b.bidder)
+			return a.total === null ? 1 : -1
+		}
+		return b.total - a.total || a.bidder.localeCompare(b.bidder)
+	})
+	const positionsUnknown = model.positions.some((p) => p.total === null)
+	// A bidder whose position is unknown could be above the best known one, so no
+	// leader is named at all while any position is unknown.
+	const leader = positionsUnknown ? null : (positions[0] ?? null)
 	const antisnipe = antisnipeBehaviourLabel(model.mode, model.windowSec)
 	// Newest first, by the bid's own committed time — the read orders by height,
 	// but a bid feed reads as a timeline.
@@ -211,7 +223,7 @@ export function CatalogueDetailView({
 								<div>
 									<div className="cat-label">{ended ? 'Final price' : 'Current price'}</div>
 									<div className="cat-price" data-testid="catalogue-price">
-										{model.topBidTotal === null && model.bidsWithoutAmount > 0 ? (
+										{model.topBidTotal === null && (model.bidsWithoutAmount > 0 || model.bidCount > 0) ? (
 											<span>total unknown</span>
 										) : (
 											<>
@@ -240,7 +252,11 @@ export function CatalogueDetailView({
 								{phaseLabel(model.phase)}
 								{model.verdict !== null ? ` · outcome: ${model.verdict} (relay-reported)` : ' · outcome not verified yet'}
 								{model.divergent ? ' · relays disagree' : ''}
-								{leader !== null ? ` · leader ${shortKey(leader.bidder)}` : ' · no bids yet'}
+								{leader !== null
+									? ` · leader ${shortKey(leader.bidder)}`
+									: positionsUnknown
+										? ' · top position not known'
+										: ' · no bids yet'}
 							</div>
 							{/*
 							  The money receipt, kept apart from the verdict on purpose: a
@@ -333,7 +349,7 @@ export function CatalogueDetailView({
 								{positions.map((position) => (
 									<li key={position.bidder} className="cat-feed__item">
 										<span className="cat-bid-name">{shortKey(position.bidder)}</span>
-										<b>{position.total.toLocaleString()} sats</b>
+										<b>{position.total === null ? ARENA_POSITION_UNKNOWN_LABEL : `${position.total.toLocaleString()} sats`}</b>
 										{model.refundsByBidder[position.bidder] !== undefined && (
 											<em data-testid="catalogue-refund-receipt" data-height={model.refundsByBidder[position.bidder]}>
 												{refundReceiptLabel(model.refundsByBidder[position.bidder])}

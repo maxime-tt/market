@@ -101,10 +101,50 @@ describe('arena lot helpers', () => {
 		expect(arenaLadder({ minimum: null, ownPosition: null }, 100)).toEqual([])
 	})
 
+	test("the leader's step is a real raise, not the 1-sat self-raise clamp", () => {
+		// The floor for the bidder already at the top is the top itself
+		// (`bid-rules.ts`: "a bidder improving their OWN standing need only reach
+		// the top"), so `max(1, minimum − own)` would publish exactly 1 sat: legal
+		// under R2-A, and not a step. Every step raises the leader's own position.
+		const steps = arenaLadder({ minimum: 532, ownPosition: 532 }, 10)
+		expect(steps.map((s) => s.target)).toEqual([542, 552, 582])
+		expect(steps.map((s) => s.delta)).toEqual([10, 20, 50])
+		// …and none of them is the clamp.
+		expect(steps.every((s) => s.delta >= 10)).toBe(true)
+	})
+
 	test('bid rows carry the running position, newest first', () => {
 		const rows = arenaBidRows(model)
 		expect(rows.map((r) => r.eventId)).toEqual(['b3', 'b2', 'b1'])
 		expect(rows[0]!.position).toBe(1_500)
+	})
+
+	test('a refunded leg adds nothing to the running position', () => {
+		const rows = arenaBidRows({
+			...model,
+			receipts: [
+				{
+					eventId: 'r-1',
+					bidId: 'b1',
+					outcome: 'refund',
+					height: 400,
+					blockHash: 'beef',
+					settledAt: 1,
+					paramsVersion: 'pv-1',
+					paramsVersionMismatch: null,
+					outputs: [],
+					total: 1_000,
+					destinationCount: 0,
+					outputsWithoutAmount: 0,
+				},
+			],
+		})
+		// b1 (1,000) is dead: alice's position after b3 is her live 500, not 1,500.
+		expect(rows.map((r) => [r.eventId, r.position])).toEqual([
+			['b3', 500],
+			['b2', 1_100],
+			['b1', 0],
+		])
 	})
 })
 
@@ -142,6 +182,35 @@ describe('ArenaLotView', () => {
 		})
 		expect(html).toContain('arena-lot-ladder')
 		expect(html).toContain('Sign in to bid')
+	})
+
+	test('every ladder step shows the delta it publishes and states the position it reaches', () => {
+		const html = render()
+		// The floor is 1,600 for a bidder at 1,100, so Next publishes 500 — the
+		// number the button displays — and states the position 500 lands on.
+		expect(html).toContain('Next: bid 500 sats, reaching your position 1,600 sats')
+		expect(html).toContain('data-publishes="500"')
+		expect(html).toContain('data-reaches="1600"')
+		expect(html).toContain('→ your position 1,600')
+		// The published delta, not the position, is the big number on the button.
+		expect(html).toContain('<b>500</b>')
+		expect(html).not.toContain('<b>1,600</b>')
+	})
+
+	test('the swipe publishes the delta it displays, not the position it reaches', () => {
+		const html = render()
+		expect(html).toContain('Swipe to bid 500 sats, reaching your position 1,600 sats')
+		expect(html).toContain('data-publishes="500"')
+		expect(html).toContain('your position 1,600')
+	})
+
+	test('a position the read could not determine is said in words, never summed', () => {
+		const html = render({
+			model: { ...model, positions: [{ bidder: alice, total: null }], topBidTotal: null },
+		})
+		expect(html).toContain('position not known')
+		expect(html).toContain('The top position is not known')
+		expect(html).toContain('not stated')
 	})
 
 	test('a missing lot renders the read state, not a zero', () => {
