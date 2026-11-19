@@ -379,7 +379,7 @@ export function ImageUploader({
 							<SelectContent>
 								{servers.map((server) => (
 									<SelectItem key={server.url} value={server.url}>
-										{server.name} ({server.plan})
+										{server.plan === 'self-hosted' ? server.name : `${server.name} (${server.plan})`}
 									</SelectItem>
 								))}
 							</SelectContent>
