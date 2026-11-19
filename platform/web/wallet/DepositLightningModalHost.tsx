@@ -15,24 +15,8 @@ import { cashuActions, cashuStore } from '@platform/web/wallet/cashuStore'
 import { getActiveSignerCapability } from '@platform/web/auth/authStore'
 import { useWallets, walletActions } from '@platform/web/config/walletStore'
 import { classifyDepositTerminalErrorOutcome, type AuctionBidFundingFailureReason } from '@platform/web/auctions/useAuctionBidFunding'
-import { normalizeMintUrl } from '@sdk/commerce/payments/display'
+import { depositMintCandidates, normalizeDepositMintUrl } from '@sdk/commerce/payments/depositMints'
 import { DepositLightningModalView } from '@ui/wallet/deposit-lightning-modal-view'
-
-const isValidMintUrl = (mintUrl: string): boolean => {
-	const normalizedMintUrl = normalizeMintUrl(mintUrl)
-	if (!normalizedMintUrl) return false
-	try {
-		new URL(normalizedMintUrl)
-		return true
-	} catch {
-		return false
-	}
-}
-
-const normalizeValidMintUrl = (mintUrl: string): string | null => {
-	const normalizedMintUrl = normalizeMintUrl(mintUrl)
-	return isValidMintUrl(normalizedMintUrl) ? normalizedMintUrl : null
-}
 
 interface DepositLightningModalHostProps {
 	open: boolean
@@ -97,15 +81,7 @@ export function DepositLightningModalHost({
 	// classifying a terminal deposit error as 'deposit_outcome_uncertain': a
 	// payment could have been made only if an invoice existed.
 	const sessionInvoiceExistedRef = useRef(false)
-	const filteredMints = useMemo(() => {
-		const normalizedWalletMints = mints.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null)
-		const normalizedAllowedMints = allowedMints?.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null) ?? []
-
-		if (!allowedMints?.length) return normalizedWalletMints
-
-		const allowedMintSet = new Set(normalizedAllowedMints)
-		return normalizedWalletMints.filter((mint) => allowedMintSet.has(mint))
-	}, [allowedMints, mints])
+	const filteredMints = useMemo(() => depositMintCandidates({ walletMints: mints, allowedMints }), [allowedMints, mints])
 	const hasAllowedMints = filteredMints.length > 0
 
 	const savedNwcWallets = useMemo(() => wallets.filter((wallet) => !!wallet.nwcUri), [wallets])
@@ -120,8 +96,8 @@ export function DepositLightningModalHost({
 			return
 		}
 
-		const normalizedPreferredMint = normalizeValidMintUrl(preferredMint ?? '')
-		const normalizedDefaultMint = normalizeValidMintUrl(defaultMint ?? '')
+		const normalizedPreferredMint = normalizeDepositMintUrl(preferredMint ?? '')
+		const normalizedDefaultMint = normalizeDepositMintUrl(defaultMint ?? '')
 		const preferred = normalizedPreferredMint ? filteredMints.find((mint) => mint === normalizedPreferredMint) : ''
 		const defaultAllowedMint = normalizedDefaultMint ? filteredMints.find((mint) => mint === normalizedDefaultMint) : ''
 		const nextSelectedMint = preferred || defaultAllowedMint || filteredMints[0] || ''
@@ -136,7 +112,7 @@ export function DepositLightningModalHost({
 		}
 
 		setSelectedMint((currentMint) => {
-			const normalizedCurrentMint = normalizeValidMintUrl(currentMint)
+			const normalizedCurrentMint = normalizeDepositMintUrl(currentMint)
 			if (normalizedCurrentMint && filteredMints.includes(normalizedCurrentMint)) {
 				return currentMint
 			}

@@ -146,7 +146,7 @@ export function DepositLightningModalView({
 							<p className="text-sm text-destructive text-center">{depositError || 'Failed to generate invoice. Please try again.'}</p>
 						)}
 						{!hasAllowedMints && !depositInvoice && (
-							<p className="text-sm text-destructive text-center">No accepted auction mints are available in this wallet.</p>
+							<p className="text-sm text-destructive text-center">No mint accepted by this auction is available.</p>
 						)}
 
 						{/* Payment status indicator */}
@@ -283,7 +283,7 @@ export function DepositLightningModalView({
 								</select>
 							) : (
 								<p className="text-sm text-destructive">
-									{allowedMints?.length ? 'No accepted auction mints are available in this wallet.' : 'No mints available.'}
+									{allowedMints?.length ? 'No mint accepted by this auction is available.' : 'No mints available.'}
 								</p>
 							)}
 						</div>

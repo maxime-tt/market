@@ -23,6 +23,7 @@ import { Store } from '@tanstack/store'
 import { createCashuStore } from '@sdk/commerce/payments/state/cashu'
 import type { CashuState } from '@sdk/commerce/payments/state/cashu'
 import { authBinding } from '@platform/web/auth/authBinding'
+import { resolveChainMint } from '@platform/web/chainMint'
 
 /**
  * The signed-in pubkey, or `null` before the auth machine is composed.
@@ -42,7 +43,7 @@ const currentPubkeyOrNull = (): string | null => {
 }
 
 /** The one wallet store, built by the assembly with the app's auth accessor (read lazily, per call). */
-const { cashuState, cashuActions } = createCashuStore(currentPubkeyOrNull)
+const { cashuState, cashuActions } = createCashuStore(currentPubkeyOrNull, { resolveMintSeed: resolveChainMint })
 
 export { cashuActions }
 
