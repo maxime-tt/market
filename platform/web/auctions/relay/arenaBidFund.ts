@@ -55,7 +55,9 @@
 import type { ArenaAuctionDetailModel } from '@ui/auction/arena/model'
 import {
 	arenaBidLocktimeFloor,
+	arenaDenominationSplit,
 	arenaSettleDestinations,
+	ArenaBidFundingError,
 	buildArenaBidFunding,
 	type ArenaBidFunding,
 	type ArenaBidFundingTerms,
@@ -145,6 +147,10 @@ export type ArenaBidFundRefusal =
 	| 'fund.split-recipient-invalid'
 	/** The bid amount is not a positive safe integer. Nothing is rounded. */
 	| 'fund.amount-invalid'
+	/** The relay committed no mint keys (denominations), so no payout can be built. */
+	| 'fund.keyset-keys-missing'
+	/** An amount the escrow must pay cannot be made from the mint keyset's denominations. */
+	| 'fund.amount-unrepresentable'
 	/** The mint answered the lock with no proofs at all. */
 	| 'fund.escrow-empty'
 	/** The mint's locked proofs do not total the bid amount. */
@@ -177,6 +183,8 @@ export const ARENA_BID_FUND_REFUSAL_TEXT: Record<ArenaBidFundRefusal, string> = 
 	'fund.seller-wallet-invalid': 'the auction’s seller wallet is not a valid payment key',
 	'fund.split-recipient-invalid': 'a committed v4v split row names an invalid recipient key',
 	'fund.amount-invalid': 'the bid amount must be a positive whole number of sats',
+	'fund.keyset-keys-missing': 'the relay commits no mint keyset denominations, so no payout can be built from amounts the mint can honour',
+	'fund.amount-unrepresentable': 'an amount this escrow must pay cannot be made from the mint keyset’s denominations',
 	'fund.escrow-empty': 'the mint locked nothing for this bid',
 	'fund.escrow-mismatch': 'the locked escrow does not total the bid amount',
 	'fund.mixed-keysets': 'the locked escrow mixes keysets, so one keyset cannot be pinned for the templates',
@@ -334,7 +342,28 @@ export async function assembleArenaBidFunding(
 	}
 	// The split's rounding (spec §6) is checked here, before the lock, so an
 	// amount the committed split cannot represent never commits the bidder's money.
-	arenaSettleDestinations({ amount, sellerWallet, v4vSplit })
+	const settleDestinations = arenaSettleDestinations({ amount, sellerWallet, v4vSplit })
+
+	// Every amount the escrow can ever pay — each settle destination and the
+	// total the refund returns — must decompose into the mint keyset's
+	// denominations. A Cashu output is a single denomination: the mint refuses a
+	// non-denomination amount with HTTP 400 before it examines a signature, so an
+	// output the mint can never honour locks the bidder's sats forever. This is
+	// checked BEFORE the lock, naming the amount, so nothing is committed.
+	const keys = config.keys ?? null
+	if (keys === null) refuse('fund.keyset-keys-missing', 'the relay committed no mint keys (no denominations to build a payout from)')
+	try {
+		for (const destination of settleDestinations) arenaDenominationSplit(destination.amount, keys)
+		arenaDenominationSplit(amount, keys)
+	} catch (error) {
+		if (error instanceof ArenaBidFundingError && error.refusal === 'template.keyset-unusable') {
+			refuse('fund.keyset-keys-missing', error.detail)
+		}
+		if (error instanceof ArenaBidFundingError && error.refusal === 'template.amount-unrepresentable') {
+			refuse('fund.amount-unrepresentable', error.detail)
+		}
+		throw error
+	}
 
 	const minLocktime = arenaBidLocktimeFloor({
 		mode,
@@ -378,6 +407,7 @@ export async function assembleArenaBidFunding(
 		bidderWallet,
 		committeeKey,
 		keysetId,
+		keys,
 		minLocktime,
 		signer,
 		// `null` means "the create committed no split"; that is `undefined` here,
@@ -389,6 +419,7 @@ export async function assembleArenaBidFunding(
 		sellerWallet,
 		committeeKey,
 		keysetId,
+		keys,
 		minLocktime,
 		v4vSplit,
 	}

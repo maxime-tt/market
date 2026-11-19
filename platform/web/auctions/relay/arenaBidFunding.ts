@@ -35,7 +35,16 @@
  * with the wallet spend key, supplied as a callback so this module never holds
  * key material.
  */
-import { OutputData, getPubKeyFromPrivKey, hashToCurve, pointFromHex, schnorrVerifyDigest, type P2PKOptions } from '@cashu/cashu-ts'
+import {
+	OutputData,
+	getPubKeyFromPrivKey,
+	hashToCurve,
+	pointFromHex,
+	schnorrVerifyDigest,
+	splitAmount,
+	type Keys,
+	type P2PKOptions,
+} from '@cashu/cashu-ts'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 
@@ -62,6 +71,8 @@ const HEX32 = /^[0-9a-f]{64}$/
 const HEX64 = /^[0-9a-f]{128}$/
 const COMPRESSED_PUBKEY = /^0[23][0-9a-f]{64}$/
 const DECIMAL_INTEGER = /^(0|[1-9][0-9]*)$/
+/** A canonical positive decimal integer — a mint denomination, as NUT-01 keys it. */
+const DENOMINATION = /^[1-9][0-9]*$/
 
 /** secp256k1's generator, compressed. A public curve constant, not key material. */
 const SECP256K1_G = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
@@ -173,6 +184,8 @@ export type ArenaBidFundingRefusal =
 	| 'template.split-omits'
 	| 'template.split-adds'
 	| 'template.split-unrepresentable'
+	| 'template.amount-unrepresentable'
+	| 'template.keyset-unusable'
 
 /**
  * The refusal text is the protocol's own wherever it has one, so a validator
@@ -209,6 +222,9 @@ export const ARENA_BID_FUNDING_REFUSAL_TEXT: Record<ArenaBidFundingRefusal, stri
 	'template.split-omits': 'settle template omits a committed v4v split output',
 	'template.split-adds': 'settle template adds an output that is not in the committed v4v split',
 	'template.split-unrepresentable': 'template cannot represent the committed v4v split without loss',
+	'template.amount-unrepresentable':
+		'the amount cannot be paid in the mint keyset’s denominations, so the pre-signed output would never be honoured',
+	'template.keyset-unusable': 'the mint keyset names no usable denominations, so no output amount can be built',
 }
 
 export class ArenaBidFundingError extends Error {
@@ -453,6 +469,76 @@ export function arenaSettleDestinations(input: {
 }
 
 /**
+ * One mint keyset's public keys, keyed by denomination: NUT-01's
+ * `{ "<amount>": "<pubkey>" }`.
+ *
+ * This is the shape the relay commits in its kind-1448 params (`keys`) and the
+ * shape `cashu-ts`'s `MintKeys` carries as `.keys`, so the denominations a payout
+ * is decomposed into come from the keyset the app already reads — never a
+ * hardcoded list.
+ */
+export type ArenaKeysetKeys = Keys
+
+/**
+ * The keyset's denominations as numbers, largest first. Refuses a keyset whose
+ * entries are not canonical positive decimal integers with a non-empty key, so a
+ * malformed relay reading is named rather than silently decomposing against
+ * nothing.
+ *
+ * Denominations above `2^53` (a real mint keyset tops out around `2^60`) are
+ * returned as their nearest `number`; the split itself stays exact because
+ * `splitAmount` parses the keys as big integers.
+ */
+export function arenaKeysetDenominations(keys: ArenaKeysetKeys): number[] {
+	const denominations: number[] = []
+	for (const [amount, key] of Object.entries(keys)) {
+		if (!DENOMINATION.test(amount)) refuse('template.keyset-unusable', `${JSON.stringify(amount)} is not a denomination`)
+		if (typeof key !== 'string' || key.length === 0) refuse('template.keyset-unusable', `denomination ${amount} has no key`)
+		denominations.push(Number(amount))
+	}
+	if (denominations.length === 0) refuse('template.keyset-unusable', 'the keyset names no denominations')
+	return denominations.sort((a, b) => b - a)
+}
+
+/**
+ * Decompose one amount into the keyset's denominations, largest first — the same
+ * canonical split `cashu-ts`'s `splitAmount` gives the wallet, so the outputs a
+ * template pre-signs are outputs the wallet would itself have produced.
+ *
+ * A Cashu output must be a **single** denomination: the mint looks the amount up
+ * in its keyset (`private_key_amount = keyset.private_keys[output.amount]`) and
+ * answers `POST /v1/swap` with HTTP 400 for any other amount **before it examines
+ * a signature**. So a 100-sat payout is `64 + 32 + 4`, never one 100-sat output —
+ * every element here is a denomination the mint can actually sign. An escrow
+ * whose template asks for 100 sats can therefore never settle and never refund.
+ *
+ * Refuses — never rounds, never guesses — when the amount is not a positive whole
+ * number of sats, or when no combination of the keyset's denominations makes it
+ * exactly. The refusal names the amount, because locking sats a pre-signed
+ * template can never pay out is the worst failure mode this module has.
+ */
+export function arenaDenominationSplit(amount: number, keys: ArenaKeysetKeys): number[] {
+	// Validate the keyset first, so a malformed reading is refused by its own name
+	// (`template.keyset-unusable`) rather than blamed on the amount.
+	arenaKeysetDenominations(keys)
+	if (!Number.isSafeInteger(amount) || amount <= 0) {
+		refuse('template.amount-unrepresentable', `${String(amount)} is not a positive whole number of sats`)
+	}
+	let parts: number[]
+	try {
+		parts = splitAmount(amount, keys).map((part) => part.toNumber())
+	} catch (error) {
+		refuse(
+			'template.amount-unrepresentable',
+			`${amount} cannot be made from the keyset’s denominations (${error instanceof Error ? error.message : String(error)})`,
+		)
+	}
+	const total = parts.reduce((sum, part) => sum + part, 0)
+	if (parts.length === 0 || total !== amount) refuse('template.amount-unrepresentable', `${amount} decomposed to ${total}`)
+	return parts
+}
+
+/**
  * The layout-B SIG_ALL digest, byte for byte:
  *
  * ```
@@ -483,16 +569,24 @@ export function arenaOutputBPoint(output: Pick<ArenaTemplateOutput, 'secret' | '
 /**
  * Build one signed outcome template for a set of destinations.
  *
- * Each output is a fresh NUT-11 `P2PK` secret locked to its destination with a
- * random 32-byte blinding factor. The opening (`secret` + `r`) is committed
- * inside the template, so the committee can submit exactly the output the
- * bidder authorised without ever choosing a destination itself; the digest is
- * recomputed from the inputs and outputs and signed with the wallet key.
+ * Each **destination amount is decomposed into the mint keyset's denominations**
+ * first ({@link arenaDenominationSplit}), one output per denomination: a 100-sat
+ * destination becomes three outputs of 64, 32 and 4 sats. The mint honours only
+ * single-denomination outputs, so a template with a 100-sat output could never
+ * settle and never refund.
+ *
+ * Each output is then a fresh NUT-11 `P2PK` secret locked to its destination with
+ * a random 32-byte blinding factor. The opening (`secret` + `r`) is committed
+ * inside the template, so the committee can submit exactly the output the bidder
+ * authorised without ever choosing a destination itself; the digest is recomputed
+ * from the inputs and outputs and signed with the wallet key.
  */
 export async function buildArenaOutcomeTemplate(input: {
 	proofs: readonly ArenaEscrowProof[]
 	destinations: readonly ArenaTemplateDestination[]
 	keysetId: string
+	/** The pinned keyset's keys; the payout's denominations come from here. */
+	keys: ArenaKeysetKeys
 	signer: ArenaWalletSpendSigner
 }): Promise<ArenaOutcomeTemplate> {
 	if (input.proofs.length === 0) refuse('lock.no-proofs')
@@ -504,21 +598,19 @@ export async function buildArenaOutcomeTemplate(input: {
 		return { amount: proof.amount, id: proof.id, secret: proof.secret, C: proof.C }
 	})
 	const total = inputs.reduce((sum, proof) => sum + proof.amount, 0)
-	const outputs = input.destinations.map((destination) => {
+	const outputs = input.destinations.flatMap((destination) => {
 		if (!isCompressed(destination.recipient)) refuse('template.destination')
-		if (!Number.isSafeInteger(destination.amount) || destination.amount <= 0) refuse('template.amount')
-		const data = OutputData.createSingleP2PKData(
-			{ kind: 'P2PK', data: destination.recipient.toLowerCase() },
-			destination.amount,
-			input.keysetId,
-		)
-		return {
-			amount: destination.amount,
-			id: data.blindedMessage.id,
-			secret: new TextDecoder().decode(data.secret),
-			r: hex32(data.blindingFactor),
-			B_: data.blindedMessage.B_,
-		}
+		const recipient = destination.recipient.toLowerCase()
+		return arenaDenominationSplit(destination.amount, input.keys).map((amount) => {
+			const data = OutputData.createSingleP2PKData({ kind: 'P2PK', data: recipient }, amount, input.keysetId)
+			return {
+				amount,
+				id: data.blindedMessage.id,
+				secret: new TextDecoder().decode(data.secret),
+				r: hex32(data.blindingFactor),
+				B_: data.blindedMessage.B_,
+			}
+		})
 	})
 	if (outputs.reduce((sum, output) => sum + output.amount, 0) !== total) refuse('template.amount')
 	if (outputs.some((output) => output.id !== input.keysetId)) refuse('template.keyset')
@@ -539,6 +631,13 @@ export interface ArenaBidFundingTerms {
 	sellerWallet: string
 	committeeKey: string
 	keysetId: string
+	/**
+	 * The pinned keyset's keys (`{ "<amount>": "<pubkey>" }`), the same keyset
+	 * {@link keysetId} names. The expected payout is decomposed into these
+	 * denominations, so the check proves the template pays in outputs the mint
+	 * can sign — not just outputs that sum to the amount.
+	 */
+	keys: ArenaKeysetKeys
 	minLocktime: number
 	v4vSplit?: readonly ArenaBidSplitRow[]
 }
@@ -548,8 +647,9 @@ export interface ArenaBidFundingTerms {
  * (`verifySigAllBidTemplates` + `checkSigAllLock`): the lock is one identical
  * five-tag 2-of-2, the inputs are the committed proofs, the settle template
  * pays the committed seller (and the committed v4v split, exactly), the refund
- * template pays the bidder alone, both digests derive from their own contents,
- * and both signatures verify over those digests with the wallet spend key.
+ * template pays the bidder alone, every output is a denomination the keyset
+ * actually has, both digests derive from their own contents, and both signatures
+ * verify over those digests with the wallet spend key.
  */
 export function verifyArenaBidFunding(funding: ArenaBidFunding, terms: ArenaBidFundingTerms): number {
 	if (!isCompressed(funding.wallet)) refuse('wallet.not-compressed')
@@ -561,12 +661,20 @@ export function verifyArenaBidFunding(funding: ArenaBidFunding, terms: ArenaBidF
 	})
 	if (funding.locktime !== locktime) refuse('lock.locktime-below-floor', 'the payload and the proofs disagree')
 	const amount = funding.proofs.reduce((sum, proof) => sum + proof.amount, 0)
-	const settleDestinations = arenaSettleDestinations({
-		amount,
-		sellerWallet: terms.sellerWallet,
-		v4vSplit: terms.v4vSplit,
-	})
-	const refundDestinations: ArenaTemplateDestination[] = [{ recipient: terms.bidderWallet.toLowerCase(), amount }]
+	// The expected outputs are the destinations decomposed into the keyset's
+	// denominations, in the order the builder emits them, so this compares the
+	// template to exactly what it should carry — one output per denomination.
+	const expectedOutputs = (destinations: readonly ArenaTemplateDestination[]): ArenaTemplateDestination[] =>
+		destinations.flatMap((destination) =>
+			arenaDenominationSplit(destination.amount, terms.keys).map((denomination) => ({
+				recipient: destination.recipient.toLowerCase(),
+				amount: denomination,
+			})),
+		)
+	const settleDestinations = expectedOutputs(
+		arenaSettleDestinations({ amount, sellerWallet: terms.sellerWallet, v4vSplit: terms.v4vSplit }),
+	)
+	const refundDestinations = expectedOutputs([{ recipient: terms.bidderWallet.toLowerCase(), amount }])
 	const splitRecipients = new Set((terms.v4vSplit ?? []).map((row) => row.recipientPubkey.toLowerCase()))
 
 	const check = (outcome: 'settle' | 'refund', template: ArenaOutcomeTemplate, expected: readonly ArenaTemplateDestination[]) => {
@@ -624,8 +732,11 @@ export function verifyArenaBidFunding(funding: ArenaBidFunding, terms: ArenaBidF
  *
  * The caller has already locked `amount` under the options from
  * {@link buildArenaEscrowLockOptions}; this derives both templates, signs them
- * with the wallet key, and returns the object the 1441 content carries. It does
- * not lock anything itself, so the money movement stays in one place.
+ * with the wallet key, and returns the object the 1441 content carries. Every
+ * payout is decomposed into the pinned keyset's denominations
+ * ({@link arenaDenominationSplit}), so both templates carry outputs the mint can
+ * actually sign. It does not lock anything itself, so the money movement stays in
+ * one place.
  */
 export async function buildArenaBidFunding(input: {
 	proofs: readonly ArenaEscrowProof[]
@@ -633,6 +744,8 @@ export async function buildArenaBidFunding(input: {
 	bidderWallet: string
 	committeeKey: string
 	keysetId: string
+	/** The pinned keyset's keys; both templates' outputs are decomposed into these. */
+	keys: ArenaKeysetKeys
 	minLocktime: number
 	signer: ArenaWalletSpendSigner
 	v4vSplit?: readonly ArenaBidSplitRow[]
@@ -644,12 +757,14 @@ export async function buildArenaBidFunding(input: {
 		proofs: input.proofs,
 		destinations: arenaSettleDestinations({ amount, sellerWallet: input.sellerWallet, v4vSplit: input.v4vSplit }),
 		keysetId: input.keysetId,
+		keys: input.keys,
 		signer: input.signer,
 	})
 	const refund = await buildArenaOutcomeTemplate({
 		proofs: input.proofs,
 		destinations: [{ recipient: input.bidderWallet.toLowerCase(), amount }],
 		keysetId: input.keysetId,
+		keys: input.keys,
 		signer: input.signer,
 	})
 	const locktime = validateArenaEscrowLock(input.proofs, {

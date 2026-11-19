@@ -634,19 +634,16 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				expect(winnerVerdict.height).toBeGreaterThan(0)
 				report.winnerVerdict = winnerVerdict
 
-				// ---- 9. A settle receipt (1444) SHOULD record the winner's settlement. ----
-				// MEASURED CHAIN DEFECT (owner forensics, live committed state): 12 bids have a
-				// due outcome with NO settlement (9 winners awaiting settle, 3 losers awaiting
-				// refund, 888 sats total), and EVERY unsettled escrow was funded with EXACTLY 2
-				// proofs while every settled escrow has 1, 3, 5 or 6 — the counts do not overlap.
-				// The mint answers POST /v1/swap with HTTP 400 for those attempts (mint journal
-				// "Exception: 72/80" then "/v1/swap 400") and the chain's settler retries forever
-				// (settle-journal.jsonl: 618 failed attempts). Neither side logs the refusal
-				// detail. NOT the cause: the FROST group key (03be47f1…) and the keyset
-				// (0102b930f4dc…) are unchanged — no key rotation. So the winner will NEVER settle
-				// while the chain has this defect. The assertion below is NOT weakened: it stays
-				// and FAILS with the defect named. The walk continues so every other step is still
-				// exercised, and the escrow this leaves locked is THROWAWAY-WITH-CONSEQUENCE.
+				// ---- 9. A settle receipt (1444) records the winner's settlement. ----
+				// The app-side defect behind the earlier red run is fixed in this tree: the
+				// outcome templates are built by `buildArenaOutcomeTemplate`, which now
+				// decomposes every payout into the mint keyset's single denominations
+				// (handover §4). A Cashu output must be one denomination — the mint looks the
+				// amount up in its keyset and answers POST /v1/swap 400 before it examines a
+				// signature — so a pre-signed 72- or 80-sat output could never settle and
+				// never refund, and the chain's settler retried it forever. The assertion at
+				// the end of the walk stays exactly as strong: it must find the winner's
+				// kind-1444 settle receipt.
 				const settlePoll = await pollRelayForBidReceipts(pool, RELAY, 1444, Sniper.bidEventId, 25_000).catch(() => null)
 				const settleRead = settlePoll === null ? null : readArenaReceipts(settlePoll.events as ArenaReceiptEventLike[], {})
 				const settle = settleRead?.receipts.find((receipt) => receipt.outcome === 'settle' && receipt.bidId === Sniper.bidEventId)
@@ -661,7 +658,7 @@ describe('live lifecycle (chain + mint + relay)', () => {
 								coordinate,
 								committedStatus: winnerState?.status ?? null,
 								committedSettled: winnerState?.settled ?? null,
-								defect: 'the chain settler cannot complete a 2-proof escrow: POST /v1/swap -> 400, retried forever',
+								defect: 'no kind-1444 settle receipt was read for the winning bid',
 							}
 						: {
 								reached: true,
@@ -704,7 +701,7 @@ describe('live lifecycle (chain + mint + relay)', () => {
 					expect(sellerSource.balance() - sellerBalanceBefore).toBe(sellerPayout)
 					report.sellerClaim = { claimed: sellerRun.claimed, balanceBefore: sellerBalanceBefore, balanceAfter: sellerSource.balance() }
 				} else {
-					report.sellerClaim = { reached: false, reason: 'blocked by the chain settle defect — no kind-1444 to claim' }
+					report.sellerClaim = { reached: false, reason: 'no kind-1444 settle receipt to claim' }
 				}
 
 				// ---- 10. The sniper's claim message reaches the seller, and the fulfilment surface shows it ----
@@ -874,9 +871,9 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				}
 
 				// ---- THE SETTLE ASSERTION, last so every other step is exercised first ----
-				// It is NOT weakened and NOT skipped: while the chain's 2-proof-escrow defect
-				// stands, this fails — naming the defect — and the run is red for the right
-				// reason. The escrows this walk leaves locked are throwaway-with-consequence.
+				// It is NOT weakened and NOT skipped: it requires the winner's kind-1444 settle
+				// receipt, which the fixed denomination decomposition now lets the mint honour.
+				// The escrows this walk binds are throwaway test lots.
 				report.throwaway = {
 					coordinate,
 					seller: sellerPubkey,
@@ -886,7 +883,7 @@ describe('live lifecycle (chain + mint + relay)', () => {
 						sniper: {
 							eventId: Sniper.bidEventId,
 							amount: BID_EXTEND_SATS,
-							note: 'WINNING escrow locked at the mint, never settled — throwaway-with-consequence',
+							note: 'WINNING escrow, settled to the seller when the settle step passes',
 						},
 					},
 					admissionProbeEscrow: {
@@ -900,11 +897,11 @@ describe('live lifecycle (chain + mint + relay)', () => {
 				expect(
 					settle !== undefined,
 					`the chain settled no kind-1444 receipt for the winning bid ${Sniper.bidEventId} ` +
-						`(committed status ${winnerState?.status ?? 'unknown'}, settled ${JSON.stringify(winnerState?.settled ?? null)}): ` +
-						`MEASURED CHAIN DEFECT — 12 bids are DUE with no settlement (9 winners, 3 losers, 888 sats), every unsettled ` +
-						`escrow is funded with EXACTLY 2 proofs while every settled escrow has 1/3/5/6 (the counts do not overlap), ` +
-						`the mint answers POST /v1/swap 400, and the chain's settler retries forever. Not key rotation (group key ` +
-						`03be47f1…, keyset 0102b930f4dc…). The lifecycle cannot complete until the chain settles 2-proof escrows.`,
+						`(committed status ${winnerState?.status ?? 'unknown'}, settled ${JSON.stringify(winnerState?.settled ?? null)}). ` +
+						`VALIDATED CAUSE (handover §4): the pre-signed outcome templates asked for output amounts that are not mint ` +
+						`denominations, so POST /v1/swap answered 400 before any signature was examined and the escrow could never ` +
+						`settle or refund. This tree decomposes every payout into the keyset's denominations; if this assertion still ` +
+						`fires, read the mint's and the chain's refusal for the winning escrow rather than assuming a regression here.`,
 				).toBe(true)
 			} finally {
 				pool.close([RELAY])

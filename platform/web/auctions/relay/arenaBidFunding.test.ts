@@ -23,6 +23,8 @@ import {
 	ARENA_SIGALL_GOLDEN_DIGEST,
 	ArenaBidFundingError,
 	arenaBidLocktimeFloor,
+	arenaDenominationSplit,
+	arenaKeysetDenominations,
 	arenaOutputBPoint,
 	arenaSigAllDigest,
 	arenaSettleDestinations,
@@ -50,6 +52,10 @@ const COMMITTEE = arenaWalletPubkey(COMMITTEE_SK)
 const SELLER = arenaWalletPubkey(SELLER_SK)
 const V4V = arenaWalletPubkey(V4V_SK)
 const KEYSET = '009a1f293253e41e'
+/** The pinned keyset's keys: the standard power-of-two denominations, 1 … 2048. */
+const KEYSET_KEYS = Object.fromEntries(Array.from({ length: 12 }, (_, bit) => [String(1 << bit), `02${'0'.repeat(64)}`]))
+/** A deliberately nonstandard keyset: 1, 5 and 25 only. */
+const ODD_KEYS = { '1': `02${'1'.repeat(64)}`, '5': `02${'2'.repeat(64)}`, '25': `02${'3'.repeat(64)}` }
 const LOCKTIME = 1_800_000_000
 const FIXTURE_C = `02${'ab'.repeat(32)}`
 
@@ -94,6 +100,7 @@ const terms = (over: Partial<Parameters<typeof verifyArenaBidFunding>[1]> = {}) 
 	sellerWallet: SELLER,
 	committeeKey: COMMITTEE,
 	keysetId: KEYSET,
+	keys: KEYSET_KEYS,
 	minLocktime: LOCKTIME,
 	...over,
 })
@@ -311,6 +318,7 @@ describe('the outcome templates', () => {
 			bidderWallet: BIDDER,
 			committeeKey: COMMITTEE,
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			minLocktime: LOCKTIME,
 			signer: walletSigner,
 		})
@@ -356,11 +364,32 @@ describe('the outcome templates', () => {
 			bidderWallet: BIDDER,
 			committeeKey: COMMITTEE,
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			minLocktime: LOCKTIME,
 			signer: walletSigner,
 			v4vSplit: split,
 		})
-		expect(funding.outcome_templates.settle.outputs.map((output) => output.amount)).toEqual([50, 950])
+		// The committed split's recipients are unchanged — one destination per
+		// recipient — but each destination's amount is decomposed into the mint's
+		// single-denomination outputs: the v4v row (50 sats) is 32+16+2, and the
+		// seller's remainder (950 sats) is 512+256+128+32+16+4+2.
+		const payouts = funding.outcome_templates.settle.outputs.map((output) => ({
+			recipient: JSON.parse(output.secret)[1].data as string,
+			amount: output.amount,
+		}))
+		expect(payouts).toEqual([
+			{ recipient: V4V, amount: 32 },
+			{ recipient: V4V, amount: 16 },
+			{ recipient: V4V, amount: 2 },
+			{ recipient: SELLER, amount: 512 },
+			{ recipient: SELLER, amount: 256 },
+			{ recipient: SELLER, amount: 128 },
+			{ recipient: SELLER, amount: 32 },
+			{ recipient: SELLER, amount: 16 },
+			{ recipient: SELLER, amount: 4 },
+			{ recipient: SELLER, amount: 2 },
+		])
+		expect(funding.outcome_templates.settle.outputs.reduce((sum, output) => sum + output.amount, 0)).toBe(1000)
 		expect(() => verifyArenaBidFunding(funding, terms({ v4vSplit: split }))).not.toThrow()
 	})
 
@@ -371,6 +400,7 @@ describe('the outcome templates', () => {
 			proofs,
 			destinations: [{ recipient: V4V, amount: 1000 }],
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			signer: walletSigner,
 		})
 		const funding = (await buildArenaBidFunding({
@@ -379,6 +409,7 @@ describe('the outcome templates', () => {
 			bidderWallet: BIDDER,
 			committeeKey: COMMITTEE,
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			minLocktime: LOCKTIME,
 			signer: walletSigner,
 			v4vSplit: split,
@@ -393,6 +424,7 @@ describe('the outcome templates', () => {
 			proofs,
 			destinations: [{ recipient: COMMITTEE, amount: 1000 }],
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			signer: walletSigner,
 		})
 		const funding = await buildArenaBidFunding({
@@ -401,6 +433,7 @@ describe('the outcome templates', () => {
 			bidderWallet: BIDDER,
 			committeeKey: COMMITTEE,
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			minLocktime: LOCKTIME,
 			signer: walletSigner,
 		})
@@ -414,6 +447,7 @@ describe('the outcome templates', () => {
 			proofs,
 			destinations: [{ recipient: V4V, amount: 1000 }],
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			signer: walletSigner,
 		})
 		const funding = await buildArenaBidFunding({
@@ -422,6 +456,7 @@ describe('the outcome templates', () => {
 			bidderWallet: BIDDER,
 			committeeKey: COMMITTEE,
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			minLocktime: LOCKTIME,
 			signer: walletSigner,
 		})
@@ -436,6 +471,7 @@ describe('the outcome templates', () => {
 			bidderWallet: BIDDER,
 			committeeKey: COMMITTEE,
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			minLocktime: LOCKTIME,
 			signer: walletSigner,
 		})
@@ -451,6 +487,7 @@ describe('the outcome templates', () => {
 			bidderWallet: BIDDER,
 			committeeKey: COMMITTEE,
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			minLocktime: LOCKTIME,
 			signer: walletSigner,
 		})
@@ -462,6 +499,7 @@ describe('the outcome templates', () => {
 			proofs: funding.proofs,
 			destinations: [{ recipient: SELLER, amount: 1000 }],
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			signer: wrongSigner,
 		})
 		const tampered = { ...funding, outcome_templates: { ...funding.outcome_templates, settle } }
@@ -475,6 +513,7 @@ describe('the outcome templates', () => {
 			bidderWallet: BIDDER,
 			committeeKey: COMMITTEE,
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			minLocktime: LOCKTIME,
 			signer: walletSigner,
 		})
@@ -483,9 +522,152 @@ describe('the outcome templates', () => {
 			proofs: otherProofs,
 			destinations: [{ recipient: SELLER, amount: 1000 }],
 			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
 			signer: walletSigner,
 		})
 		const tampered = { ...funding, outcome_templates: { ...funding.outcome_templates, settle } }
 		expect(refusalOf(() => verifyArenaBidFunding(tampered, terms()))).toBe('template.inputs-not-committed-proofs')
+	})
+})
+
+// ---------- The payout is decomposed into the mint's denominations ----------
+
+describe('a payout is decomposed into the mint keyset’s denominations', () => {
+	test('a 100-sat destination becomes 64 + 32 + 4, and an 80-sat destination 64 + 16', async () => {
+		const decomposeDestination = (amount: number) =>
+			buildArenaOutcomeTemplate({
+				proofs: escrowProofs(amount),
+				destinations: [{ recipient: SELLER, amount }],
+				keysetId: KEYSET,
+				keys: KEYSET_KEYS,
+				signer: walletSigner,
+			})
+		expect((await decomposeDestination(100)).outputs.map((output) => output.amount)).toEqual([64, 32, 4])
+		expect((await decomposeDestination(80)).outputs.map((output) => output.amount)).toEqual([64, 16])
+	})
+
+	test('the decomposed outputs still reconcile with the locked inputs', async () => {
+		const proofs = escrowProofs(100)
+		const template = await buildArenaOutcomeTemplate({
+			proofs,
+			destinations: [{ recipient: SELLER, amount: 100 }],
+			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
+			signer: walletSigner,
+		})
+		const locked = proofs.reduce((sum, proof) => sum + proof.amount, 0)
+		expect(template.inputs.reduce((sum, proof) => sum + proof.amount, 0)).toBe(locked)
+		expect(template.outputs.reduce((sum, output) => sum + output.amount, 0)).toBe(locked)
+		// And every output is a denomination the keyset actually has.
+		const denominations = new Set(arenaKeysetDenominations(KEYSET_KEYS))
+		for (const output of template.outputs) expect(denominations.has(output.amount)).toBe(true)
+	})
+
+	test('a v4v split keeps exactly one destination per recipient, and decomposes each', async () => {
+		const other = arenaWalletPubkey('55'.repeat(32))
+		const split = [
+			{ role: 'validator', recipientPubkey: V4V, allocationBps: 2500 },
+			{ role: 'v4v', recipientPubkey: other, allocationBps: 2500 },
+		]
+		// Still one destination per recipient: the two split rows, then the seller remainder.
+		expect(arenaSettleDestinations({ amount: 100, sellerWallet: SELLER, v4vSplit: split })).toEqual([
+			{ recipient: V4V, amount: 25 },
+			{ recipient: other, amount: 25 },
+			{ recipient: SELLER, amount: 50 },
+		])
+		const funding = await buildArenaBidFunding({
+			proofs: escrowProofs(100),
+			sellerWallet: SELLER,
+			bidderWallet: BIDDER,
+			committeeKey: COMMITTEE,
+			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
+			minLocktime: LOCKTIME,
+			signer: walletSigner,
+			v4vSplit: split,
+		})
+		const payouts = funding.outcome_templates.settle.outputs.map((output) => ({
+			recipient: JSON.parse(output.secret)[1].data as string,
+			amount: output.amount,
+		}))
+		// 25 = 16+8+1 for each split row, 50 = 32+16+2 for the seller remainder.
+		expect(payouts).toEqual([
+			{ recipient: V4V, amount: 16 },
+			{ recipient: V4V, amount: 8 },
+			{ recipient: V4V, amount: 1 },
+			{ recipient: other, amount: 16 },
+			{ recipient: other, amount: 8 },
+			{ recipient: other, amount: 1 },
+			{ recipient: SELLER, amount: 32 },
+			{ recipient: SELLER, amount: 16 },
+			{ recipient: SELLER, amount: 2 },
+		])
+		expect(() => verifyArenaBidFunding(funding, terms({ v4vSplit: split }))).not.toThrow()
+	})
+
+	test('the split follows the injected keyset, not a hardcoded power-of-two list', async () => {
+		expect(arenaDenominationSplit(100, ODD_KEYS)).toEqual([25, 25, 25, 25])
+		expect(arenaDenominationSplit(80, ODD_KEYS)).toEqual([25, 25, 25, 5])
+		const template = await buildArenaOutcomeTemplate({
+			proofs: escrowProofs(80),
+			destinations: [{ recipient: SELLER, amount: 80 }],
+			keysetId: KEYSET,
+			keys: ODD_KEYS,
+			signer: walletSigner,
+		})
+		expect(template.outputs.map((output) => output.amount)).toEqual([25, 25, 25, 5])
+		expect(template.outputs.reduce((sum, output) => sum + output.amount, 0)).toBe(80)
+	})
+
+	test('an amount the keyset cannot make is refused, and no template is produced', async () => {
+		// A keyset with no 1-sat key: 3 sats cannot be made from 5 and 25.
+		const noOnes = { '5': `02${'5'.repeat(64)}`, '25': `02${'6'.repeat(64)}` }
+		expect(refusalOf(() => arenaDenominationSplit(3, noOnes))).toBe('template.amount-unrepresentable')
+		await expect(
+			buildArenaOutcomeTemplate({
+				proofs: escrowProofs(3),
+				destinations: [{ recipient: SELLER, amount: 3 }],
+				keysetId: KEYSET,
+				keys: noOnes,
+				signer: walletSigner,
+			}),
+		).rejects.toBeInstanceOf(ArenaBidFundingError)
+	})
+
+	test('a zero, negative or non-integer amount is refused by name', () => {
+		expect(refusalOf(() => arenaDenominationSplit(0, KEYSET_KEYS))).toBe('template.amount-unrepresentable')
+		expect(refusalOf(() => arenaDenominationSplit(-4, KEYSET_KEYS))).toBe('template.amount-unrepresentable')
+		expect(refusalOf(() => arenaDenominationSplit(1.5, KEYSET_KEYS))).toBe('template.amount-unrepresentable')
+	})
+
+	test('a keyset naming no usable denomination is refused by name', () => {
+		expect(refusalOf(() => arenaDenominationSplit(10, {}))).toBe('template.keyset-unusable')
+		expect(refusalOf(() => arenaDenominationSplit(10, { '0': KEYSET_KEYS['1'] }))).toBe('template.keyset-unusable')
+	})
+
+	test('a single-output settle template is refused against the pinned keyset', async () => {
+		// A keyset under which 1,000 is a single denomination builds the shape that
+		// can never settle; verifying it against the real power-of-two keyset must
+		// fail, because the expected payout there is six outputs.
+		const funding = await buildArenaBidFunding({
+			proofs: escrowProofs(1000),
+			sellerWallet: SELLER,
+			bidderWallet: BIDDER,
+			committeeKey: COMMITTEE,
+			keysetId: KEYSET,
+			keys: KEYSET_KEYS,
+			minLocktime: LOCKTIME,
+			signer: walletSigner,
+		})
+		const single = await buildArenaOutcomeTemplate({
+			proofs: funding.proofs,
+			destinations: [{ recipient: SELLER, amount: 1000 }],
+			keysetId: KEYSET,
+			keys: { '1000': KEYSET_KEYS['512'] },
+			signer: walletSigner,
+		})
+		expect(single.outputs.map((output) => output.amount)).toEqual([1000])
+		const tampered = { ...funding, outcome_templates: { ...funding.outcome_templates, settle: single } }
+		expect(refusalOf(() => verifyArenaBidFunding(tampered, terms()))).toBe('template.amount')
 	})
 })
