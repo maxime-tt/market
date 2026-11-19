@@ -35,8 +35,11 @@ describe('intro counters', () => {
 // The handoff is measured against the live DOM in the app; these fakes carry the
 // two things the chooser actually touches (a box, and whether it sits in the
 // bar), so the decision is proven without a browser. What they do NOT prove is
-// painting: that a `fixed` pill over a real field fades to an identical element
-// is a compositor fact, checked by eye.
+// (a) painting — that a `fixed` pill over a real field fades to an identical
+// element is a compositor fact, checked by eye — or (b) the wiring that drives
+// the re-measure (the search beat, the MutationObserver on new mounts, and the
+// stop-at-fade guard), which needs a live document. They do prove the re-measure
+// *outcome*: the same pill re-measured against a changed field set moves.
 function fakeField(box: { top: number; left: number; width: number; height: number }, inBar = false): HandoffCandidate {
 	return {
 		getBoundingClientRect: () => box,
@@ -106,6 +109,34 @@ describe('intro handoff: positioning the pill', () => {
 		expect(positionHandoffPill(pill, doc)).toBeNull()
 		expect(pill.style).toEqual({ position: '', top: '', left: '', width: '', height: '' })
 		expect(positionHandoffPill(null, doc)).toBeNull()
+	})
+
+	test('a page field that arrives later is followed: the re-measure moves the pill off the bar', () => {
+		const barBox = { top: 12, left: 441, width: 397, height: 40 }
+		const heroBox = { top: 88, left: 328, width: 560, height: 70 }
+		const fields: HandoffCandidate[] = [fakeField(barBox, true)]
+		const doc = { querySelectorAll: () => fields } as unknown as Document
+		const pill = fakePill()
+
+		// At the beat only the bar's field is mounted (the home read is in flight).
+		expect(positionHandoffPill(pill, doc)).toEqual(barBox)
+		expect(pill.style).toEqual({ position: 'fixed', top: '12px', left: '441px', width: '397px', height: '40px' })
+
+		// The page's own field mounts; the next re-measure (a mutation, then the
+		// fade's final measure) prefers it.
+		fields.push(fakeField(heroBox))
+		expect(positionHandoffPill(pill, doc)).toEqual(heroBox)
+		expect(pill.style).toEqual({ position: 'fixed', top: '88px', left: '328px', width: '560px', height: '70px' })
+	})
+
+	test('a slow read that never renders a page field keeps the bar field — no wrong promise', () => {
+		const barBox = { top: 12, left: 441, width: 397, height: 40 }
+		const doc = { querySelectorAll: () => [fakeField(barBox, true)] } as unknown as Document
+		const pill = fakePill()
+		expect(positionHandoffPill(pill, doc)).toEqual(barBox)
+		// The fade's final measure sees the same field, so the pill does not jump.
+		expect(positionHandoffPill(pill, doc)).toEqual(barBox)
+		expect(pill.style).toEqual({ position: 'fixed', top: '12px', left: '441px', width: '397px', height: '40px' })
 	})
 })
 
