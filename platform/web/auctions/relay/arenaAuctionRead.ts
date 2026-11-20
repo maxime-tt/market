@@ -296,6 +296,13 @@ export function arenaAuctionFilters(): EventFilter[] {
 	// all commitments and no lot ever arrives. Measured on the live relay
 	// 2026-11-18: 36 creates alongside ~500 commitments, while the app's list
 	// rendered a single lot. Splitting the filter gives each kind its own budget.
+	//
+	// A budget is still a **window**, and kind 1449 carries three schemas the
+	// chain publishes in bursts: a create-admission can be pushed out of the
+	// newest 200 by committed ends and bid admissions alone. That is why a
+	// surface whose gate reads the acceptances asks the read for the ones it is
+	// missing — see `unadmittedCreateIds` and
+	// `ArenaAuctionRead.missingCreateAdmissions`.
 	return [
 		{ kinds: [ARENA_AUCTION_CREATE_KIND], limit: 500 },
 		{ kinds: [ARENA_AUCTION_BID_KIND], limit: 500 },
@@ -428,6 +435,64 @@ export function arenaLotFollowUpFilters(
 			},
 		]
 	}
+}
+
+/**
+ * The creates this read read that carry **no create-admission** yet — the
+ * positive fact {@link isFollowedAuction} gates every discovery surface on.
+ *
+ * ## Why a read can be missing the fact its own gate needs
+ *
+ * `arena.createadmit.v1` shares kind 1449 with `arena.lot.v1` (a committed end)
+ * and `arena.bidadmit.v1` (a bid's admission), and the chain publishes all three
+ * in bursts. A `limit`-bounded subscription over the kind therefore returns
+ * whichever of the three the relay's newest slice happens to hold — measured on
+ * the live relay 2026-11-20: the newest 200 kind-1449 events were 200
+ * create-admissions just after the 09:47:41 burst, and **28 bid admissions + 172
+ * committed ends** in the window before it, which carried **no acceptance for
+ * any of the 77 lots**. Every lot's `createAdmit` was `null`, and the list
+ * rendered empty with all seven relays healthy while the lot page still resolved
+ * its lot. A second, measured way the same fact goes missing: the relay answers
+ * the arena REQ **filter by filter**, so the admissions arrive after the creates,
+ * the bids, the receipts, the verdicts and the commitments — whichever a read
+ * has not consumed when it reaches its deadline is dropped with the rest of the
+ * tail. Same relay, same minute, 2026-11-20: 30 of the 56 accepted lots were
+ * followed at the read's 8 s deadline, and 56 of 56 with the same code at a 30 s
+ * deadline.
+ *
+ * ## The fact is asked for by the one tag that addresses it
+ *
+ * A create-admission names the create it accepted in its `e` tag and in its
+ * content's `root_event_id`, and a 64-hex value is a tag the relay's index
+ * actually carries (`#e` — the same key the bid follow-up uses, unlike a 106-char
+ * coordinate). Asking for the ids of the creates this read read therefore finds
+ * every acceptance, however old the lot and whatever arrived since. It cannot
+ * invent one: each event still goes through `parseArenaCreateAdmitEvent` —
+ * signature, schema, the mandatory agreeing anchor, the `e`/`auction` tags
+ * against the content — and an acceptance that names a create this read did not
+ * read is dropped as an orphan.
+ *
+ * The ids are in the order the creates were read, deduped: this is the read's own
+ * answer to "which of the creates I read has the chain not accepted *as far as I
+ * have read*".
+ */
+export function unadmittedCreateIds(events: readonly ArenaAuctionEvent[]): string[] {
+	const admitted = new Set<string>()
+	for (const event of events) if (event.type === 'create-admit') admitted.add(event.admit.rootEventId)
+
+	const seen = new Set<string>()
+	const ids: string[] = []
+	for (const event of events) {
+		if (event.type !== 'create' || seen.has(event.id)) continue
+		seen.add(event.id)
+		if (!admitted.has(event.id)) ids.push(event.id)
+	}
+	return ids
+}
+
+/** The one filter that asks for the create-admissions of `ids`: by the create's own event id. */
+export function arenaCreateAdmitFilter(ids: readonly string[]): EventFilter {
+	return { kinds: [ARENA_LOT_STATE_KIND], '#e': [...ids] }
 }
 
 /** The fields a decoded event always has, whatever its kind. */
@@ -1897,9 +1962,33 @@ export interface ArenaAuctionRead {
 	 * fail — see `health`.
 	 */
 	snapshot(options?: { signal?: AbortSignal }): Promise<ArenaAuctionSnapshot>
+	/**
+	 * The chain's **create-admissions** for the creates `events` names that carry
+	 * none ({@link unadmittedCreateIds}) — one bounded REQ per relay, asked by the
+	 * `#e` tag that addresses a create's own event id, and **only when something is
+	 * missing**: a complete read opens no REQ and resolves empty.
+	 *
+	 * The returned events are **not** merged into any projection here: the caller
+	 * projects them like any other batch, so "what an admission is" stays one rule
+	 * in one place (`projectArenaEvents` → `arenaCreateAdmitRead.ts`). The caller
+	 * also owns the budget (`deadlineMs`), because it is the caller that knows how
+	 * long the page may wait for the read to be complete.
+	 */
+	missingCreateAdmissions(
+		events: readonly ArenaAuctionEvent[],
+		options?: { signal?: AbortSignal; deadlineMs?: number },
+	): Promise<{ events: ArenaAuctionEvent[]; refusals: ArenaRefusedEvent[] }>
 	/** Abort every open subscription. */
 	close(): void
 }
+
+/**
+ * How long {@link ArenaAuctionRead.missingCreateAdmissions} may wait for its one
+ * REQ per relay. It is a second, smaller budget after the read's own deadline:
+ * the REQ is one indexed lookup per relay, and a page must not wait on a relay
+ * that will not answer this one question.
+ */
+export const DEFAULT_MISSING_ADMISSION_DEADLINE_MS = 1500
 
 const DEFAULT_DEADLINE_MS = 8000
 
@@ -2317,6 +2406,45 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 				}
 			}
 			return projectArenaEvents([...byId.values()], health, refusals)
+		},
+
+		async missingCreateAdmissions(events, options) {
+			const ids = unadmittedCreateIds(events)
+			if (ids.length === 0) return { events: [], refusals: [] }
+
+			const controller = new AbortController()
+			controllers.add(controller)
+			const onCallerAbort = () => controller.abort()
+			if (options?.signal?.aborted) controller.abort()
+			else options?.signal?.addEventListener('abort', onCallerAbort)
+			const timer = setTimeout(() => controller.abort(), options?.deadlineMs ?? DEFAULT_MISSING_ADMISSION_DEADLINE_MS)
+
+			const collected: ArenaAuctionEvent[] = []
+			const refusals: ArenaRefusedEvent[] = []
+			const filters: EventFilter[] = [arenaCreateAdmitFilter(ids)]
+			try {
+				await Promise.all(
+					relays.map(async (url) => {
+						try {
+							for await (const item of init.openRelay(url)(filters, { signal: controller.signal, bounded: true })) {
+								if (item.type !== 'event') continue
+								const decoded = decodeArenaEvent(item.event, url)
+								if (decoded.ok) collected.push(decoded.event)
+								else refusals.push(decoded.refusal)
+							}
+						} catch {
+							// A relay that will not answer this one REQ adds nothing to the
+							// answer; the read states what it has instead of failing the
+							// whole question because one relay stayed quiet.
+						}
+					}),
+				)
+			} finally {
+				clearTimeout(timer)
+				controllers.delete(controller)
+				options?.signal?.removeEventListener('abort', onCallerAbort)
+			}
+			return { events: collected, refusals }
 		},
 
 		close() {

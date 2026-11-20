@@ -17,6 +17,7 @@ import type { EventFilter, EventStreamItem, NostrEventLike } from '@sdk/core'
 import {
 	ARENA_AUCTION_BID_KIND,
 	ARENA_AUCTION_CREATE_KIND,
+	ARENA_LOT_STATE_KIND,
 	ARENA_STATE_COMMITMENT_KIND,
 	ARENA_VERDICT_KIND,
 	ARENA_VERDICT_SCHEMA,
@@ -24,6 +25,7 @@ import {
 import {
 	createArenaAuctionRead,
 	decodeArenaEvent,
+	followedAuctionViews,
 	projectArenaEvents,
 	type ArenaAuctionRead,
 	type ArenaAuctionSnapshot,
@@ -833,6 +835,45 @@ describe('collectArenaSurfacesRead', () => {
 		expect(state.chainClock?.ageSec).not.toBeNull()
 		// The rules clock is the same anchored instant.
 		expect(state.chainClock?.rulesHeight).toBe(30)
+	})
+
+	test('a kind-1449 window with no admission still yields a followed lot, asked for by its create id', async () => {
+		// The measured defect (2026-11-20): kind 1449 carries three schemas, and the
+		// relay's newest slice can hold committed ends and bid admissions alone — so
+		// a read reports every create and not one acceptance, and a gate that
+		// requires one lists nothing on a healthy relay. The collector asks the read
+		// for exactly the acceptances it is missing, by the create's own id, and
+		// projects once more before it states a final status.
+		const create = createEvent({ id: 'create-windowed' })
+		const admit = makeCreateAdmitEvent(create)
+		const calls: (readonly EventFilter[])[] = []
+		const read = createArenaAuctionRead({
+			relays: ['wss://windowed'],
+			deadlineMs: 150,
+			openRelay:
+				(url: string): ArenaRelayOpen =>
+				(filters: readonly EventFilter[]) => ({
+					async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+						calls.push(filters)
+						const requested = new Set(filters.flatMap((filter) => filter['#e'] ?? []))
+						const events = requested.size === 0 ? [create] : [admit]
+						for (const event of events) yield { type: 'event', event } as EventStreamItem<NostrEventLike>
+						yield {
+							type: 'caught-up',
+							info: { eose: [url], pending: [], complete: false },
+						} as EventStreamItem<NostrEventLike>
+					},
+				}),
+		})
+
+		const state = await collectArenaSurfacesRead(read)
+		expect(state.status).toBe('settled')
+		expect(state.snapshot?.auctions).toHaveLength(1)
+		expect(state.snapshot?.auctions[0]?.createAdmit?.eventId).toBe(admit.id)
+		expect(followedAuctionViews(state.snapshot!.auctions)).toHaveLength(1)
+		// Two REQs: the whole-arena base set, then the one acceptance by create id.
+		expect(calls).toHaveLength(2)
+		expect(calls[1]).toEqual([{ kinds: [ARENA_LOT_STATE_KIND], '#e': [create.id] }])
 	})
 
 	test('with no commitment the chain clock is honestly unknown, never zero or now', async () => {

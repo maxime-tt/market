@@ -44,6 +44,7 @@ import {
 	createWebArenaAuctionRead,
 	isFollowedAuction,
 	projectArenaEvents,
+	unadmittedCreateIds,
 	type ArenaAuctionEvent,
 	type ArenaAuctionSnapshot,
 	type ArenaAuctionView,
@@ -481,6 +482,27 @@ export async function collectArenaSurfacesRead(
 			}
 			refresh(item.health)
 			break
+		}
+
+		// The read's own budget can leave an acceptance behind: kind 1449 carries
+		// three schemas the relay answers in bursts (so a `limit`-bounded window
+		// over the kind can hold no admission at all), and the relay answers the
+		// arena REQ filter by filter — the admissions arrive last, and a read that
+		// reaches its deadline drops the tail it had not consumed. Both were
+		// measured on the live relay, 2026-11-20. A discovery surface must not gate
+		// a lot the chain accepted on "no fact read", so this asks the read for
+		// exactly the acceptances it is missing — one bounded REQ, by the create's
+		// own id, opened only when something is missing — and projects once more.
+		const missing = unadmittedCreateIds([...byId.values()])
+		if (missing.length > 0) {
+			const fetched = await read.missingCreateAdmissions([...byId.values()], { signal: options.signal })
+			for (const event of fetched.events) {
+				const prior = byId.get(event.id)
+				if (prior === undefined) byId.set(event.id, event)
+				else for (const relay of event.relays) if (!prior.relays.includes(relay)) prior.relays.push(relay)
+			}
+			refusals.push(...fetched.refusals)
+			if (fetched.events.length > 0 || fetched.refusals.length > 0) refresh(snapshot.health)
 		}
 	} finally {
 		read.close()
