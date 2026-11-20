@@ -1,4 +1,7 @@
 import { Button } from '@ui/primitives/button'
+import { DashboardIconTile } from '@ui/dashboard/dashboard-icon-tile'
+import { cn } from '@ui/utils/cn'
+import { ImagePlus } from 'lucide-react'
 import { Input } from '@ui/primitives/input'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -23,6 +26,9 @@ function withMimeExtension(fileName: string, mimeType: string): string {
 	return fileName.match(/\.[^/.]+$/) ? fileName.replace(/\.[^/.]+$/, extension) : `${fileName}${extension}`
 }
 
+/** Small round controls floating over an uploaded image. */
+const classNameOverlayButton = 'rounded-full border-border-default bg-surface-raised/90 text-text-high backdrop-blur hover:bg-surface-hover'
+
 interface ImageUploaderProps {
 	src: string | null
 	index: number
@@ -31,6 +37,8 @@ interface ImageUploaderProps {
 	compact?: boolean
 	initialUrl?: string
 	imageDimensionText?: string
+	/** Drop-zone shape: `video` (16:9, the default), `banner` (5:1, profile headers) or `square` (avatars). */
+	aspect?: 'video' | 'banner' | 'square'
 	preferredServer?: string
 	onUploadAttempt?: () => boolean
 	onBeforeUpload?: () => Promise<void>
@@ -55,7 +63,8 @@ export function ImageUploader({
 	onDemote,
 	onInteraction,
 	onUrlChange,
-	imageDimensionText = 'dimensions: 1600px High x 1600px Wide',
+	imageDimensionText = 'Recommended: 1600 × 1600 px',
+	aspect = 'video',
 	preferredServer,
 	onUploadAttempt,
 	onBeforeUpload,
@@ -363,17 +372,20 @@ export function ImageUploader({
 	}
 
 	return (
-		<div className="w-full h-full">
-			<div className="flex flex-col">
+		<div className={cn('w-full', aspect === 'square' ? 'max-w-[280px]' : 'h-full')}>
+			<div className="flex flex-col bg-surface-raised border border-border-default rounded-2xl overflow-hidden">
 				<div
-					className={`border-2 border-b-0 border-black relative w-full aspect-video overflow-hidden
-            ${localSrc ? 'bg-black' : ''}`}
-					style={localSrc ? {} : { backgroundImage: 'url("images/checker.png")', backgroundRepeat: 'repeat' }}
+					data-slot="image-drop-zone"
+					className={cn(
+						'relative w-full overflow-hidden',
+						aspect === 'banner' ? 'aspect-[5/1] min-h-36' : aspect === 'square' ? 'aspect-square' : 'aspect-video',
+						localSrc ? 'bg-surface-sunken' : 'bg-surface-sunken/60',
+					)}
 				>
 					{/* Floating server selector */}
 					<div className="top-2 left-2 z-10 absolute">
 						<Select value={selectedServer} onValueChange={setSelectedServer}>
-							<SelectTrigger className="bg-white shadow-sm border-2 border-black w-[280px]">
+							<SelectTrigger className="bg-surface-raised/90 shadow-sm backdrop-blur border-border-default rounded-full w-auto max-w-[240px] h-8 text-xs">
 								<SelectValue placeholder="Select server" />
 							</SelectTrigger>
 							<SelectContent>
@@ -388,21 +400,7 @@ export function ImageUploader({
 
 					{localSrc ? (
 						<>
-							<div className="absolute inset-0 opacity-10">
-								<div
-									className="absolute inset-0 bg-gradient-to-r from-gray-300 to-white"
-									style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
-								></div>
-								<div
-									className="absolute inset-0 bg-gradient-to-l from-gray-300 to-white"
-									style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
-								></div>
-							</div>
-
-							<div
-								className="absolute inset-0 flex justify-center items-center"
-								style={{ backgroundImage: 'url("images/image-bg-pattern.png")', backgroundRepeat: 'repeat' }}
-							>
+							<div className="absolute inset-0 flex justify-center items-center">
 								{getMediaType(localSrc) === 'video' ? (
 									<video src={localSrc} controls className="max-w-full max-h-full object-contain">
 										<track kind="captions" />
@@ -415,11 +413,11 @@ export function ImageUploader({
 
 							<div className="right-2 bottom-2 absolute flex gap-2">
 								{inputEditable && (
-									<Button type="button" variant="outline" size="icon" className="bg-white" onClick={handleEditByUpload}>
+									<Button type="button" variant="outline" size="icon" className={classNameOverlayButton} onClick={handleEditByUpload}>
 										<span className="w-6 h-6 i-upload" />
 									</Button>
 								)}
-								<Button type="button" variant="outline" size="icon" className="bg-white" onClick={() => onDelete(index)}>
+								<Button type="button" variant="outline" size="icon" className={classNameOverlayButton} onClick={() => onDelete(index)}>
 									<span className="w-4 h-4 i-delete" />
 								</Button>
 							</div>
@@ -430,7 +428,7 @@ export function ImageUploader({
 										type="button"
 										variant="outline"
 										size="icon"
-										className="bg-white"
+										className={classNameOverlayButton}
 										disabled={index === 0}
 										onClick={() => onPromote && onPromote(index)}
 									>
@@ -440,7 +438,7 @@ export function ImageUploader({
 										type="button"
 										variant="outline"
 										size="icon"
-										className="bg-white"
+										className={classNameOverlayButton}
 										disabled={index === imagesLength - 1}
 										onClick={() => onDemote && onDemote(index)}
 									>
@@ -452,29 +450,30 @@ export function ImageUploader({
 					) : (
 						<button
 							type="button"
-							className={`absolute inset-0 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-black/5 ${
-								isDragging ? 'bg-black/10' : ''
-							}`}
+							className={cn(
+								'absolute inset-2 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong text-text-high normal-case tracking-normal cursor-pointer transition-colors hover:border-fill-accent hover:bg-surface-hover',
+								isDragging && 'border-fill-accent bg-surface-hover',
+							)}
 							onClick={handleUploadIntent}
 							onDragEnter={handleDragEnter}
 							onDragOver={(e) => e.preventDefault()}
 							onDragLeave={handleDragLeave}
 							onDrop={handleDrop}
 						>
-							<span className="w-10 h-10 i-upload" />
-							<strong>{isDragging ? 'Drop media here' : 'Click or drag image here'}</strong>
-							<strong className="text-gray-500 text-xs">{imageDimensionText}</strong>
+							<DashboardIconTile icon={ImagePlus} />
+							<span className="font-medium text-sm">{isDragging ? 'Drop it here' : 'Click or drag an image here'}</span>
+							<span className="text-text-mid text-xs">{imageDimensionText}</span>
 						</button>
 					)}
 				</div>
 
 				{/* URL input below image - full width */}
-				<div className="relative w-full">
+				<div className="relative border-border-default border-t w-full">
 					<Input
 						disabled={!inputEditable && Boolean(localSrc)}
 						value={inputValue}
 						type="text"
-						className="pr-12 border-2 border-black rounded-none h-12"
+						className="bg-transparent shadow-none pr-24 border-0 rounded-none focus-visible:ring-0 h-12"
 						placeholder="Set a remote image URL"
 						id="userImageRemote"
 						name="imageRemoteInput"
@@ -486,7 +485,7 @@ export function ImageUploader({
 						inputEditable ? (
 							<Button
 								type="button"
-								className="top-1 right-1 bottom-1 absolute h-10"
+								className="top-1.5 right-1.5 bottom-1.5 absolute rounded-full h-9"
 								onClick={handleSaveImage}
 								data-testid="image-save-button"
 							>
@@ -496,7 +495,7 @@ export function ImageUploader({
 							<Button
 								type="button"
 								variant="outline"
-								className="top-1 right-1 bottom-1 absolute bg-white h-10"
+								className="top-1.5 right-1.5 bottom-1.5 absolute rounded-full h-9"
 								onClick={() => setInputEditable(true)}
 								data-testid="image-edit-button"
 							>
@@ -506,7 +505,7 @@ export function ImageUploader({
 					) : (
 						<Button
 							type="button"
-							className="top-1 right-1 bottom-1 absolute h-10"
+							className="top-1.5 right-1.5 bottom-1.5 absolute rounded-full h-9"
 							onClick={handleSaveImage}
 							data-testid="image-save-button"
 						>
@@ -515,7 +514,7 @@ export function ImageUploader({
 					)}
 				</div>
 
-				{urlError && <p className="text-destructive text-sm">{urlError}</p>}
+				{urlError && <p className="mt-2 text-destructive text-sm">{urlError}</p>}
 
 				{isLoading && (
 					<div className="flex flex-col gap-2">

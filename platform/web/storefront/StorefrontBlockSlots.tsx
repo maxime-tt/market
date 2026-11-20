@@ -26,7 +26,16 @@ import { useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useQuery } from '@tanstack/react-query'
 import { useStorefrontContext } from '@ui/storefront/StorefrontContext'
-import { selectAuctionList, useAuctionListRead } from './auctionListRead'
+import { selectAuctionList, useNowSeconds, useSharedAuctionListRead } from './auctionListRead'
+import {
+	AuctionBentoSlot,
+	CategorySectionSlot,
+	ClosingPicksSlot,
+	CollectionRowSlot,
+	CoverAuctionSlot,
+	ProductSpreadSlot,
+	TickerSlot,
+} from './MagazineBlockSlots'
 import type { StorefrontBlock, StorefrontPage } from '@sdk/commerce/storefront/storefrontPage'
 
 /**
@@ -165,16 +174,7 @@ function SearchSlot({ placeholder, size }: SearchBlockProps) {
 		if (term.length === 0) return
 		navigate({ to: '/', search: { q: term } })
 	}
-	return (
-		<SearchBlock
-			placeholder={placeholder}
-			size={size}
-			query={query}
-			onChange={setQuery}
-			onGo={go}
-			onClear={() => setQuery('')}
-		/>
-	)
+	return <SearchBlock placeholder={placeholder} size={size} query={query} onChange={setQuery} onGo={go} onClear={() => setQuery('')} />
 }
 
 /**
@@ -185,13 +185,7 @@ function SearchSlot({ placeholder, size }: SearchBlockProps) {
  */
 function CategoriesSlot({ categories, title }: CategoriesBlockBlockProps) {
 	const navigate = useNavigate()
-	return (
-		<CategoriesBlock
-			categories={categories}
-			title={title}
-			categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`}
-		/>
-	)
+	return <CategoriesBlock categories={categories} title={title} categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`} />
 }
 
 /**
@@ -206,14 +200,16 @@ function CategoriesSlot({ categories, title }: CategoriesBlockBlockProps) {
  */
 function AuctionListSlot(props: AuctionListBlockProps) {
 	const { pubkey } = useStorefrontContext()
-	const read = useAuctionListRead()
-	const now = Math.floor(Date.now() / 1000)
+	// One read shared with the other auction blocks on the page (ADR-0028).
+	const read = useSharedAuctionListRead()
+	const now = useNowSeconds()
 	const selection = {
 		source: props.source,
 		seller: pubkey,
 		coordinates: props.auctionCoordinates,
 		limit: props.limit,
 		now,
+		sort: props.sort,
 	} as const
 	const selected = read.snapshot
 		? selectAuctionList(read.snapshot, selection)
@@ -227,6 +223,7 @@ function AuctionListSlot(props: AuctionListBlockProps) {
 			status={read.status}
 			relayHealth={read.relayHealth}
 			auctionHref={auctionHref}
+			now={now}
 		/>
 	)
 }
@@ -251,6 +248,13 @@ export const storefrontBlockSlots: StorefrontDataSlots = {
 	Search: (props) => <SearchSlot {...props} />,
 	Categories: (props) => <CategoriesSlot {...props} />,
 	AuctionList: (props) => <AuctionListSlot {...props} />,
+	Ticker: (props) => <TickerSlot {...props} />,
+	CoverAuction: (props) => <CoverAuctionSlot {...props} />,
+	ProductSpread: (props) => <ProductSpreadSlot {...props} />,
+	CollectionRow: (props) => <CollectionRowSlot {...props} />,
+	CategorySection: (props) => <CategorySectionSlot {...props} />,
+	AuctionBento: (props) => <AuctionBentoSlot {...props} />,
+	ClosingPicks: (props) => <ClosingPicksSlot {...props} />,
 }
 
 /**
@@ -309,11 +313,7 @@ function servedRegionElement(block: StorefrontBlock): ReactNode {
  * Returns the teardown: every region root unmounts, leaving the server's
  * markup in place.
  */
-export function fillServedPageRegions(
-	container: HTMLElement,
-	page: StorefrontPage,
-	wrap: (children: ReactNode) => ReactNode,
-): () => void {
+export function fillServedPageRegions(container: HTMLElement, page: StorefrontPage, wrap: (children: ReactNode) => ReactNode): () => void {
 	const roots: Root[] = []
 	for (const element of container.querySelectorAll<HTMLElement>(SERVED_REGION_SELECTOR)) {
 		const block = page.content.find((candidate) => candidate.props.id === element.dataset.arBlockId)

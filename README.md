@@ -1,5 +1,7 @@
 # Market Frontend
 
+New to the site? The [user guide](docs/guide/README.md) walks through shopping, auctions, the wallet and selling, with screenshots.
+
 To install dependencies:
 
 ```bash
@@ -86,6 +88,10 @@ When you first start the application:
    ```bash
    bun seed
    ```
+
+## Theming
+
+The public site, dashboard and storefront pages each have their own theme, all with bundled fonts and no third-party hosts. See the [theming guide](docs/theming.md) for tokens, scopes and Puck blocks.
 
 ## React Query
 

@@ -11,6 +11,8 @@ import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { DashboardOverviewStats } from '@ui/dashboard/dashboard-overview-stats'
+import { DashboardIconTile } from '@ui/dashboard/dashboard-icon-tile'
+import { CreditCard, FolderOpen, Gavel, MessagesSquare, PackagePlus, Receipt, User } from 'lucide-react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/')({
 	component: DashboardInnerComponent,
@@ -56,9 +58,9 @@ function DashboardInnerComponent() {
 				<CardContent>
 					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 						<Link to="/dashboard/products/products/new">
-							<Button variant="outline" className="w-full justify-start h-auto py-4">
-								<div className="flex items-start gap-3">
-									<span className="text-2xl">➕</span>
+							<Button variant="outline" className="justify-start py-4 rounded-2xl w-full h-auto normal-case tracking-normal">
+								<div className="flex items-center gap-3">
+									<DashboardIconTile icon={PackagePlus} />
 									<div className="text-left">
 										<div className="font-semibold">Create Product</div>
 										<div className="text-xs text-muted-foreground">List a new item for sale</div>
@@ -68,9 +70,9 @@ function DashboardInnerComponent() {
 						</Link>
 
 						<Link to="/dashboard/products/auctions">
-							<Button variant="outline" className="w-full justify-start h-auto py-4">
-								<div className="flex items-start gap-3">
-									<span className="text-2xl">🔨</span>
+							<Button variant="outline" className="justify-start py-4 rounded-2xl w-full h-auto normal-case tracking-normal">
+								<div className="flex items-center gap-3">
+									<DashboardIconTile icon={Gavel} />
 									<div className="text-left">
 										<div className="font-semibold">Auctions</div>
 										<div className="text-xs text-muted-foreground">Manage your auction listings</div>
@@ -80,9 +82,9 @@ function DashboardInnerComponent() {
 						</Link>
 
 						<Link to="/dashboard/sales/sales">
-							<Button variant="outline" className="w-full justify-start h-auto py-4">
-								<div className="flex items-start gap-3">
-									<span className="text-2xl">💰</span>
+							<Button variant="outline" className="justify-start py-4 rounded-2xl w-full h-auto normal-case tracking-normal">
+								<div className="flex items-center gap-3">
+									<DashboardIconTile icon={Receipt} />
 									<div className="text-left">
 										<div className="font-semibold">View Sales</div>
 										<div className="text-xs text-muted-foreground">Manage your orders</div>
@@ -92,9 +94,9 @@ function DashboardInnerComponent() {
 						</Link>
 
 						<Link to="/dashboard/sales/messages">
-							<Button variant="outline" className="w-full justify-start h-auto py-4">
-								<div className="flex items-start gap-3">
-									<span className="text-2xl">✉️</span>
+							<Button variant="outline" className="justify-start py-4 rounded-2xl w-full h-auto normal-case tracking-normal">
+								<div className="flex items-center gap-3">
+									<DashboardIconTile icon={MessagesSquare} />
 									<div className="text-left">
 										<div className="font-semibold">Messages</div>
 										<div className="text-xs text-muted-foreground">Chat with buyers/sellers</div>
@@ -104,9 +106,9 @@ function DashboardInnerComponent() {
 						</Link>
 
 						<Link to="/dashboard/products/collections">
-							<Button variant="outline" className="w-full justify-start h-auto py-4">
-								<div className="flex items-start gap-3">
-									<span className="text-2xl">🗂️</span>
+							<Button variant="outline" className="justify-start py-4 rounded-2xl w-full h-auto normal-case tracking-normal">
+								<div className="flex items-center gap-3">
+									<DashboardIconTile icon={FolderOpen} />
 									<div className="text-left">
 										<div className="font-semibold">Collections</div>
 										<div className="text-xs text-muted-foreground">Organize your products</div>
@@ -116,9 +118,9 @@ function DashboardInnerComponent() {
 						</Link>
 
 						<Link to="/dashboard/account/receiving-payments">
-							<Button variant="outline" className="w-full justify-start h-auto py-4">
-								<div className="flex items-start gap-3">
-									<span className="text-2xl">💸</span>
+							<Button variant="outline" className="justify-start py-4 rounded-2xl w-full h-auto normal-case tracking-normal">
+								<div className="flex items-center gap-3">
+									<DashboardIconTile icon={CreditCard} />
 									<div className="text-left">
 										<div className="font-semibold">Payment Settings</div>
 										<div className="text-xs text-muted-foreground">Configure how you get paid</div>
@@ -128,9 +130,9 @@ function DashboardInnerComponent() {
 						</Link>
 
 						<Link to="/dashboard/account/profile">
-							<Button variant="outline" className="w-full justify-start h-auto py-4">
-								<div className="flex items-start gap-3">
-									<span className="text-2xl">👤</span>
+							<Button variant="outline" className="justify-start py-4 rounded-2xl w-full h-auto normal-case tracking-normal">
+								<div className="flex items-center gap-3">
+									<DashboardIconTile icon={User} />
 									<div className="text-left">
 										<div className="font-semibold">Edit Profile</div>
 										<div className="text-xs text-muted-foreground">Update your store info</div>

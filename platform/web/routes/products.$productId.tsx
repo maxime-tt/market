@@ -211,7 +211,7 @@ const renderProductShippingSelector = (shippingState: ProductPageShippingState, 
 		case 'loading':
 			return <div className="text-sm text-muted-foreground">Loading shipping options...</div>
 		case 'unavailable':
-			return <div className="text-sm text-red-500">Shipping options unavailable</div>
+			return <div className="text-sm text-error">Shipping options unavailable</div>
 		case 'resolved-empty':
 			return <div className="text-sm text-muted-foreground">No published shipping options could be resolved for this product.</div>
 		case 'resolved':
@@ -228,7 +228,9 @@ const renderProductShippingSelector = (shippingState: ProductPageShippingState, 
 }
 
 const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView: boolean, shippingState: ProductPageShippingState) => {
-	const wrapContent = (content: ReactNode) => <div className="bg-white shadow-md p-6 rounded-lg">{content}</div>
+	const wrapContent = (content: ReactNode) => (
+		<div className="bg-surface-raised p-6 border border-border-default rounded-2xl text-text-high">{content}</div>
+	)
 
 	const summary = getProductSummary(eventProduct)
 	const description = getProductDescription(eventProduct)
@@ -241,8 +243,8 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 		case TabProductPage.description:
 			return wrapContent(
 				<>
-					{summary && <p className="mb-4 pb-4 border-gray-200 border-b text-gray-600 italic">{summary}</p>}
-					<p className="text-gray-700 break-words whitespace-pre-wrap">{description}</p>
+					{summary && <p className="mb-4 pb-4 border-border-default border-b text-text-mid italic">{summary}</p>}
+					<p className="text-text-high break-words whitespace-pre-wrap">{description}</p>
 				</>,
 			)
 		case TabProductPage.spec:
@@ -251,16 +253,16 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 				<div className={className}>
 					{weightTag && (
 						<div className="flex flex-col">
-							<span className="font-medium text-gray-500 text-base">Weight</span>
-							<span className="text-gray-900 text-base">
+							<span className="font-medium text-text-mid text-base">Weight</span>
+							<span className="text-text-high text-base">
 								{weightTag[1]} {weightTag[2]}
 							</span>
 						</div>
 					)}
 					{dimensionsTag && (
 						<div className="flex flex-col">
-							<span className="font-medium text-gray-500 text-base">Dimensions (L×W×H)</span>
-							<span className="text-gray-900 text-base break-all">
+							<span className="font-medium text-text-mid text-base">Dimensions (L×W×H)</span>
+							<span className="text-text-high text-base break-all">
 								{dimensionsTag[1]
 									.split('x')
 									.map((num) => parseFloat(num).toFixed(1))
@@ -271,39 +273,39 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 					)}
 					{specs.map((spec, index) => (
 						<div key={index} className="flex flex-col">
-							<span className="font-medium text-gray-500 text-base capitalize">{spec[1]}</span>
-							<span className="text-gray-900 text-base break-all">{spec[2]}</span>
+							<span className="font-medium text-text-mid text-base capitalize">{spec[1]}</span>
+							<span className="text-text-high text-base break-all">{spec[2]}</span>
 						</div>
 					))}
-					{specs.length === 0 && !weightTag && !dimensionsTag && <p className="col-span-2 text-gray-700">No specifications available</p>}
+					{specs.length === 0 && !weightTag && !dimensionsTag && <p className="col-span-2 text-text-high">No specifications available</p>}
 				</div>,
 			)
 		case TabProductPage.shipping:
 			return wrapContent(
 				<div className="flex flex-col gap-6">
 					<div className="flex items-center gap-3">
-						<Truck className="w-6 h-6 text-gray-500" />
+						<Truck className="w-6 h-6 text-text-mid" />
 						<h3 className="font-medium text-lg">Shipping Options</h3>
 					</div>
 
 					<div className="flex flex-wrap md:flex-nowrap gap-6">
 						<div className="w-full md:w-1/2 min-w-0">
-							<p className="mb-4 text-gray-500 text-sm">Select a shipping method to see estimated costs and delivery times.</p>
+							<p className="mb-4 text-text-mid text-sm">Select a shipping method to see estimated costs and delivery times.</p>
 
 							<div className="w-full">{renderProductShippingSelector(shippingState, eventProduct, 'w-full')}</div>
 
 							<div className="mt-4">
-								<p className="text-gray-500 text-sm">Shipping costs will be added to the final price in the cart.</p>
+								<p className="text-text-mid text-sm">Shipping costs will be added to the final price in the cart.</p>
 							</div>
 						</div>
 
-						<div className="bg-gray-50 p-4 rounded-md w-full md:w-1/2 min-w-0">
+						<div className="bg-surface-sunken p-4 border border-border-default rounded-xl w-full md:w-1/2 min-w-0">
 							<h4 className="mb-2 font-medium">Shipping Information</h4>
 
 							{weightTag && (
 								<div className="flex flex-col mb-2">
-									<span className="font-medium text-gray-500 text-base">Weight:</span>
-									<span className="text-gray-900 text-base">
+									<span className="font-medium text-text-mid text-base">Weight:</span>
+									<span className="text-text-high text-base">
 										{weightTag[1]} {weightTag[2]}
 									</span>
 								</div>
@@ -311,8 +313,8 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 
 							{dimensionsTag && (
 								<div className="flex flex-col mb-2">
-									<span className="font-medium text-gray-500 text-base">Dimensions:</span>
-									<span className="text-gray-900 text-base">
+									<span className="font-medium text-text-mid text-base">Dimensions:</span>
+									<span className="text-text-high text-base">
 										<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
 									</span>
 								</div>
@@ -320,12 +322,12 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 
 							{location && (
 								<div className="flex flex-col mb-2">
-									<span className="font-medium text-gray-500 text-base">Ships from:</span>
-									<span className="text-gray-900 text-base">{location}</span>
+									<span className="font-medium text-text-mid text-base">Ships from:</span>
+									<span className="text-text-high text-base">{location}</span>
 								</div>
 							)}
 
-							<div className="mt-3 text-gray-500 text-sm">Delivery times are estimates and may vary based on your location.</div>
+							<div className="mt-3 text-text-mid text-sm">Delivery times are estimates and may vary based on your location.</div>
 						</div>
 					</div>
 				</div>,
@@ -654,7 +656,7 @@ function RouteComponent() {
 		<div className="flex flex-col gap-4">
 			<div className="z-10 relative">
 				<div
-					className={`relative hero-container-product ${backgroundImageUrl ? 'bg-hero-image' : 'bg-black'}`}
+					className={`relative hero-container-product ${backgroundImageUrl ? 'bg-hero-image' : 'bg-surface-sunken'}`}
 					style={heroBackgroundStyle(heroImageUrl)}
 				>
 					<div className="hero-overlays">
@@ -676,7 +678,7 @@ function RouteComponent() {
 
 						<div className="flex flex-col gap-2 mx-auto w-full max-w-[600px] lg:max-w-none text-white">
 							<div className="flex justify-between items-center">
-								<h1 className="lg:pl-0 font-semibold text-3xl">{title}</h1>
+								<h1 className="lg:pl-0 font-heading text-4xl lg:text-5xl">{title}</h1>
 								<div className="flex items-center gap-2">
 									{/* Entity Actions Menu for admins/editors/owners */}
 									<EntityActionsMenu
@@ -757,7 +759,9 @@ function RouteComponent() {
 								(tab) =>
 									!getIsTabDisabled(tab) && (
 										<div>
-											<div className="bg-secondary px-4 py-2 rounded-t-md font-medium text-white text-sm">{tab}</div>
+											<div className="bg-fill-ink px-4 py-2 rounded-full w-fit font-semibold text-on-fill-ink text-xs uppercase tracking-[0.06em]">
+												{tab}
+											</div>
 											{getTabContent(tab, product, true, productShippingState)}
 										</div>
 									),
@@ -770,7 +774,7 @@ function RouteComponent() {
 									<TabsTrigger
 										value={tab}
 										onClick={() => setCurrentTab(tab)}
-										className="data-[state=active]:bg-secondary data-[state=inactive]:bg-gray-100 px-4 py-2 rounded-none font-medium data-[state=active]:text-white data-[state=inactive]:text-black text-sm"
+										className="data-[state=active]:bg-fill-ink data-[state=inactive]:bg-transparent px-4 py-2 border data-[state=active]:border-fill-ink data-[state=inactive]:border-border-strong rounded-full font-semibold data-[state=active]:text-on-fill-ink data-[state=inactive]:text-text-high data-[state=inactive]:hover:text-fill-ink text-xs tracking-[0.06em]"
 										disabled={getIsTabDisabled(tab)}
 									>
 										{tab}
@@ -779,7 +783,7 @@ function RouteComponent() {
 							</TabsList>
 
 							{Object.values(TabProductPage).map((tab) => (
-								<TabsContent value={tab} className="bg-tertiary mt-4 border-secondary border-t-3">
+								<TabsContent value={tab} className="mt-4">
 									{getTabContent(tab, product, false, productShippingState)}
 								</TabsContent>
 							))}

@@ -18,6 +18,7 @@
  * both chromes are one code path and the bar needs no per-chrome branch.
  */
 
+import { useNavFit } from './use-nav-fit'
 import type { FC, ReactNode, Ref } from 'react'
 import { cn } from '../utils/cn'
 
@@ -95,12 +96,17 @@ export interface AppBarViewProps {
  * painting over the field) if an operator's instance name ever outgrows it.
  */
 export const AppBarView: FC<AppBarViewProps> = ({ brand, navItems, searchSlot, accountSlot, className, ref }) => {
+	// From `xl` the list sits inline only when it fits whole (see use-nav-fit.ts);
+	// otherwise `data-nav-fits="false"` hands it to the host's menu button.
+	const { laneRef, brandRef, navRef, fits } = useNavFit()
 	return (
 		<header
 			ref={ref}
 			data-slot="app-bar"
 			data-testid="widget-app-bar"
+			data-nav-fits={fits === false ? 'false' : undefined}
 			className={cn(
+				'group/appbar',
 				'grid',
 				// Two rows on a phone: brand + account on the first, the search field
 				// alone on a full-width second row below `sm` (see the component doc).
@@ -131,13 +137,17 @@ export const AppBarView: FC<AppBarViewProps> = ({ brand, navItems, searchSlot, a
 			)}
 		>
 			{/* Left track: brand, then the nav list (the host's `mobile-menu-button` covers phones) */}
-			<div data-slot="app-bar-left" className="col-start-1 row-start-1 flex min-w-0 items-center gap-5 overflow-hidden">
-				<div data-slot="brand" className="flex min-w-0 items-center gap-3">
+			<div ref={laneRef} data-slot="app-bar-left" className="col-start-1 row-start-1 flex min-w-0 items-center gap-5 overflow-hidden">
+				<div ref={brandRef} data-slot="brand" className="flex min-w-0 items-center gap-3">
 					{brand}
 				</div>
 
 				{navItems && (
-					<nav data-slot="app-bar-nav" className="hidden xl:flex min-w-0 flex-wrap items-center gap-x-6 gap-y-1">
+					<nav
+						ref={navRef}
+						data-slot="app-bar-nav"
+						className="hidden xl:flex shrink-0 flex-nowrap items-center gap-x-6 whitespace-nowrap xl:group-data-[nav-fits=false]/appbar:invisible xl:group-data-[nav-fits=false]/appbar:absolute xl:group-data-[nav-fits=false]/appbar:pointer-events-none"
+					>
 						{navItems}
 					</nav>
 				)}

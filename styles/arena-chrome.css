@@ -2,9 +2,10 @@
  * Arena chrome: the app header, footer and Browse surface (nav, search field,
  * results) in the Plebeian Auctions Arena look.
  *
- * The root layout puts `.arena-chrome` on its wrapper for the auction routes
- * and the home / Browse surface (platform/web/layout/appChrome.ts,
- * `usesArenaChrome`). Every component under it keeps its own markup and
+ * The root layout puts `.arena-chrome` on its wrapper, and on <body>, for
+ * every public page; only the dashboard is left out (ADR-0025). See
+ * platform/web/layout/appChrome.ts, `usesArenaChrome`. ADR-0023 will feed
+ * these values from the theme registry. Every component under it keeps its own markup and
  * tokens; this file only rebinds the token values inside the scope, the same
  * way `.dark` does in globals.css. Colours come from the Arena demo
  * (web/src/template.css). Fonts are the bundled ones in styles/fonts.css —
@@ -382,6 +383,7 @@
 
 .arena-login input,
 .arena-login textarea,
+.arena-login select,
 .arena-login [data-slot='select-trigger'] {
 	background: var(--arena-bg) !important;
 	border: 1px solid var(--arena-line) !important;
@@ -391,6 +393,7 @@
 
 .arena-login input:focus,
 .arena-login textarea:focus,
+.arena-login select:focus,
 .arena-login [data-slot='select-trigger']:focus {
 	border-color: var(--arena-pink) !important;
 	box-shadow: 0 0 0 2px rgb(255 62 181 / 0.3) !important;
@@ -420,6 +423,75 @@
 
 .arena-login > button:last-child:hover {
 	color: var(--arena-pink);
+}
+
+/* --- Wallet dialogs ----------------------------------------------------------
+ * Deposit / Withdraw (Lightning) and Receive / Send (Cashu ecash) open from the
+ * header wallet panel. They share the login dialog's portalled Arena scope and
+ * add the panel's pill buttons and a serif title, so the whole wallet reads as
+ * one surface with the Search button's pink as its single action colour.
+ * ------------------------------------------------------------------------- */
+
+.arena-wallet-dialog {
+	padding: 24px;
+}
+
+.arena-wallet-dialog [data-slot='dialog-title'] {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-weight: 400;
+	font-size: 30px;
+	line-height: 1.05;
+	letter-spacing: -0.01em;
+}
+
+.arena-wallet-dialog [data-slot='dialog-description'] {
+	color: var(--arena-muted);
+}
+
+.arena-wallet-dialog label {
+	color: var(--arena-muted);
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.arena-wallet-dialog [data-slot='button'] {
+	border-radius: 999px;
+	height: 40px;
+	padding-inline: 18px;
+	font-size: 12px;
+	letter-spacing: 0.06em;
+}
+
+.arena-wallet-dialog [data-slot='button'][data-size='icon'] {
+	width: 40px;
+	padding-inline: 0;
+}
+
+.arena-wallet-dialog [data-slot='button'][data-variant='default']:disabled {
+	background: var(--arena-surface-2);
+	color: var(--arena-muted);
+	opacity: 1;
+}
+
+.arena-wallet-dialog [data-slot='button'][data-variant='ghost'] {
+	background: transparent;
+	color: var(--arena-muted);
+}
+
+.arena-wallet-dialog [data-slot='button'][data-variant='ghost']:hover {
+	background: var(--arena-surface-2);
+	color: var(--arena-ink);
+}
+
+.arena-wallet-dialog input,
+.arena-wallet-dialog select {
+	height: 44px;
+}
+
+.arena-wallet-dialog textarea {
+	border-radius: 16px;
 }
 
 /* --- Dashboard title bar ----------------------------------------------------
@@ -485,4 +557,120 @@
 
 .arena-dash-title .arena-dash-toggle:hover {
 	color: #ffffff;
+}
+
+/* --- Older public pages -------------------------------------------------------
+ * Every public page now renders in the Arena scope (ADR-0025). Pages written
+ * before the role tokens still carry a few hard-coded colours; these map them
+ * onto Arena values, the same way the admin console does for the dashboard.
+ * Never inside a storefront theme (it keeps its own look) or the console.
+ * New code should use tokens directly; see docs/theming.md.
+ * ------------------------------------------------------------------------- */
+
+.arena-chrome
+	:is(.bg-white, .lg\:bg-white, .bg-gray-50, .bg-gray-100, .bg-light-gray, .bg-tertiary, .bg-muted\/40):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	background-color: var(--arena-surface);
+}
+
+.arena-chrome
+	:is(.hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover, .hover\:bg-white:hover, .bg-gray-200):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	background-color: var(--arena-surface-2);
+}
+
+.arena-chrome
+	:is(.border-black, .lg\:border-black, .border-gray-100, .border-gray-200, .border-gray-300):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	border-color: var(--arena-line);
+}
+
+.arena-chrome
+	:is(.text-black, .text-gray-900, .text-gray-800):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	color: var(--arena-ink);
+}
+
+.arena-chrome
+	:is(.text-gray-700, .text-gray-600, .text-gray-500, .text-gray-400, .text-muted-foreground):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	color: var(--arena-muted);
+}
+
+/* The old black and banner buttons become the one pink action. */
+.arena-chrome
+	:is(.btn-black, .btn-product-banner, .bg-pink-500, .bg-pink-600, .bg-brand-pink):not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	background-color: var(--arena-pink);
+	color: var(--arena-bg);
+	border-color: transparent;
+}
+
+.arena-chrome
+	:is(.btn-black, .btn-product-banner):hover:not(
+		:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)
+	) {
+	background-color: var(--arena-pink-hover);
+}
+
+/* Pill buttons on page content, as on the products pages. Only buttons still
+   on the primitive's default corner (`rounded-md`); custom shapes are kept. */
+.arena-chrome
+	main
+	[data-slot='button'].rounded-md:not(:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)) {
+	border-radius: 999px;
+}
+
+/* Bare `border` utilities default to currentColor; give them the hairline in
+   the base layer so explicit border colours still win. */
+@layer base {
+	.arena-chrome main *:not(:where([data-storefront-theme], [data-storefront-theme] *, .admin-console, .admin-console *)) {
+		border-color: var(--arena-line);
+	}
+}
+
+/* --- Cart and other sheets ----------------------------------------------------
+ * Sheets are portalled onto <body>, which carries `.arena-chrome` on public
+ * pages. Hairline borders, a serif title, pill buttons and a calm notice.
+ * ------------------------------------------------------------------------- */
+
+.arena-chrome [data-slot='sheet-content'],
+.arena-chrome [data-slot='sheet-content'] * {
+	border-color: var(--arena-line);
+}
+
+.arena-chrome [data-slot='sheet-content'] {
+	background: var(--arena-bg);
+}
+
+.arena-chrome [data-slot='sheet-title'] {
+	font-family: var(--font-display);
+	font-weight: 400;
+	font-size: 30px;
+	line-height: 1.05;
+	letter-spacing: -0.01em;
+}
+
+.arena-chrome [data-slot='sheet-content'] [data-slot='button'] {
+	border-radius: 999px;
+}
+
+.arena-chrome [data-slot='sheet-content'] .border-error-border {
+	border-color: color-mix(in srgb, var(--color-error, #ef4444) 60%, transparent);
+}
+
+.arena-chrome [data-slot='sheet-content'] .bg-warning-muted {
+	background: var(--arena-surface);
+	border-radius: 16px;
+	border-left-color: var(--arena-lime);
+}
+
+.arena-chrome [data-slot='sheet-content'] .bg-warning-muted .text-warning-foreground {
+	color: var(--arena-ink);
 }

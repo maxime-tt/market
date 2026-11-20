@@ -95,7 +95,7 @@ export function ProductCardHost({ product, className }: ProductCardHostProps) {
 			to={`/products/${product.id}`}
 			onClick={handleProductClick}
 			className={cn(
-				'border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200 cursor-pointer',
+				'border border-border-default rounded-2xl bg-surface-raised text-text-high shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:border-border-strong hover:shadow-md transition-[border-color,box-shadow] duration-200 cursor-pointer',
 				className,
 			)}
 			data-testid="product-card"

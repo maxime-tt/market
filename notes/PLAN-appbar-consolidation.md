@@ -51,7 +51,7 @@ replaces the other, and the price is two nav bars to maintain, two account
 clusters, and a header that is absent from the two most-visited pages.
 
 **Arena/light chrome.** `usesArenaChrome` (`appChrome.ts:56-58`) puts
-`.arena-chrome` on the root wrapper for `/`, `/auctions` and `/auctions/*`
+`.arena-chrome` on the root wrapper for every path except `/dashboard` (ADR-0025)
 (`__root.tsx:100`). That class rebinds the widget tokens to Arena's dark values
 (`styles/arena-chrome.css:42-50`), so markup written against
 `bg-surface-raised` / `text-text-high` / `border-border-default` / `bg-fill-ink`

@@ -1,5 +1,5 @@
 import { Check, Loader2, ScanLine, Zap } from 'lucide-react'
-import { Scanner } from '@yudiel/react-qr-scanner'
+import { Scanner } from '@ui/primitives/lazy-qr-scanner'
 import { Button } from '../primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../primitives/dialog'
 
@@ -61,13 +61,13 @@ export function WithdrawLightningModalView({
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-			<DialogContent className="sm:max-w-md">
+			<DialogContent className="arena-login arena-wallet-dialog sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
-						<Zap className="w-5 h-5 text-warning" />
+						<Zap className="w-5 h-5 text-fill-ink" />
 						Withdraw to Lightning
 					</DialogTitle>
-					<DialogDescription>Pay a Lightning invoice using your eCash (Balance: {totalBalance.toLocaleString()} sats)</DialogDescription>
+					<DialogDescription>Pay a Lightning invoice using your ecash (Balance: {totalBalance.toLocaleString()} sats)</DialogDescription>
 				</DialogHeader>
 
 				{isSuccess ? (

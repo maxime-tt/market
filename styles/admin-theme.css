@@ -1,0 +1,643 @@
+/*
+ * admin-theme.css — the admin console theme (ADR-0022).
+ *
+ * "Party in the front, business at the back": the public site wears the
+ * instance's storefront theme; the dashboard, settings and editors wear this
+ * one fixed design system, the same on every Plebeian instance. Each admin
+ * picks a style, colour and mode for themselves (stored in their browser).
+ *
+ * Scope: `.admin-console`, set by the dashboard layout together with
+ * `data-admin-style`, `data-admin-color` and `data-admin-mode`. Everything is
+ * custom properties re-declared on that element, so the existing components
+ * (which read `--primary`, `--card`, `--text-high`, …) follow without edits.
+ *
+ * The page builder's live preview is the one exception: it must look exactly
+ * like the public site. `.admin-console [data-storefront-theme]` restores the
+ * public token values (copied from `.theme-new` in globals-new.css; a test
+ * keeps them in step), and the storefront's own inline palette still wins.
+ *
+ * Fonts are bundled (styles/fonts.css). Nothing here loads from a third party.
+ */
+
+/* ── Colour presets: accent + background glow, light and dark ─────────── */
+:is(.admin-console, .admin-portal) {
+	--a-acc-light: #0b7d72;
+	--a-acc-dark: #2dd4bf;
+	--a-accfg-dark: #04201d;
+	--a-b1-light: #a7e8dc;
+	--a-b2-light: #b9d4ff;
+	--a-b3-light: #c8f0d0;
+	--a-b1-dark: #0d4d4a;
+	--a-b2-dark: #11305e;
+	--a-b3-dark: #0b4a33;
+}
+:is(.admin-console, .admin-portal)[data-admin-color='ocean'] {
+	--a-acc-light: #2563eb;
+	--a-acc-dark: #60a5fa;
+	--a-accfg-dark: #06142e;
+	--a-b1-light: #bcd3ff;
+	--a-b2-light: #a5e4f5;
+	--a-b3-light: #d6ccff;
+	--a-b1-dark: #122a66;
+	--a-b2-dark: #0b4660;
+	--a-b3-dark: #2a1f66;
+}
+:is(.admin-console, .admin-portal)[data-admin-color='emerald'] {
+	--a-acc-light: #15803d;
+	--a-acc-dark: #4ade80;
+	--a-accfg-dark: #052010;
+	--a-b1-light: #c3f0cf;
+	--a-b2-light: #e3f5b8;
+	--a-b3-light: #b5eadf;
+	--a-b1-dark: #0d4a26;
+	--a-b2-dark: #33470e;
+	--a-b3-dark: #0b4640;
+}
+:is(.admin-console, .admin-portal)[data-admin-color='violet'] {
+	--a-acc-light: #7c3aed;
+	--a-acc-dark: #a78bfa;
+	--a-accfg-dark: #170a33;
+	--a-b1-light: #ddd0ff;
+	--a-b2-light: #f5c9ec;
+	--a-b3-light: #c7d6ff;
+	--a-b1-dark: #2f1a66;
+	--a-b2-dark: #5a1849;
+	--a-b3-dark: #1b2a66;
+}
+:is(.admin-console, .admin-portal)[data-admin-color='sunset'] {
+	--a-acc-light: #c2410c;
+	--a-acc-dark: #fb923c;
+	--a-accfg-dark: #2a1004;
+	--a-b1-light: #ffd6b8;
+	--a-b2-light: #ffc9d6;
+	--a-b3-light: #fff0b3;
+	--a-b1-dark: #5a260b;
+	--a-b2-dark: #5a1630;
+	--a-b3-dark: #4d3a08;
+}
+:is(.admin-console, .admin-portal)[data-admin-color='graphite'] {
+	--a-acc-light: #334155;
+	--a-acc-dark: #cbd5e1;
+	--a-accfg-dark: #0f172a;
+	--a-b1-light: #dfe5ec;
+	--a-b2-light: #e9e4dc;
+	--a-b3-light: #d6dde6;
+	--a-b1-dark: #1d2633;
+	--a-b2-dark: #2a2620;
+	--a-b3-dark: #1a222c;
+}
+
+/* ── Mode: neutrals, and which preset half is live ───────────────────── */
+:is(.admin-console, .admin-portal),
+:is(.admin-console, .admin-portal)[data-admin-mode='light'] {
+	--admin-acc: var(--a-acc-light);
+	--admin-accfg: #ffffff;
+	--admin-b1: var(--a-b1-light);
+	--admin-b2: var(--a-b2-light);
+	--admin-b3: var(--a-b3-light);
+	--admin-bg: #eef3f6;
+	--admin-fg: #0f1d24;
+	--admin-fg2: #2b3d47;
+	--admin-mut: #5b6e78;
+	--admin-line: rgb(15 40 55 / 0.12);
+	--admin-line-strong: rgb(15 40 55 / 0.3);
+	--admin-glass: rgb(255 255 255 / 0.55);
+	--admin-glass-2: rgb(255 255 255 / 0.74);
+	--admin-glass-border: rgb(255 255 255 / 0.85);
+	--admin-hover: rgb(255 255 255 / 0.9);
+	--admin-solid: #ffffff;
+	--admin-shadow: 0 8px 30px rgb(20 60 80 / 0.08);
+	--admin-shadow-pop: 0 20px 50px rgb(20 40 60 / 0.18);
+	color-scheme: light;
+}
+:is(.admin-console, .admin-portal)[data-admin-mode='dark'] {
+	--admin-acc: var(--a-acc-dark);
+	--admin-accfg: var(--a-accfg-dark);
+	--admin-b1: var(--a-b1-dark);
+	--admin-b2: var(--a-b2-dark);
+	--admin-b3: var(--a-b3-dark);
+	--admin-bg: #070b10;
+	--admin-fg: #e8f1f3;
+	--admin-fg2: #c3d0d5;
+	--admin-mut: #8fa1a8;
+	--admin-line: rgb(255 255 255 / 0.1);
+	--admin-line-strong: rgb(255 255 255 / 0.24);
+	--admin-glass: rgb(255 255 255 / 0.06);
+	--admin-glass-2: rgb(255 255 255 / 0.09);
+	--admin-glass-border: rgb(255 255 255 / 0.14);
+	--admin-hover: rgb(255 255 255 / 0.14);
+	--admin-solid: #10171d;
+	--admin-shadow: 0 10px 40px rgb(0 0 0 / 0.35);
+	--admin-shadow-pop: 0 20px 60px rgb(0 0 0 / 0.55);
+	color-scheme: dark;
+}
+
+/* ── Role tokens the app already reads, rebound for the console ──────── */
+:is(.admin-console, .admin-portal) {
+	--background: var(--admin-bg);
+	--foreground: var(--admin-fg);
+	--card: var(--admin-glass-2);
+	--card-foreground: var(--admin-fg);
+	--popover: var(--admin-solid);
+	--popover-foreground: var(--admin-fg);
+	--primary: var(--admin-acc);
+	--primary-foreground: var(--admin-accfg);
+	--primary-foreground-hover: var(--admin-accfg);
+	--primary-border: var(--admin-acc);
+	--primary-border-hover: var(--admin-acc);
+	--secondary: var(--admin-acc);
+	--secondary-foreground: var(--admin-accfg);
+	--tertiary: var(--admin-glass-2);
+	--tertiary-hover: var(--admin-hover);
+	--focus: var(--admin-acc);
+	--focus-foreground: var(--admin-accfg);
+	--focus-foreground-hover: var(--admin-accfg);
+	--muted: var(--admin-glass);
+	--muted-foreground: var(--admin-mut);
+	--accent: var(--admin-hover);
+	--accent-foreground: var(--admin-fg);
+	--border: var(--admin-line);
+	--input: var(--admin-line-strong);
+	--ring: var(--admin-acc);
+	--bg: var(--admin-glass);
+	--surface-raised: var(--admin-glass-2);
+	--surface-sunken: var(--admin-glass);
+	--surface-hover: var(--admin-hover);
+	--fill-accent: var(--admin-acc);
+	--on-fill-accent: var(--admin-accfg);
+	--fill-ink: var(--admin-acc);
+	--on-fill-ink: var(--admin-accfg);
+	--fill-ink-hover: color-mix(in srgb, var(--admin-acc) 85%, black);
+	--text-high: var(--admin-fg);
+	--text-mid: var(--admin-mut);
+	--border-default: var(--admin-line);
+	--border-strong: var(--admin-line-strong);
+	--focus-ring: var(--admin-acc);
+	--radius: 12px;
+	--radius-sm: 6px;
+	--radius-md: 9px;
+	--radius-lg: 12px;
+	--radius-xl: 18px;
+	--font-body: 'InterVariable', system-ui, sans-serif;
+	--font-header: 'InterVariable', system-ui, sans-serif;
+	--font-heading: 'InterVariable', system-ui, sans-serif;
+
+	/* Puck's editor chrome (its semantic tokens; the raw palette stays). */
+	--puck-font-family: 'InterVariable', system-ui, sans-serif;
+	--puck-color-surface: var(--admin-glass-2);
+	--puck-color-surface-muted: var(--admin-glass);
+	--puck-color-surface-subtle: transparent;
+	--puck-color-border: var(--admin-line);
+	--puck-color-border-hover: var(--admin-line-strong);
+	--puck-color-border-muted: var(--admin-line);
+	--puck-color-text: var(--admin-fg);
+	--puck-color-text-secondary: var(--admin-fg2);
+	--puck-color-text-muted: var(--admin-mut);
+	--puck-color-text-subtle: var(--admin-mut);
+	--puck-color-interactive: var(--admin-acc);
+	--puck-color-interactive-hover: color-mix(in srgb, var(--admin-acc) 85%, black);
+	--puck-color-interactive-active: color-mix(in srgb, var(--admin-acc) 75%, black);
+	--puck-color-interactive-subtle: color-mix(in srgb, var(--admin-acc) 10%, transparent);
+	--puck-color-interactive-soft: color-mix(in srgb, var(--admin-acc) 14%, transparent);
+	--puck-color-interactive-soft-hover: color-mix(in srgb, var(--admin-acc) 22%, transparent);
+	--puck-color-interactive-neutral-hover: var(--admin-hover);
+	--puck-color-focus-ring: var(--admin-acc);
+	--puck-color-selection-border: var(--admin-acc);
+	--puck-color-selection-bg: color-mix(in srgb, var(--admin-acc) 12%, transparent);
+}
+
+/* Pop-ups opened from inside the console (tagged `.admin-portal`, see
+   useAdminPortalTheme.ts) carry the same tokens, but none of the layout. */
+.admin-portal {
+	color: var(--admin-fg);
+	font-family: var(--font-body);
+}
+
+.admin-console {
+	position: relative;
+	isolation: isolate;
+	min-height: calc(100vh - 64px);
+	color: var(--admin-fg);
+	font-family: var(--font-body);
+	background-color: var(--admin-bg);
+}
+
+/* ── Glass: the background the translucent panels sit on ────────────── */
+.admin-console[data-admin-style='glass']::before {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+	background:
+		radial-gradient(640px 460px at 12% 22%, var(--admin-b1), transparent 70%),
+		radial-gradient(720px 520px at 88% 12%, var(--admin-b2), transparent 70%),
+		radial-gradient(680px 500px at 60% 96%, var(--admin-b3), transparent 70%), var(--admin-bg);
+}
+
+.admin-console[data-admin-style='glass'] .admin-panel {
+	background: var(--admin-glass);
+	border: 1px solid var(--admin-glass-border);
+	border-radius: 18px;
+	box-shadow: var(--admin-shadow);
+	backdrop-filter: blur(22px) saturate(1.4);
+	-webkit-backdrop-filter: blur(22px) saturate(1.4);
+}
+
+/* ── Solid: opaque cards on a quietly tinted ground ──────────────────── */
+:is(.admin-console, .admin-portal)[data-admin-style='solid']:not([data-admin-mode='dark']) {
+	--admin-bg: color-mix(in srgb, var(--admin-acc) 5%, #f2f4f6);
+	--admin-line: rgb(15 30 45 / 0.13);
+	--admin-glass: #ffffff;
+	--admin-glass-2: #ffffff;
+	--admin-glass-border: rgb(15 30 45 / 0.13);
+	--admin-hover: color-mix(in srgb, var(--admin-acc) 7%, #ffffff);
+	--admin-shadow: 0 1px 2px rgb(15 30 45 / 0.06), 0 4px 14px rgb(15 30 45 / 0.05);
+}
+:is(.admin-console, .admin-portal)[data-admin-style='solid'][data-admin-mode='dark'] {
+	--admin-bg: color-mix(in srgb, var(--admin-acc) 5%, #0a0e13);
+	--admin-glass: #171f27;
+	--admin-glass-2: #171f27;
+	--admin-glass-border: rgb(255 255 255 / 0.1);
+	--admin-hover: color-mix(in srgb, var(--admin-acc) 12%, #171f27);
+	--admin-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.3);
+}
+.admin-console[data-admin-style='solid'] .admin-panel {
+	background: var(--admin-glass-2);
+	border: 1px solid var(--admin-glass-border);
+	border-radius: 12px;
+	box-shadow: var(--admin-shadow);
+}
+
+/* ── Minimal: no panels, hairlines and white space ───────────────────── */
+:is(.admin-console, .admin-portal)[data-admin-style='minimal']:not([data-admin-mode='dark']) {
+	--admin-bg: #ffffff;
+	--admin-line: rgb(0 0 0 / 0.09);
+	--admin-line-strong: rgb(0 0 0 / 0.22);
+	--admin-glass: #ffffff;
+	--admin-glass-2: #ffffff;
+	--admin-glass-border: rgb(0 0 0 / 0.09);
+	--admin-hover: #f2f3f4;
+}
+:is(.admin-console, .admin-portal)[data-admin-style='minimal'][data-admin-mode='dark'] {
+	--admin-bg: #0b0b0c;
+	--admin-line: rgb(255 255 255 / 0.09);
+	--admin-glass: #0b0b0c;
+	--admin-glass-2: #0b0b0c;
+	--admin-glass-border: rgb(255 255 255 / 0.09);
+	--admin-hover: #18181b;
+}
+:is(.admin-console, .admin-portal)[data-admin-style='minimal'] {
+	--radius: 8px;
+	--radius-lg: 8px;
+	--radius-xl: 10px;
+}
+.admin-console[data-admin-style='minimal'] .admin-panel {
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+}
+@media (min-width: 1024px) {
+	.admin-console[data-admin-style='minimal'] .admin-sidebar {
+		border-right: 1px solid var(--admin-line);
+	}
+}
+
+/* ── Title bar ───────────────────────────────────────────────────────── */
+.admin-console .arena-dash-title {
+	background: transparent;
+	color: var(--admin-fg);
+	border-bottom: 0;
+	font-family: var(--font-body);
+	font-weight: 650;
+	font-size: 1.375rem;
+	letter-spacing: -0.01em;
+}
+.admin-console .arena-dash-title::before {
+	background: var(--admin-acc);
+	box-shadow: 0 0 10px color-mix(in srgb, var(--admin-acc) 60%, transparent);
+}
+
+/* Chip buttons in the title bar (Appearance, Show menu). */
+.admin-console .admin-chip,
+.admin-console .arena-dash-title .arena-dash-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.4rem 0.8rem;
+	border-radius: 12px;
+	border: 1px solid var(--admin-glass-border);
+	background: var(--admin-glass-2);
+	color: var(--admin-fg);
+	font-family: var(--font-body);
+	font-size: 0.8125rem;
+	font-weight: 550;
+	letter-spacing: 0;
+	text-transform: none;
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	transition: background-color 120ms ease;
+}
+.admin-console .admin-chip:hover,
+.admin-console .arena-dash-title .arena-dash-toggle:hover {
+	background: var(--admin-hover);
+	color: var(--admin-fg);
+}
+
+/* ── Sidebar menu ────────────────────────────────────────────────────── */
+.admin-console .admin-sidebar {
+	padding: 0.5rem 0.5rem 0.75rem;
+}
+@media (min-width: 1024px) {
+	.admin-console .admin-sidebar {
+		width: 16rem;
+	}
+}
+.admin-console [data-slot='sidebar-nav-heading'] {
+	background: transparent;
+	color: var(--admin-mut);
+	font-family: var(--font-body);
+	font-size: 0.6875rem;
+	font-weight: 650;
+	letter-spacing: 0.06em;
+	padding: 0.9rem 0.75rem 0.3rem;
+	margin: 0;
+}
+.admin-console [data-slot='sidebar-nav'] nav {
+	padding: 0;
+	font-size: 0.875rem;
+}
+.admin-console [data-slot='sidebar-nav'] nav > a {
+	margin: 0;
+	padding: 0.45rem 0.75rem;
+	border: 1px solid transparent;
+	border-radius: 10px;
+	background: transparent;
+	color: var(--admin-fg2);
+	font-weight: 500;
+}
+.admin-console [data-slot='sidebar-nav'] nav > a svg {
+	color: var(--admin-mut);
+	width: 1rem;
+	height: 1rem;
+	flex: none;
+}
+.admin-console [data-slot='sidebar-nav'] nav > a:hover {
+	background: var(--admin-glass);
+	color: var(--admin-fg);
+}
+.admin-console [data-slot='sidebar-nav'] nav > a[data-status='active'] {
+	background: var(--admin-glass-2);
+	border-color: var(--admin-glass-border);
+	color: var(--admin-fg);
+	font-weight: 600;
+	box-shadow: 0 2px 10px rgb(0 0 0 / 0.06);
+}
+.admin-console [data-slot='sidebar-nav'] nav > a[data-status='active'] svg {
+	color: var(--admin-acc);
+}
+
+/* ── Controls, outside the live preview ─────────────────────────────── */
+.admin-console button:not(:where([data-storefront-theme] *)) {
+	text-transform: none;
+}
+
+/* Legacy hard-coded colours in older dashboard pages, mapped onto the console
+   palette. Never inside the live preview, which keeps the public theme. */
+.admin-console :is(.bg-white, .lg\:bg-white, .bg-gray-50, .bg-light-gray):not(:where([data-storefront-theme], [data-storefront-theme] *)) {
+	background-color: var(--admin-glass);
+}
+.admin-console
+	:is(.bg-gray-100, .hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover, .hover\:bg-white:hover):not(
+		:where([data-storefront-theme], [data-storefront-theme] *)
+	) {
+	background-color: var(--admin-glass-2);
+}
+.admin-console
+	:is(.border-black, .lg\:border-black, .border-gray-200, .border-gray-300):not(
+		:where([data-storefront-theme], [data-storefront-theme] *)
+	) {
+	border-color: var(--admin-line);
+}
+.admin-console :is(.text-black, .text-gray-900, .text-gray-800):not(:where([data-storefront-theme], [data-storefront-theme] *)) {
+	color: var(--admin-fg);
+}
+.admin-console :is(.text-gray-700, .text-gray-600, .text-gray-500):not(:where([data-storefront-theme], [data-storefront-theme] *)) {
+	color: var(--admin-mut);
+}
+.admin-console :is(.bg-pink-500, .bg-pink-600, .bg-brand-pink):not(:where([data-storefront-theme], [data-storefront-theme] *)) {
+	background-color: var(--admin-acc);
+	color: var(--admin-accfg);
+}
+.admin-console :is(.hover\:text-pink-500:hover, .text-pink-500):not(:where([data-storefront-theme], [data-storefront-theme] *)) {
+	color: var(--admin-acc);
+}
+
+.admin-console :is(.bg-neutral-800, .bg-neutral-900, .bg-black):not(:where([data-storefront-theme], [data-storefront-theme] *)) {
+	background-color: var(--admin-acc);
+	color: var(--admin-accfg);
+}
+.admin-console
+	:is(.hover\:bg-neutral-700:hover, .hover\:bg-gray-800:hover):not(:where([data-storefront-theme], [data-storefront-theme] *)) {
+	background-color: color-mix(in srgb, var(--admin-acc) 86%, black);
+}
+
+/* Bare `border` utilities default to currentColor (Tailwind v4 has no base
+   border colour here). Give them the console hairline in the base layer, so
+   any explicit border-* colour utility still wins. */
+@layer base {
+	.admin-console *:not(:where([data-storefront-theme], [data-storefront-theme] *)) {
+		border-color: var(--admin-line);
+	}
+}
+
+/* ── Appearance panel ────────────────────────────────────────────────── */
+.admin-console .admin-popover {
+	position: absolute;
+	right: 0;
+	top: calc(100% + 8px);
+	z-index: 60;
+	width: 320px;
+	padding: 14px;
+	border-radius: 16px;
+	background: color-mix(in srgb, var(--admin-solid) 82%, transparent);
+	border: 1px solid var(--admin-glass-border);
+	box-shadow: var(--admin-shadow-pop);
+	backdrop-filter: blur(26px) saturate(1.5);
+	-webkit-backdrop-filter: blur(26px) saturate(1.5);
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	color: var(--admin-fg);
+	font-family: var(--font-body);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: 0;
+	text-align: left;
+}
+.admin-console .admin-popover-title {
+	font-size: 0.9375rem;
+	font-weight: 650;
+}
+.admin-console .admin-popover-note {
+	margin: -6px 0 2px;
+	color: var(--admin-mut);
+	font-size: 0.75rem;
+	line-height: 1.4;
+}
+.admin-console .admin-popover-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	color: var(--admin-fg2);
+}
+.admin-console .admin-seg {
+	display: flex;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 10px;
+	background: var(--admin-glass);
+	border: 1px solid var(--admin-glass-border);
+}
+.admin-console .admin-seg button {
+	padding: 4px 10px;
+	border-radius: 7px;
+	color: var(--admin-fg2);
+	font-size: 0.75rem;
+	font-weight: 550;
+}
+.admin-console .admin-seg button[aria-checked='true'] {
+	background: var(--admin-acc);
+	color: var(--admin-accfg);
+}
+.admin-console .admin-seg button:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+.admin-console .admin-swatches {
+	display: flex;
+	gap: 8px;
+}
+.admin-console .admin-swatch {
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 999px;
+	color: #fff;
+	box-shadow:
+		inset 0 1px 0 rgb(255 255 255 / 0.5),
+		0 1px 3px rgb(0 0 0 / 0.2);
+}
+.admin-console[data-admin-mode='dark'] .admin-swatch {
+	color: #0b0f14;
+}
+.admin-console .admin-swatch[aria-checked='true'] {
+	outline: 2px solid var(--admin-fg);
+	outline-offset: 2px;
+}
+
+/* ── The live preview keeps the public theme ─────────────────────────── */
+.admin-console [data-storefront-theme] {
+	--background: oklch(1 0 0);
+	--foreground: oklch(0.22 0.02 340);
+	--card: oklch(0.985 0 0);
+	--card-foreground: oklch(0.22 0.02 340);
+	--popover: oklch(0.985 0 0);
+	--popover-foreground: oklch(0.22 0.02 340);
+	--primary: oklch(0.688 0.249 348);
+	--primary-foreground: oklch(0.145 0 0);
+	--primary-foreground-hover: oklch(0.145 0 0);
+	--primary-border: oklch(0.688 0.249 348);
+	--primary-border-hover: oklch(0.688 0.249 348);
+	--secondary: oklch(0.688 0.249 348);
+	--secondary-foreground: oklch(0.145 0 0);
+	--tertiary: oklch(1 0 0);
+	--tertiary-hover: oklch(0.489 0 0);
+	--focus: oklch(0.688 0.249 348);
+	--focus-foreground: oklch(0.145 0 0);
+	--focus-foreground-hover: oklch(0.12 0 0);
+	--muted: oklch(0.96 0.008 350);
+	--muted-foreground: oklch(0.48 0.03 340);
+	--accent: oklch(0.96 0.008 350);
+	--accent-foreground: oklch(0.22 0.02 340);
+	--border: oklch(0.9 0.012 340);
+	--input: oklch(0.66 0.03 340);
+	--ring: oklch(0.58 0.15 350);
+	--bg: oklch(1 0 0);
+	--surface-raised: oklch(0.985 0 0);
+	--surface-sunken: oklch(0.96 0.008 350);
+	--surface-hover: oklch(0.93 0.016 350);
+	--fill-accent: oklch(0.34 0.11 350);
+	--on-fill-accent: oklch(0.99 0 0);
+	--fill-ink: oklch(0.688 0.249 348);
+	--on-fill-ink: oklch(0.145 0 0);
+	--fill-ink-hover: oklch(0.63 0.24 348);
+	--text-high: oklch(0.22 0.02 340);
+	--text-mid: oklch(0.48 0.03 340);
+	--border-default: oklch(0.9 0.012 340);
+	--border-strong: oklch(0.66 0.03 340);
+	--focus-ring: oklch(0.58 0.15 350);
+	--font-body: 'Plus Jakarta Sans', sans-serif;
+	--font-header: 'Instrument Serif', Georgia, serif;
+	--font-heading: 'Instrument Serif', Georgia, serif;
+
+	color: var(--foreground);
+	font-family: var(--font-body);
+}
+
+/* ── Style accents: chips, active menu item, title dot ───────────────── */
+.admin-console[data-admin-style='solid'] .admin-chip,
+.admin-console[data-admin-style='solid'] .arena-dash-title .arena-dash-toggle,
+.admin-console[data-admin-style='minimal'] .admin-chip,
+.admin-console[data-admin-style='minimal'] .arena-dash-title .arena-dash-toggle {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	border-color: var(--admin-line-strong);
+	border-radius: 8px;
+}
+.admin-console[data-admin-style='minimal'] .admin-chip,
+.admin-console[data-admin-style='minimal'] .arena-dash-title .arena-dash-toggle {
+	background: transparent;
+	border-color: var(--admin-line);
+}
+.admin-console[data-admin-style='solid'] [data-slot='sidebar-nav'] nav > a[data-status='active'] {
+	background: color-mix(in srgb, var(--admin-acc) 12%, transparent);
+	border-color: transparent;
+	color: var(--admin-acc);
+	box-shadow: none;
+}
+.admin-console[data-admin-style='minimal'] [data-slot='sidebar-nav'] nav > a {
+	border-radius: 0 6px 6px 0;
+}
+.admin-console[data-admin-style='minimal'] [data-slot='sidebar-nav'] nav > a[data-status='active'] {
+	background: var(--admin-hover);
+	border-color: transparent;
+	box-shadow: inset 2px 0 0 var(--admin-acc);
+}
+.admin-console[data-admin-style='solid'] .arena-dash-title::before,
+.admin-console[data-admin-style='minimal'] .arena-dash-title::before {
+	box-shadow: none;
+}
+.admin-console[data-admin-style='solid'] .admin-popover,
+.admin-console[data-admin-style='minimal'] .admin-popover {
+	background: var(--admin-solid);
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	border-radius: 12px;
+}
+
+/* ── Phone title bar ─────────────────────────────────────────────────── */
+/* It is sticky, so it needs a ground of its own or the page scrolls
+   visibly through the title. */
+.admin-console .admin-titlebar-mobile {
+	background: color-mix(in srgb, var(--admin-bg) 82%, transparent);
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	border-bottom: 1px solid var(--admin-line);
+}
+.admin-console .admin-chip-compact {
+	padding: 0.5rem;
+}

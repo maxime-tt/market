@@ -1,0 +1,673 @@
+/* ---------------------------------------------------------------------------
+ * Magazine home blocks (ADR-0028): the "cover story" layout. Every colour is a
+ * storefront token, so the blocks follow whichever theme the page picked; the
+ * Arena theme gives the pink, lime and Instrument Serif the mockup was drawn in.
+ * ------------------------------------------------------------------------- */
+
+.mz-wrap {
+	container-type: inline-size;
+	margin: 0 auto;
+	width: 100%;
+	max-width: 1280px;
+	padding: 0 20px;
+}
+@media (min-width: 640px) {
+	.mz-wrap {
+		padding: 0 32px;
+	}
+}
+
+.mz-sec {
+	margin-top: 64px;
+}
+.mz-sec:first-child {
+	margin-top: 28px;
+}
+
+.mz-mono {
+	font-family: var(--font-mono, ui-monospace, monospace);
+}
+.mz-serif {
+	font-family: var(--font-header, Georgia, serif);
+	font-weight: 400;
+	font-synthesis: none;
+}
+
+/* Section head: serif title, an accent word in italic pink, a mono link. */
+.mz-head {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 22px;
+	padding-bottom: 14px;
+	border-bottom: 1px solid var(--border);
+}
+.mz-head h2 {
+	font-family: var(--font-header, Georgia, serif);
+	font-weight: 400;
+	font-size: clamp(28px, 4.2cqi, 46px);
+	line-height: 1;
+	letter-spacing: -0.02em;
+	color: var(--foreground);
+}
+.mz-head h2 em {
+	color: var(--primary);
+	font-style: italic;
+}
+.mz-link {
+	flex: none;
+	font: 700 12px var(--font-mono, ui-monospace, monospace);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--muted-foreground);
+	white-space: nowrap;
+}
+.mz-link:hover {
+	color: var(--primary);
+}
+.mz-label {
+	font: 700 13px var(--font-mono, ui-monospace, monospace);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--primary);
+	margin-bottom: 6px;
+}
+.mz-sub {
+	color: var(--muted-foreground);
+	font-size: 14px;
+	margin-top: 6px;
+}
+
+.mz-img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.4s ease;
+}
+a:hover > .mz-img,
+a:hover .mz-ph > .mz-img {
+	transform: scale(1.04);
+}
+.mz-noimg {
+	display: flex;
+	width: 100%;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+	background: var(--muted);
+	color: var(--muted-foreground);
+	font-size: 13px;
+}
+
+.mz-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 10px;
+	border-radius: 999px;
+	font: 700 11px var(--font-mono, ui-monospace, monospace);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	background: var(--primary);
+	color: var(--primary-foreground);
+}
+.mz-pill::before {
+	content: '';
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: currentColor;
+	animation: mz-pulse 1.4s ease-in-out infinite;
+}
+.mz-pill[data-phase='ended'] {
+	background: var(--muted);
+	color: var(--muted-foreground);
+}
+.mz-pill[data-phase='ended']::before {
+	animation: none;
+}
+@keyframes mz-pulse {
+	50% {
+		opacity: 0.25;
+	}
+}
+
+/* ---- Ticker ------------------------------------------------------------ */
+.mz-tick {
+	border-bottom: 1px solid var(--border);
+	overflow: hidden;
+	white-space: nowrap;
+	font: 500 12.5px var(--font-mono, ui-monospace, monospace);
+	color: var(--muted-foreground);
+	padding: 11px 0;
+}
+.mz-tick-track {
+	display: inline-flex;
+	animation: mz-marquee 60s linear infinite;
+}
+.mz-tick:hover .mz-tick-track {
+	animation-play-state: paused;
+}
+.mz-tick span {
+	margin: 0 22px;
+}
+.mz-tick b {
+	color: var(--secondary);
+	font-weight: 700;
+}
+@keyframes mz-marquee {
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+/* ---- Cover ------------------------------------------------------------- */
+.mz-cover {
+	display: grid;
+	gap: 32px;
+	padding: 36px 0 8px;
+	align-items: center;
+}
+@container (min-width: 896px) {
+	.mz-cover {
+		grid-template-columns: 1.25fr 1fr;
+		gap: 48px;
+		padding-top: 44px;
+	}
+}
+.mz-cover-ph {
+	position: relative;
+	display: block;
+	aspect-ratio: 4 / 3.3;
+	border-radius: var(--storefront-radius, 22px);
+	overflow: visible;
+}
+.mz-cover-ph .mz-clip {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	overflow: hidden;
+	border: 1px solid var(--border);
+}
+.mz-cover-ph .mz-pill {
+	position: absolute;
+	left: 18px;
+	top: 18px;
+}
+.mz-sticker {
+	position: absolute;
+	right: -10px;
+	top: 28px;
+	transform: rotate(8deg);
+	background: var(--secondary);
+	color: #111;
+	font: 700 13px var(--font-mono, ui-monospace, monospace);
+	padding: 12px 16px;
+	border-radius: 10px;
+	box-shadow: 0 8px 30px rgb(0 0 0 / 0.5);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+.mz-kicker {
+	font: 700 12px var(--font-mono, ui-monospace, monospace);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--primary);
+}
+.mz-cover h1 {
+	font-family: var(--font-header, Georgia, serif);
+	font-style: italic;
+	font-weight: 400;
+	font-synthesis: none;
+	font-size: clamp(36px, 6.4cqi, 84px);
+	line-height: 0.95;
+	letter-spacing: -0.025em;
+	margin: 14px 0 18px;
+	color: var(--foreground);
+	overflow-wrap: break-word;
+	hyphens: auto;
+}
+.mz-deck {
+	font-size: 17px;
+	line-height: 1.55;
+	color: color-mix(in oklch, var(--foreground) 82%, transparent);
+	max-width: 520px;
+}
+.mz-stats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px 36px;
+	margin: 28px 0;
+	padding: 22px 0;
+	border-top: 1px solid var(--border);
+	border-bottom: 1px solid var(--border);
+}
+.mz-stats small {
+	display: block;
+	font: 700 11px var(--font-mono, ui-monospace, monospace);
+	letter-spacing: 0.12em;
+	color: var(--muted-foreground);
+	text-transform: uppercase;
+	margin-bottom: 6px;
+}
+.mz-stats .mz-v {
+	font: 700 clamp(24px, 2.6vw, 34px) var(--font-mono, ui-monospace, monospace);
+	letter-spacing: -0.03em;
+	color: var(--foreground);
+	font-variant-numeric: tabular-nums;
+}
+.mz-stats .mz-v i {
+	font: 500 14px var(--font-body, system-ui, sans-serif);
+	color: var(--muted-foreground);
+	font-style: normal;
+	margin-left: 6px;
+}
+.mz-stats .mz-hot {
+	color: var(--primary);
+}
+.mz-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+.mz-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 14px 24px;
+	border-radius: 999px;
+	font-weight: 700;
+	font-size: 15px;
+	background: var(--primary);
+	color: var(--primary-foreground);
+	transition: transform 0.15s ease;
+}
+.mz-btn:hover {
+	transform: translateY(-1px);
+}
+.mz-btn-ghost {
+	background: transparent;
+	color: var(--foreground);
+	border: 1px solid var(--border);
+}
+.mz-by {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 22px;
+	color: var(--muted-foreground);
+	font-size: 13px;
+}
+
+/* ---- Auction cards ------------------------------------------------------- */
+.mz-close {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+}
+@container (min-width: 704px) {
+	.mz-close {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+@container (min-width: 1036px) {
+	.mz-close {
+		grid-template-columns: repeat(6, minmax(0, 1fr));
+	}
+}
+.mz-cc {
+	display: block;
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: calc(var(--storefront-radius, 22px) * 0.75);
+	overflow: hidden;
+	color: var(--card-foreground);
+}
+.mz-cc .mz-ph {
+	aspect-ratio: 1;
+	position: relative;
+	overflow: hidden;
+}
+.mz-cd {
+	position: absolute;
+	left: 10px;
+	bottom: 10px;
+	background: color-mix(in oklch, var(--background) 85%, transparent);
+	border: 1px solid var(--primary);
+	color: var(--primary);
+	font: 700 14px var(--font-mono, ui-monospace, monospace);
+	padding: 5px 10px;
+	border-radius: 8px;
+	font-variant-numeric: tabular-nums;
+}
+.mz-cc .mz-b {
+	padding: 12px 14px 14px;
+}
+.mz-cc .mz-t {
+	font-weight: 600;
+	font-size: 14px;
+	line-height: 1.3;
+	height: 36px;
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+}
+.mz-m {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	font: 500 12.5px var(--font-mono, ui-monospace, monospace);
+	color: var(--muted-foreground);
+	margin-top: 8px;
+}
+.mz-m b {
+	color: var(--foreground);
+}
+.mz-bar {
+	height: 3px;
+	background: var(--border);
+	margin-top: 10px;
+	border-radius: 2px;
+	overflow: hidden;
+}
+.mz-bar i {
+	display: block;
+	height: 100%;
+	background: var(--primary);
+	border-radius: 2px;
+}
+
+.mz-lots {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 22px;
+}
+@container (min-width: 936px) {
+	.mz-lots {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+}
+.mz-lc {
+	display: block;
+	color: var(--foreground);
+}
+.mz-lc .mz-ph {
+	aspect-ratio: 4 / 5;
+	border-radius: calc(var(--storefront-radius, 22px) * 0.8);
+	overflow: hidden;
+	position: relative;
+	border: 1px solid var(--border);
+}
+.mz-lc .mz-pill {
+	position: absolute;
+	left: 12px;
+	top: 12px;
+}
+.mz-lc .mz-cd2 {
+	position: absolute;
+	right: 12px;
+	top: 12px;
+	background: color-mix(in oklch, var(--background) 80%, transparent);
+	color: var(--foreground);
+	font: 700 13px var(--font-mono, ui-monospace, monospace);
+	padding: 4px 9px;
+	border-radius: 7px;
+	font-variant-numeric: tabular-nums;
+}
+.mz-lc h3 {
+	font-family: var(--font-header, Georgia, serif);
+	font-weight: 400;
+	font-synthesis: none;
+	font-size: 26px;
+	line-height: 1.05;
+	margin: 14px 0 6px;
+}
+.mz-lc .mz-m {
+	font-size: 13px;
+}
+.mz-lc .mz-m b {
+	color: var(--secondary);
+	font-size: 16px;
+}
+
+/* ---- Product spread ------------------------------------------------------ */
+.mz-spread {
+	display: grid;
+	gap: 26px;
+}
+@container (min-width: 896px) {
+	.mz-spread {
+		grid-template-columns: 1.4fr 1fr;
+	}
+}
+.mz-big {
+	position: relative;
+	display: block;
+	border-radius: var(--storefront-radius, 22px);
+	overflow: hidden;
+	min-height: 460px;
+	border: 1px solid var(--border);
+	color: #f6efea;
+}
+@container (min-width: 896px) {
+	.mz-big {
+		min-height: 560px;
+	}
+}
+.mz-big > .mz-img,
+.mz-big > .mz-noimg {
+	position: absolute;
+	inset: 0;
+}
+.mz-cap {
+	position: absolute;
+	inset: auto 0 0 0;
+	padding: 30px;
+	background: linear-gradient(transparent, rgb(10 9 10 / 0.92) 45%);
+}
+.mz-cap blockquote {
+	font-family: var(--font-header, Georgia, serif);
+	font-style: italic;
+	font-synthesis: none;
+	font-size: clamp(26px, 3.6cqi, 44px);
+	line-height: 1.05;
+	margin: 10px 0 14px;
+}
+.mz-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+.mz-stack {
+	display: grid;
+	gap: 26px;
+}
+.mz-sm {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: var(--storefront-radius, 22px);
+	overflow: hidden;
+	color: var(--card-foreground);
+	min-height: 240px;
+}
+.mz-sm .mz-ph {
+	overflow: hidden;
+}
+.mz-sm .mz-b {
+	padding: 24px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 14px;
+}
+.mz-sm h3 {
+	font-family: var(--font-header, Georgia, serif);
+	font-weight: 400;
+	font-synthesis: none;
+	font-size: clamp(22px, 2.4cqi, 32px);
+	line-height: 1.05;
+	margin-top: 10px;
+	overflow-wrap: break-word;
+	hyphens: auto;
+}
+.mz-price {
+	font: 700 18px var(--font-mono, ui-monospace, monospace);
+}
+.mz-chip {
+	font: 700 11px var(--font-mono, ui-monospace, monospace);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	padding: 6px 11px;
+	opacity: 0.85;
+}
+
+/* ---- Collections --------------------------------------------------------- */
+.mz-cols {
+	/* Phones: a swipeable shelf, like the category rows. */
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: 78%;
+	gap: 14px;
+	overflow-x: auto;
+	scroll-snap-type: x mandatory;
+	scrollbar-width: none;
+	margin: 0 -20px;
+	padding: 0 20px 4px;
+	scroll-padding: 0 20px;
+}
+.mz-cols::-webkit-scrollbar {
+	display: none;
+}
+.mz-cols > * {
+	scroll-snap-align: start;
+}
+@container (min-width: 576px) {
+	.mz-cols {
+		grid-auto-flow: row;
+		grid-auto-columns: auto;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 22px;
+		overflow: visible;
+		margin: 0;
+		padding: 0;
+	}
+}
+@container (min-width: 1036px) {
+	.mz-cols {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+}
+.mz-col {
+	display: block;
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: calc(var(--storefront-radius, 22px) * 0.9);
+	padding: 12px;
+	color: var(--card-foreground);
+}
+.mz-g {
+	display: grid;
+	grid-template-columns: 2fr 1fr;
+	grid-template-rows: 1fr 1fr;
+	gap: 6px;
+	height: 220px;
+}
+.mz-g > div {
+	border-radius: 12px;
+	overflow: hidden;
+	background: var(--muted);
+}
+.mz-g > div:first-child {
+	grid-row: span 2;
+}
+.mz-g[data-count='1'] {
+	grid-template-columns: 1fr;
+}
+.mz-g[data-count='2'] > div:last-child {
+	grid-row: span 2;
+}
+.mz-col h3 {
+	font-family: var(--font-header, Georgia, serif);
+	font-weight: 400;
+	font-synthesis: none;
+	font-size: 26px;
+	margin: 14px 6px 4px;
+	line-height: 1.05;
+}
+.mz-col p {
+	margin: 0 6px 6px;
+	font-size: 13px;
+	color: var(--muted-foreground);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+/* ---- Category sections ----------------------------------------------------- */
+.mz-pg {
+	/* Phones: a swipeable shelf, so each card keeps its full width. */
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: 72%;
+	gap: 14px;
+	overflow-x: auto;
+	scroll-snap-type: x mandatory;
+	scrollbar-width: none;
+	margin: 0 -20px;
+	padding: 0 20px 4px;
+	scroll-padding: 0 20px;
+}
+.mz-pg::-webkit-scrollbar {
+	display: none;
+}
+.mz-pg > * {
+	scroll-snap-align: start;
+}
+@container (min-width: 476px) {
+	.mz-pg {
+		grid-auto-columns: 44%;
+	}
+}
+@container (min-width: 704px) {
+	.mz-pg {
+		grid-auto-flow: row;
+		grid-auto-columns: auto;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 18px;
+		overflow: visible;
+		margin: 0;
+		padding: 0;
+	}
+}
+@container (min-width: 1036px) {
+	.mz-pg {
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+	}
+}
+
+.mz-skel {
+	background: var(--muted);
+	border-radius: calc(var(--storefront-radius, 22px) * 0.75);
+	animation: mz-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mz-tick-track,
+	.mz-pill::before,
+	.mz-skel {
+		animation: none;
+	}
+	.mz-img {
+		transition: none;
+	}
+}

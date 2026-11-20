@@ -18,6 +18,24 @@ import { AuctionListBlock, type AuctionListBlockProps } from './blocks/AuctionLi
 import { ProfileHeaderBlock, type ProfileHeaderBlockProps } from './blocks/ProfileHeaderBlock'
 import { TextBlock } from './blocks/TextBlock'
 import { DividerBlock, SpacerBlock } from './blocks/SpacingBlocks'
+import {
+	CategorySectionBlock,
+	CollectionRowBlock,
+	CoverAuctionBlock,
+	ProductSpreadBlock,
+	TickerBlock,
+	type CategorySectionBlockProps,
+	type CollectionRowBlockProps,
+	type CoverAuctionBlockProps,
+	type ProductSpreadBlockProps,
+} from './blocks/MagazineBlocks'
+import {
+	AuctionBentoBlock,
+	ClosingPicksBlock,
+	TickerBand,
+	type AuctionBentoBlockProps,
+	type ClosingPicksBlockProps,
+} from './blocks/ZineBlocks'
 
 /**
  * Turns a validated page document into elements.
@@ -56,6 +74,13 @@ export interface StorefrontDataSlots {
 	Search?: (props: SearchBlockProps) => ReactNode
 	Categories?: (props: CategoriesBlockBlockProps) => ReactNode
 	AuctionList?: (props: AuctionListBlockProps) => ReactNode
+	Ticker?: (props: { messages: { text: string }[]; showLiveStats: boolean; style: 'strip' | 'band' }) => ReactNode
+	CoverAuction?: (props: CoverAuctionBlockProps) => ReactNode
+	ProductSpread?: (props: ProductSpreadBlockProps) => ReactNode
+	CollectionRow?: (props: CollectionRowBlockProps) => ReactNode
+	CategorySection?: (props: CategorySectionBlockProps) => ReactNode
+	AuctionBento?: (props: AuctionBentoBlockProps) => ReactNode
+	ClosingPicks?: (props: ClosingPicksBlockProps) => ReactNode
 }
 
 /**
@@ -141,11 +166,7 @@ export function StorefrontBlockView({ block, slots }: { block: StorefrontBlock; 
 				<ProductRowBlock {...block.props} products={null} isLoading={false} isError={false} renderProduct={() => null} />
 			)
 		case 'Search':
-			return slots?.Search ? (
-				slots.Search(block.props)
-			) : (
-				<SearchBlock {...block.props} query="" onChange={() => {}} onGo={() => {}} />
-			)
+			return slots?.Search ? slots.Search(block.props) : <SearchBlock {...block.props} query="" onChange={() => {}} onGo={() => {}} />
 		case 'Categories': {
 			// `id` is the block's own key, not a view prop: pass the two fields
 			// the block actually renders.
@@ -168,6 +189,74 @@ export function StorefrontBlockView({ block, slots }: { block: StorefrontBlock; 
 					missing={[]}
 					status="error"
 					relayHealth={{ answered: 0, total: 0 }}
+					auctionHref={(coordinate) => `/auctions/${encodeURIComponent(coordinate.split(':').slice(2).join(':'))}`}
+				/>
+			)
+		// Magazine blocks (ADR-0028). With no host, each draws its honest
+		// no-data state: the author's own ticker lines, and nothing read.
+		case 'Ticker':
+			return slots?.Ticker ? (
+				slots.Ticker(block.props)
+			) : block.props.style === 'band' ? (
+				<TickerBand lines={block.props.messages.map((m) => m.text.trim()).filter(Boolean)} />
+			) : (
+				<TickerBlock entries={block.props.messages.filter((m) => m.text.trim()).map((m) => ({ label: m.text }))} />
+			)
+		case 'CoverAuction':
+			return slots?.CoverAuction ? (
+				slots.CoverAuction(block.props)
+			) : (
+				<CoverAuctionBlock
+					{...block.props}
+					item={null}
+					status="error"
+					now={0}
+					auctionHref={(coordinate) => `/auctions/${encodeURIComponent(coordinate.split(':').slice(2).join(':'))}`}
+				/>
+			)
+		case 'ProductSpread':
+			return slots?.ProductSpread ? (
+				slots.ProductSpread(block.props)
+			) : (
+				<ProductSpreadBlock {...block.props} products={null} isLoading={false} />
+			)
+		case 'CollectionRow':
+			return slots?.CollectionRow ? (
+				slots.CollectionRow(block.props)
+			) : (
+				<CollectionRowBlock {...block.props} collections={null} isLoading={false} />
+			)
+		case 'CategorySection':
+			return slots?.CategorySection ? (
+				slots.CategorySection(block.props)
+			) : (
+				<CategorySectionBlock {...block.props} products={null} isLoading={false} browseHref="/products" />
+			)
+		// Zine blocks (ADR-0029).
+		case 'AuctionBento':
+			return slots?.AuctionBento ? (
+				slots.AuctionBento(block.props)
+			) : (
+				<AuctionBentoBlock
+					{...block.props}
+					items={[]}
+					liveCount={0}
+					status="error"
+					now={0}
+					auctionHref={(coordinate) => `/auctions/${encodeURIComponent(coordinate.split(':').slice(2).join(':'))}`}
+				/>
+			)
+		case 'ClosingPicks':
+			return slots?.ClosingPicks ? (
+				slots.ClosingPicks(block.props)
+			) : (
+				<ClosingPicksBlock
+					{...block.props}
+					closing={[]}
+					closingStatus="error"
+					picks={null}
+					picksLoading={false}
+					now={0}
 					auctionHref={(coordinate) => `/auctions/${encodeURIComponent(coordinate.split(':').slice(2).join(':'))}`}
 				/>
 			)

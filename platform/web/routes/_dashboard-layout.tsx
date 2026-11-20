@@ -28,6 +28,10 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { AppearanceControl } from '@ui/admin-theme/appearance-control'
+import { dashboardNavIcon } from '@ui/nav/nav-icons'
+import { useAdminAppearance } from '@platform/web/admin-theme/useAdminAppearance'
+import { useAdminPortalTheme } from '@platform/web/admin-theme/useAdminPortalTheme'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 
 export const Route = createFileRoute('/_dashboard-layout')({
@@ -150,6 +154,10 @@ function DashboardLayout() {
 		setWorkspaceMenuOpen(false)
 	}, [location.pathname])
 	const showDesktopMenu = !workspace || workspaceMenuOpen
+	// The admin console theme (ADR-0022): this admin's own style, colour and mode.
+	const { appearance, resolvedMode, setAppearance } = useAdminAppearance()
+	// Pop-ups opened from the console wear it too (the header's keep the public theme).
+	useAdminPortalTheme(appearance, resolvedMode)
 
 	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
 	React.useEffect(() => {
@@ -193,11 +201,18 @@ function DashboardLayout() {
 	const emoji = findNavEmoji(DASHBOARD_NAV, location.pathname)
 	const showTitle = showsPageTitle(DASHBOARD_NAV, location.pathname, needsBackButton)
 
-	// Offsets match the Arena header: 61px tall on desktop, 117px on a phone (with its search row).
+	// Offsets follow the app bar's measured height (`--app-bar-h`, set by the
+	// AppBar host); the old fixed 61px / 117px are only fallbacks.
 	return (
-		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-61px)]">
+		<div
+			className="lg:flex lg:flex-col lg:h-[calc(100vh-var(--app-bar-h,61px))] admin-console"
+			data-admin-style={appearance.style}
+			data-admin-color={appearance.color}
+			data-admin-mode={resolvedMode}
+			data-testid="admin-console"
+		>
 			{/* Header - responsive for mobile/desktop */}
-			<div className="lg:hidden top-[117px] z-10 sticky">
+			<div className="admin-titlebar-mobile lg:hidden top-[var(--app-bar-h,117px)] z-10 sticky">
 				<h1 className="arena-dash-title relative flex justify-center items-center gap-2 p-4 font-heading text-center">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
 					{!showSidebar && isMobile && <BackButton variant="icon" ariaLabel="Back to sidebar" onClick={handleBackToSidebar} />}
@@ -220,6 +235,17 @@ function DashboardLayout() {
 						)}
 					</span>
 
+					{/* Appearance - on the menu screen, where the page emoji is not shown */}
+					{showSidebar && (
+						<AppearanceControl
+							value={appearance}
+							resolvedMode={resolvedMode}
+							onChange={setAppearance}
+							compact
+							className="top-1/2 right-2 sm:right-3 md:right-4 z-20 absolute -translate-y-1/2"
+						/>
+					)}
+
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
 					{!showSidebar && emoji && isMobile && !dashboardEmoji && (
 						<span className="top-1/2 right-2 sm:right-3 md:right-4 z-20 absolute flex justify-center items-center w-12 h-12 text-2xl -translate-y-1/2 select-none">
@@ -232,13 +258,14 @@ function DashboardLayout() {
 			<div className="hidden lg:block">
 				<h1 className="arena-dash-title relative flex justify-center lg:justify-start items-center gap-2 px-6 py-3 font-heading text-center">
 					Dashboard
+					<AppearanceControl value={appearance} resolvedMode={resolvedMode} onChange={setAppearance} className="ml-auto" />
 					{workspace && (
 						<button
 							type="button"
 							onClick={() => setWorkspaceMenuOpen((open) => !open)}
 							aria-expanded={workspaceMenuOpen}
 							aria-controls="dashboard-menu"
-							className="inline-flex items-center gap-2 ml-auto px-3 py-1.5 border border-white/25 hover:border-white/60 rounded-md text-sm transition-colors arena-dash-toggle"
+							className="inline-flex items-center gap-2 px-3 py-1.5 border border-white/25 hover:border-white/60 rounded-md text-sm transition-colors arena-dash-toggle"
 							data-testid="dashboard-menu-toggle"
 						>
 							{workspaceMenuOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
@@ -258,10 +285,17 @@ function DashboardLayout() {
 				<div ref={parent} className={cn('lg:flex lg:gap-6 lg:w-full', workspace && 'lg:gap-3')}>
 					{/* Sidebar - responsive behavior */}
 					{(isMobile ? showSidebar : showDesktopMenu) && (
-						<aside id="dashboard-menu" className="lg:flex-shrink-0 lg:bg-white lg:border lg:border-black lg:rounded w-full lg:w-80 lg:max-h-full lg:overflow-y-auto">
+						<aside
+							id="dashboard-menu"
+							className="admin-panel admin-sidebar lg:flex-shrink-0 lg:bg-white lg:border lg:border-black lg:rounded w-full lg:w-80 lg:max-h-full lg:overflow-y-auto"
+						>
 							<SidebarNav
 								sections={navSections}
 								onNavigate={handleSidebarItemClick}
+								renderIcon={(item) => {
+									const Icon = dashboardNavIcon(item.path)
+									return <Icon aria-hidden="true" />
+								}}
 								renderLink={({ item, className, active, onNavigate, children }) => (
 									<Link
 										key={item.path}
@@ -280,8 +314,8 @@ function DashboardLayout() {
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
-							className={`w-full lg:flex-1 lg:max-w-[67rem] lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
-								isMessageDetailView && isMobile ? 'h-[calc(100vh-117px)]' : ''
+							className={`admin-panel w-full lg:flex-1 lg:max-w-[67rem] lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
+								isMessageDetailView && isMobile ? 'h-[calc(100vh-var(--app-bar-h,117px))]' : ''
 							} ${workspace ? 'lg:max-w-none' : ''}`}
 						>
 							{/* Desktop back button and title - fixed to top of container */}

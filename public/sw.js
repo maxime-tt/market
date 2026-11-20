@@ -42,6 +42,11 @@ self.addEventListener('fetch', (event) => {
 		return
 	}
 
+	// Only the offline fallbacks go through the worker. Everything else (the app
+	// bundle, fonts, images) goes straight to the network and the HTTP cache,
+	// so the worker never sits in front of the first paint.
+	if (!STATIC_ASSETS.some((asset) => url.pathname.endsWith(asset))) return
+
 	event.respondWith(
 		fetch(request)
 			.then((response) => {

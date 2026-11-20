@@ -344,6 +344,13 @@ function maybeKickReconnect(source: 'interval' | 'visibilitychange'): void {
 	})
 }
 
+/** Grace after the app relay (or half the relays) sent EOSE before a bounded read resolves. */
+export const EARLY_SETTLE_GRACE_MS = 400
+
+function normalizeRelayUrlForSettle(url: string | undefined): string | undefined {
+	return url ? url.trim().replace(/\/+$/, '').toLowerCase() : undefined
+}
+
 export const ndkActions = {
 	/**
 	 * Idempotent helper that adds `config.appRelay` to NDK if not
@@ -408,6 +415,22 @@ export const ndkActions = {
 			const subscription = relaySet ? ndk.subscribe(filters, subscriptionOpts, relaySet) : ndk.subscribe(filters, subscriptionOpts)
 
 			timer = setTimeout(() => finalize(subscription), timeoutMs)
+			// Settle early (ADR-0026): once the app relay, or at least half the relays, have sent EOSE,
+			// give the rest a short grace and resolve. Dead or silent relays (403/503, or a relay that
+			// never answers a kind) otherwise hold every read until the full timeout.
+			const appRelay = normalizeRelayUrlForSettle(configStore.state.config.appRelay)
+			let graceTimer: ReturnType<typeof setTimeout> | undefined
+			const poll = setInterval(() => {
+				if (settled) return clearInterval(poll)
+				const seen = (subscription as unknown as { eosesSeen?: Set<{ url: string }> }).eosesSeen
+				const total = (subscription as unknown as { relayFilters?: Map<string, unknown> }).relayFilters?.size ?? 0
+				if (!seen || seen.size === 0 || graceTimer) return
+				const appSeen = !!appRelay && [...seen].some((r) => normalizeRelayUrlForSettle(r.url) === appRelay)
+				if (appSeen || (seen.size >= 2 && seen.size * 2 >= total)) {
+					clearInterval(poll)
+					graceTimer = setTimeout(() => finalize(subscription), EARLY_SETTLE_GRACE_MS)
+				}
+			}, 50)
 		})
 	},
 

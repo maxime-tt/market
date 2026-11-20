@@ -17,6 +17,7 @@
 		"start:staging": "NODE_ENV=production bun platform/web/app/entry.tsx",
 		"build": "bun run generate-routes && bun run build.ts",
 		"build:production": "NODE_ENV=production bun run generate-routes && bun run build.ts --minify --source-map=none",
+		"build:web": "bun scripts/build-web.ts",
 		"deploy:staging": "bash scripts/deploy-staging.sh",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",

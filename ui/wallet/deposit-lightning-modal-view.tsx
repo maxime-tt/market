@@ -81,14 +81,14 @@ export function DepositLightningModalView({
 }: DepositLightningModalViewProps) {
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-			<DialogContent className="sm:max-w-md">
+			<DialogContent className="arena-login arena-wallet-dialog sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
-						<Zap className="w-5 h-5 text-warning" />
+						<Zap className="w-5 h-5 text-fill-ink" />
 						{isBidQuickView ? 'Bid with lightning' : 'Deposit Lightning'}
 					</DialogTitle>
 					<DialogDescription>
-						{isBidQuickView ? 'Pay this invoice to lock your bid.' : 'Generate a Lightning invoice to mint eCash'}
+						{isBidQuickView ? 'Pay this invoice to lock your bid.' : 'Generate a Lightning invoice to mint ecash'}
 					</DialogDescription>
 				</DialogHeader>
 
@@ -98,7 +98,7 @@ export function DepositLightningModalView({
 							<Check className="w-6 h-6 text-success" />
 						</div>
 						<p className="text-lg font-medium text-success">Deposit Successful!</p>
-						<p className="text-sm text-text-mid mt-2">Your eCash has been minted</p>
+						<p className="text-sm text-text-mid mt-2">Your ecash has been minted</p>
 						<Button onClick={onClose} className="mt-4">
 							Done
 						</Button>

@@ -1,10 +1,10 @@
 import { Check, Loader2, QrCode, ScanLine } from 'lucide-react'
-import { Scanner } from '@yudiel/react-qr-scanner'
+import { Scanner } from '@ui/primitives/lazy-qr-scanner'
 import { Button } from '../primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../primitives/dialog'
 
 /**
- * Receive eCash — the presentational half of the retired
+ * Receive ecash — the presentational half of the retired
  * `src/feature/wallet/components/ReceiveEcashModal.tsx`.
  *
  * Props-only: the platform host owns the token field, the scanner toggle, the
@@ -52,13 +52,13 @@ export function ReceiveEcashModalView({
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-			<DialogContent className="sm:max-w-md">
+			<DialogContent className="arena-login arena-wallet-dialog sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
-						<QrCode className="w-5 h-5 text-info" />
-						Receive eCash
+						<QrCode className="w-5 h-5 text-fill-ink" />
+						Receive ecash
 					</DialogTitle>
-					<DialogDescription>Scan or paste a Cashu token to receive eCash</DialogDescription>
+					<DialogDescription>Scan or paste a Cashu token to receive ecash</DialogDescription>
 				</DialogHeader>
 
 				{isSuccess ? (
@@ -66,7 +66,7 @@ export function ReceiveEcashModalView({
 						<div className="w-12 h-12 mx-auto mb-4 rounded-full bg-success-muted flex items-center justify-center">
 							<Check className="w-6 h-6 text-success" />
 						</div>
-						<p className="text-lg font-medium text-success">eCash Received!</p>
+						<p className="text-lg font-medium text-success">ecash Received!</p>
 						<p className="text-sm text-text-mid mt-2">The tokens have been added to your wallet</p>
 						<Button onClick={onClose} className="mt-4">
 							Done

@@ -256,6 +256,42 @@ export const productsQueryOptions = (limit: number = 500, tag?: string) =>
 	})
 
 /**
+ * A small read of the newest purchasable listings, for home sections that need a
+ * handful of pictures fast (ADR-0029). Its own cache entry, so it never stands in
+ * for the products page's full read. Retries an empty cold-start read like the tag read.
+ */
+export const newestProductsQueryOptions = (limit: number) =>
+	queryOptions({
+		queryKey: [...productKeys.all, 'newest', limit],
+		queryFn: async () => {
+			if (!isAppRelayReady()) return []
+			return listProducts({ limit }, 'purchasable', { excludeTestLabeled: true })
+		},
+		staleTime: 60_000,
+		refetchInterval: (query) => (query.state.data?.length === 0 && query.state.dataUpdateCount < 4 ? 5_000 : false),
+	})
+
+/**
+ * Listings carrying any of `tags`, one read per tag (a single `#t` filter lets one busy tag
+ * crowd out the rest), merged newest first under one cache entry. A read that
+ * comes back empty (relays still connecting) tries again a few times before settling, so a
+ * magazine category section is not left blank by a cold start.
+ */
+export const productsByTagsQueryOptions = (limit: number, tags: readonly string[]) =>
+	queryOptions({
+		queryKey: [...productKeys.all, 'tags', [...tags].sort().join(','), limit],
+		queryFn: async () => {
+			if (!isAppRelayReady()) return []
+			const perTag = await Promise.all(tags.map((tag) => listProducts({ limit, tag }, 'purchasable', { excludeTestLabeled: true })))
+			const byId = new Map(perTag.flat().map((event) => [event.id, event]))
+			return [...byId.values()].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+		},
+		enabled: tags.length > 0,
+		staleTime: 60_000,
+		refetchInterval: (query) => (query.state.data?.length === 0 && query.state.dataUpdateCount < 4 ? 5_000 : false),
+	})
+
+/**
  * React Query options for fetching products with pagination
  * @param limit Number of products to fetch
  * @param until Timestamp to fetch products before

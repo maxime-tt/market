@@ -216,7 +216,7 @@ function SetupRoute() {
 					<div>
 						<div className="container">
 							<div className="flex justify-between items-center mb-4">
-								<h2 className="text-2xl font-bold">Instance Setup</h2>
+								<h2 className="font-heading text-4xl">Instance setup</h2>
 							</div>
 							<Separator className="my-2" />
 							<form
@@ -230,7 +230,7 @@ function SetupRoute() {
 								<h3 className="text-xl font-semibold">Identity</h3>
 								<div>
 									<Label className="font-bold">Instance Identity</Label>
-									<div className="text-sm text-gray-500 mb-4">
+									<div className="text-sm text-text-mid mb-4">
 										This instance will be identified by a public key derived from your server's APP_PRIVATE_KEY environment variable.
 									</div>
 								</div>
@@ -278,7 +278,7 @@ function SetupRoute() {
 													placeholder="Owner npub"
 												/>
 												<Button type="button" variant="outline" onClick={getOwnerPubkey}>
-													<span className="text-black">Get Key</span>
+													<span>Get Key</span>
 												</Button>
 											</div>
 											{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (

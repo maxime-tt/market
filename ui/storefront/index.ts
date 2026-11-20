@@ -23,7 +23,12 @@ export { ProductGridBlock, type ProductGridBlockProps, type ProductGridBlockView
 export { FeaturedProductBlock, type FeaturedProductBlockProps, type FeaturedProductBlockViewProps } from './blocks/FeaturedProductBlock'
 export { ProductRowBlock, type ProductRowBlockProps, type ProductRowBlockViewProps } from './blocks/ProductRowBlock'
 export { SearchBlock, type SearchBlockProps, type SearchBlockViewProps } from './blocks/SearchBlock'
-export { CategoriesBlock, type CategoriesBlockProps, type CategoriesBlockBlockProps, type CategoriesBlockViewProps } from './blocks/CategoriesBlock'
+export {
+	CategoriesBlock,
+	type CategoriesBlockProps,
+	type CategoriesBlockBlockProps,
+	type CategoriesBlockViewProps,
+} from './blocks/CategoriesBlock'
 export {
 	AuctionListBlock,
 	type AuctionListBlockProps,
@@ -31,6 +36,35 @@ export {
 	type AuctionListItem,
 	type AuctionListStatus,
 } from './blocks/AuctionListBlock'
+export {
+	TickerBlock,
+	CoverAuctionBlock,
+	ProductSpreadBlock,
+	CollectionRowBlock,
+	CategorySectionBlock,
+	MagazineHead,
+	AccentTitle,
+	formatCountdown,
+	formatSats,
+	parseCategoryTags,
+	type TickerEntry,
+	type CoverAuctionBlockProps,
+	type CoverAuctionBlockViewProps,
+	type ProductSpreadBlockProps,
+	type MagazineProduct,
+	type CollectionRowBlockProps,
+	type MagazineCollection,
+	type CategorySectionBlockProps,
+} from './blocks/MagazineBlocks'
+export {
+	AuctionBentoBlock,
+	ClosingPicksBlock,
+	TickerBand,
+	type AuctionBentoBlockProps,
+	type AuctionBentoBlockViewProps,
+	type ClosingPicksBlockProps,
+	type ClosingPicksBlockViewProps,
+} from './blocks/ZineBlocks'
 export {
 	ProfileHeaderBlock,
 	type ProfileHeaderBlockProps,

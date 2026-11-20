@@ -149,6 +149,8 @@ type RootRenderProps = { children?: React.ReactNode } & Partial<StorefrontRootPr
 
 export const storefrontCmsConfig: Config = {
 	categories: {
+		magazine: { title: 'Magazine', components: ['Ticker', 'CoverAuction', 'ProductSpread', 'CollectionRow', 'CategorySection'] },
+		zine: { title: 'Zine', components: ['AuctionBento', 'ClosingPicks'] },
 		identity: { title: 'Identity', components: ['ProfileHeader', 'Hero'] },
 		content: { title: 'Content', components: ['Text', 'Image', 'LinkList', 'Search'] },
 		commerce: { title: 'Products', components: ['ProductGrid', 'FeaturedProduct', 'ProductRow'] },
@@ -493,6 +495,26 @@ export const storefrontCmsConfig: Config = {
 					),
 				},
 				limit: { type: 'number', label: 'Maximum auctions', min: 1, max: 30, step: 1 },
+				layout: {
+					type: 'select',
+					label: 'Card style',
+					options: [
+						{ label: 'Classic grid', value: 'grid' },
+						{ label: 'Closing soon (countdown and time bar)', value: 'closing' },
+						{ label: 'Tall magazine cards', value: 'tall' },
+					],
+				},
+				sort: {
+					type: 'radio',
+					label: 'Order (all marketplace auctions)',
+					options: [
+						{ label: 'Ending soonest', value: 'ending' },
+						{ label: 'Most bids', value: 'popular' },
+						{ label: 'Newest', value: 'newest' },
+					],
+				},
+				linkLabel: { type: 'text', label: 'Heading link text', placeholder: 'All auctions' },
+				linkHref: { type: 'text', label: 'Heading link address', placeholder: '/auctions' },
 				emptyMessage: { type: 'text', label: 'Message when empty' },
 			},
 			defaultProps: {
@@ -500,9 +522,280 @@ export const storefrontCmsConfig: Config = {
 				source: 'mine',
 				auctionCoordinates: [],
 				limit: 6,
+				layout: 'grid',
+				sort: 'ending',
+				linkLabel: '',
+				linkHref: '',
 				emptyMessage: 'No auctions here yet.',
 			},
 			render: renderBlock('AuctionList'),
+		},
+
+		// Magazine home blocks (ADR-0028). Titles take *one word* in asterisks
+		// for the italic accent.
+		Ticker: {
+			label: 'Ticker strip',
+			fields: {
+				style: {
+					type: 'radio',
+					label: 'Style',
+					options: [
+						{ label: 'Thin strip', value: 'strip' },
+						{ label: 'Big band', value: 'band' },
+					],
+				},
+				showLiveStats: {
+					type: 'radio',
+					label: 'Live auction figures',
+					options: [
+						{ label: 'Show', value: true },
+						{ label: 'Hide', value: false },
+					],
+				},
+				messages: {
+					type: 'array',
+					label: 'Your lines',
+					max: 12,
+					getItemSummary: (item: { text?: string }) => item?.text || 'Line',
+					arrayFields: { text: { type: 'text', label: 'Text' } },
+					defaultItemProps: { text: 'Paid in sats' },
+				},
+			},
+			defaultProps: { style: 'strip', showLiveStats: true, messages: [{ text: 'Paid in sats' }, { text: 'Escrow in Cashu ecash' }] },
+			render: renderBlock('Ticker'),
+		},
+
+		CoverAuction: {
+			label: 'Cover auction',
+			fields: {
+				source: {
+					type: 'radio',
+					label: 'Lot',
+					options: [
+						{ label: 'Automatic (most bids)', value: 'auto' },
+						{ label: 'Hand-picked', value: 'picked' },
+					],
+				},
+				auctionCoordinates: {
+					type: 'custom',
+					label: 'Cover lot',
+					render: ({ value, onChange, readOnly }) => (
+						<AuctionPickerField
+							label="Cover lot (the first one is used)"
+							value={Array.isArray(value) ? (value as string[]).slice(0, 1) : []}
+							onChange={(next) => onChange(next.slice(-1))}
+							readOnly={readOnly}
+						/>
+					),
+				},
+				kicker: { type: 'text', label: 'Kicker', placeholder: 'Featured auction' },
+				deck: { type: 'textarea', label: 'Deck (blank uses the lot description)' },
+				sticker: { type: 'text', label: 'Sticker', placeholder: 'Lot of the week' },
+				ctaLabel: { type: 'text', label: 'Button text', placeholder: 'Open the arena' },
+				footnote: { type: 'text', label: 'Footnote' },
+			},
+			defaultProps: {
+				source: 'auto',
+				auctionCoordinates: [],
+				kicker: 'Featured auction',
+				deck: '',
+				sticker: 'Lot of the week',
+				ctaLabel: 'Open the arena',
+				footnote: 'Signed listing · Sats held in Cashu ecash escrow',
+			},
+			render: renderBlock('CoverAuction'),
+		},
+
+		ProductSpread: {
+			label: 'Featured products spread',
+			fields: {
+				title: { type: 'text', label: 'Section title' },
+				source: {
+					type: 'radio',
+					label: 'Products',
+					options: [
+						{ label: 'Featured list (App settings)', value: 'featured' },
+						{ label: 'Hand-picked', value: 'picked' },
+					],
+				},
+				productDTags: {
+					type: 'custom',
+					label: 'Products (up to three)',
+					render: ({ value, onChange, readOnly }) => (
+						<ProductRowPickerField
+							label="Products (up to three)"
+							value={Array.isArray(value) ? (value as string[]).filter((entry) => typeof entry === 'string') : []}
+							onChange={(next: string[]) => onChange(next.slice(0, 3))}
+							readOnly={readOnly}
+						/>
+					),
+				},
+				quote: { type: 'text', label: 'Pull quote on the big card' },
+				kickers: {
+					type: 'array',
+					label: 'Card labels',
+					max: 3,
+					getItemSummary: (item: { text?: string }) => item?.text || 'Label',
+					arrayFields: { text: { type: 'text', label: 'Label' } },
+					defaultItemProps: { text: 'Staff favourite' },
+				},
+				linkLabel: { type: 'text', label: 'Heading link text', placeholder: 'All products' },
+				linkHref: { type: 'text', label: 'Heading link address', placeholder: '/products' },
+			},
+			defaultProps: {
+				title: 'Featured *products*',
+				source: 'featured',
+				productDTags: [],
+				quote: '',
+				kickers: [{ text: "Editor's pick" }, { text: 'Staff favourite' }, { text: 'Just restocked' }],
+				linkLabel: 'All products',
+				linkHref: '/products',
+			},
+			render: renderBlock('ProductSpread'),
+		},
+
+		CollectionRow: {
+			label: 'Collections row',
+			fields: {
+				title: { type: 'text', label: 'Section title' },
+				source: {
+					type: 'radio',
+					label: 'Collections',
+					options: [
+						{ label: 'Featured, then newest', value: 'featured' },
+						{ label: 'Newest', value: 'newest' },
+					],
+				},
+				style: {
+					type: 'radio',
+					label: 'Style',
+					options: [
+						{ label: 'Collage cards', value: 'cards' },
+						{ label: 'Colour tiles', value: 'tiles' },
+					],
+				},
+				limit: { type: 'number', label: 'How many', min: 1, max: 8, step: 1 },
+				linkLabel: { type: 'text', label: 'Heading link text' },
+				linkHref: { type: 'text', label: 'Heading link address' },
+			},
+			defaultProps: { title: 'Collections', source: 'featured', style: 'cards', limit: 4, linkLabel: '', linkHref: '' },
+			render: renderBlock('CollectionRow'),
+		},
+
+		CategorySection: {
+			label: 'Category section',
+			fields: {
+				label: { type: 'text', label: 'Label', placeholder: '01 / Category' },
+				title: { type: 'text', label: 'Title' },
+				subtitle: { type: 'text', label: 'Subtitle' },
+				tags: { type: 'text', label: 'Product tags (comma separated)', placeholder: 'bitcoin, node' },
+				style: {
+					type: 'radio',
+					label: 'Style',
+					options: [
+						{ label: 'Row of cards', value: 'row' },
+						{ label: 'Bento (one big, four small)', value: 'bento' },
+					],
+				},
+				limit: { type: 'number', label: 'How many products', min: 1, max: 10, step: 1 },
+				badge: { type: 'text', label: 'Badge on the big pick (bento)', placeholder: 'Best seller' },
+				linkLabel: { type: 'text', label: 'Link text (blank: Browse <title>)' },
+			},
+			defaultProps: { label: '01 / Category', title: 'Category', subtitle: '', tags: '', style: 'row', limit: 5, badge: '', linkLabel: '' },
+			render: renderBlock('CategorySection'),
+		},
+
+		// Zine home blocks (ADR-0029).
+		AuctionBento: {
+			label: 'Auction bento',
+			fields: {
+				title: { type: 'text', label: 'Headline (*word* for the accent)' },
+				intro: { type: 'textarea', label: 'Intro beside the headline' },
+				showLiveCount: {
+					type: 'radio',
+					label: 'Live count sticker',
+					options: [
+						{ label: 'Show', value: true },
+						{ label: 'Hide', value: false },
+					],
+				},
+				source: {
+					type: 'radio',
+					label: 'Lots',
+					options: [
+						{ label: 'Automatic (live, most bids)', value: 'auto' },
+						{ label: 'Hand-picked', value: 'picked' },
+					],
+				},
+				auctionCoordinates: {
+					type: 'custom',
+					label: 'Lots (up to four)',
+					render: ({ value, onChange, readOnly }) => (
+						<AuctionPickerField
+							label="Lots (up to four, the first is the big one)"
+							value={Array.isArray(value) ? (value as string[]).slice(0, 4) : []}
+							onChange={(next) => onChange(next.slice(0, 4))}
+							readOnly={readOnly}
+						/>
+					),
+				},
+				sticker: { type: 'text', label: 'Sticker on the big lot (blank hides it)', placeholder: 'Top bid' },
+			},
+			defaultProps: {
+				title: 'On the *block*',
+				intro:
+					'Bid in sats on things people actually made. Every lot is a signed Nostr listing, and every bid sits in Cashu ecash escrow until the hammer.',
+				showLiveCount: true,
+				source: 'auto',
+				auctionCoordinates: [],
+				sticker: 'Top bid',
+			},
+			render: renderBlock('AuctionBento'),
+		},
+
+		ClosingPicks: {
+			label: 'Closing soon + picks',
+			fields: {
+				closingTitle: { type: 'text', label: 'Closing list title' },
+				closingChip: { type: 'text', label: 'Closing list chip' },
+				closingLimit: { type: 'number', label: 'How many lots', min: 1, max: 8, step: 1 },
+				picksTitle: { type: 'text', label: 'Pinboard title' },
+				picksChip: { type: 'text', label: 'Pinboard chip' },
+				source: {
+					type: 'radio',
+					label: 'Products',
+					options: [
+						{ label: 'Featured list (App settings)', value: 'featured' },
+						{ label: 'Hand-picked', value: 'picked' },
+					],
+				},
+				productDTags: {
+					type: 'custom',
+					label: 'Products (up to six)',
+					render: ({ value, onChange, readOnly }) => (
+						<ProductRowPickerField
+							label="Products (up to six)"
+							value={Array.isArray(value) ? (value as string[]).filter((entry) => typeof entry === 'string') : []}
+							onChange={(next: string[]) => onChange(next.slice(0, 6))}
+							readOnly={readOnly}
+						/>
+					),
+				},
+				picksLimit: { type: 'number', label: 'How many products', min: 1, max: 6, step: 1 },
+				buttonLabel: { type: 'text', label: 'Card button text', placeholder: 'View' },
+			},
+			defaultProps: {
+				closingTitle: 'Closing soon',
+				closingChip: 'Next hour',
+				closingLimit: 5,
+				picksTitle: 'Featured products',
+				picksChip: 'Fresh picks',
+				source: 'featured',
+				productDTags: [],
+				picksLimit: 6,
+				buttonLabel: 'View',
+			},
+			render: renderBlock('ClosingPicks'),
 		},
 	},
 }

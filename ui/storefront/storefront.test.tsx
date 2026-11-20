@@ -169,7 +169,7 @@ describe('StorefrontRenderer', () => {
 			{ type: 'Spacer', props: { id: 'b9', size: 'sm' } },
 			{
 				type: 'AuctionList',
-				props: { id: 'b10', title: 'Live', source: 'mine', auctionCoordinates: [], limit: 6, emptyMessage: '' },
+				props: { id: 'b10', title: 'Live', source: 'mine', auctionCoordinates: [], limit: 6, emptyMessage: '', layout: 'grid', sort: 'ending', linkLabel: '', linkHref: '' },
 			},
 		]
 		for (const block of blocks) {

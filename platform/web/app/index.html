@@ -18,6 +18,13 @@
 			link.rel = 'manifest'
 			link.href = '/manifest.json'
 			document.head.appendChild(link)
+			// Bundled fonts load as their own files (styles/fonts.css, served at
+			// /fonts.css). Bun's CSS bundler would otherwise inline every face as
+			// base64 into the main stylesheet: 1 MB+ that blocks the first paint.
+			var fonts = document.createElement('link')
+			fonts.rel = 'stylesheet'
+			fonts.href = '/fonts.css'
+			document.head.appendChild(fonts)
 		</script>
 		<script type="module" src="./polyfills.ts"></script>
 		<script type="module" src="../frontend.tsx" async></script>

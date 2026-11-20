@@ -38,15 +38,27 @@ export interface SidebarNavProps {
 	renderLink: (args: NavLinkRenderArgs) => ReactNode
 	onNavigate?: () => void
 	className?: string
+	/**
+	 * Renders a leading icon for an entry. When given, it replaces the entry's
+	 * emoji (the admin console's line icons, ADR-0022).
+	 */
+	renderIcon?: (item: NavItemWithBadge) => ReactNode
 }
 
 /** Highest badge value rendered verbatim before switching to `99+`. */
 const BADGE_MAX = 99
 
-function NavItemContent({ item }: { item: NavItemWithBadge }) {
+function NavItemContent({ item, icon }: { item: NavItemWithBadge; icon?: ReactNode }) {
 	return (
 		<span className="flex justify-between items-center">
-			<span>{`${item.emoji} ${item.title}`}</span>
+			{icon ? (
+				<span className="flex items-center gap-2.5" data-slot="sidebar-nav-label">
+					{icon}
+					<span>{item.title}</span>
+				</span>
+			) : (
+				<span>{`${item.emoji} ${item.title}`}</span>
+			)}
 			{item.badgeCount > 0 && (
 				<span className="inline-flex justify-center items-center bg-fill-accent ml-2 px-2 rounded-full min-w-[1.5rem] h-6 font-bold text-on-fill-accent text-xs">
 					{item.badgeCount > BADGE_MAX ? `${BADGE_MAX}+` : item.badgeCount}
@@ -61,12 +73,14 @@ function NavItemContent({ item }: { item: NavItemWithBadge }) {
  * state. Router-free — the host injects link rendering so client-side routing
  * and prefetching stay in the host.
  */
-export function SidebarNav({ sections, renderLink, onNavigate, className }: SidebarNavProps) {
+export function SidebarNav({ sections, renderLink, onNavigate, className, renderIcon }: SidebarNavProps) {
 	return (
 		<div className={cn('lg:space-y-2', className)} data-slot="sidebar-nav">
 			{sections.map((section) => (
 				<div key={section.title}>
-					<h3 className="bg-text-high mb-0 px-4 py-2 font-header text-bg lg:mb-2">{section.title}</h3>
+					<h3 className="bg-text-high mb-0 px-4 py-2 font-header text-bg lg:mb-2" data-slot="sidebar-nav-heading">
+						{section.title}
+					</h3>
 					<nav className="space-y-2 p-[calc(var(--gap)*1rem)] text-xl lg:p-0 lg:text-base">
 						{section.items.map((item) =>
 							renderLink({
@@ -74,7 +88,7 @@ export function SidebarNav({ sections, renderLink, onNavigate, className }: Side
 								active: item.active,
 								className: SIDEBAR_NAV_LINK_CLASS,
 								onNavigate: () => onNavigate?.(),
-								children: <NavItemContent item={item} />,
+								children: <NavItemContent item={item} icon={renderIcon?.(item)} />,
 							}),
 						)}
 					</nav>
