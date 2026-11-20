@@ -68,7 +68,7 @@ import {
 	loadArenaReceiptClaimRecord,
 	saveArenaReceiptClaimRecord,
 } from '@platform/web/auctions/relay/arenaReceiptClaims'
-import { parseArenaRefusalEvent } from '@platform/web/auctions/relay/arenaLotStateRead'
+import { parseArenaRefusalEvent } from '@sdk/commerce/auctions/arena'
 import {
 	buildAuctionClaimPublicMarkerTags,
 	createPrivateAuctionClaimMessage,

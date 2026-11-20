@@ -1,5 +1,5 @@
 /**
- * `arenaLotStateRead.ts` — the app's read of the chain's **state half** for one
+ * `arenaLotState.ts` — the app's read of the chain's **state half** for one
  * lot: the **committed end** (kind 1449, `arena.lot.v1`) and the **refusals**
  * (kind 1450, `arena.refused.v1`).
  *

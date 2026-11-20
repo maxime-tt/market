@@ -72,7 +72,8 @@ import {
 	type ArenaCreateValue,
 } from '@sdk/commerce/auctions/auctionPublishValidation'
 import type { ArenaAuctionMode, AuctionFormData } from '@sdk/commerce/auctions/auctionForm'
-import { arenaAuctionCoordinate, type ArenaAuctionView } from '@platform/web/auctions/relay/arenaAuctionRead'
+import type { ArenaAuctionView } from '@platform/web/auctions/relay/arenaAuctionRead'
+import { arenaAuctionCoordinate } from '@sdk/commerce/auctions/arena'
 // Type-only: erased at runtime, so this path stays free of any `ui/` code.
 import type { ArenaCreateAcceptanceState } from '@ui/auction/arena/create-stepper'
 

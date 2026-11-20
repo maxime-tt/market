@@ -30,7 +30,7 @@
  */
 
 import { ARENA_AUCTION_BID_KIND, ARENA_AUCTION_CREATE_KIND, ARENA_VERDICT_KIND } from '@sdk/commerce/auctions/constants'
-import { arenaAuctionCoordinate } from '@platform/web/auctions/relay/arenaAuctionRead'
+import { arenaAuctionCoordinate } from '@sdk/commerce/auctions/arena'
 
 /** The part of an NDK event (or any relay event) these rules read. */
 export interface ArenaEventLike {
