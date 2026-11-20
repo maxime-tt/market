@@ -71,7 +71,7 @@ export interface StorefrontThemePalette {
 	key: StorefrontPaletteKey
 	label: string
 	dark: boolean
-	/** Part of the studio's shared pair (Brutalist, Neon), offered on most layouts. */
+	/** One of the studio's Brutalist and Neon pair. They are listed once, under Plebeian. */
 	shared: boolean
 	swatch: string[]
 	shadowRgb: string
@@ -458,46 +458,6 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 					border: 'oklch(0.354 0.017 120.9)',
 				},
 			},
-			{
-				key: 'brutal',
-				label: 'Brutalist',
-				dark: false,
-				shared: true,
-				swatch: ['#ffffff', '#000000', '#ff3d00'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(1.000 0.000 89.9)',
-					foreground: 'oklch(0.000 0.000 0.0)',
-					card: 'oklch(1.000 0.000 89.9)',
-					cardForeground: 'oklch(0.000 0.000 0.0)',
-					primary: 'oklch(0.654 0.235 34.0)',
-					primaryForeground: 'oklch(0.000 0.000 0.0)',
-					secondary: 'oklch(0.452 0.313 264.1)',
-					muted: 'oklch(0.550 0.000 49.4)',
-					mutedForeground: 'oklch(0.289 0.000 89.9)',
-					border: 'oklch(0.000 0.000 0.0)',
-				},
-			},
-			{
-				key: 'neon',
-				label: 'Neon',
-				dark: true,
-				shared: true,
-				swatch: ['#07070c', '#39ff14', '#ff2bd6'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(0.131 0.012 284.7)',
-					foreground: 'oklch(0.970 0.015 286.1)',
-					card: 'oklch(0.183 0.020 284.2)',
-					cardForeground: 'oklch(0.970 0.015 286.1)',
-					primary: 'oklch(0.871 0.286 141.5)',
-					primaryForeground: 'oklch(0.131 0.012 284.7)',
-					secondary: 'oklch(0.691 0.282 338.1)',
-					muted: 'oklch(0.198 0.025 284.1)',
-					mutedForeground: 'oklch(0.696 0.044 285.2)',
-					border: 'oklch(0.280 0.042 283.3)',
-				},
-			},
 		],
 	},
 	art: {
@@ -586,46 +546,6 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 					muted: 'oklch(0.245 0.003 106.6)',
 					mutedForeground: 'oklch(0.677 0.015 88.7)',
 					border: 'oklch(0.300 0.005 106.7)',
-				},
-			},
-			{
-				key: 'brutal',
-				label: 'Brutalist',
-				dark: false,
-				shared: true,
-				swatch: ['#ffffff', '#000000', '#ff3d00'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(1.000 0.000 89.9)',
-					foreground: 'oklch(0.000 0.000 0.0)',
-					card: 'oklch(1.000 0.000 89.9)',
-					cardForeground: 'oklch(0.000 0.000 0.0)',
-					primary: 'oklch(0.654 0.235 34.0)',
-					primaryForeground: 'oklch(0.000 0.000 0.0)',
-					secondary: 'oklch(0.452 0.313 264.1)',
-					muted: 'oklch(0.550 0.000 49.4)',
-					mutedForeground: 'oklch(0.289 0.000 89.9)',
-					border: 'oklch(0.000 0.000 0.0)',
-				},
-			},
-			{
-				key: 'neon',
-				label: 'Neon',
-				dark: true,
-				shared: true,
-				swatch: ['#07070c', '#39ff14', '#ff2bd6'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(0.131 0.012 284.7)',
-					foreground: 'oklch(0.970 0.015 286.1)',
-					card: 'oklch(0.183 0.020 284.2)',
-					cardForeground: 'oklch(0.970 0.015 286.1)',
-					primary: 'oklch(0.871 0.286 141.5)',
-					primaryForeground: 'oklch(0.131 0.012 284.7)',
-					secondary: 'oklch(0.691 0.282 338.1)',
-					muted: 'oklch(0.198 0.025 284.1)',
-					mutedForeground: 'oklch(0.696 0.044 285.2)',
-					border: 'oklch(0.280 0.042 283.3)',
 				},
 			},
 		],
@@ -719,46 +639,6 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 					border: 'oklch(0.282 0.036 144.5)',
 				},
 			},
-			{
-				key: 'brutal',
-				label: 'Brutalist',
-				dark: false,
-				shared: true,
-				swatch: ['#ffffff', '#000000', '#ff3d00'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(1.000 0.000 89.9)',
-					foreground: 'oklch(0.000 0.000 0.0)',
-					card: 'oklch(1.000 0.000 89.9)',
-					cardForeground: 'oklch(0.000 0.000 0.0)',
-					primary: 'oklch(0.654 0.235 34.0)',
-					primaryForeground: 'oklch(0.000 0.000 0.0)',
-					secondary: 'oklch(0.452 0.313 264.1)',
-					muted: 'oklch(0.550 0.000 49.4)',
-					mutedForeground: 'oklch(0.289 0.000 89.9)',
-					border: 'oklch(0.000 0.000 0.0)',
-				},
-			},
-			{
-				key: 'neon',
-				label: 'Neon',
-				dark: true,
-				shared: true,
-				swatch: ['#07070c', '#39ff14', '#ff2bd6'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(0.131 0.012 284.7)',
-					foreground: 'oklch(0.970 0.015 286.1)',
-					card: 'oklch(0.183 0.020 284.2)',
-					cardForeground: 'oklch(0.970 0.015 286.1)',
-					primary: 'oklch(0.871 0.286 141.5)',
-					primaryForeground: 'oklch(0.131 0.012 284.7)',
-					secondary: 'oklch(0.691 0.282 338.1)',
-					muted: 'oklch(0.198 0.025 284.1)',
-					mutedForeground: 'oklch(0.696 0.044 285.2)',
-					border: 'oklch(0.280 0.042 283.3)',
-				},
-			},
 		],
 	},
 	elec: {
@@ -848,46 +728,6 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 					muted: 'oklch(0.299 0.068 258.5)',
 					mutedForeground: 'oklch(0.761 0.053 258.4)',
 					border: 'oklch(0.371 0.083 257.5)',
-				},
-			},
-			{
-				key: 'brutal',
-				label: 'Brutalist',
-				dark: false,
-				shared: true,
-				swatch: ['#ffffff', '#000000', '#ff3d00'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(1.000 0.000 89.9)',
-					foreground: 'oklch(0.000 0.000 0.0)',
-					card: 'oklch(1.000 0.000 89.9)',
-					cardForeground: 'oklch(0.000 0.000 0.0)',
-					primary: 'oklch(0.654 0.235 34.0)',
-					primaryForeground: 'oklch(0.000 0.000 0.0)',
-					secondary: 'oklch(0.452 0.313 264.1)',
-					muted: 'oklch(0.550 0.000 49.4)',
-					mutedForeground: 'oklch(0.289 0.000 89.9)',
-					border: 'oklch(0.000 0.000 0.0)',
-				},
-			},
-			{
-				key: 'neon',
-				label: 'Neon',
-				dark: true,
-				shared: true,
-				swatch: ['#07070c', '#39ff14', '#ff2bd6'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(0.131 0.012 284.7)',
-					foreground: 'oklch(0.970 0.015 286.1)',
-					card: 'oklch(0.183 0.020 284.2)',
-					cardForeground: 'oklch(0.970 0.015 286.1)',
-					primary: 'oklch(0.871 0.286 141.5)',
-					primaryForeground: 'oklch(0.131 0.012 284.7)',
-					secondary: 'oklch(0.691 0.282 338.1)',
-					muted: 'oklch(0.198 0.025 284.1)',
-					mutedForeground: 'oklch(0.696 0.044 285.2)',
-					border: 'oklch(0.280 0.042 283.3)',
 				},
 			},
 		],
@@ -981,46 +821,6 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 					border: 'oklch(0.308 0.014 261.7)',
 				},
 			},
-			{
-				key: 'brutal',
-				label: 'Brutalist',
-				dark: false,
-				shared: true,
-				swatch: ['#ffffff', '#000000', '#ff3d00'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(1.000 0.000 89.9)',
-					foreground: 'oklch(0.000 0.000 0.0)',
-					card: 'oklch(1.000 0.000 89.9)',
-					cardForeground: 'oklch(0.000 0.000 0.0)',
-					primary: 'oklch(0.654 0.235 34.0)',
-					primaryForeground: 'oklch(0.000 0.000 0.0)',
-					secondary: 'oklch(0.452 0.313 264.1)',
-					muted: 'oklch(0.550 0.000 49.4)',
-					mutedForeground: 'oklch(0.289 0.000 89.9)',
-					border: 'oklch(0.000 0.000 0.0)',
-				},
-			},
-			{
-				key: 'neon',
-				label: 'Neon',
-				dark: true,
-				shared: true,
-				swatch: ['#07070c', '#39ff14', '#ff2bd6'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(0.131 0.012 284.7)',
-					foreground: 'oklch(0.970 0.015 286.1)',
-					card: 'oklch(0.183 0.020 284.2)',
-					cardForeground: 'oklch(0.970 0.015 286.1)',
-					primary: 'oklch(0.871 0.286 141.5)',
-					primaryForeground: 'oklch(0.131 0.012 284.7)',
-					secondary: 'oklch(0.691 0.282 338.1)',
-					muted: 'oklch(0.198 0.025 284.1)',
-					mutedForeground: 'oklch(0.696 0.044 285.2)',
-					border: 'oklch(0.280 0.042 283.3)',
-				},
-			},
 		],
 	},
 	acct: {
@@ -1110,46 +910,6 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 					muted: 'oklch(0.235 0.013 168.5)',
 					mutedForeground: 'oklch(0.700 0.023 158.3)',
 					border: 'oklch(0.296 0.019 167.7)',
-				},
-			},
-			{
-				key: 'brutal',
-				label: 'Brutalist',
-				dark: false,
-				shared: true,
-				swatch: ['#ffffff', '#000000', '#ff3d00'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(1.000 0.000 89.9)',
-					foreground: 'oklch(0.000 0.000 0.0)',
-					card: 'oklch(1.000 0.000 89.9)',
-					cardForeground: 'oklch(0.000 0.000 0.0)',
-					primary: 'oklch(0.654 0.235 34.0)',
-					primaryForeground: 'oklch(0.000 0.000 0.0)',
-					secondary: 'oklch(0.452 0.313 264.1)',
-					muted: 'oklch(0.550 0.000 49.4)',
-					mutedForeground: 'oklch(0.289 0.000 89.9)',
-					border: 'oklch(0.000 0.000 0.0)',
-				},
-			},
-			{
-				key: 'neon',
-				label: 'Neon',
-				dark: true,
-				shared: true,
-				swatch: ['#07070c', '#39ff14', '#ff2bd6'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(0.131 0.012 284.7)',
-					foreground: 'oklch(0.970 0.015 286.1)',
-					card: 'oklch(0.183 0.020 284.2)',
-					cardForeground: 'oklch(0.970 0.015 286.1)',
-					primary: 'oklch(0.871 0.286 141.5)',
-					primaryForeground: 'oklch(0.131 0.012 284.7)',
-					secondary: 'oklch(0.691 0.282 338.1)',
-					muted: 'oklch(0.198 0.025 284.1)',
-					mutedForeground: 'oklch(0.696 0.044 285.2)',
-					border: 'oklch(0.280 0.042 283.3)',
 				},
 			},
 		],
@@ -1285,97 +1045,6 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 			},
 		],
 	},
-	brut: {
-		id: 'brut',
-		label: 'Concrete',
-		description:
-			'Raw, loud and honest. Giant type, hard black rules, an index-style product list, hard offset shadows and greyscale photos that flood with colour on hover.',
-		forWho: 'Brutalist shop',
-		fonts: 'Bricolage Grotesque \u00b7 Space Mono',
-		tune: { radiusPx: 0, shadow: 0.6, glass: 0, spacing: 1, texture: 0.15, handmade: 0.2 },
-		palettes: [
-			{
-				key: 'brutal',
-				label: 'Brutalist',
-				dark: false,
-				shared: true,
-				swatch: ['#ffffff', '#000000', '#ff3d00'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(1.000 0.000 89.9)',
-					foreground: 'oklch(0.000 0.000 0.0)',
-					card: 'oklch(1.000 0.000 89.9)',
-					cardForeground: 'oklch(0.000 0.000 0.0)',
-					primary: 'oklch(0.654 0.235 34.0)',
-					primaryForeground: 'oklch(0.000 0.000 0.0)',
-					secondary: 'oklch(0.452 0.313 264.1)',
-					muted: 'oklch(0.550 0.000 49.4)',
-					mutedForeground: 'oklch(0.289 0.000 89.9)',
-					border: 'oklch(0.000 0.000 0.0)',
-				},
-			},
-			{
-				key: 'concrete',
-				label: 'Concrete',
-				dark: false,
-				shared: false,
-				swatch: ['#d6d3cc', '#111111', '#e10600'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(0.867 0.010 87.5)',
-					foreground: 'oklch(0.178 0.000 89.9)',
-					card: 'oklch(0.907 0.010 87.5)',
-					cardForeground: 'oklch(0.178 0.000 89.9)',
-					primary: 'oklch(0.573 0.233 29.5)',
-					primaryForeground: 'oklch(1.000 0.000 89.9)',
-					secondary: 'oklch(0.178 0.000 89.9)',
-					muted: 'oklch(0.557 0.006 88.6)',
-					mutedForeground: 'oklch(0.353 0.007 84.6)',
-					border: 'oklch(0.178 0.000 89.9)',
-				},
-			},
-			{
-				key: 'neon',
-				label: 'Neon',
-				dark: true,
-				shared: true,
-				swatch: ['#07070c', '#39ff14', '#ff2bd6'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(0.131 0.012 284.7)',
-					foreground: 'oklch(0.970 0.015 286.1)',
-					card: 'oklch(0.183 0.020 284.2)',
-					cardForeground: 'oklch(0.970 0.015 286.1)',
-					primary: 'oklch(0.871 0.286 141.5)',
-					primaryForeground: 'oklch(0.131 0.012 284.7)',
-					secondary: 'oklch(0.691 0.282 338.1)',
-					muted: 'oklch(0.198 0.025 284.1)',
-					mutedForeground: 'oklch(0.696 0.044 285.2)',
-					border: 'oklch(0.280 0.042 283.3)',
-				},
-			},
-			{
-				key: 'acid',
-				label: 'Acid',
-				dark: false,
-				shared: false,
-				swatch: ['#e6ff3a', '#000000', '#7a00ff'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(0.950 0.204 117.0)',
-					foreground: 'oklch(0.000 0.000 0.0)',
-					card: 'oklch(0.964 0.146 115.0)',
-					cardForeground: 'oklch(0.000 0.000 0.0)',
-					primary: 'oklch(0.000 0.000 0.0)',
-					primaryForeground: 'oklch(0.950 0.204 117.0)',
-					secondary: 'oklch(0.524 0.293 292.0)',
-					muted: 'oklch(0.523 0.112 64.4)',
-					mutedForeground: 'oklch(0.290 0.066 116.0)',
-					border: 'oklch(0.000 0.000 0.0)',
-				},
-			},
-		],
-	},
 	arena: {
 		id: 'arena',
 		label: 'Arena',
@@ -1465,57 +1134,32 @@ const THEME_DATA: Record<string, StorefrontThemeData> = {
 					border: 'oklch(0.875 0.026 67.5)',
 				},
 			},
-			{
-				key: 'brutal',
-				label: 'Brutalist',
-				dark: false,
-				shared: true,
-				swatch: ['#ffffff', '#000000', '#ff3d00'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(1.000 0.000 89.9)',
-					foreground: 'oklch(0.000 0.000 0.0)',
-					card: 'oklch(1.000 0.000 89.9)',
-					cardForeground: 'oklch(0.000 0.000 0.0)',
-					primary: 'oklch(0.654 0.235 34.0)',
-					primaryForeground: 'oklch(0.000 0.000 0.0)',
-					secondary: 'oklch(0.452 0.313 264.1)',
-					muted: 'oklch(0.550 0.000 49.4)',
-					mutedForeground: 'oklch(0.289 0.000 89.9)',
-					border: 'oklch(0.000 0.000 0.0)',
-				},
-			},
-			{
-				key: 'neon',
-				label: 'Neon',
-				dark: true,
-				shared: true,
-				swatch: ['#07070c', '#39ff14', '#ff2bd6'],
-				shadowRgb: '0,0,0',
-				tokens: {
-					background: 'oklch(0.131 0.012 284.7)',
-					foreground: 'oklch(0.970 0.015 286.1)',
-					card: 'oklch(0.183 0.020 284.2)',
-					cardForeground: 'oklch(0.970 0.015 286.1)',
-					primary: 'oklch(0.871 0.286 141.5)',
-					primaryForeground: 'oklch(0.131 0.012 284.7)',
-					secondary: 'oklch(0.691 0.282 338.1)',
-					muted: 'oklch(0.198 0.025 284.1)',
-					mutedForeground: 'oklch(0.696 0.044 285.2)',
-					border: 'oklch(0.280 0.042 283.3)',
-				},
-			},
 		],
 	},
 }
 
 /** The registry, with each layout's default palette projected onto `tokens`. */
-export const STOREFRONT_THEMES = Object.fromEntries(
+const ACTIVE_THEMES = Object.fromEntries(
 	Object.entries(THEME_DATA).map(([id, data]) => [id, { ...data, tokens: data.palettes[0].tokens }]),
+) as Record<string, StorefrontThemeDefinition>
+
+/**
+ * Looks that are no longer offered but stay in the schema, so a page that
+ * names one still parses. Each renders as the look it was folded into.
+ * Concrete (`brut`) went because its Brutalist and Neon colourways now live
+ * once, under Plebeian. Its Concrete and Acid colourways fall back to
+ * Plebeian's first one.
+ */
+export const RETIRED_STOREFRONT_THEMES: Partial<Record<StorefrontThemeId, StorefrontThemeId>> = { brut: 'pleb' }
+
+export const STOREFRONT_THEMES = Object.fromEntries(
+	STOREFRONT_THEME_IDS.map((id) => [id, ACTIVE_THEMES[RETIRED_STOREFRONT_THEMES[id] ?? id]]),
 ) as Record<StorefrontThemeId, StorefrontThemeDefinition>
 
-/** `STOREFRONT_THEMES` in the schema's declared order — what pickers iterate over. */
-export const STOREFRONT_THEME_LIST: StorefrontThemeDefinition[] = STOREFRONT_THEME_IDS.map((id) => STOREFRONT_THEMES[id])
+/** The offered looks in the schema's declared order — what pickers iterate over. Retired ids are left out. */
+export const STOREFRONT_THEME_LIST: StorefrontThemeDefinition[] = STOREFRONT_THEME_IDS.filter((id) => !RETIRED_STOREFRONT_THEMES[id]).map(
+	(id) => STOREFRONT_THEMES[id],
+)
 
 /** Falls back to `default` for an id outside the closed set, rather than throwing mid-render. */
 export function getStorefrontTheme(id: string | undefined): StorefrontThemeDefinition {
@@ -1539,7 +1183,7 @@ export function getStorefrontPalette(theme: StorefrontThemeDefinition, key: stri
 	return theme.palettes[0]
 }
 
-/** The palette keys a layout offers — its own colourways plus the shared pair. */
+/** The palette keys a layout offers. */
 export function storefrontThemePaletteKeys(themeId: StorefrontThemeId): string[] {
 	return getStorefrontTheme(themeId).palettes.map((palette) => palette.key)
 }
@@ -1547,9 +1191,7 @@ export function storefrontThemePaletteKeys(themeId: StorefrontThemeId): string[]
 /**
  * True when a key is one of that layout's palettes.
  *
- * The two shared colourways (Brutalist, Neon) are part of every layout except
- * the one that opts out, so they answer true wherever they are actually
- * offered — this reads the layout's own list rather than a global one.
+ * Reads the layout's own list. Brutalist and Neon belong to Plebeian only.
  */
 export function isPaletteInTheme(themeId: StorefrontThemeId, key: string): boolean {
 	return storefrontThemePaletteKeys(themeId).includes(key)
