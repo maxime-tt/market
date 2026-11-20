@@ -169,6 +169,14 @@ import {
 	type ArenaBidAdmitEventLike,
 	type ParsedArenaBidAdmit,
 } from './arenaBidAdmitRead'
+import {
+	ArenaCreateAdmitError,
+	dedupeArenaCreateAdmits,
+	isArenaCreateAdmitSchema,
+	parseArenaCreateAdmitEvent,
+	type ArenaCreateAdmitEventLike,
+	type ParsedArenaCreateAdmit,
+} from './arenaCreateAdmitRead'
 // Type-only: erased at runtime, so this adapter stays free of any `ui/` code.
 import type { ArenaV4vSplitRow } from '@ui/auction/arena/model'
 
@@ -529,6 +537,17 @@ export interface ArenaRefusedFactEvent extends ArenaAuctionEventBase {
 	refusal: ParsedArenaRefusal
 }
 
+/**
+ * A kind-1449 **create admission**: the chain's own record that it **accepted**
+ * one create. The third schema of the same kind as {@link ArenaLotStateEvent}
+ * and {@link ArenaBidAdmitEvent}, dispatched on `content.schema`. This is the
+ * one fact on which the app follows a lot at all.
+ */
+export interface ArenaCreateAdmitEvent extends ArenaAuctionEventBase {
+	type: 'create-admit'
+	admit: ParsedArenaCreateAdmit
+}
+
 export type ArenaAuctionEvent =
 	| ArenaCreateEvent
 	| ArenaBidEvent
@@ -537,6 +556,7 @@ export type ArenaAuctionEvent =
 	| ArenaReceiptEvent
 	| ArenaLotStateEvent
 	| ArenaBidAdmitEvent
+	| ArenaCreateAdmitEvent
 	| ArenaRefusedFactEvent
 
 /** One event the gate refused, with the relay that offered it. */
@@ -807,13 +827,18 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 				sig: event.sig ?? '',
 			}
 			if (event.kind === ARENA_LOT_STATE_KIND) {
-				// Kind 1449 carries two schemas. The schema, not the kind, says
-				// which fact an event is — so a bid admission is read as one and a
-				// committed end as the other, and each parser refuses the other's
-				// shape by name (`arenaBidAdmitRead.ts` / `arenaLotStateRead.ts`).
+				// Kind 1449 carries three schemas. The schema, not the kind, says
+				// which fact an event is — so a bid admission, a create admission and
+				// a committed end are each read as their own fact, and each parser
+				// refuses the others' shapes by name (`arenaBidAdmitRead.ts`,
+				// `arenaCreateAdmitRead.ts` / `arenaLotStateRead.ts`).
 				if (isArenaBidAdmitSchema(event.content)) {
 					const admit = parseArenaBidAdmitEvent(like as ArenaBidAdmitEventLike)
 					return { ok: true, event: { ...baseOf(event, relay), type: 'bid-admit', admit } }
+				}
+				if (isArenaCreateAdmitSchema(event.content)) {
+					const admit = parseArenaCreateAdmitEvent(like as ArenaCreateAdmitEventLike)
+					return { ok: true, event: { ...baseOf(event, relay), type: 'create-admit', admit } }
 				}
 				const lotState = parseArenaLotStateEvent(like)
 				return { ok: true, event: { ...baseOf(event, relay), type: 'lot-state', lotState } }
@@ -822,7 +847,7 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 			return { ok: true, event: { ...baseOf(event, relay), type: 'refused-fact', refusal } }
 		} catch (error) {
 			const reason =
-				error instanceof ArenaLotStateError || error instanceof ArenaBidAdmitError
+				error instanceof ArenaLotStateError || error instanceof ArenaBidAdmitError || error instanceof ArenaCreateAdmitError
 					? error.refusal
 					: 'arena.lot_state.bad_content'
 			const detail = error instanceof Error ? error.message : String(error)
@@ -1002,6 +1027,19 @@ export interface ArenaAuctionView {
 	 */
 	createRefusal: ArenaRefusedCreateFact | null
 	/**
+	 * The chain's **acceptance** of this lot's create (kind 1449,
+	 * `arena.createadmit.v1`), at the earliest anchored height, or `null` when no
+	 * acceptance fact was read.
+	 *
+	 * This is the fact the app **follows** a lot on: `null` is *no acceptance
+	 * read* — never "accepted" (nothing else is the chain's word for that) and
+	 * never "refused" (that is {@link ArenaAuctionView.createRefusal}, in the
+	 * chain's own words). An auction with no acceptance fact is not followed at
+	 * all: it is dropped from discovery and, on direct navigation, resolved and
+	 * told which constraint failed.
+	 */
+	createAdmit: ParsedArenaCreateAdmit | null
+	/**
 	 * The chain's refusals of this lot's **bids** (1450 events naming a kind-1441),
 	 * one per refused bid event id, at the earliest anchored height.
 	 *
@@ -1084,6 +1122,8 @@ export interface ArenaAuctionSnapshot {
 	orphanLotStates: ParsedArenaLotState[]
 	/** Bid admissions (kind 1449, `arena.bidadmit.v1`) whose coordinate matches no create this read saw. */
 	orphanAdmissions: ParsedArenaBidAdmit[]
+	/** Create admissions (kind 1449, `arena.createadmit.v1`) whose coordinate matches no create this read saw. */
+	orphanCreateAdmits: ParsedArenaCreateAdmit[]
 	/** Every create the chain refused (kind 1450), deduped at the earliest anchored height. */
 	refusedCreates: ArenaRefusedCreateFact[]
 	/** State commitments, height descending then time descending, then validator pubkey. */
@@ -1108,6 +1148,39 @@ function byNewestThenId(a: { createdAt: number; id: string }, b: { createdAt: nu
 function byOldestThenId(a: { createdAt: number; id: string }, b: { createdAt: number; id: string }): number {
 	if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt
 	return a.id.localeCompare(b.id)
+}
+
+/**
+ * **Is this lot followed at all?** The gate is the chain's own positive fact: a
+ * create-admission (`arena.createadmit.v1`, kind 1449) naming the coordinate.
+ *
+ * Nothing weaker counts. A create on a relay is a *claim*; a relay ACK is
+ * storage; an absent fact is *no acceptance read* — never "accepted", and never
+ * "refused" (the chain's own refusal is a kind 1450, carried in
+ * {@link ArenaAuctionView.createRefusal}).
+ *
+ * It lives beside the view it reads so every surface adapter applies the one
+ * rule: reading the fact and deciding to follow a lot must not be two opinions
+ * (`auctionSurfacesRead.ts` gates the phase with it, `ArenaAuctionsListHost.tsx`,
+ * `featuredAuctionLots.ts` and the storefront list filter with
+ * {@link followedAuctionViews}).
+ */
+export function isFollowedAuction(view: ArenaAuctionView): boolean {
+	return view.createAdmit !== null
+}
+
+/**
+ * The discovery filter: the lots a surface may **follow**.
+ *
+ * A discovery surface (the arena list, the featured strip, the storefront list)
+ * follows only what the chain accepted; a lot whose create-admission fact has
+ * not been read is not listed at all. Direct navigation is different on purpose:
+ * it resolves the event anyway and states which constraint failed, because a
+ * create that exists on the relay and silently disappears is not an answer a
+ * visitor can act on.
+ */
+export function followedAuctionViews(views: readonly ArenaAuctionView[]): ArenaAuctionView[] {
+	return views.filter(isFollowedAuction)
 }
 
 /**
@@ -1245,6 +1318,7 @@ export function projectArenaEvents(
 	const receiptEvents = all.filter((e): e is ArenaReceiptEvent => e.type === 'receipt')
 	const lotStateEvents = all.filter((e): e is ArenaLotStateEvent => e.type === 'lot-state')
 	const bidAdmitEvents = all.filter((e): e is ArenaBidAdmitEvent => e.type === 'bid-admit')
+	const createAdmitEvents = all.filter((e): e is ArenaCreateAdmitEvent => e.type === 'create-admit')
 	const refusedFactEvents = all.filter((e): e is ArenaRefusedFactEvent => e.type === 'refused-fact')
 
 	// ---- resolve 1440 versions ------------------------------------------
@@ -1433,6 +1507,34 @@ export function projectArenaEvents(
 		admitRelaysByAuction.set(coordinate, relays)
 	}
 
+	// ---- create admissions (1449, `arena.createadmit.v1`), grouped by coordinate ---
+	// The same resolution again, and the same dedupe rule: one acceptance per
+	// coordinate, kept at the earliest anchored height. This is the fact the app
+	// follows a lot on, so it is grouped exactly where the coordinate is known —
+	// an acceptance whose coordinate matches no create this read saw is an orphan
+	// and never silently accepted for some other lot.
+	const createAdmitsByAuction = new Map<string, ParsedArenaCreateAdmit[]>()
+	const createAdmitRelaysByAuction = new Map<string, Set<string>>()
+	const orphanCreateAdmits: ParsedArenaCreateAdmit[] = []
+	for (const event of createAdmitEvents) {
+		const auctionId = event.admit.auctionId
+		const coordinate = auctionId.includes(':')
+			? auctionId
+			: (dToCoordinate.get(auctionId) ?? []).length === 1
+				? dToCoordinate.get(auctionId)![0]
+				: null
+		if (coordinate === null) {
+			orphanCreateAdmits.push(event.admit)
+			continue
+		}
+		const list = createAdmitsByAuction.get(coordinate)
+		if (list === undefined) createAdmitsByAuction.set(coordinate, [event.admit])
+		else list.push(event.admit)
+		const relays = createAdmitRelaysByAuction.get(coordinate) ?? new Set<string>()
+		for (const relay of event.relays) relays.add(relay)
+		createAdmitRelaysByAuction.set(coordinate, relays)
+	}
+
 	// A refusal (a 1450) names a **create event id**, not a coordinate, so it is
 	// deduped by `(event_id, reason)` at the earliest anchored height and kept at
 	// the snapshot, where a surface that has the create's event id can find it.
@@ -1536,6 +1638,7 @@ export function projectArenaEvents(
 		for (const relay of receiptRelaysByAuction.get(entry.coordinate) ?? []) relays.add(relay)
 		for (const relay of lotStateRelaysByAuction.get(entry.coordinate) ?? []) relays.add(relay)
 		for (const relay of admitRelaysByAuction.get(entry.coordinate) ?? []) relays.add(relay)
+		for (const relay of createAdmitRelaysByAuction.get(entry.coordinate) ?? []) relays.add(relay)
 
 		// The committed ends, deduped by `(auction_id, end_time)` at the earliest
 		// anchored height, ordered by height ascending; the highest-anchored one
@@ -1570,6 +1673,12 @@ export function projectArenaEvents(
 			if (admissionForBid[admit.bidId] === undefined) admissionForBid[admit.bidId] = admit
 		}
 
+		// **The create's acceptance** (kind 1449, `arena.createadmit.v1`): the
+		// chain's own record that it took this create, deduped at the earliest
+		// anchored height. This is the gate the app follows the lot on, so `null`
+		// is *no acceptance read* and the surfaces say so — never "accepted".
+		const createAdmit = dedupeArenaCreateAdmits(createAdmitsByAuction.get(entry.coordinate) ?? [])[0] ?? null
+
 		auctions.push({
 			coordinate: entry.coordinate,
 			seller: entry.root.pubkey,
@@ -1592,6 +1701,7 @@ export function projectArenaEvents(
 			committedEnd,
 			committedEnds,
 			createRefusal,
+			createAdmit,
 			bidRefusals,
 			admissions,
 			admissionForBid,
@@ -1681,6 +1791,7 @@ export function projectArenaEvents(
 		orphanReceipts,
 		orphanLotStates,
 		orphanAdmissions,
+		orphanCreateAdmits,
 		refusedCreates,
 		stateCommitments,
 		highestCommitment,

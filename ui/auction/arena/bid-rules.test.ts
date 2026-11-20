@@ -29,6 +29,9 @@ const OTHER = 'bidder-carol'
 
 const SIGNED_IN: ArenaBidderState = { pubkey: BIDDER, wallet: 'ready' }
 
+/** The chain's acceptance of the fixture lot: the fact the gate follows a lot on. */
+const ACCEPTED = { accepted: true, acceptedHeight: 4210, admitEventId: 'admit-event-1' } as const
+
 function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetailModel {
 	return {
 		coordinate: `1440:${SELLER}:lot-1`,
@@ -69,6 +72,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		refundsByBidder: {},
 		settleReceipt: null,
 		createRefusal: null,
+		acceptance: ACCEPTED,
 		bidRefusals: {},
 		admissions: {},
 		...over,
@@ -179,6 +183,14 @@ describe('arenaBidBlock — every reason bidding is not offered', () => {
 		expect(arenaBidBlock(detail({ phase: 'unknown', endsAt: null }), 'settled', 2000, SIGNED_IN)).toBe('end-unknown')
 	})
 
+	test('a lot the chain has not accepted is not biddable, whatever its clock says', () => {
+		const unaccepted = detail({ phase: 'unaccepted', acceptance: { accepted: false, acceptedHeight: null, admitEventId: null } })
+		expect(arenaBidBlock(unaccepted, 'settled', 2000, SIGNED_IN)).toBe('not-accepted')
+		// The gate outranks the clock in both directions: an unaccepted lot is not
+		// "ended", and its create-derived end can never open it for bidding.
+		expect(arenaBidBlock(unaccepted, 'settled', 7000, SIGNED_IN)).toBe('not-accepted')
+	})
+
 	test('ended by the clock, and ended by the recorded phase', () => {
 		expect(arenaBidBlock(detail(), 'settled', 4600, SIGNED_IN)).toBe('ended')
 		expect(arenaBidBlock(detail({ phase: 'ended' }), 'settled', 2000, SIGNED_IN)).toBe('ended')
@@ -208,6 +220,13 @@ describe('checkArenaBid — the amount check', () => {
 	test('below the floor is refused, and names the floor', () => {
 		const check = checkArenaBid(input({ raw: '999' }))
 		expect(check).toMatchObject({ allowed: false, reason: 'below-minimum', amount: 999, minimum: 1000 })
+	})
+
+	test('no amount is allowed on a lot the chain has not accepted', () => {
+		// A big number is not the fix for the gate: `not-accepted` outranks every
+		// amount rule, so the reason never becomes `ok`.
+		const check = checkArenaBid(input({ model: detail({ phase: 'unaccepted' }), raw: '999999' }))
+		expect(check).toMatchObject({ allowed: false, reason: 'not-accepted' })
 	})
 
 	test('empty, zero and non-integer each have their own reason', () => {
@@ -264,6 +283,7 @@ describe('bidBlockedCopy — no disabled button without a sentence', () => {
 		'read-incomplete',
 		'end-unknown',
 		'ended',
+		'not-accepted',
 		'not-started',
 		'own-auction',
 		'no-wallet',

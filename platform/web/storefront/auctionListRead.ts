@@ -45,6 +45,7 @@ import { getReadContext } from '@platform/web/readContext'
 import { webRelayPolicy } from '@platform/web/sdkNostrIo'
 import {
 	createWebArenaAuctionRead,
+	followedAuctionViews,
 	projectArenaEvents,
 	type ArenaAuctionEvent,
 	type ArenaAuctionSnapshot,
@@ -133,9 +134,14 @@ export function selectAuctionList(
 	selection: AuctionListSelection,
 ): { items: AuctionListItem[]; missing: string[] } {
 	const limit = Math.max(0, selection.limit)
+	// Discovery follows only what the chain accepted: a lot with no
+	// create-admission fact read (`arena.createadmit.v1`, kind 1449) is not a lot
+	// this block may show, in any of its three sources. The block's own notice then
+	// states the coordinate was either not carried by a relay or not accepted.
+	const followed = followedAuctionViews(snapshot.auctions)
 	if (selection.source === 'mine') {
 		return {
-			items: snapshot.auctions
+			items: followed
 				.filter((auction) => auction.seller === selection.seller)
 				.slice(0, limit)
 				.map((auction) => toAuctionListItem(auction, selection.now)),
@@ -149,7 +155,7 @@ export function selectAuctionList(
 		// `popular` puts the most-bid live lots first; `newest` keeps the read's
 		// newest-first order. Live lots always lead: a front page shows what a
 		// visitor can still bid on before what is over.
-		const projected = snapshot.auctions.map((auction) => toAuctionListItem(auction, selection.now))
+		const projected = followed.map((auction) => toAuctionListItem(auction, selection.now))
 		const live = projected.filter((item) => item.phase === 'open')
 		const sort = selection.sort ?? 'ending'
 		if (sort === 'ending') live.sort((a, b) => (a.endsAt ?? Infinity) - (b.endsAt ?? Infinity))
@@ -158,7 +164,7 @@ export function selectAuctionList(
 		return { items: [...live, ...rest].slice(0, limit), missing: [] }
 	}
 
-	const byCoordinate = new Map(snapshot.auctions.map((auction) => [auction.coordinate, auction]))
+	const byCoordinate = new Map(followed.map((auction) => [auction.coordinate, auction]))
 	const items: AuctionListItem[] = []
 	const missing: string[] = []
 	for (const coordinate of selection.coordinates) {

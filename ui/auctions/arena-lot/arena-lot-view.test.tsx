@@ -27,6 +27,10 @@ const model: ArenaAuctionDetailModel = {
 	bidCount: 3,
 	bidsWithoutAmount: 0,
 	endsAt: 1_600,
+	endSource: 'create-derived',
+	createDerivedEndsAt: 1_600,
+	committedEndHeight: null,
+	committedEndOrdinal: null,
 	phase: 'open',
 	verdict: null,
 	verdictCount: 0,
@@ -57,6 +61,10 @@ const model: ArenaAuctionDetailModel = {
 	receipts: [],
 	refundsByBidder: { [bob]: 77 },
 	settleReceipt: null,
+	createRefusal: null,
+	acceptance: { accepted: true, acceptedHeight: 4210, admitEventId: 'admit-event-1' },
+	bidRefusals: {},
+	admissions: {},
 }
 
 function bid(over: Partial<ArenaLotBidProps> = {}): ArenaLotBidProps {

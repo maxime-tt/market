@@ -359,6 +359,7 @@ export function bidButtonLabel(blockedReason: ArenaBidBlockedReason | null, chec
 			'own-auction': 'Your auction',
 			concluded: 'Auction concluded',
 			ended: 'Bidding closed',
+			'not-accepted': 'Not accepted by the chain',
 			'end-unknown': 'No end time stated',
 			'no-wallet': 'Sign in to bid',
 			'wallet-unavailable': 'Wallet not ready',
