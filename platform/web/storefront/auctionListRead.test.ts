@@ -487,7 +487,13 @@ describe('selectAuctionList', () => {
 
 describe('magazine selections', () => {
 	function snapshotWith(...events: NostrEventLike[]) {
-		const ok = events.map((event) => decodeArenaEvent(event, 'wss://a')).flatMap((result) => (result.ok ? [result.event] : []))
+		// Every fixture create carries the chain's admission: without it the gate
+		// does not follow the lot (`isFollowedAuction`) and a selection sees no
+		// items at all.
+		const admits = events.filter((event) => event.kind === ARENA_AUCTION_CREATE_KIND).map((create) => admitEvent(createAdmitOf(create)))
+		const ok = [...events, ...admits]
+			.map((event) => decodeArenaEvent(event, 'wss://a'))
+			.flatMap((result) => (result.ok ? [result.event] : []))
 		return projectArenaEvents(ok)
 	}
 	const item = (over: Partial<ReturnType<typeof toAuctionListItem>>) =>
@@ -596,7 +602,12 @@ describe('collectAuctionListRead', () => {
 		// partial-read sentence.
 		const started = Date.now()
 		const state = await collectAuctionListRead(
-			readFrom({ 'wss://answered': { events: [createEvent({ id: 'root', created_at: 1000, d: 'lot-1' })], hang: true } }, 150),
+			readFrom(
+				// The delivered create needs the chain's admission, or the gate
+				// does not follow the lot and the read lists nothing.
+				{ 'wss://answered': { events: [createEvent({ id: 'root', created_at: 1000, d: 'lot-1' }), admitEvent()], hang: true } },
+				150,
+			),
 		)
 		expect(Date.now() - started).toBeGreaterThanOrEqual(120)
 		expect(state.status).toBe('settled')
@@ -634,7 +645,7 @@ describe('collectAuctionListRead', () => {
 		const state = await collectAuctionListRead(
 			readFrom(
 				{
-					'wss://answered': { events: [createEvent({ id: 'root', d: 'lot-1' })] },
+					'wss://answered': { events: [createEvent({ id: 'root', d: 'lot-1' }), admitEvent()] },
 					'wss://never': { connected: false, hang: true },
 				},
 				60,
