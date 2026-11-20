@@ -11,12 +11,12 @@ import { StorefrontBlockView, StorefrontProvider, StorefrontRoot } from '@ui/sto
 import { Button } from '@ui/primitives/button'
 import { cn } from '@ui/utils/cn'
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { storefrontBlockSlots } from './StorefrontBlockSlots'
-import { ThemeStudio } from './fields/ThemePickerField'
+import { ThemeColourList, ThemeTunePanel } from './fields/ThemePickerField'
 
 /**
- * The two-step page setup wizard: choose a template, then choose a theme.
+ * The three-step page setup wizard: choose a layout, choose colours, make it yours.
  *
  * Both steps render **real** previews through `StorefrontBlockView` /
  * `StorefrontRoot` — the same components the published page and the Puck
@@ -32,13 +32,17 @@ import { ThemeStudio } from './fields/ThemePickerField'
  * what the author starts from.
  */
 
-const STEPS = ['template', 'theme'] as const
+const STEPS = ['template', 'colours', 'tune'] as const
 type WizardStep = (typeof STEPS)[number]
 
 const STEP_LABEL: Record<WizardStep, string> = {
-	template: 'Choose a template',
-	theme: 'Choose a theme',
+	template: 'Choose layout',
+	colours: 'Choose colours',
+	tune: 'Make it yours',
 }
+
+/** The width the preview lays out at before it is scaled to fit: a desktop page. */
+const PREVIEW_WIDTH = 1280
 
 export interface StorefrontSetupWizardProps {
 	pubkey: string
@@ -113,7 +117,7 @@ export function StorefrontSetupWizard({
 
 	return (
 		<StorefrontProvider value={{ pubkey, isEditing: true }}>
-			<div className="mx-auto flex min-h-[70vh] w-full max-w-5xl flex-col gap-6 p-4 sm:p-6" data-testid="storefront-wizard">
+			<div className="mx-auto flex min-h-[70vh] w-full max-w-7xl flex-col gap-6 p-4 sm:p-6" data-testid="storefront-wizard">
 				<ol className="flex flex-wrap items-center gap-2 text-sm font-medium text-muted-foreground" aria-label="Setup steps">
 					{STEPS.map((s, i) => (
 						<li key={s} className="flex items-center gap-2">
@@ -152,45 +156,47 @@ export function StorefrontSetupWizard({
 					</div>
 				)}
 
-				{step === 'theme' && (
-					<div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-						{/* The studio's three steps, reused verbatim from the builder
-						    sidebar — one component means the wizard and the editor can
-						    never offer different-looking theme controls. */}
-						<ThemeStudio
-							theme={themeId}
-							palette={paletteKey}
-							tune={tune}
-							onChange={({ theme: nextTheme, palette: nextPalette, tune: nextTune }) => {
-								setThemeId(nextTheme)
-								setPaletteKey(nextPalette)
-								setTune(nextTune)
-							}}
-						/>
+				{step !== 'template' && (
+					<div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+						{/* Each column scrolls on its own, so the preview stays in view
+						    while the author runs down a long colour list. */}
+						<div className="flex min-w-0 flex-col gap-2 lg:max-h-[70vh] lg:overflow-y-auto lg:pr-1">
+							{step === 'colours' ? (
+								<ThemeColourList
+									themeId={themeId}
+									paletteKey={paletteKey}
+									columns={2}
+									onChange={({ themeId: nextTheme, paletteKey: nextPalette }) => {
+										// A new look brings its own tuning; another colourway of
+										// the same look keeps what the author already set.
+										if (nextTheme !== themeId) setTune({ ...getStorefrontTheme(nextTheme).tune })
+										setThemeId(nextTheme)
+										setPaletteKey(nextPalette)
+									}}
+								/>
+							) : (
+								<ThemeTunePanel themeId={themeId} value={tune} onChange={setTune} />
+							)}
+						</div>
 
-						<div className="flex min-w-0 flex-col gap-3">
-							{/* The template chosen in step 1, rendered with the look chosen
-							    here — the moment that makes "this template, with this look"
-							    concrete before the author commits to it. */}
+						<div className="flex min-w-0 flex-col gap-2">
 							<p className="text-sm text-muted-foreground">
-								<span className="font-medium text-foreground">{theme.label}</span> · {theme.forWho} ·{' '}
-								{theme.palettes.find((p) => p.key === paletteKey)?.label ?? theme.palettes[0].label}
+								<span className="font-medium text-foreground">{template.label}</span> · {theme.label}
+								{theme.palettes.length > 1 && <> · {theme.palettes.find((p) => p.key === paletteKey)?.label ?? theme.palettes[0].label}</>}
 							</p>
-							<div className="overflow-hidden rounded-lg border border-border">
-								{previewBlocks.length > 0 ? (
-									<div className="pointer-events-none" aria-hidden>
-										<StorefrontRoot props={{ title: '', theme: themeId, palette: paletteKey, tune }} fullHeight={false}>
-											{previewBlocks.slice(0, 2).map((block) => (
-												<StorefrontBlockView key={block.props.id} block={block} slots={storefrontBlockSlots} />
-											))}
-										</StorefrontRoot>
-									</div>
-								) : (
-									<p className="p-6 text-center text-sm text-muted-foreground">
-										A blank page has nothing to preview yet — the theme still applies once you add blocks.
-									</p>
-								)}
-							</div>
+							{previewBlocks.length > 0 ? (
+								<DesktopPreview>
+									<StorefrontRoot props={{ title: '', theme: themeId, palette: paletteKey, tune }} fullHeight={false}>
+										{previewBlocks.map((block) => (
+											<StorefrontBlockView key={block.props.id} block={block} slots={storefrontBlockSlots} />
+										))}
+									</StorefrontRoot>
+								</DesktopPreview>
+							) : (
+								<p className="rounded-lg border border-border p-6 text-center text-sm text-muted-foreground">
+									A blank page has nothing to preview yet. Your colours still apply once you add blocks.
+								</p>
+							)}
 						</div>
 					</div>
 				)}
@@ -215,7 +221,7 @@ export function StorefrontSetupWizard({
 						</Button>
 					) : (
 						<Button onClick={finish} data-testid="storefront-wizard-finish">
-							Use this template
+							Use this page
 						</Button>
 					)}
 				</div>
@@ -280,5 +286,52 @@ function TemplateCard({
 				<span className="text-sm text-muted-foreground">{description}</span>
 			</div>
 		</button>
+	)
+}
+
+/**
+ * The page laid out at desktop width, then scaled down to fit the column, so
+ * the preview shows the layout visitors on a computer will see rather than
+ * the phone layout a narrow column would produce. Container queries inside the
+ * blocks see the full {@link PREVIEW_WIDTH}. The frame scrolls when the page
+ * is taller than the screen.
+ */
+function DesktopPreview({ children }: { children: ReactNode }) {
+	const frameRef = useRef<HTMLDivElement>(null)
+	const pageRef = useRef<HTMLDivElement>(null)
+	const [size, setSize] = useState({ scale: 0.5, height: 0 })
+
+	useLayoutEffect(() => {
+		const frame = frameRef.current
+		const page = pageRef.current
+		if (!frame || !page) return
+		const measure = () => {
+			const scale = Math.min(1, frame.clientWidth / PREVIEW_WIDTH)
+			setSize({ scale, height: page.offsetHeight * scale })
+		}
+		measure()
+		const observer = new ResizeObserver(measure)
+		observer.observe(frame)
+		observer.observe(page)
+		return () => observer.disconnect()
+	}, [])
+
+	return (
+		<div
+			ref={frameRef}
+			className="max-h-[70vh] overflow-y-auto overflow-x-hidden rounded-lg border border-border"
+			data-testid="storefront-wizard-preview"
+		>
+			<div style={{ height: size.height }} className="relative">
+				<div
+					ref={pageRef}
+					className="pointer-events-none absolute left-0 top-0 origin-top-left"
+					style={{ width: PREVIEW_WIDTH, transform: `scale(${size.scale})` }}
+					aria-hidden
+				>
+					{children}
+				</div>
+			</div>
+		</div>
 	)
 }

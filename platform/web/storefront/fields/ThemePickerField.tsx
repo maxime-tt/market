@@ -1,6 +1,5 @@
 import type { StorefrontThemeId } from '@sdk/commerce/storefront/storefrontPage'
 import {
-	STOREFRONT_THEMES,
 	STOREFRONT_THEME_LIST,
 	STOREFRONT_TUNE_AXES,
 	getStorefrontPalette,
@@ -9,7 +8,6 @@ import {
 	storefrontPaletteSwatchColors,
 	storefrontThemeSwatchColors,
 	storefrontTuneWord,
-	type StorefrontThemeDefinition,
 	type StorefrontThemeTune,
 	type StorefrontTuneAxis,
 } from '@sdk/config/storefront/storefrontThemes'
@@ -20,139 +18,115 @@ import { Check, RotateCcw, Wand2 } from 'lucide-react'
  * The theme picker.
  *
  * Modelled on the Plebeian Theme Studio (plebeian-theme-studio.pplx.app), which
- * walks the author through three steps — pick a layout, choose colours, make it
- * yours — and then exports one small `plebeian.site-theme` object. This file
+ * walks the author through three steps and then exports one small `plebeian.site-theme` object. This file
  * reproduces that flow: the same three steps, the same six tune axes, and the
  * same value-band words ("Sharp … Pebble"), so the two surfaces read as one
  * feature rather than two.
  *
  * Everything here is presentational. It reads the registry, reports the
  * author's choice, and never invents a value — every number it can produce is
- * clamped by `normalizeStorefrontTune`. `ThemeSwatchGrid` is kept as the export
- * name `storefrontCms.tsx` and the wizard already import; it is now the step-1
- * gallery, and `ThemeSwatchCard` keeps its old signature.
+ * clamped by `normalizeStorefrontTune`.
+ *
+ * Here the steps are: 1 choose a layout (the page template), 2 choose colours
+ * (one list of every look and colourway), 3 make it yours (the tune axes).
  */
 
-/** A layout card in step 1. */
-export function ThemeSwatchCard({
-	theme,
-	selected,
-	disabled,
-	onSelect,
-}: {
-	theme: StorefrontThemeDefinition
-	selected: boolean
-	disabled?: boolean
-	onSelect: () => void
-}) {
-	return (
-		<button
-			type="button"
-			onClick={onSelect}
-			disabled={disabled}
-			aria-pressed={selected}
-			data-testid={`storefront-theme-${theme.id}`}
-			className={cn(
-				'flex flex-col gap-2 rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-				selected ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary/50',
-			)}
-		>
-			<div className="flex items-center justify-between gap-2">
-				<span className="truncate text-sm font-medium text-foreground">{theme.label}</span>
-				{selected && <Check className="size-4 shrink-0 text-primary" aria-hidden />}
-			</div>
-			<div className="flex gap-1">
-				{storefrontThemeSwatchColors(theme).map((color, index) => (
-					// Hairline over a caller-supplied colour: the chip's own background is
-					// the palette's literal value (it must preview the real palette, not a
-					// role), so the theme cannot own the border around it either.
-					<span key={index} className="size-5 rounded-full border border-black/10" style={{ background: color }} aria-hidden />
-				))}
-			</div>
-			<span className="text-xs font-medium text-muted-foreground">{theme.forWho}</span>
-			<span className="text-xs text-muted-foreground">{theme.description}</span>
-			<span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-				{theme.fonts} · {theme.palettes.length} colourways
-			</span>
-		</button>
-	)
+/** One choice in the colour list: a layout's type and feel, in one of its colourways. */
+export interface StorefrontColourOption {
+	themeId: StorefrontThemeId
+	paletteKey: string
+	label: string
+	swatch: string[]
 }
 
-/** Step 1 — "Pick a layout". */
-export function ThemeLayoutGallery({
-	value,
-	onChange,
-	readOnly,
-}: {
-	value: StorefrontThemeId
-	onChange: (id: StorefrontThemeId) => void
-	readOnly?: boolean
-}) {
-	return (
-		<div className="grid grid-cols-1 gap-2">
-			{STOREFRONT_THEME_LIST.map((theme) => (
-				<ThemeSwatchCard
-					key={theme.id}
-					theme={theme}
-					selected={theme.id === value}
-					disabled={readOnly}
-					onSelect={() => onChange(theme.id)}
-				/>
-			))}
-		</div>
-	)
+/** A heading and its colourways. Single-colourway looks share one "Classic" group. */
+export interface StorefrontColourGroup {
+	label: string
+	options: StorefrontColourOption[]
 }
 
 /**
- * Kept as the export name the CMS config and the setup wizard already import.
- * The root field stores a layout id, so the gallery *is* the theme picker.
+ * Every look and colourway as one list, so the author picks colours in one
+ * place. A layout with a single colourway is named by the layout; a layout with
+ * several gets a heading and names each colourway under it.
  */
-export const ThemeSwatchGrid = ThemeLayoutGallery
+export function storefrontColourGroups(): StorefrontColourGroup[] {
+	const classic: StorefrontColourOption[] = []
+	const groups: StorefrontColourGroup[] = []
+	for (const theme of STOREFRONT_THEME_LIST) {
+		const options = theme.palettes.map((palette) => ({
+			themeId: theme.id,
+			paletteKey: palette.key,
+			label: theme.palettes.length === 1 ? theme.label : palette.label,
+			swatch: theme.palettes.length === 1 ? storefrontThemeSwatchColors(theme) : storefrontPaletteSwatchColors(palette),
+		}))
+		if (options.length === 1) classic.push(options[0])
+		else groups.push({ label: theme.label, options })
+	}
+	return [{ label: 'Classic', options: classic }, ...groups]
+}
 
-/** Step 2 — "Choose colours". One curated palette per row, like the studio dock. */
-export function ThemePaletteStrip({
+/**
+ * Step 2 — "Choose colours". Name and swatches only, nothing else, so the
+ * whole list scans quickly. `columns` lets the wizard use two columns where
+ * the sidebar has room for one.
+ */
+export function ThemeColourList({
 	themeId,
-	value,
+	paletteKey,
 	onChange,
 	readOnly,
+	columns = 1,
 }: {
 	themeId: StorefrontThemeId
-	value: string
-	onChange: (key: string) => void
+	/** Empty means the layout's first colourway. */
+	paletteKey: string
+	onChange: (next: { themeId: StorefrontThemeId; paletteKey: string }) => void
 	readOnly?: boolean
+	columns?: 1 | 2
 }) {
-	const theme = getStorefrontTheme(themeId)
+	const current = getStorefrontPalette(getStorefrontTheme(themeId), paletteKey).key
 	return (
-		<div className="flex flex-col gap-1.5">
-			{theme.palettes.map((palette) => {
-				const selected = palette.key === (value || theme.palettes[0].key)
-				return (
-					<button
-						key={palette.key}
-						type="button"
-						disabled={readOnly}
-						aria-pressed={selected}
-						onClick={() => onChange(palette.key)}
-						data-testid={`storefront-palette-${palette.key}`}
-						className={cn(
-							'flex items-center gap-2 rounded-md border p-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-							selected ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary/50',
-						)}
-					>
-						<span className="flex shrink-0 gap-1">
-							{storefrontPaletteSwatchColors(palette).map((color, index) => (
-								// Same caller-supplied-surface hairline as the layout cards above.
-								<span key={index} className="size-4 rounded-full border border-black/10" style={{ background: color }} aria-hidden />
-							))}
-						</span>
-						<span className="min-w-0 flex-1 truncate text-xs text-foreground">{palette.label}</span>
-						<span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
-							{palette.shared ? 'Bold · ' : ''}
-							{palette.dark ? 'Dark' : 'Light'}
-						</span>
-					</button>
-				)
-			})}
+		<div className="flex flex-col gap-3" data-testid="storefront-colour-list">
+			{storefrontColourGroups().map((group) => (
+				<section key={group.label} className="flex flex-col gap-1" aria-label={group.label}>
+					<h5 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{group.label}</h5>
+					<div className={cn('grid gap-1', columns === 2 ? 'grid-cols-2' : 'grid-cols-1')}>
+						{group.options.map((option) => {
+							const selected = option.themeId === themeId && option.paletteKey === current
+							return (
+								<button
+									key={`${option.themeId}-${option.paletteKey}`}
+									type="button"
+									disabled={readOnly}
+									aria-pressed={selected}
+									onClick={() => onChange({ themeId: option.themeId, paletteKey: option.paletteKey })}
+									data-testid={`storefront-colour-${option.themeId}-${option.paletteKey}`}
+									className={cn(
+										'flex h-8 items-center gap-2 rounded-md border px-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+										selected ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary/50',
+									)}
+								>
+									<span className="flex shrink-0 -space-x-1">
+										{option.swatch.map((color, index) => (
+											// Hairline over a caller-supplied colour: the chip previews the
+											// palette's literal value, so the theme cannot own its border.
+											<span
+												key={index}
+												className="size-3.5 rounded-full border border-black/15"
+												style={{ background: color }}
+												aria-hidden
+											/>
+										))}
+									</span>
+									<span className="min-w-0 flex-1 truncate text-xs text-foreground">{option.label}</span>
+									{selected && <Check className="size-3.5 shrink-0 text-primary" aria-hidden />}
+								</button>
+							)
+						})}
+					</div>
+				</section>
+			))}
 		</div>
 	)
 }
@@ -270,58 +244,6 @@ export function surpriseTune(base: StorefrontThemeTune, random: () => number = M
 		drift[axis.key] = base[axis.key] + (random() - 0.5) * span * 0.7
 	}
 	return normalizeStorefrontTune(drift, base)
-}
-
-/**
- * The whole three-step flow in one control, for surfaces that own all three
- * values at once — the setup wizard, and any future standalone theme editor.
- * The Puck sidebar uses the three steps as separate root fields, so both paths
- * share these components instead of reimplementing them.
- */
-export function ThemeStudio({
-	theme,
-	palette,
-	tune,
-	onChange,
-	readOnly,
-}: {
-	theme: StorefrontThemeId
-	palette: string
-	tune: StorefrontThemeTune
-	onChange: (next: { theme: StorefrontThemeId; palette: string; tune: StorefrontThemeTune }) => void
-	readOnly?: boolean
-}) {
-	return (
-		<div className="flex flex-col gap-4" data-testid="storefront-theme-studio">
-			<section className="flex flex-col gap-1.5">
-				<h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">1 · Pick a layout</h4>
-				<ThemeLayoutGallery
-					value={theme}
-					readOnly={readOnly}
-					onChange={(id) =>
-						// Switching layout resets the palette and the tune to that
-						// layout's own defaults, as the studio does: a palette key
-						// belongs to one layout, and carrying the numbers across would
-						// describe a look nobody chose.
-						onChange({ theme: id, palette: STOREFRONT_THEMES[id].palettes[0].key, tune: { ...STOREFRONT_THEMES[id].tune } })
-					}
-				/>
-			</section>
-			<section className="flex flex-col gap-1.5">
-				<h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">2 · Choose colours</h4>
-				<ThemePaletteStrip
-					themeId={theme}
-					value={palette}
-					readOnly={readOnly}
-					onChange={(key) => onChange({ theme, palette: key, tune })}
-				/>
-			</section>
-			<section className="flex flex-col gap-1.5">
-				<h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">3 · Make it yours</h4>
-				<ThemeTunePanel themeId={theme} value={tune} readOnly={readOnly} onChange={(next) => onChange({ theme, palette, tune: next })} />
-			</section>
-		</div>
-	)
 }
 
 /**
