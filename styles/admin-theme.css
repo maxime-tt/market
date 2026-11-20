@@ -678,3 +678,19 @@
 	--puck-user-sidebar-left-width: 200px;
 	--puck-user-sidebar-right-width: 272px;
 }
+
+/* Page editor on phones: Puck stacks header, canvas and the Blocks/Outline/
+   Fields bar in one fixed-height box. The publish header fills most of it,
+   and the framed canvas has no content height of its own, so it collapsed
+   to 0px. Below Puck's 638px breakpoint let the editor grow with the page
+   and give the canvas most of the screen. */
+@media (max-width: 637px) {
+	.admin-console .storefront-builder .Puck,
+	.admin-console .storefront-builder .Puck > div,
+	.admin-console .storefront-builder .Puck > div > div {
+		height: auto;
+	}
+	.admin-console .storefront-builder [class*='_PuckCanvas_'] {
+		height: 75dvh;
+	}
+}
