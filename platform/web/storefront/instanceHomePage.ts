@@ -111,17 +111,21 @@ export function homePageLoading(state: {
 	return !state.ownChoice && state.legacyLoading
 }
 
-/** The instance's home page, read from every eligible author at once. */
-export function useInstanceHomePage(): InstanceHomePage {
+/**
+ * The instance's home page, read from every eligible author at once.
+ * `enabled: false` skips the reads (the page editor calls this for every page,
+ * but only the `home` page needs it).
+ */
+export function useInstanceHomePage({ enabled = true }: { enabled?: boolean } = {}): InstanceHomePage {
 	const { data: config, isLoading: configLoading } = useConfigQuery()
 	const { data: adminSettings, isLoading: adminsLoading } = useAdminSettings(config?.appPublicKey)
-	const authors = instanceHomeAuthors(config?.appPublicKey, adminSettings?.owner ?? config?.ownerPk, adminSettings?.admins)
+	const authors = enabled ? instanceHomeAuthors(config?.appPublicKey, adminSettings?.owner ?? config?.ownerPk, adminSettings?.admins) : []
 	const results = useQueries({
-		queries: [
-			...authors.map((pubkey) => instanceHomePageQueryOptions(pubkey)),
-			storefrontAddressPageQueryOptions(LEGACY_HOME_PUBKEY, HOME_PAGE_D_TAG),
-		],
+		queries: enabled
+			? [...authors.map((pubkey) => instanceHomePageQueryOptions(pubkey)), storefrontAddressPageQueryOptions(LEGACY_HOME_PUBKEY, HOME_PAGE_D_TAG)]
+			: [],
 	})
+	if (!enabled) return { choice: null, loading: false }
 	const own = results.slice(0, authors.length)
 	const legacy = results[authors.length]
 	const ownChoice = chooseHomePage(
