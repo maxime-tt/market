@@ -32,6 +32,7 @@ import {
 	AuctionTechnicalRow,
 } from '@ui/auction/auction-detail-views'
 import { ArenaLotView, type ArenaLotBidProps } from '@ui/auctions/arena-lot/arena-lot-view'
+import { arenaRequiredRaise } from '@ui/auction/arena/bid-rules'
 import type { ArenaAuctionDetailModel } from '@ui/auction/arena/model'
 import type { WidgetLibrary } from '../libraries'
 
@@ -519,6 +520,7 @@ const arenaLotModel: ArenaAuctionDetailModel = {
 	description:
 		'A risograph print on cotton paper, signed and numbered.\n\nShips in a tube from Cornwall. Paid in sats through Cashu ecash escrow.',
 	minIncrement: 1_000,
+	minIncrementBps: 200,
 	mode: 'antisnipe',
 	windowSec: 60,
 	durationSec: 600,
@@ -550,7 +552,8 @@ const arenaRenderName = (pubkey: string) => arenaNames[pubkey.slice(0, 2)] ?? pu
 function ArenaLotDemo({ model, now, blocked }: { model: ArenaAuctionDetailModel; now: number; blocked: boolean }) {
 	const [amount, setAmount] = useState('')
 	const own = 15_000
-	const minimum = (model.topBidTotal ?? 0) + (model.minIncrement ?? 0)
+	// The chain's own raise rule, not the create-time increment: top + 2% of the top.
+	const minimum = (model.topBidTotal ?? 0) + arenaRequiredRaise(model.topBidTotal ?? 0, model.minIncrementBps ?? 200)
 	const raw = amount === '' ? String(minimum - own) : amount
 	const bid: ArenaLotBidProps = {
 		viewer: arenaKey('c1'),

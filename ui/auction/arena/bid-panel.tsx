@@ -376,15 +376,12 @@ export function bidButtonLabel(blockedReason: ArenaBidBlockedReason | null, chec
 export function bidFloorLabel(model: ArenaAuctionDetailModel, check: ArenaBidCheck | null): string {
 	if (check === null || check.minimum === null) {
 		if (model.startingBid === null) return 'This auction published no starting bid.'
-		return 'The minimum for your next bid cannot be computed from the bids read so far.'
+		return 'The minimum for your next bid cannot be computed from what has been read so far.'
 	}
 	if (check.ownPosition !== null) {
 		return `Bids add to your position. Yours is ${check.ownPosition.toLocaleString()} sats; your position must reach at least ${check.minimum.toLocaleString()} sats.`
 	}
 	if (model.bidCount === 0) return `Opening bid: at least ${check.minimum.toLocaleString()} sats.`
-	if (model.minIncrement === null) {
-		return `Next bid: more than ${check.minimum.toLocaleString()} sats. This auction published no minimum increment, so the app requires one sat above the top.`
-	}
 	return `Next bid: at least ${check.minimum.toLocaleString()} sats.`
 }
 

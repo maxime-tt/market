@@ -243,7 +243,22 @@ export interface ArenaAuctionDetailModel extends ArenaAuctionCardModel {
 	 * create's `media` items. Empty when the lot published no safe image.
 	 */
 	media: ArenaLotMediaItem[]
+	/**
+	 * The create's published `min_increment` in sats, or `null` when the create
+	 * stated none. This is a **create term** — a suggested step and a display
+	 * fact — **not** the raise rule: the chain derives the required raise from
+	 * {@link minIncrementBps} and does not use this field for it.
+	 */
 	minIncrement: number | null
+	/**
+	 * The **effective** `min_increment_bps` the chain enforces at bid admission
+	 * (`Params.MinIncrementBps`, carried by the kind-1448 params event as
+	 * `min_increment_bps`): the required raise on a top is
+	 * `top + arenaRequiredRaise(top, minIncrementBps)`. `null` when the params
+	 * have **not** been read — the floor then refuses rather than inventing a
+	 * raise (see `bid-rules.ts` `arenaBidFloor`).
+	 */
+	minIncrementBps: number | null
 	/** `fixed` | `antisnipe`, or `null` when the create stated no mode. */
 	mode: string | null
 	/**

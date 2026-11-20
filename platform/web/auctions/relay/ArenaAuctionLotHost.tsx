@@ -36,8 +36,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { EventStorePort } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
-import { getReadContext } from '@platform/web/readContext'
+import { getAppRelayUrl, getReadContext } from '@platform/web/readContext'
 import { webRelayPolicy } from '@platform/web/sdkNostrIo'
+import { createWebArenaParamsRead } from '@platform/web/auctions/relay/arenaParamsRead'
+import { arenaParamsRelays } from '@platform/web/auctions/relay/arenaParamsRelays'
 import {
 	arenaLotFilters,
 	arenaLotFollowUpFilters,
@@ -134,6 +136,42 @@ export function useArenaLotRead(init: ArenaLotReadInit): ArenaSurfacesReadState 
 	return state
 }
 
+/**
+ * The chain's effective `min_increment_bps`, read once from the committed
+ * kind-1448 params event (`arenaParamsRead.ts`), exactly as the bid funding path
+ * reads the committee key and mint. `null` until the read answers — so the bid
+ * floor refuses rather than inventing a raise while the term is unknown.
+ *
+ * It is a separate read from the auction surfaces because the params are a
+ * different event family (1448, not the 1440-series); the read never rejects (a
+ * relay that fails resolves to `params: null`), and it is **not** polled: the
+ * chain's params change on `arena init`, not on a bid, so one read per page is
+ * enough for the display and the pre-check. The floor is re-derived from the
+ * same model on every render, but the term it needs is this one value.
+ */
+function useArenaMinIncrementBps(): number | null {
+	const [bps, setBps] = useState<number | null>(null)
+	useEffect(() => {
+		let cancelled = false
+		const read = createWebArenaParamsRead({
+			relays: arenaParamsRelays(getAppRelayUrl(), webRelayPolicy('query')),
+			store: getReadContext().store as unknown as EventStorePort<Event>,
+		})
+		void read()
+			.then((selection) => {
+				if (!cancelled && selection.params !== null) setBps(selection.params.terms.min_increment_bps)
+			})
+			.catch(() => {
+				// A read that rejected is health, never a term: leave `null` so the
+				// floor refuses rather than inventing a raise.
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [])
+	return bps
+}
+
 export interface ArenaLotReadInit {
 	/** The route param: the auction's `d` tag, or `null` for the whole-arena read (the index). */
 	d: string | null
@@ -187,7 +225,13 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, backHre
 	// the snapshot's own object and the divergences belong to the snapshot, so
 	// these keys change only when the read or the clock really moved.
 	const divergences = read.snapshot?.verdictDivergence
-	const context = useMemo(() => ({ now, status: read.status, divergences }), [now, read.status, divergences])
+	// The chain's effective raise term, read once from the committed 1448 params.
+	// `null` until it answers; the floor then refuses rather than inventing one.
+	const minIncrementBps = useArenaMinIncrementBps()
+	const context = useMemo(
+		() => ({ now, status: read.status, divergences, minIncrementBps }),
+		[now, read.status, divergences, minIncrementBps],
+	)
 	const detail = useMemo(() => (view === null ? null : toAuctionDetailModel(view, context)), [view, context])
 	const verdicts = useMemo(() => (view === null ? null : toVerdictPanelModel(view, context)), [view, context])
 	// Whether the chain is advancing — fresh kind-1447 commitments across several

@@ -249,6 +249,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		description: null,
 		media: [],
 		minIncrement: 100,
+		minIncrementBps: 200,
 		mode: 'fixed',
 		windowSec: null,
 		durationSec: 3600,

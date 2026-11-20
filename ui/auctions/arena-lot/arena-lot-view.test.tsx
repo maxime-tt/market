@@ -40,6 +40,7 @@ const model: ArenaAuctionDetailModel = {
 	description: 'A described lot.',
 	media: [],
 	minIncrement: 100,
+	minIncrementBps: 200,
 	mode: 'antisnipe',
 	windowSec: 60,
 	durationSec: 600,

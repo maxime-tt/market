@@ -133,6 +133,18 @@ export interface ArenaParamsTerms {
 	bid_to_consensus_latency_sec: number | null
 	min_window_sec: number | null
 	max_window_sec: number | null
+	/**
+	 * The **effective** minimum raise the chain enforces at bid admission, in
+	 * basis points of the top position (`Params.MinIncrementBps`): the required
+	 * raise is `max(1, ceil(top * min_increment_bps / 10000))`. It is the one
+	 * term here that is **never `null`**: the chain's default when the field is
+	 * absent (an older chain, or a trimmed document) is
+	 * {@link ARENA_DEFAULT_MIN_INCREMENT_BPS}, and a `0` is that default too — a
+	 * chain that enforced no raise would still admit a 1-sat self-raise, which
+	 * is exactly what the chain now forbids. **Not** the lot's create-time
+	 * `min_increment`, which the chain does not use for the raise.
+	 */
+	min_increment_bps: number
 	min_duration_sec: number | null
 	max_duration_sec: number | null
 	max_proofs: number | null
@@ -213,6 +225,26 @@ function parseContentObject(content: string): Record<string, unknown> {
 /** A non-empty string, kept verbatim; anything else is unknown (`null`). */
 function asNonEmptyString(value: unknown): string | null {
 	return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+/**
+ * The chain's own default minimum raise, in basis points of the top position
+ * (`Params.MinIncrementBps`). A params event that omits the field — an older
+ * chain, or a trimmed document — means the chain is enforcing this default, so
+ * the app reads the **effective** value rather than `null`: the required raise
+ * is 2% of the top, rounded up, floored at 1 sat.
+ */
+export const ARENA_DEFAULT_MIN_INCREMENT_BPS = 200
+
+/**
+ * The effective `min_increment_bps`: a positive integer from the event, else the
+ * chain's default. An absent field and a `0` both mean "the chain's default",
+ * never "no raise" — a chain that enforced no raise would still admit a 1-sat
+ * self-raise, which is exactly the case the chain's rule now forbids.
+ */
+function asMinIncrementBps(value: unknown): number {
+	const bps = asCount(value)
+	return bps === null || bps === 0 ? ARENA_DEFAULT_MIN_INCREMENT_BPS : bps
 }
 
 /** A non-negative integer; anything else (fraction, negative, NaN) is unknown (`null`). */
@@ -384,6 +416,7 @@ export function parseArenaParamsEvent(event: ArenaParamsEventLike): ParsedArenaP
 			bid_to_consensus_latency_sec: asCount(content.bid_to_consensus_latency_sec),
 			min_window_sec: asCount(content.min_window_sec),
 			max_window_sec: asCount(content.max_window_sec),
+			min_increment_bps: asMinIncrementBps(content.min_increment_bps),
 			min_duration_sec: asCount(content.min_duration_sec),
 			max_duration_sec: asCount(content.max_duration_sec),
 			max_proofs: asCount(content.max_proofs),

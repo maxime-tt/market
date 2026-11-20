@@ -33,7 +33,7 @@ import {
 	type ArenaRelayHealth,
 	type ArenaSurfaceStatus,
 } from '@ui/auction/arena/model'
-import { bidBlockedCopy, type ArenaBidBlockedReason, type ArenaBidCheck } from '@ui/auction/arena/bid-rules'
+import { arenaRequiredRaise, bidBlockedCopy, type ArenaBidBlockedReason, type ArenaBidCheck } from '@ui/auction/arena/bid-rules'
 import { bidButtonLabel, bidFloorLabel, bidSubmissionStepper, submissionLine, type ArenaBidSubmissionState } from '@ui/auction/arena/bid-panel'
 
 // =========================================================================
@@ -116,30 +116,28 @@ export interface ArenaLadderStep {
  * NEXT / JUMP / BIG MOVE, as in the demo, on this lot's real floor.
  *
  * Bids are deltas on a position, so each button names **the delta it publishes**
- * and the **position that delta reaches**. The step is the published minimum
- * increment; a lot that published none steps by 5% of the floor, which only
- * picks suggested amounts — the floor itself is still the check's.
- *
- * The one bidder `arenaBidFloor` returns the **top** as the floor for is the
- * bidder already at or above it (`bid-rules.ts`, "a bidder improving their OWN
- * standing need only reach the top"). Reaching that same floor would publish
- * `max(1, minimum − own) = 1`: a legal self-raise under R2-A, and not a step. So
- * for that bidder the step reaches one increment **above their own position**,
- * and the same check holds the resulting delta to the floor like any other.
+ * and the **position that delta reaches**. The step is the chain's own required
+ * raise (`arenaRequiredRaise(top, min_increment_bps)`, passed in by the caller);
+ * when the raise is not known the buttons fall back to 5% of the floor, which
+ * only picks suggested amounts — the floor itself is still the check's
+ * (`bid-rules.ts`), and the check holds every resulting delta to it.
  */
-export function arenaLadder(check: Pick<ArenaBidCheck, 'minimum' | 'ownPosition'> | null, minIncrement: number | null): ArenaLadderStep[] {
+export function arenaLadder(check: Pick<ArenaBidCheck, 'minimum' | 'ownPosition'> | null, step: number | null): ArenaLadderStep[] {
 	if (check === null || check.minimum === null) return []
 	const min = check.minimum
-	const step = minIncrement !== null && minIncrement > 0 ? minIncrement : Math.max(1, Math.round(min * 0.05))
+	const stride = step !== null && step > 0 ? step : Math.max(1, Math.round(min * 0.05))
 	const own = check.ownPosition ?? 0
-	const first = own >= min ? own + step : min
+	// A bidder already at or above the floor (a leader the read has not yet
+	// advanced past `min`) is stepped forward from their own position; everyone
+	// else reaches the floor first.
+	const first = own >= min ? own + stride : min
 	const make = (key: ArenaLadderStep['key'], label: string, target: number): ArenaLadderStep => ({
 		key,
 		label,
 		target,
 		delta: Math.max(1, target - own),
 	})
-	return [make('next', 'Next', first), make('jump', 'Jump', min + 2 * step), make('big', 'Big move', min + 5 * step)]
+	return [make('next', 'Next', first), make('jump', 'Jump', min + 2 * stride), make('big', 'Big move', min + 5 * stride)]
 }
 
 /** Short relative time for the feeds: `now`, `45s`, `3m`, `2h`, `4d`. */
@@ -467,7 +465,14 @@ export function ArenaLotView({
 	const viewer = bidProp?.viewer ?? null
 	const viewerPos = viewer === null ? null : (positions.find((p) => p.bidder === viewer) ?? null)
 
-	const ladder = bid === null ? [] : arenaLadder(bid.check, model.minIncrement)
+	// The step the ladder suggests is the chain's own required raise when the
+	// params have been read and a top is known; otherwise `null` (the ladder's
+	// 5% fallback). It is a suggestion — the floor and every delta are the check's.
+	const ladderStep =
+		model.topBidTotal !== null && model.minIncrementBps !== null
+			? arenaRequiredRaise(model.topBidTotal, model.minIncrementBps)
+			: null
+	const ladder = bid === null ? [] : arenaLadder(bid.check, ladderStep)
 	const hardBlocked = bid !== null && bid.blockedReason !== null
 	// Closed for good: the controls would offer nothing, so only the reason shows.
 	// Other blocks (sign in, own lot) keep the controls visible but inert.

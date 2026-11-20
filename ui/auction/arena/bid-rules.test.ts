@@ -14,6 +14,7 @@ import {
 	ARENA_BIDDER_SIGNED_OUT,
 	arenaBidBlock,
 	arenaBidFloor,
+	arenaRequiredRaise,
 	bidBlockedCopy,
 	checkArenaBid,
 	parseBidAmountSats,
@@ -57,6 +58,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		description: null,
 		media: [],
 		minIncrement: 100,
+		minIncrementBps: 200,
 		mode: 'fixed',
 		windowSec: null,
 		durationSec: 3600,
@@ -127,19 +129,65 @@ describe('parseBidAmountSats — money is an integer number of sats', () => {
 // The floor: published terms, and bids are deltas
 // =========================================================================
 
-describe('arenaBidFloor — the floor comes from the create, never a guess', () => {
+describe('arenaRequiredRaise — the chain’s raise rule, in one place', () => {
+	test('2% of the top, rounded up', () => {
+		expect(arenaRequiredRaise(1_000, 200)).toBe(20)
+		expect(arenaRequiredRaise(101, 200)).toBe(3)
+	})
+
+	test('never below one sat, even for a tiny or zero top', () => {
+		expect(arenaRequiredRaise(50, 200)).toBe(1)
+		expect(arenaRequiredRaise(1, 200)).toBe(1)
+		expect(arenaRequiredRaise(0, 0)).toBe(1)
+	})
+})
+
+describe('arenaBidFloor — the floor comes from the terms, never a guess', () => {
 	test('no bids: the opening price is the starting bid', () => {
 		expect(arenaBidFloor(detail(), null)).toEqual({ kind: 'first', minimum: 1000, topTotal: null })
 	})
 
-	test('a top bid: the next must reach top + min_increment', () => {
-		expect(arenaBidFloor(detail({ bidCount: 1, topBidTotal: 1000 }), null)).toEqual({ kind: 'raise', minimum: 1100, topTotal: 1000 })
+	test('a top bid: the next must reach top + the chain’s required raise', () => {
+		// top 1000 at 200 bps → raise 20 → 1020.
+		expect(arenaBidFloor(detail({ bidCount: 1, topBidTotal: 1000 }), null)).toEqual({
+			kind: 'raise',
+			minimum: 1020,
+			topTotal: 1000,
+		})
 	})
 
-	test('an unstated min_increment is not zero: the floor is one sat above the top', () => {
-		expect(arenaBidFloor(detail({ bidCount: 1, topBidTotal: 1000, minIncrement: null }), null)).toEqual({
+	test('the raise is the rule, not a static increment: a 50-top raises by 1, a 101-top by 3', () => {
+		expect(arenaBidFloor(detail({ bidCount: 1, topBidTotal: 50 }), null)).toEqual({ kind: 'raise', minimum: 51, topTotal: 50 })
+		expect(arenaBidFloor(detail({ bidCount: 1, topBidTotal: 101 }), null)).toEqual({ kind: 'raise', minimum: 104, topTotal: 101 })
+	})
+
+	test('the lot’s create-time min_increment is not the raise: a different one changes nothing', () => {
+		expect(arenaBidFloor(detail({ bidCount: 1, topBidTotal: 1000, minIncrement: 1 }), null)).toEqual({
 			kind: 'raise',
-			minimum: 1001,
+			minimum: 1020,
+			topTotal: 1000,
+		})
+		expect(arenaBidFloor(detail({ bidCount: 1, topBidTotal: 1000, minIncrement: 99999 }), null)).toEqual({
+			kind: 'raise',
+			minimum: 1020,
+			topTotal: 1000,
+		})
+	})
+
+	test('the leader’s own raise is subject to the rule too', () => {
+		// The chain no longer exempts a leader’s self-raise: the bidder at the top
+		// must still clear it by the required raise, not merely reach it.
+		expect(arenaBidFloor(detail({ bidCount: 1, topBidTotal: 1000 }), 1000)).toEqual({
+			kind: 'raise',
+			minimum: 1020,
+			topTotal: 1000,
+		})
+	})
+
+	test('params unread (bps null) with a top: no invented floor', () => {
+		expect(arenaBidFloor(detail({ bidCount: 1, topBidTotal: 1000, minIncrementBps: null }), null)).toEqual({
+			kind: 'unknown',
+			minimum: null,
 			topTotal: 1000,
 		})
 	})
@@ -154,10 +202,6 @@ describe('arenaBidFloor — the floor comes from the create, never a guess', () 
 			minimum: null,
 			topTotal: null,
 		})
-	})
-
-	test('a bidder already at the top need only reach the top, not outbid themselves', () => {
-		expect(arenaBidFloor(detail({ bidCount: 1, topBidTotal: 1000 }), 1000)).toEqual({ kind: 'raise', minimum: 1000, topTotal: 1000 })
 	})
 })
 
@@ -247,14 +291,43 @@ describe('checkArenaBid — the amount check', () => {
 	test('bids are DELTAS: a bidder at 1000 who bids 100 reaches 1100 and is allowed', () => {
 		const model = detail({ bidCount: 1, topBidTotal: 1000, positions: [{ bidder: BIDDER, total: 1000 }] })
 		const check = checkArenaBid(input({ model, raw: '100' }))
-		// 100 alone is far below the floor; 1000 + 100 is not.
-		expect(check).toMatchObject({ allowed: true, reason: 'ok', amount: 100, minimum: 1000, ownPosition: 1000 })
+		// 100 alone is below the floor; the leader’s position 1000 + 100 clears the
+		// 1020 the chain’s 2% raise requires.
+		expect(check).toMatchObject({ allowed: true, reason: 'ok', amount: 100, minimum: 1020, ownPosition: 1000 })
 	})
 
-	test('a bidder at 1000 who bids 1 on a 1000 floor is refused — their position would be 1001, below a 1100 raise floor', () => {
+	test('a bidder at 1000 who bids 1 on a leader at 1500 is refused — their position would be 1001, below the 1530 raise floor', () => {
 		const model = detail({ bidCount: 1, topBidTotal: 1500, positions: [{ bidder: BIDDER, total: 1000 }] })
 		const check = checkArenaBid(input({ model, raw: '1' }))
-		expect(check).toMatchObject({ allowed: false, reason: 'below-minimum', minimum: 1600, ownPosition: 1000 })
+		expect(check).toMatchObject({ allowed: false, reason: 'below-minimum', minimum: 1530, ownPosition: 1000 })
+	})
+
+	test('a raise one sat below the required raise is refused locally', () => {
+		// top 1000 at 200 bps → required raise 20 → the next position must reach 1020.
+		const model = detail({ bidCount: 1, topBidTotal: 1000 })
+		expect(checkArenaBid(input({ model, raw: '1020' }))).toMatchObject({ allowed: true, reason: 'ok', minimum: 1020 })
+		expect(checkArenaBid(input({ model, raw: '1019' }))).toMatchObject({
+			allowed: false,
+			reason: 'below-minimum',
+			minimum: 1020,
+		})
+	})
+
+	test('the leader’s own raise is held to the same rule: 1 sat above the top is refused', () => {
+		const model = detail({ bidCount: 1, topBidTotal: 1000, positions: [{ bidder: BIDDER, total: 1000 }] })
+		// The chain no longer exempts a leader’s self-raise; a 1-sat self-raise cannot exist.
+		expect(checkArenaBid(input({ model, raw: '1' }))).toMatchObject({
+			allowed: false,
+			reason: 'below-minimum',
+			minimum: 1020,
+			ownPosition: 1000,
+		})
+	})
+
+	test('params unread: a raise floor is not invented', () => {
+		const model = detail({ bidCount: 1, topBidTotal: 1000, minIncrementBps: null })
+		const check = checkArenaBid(input({ model, raw: '5000' }))
+		expect(check).toMatchObject({ allowed: false, reason: 'read-incomplete', minimum: null })
 	})
 
 	test('someone else’s position is not the viewer’s', () => {
