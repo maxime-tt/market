@@ -341,10 +341,11 @@ test.describe('storefront setup wizard', () => {
 		await newUserPage.getByTestId('storefront-template-showcase').click()
 		await newUserPage.getByTestId('storefront-wizard-next').click()
 
-		// Step 2: theme. "Back" is available here.
+		// Step 2: colours. "Back" is available here. Step 3 is make it yours.
 		await expect(newUserPage.getByTestId('storefront-wizard-back')).toBeVisible()
-		await expect(newUserPage.getByTestId('storefront-theme-sunset')).toBeVisible()
-		await newUserPage.getByTestId('storefront-theme-sunset').click()
+		await expect(newUserPage.getByTestId('storefront-colour-sunset-sunset')).toBeVisible()
+		await newUserPage.getByTestId('storefront-colour-sunset-sunset').click()
+		await newUserPage.getByTestId('storefront-wizard-next').click()
 		await newUserPage.getByTestId('storefront-wizard-finish').click()
 
 		// The editor opens seeded with the showcase template's blocks — proof the

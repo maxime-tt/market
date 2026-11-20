@@ -167,7 +167,6 @@
 	--on-fill-accent: var(--admin-accfg);
 	--fill-ink: var(--admin-acc);
 	--on-fill-ink: var(--admin-accfg);
-	--fill-ink-hover: color-mix(in srgb, var(--admin-acc) 85%, black);
 	--text-high: var(--admin-fg);
 	--text-mid: var(--admin-mut);
 	--border-default: var(--admin-line);
@@ -195,14 +194,36 @@
 	--puck-color-text-muted: var(--admin-mut);
 	--puck-color-text-subtle: var(--admin-mut);
 	--puck-color-interactive: var(--admin-acc);
-	--puck-color-interactive-hover: color-mix(in srgb, var(--admin-acc) 85%, black);
-	--puck-color-interactive-active: color-mix(in srgb, var(--admin-acc) 75%, black);
-	--puck-color-interactive-subtle: color-mix(in srgb, var(--admin-acc) 10%, transparent);
-	--puck-color-interactive-soft: color-mix(in srgb, var(--admin-acc) 14%, transparent);
-	--puck-color-interactive-soft-hover: color-mix(in srgb, var(--admin-acc) 22%, transparent);
 	--puck-color-interactive-neutral-hover: var(--admin-hover);
 	--puck-color-focus-ring: var(--admin-acc);
 	--puck-color-selection-border: var(--admin-acc);
+}
+/*
+ * Mixed colours. Each custom property built with `color-mix` gets a rule of
+ * its own: the CSS build (lightningcss, through the Tailwind plugin) keeps an
+ * @supports copy of only the first `color-mix` custom property in a rule and
+ * turns every later one into the bare `var()` it mixes. That made Puck's 12%
+ * hover tint a solid accent block over the page editor canvas.
+ */
+:is(.admin-console, .admin-portal) {
+	--fill-ink-hover: color-mix(in srgb, var(--admin-acc) 85%, black);
+}
+:is(.admin-console, .admin-portal) {
+	--puck-color-interactive-hover: color-mix(in srgb, var(--admin-acc) 85%, black);
+}
+:is(.admin-console, .admin-portal) {
+	--puck-color-interactive-active: color-mix(in srgb, var(--admin-acc) 75%, black);
+}
+:is(.admin-console, .admin-portal) {
+	--puck-color-interactive-subtle: color-mix(in srgb, var(--admin-acc) 10%, transparent);
+}
+:is(.admin-console, .admin-portal) {
+	--puck-color-interactive-soft: color-mix(in srgb, var(--admin-acc) 14%, transparent);
+}
+:is(.admin-console, .admin-portal) {
+	--puck-color-interactive-soft-hover: color-mix(in srgb, var(--admin-acc) 22%, transparent);
+}
+:is(.admin-console, .admin-portal) {
 	--puck-color-selection-bg: color-mix(in srgb, var(--admin-acc) 12%, transparent);
 }
 
@@ -246,21 +267,29 @@
 
 /* ── Solid: opaque cards on a quietly tinted ground ──────────────────── */
 :is(.admin-console, .admin-portal)[data-admin-style='solid']:not([data-admin-mode='dark']) {
-	--admin-bg: color-mix(in srgb, var(--admin-acc) 5%, #f2f4f6);
 	--admin-line: rgb(15 30 45 / 0.13);
 	--admin-glass: #ffffff;
 	--admin-glass-2: #ffffff;
 	--admin-glass-border: rgb(15 30 45 / 0.13);
-	--admin-hover: color-mix(in srgb, var(--admin-acc) 7%, #ffffff);
 	--admin-shadow: 0 1px 2px rgb(15 30 45 / 0.06), 0 4px 14px rgb(15 30 45 / 0.05);
 }
+:is(.admin-console, .admin-portal)[data-admin-style='solid']:not([data-admin-mode='dark']) {
+	--admin-bg: color-mix(in srgb, var(--admin-acc) 5%, #f2f4f6);
+}
+:is(.admin-console, .admin-portal)[data-admin-style='solid']:not([data-admin-mode='dark']) {
+	--admin-hover: color-mix(in srgb, var(--admin-acc) 7%, #ffffff);
+}
 :is(.admin-console, .admin-portal)[data-admin-style='solid'][data-admin-mode='dark'] {
-	--admin-bg: color-mix(in srgb, var(--admin-acc) 5%, #0a0e13);
 	--admin-glass: #171f27;
 	--admin-glass-2: #171f27;
 	--admin-glass-border: rgb(255 255 255 / 0.1);
-	--admin-hover: color-mix(in srgb, var(--admin-acc) 12%, #171f27);
 	--admin-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.3);
+}
+:is(.admin-console, .admin-portal)[data-admin-style='solid'][data-admin-mode='dark'] {
+	--admin-bg: color-mix(in srgb, var(--admin-acc) 5%, #0a0e13);
+}
+:is(.admin-console, .admin-portal)[data-admin-style='solid'][data-admin-mode='dark'] {
+	--admin-hover: color-mix(in srgb, var(--admin-acc) 12%, #171f27);
 }
 .admin-console[data-admin-style='solid'] .admin-panel {
 	background: var(--admin-glass-2);
@@ -640,4 +669,28 @@
 }
 .admin-console .admin-chip-compact {
 	padding: 0.5rem;
+}
+
+/* Page editor columns: a slimmer block list and a settings column just wide
+   enough for the colour list, leaving the canvas the room. Puck scales the
+   desktop page to whatever is left. Dragging a sidebar edge still overrides. */
+.admin-console .storefront-builder {
+	--puck-user-sidebar-left-width: 200px;
+	--puck-user-sidebar-right-width: 272px;
+}
+
+/* Page editor on phones: Puck stacks header, canvas and the Blocks/Outline/
+   Fields bar in one fixed-height box. The publish header fills most of it,
+   and the framed canvas has no content height of its own, so it collapsed
+   to 0px. Below Puck's 638px breakpoint let the editor grow with the page
+   and give the canvas most of the screen. */
+@media (max-width: 637px) {
+	.admin-console .storefront-builder .Puck,
+	.admin-console .storefront-builder .Puck > div,
+	.admin-console .storefront-builder .Puck > div > div {
+		height: auto;
+	}
+	.admin-console .storefront-builder [class*='_PuckCanvas_'] {
+		height: 75dvh;
+	}
 }

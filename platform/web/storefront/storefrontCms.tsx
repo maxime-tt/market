@@ -12,7 +12,7 @@ import { usePuck, type Config, type Data } from '@puckeditor/core'
 import { storefrontBlockSlots } from './StorefrontBlockSlots'
 import { CollectionPickerField, ProductPickerField, ProductRowPickerField } from './fields/ItemPickerField'
 import { AuctionPickerField } from './fields/AuctionPickerField'
-import { ThemePaletteStrip, ThemeSwatchGrid, ThemeTunePanel } from './fields/ThemePickerField'
+import { ThemeColourList, ThemeTunePanel } from './fields/ThemePickerField'
 
 /**
  * The CMS component registry: what the Puck editor can put on a page.
@@ -61,26 +61,23 @@ const widthOptions = [
 ]
 
 /**
- * The layout currently selected on the page, read from Puck's own state.
+ * The look currently selected on the page, read from Puck's own state.
  *
- * Steps 2 and 3 need to know which layout is chosen, and a Puck custom field
- * receives only its own `value` and `onChange` — there is no sibling access.
- * `usePuck` is the supported way to read it, and these fields only ever render
- * inside the editor sidebar, which is inside the Puck context.
+ * Step 3 needs to know which look is chosen, and a Puck custom field receives
+ * only its own `value` and `onChange` — there is no sibling access. `usePuck`
+ * is the supported way to read it, and these fields only ever render inside
+ * the editor sidebar, which is inside the Puck context.
  */
-function useRootTheme(): StorefrontThemeId {
+function useRootLook(): { theme: StorefrontThemeId; palette: string } {
 	const { appState } = usePuck()
-	const theme = (appState?.data?.root?.props as { theme?: string } | undefined)?.theme
-	return (theme && Object.prototype.hasOwnProperty.call(STOREFRONT_THEMES, theme) ? theme : 'default') as StorefrontThemeId
+	const props = appState?.data?.root?.props as { theme?: string; palette?: string } | undefined
+	const theme = (
+		props?.theme && Object.prototype.hasOwnProperty.call(STOREFRONT_THEMES, props.theme) ? props.theme : 'default'
+	) as StorefrontThemeId
+	return { theme, palette: props?.palette ?? '' }
 }
 
-/** Step 2 as a sidebar field: the colourways of whichever layout is selected. */
-function ThemePaletteField({ value, onChange, readOnly }: { value?: string; onChange: (v: string) => void; readOnly?: boolean }) {
-	const theme = useRootTheme()
-	return <ThemePaletteStrip themeId={theme} value={value ?? ''} onChange={onChange} readOnly={readOnly} />
-}
-
-/** Step 3 as a sidebar field: the six bounded axes for the selected layout. */
+/** Step 3 as a sidebar field: the six bounded axes for the selected look. */
 function ThemeTuneField({
 	value,
 	onChange,
@@ -90,50 +87,53 @@ function ThemeTuneField({
 	onChange: (v: StorefrontThemeTune) => void
 	readOnly?: boolean
 }) {
-	const theme = useRootTheme()
+	const { theme } = useRootLook()
 	return <ThemeTunePanel themeId={theme} value={value} onChange={onChange} readOnly={readOnly} />
 }
 
 /**
- * Step 1 as a sidebar field.
+ * Step 2 as a sidebar field: one list of every look and colourway.
  *
- * A layout change has to reset the colourway and the tuning along with it. The
- * wizard does that through `ThemeStudio`; the sidebar must do the same, or the
- * two disagree about what "picking a layout" means.
+ * A choice writes the look and the colourway together, and a change of look
+ * also resets the tuning to that look's defaults, as the wizard does.
  *
- * Puck binds one field to one value, so the reset cannot be expressed through
- * this field's own `onChange` — the sibling `palette` and `tune` fields would
- * keep whatever the previous layout left behind. `dispatch({ type: 'setData' })`
- * writes all three root props in a single action, and the functional form
- * composes with the current props rather than a captured copy.
+ * Puck binds one field to one value, so this cannot go through the field's own
+ * `onChange` — the sibling `palette` and `tune` props would keep whatever the
+ * previous look left behind. `dispatch({ type: 'setData' })` writes all three
+ * root props in one action, and the functional form composes with the current
+ * props rather than a captured copy.
  *
  * This is not hypothetical. A page published from a staging instance named the
  * `elec` layout with the `cards` palette `holo-night` and `cards`' default tune,
  * because the switch only ever wrote the layout.
  */
-function ThemeLayoutField({ value, readOnly }: { value?: StorefrontThemeId; readOnly?: boolean }) {
+function ThemeColourField({ readOnly }: { readOnly?: boolean }) {
 	const { dispatch } = usePuck()
+	const { theme, palette } = useRootLook()
 	return (
-		<ThemeSwatchGrid
-			value={value ?? 'default'}
+		<ThemeColourList
+			themeId={theme}
+			paletteKey={palette}
 			readOnly={readOnly}
-			onChange={(id) =>
+			onChange={({ themeId, paletteKey }) =>
 				dispatch({
 					type: 'setData',
-					data: (previous: Data) => ({
-						...previous,
-						root: {
-							...previous.root,
-							props: {
-								...previous.root.props,
-								theme: id,
-								// Empty is "this layout's default colourway", so a key
-								// belonging to the layout just left behind cannot survive.
-								palette: '',
-								tune: { ...STOREFRONT_THEMES[id].tune },
+					data: (previous: Data) => {
+						const props = previous.root.props as { theme?: string; tune?: StorefrontThemeTune }
+						const sameLook = props.theme === themeId
+						return {
+							...previous,
+							root: {
+								...previous.root,
+								props: {
+									...previous.root.props,
+									theme: themeId,
+									palette: paletteKey,
+									tune: sameLook && props.tune ? props.tune : { ...STOREFRONT_THEMES[themeId].tune },
+								},
 							},
-						},
-					}),
+						}
+					},
 				})
 			}
 		/>
@@ -162,22 +162,16 @@ export const storefrontCmsConfig: Config = {
 	root: {
 		fields: {
 			title: { type: 'text', label: 'Page title' },
+			// The colour list writes `theme`, `palette` and `tune` together, so it
+			// sits on `theme` and the palette has no field of its own.
 			theme: {
 				type: 'custom',
-				label: 'Layout',
-				render: ({ value, readOnly }) => <ThemeLayoutField value={value as StorefrontThemeId} readOnly={readOnly} />,
-			},
-			// Steps 2 and 3 of the studio flow, as separate root fields: Puck binds
-			// one field to one value, so the palette and the tune each need their
-			// own — and each reads the selected layout from Puck's state.
-			palette: {
-				type: 'custom',
 				label: 'Colours',
-				render: ({ value, onChange, readOnly }) => <ThemePaletteField value={value as string} onChange={onChange} readOnly={readOnly} />,
+				render: ({ readOnly }) => <ThemeColourField readOnly={readOnly} />,
 			},
 			tune: {
 				type: 'custom',
-				label: 'Fine-tune',
+				label: 'Make it yours',
 				render: ({ value, onChange, readOnly }) => (
 					<ThemeTuneField value={value as Partial<StorefrontThemeTune>} onChange={onChange} readOnly={readOnly} />
 				),

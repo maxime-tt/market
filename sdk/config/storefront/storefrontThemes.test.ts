@@ -7,6 +7,7 @@ import {
 	storefrontThemePaletteKeys,
 	storefrontThemeSwatchColors,
 	validateStorefrontThemeSelection,
+	RETIRED_STOREFRONT_THEMES,
 	STOREFRONT_THEMES,
 	STOREFRONT_THEME_LIST,
 } from './storefrontThemes'
@@ -19,8 +20,29 @@ describe('STOREFRONT_THEMES registry', () => {
 		expect(registryIds).toEqual([...STOREFRONT_THEME_IDS].sort())
 	})
 
-	test('STOREFRONT_THEME_LIST follows the schema-declared order', () => {
-		expect(STOREFRONT_THEME_LIST.map((t) => t.id)).toEqual([...STOREFRONT_THEME_IDS])
+	test('STOREFRONT_THEME_LIST follows the schema-declared order, without retired looks', () => {
+		const offered = STOREFRONT_THEME_IDS.filter((id) => !RETIRED_STOREFRONT_THEMES[id])
+		expect(STOREFRONT_THEME_LIST.map((t) => t.id)).toEqual([...offered])
+		expect(STOREFRONT_THEME_LIST.map((t) => t.id)).not.toContain('brut')
+	})
+
+	test('a retired look renders as the look it was folded into', () => {
+		expect(getStorefrontTheme('brut').id).toBe('pleb')
+		expect(getStorefrontTheme('acct').id).toBe('default')
+		expect(STOREFRONT_THEME_LIST.map((t) => t.id)).not.toContain('acct')
+	})
+
+	test('trimmed colourways are no longer offered', () => {
+		expect(isPaletteInTheme('art', 'white-cube')).toBe(false)
+		expect(isPaletteInTheme('cards', 'arcade')).toBe(false)
+		expect(isPaletteInTheme('pleb', 'soft-pink')).toBe(false)
+	})
+
+	test('Brutalist and Neon are listed once, under Plebeian', () => {
+		for (const key of ['brutal', 'neon']) {
+			const owners = STOREFRONT_THEME_LIST.filter((t) => t.palettes.some((p) => p.key === key)).map((t) => t.id)
+			expect(owners, key).toEqual(['pleb'])
+		}
 	})
 
 	test('every theme defines all ten tokens as non-empty oklch() strings', () => {
@@ -54,7 +76,7 @@ describe('STOREFRONT_THEMES registry', () => {
 
 	test('id field matches the key it is stored under', () => {
 		for (const [key, theme] of Object.entries(STOREFRONT_THEMES)) {
-			expect(key).toBe(theme.id)
+			expect(theme.id as string).toBe(RETIRED_STOREFRONT_THEMES[key as keyof typeof RETIRED_STOREFRONT_THEMES] ?? key)
 		}
 	})
 })
@@ -113,18 +135,11 @@ describe('isPaletteInTheme — a colourway belongs to a layout, not to the app',
 		expect(isPaletteInTheme('farm', 'acid')).toBe(false)
 	})
 
-	test('the shared pair is offered by the layouts that receive it', () => {
-		expect(isPaletteInTheme('elec', 'brutal')).toBe(true)
-		expect(isPaletteInTheme('elec', 'neon')).toBe(true)
-		expect(isPaletteInTheme('farm', 'brutal')).toBe(true)
-	})
-
-	test('brut opted out of the shared pair and lists its own set instead', () => {
-		expect(isPaletteInTheme('brut', 'brutal')).toBe(true)
-		expect(isPaletteInTheme('brut', 'neon')).toBe(true)
-		expect(isPaletteInTheme('brut', 'concrete')).toBe(true)
-		expect(isPaletteInTheme('brut', 'acid')).toBe(true)
-		expect(isPaletteInTheme('brut', 'holo-night')).toBe(false)
+	test('Brutalist and Neon belong to Plebeian only', () => {
+		expect(isPaletteInTheme('pleb', 'brutal')).toBe(true)
+		expect(isPaletteInTheme('pleb', 'neon')).toBe(true)
+		expect(isPaletteInTheme('elec', 'brutal')).toBe(false)
+		expect(isPaletteInTheme('arena', 'neon')).toBe(false)
 	})
 
 	test('every layout accepts every key it actually offers', () => {
@@ -210,8 +225,8 @@ describe('arena theme', () => {
 		expect(arena.tokens.primary).toBe('oklch(0.688 0.249 348.0)')
 	})
 
-	test('offers its own colourways plus the shared Brutalist and Neon pair', () => {
-		for (const key of ['arena', 'arena-lime', 'sats-orange', 'arena-day', 'brutal', 'neon'] as const) {
+	test('offers its own four colourways', () => {
+		for (const key of ['arena', 'arena-lime', 'sats-orange', 'arena-day'] as const) {
 			expect(isPaletteInTheme('arena', key), key).toBe(true)
 		}
 	})

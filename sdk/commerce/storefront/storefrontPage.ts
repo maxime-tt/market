@@ -550,8 +550,10 @@ export const STOREFRONT_THEME_IDS = [
 	'cards',
 	'elec',
 	'law',
+	// Retired: Ledger. Kept so old pages parse; renders as Default.
 	'acct',
 	'pleb',
+	// Retired: Concrete. Kept so old pages parse; renders as Plebeian.
 	'brut',
 	'arena',
 ] as const

@@ -640,6 +640,8 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 		return (
 			<StorefrontSetupWizard
 				pubkey={pubkey}
+				// The home page starts from On the block, the instance's standard home.
+				initialTemplateId={isHomePage ? 'zine' : undefined}
 				initialThemeId={currentThemeId}
 				initialPaletteKey={currentRootProps.palette}
 				initialTune={currentRootProps.tune}
@@ -681,7 +683,10 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 					</div>
 				)}
 
-				<div className={cn('flex-1', publish.isPending && 'pointer-events-none opacity-60')} data-testid="storefront-builder">
+				<div
+					className={cn('storefront-builder flex-1', publish.isPending && 'pointer-events-none opacity-60')}
+					data-testid="storefront-builder"
+				>
 					<Puck
 						config={storefrontCmsConfig}
 						data={initialData}
@@ -691,7 +696,8 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 						// Rendering inline instead of in an iframe keeps the canvas
 						// inside the app's own stylesheet and React tree, so blocks
 						// look in the editor exactly as they will on the page.
-						iframe={{ enabled: false }}
+						iframe={{ enabled: true, waitForStyles: true }}
+						viewports={EDITOR_VIEWPORTS}
 						height="100%"
 					/>
 				</div>
@@ -705,6 +711,17 @@ export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pu
 		</StorefrontProvider>
 	)
 }
+
+/**
+ * Desktop first. Puck picks the option closest to the window width and scales
+ * it down to fit the canvas, so a 1440px window shows the 1280px layout rather
+ * than the narrow column the canvas measures.
+ */
+const EDITOR_VIEWPORTS = [
+	{ width: 1280, height: 'auto' as const, icon: 'Monitor' as const, label: 'Desktop' },
+	{ width: 768, height: 'auto' as const, icon: 'Tablet' as const, label: 'Tablet' },
+	{ width: 390, height: 'auto' as const, icon: 'Smartphone' as const, label: 'Phone' },
+]
 
 function ChangeTemplateDialog({
 	open,

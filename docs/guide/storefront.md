@@ -8,6 +8,16 @@
 
 A page stays unlisted until you publish it and point a route at it.
 
+## Three steps to a page
+
+New pages and **Change template** walk you through three steps:
+
+1. **Choose layout.** Pick a template to start from.
+2. **Choose colours.** One list of colour sets, each with its name and swatches. The preview shows your page at desktop size.
+3. **Make it yours.** Corners, shadows, glass, spacing, texture and a hand-made feel.
+
+You can change colours and the Make it yours sliders later in the editor's right column, under the page title. The canvas shows your page at desktop size. Use the buttons above it to check tablet and phone.
+
 ## Home templates
 
 Two home layouts ship with every instance. Open the home page in the editor, click **Change template** and pick one:
