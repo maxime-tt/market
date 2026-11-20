@@ -8,6 +8,22 @@
 
 A page stays unlisted until you publish it and point a route at it.
 
+## The magazine home
+
+The home page now reads like a magazine cover: a featured live lot up top, auctions next, then products, collections and a few category shelves. Every part of it is a block, so you can change it all in the page editor.
+
+To use it, open the home page in the editor, click **Change template** and pick **Magazine cover**. You'll find the blocks under **Magazine**:
+
+- **Ticker strip.** A scrolling line of short messages. Turn on live stats to show lots live, the next lot to close and bids today.
+- **Cover auction.** One lot, big, with a live countdown and the current bid. **Auto** picks the busiest live lot. **Picked** shows the one you choose.
+- **Featured products spread.** One big product and two small ones, taken from your featured products.
+- **Collections row.** Featured collections first, then the newest ones.
+- **Category section.** A row of products for a list of tags, such as `hoodie, streetwear, clothing`.
+
+The **Auction list** block also has new card styles (grid, closing soon or tall) and an order (ending soon, most bids or newest).
+
+Tip: wrap a word in stars, like `Closing *soon*`, to set it in the accent colour.
+
 ## The dashboard look
 
 The dashboard has its own theme, separate from the public site. Click **Appearance** at the top right to change it:

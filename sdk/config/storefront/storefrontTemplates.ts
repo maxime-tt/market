@@ -17,7 +17,7 @@ import type { StorefrontBlock, StorefrontThemeId } from '@sdk/commerce/storefron
  * safely from untrusted input.
  */
 
-export type StorefrontTemplateId = 'blank' | 'link-in-bio' | 'shop' | 'showcase'
+export type StorefrontTemplateId = 'blank' | 'link-in-bio' | 'shop' | 'showcase' | 'magazine'
 
 export interface StorefrontTemplate {
 	id: StorefrontTemplateId
@@ -33,6 +33,131 @@ export interface StorefrontTemplate {
 	 */
 	blocks: StorefrontBlock[]
 }
+
+/**
+ * The "cover story" magazine home (ADR-0028, layout A): a ticker, one lot on
+ * the cover, auctions first, then featured products, collections and numbered
+ * category sections. Every section is a normal block, so all of it stays
+ * editable; nothing in it stores a price or a listing.
+ */
+export const MAGAZINE_HOME_BLOCKS: StorefrontBlock[] = [
+	{
+		type: 'Ticker',
+		props: {
+			id: 'tpl',
+			showLiveStats: true,
+			messages: [{ text: 'Paid in sats' }, { text: 'Escrow in Cashu ecash' }, { text: 'Signed listings on Nostr' }],
+		},
+	},
+	{
+		type: 'CoverAuction',
+		props: {
+			id: 'tpl',
+			source: 'auto',
+			auctionCoordinates: [],
+			kicker: 'Featured auction',
+			deck: '',
+			sticker: 'Lot of the week',
+			ctaLabel: 'Open the arena',
+			footnote: 'Signed listing · Sats held in Cashu ecash escrow',
+		},
+	},
+	{
+		type: 'AuctionList',
+		props: {
+			id: 'tpl',
+			title: 'Closing *soon*',
+			source: 'all',
+			auctionCoordinates: [],
+			limit: 6,
+			emptyMessage: 'Nothing closing right now.',
+			layout: 'closing',
+			sort: 'ending',
+			linkLabel: 'All auctions',
+			linkHref: '/auctions',
+		},
+	},
+	{
+		type: 'AuctionList',
+		props: {
+			id: 'tpl',
+			title: 'Featured *auctions*',
+			source: 'all',
+			auctionCoordinates: [],
+			limit: 4,
+			emptyMessage: 'No auctions yet.',
+			layout: 'tall',
+			sort: 'popular',
+			linkLabel: 'See all',
+			linkHref: '/auctions',
+		},
+	},
+	{
+		type: 'ProductSpread',
+		props: {
+			id: 'tpl',
+			title: 'Featured *products*',
+			source: 'featured',
+			productDTags: [],
+			kickers: [{ text: "Editor's pick" }, { text: 'Staff favourite' }, { text: 'Just restocked' }],
+			quote: '',
+			linkLabel: 'All products',
+			linkHref: '/products',
+		},
+	},
+	{
+		type: 'CollectionRow',
+		props: { id: 'tpl', title: 'Collections', source: 'featured', limit: 4, linkLabel: 'Community', linkHref: '/community' },
+	},
+	{
+		type: 'CategorySection',
+		props: {
+			id: 'tpl',
+			label: '01 / Category',
+			title: 'Art & *prints*',
+			subtitle: 'Original work and prints, paid for in sats.',
+			tags: 'Art, art, Digital Art, digital art, print',
+			limit: 5,
+			linkLabel: '',
+		},
+	},
+	{
+		type: 'CategorySection',
+		props: {
+			id: 'tpl',
+			label: '02 / Category',
+			title: 'Wear',
+			subtitle: 'Hoodies, tees and caps from Bitcoin makers.',
+			tags: 'hoodie, bitcoin apparel, streetwear, clothing, t-shirt',
+			limit: 5,
+			linkLabel: '',
+		},
+	},
+	{
+		type: 'CategorySection',
+		props: {
+			id: 'tpl',
+			label: '03 / Category',
+			title: 'Bitcoin *gear*',
+			subtitle: 'Nodes, gadgets and 3D-printed bits for running your own.',
+			tags: 'bitcoin, node, gadgets, electronics, 3ddruck',
+			limit: 5,
+			linkLabel: '',
+		},
+	},
+	{
+		type: 'CategorySection',
+		props: {
+			id: 'tpl',
+			label: '04 / Category',
+			title: 'The *pantry*',
+			subtitle: 'Small-batch food from growers who take sats.',
+			tags: 'alimenti, food, coffee',
+			limit: 5,
+			linkLabel: '',
+		},
+	},
+]
 
 export const STOREFRONT_TEMPLATES: StorefrontTemplate[] = [
 	{
@@ -124,6 +249,13 @@ export const STOREFRONT_TEMPLATES: StorefrontTemplate[] = [
 				},
 			},
 		],
+	},
+	{
+		id: 'magazine',
+		label: 'Magazine cover',
+		description: 'A live lot on the cover, auctions first, then featured products, collections and category sections.',
+		defaultThemeId: 'arena',
+		blocks: MAGAZINE_HOME_BLOCKS,
 	},
 ]
 

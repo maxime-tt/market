@@ -1,6 +1,4 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Suspense, useState } from 'react'
-import { lazyRetry } from '@ui/utils/lazy-retry'
 import { z } from 'zod'
 import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
 import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
@@ -9,9 +7,20 @@ import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSl
 import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/storefront'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { LEGACY_HOME_PUBKEY, useInstanceHomePage } from '@platform/web/storefront/instanceHomePage'
+import { MAGAZINE_HOME_BLOCKS } from '@sdk/config/storefront/storefrontTemplates'
 
-// The intro animation (gsap) loads after the page, never ahead of it (ADR-0027).
-const IntroOverlay = lazyRetry(() => import('@ui/browse/intro').then((m) => ({ default: m.IntroOverlay })))
+/**
+ * The built-in home (ADR-0028): the magazine "cover story" template, drawn when
+ * no published `home` page resolves. Stable ids so React keeps each section
+ * mounted across renders.
+ */
+const BUILT_IN_HOME = {
+	version: STOREFRONT_PAGE_VERSION,
+	enabled: true,
+	root: { props: { title: '', theme: 'arena' as const, palette: 'arena' } },
+	content: MAGAZINE_HOME_BLOCKS.map((block, index) => ({ ...block, props: { ...block.props, id: `home-${block.type}-${index}` } })),
+}
+const builtInHomePage = parseStorefrontPage(JSON.stringify(BUILT_IN_HOME)).page
 
 /**
  * Browse URL state: ?q=&p=
@@ -45,9 +54,6 @@ function BrowseIndex() {
 	// changing the renderer.
 	const { choice: publishedChoice, loading: homeLoading } = useInstanceHomePage()
 	const publishedHome = publishedChoice?.page ?? null
-	// The intro plays over the home once per mount; it is an overlay, so the hero
-	// renders underneath from the first paint and nothing waits on it.
-	const [introDone, setIntroDone] = useState(false)
 
 	// The home page is CMS-produced (owner ruling): with no search state on the
 	// URL, `/` renders the app key's `home` page inside the browse chrome. The
@@ -61,44 +67,11 @@ function BrowseIndex() {
 	// the CMS empty state, which is honest — not the browse fallback, which would
 	// hide the fact that nothing has been authored.
 	if (!q.trim() && !p) {
-		// The home composition is the CMS block set (owner ruling): a `Search`
-		// block, a hand-picked `ProductRow` and the flat `Categories` list,
-		// rendered inside the browse chrome. It is expressed as a page document
-		// so the same renderer that draws published pages draws this one — when
-		// the app key's own `home` page resolves, this constant is replaced by it
-		// and nothing else changes.
-		const homePage = {
-			version: STOREFRONT_PAGE_VERSION,
-			enabled: true,
-			root: { props: { title: '', theme: 'arena' as const, palette: 'arena' } },
-			content: [
-				{ type: 'Search' as const, props: { id: 'home-search', placeholder: 'Search the marketplace', size: 'lg' as const } },
-				{
-					type: 'ProductRow' as const,
-					props: { id: 'home-row', productDTags: ['orange-flock-black-orange-edition-high-top-sneakers-ma5ond'] },
-				},
-				{
-					type: 'Categories' as const,
-					props: {
-						id: 'home-cats',
-						title: 'Browse by category',
-						categories: [
-							{ label: 'Art', key: 'art' },
-							{ label: 'Clothing', key: 'clothing' },
-							{ label: 'Bitcoin', key: 'bitcoin' },
-						],
-					},
-				},
-			],
-		}
-		const page = arenaHome(publishedHome ?? (parseStorefrontPage(JSON.stringify(homePage)).page as never))
+		// No intro overlay and no welcome banner (ADR-0028): the page opens
+		// straight onto its first block, the magazine cover by default.
+		const page = arenaHome(publishedHome ?? (builtInHomePage as never))
 		return (
 			<>
-				{!introDone && (
-					<Suspense fallback={<div aria-hidden className="fixed inset-0 z-[60] bg-background pointer-events-none" />}>
-						<IntroOverlay onDone={() => setIntroDone(true)} />
-					</Suspense>
-				)}
 				{homeLoading ? (
 					// Hold the space while the published page is read: drawing the built-in
 					// composition here flashed a stand-in page before the real one.

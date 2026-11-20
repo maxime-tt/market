@@ -340,6 +340,103 @@ export const AuctionListBlockSchema = z.object({
 		auctionCoordinates: z.array(auctionCoordinateRef).max(30).default([]),
 		limit: z.number().int().min(1).max(30).default(6),
 		emptyMessage: shortText.default('No auctions here yet.'),
+		/**
+		 * Card style (ADR-0028). `grid` is the original card; `closing` is the
+		 * compact countdown card with a time bar; `tall` is the 4:5 magazine card.
+		 * Additive: a page published before layouts existed reads as `grid`.
+		 */
+		layout: z.enum(['grid', 'closing', 'tall']).default('grid'),
+		/** Order for `all`: soonest ending, most bids, or newest. `picked` keeps the document order. */
+		sort: z.enum(['ending', 'popular', 'newest']).default('ending'),
+		/** Optional heading link, e.g. "All auctions" to `/auctions`. */
+		linkLabel: shortText.default(''),
+		linkHref: safeHref.or(z.literal('')).default(''),
+	}),
+})
+
+/**
+ * Magazine home blocks (ADR-0028). Each one is a section of the "cover story"
+ * home layout and stays editable in the page editor. Like `AuctionList`, none
+ * of them stores a price, a bid or an image of someone else's listing: those
+ * are read live, the document only says what to show and how to title it.
+ */
+
+/** One line of editable text inside a block (Puck array fields hold objects). */
+const textItem = z.object({ text: shortText })
+
+/** A mono strip of short facts across the top of the page. */
+export const TickerBlockSchema = z.object({
+	type: z.literal('Ticker'),
+	props: z.object({
+		...blockBase,
+		/** Author lines, shown after the live figures. */
+		messages: z.array(textItem).max(12).default([]),
+		/** Prepend live figures from the auction read: lots live, closing next, top bid. */
+		showLiveStats: z.boolean().default(true),
+	}),
+})
+
+/** The cover: one auction, large, with a live countdown and the current bid. */
+export const CoverAuctionBlockSchema = z.object({
+	type: z.literal('CoverAuction'),
+	props: z.object({
+		...blockBase,
+		/** `auto` = the live lot with the most bids; `picked` = the coordinate below. */
+		source: z.enum(['auto', 'picked']).default('auto'),
+		auctionCoordinates: z.array(auctionCoordinateRef).max(1).default([]),
+		kicker: shortText.default('Featured auction'),
+		/** Short paragraph under the title. Blank uses the lot's own summary. */
+		deck: shortText.default(''),
+		sticker: shortText.default('Lot of the week'),
+		ctaLabel: shortText.default('Open the arena'),
+		footnote: shortText.default('Signed listing · Sats held in Cashu ecash escrow'),
+	}),
+})
+
+/** A large editor's pick beside two stacked product cards. */
+export const ProductSpreadBlockSchema = z.object({
+	type: z.literal('ProductSpread'),
+	props: z.object({
+		...blockBase,
+		title: shortText.default('Featured *products*'),
+		/** `featured` = the instance's featured products list; `picked` = the d tags below. */
+		source: z.enum(['featured', 'picked']).default('featured'),
+		productDTags: z.array(dTagRef).max(3).default([]),
+		/** Small labels over each card, in order. */
+		kickers: z.array(textItem).max(3).default([]),
+		/** Pull quote on the large card. Blank uses the product title. */
+		quote: shortText.default(''),
+		linkLabel: shortText.default(''),
+		linkHref: safeHref.or(z.literal('')).default(''),
+	}),
+})
+
+/** A row of collection cards, each a small image collage. */
+export const CollectionRowBlockSchema = z.object({
+	type: z.literal('CollectionRow'),
+	props: z.object({
+		...blockBase,
+		title: shortText.default('Collections'),
+		/** `featured` = the instance's featured collections, then newest; `newest` = newest with an image. */
+		source: z.enum(['featured', 'newest']).default('featured'),
+		limit: z.number().int().min(1).max(8).default(4),
+		linkLabel: shortText.default(''),
+		linkHref: safeHref.or(z.literal('')).default(''),
+	}),
+})
+
+/** A numbered category section: label, title, subtitle and a row of products. */
+export const CategorySectionBlockSchema = z.object({
+	type: z.literal('CategorySection'),
+	props: z.object({
+		...blockBase,
+		label: shortText.default('01 / Category'),
+		title: shortText.default(''),
+		subtitle: shortText.default(''),
+		/** Comma-separated product tags; a listing with any of them belongs here. */
+		tags: z.string().max(400).default(''),
+		limit: z.number().int().min(1).max(10).default(5),
+		linkLabel: shortText.default(''),
 	}),
 })
 
@@ -357,6 +454,11 @@ export const StorefrontBlockSchema = z.discriminatedUnion('type', [
 	SearchBlockSchema,
 	CategoriesBlockSchema,
 	AuctionListBlockSchema,
+	TickerBlockSchema,
+	CoverAuctionBlockSchema,
+	ProductSpreadBlockSchema,
+	CollectionRowBlockSchema,
+	CategorySectionBlockSchema,
 ])
 
 export type StorefrontBlock = z.infer<typeof StorefrontBlockSchema>

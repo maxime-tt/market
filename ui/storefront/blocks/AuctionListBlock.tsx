@@ -1,7 +1,9 @@
 import { cn } from '@ui/utils/cn'
+import type { ReactNode } from 'react'
 import { useStorefrontContext } from '../StorefrontContext'
 import { isSafeMediaSrc } from '@sdk/commerce/storefront/storefrontPage'
 import { StorefrontEditorHint, StorefrontSection, StorefrontSectionTitle } from './shared'
+import { ClosingAuctionCard, MagazineHead, TallAuctionCard } from './MagazineBlocks'
 
 /**
  * A listing of auctions an author can place in a page.
@@ -43,6 +45,12 @@ export interface AuctionListBlockProps {
 	auctionCoordinates: string[]
 	limit: number
 	emptyMessage: string
+	/** Card style (ADR-0028): `grid` (original), `closing` (countdown + time bar) or `tall` (4:5 magazine card). */
+	layout?: 'grid' | 'closing' | 'tall'
+	/** Order for `all`; applied by the host. */
+	sort?: 'ending' | 'popular' | 'newest'
+	linkLabel?: string
+	linkHref?: string
 }
 
 /** One auction, as the host read it. No field here is stored in the document. */
@@ -61,6 +69,8 @@ export interface AuctionListItem {
 	bidCount: number
 	/** `created_at + duration_seconds`, or `null` when the create carried no duration. */
 	endsAt: number | null
+	/** The root create's `created_at`, so a card can draw how much time has gone. */
+	startsAt?: number | null
 	/** `unknown` is a real answer: a create with no duration has no end to state. */
 	phase: 'open' | 'ended' | 'unknown'
 	/** The relay-reported verdict outcome, or `null` when no verdict has been read. */
@@ -89,6 +99,8 @@ export interface AuctionListBlockViewProps extends AuctionListBlockProps {
 	relayHealth: { answered: number; total: number }
 	/** Host-supplied link target for one auction (the block never invents a route). */
 	auctionHref: (coordinate: string) => string
+	/** Unix seconds for the countdowns; the host ticks it. Defaults to the render time. */
+	now?: number
 }
 
 /** A pubkey is unreadable in full at card size; keep the ends, drop the middle. */
@@ -173,9 +185,32 @@ export function AuctionListBlock({
 	status,
 	relayHealth,
 	auctionHref,
+	layout = 'grid',
+	linkLabel = '',
+	linkHref = '',
+	now = Math.floor(Date.now() / 1000),
 }: AuctionListBlockViewProps) {
 	const { isEditing } = useStorefrontContext()
 	const items = (auctions ?? []).slice(0, Math.max(0, limit))
+
+	if (layout !== 'grid') {
+		return (
+			<MagazineAuctionList
+				title={title}
+				layout={layout}
+				linkLabel={linkLabel}
+				linkHref={linkHref}
+				emptyMessage={emptyMessage}
+				items={items}
+				limit={limit}
+				status={status}
+				now={now}
+				auctionHref={auctionHref}
+				pickedNothing={source === 'picked' && auctionCoordinates.length === 0}
+				isEditing={isEditing}
+			/>
+		)
+	}
 
 	// Picked mode with nothing picked is an authoring gap, not a visitor fact.
 	if (source === 'picked' && auctionCoordinates.length === 0) {
@@ -254,5 +289,83 @@ export function AuctionListBlock({
 				)}
 			</div>
 		</StorefrontSection>
+	)
+}
+
+/**
+ * The magazine layouts (ADR-0028). The same honesty rules hold, said more
+ * briefly: a skeleton while nothing has arrived, the cards that did arrive on a
+ * partial read, and the empty message only once the read has settled.
+ */
+function MagazineAuctionList({
+	title,
+	layout,
+	linkLabel,
+	linkHref,
+	emptyMessage,
+	items,
+	limit,
+	status,
+	now,
+	auctionHref,
+	pickedNothing,
+	isEditing,
+}: {
+	title: string
+	layout: 'closing' | 'tall'
+	linkLabel: string
+	linkHref: string
+	emptyMessage: string
+	items: AuctionListItem[]
+	limit: number
+	status: AuctionListStatus
+	now: number
+	auctionHref: (coordinate: string) => string
+	pickedNothing: boolean
+	isEditing: boolean
+}) {
+	const gridClass = layout === 'closing' ? 'mz-close' : 'mz-lots'
+	if (pickedNothing) {
+		return isEditing ? (
+			<div className="mz-wrap mz-sec">
+				<MagazineHead title={title} />
+				<StorefrontEditorHint>Pick the auctions this section should show.</StorefrontEditorHint>
+			</div>
+		) : null
+	}
+	let body: ReactNode
+	if (items.length > 0) {
+		body = (
+			<div className={gridClass}>
+				{items.map((item) =>
+					layout === 'closing' ? (
+						<ClosingAuctionCard key={item.coordinate} item={item} now={now} href={auctionHref(item.coordinate)} />
+					) : (
+						<TallAuctionCard key={item.coordinate} item={item} now={now} href={auctionHref(item.coordinate)} />
+					),
+				)}
+			</div>
+		)
+	} else if (status === 'loading') {
+		const count = Math.min(limit, layout === 'closing' ? 6 : 4)
+		body = (
+			<div className={gridClass} aria-busy="true" data-testid="storefront-auction-list-loading">
+				{Array.from({ length: count }, (_, index) => (
+					<div key={index} className="mz-skel" style={{ aspectRatio: layout === 'closing' ? '1 / 1.45' : '4 / 6' }} />
+				))}
+			</div>
+		)
+	} else if (status === 'settled') {
+		body = <p className="py-8 text-center text-muted-foreground">{emptyMessage.trim() || 'No auctions here yet.'}</p>
+	} else {
+		body = <p className="py-8 text-center text-muted-foreground">Auctions could not be read right now.</p>
+	}
+	return (
+		<div className={cn('mz-wrap mz-sec', isEditing && 'pointer-events-none')}>
+			<MagazineHead title={title} linkLabel={linkLabel} linkHref={linkHref} />
+			<div data-testid="storefront-auction-list" data-state={status} data-layout={layout}>
+				{body}
+			</div>
+		</div>
 	)
 }
