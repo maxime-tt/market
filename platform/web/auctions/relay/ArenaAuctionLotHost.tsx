@@ -57,6 +57,7 @@ import { chainClockLabel, shortKey, type ArenaRelayHealth, type ArenaSurfaceStat
 import { useAuctionBidController } from '@platform/web/auctions/relay/AuctionBidHost'
 import { arenaChainAdvancing } from '@platform/web/auctions/relay/arenaBidPublish'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
+import { AuctionFulfilmentHost } from '@platform/web/dashboard/AuctionFulfilmentHost'
 import { lotHref, resolveArenaLot, type ArenaLotLookup } from '@platform/web/auctions/relay/arenaLotRead'
 
 /** Before the first relay result arrives: not "no auction", just "not read yet". */
@@ -211,27 +212,30 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, backHre
 	}
 
 	return (
-		<ArenaLotView
-			model={detail}
-			status={read.status}
-			relayHealth={read.relayHealth}
-			now={now}
-			backHref={backHref}
-			chainClockLabel={read.chainClock === null ? null : chainClockLabel(read.chainClock)}
-			sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} subtitle="npub" />}
-			renderName={(pubkey) => <BidderName pubkey={pubkey} />}
-			bid={detail === null ? null : bid}
-			verdicts={
-				verdicts === null ? null : (
-					<ArenaVerdictPanel
-						model={verdicts}
-						status={read.status}
-						relayHealth={read.relayHealth}
-						renderValidator={(pubkey) => (pubkey === null ? null : <UserCardHost pubkey={pubkey} />)}
-					/>
-				)
-			}
-		/>
+		<>
+			<ArenaLotView
+				model={detail}
+				status={read.status}
+				relayHealth={read.relayHealth}
+				now={now}
+				backHref={backHref}
+				chainClockLabel={read.chainClock === null ? null : chainClockLabel(read.chainClock)}
+				sellerIdentity={view === null ? undefined : <UserCardHost pubkey={view.seller} subtitle="npub" />}
+				renderName={(pubkey) => <BidderName pubkey={pubkey} />}
+				bid={detail === null ? null : bid}
+				verdicts={
+					verdicts === null ? null : (
+						<ArenaVerdictPanel
+							model={verdicts}
+							status={read.status}
+							relayHealth={read.relayHealth}
+							renderValidator={(pubkey) => (pubkey === null ? null : <UserCardHost pubkey={pubkey} />)}
+						/>
+					)
+				}
+			/>
+			<AuctionFulfilmentHost view={view} />
+		</>
 	)
 }
 

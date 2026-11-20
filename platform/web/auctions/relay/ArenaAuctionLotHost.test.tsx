@@ -6,19 +6,23 @@
  * exercised is the chain the route runs — resolve the `d`, project the model,
  * compose the surfaces — with the socket and the identity/bid hosts doubled.
  *
- * The two doubled modules are first-party platform seams the host injects as
- * props (`AuctionBidHost`, `UserCardHost`); mocking them is what lets the real
+ * The doubled modules are first-party platform seams the host injects as props
+ * or reads through (`AuctionBidHost`, `UserCardHost`, the fulfilment claim
+ * queries and the claim dialog); mocking them is what lets the real
  * `ui/auction/arena/*` surfaces render, so the term copy and the bid-slot
- * placement are asserted against the actual views, not against stubs.
+ * placement are asserted against the actual views, not against stubs. The
+ * viewer is the app's own auth store, set per test.
  *
  * Pubkeys are short and non-hex on purpose: they are opaque strings here, and a
  * 64-hex literal in a test file is indistinguishable from a key to the
  * pre-commit scanner (`auctionSurfacesRead.test.ts:10-13`).
  */
 
-import { beforeAll, describe, expect, mock, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { authStore } from '@platform/web/auth/authStore'
+import { INITIAL_AUTH_STATE } from '@sdk/core/auth'
 import type { NostrEventLike } from '@sdk/core'
 import {
 	ARENA_AUCTION_BID_KIND,
@@ -59,6 +63,19 @@ mock.module('@platform/web/profiles/profileQuery', () => ({
 mock.module('@platform/web/profiles/userCardHosts', () => ({
 	UserCardHost: (props: { pubkey?: string }) => createElement('span', { 'data-testid': 'user-card-stub' }, props.pubkey ?? ''),
 }))
+
+// The fulfilment panel (mounted by the host on this page) reads claim orders and
+// the private delivery through queries that need a `QueryClientProvider`, and a
+// winner's claim affordance opens the claim dialog; neither is what this file
+// tests. Both are doubled here so the panel's own gates render without a
+// provider. The viewer is the app's real auth store (`readContext.ts:37` already
+// needs it), set per test — a signed-out store by default, so no signer and no
+// session are touched.
+mock.module('@platform/web/auctions/auctionsQuery', () => ({
+	useAuctionClaimOrders: () => ({ data: [] as Array<{ pubkey: string }> }),
+	usePrivateAuctionClaimForOrder: () => ({ data: undefined, isLoading: false }),
+}))
+mock.module('@platform/web/auctions/AuctionClaimDialog', () => ({ AuctionClaimDialog: () => null }))
 
 // Imported after the mocks above (a static import is hoisted past `mock.module`).
 let ArenaAuctionLotHost: (typeof import('./ArenaAuctionLotHost'))['ArenaAuctionLotHost']
@@ -113,7 +130,7 @@ function bidEvent(over: { auctionId?: string; amount?: unknown; pubkey?: string;
 	}
 }
 
-function verdictEvent(over: { auctionId?: string; outcome?: string; height?: number; validator?: string } = {}): NostrEventLike {
+function verdictEvent(over: { auctionId?: string; outcome?: string; height?: number; validator?: string; bidId?: string } = {}): NostrEventLike {
 	const auctionId = over.auctionId ?? 'lot-1'
 	const height = over.height ?? 10
 	const validator = over.validator ?? 'validator-one'
@@ -135,7 +152,7 @@ function verdictEvent(over: { auctionId?: string; outcome?: string; height?: num
 			height,
 			block_hash: 'beef',
 			derived_from: 'committed_state',
-			bid_id: 'bid-from-content',
+			bid_id: over.bidId ?? 'bid-from-content',
 		}),
 	}
 }
@@ -164,6 +181,16 @@ function render(read: ArenaSurfacesReadState, over: { d?: string; seller?: strin
 			onRefresh: () => {},
 		}) as ReactNode,
 	)
+}
+
+// Every render starts signed out; a test that wants a viewer signs one in.
+beforeEach(() => {
+	authStore.setState(() => INITIAL_AUTH_STATE)
+})
+
+/** The viewer for one render: the app's real auth store, no signer involved. */
+function signInAs(pubkey: string): void {
+	authStore.setState(() => ({ ...INITIAL_AUTH_STATE, user: { pubkey }, isAuthenticated: true }))
 }
 
 // =========================================================================
@@ -360,5 +387,58 @@ describe('ArenaAuctionLotHost — verdicts', () => {
 		)
 		expect(markup).toContain('data-slot="arena-verdict-disagreement"')
 		expect(markup).toContain('does not pick one')
+	})
+})
+
+// =========================================================================
+// Fulfilment — the winner/seller panel mounts on the public lot page
+// =========================================================================
+
+describe('ArenaAuctionLotHost — fulfilment', () => {
+	// A create, a bid, and the winner verdict that names it: the frame the
+	// fulfilment panel reads its winner from. The verdict names the bid by id,
+	// which is the only way a winner is nameable (`auctionFulfilment.ts:27-35`).
+	function settledWin(amount: unknown): NostrEventLike[] {
+		const bid = bidEvent({ amount, pubkey: BIDDER })
+		return [createEvent(), bid, verdictEvent({ bidId: bid.id })]
+	}
+
+	test('the winner sees the fulfilment panel with the shipping-address affordance', () => {
+		signInAs(BIDDER)
+		const markup = render(readState(settledWin(100), 'settled'))
+		// The public lot still renders; the panel is mounted beside it.
+		expect(markup).toContain('data-slot="arena-lot"')
+		expect(markup).toContain('data-slot="auction-fulfilment-winner"')
+		expect(markup).toContain('Submit shipping address')
+	})
+
+	test('an anonymous viewer sees neither fulfilment panel', () => {
+		const markup = render(readState(settledWin(100), 'settled'))
+		expect(markup).not.toContain('data-slot="auction-fulfilment-winner"')
+		expect(markup).not.toContain('data-slot="auction-fulfilment-seller"')
+	})
+
+	test('a bidder who is not the winner sees neither fulfilment panel', () => {
+		signInAs('someone-else')
+		const markup = render(readState(settledWin(100), 'settled'))
+		expect(markup).not.toContain('data-slot="auction-fulfilment-winner"')
+		expect(markup).not.toContain('data-slot="auction-fulfilment-seller"')
+	})
+
+	test('the seller sees the panel awaiting the winner, never the claim affordance', () => {
+		signInAs(SELLER_A)
+		const markup = render(readState(settledWin(100), 'settled'))
+		expect(markup).toContain('data-slot="auction-fulfilment-seller"')
+		expect(markup).toContain('Waiting for the winner to submit a shipping address.')
+		expect(markup).not.toContain('Submit shipping address')
+	})
+
+	test('a winner whose position is not positive is told the amount is not read — never a spinner, never settled', () => {
+		signInAs(BIDDER)
+		const markup = render(readState(settledWin(0), 'settled'))
+		expect(markup).toContain('data-slot="auction-fulfilment-winner"')
+		expect(markup).toContain('The read holds no winning amount for your bid')
+		expect(markup).toContain('this is not a statement that you did not win')
+		expect(markup).not.toContain('Submit shipping address')
 	})
 })
