@@ -23,6 +23,8 @@ import {
 	ARENA_VERDICT_SCHEMA,
 } from '@sdk/commerce/auctions/constants'
 import {
+	arenaLotFilters,
+	arenaLotFollowUpFilters,
 	createArenaAuctionRead,
 	decodeArenaEvent,
 	followedAuctionViews,
@@ -31,10 +33,14 @@ import {
 	type ArenaAuctionSnapshot,
 	type ArenaAuctionView,
 	type ArenaRelayOpen,
+	type ArenaRelayOpenFactory,
 	type ArenaRelayOpenOptions,
 	type ArenaReadHealth,
 } from '@platform/web/auctions/relay/arenaAuctionRead'
 import { makeCreateAdmitEvent } from './arenaCreateAdmitFixture'
+import { nextCreateAcceptanceState } from './arenaAuctionCreate'
+import { resolveArenaLot } from './arenaLotRead'
+import { createAcceptanceStepper } from '@ui/auction/arena/create-stepper'
 import {
 	arenaSurfaceRelayCounts,
 	arenaSurfaceStatus,
@@ -881,6 +887,117 @@ describe('collectArenaSurfacesRead', () => {
 		expect(state.chainClock?.time).toBeNull()
 		expect(state.chainClock?.height).toBeNull()
 		expect(state.chainClock?.freshness).toBe('unknown')
+	})
+})
+
+// =========================================================================
+// A refused lot: the panel and the lot page reach the chain's own words
+// =========================================================================
+
+/**
+ * The lot page and the create form's acceptance panel read through the **same**
+ * shell (`useArenaLotRead`: `arenaLotFilters` + `arenaLotFollowUpFilters`), so
+ * the whole chain — the read, the route's own resolver, the projection, the
+ * form's transition and the stepper — is proven here with the socket replaced.
+ *
+ * A kind-1450 refusal is not in the base REQ: it names the refused event's id and
+ * carries no `auction` coordinate and no `d`, so the only address a lot read has
+ * for it is the create's own event id, in the follow-up. Without that REQ the
+ * refusal for the very lot a page is watching never arrives — which is what made
+ * the lot page's refusal copy and the stepper's `refused` state unreachable.
+ */
+describe('a refused lot: the panel and the lot page reach the chain’s own words', () => {
+	const D = 'lot-refused'
+	const create = createEvent({ id: 'create-refused', d: D })
+	const refusal = refusedEvent({ refusedEventId: create.id, reason: 'title required (max 120 chars)' })
+	const published = {
+		phase: 'published' as const,
+		eventId: create.id,
+		coordinate: `1440:${SELLER_A}:${D}`,
+		acceptedBy: ['wss://limited'],
+		totalRelays: 1,
+	}
+
+	/**
+	 * A relay that answers by the tags it indexes, like the live one: the lot's
+	 * `#d` with the create, a `#e` REQ for kind 1450 with the refusal it holds, and
+	 * nothing for a request it has no event for (the admission REQ included).
+	 */
+	function panelRelay(held: NostrEventLike | null): { open: ArenaRelayOpenFactory; calls: (readonly EventFilter[])[] } {
+		const calls: (readonly EventFilter[])[] = []
+		const open: ArenaRelayOpenFactory =
+			(url: string): ArenaRelayOpen =>
+			(filters: readonly EventFilter[]) => ({
+				async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+					calls.push(filters)
+					const byD = filters.some((filter) => (filter['#d'] ?? []).includes(D))
+					const wantsRefusal =
+						held !== null &&
+						filters.some((filter) => (filter.kinds ?? []).includes(1450) && (filter['#e'] ?? []).includes(create.id))
+					const answer = byD ? [create] : wantsRefusal ? [held] : []
+					for (const event of answer) yield { type: 'event', event } as EventStreamItem<NostrEventLike>
+					yield { type: 'caught-up', info: { eose: [url], pending: [], complete: false } } as EventStreamItem<NostrEventLike>
+				},
+			})
+		return { open, calls }
+	}
+
+	test('the lot read asks by the create’s own id, and both surfaces reach the chain’s words', async () => {
+		const relay = panelRelay(refusal)
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 150,
+			filters: arenaLotFilters(SELLER_A, D),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, D),
+			openRelay: relay.open,
+		})
+		const state = await collectArenaSurfacesRead(read)
+		expect(state.status).toBe('settled')
+
+		// The base REQ (call 0) cannot carry the refusal; the follow-up, opened once
+		// the create arrived, is the one that asks for it — by the create's own id.
+		expect(relay.calls[0]?.some((filter) => (filter.kinds ?? []).includes(1450))).toBe(false)
+		expect(relay.calls[1]).toContainEqual({ kinds: [1450], '#e': [create.id] })
+
+		const lookup = resolveArenaLot(state.snapshot!, D, SELLER_A)
+		if (lookup.kind !== 'found') throw new Error(`expected the lot to resolve, got ${lookup.kind}`)
+		const detail = toAuctionDetailModel(lookup.view, { now: 2000, status: state.status })
+		// What the lot page's banner states, verbatim (`createAcceptanceNotice` →
+		// `createRefusalLabel`), and why it offers nothing that moves money.
+		expect(detail.createRefusal?.reason).toBe('title required (max 120 chars)')
+		expect(detail.phase).toBe('unaccepted')
+
+		const next = nextCreateAcceptanceState({ previous: published, view: lookup.view, createEventId: create.id })
+		expect(next.phase).toBe('refused')
+		if (next.phase !== 'refused') throw new Error('expected the refusal to move the panel')
+		expect(next.reason).toBe('title required (max 120 chars)')
+		const stepper = createAcceptanceStepper(next)
+		expect(stepper.steps.map((step) => [step.key, step.status])).toEqual([
+			['publish', 'done'],
+			['accept', 'failed'],
+		])
+		expect(stepper.steps[1].detail).toBe('the chain refused this listing: title required (max 120 chars)')
+	})
+
+	test('with no refusal read the panel does not move: still reading, never refused', async () => {
+		const relay = panelRelay(null)
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 150,
+			filters: arenaLotFilters(SELLER_A, D),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, D),
+			openRelay: relay.open,
+		})
+		const state = await collectArenaSurfacesRead(read)
+
+		const lookup = resolveArenaLot(state.snapshot!, D, SELLER_A)
+		if (lookup.kind !== 'found') throw new Error(`expected the lot to resolve, got ${lookup.kind}`)
+		expect(toAuctionDetailModel(lookup.view, { now: 2000, status: state.status }).createRefusal).toBeNull()
+
+		// Neither fact read: the same state comes back, and the acceptance step
+		// still animates — an absent refusal is never rendered as one.
+		expect(nextCreateAcceptanceState({ previous: published, view: lookup.view, createEventId: create.id })).toBe(published)
+		expect(createAcceptanceStepper(published).steps[1].status).toBe('active')
 	})
 })
 

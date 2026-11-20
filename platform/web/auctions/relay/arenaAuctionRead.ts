@@ -320,11 +320,34 @@ export function arenaLotBidFilters(seller: string | null, d: string, eventId: st
 	return filters
 }
 
-/** The `#e` bid filter for a lot whose create event id is known; empty when no id is. */
-export function arenaLotBidByEventFilters(eventIds: readonly string[]): EventFilter[] {
+/**
+ * The two `#e` filters a lot's **create event id** addresses, for one whose id
+ * is known: the bids bound to the create, and **the chain's refusal of it**
+ * (kind 1450). Empty when no id is, never an empty `'#e': []` — some relays read
+ * that as "match nothing", others as "match everything".
+ *
+ * The refusal is here, and nowhere in {@link arenaLotFilters}, because a create
+ * event id is the **only** address a 1450 has:
+ *
+ * - A refund, a verdict and a committed end (and a bid's `a`) carry the
+ *   `auction` coordinate, which is what the base REQ filters on. A 1450 carries
+ *   none — its `e` tag holds the refused event's id (and its content repeats it
+ *   as `event_id`) — so no coordinate filter can ever match it.
+ * - A bid's `a` value is 106 chars, which the relay's event store refuses to
+ *   index (see {@link arenaLotBidFilters}); the `e` tag, 64-hex, is indexed.
+ *
+ * So a lot read's base subscription cannot deliver its own create's refusal, and
+ * a bounded REQ addressed by the create's id is the one way to read it. Bounded
+ * to the ids in hand — the creates **this** read read — so the request asks for
+ * this lot's refusal, never the arena's.
+ */
+export function arenaLotCreateEventFilters(eventIds: readonly string[]): EventFilter[] {
 	const ids = eventIds.filter((id) => id !== '')
 	if (ids.length === 0) return []
-	return [{ kinds: [ARENA_AUCTION_BID_KIND], '#e': [...ids] }]
+	return [
+		{ kinds: [ARENA_AUCTION_BID_KIND], '#e': [...ids] },
+		{ kinds: [ARENA_REFUSED_KIND], '#e': [...ids] },
+	]
 }
 
 /**
@@ -367,6 +390,11 @@ export function arenaLotFilters(seller: string | null, d: string, eventId: strin
  *
  * - A bid's `#e` tag names the create's **event id** (its `a` coordinate is 106
  *   chars, which the relay's index refuses — see {@link arenaLotBidFilters}).
+ * - The **same id is the only address a kind-1450 refusal has**: a refusal names
+ *   the refused event's id and carries no `auction` tag, so a lot read's
+ *   coordinate filters can never match it, and without this REQ a refusal for the
+ *   very lot the page is watching would never arrive ({@link
+ *   arenaLotCreateEventFilters}).
  * - Every coordinate-tagged kind (a receipt's / verdict's / committed end's
  *   `auction`) names the create's **`(seller, d)` coordinate**, and a bare-`d`
  *   address does not carry the seller. With a seller known that coordinate is in
@@ -377,8 +405,8 @@ export function arenaLotFilters(seller: string | null, d: string, eventId: strin
  *
  * The read opens the base subscription first ({@link arenaLotFilters}); once a
  * create for this `d` arrives, the returned set is subscribed as a second REQ.
- * With a known seller it is the `#e` bid filter alone (the coordinate filter is
- * never sent twice); with no seller it carries the `#e` bid filter **and** the
+ * With a known seller it is the `#e` filters alone (the coordinate filter is
+ * never sent twice); with no seller it carries the `#e` filters **and** the
  * coordinate filter, so receipts (1443/1444), verdicts (1445) and the committed
  * end (1449) are read together as they are on a seller-known lot. No create yet
  * → no extra filter, never an empty one.
@@ -402,7 +430,7 @@ export function arenaLotFollowUpFilters(
 				if (!coordinates.includes(coordinate)) coordinates.push(coordinate)
 			}
 		}
-		const filters = arenaLotBidByEventFilters(ids)
+		const filters = arenaLotCreateEventFilters(ids)
 		if (coordinates.length === 0) return filters
 		return [
 			...filters,
@@ -959,6 +987,11 @@ export interface ArenaAuctionView {
 	/**
 	 * The chain's refusal of this lot's **create** (a 1450 naming the root
 	 * create's event id), or `null` when none was read.
+	 *
+	 * A refusal names no coordinate and no `d`, so it cannot arrive in a lot
+	 * read's base REQ: it is asked for by the create's own event id, in the
+	 * follow-up REQ ({@link arenaLotCreateEventFilters}). `null` here is
+	 * therefore *no refusal read* — never an answer that the chain did not refuse.
 	 */
 	createRefusal: ArenaRefusedCreateFact | null
 	/**

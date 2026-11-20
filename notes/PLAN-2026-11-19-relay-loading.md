@@ -183,6 +183,14 @@ to its caught-up marker, so it is an unconditional wait for a relay round trip �
 | 8 | **bid escrow terms** | `readConfig` in `arenaBidFundPorts` (`AuctionBidHost.tsx:118-124`) | params read + `resolveEscrowMintUrl` (config wait + keysets HTTP) | same | 12–25 ms + 78 ms | a bid in `publishing` for ~100 ms |
 | 9 | **chain clock** | derived in `collectArenaSurfacesRead.refresh` (`auctionSurfacesRead.ts:385-392`) from the 1447s in the same read | the label is `null` until the first commitment | none (no timer of its own) | first 1447 at 85–128 ms | no chain-clock label for the first ~100 ms |
 
+**Correction (2026-11-20).** Row 5's kind list was wrong for **1450**. A refusal (`arena.refused.v1`)
+names the refused event's id in its `e` tag and carries **no** `auction` tag at all, so the lot read's
+`#auction` filter can never match one: the row counted a fact that could not arrive, and a refusal for
+the lot a page was watching was unreadable in the browser. A lot read now asks for its creates'
+refusals by that `#e` address, in the same follow-up REQ as its bids
+(`arenaAuctionRead.ts` `arenaLotCreateEventFilters`, used by `arenaLotFollowUpFilters`), so the create
+stepper's `refused` state and the lot page's refusal copy are reachable.
+
 Two things this table makes explicit:
 
 - **Nothing on the arena path awaits a timeout for *data*** — the data arrives in tens of
