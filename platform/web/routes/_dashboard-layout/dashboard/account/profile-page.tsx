@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { StorefrontBuilder } from '@platform/web/storefront/StorefrontBuilder'
+import { StorefrontBuilder } from '@platform/web/storefront/LazyStorefrontBuilder'
 import { authStore } from '@platform/web/auth/authStore'
 import { LoadingState } from '@ui/shared/loading-state'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'

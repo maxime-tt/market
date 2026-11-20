@@ -1,5 +1,5 @@
 import { Check, Loader2, QrCode, ScanLine } from 'lucide-react'
-import { Scanner } from '@yudiel/react-qr-scanner'
+import { Scanner } from '@ui/primitives/lazy-qr-scanner'
 import { Button } from '../primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../primitives/dialog'
 

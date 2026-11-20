@@ -36,7 +36,6 @@
  * added.
  */
 
-import { PickupLocationDialog } from '@ui/dialogs/pickup-location-dialog'
 import { ShareProfileDialog } from '@platform/web/profiles/ShareProfileDialog'
 import { EntityActionsMenu } from '@platform/web/permissions/EntityActionsMenu'
 import { SellerProfileView } from '@ui/browse/seller-profile'
@@ -79,9 +78,15 @@ import { getProfileIdentifierValidationError } from '@sdk/core/profile/profileVa
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Edit, MapPin, Plus, RotateCcw, Share2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
+import { lazyRetry } from '@ui/utils/lazy-retry'
 import { toast } from 'sonner'
 import { TooltipButton } from '@ui/wrappers/tooltip-button'
+
+// The pickup map (maplibre, ~1 MB) loads only when the dialog is opened (ADR-0027).
+const PickupLocationDialog = lazyRetry(() =>
+	import('@ui/dialogs/pickup-location-dialog').then((m) => ({ default: m.PickupLocationDialog })),
+)
 
 interface ProfilePageProps {
 	profileId: string
@@ -470,13 +475,15 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 
 			<ShareProfileDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} pubkey={profilePubkey} profileName={profile?.name} />
 
-			{pickupLocations.length > 0 && (
-				<PickupLocationDialog
-					open={pickupLocationDialogOpen}
-					onOpenChange={setPickupLocationDialogOpen}
-					locations={pickupLocations}
-					vendorName={profile?.name}
-				/>
+			{pickupLocations.length > 0 && pickupLocationDialogOpen && (
+				<Suspense fallback={null}>
+					<PickupLocationDialog
+						open={pickupLocationDialogOpen}
+						onOpenChange={setPickupLocationDialogOpen}
+						locations={pickupLocations}
+						vendorName={profile?.name}
+					/>
+				</Suspense>
 			)}
 		</div>
 	)

@@ -10,6 +10,7 @@
 import index from './index.html'
 import { buildServer, initializeAppSettings, startEventHandlerInitialization } from '@platform/server'
 import { loadRouteTable } from '@platform/server/routes/routeTable'
+import { prepareWebBundle } from '@platform/server/http/prebuilt'
 
 import.meta.hot.accept()
 
@@ -31,11 +32,16 @@ export const serverPromise: Promise<ResolvedServer> = (async () => {
 	// ingest mutate this same object, and every request re-resolves against it.
 	const routing = loadRouteTable(process.env.AR_ROUTES_FILE ?? './data/routes.json')
 	for (const warning of routing.warnings()) console.warn(`⚠️ ${warning.message}`)
+	// Production builds the code-split bundle (ADR-0027) while settings load; if
+	// that fails, or in development, Bun bundles `index.html` at runtime.
+	const prebuiltReady = process.env.NODE_ENV === 'production' ? prepareWebBundle() : Promise.resolve(null)
 	await initializeAppSettings()
 	// Heavy relay-dependent EventHandler bootstrap runs in parallel with
 	// HTTP serving — relay timeouts shouldn't block the setup form.
 	void startEventHandlerInitialization()
-	resolvedServer = buildServer({ indexHtml: index, routing })
+	const prebuilt = await prebuiltReady
+	console.log(prebuilt ? '📦 Serving the prebuilt bundle (dist/web)' : '📦 Bundling index.html at runtime')
+	resolvedServer = buildServer({ indexHtml: prebuilt?.indexHtml ?? index, routing, extraRoutes: prebuilt?.routes })
 	console.log(`🚀 Server running at ${resolvedServer.url}`)
 	return resolvedServer
 })()
