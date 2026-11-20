@@ -42,6 +42,14 @@ export interface ArenaPurchaseRow {
 	settle: ArenaReceiptModel | null
 	/** The `1443` that refunded this bid, as a surface renders it, or `null` when none was read. */
 	refund: ArenaReceiptModel | null
+	/**
+	 * The **raw** receipt for this row's move (the settle when the row won, the
+	 * refund when it was refunded, `null` when neither was read) — the proof
+	 * secrets the claim work needs. Deliberately separate from {@link settle} /
+	 * {@link refund}, which are the display models and omit the secrets
+	 * (`model.ts:195-210`).
+	 */
+	receipt: ParsedArenaReceipt | null
 	/** The anchored height of the winning verdict, when one names this bid. */
 	verdictHeight: number | null
 	/** The verdict's words when it names the winner (`winner`), or `null`. */
@@ -100,6 +108,9 @@ export function arenaPurchaseRowFor(view: ArenaAuctionView, buyerPubkey: string)
 		// holds one (`paramsVersionMismatch: null` means "not compared").
 		settle: toModel(view.settleForBid[chosen.eventId]),
 		refund: toModel(view.refundForBid[chosen.eventId]),
+		// The raw receipt for the move this row is about — the settle for a won
+		// bid (it names money that moved), else the refund for a refunded bid.
+		receipt: view.settleForBid[chosen.eventId] ?? view.refundForBid[chosen.eventId] ?? null,
 		verdictHeight: verdict?.height ?? null,
 		verdictOutcome: verdict?.outcome ?? null,
 	}

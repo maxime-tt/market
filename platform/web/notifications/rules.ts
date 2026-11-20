@@ -37,7 +37,9 @@ export type AppNotificationEvent =
 			readonly bidderPubkey: string
 			readonly auctionRootEventId: string
 			readonly bidEventId: string
-			readonly bidAmount: number
+			readonly bidAmount: number | null
+			readonly lotD: string
+			readonly lotSeller: string
 	  }
 
 /** A rule over the app's event union, the app's type union and the app's payload union. */
@@ -220,11 +222,13 @@ export const bidUpdateRule: AppNotificationRule = {
 }
 
 /**
- * An auction the user won — the active modal notification.
- * Replaces `auctionWonActions.enqueue(win)` — `useAuctionWinMonitor.ts:179`.
+ * An auction the user won — the active modal notification, produced from the **arena** read by
+ * `useAuctionWinMonitor` (`arenaWinRead.ts`'s `arenaWinFactFor`).
  *
  * Its id encodes the composite the old queue de-duplicated on: `bidderPubkey` AND `auctionRootEventId`
  * (`auctionWon.ts:19`). Its scope is the auction root event id, which is what `removeForAuction` filters by.
+ * The payload also carries the lot page's own address (`lotD` + `lotSeller`), which the retired 30408
+ * pipeline did not need because it settled in place.
  */
 export const auctionWonRule: AppNotificationRule = {
 	id: 'auction-won',
@@ -239,6 +243,8 @@ export const auctionWonRule: AppNotificationRule = {
 							auctionRootEventId: input.auctionRootEventId,
 							bidEventId: input.bidEventId,
 							bidAmount: input.bidAmount,
+							lotD: input.lotD,
+							lotSeller: input.lotSeller,
 						},
 						scope: notificationScopes.auctionWon(input.auctionRootEventId),
 						createdAt: input.createdAt,

@@ -798,6 +798,15 @@ export const walletOps = {
 	getAuctionBidWalletSigner,
 
 	/**
+	 * This wallet's own P2PK key (compressed secp256k1 hex), or `null` until
+	 * {@link walletOps.ensureAuctionWalletKey} has resolved the pair. It is the
+	 * same key the claim host reads (`arenaReceiptClaimsHost.getWalletP2pk`), so
+	 * the wins surface can tell which receipt outputs are addressed to this
+	 * wallet without a second authority for the key.
+	 */
+	getAuctionWalletP2pk: (): string | null => walletKeyMaterialCache?.walletP2pk ?? null,
+
+	/**
 	 * Resolve and cache the wallet's auction spend key on demand, and RETRY after a failure.
 	 *
 	 * The startup bootstrap in {@link walletOps.initialize} is best effort, so a wallet that was
