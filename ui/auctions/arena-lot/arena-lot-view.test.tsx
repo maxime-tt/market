@@ -27,6 +27,10 @@ const model: ArenaAuctionDetailModel = {
 	bidCount: 3,
 	bidsWithoutAmount: 0,
 	endsAt: 1_600,
+	endSource: 'create-derived',
+	createDerivedEndsAt: 1_600,
+	committedEndHeight: null,
+	committedEndOrdinal: null,
 	phase: 'open',
 	verdict: null,
 	verdictCount: 0,
@@ -57,6 +61,10 @@ const model: ArenaAuctionDetailModel = {
 	receipts: [],
 	refundsByBidder: { [bob]: 77 },
 	settleReceipt: null,
+	createRefusal: null,
+	acceptance: { accepted: true, acceptedHeight: 4210, admitEventId: 'admit-event-1' },
+	bidRefusals: {},
+	admissions: {},
 }
 
 function bid(over: Partial<ArenaLotBidProps> = {}): ArenaLotBidProps {
@@ -217,6 +225,24 @@ describe('ArenaLotView', () => {
 		const html = render({ model: null, status: 'loading' })
 		expect(html).toContain('arena-lot-state')
 		expect(html).not.toContain('0 sats')
+	})
+
+	test('a lot the chain has not accepted shows the banner and no bid controller', () => {
+		// The bid controller is handed in ready to render, as the host does; the view
+		// must null it for an unaccepted lot, because nothing on it may move money.
+		const html = render({
+			model: {
+				...model,
+				phase: 'unaccepted',
+				acceptance: { accepted: false, acceptedHeight: null, admitEventId: null },
+			},
+		})
+		expect(html).toContain('data-testid="arena-lot-acceptance"')
+		expect(html).toContain('data-accepted="false"')
+		expect(html).toContain('no relay carried a create-admission fact')
+		expect(html).not.toContain('arena-lot-ladder')
+		expect(html).not.toContain('Sign in to bid')
+		expect(html).toContain('data-phase="unaccepted"')
 	})
 
 	test('no third-party hosts or Google in the view', () => {

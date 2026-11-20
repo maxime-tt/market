@@ -17,6 +17,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { NostrEventLike } from '@sdk/core'
 import { ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
+import { makeCreateAdmitEvent } from '@platform/web/auctions/relay/arenaCreateAdmitFixture'
 import { decodeArenaEvent, projectArenaEvents, type ArenaAuctionEvent } from '@platform/web/auctions/relay/arenaAuctionRead'
 import {
 	featuredAuctionCards,
@@ -60,8 +61,11 @@ function decoded(events: readonly NostrEventLike[]): ArenaAuctionEvent[] {
 }
 
 function readOf(events: readonly NostrEventLike[], status: FeaturedAuctionRead['status'] = 'settled'): FeaturedAuctionRead {
+	// Every create here is a lot the chain accepted: append its admission, or the
+	// featured surfaces would (correctly) not offer it.
+	const admits = events.filter((event) => event.kind === ARENA_AUCTION_CREATE_KIND).map((create) => makeCreateAdmitEvent(create))
 	return {
-		snapshot: projectArenaEvents(decoded(events)),
+		snapshot: projectArenaEvents(decoded([...events, ...admits])),
 		status,
 		relayHealth: { answered: 1, total: 1 },
 	}

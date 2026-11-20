@@ -65,6 +65,30 @@ function summaryOf(entry: Extract<FeaturedAuctionEntry, { kind: 'lot' }>): strin
 	return `${price} · ${bids}`
 }
 
+/**
+ * The three reasons a curated coordinate cannot be shown as a card. They are
+ * not interchangeable: a lot the chain has not accepted is not "deleted", and
+ * an unfinished read is not an absence of anything.
+ */
+const NOT_SHOWN_COPY: Record<
+	Exclude<FeaturedAuctionEntry['kind'], 'lot'>,
+	{ title: string; detail: string }
+> = {
+	missing: {
+		title: 'Auction no longer published',
+		detail: 'No relay carries this auction any more, so it cannot be shown. Remove it from the list.',
+	},
+	unaccepted: {
+		title: 'Auction not accepted by the chain',
+		detail:
+			'The chain has published no acceptance (arena.createadmit.v1) of this create, so the app does not follow this lot and will not feature it. Remove it, or wait for the chain to accept the create.',
+	},
+	unread: {
+		title: 'Auction not read yet',
+		detail: 'The auction read has not finished, so this entry cannot be shown yet. Nothing has been removed.',
+	},
+}
+
 export function FeaturedAuctionsEditor({
 	entries,
 	options,
@@ -123,19 +147,14 @@ export function FeaturedAuctionsEditor({
 										/>
 									)
 								}
-								const detail =
-									entry.kind === 'missing'
-										? 'No relay carries this auction any more, so it cannot be shown. Remove it from the list.'
-										: 'The auction read has not finished, so this entry cannot be shown yet. Nothing has been removed.'
+								const copy = NOT_SHOWN_COPY[entry.kind]
 								return (
 									<Card key={entry.coordinate} className="p-4">
 										<div className="flex items-start gap-4">
 											<div className="flex-1 min-w-0">
-												<h3 className="font-semibold text-sm">
-													{entry.kind === 'missing' ? 'Auction no longer published' : 'Auction not read yet'}
-												</h3>
+												<h3 className="font-semibold text-sm">{copy.title}</h3>
 												<p className="text-xs text-text-mid mt-1 break-all">{entry.coordinate}</p>
-												<p className="text-xs text-text-mid mt-1">{detail}</p>
+												<p className="text-xs text-text-mid mt-1">{copy.detail}</p>
 											</div>
 											<Button variant="destructive" size="sm" onClick={() => onRemove(entry.coordinate)} disabled={isRemoving}>
 												Remove
@@ -155,7 +174,7 @@ export function FeaturedAuctionsEditor({
 						<Plus className="w-5 h-5" />
 						Add Featured Auction
 					</CardTitle>
-					<CardDescription>Only auctions published to the relays can be featured.</CardDescription>
+					<CardDescription>Only lots the chain has accepted can be featured.</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
 					{notice !== null && <p className="text-sm text-text-mid">{notice}</p>}
@@ -163,8 +182,8 @@ export function FeaturedAuctionsEditor({
 						<EmptyState
 							compact
 							icon={<Gavel />}
-							title="No published auctions to feature"
-							description="Every relay answered and none carried an auction, or every published auction is already featured above."
+							title="No accepted auctions to feature"
+							description="Every relay answered and none carried an auction the chain has accepted, or every one of them is already featured above."
 						/>
 					)}
 					{options.length > 0 && (

@@ -264,6 +264,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		refundsByBidder: {},
 		settleReceipt: null,
 		createRefusal: null,
+		acceptance: { accepted: true, acceptedHeight: 4210, admitEventId: 'admit-event-1' },
 		bidRefusals: {},
 		admissions: {},
 		...over,

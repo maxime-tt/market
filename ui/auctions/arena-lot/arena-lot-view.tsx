@@ -23,6 +23,7 @@ import {
 	ARENA_NO_RECEIPT_LABEL,
 	ARENA_POSITION_UNKNOWN_LABEL,
 	antisnipeBehaviourLabel,
+	createAcceptanceNotice,
 	readStateMessage,
 	refundReceiptLabel,
 	settleReceiptLabel,
@@ -393,7 +394,7 @@ export function ArenaLotView({
 	chainClockLabel = null,
 	sellerIdentity,
 	renderName,
-	bid = null,
+	bid: bidProp = null,
 	verdicts,
 	backHref = null,
 }: ArenaLotViewProps) {
@@ -413,15 +414,32 @@ export function ArenaLotView({
 	}
 
 	const name = (pubkey: string) => (renderName ? renderName(pubkey) : shortKey(pubkey))
+	// **The gate, at the one place the page can enforce it.** A lot the chain has
+	// not accepted (`arena.createadmit.v1`, kind 1449 — the phase `unaccepted`) is
+	// not followed: nothing is offered on it that moves money, so the bid
+	// controller is dropped here whatever the host passed. The page still states
+	// which constraint failed, in the banner below.
+	const unaccepted = model.phase === 'unaccepted'
+	const bid = unaccepted ? null : bidProp
+	const acceptanceNotice = createAcceptanceNotice(model.acceptance, model.createRefusal, status)
 	const ended = model.verdict !== null || model.phase === 'ended' || (model.endsAt !== null && now >= model.endsAt)
 	const live = model.phase === 'open' && !ended
-	const remaining = model.endsAt === null ? 0 : Math.max(0, model.endsAt - now)
+	// An unaccepted lot's clock is not a deadline anyone can bid against, so no
+	// countdown runs on it: the ring stays empty and the label states the gate.
+	const remaining = unaccepted || model.endsAt === null ? 0 : Math.max(0, model.endsAt - now)
 	const urgent = live && remaining > 0 && remaining <= 60
-	const clock = model.endsAt === null ? '–:––' : ended ? '0:00' : arenaClock(remaining)
+	const clock = unaccepted || model.endsAt === null ? '–:––' : ended ? '0:00' : arenaClock(remaining)
 	const antisnipe = antisnipeBehaviourLabel(model.mode, model.windowSec)
 	const modeTag = model.mode === 'antisnipe' ? 'Anti-snipe close' : model.mode === null ? 'Close mode not stated' : 'Fixed close'
-	const ringLabel =
-		model.endsAt === null ? 'End not stated' : ended ? 'Closed' : model.mode === 'antisnipe' ? 'Bids reset the clock' : 'Until close'
+	const ringLabel = unaccepted
+		? 'Not accepted by the chain'
+		: model.endsAt === null
+			? 'End not stated'
+			: ended
+				? 'Closed'
+				: model.mode === 'antisnipe'
+					? 'Bids reset the clock'
+					: 'Until close'
 
 	// Known positions rank first, best first; a `null` total means the read could
 	// not determine that bidder's position (`arenaAuctionRead.ts`), so they are
@@ -446,7 +464,7 @@ export function ArenaLotView({
 
 	const rows = arenaBidRows(model)
 	const topRowId = leader === null ? null : (rows.find((r) => r.bidder === leader.bidder)?.eventId ?? null)
-	const viewer = bid?.viewer ?? null
+	const viewer = bidProp?.viewer ?? null
 	const viewerPos = viewer === null ? null : (positions.find((p) => p.bidder === viewer) ?? null)
 
 	const ladder = bid === null ? [] : arenaLadder(bid.check, model.minIncrement)
@@ -485,7 +503,13 @@ export function ArenaLotView({
 				]
 
 	return (
-		<div className="arn" data-slot="arena-lot" data-state={status} data-phase={live ? 'live' : 'ended'}>
+		<div
+			className="arn"
+			data-slot="arena-lot"
+			data-state={status}
+			data-phase={live ? 'live' : unaccepted ? 'unaccepted' : 'ended'}
+			data-accepted={model.acceptance.accepted ? 'true' : 'false'}
+		>
 			<div className="arn-wrap">
 				<div className="arn-ticker" aria-hidden="true">
 					<div className="arn-ticker__track">
@@ -524,6 +548,12 @@ export function ArenaLotView({
 						)}
 					</div>
 				</header>
+
+				{!model.acceptance.accepted && (
+					<p className="arn-blocked" role="alert" data-testid="arena-lot-acceptance" data-accepted="false">
+						{acceptanceNotice}
+					</p>
+				)}
 
 				<div className="arn-grid">
 					<section className="arn-panel" aria-label="Lot media">
@@ -713,7 +743,10 @@ export function ArenaLotView({
 							</>
 						)}
 
-						<p className="arn-note">{ARENA_ESCROW_COPY}</p>
+						{/* The escrow sentence describes money this page can take from you.
+						    A lot the chain has not accepted takes none, so it is not shown
+						    there — the banner above states the gate in its place. */}
+						{!unaccepted && <p className="arn-note">{ARENA_ESCROW_COPY}</p>}
 					</section>
 
 					<section className="arn-panel arn-feeds" aria-label="Activity">
@@ -788,6 +821,14 @@ export function ArenaLotView({
 										{relayHealth.total > 0 ? `${relayHealth.answered} of ${relayHealth.total} answered` : 'none configured'}
 										{status === 'settled' ? '' : ' · still reading'}
 									</small>
+								</li>
+								<li
+									className="arn-chain"
+									data-testid="arena-lot-chain-acceptance"
+									data-accepted={model.acceptance.accepted ? 'true' : 'false'}
+								>
+									<b>Chain acceptance</b>
+									<small>{acceptanceNotice}</small>
 								</li>
 								{model.settleReceipt !== null && (
 									<li className="arn-chain">
@@ -889,7 +930,7 @@ export function ArenaLotView({
 				<div className="arn-sticky" data-testid="arena-lot-sticky">
 					<div>
 						<b>{priceValue === null ? 'not stated' : `${sats(priceValue)} sats`}</b>
-						<span className="arn-sticky__time">{ended ? 'Closed' : clock}</span>
+						<span className="arn-sticky__time">{unaccepted ? 'Not accepted' : ended ? 'Closed' : clock}</span>
 					</div>
 					{live && bid !== null && !hardBlocked && next !== null ? (
 						<a
@@ -902,7 +943,7 @@ export function ArenaLotView({
 						</a>
 					) : (
 						<button className="arn-btn" type="button" disabled>
-							{bid === null ? 'Bidding closed' : bidButtonLabel(bid.blockedReason, bid.check, false)}
+							{bid === null ? (unaccepted ? 'Not accepted by the chain' : 'Bidding closed') : bidButtonLabel(bid.blockedReason, bid.check, false)}
 						</button>
 					)}
 				</div>

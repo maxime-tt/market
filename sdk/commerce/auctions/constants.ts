@@ -369,6 +369,17 @@ export const ARENA_LOT_SCHEMA = 'arena.lot.v1'
  */
 export const ARENA_BID_ADMIT_SCHEMA = 'arena.bidadmit.v1'
 
+/**
+ * `schema` value inside a kind-1449 **create-admission** event's JSON content —
+ * the chain's own record that it **accepted** one create (the positive twin of
+ * the kind-1450 refusal). Kind 1449 carries **three** schemas (`arena.lot.v1` a
+ * lot's committed end, `arena.bidadmit.v1` a bid's admission, `arena.createadmit.v1`
+ * a create's acceptance), so a reader dispatches on `content.schema`, never on the
+ * kind alone. Anchor (height + block_hash) is MANDATORY; tags `e` = the create's
+ * root event id, `auction` = the coordinate, `p` = the signing validator.
+ */
+export const ARENA_CREATE_ADMIT_SCHEMA = 'arena.createadmit.v1'
+
 /** `schema` value inside a kind-1450 refusal event's JSON content. */
 export const ARENA_REFUSED_SCHEMA = 'arena.refused.v1'
 

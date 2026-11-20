@@ -42,6 +42,7 @@ import { getReadContext } from '@platform/web/readContext'
 import { webRelayPolicy } from '@platform/web/sdkNostrIo'
 import {
 	createWebArenaAuctionRead,
+	isFollowedAuction,
 	projectArenaEvents,
 	type ArenaAuctionEvent,
 	type ArenaAuctionSnapshot,
@@ -60,6 +61,7 @@ import type {
 	ArenaAuctionPhase,
 	ArenaBidAdmissionModel,
 	ArenaChainClockModel,
+	ArenaCreateAcceptanceModel,
 	ArenaCreateRefusalModel,
 	ArenaEndSource,
 	ArenaReceiptModel,
@@ -95,6 +97,20 @@ export function arenaSurfaceRelayCounts(health: ArenaReadHealth): ArenaRelayHeal
 // =========================================================================
 
 /**
+ * The chain's acceptance of a lot's create, as the read-models state it.
+ *
+ * The **gate** itself — whether the lot is followed at all — is
+ * `isFollowedAuction` in `arenaAuctionRead.ts`, the module that owns the view
+ * and its `createAdmit` field; this projection only renders that answer for a
+ * surface.
+ */
+export function createAcceptanceOf(view: ArenaAuctionView): ArenaCreateAcceptanceModel {
+	const admit = view.createAdmit
+	if (admit === null) return { accepted: false, acceptedHeight: null, admitEventId: null }
+	return { accepted: true, acceptedHeight: admit.acceptedHeight, admitEventId: admit.eventId }
+}
+
+/**
  * The **create-derived** end: `root.created_at + duration_seconds`, or `null`
  * when the create stated no positive duration. This is the end the create
  * states, not the end the chain committed; a surface that shows it must label
@@ -128,7 +144,20 @@ export function endSourceOf(view: ArenaAuctionView): ArenaEndSource {
 	return 'unknown'
 }
 
+/**
+ * The lot's phase — **the one place acceptance is decided for the surfaces**.
+ *
+ * A lot the chain has not accepted is `unaccepted` whatever its clock says: the
+ * app does not follow it at all, so nothing may open it for bidding, no
+ * countdown may run on it and no funding floor may be offered. That gate is
+ * here rather than in each surface, so the countdown, the bid rules and the
+ * funding-locktime floor all hang off one answer.
+ *
+ * Past the gate, the phase is the create/committed end as before: `unknown`
+ * when no end can be read (never a guessed deadline), else open/ended at `now`.
+ */
 export function auctionPhase(view: ArenaAuctionView, now: number): ArenaAuctionPhase {
+	if (!isFollowedAuction(view)) return 'unaccepted'
 	const endsAt = auctionEndsAt(view)
 	if (endsAt === null) return 'unknown'
 	return now < endsAt ? 'open' : 'ended'
@@ -204,7 +233,7 @@ export function toAuctionCardModel(view: ArenaAuctionView, context: ArenaSurface
 		createDerivedEndsAt,
 		committedEndHeight: view.committedEnd?.height ?? null,
 		committedEndOrdinal: view.committedEnd?.extensionOrdinal ?? null,
-		phase: endsAt === null ? 'unknown' : context.now < endsAt ? 'open' : 'ended',
+		phase: auctionPhase(view, context.now),
 		verdict,
 		verdictCount: view.verdicts.length,
 		validatorCount: validatorKeys(view.verdicts).length,
@@ -330,6 +359,7 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 		refundsByBidder,
 		settleReceipt: view.settleReceipt === null ? null : toReceiptModel(view.settleReceipt, context.heldParamsVersion),
 		createRefusal,
+		acceptance: createAcceptanceOf(view),
 		bidRefusals,
 		admissions,
 	}

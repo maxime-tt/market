@@ -33,6 +33,9 @@ const BIDDER = 'bidder-bob'
 const SIGNED_IN: ArenaBidderState = { pubkey: BIDDER, wallet: 'ready' }
 const NOW = 2000
 
+/** The chain's acceptance of the fixture lot: the fact the gate follows a lot on. */
+const ACCEPTED = { accepted: true, acceptedHeight: 4210, admitEventId: 'admit-event-1' } as const
+
 function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetailModel {
 	return {
 		coordinate: `1440:${SELLER}:lot-1`,
@@ -73,6 +76,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		refundsByBidder: {},
 		settleReceipt: null,
 		createRefusal: null,
+		acceptance: ACCEPTED,
 		bidRefusals: {},
 		admissions: {},
 		...over,

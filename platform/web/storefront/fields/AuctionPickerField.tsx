@@ -1,4 +1,5 @@
 import { toAuctionListItem, useAuctionListRead } from '../auctionListRead'
+import { followedAuctionViews } from '@platform/web/auctions/relay/arenaAuctionRead'
 import { useStorefrontContext } from '@ui/storefront/StorefrontContext'
 
 /**
@@ -35,11 +36,13 @@ export function AuctionPickerField({
 	const { pubkey } = useStorefrontContext()
 	const read = useAuctionListRead()
 	const now = Math.floor(Date.now() / 1000)
-	// Every auction the read delivered, the author's own first. "Hand-picked" is
-	// curation (the card keeps its own seller), and a home page is written by an
-	// operator key that sells nothing, so an own-auctions-only list would leave
-	// it nothing to pick.
-	const mine = (read.snapshot?.auctions ?? [])
+	// Every **followed** lot the read delivered (the chain accepted its create),
+	// the author's own first. "Hand-picked" is curation (the card keeps its own
+	// seller), and a home page is written by an operator key that sells nothing,
+	// so an own-auctions-only list would leave it nothing to pick. A lot the chain
+	// has not accepted is not offered: a block must not name one the app does not
+	// follow.
+	const mine = followedAuctionViews(read.snapshot?.auctions ?? [])
 		.map((auction) => {
 			const item = toAuctionListItem(auction, now)
 			const own = auction.seller === pubkey

@@ -284,7 +284,9 @@ export function AuctionListBlock({
 						className="mt-4 text-sm text-muted-foreground"
 					>
 						{status === 'settled'
-							? `${missing.length} requested ${missing.length === 1 ? 'auction was' : 'auctions were'} not found on the relays.`
+							? missing.length === 1
+								? '1 requested auction is not shown: no relay carried it, or the chain has not accepted it.'
+								: `${missing.length} requested auctions are not shown: no relay carried them, or the chain has not accepted them.`
 							: `${missing.length} requested ${missing.length === 1 ? 'auction has' : 'auctions have'} not arrived yet.`}
 					</p>
 				)}

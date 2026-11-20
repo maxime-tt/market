@@ -35,6 +35,7 @@ import {
 	type AuctionV4vSplitRowInput,
 } from '@platform/web/auctions/auctionPublish'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@platform/web/auctions/auctionFormStorage'
+import { CreateAcceptancePanel, type PublishedAuctionCreate } from '@platform/web/auctions/CreateAcceptancePanel'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
@@ -359,6 +360,13 @@ export function AuctionFormContent() {
 	const [activeTab, setActiveTab] = useState<AuctionTab>('name')
 	const [savedAt, setSavedAt] = useState<number | null>(null)
 	const [publishError, setPublishError] = useState<string | null>(null)
+	/**
+	 * The create the **relays** stored, once the publish path reported it — the
+	 * facts the acceptance panel watches on. Not "listed": the panel then waits
+	 * for the chain's own create-admission fact, and `null` means the form is
+	 * still the thing on screen.
+	 */
+	const [published, setPublished] = useState<PublishedAuctionCreate | null>(null)
 	// The chain's own create rules (kind 1448), read from the relay: the
 	// pre-flight is the chain's rules, never a second hardcoded copy. `null`
 	// until a reading arrives, and a `null` rule is not checked.
@@ -489,8 +497,19 @@ export function AuctionFormContent() {
 			clearAuctionFormDraft(userPubkey)
 			setSavedAt(null)
 
-			document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-			navigate({ to: '/auctions' })
+			// The relays took the signed event — **not** that the chain accepted the
+			// create. The form hands the facts to the acceptance panel, which waits
+			// for the chain's own create-admission fact (`arena.createadmit.v1`) and
+			// says "still reading" until it (or a refusal) arrives. Navigating here
+			// would send the seller to a lot the app does not follow yet.
+			setPublished({
+				eventId: result.eventId,
+				coordinate: result.coordinate,
+				acceptedBy: result.acceptedBy,
+				totalRelays: result.totalRelays,
+				d: result.d,
+				seller: userPubkey,
+			})
 		} catch (error) {
 			console.error('Failed to submit auction form:', error)
 			setPublishError(error instanceof Error ? error.message : String(error))
@@ -504,6 +523,27 @@ export function AuctionFormContent() {
 		{ value: 'image', label: 'Media', showAsterisk: !hasValidImage },
 		{ value: 'split', label: 'Split', showAsterisk: !tabValid.split },
 	]
+
+	// After the relays took the signed create, the sheet shows the **acceptance
+	// panel** instead of the form: the create is on the relays, and what is left
+	// to know is the chain's own word on it. The seller can leave at any time —
+	// the create is published either way.
+	if (published !== null) {
+		const closeSheet = () => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		return (
+			<CreateAcceptancePanel
+				create={published}
+				onOpenListing={() => {
+					closeSheet()
+					navigate({ to: '/auctions/$auctionId', params: { auctionId: published.d }, search: { seller: published.seller } })
+				}}
+				onBack={() => {
+					closeSheet()
+					navigate({ to: '/auctions' })
+				}}
+			/>
+		)
+	}
 
 	return (
 		<form onSubmit={handleSubmit} className="flex flex-col h-full mt-4 overflow-hidden">

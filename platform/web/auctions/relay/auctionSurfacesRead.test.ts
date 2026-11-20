@@ -32,6 +32,7 @@ import {
 	type ArenaRelayOpenOptions,
 	type ArenaReadHealth,
 } from '@platform/web/auctions/relay/arenaAuctionRead'
+import { makeCreateAdmitEvent } from './arenaCreateAdmitFixture'
 import {
 	arenaSurfaceRelayCounts,
 	arenaSurfaceStatus,
@@ -312,7 +313,10 @@ function health(over: Partial<ArenaReadHealth> = {}): ArenaReadHealth {
 }
 
 function snapshotOf(events: NostrEventLike[], relay = 'wss://relay.one'): ArenaAuctionSnapshot {
-	const decoded = events.map((event) => {
+	// Every create here is a lot the chain accepted: append its create-admission,
+	// or the gate would (correctly) not follow it.
+	const admits = events.filter((event) => event.kind === ARENA_AUCTION_CREATE_KIND).map((create) => makeCreateAdmitEvent(create))
+	const decoded = [...events, ...admits].map((event) => {
 		const result = decode(event, relay)
 		if (!result.ok) throw new Error(`fixture refused: ${result.refusal.reason} ${result.refusal.detail}`)
 		return result.event
@@ -683,8 +687,12 @@ describe('divergenceFor', () => {
 
 	test('two relays reporting different outcomes produce a divergence on the real read', async () => {
 		const read = readFrom({
-			'wss://a': { events: [createEvent({ id: 'create-1' }), verdictEvent({ outcome: 'winner', validator: 'validator-one' })] },
-			'wss://b': { events: [createEvent({ id: 'create-1' }), verdictEvent({ outcome: 'cancelled', validator: 'validator-two' })] },
+			'wss://a': {
+				events: [createEvent({ id: 'create-1' }), makeCreateAdmitEvent(createEvent({ id: 'create-1' })), verdictEvent({ outcome: 'winner', validator: 'validator-one' })],
+			},
+			'wss://b': {
+				events: [createEvent({ id: 'create-1' }), makeCreateAdmitEvent(createEvent({ id: 'create-1' })), verdictEvent({ outcome: 'cancelled', validator: 'validator-two' })],
+			},
 		})
 		const snapshot = await read.snapshot()
 		expect(snapshot.verdictDivergence).toHaveLength(1)
@@ -702,9 +710,10 @@ describe('divergenceFor', () => {
 describe('collectArenaSurfacesRead', () => {
 	test('two relays delivering the same auction settles, with both relays recorded as provenance', async () => {
 		const create = createEvent({ id: 'create-shared' })
+		const admit = makeCreateAdmitEvent(create)
 		const read = readFrom({
-			'wss://a': { events: [create] },
-			'wss://b': { events: [create] },
+			'wss://a': { events: [create, admit] },
+			'wss://b': { events: [create, admit] },
 		})
 		const state = await collectArenaSurfacesRead(read)
 		expect(state.status).toBe('settled')
@@ -716,7 +725,7 @@ describe('collectArenaSurfacesRead', () => {
 
 	test('one dead relay keeps the data and is accounted, so the read settles', async () => {
 		const read = readFrom({
-			'wss://a': { events: [createEvent({ id: 'create-1' })] },
+			'wss://a': { events: [createEvent({ id: 'create-1' }), makeCreateAdmitEvent(createEvent({ id: 'create-1' }))] },
 			'wss://b': { fail: 'connection refused' },
 		})
 		const state = await collectArenaSurfacesRead(read)

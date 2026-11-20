@@ -9,13 +9,20 @@
  * pre-commit scanner.
  */
 import { describe, expect, test } from 'bun:test'
+import { finalizeEvent, getPublicKey } from 'nostr-tools'
 import type { EventFilter, EventStreamItem, NostrEventLike } from '@sdk/core'
-import { ARENA_AUCTION_CREATE_KIND, ARENA_VERDICT_KIND } from '@sdk/commerce/auctions/constants'
+import {
+	ARENA_AUCTION_CREATE_KIND,
+	ARENA_CREATE_ADMIT_SCHEMA,
+	ARENA_LOT_STATE_KIND,
+	ARENA_VERDICT_KIND,
+} from '@sdk/commerce/auctions/constants'
 import {
 	createArenaAuctionRead,
 	decodeArenaEvent,
 	projectArenaEvents,
 	type ArenaAuctionRead,
+	type ArenaAuctionView,
 	type ArenaRelayOpen,
 	type ArenaRelayOpenOptions,
 	type ArenaReadHealth,
@@ -197,6 +204,75 @@ function health(over: Partial<ArenaReadHealth> = {}): ArenaReadHealth {
 }
 
 // =========================================================================
+// The chain's create-admission — the fact the app follows a lot on
+// =========================================================================
+
+const ADMIT_SK = new Uint8Array(32).fill(23)
+const ADMIT_PUB = getPublicKey(ADMIT_SK)
+
+/**
+ * A signed kind-1449 create-admission (`arena.createadmit.v1`) for a create the
+ * fixtures published. The read verifies the signature, so a create without one
+ * is not a lot the app follows (`arenaAuctionRead.ts` `isFollowedAuction`).
+ */
+function admitEvent(over: { d?: string; seller?: string; rootEventId?: string; acceptedHeight?: number } = {}): NostrEventLike {
+	const d = over.d ?? 'lot-1'
+	const seller = over.seller ?? SELLER_A
+	const coordinate = `1440:${seller}:${d}`
+	const acceptedHeight = over.acceptedHeight ?? 4241
+	const hash = 'ab'.repeat(32)
+	return finalizeEvent(
+		{
+			kind: ARENA_LOT_STATE_KIND,
+			created_at: 1_795_021_527,
+			tags: [
+				['e', over.rootEventId ?? `create-${d}`],
+				['auction', coordinate],
+				['height', String(acceptedHeight)],
+				['hash', hash],
+				['p', ADMIT_PUB],
+			],
+			content: JSON.stringify({
+				schema: ARENA_CREATE_ADMIT_SCHEMA,
+				auction_id: coordinate,
+				seller,
+				root_event_id: over.rootEventId ?? `create-${d}`,
+				accepted_height: acceptedHeight,
+				block_hash: hash,
+				end_time: 4600,
+				original_end_time: 4600,
+				mode: 'fixed',
+			}),
+		},
+		ADMIT_SK,
+	) as unknown as NostrEventLike
+}
+
+/** What a create fixture implies for its admission: its `d`, its seller, its own event id. */
+function createAdmitOf(create: NostrEventLike): { d: string; seller: string; rootEventId: string } {
+	const dTag = create.tags.find((tag) => tag[0] === 'd')?.[1]
+	return { d: dTag ?? 'lot-1', seller: create.pubkey, rootEventId: create.id }
+}
+
+/**
+ * The chain's create-admission for `lot-1`, as the `toAuctionListItem` fixture
+ * carries it: a view must hold one to be a lot the app follows.
+ */
+const ADMIT: ArenaAuctionView['createAdmit'] = {
+	eventId: 'admit-1',
+	signerPubkey: ADMIT_PUB,
+	auctionId: `1440:${SELLER_A}:lot-1`,
+	seller: SELLER_A,
+	rootEventId: 'create-lot-1',
+	acceptedHeight: 4241,
+	endTime: 4600,
+	originalEndTime: 4600,
+	mode: 'fixed',
+	height: 4241,
+	blockHash: 'ab'.repeat(32),
+}
+
+// =========================================================================
 // The status mapping — one word, never a guess
 // =========================================================================
 
@@ -275,6 +351,7 @@ describe('toAuctionListItem', () => {
 		committedEnd: null,
 		committedEnds: [],
 		createRefusal: null,
+		createAdmit: ADMIT,
 		bidRefusals: [],
 		admissions: [],
 		admissionForBid: {},
@@ -303,6 +380,7 @@ describe('toAuctionListItem', () => {
 
 	test('a verdict is carried through as relay-reported, and absent reads null', () => {
 		const verdict = {
+			eventId: 'verdict-1',
 			auctionId: 'lot-1',
 			bidId: 'bid-1',
 			outcome: 'winner' as const,
@@ -324,8 +402,13 @@ describe('toAuctionListItem', () => {
 describe('selectAuctionList', () => {
 	function snapshotWith(...events: NostrEventLike[]) {
 		// Project through the real gate, so the fixtures are held to the same
-		// rules a relay would be.
-		const ok = events.map((event) => decodeArenaEvent(event, 'wss://a')).flatMap((result) => (result.ok ? [result.event] : []))
+		// rules a relay would be — **including the acceptance gate**: every 1440
+		// here is a lot the chain accepted, so a signed create-admission is
+		// appended for it. Without it the list would (correctly) drop the lot.
+		const admits = events.filter((event) => event.kind === ARENA_AUCTION_CREATE_KIND).map((create) => admitEvent(createAdmitOf(create)))
+		const ok = [...events, ...admits]
+			.map((event) => decodeArenaEvent(event, 'wss://a'))
+			.flatMap((result) => (result.ok ? [result.event] : []))
 		return projectArenaEvents(ok)
 	}
 
@@ -378,6 +461,24 @@ describe('selectAuctionList', () => {
 		const { items } = selectAuctionList(snapshot, selection({ now: 1000, limit: 2 }))
 		expect(items.map((item) => item.d)).toEqual(['three', 'two'])
 	})
+
+	test('a create the chain has not accepted is not offered, and reads as not delivered', () => {
+		// The read delivered the create; no create-admission fact names its
+		// coordinate. Discovery follows only accepted lots, so it is not an item —
+		// and a picked coordinate that is on the relays but unaccepted is reported
+		// unshown, which the block says in its own words (never "accepted").
+		const ok = [createEvent({ id: 'a1', created_at: 1000, d: 'pending' })]
+			.map((event) => decodeArenaEvent(event, 'wss://a'))
+			.flatMap((result) => (result.ok ? [result.event] : []))
+		const snapshot = projectArenaEvents(ok)
+		const coordinate = `1440:${SELLER_A}:pending`
+		expect(snapshot.auctions.map((auction) => auction.coordinate)).toEqual([coordinate])
+
+		expect(selectAuctionList(snapshot, selection({ source: 'all', now: 1000 })).items).toEqual([])
+		const picked = selectAuctionList(snapshot, selection({ source: 'picked', coordinates: [coordinate], now: 1000 }))
+		expect(picked.items).toEqual([])
+		expect(picked.missing).toEqual([coordinate])
+	})
 })
 
 // =========================================================================
@@ -386,7 +487,13 @@ describe('selectAuctionList', () => {
 
 describe('magazine selections', () => {
 	function snapshotWith(...events: NostrEventLike[]) {
-		const ok = events.map((event) => decodeArenaEvent(event, 'wss://a')).flatMap((result) => (result.ok ? [result.event] : []))
+		// Every fixture create carries the chain's admission: without it the gate
+		// does not follow the lot (`isFollowedAuction`) and a selection sees no
+		// items at all.
+		const admits = events.filter((event) => event.kind === ARENA_AUCTION_CREATE_KIND).map((create) => admitEvent(createAdmitOf(create)))
+		const ok = [...events, ...admits]
+			.map((event) => decodeArenaEvent(event, 'wss://a'))
+			.flatMap((result) => (result.ok ? [result.event] : []))
 		return projectArenaEvents(ok)
 	}
 	const item = (over: Partial<ReturnType<typeof toAuctionListItem>>) =>
@@ -449,6 +556,9 @@ describe('collectAuctionListRead', () => {
 			createEvent({ id: 'root', created_at: 1000, d: 'lot-1' }),
 			bidEvent({ auctionId: 'lot-1', amount: 150 }),
 			verdictEvent({ auctionId: 'lot-1', outcome: 'winner' }),
+			// The chain's create-admission: without it the gate does not follow the
+			// lot, and the delivered create is (correctly) not an item.
+			admitEvent(),
 		]
 		const state = await collectAuctionListRead(readFrom({ 'wss://a': { events } }))
 
@@ -474,7 +584,7 @@ describe('collectAuctionListRead', () => {
 		// delivered is kept.
 		const state = await collectAuctionListRead(
 			readFrom({
-				'wss://a': { events: [createEvent({ id: 'root', d: 'lot-1' })] },
+				'wss://a': { events: [createEvent({ id: 'root', d: 'lot-1' }), admitEvent()] },
 				'wss://b': { fail: 'connection refused' },
 			}),
 		)
@@ -492,7 +602,12 @@ describe('collectAuctionListRead', () => {
 		// partial-read sentence.
 		const started = Date.now()
 		const state = await collectAuctionListRead(
-			readFrom({ 'wss://answered': { events: [createEvent({ id: 'root', created_at: 1000, d: 'lot-1' })], hang: true } }, 150),
+			readFrom(
+				// The delivered create needs the chain's admission, or the gate
+				// does not follow the lot and the read lists nothing.
+				{ 'wss://answered': { events: [createEvent({ id: 'root', created_at: 1000, d: 'lot-1' }), admitEvent()], hang: true } },
+				150,
+			),
 		)
 		expect(Date.now() - started).toBeGreaterThanOrEqual(120)
 		expect(state.status).toBe('settled')
@@ -530,7 +645,7 @@ describe('collectAuctionListRead', () => {
 		const state = await collectAuctionListRead(
 			readFrom(
 				{
-					'wss://answered': { events: [createEvent({ id: 'root', d: 'lot-1' })] },
+					'wss://answered': { events: [createEvent({ id: 'root', d: 'lot-1' }), admitEvent()] },
 					'wss://never': { connected: false, hang: true },
 				},
 				60,

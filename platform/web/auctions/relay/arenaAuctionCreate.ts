@@ -72,7 +72,9 @@ import {
 	type ArenaCreateValue,
 } from '@sdk/commerce/auctions/auctionPublishValidation'
 import type { ArenaAuctionMode, AuctionFormData } from '@sdk/commerce/auctions/auctionForm'
-import { arenaAuctionCoordinate } from '@platform/web/auctions/relay/arenaAuctionRead'
+import { arenaAuctionCoordinate, type ArenaAuctionView } from '@platform/web/auctions/relay/arenaAuctionRead'
+// Type-only: erased at runtime, so this path stays free of any `ui/` code.
+import type { ArenaCreateAcceptanceState } from '@ui/auction/arena/create-stepper'
 
 // Re-exported so a caller of this path imports the refusal and its names from one place.
 export { ArenaCreateRefusalError }
@@ -393,4 +395,87 @@ export async function publishArenaCreate(
 		rejected,
 		totalRelays: options.relays.length,
 	}
+}
+
+// =========================================================================
+// The create form's acceptance transition
+// =========================================================================
+
+/**
+ * How often the create form's acceptance panel reopens its lot read while the
+ * chain has published neither an acceptance nor a refusal.
+ *
+ * The same cadence as the bid panel's `ARENA_BID_SETTLE_POLL_MS`: a one-shot
+ * read's freshness decays by itself, and "still reading" is a claim about the
+ * read, not about the chain — so a page that never re-read could only ever turn
+ * its own staleness into a claim about the chain.
+ */
+export const CREATE_ACCEPTANCE_POLL_MS = 15_000
+
+/**
+ * What the app now knows about a just-published create, from the read it has
+ * just consumed.
+ *
+ * The twin of `nextPublishedBidState` (`arenaBidPublish.ts`), for the create's
+ * own positive fact: an `arena.createadmit.v1` fact (kind 1449) naming this
+ * lot's coordinate is the chain saying it accepted the create, and it outranks
+ * every weaker signal — a relay ACK is storage, and the read holding the create
+ * says nothing about acceptance.
+ *
+ * From a still-reading submission (`published`):
+ *
+ * 1. the chain's **acceptance** → `accepted`, with the height it states;
+ * 2. else the chain's **refusal** of *this* create (a kind 1450 naming the
+ *    create's event id) → `refused`, with the chain's reason verbatim;
+ * 3. else the state is returned **unchanged**: still reading. An absent fact is
+ *    never "accepted" and never "refused".
+ *
+ * A concluded state is returned unchanged: neither the acceptance nor the
+ * refusal is re-litigated tick over tick, and an in-flight publish has nothing
+ * to conclude from. Returning the same object for a state that did not move is
+ * deliberate — the form's render does not depend on it, but a caller that
+ * compares identities (as `AuctionBidHost.tsx` does) must not see a new one for
+ * an unchanged fact.
+ */
+export function nextCreateAcceptanceState(input: {
+	/** The state the form holds. Anything that is not a still-reading submission is returned unchanged. */
+	previous: ArenaCreateAcceptanceState
+	/**
+	 * The lot this create belongs to, as the read delivered it, or `null` when the
+	 * read has not delivered it (yet) — which is not an answer either way.
+	 */
+	view: ArenaAuctionView | null
+	/** The signed create's event id: the id a kind-1450 refusal of it would name. */
+	createEventId: string
+}): ArenaCreateAcceptanceState {
+	const previous = input.previous
+	if (previous.phase !== 'published') return previous
+	const { view } = input
+	if (view === null) return previous
+
+	if (view.createAdmit !== null) {
+		return {
+			phase: 'accepted',
+			eventId: previous.eventId,
+			coordinate: previous.coordinate,
+			acceptedBy: previous.acceptedBy,
+			totalRelays: previous.totalRelays,
+			acceptedHeight: view.createAdmit.acceptedHeight,
+		}
+	}
+
+	// A refusal names a create's **event id**, not a coordinate: one that names
+	// another create is not this create's refusal.
+	if (view.createRefusal !== null && view.createRefusal.createEventId === input.createEventId) {
+		return {
+			phase: 'refused',
+			eventId: previous.eventId,
+			coordinate: previous.coordinate,
+			acceptedBy: previous.acceptedBy,
+			totalRelays: previous.totalRelays,
+			reason: view.createRefusal.reason,
+		}
+	}
+
+	return previous
 }

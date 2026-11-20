@@ -15,17 +15,21 @@ import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import type { Event } from '@sdk/core/nostr-io'
+import type { NostrEventLike } from '@sdk/core'
 import { ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
 import type { ArenaCreateValidationInput } from '@sdk/commerce/auctions/auctionPublishValidation'
-import { decodeArenaEvent, projectArenaEvents } from '@platform/web/auctions/relay/arenaAuctionRead'
+import { decodeArenaEvent, projectArenaEvents, type ArenaAuctionView } from '@platform/web/auctions/relay/arenaAuctionRead'
+import type { ArenaCreateAcceptanceState } from '@ui/auction/arena/create-stepper'
 import {
 	ArenaCreateRefusalError,
 	buildArenaCreateDraft,
+	nextCreateAcceptanceState,
 	publishArenaCreate,
 	type ArenaCreateContent,
 	type ArenaCreatePublisher,
 	type ArenaCreateSigner,
 } from './arenaAuctionCreate'
+import { TEST_CREATE_ADMIT_HEIGHT, makeCreateAdmitEvent, makeCreateRefusalEvent } from './arenaCreateAdmitFixture'
 
 // ---------- Fixtures -------------------------------------------------------
 
@@ -451,5 +455,81 @@ describe('the lot gallery', () => {
 	test('too many gallery items is refused by name', () => {
 		const media = Array.from({ length: 13 }, (_, i) => ({ type: 'image', url: `https://img.example/${i}.jpg` }))
 		expect(refusalOf(() => build({ media }))).toBe('create.too-much-media')
+	})
+})
+
+// ---------- The form's acceptance transition -------------------------------
+
+describe('nextCreateAcceptanceState — one transition, never a guess', () => {
+	const createdEvent = (): NostrEventLike => {
+		const draft = build()
+		return finalizeEvent(
+			{ kind: ARENA_AUCTION_CREATE_KIND, created_at: NOW, tags: draft.tags, content: JSON.stringify(draft.content) },
+			SELLER_SK,
+		) as unknown as NostrEventLike
+	}
+
+	const auctionView = (events: readonly NostrEventLike[]): ArenaAuctionView | null => {
+		const decoded = events.map((event) => {
+			const result = decodeArenaEvent(event, RELAY_A)
+			if (!result.ok) throw new Error(`fixture refused: ${result.refusal.reason} ${result.refusal.detail}`)
+			return result.event
+		})
+		return projectArenaEvents(decoded).auctions[0] ?? null
+	}
+
+	const published = (create: NostrEventLike): ArenaCreateAcceptanceState => ({
+		phase: 'published',
+		eventId: create.id,
+		coordinate: `1440:${SELLER}:${D}`,
+		acceptedBy: [RELAY_A],
+		totalRelays: 2,
+	})
+
+	test('the chain’s acceptance moves it to accepted, with the height it states', () => {
+		const create = createdEvent()
+		const view = auctionView([create, makeCreateAdmitEvent(create)])
+		const next = nextCreateAcceptanceState({ previous: published(create), view, createEventId: create.id })
+		expect(next.phase).toBe('accepted')
+		if (next.phase === 'accepted') expect(next.acceptedHeight).toBe(TEST_CREATE_ADMIT_HEIGHT)
+	})
+
+	test('neither fact: still reading — the same state back, never accepted and never refused', () => {
+		const create = createdEvent()
+		const previous = published(create)
+
+		// The read delivered the create but no acceptance and no refusal.
+		expect(nextCreateAcceptanceState({ previous, view: auctionView([create]), createEventId: create.id })).toBe(previous)
+		// The read has not delivered the lot at all: that is not an answer either way.
+		expect(nextCreateAcceptanceState({ previous, view: null, createEventId: create.id })).toBe(previous)
+	})
+
+	test('a kind-1450 naming this create refuses it, in the chain’s words verbatim', () => {
+		const create = createdEvent()
+		const view = auctionView([create, makeCreateRefusalEvent(create, { reason: 'startPrice out of range (1..10000000)' })])
+		const next = nextCreateAcceptanceState({ previous: published(create), view, createEventId: create.id })
+		expect(next.phase).toBe('refused')
+		if (next.phase === 'refused') expect(next.reason).toBe('startPrice out of range (1..10000000)')
+	})
+
+	test('a 1450 naming a different create does not refuse this one', () => {
+		const create = createdEvent()
+		const view = auctionView([create, makeCreateRefusalEvent(create)])
+		const previous = published(create)
+		// The caller's create id is not the one the refusal names: not our refusal.
+		expect(nextCreateAcceptanceState({ previous, view, createEventId: 'a-different-create' })).toBe(previous)
+	})
+
+	test('a concluded state is returned unchanged — the chain is not re-litigated tick over tick', () => {
+		const create = createdEvent()
+		const accepted: ArenaCreateAcceptanceState = {
+			phase: 'accepted',
+			acceptedHeight: 9,
+			eventId: create.id,
+			coordinate: `1440:${SELLER}:${D}`,
+			acceptedBy: [RELAY_A],
+			totalRelays: 2,
+		}
+		expect(nextCreateAcceptanceState({ previous: accepted, view: auctionView([create]), createEventId: create.id })).toBe(accepted)
 	})
 })

@@ -170,13 +170,15 @@ describe('AuctionListBlock — what an auction card says', () => {
 describe('AuctionListBlock — picked references', () => {
 	const picked = { ...blockProps, source: 'picked' as const, auctionCoordinates: [COORD] }
 
-	test('a picked reference that has not arrived is "not arrived yet", and a settled one is "not found"', () => {
+	test('a picked reference that has not arrived is "not arrived yet", and a settled one names the gate', () => {
 		const loading = render({ ...picked, status: 'loading', auctions: [], missing: [COORD] })
 		expect(loading).toContain('not arrived yet')
-		expect(loading).not.toContain('not found')
+		expect(loading).not.toContain('has not accepted it')
 
 		const settled = render({ ...picked, status: 'settled', auctions: [], missing: [COORD] })
-		expect(settled).toContain('not found')
+		// A settled pick the read did not deliver may be missing *or* unaccepted:
+		// the block says both, and never claims the lot was deleted.
+		expect(settled).toContain('no relay carried it, or the chain has not accepted it')
 		expect(settled).not.toContain('not arrived yet')
 	})
 

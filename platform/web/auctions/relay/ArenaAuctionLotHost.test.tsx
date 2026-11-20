@@ -30,6 +30,7 @@ import {
 	ARENA_VERDICT_KIND,
 	ARENA_VERDICT_SCHEMA,
 } from '@sdk/commerce/auctions/constants'
+import { makeCreateAdmitEvent } from './arenaCreateAdmitFixture'
 import { decodeArenaEvent, projectArenaEvents, type ArenaAuctionSnapshot } from './arenaAuctionRead'
 import type { ArenaSurfacesReadState } from './auctionSurfacesRead'
 import type { ArenaSurfaceStatus } from '@ui/auction/arena/model'
@@ -158,7 +159,10 @@ function verdictEvent(over: { auctionId?: string; outcome?: string; height?: num
 }
 
 function snapshotOf(events: NostrEventLike[]): ArenaAuctionSnapshot {
-	const decoded = events.map((event) => {
+	// The chain accepted every fixture create: append its admission, or the gate
+	// would not follow the lot and the detail would render `unaccepted`.
+	const admits = events.filter((event) => event.kind === ARENA_AUCTION_CREATE_KIND).map((create) => makeCreateAdmitEvent(create))
+	const decoded = [...events, ...admits].map((event) => {
 		const result = decodeArenaEvent(event, 'wss://relay.one')
 		if (!result.ok) throw new Error(`fixture refused: ${result.refusal.reason} ${result.refusal.detail}`)
 		return result.event

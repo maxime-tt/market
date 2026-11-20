@@ -79,6 +79,13 @@ export type ArenaBidBlockedReason =
 	| 'end-unknown'
 	/** `now >= endsAt`. */
 	| 'ended'
+	/**
+	 * The chain has published no create-admission fact (`arena.createadmit.v1`,
+	 * kind 1449) for this lot, so the app does not follow it and nothing is
+	 * offered on it. Not "refused": a refused create states its reason
+	 * separately, in the chain's own words.
+	 */
+	| 'not-accepted'
 	/** The auction started after now (rare: the root's `created_at` is in the future). */
 	| 'not-started'
 	/** The viewer is the seller. */
@@ -254,6 +261,10 @@ export function arenaBidBlock(
 	// second opinion and the weaker one, so a published verdict closes bidding
 	// even if `endsAt` has not passed by local time.
 	if (model.verdict !== null) return 'concluded'
+	// The gate: the chain has published no create-admission fact for this lot, so
+	// the app does not follow it at all. This outranks the clock — a lot nobody
+	// accepted is not biddable whether or not a create-derived end has passed.
+	if (model.phase === 'unaccepted') return 'not-accepted'
 	if (model.phase === 'unknown') return 'end-unknown'
 	if (model.phase === 'ended' || (model.endsAt !== null && now >= model.endsAt)) return 'ended'
 	if (model.endsAt !== null && now < model.rootCreatedAt) return 'not-started'
@@ -282,6 +293,7 @@ export function checkArenaBid(input: ArenaBidCheckInput): ArenaBidCheck {
 		if (
 			blocked === 'ended' ||
 			blocked === 'concluded' ||
+			blocked === 'not-accepted' ||
 			blocked === 'end-unknown' ||
 			blocked === 'own-auction' ||
 			blocked === 'no-wallet' ||
@@ -322,6 +334,8 @@ export function bidBlockedCopy(reason: ArenaBidBlockedReason, check: Pick<ArenaB
 			return 'This auction states no end time, so the app cannot say whether bidding is open. Nothing is offered for bid until an end time is published.'
 		case 'ended':
 			return 'Bidding has closed for this auction.'
+		case 'not-accepted':
+			return 'The chain has not accepted this listing, so this app does not follow it and nothing may be bid on it. Bidding opens when the chain accepts the create.'
 		case 'not-started':
 			return 'This auction has not opened yet.'
 		case 'own-auction':

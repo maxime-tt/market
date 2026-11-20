@@ -15,6 +15,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { NostrEventLike } from '@sdk/core'
 import { ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
+import { makeCreateAdmitEvent } from '@platform/web/auctions/relay/arenaCreateAdmitFixture'
 import { decodeArenaEvent, projectArenaEvents } from '@platform/web/auctions/relay/arenaAuctionRead'
 import { FeaturedAuctionsEditor } from './FeaturedAuctionsEditor'
 import {
@@ -48,8 +49,18 @@ function createEvent(d: string, content: Record<string, unknown> = {}): NostrEve
 	}
 }
 
-function readOf(events: readonly NostrEventLike[], status: FeaturedAuctionRead['status'] = 'settled'): FeaturedAuctionRead {
-	const decoded = events.map((event) => {
+/**
+ * A read over the fixture events. `admit` (default true) appends the chain's
+ * create-admission for every create — pass `false` to build the `unaccepted`
+ * state: the create was delivered and the chain has said nothing about it.
+ */
+function readOf(
+	events: readonly NostrEventLike[],
+	status: FeaturedAuctionRead['status'] = 'settled',
+	admit = true,
+): FeaturedAuctionRead {
+	const admits = admit ? events.filter((event) => event.kind === ARENA_AUCTION_CREATE_KIND).map((create) => makeCreateAdmitEvent(create)) : []
+	const decoded = [...events, ...admits].map((event) => {
 		const result = decodeArenaEvent(event, 'wss://relay.test')
 		if (!result.ok) throw new Error(`fixture refused: ${result.refusal.reason}`)
 		return result.event
@@ -80,7 +91,7 @@ describe('FeaturedAuctionsEditor — empty state', () => {
 	test('no curated entries and no published lot says both, and offers no picker', () => {
 		const markup = renderEditor(readOf([]), [])
 		expect(markup).toContain('No featured auctions yet')
-		expect(markup).toContain('No published auctions to feature')
+		expect(markup).toContain('No accepted auctions to feature')
 		expect(markup).not.toContain('Choose a published auction')
 	})
 
@@ -88,7 +99,7 @@ describe('FeaturedAuctionsEditor — empty state', () => {
 		const markup = renderEditor(readOf([], 'no-relays'), [])
 		expect(markup).toContain('No relay answered')
 		expect(markup).toContain('not the same as there being none')
-		expect(markup).not.toContain('No published auctions to feature')
+		expect(markup).not.toContain('No accepted auctions to feature')
 	})
 })
 
@@ -108,7 +119,7 @@ describe('FeaturedAuctionsEditor — populated state', () => {
 		const markup = renderEditor(read, featured, options)
 		expect(options.map((option) => option.coordinate)).toEqual([`1440:${SELLER}:lot-b`])
 		expect(markup).toContain('Choose a published auction')
-		expect(markup).not.toContain('No published auctions to feature')
+		expect(markup).not.toContain('No accepted auctions to feature')
 	})
 
 	test('an entry whose lot the settled read does not carry says so and keeps Remove', () => {
@@ -124,5 +135,17 @@ describe('FeaturedAuctionsEditor — populated state', () => {
 		const markup = renderEditor(readOf([], 'incomplete'), [`1440:${SELLER}:lot-a`])
 		expect(markup).toContain('Auction not read yet')
 		expect(markup).not.toContain('Auction no longer published')
+	})
+
+	test('a create the chain has not accepted is its own outcome, never "no longer published"', () => {
+		// The read delivered the create; no create-admission fact names its
+		// coordinate, so the app does not follow the lot — but a relay DOES carry it.
+		const coordinate = `1440:${SELLER}:lot-a`
+		const read = readOf([createEvent('lot-a')], 'settled', false)
+		expect(resolveFeaturedAuctionEntries([coordinate], read, NOW)).toEqual([{ kind: 'unaccepted', coordinate }])
+		const markup = renderEditor(read, [coordinate])
+		expect(markup).toContain('Auction not accepted by the chain')
+		expect(markup).not.toContain('Auction no longer published')
+		expect(markup).not.toContain('Auction not read yet')
 	})
 })

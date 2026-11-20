@@ -59,7 +59,12 @@
  *   label filter, as do the seller-profile and owner-dashboard reads.
  */
 
-import type { ArenaAuctionSnapshot, ArenaAuctionView, ArenaVerdictDivergence } from '@platform/web/auctions/relay/arenaAuctionRead'
+import {
+	followedAuctionViews,
+	type ArenaAuctionSnapshot,
+	type ArenaAuctionView,
+	type ArenaVerdictDivergence,
+} from '@platform/web/auctions/relay/arenaAuctionRead'
 import { lotHref } from '@platform/web/auctions/relay/arenaLotRead'
 import { auctionEndsAt, toAuctionCardModel } from '@platform/web/auctions/relay/auctionSurfacesRead'
 import { fetchTestLabels, useTestLabelState } from '@platform/web/config/testLabelsBinding'
@@ -132,8 +137,9 @@ export interface ArenaListSelectionResult {
 	cards: ArenaAuctionCardModel[]
 	/**
 	 * How many **discoverable** lots the read delivered, before the hide-ended
-	 * filter. Test-labeled lots are not in this count: they are not discovery
-	 * results, so an all-labeled list must not be blamed on a filter the reader set.
+	 * filter. Neither test-labeled lots nor lots the chain has not accepted are in
+	 * this count: they are not discovery results, so an all-labeled (or
+	 * all-unaccepted) list must not be blamed on a filter the reader set.
 	 */
 	total: number
 }
@@ -193,7 +199,13 @@ export function orderArenaViews(views: readonly ArenaAuctionView[], sort: ArenaL
  * empty read is not — the two sentences must not be confused.
  */
 export function selectArenaListCards(snapshot: ArenaAuctionSnapshot | null, selection: ArenaListSelection): ArenaListSelectionResult {
-	const views = snapshot?.auctions ?? []
+	// Discovery follows only what the chain accepted: a create-admission fact
+	// (`arena.createadmit.v1`) must have been read for the coordinate, or the lot
+	// is not listed at all. The gate is `followedAuctionViews` — one rule, the
+	// same one the featured strip and the storefront list apply — and it runs
+	// before the test-label filter, so a lot nobody follows is not a discovery
+	// result the reader's toggle can reveal.
+	const views = followedAuctionViews(snapshot?.auctions ?? [])
 	// ADR-0009: a `test`-labeled lot is not a discovery result. The SDK filter
 	// fails open until a label read has populated the store, so an unloaded label
 	// state hides nothing. The reader's toggle reveals labeled lots again.

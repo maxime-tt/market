@@ -57,8 +57,15 @@ export interface ArenaRelayHealth {
  * `unknown` is a real answer, not a fallback: a 1440 that states no
  * `duration_seconds` has no end to compute, and a surface that guessed one
  * would be inventing a deadline the protocol never agreed to.
+ *
+ * `unaccepted` is the app's **gate**: the chain publishes a create-admission
+ * fact (`arena.createadmit.v1`, kind 1449) when it accepts a create, and a lot
+ * with no such fact read is **not followed** at all. It is not "ended" (nothing
+ * closed), not "open" (nothing may be bid on it) and not `unknown` (which is
+ * about the end, not about the chain's word) — so it gets its own word, and the
+ * lot's surfaces state which constraint failed.
  */
-export type ArenaAuctionPhase = 'open' | 'ended' | 'unknown'
+export type ArenaAuctionPhase = 'open' | 'ended' | 'unknown' | 'unaccepted'
 
 /**
  * Where a lot's displayed end came from. This is the distinction the increment
@@ -282,6 +289,14 @@ export interface ArenaAuctionDetailModel extends ArenaAuctionCardModel {
 	 */
 	createRefusal: ArenaCreateRefusalModel | null
 	/**
+	 * The chain's **acceptance** of this lot's create (kind 1449,
+	 * `arena.createadmit.v1`) — the fact the app follows a lot on. `accepted:
+	 * false` is *no acceptance read*: the surfaces say "still reading", never
+	 * "accepted" and never "refused". Only an accepted lot offers anything that
+	 * moves money.
+	 */
+	acceptance: ArenaCreateAcceptanceModel
+	/**
 	 * The chain's refusals of this lot's **bids**, keyed by the refused bid's
 	 * event id, with the chain's own reason verbatim.
 	 *
@@ -314,6 +329,25 @@ export interface ArenaCreateRefusalModel {
 	height: number
 	/** The refusal event's id. */
 	refusalEventId: string
+}
+
+/**
+ * The chain's **acceptance** of this lot's create (kind 1449,
+ * `arena.createadmit.v1`), as a surface may state it, or the absence of one.
+ *
+ * `accepted === false` is *no acceptance read*: the chain has published no
+ * create-admission fact this read saw. It is **not** a refusal — that is
+ * {@link ArenaAuctionDetailModel.createRefusal}, in the chain's own words — and
+ * it is **not** an acceptance. Absent facts read as "still reading", never as
+ * either.
+ */
+export interface ArenaCreateAcceptanceModel {
+	/** The chain published a create-admission fact this read delivered for this lot. */
+	accepted: boolean
+	/** The height the chain states it accepted the create at, or `null` while none was read. */
+	acceptedHeight: number | null
+	/** The create-admission event's id, or `null` while none was read. */
+	admitEventId: string | null
 }
 
 /**
@@ -513,6 +547,37 @@ export function createRefusalLabel(reason: string): string {
 }
 
 /**
+ * The one sentence a lot's surface states about the chain's **acceptance** of
+ * its create.
+ *
+ * Three outcomes, never conflated:
+ *
+ * - **accepted** — the chain's create-admission fact was read, and the sentence
+ *   names the height it states;
+ * - **refused** — the chain published a kind-1450 refusal, stated in the
+ *   chain's own words via {@link createRefusalLabel};
+ * - **no acceptance read** — neither fact: the sentence says *still reading*
+ *   while the read has not settled, and *no create-admission fact names this
+ *   listing* once it has. It never says "accepted" and never says "refused".
+ */
+export function createAcceptanceNotice(
+	acceptance: ArenaCreateAcceptanceModel,
+	refusal: ArenaCreateRefusalModel | null,
+	status: ArenaSurfaceStatus,
+): string {
+	if (acceptance.accepted) {
+		return acceptance.acceptedHeight === null
+			? 'The chain accepted this listing. The height it accepted at was not read.'
+			: `The chain accepted this listing at height ${acceptance.acceptedHeight.toLocaleString()}.`
+	}
+	if (refusal !== null) return createRefusalLabel(refusal.reason)
+	if (status !== 'settled') {
+		return 'The chain has not accepted this listing yet: no create-admission fact (arena.createadmit.v1) has been read for it — the read has not settled, so this may still arrive.'
+	}
+	return 'The chain has not accepted this listing: no relay carried a create-admission fact (arena.createadmit.v1) for it. Nothing is followed on a create the chain has not taken.'
+}
+
+/**
  * The one sentence a surface may say about anti-snipe, or `null` when the
  * create did not state an `antisnipe` mode with a positive window. Anti-snipe
  * is behaviour, not a knob: an accepted bid inside the window pushes the end to
@@ -539,12 +604,15 @@ export const ARENA_ESCROW_COPY =
 export function phaseLabel(phase: ArenaAuctionPhase): string {
 	if (phase === 'open') return 'Open'
 	if (phase === 'ended') return 'Ended'
+	if (phase === 'unaccepted') return 'Not accepted'
 	return ARENA_UNKNOWN_END_LABEL
 }
 
 export function phaseTone(phase: ArenaAuctionPhase): StatusTone {
 	if (phase === 'open') return 'success'
 	if (phase === 'ended') return 'neutral'
+	// Both a lot with no readable end and a lot the chain has not accepted are
+	// flagged, not fatal: the second one is a state the chain can still leave.
 	return 'warning'
 }
 
@@ -645,7 +713,16 @@ export const ARENA_VERDICT_ABSENT_LABEL =
 export const ARENA_VERDICT_PHASE_UNKNOWN_LABEL =
 	'This lot states no end that could be read, so whether the chain has closed it is unknown. These relays carried no verdict for it.'
 
-/** The empty-state sentence while the read is unfinished — never a no-data notice. */
+/**
+ * The empty-state sentence for a lot the chain has **not accepted**: the app
+ * does not follow it at all, so no verdict could be read for it and its absence
+ * says nothing about an outcome.
+ */
+export const ARENA_VERDICT_UNACCEPTED_LABEL =
+	'The chain has not accepted this listing, so this app does not follow it — no verdict can be read for a lot the chain has not taken.'
+
+/**
+ * The empty-state sentence while the read is unfinished — never a no-data notice. */
 export const ARENA_VERDICT_READING_LABEL = 'No verdict has been read yet — the read has not finished, so this is not "no verdict".'
 
 /**
@@ -659,6 +736,7 @@ export function verdictEmptyLabel(phase: ArenaAuctionPhase, status: ArenaSurface
 	if (status !== 'settled') return ARENA_VERDICT_READING_LABEL
 	if (phase === 'open') return ARENA_VERDICT_NOT_CLOSED_LABEL
 	if (phase === 'ended') return ARENA_VERDICT_ABSENT_LABEL
+	if (phase === 'unaccepted') return ARENA_VERDICT_UNACCEPTED_LABEL
 	return ARENA_VERDICT_PHASE_UNKNOWN_LABEL
 }
 
