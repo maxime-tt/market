@@ -18,7 +18,10 @@
  * ({@link CREATE_ACCEPTANCE_POLL_MS}). The transition is the pure
  * `nextCreateAcceptanceState` (`relay/arenaAuctionCreate.ts`), so "still reading"
  * is a fact about the read and never a guess: an absent fact is never rendered
- * as accepted, and never as refused.
+ * as accepted, and never as refused. Both of the chain's words are readable on
+ * that read: an acceptance arrives among the kind-1449 facts the base REQ asks
+ * for, and a **refusal** (kind 1450) is asked for by the create's own event id in
+ * the follow-up — the only address a refusal has, since it names no coordinate.
  *
  * This file is an assembler: it owns the subscription and the button wiring, and
  * hands the `ui/` stepper plain state (`ui/AGENTS.md`).

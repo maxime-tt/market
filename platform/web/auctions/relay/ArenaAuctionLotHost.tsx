@@ -105,10 +105,14 @@ export function useArenaLotRead(init: ArenaLotReadInit): ArenaSurfacesReadState 
 			// A bid's `a` value is 106 chars (…:uuid), which the relay's index
 			// refuses, so its bids are only findable by the bid's `e` = the create's
 			// event id — knowable only after the create arrives. The base REQ keeps
-			// `#a` for relays that index it; this second REQ adds `#e`. The
-			// whole-arena read already asks for every bid kind, so it has no
-			// follow-up to add. The create-admissions its gate reads are not a
-			// follow-up either: the read asks for the missing ones when it has
+			// `#a` for relays that index it; this second REQ adds `#e`. A chain
+			// **refusal** of this create (kind 1450) has that same `#e` address and
+			// no coordinate at all, so it is read here too: without it the refusal
+			// for the very lot on screen could never arrive, and the lot page's
+			// refusal copy and the create panel's `refused` state would stay
+			// unreachable. The whole-arena read already asks for every bid kind, so
+			// it has no follow-up to add. The create-admissions its gate reads are
+			// not a follow-up either: the read asks for the missing ones when it has
 			// reported (`ArenaAuctionRead.missingCreateAdmissions`).
 			followUpFilters: d === null ? undefined : arenaLotFollowUpFilters(seller, d),
 		})

@@ -37,6 +37,7 @@ import {
 	arenaAuctionFilters,
 	arenaCreateAdmitFilter,
 	arenaLotBidFilters,
+	arenaLotCreateEventFilters,
 	arenaLotFilters,
 	arenaLotFollowUpFilters,
 	createArenaAuctionRead,
@@ -1804,10 +1805,17 @@ describe('the state half — the committed end (1449) and refusals (1450)', () =
 
 /**
  * A relay shaped like the measured one: the `#a` coordinate (106 chars for a
- * UUID `d`) is not in its index, so a base query answers only the create; the
- * bid is answerable only through the `#e` filter (the create's 64-hex id).
+ * UUID `d`) is not in its index, so a base query answers only the create. The
+ * bid, and the chain's kind-1450 refusal of the create, are answerable only
+ * through the `#e` filter (the create's own id) — each by its own kind, the way
+ * the relay's index actually answers.
  */
-function lotRelay(options: { create: NostrEventLike | null; bid: NostrEventLike | null }): {
+function lotRelay(options: {
+	create: NostrEventLike | null
+	bid: NostrEventLike | null
+	/** Kind-1450 refusals the relay holds; each is answered only to a `#e` REQ for kind 1450. */
+	refusals?: NostrEventLike[]
+}): {
 	open: ArenaRelayOpenFactory
 	calls: (readonly EventFilter[])[]
 } {
@@ -1817,8 +1825,18 @@ function lotRelay(options: { create: NostrEventLike | null; bid: NostrEventLike 
 		(filters: readonly EventFilter[]) => ({
 			async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
 				calls.push(filters)
-				const byEvent = filters.some((filter) => (filter['#e'] ?? []).includes(options.create?.id ?? ''))
-				const events = byEvent ? (options.bid === null ? [] : [options.bid]) : options.create === null ? [] : [options.create]
+				const id = options.create?.id ?? ''
+				const events: NostrEventLike[] = []
+				if (options.create !== null && filters.some((filter) => (filter['#d'] ?? []).length > 0)) events.push(options.create)
+				if (
+					options.bid !== null &&
+					filters.some((filter) => (filter.kinds ?? []).includes(1441) && (filter['#e'] ?? []).includes(id))
+				) {
+					events.push(options.bid)
+				}
+				if (filters.some((filter) => (filter.kinds ?? []).includes(1450) && (filter['#e'] ?? []).includes(id))) {
+					events.push(...(options.refusals ?? []))
+				}
 				for (const event of events) yield { type: 'event', event } as EventStreamItem<NostrEventLike>
 				yield { type: 'caught-up', info: { eose: [url], pending: [], complete: false } } as EventStreamItem<NostrEventLike>
 			},
@@ -1866,10 +1884,14 @@ describe('a lot read whose bids are only findable by #e', () => {
 		})
 		const items = await collect(read.events())
 
-		// Two REQs: the base one keeps #a; the follow-up is the #e variant alone.
+		// Two REQs: the base one keeps #a; the follow-up is the create's own `#e`
+		// address — its bids, and the chain's refusal of that create.
 		expect(relay.calls).toHaveLength(2)
 		expect(relay.calls[0]).toContainEqual({ kinds: [1441], '#a': [COORD] })
-		expect(relay.calls[1]).toEqual([{ kinds: [1441], '#e': [ROOT] }])
+		expect(relay.calls[1]).toEqual([
+			{ kinds: [1441], '#e': [ROOT] },
+			{ kinds: [1450], '#e': [ROOT] },
+		])
 
 		const events = items.filter((item) => item.type === 'events').flatMap((item) => item.events)
 		expect(events.map((event) => event.id)).toEqual([ROOT, bid.id])
@@ -1891,6 +1913,150 @@ describe('a lot read whose bids are only findable by #e', () => {
 		})
 		await read.snapshot()
 		expect(relay.calls).toHaveLength(1)
+	})
+})
+
+// =========================================================================
+// A lot's refusal: a 1450 has no coordinate, so the follow-up asks by #e
+// =========================================================================
+
+/**
+ * A kind-1450 refusal that names this create is the **only** fact that refuses a
+ * lot (`arenaAuctionRead.ts` `ArenaAuctionView.createRefusal`). It carries the
+ * refused event's id in its `e` tag and no `auction` tag at all, so it cannot be
+ * addressed by the coordinate or the `d` the base REQ filters on: the create's
+ * own event id — knowable only after the create has been read — is its one
+ * address, and the follow-up REQ is where it is asked for.
+ */
+describe('a lot’s create refusal is readable only by the create’s own id', () => {
+	const ROOT = 'refused-root-1'
+	const COORD = `1440:${SELLER_A}:lot-1`
+	const create = createEvent({ id: ROOT })
+	const bid = bidEvent({ auctionId: 'lot-1', amount: 500, a: COORD, e: ROOT, id: 'refused-bid' })
+	const decoded = (event: NostrEventLike): ArenaAuctionEvent => {
+		const result = decodeArenaEvent(event, 'wss://limited')
+		if (!result.ok) throw new Error(`fixture refused: ${result.refusal.reason}`)
+		return result.event
+	}
+
+	test('the base REQ cannot carry a 1450: a refusal names no coordinate and no `d`', () => {
+		for (const filter of arenaLotFilters(SELLER_A, 'lot-1')) expect(filter.kinds ?? []).not.toContain(1450)
+		// …while the create it must be read after is right there in that REQ.
+		expect(arenaLotFilters(SELLER_A, 'lot-1')).toContainEqual({ kinds: [1440], '#d': ['lot-1'] })
+	})
+
+	test('the follow-up asks for the refusal by the create’s own id, beside the bids', () => {
+		expect(arenaLotCreateEventFilters([ROOT, 'root-2'])).toEqual([
+			{ kinds: [1441], '#e': [ROOT, 'root-2'] },
+			{ kinds: [1450], '#e': [ROOT, 'root-2'] },
+		])
+		// No id is no filter: never an empty `'#e': []`.
+		expect(arenaLotCreateEventFilters([])).toEqual([])
+		expect(arenaLotCreateEventFilters([''])).toEqual([])
+		expect(arenaLotFollowUpFilters(SELLER_A, 'lot-1')([decoded(create)])).toEqual([
+			{ kinds: [1441], '#e': [ROOT] },
+			{ kinds: [1450], '#e': [ROOT] },
+		])
+	})
+
+	test('the refusal arrives in the lot’s own read, before caught-up', async () => {
+		const refusal = refusedEvent({ refusedEventId: ROOT, reason: 'startPrice out of range (1..10000000)' })
+		const relay = lotRelay({ create, bid, refusals: [refusal] })
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 1000,
+			filters: arenaLotFilters(SELLER_A, 'lot-1'),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, 'lot-1'),
+			openRelay: relay.open,
+		})
+		const items = await collect(read.events())
+
+		// The refusal rides in the same second REQ as the bids, addressed by the id.
+		expect(relay.calls[1]).toEqual([
+			{ kinds: [1441], '#e': [ROOT] },
+			{ kinds: [1450], '#e': [ROOT] },
+		])
+		const events = items.filter((item) => item.type === 'events').flatMap((item) => item.events)
+		expect(events.map((event) => event.id)).toEqual([ROOT, bid.id, refusal.id])
+
+		// A page's collector stops at caught-up, so the refusal precedes it.
+		const types = items.map((item) => item.type)
+		expect(types.lastIndexOf('events')).toBeLessThan(types.indexOf('caught-up'))
+	})
+
+	test('the lot carries it as createRefusal, in the chain’s words, and the snapshot as a refused create', async () => {
+		const refusal = refusedEvent({ refusedEventId: ROOT, reason: 'startPrice out of range (1..10000000)' })
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 1000,
+			filters: arenaLotFilters(SELLER_A, 'lot-1'),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, 'lot-1'),
+			openRelay: lotRelay({ create, bid, refusals: [refusal] }).open,
+		})
+		const snapshot = await read.snapshot()
+
+		const view = snapshot.auctions[0]
+		expect(view.createRefusal?.createEventId).toBe(ROOT)
+		expect(view.createRefusal?.reason).toBe('startPrice out of range (1..10000000)')
+		expect(view.createRefusal?.height).toBe(1749)
+		expect(snapshot.refusedCreates).toHaveLength(1)
+	})
+
+	test('a refusal naming a different create never refuses this lot', async () => {
+		// A relay that answers the create's `#e` REQ with a refusal it holds for some
+		// other event: the fact is read, and it is not this create's — the key is the
+		// refused event id, never "the newest 1450 that arrived".
+		const elsewhere = refusedEvent({ refusedEventId: 'another-create', reason: 'title required (max 120 chars)' })
+		const read = createArenaAuctionRead({
+			relays: ['wss://sloppy'],
+			deadlineMs: 200,
+			filters: arenaLotFilters(SELLER_A, 'lot-1'),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, 'lot-1'),
+			openRelay:
+				(url: string): ArenaRelayOpen =>
+				(filters: readonly EventFilter[]) => ({
+					async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+						const byD = filters.some((filter) => (filter['#d'] ?? []).length > 0)
+						for (const event of byD ? [create] : [elsewhere]) yield { type: 'event', event } as EventStreamItem<NostrEventLike>
+						yield { type: 'caught-up', info: { eose: [url], pending: [], complete: false } } as EventStreamItem<NostrEventLike>
+					},
+				}),
+		})
+		const snapshot = await read.snapshot()
+
+		expect(snapshot.auctions[0].createRefusal).toBeNull()
+		expect(snapshot.refusedCreates.map((fact) => fact.createEventId)).toEqual(['another-create'])
+	})
+
+	test('a refusal that fails the gate is refused by name, never surfaced', async () => {
+		// Fail closed, the same discipline as every other kind: the parser verifies
+		// the signature first, so an unsigned refusal is not a refusal.
+		const tampered = { ...refusedEvent({ refusedEventId: ROOT }), sig: '' }
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 1000,
+			filters: arenaLotFilters(SELLER_A, 'lot-1'),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, 'lot-1'),
+			openRelay: lotRelay({ create, bid, refusals: [tampered] }).open,
+		})
+		const snapshot = await read.snapshot()
+
+		expect(snapshot.auctions[0].createRefusal).toBeNull()
+		expect(snapshot.refusals.map((refusal) => refusal.reason)).toContain('arena.lot_state.bad_signature')
+	})
+
+	test('with no refusal read the lot has no createRefusal — no reason is invented', async () => {
+		const read = createArenaAuctionRead({
+			relays: ['wss://limited'],
+			deadlineMs: 1000,
+			filters: arenaLotFilters(SELLER_A, 'lot-1'),
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, 'lot-1'),
+			openRelay: lotRelay({ create, bid, refusals: [] }).open,
+		})
+		const snapshot = await read.snapshot()
+
+		expect(snapshot.auctions[0].createRefusal).toBeNull()
+		expect(snapshot.refusedCreates).toEqual([])
 	})
 })
 
@@ -2159,7 +2325,10 @@ describe('a seller-known lot read never sends the coordinate filter twice', () =
 
 		expect(relay.calls).toHaveLength(2)
 		expect(relay.calls[0]).toContainEqual(COORDINATE_FILTER)
-		expect(relay.calls[1]).toEqual([{ kinds: [1441], '#e': ['bare-root'] }])
+		expect(relay.calls[1]).toEqual([
+			{ kinds: [1441], '#e': ['bare-root'] },
+			{ kinds: [1450], '#e': ['bare-root'] },
+		])
 
 		// Exactly one REQ carries the coordinate, across the whole read.
 		const coordinateFilters = relay.calls.flat().filter((filter) => filter['#auction'] !== undefined)

@@ -249,6 +249,33 @@ describe('ArenaLotView', () => {
 		expect(html).toContain('data-phase="unaccepted"')
 	})
 
+	test('a lot the chain refused states the refusal verbatim and offers nothing that moves money', () => {
+		// The refusal is the chain's own sentence, kept verbatim through the read
+		// (`createRefusal` → `createRefusalLabel`): a refused listing says why, in
+		// the chain's words, and offers no bid, no funding and no claim — the view
+		// nulls the bid controller and the phase keeps it unaccepted.
+		const html = render({
+			model: {
+				...model,
+				phase: 'unaccepted',
+				acceptance: { accepted: false, acceptedHeight: null, admitEventId: null },
+				createRefusal: {
+					reason: 'startPrice out of range (1..10000000)',
+					height: 1749,
+					refusalEventId: 'refusal-event-1',
+				},
+			},
+		})
+		expect(html).toContain('data-testid="arena-lot-acceptance"')
+		expect(html).toContain('data-accepted="false"')
+		expect(html).toContain('the chain refused this listing: startPrice out of range (1..10000000)')
+		expect(html).toContain('data-phase="unaccepted"')
+		expect(html).not.toContain('arena-lot-ladder')
+		expect(html).not.toContain('Sign in to bid')
+		// Not "not found", and never a re-worded reason.
+		expect(html).not.toContain('no create-admission fact')
+	})
+
 	test('no third-party hosts or Google in the view', () => {
 		const html = render()
 		expect(html).not.toMatch(/https?:\/\//)
