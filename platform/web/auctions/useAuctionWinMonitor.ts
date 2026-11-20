@@ -34,11 +34,9 @@ import { useStore } from '@tanstack/react-store'
 import type { EventStorePort } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
 import { ARENA_AUCTION_BID_KIND } from '@sdk/commerce/auctions/constants'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { authStore } from '@platform/web/auth/authStore'
-import { ndkActions } from '@platform/web/ndk/ndkStore'
 import { getReadContext } from '@platform/web/readContext'
-import { webRelayPolicy } from '@platform/web/sdkNostrIo'
+import { createWebRelayReadContext, webRelayPolicy } from '@platform/web/sdkNostrIo'
 import {
 	appNotifications,
 	enqueueAuctionWin,
@@ -60,15 +58,19 @@ const POLL_INTERVAL_MS = 20_000
 const BID_DISCOVERY_LIMIT = 500
 const DISCOVERY_TIMEOUT_MS = 8000
 
-/** The arena bid kind as NDK's filter type — a bare number is not assignable to `NDKFilter['kinds']`. */
-const AUCTION_BID_KIND_NDK = ARENA_AUCTION_BID_KIND as NonNullable<NDKFilter['kinds']>[number]
-
 /** Read the user's own 1441 bids and reduce them to the lots the watch list reads. */
 async function discoverBidLots(pubkey: string): Promise<WatchableLot[]> {
-	const events = await ndkActions.fetchEventsWithTimeout(
-		{ kinds: [AUCTION_BID_KIND_NDK], authors: [pubkey], limit: BID_DISCOVERY_LIMIT },
-		{ timeoutMs: DISCOVERY_TIMEOUT_MS },
+	// Discovery is a bounded one-off lookup, so it uses the seam's `fetch` over the
+	// app's own query relays — the same `createWebRelayReadContext` route the lot read
+	// (`readAuctionLot`) takes — never a second relay client.
+	const read = createWebRelayReadContext(
+		getReadContext().store as unknown as EventStorePort<Event>,
+		[...webRelayPolicy('query')],
+		{ deadlineMs: DISCOVERY_TIMEOUT_MS },
 	)
+	const events = await read.fetch([
+		{ kinds: [ARENA_AUCTION_BID_KIND], authors: [pubkey], limit: BID_DISCOVERY_LIMIT },
+	])
 	const byCoordinate = new Map<string, WatchableLot>()
 	for (const event of events) {
 		const binding = arenaBidBinding(event)

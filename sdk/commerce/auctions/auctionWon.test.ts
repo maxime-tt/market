@@ -56,6 +56,8 @@ const win: AuctionWonPayload = {
 	auctionRootEventId: AUCTION_ROOT_ID,
 	bidEventId: WINNING_BID_ID,
 	bidAmount: 5000,
+	lotD: 'auction-1',
+	lotSeller: SELLER_PUBKEY,
 }
 
 const makeSettlement = (overrides: Partial<NostrEventLike> = {}): NostrEventLike => ({
