@@ -40,7 +40,7 @@ import { toast } from 'sonner'
 import { StorefrontSetupWizard } from './StorefrontSetupWizard'
 import { storefrontCmsConfig } from './storefrontCms'
 import { usePublishStorefrontPage, useStorefrontPage } from './storefrontQuery'
-import { HOME_PAGE_D_TAG } from './instanceHomePage'
+import { HOME_PAGE_D_TAG, LEGACY_HOME_PUBKEY, useInstanceHomePage } from './instanceHomePage'
 import { clearStorefrontDraft, loadStorefrontDraft, saveStorefrontDraft } from './draftStorage'
 
 // no-external.css is Puck's stylesheet without its @import of Inter from
@@ -113,8 +113,17 @@ function fromPuckData(data: Data, enabled: boolean, chrome: StorefrontPageChrome
 }
 
 export function StorefrontBuilder({ pubkey, dTag = STOREFRONT_PAGE_D_TAG }: { pubkey: string; dTag?: string }) {
-	const { data: published, isLoading } = useStorefrontPage(pubkey, dTag)
+	const { data: ownPublished, isLoading: ownLoading } = useStorefrontPage(pubkey, dTag)
 	const publish = usePublishStorefrontPage()
+
+	// The home page is shared by the app key, the owner and the admins, and `/` shows
+	// the newest of theirs (ADR-0028). Edit that one, not just this author's own copy,
+	// so publishing never brings back an older layout someone else replaced.
+	const instanceHome = useInstanceHomePage({ enabled: dTag === HOME_PAGE_D_TAG })
+	const sharedHome = instanceHome.choice && instanceHome.choice.pubkey !== LEGACY_HOME_PUBKEY ? instanceHome.choice : null
+	const sharedPage = sharedHome?.page
+	const published = useMemo(() => (sharedPage ? { ...ownPublished, page: sharedPage } : ownPublished), [ownPublished, sharedPage])
+	const isLoading = ownLoading || instanceHome.loading
 
 	// Derived, never passed: the storefront page is the one whose address is the
 	// reserved default. Everything address-specific in the chrome hangs off this.

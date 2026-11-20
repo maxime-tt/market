@@ -42,6 +42,7 @@ The home page opened on a welcome banner and an intro animation, then a search b
 
 ## Consequences
 
+- The editor opens the `home` page the site actually shows: the newest one by the app key, the owner or an admin. It used to open only the signed-in author's own copy, so an older layout could come back on publish. Local drafts still come first.
 - A published home page (kind 30024, `d=home`) still wins over the built-in home. To switch a live instance, open the home page in the editor, choose **Change template → Magazine cover** and publish.
 - The server-rendered first paint shows the no-host view of the new blocks until the app takes over. Server-side data for these blocks is a follow-up.
 - The intro module (`ui/browse/intro`) is no longer used by the home page. It can be removed later.
