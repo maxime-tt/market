@@ -13,10 +13,12 @@ import {
 	ARENA_BID_ADVISORY,
 	ARENA_BIDDER_SIGNED_OUT,
 	arenaBidBlock,
+	arenaBidDelta,
 	arenaBidFloor,
 	arenaRequiredRaise,
 	bidBlockedCopy,
 	checkArenaBid,
+	ownArenaPosition,
 	parseBidAmountSats,
 	type ArenaBidBlockedReason,
 	type ArenaBidCheckInput,
@@ -206,6 +208,56 @@ describe('arenaBidFloor — the floor comes from the terms, never a guess', () =
 })
 
 // =========================================================================
+// The bidder's own position, and the one intent → delta conversion
+// =========================================================================
+
+describe('ownArenaPosition — what the bidder already holds, never a guessed zero', () => {
+	test('the live leg sum is the position', () => {
+		const model = detail({ positions: [{ bidder: BIDDER, total: 100 }] })
+		expect(ownArenaPosition(model, BIDDER, 'settled')).toBe(100)
+	})
+
+	test('a position the read could not settle is null, not zero', () => {
+		const model = detail({ positions: [{ bidder: BIDDER, total: null }] })
+		expect(ownArenaPosition(model, BIDDER, 'settled')).toBeNull()
+	})
+
+	test('a settled read with no leg for the bidder is a real zero', () => {
+		expect(ownArenaPosition(detail(), BIDDER, 'settled')).toBe(0)
+	})
+
+	test('an unsettled read with no leg read is null: absence is not evidence of zero', () => {
+		for (const status of ['loading', 'incomplete', 'no-relays', 'error'] as const) {
+			expect(ownArenaPosition(detail(), BIDDER, status)).toBeNull()
+		}
+	})
+
+	test('no model or no bidder is unknown', () => {
+		expect(ownArenaPosition(null, BIDDER, 'settled')).toBeNull()
+		expect(ownArenaPosition(detail(), null, 'settled')).toBeNull()
+	})
+})
+
+describe('arenaBidDelta — the ONE conversion from an intended position to a chain delta', () => {
+	test('the maintainer’s case: a 100-sat position and a 102-sat intent publish 2', () => {
+		expect(arenaBidDelta(100, 102)).toBe(2)
+	})
+
+	test('a first bidder adds the whole intent', () => {
+		expect(arenaBidDelta(0, 102)).toBe(102)
+	})
+
+	test('an intent at or below the position is not a raise', () => {
+		expect(arenaBidDelta(100, 100)).toBe(0)
+		expect(arenaBidDelta(100, 40)).toBe(-60)
+	})
+
+	test('an unknown own position yields null, never the whole intent', () => {
+		expect(arenaBidDelta(null, 102)).toBeNull()
+	})
+})
+
+// =========================================================================
 // Blocking states outrank amount states
 // =========================================================================
 
@@ -255,15 +307,54 @@ describe('arenaBidBlock — every reason bidding is not offered', () => {
 	})
 })
 
-describe('checkArenaBid — the amount check', () => {
-	test('an amount at the floor is allowed', () => {
+describe('checkArenaBid — the typed position, and the delta it publishes', () => {
+	test('an intent at the floor on a lot with no bids is allowed, and publishes the whole intent', () => {
 		const check = checkArenaBid(input({ raw: '1000' }))
-		expect(check).toMatchObject({ allowed: true, reason: 'ok', amount: 1000, minimum: 1000, ownPosition: null })
+		expect(check).toMatchObject({ allowed: true, reason: 'ok', amount: 1000, minimum: 1000, ownPosition: 0 })
+	})
+
+	test('the maintainer’s case: own 100, intent 102 → published delta 2, position 102', () => {
+		// top 100 at 200 bps → required raise 2 → the floor is 102. The bidder
+		// already holds 100 and types 102 (the number the panel showed); the delta
+		// the chain is handed is 2, not 102, so their position becomes 102.
+		const model = detail({ bidCount: 1, topBidTotal: 100, positions: [{ bidder: BIDDER, total: 100 }] })
+		const check = checkArenaBid(input({ model, raw: '102' }))
+		expect(check).toMatchObject({ allowed: true, reason: 'ok', amount: 2, minimum: 102, ownPosition: 100 })
+		expect(check.ownPosition! + check.amount!).toBe(102)
+	})
+
+	test('a non-leader with no position publishes the whole intent as the delta', () => {
+		const model = detail({ bidCount: 1, topBidTotal: 100 })
+		const check = checkArenaBid(input({ model, raw: '102' }))
+		expect(check).toMatchObject({ allowed: true, reason: 'ok', amount: 102, minimum: 102, ownPosition: 0 })
 	})
 
 	test('below the floor is refused, and names the floor', () => {
 		const check = checkArenaBid(input({ raw: '999' }))
 		expect(check).toMatchObject({ allowed: false, reason: 'below-minimum', amount: 999, minimum: 1000 })
+	})
+
+	test('an intent at or below the bidder’s own position is refused — nothing to add', () => {
+		const model = detail({ bidCount: 1, topBidTotal: 100, positions: [{ bidder: BIDDER, total: 100 }] })
+		// The floor is 102; 100 leaves the position where it is and 40 would lower it.
+		expect(checkArenaBid(input({ model, raw: '100' }))).toMatchObject({
+			allowed: false,
+			reason: 'at-or-below-own-position',
+			amount: null,
+			ownPosition: 100,
+		})
+		expect(checkArenaBid(input({ model, raw: '40' }))).toMatchObject({
+			allowed: false,
+			reason: 'at-or-below-own-position',
+			amount: null,
+			ownPosition: 100,
+		})
+	})
+
+	test('a delta of zero or negative is never signed: `amount` stays null', () => {
+		const model = detail({ bidCount: 1, topBidTotal: 100, positions: [{ bidder: BIDDER, total: 100 }] })
+		expect(checkArenaBid(input({ model, raw: '100' })).amount).toBeNull()
+		expect(checkArenaBid(input({ model, raw: '1' })).amount).toBeNull()
 	})
 
 	test('no amount is allowed on a lot the chain has not accepted', () => {
@@ -288,18 +379,10 @@ describe('checkArenaBid — the amount check', () => {
 		expect(checkArenaBid(input({ now: 9000, raw: '' })).reason).toBe('ended')
 	})
 
-	test('bids are DELTAS: a bidder at 1000 who bids 100 reaches 1100 and is allowed', () => {
-		const model = detail({ bidCount: 1, topBidTotal: 1000, positions: [{ bidder: BIDDER, total: 1000 }] })
-		const check = checkArenaBid(input({ model, raw: '100' }))
-		// 100 alone is below the floor; the leader’s position 1000 + 100 clears the
-		// 1020 the chain’s 2% raise requires.
-		expect(check).toMatchObject({ allowed: true, reason: 'ok', amount: 100, minimum: 1020, ownPosition: 1000 })
-	})
-
-	test('a bidder at 1000 who bids 1 on a leader at 1500 is refused — their position would be 1001, below the 1530 raise floor', () => {
+	test('a bidder at 1000 who intends 1001 on a leader at 1500 is refused — that position is below the 1530 floor', () => {
 		const model = detail({ bidCount: 1, topBidTotal: 1500, positions: [{ bidder: BIDDER, total: 1000 }] })
-		const check = checkArenaBid(input({ model, raw: '1' }))
-		expect(check).toMatchObject({ allowed: false, reason: 'below-minimum', minimum: 1530, ownPosition: 1000 })
+		const check = checkArenaBid(input({ model, raw: '1001' }))
+		expect(check).toMatchObject({ allowed: false, reason: 'below-minimum', minimum: 1530, ownPosition: 1000, amount: 1 })
 	})
 
 	test('a raise one sat below the required raise is refused locally', () => {
@@ -313,14 +396,42 @@ describe('checkArenaBid — the amount check', () => {
 		})
 	})
 
-	test('the leader’s own raise is held to the same rule: 1 sat above the top is refused', () => {
+	test('the leader’s own raise is held to the same rule: reaching the top is not raising it', () => {
 		const model = detail({ bidCount: 1, topBidTotal: 1000, positions: [{ bidder: BIDDER, total: 1000 }] })
-		// The chain no longer exempts a leader’s self-raise; a 1-sat self-raise cannot exist.
-		expect(checkArenaBid(input({ model, raw: '1' }))).toMatchObject({
+		// A self-raise to the top itself has no delta; the chain's 2% raise puts
+		// the floor at 1020, so the leader must intend at least that.
+		expect(checkArenaBid(input({ model, raw: '1000' }))).toMatchObject({
 			allowed: false,
-			reason: 'below-minimum',
+			reason: 'at-or-below-own-position',
+			ownPosition: 1000,
+		})
+		expect(checkArenaBid(input({ model, raw: '1020' }))).toMatchObject({
+			allowed: true,
+			reason: 'ok',
+			amount: 20,
 			minimum: 1020,
 			ownPosition: 1000,
+		})
+	})
+
+	test('an unsettled own position is refused, never treated as zero', () => {
+		// The bidder’s entry carries `null`: a leg whose liveness the read could
+		// not vouch for. The delta cannot be known, so the check refuses rather
+		// than publishing the whole intent.
+		const model = detail({ bidCount: 1, topBidTotal: 100, positions: [{ bidder: BIDDER, total: null }] })
+		expect(checkArenaBid(input({ model, raw: '102' }))).toMatchObject({
+			allowed: false,
+			reason: 'own-position-unknown',
+			amount: null,
+			ownPosition: null,
+		})
+	})
+
+	test('an unsettled read with no leg for the bidder is refused, never a guessed zero', () => {
+		expect(checkArenaBid(input({ status: 'incomplete', raw: '102' }))).toMatchObject({
+			allowed: false,
+			reason: 'own-position-unknown',
+			ownPosition: null,
 		})
 	})
 
@@ -330,9 +441,14 @@ describe('checkArenaBid — the amount check', () => {
 		expect(check).toMatchObject({ allowed: false, reason: 'read-incomplete', minimum: null })
 	})
 
-	test('someone else’s position is not the viewer’s', () => {
+	test('someone else’s position is not the viewer’s: a settled read with no leg is a real zero', () => {
 		const model = detail({ bidCount: 1, topBidTotal: 1000, positions: [{ bidder: OTHER, total: 1000 }] })
-		expect(checkArenaBid(input({ model, raw: '100' }))).toMatchObject({ allowed: false, reason: 'below-minimum', ownPosition: null })
+		expect(checkArenaBid(input({ model, raw: '100' }))).toMatchObject({
+			allowed: false,
+			reason: 'below-minimum',
+			ownPosition: 0,
+			amount: 100,
+		})
 	})
 
 	test('no starting_bid: refused as unstated, not as zero', () => {
@@ -367,6 +483,8 @@ describe('bidBlockedCopy — no disabled button without a sentence', () => {
 		'zero',
 		'no-starting-bid',
 		'below-minimum',
+		'at-or-below-own-position',
+		'own-position-unknown',
 	]
 
 	test('every reason except "ok" renders a non-empty sentence', () => {
@@ -376,9 +494,16 @@ describe('bidBlockedCopy — no disabled button without a sentence', () => {
 		expect(bidBlockedCopy('ok', { minimum: null, ownPosition: null })).toBe('')
 	})
 
-	test('the below-minimum sentence states the floor in sats and says bids are deltas', () => {
-		expect(bidBlockedCopy('below-minimum', { minimum: 1600, ownPosition: 1000 })).toContain('1,600 sats')
-		expect(bidBlockedCopy('below-minimum', { minimum: 1600, ownPosition: 1000 })).toContain('adds to your position')
+	test('the below-minimum sentence names the position the bid must reach, and the one held', () => {
+		const copy = bidBlockedCopy('below-minimum', { minimum: 1600, ownPosition: 1000 })
+		expect(copy).toContain('1,600 sats')
+		expect(copy).toContain('1,000 sats')
+		expect(copy).toContain('must reach')
+	})
+
+	test('the own-position reasons are about the position, and the unknown one refuses to guess', () => {
+		expect(bidBlockedCopy('at-or-below-own-position', { minimum: 1600, ownPosition: 1000 })).toContain('1,000 sats')
+		expect(bidBlockedCopy('own-position-unknown', { minimum: 1000, ownPosition: null })).toContain('reload')
 	})
 
 	test('a decimal is explained, never silently rounded', () => {

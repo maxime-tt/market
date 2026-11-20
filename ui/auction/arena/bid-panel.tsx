@@ -335,7 +335,7 @@ export interface ArenaBidPanelProps {
 	check: ArenaBidCheck | null
 	/** The check that blocks bidding regardless of the amount, e.g. `own-auction`; `null` when none does. */
 	blockedReason: ArenaBidBlockedReason | null
-	/** The typed amount, verbatim. */
+	/** The typed bid, verbatim: the **position** the bidder means to hold, not the delta published. */
 	amountInput: string
 	onAmountChange: (value: string) => void
 	/** True while a submission is in flight: the input and the button are both inert. */
@@ -378,7 +378,7 @@ export function bidFloorLabel(model: ArenaAuctionDetailModel, check: ArenaBidChe
 		if (model.startingBid === null) return 'This auction published no starting bid.'
 		return 'The minimum for your next bid cannot be computed from what has been read so far.'
 	}
-	if (check.ownPosition !== null) {
+	if (check.ownPosition !== null && check.ownPosition > 0) {
 		return `Bids add to your position. Yours is ${check.ownPosition.toLocaleString()} sats; your position must reach at least ${check.minimum.toLocaleString()} sats.`
 	}
 	if (model.bidCount === 0) return `Opening bid: at least ${check.minimum.toLocaleString()} sats.`

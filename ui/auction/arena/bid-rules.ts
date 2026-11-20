@@ -107,25 +107,49 @@ export type ArenaBidBlockedReason =
 	| 'no-starting-bid'
 	/** Below the lowest bid the published terms allow. The amount it names lives on the verdict. */
 	| 'below-minimum'
+	/**
+	 * The typed **position** is at or below the bidder's own position: there is
+	 * nothing to add, so the chain's delta would be zero or negative. A bid is an
+	 * increase on where the bidder already stands.
+	 */
+	| 'at-or-below-own-position'
+	/**
+	 * The read has not settled what the bidder already holds (their legs could
+	 * not all be vouched for, or the read has not caught up), so the delta the
+	 * chain expects cannot be known. The app refuses rather than treating an
+	 * unknown position as `0`, which would publish the whole intent as a delta.
+	 */
+	| 'own-position-unknown'
 	/** Passes the client pre-check. Publishable — not valid. */
 	| 'ok'
 
-/** The outcome of pre-checking one amount against one auction. */
+/** The outcome of pre-checking one typed amount against one auction. */
 export interface ArenaBidCheck {
 	/** `true` only for `ok`. */
 	allowed: boolean
 	/** Why. Always populated — `ok` is a reason too. */
 	reason: ArenaBidBlockedReason
-	/** The integer sats the input represents, or `null` when it does not parse. */
+	/**
+	 * The **delta** this bid publishes — the chain's `BidContent.Amount`, an
+	 * integer added to the bidder's position — or `null` when it would not be a
+	 * positive integer: the input does not parse, the bidder's own position is
+	 * not known, or the intent is not a raise on it. This is the number the
+	 * event names and the escrow locks, never the panel's (position) number.
+	 */
 	amount: number | null
 	/**
-	 * The lowest amount the published terms and the chain's committed params
-	 * allow for this bidder at `now`, or `null` when it cannot be computed
-	 * (`starting_bid` unstated, or a raise whose `min_increment_bps` has not
-	 * been read).
+	 * The lowest **position** the published terms and the chain's committed
+	 * params allow this bidder to reach at `now` — the number the panel's field
+	 * is a position *of* — or `null` when it cannot be computed (`starting_bid`
+	 * unstated, or a raise whose `min_increment_bps` has not been read).
 	 */
 	minimum: number | null
-	/** The bidder's own position, if they already have one. Tells the UI the input is a **delta**. */
+	/**
+	 * The bidder's own **position** on the lot (the sum of their live legs), or
+	 * `null` when the read has not settled it. `0` when the read is settled and
+	 * they have no legs. The input is a position, and this is what the delta is
+	 * measured against.
+	 */
 	ownPosition: number | null
 }
 
@@ -165,13 +189,14 @@ export function parseBidAmountSats(raw: string | number | null | undefined): num
 /**
  * Bids are **deltas** added to a bidder's position, not the resulting total
  * (the reference chain's `BidContent.Amount`, `chain/app.go`: "a DELTA added to
- * the bidder's existing position, not their new total"). So the comparable
- * figure for "can this bid stand?" is the bidder's position **after** the delta,
- * which is `ownPosition + amount` — not `amount` on its own.
+ * the bidder's existing position, not their new total"). The panel's number is
+ * the **position** the bidder means to hold — it is displayed and pre-filled
+ * against a position floor — so the figure "can this bid stand?" compares is
+ * that intended position, `ownPosition + delta`, which is the typed number
+ * itself. `arenaBidDelta` performs the one conversion between the two.
  *
- * A bidder who already holds 1,000 sats and types `100` on an auction whose
- * floor is 1,100 has not bid 1,100; they have bid 100 and their position is
- * 1,100. The check compares positions.
+ * A bidder who already holds 1,000 sats and types `1,100` means to hold 1,100:
+ * the published delta is 100.
  */
 export interface ArenaBidFloor {
 	/**
@@ -246,10 +271,63 @@ export function arenaBidFloor(
 	}
 	// The bidder has already bid on an auction whose bids were not read into a
 	// top — the read is partial. Their own position is the best floor known.
-	if (ownPosition !== null && model.startingBid <= 0) {
+	if (ownPosition !== null && ownPosition > 0 && model.startingBid <= 0) {
 		return { kind: 'first', minimum: ownPosition, topTotal: null }
 	}
 	return { kind: 'first', minimum: model.startingBid, topTotal: null }
+}
+
+// =========================================================================
+// Intent → delta: the one conversion
+// =========================================================================
+
+/**
+ * The bidder's own **position** on the lot: the sum of their live legs, as the
+ * read records it (`auctionSurfacesRead.ts` → `ArenaAuctionDetailModel.positions`,
+ * `arenaAuctionRead.ts`). The chain adds a bid's `Amount` (a delta) to whatever
+ * the bidder already holds, so this is the figure the panel's intended
+ * *position* is measured against.
+ *
+ * The honest answers, and never a substitute:
+ *
+ * - the bidder's entry carries a number → that sum;
+ * - the entry carries `null` (a leg whose liveness the read could not vouch
+ *   for) → `null`: **not known**;
+ * - the bidder has no entry and the read is `settled` → `0` (they hold
+ *   nothing);
+ * - the bidder has no entry and the read has not settled → `null`. Absence in a
+ *   partial read is not a zero: a leg the read has not delivered yet would
+ *   become one, and the whole intent would be published as a delta.
+ */
+export function ownArenaPosition(
+	model: Pick<ArenaAuctionDetailModel, 'positions'> | null,
+	pubkey: string | null,
+	status: ArenaBidCheckInput['status'],
+): number | null {
+	if (model === null || pubkey === null) return null
+	const entry = model.positions.find((position) => position.bidder === pubkey)
+	if (entry !== undefined) return entry.total
+	return status === 'settled' ? 0 : null
+}
+
+/**
+ * The **delta** the chain expects, from the panel's intended *position*.
+ *
+ * The panel's number is a position: `arenaBidFloor` states its floor against
+ * positions, the field is pre-filled with that floor, and the bidder reads the
+ * box as "where I will stand". The chain's `BidContent.Amount` is a delta added
+ * to the bidder's existing position (`chain/app.go`). This is the **one**
+ * conversion between the two, so the pre-check, the published `amount` and the
+ * escrow cannot disagree: a 100-sat position and a 102-sat intent become a
+ * 2-sat delta.
+ *
+ * An unknown own position (`ownArenaPosition` → `null`) yields `null`: the delta
+ * cannot be known without knowing where the bidder stands, and treating it as
+ * `0` is exactly the bug this conversion exists to prevent.
+ */
+export function arenaBidDelta(ownPosition: number | null, intent: number): number | null {
+	if (ownPosition === null) return null
+	return intent - ownPosition
 }
 
 // =========================================================================
@@ -263,7 +341,11 @@ export interface ArenaBidCheckInput {
 	/** Unix seconds, supplied by the caller so this stays pure. */
 	now: number
 	bidder: ArenaBidderState
-	/** The typed amount, verbatim. */
+	/**
+	 * The typed bid, verbatim: the **position** the bidder means to hold after
+	 * this bid — the number the panel shows — never the delta that gets
+	 * published. `arenaBidDelta` turns it into that delta.
+	 */
 	raw: string
 }
 
@@ -293,15 +375,27 @@ export function arenaBidBlock(
 }
 
 /**
- * Pre-check one amount. Blocking reasons outrank amount reasons: a bidder
- * cannot fix "the auction ended" by typing a bigger number.
+ * Pre-check one typed **position**. Blocking reasons outrank amount reasons: a
+ * bidder cannot fix "the auction ended" by typing a bigger number.
+ *
+ * The typed number is a position; the chain is handed a delta. The guards, in
+ * order, are: it parses; it is not zero; the floor is known; the bidder's own
+ * position is known (the read has settled what they hold); the intent is a
+ * raise on that position (delta ≥ 1); and the intent reaches the floor. The
+ * delta — `arenaBidDelta(ownPosition, intent)` — is what `amount` carries, and
+ * is the only number the publish and the escrow ever see.
  */
 export function checkArenaBid(input: ArenaBidCheckInput): ArenaBidCheck {
 	const { model, status, now, bidder, raw } = input
 	const blocked = arenaBidBlock(model, status, now, bidder)
-	const amount = parseBidAmountSats(raw)
-	const ownPosition =
-		model !== null && bidder.pubkey !== null ? (model.positions.find((p) => p.bidder === bidder.pubkey)?.total ?? null) : null
+	// The typed integer is the **position** the bidder means to hold.
+	const intent = parseBidAmountSats(raw)
+	const ownPosition = ownArenaPosition(model, bidder.pubkey, status)
+	const delta = intent === null ? null : arenaBidDelta(ownPosition, intent)
+	// `amount` is the delta, and only when it is a positive integer: a delta at
+	// or below zero is not an amount to publish, and a `0` here would read as one
+	// to every consumer that checks `amount !== null`.
+	const amount = delta !== null && delta >= 1 ? delta : null
 	const floor = model !== null ? arenaBidFloor(model, ownPosition) : { kind: 'unknown' as const, minimum: null, topTotal: null }
 	const base = { amount, minimum: floor.minimum, ownPosition }
 
@@ -323,13 +417,20 @@ export function checkArenaBid(input: ArenaBidCheckInput): ArenaBidCheck {
 		}
 	}
 	if (raw.trim() === '') return { allowed: false, reason: 'empty', ...base }
-	if (amount === null) return { allowed: false, reason: 'not-integer-sats', ...base }
-	if (amount === 0) return { allowed: false, reason: 'zero', ...base }
+	if (intent === null) return { allowed: false, reason: 'not-integer-sats', ...base }
+	if (intent === 0) return { allowed: false, reason: 'zero', ...base }
 	if (floor.minimum === null) {
 		return { allowed: false, reason: model?.startingBid === null ? 'no-starting-bid' : 'read-incomplete', ...base }
 	}
-	const resulting = (ownPosition ?? 0) + amount
-	if (resulting < floor.minimum) return { allowed: false, reason: 'below-minimum', ...base }
+	// The read has not settled what the bidder holds, so the delta cannot be
+	// known. Refused, never treated as a `0` own position.
+	if (ownPosition === null) return { allowed: false, reason: 'own-position-unknown', ...base }
+	// A bid adds to the bidder's position; an intent at or below where they
+	// already stand has nothing to add (the delta would be ≤ 0).
+	if (amount === null) return { allowed: false, reason: 'at-or-below-own-position', ...base }
+	// The resulting position is the typed intent (`ownPosition + delta`); it must
+	// reach the chain's floor.
+	if (intent < floor.minimum) return { allowed: false, reason: 'below-minimum', ...base }
 	return { allowed: true, reason: 'ok', ...base }
 }
 
@@ -374,10 +475,16 @@ export function bidBlockedCopy(reason: ArenaBidBlockedReason, check: Pick<ArenaB
 			return 'This auction published no starting bid, so there is no opening price to meet. Bidding is not offered rather than guessed at.'
 		case 'below-minimum':
 			return check.minimum !== null
-				? check.ownPosition !== null
-					? `A bid adds to your position rather than replacing it. This one must bring your position to at least ${sats(check.minimum)}.`
-					: `The lowest bid accepted here is ${sats(check.minimum)}.`
+				? check.ownPosition !== null && check.ownPosition > 0
+					? `Your position must reach at least ${sats(check.minimum)}; you hold ${sats(check.ownPosition)} now.`
+					: `The lowest position this auction accepts is ${sats(check.minimum)}.`
 				: 'This bid is below the auction’s minimum.'
+		case 'at-or-below-own-position':
+			return check.ownPosition !== null
+				? `Your bid must raise your position above the ${sats(check.ownPosition)} you already hold.`
+				: 'Your bid must raise the position you already hold.'
+		case 'own-position-unknown':
+			return 'The app could not settle the position you already hold on this auction, so it cannot work out how much your bid adds. It will not guess — reload to try again.'
 		case 'ok':
 			return ''
 	}

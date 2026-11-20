@@ -137,7 +137,7 @@ describe('ArenaBidPanel — the entry surface', () => {
 		const html = panel({ amountInput: '999' })
 		expect(html).toContain('data-slot="arena-bid-invalid"')
 		expect(html).toContain('role="alert"')
-		expect(html).toContain('The lowest bid accepted here is 1,000 sats.')
+		expect(html).toContain('The lowest position this auction accepts is 1,000 sats.')
 		expect(html).toContain('disabled')
 	})
 
@@ -160,6 +160,13 @@ describe('ArenaBidPanel — the entry surface', () => {
 	test('a bidder with a position is told that bids add to it', () => {
 		const model = detail({ bidCount: 1, topBidTotal: 1000, positions: [{ bidder: BIDDER, total: 1000 }] })
 		expect(panel({ model, amountInput: '100' })).toContain('Bids add to your position. Yours is 1,000 sats')
+	})
+
+	test('a position typed at or below what the bidder holds is refused in words, as a position', () => {
+		const model = detail({ bidCount: 1, topBidTotal: 1000, positions: [{ bidder: BIDDER, total: 1000 }] })
+		const html = panel({ model, amountInput: '1000' })
+		expect(html).toContain('data-slot="arena-bid-invalid"')
+		expect(html).toContain('Your bid must raise your position above the 1,000 sats you already hold.')
 	})
 })
 
