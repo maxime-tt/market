@@ -106,12 +106,24 @@ export interface BidUpdatePayload {
 	readonly auctionKey?: string
 }
 
-/** An auction the user won. The shape is `auctionWon.ts`'s `AuctionWonPayload`, verbatim. */
+/**
+ * An auction the user won, projected from the **arena** read (`arenaWinRead.ts`).
+ *
+ * `auctionRootEventId` is the lot's root 1440 event id — the identity the queue
+ * de-duplicates a lot on. `lotD` + `lotSeller` are the lot page's own address
+ * (`1440:<seller>:<d>` → `/auctions/<d>?seller=<seller>`), so the modal's CTA can
+ * open the lot where the claim/fulfilment flow lives; the retired 30408 pipeline
+ * used to identify the lot by its settlement event id, which the arena has no
+ * equivalent for. `bidAmount` is the winner's derived position, or `null` when
+ * the read could not state it — stated, never invented as `0`.
+ */
 export interface AuctionWonPayload {
 	readonly bidderPubkey: string
 	readonly auctionRootEventId: string
 	readonly bidEventId: string
-	readonly bidAmount: number
+	readonly bidAmount: number | null
+	readonly lotD: string
+	readonly lotSeller: string
 }
 
 /** AppNotificationPayload — the union every app notification's `payload` is drawn from. */

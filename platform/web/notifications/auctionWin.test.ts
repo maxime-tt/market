@@ -25,6 +25,8 @@ const win: AuctionWonPayload = {
 	auctionRootEventId: AUCTION_ROOT_ID,
 	bidEventId: 'e'.repeat(64),
 	bidAmount: 5000,
+	lotD: 'lot-1',
+	lotSeller: 'seller-1',
 }
 
 const secondWin: AuctionWonPayload = {
@@ -32,6 +34,8 @@ const secondWin: AuctionWonPayload = {
 	auctionRootEventId: OTHER_AUCTION_ROOT_ID,
 	bidEventId: '3'.repeat(64),
 	bidAmount: 7000,
+	lotD: 'lot-2',
+	lotSeller: 'seller-1',
 }
 
 let notifications: AppNotifications
@@ -77,6 +81,8 @@ describe('the auction-win queue operations', () => {
 			auctionRootEventId: AUCTION_ROOT_ID,
 			bidEventId: '3'.repeat(64),
 			bidAmount: 7000,
+			lotD: 'lot-1',
+			lotSeller: 'seller-1',
 		}
 		enqueueAuctionWin(notifications, win, 1)
 		// Same auction, different bidder: distinct id, so both stay queued until the retain below.

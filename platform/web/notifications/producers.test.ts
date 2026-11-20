@@ -43,6 +43,8 @@ describe('the producer seam — derive and apply', () => {
 			auctionRootEventId: 'root-1',
 			bidEventId: 'bid-1',
 			bidAmount: 42,
+			lotD: 'lot-1',
+			lotSeller: 'seller-1',
 		} as const
 		applyAppNotificationEvent(notifications, event)
 		expect(notifications.queue.active().map((n) => n.id)).toEqual(['auction-won:root-1:me'])
@@ -58,6 +60,8 @@ describe('the producer seam — derive and apply', () => {
 			auctionRootEventId: 'root-1',
 			bidEventId: 'bid-1',
 			bidAmount: 42,
+			lotD: 'lot-1',
+			lotSeller: 'seller-1',
 		})[0]
 		applyAppNotification(notifications, win)
 		applyAppNotification(notifications, win)
@@ -108,6 +112,8 @@ describe('the bulk reconciliation — an overwrite, not an accumulation', () => 
 				auctionRootEventId: 'root-1',
 				bidEventId: 'bid-1',
 				bidAmount: 9,
+				lotD: 'lot-1',
+				lotSeller: 'seller-1',
 			},
 		])
 		expect(notifications.ledger.totalUnseen()).toBe(0)

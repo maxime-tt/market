@@ -85,18 +85,28 @@ describe('the app rules — the active auction win', () => {
 			auctionRootEventId: 'root-1',
 			bidEventId: 'bid-1',
 			bidAmount: 5000,
+			lotD: 'lot-1',
+			lotSeller: 'seller-1',
 		})
 		expect(derived).toHaveLength(1)
 		expect(derived[0]).toMatchObject({
 			id: 'auction-won:root-1:me',
 			type: 'auction-won',
 			scope: 'auction-won:root-1',
-			payload: { bidderPubkey: 'me', auctionRootEventId: 'root-1', bidEventId: 'bid-1', bidAmount: 5000 },
+			payload: { bidderPubkey: 'me', auctionRootEventId: 'root-1', bidEventId: 'bid-1', bidAmount: 5000, lotD: 'lot-1', lotSeller: 'seller-1' },
 		})
 	})
 
 	test('two wins on the same auction by the same bidder share an id (de-dup), a different bidder does not', () => {
-		const base = { kind: 'auction-won', createdAt: 20, auctionRootEventId: 'root-1', bidEventId: 'bid-1', bidAmount: 5000 } as const
+		const base = {
+			kind: 'auction-won',
+			createdAt: 20,
+			auctionRootEventId: 'root-1',
+			bidEventId: 'bid-1',
+			bidAmount: 5000,
+			lotD: 'lot-1',
+			lotSeller: 'seller-1',
+		} as const
 		const first = auctionWonRule.derive({ ...base, bidderPubkey: 'me' })
 		const again = auctionWonRule.derive({ ...base, bidderPubkey: 'me' })
 		const other = auctionWonRule.derive({ ...base, bidderPubkey: 'someone-else' })
@@ -128,7 +138,7 @@ describe('the app rules — dispatch over the whole set', () => {
 			{ kind: 'auction-live', createdAt: 1, auctionKey: 'a' },
 			{ kind: 'auction-settlement', createdAt: 1, auctionKey: 'a' },
 			{ kind: 'bid-update', createdAt: 1 },
-			{ kind: 'auction-won', createdAt: 1, bidderPubkey: 'me', auctionRootEventId: 'r', bidEventId: 'b', bidAmount: 1 },
+			{ kind: 'auction-won', createdAt: 1, bidderPubkey: 'me', auctionRootEventId: 'r', bidEventId: 'b', bidAmount: 1, lotD: 'd', lotSeller: 's' },
 		]
 		for (const event of events) {
 			expect(deriveFromRules<AppNotificationEvent>(appNotificationRules, event)).toHaveLength(1)
