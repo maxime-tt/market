@@ -23,9 +23,9 @@ import { finalizeEvent, getPublicKey } from 'nostr-tools'
 import { Observable } from 'rxjs'
 import type { EventStorePort } from '@sdk/core/event-store'
 import type { Event } from '@sdk/core/nostr-io'
-import type { RelayRequestGroup } from '@platform/web/applesauceIo'
+import { getApplesauceRelayPool, type RelayRequestGroup } from '@platform/web/applesauceIo'
 import { readArenaParams } from '@platform/web/auctions/relay/arenaParamsRead'
-import { createWebRelayReadContext } from '@platform/web/sdkNostrIo'
+import { createWebRelayReadContext, webRelayConnected } from '@platform/web/sdkNostrIo'
 
 // ---------------------------------------------------------------------------
 // The relay pool: `req` only, driven message by message.
@@ -161,5 +161,27 @@ describe('createWebRelayReadContext — a bounded read waits for every named rel
 
 		speak({ type: 'EOSE', from: CARRIER })
 		expect((await read).params?.height).toBe(3000)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// The connect truth a read asks for at its own deadline
+// ---------------------------------------------------------------------------
+
+describe('webRelayConnected — the pool’s own socket truth, on demand', () => {
+	/**
+	 * The read's deadline lands before the transport's own settle bound, so a read
+	 * that must classify a never-connected relay asks the pool itself
+	 * (`arenaAuctionRead.ts`, `init.relayConnected`) instead of waiting for a
+	 * marker that arrives too late. No socket opens here: a relay the pool knows
+	 * but that never connected reads `false`, and a URL the pool holds nothing for
+	 * reads `null` — no verdict, never "unreachable".
+	 */
+	test('a pooled relay that never connected is false; a URL the pool does not hold is no verdict', () => {
+		const pooled = 'wss://read-deadline-probe.invalid'
+		getApplesauceRelayPool().relay(pooled)
+
+		expect(webRelayConnected(pooled)).toBe(false)
+		expect(webRelayConnected(`${pooled}/never-asked`)).toBeNull()
 	})
 })

@@ -45,7 +45,7 @@ import {
 	type ArenaRelayOpenOptions,
 	type ArenaReadStreamItem,
 } from './arenaAuctionRead'
-import { auctionListStatus } from '@platform/web/storefront/auctionListRead'
+import { auctionListStatus, relayCounts } from '@platform/web/storefront/auctionListRead'
 
 // =========================================================================
 // Fixtures
@@ -384,6 +384,14 @@ interface FakeRelayOptions {
 	refused?: string
 	/** The relay's connection never established: the caught-up marker names it `unreachable`. */
 	unreachable?: boolean
+	/**
+	 * What the relay's socket truth answers when the read asks it at its deadline
+	 * (`init.relayConnected`). Default `true`, or `false` for a fake whose stream
+	 * throws on open. `false` + `hang` models the measured cold-load case: a relay
+	 * that never opened a socket, says nothing, and whose transport verdict
+	 * arrives too late to be seen.
+	 */
+	connected?: boolean
 }
 
 function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
@@ -421,12 +429,25 @@ function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
  * that consumes `events()` names the bound it needs. The fakes here resolve in
  * microtasks, so the default is deliberately short; the reads that are *about*
  * the bound pass their own (`60`, `40`).
+ *
+ * The connect truth defaults to the fake's own shape — a relay whose stream
+ * throws on open never had a socket, every other fake did — and a test that
+ * needs "the transport cannot speak" passes its own probe.
  */
-function readFrom(relays: Record<string, FakeRelayOptions>, deadlineMs = 200): ArenaAuctionRead {
+function readFrom(
+	relays: Record<string, FakeRelayOptions>,
+	deadlineMs = 200,
+	relayConnected: (url: string) => boolean | null = (url) => {
+		const relay = relays[url]
+		if (relay === undefined) return true
+		return relay.connected ?? relay.fail === undefined
+	},
+): ArenaAuctionRead {
 	return createArenaAuctionRead({
 		relays: Object.keys(relays),
 		openRelay: (url) => fakeRelay(url, relays[url] ?? {}),
 		deadlineMs,
+		relayConnected,
 	})
 }
 
@@ -858,10 +879,11 @@ describe('resilience', () => {
 	test('a genuinely silent relay inside the deadline still yields incomplete', async () => {
 		// The honesty rule survives: a relay the transport has not classified — it
 		// connected and said nothing — could still answer, so the read stays
-		// incomplete rather than rendering a no-data verdict.
+		// incomplete rather than rendering a no-data verdict. The socket probe says
+		// `true`, which is exactly what keeps it out of `unreachable`.
 		const read = readFrom(
 			{
-				'wss://mute': { silent: true, hang: true },
+				'wss://mute': { connected: true, silent: true, hang: true },
 				'wss://alive': { events: [createEvent({ id: 'root-1' })] },
 			},
 			60,
@@ -877,7 +899,134 @@ describe('resilience', () => {
 		expect(caughtUp.health.pending).toEqual(['wss://mute'])
 		expect(caughtUp.health.refused).toEqual([])
 		expect(caughtUp.health.unreachable).toEqual([])
+		// Connected and silent is the read stopping its wait, not a relay verdict.
+		expect(caughtUp.health.relays.find((r) => r.url === 'wss://mute')?.status).toBe('timeout')
 		expect(auctionListStatus(caughtUp.health)).toBe('incomplete')
+	})
+
+	test('a relay whose socket never opened is unreachable at the deadline, not pending', async () => {
+		// Measured live 2026-11-20 (lot d=612a25ed-2562-4575-b780-ecfa98d7f35a, 7
+		// configured relays): the transport's own settle bound is armed when its
+		// stream opens, so it fires *after* the read's deadline — its verdict never
+		// arrived and the relays with no socket were frozen as `pending`. The lot
+		// page read `incomplete` ("3 of 7 relays answered") on every cold run, where
+		// the deployed baseline read `settled`. At its deadline the read asks the
+		// transport's connect truth itself, and knows: no socket, cannot answer.
+		const read = readFrom(
+			{
+				'wss://never': { connected: false, hang: true },
+				'wss://alive': { events: [createEvent({ id: 'root-1' })] },
+			},
+			60,
+		)
+
+		const items = await collect(read.events())
+		const caughtUp = items.find((i) => i.type === 'caught-up')
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(caughtUp.health.relays.find((r) => r.url === 'wss://never')?.status).toBe('unreachable')
+		expect(caughtUp.health.unreachable).toEqual(['wss://never'])
+		expect(caughtUp.health.pending).toEqual([])
+		// The counts stay honest: a relay that never answered is not answered, and
+		// the word is `settled` with the count short of the total.
+		expect(relayCounts(caughtUp.health)).toEqual({ answered: 1, total: 2 })
+		expect(auctionListStatus(caughtUp.health)).toBe('settled')
+	})
+
+	test('a relay the transport gave up on is still unreachable when its socket is shut', async () => {
+		// The transport's own fallback can only say "no EOSE", so it names a
+		// never-connected relay `pending`; in production that marker lands after the
+		// read's deadline. Whichever order the two arrive in, the read's own
+		// classification at its deadline is a fact about the socket rather than an
+		// estimate — so the relay ends `unreachable`: the give-up was the guess.
+		const read = createArenaAuctionRead({
+			relays: ['wss://never', 'wss://alive'],
+			deadlineMs: 60,
+			relayConnected: (url) => url !== 'wss://never',
+			openRelay: (url) => (filters: readonly EventFilter[], opts: ArenaRelayOpenOptions) => {
+				if (url !== 'wss://never') return fakeRelay(url, { events: [createEvent({ id: 'root-1' })] })(filters, opts)
+				return {
+					async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+						// The transport's fallback: no EOSE, so the marker can only call the
+						// relay `pending`. The relay then stays open, as a live connection does.
+						yield { type: 'caught-up', info: { eose: [], pending: [url], complete: false } }
+						if (!opts.signal?.aborted) {
+							const { promise, resolve } = Promise.withResolvers<void>()
+							opts.signal?.addEventListener('abort', () => resolve())
+							await promise
+						}
+					},
+				}
+			},
+		})
+
+		const items = await collect(read.events())
+		const caughtUp = items.find((i) => i.type === 'caught-up')
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(caughtUp.health.unreachable).toEqual(['wss://never'])
+		expect(caughtUp.health.pending).toEqual([])
+		expect(auctionListStatus(caughtUp.health)).toBe('settled')
+	})
+
+	test('a transport that cannot speak for a relay leaves it pending, not unreachable', async () => {
+		// `null` is "no verdict", and the read may not invent one: with no connect
+		// truth about that relay the silence reading stands, so the read stays
+		// incomplete while the relay that answered still counts.
+		const read = readFrom(
+			{
+				'wss://alive': { events: [createEvent({ id: 'root-1' })] },
+				'wss://unknown': { hang: true },
+			},
+			40,
+			() => null,
+		)
+
+		const items = await collect(read.events())
+		const caughtUp = items.find((i) => i.type === 'caught-up')
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(caughtUp.health.pending).toEqual(['wss://unknown'])
+		expect(caughtUp.health.unreachable).toEqual([])
+		expect(caughtUp.health.relays.find((r) => r.url === 'wss://unknown')?.status).toBe('timeout')
+		expect(relayCounts(caughtUp.health)).toEqual({ answered: 1, total: 2 })
+		expect(auctionListStatus(caughtUp.health)).toBe('incomplete')
+	})
+
+	test('the deadline classification ends nothing early: the pumps are aborted together at the bound', async () => {
+		// The classification is a label, not an end. A relay that never connected is
+		// settled `unreachable` *and* the relays that are still open stay open: the
+		// read runs to its full deadline, then tears every subscription down at once,
+		// and the caught-up marker is the last item.
+		const aborted: string[] = []
+		const read = createArenaAuctionRead({
+			relays: ['wss://never', 'wss://mute'],
+			deadlineMs: 60,
+			relayConnected: (url) => url !== 'wss://never',
+			openRelay: (url) => (_filters: readonly EventFilter[], opts: ArenaRelayOpenOptions) => ({
+				async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+					// Both relays are silent; only their sockets differ. Neither stream
+					// ends on its own, so only the deadline (and the teardown it triggers)
+					// can finish this read.
+					if (!opts.signal?.aborted) {
+						const { promise, resolve } = Promise.withResolvers<void>()
+						opts.signal?.addEventListener('abort', () => {
+							aborted.push(url)
+							resolve()
+						})
+						await promise
+					}
+				},
+			}),
+		})
+
+		const started = Date.now()
+		const items = await collect(read.events())
+		expect(Date.now() - started).toBeGreaterThanOrEqual(50)
+		expect(aborted).toEqual(['wss://never', 'wss://mute'])
+		const caughtUp = items.at(-1)
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(items.filter((i) => i.type === 'caught-up')).toHaveLength(1)
+		expect(caughtUp.health.relays.find((r) => r.url === 'wss://never')?.status).toBe('unreachable')
+		expect(caughtUp.health.relays.find((r) => r.url === 'wss://mute')?.status).toBe('timeout')
+		expect(caughtUp.health.pending).toEqual(['wss://mute'])
 	})
 
 	test('a refused relay receives no follow-up REQ', async () => {

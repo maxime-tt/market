@@ -127,6 +127,12 @@ interface FakeRelayOptions {
 	fail?: string
 	/** Yield `events`, then hold the stream open (no EOSE) until the read aborts it. */
 	hang?: boolean
+	/**
+	 * The relay's socket truth when the read asks at its deadline
+	 * (`init.relayConnected`). Default `true`, or `false` for a fake whose stream
+	 * throws on open. `false` + `hang` is the measured never-connected relay.
+	 */
+	connected?: boolean
 }
 
 function commitmentEvent(over: { height?: number; appHash?: string; validator?: string; time?: number | null } = {}): NostrEventLike {
@@ -266,12 +272,25 @@ function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
  * A live read ends at its deadline, never at a settle marker, so a test that
  * consumes `events()` names the bound it needs. The fakes here resolve in
  * microtasks, which is why the default is short.
+ *
+ * The connect truth follows the fake's own shape — a relay whose stream throws
+ * on open never had a socket, every other fake did — and a test that needs "the
+ * transport cannot speak" passes its own probe.
  */
-function readFrom(relays: Record<string, FakeRelayOptions>, deadlineMs = 200): ArenaAuctionRead {
+function readFrom(
+	relays: Record<string, FakeRelayOptions>,
+	deadlineMs = 200,
+	relayConnected: (url: string) => boolean | null = (url) => {
+		const relay = relays[url]
+		if (relay === undefined) return true
+		return relay.connected ?? relay.fail === undefined
+	},
+): ArenaAuctionRead {
 	return createArenaAuctionRead({
 		relays: Object.keys(relays),
 		openRelay: (url) => fakeRelay(url, relays[url] ?? {}),
 		deadlineMs,
+		relayConnected,
 	})
 }
 
@@ -723,6 +742,46 @@ describe('collectArenaSurfacesRead', () => {
 		expect(state.relayHealth).toEqual({ answered: 1, total: 1 })
 		expect(state.snapshot?.auctions).toHaveLength(1)
 		expect(state.snapshot?.health.pending).toEqual([])
+	})
+
+	test('a relay whose socket never opened settles the surface, with the count short of the total', async () => {
+		// The measured cold-load shape (2026-11-20, lot d=612a25ed…, 7 configured
+		// relays): the ones that never opened a socket were frozen `pending`, so the
+		// surface read `incomplete` ("3 of 7 relays answered") where the deployed
+		// baseline read `settled`. A relay with no socket cannot answer: it is
+		// `unreachable`, and the count stays honest — short of the total.
+		const state = await collectArenaSurfacesRead(
+			readFrom(
+				{
+					'wss://a': { events: [createEvent({ id: 'create-1' })] },
+					'wss://never': { connected: false, hang: true },
+				},
+				60,
+			),
+		)
+		expect(state.status).toBe('settled')
+		expect(state.relayHealth).toEqual({ answered: 1, total: 2 })
+		expect(state.snapshot?.health.unreachable).toEqual(['wss://never'])
+		expect(state.snapshot?.health.pending).toEqual([])
+		expect(state.snapshot?.auctions).toHaveLength(1)
+	})
+
+	test('a relay that connected and stayed silent keeps the surface incomplete', async () => {
+		// The other half of the rule: an open socket that says nothing could still
+		// answer, so the surface may not state the lot's phase.
+		const state = await collectArenaSurfacesRead(
+			readFrom(
+				{
+					'wss://a': { events: [createEvent({ id: 'create-1' })] },
+					'wss://mute': { connected: true, hang: true },
+				},
+				60,
+			),
+		)
+		expect(state.status).toBe('incomplete')
+		expect(state.relayHealth).toEqual({ answered: 1, total: 2 })
+		expect(state.snapshot?.health.pending).toEqual(['wss://mute'])
+		expect(state.snapshot?.health.unreachable).toEqual([])
 	})
 
 	test('no relays configured answers "nothing", not "no auctions"', async () => {

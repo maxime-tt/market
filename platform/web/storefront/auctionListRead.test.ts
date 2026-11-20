@@ -113,6 +113,12 @@ interface FakeRelayOptions {
 	silent?: boolean
 	/** Yield `events`, then hold the stream open until the read aborts it. */
 	hang?: boolean
+	/**
+	 * The relay's socket truth when the read asks at its deadline
+	 * (`init.relayConnected`). Default `true`, or `false` for a fake whose stream
+	 * throws on open. `false` + `hang` is the measured never-connected relay.
+	 */
+	connected?: boolean
 }
 
 function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
@@ -147,12 +153,25 @@ function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
  * A live read ends at its deadline, never at a settle marker, so a test that
  * consumes `events()` names the bound it needs. The fakes here resolve in
  * microtasks, which is why the default is short.
+ *
+ * The connect truth follows the fake's own shape — a relay whose stream throws
+ * on open never had a socket, every other fake did — and a test that needs "the
+ * transport cannot speak" passes its own probe.
  */
-function readFrom(relays: Record<string, FakeRelayOptions>, deadlineMs = 200): ArenaAuctionRead {
+function readFrom(
+	relays: Record<string, FakeRelayOptions>,
+	deadlineMs = 200,
+	relayConnected: (url: string) => boolean | null = (url) => {
+		const relay = relays[url]
+		if (relay === undefined) return true
+		return relay.connected ?? relay.fail === undefined
+	},
+): ArenaAuctionRead {
 	return createArenaAuctionRead({
 		relays: Object.keys(relays),
 		openRelay: (url) => fakeRelay(url, relays[url] ?? {}),
 		deadlineMs,
+		relayConnected,
 	})
 }
 
@@ -500,6 +519,50 @@ describe('collectAuctionListRead', () => {
 		expect(state.snapshot?.health.refused).toEqual(['wss://refuser'])
 		expect(state.snapshot?.health.unreachable).toEqual(['wss://gone'])
 		expect(state.snapshot?.health.pending).toEqual([])
+	})
+
+	test('a relay whose socket never opened settles the read, with the count short of the total', async () => {
+		// The measured cold-load shape (2026-11-20, lot d=612a25ed…, 7 configured
+		// relays, 2-3 of them with no socket): `settled` beside `N of M relays
+		// answered` is the honest pair. `incomplete` was the bug — the transport's
+		// own verdict is armed later than the read's deadline, so the read asks the
+		// transport's connect truth itself when it gives up.
+		const state = await collectAuctionListRead(
+			readFrom(
+				{
+					'wss://answered': { events: [createEvent({ id: 'root', d: 'lot-1' })] },
+					'wss://never': { connected: false, hang: true },
+				},
+				60,
+			),
+		)
+		expect(state.status).toBe('settled')
+		expect(state.relayHealth).toEqual({ answered: 1, total: 2 })
+		expect(state.snapshot?.health.unreachable).toEqual(['wss://never'])
+		expect(state.snapshot?.health.pending).toEqual([])
+		// The relay that never answered is still not counted as answering, and the
+		// lot the other relay delivered is stated in full.
+		const { items } = selectAuctionList(state.snapshot!, selection({ now: 1000 }))
+		expect(items.map((item) => item.d)).toEqual(['lot-1'])
+	})
+
+	test('a relay that connected and stayed silent keeps the read incomplete', async () => {
+		// The other half of the rule: an open socket that says nothing is not a
+		// verdict, so the block may not state the lot's phase.
+		const state = await collectAuctionListRead(
+			readFrom(
+				{
+					'wss://answered': { events: [createEvent({ id: 'root', d: 'lot-1' })] },
+					'wss://mute': { connected: true, hang: true },
+				},
+				60,
+			),
+		)
+		expect(state.status).toBe('incomplete')
+		expect(state.relayHealth).toEqual({ answered: 1, total: 2 })
+		expect(state.snapshot?.health.pending).toEqual(['wss://mute'])
+		expect(state.snapshot?.health.unreachable).toEqual([])
+		expect(state.snapshot?.health.relays.find((r) => r.url === 'wss://mute')?.status).toBe('timeout')
 	})
 
 	test('a genuinely silent relay inside the deadline keeps the read incomplete', async () => {

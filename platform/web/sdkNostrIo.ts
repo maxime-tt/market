@@ -1,4 +1,4 @@
-import { createRelayStream, getApplesauceRelayPool, type RelayRequestGroup } from '@platform/web/applesauceIo'
+import { createRelayStream, getApplesauceRelayPool, relayConnectionState, type RelayRequestGroup } from '@platform/web/applesauceIo'
 import { getWriteRelays, ndkStore } from '@platform/web/ndk/ndkStore'
 import { createNostrIo, relayPoolAdapter, type Event, type NostrIo, type PoolPort, type RelayPolicy } from '@sdk/core/nostr-io'
 import { createEventReadContext, createStoreStream, type EventReadContext, type EventStorePort } from '@sdk/core/event-store'
@@ -28,6 +28,20 @@ export interface WebRelayReadOptions {
 	 * without a socket (ADR-0005).
 	 */
 	group?: RelayRequestGroup
+}
+
+/**
+ * Whether one relay's socket is open **right now** — the app pool's own truth,
+ * the same one the transport's settle bound reads. `null` means the pool holds
+ * no relay for that URL, which is no verdict at all — never "unreachable".
+ *
+ * This is the read-context seam's answer to a read that owns a deadline of its
+ * own (the arena read's `relayConnected`): asked once, synchronously, when that
+ * deadline fires, so a relay whose socket never opened is a settled `no`
+ * instead of `pending` while the transport's own bound is still in the future.
+ */
+export function webRelayConnected(url: string): boolean | null {
+	return relayConnectionState(url)?.connected ?? null
 }
 
 /**
