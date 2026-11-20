@@ -17,7 +17,7 @@ import type { StorefrontBlock, StorefrontThemeId } from '@sdk/commerce/storefron
  * safely from untrusted input.
  */
 
-export type StorefrontTemplateId = 'blank' | 'link-in-bio' | 'shop' | 'showcase' | 'magazine'
+export type StorefrontTemplateId = 'blank' | 'link-in-bio' | 'shop' | 'showcase' | 'magazine' | 'zine'
 
 export interface StorefrontTemplate {
 	id: StorefrontTemplateId
@@ -45,6 +45,7 @@ export const MAGAZINE_HOME_BLOCKS: StorefrontBlock[] = [
 		type: 'Ticker',
 		props: {
 			id: 'tpl',
+			style: 'strip',
 			showLiveStats: true,
 			messages: [{ text: 'Paid in sats' }, { text: 'Escrow in Cashu ecash' }, { text: 'Signed listings on Nostr' }],
 		},
@@ -107,7 +108,15 @@ export const MAGAZINE_HOME_BLOCKS: StorefrontBlock[] = [
 	},
 	{
 		type: 'CollectionRow',
-		props: { id: 'tpl', title: 'Collections', source: 'featured', limit: 4, linkLabel: 'Community', linkHref: '/community' },
+		props: {
+			id: 'tpl',
+			title: 'Collections',
+			source: 'featured',
+			style: 'cards',
+			limit: 4,
+			linkLabel: 'Community',
+			linkHref: '/community',
+		},
 	},
 	{
 		type: 'CategorySection',
@@ -117,7 +126,9 @@ export const MAGAZINE_HOME_BLOCKS: StorefrontBlock[] = [
 			title: 'Art & *prints*',
 			subtitle: 'Original work and prints, paid for in sats.',
 			tags: 'Art, art, Digital Art, digital art, print',
+			style: 'row',
 			limit: 5,
+			badge: '',
 			linkLabel: '',
 		},
 	},
@@ -129,7 +140,9 @@ export const MAGAZINE_HOME_BLOCKS: StorefrontBlock[] = [
 			title: 'Wear',
 			subtitle: 'Hoodies, tees and caps from Bitcoin makers.',
 			tags: 'hoodie, bitcoin apparel, streetwear, clothing, t-shirt',
+			style: 'row',
 			limit: 5,
+			badge: '',
 			linkLabel: '',
 		},
 	},
@@ -141,7 +154,9 @@ export const MAGAZINE_HOME_BLOCKS: StorefrontBlock[] = [
 			title: 'Bitcoin *gear*',
 			subtitle: 'Nodes, gadgets and 3D-printed bits for running your own.',
 			tags: 'bitcoin, node, gadgets, electronics, 3ddruck',
+			style: 'row',
 			limit: 5,
+			badge: '',
 			linkLabel: '',
 		},
 	},
@@ -153,10 +168,80 @@ export const MAGAZINE_HOME_BLOCKS: StorefrontBlock[] = [
 			title: 'The *pantry*',
 			subtitle: 'Small-batch food from growers who take sats.',
 			tags: 'alimenti, food, coffee',
+			style: 'row',
 			limit: 5,
+			badge: '',
 			linkLabel: '',
 		},
 	},
+]
+
+/** One bento category section for the zine home. */
+function zineCategory(title: string, tags: string, badge: string): StorefrontBlock {
+	return {
+		type: 'CategorySection',
+		props: { id: 'tpl', label: '', title, subtitle: '', tags, style: 'bento', limit: 5, badge, linkLabel: 'See all' },
+	}
+}
+
+/**
+ * The "On the block" zine home (ADR-0029, the layout in the mockup the owner
+ * picked): a big headline over a bento of live lots, a tilted band, closing
+ * soon beside a pinboard of products, colour collection tiles, then bento
+ * category sections. Same rule as the magazine: nothing here stores a price.
+ */
+export const ZINE_HOME_BLOCKS: StorefrontBlock[] = [
+	{
+		type: 'AuctionBento',
+		props: {
+			id: 'tpl',
+			title: 'On the *block*',
+			intro:
+				'Bid in sats on things people actually made. Every lot is a signed Nostr listing, and every bid sits in Cashu ecash escrow until the hammer.',
+			showLiveCount: true,
+			source: 'auto',
+			auctionCoordinates: [],
+			sticker: 'Top bid',
+		},
+	},
+	{
+		type: 'Ticker',
+		props: {
+			id: 'tpl',
+			style: 'band',
+			showLiveStats: false,
+			messages: [
+				{ text: 'Bid in sats' },
+				{ text: 'Lightning fast' },
+				{ text: 'Escrow in Cashu ecash' },
+				{ text: 'Sellers own their shops' },
+				{ text: 'No accounts, just Nostr keys' },
+			],
+		},
+	},
+	{
+		type: 'ClosingPicks',
+		props: {
+			id: 'tpl',
+			closingTitle: 'Closing soon',
+			closingChip: 'Next hour',
+			closingLimit: 5,
+			picksTitle: 'Featured products',
+			picksChip: 'Fresh picks',
+			source: 'featured',
+			productDTags: [],
+			picksLimit: 6,
+			buttonLabel: 'View',
+		},
+	},
+	{
+		type: 'CollectionRow',
+		props: { id: 'tpl', title: '', source: 'featured', style: 'tiles', limit: 4, linkLabel: '', linkHref: '' },
+	},
+	zineCategory('Art & prints', 'Art, art, Digital Art, digital art, print', 'Staff pick'),
+	zineCategory('Wear', 'hoodie, bitcoin apparel, streetwear, clothing, t-shirt', 'New in'),
+	zineCategory('Bitcoin gear', 'bitcoin, node, gadgets, electronics, 3ddruck', 'Fresh batch'),
+	zineCategory('The pantry', 'alimenti, food, coffee', 'Small batch'),
 ]
 
 export const STOREFRONT_TEMPLATES: StorefrontTemplate[] = [
@@ -256,6 +341,14 @@ export const STOREFRONT_TEMPLATES: StorefrontTemplate[] = [
 		description: 'A live lot on the cover, auctions first, then featured products, collections and category sections.',
 		defaultThemeId: 'arena',
 		blocks: MAGAZINE_HOME_BLOCKS,
+	},
+	{
+		id: 'zine',
+		label: 'On the block',
+		description:
+			'A big headline over live lots, closing soon beside a pinboard of products, colour collection tiles and bento category sections.',
+		defaultThemeId: 'arena',
+		blocks: ZINE_HOME_BLOCKS,
 	},
 ]
 

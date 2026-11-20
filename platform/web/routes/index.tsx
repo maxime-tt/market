@@ -7,10 +7,10 @@ import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSl
 import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/storefront'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { LEGACY_HOME_PUBKEY, useInstanceHomePage } from '@platform/web/storefront/instanceHomePage'
-import { MAGAZINE_HOME_BLOCKS } from '@sdk/config/storefront/storefrontTemplates'
+import { ZINE_HOME_BLOCKS } from '@sdk/config/storefront/storefrontTemplates'
 
 /**
- * The built-in home (ADR-0028): the magazine "cover story" template, drawn when
+ * The built-in home (ADR-0029): the "On the block" zine template, drawn when
  * no published `home` page resolves. Stable ids so React keeps each section
  * mounted across renders.
  */
@@ -18,7 +18,7 @@ const BUILT_IN_HOME = {
 	version: STOREFRONT_PAGE_VERSION,
 	enabled: true,
 	root: { props: { title: '', theme: 'arena' as const, palette: 'arena' } },
-	content: MAGAZINE_HOME_BLOCKS.map((block, index) => ({ ...block, props: { ...block.props, id: `home-${block.type}-${index}` } })),
+	content: ZINE_HOME_BLOCKS.map((block, index) => ({ ...block, props: { ...block.props, id: `home-${block.type}-${index}` } })),
 }
 const builtInHomePage = parseStorefrontPage(JSON.stringify(BUILT_IN_HOME)).page
 

@@ -373,6 +373,8 @@ export const TickerBlockSchema = z.object({
 		messages: z.array(textItem).max(12).default([]),
 		/** Prepend live figures from the auction read: lots live, closing next, top bid. */
 		showLiveStats: z.boolean().default(true),
+		/** `strip` = thin mono line; `band` = a big tilted accent band in italic serif (ADR-0029). */
+		style: z.enum(['strip', 'band']).default('strip'),
 	}),
 })
 
@@ -422,6 +424,8 @@ export const CollectionRowBlockSchema = z.object({
 		limit: z.number().int().min(1).max(8).default(4),
 		linkLabel: shortText.default(''),
 		linkHref: safeHref.or(z.literal('')).default(''),
+		/** `cards` = image collage cards; `tiles` = bold colour tiles with fanned pictures (ADR-0029). */
+		style: z.enum(['cards', 'tiles']).default('cards'),
 	}),
 })
 
@@ -437,6 +441,50 @@ export const CategorySectionBlockSchema = z.object({
 		tags: z.string().max(400).default(''),
 		limit: z.number().int().min(1).max(10).default(5),
 		linkLabel: shortText.default(''),
+		/** `row` = a row of product cards; `bento` = one big pick beside four smaller ones (ADR-0029). */
+		style: z.enum(['row', 'bento']).default('row'),
+		/** Small badge on the big pick in the bento style, e.g. "Best seller". */
+		badge: shortText.default(''),
+	}),
+})
+
+/**
+ * Zine home blocks (ADR-0029), from the "On the block" layout.
+ */
+
+/** A big headline over a bento of up to four auction lots. */
+export const AuctionBentoBlockSchema = z.object({
+	type: z.literal('AuctionBento'),
+	props: z.object({
+		...blockBase,
+		title: shortText.default('On the *block*'),
+		/** Short paragraph beside the headline. */
+		intro: shortText.default(''),
+		/** Show a "N LIVE" sticker after the headline. */
+		showLiveCount: z.boolean().default(true),
+		/** `auto` = live lots, most bids first, then the rest; `picked` = the coordinates below, in order. */
+		source: z.enum(['auto', 'picked']).default('auto'),
+		auctionCoordinates: z.array(auctionCoordinateRef).max(4).default([]),
+		/** Round sticker on the big lot. Blank hides it. */
+		sticker: shortText.default('Top bid'),
+	}),
+})
+
+/** "Closing soon" as a numbered list beside a pinboard of product polaroids. */
+export const ClosingPicksBlockSchema = z.object({
+	type: z.literal('ClosingPicks'),
+	props: z.object({
+		...blockBase,
+		closingTitle: shortText.default('Closing soon'),
+		closingChip: shortText.default('Next hour'),
+		closingLimit: z.number().int().min(1).max(8).default(5),
+		picksTitle: shortText.default('Featured products'),
+		picksChip: shortText.default('Fresh picks'),
+		/** `featured` = the instance's featured products (newest as a fallback); `picked` = the d tags below. */
+		source: z.enum(['featured', 'picked']).default('featured'),
+		productDTags: z.array(dTagRef).max(6).default([]),
+		picksLimit: z.number().int().min(1).max(6).default(6),
+		buttonLabel: shortText.default('View'),
 	}),
 })
 
@@ -459,6 +507,8 @@ export const StorefrontBlockSchema = z.discriminatedUnion('type', [
 	ProductSpreadBlockSchema,
 	CollectionRowBlockSchema,
 	CategorySectionBlockSchema,
+	AuctionBentoBlockSchema,
+	ClosingPicksBlockSchema,
 ])
 
 export type StorefrontBlock = z.infer<typeof StorefrontBlockSchema>
