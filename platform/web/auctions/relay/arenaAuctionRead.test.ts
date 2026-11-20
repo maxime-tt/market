@@ -26,6 +26,8 @@ import {
 import { ARENA_REFUSAL_BAD_CONTENT } from '@platform/web/auctions/relay/arenaAnchor'
 import { makeCreateAdmitEvent } from './arenaCreateAdmitFixture'
 import {
+	ARENA_READ_DRAIN_CEILING_MS,
+	ARENA_READ_DRAIN_QUIET_MS,
 	ARENA_READ_KINDS,
 	ARENA_REFUSAL_BAD_IDENTITY,
 	ARENA_REFUSAL_IMMUTABLE_CHANGED,
@@ -1289,12 +1291,13 @@ describe('the live stream', () => {
 		expect(caughtUp.health.pending).toEqual([])
 	})
 
-	test('the deadline ends a live read even while a relay keeps delivering', async () => {
-		// A relay that never stops talking must not keep the read alive past its
-		// deadline: the loop drains what has arrived and then stops consuming, so
-		// the run is bounded by the deadline, not by the relay's chatter. The fake
-		// yields on an event-loop turn (never a clock), which is what lets the
-		// deadline timer fire between two events.
+	test('a relay that never stops delivering is cut at the drain’s cap', async () => {
+		// The drain is bounded by construction: past the deadline the pump stops
+		// taking what the relay keeps delivering at `ARENA_READ_DRAIN_CEILING_MS`, so
+		// a relay that never stops talking cannot keep the read alive — the run is
+		// bounded by the deadline plus the drain, not by the relay's chatter. The fake
+		// yields on an event-loop turn (never a clock), which is what lets the deadline
+		// and the cap fire between two events.
 		const read = createArenaAuctionRead({
 			relays: ['wss://flood'],
 			deadlineMs: 20,
@@ -1312,8 +1315,15 @@ describe('the live stream', () => {
 
 		const started = Date.now()
 		const items = await collect(read.events())
-		expect(Date.now() - started).toBeLessThan(2000)
+		const elapsed = Date.now() - started
+		expect(elapsed).toBeGreaterThanOrEqual(ARENA_READ_DRAIN_CEILING_MS)
+		expect(elapsed).toBeLessThan(ARENA_READ_DRAIN_CEILING_MS + ARENA_READ_DRAIN_QUIET_MS + 500)
 		expect(items.filter((i) => i.type === 'caught-up')).toHaveLength(1)
+		// The drain really did keep reading past the deadline: this is the chatter it
+		// consumed before the cap stopped it.
+		const caughtUp = items.at(-1)
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(caughtUp.health.relays[0]?.refusals ?? 0).toBeGreaterThan(1)
 	})
 
 	test('close() ends an open read that would otherwise wait forever', async () => {
@@ -1339,6 +1349,141 @@ describe('the live stream', () => {
 		const snapshot = await pending
 		expect(snapshot.health.aborted).toBe(true)
 		expect(snapshot.auctions).toEqual([])
+	})
+})
+
+// =========================================================================
+// The drain: the deadline ends the read's wait, not its consumption
+// =========================================================================
+
+/**
+ * A relay that answers in the measured shape of the arena REQ: it hands over
+ * `head`, says it is caught up, and only then — `releaseAtMs` after the read
+ * started, a few ms past the read's own deadline — releases `tail`. What the
+ * drain reads is therefore what the transport is still holding *past* the
+ * deadline, which is exactly the truncation the live read was measuring at 8 s:
+ * kind-1449's window is shared by three schemas the chain publishes in bursts,
+ * so the create-admissions a list needs are the tail of that one REQ's answer.
+ *
+ * The release is a timer rather than a gate because the read's deadline is a
+ * timer too: this one is armed after the read's own and due later, so the tail
+ * is provably delivered after the deadline and provably inside the drain's
+ * quiet window. These reads are *about* the platform clock — the deadline and
+ * the quiet window are `setTimeout`s the read itself arms — so a real delay is
+ * the measurement here, not a guess at one.
+ */
+function straddlingRelay(options: {
+	head: NostrEventLike[]
+	tail: NostrEventLike[]
+	/** When to release the tail, counted from the read's start (ms). */
+	releaseAtMs: number
+	/** Emit the caught-up marker after the head — a relay that answered and kept delivering. */
+	answered?: boolean
+	/** Called once per REQ opened, so a test can count them. */
+	calls?: (readonly EventFilter[])[]
+}): ArenaRelayOpenFactory {
+	return (url) => (filters) => {
+		options.calls?.push(filters)
+		const released = Promise.withResolvers<void>()
+		setTimeout(released.resolve, options.releaseAtMs)
+		return {
+			async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+				for (const event of options.head) yield { type: 'event', event } as EventStreamItem<NostrEventLike>
+				if (options.answered !== false) {
+					yield {
+						type: 'caught-up',
+						info: { eose: [url], pending: [], complete: false },
+					} as EventStreamItem<NostrEventLike>
+				}
+				await released.promise
+				for (const event of options.tail) yield { type: 'event', event } as EventStreamItem<NostrEventLike>
+			},
+		}
+	}
+}
+
+describe('the drain after the deadline', () => {
+	test('an admission the transport is still holding when the deadline fires is applied', async () => {
+		const deadlineMs = 60
+		const create = createEvent({ id: 'drain-root', d: 'lot-drain' }, { auction_id: 'lot-drain' })
+		const admit = makeCreateAdmitEvent(create)
+		const read = createArenaAuctionRead({
+			relays: ['wss://drain'],
+			deadlineMs,
+			openRelay: straddlingRelay({ head: [create], tail: [admit], releaseAtMs: deadlineMs + 5 }),
+		})
+
+		const started = Date.now()
+		const items = await collect(read.events())
+		const elapsed = Date.now() - started
+
+		const delivered = items.filter((i) => i.type === 'events').flatMap((i) => i.events)
+		// Applied to the model, not merely seen: the lot the chain accepted is followed.
+		expect(followedAuctionViews(projectArenaEvents(delivered).auctions).map((view) => view.rootEventId)).toEqual(['drain-root'])
+		// And the read still ended at its own deadline: the relay's EOSE settled
+		// nothing, and the drain is one quiet window at most.
+		expect(elapsed).toBeGreaterThanOrEqual(deadlineMs)
+		expect(elapsed).toBeLessThan(deadlineMs + ARENA_READ_DRAIN_QUIET_MS)
+	})
+
+	test('a bounded read finishes its drain too, rather than ending at the deadline', async () => {
+		const deadlineMs = 50
+		const create = createEvent({ id: 'snap-root', d: 'lot-snap' }, { auction_id: 'lot-snap' })
+		const admit = makeCreateAdmitEvent(create)
+		const read = createArenaAuctionRead({
+			relays: ['wss://snap'],
+			deadlineMs,
+			// No caught-up marker before the tail: a bounded read ends at one, and what
+			// is under test here is what it does when the tail arrives instead.
+			openRelay: straddlingRelay({
+				head: [create],
+				tail: [admit],
+				releaseAtMs: deadlineMs + 5,
+				answered: false,
+			}),
+		})
+
+		const snapshot = await read.snapshot()
+		expect(followedAuctionViews(snapshot.auctions).map((view) => view.rootEventId)).toEqual(['snap-root'])
+	})
+
+	test('a relay that goes quiet after the deadline ends the read at the quiet window, not the cap', async () => {
+		// Nothing in hand is nothing to wait for: a relay that has said all it will
+		// say does not cost the read the drain's whole cap.
+		const deadlineMs = 40
+		const read = readFrom({ 'wss://quiet': { events: [createEvent({ id: 'quiet-root' })], hang: true } }, deadlineMs)
+
+		const started = Date.now()
+		await collect(read.events())
+		const elapsed = Date.now() - started
+
+		expect(elapsed).toBeGreaterThanOrEqual(deadlineMs + ARENA_READ_DRAIN_QUIET_MS)
+		expect(elapsed).toBeLessThan(deadlineMs + ARENA_READ_DRAIN_CEILING_MS)
+	})
+
+	test('a create read during the drain opens no new REQ', async () => {
+		// The deadline is the read's contract, and the drain only finishes what the
+		// read already asked for: a create whose follow-up filter would be a *new* REQ
+		// arriving inside the drain opens none.
+		const deadlineMs = 50
+		const calls: (readonly EventFilter[])[] = []
+		const create = createEvent({ id: 'late-root', d: 'late-lot' }, { auction_id: 'late-lot' })
+		const read = createArenaAuctionRead({
+			relays: ['wss://late'],
+			deadlineMs,
+			followUpFilters: arenaLotFollowUpFilters(SELLER_A, 'late-lot'),
+			openRelay: straddlingRelay({
+				head: [],
+				tail: [create],
+				releaseAtMs: deadlineMs + 5,
+				calls,
+			}),
+		})
+
+		const items = await collect(read.events())
+		const delivered = items.filter((i) => i.type === 'events').flatMap((i) => i.events)
+		expect(delivered.map((event) => event.id)).toEqual(['late-root'])
+		expect(calls).toHaveLength(1)
 	})
 })
 

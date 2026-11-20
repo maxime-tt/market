@@ -84,7 +84,8 @@
  *   it is `unreachable`, not still-waiting. Nothing settles early either way —
  *   the read waits for the relay's own verdict for its whole deadline, there is
  *   no per-relay margin that ends it first, and at the deadline the whole read
- *   gives up together (see the note at the web host,
+ *   gives up waiting together and then finishes reading what its transports had
+ *   already delivered (`pump`) before it ends (see the note at the web host,
  *   `createWebArenaAuctionRead`).
  *
  * `snapshot()` therefore **never rejects** because of the network; it resolves
@@ -430,11 +431,14 @@ export function arenaLotFollowUpFilters(
  * rendered empty with all seven relays healthy while the lot page still resolved
  * its lot. A second, measured way the same fact goes missing: the relay answers
  * the arena REQ **filter by filter**, so the admissions arrive after the creates,
- * the bids, the receipts, the verdicts and the commitments — whichever a read
- * has not consumed when it reaches its deadline is dropped with the rest of the
- * tail. Same relay, same minute, 2026-11-20: 30 of the 56 accepted lots were
- * followed at the read's 8 s deadline, and 56 of 56 with the same code at a 30 s
- * deadline.
+ * the bids, the receipts, the verdicts and the commitments — and a read that
+ * ends at its deadline with that tail still in the transport's hands loses it.
+ * Same relay, same minute, 2026-11-20: 30 of the 56 accepted lots were followed
+ * at the read's 8 s deadline, and 56 of 56 with the same code at a 30 s deadline.
+ * The read now drains what each transport has already delivered before it ends
+ * (`pump`), so a delivered tail is read; this gate stays for the tail that was
+ * still on the wire when the drain's quiet window closed, and it is what makes a
+ * page complete rather than merely lucky.
  *
  * ## The fact is asked for by the one tag that addresses it
  *
@@ -1756,6 +1760,12 @@ export interface ArenaAuctionRead {
 	 * connection stays open until then, so a relay that has signalled EOSE is
 	 * still read and a late event is still applied to the model. A relay the
 	 * transport gave up on but which then answers is counted as answered.
+	 *
+	 * The deadline ends the read's **wait**, not its **consumption**: what each
+	 * transport has already delivered is read before the read ends (the drain,
+	 * bounded by {@link ARENA_READ_DRAIN_QUIET_MS} and
+	 * {@link ARENA_READ_DRAIN_CEILING_MS}), so the tail of an answer that landed at
+	 * the deadline is applied rather than dropped.
 	 */
 	events(options?: { signal?: AbortSignal }): AsyncIterable<ArenaReadStreamItem>
 	/**
@@ -1793,6 +1803,56 @@ export interface ArenaAuctionRead {
 export const DEFAULT_MISSING_ADMISSION_DEADLINE_MS = 1500
 
 const DEFAULT_DEADLINE_MS = 8000
+
+/**
+ * How long a pump keeps taking what the transport hands over before it gives up
+ * on it — **the drain after the deadline**.
+ *
+ * The deadline ends the read's *wait*, not its *consumption*. A pump holds one
+ * pull in flight; when the deadline fires that pull is often already carrying
+ * the item the relay was mid-answer with (measured 2026-11-20: the arena REQ's
+ * kind-1449 window is shared by three schemas the chain publishes in bursts, so
+ * the create-admissions a list needs are the answer's tail, and a read that
+ * breaks out of its pump at the deadline drops them). The drain reads what is
+ * in hand and stops when the transport hands nothing over for this long.
+ *
+ * 100 ms is an order of magnitude above the measured cost of one item's step
+ * (decode plus the store's admission of it: a handful of ms live), so a slow
+ * step cannot be mistaken for a quiet transport; and it is 1.25% of the read's
+ * own 8 s budget.
+ */
+export const ARENA_READ_DRAIN_QUIET_MS = 100
+
+/**
+ * The hard cap on the drain, armed once when the deadline fires and never
+ * re-armed — which is why the drain cannot grow without limit. A pump stops
+ * taking new items here even while a relay keeps delivering, so a read ends at
+ * its deadline plus at most {@link ARENA_READ_DRAIN_QUIET_MS} (the drain of what
+ * was in hand: the normal case) and never later than
+ * `ARENA_READ_DRAIN_CEILING_MS + ARENA_READ_DRAIN_QUIET_MS`.
+ */
+export const ARENA_READ_DRAIN_CEILING_MS = 1000
+
+/** The sentinel a drain step resolves with when the transport has nothing already handed over. */
+const READ_DRAIN_IDLE = Symbol('arena.read.drain-idle')
+
+/**
+ * One drain step: the pull when the transport hands its item over within
+ * `quietMs`, and {@link READ_DRAIN_IDLE} when it does not — nothing is in hand,
+ * so the pump stops instead of waiting for the network.
+ *
+ * The `pull` is the same promise the pump has had in flight since before the
+ * deadline: the item the deadline interrupted is this step's item, never a later
+ * one. Its rejection still reaches the pump, which settles the relay `'error'`.
+ */
+function drainStep(
+	pull: Promise<IteratorResult<EventStreamItem<NostrEventLike>>>,
+	quietMs: number,
+): Promise<IteratorResult<EventStreamItem<NostrEventLike>> | typeof READ_DRAIN_IDLE> {
+	const { promise: quiet, resolve } = Promise.withResolvers<typeof READ_DRAIN_IDLE>()
+	const timer = setTimeout(() => resolve(READ_DRAIN_IDLE), quietMs)
+	return Promise.race([pull, quiet]).finally(() => clearTimeout(timer))
+}
 
 interface QueueEvent {
 	kind: 'event'
@@ -1851,9 +1911,22 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 				let allDone = relays.length === 0
 				let caughtUpEmitted = false
 				let aborted = controller.signal.aborted
-				// The one thing that ends a live read: its deadline (or a caller abort).
-				// A settled subscription is *not* an end — see the settle marker below.
+				// The one thing that ends a live read: its deadline (or a caller abort) —
+				// and after the deadline only the drain of what the transport had already
+				// handed over (see `pump`). A settled subscription is *not* an end — see
+				// the settle marker below.
 				let deadlineFired = false
+				// A gate that opens (resolving `READ_DRAIN_IDLE`) when the deadline fires,
+				// so a pump's wait for the transport never outlives the read's own
+				// deadline: the pull it was waiting on is then drained rather than dropped
+				// with the tail.
+				const deadlineGate = Promise.withResolvers<typeof READ_DRAIN_IDLE>()
+				/** The drain's cap reached: relays that will not stop delivering stop being read. */
+				let drainCeilingReached = false
+				let drainCeilingTimer: ReturnType<typeof setTimeout> | undefined
+				/** The read's own end bound, one quiet window past the cap, whatever the pumps do. */
+				let drainEnded = false
+				let drainEndTimer: ReturnType<typeof setTimeout> | undefined
 
 				function push(item: QueueItem): void {
 					queue.push(item)
@@ -1966,6 +2039,10 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 				function openFollowUps(event: ArenaAuctionEvent): void {
 					const followUp = init.followUpFilters
 					if (followUp === undefined) return
+					// The deadline is the read's contract: a REQ opened after it would be
+					// cut with the drain, and the read opens none — what it already asked
+					// for is what the drain finishes.
+					if (deadlineFired || controller.signal.aborted) return
 					if (seenIds.has(event.id)) return
 					seenIds.add(event.id)
 					seenEvents.push(event)
@@ -1993,16 +2070,40 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 					openSubscriptions += 1
 					void (async () => {
 						try {
-							const source = init.openRelay(url)
-							for await (const item of source(filters, {
-								signal: controller.signal,
-								bounded,
-							})) {
-								// The deadline ends the read: a relay that keeps
-								// delivering must not keep the drain alive past it. (A
-								// pump blocked on a quiet relay is ended by the loop's
-								// own `deadlineFired` check instead.)
-								if (controller.signal.aborted || deadlineFired) break
+							const iterator = init.openRelay(url)(filters, { signal: controller.signal, bounded })[Symbol.asyncIterator]()
+							// One pull in flight at a time, and never abandoned while a step
+							// can still use it: the pull the deadline interrupts is the item
+							// the transport was already handing over, and the drain below
+							// reads that same promise rather than a later one.
+							let inFlight: Promise<IteratorResult<EventStreamItem<NostrEventLike>>> | null = null
+							const pulled = (): Promise<IteratorResult<EventStreamItem<NostrEventLike>>> => (inFlight ??= iterator.next())
+							while (true) {
+								// A caller abort ends the pump at once: the read is being torn
+								// down, and its partial result is what the caller asked for.
+								if (controller.signal.aborted) break
+								let step: IteratorResult<EventStreamItem<NostrEventLike>> | typeof READ_DRAIN_IDLE
+								if (!deadlineFired) {
+									// Wait for the transport, but never past the read's deadline.
+									step = await Promise.race([pulled(), deadlineGate.promise])
+									// The deadline fired: the pull stays in flight and the drain
+									// takes it over on the next turn.
+									if (step === READ_DRAIN_IDLE) continue
+								} else {
+									// The drain: what the transport has already delivered, taken
+									// until it hands over nothing for `ARENA_READ_DRAIN_QUIET_MS`
+									// (or the cap says the relay will not stop delivering). The
+									// deadline ended the read's *wait*, not its *consumption*.
+									if (drainCeilingReached) break
+									step = await drainStep(pulled(), ARENA_READ_DRAIN_QUIET_MS)
+									// Nothing in hand within the quiet window: this pump's drain is
+									// over. The pull it leaves in flight belongs to the transport,
+									// which the read tears down as it ends; an item that lands only
+									// after this is past the drain's bound, not one the read held.
+									if (step === READ_DRAIN_IDLE) break
+								}
+								inFlight = null
+								if (step.done === true) break
+								const item = step.value
 								if (item.type === 'caught-up') {
 									// "Settled" is what this marker means: for a one-relay
 									// context it fires when that relay reached EOSE *or* when the
@@ -2093,11 +2194,13 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 					return
 				}
 
-				// The deadline ends the read. Everything that has arrived is already on
-				// the queue and will be drained by the loop below; the read then stops
-				// consuming — its sockets are torn down by the `finally`. Until then the
-				// relay connections stay open for the full `deadlineMs`, which is why a
-				// relay that signalled EOSE and then stayed quiet is still read.
+				// The deadline ends the read's **wait**: the relays stopped answering are
+				// settled below, and the pumps stop waiting on the transport. What the
+				// transport has *already* delivered is still read — the drain in `pump` —
+				// and only then does the read end, so a relay whose answer is in hand at
+				// the deadline is not cut off with the tail. Until the deadline the relay
+				// connections stay open for the full `deadlineMs`, which is why a relay
+				// that signalled EOSE and then stayed quiet is still read.
 				const deadline = setTimeout(() => {
 					// The deadline is where the read **knows**: it stops waiting on every
 					// relay that has not answered, and it settles each one synchronously
@@ -2124,6 +2227,20 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 					// its deadline either; its subscription is dropped with the read.
 					for (const subscription of subscriptions) markSubscriptionSettled(subscription)
 					deadlineFired = true
+					// The drain, and its cap. The gate releases every pump's wait: the pump
+					// keeps the pull in flight and reads what it holds, instead of breaking
+					// out of the loop with the item already in hand. A pump stops on its own
+					// once the transport hands over nothing for one quiet window; a relay
+					// that never goes quiet stops being read at the cap, and `drainEndTimer`
+					// bounds the read itself whatever the pumps do.
+					deadlineGate.resolve(READ_DRAIN_IDLE)
+					drainCeilingTimer = setTimeout(() => {
+						drainCeilingReached = true
+					}, ARENA_READ_DRAIN_CEILING_MS)
+					drainEndTimer = setTimeout(() => {
+						drainEnded = true
+						push({ kind: 'wake' })
+					}, ARENA_READ_DRAIN_CEILING_MS + ARENA_READ_DRAIN_QUIET_MS)
 					push({ kind: 'wake' })
 				}, deadlineMs)
 
@@ -2139,10 +2256,15 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 							for (const subscription of subscriptions) markSubscriptionSettled(subscription)
 						}
 						if (queue.length === 0) {
-							// `allDone` is every pump having ended on its own; for a live
-							// read the pumps are held open by design, so `deadlineFired`
-							// is the normal exit: no subscription ending can shorten it.
-							if (allDone || deadlineFired) break
+							// `allDone` is every pump having ended on its own, and it is the
+							// live read's exit: the deadline ends each pump's *wait*, the
+							// drain then ends each pump with what its transport had already
+							// delivered (`pump`), and only then does the read end. So no
+							// subscription ending can shorten a live read, and the deadline
+							// alone no longer ends one. `drainEnded` is the read's own bound —
+							// one quiet window past the drain's cap — and it ends the read
+							// even if a pump never does.
+							if (allDone || drainEnded) break
 							await wait()
 							continue
 						}
@@ -2166,7 +2288,12 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 						// end here: a relay that has signalled EOSE may still deliver, so its
 						// connection stays open and the read ends at its deadline (or a
 						// caller abort). No subscription ending shortens a live read.
-						if (bounded && settledSubscriptions >= openSubscriptions) break
+						//
+						// Once the deadline has fired the marker *is* settled for every
+						// subscription (the deadline marks them), and the drain of what the
+						// transports already delivered is still running: a snapshot must not
+						// lose that tail either, so from then on it ends with its pumps.
+						if (bounded && !deadlineFired && settledSubscriptions >= openSubscriptions) break
 					}
 
 					if (!caughtUpEmitted) {
@@ -2175,6 +2302,8 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 					}
 				} finally {
 					clearTimeout(deadline)
+					clearTimeout(drainCeilingTimer)
+					clearTimeout(drainEndTimer)
 					controller.abort()
 					controllers.delete(controller)
 					options.signal?.removeEventListener('abort', onCallerAbort)
