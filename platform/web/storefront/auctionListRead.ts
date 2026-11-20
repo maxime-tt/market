@@ -34,7 +34,7 @@
  * time that moves when a title changes is not an end time.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { EventStorePort } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
 import { getReadContext } from '@platform/web/readContext'
@@ -60,6 +60,8 @@ export interface AuctionListSelection {
 	limit: number
 	/** Unix seconds. Supplied by the caller so the projection stays pure. */
 	now: number
+	/** Order for `all` (ADR-0028). Defaults to `ending`, the original rule. */
+	sort?: 'ending' | 'popular' | 'newest'
 }
 
 export interface AuctionListData {
@@ -109,6 +111,7 @@ export function toAuctionListItem(view: ArenaAuctionView, now: number): AuctionL
 		topBidTotal: view.topBid?.total ?? null,
 		bidCount: view.bids.length,
 		endsAt,
+		startsAt: view.rootCreatedAt,
 		phase,
 		verdict,
 	}
@@ -139,8 +142,14 @@ export function selectAuctionList(
 	if (selection.source === 'all') {
 		// Live first, soonest-ending at the top (what a visitor can still bid on),
 		// then everything else in the read's own newest-first order.
+		// `popular` puts the most-bid live lots first; `newest` keeps the read's
+		// newest-first order. Live lots always lead: a front page shows what a
+		// visitor can still bid on before what is over.
 		const projected = snapshot.auctions.map((auction) => toAuctionListItem(auction, selection.now))
-		const live = projected.filter((item) => item.phase === 'open').sort((a, b) => (a.endsAt ?? Infinity) - (b.endsAt ?? Infinity))
+		const live = projected.filter((item) => item.phase === 'open')
+		const sort = selection.sort ?? 'ending'
+		if (sort === 'ending') live.sort((a, b) => (a.endsAt ?? Infinity) - (b.endsAt ?? Infinity))
+		else if (sort === 'popular') live.sort(byPopularity)
 		const rest = projected.filter((item) => item.phase !== 'open')
 		return { items: [...live, ...rest].slice(0, limit), missing: [] }
 	}
@@ -154,6 +163,56 @@ export function selectAuctionList(
 		else if (items.length < limit) items.push(toAuctionListItem(auction, selection.now))
 	}
 	return { items, missing }
+}
+
+/** Most bids first, then the higher top bid, then the sooner end. */
+export function byPopularity(a: AuctionListItem, b: AuctionListItem): number {
+	return (
+		b.bidCount - a.bidCount ||
+		(b.topBidTotal ?? b.startingBid ?? 0) - (a.topBidTotal ?? a.startingBid ?? 0) ||
+		(a.endsAt ?? Infinity) - (b.endsAt ?? Infinity)
+	)
+}
+
+/**
+ * The cover lot (ADR-0028). `picked` is the one coordinate the editor chose;
+ * `auto` is the live lot with the most bids, else the newest lot read.
+ */
+export function selectCoverAuction(
+	snapshot: ArenaAuctionSnapshot,
+	selection: { source: 'auto' | 'picked'; coordinates: readonly string[]; now: number },
+): { item: AuctionListItem; description: string | null } | null {
+	let view: ArenaAuctionView | undefined
+	if (selection.source === 'picked') {
+		const coordinate = selection.coordinates[0]
+		view = coordinate ? snapshot.auctions.find((auction) => auction.coordinate === coordinate) : undefined
+	} else {
+		const ranked = snapshot.auctions
+			.map((auction) => ({ auction, item: toAuctionListItem(auction, selection.now) }))
+			.filter(({ item }) => item.phase === 'open')
+			.sort((a, b) => byPopularity(a.item, b.item))
+		view = ranked[0]?.auction ?? snapshot.auctions[0]
+	}
+	return view ? { item: toAuctionListItem(view, selection.now), description: view.content.description } : null
+}
+
+/** The live figures the ticker can state, all derived from the read. */
+export interface AuctionTickerStats {
+	live: number
+	closingNext: AuctionListItem | null
+	topBid: number | null
+	bidsToday: number
+}
+
+export function auctionTickerStats(snapshot: ArenaAuctionSnapshot, now: number): AuctionTickerStats {
+	const projected = snapshot.auctions.map((auction) => toAuctionListItem(auction, now))
+	const live = projected.filter((item) => item.phase === 'open')
+	const closingNext = [...live].sort((a, b) => (a.endsAt ?? Infinity) - (b.endsAt ?? Infinity))[0] ?? null
+	const topBid = live.reduce<number | null>((best, item) => (item.topBidTotal !== null && (best === null || item.topBidTotal > best) ? item.topBidTotal : best), null)
+	const dayAgo = now - 86_400
+	let bidsToday = 0
+	for (const auction of snapshot.auctions) for (const bid of auction.bids) if (bid.createdAt >= dayAgo) bidsToday += 1
+	return { live: live.length, closingNext, topBid, bidsToday }
 }
 
 /** The read state the hook publishes; projection happens at render, with a fresh `now`. */
@@ -263,4 +322,101 @@ export function useAuctionListRead(): AuctionListReadState {
 	}, [relays, relaysKey])
 
 	return state
+}
+/**
+ * One auction read shared by every block on the page (ADR-0028).
+ *
+ * The magazine home puts four auction-backed blocks on one page — ticker,
+ * cover, closing soon, featured — and each opening its own subscription would
+ * read the same relays four times. They subscribe to one shared read instead.
+ * The read starts with the first subscriber and closes a few seconds after the
+ * last one leaves; the last result is kept so a remount (or the editor
+ * re-rendering a block) starts from what was already read.
+ */
+type SharedRead = {
+	state: AuctionListReadState
+	listeners: Set<() => void>
+	stop: (() => void) | null
+	idleTimer: ReturnType<typeof setTimeout> | null
+	startedAt: number
+}
+
+const shared: SharedRead = { state: EMPTY_STATE, listeners: new Set(), stop: null, idleTimer: null, startedAt: 0 }
+
+/** A settled read older than this is read again on the next mount. */
+const SHARED_READ_TTL_MS = 60_000
+
+function publish(next: AuctionListReadState) {
+	shared.state = next
+	for (const listener of shared.listeners) listener()
+}
+
+function startSharedRead() {
+	const controller = new AbortController()
+	let cancelled = false
+	const read = createWebArenaAuctionRead({
+		relays: [...webRelayPolicy('query')],
+		store: getReadContext().store as unknown as EventStorePort<Event>,
+	})
+	shared.startedAt = Date.now()
+	void collectAuctionListRead(read, {
+		signal: controller.signal,
+		onProgress: (progress) => {
+			// Keep showing the previous result until the new read has something.
+			if (!cancelled && (progress.snapshot?.auctions.length ?? 0) > 0) publish(progress)
+		},
+	})
+		.then((result) => {
+			if (!cancelled) publish(result)
+		})
+		.catch(() => {
+			if (!cancelled) publish({ ...shared.state, status: 'error' })
+		})
+	shared.stop = () => {
+		cancelled = true
+		controller.abort()
+		read.close()
+	}
+}
+
+function subscribeShared(listener: () => void): () => void {
+	shared.listeners.add(listener)
+	if (shared.idleTimer) {
+		clearTimeout(shared.idleTimer)
+		shared.idleTimer = null
+	}
+	const stale = Date.now() - shared.startedAt > SHARED_READ_TTL_MS
+	if (!shared.stop || (stale && shared.state.status !== 'loading')) {
+		shared.stop?.()
+		startSharedRead()
+	}
+	return () => {
+		shared.listeners.delete(listener)
+		if (shared.listeners.size === 0 && !shared.idleTimer) {
+			shared.idleTimer = setTimeout(() => {
+				shared.idleTimer = null
+				if (shared.listeners.size > 0) return
+				shared.stop?.()
+				shared.stop = null
+			}, 5_000)
+		}
+	}
+}
+
+export function useSharedAuctionListRead(): AuctionListReadState {
+	return useSyncExternalStore(
+		subscribeShared,
+		() => shared.state,
+		() => EMPTY_STATE,
+	)
+}
+
+/** A clock that ticks once a second, for the countdowns. */
+export function useNowSeconds(): number {
+	const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+	useEffect(() => {
+		const timer = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000)
+		return () => clearInterval(timer)
+	}, [])
+	return now
 }

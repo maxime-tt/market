@@ -22,7 +22,10 @@ import {
 } from '@platform/web/auctions/relay/arenaAuctionRead'
 import {
 	auctionListStatus,
+	auctionTickerStats,
+	byPopularity,
 	collectAuctionListRead,
+	selectCoverAuction,
 	selectAuctionList,
 	toAuctionListItem,
 	type AuctionListSelection,
@@ -320,6 +323,65 @@ describe('selectAuctionList', () => {
 		)
 		const { items } = selectAuctionList(snapshot, selection({ now: 1000, limit: 2 }))
 		expect(items.map((item) => item.d)).toEqual(['three', 'two'])
+	})
+})
+
+// =========================================================================
+// Magazine home selections (ADR-0028)
+// =========================================================================
+
+describe('magazine selections', () => {
+	function snapshotWith(...events: NostrEventLike[]) {
+		const ok = events.map((event) => decodeArenaEvent(event, 'wss://a')).flatMap((result) => (result.ok ? [result.event] : []))
+		return projectArenaEvents(ok)
+	}
+	const item = (over: Partial<ReturnType<typeof toAuctionListItem>>) =>
+		({ coordinate: 'c', seller: 's', d: 'd', title: null, startingBid: null, topBidTotal: null, bidCount: 0, endsAt: null, phase: 'open', verdict: null, ...over }) as ReturnType<
+			typeof toAuctionListItem
+		>
+
+	test('popularity: most bids, then higher top bid, then sooner end', () => {
+		const ranked = [
+			item({ d: 'quiet', bidCount: 1, topBidTotal: 500 }),
+			item({ d: 'busy', bidCount: 9, topBidTotal: 100 }),
+			item({ d: 'rich', bidCount: 1, topBidTotal: 9000 }),
+		].sort(byPopularity)
+		expect(ranked.map((entry) => entry.d)).toEqual(['busy', 'rich', 'quiet'])
+	})
+
+	test('items carry the root start, so a card can draw elapsed time', () => {
+		const snapshot = snapshotWith(createEvent({ id: 'a1', created_at: 1000, d: 'one' }))
+		expect(toAuctionListItem(snapshot.auctions[0], 1500).startsAt).toBe(1000)
+	})
+
+	test('cover: picked is the named lot, auto prefers a live lot over an ended one', () => {
+		const snapshot = snapshotWith(
+			createEvent({ id: 'a1', pubkey: SELLER_A, created_at: 1000, d: 'ended' }, { durationSec: 100 }),
+			createEvent({ id: 'b1', pubkey: SELLER_B, created_at: 2000, d: 'live' }, { durationSec: 3600 }),
+		)
+		expect(selectCoverAuction(snapshot, { source: 'auto', coordinates: [], now: 2500 })?.item.d).toBe('live')
+		expect(selectCoverAuction(snapshot, { source: 'picked', coordinates: ['1440:seller-alice:ended'], now: 2500 })?.item.d).toBe('ended')
+		expect(selectCoverAuction(snapshot, { source: 'picked', coordinates: [], now: 2500 })).toBeNull()
+	})
+
+	test('sort newest keeps the read order among live lots', () => {
+		const snapshot = snapshotWith(
+			createEvent({ id: 'b1', pubkey: SELLER_B, created_at: 2000, d: 'older' }, { durationSec: 600 }),
+			createEvent({ id: 'b2', pubkey: SELLER_B, created_at: 2100, d: 'newer' }, { durationSec: 3600 }),
+		)
+		const { items } = selectAuctionList(snapshot, selection({ source: 'all', now: 2200, sort: 'newest' }))
+		expect(items.map((entry) => entry.d)).toEqual(['newer', 'older'])
+	})
+
+	test('ticker stats count live lots and name the next to close', () => {
+		const snapshot = snapshotWith(
+			createEvent({ id: 'a1', created_at: 1000, d: 'ended' }, { durationSec: 100 }),
+			createEvent({ id: 'b1', pubkey: SELLER_B, created_at: 2000, d: 'late' }, { durationSec: 3600 }),
+			createEvent({ id: 'b2', pubkey: SELLER_B, created_at: 2100, d: 'soon' }, { durationSec: 600 }),
+		)
+		const stats = auctionTickerStats(snapshot, 2500)
+		expect(stats.live).toBe(2)
+		expect(stats.closingNext?.d).toBe('soon')
 	})
 })
 

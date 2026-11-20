@@ -18,6 +18,17 @@ import { AuctionListBlock, type AuctionListBlockProps } from './blocks/AuctionLi
 import { ProfileHeaderBlock, type ProfileHeaderBlockProps } from './blocks/ProfileHeaderBlock'
 import { TextBlock } from './blocks/TextBlock'
 import { DividerBlock, SpacerBlock } from './blocks/SpacingBlocks'
+import {
+	CategorySectionBlock,
+	CollectionRowBlock,
+	CoverAuctionBlock,
+	ProductSpreadBlock,
+	TickerBlock,
+	type CategorySectionBlockProps,
+	type CollectionRowBlockProps,
+	type CoverAuctionBlockProps,
+	type ProductSpreadBlockProps,
+} from './blocks/MagazineBlocks'
 
 /**
  * Turns a validated page document into elements.
@@ -56,6 +67,11 @@ export interface StorefrontDataSlots {
 	Search?: (props: SearchBlockProps) => ReactNode
 	Categories?: (props: CategoriesBlockBlockProps) => ReactNode
 	AuctionList?: (props: AuctionListBlockProps) => ReactNode
+	Ticker?: (props: { messages: { text: string }[]; showLiveStats: boolean }) => ReactNode
+	CoverAuction?: (props: CoverAuctionBlockProps) => ReactNode
+	ProductSpread?: (props: ProductSpreadBlockProps) => ReactNode
+	CollectionRow?: (props: CollectionRowBlockProps) => ReactNode
+	CategorySection?: (props: CategorySectionBlockProps) => ReactNode
 }
 
 /**
@@ -170,6 +186,36 @@ export function StorefrontBlockView({ block, slots }: { block: StorefrontBlock; 
 					relayHealth={{ answered: 0, total: 0 }}
 					auctionHref={(coordinate) => `/auctions/${encodeURIComponent(coordinate.split(':').slice(2).join(':'))}`}
 				/>
+			)
+		// Magazine blocks (ADR-0028). With no host, each draws its honest
+		// no-data state: the author's own ticker lines, and nothing read.
+		case 'Ticker':
+			return slots?.Ticker ? (
+				slots.Ticker(block.props)
+			) : (
+				<TickerBlock entries={block.props.messages.filter((m) => m.text.trim()).map((m) => ({ label: m.text }))} />
+			)
+		case 'CoverAuction':
+			return slots?.CoverAuction ? (
+				slots.CoverAuction(block.props)
+			) : (
+				<CoverAuctionBlock
+					{...block.props}
+					item={null}
+					status="error"
+					now={0}
+					auctionHref={(coordinate) => `/auctions/${encodeURIComponent(coordinate.split(':').slice(2).join(':'))}`}
+				/>
+			)
+		case 'ProductSpread':
+			return slots?.ProductSpread ? slots.ProductSpread(block.props) : <ProductSpreadBlock {...block.props} products={null} isLoading={false} />
+		case 'CollectionRow':
+			return slots?.CollectionRow ? slots.CollectionRow(block.props) : <CollectionRowBlock {...block.props} collections={null} isLoading={false} />
+		case 'CategorySection':
+			return slots?.CategorySection ? (
+				slots.CategorySection(block.props)
+			) : (
+				<CategorySectionBlock {...block.props} products={null} isLoading={false} browseHref="/products" />
 			)
 		default: {
 			// Unreachable while the switch matches the union. The assignment

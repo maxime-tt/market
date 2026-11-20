@@ -26,7 +26,8 @@ import { useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useQuery } from '@tanstack/react-query'
 import { useStorefrontContext } from '@ui/storefront/StorefrontContext'
-import { selectAuctionList, useAuctionListRead } from './auctionListRead'
+import { selectAuctionList, useNowSeconds, useSharedAuctionListRead } from './auctionListRead'
+import { CategorySectionSlot, CollectionRowSlot, CoverAuctionSlot, ProductSpreadSlot, TickerSlot } from './MagazineBlockSlots'
 import type { StorefrontBlock, StorefrontPage } from '@sdk/commerce/storefront/storefrontPage'
 
 /**
@@ -206,14 +207,16 @@ function CategoriesSlot({ categories, title }: CategoriesBlockBlockProps) {
  */
 function AuctionListSlot(props: AuctionListBlockProps) {
 	const { pubkey } = useStorefrontContext()
-	const read = useAuctionListRead()
-	const now = Math.floor(Date.now() / 1000)
+	// One read shared with the other auction blocks on the page (ADR-0028).
+	const read = useSharedAuctionListRead()
+	const now = useNowSeconds()
 	const selection = {
 		source: props.source,
 		seller: pubkey,
 		coordinates: props.auctionCoordinates,
 		limit: props.limit,
 		now,
+		sort: props.sort,
 	} as const
 	const selected = read.snapshot
 		? selectAuctionList(read.snapshot, selection)
@@ -227,6 +230,7 @@ function AuctionListSlot(props: AuctionListBlockProps) {
 			status={read.status}
 			relayHealth={read.relayHealth}
 			auctionHref={auctionHref}
+			now={now}
 		/>
 	)
 }
@@ -251,6 +255,11 @@ export const storefrontBlockSlots: StorefrontDataSlots = {
 	Search: (props) => <SearchSlot {...props} />,
 	Categories: (props) => <CategoriesSlot {...props} />,
 	AuctionList: (props) => <AuctionListSlot {...props} />,
+	Ticker: (props) => <TickerSlot {...props} />,
+	CoverAuction: (props) => <CoverAuctionSlot {...props} />,
+	ProductSpread: (props) => <ProductSpreadSlot {...props} />,
+	CollectionRow: (props) => <CollectionRowSlot {...props} />,
+	CategorySection: (props) => <CategorySectionSlot {...props} />,
 }
 
 /**
