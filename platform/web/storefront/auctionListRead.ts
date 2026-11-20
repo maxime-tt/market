@@ -47,6 +47,7 @@ import {
 	createWebArenaAuctionRead,
 	followedAuctionViews,
 	projectArenaEvents,
+	unadmittedCreateIds,
 	type ArenaAuctionEvent,
 	type ArenaAuctionSnapshot,
 	type ArenaAuctionView,
@@ -271,6 +272,27 @@ export async function collectAuctionListRead(
 			}
 			snapshot = projectArenaEvents([...byId.values()], item.health, refusals)
 			break
+		}
+
+		// This block lists only the lots the chain accepted
+		// (`followedAuctionViews`), and the read's own budget can leave those
+		// acceptances behind: kind 1449 is one window shared with the committed
+		// ends and the bid admissions, and the relay answers the arena REQ filter by
+		// filter — the admissions are the tail a read may not have consumed when it
+		// reaches its deadline. Ask for exactly the missing ones, once, by the
+		// create's own id, and project again: the same rule
+		// `collectArenaSurfacesRead` applies.
+		if (unadmittedCreateIds([...byId.values()]).length > 0) {
+			const fetched = await read.missingCreateAdmissions([...byId.values()], { signal: options.signal })
+			for (const event of fetched.events) {
+				const prior = byId.get(event.id)
+				if (prior === undefined) byId.set(event.id, event)
+				else for (const relay of event.relays) if (!prior.relays.includes(relay)) prior.relays.push(relay)
+			}
+			refusals.push(...fetched.refusals)
+			if (fetched.events.length > 0 || fetched.refusals.length > 0) {
+				snapshot = projectArenaEvents([...byId.values()], snapshot.health, refusals)
+			}
 		}
 	} finally {
 		read.close()

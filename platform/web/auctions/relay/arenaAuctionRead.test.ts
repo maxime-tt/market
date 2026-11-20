@@ -24,6 +24,7 @@ import {
 	ARENA_VERDICT_KIND,
 } from '@sdk/commerce/auctions/constants'
 import { ARENA_REFUSAL_BAD_CONTENT } from '@platform/web/auctions/relay/arenaAnchor'
+import { makeCreateAdmitEvent } from './arenaCreateAdmitFixture'
 import {
 	ARENA_READ_KINDS,
 	ARENA_REFUSAL_BAD_IDENTITY,
@@ -32,13 +33,17 @@ import {
 	ARENA_REFUSAL_UNBOUND_BID,
 	ARENA_REFUSAL_UNEXPECTED_KIND,
 	arenaAuctionFilters,
+	arenaCreateAdmitFilter,
 	arenaLotBidFilters,
 	arenaLotFilters,
 	arenaLotFollowUpFilters,
 	createArenaAuctionRead,
 	decodeArenaEvent,
 	findImmutableChange,
+	followedAuctionViews,
 	projectArenaEvents,
+	unadmittedCreateIds,
+	type ArenaAuctionEvent,
 	type ArenaAuctionRead,
 	type ArenaRelayOpen,
 	type ArenaRelayOpenFactory,
@@ -1741,6 +1746,107 @@ describe('a lot read whose bids are only findable by #e', () => {
 		})
 		await read.snapshot()
 		expect(relay.calls).toHaveLength(1)
+	})
+})
+
+// =========================================================================
+// A discovery read: the acceptances its gate needs are asked for, not windowed
+// =========================================================================
+
+/**
+ * A relay shaped like the measured one for the **whole arena**: kind 1449 is
+ * answered from a `limit`-bounded window, so the slice carries no
+ * create-admission at all, while the admission itself is answerable through the
+ * `#e` filter on the create's own id.
+ *
+ * Measured on the live relay 2026-11-20: the newest 200 kind-1449 events held
+ * 200 create-admissions just after the 09:47:41 burst, and 172 committed ends +
+ * 28 bid admissions in the window before it. In that window every lot's
+ * `createAdmit` was `null`, and the list rendered empty with all seven relays
+ * healthy while the lot page still resolved its lot.
+ */
+function windowedArenaRelay(
+	windowEvents: NostrEventLike[],
+	admits: NostrEventLike[],
+): { open: ArenaRelayOpenFactory; calls: (readonly EventFilter[])[] } {
+	const calls: (readonly EventFilter[])[] = []
+	const open: ArenaRelayOpenFactory =
+		(url: string): ArenaRelayOpen =>
+		(filters: readonly EventFilter[]) => ({
+			async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+				calls.push(filters)
+				const requested = new Set(filters.flatMap((filter) => filter['#e'] ?? []))
+				const events =
+					requested.size === 0
+						? windowEvents
+						: admits.filter((admit) => requested.has(admit.tags.find((tag) => tag[0] === 'e')?.[1] ?? ''))
+				for (const event of events) yield { type: 'event', event } as EventStreamItem<NostrEventLike>
+				yield { type: 'caught-up', info: { eose: [url], pending: [], complete: false } } as EventStreamItem<NostrEventLike>
+			},
+		})
+	return { open, calls }
+}
+
+describe('the acceptances a read is missing: kind 1449 is a window, not a set', () => {
+	const create = createEvent({ id: 'root-1' })
+	const admit = makeCreateAdmitEvent(create)
+	const decoded = (event: NostrEventLike): ArenaAuctionEvent => {
+		const result = decodeArenaEvent(event, 'wss://relay.one')
+		if (!result.ok) throw new Error(`refused: ${result.refusal.reason}`)
+		return result.event
+	}
+
+	test('the ids are the creates read that no admission names, deduped and in read order', () => {
+		expect(unadmittedCreateIds([])).toEqual([])
+		// Bids and admissions are not creates: they ask for nothing.
+		expect(unadmittedCreateIds([decoded(bidEvent({ auctionId: 'lot-1' }))])).toEqual([])
+
+		const other = createEvent({ id: 'root-2', d: 'lot-2' }, { auction_id: 'lot-2' })
+		// A repeated create is one id; the admitted one is not asked for.
+		expect(unadmittedCreateIds([decoded(create), decoded(other), decoded(create), decoded(admit)])).toEqual(['root-2'])
+		// An admission for the other create covers it, and the answer is empty.
+		expect(
+			unadmittedCreateIds([decoded(create), decoded(other), decoded(admit), decoded(makeCreateAdmitEvent(other))]),
+		).toEqual([])
+	})
+
+	test('the filter asks for the admissions by the create’s own id', () => {
+		expect(arenaCreateAdmitFilter(['root-1', 'root-2'])).toEqual({ kinds: [ARENA_LOT_STATE_KIND], '#e': ['root-1', 'root-2'] })
+	})
+
+	test('asking for the missing acceptances opens one #e REQ and decodes what it answers', async () => {
+		const relay = windowedArenaRelay([create], [admit])
+		const read = createArenaAuctionRead({ relays: ['wss://windowed'], deadlineMs: 1000, openRelay: relay.open })
+
+		const { events, refusals } = await read.missingCreateAdmissions([decoded(create)])
+		expect(events.map((event) => event.id)).toEqual([admit.id])
+		expect(refusals).toEqual([])
+		expect(relay.calls).toHaveLength(1)
+		expect(relay.calls[0]).toEqual([{ kinds: [ARENA_LOT_STATE_KIND], '#e': [create.id] }])
+	})
+
+	test('a read that already has every acceptance asks for nothing at all', async () => {
+		const relay = windowedArenaRelay([create], [admit])
+		const read = createArenaAuctionRead({ relays: ['wss://windowed'], deadlineMs: 1000, openRelay: relay.open })
+
+		const { events, refusals } = await read.missingCreateAdmissions([decoded(create), decoded(admit)])
+		expect(events).toEqual([])
+		expect(refusals).toEqual([])
+		// The one property that keeps this affordable: a complete read opens no REQ.
+		expect(relay.calls).toHaveLength(0)
+	})
+
+	test('the read alone still follows nothing from that window — the window is not a set', async () => {
+		const relay = windowedArenaRelay([create], [admit])
+		const read = createArenaAuctionRead({ relays: ['wss://windowed'], deadlineMs: 1000, openRelay: relay.open })
+
+		const snapshot = await read.snapshot()
+		expect(snapshot.auctions).toHaveLength(1)
+		expect(snapshot.auctions[0]?.createAdmit).toBeNull()
+		expect(followedAuctionViews(snapshot.auctions)).toEqual([])
+		// The relay still answered, and with the create: an empty followed list is
+		// a statement about the window, not about the arena.
+		expect(snapshot.health.empty).toBe(false)
 	})
 })
 

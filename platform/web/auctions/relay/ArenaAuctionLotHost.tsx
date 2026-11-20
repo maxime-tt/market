@@ -102,7 +102,9 @@ export function useArenaLotRead(init: ArenaLotReadInit): ArenaSurfacesReadState 
 			// event id — knowable only after the create arrives. The base REQ keeps
 			// `#a` for relays that index it; this second REQ adds `#e`. The
 			// whole-arena read already asks for every bid kind, so it has no
-			// follow-up to add.
+			// follow-up to add. The create-admissions its gate reads are not a
+			// follow-up either: the read asks for the missing ones when it has
+			// reported (`ArenaAuctionRead.missingCreateAdmissions`).
 			followUpFilters: d === null ? undefined : arenaLotFollowUpFilters(seller, d),
 		})
 
