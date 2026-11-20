@@ -552,6 +552,7 @@ export const STOREFRONT_THEME_IDS = [
 	'law',
 	'acct',
 	'pleb',
+	// Retired: Concrete. Kept so old pages parse; renders as Plebeian.
 	'brut',
 	'arena',
 ] as const

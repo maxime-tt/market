@@ -40,6 +40,7 @@ The solid hover came from the CSS build. lightningcss, through the Tailwind plug
   The wizard follows these steps, with a desktop-width preview scaled to fit. The editor's settings column shows the same Colours list and Make it yours panel. Picking a colour writes the look and colourway together, and resets the tuning only when the look changes.
 
 - **Phone editing.** Below Puck's 638px breakpoint the editor grows with the page and the canvas takes 75% of the screen height. Without this the publish header filled Puck's fixed box and the framed canvas collapsed to nothing.
+- **No repeated colours.** Brutalist and Neon are listed once, under Plebeian, instead of under every look. The Concrete look is retired: `brut` stays in the schema so old pages still parse, and it renders as Plebeian.
 - **Home default.** Change template on the home page starts on On the block.
 
 ## Consequences
