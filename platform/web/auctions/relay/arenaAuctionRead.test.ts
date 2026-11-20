@@ -416,7 +416,13 @@ function fakeRelay(url: string, options: FakeRelayOptions): ArenaRelayOpen {
 	})
 }
 
-function readFrom(relays: Record<string, FakeRelayOptions>, deadlineMs = 5000): ArenaAuctionRead {
+/**
+ * A live read now ends at its deadline, never at a settle marker, so a test
+ * that consumes `events()` names the bound it needs. The fakes here resolve in
+ * microtasks, so the default is deliberately short; the reads that are *about*
+ * the bound pass their own (`60`, `40`).
+ */
+function readFrom(relays: Record<string, FakeRelayOptions>, deadlineMs = 200): ArenaAuctionRead {
 	return createArenaAuctionRead({
 		relays: Object.keys(relays),
 		openRelay: (url) => fakeRelay(url, relays[url] ?? {}),
@@ -882,7 +888,9 @@ describe('resilience', () => {
 		const create = createEvent({ id: 'root-1', d: 'lot-1' })
 		const read = createArenaAuctionRead({
 			relays: ['wss://refuser', 'wss://alive'],
-			deadlineMs: 5000,
+			// The live read ends at its deadline, not at a settle marker; the fakes
+			// resolve in microtasks, so a short bound is all this needs.
+			deadlineMs: 200,
 			filters: arenaLotFilters(SELLER_A, 'lot-1'),
 			followUpFilters: arenaLotFollowUpFilters(SELLER_A, 'lot-1'),
 			openRelay: (url) => (filters, opts) => {
@@ -999,14 +1007,16 @@ describe('resilience', () => {
 		expect(snapshot.health.empty).toBe(true)
 	})
 
-	test('a relay delivering after the deadline is counted as answered', async () => {
-		// The transport's per-relay deadline (its never-EOSE fallback, `deadlineMs`)
-		// fires first: measured live 2026-11-19, the relay that carries the lot sent
-		// its first kind-1440 EVENT at 8759 ms, after the 8 s fallback. The late
-		// answer is the answer — the give-up was a guess.
+	test('a relay the transport gave up on that then delivers is counted as answered', async () => {
+		// The transport's never-EOSE fallback gives up on a relay (a `caught-up`
+		// naming it pending, with no EOSE). Measured live 2026-11-19, the relay that
+		// carries the lot sent its first kind-1440 EVENT at 8759 ms, after the 8 s
+		// fallback. The late answer is the answer — the give-up was a guess — and
+		// under the deadline contract the read is still consuming that relay when it
+		// arrives, so the event upgrades the relay to `ok` before the read ends.
 		const read = createArenaAuctionRead({
 			relays: ['wss://late'],
-			deadlineMs: 60_000,
+			deadlineMs: 200,
 			openRelay: (url) => (_filters: readonly EventFilter[], _opts: ArenaRelayOpenOptions) => ({
 				async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
 					yield { type: 'caught-up', info: { eose: [], pending: [url], complete: false } }
@@ -1031,8 +1041,10 @@ describe('resilience', () => {
 		// "no relay answered" for a read that plainly received events.
 		const read = readFrom({ 'wss://slow': { events: [createEvent({ id: 'root-1' })], hang: true } }, 40)
 
-		// A hanging relay never ends its own stream, so the read is closed at its
-		// caught-up marker — what a page surface does (`collectArenaSurfacesRead`).
+		// A hanging relay never ends its own stream, so the read ends at its
+		// deadline and emits the caught-up marker there — the last item a page
+		// surface's collector sees before it closes the read
+		// (`collectArenaSurfacesRead`).
 		const items: ArenaReadStreamItem[] = []
 		for await (const item of read.events()) {
 			items.push(item)
@@ -1055,6 +1067,9 @@ describe('resilience', () => {
 
 describe('the live stream', () => {
 	test('delivers events, then one caught-up marker, then ends', async () => {
+		// The fake's stream ends after its EOSE, so `allDone` ends this read. A real
+		// transport keeps the stream open (it delivered after its never-EOSE
+		// fallback, measured 2026-11-19), so the deadline is the normal bound there.
 		const read = readFrom({ 'wss://a': { events: [createEvent({ id: 'root-1' })] } })
 		const items = await collect(read.events())
 
@@ -1062,6 +1077,88 @@ describe('the live stream', () => {
 		const caughtUp = items.filter((i) => i.type === 'caught-up')
 		expect(events.length).toBeGreaterThan(0)
 		expect(caughtUp).toHaveLength(1)
+		expect(items.filter((i) => i.type === 'caught-up')).toHaveLength(1)
+	})
+
+	test('an event arriving after a relay’s EOSE, before the deadline, is still applied', async () => {
+		// The ruling: EOSE is a boundary for the relay's own backlog, not for the
+		// read. The connection stays open for the whole deadline, so a bid that
+		// arrives *after* the relay said "caught up" is still delivered and still
+		// lands in the model. The early settle gate this replaced ended the read at
+		// EOSE, and that late bid was lost.
+		const create = createEvent({ id: 'root-1' })
+		const lateBid = bidEvent({ auctionId: 'lot-1', amount: 500, e: 'root-1', id: 'late-bid' })
+		// Nothing in this test waits on a clock: the relay holds the bid back until
+		// the read has taken the create, and the relay is left connected until the
+		// read aborts it at its deadline. Both orderings are gates, not durations.
+		const hasCreate = Promise.withResolvers<void>()
+		const read = createArenaAuctionRead({
+			relays: ['wss://slow-tail'],
+			deadlineMs: 300,
+			openRelay: (url) => (_filters: readonly EventFilter[], options: ArenaRelayOpenOptions) => ({
+				async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+					yield { type: 'event', event: create }
+					yield { type: 'caught-up', info: { eose: [url], pending: [], complete: false } }
+					// The relay answered the REQ, then took its time over the bid …
+					await hasCreate.promise
+					yield { type: 'event', event: lateBid }
+					// … and stayed connected, which is what a live relay does: the read
+					// aborts it, and only at its deadline.
+					const stayOpen = Promise.withResolvers<void>()
+					options.signal?.addEventListener('abort', () => stayOpen.resolve(), { once: true })
+					await stayOpen.promise
+				},
+			}),
+		})
+
+		const started = Date.now()
+		const items: ArenaReadStreamItem[] = []
+		for await (const item of read.events()) {
+			items.push(item)
+			// Release the bid only once the read holds the create: the EOSE is already
+			// behind the pump by then, so the bid provably arrives after it.
+			if (item.type === 'events') hasCreate.resolve()
+		}
+		const elapsed = Date.now() - started
+
+		const delivered = items.filter((i) => i.type === 'events').flatMap((i) => i.events)
+		expect(delivered.map((event) => event.id)).toEqual(['root-1', 'late-bid'])
+		// Applied to the model, not merely seen on the wire: the late bid is in the
+		// auction the projection produces from everything the read delivered.
+		expect(projectArenaEvents(delivered).auctions[0].bids.map((bid) => bid.eventId)).toEqual(['late-bid'])
+		// And the read ran to its deadline: EOSE ended no part of it.
+		expect(elapsed).toBeGreaterThanOrEqual(250)
+
+		const caughtUp = items.at(-1)
+		if (caughtUp?.type !== 'caught-up') throw new Error('no caught-up marker')
+		expect(caughtUp.health.answered).toEqual(['wss://slow-tail'])
+		expect(caughtUp.health.pending).toEqual([])
+	})
+
+	test('the deadline ends a live read even while a relay keeps delivering', async () => {
+		// A relay that never stops talking must not keep the read alive past its
+		// deadline: the loop drains what has arrived and then stops consuming, so
+		// the run is bounded by the deadline, not by the relay's chatter. The fake
+		// yields on an event-loop turn (never a clock), which is what lets the
+		// deadline timer fire between two events.
+		const read = createArenaAuctionRead({
+			relays: ['wss://flood'],
+			deadlineMs: 20,
+			openRelay: () => () => ({
+				async *[Symbol.asyncIterator](): AsyncIterator<EventStreamItem<NostrEventLike>> {
+					// A wrong-kind event: refused by the gate immediately, so the flood
+					// costs the read a refusal, not a projection.
+					for (;;) {
+						yield { type: 'event', event: ev({ kind: 1, content: 'gm' }) }
+						await new Promise<void>((resolve) => setImmediate(resolve))
+					}
+				},
+			}),
+		})
+
+		const started = Date.now()
+		const items = await collect(read.events())
+		expect(Date.now() - started).toBeLessThan(2000)
 		expect(items.filter((i) => i.type === 'caught-up')).toHaveLength(1)
 	})
 
