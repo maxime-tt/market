@@ -27,7 +27,15 @@ import { createRoot, type Root } from 'react-dom/client'
 import { useQuery } from '@tanstack/react-query'
 import { useStorefrontContext } from '@ui/storefront/StorefrontContext'
 import { selectAuctionList, useNowSeconds, useSharedAuctionListRead } from './auctionListRead'
-import { CategorySectionSlot, CollectionRowSlot, CoverAuctionSlot, ProductSpreadSlot, TickerSlot } from './MagazineBlockSlots'
+import {
+	AuctionBentoSlot,
+	CategorySectionSlot,
+	ClosingPicksSlot,
+	CollectionRowSlot,
+	CoverAuctionSlot,
+	ProductSpreadSlot,
+	TickerSlot,
+} from './MagazineBlockSlots'
 import type { StorefrontBlock, StorefrontPage } from '@sdk/commerce/storefront/storefrontPage'
 
 /**
@@ -166,16 +174,7 @@ function SearchSlot({ placeholder, size }: SearchBlockProps) {
 		if (term.length === 0) return
 		navigate({ to: '/', search: { q: term } })
 	}
-	return (
-		<SearchBlock
-			placeholder={placeholder}
-			size={size}
-			query={query}
-			onChange={setQuery}
-			onGo={go}
-			onClear={() => setQuery('')}
-		/>
-	)
+	return <SearchBlock placeholder={placeholder} size={size} query={query} onChange={setQuery} onGo={go} onClear={() => setQuery('')} />
 }
 
 /**
@@ -186,13 +185,7 @@ function SearchSlot({ placeholder, size }: SearchBlockProps) {
  */
 function CategoriesSlot({ categories, title }: CategoriesBlockBlockProps) {
 	const navigate = useNavigate()
-	return (
-		<CategoriesBlock
-			categories={categories}
-			title={title}
-			categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`}
-		/>
-	)
+	return <CategoriesBlock categories={categories} title={title} categoryToPath={(key: string) => `/?q=${encodeURIComponent(key)}`} />
 }
 
 /**
@@ -260,6 +253,8 @@ export const storefrontBlockSlots: StorefrontDataSlots = {
 	ProductSpread: (props) => <ProductSpreadSlot {...props} />,
 	CollectionRow: (props) => <CollectionRowSlot {...props} />,
 	CategorySection: (props) => <CategorySectionSlot {...props} />,
+	AuctionBento: (props) => <AuctionBentoSlot {...props} />,
+	ClosingPicks: (props) => <ClosingPicksSlot {...props} />,
 }
 
 /**
@@ -318,11 +313,7 @@ function servedRegionElement(block: StorefrontBlock): ReactNode {
  * Returns the teardown: every region root unmounts, leaving the server's
  * markup in place.
  */
-export function fillServedPageRegions(
-	container: HTMLElement,
-	page: StorefrontPage,
-	wrap: (children: ReactNode) => ReactNode,
-): () => void {
+export function fillServedPageRegions(container: HTMLElement, page: StorefrontPage, wrap: (children: ReactNode) => ReactNode): () => void {
 	const roots: Root[] = []
 	for (const element of container.querySelectorAll<HTMLElement>(SERVED_REGION_SELECTOR)) {
 		const block = page.content.find((candidate) => candidate.props.id === element.dataset.arBlockId)

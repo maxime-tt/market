@@ -8,9 +8,27 @@
 
 A page stays unlisted until you publish it and point a route at it.
 
+## Home templates
+
+Two home layouts ship with every instance. Open the home page in the editor, click **Change template** and pick one:
+
+- **On the block.** The default home. A big headline over live lots, a tilted band, closing soon beside a pinboard of products, colour collection tiles and bento category sections.
+- **Magazine cover.** A featured lot on the cover, auctions next, then products, collections and category shelves.
+
+Applying a template gives you a normal page, so change anything you like before you publish.
+
+### On the block
+
+The blocks live under **Zine**:
+
+- **Auction bento.** Your headline and intro over up to four lots. **Auto** puts the busiest live lots first. **Picked** shows the ones you choose, the first one big.
+- **Closing soon + picks.** A numbered list of lots by end time, next to a pinboard of products.
+
+A few blocks also have a **Style** option: the ticker can be a **Big band**, collections can be **Colour tiles**, and category sections can be a **Bento** with a badge on the big pick.
+
 ## The magazine home
 
-The home page now reads like a magazine cover: a featured live lot up top, auctions next, then products, collections and a few category shelves. Every part of it is a block, so you can change it all in the page editor.
+The magazine cover has a featured live lot up top, auctions next, then products, collections and a few category shelves. Every part of it is a block, so you can change it all in the page editor.
 
 To use it, open the home page in the editor, click **Change template** and pick **Magazine cover**. You'll find the blocks under **Magazine**:
 

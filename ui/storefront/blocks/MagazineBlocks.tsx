@@ -5,6 +5,7 @@ import { useStorefrontContext } from '../StorefrontContext'
 import type { AuctionListItem, AuctionListStatus } from './AuctionListBlock'
 import { StorefrontEditorHint } from './shared'
 import './magazine.css'
+import './zine.css'
 
 /**
  * The magazine home blocks (ADR-0028), drawn from the "cover story" mockup.
@@ -103,7 +104,18 @@ export function MagazineHead({
 }
 
 /** An image gated through the same scheme check as every page image. */
-export function MagazineImage({ src, alt = '', eager = false }: { src: string | null | undefined; alt?: string; eager?: boolean }) {
+export function MagazineImage({
+	src,
+	alt = '',
+	eager = false,
+	hideFrameOnError = false,
+}: {
+	src: string | null | undefined
+	alt?: string
+	eager?: boolean
+	/** Hide the image's wrapper when it fails to load (decorative fans, ADR-0029). */
+	hideFrameOnError?: boolean
+}) {
 	if (!src || !isSafeMediaSrc(src)) return <span className="mz-noimg">No image</span>
 	return (
 		<img
@@ -113,6 +125,14 @@ export function MagazineImage({ src, alt = '', eager = false }: { src: string | 
 			loading={eager ? 'eager' : 'lazy'}
 			decoding="async"
 			referrerPolicy="no-referrer"
+			onError={
+				hideFrameOnError
+					? (event) => {
+							const frame = event.currentTarget.parentElement
+							if (frame) frame.style.display = 'none'
+						}
+					: undefined
+			}
 			{...(eager ? { fetchPriority: 'high' as const } : {})}
 		/>
 	)
@@ -378,7 +398,17 @@ export interface ProductSpreadBlockViewProps extends ProductSpreadBlockProps {
 
 const DEFAULT_KICKERS = ["Editor's pick", 'Staff favourite', 'Just restocked']
 
-export function ProductSpreadBlock({ title, kickers, quote, linkLabel, linkHref, products, isLoading, source, productDTags }: ProductSpreadBlockViewProps) {
+export function ProductSpreadBlock({
+	title,
+	kickers,
+	quote,
+	linkLabel,
+	linkHref,
+	products,
+	isLoading,
+	source,
+	productDTags,
+}: ProductSpreadBlockViewProps) {
 	const { isEditing } = useStorefrontContext()
 	const items = (products ?? []).slice(0, 3)
 	const kicker = (index: number) => kickers[index]?.text?.trim() || DEFAULT_KICKERS[index] || ''
@@ -465,6 +495,7 @@ export interface CollectionRowBlockProps {
 	limit: number
 	linkLabel: string
 	linkHref: string
+	style?: 'cards' | 'tiles'
 }
 
 export interface MagazineCollection {
@@ -481,7 +512,15 @@ export interface CollectionRowBlockViewProps extends CollectionRowBlockProps {
 	isLoading: boolean
 }
 
-export function CollectionRowBlock({ title, limit, linkLabel, linkHref, collections, isLoading }: CollectionRowBlockViewProps) {
+export function CollectionRowBlock({
+	title,
+	limit,
+	linkLabel,
+	linkHref,
+	collections,
+	isLoading,
+	style = 'cards',
+}: CollectionRowBlockViewProps) {
 	const { isEditing } = useStorefrontContext()
 	const items = (collections ?? []).slice(0, Math.max(0, limit))
 
@@ -509,32 +548,36 @@ export function CollectionRowBlock({ title, limit, linkLabel, linkHref, collecti
 	return (
 		<div className={cn('mz-wrap mz-sec', isEditing && 'pointer-events-none')} data-testid="storefront-collection-row">
 			<MagazineHead title={title} linkLabel={linkLabel} linkHref={linkHref} />
-			<div className="mz-cols">
-				{items.map((collection) => {
-					const images = collection.images.slice(0, 3)
-					return (
-						<a key={collection.key} className="mz-col" href={collection.href}>
-							<div className="mz-g" data-count={Math.max(1, images.length)}>
-								{(images.length > 0 ? images : ['']).map((src, index) => (
-									<div key={index}>
-										<MagazineImage src={src || null} />
-									</div>
-								))}
-							</div>
-							<h3>{collection.title}</h3>
-							<p>
-								<span>{collection.itemCount === 1 ? '1 item' : `${collection.itemCount} items`}</span>
-								{collection.curator ? (
-									<>
-										<span aria-hidden>·</span>
-										{collection.curator}
-									</>
-								) : null}
-							</p>
-						</a>
-					)
-				})}
-			</div>
+			{style === 'tiles' ? (
+				<CollectionTiles collections={items} />
+			) : (
+				<div className="mz-cols">
+					{items.map((collection) => {
+						const images = collection.images.slice(0, 3)
+						return (
+							<a key={collection.key} className="mz-col" href={collection.href}>
+								<div className="mz-g" data-count={Math.max(1, images.length)}>
+									{(images.length > 0 ? images : ['']).map((src, index) => (
+										<div key={index}>
+											<MagazineImage src={src || null} />
+										</div>
+									))}
+								</div>
+								<h3>{collection.title}</h3>
+								<p>
+									<span>{collection.itemCount === 1 ? '1 item' : `${collection.itemCount} items`}</span>
+									{collection.curator ? (
+										<>
+											<span aria-hidden>·</span>
+											{collection.curator}
+										</>
+									) : null}
+								</p>
+							</a>
+						)
+					})}
+				</div>
+			)}
 		</div>
 	)
 }
@@ -550,11 +593,15 @@ export interface CategorySectionBlockProps {
 	tags: string
 	limit: number
 	linkLabel: string
+	style?: 'row' | 'bento'
+	badge?: string
 }
 
 export interface CategorySectionBlockViewProps extends CategorySectionBlockProps {
 	/** Rendered product cards, supplied by the host. */
 	products: ReactNode[] | null
+	/** Plain product data for the bento style (cards there are drawn here, not by the host). */
+	items?: MagazineProduct[] | null
 	isLoading: boolean
 	/** Host-resolved browse address for the section's tags. */
 	browseHref: string
@@ -562,14 +609,43 @@ export interface CategorySectionBlockViewProps extends CategorySectionBlockProps
 
 /** Comma-separated tags → trimmed, de-duplicated list. */
 export function parseCategoryTags(tags: string): string[] {
-	return [...new Set(tags.split(',').map((tag) => tag.trim()).filter((tag) => tag.length > 0))].slice(0, 10)
+	return [
+		...new Set(
+			tags
+				.split(',')
+				.map((tag) => tag.trim())
+				.filter((tag) => tag.length > 0),
+		),
+	].slice(0, 10)
 }
 
-export function CategorySectionBlock({ label, title, subtitle, tags, limit, linkLabel, products, isLoading, browseHref }: CategorySectionBlockViewProps) {
+export function CategorySectionBlock({
+	label,
+	title,
+	subtitle,
+	tags,
+	limit,
+	linkLabel,
+	products,
+	items: bentoItems,
+	isLoading,
+	browseHref,
+	style = 'row',
+	badge = '',
+}: CategorySectionBlockViewProps) {
 	const { isEditing } = useStorefrontContext()
-	const items = (products ?? []).slice(0, Math.max(0, limit))
-	const head = (
-		<MagazineHead title={title} label={label} subtitle={subtitle} linkLabel={linkLabel || (title ? `Browse ${title.replace(/\*/g, '').toLowerCase()}` : '')} linkHref={browseHref} />
+	const bento = style === 'bento'
+	const items = bento ? (bentoItems ?? []).slice(0, Math.min(5, Math.max(0, limit))) : (products ?? []).slice(0, Math.max(0, limit))
+	const head = bento ? (
+		<CategoryBentoHead title={title} linkLabel={linkLabel} href={browseHref} />
+	) : (
+		<MagazineHead
+			title={title}
+			label={label}
+			subtitle={subtitle}
+			linkLabel={linkLabel || (title ? `Browse ${title.replace(/\*/g, '').toLowerCase()}` : '')}
+			linkHref={browseHref}
+		/>
 	)
 
 	if (parseCategoryTags(tags).length === 0) {
@@ -605,11 +681,77 @@ export function CategorySectionBlock({ label, title, subtitle, tags, limit, link
 	return (
 		<div className={cn('mz-wrap mz-sec', isEditing && 'pointer-events-none')} data-testid="storefront-category-section">
 			{head}
-			<div className="mz-pg">
-				{items.map((product, index) => (
-					<Fragment key={index}>{product}</Fragment>
-				))}
-			</div>
+			{bento ? (
+				<CategoryBento items={items as MagazineProduct[]} badge={badge} />
+			) : (
+				<div className="mz-pg">
+					{(items as ReactNode[]).map((product, index) => (
+						<Fragment key={index}>{product}</Fragment>
+					))}
+				</div>
+			)}
+		</div>
+	)
+}
+
+// ---------------------------------------------------------------------------
+// Collection tiles (CollectionRow `tiles` style)
+// ---------------------------------------------------------------------------
+
+export function CollectionTiles({ collections }: { collections: MagazineCollection[] }) {
+	return (
+		<div className="zn-tiles" data-testid="storefront-collection-tiles">
+			{collections.map((collection) => (
+				<a key={collection.key} className="zn-cl" href={collection.href}>
+					<small>{collection.itemCount === 1 ? '1 item' : `${collection.itemCount} items`}</small>
+					<h3>{collection.title}</h3>
+					<span className="zn-fan" aria-hidden>
+						{collection.images.slice(0, 3).map((src, index) => (
+							<span key={index}>
+								<MagazineImage src={src} hideFrameOnError />
+							</span>
+						))}
+					</span>
+				</a>
+			))}
+		</div>
+	)
+}
+
+// ---------------------------------------------------------------------------
+// Category bento (CategorySection `bento` style)
+// ---------------------------------------------------------------------------
+
+export function CategoryBentoHead({ title, linkLabel, href }: { title: string; linkLabel: string; href: string }) {
+	return (
+		<div className="zn-cath">
+			<h2>
+				<AccentTitle text={title} />
+			</h2>
+			<span className="zn-ln" aria-hidden />
+			<a href={href}>{linkLabel.trim() || 'See all'} →</a>
+		</div>
+	)
+}
+
+export function CategoryBento({ items, badge }: { items: MagazineProduct[]; badge: string }) {
+	return (
+		<div className="zn-cg" data-count={items.length}>
+			{items.slice(0, 5).map((product, index) => (
+				<a key={product.key} className="zn-pc" href={product.href}>
+					<span className="zn-ph">
+						<MagazineImage src={product.imageUrl} alt={product.title} />
+					</span>
+					{index === 0 && badge.trim() ? <span className="zn-badge">{badge}</span> : null}
+					<span className="zn-b">
+						<span className="zn-t">
+							{product.title}
+							{product.seller ? <small>{product.seller}</small> : null}
+						</span>
+						<span className="zn-p">{product.price}</span>
+					</span>
+				</a>
+			))}
 		</div>
 	)
 }

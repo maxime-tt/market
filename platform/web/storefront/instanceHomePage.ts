@@ -39,7 +39,11 @@ export interface HomePageChoice {
 }
 
 /** The ordered, de-duplicated list of keys whose `home` page counts as this instance's. */
-export function instanceHomeAuthors(appPublicKey: string | undefined, owner: string | undefined, admins: readonly string[] | undefined): string[] {
+export function instanceHomeAuthors(
+	appPublicKey: string | undefined,
+	owner: string | undefined,
+	admins: readonly string[] | undefined,
+): string[] {
 	const out: string[] = []
 	for (const key of [appPublicKey, owner, ...(admins ?? [])]) {
 		if (key && !out.includes(key) && key !== LEGACY_HOME_PUBKEY) out.push(key)
@@ -121,9 +125,13 @@ export function useInstanceHomePage({ enabled = true }: { enabled?: boolean } = 
 	const { data: adminSettings, isLoading: adminsLoading } = useAdminSettings(config?.appPublicKey)
 	const authors = enabled ? instanceHomeAuthors(config?.appPublicKey, adminSettings?.owner ?? config?.ownerPk, adminSettings?.admins) : []
 	const results = useQueries({
-		queries: enabled
-			? [...authors.map((pubkey) => instanceHomePageQueryOptions(pubkey)), storefrontAddressPageQueryOptions(LEGACY_HOME_PUBKEY, HOME_PAGE_D_TAG)]
-			: [],
+		// Typed as one list so the empty case does not narrow the results to `never`.
+		queries: (enabled
+			? [
+					...authors.map((pubkey) => instanceHomePageQueryOptions(pubkey)),
+					storefrontAddressPageQueryOptions(LEGACY_HOME_PUBKEY, HOME_PAGE_D_TAG),
+				]
+			: []) as ReturnType<typeof instanceHomePageQueryOptions>[],
 	})
 	if (!enabled) return { choice: null, loading: false }
 	const own = results.slice(0, authors.length)

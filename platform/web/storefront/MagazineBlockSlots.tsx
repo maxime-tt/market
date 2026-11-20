@@ -9,9 +9,16 @@
  *   ProductSpread                       → featured products list, or picked `d` tags
  *   CollectionRow                       → featured collections, then newest with an image
  *   CategorySection                     → products by tag (the browse read, test listings excluded)
+ *   AuctionBento / ClosingPicks         → the same shared auction read; picks as ProductSpread (ADR-0029)
  */
 import { useQuery } from '@tanstack/react-query'
 import {
+	AuctionBentoBlock,
+	ClosingPicksBlock,
+	TickerBand,
+	type AuctionBentoBlockProps,
+	type AuctionListItem,
+	type ClosingPicksBlockProps,
 	CategorySectionBlock,
 	CollectionRowBlock,
 	CoverAuctionBlock,
@@ -33,12 +40,21 @@ import { getCollectionId, getCollectionImages, getCollectionProductReferences, g
 import { getReadContext } from '@platform/web/readContext'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useFeaturedCollections, useFeaturedProducts } from '@platform/web/featured/featuredQueries'
-import { productsByTagsQueryOptions, productsQueryOptions } from '@platform/web/products/productQuery'
+import { newestProductsQueryOptions, productsByTagsQueryOptions } from '@platform/web/products/productQuery'
 import { ProductCardHost } from '@platform/web/products/ProductCardHost'
 import { PriceDisplayHost } from '@platform/web/products/PriceDisplayHost'
 import { collectionsQueryOptions } from '@platform/web/collections/collectionQuery'
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
-import { auctionTickerStats, selectCoverAuction, useNowSeconds, useSharedAuctionListRead } from './auctionListRead'
+import { ProfileNameHost } from '@platform/web/profiles/ProfileNameHost'
+import {
+	auctionTickerStats,
+	byPopularity,
+	selectAuctionList,
+	selectCoverAuction,
+	toAuctionListItem,
+	useNowSeconds,
+	useSharedAuctionListRead,
+} from './auctionListRead'
 
 /** A listing event as the card host takes it (the read context's event type). */
 type ListingEvent = Parameters<typeof ProductCardHost>[0]['product']
@@ -64,7 +80,15 @@ function firstImage(tags: string[][]): string | null {
 // Ticker
 // ---------------------------------------------------------------------------
 
-export function TickerSlot({ messages, showLiveStats }: { messages: { text: string }[]; showLiveStats: boolean }) {
+export function TickerSlot({
+	messages,
+	showLiveStats,
+	style = 'strip',
+}: {
+	messages: { text: string }[]
+	showLiveStats: boolean
+	style?: 'strip' | 'band'
+}) {
 	const read = useSharedAuctionListRead()
 	const now = useNowSeconds()
 	const entries: TickerEntry[] = []
@@ -81,6 +105,7 @@ export function TickerSlot({ messages, showLiveStats }: { messages: { text: stri
 		if (stats.topBid !== null) entries.push({ label: 'Top live bid', value: `${formatSats(stats.topBid)} sats` })
 	}
 	for (const message of messages) if (message.text.trim()) entries.push({ label: message.text.trim() })
+	if (style === 'band') return <TickerBand lines={entries.map((entry) => [entry.label, entry.value].filter(Boolean).join(' '))} />
 	return <TickerBlock entries={entries} />
 }
 
@@ -91,7 +116,9 @@ export function TickerSlot({ messages, showLiveStats }: { messages: { text: stri
 export function CoverAuctionSlot(props: CoverAuctionBlockProps) {
 	const read = useSharedAuctionListRead()
 	const now = useNowSeconds()
-	const cover = read.snapshot ? selectCoverAuction(read.snapshot, { source: props.source, coordinates: props.auctionCoordinates, now }) : null
+	const cover = read.snapshot
+		? selectCoverAuction(read.snapshot, { source: props.source, coordinates: props.auctionCoordinates, now })
+		: null
 	// A partial read that has not delivered the lot yet is still loading, not empty.
 	const status = !cover && read.status === 'incomplete' ? 'loading' : read.status
 	return (
@@ -124,19 +151,27 @@ function toMagazineProduct(event: ListingEvent): MagazineProduct {
 	}
 }
 
-export function ProductSpreadSlot(props: ProductSpreadBlockProps) {
+/**
+ * Products for a spread or a pinboard: the editor's picks (`d` tags, in order),
+ * or the instance's featured list, falling back to the newest listings with a
+ * picture so the section never sits empty on a fresh market.
+ */
+export function useShowcaseProducts(
+	source: 'featured' | 'picked',
+	productDTags: string[],
+	count: number,
+): { products: ListingEvent[] | null; isLoading: boolean } {
 	const { data: config } = useConfigQuery()
 	const appPubkey = config?.appPublicKey ?? ''
-	const featured = useFeaturedProducts(props.source === 'featured' ? appPubkey : '')
+	const featured = useFeaturedProducts(source === 'featured' ? appPubkey : '')
 
-	// Picked: the editor's `d` tags, in order. Featured: the instance's list.
 	const wanted =
-		props.source === 'picked'
-			? props.productDTags.map((d) => ({ d, pubkey: null as string | null }))
+		source === 'picked'
+			? productDTags.slice(0, count).map((d) => ({ d, pubkey: null as string | null }))
 			: (featured.data?.featuredProducts ?? [])
 					.map(parseCoordinate)
 					.filter((ref): ref is NonNullable<typeof ref> => ref !== null)
-					.slice(0, 3)
+					.slice(0, count)
 					.map((ref) => ({ d: ref.d, pubkey: ref.pubkey as string | null }))
 	const key = wanted.map((ref) => `${ref.pubkey ?? ''}:${ref.d}`).join(',')
 
@@ -157,28 +192,45 @@ export function ProductSpreadSlot(props: ProductSpreadBlockProps) {
 		},
 	})
 
-	// No featured list on this instance yet: fall back to the newest listings with a picture,
-	// one per seller, so the spread never sits empty on a fresh market.
-	// (Also when the list names listings no relay returned.)
-	const useNewest = props.source === 'featured' && !featured.isLoading && (wanted.length === 0 || (!isLoading && data?.length === 0))
-	// The same read the products page uses, so the two share one cache entry.
-	const newest = useQuery({ ...productsQueryOptions(), enabled: useNewest })
-	const fallback = useNewest ? pickSpreadFallback((newest.data ?? []) as ListingEvent[]) : null
+	// Also when the list names listings no relay returned.
+	const useNewest = source === 'featured' && !featured.isLoading && (wanted.length === 0 || (!isLoading && data?.length === 0))
+	// A small newest-first read: enough pictures to fill the section, quick on a cold start.
+	const newest = useQuery({ ...newestProductsQueryOptions(40), enabled: useNewest })
+	const fallback = useNewest ? pickSpreadFallback((newest.data ?? []) as ListingEvent[], count) : null
 
-	const loading = (props.source === 'featured' && featured.isLoading) || (wanted.length > 0 && isLoading) || (useNewest && newest.isLoading)
-	const products = fallback ?? data ?? null
-	return <ProductSpreadBlock {...props} products={products ? products.map(toMagazineProduct) : null} isLoading={loading} />
+	const loading = (source === 'featured' && featured.isLoading) || (wanted.length > 0 && isLoading) || (useNewest && newest.isLoading)
+	return { products: fallback ?? data ?? null, isLoading: loading }
 }
 
-/** Newest listings with a picture, at most one per seller, three in all. */
-export function pickSpreadFallback(events: ListingEvent[]): ListingEvent[] {
+export function ProductSpreadSlot(props: ProductSpreadBlockProps) {
+	const { products, isLoading } = useShowcaseProducts(props.source, props.productDTags, 3)
+	return <ProductSpreadBlock {...props} products={products ? products.map(toMagazineProduct) : null} isLoading={isLoading} />
+}
+
+/**
+ * Newest listings with a picture, `count` in all. One per seller first; when
+ * there are fewer sellers than slots, a second pass fills the rest (never the
+ * same picture twice, so size variants do not repeat).
+ */
+export function pickSpreadFallback(events: ListingEvent[], count = 3): ListingEvent[] {
+	const sorted = [...events]
+		.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+		.filter((event) => firstImage(getProductImages(event)))
 	const sellers = new Set<string>()
+	const images = new Set<string>()
 	const picked: ListingEvent[] = []
-	for (const event of [...events].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))) {
-		if (picked.length >= 3) break
-		if (sellers.has(event.pubkey) || !firstImage(getProductImages(event))) continue
-		sellers.add(event.pubkey)
+	const take = (event: ListingEvent) => {
 		picked.push(event)
+		sellers.add(event.pubkey)
+		images.add(firstImage(getProductImages(event)) ?? '')
+	}
+	for (const event of sorted) {
+		if (picked.length >= count) break
+		if (!sellers.has(event.pubkey)) take(event)
+	}
+	for (const event of sorted) {
+		if (picked.length >= count) break
+		if (!picked.includes(event) && !images.has(firstImage(getProductImages(event)) ?? '')) take(event)
 	}
 	return picked
 }
@@ -199,7 +251,9 @@ export function CollectionRowSlot(props: CollectionRowBlockProps) {
 	const featured = useFeaturedCollections(props.source === 'featured' ? appPubkey : '')
 	const newest = useQuery(collectionsQueryOptions)
 
-	const featuredRefs = (featured.data?.featuredCollections ?? []).map(parseCoordinate).filter((ref): ref is NonNullable<typeof ref> => ref !== null)
+	const featuredRefs = (featured.data?.featuredCollections ?? [])
+		.map(parseCoordinate)
+		.filter((ref): ref is NonNullable<typeof ref> => ref !== null)
 	const featuredKey = featuredRefs.map((ref) => `${ref.pubkey}:${ref.d}`).join(',')
 	const featuredEvents = useQuery({
 		queryKey: ['storefront', 'collection-row', 'featured', featuredKey],
@@ -239,7 +293,9 @@ export function CollectionRowSlot(props: CollectionRowBlockProps) {
 		staleTime: 5 * 60_000,
 		refetchInterval: (query) => (query.state.data?.size === 0 && query.state.dataUpdateCount < 4 ? 5_000 : false),
 		queryFn: async () => {
-			const events = (await getReadContext().fetch([{ kinds: [30402], '#d': [...new Set(productRefs.map((ref) => ref.d))] }])) as ListingEvent[]
+			const events = (await getReadContext().fetch([
+				{ kinds: [30402], '#d': [...new Set(productRefs.map((ref) => ref.d))] },
+			])) as ListingEvent[]
 			const byRef = new Map<string, string>()
 			for (const event of events) {
 				const d = event.tags.find((tag) => tag[0] === 'd')?.[1]
@@ -307,12 +363,81 @@ export function CategorySectionSlot(props: CategorySectionBlockProps) {
 
 	products.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
 
+	const shown = products.slice(0, props.limit)
 	return (
 		<CategorySectionBlock
 			{...props}
-			products={products.slice(0, props.limit).map((event) => <ProductCardHost key={event.id} product={event} />)}
+			products={props.style === 'bento' ? null : shown.map((event) => <ProductCardHost key={event.id} product={event} />)}
+			items={
+				props.style === 'bento'
+					? shown.map((event) => ({ ...toMagazineProduct(event), seller: <ProfileNameHost pubkey={event.pubkey} disableLink truncate /> }))
+					: null
+			}
 			isLoading={products.length === 0 && read.isLoading}
 			browseHref={tags[0] ? `/?q=${encodeURIComponent(tags[0])}` : '/products'}
+		/>
+	)
+}
+
+// ---------------------------------------------------------------------------
+// Zine blocks (ADR-0029)
+// ---------------------------------------------------------------------------
+
+/**
+ * The bento's lots. `picked` keeps the editor's order; `auto` puts live lots
+ * first, most bids on top, then fills with the rest in the read's own order so
+ * a quiet market still shows four pictures.
+ */
+export function selectBentoLots(
+	snapshot: Parameters<typeof selectAuctionList>[0],
+	selection: { source: 'auto' | 'picked'; coordinates: readonly string[]; now: number },
+): AuctionListItem[] {
+	if (selection.source === 'picked') {
+		return selectAuctionList(snapshot, { source: 'picked', seller: '', coordinates: selection.coordinates, limit: 4, now: selection.now })
+			.items
+	}
+	const projected = snapshot.auctions.map((auction) => toAuctionListItem(auction, selection.now)).filter((item) => item.imageUrl)
+	const live = projected.filter((item) => item.phase === 'open').sort(byPopularity)
+	const rest = projected.filter((item) => item.phase !== 'open')
+	return [...live, ...rest].slice(0, 4)
+}
+
+export function AuctionBentoSlot(props: AuctionBentoBlockProps) {
+	const read = useSharedAuctionListRead()
+	const now = useNowSeconds()
+	const items = read.snapshot ? selectBentoLots(read.snapshot, { source: props.source, coordinates: props.auctionCoordinates, now }) : []
+	const liveCount = read.snapshot ? auctionTickerStats(read.snapshot, now).live : 0
+	const status = items.length === 0 && read.status === 'incomplete' ? 'loading' : read.status
+	return (
+		<AuctionBentoBlock
+			{...props}
+			items={items}
+			liveCount={liveCount}
+			status={status}
+			now={now}
+			auctionHref={magazineAuctionHref}
+			renderSeller={(pubkey) => <ProfileNameHost pubkey={pubkey} disableLink truncate />}
+		/>
+	)
+}
+
+export function ClosingPicksSlot(props: ClosingPicksBlockProps) {
+	const read = useSharedAuctionListRead()
+	const now = useNowSeconds()
+	const closing = read.snapshot
+		? selectAuctionList(read.snapshot, { source: 'all', seller: '', coordinates: [], sort: 'ending', limit: props.closingLimit, now }).items
+		: []
+	const closingStatus = closing.length === 0 && read.status === 'incomplete' ? 'loading' : read.status
+	const picks = useShowcaseProducts(props.source, props.productDTags, props.picksLimit)
+	return (
+		<ClosingPicksBlock
+			{...props}
+			closing={closing}
+			closingStatus={closingStatus}
+			picks={picks.products ? picks.products.map(toMagazineProduct) : null}
+			picksLoading={picks.isLoading}
+			now={now}
+			auctionHref={magazineAuctionHref}
 		/>
 	)
 }
