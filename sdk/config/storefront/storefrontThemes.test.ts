@@ -28,6 +28,14 @@ describe('STOREFRONT_THEMES registry', () => {
 
 	test('a retired look renders as the look it was folded into', () => {
 		expect(getStorefrontTheme('brut').id).toBe('pleb')
+		expect(getStorefrontTheme('acct').id).toBe('default')
+		expect(STOREFRONT_THEME_LIST.map((t) => t.id)).not.toContain('acct')
+	})
+
+	test('trimmed colourways are no longer offered', () => {
+		expect(isPaletteInTheme('art', 'white-cube')).toBe(false)
+		expect(isPaletteInTheme('cards', 'arcade')).toBe(false)
+		expect(isPaletteInTheme('pleb', 'soft-pink')).toBe(false)
 	})
 
 	test('Brutalist and Neon are listed once, under Plebeian', () => {
