@@ -53,7 +53,10 @@
  * - **`amount` is the DELTA**, an integer, in sats. The arena protocol's bid
  *   model is additive (the reference chain's `BidContent.Amount`, `chain/app.go`)
  *   — the read adapter sums bid amounts per bidder into positions — and the
- *   surface says "bids add to your position" for exactly that reason. It is
+ *   surface says "bids add to your position" for exactly that reason. The panel's
+ *   number is the *position* the bidder means to hold; `arenaBidDelta`
+ *   (`bid-rules.ts`) is the one conversion from it to this delta, so a 100-sat
+ *   position and a 102-sat intent publish a 2-sat `amount`. It is
  *   written as a JSON **number**, not a string, because that is the type the
  *   read adapter accepts and the type the demo client wrote.
  * - **`wallet`, `proofs` and `outcome_templates` are the funding payload**, and

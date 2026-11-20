@@ -218,7 +218,7 @@ export interface AuctionBidController {
 	pending: boolean
 	submission: ArenaBidSubmissionState
 	onSubmit: () => void
-	/** Submit a specific delta at once (the Arena swipe), through the same publish path. */
+	/** Submit a specific typed position at once (the Arena swipe), through the same publish path. */
 	onSubmitAmount: (raw: string) => void
 }
 
@@ -349,11 +349,12 @@ export function useAuctionBidController({
 				const nowSec = Math.floor(Date.now() / 1000)
 				// The escrow first, and only for a bid the check has already allowed:
 				// money is never locked for a bid that is about to be refused, and a
-				// bid is never published without its escrow. `check.amount` is the same
-				// parse `publishArenaBid` performs on `raw`, so the amount locked is
-				// the amount the event names. When the check is not allowed — or names
-				// no amount — the publish path's own refusal is the honest answer and
-				// no lock is attempted.
+				// bid is never published without its escrow. `check.amount` is the
+				// **delta** — the same `arenaBidDelta` `publishArenaBid` recomputes
+				// from `raw` — so the sats locked are the sats the event names, never
+				// the panel's (position) number. When the check is not allowed — or
+				// names no amount — the publish path's own refusal is the honest
+				// answer and no lock is attempted.
 				if (model !== null && check !== null && check.allowed && check.amount !== null) {
 					// Resolve (and, on a fresh wallet, create) the spend key before the escrow reads
 					// the synchronous signer. The ensure retries, so a wallet that was not ready at

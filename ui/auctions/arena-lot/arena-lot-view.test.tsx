@@ -73,7 +73,7 @@ function bid(over: Partial<ArenaLotBidProps> = {}): ArenaLotBidProps {
 		viewer: bob,
 		check: { allowed: true, reason: 'ok', amount: 500, minimum: 1_600, ownPosition: 1_100 },
 		blockedReason: null,
-		amountInput: '500',
+		amountInput: '1600',
 		onAmountChange: () => {},
 		pending: false,
 		submission: { phase: 'idle' },
@@ -108,6 +108,9 @@ describe('arena lot helpers', () => {
 		expect(steps.map((s) => s.target)).toEqual([1_600, 1_800, 2_100])
 		expect(steps.map((s) => s.delta)).toEqual([500, 700, 1_000])
 		expect(arenaLadder({ minimum: null, ownPosition: null }, 100)).toEqual([])
+		// No steps when the bidder's own position is not known: the delta cannot
+		// be computed, so the ladder does not measure from a guessed zero.
+		expect(arenaLadder({ minimum: 1_600, ownPosition: null }, 100)).toEqual([])
 	})
 
 	test("the leader's step is a real raise, not the 1-sat self-raise clamp", () => {
@@ -193,24 +196,24 @@ describe('ArenaLotView', () => {
 		expect(html).toContain('Sign in to bid')
 	})
 
-	test('every ladder step shows the delta it publishes and states the position it reaches', () => {
+	test('every ladder step shows the position it reaches and the delta that position publishes', () => {
 		const html = render()
-		// The floor is 1,600 for a bidder at 1,100, so Next publishes 500 — the
-		// number the button displays — and states the position 500 lands on.
-		expect(html).toContain('Next: bid 500 sats, reaching your position 1,600 sats')
+		// The floor is 1,600 for a bidder at 1,100, so Next reaches 1,600 — the
+		// number the button shows and puts in the field — and publishes a 500 delta.
+		expect(html).toContain('Next: reach position 1,600 sats, publishing 500 sats')
 		expect(html).toContain('data-publishes="500"')
 		expect(html).toContain('data-reaches="1600"')
-		expect(html).toContain('→ your position 1,600')
-		// The published delta, not the position, is the big number on the button.
-		expect(html).toContain('<b>500</b>')
-		expect(html).not.toContain('<b>1,600</b>')
+		expect(html).toContain('→ adds 500 sats')
+		// The position the bidder means to hold is the big number on the button.
+		expect(html).toContain('<b>1,600</b>')
+		expect(html).not.toContain('<b>500</b>')
 	})
 
-	test('the swipe publishes the delta it displays, not the position it reaches', () => {
+	test('the swipe shows the position it reaches and publishes that position’s delta', () => {
 		const html = render()
-		expect(html).toContain('Swipe to bid 500 sats, reaching your position 1,600 sats')
+		expect(html).toContain('Swipe to bid: reach position 1,600 sats, publishing 500 sats')
 		expect(html).toContain('data-publishes="500"')
-		expect(html).toContain('your position 1,600')
+		expect(html).toContain('adds 500')
 	})
 
 	test('a position the read could not determine is said in words, never summed', () => {

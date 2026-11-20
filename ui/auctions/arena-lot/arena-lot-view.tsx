@@ -47,14 +47,14 @@ export interface ArenaLotBidProps {
 	viewer: string | null
 	check: ArenaBidCheck | null
 	blockedReason: ArenaBidBlockedReason | null
-	/** The typed amount — a **delta** added to the bidder's position. */
+	/** The typed bid — the **position** the bidder means to hold, not the delta published. */
 	amountInput: string
 	onAmountChange: (value: string) => void
 	pending: boolean
 	submission: ArenaBidSubmissionState
 	/** Publish `amountInput`. */
 	onSubmit: () => void
-	/** Publish this exact delta (the swipe), through the same check and path. */
+	/** Publish this exact **position** at once (the swipe), through the same check and path. */
 	onSubmitAmount: (raw: string) => void
 }
 
@@ -113,27 +113,33 @@ export function arenaRingOffset(remaining: number, durationSec: number | null): 
 export interface ArenaLadderStep {
 	key: 'next' | 'jump' | 'big'
 	label: string
-	/** The position this step reaches — stated *beside* the published number. */
+	/** The position this step means to reach — **the number the button displays** and puts in the field. */
 	target: number
-	/** The delta this step publishes — **the number the button displays**. */
+	/** The delta that position publishes — the sats the chain is handed and the escrow locks. */
 	delta: number
 }
 
 /**
  * NEXT / JUMP / BIG MOVE, as in the demo, on this lot's real floor.
  *
- * Bids are deltas on a position, so each button names **the delta it publishes**
- * and the **position that delta reaches**. The step is the chain's own required
- * raise (`arenaRequiredRaise(top, min_increment_bps)`, passed in by the caller);
- * when the raise is not known the buttons fall back to 5% of the floor, which
- * only picks suggested amounts — the floor itself is still the check's
- * (`bid-rules.ts`), and the check holds every resulting delta to it.
+ * The panel's number is a **position**, so each button names the position it
+ * means to reach (`target` — the value it hands the field) and the delta that
+ * position publishes (`delta`, `target − own`). The step is the chain's own
+ * required raise (`arenaRequiredRaise(top, min_increment_bps)`, passed in by the
+ * caller); when the raise is not known the buttons fall back to 5% of the floor,
+ * which only picks suggested positions — the floor itself is still the check's
+ * (`bid-rules.ts`), and the check converts every position to a delta and holds
+ * it to that floor.
+ *
+ * The bidder's own position must be settled (`ownPosition !== null`): without
+ * it neither the target nor the delta can be known, so there are no steps. The
+ * empty list is the honest answer, not a step measured from a guessed `0`.
  */
 export function arenaLadder(check: Pick<ArenaBidCheck, 'minimum' | 'ownPosition'> | null, step: number | null): ArenaLadderStep[] {
-	if (check === null || check.minimum === null) return []
+	if (check === null || check.minimum === null || check.ownPosition === null) return []
 	const min = check.minimum
 	const stride = step !== null && step > 0 ? step : Math.max(1, Math.round(min * 0.05))
-	const own = check.ownPosition ?? 0
+	const own = check.ownPosition
 	// A bidder already at or above the floor (a leader the read has not yet
 	// advanced past `min`) is stepped forward from their own position; everyone
 	// else reaches the floor first.
@@ -308,21 +314,23 @@ function LiveBadge({ live }: { live: boolean }) {
 /**
  * Drag the knob to the end to publish. Keyboard: Enter or Space.
  *
- * `amount` is the delta this control **publishes** and the number it **shows** —
- * one value, never a target shown over a delta published (`bid.onSubmitAmount`
- * takes exactly `String(amount)`). `reaches` states the position that delta
- * lands on.
+ * `position` is the **position this control means to reach** — the number it
+ * **shows** and hands the field (`bid.onSubmitAmount` takes exactly
+ * `String(position)`), which the check converts to a delta before anything is
+ * signed. `adds` is that delta: the sats the chain is handed and the escrow
+ * locks. One conversion, so the number shown and the sats published cannot
+ * drift apart.
  */
 function SwipeToBid({
 	label,
-	amount,
-	reaches,
+	position,
+	adds,
 	disabled,
 	onConfirm,
 }: {
 	label: string
-	amount: number
-	reaches: number
+	position: number
+	adds: number
 	disabled: boolean
 	onConfirm: () => void
 }) {
@@ -349,7 +357,6 @@ function SwipeToBid({
 		setX(0)
 	}
 
-	const reached = `reaching your position ${sats(reaches)} sats`
 	return (
 		<div
 			ref={track}
@@ -357,9 +364,9 @@ function SwipeToBid({
 			role="button"
 			tabIndex={disabled ? -1 : 0}
 			aria-disabled={disabled}
-			aria-label={`${label} ${sats(amount)} sats, ${reached}`}
+			aria-label={`${label}: reach position ${sats(position)} sats, publishing ${sats(adds)} sats`}
 			data-testid="arena-lot-swipe"
-			data-publishes={amount}
+			data-publishes={adds}
 			onKeyDown={(e) => {
 				if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
 					e.preventDefault()
@@ -369,8 +376,8 @@ function SwipeToBid({
 		>
 			<div className="arn-swipe__fill" style={{ width: x + 50 }} />
 			<span className="arn-swipe__label">
-				{label} <b>{sats(amount)}</b>
-				<em> · your position {sats(reaches)}</em>
+				{label} <b>{sats(position)}</b>
+				<em> · adds {sats(adds)}</em>
 			</span>
 			<span
 				className="arn-swipe__knob"
@@ -475,7 +482,8 @@ export function ArenaLotView({
 
 	// The step the ladder suggests is the chain's own required raise when the
 	// params have been read and a top is known; otherwise `null` (the ladder's
-	// 5% fallback). It is a suggestion — the floor and every delta are the check's.
+	// 5% fallback). It is a suggestion — the floor and every position-to-delta
+	// conversion are the check's.
 	const ladderStep =
 		model.topBidTotal !== null && model.minIncrementBps !== null
 			? arenaRequiredRaise(model.topBidTotal, model.minIncrementBps)
@@ -660,16 +668,16 @@ export function ArenaLotView({
 												<button
 													key={step.key}
 													type="button"
-													className={String(step.delta) === bid.amountInput.trim() ? 'is-on' : undefined}
+													className={String(step.target) === bid.amountInput.trim() ? 'is-on' : undefined}
 													disabled={controlsDisabled}
-													onClick={() => bid.onAmountChange(String(step.delta))}
-													aria-label={`${step.label}: bid ${sats(step.delta)} sats, reaching your position ${sats(step.target)} sats`}
+													onClick={() => bid.onAmountChange(String(step.target))}
+													aria-label={`${step.label}: reach position ${sats(step.target)} sats, publishing ${sats(step.delta)} sats`}
 													data-publishes={step.delta}
 													data-reaches={step.target}
 												>
 													<small>{step.label}</small>
-													<b>{sats(step.delta)}</b>
-													<em className="arn-ladder__reaches">→ your position {sats(step.target)}</em>
+													<b>{sats(step.target)}</b>
+													<em className="arn-ladder__reaches">→ adds {sats(step.delta)} sats</em>
 												</button>
 											))}
 								</div>
@@ -711,10 +719,10 @@ export function ArenaLotView({
 								{!hardBlocked && next !== null && (
 									<SwipeToBid
 										label="Swipe to bid"
-										amount={next.delta}
-										reaches={next.target}
+										position={next.target}
+										adds={next.delta}
 										disabled={controlsDisabled}
-										onConfirm={() => bid.onSubmitAmount(String(next.delta))}
+										onConfirm={() => bid.onSubmitAmount(String(next.target))}
 									/>
 								)}
 
@@ -952,7 +960,7 @@ export function ArenaLotView({
 							className="arn-btn"
 							href="#arn-bid"
 							style={{ textDecoration: 'none' }}
-							onClick={() => bid.onAmountChange(String(next.delta))}
+							onClick={() => bid.onAmountChange(String(next.target))}
 						>
 							Bid {sats(next.target)}
 						</a>

@@ -456,6 +456,27 @@ describe('publishArenaBid — the publish path re-checks even when the button wa
 		})
 	})
 
+	test('the maintainer’s case reaches the wire as a DELTA: own 100 + intent 102 → amount 2', async () => {
+		// The bidder already holds 100; the panel shows 102 (the position they mean
+		// to hold) and the chain must be handed 2, not 102. The escrow locks the
+		// delta too: `funded(2)` is the only lock this bid publishes.
+		const model = detail({ bidCount: 1, topBidTotal: 100, positions: [{ bidder: BIDDER, total: 100 }] })
+		const pub = publisher([{ url: RELAY_A, accepted: true }])
+		const result = await publishArenaBid(bid({ model, raw: '102' }), options({ publisher: pub, funding: await funded(2), fundingTerms }))
+		expect(result.state).toMatchObject({ phase: 'presumed', amount: 2 })
+		const content = JSON.parse(pub.sent[0].content)
+		expect(content.amount).toBe(2)
+		// The money locked is the delta — 2 sats, not the 102 the bidder typed.
+		expect(content.proofs.reduce((sum: number, proof: { amount: number }) => sum + proof.amount, 0)).toBe(2)
+	})
+
+	test('an escrow funded with the intent (102) rather than the delta (2) is refused before signing', async () => {
+		const model = detail({ bidCount: 1, topBidTotal: 100, positions: [{ bidder: BIDDER, total: 100 }] })
+		const error = await refusalOf(bid({ model, raw: '102' }), { funding: await funded(102), fundingTerms })
+		expect(error.refusal).toBe('bid.funding-invalid')
+		expect(error.state.phase).toBe('failed')
+	})
+
 	test('an ended auction is refused even with a valid amount', async () => {
 		await refusalOf(bid({ model: detail({ phase: 'ended' }) }))
 	})
