@@ -59,6 +59,9 @@ import { arenaChainAdvancing } from '@platform/web/auctions/relay/arenaBidPublis
 import { UserCardHost } from '@platform/web/profiles/userCardHosts'
 import { AuctionFulfilmentHost } from '@platform/web/dashboard/AuctionFulfilmentHost'
 import { lotHref, resolveArenaLot, type ArenaLotLookup } from '@platform/web/auctions/relay/arenaLotRead'
+import { LiveChatPanel } from '@platform/web/messaging/LiveChatPanel'
+import { ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
+import type { NostrEventLike } from '@sdk/core/nostr/eventLike'
 
 /** Before the first relay result arrives: not "no auction", just "not read yet". */
 const EMPTY_READ: ArenaSurfacesReadState = {
@@ -233,10 +236,22 @@ export function ArenaAuctionLotHost({ d, seller, now, read, onPublished, backHre
 						/>
 					)
 				}
+				chat={view === null ? undefined : <LiveChatPanel auctionEvent={lotAsCreateEvent(view.seller, view.d)} />}
 			/>
 			<AuctionFulfilmentHost view={view} />
 		</>
 	)
+}
+
+/**
+ * A minimal `1440:<seller>:<d>` event for the live-chat panel, which derives the
+ * chat room from the create's seller and `d` (`liveChatQuery.ts`). The read
+ * model carries seller and `d`, not the raw create event; the panel reads only
+ * those two, so this is the whole of the event it needs — never a fabricated
+ * title, image or bid.
+ */
+function lotAsCreateEvent(seller: string, d: string): NostrEventLike {
+	return { id: '', pubkey: seller, kind: ARENA_AUCTION_CREATE_KIND, content: '', tags: [['d', d]] }
 }
 
 /** A bidder's display name from their profile, or the short key while none is read. */

@@ -4,7 +4,6 @@ import {
 	LIVE_ACTIVITY_DTAG_MAX_LENGTH,
 	LIVE_ACTIVITY_DTAG_PREFIX,
 	RELAY_TAG_INDEX_VALUE_MAX_LENGTH,
-	AUCTION_KIND,
 	deriveLiveActivityStatus,
 	isWithinRelayTagIndexBudget,
 	parseAuctionCoordFromATag,
@@ -18,6 +17,9 @@ import {
 const SELLER_PUBKEY = 'a'.repeat(64)
 const CVM_PUBKEY = 'b'.repeat(64)
 const AUCTION_DTAG = 'my-auction-123'
+// The live auction family this test's coordinates belong to. It is a caller's
+// fact (the arena 1440 create kind); `nip53.ts` holds no family number.
+const AUCTION_KIND = 1440
 const AUCTION_COORD = `${AUCTION_KIND}:${SELLER_PUBKEY}:${AUCTION_DTAG}`
 
 describe('nip53', () => {
@@ -50,27 +52,34 @@ describe('nip53', () => {
 	})
 
 	describe('parseAuctionCoordFromATag', () => {
-		test('extracts auction coordinate from a tag', () => {
+		test('extracts auction coordinate from a tag in the given family', () => {
 			const event = {
 				tags: [['a', AUCTION_COORD]],
 			}
-			expect(parseAuctionCoordFromATag(event)).toBe(AUCTION_COORD)
+			expect(parseAuctionCoordFromATag(event, AUCTION_KIND)).toBe(AUCTION_COORD)
 		})
 
 		test('returns null when no a tag', () => {
 			const event = { tags: [] }
-			expect(parseAuctionCoordFromATag(event)).toBeNull()
+			expect(parseAuctionCoordFromATag(event, AUCTION_KIND)).toBeNull()
 		})
 
 		test('returns null when a tag does not start with auction kind', () => {
 			const event = {
 				tags: [['a', `99999:${SELLER_PUBKEY}:something`]],
 			}
-			expect(parseAuctionCoordFromATag(event)).toBeNull()
+			expect(parseAuctionCoordFromATag(event, AUCTION_KIND)).toBeNull()
+		})
+
+		test('rejects the retired 30408 family: only the given family resolves', () => {
+			const event = {
+				tags: [['a', `30408:${SELLER_PUBKEY}:${AUCTION_DTAG}`]],
+			}
+			expect(parseAuctionCoordFromATag(event, AUCTION_KIND)).toBeNull()
 		})
 
 		test('returns null when tags are undefined', () => {
-			expect(parseAuctionCoordFromATag({})).toBeNull()
+			expect(parseAuctionCoordFromATag({}, AUCTION_KIND)).toBeNull()
 		})
 	})
 

@@ -78,6 +78,12 @@ mock.module('@platform/web/auctions/auctionsQuery', () => ({
 }))
 mock.module('@platform/web/auctions/AuctionClaimDialog', () => ({ AuctionClaimDialog: () => null }))
 
+// The lot's chat tab mounts the live-chat panel, which reads through React Query
+// (`liveChatQuery.ts` has its own tests) and the app NDK. It is doubled here for
+// the same reason the claim dialog is: this file tests the host's wiring, and
+// this render has no provider.
+mock.module('@platform/web/messaging/LiveChatPanel', () => ({ LiveChatPanel: () => null }))
+
 // Imported after the mocks above (a static import is hoisted past `mock.module`).
 let ArenaAuctionLotHost: (typeof import('./ArenaAuctionLotHost'))['ArenaAuctionLotHost']
 let resolveArenaLot: (typeof import('./arenaLotRead'))['resolveArenaLot']

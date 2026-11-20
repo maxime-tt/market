@@ -1,7 +1,5 @@
+import { LIVE_ACTIVITY_KIND } from '@sdk/core/nostr/nip53'
 import { LIVE_CHAT_KIND } from './liveChatEvents'
-
-/** NIP-53 live activity kind. */
-export const LIVE_ACTIVITY_KIND = 30311
 
 // A type alias (not interface) so it stays assignable to relay-client filters with `#${string}` index signatures.
 export type LiveChatFilter = {

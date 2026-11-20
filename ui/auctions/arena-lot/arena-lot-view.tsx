@@ -14,7 +14,8 @@
  *  - a field the read does not carry is said in words, never defaulted to 0;
  *  - the leader line names the top **derived position**, not a winner — the
  *    verdict is the authority on who won;
- *  - the Chat tab says plainly that lot chat is not connected.
+ *  - the Chat tab shows the host-provided live chat when one is passed, and says
+ *    plainly that lot chat is not connected otherwise.
  */
 import './arena-lot.css'
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
@@ -73,6 +74,12 @@ export interface ArenaLotViewProps {
 	bid?: ArenaLotBidProps | null
 	/** Host-rendered verdict panel, shown under the leaderboard. */
 	verdicts?: ReactNode
+	/**
+	 * Host-rendered live chat for this lot, shown in the Chat tab. The host owns
+	 * the read and the publish; the view only places it. When absent the tab says
+	 * so in words rather than pretending.
+	 */
+	chat?: ReactNode
 	backHref?: string | null
 }
 
@@ -396,6 +403,7 @@ export function ArenaLotView({
 	renderName,
 	bid: bidProp = null,
 	verdicts,
+	chat,
 	backHref = null,
 }: ArenaLotViewProps) {
 	const [tab, setTab] = useState<'bids' | 'chat' | 'chain'>('bids')
@@ -801,9 +809,11 @@ export function ArenaLotView({
 
 						{tab === 'chat' && (
 							<div className="arn-pane" data-testid="arena-lot-chat">
-								<p className="arn-empty">
-									Lot chat is not connected on this server yet. Bids, receipts and verdicts are the live record for now.
-								</p>
+								{chat ?? (
+									<p className="arn-empty">
+										Lot chat is not connected on this server yet. Bids, receipts and verdicts are the live record for now.
+									</p>
+								)}
 							</div>
 						)}
 
