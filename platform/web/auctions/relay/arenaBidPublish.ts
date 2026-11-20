@@ -114,7 +114,7 @@ import {
 	type ArenaBidderState,
 } from '@ui/auction/arena/bid-rules'
 import type { ArenaBidSubmissionState } from '@ui/auction/arena/bid-panel'
-import { arenaAuctionCoordinate } from '@platform/web/auctions/relay/arenaAuctionRead'
+import { arenaAuctionCoordinate } from '@sdk/commerce/auctions/arena'
 import { verifyArenaBidFunding, type ArenaBidFunding, type ArenaBidFundingTerms } from '@platform/web/auctions/relay/arenaBidFunding'
 
 const HEX64 = /^[0-9a-f]{64}$/

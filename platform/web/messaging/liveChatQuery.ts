@@ -5,13 +5,13 @@ import { verifyNostrEventSignature } from '@sdk/core/nostr/eventSignature'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { liveActivityKeys } from '@sdk/core/query/queryKeyFactory'
 import {
-	AUCTION_KIND,
 	buildLiveActivityDTag,
 	parseLiveActivity,
 	parseLiveChatMessage,
 	type LiveActivity,
 	type LiveChatMessage,
 } from '@sdk/core/nostr/nip53'
+import { arenaAuctionCoordinate } from '@sdk/commerce/auctions/arena'
 import {
 	buildLiveActivityFilter,
 	buildLiveChatMessagesFilter,
@@ -29,7 +29,7 @@ export const fetchLiveActivity = async (event: NostrEventLike): Promise<LiveActi
 	const ndk = getAppNdk()
 	if (!ndk) return null
 
-	const coord = `${AUCTION_KIND}:${event.pubkey}:${dTag}`
+	const coord = arenaAuctionCoordinate(event.pubkey, dTag)
 
 	// The kind-30311 live-activity event's canonical `d` tag is derived from the
 	// auction coordinate via buildLiveActivityDTag (`auction:<12-hex digest>`),
@@ -112,7 +112,7 @@ export interface UseLiveActivityOptions {
 
 export const useLiveActivity = (event: NostrEventLike | null, options?: UseLiveActivityOptions) => {
 	const dTag = event ? getAuctionId(event) : ''
-	const coord = event && dTag ? `${AUCTION_KIND}:${event.pubkey}:${dTag}` : ''
+	const coord = event && dTag ? arenaAuctionCoordinate(event.pubkey, dTag) : ''
 
 	return useQuery(
 		queryOptions({

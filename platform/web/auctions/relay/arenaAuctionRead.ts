@@ -116,8 +116,8 @@
  * - a later version is an **update** only if its `e` tag names that root
  *   (decision §4.3) — an event that does not supersede the root is not an
  *   update and is ignored, never guessed at;
- * - an update is **accepted** only if every field in
- *   {@link ARENA_CREATE_IMMUTABLE_FIELDS} is unchanged from the root
+ * - an update is **accepted** only if every field in the immutable allow-list
+ *   is unchanged from the root
  *   (decision §3, §4.3);
  * - the **canonical** version is the latest accepted one by `created_at`
  *   (decision §4, last bullet).
@@ -128,7 +128,6 @@
  * if a constraint failure is invisible).
  */
 
-import { parseLotMedia, type LotMediaItem } from '@sdk/commerce/auctions/lotMedia'
 import type { EventFilter, EventStorePort, EventStreamItem, NostrEventLike } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
 import { createWebRelayReadContext, webRelayConnected } from '@platform/web/sdkNostrIo'
@@ -152,6 +151,11 @@ import {
 } from './arenaAnchor'
 import { ArenaReceiptError, dedupeArenaReceipts, parseArenaReceiptEvent, type ParsedArenaReceipt } from './arenaReceiptsRead'
 import {
+	arenaAuctionCoordinate,
+	canonicalArenaCreate,
+	parseArenaCreateEvent,
+	resolveArenaCreateVersions,
+	type ArenaCreateContent,
 	ArenaLotStateError,
 	dedupeArenaRefusals,
 	dedupeArenaLotStates,
@@ -160,7 +164,7 @@ import {
 	type ArenaLotStateEventLike,
 	type ParsedArenaRefusal,
 	type ParsedArenaLotState,
-} from './arenaLotStateRead'
+} from '@sdk/commerce/auctions/arena'
 import {
 	ArenaBidAdmitError,
 	dedupeArenaBidAdmits,
@@ -177,8 +181,6 @@ import {
 	type ArenaCreateAdmitEventLike,
 	type ParsedArenaCreateAdmit,
 } from './arenaCreateAdmitRead'
-// Type-only: erased at runtime, so this adapter stays free of any `ui/` code.
-import type { ArenaV4vSplitRow } from '@ui/auction/arena/model'
 
 // =========================================================================
 // Refusals
@@ -240,36 +242,10 @@ export type ArenaReadRefusalName =
 	| 'arena.bid_admit.signer_not_in_roster'
 
 // =========================================================================
-// The immutable allow-list for a 1440 (MERGED-PROTOCOL-SPEC.md §8)
-//
-// "display is mutable; money, time and cryptography are not." The seven
-// fields below are frozen at first publish; `title` / `description` /
-// `image` are deliberately absent, because those are the three that may be
-// edited, including after the first bid. `auction_id` (the `d` value) is the
-// auction's own identity and is enforced separately by the `d`/`auction_id`
-// identity check below.
+// The immutable allow-list for a 1440 lives in the SDK parse
+// (`sdk/commerce/auctions/arena/arenaCreate.ts`), so this read and the
+// live-activity worker compare the same frozen fields.
 // =========================================================================
-
-export const ARENA_CREATE_IMMUTABLE_FIELDS = [
-	'mode',
-	'startPrice',
-	'minIncrement',
-	'windowSec',
-	'durationSec',
-	'sellerWallet',
-	'v4vSplit',
-] as const
-
-export type ArenaCreateImmutableField = (typeof ARENA_CREATE_IMMUTABLE_FIELDS)[number]
-
-/**
- * Which of the frozen fields are numbers on the wire. Compared numerically, so
- * `1000` and `"1000"` are the same value (a producer's type wobble is not a
- * field change); everything else is compared as a trimmed string, and
- * absent/empty collapses to `null`. `v4vSplit` is an array of objects and is
- * compared by its canonical JSON serialisation.
- */
-const NUMERIC_IMMUTABLE_FIELDS: ReadonlySet<string> = new Set(['startPrice', 'minIncrement', 'windowSec', 'durationSec'])
 
 // =========================================================================
 // Raw event → decoded event
@@ -512,26 +488,6 @@ export interface ArenaAuctionEventBase {
 	relays: string[]
 }
 
-/** The create content (`KindCreate`), as read — the consolidated protocol's camelCase fields only. */
-export interface ArenaCreateContent {
-	auctionId: string
-	title: string | null
-	description: string | null
-	/** The lot's image URL (`image` on the wire). */
-	image: string | null
-	/** Gallery items after `image` (`media` on the wire); unsafe entries are dropped. */
-	media: LotMediaItem[]
-	/** The opening price (`startPrice` on the wire); `null` when unstated. */
-	startPrice: number | null
-	minIncrement: number | null
-	/** `fixed` | `antisnipe`; `null` when unstated. */
-	mode: string | null
-	windowSec: number | null
-	durationSec: number | null
-	sellerWallet: string | null
-	v4vSplit: ArenaV4vSplitRow[] | null
-}
-
 export interface ArenaCreateEvent extends ArenaAuctionEventBase {
 	type: 'create'
 	/** The `d` value — the auction's identity within its seller (decision §3). */
@@ -663,27 +619,6 @@ function asTrimmedString(value: unknown): string | null {
 	return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
-/**
- * The committed V4V split, or `null`. A row is kept only when its role is a
- * non-empty string, its recipient is a non-empty string, and its allocation is
- * a finite number; anything else is dropped, never coerced. An absent, empty or
- * unparseable split is `null` — "no split stated", not an empty split.
- */
-function asV4vSplit(value: unknown): ArenaV4vSplitRow[] | null {
-	if (!Array.isArray(value)) return null
-	const rows: ArenaV4vSplitRow[] = []
-	for (const entry of value) {
-		if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
-		const row = entry as Record<string, unknown>
-		const role = asTrimmedString(row.role)
-		const recipientPubkey = asTrimmedString(row.recipientPubkey)
-		const allocationBps = asFiniteNumber(row.allocationBps)
-		if (role === null || recipientPubkey === null || allocationBps === null) continue
-		rows.push({ role, recipientPubkey, allocationBps })
-	}
-	return rows.length > 0 ? rows : null
-}
-
 function parseJsonObject(content: string): Record<string, unknown> | null {
 	let parsed: unknown
 	try {
@@ -695,60 +630,9 @@ function parseJsonObject(content: string): Record<string, unknown> | null {
 	return parsed as Record<string, unknown>
 }
 
-/** Canonical form of one frozen field, for the immutable comparison. */
-function canonicalImmutableValue(value: unknown, numeric: boolean): string | null {
-	if (value === undefined || value === null) return null
-	if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null
-	if (typeof value === 'boolean') return String(value)
-	if (typeof value === 'string') {
-		const trimmed = value.trim()
-		if (trimmed === '') return null
-		if (numeric) {
-			const n = Number(trimmed)
-			return Number.isFinite(n) ? String(n) : trimmed
-		}
-		return trimmed
-	}
-	return JSON.stringify(value)
-}
-
-function canonicalImmutableFields(content: Record<string, unknown>): Record<string, string | null> {
-	const out: Record<string, string | null> = {}
-	for (const field of ARENA_CREATE_IMMUTABLE_FIELDS) {
-		out[field] = canonicalImmutableValue(content[field], NUMERIC_IMMUTABLE_FIELDS.has(field))
-	}
-	return out
-}
-
-function createContentOf(content: Record<string, unknown>): ArenaCreateContent {
-	return {
-		// The identity key stays snake_case on the wire: `MERGED-PROTOCOL-SPEC.md` §8
-		// names `auction_id` (the `d` value), the bid and verdict content carry the
-		// same key, and the live e2e create does too. Only the money and time fields
-		// below are the consolidated protocol's camelCase.
-		auctionId: asTrimmedString(content.auction_id) ?? '',
-		title: asTrimmedString(content.title),
-		description: asTrimmedString(content.description),
-		image: asTrimmedString(content.image),
-		media: parseLotMedia(content.media),
-		startPrice: asFiniteNumber(content.startPrice),
-		minIncrement: asFiniteNumber(content.minIncrement),
-		mode: asTrimmedString(content.mode),
-		windowSec: asFiniteNumber(content.windowSec),
-		durationSec: asFiniteNumber(content.durationSec),
-		sellerWallet: asTrimmedString(content.sellerWallet),
-		v4vSplit: asV4vSplit(content.v4vSplit),
-	}
-}
-
 /** The `(seller, d)` group key. `\0` cannot appear in a pubkey or a `d`, so it cannot collide. */
 function auctionGroupKey(seller: string, d: string): string {
 	return `${seller}\u0000${d}`
-}
-
-/** `a = 1440:<seller_pubkey>:<d>` — our own convention, since 1440 is not addressable (decision §4). */
-export function arenaAuctionCoordinate(seller: string, d: string): string {
-	return `${ARENA_AUCTION_CREATE_KIND}:${seller}:${d}`
 }
 
 function baseOf(event: NostrEventLike, relay: string): ArenaAuctionEventBase {
@@ -793,43 +677,25 @@ export function decodeArenaEvent(event: NostrEventLike, relay: string): DecodeRe
 	}
 
 	if (event.kind === ARENA_AUCTION_CREATE_KIND) {
-		const content = parseJsonObject(event.content)
-		if (content === null) return refuse(relay, event, ARENA_REFUSAL_BAD_CONTENT, 'create content is not a JSON object')
-
-		const contentAuctionId = asTrimmedString(content.auction_id)
-		const tagD = tagValue(event.tags, 'd')
-		// The identity IS the `d` value (`MERGED-PROTOCOL-SPEC.md` §8: `auction_id`
-		// is the `d` value). A client may write it twice — the `d` tag and the
-		// content key — and must then agree, because a disagreement makes the event
-		// address two auctions and neither reading is safe. But a client may also
-		// write only the tag: the chain's own client does exactly that, and
-		// refusing it made every lot created by a conformant client invisible in
-		// this app. A create that names no `d` at all is refused: 1440 is a regular
-		// kind, so the `d` is the only stable address for later versions.
-		if (tagD === null && contentAuctionId === null) {
-			return refuse(relay, event, ARENA_REFUSAL_BAD_CONTENT, 'create states no identity (no d tag and no content.auction_id)')
+		// The parse is shared with the live-activity worker
+		// (`sdk/commerce/auctions/arena/arenaCreate.ts`): identity, content and the
+		// frozen-field snapshot, refused by name. This adapter maps the parse's
+		// reason onto its own refusal vocabulary and adds relay provenance.
+		const parsed = parseArenaCreateEvent({
+			id: event.id,
+			pubkey: event.pubkey,
+			created_at: event.created_at ?? 0,
+			tags: event.tags,
+			content: event.content,
+		})
+		if (!parsed.ok) {
+			const reason = parsed.reason === 'arena.bad_identity' ? ARENA_REFUSAL_BAD_IDENTITY : ARENA_REFUSAL_BAD_CONTENT
+			return refuse(relay, event, reason, parsed.detail)
 		}
-		if (tagD !== null && contentAuctionId !== null && tagD !== contentAuctionId) {
-			return refuse(
-				relay,
-				event,
-				ARENA_REFUSAL_BAD_IDENTITY,
-				`d tag ${JSON.stringify(tagD)} != content.auction_id ${JSON.stringify(contentAuctionId)}`,
-			)
-		}
-		const auctionId = tagD ?? (contentAuctionId as string)
-
+		const { d, auctionId, supersedes, content, immutable } = parsed.create
 		return {
 			ok: true,
-			event: {
-				...baseOf(event, relay),
-				type: 'create',
-				d: tagD ?? auctionId,
-				auctionId,
-				supersedes: tagValue(event.tags, 'e'),
-				content_: { ...createContentOf(content), auctionId },
-				immutable: canonicalImmutableFields(content),
-			},
+			event: { ...baseOf(event, relay), type: 'create', d, auctionId, supersedes, content_: content, immutable },
 		}
 	}
 
@@ -1203,18 +1069,6 @@ export interface ArenaAuctionSnapshot {
 	health: ArenaReadHealth
 }
 
-/** Order: `created_at` descending, ties to the lexically lowest id (`mergeRules.ts:24-28`). */
-function byNewestThenId(a: { createdAt: number; id: string }, b: { createdAt: number; id: string }): number {
-	if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt
-	return a.id.localeCompare(b.id)
-}
-
-/** Order: `created_at` ascending, ties to the lexically lowest id (a bid chain reads forwards). */
-function byOldestThenId(a: { createdAt: number; id: string }, b: { createdAt: number; id: string }): number {
-	if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt
-	return a.id.localeCompare(b.id)
-}
-
 /**
  * **Is this lot followed at all?** The gate is the chain's own positive fact: a
  * create-admission (`arena.createadmit.v1`, kind 1449) naming the coordinate.
@@ -1249,64 +1103,12 @@ export function followedAuctionViews(views: readonly ArenaAuctionView[]): ArenaA
 }
 
 /**
- * The immutable check (decision §3): returns the first frozen field whose value
- * differs from the root's, or null when every one is unchanged.
+ * The immutable check and the version resolution live in the SDK parse
+ * (`sdk/commerce/auctions/arena/arenaCreate.ts`), shared with the
+ * live-activity worker. {@link resolveArenaCreateVersions} returns the root,
+ * the accepted supersessions and every reject with the read's refusal name.
  */
-export function findImmutableChange(
-	root: ArenaCreateEvent,
-	update: ArenaCreateEvent,
-): { field: ArenaCreateImmutableField; from: string | null; to: string | null } | null {
-	for (const field of ARENA_CREATE_IMMUTABLE_FIELDS) {
-		const before = root.immutable[field] ?? null
-		const after = update.immutable[field] ?? null
-		if (before !== after) return { field, from: before, to: after }
-	}
-	return null
-}
 
-interface AcceptedVersion {
-	event: ArenaCreateEvent
-	reason: string
-	field: string | null
-	detail: string
-}
-
-/** Resolve one `(seller, d)` group to root + accepted versions + rejects. */
-function resolveVersions(versions: readonly ArenaCreateEvent[]): {
-	root: ArenaCreateEvent
-	accepted: ArenaCreateEvent[]
-	rejected: AcceptedVersion[]
-} {
-	const ordered = [...versions].sort(byOldestThenId)
-	const root = ordered[0]
-	const accepted: ArenaCreateEvent[] = [root]
-	const rejected: AcceptedVersion[] = []
-
-	for (const candidate of ordered.slice(1)) {
-		if (candidate.supersedes !== root.id) {
-			rejected.push({
-				event: candidate,
-				reason: ARENA_REFUSAL_NOT_SUPERSEDING_ROOT,
-				field: null,
-				detail: `e tag ${JSON.stringify(candidate.supersedes)} does not name the root ${root.id}`,
-			})
-			continue
-		}
-		const change = findImmutableChange(root, candidate)
-		if (change !== null) {
-			rejected.push({
-				event: candidate,
-				reason: ARENA_REFUSAL_IMMUTABLE_CHANGED,
-				field: change.field,
-				detail: `${change.field}: ${JSON.stringify(change.from)} -> ${JSON.stringify(change.to)}`,
-			})
-			continue
-		}
-		accepted.push(candidate)
-	}
-
-	return { root, accepted, rejected }
-}
 
 function emptyHealth(relays: readonly string[], aborted = false): ArenaReadHealth {
 	const health = relays.map<ArenaRelayHealth>((url) => ({
@@ -1399,11 +1201,11 @@ export function projectArenaEvents(
 	const resolved = new Map<string, { root: ArenaCreateEvent; canonical: ArenaCreateEvent; versions: number; coordinate: string }>()
 
 	for (const [key, versions] of groups) {
-		const { root, accepted, rejected } = resolveVersions(versions)
-		const canonical = [...accepted].sort(byNewestThenId)[0]
-		const coordinate = arenaAuctionCoordinate(root.pubkey, root.d)
-		resolved.set(key, { root, canonical, versions: versions.length, coordinate })
-		for (const reject of rejected) {
+		const group = resolveArenaCreateVersions(versions)
+		const canonical = canonicalArenaCreate(group)
+		const coordinate = arenaAuctionCoordinate(group.root.pubkey, group.root.d)
+		resolved.set(key, { root: group.root, canonical, versions: versions.length, coordinate })
+		for (const reject of group.rejected) {
 			rejectedCreates.push({
 				eventId: reject.event.id,
 				seller: reject.event.pubkey,

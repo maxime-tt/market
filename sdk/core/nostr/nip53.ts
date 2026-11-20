@@ -3,7 +3,6 @@ import { bytesToHex } from '@noble/hashes/utils.js'
 
 export const LIVE_ACTIVITY_KIND = 30311
 export const LIVE_CHAT_KIND = 1311
-export const AUCTION_KIND = 30408
 export type LiveActivityStatus = 'planned' | 'live' | 'ended'
 
 /**
@@ -84,11 +83,18 @@ export function deriveLiveActivityStatus(startsAt: number, endAt: number, now?: 
 	return 'live'
 }
 
-export function parseAuctionCoordFromATag(event: any): string | null {
+/**
+ * The auction coordinate inside an event's `a` tag, when it belongs to the
+ * given auction **family** — the live family number, passed by the caller
+ * (`ARENA_AUCTION_CREATE_KIND` for the 1440 arena series). `sdk/core` holds no
+ * marketplace family number itself; the number is a commerce fact and lives in
+ * `sdk/commerce/auctions/constants.ts`.
+ */
+export function parseAuctionCoordFromATag(event: any, family: number): string | null {
 	const aTag = event.tags?.find((t: string[]) => t[0] === 'a')
 	if (!aTag?.[1]) return null
 	const coord = aTag[1]
-	if (!coord.startsWith(`${AUCTION_KIND}:`)) return null
+	if (!coord.startsWith(`${family}:`)) return null
 	return coord
 }
 
@@ -103,7 +109,7 @@ export function buildLiveActivityCoord(activityOwnerPubkey: string, auctionCoord
 }
 
 export function buildLiveActivityTags(params: {
-	/** The kind-30408 coordinate this activity is for — the `a` reference tag. */
+	/** The kind-1440 (arena) auction coordinate this activity is for — the `a` reference tag. */
 	auctionCoord: string
 	sellerPubkey: string
 	title: string

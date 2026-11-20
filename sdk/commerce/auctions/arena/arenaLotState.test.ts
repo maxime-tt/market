@@ -1,5 +1,5 @@
 /**
- * `arenaLotStateRead.test.ts` — the chain's state half read: the committed end
+ * `arenaLotState.test.ts` — the chain's state half read: the committed end
  * (kind 1449, `arena.lot.v1`) and the refusals (kind 1450, `arena.refused.v1`),
  * verified the way the app verifies a kind-1448 params event.
  *
@@ -34,7 +34,7 @@ import {
 	refusalKey,
 	type ArenaLotStateEventLike,
 	type ArenaLotStateRefusalName,
-} from './arenaLotStateRead'
+} from './arenaLotState'
 
 // ---------- The deterministic signer --------------------------------------
 

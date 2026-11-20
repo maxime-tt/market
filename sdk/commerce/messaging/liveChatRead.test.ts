@@ -20,10 +20,10 @@ const candidate = (overrides: Partial<{ id: string; pubkey: string; kind: number
 
 describe('liveChatRead filters', () => {
 	test('live activity filter pins author, auction coord and derived d', () => {
-		expect(buildLiveActivityFilter('30408:seller:auction-1', expected)).toEqual({
+		expect(buildLiveActivityFilter('1440:seller:auction-1', expected)).toEqual({
 			kinds: [30311],
 			authors: [CVM],
-			'#a': ['30408:seller:auction-1'],
+			'#a': ['1440:seller:auction-1'],
 			'#d': ['auction:0123456789ab'],
 			limit: 10,
 		})

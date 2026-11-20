@@ -39,7 +39,6 @@ import {
 	arenaLotFollowUpFilters,
 	createArenaAuctionRead,
 	decodeArenaEvent,
-	findImmutableChange,
 	followedAuctionViews,
 	projectArenaEvents,
 	unadmittedCreateIds,
@@ -51,6 +50,7 @@ import {
 	type ArenaReadStreamItem,
 } from './arenaAuctionRead'
 import { auctionListStatus, relayCounts } from '@platform/web/storefront/auctionListRead'
+import { findImmutableChange } from '@sdk/commerce/auctions/arena'
 
 // =========================================================================
 // Fixtures

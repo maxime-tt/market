@@ -5,7 +5,7 @@ import { configStore } from '@platform/web/config/appConfigStore'
 
 const CVM_PUBKEY = 'c'.repeat(64)
 const SELLER_PUBKEY = 'a'.repeat(64)
-const AUCTION_COORDINATE = `30408:${SELLER_PUBKEY}:auction-1`
+const AUCTION_COORDINATE = `1440:${SELLER_PUBKEY}:auction-1`
 
 let fetchedFilters: Record<string, unknown>[] = []
 let relayEvents: Set<Record<string, unknown>> = new Set()
@@ -203,9 +203,17 @@ describe('liveChat queries', () => {
 			expect(result).toBeNull()
 		})
 
+		test('🔴 the auction coordinate is the 1440 arena family, never the retired 30408', async () => {
+			verifyEventResult = () => true
+			relayEvents.add(liveActivityEvent())
+			await fetchLiveActivity(auctionEvent())
+			expect(fetchedFilters[0]['#a']).toEqual([AUCTION_COORDINATE])
+			expect(fetchedFilters[0]['#a']).not.toEqual([`30408:${SELLER_PUBKEY}:auction-1`])
+		})
+
 		test('🔴 post-fetch validation: rejects candidate whose d tag belongs to a different auction', async () => {
 			verifyEventResult = () => true
-			relayEvents.add(liveActivityEvent({ dTag: buildLiveActivityDTag(`30408:${SELLER_PUBKEY}:other-auction`) }))
+			relayEvents.add(liveActivityEvent({ dTag: buildLiveActivityDTag(`1440:${SELLER_PUBKEY}:other-auction`) }))
 			const result = await fetchLiveActivity(auctionEvent())
 			expect(result).toBeNull()
 		})
