@@ -83,6 +83,9 @@ describe('an arena win is a purchase row', () => {
 		expect(row?.settle?.height).toBe(1283)
 		expect(row?.verdictHeight).toBe(1282)
 		expect(row?.amount).toBe(100)
+		// The raw receipt rides alongside the display model — the claim work reads
+		// the proof secrets the model deliberately omits.
+		expect(row?.receipt?.eventId).toBe(settle.eventId)
 	})
 
 	test('a win with no settle receipt read carries no receipt, and the words say so — not "unpaid"', () => {

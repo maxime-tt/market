@@ -25,6 +25,7 @@ import {
 	type ArenaReceiptClaimRecord,
 	type ArenaReceiptClaimsHost,
 } from './arenaReceiptClaims'
+import { arenaReceiptClaimStateFor } from './arenaReceiptClaimState'
 import type { ArenaReceiptOutput, ParsedArenaReceipt } from './arenaReceiptsRead'
 
 // =========================================================================
@@ -289,5 +290,78 @@ describe('createArenaReceiptClaims — the money leg', () => {
 		const run = await createArenaReceiptClaims({ ...host, getWalletPrivkey: () => null }).claimReceipts([parsed])
 		expect(run.claimed).toEqual([])
 		expect(run.skipped).toBe(1)
+	})
+})
+
+// =========================================================================
+// The pre-state the wins surface renders — the same selection, pure
+// =========================================================================
+
+describe('arenaReceiptClaimStateFor — the claim state before any claim runs', () => {
+	const moveKeyFor = (parsed: ParsedArenaReceipt) => `${parsed.bidId}\u0000${parsed.outcome}`
+	const claimedRecord = (parsed: ParsedArenaReceipt): ArenaReceiptClaimRecord => [
+		{
+			moveKey: moveKeyFor(parsed),
+			bidId: parsed.bidId,
+			outcome: parsed.outcome,
+			eventId: parsed.eventId,
+			auctionId: parsed.auctionId,
+			amount: 96,
+			spentSecrets: ['s'],
+			claimedAt: 1,
+		},
+	]
+
+	test('a receipt with entries for this key is claimable, with the move amount', () => {
+		const parsed = receipt({ outputs: [out({ amount: 64 }), out({ amount: 32 })] })
+		const state = arenaReceiptClaimStateFor({ receipt: parsed, record: [], walletP2pk: K, walletMints: [MINT] })
+		expect(state).toEqual({ kind: 'claimable', amountSats: 96, moveKey: moveKeyFor(parsed), keysetId: KEYSET })
+	})
+
+	test('a move already in the persisted record reads Claimed, never claimable', () => {
+		const parsed = receipt({ outputs: [out({ amount: 64 })] })
+		const state = arenaReceiptClaimStateFor({ receipt: parsed, record: claimedRecord(parsed), walletP2pk: K, walletMints: [MINT] })
+		expect(state).toEqual({ kind: 'claimed' })
+	})
+
+	test('a receipt whose entries are all another key’s is refused foreign_key', () => {
+		const parsed = receipt({ outputs: [out({ recipient: K2, secret: p2pkSecret(K2) })] })
+		const state = arenaReceiptClaimStateFor({ receipt: parsed, record: [], walletP2pk: K, walletMints: [MINT] })
+		expect(state.kind).toBe('refused')
+		if (state.kind !== 'refused') return
+		expect(state.refusal).toBe(ARENA_CLAIM_REFUSAL_FOREIGN_KEY)
+	})
+
+	test('a claimable move with no candidate mint is refused foreign_mint', () => {
+		const parsed = receipt({ outputs: [out({ amount: 64 })] })
+		const state = arenaReceiptClaimStateFor({ receipt: parsed, record: [], walletP2pk: K, walletMints: [] })
+		expect(state.kind).toBe('refused')
+		if (state.kind !== 'refused') return
+		expect(state.refusal).toBe(ARENA_CLAIM_REFUSAL_FOREIGN_MINT)
+	})
+
+	test('a keyset the app does not expect is refused keyset_mismatch', () => {
+		const parsed = receipt({ outputs: [out({ id: OTHER_KEYSET })] })
+		const state = arenaReceiptClaimStateFor({
+			receipt: parsed,
+			record: [],
+			walletP2pk: K,
+			expectedKeysetId: KEYSET,
+			walletMints: [MINT],
+		})
+		expect(state.kind).toBe('refused')
+		if (state.kind !== 'refused') return
+		expect(state.refusal).toBe(ARENA_CLAIM_REFUSAL_KEYSET_MISMATCH)
+	})
+
+	test('no receipt is stated as no-receipt, never as a claim or a refusal', () => {
+		expect(arenaReceiptClaimStateFor({ receipt: null, record: [], walletP2pk: K, walletMints: [MINT] })).toEqual({ kind: 'no-receipt' })
+	})
+
+	test('an unknown wallet key offers no action', () => {
+		const parsed = receipt({ outputs: [out({ amount: 64 })] })
+		expect(arenaReceiptClaimStateFor({ receipt: parsed, record: [], walletP2pk: null, walletMints: [MINT] })).toEqual({
+			kind: 'wallet-unavailable',
+		})
 	})
 })
