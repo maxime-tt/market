@@ -38,6 +38,7 @@ import {
 	ArenaBidPublishError,
 	arenaChainAdvancing,
 	buildArenaBidContent,
+	checkArenaBid,
 	diagnosePublishedBid,
 	nextPublishedBidState,
 	publishArenaBid,
@@ -96,6 +97,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		description: null,
 		media: [],
 		minIncrement: 100,
+		minIncrementBps: 200,
 		mode: 'fixed',
 		windowSec: null,
 		durationSec: 3600,
@@ -436,6 +438,22 @@ describe('publishArenaBid — the publish path re-checks even when the button wa
 		expect(error.refusal).toBe('bid.not-allowed')
 		expect(error.state.phase).toBe('failed')
 		expect((error.state as { reason: string }).reason).toContain('1,000 sats')
+	})
+
+	test('a raise one sat below the chain’s required raise is refused locally, before any signer', async () => {
+		// top 1000 at the chain’s 200 bps → required raise 20 → the next position
+		// must reach 1,020; 1,019 is refused by the same check the panel runs.
+		const model = detail({ bidCount: 1, topBidTotal: 1000 })
+		const error = await refusalOf(bid({ model, raw: '1019' }))
+		expect(error.refusal).toBe('bid.not-allowed')
+		const state = error.state
+		expect(state.phase).toBe('failed')
+		expect(state.phase === 'failed' ? state.reason : '').toContain('1,020 sats')
+		// The exact raise is accepted by the same check (funding aside).
+		expect(checkArenaBid({ model, status: 'settled', now: NOW, bidder: SIGNED_IN, raw: '1020' })).toMatchObject({
+			allowed: true,
+			minimum: 1020,
+		})
 	})
 
 	test('an ended auction is refused even with a valid amount', async () => {

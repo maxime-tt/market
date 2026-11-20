@@ -12,7 +12,8 @@
  *
  * ## What it is, and what it is not
  *
- * It is a **client-side pre-check against the terms the create published**.
+ * It is a **client-side pre-check against the terms the create published and
+ * the chain's own committed params** (the effective `min_increment_bps`).
  * It is not validity: a 1441 that passes this can still be refused, because
  * the terms are read from relays and a relay can be stale or lying, and because
  * the auction is the *chain's* (the relay notifies, the chain decides). The
@@ -118,8 +119,10 @@ export interface ArenaBidCheck {
 	/** The integer sats the input represents, or `null` when it does not parse. */
 	amount: number | null
 	/**
-	 * The lowest amount the published terms allow for this bidder at `now`,
-	 * or `null` when it cannot be computed (`starting_bid` unstated).
+	 * The lowest amount the published terms and the chain's committed params
+	 * allow for this bidder at `now`, or `null` when it cannot be computed
+	 * (`starting_bid` unstated, or a raise whose `min_increment_bps` has not
+	 * been read).
 	 */
 	minimum: number | null
 	/** The bidder's own position, if they already have one. Tells the UI the input is a **delta**. */
@@ -174,15 +177,30 @@ export interface ArenaBidFloor {
 	/**
 	 * - `first`   — no bid read yet: the opening must reach `starting_bid`;
 	 * - `raise`   — there is a top position: the new position must reach
-	 *               `top + min_increment` (the increment when the create stated
-	 *               one, otherwise the top itself — see below);
-	 * - `unknown` — the create stated no `starting_bid`, so no floor can be computed.
+	 *               `top + arenaRequiredRaise(top, min_increment_bps)`;
+	 * - `unknown` — the create stated no `starting_bid`, or there is a top whose
+	 *               raise cannot be known because the chain's `min_increment_bps`
+	 *               has not been read.
 	 */
 	kind: 'first' | 'raise' | 'unknown'
 	/** The amount a bidder's position must reach, or `null` for `unknown`. */
 	minimum: number | null
 	/** The top position the floor was computed from, when `kind === 'raise'`. */
 	topTotal: number | null
+}
+
+/**
+ * The chain's **required raise** on a top position: `max(1, ceil(top * bps /
+ * 10000))`. This is the rule the chain applies at bid admission, where `bps` is
+ * the params' effective `min_increment_bps` (200 = 2%). It is the **single**
+ * copy of that arithmetic: the floor, the pre-check and the floor label all
+ * derive from it, so a third variant cannot appear.
+ *
+ * `top` and the result are integer sats; the result is at least 1, so a 1-sat
+ * self-raise cannot exist even at a top of 0.
+ */
+export function arenaRequiredRaise(top: number, bps: number): number {
+	return Math.max(1, Math.ceil((top * bps) / 10000))
 }
 
 /**
@@ -193,15 +211,16 @@ export interface ArenaBidFloor {
  * - A top position exists but its total is unknown (bids without readable
  *   amounts) → a raise the client cannot compute: `unknown`, until the read is
  *   complete. An auction *with* the top known is the normal case.
- * - A top position → `top + min_increment`. An **unstated** `min_increment` is
- *   not zero: the terms are silent, so the client will not invent a raise
- *   below the top. It requires **one more sat than the top** — the floor the
- *   protocol itself enforces on a raise regardless of the increment, and the
- *   strictest reading available without guessing. This is stated in the UI
- *   (`minIncrement === null` → "no minimum increment was published").
+ * - A top position → `top + arenaRequiredRaise(top, min_increment_bps)`, the
+ *   chain's own rule, **including when the viewer is the current leader**: the
+ *   chain no longer exempts a leader's self-raise, so the app must not either.
+ *   When `min_increment_bps` has not been read (`null`) the raise is not known,
+ *   so the floor is `unknown` — the app refuses rather than inventing one from
+ *   the lot's create-time `min_increment`, which the chain does not use and
+ *   which can be lower than the chain's rule.
  */
 export function arenaBidFloor(
-	model: Pick<ArenaAuctionDetailModel, 'startingBid' | 'minIncrement' | 'topBidTotal' | 'bidCount' | 'bidsWithoutAmount'>,
+	model: Pick<ArenaAuctionDetailModel, 'startingBid' | 'minIncrementBps' | 'topBidTotal' | 'bidCount' | 'bidsWithoutAmount'>,
 	ownPosition: number | null,
 ): ArenaBidFloor {
 	if (model.bidsWithoutAmount > 0 || (model.bidCount > 0 && model.topBidTotal === null)) {
@@ -211,17 +230,16 @@ export function arenaBidFloor(
 	}
 	const top = model.topBidTotal
 	if (top !== null) {
-		const step = model.minIncrement === null ? 1 : model.minIncrement
-		if (!Number.isSafeInteger(top) || !Number.isSafeInteger(step) || step < 0) {
+		if (!Number.isSafeInteger(top)) {
 			return { kind: 'unknown', minimum: null, topTotal: top }
 		}
-		// A bidder improving their OWN standing need only reach the top: their
-		// position already is the top. Requiring top + increment from the current
-		// leader would make them outbid themselves by a step.
-		if (ownPosition !== null && ownPosition >= top) {
-			return { kind: 'raise', minimum: top, topTotal: top }
+		// The chain's rule needs its committed `bps`. Without it the raise cannot
+		// be known, so the app refuses (`unknown`) rather than guessing.
+		const bps = model.minIncrementBps
+		if (bps === null || !Number.isSafeInteger(bps) || bps < 0) {
+			return { kind: 'unknown', minimum: null, topTotal: top }
 		}
-		return { kind: 'raise', minimum: top + step, topTotal: top }
+		return { kind: 'raise', minimum: top + arenaRequiredRaise(top, bps), topTotal: top }
 	}
 	if (model.startingBid === null || !Number.isSafeInteger(model.startingBid)) {
 		return { kind: 'unknown', minimum: null, topTotal: null }
@@ -329,7 +347,7 @@ export function bidBlockedCopy(reason: ArenaBidBlockedReason, check: Pick<ArenaB
 		case 'auction-not-read':
 			return 'This auction could not be read, so there is nothing to bid on yet.'
 		case 'read-incomplete':
-			return 'The auction’s bids could not all be read, so the minimum for your next bid is not known. Reload to try again.'
+			return 'The auction’s bids or the chain’s terms could not all be read, so the minimum for your next bid is not known. Reload to try again.'
 		case 'end-unknown':
 			return 'This auction states no end time, so the app cannot say whether bidding is open. Nothing is offered for bid until an end time is published.'
 		case 'ended':

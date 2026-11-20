@@ -19,6 +19,7 @@ import { finalizeEvent, getPublicKey } from 'nostr-tools'
 import type { EventReadContext, NostrEventLike } from '@sdk/core'
 import { ARENA_PARAMS_KIND } from '@sdk/commerce/auctions/constants'
 import {
+	ARENA_DEFAULT_MIN_INCREMENT_BPS,
 	ARENA_PARAMS_REFUSAL_ANCHOR_MISMATCH,
 	ARENA_PARAMS_REFUSAL_BAD_ANCHOR,
 	ARENA_PARAMS_REFUSAL_BAD_KIND,
@@ -181,9 +182,11 @@ describe('parseArenaParamsEvent — the live relay fixture', () => {
 		expect(terms.increment_max).toBe(1_000_000)
 	})
 
-	test('every term the relay did not carry is null — never a default, never a 0', () => {
+	test('every term the relay did not carry is null — never a default, never a 0 (the one exception is the raise, which has a chain default)', () => {
 		// A signed, anchored, on-roster event whose content carries ONLY the schema,
-		// the anchor and the roster: every escrow term is absent.
+		// the anchor and the roster: every escrow term is absent. `min_increment_bps`
+		// is the deliberate exception: an absent field means the chain's default,
+		// not "unknown" — see the test below.
 		const sparse = signedParams({
 			schema: 'arena.params.v1',
 			height: 344,
@@ -201,6 +204,7 @@ describe('parseArenaParamsEvent — the live relay fixture', () => {
 			bid_to_consensus_latency_sec: null,
 			min_window_sec: null,
 			max_window_sec: null,
+			min_increment_bps: ARENA_DEFAULT_MIN_INCREMENT_BPS,
 			min_duration_sec: null,
 			max_duration_sec: null,
 			max_proofs: null,
@@ -217,6 +221,19 @@ describe('parseArenaParamsEvent — the live relay fixture', () => {
 			increment_min: null,
 			increment_max: null,
 		})
+	})
+
+	test('min_increment_bps is the effective raise, defaulting to the chain’s 200 when absent', () => {
+		const validators = [{ pubkey: SIGNER.pubkey, name: 'Validator 1', index: 1 }]
+		// The live fixture predates the field: the chain is enforcing its default.
+		expect(parseArenaParamsEvent(LIVE_EVENT).terms.min_increment_bps).toBe(ARENA_DEFAULT_MIN_INCREMENT_BPS)
+		// An explicit value is read verbatim.
+		const explicit = signedParams({ ...LIVE_CONTENT, validators, min_increment_bps: 500 })
+		expect(parseArenaParamsEvent(explicit).terms.min_increment_bps).toBe(500)
+		// A `0` is the default too: a chain that enforced no raise would still admit
+		// a 1-sat self-raise, which is exactly what the chain now forbids.
+		const zero = signedParams({ ...LIVE_CONTENT, validators, min_increment_bps: 0 })
+		expect(parseArenaParamsEvent(zero).terms.min_increment_bps).toBe(ARENA_DEFAULT_MIN_INCREMENT_BPS)
 	})
 })
 

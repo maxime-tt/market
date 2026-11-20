@@ -206,6 +206,14 @@ export interface ArenaSurfaceContext {
 	 * Absent → the mismatch can't be computed, and stays `null`.
 	 */
 	heldParamsVersion?: string | null
+	/**
+	 * The **effective** `min_increment_bps` (`Params.MinIncrementBps`) the app
+	 * last read from the kind-1448 params event, when it has one. Carried into the
+	 * detail model so the bid floor can apply the chain's own raise rule. Absent
+	 * (or `null`) → the params have not been read, and the raise floor refuses
+	 * rather than inventing a raise from the lot's create-time `min_increment`.
+	 */
+	minIncrementBps?: number | null
 }
 
 /** One canonical auction → the card model. */
@@ -344,6 +352,7 @@ export function toAuctionDetailModel(view: ArenaAuctionView, context: ArenaSurfa
 		description: view.content.description,
 		media: lotGallery(view.content.image, view.content.media),
 		minIncrement: view.content.minIncrement,
+		minIncrementBps: context.minIncrementBps ?? null,
 		mode: view.content.mode,
 		windowSec: view.content.windowSec,
 		durationSec: view.content.durationSec,

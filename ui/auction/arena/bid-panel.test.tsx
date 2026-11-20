@@ -61,6 +61,7 @@ function detail(over: Partial<ArenaAuctionDetailModel> = {}): ArenaAuctionDetail
 		description: null,
 		media: [],
 		minIncrement: 100,
+		minIncrementBps: 200,
 		mode: 'fixed',
 		windowSec: null,
 		durationSec: 3600,
@@ -151,9 +152,9 @@ describe('ArenaBidPanel — the entry surface', () => {
 		expect(html).toContain('disabled')
 	})
 
-	test('the floor for a raise is stated, with the increment that produced it', () => {
+	test('the floor for a raise is stated, from the chain’s own raise rule', () => {
 		const model = detail({ bidCount: 1, topBidTotal: 1000 })
-		expect(panel({ model, amountInput: '1100' })).toContain('Next bid: at least 1,100 sats.')
+		expect(panel({ model, amountInput: '1100' })).toContain('Next bid: at least 1,020 sats.')
 	})
 
 	test('a bidder with a position is told that bids add to it', () => {
