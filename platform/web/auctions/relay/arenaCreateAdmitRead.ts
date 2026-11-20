@@ -24,7 +24,7 @@
  *    `arena.createadmit.v1` — the other two schemas of the kind are refused by
  *    name, never mis-read;
  * 4. its anchor is **mandatory** and the tags' `height`/`hash` **agree** with
- *    the content's `height`/`block_hash`;
+ *    the content's `accepted_height`/`block_hash`;
  * 5. the `e` tag agrees with the content `root_event_id`, and the `auction` tag
  *    agrees with the content `auction_id` — each is one fact written twice, and
  *    a disagreement means the event addresses two creates;
@@ -35,15 +35,17 @@
  *
  * Anything else is refused **by name**, never guessed at.
  *
- * ## The accepted height, and the anchor height, are two numbers
+ * ## The accepted height is the anchor height
  *
  * `content.accepted_height` is the chain's own statement of the height it
  * accepted the create at, and it is required: a create-admission that cannot
  * state where it accepted the create is not an acceptance this app will follow.
- * The anchor's `height` is the committed height of the **fact** and is what
- * dedupe uses (the earliest anchored height wins) — a validator that restarts
- * and re-publishes the same acceptance at a later height has still stated one
- * acceptance, at the height it names.
+ * The chain builds the anchor tags from exactly this value and `block_hash`
+ * (`BuildCreateAdmitEvent`), so the tag and content copies must be **equal**, and
+ * the height the fact is anchored at **is** the height it accepted at. Dedupe
+ * keeps the earliest anchored height — the earliest acceptance stated — so a
+ * validator that restarts and re-publishes the same acceptance at a later height
+ * has still stated one acceptance.
  *
  * ## Honesty rule
  *
@@ -229,55 +231,63 @@ function requireVerifiedSignature(event: ArenaCreateAdmitEventLike): void {
 }
 
 /**
- * The mandatory anchor, verifying the tag copy **against** the content copy —
- * byte for byte what `arenaLotStateRead.ts:requireAgreeingAnchor` and
- * `arenaBidAdmitRead.ts` do, so all three schemas of kind 1449 share one anchor
- * rule.
+ * The mandatory anchor of a create-admission: the `height`/`hash` tags **equal**
+ * the content's `accepted_height`/`block_hash` — the two numbers the chain built
+ * both from (`BuildCreateAdmitEvent`), cross-checked against each other so an
+ * event cannot carry two anchors.
  *
- * A value missing from **both** sources is `unanchored` (the client MUST ignore
- * it); present-but-malformed is `bad_anchor`; present on both sides but
- * **unequal** is `anchor_mismatch`.
+ * A missing tag is `unanchored` (the client MUST ignore it);
+ * present-but-malformed is `bad_anchor`; present on both sides but **unequal**
+ * is `anchor_mismatch`.
  */
 function requireAgreeingAnchor(
 	tags: string[][],
-	content: Record<string, unknown>,
+	contentAcceptedHeight: number,
+	contentHash: string | null,
 	label: string,
 ): { height: number; hash: string } {
 	const tagHeight = tagValue(tags, 'height')
 	const tagHash = tagValue(tags, 'hash')
-	const contentHeight = content.height === undefined || content.height === null ? null : String(content.height)
-	const contentHash = asNonEmptyString(content.block_hash)
 
-	if (tagHeight === null && contentHeight === null) {
+	if (tagHeight === null) {
 		throw new ArenaCreateAdmitError(ARENA_CREATE_ADMIT_REFUSAL_UNANCHORED, `${label} is missing the mandatory height anchor`)
 	}
-	if (tagHash === null && contentHash === null) {
+	if (tagHash === null) {
 		throw new ArenaCreateAdmitError(ARENA_CREATE_ADMIT_REFUSAL_UNANCHORED, `${label} is missing the mandatory hash anchor`)
 	}
+	if (contentHash === null) {
+		throw new ArenaCreateAdmitError(ARENA_CREATE_ADMIT_REFUSAL_UNANCHORED, `${label} is missing the mandatory content hash anchor`)
+	}
 
-	const height = asPositiveInteger(tagHeight ?? contentHeight)
+	const height = asPositiveInteger(tagHeight)
 	if (height === null) {
 		throw new ArenaCreateAdmitError(ARENA_CREATE_ADMIT_REFUSAL_BAD_ANCHOR, `${label} height anchor is not a positive integer`)
 	}
-	const hash = tagHash ?? contentHash
-	if (hash === null || !HEX.test(hash)) {
+	if (!HEX.test(tagHash)) {
 		throw new ArenaCreateAdmitError(ARENA_CREATE_ADMIT_REFUSAL_BAD_ANCHOR, `${label} hash anchor is not a non-empty hex string`)
 	}
 
-	if (contentHeight !== null && String(height) !== contentHeight.trim()) {
+	// The chain builds the anchor tags from the content's own values
+	// (`~/work/wt-validator` `chain/lotevents.go` `BuildCreateAdmitEvent`: the
+	// `height`/`hash` tags are `accepted_height`/`block_hash`), and its own parser
+	// refuses them unless they agree (`ParseCreateAdmitEvent`: `tagHeight !=
+	// strconv.FormatInt(c.AcceptedHeight, 10) || tagHash != c.BlockHash`). So the
+	// two copies must be **equal**, not merely both present: a relay that
+	// re-framed one anchor cannot hide the other behind a second copy.
+	if (height !== contentAcceptedHeight) {
 		throw new ArenaCreateAdmitError(
 			ARENA_CREATE_ADMIT_REFUSAL_ANCHOR_MISMATCH,
-			`tag height ${JSON.stringify(tagHeight)} != content height ${JSON.stringify(contentHeight)}`,
+			`tag height ${JSON.stringify(tagHeight)} != content accepted_height ${contentAcceptedHeight}`,
 		)
 	}
-	if (contentHash !== null && tagHash !== null && contentHash.toLowerCase() !== tagHash.toLowerCase()) {
+	if (tagHash.toLowerCase() !== contentHash.toLowerCase()) {
 		throw new ArenaCreateAdmitError(
 			ARENA_CREATE_ADMIT_REFUSAL_ANCHOR_MISMATCH,
 			`tag hash ${JSON.stringify(tagHash)} != content block_hash ${JSON.stringify(contentHash)}`,
 		)
 	}
 
-	return { height, hash: hash.toLowerCase() }
+	return { height, hash: tagHash.toLowerCase() }
 }
 
 /**
@@ -341,7 +351,15 @@ export function parseArenaCreateAdmitEvent(
 		)
 	}
 
-	const anchor = requireAgreeingAnchor(event.tags, content, label)
+	// The height the fact exists to state: an acceptance that cannot say where it
+	// accepted the create is refused, never exposed as `null`. It is also the
+	// anchor's height — the chain builds the `height` tag from this very value.
+	const acceptedHeight = asPositiveInteger(content.accepted_height)
+	if (acceptedHeight === null) {
+		throw new ArenaCreateAdmitError(ARENA_CREATE_ADMIT_REFUSAL_BAD_CONTENT, 'create-admission event states no readable accepted_height')
+	}
+
+	const anchor = requireAgreeingAnchor(event.tags, acceptedHeight, asNonEmptyString(content.block_hash), label)
 
 	// The `e` tag and the content `root_event_id` are the same fact written
 	// twice; a disagreement means the acceptance names two creates.
@@ -382,14 +400,6 @@ export function parseArenaCreateAdmitEvent(
 			ARENA_CREATE_ADMIT_REFUSAL_P_TAG_MISMATCH,
 			`p tag ${JSON.stringify(tagP)} != signer ${JSON.stringify(event.pubkey)}`,
 		)
-	}
-
-	// The height the fact exists to state: an acceptance that cannot say where it
-	// accepted the create is refused here, never exposed as `null` and never
-	// silently replaced by the anchor height.
-	const acceptedHeight = asPositiveInteger(content.accepted_height)
-	if (acceptedHeight === null) {
-		throw new ArenaCreateAdmitError(ARENA_CREATE_ADMIT_REFUSAL_BAD_CONTENT, 'create-admission event states no readable accepted_height')
 	}
 
 	requireRosterMembership(event, options.roster)

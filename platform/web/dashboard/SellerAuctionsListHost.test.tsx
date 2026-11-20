@@ -12,6 +12,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
 import type { NostrEventLike } from '@sdk/core'
+import { makeCreateAdmitEvent } from '@platform/web/auctions/relay/arenaCreateAdmitFixture'
 import {
 	decodeArenaEvent,
 	projectArenaEvents,
@@ -70,7 +71,9 @@ function healthOf(over: Partial<ArenaReadHealth> = {}): ArenaReadHealth {
 }
 
 function snapshotOf(events: NostrEventLike[]): ArenaAuctionSnapshot {
-	const decoded = events.map((event) => {
+	// The chain accepted every fixture create: append its admission.
+	const admits = events.filter((event) => event.kind === ARENA_AUCTION_CREATE_KIND).map((create) => makeCreateAdmitEvent(create))
+	const decoded = [...events, ...admits].map((event) => {
 		const result = decodeArenaEvent(event, 'wss://relay.one')
 		if (!result.ok) throw new Error(`fixture refused: ${result.refusal.reason} ${result.refusal.detail}`)
 		return result.event

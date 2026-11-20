@@ -13,8 +13,10 @@ import {
 	ARENA_NO_COMMITTED_END_LABEL,
 	chainClockLabel,
 	committedEndLabel,
+	createAcceptanceNotice,
 	createRefusalLabel,
 	type ArenaChainClockModel,
+	type ArenaCreateAcceptanceModel,
 } from './model'
 
 function clock(over: Partial<ArenaChainClockModel> = {}): ArenaChainClockModel {
@@ -92,5 +94,46 @@ describe('committedEndLabel / createRefusalLabel', () => {
 	test('the labels the surfaces use name the two end sources and the missing committed end', () => {
 		expect(ARENA_CREATE_DERIVED_END_LABEL).toBe('create-derived end')
 		expect(ARENA_NO_COMMITTED_END_LABEL).toBe('no committed end read')
+	})
+})
+
+describe('createAcceptanceNotice — the chain’s word on a create, or the absence of one', () => {
+	const acceptance = (over: Partial<ArenaCreateAcceptanceModel> = {}): ArenaCreateAcceptanceModel => ({
+		accepted: false,
+		acceptedHeight: null,
+		admitEventId: null,
+		...over,
+	})
+	const refusal = { refusalEventId: 'refusal-1', height: 1749, reason: 'startPrice out of range (1..10000000)' }
+
+	test('accepted names the height the chain accepted at', () => {
+		const line = createAcceptanceNotice(acceptance({ accepted: true, acceptedHeight: 4_210, admitEventId: 'admit-1' }), null, 'settled')
+		expect(line).toBe('The chain accepted this listing at height 4,210.')
+	})
+
+	test('accepted with no height read says so in words, never a number', () => {
+		const line = createAcceptanceNotice(acceptance({ accepted: true }), null, 'settled')
+		expect(line).toContain('The height it accepted at was not read')
+	})
+
+	test('a refusal is the chain’s own words verbatim', () => {
+		expect(createAcceptanceNotice(acceptance(), refusal, 'settled')).toBe(
+			'the chain refused this listing: startPrice out of range (1..10000000)',
+		)
+	})
+
+	test('neither fact while the read has not settled: still reading, never accepted and never refused', () => {
+		const line = createAcceptanceNotice(acceptance(), null, 'incomplete')
+		expect(line).toContain('has not accepted this listing yet')
+		expect(line).toContain('has not settled')
+		expect(line).not.toContain('accepted this listing at height')
+		expect(line).not.toContain('refused')
+	})
+
+	test('neither fact once the read settled: no relay carried one, and nothing is followed', () => {
+		const line = createAcceptanceNotice(acceptance(), null, 'settled')
+		expect(line).toContain('no relay carried a create-admission fact')
+		expect(line).toContain('Nothing is followed')
+		expect(line).not.toContain('refused')
 	})
 })

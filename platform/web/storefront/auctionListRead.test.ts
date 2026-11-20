@@ -22,6 +22,7 @@ import {
 	decodeArenaEvent,
 	projectArenaEvents,
 	type ArenaAuctionRead,
+	type ArenaAuctionView,
 	type ArenaRelayOpen,
 	type ArenaRelayOpenOptions,
 	type ArenaReadHealth,
@@ -218,7 +219,7 @@ function admitEvent(over: { d?: string; seller?: string; rootEventId?: string; a
 	const d = over.d ?? 'lot-1'
 	const seller = over.seller ?? SELLER_A
 	const coordinate = `1440:${seller}:${d}`
-	const height = 4242
+	const acceptedHeight = over.acceptedHeight ?? 4241
 	const hash = 'ab'.repeat(32)
 	return finalizeEvent(
 		{
@@ -227,7 +228,7 @@ function admitEvent(over: { d?: string; seller?: string; rootEventId?: string; a
 			tags: [
 				['e', over.rootEventId ?? `create-${d}`],
 				['auction', coordinate],
-				['height', String(height)],
+				['height', String(acceptedHeight)],
 				['hash', hash],
 				['p', ADMIT_PUB],
 			],
@@ -236,8 +237,7 @@ function admitEvent(over: { d?: string; seller?: string; rootEventId?: string; a
 				auction_id: coordinate,
 				seller,
 				root_event_id: over.rootEventId ?? `create-${d}`,
-				accepted_height: over.acceptedHeight ?? 4241,
-				height,
+				accepted_height: acceptedHeight,
 				block_hash: hash,
 				end_time: 4600,
 				original_end_time: 4600,
@@ -268,7 +268,7 @@ const ADMIT: ArenaAuctionView['createAdmit'] = {
 	endTime: 4600,
 	originalEndTime: 4600,
 	mode: 'fixed',
-	height: 4242,
+	height: 4241,
 	blockHash: 'ab'.repeat(32),
 }
 
@@ -380,6 +380,7 @@ describe('toAuctionListItem', () => {
 
 	test('a verdict is carried through as relay-reported, and absent reads null', () => {
 		const verdict = {
+			eventId: 'verdict-1',
 			auctionId: 'lot-1',
 			bidId: 'bid-1',
 			outcome: 'winner' as const,
@@ -549,6 +550,9 @@ describe('collectAuctionListRead', () => {
 			createEvent({ id: 'root', created_at: 1000, d: 'lot-1' }),
 			bidEvent({ auctionId: 'lot-1', amount: 150 }),
 			verdictEvent({ auctionId: 'lot-1', outcome: 'winner' }),
+			// The chain's create-admission: without it the gate does not follow the
+			// lot, and the delivered create is (correctly) not an item.
+			admitEvent(),
 		]
 		const state = await collectAuctionListRead(readFrom({ 'wss://a': { events } }))
 
@@ -574,7 +578,7 @@ describe('collectAuctionListRead', () => {
 		// delivered is kept.
 		const state = await collectAuctionListRead(
 			readFrom({
-				'wss://a': { events: [createEvent({ id: 'root', d: 'lot-1' })] },
+				'wss://a': { events: [createEvent({ id: 'root', d: 'lot-1' }), admitEvent()] },
 				'wss://b': { fail: 'connection refused' },
 			}),
 		)

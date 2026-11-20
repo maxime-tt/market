@@ -17,6 +17,7 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ARENA_AUCTION_BID_KIND, ARENA_AUCTION_CREATE_KIND } from '@sdk/commerce/auctions/constants'
+import { makeCreateAdmitEvent } from './arenaCreateAdmitFixture'
 import { testLabelActions } from '@sdk/config/test-labels'
 import type { NostrEventLike } from '@sdk/core'
 import { findAuction, toAuctionDetailModel } from '@platform/web/auctions/relay/auctionSurfacesRead'
@@ -104,7 +105,9 @@ function healthOf(over: Partial<ArenaReadHealth> = {}): ArenaReadHealth {
 }
 
 function snapshotOf(events: NostrEventLike[], health: Partial<ArenaReadHealth> = {}): ArenaAuctionSnapshot {
-	const decoded = events.map((event) => {
+	// The chain accepted every fixture create: append its admission.
+	const admits = events.filter((event) => event.kind === ARENA_AUCTION_CREATE_KIND).map((create) => makeCreateAdmitEvent(create))
+	const decoded = [...events, ...admits].map((event) => {
 		const result = decodeArenaEvent(event, 'wss://relay.one')
 		if (!result.ok) throw new Error(`fixture refused: ${result.refusal.reason} ${result.refusal.detail}`)
 		return result.event
@@ -473,6 +476,29 @@ describe('ADR-0009 — test-labeled lots are hidden from the auction list', () =
 
 		// `open-lot` is SELLER's; OtherSeller's same `d` is a different coordinate.
 		expect(select().cards.map((card) => card.d)).toEqual(['open-lot', 'endless-lot', 'ended-lot'])
+	})
+})
+
+describe('the chain’s create-admission gate', () => {
+	test('an unaccepted coordinate is dropped, and total counts only followed lots', () => {
+		// The read delivered both creates; only one carries the chain's own
+		// acceptance (`arena.createadmit.v1`).
+		const accepted = createEvent({ d: 'accepted-lot' })
+		const unaccepted = createEvent({ d: 'unaccepted-lot' })
+		const snapshot = projectArenaEvents(
+			[accepted, makeCreateAdmitEvent(accepted), unaccepted].map((event) => {
+				const result = decodeArenaEvent(event, 'wss://relay.one')
+				if (!result.ok) throw new Error(`fixture refused: ${result.refusal.reason} ${result.refusal.detail}`)
+				return result.event
+			}),
+			healthOf(),
+		)
+		expect(snapshot.auctions.map((auction) => auction.d).sort()).toEqual(['accepted-lot', 'unaccepted-lot'])
+		expect(snapshot.auctions.find((auction) => auction.d === 'unaccepted-lot')?.createAdmit).toBeNull()
+
+		const { cards, total } = selectArenaListCards(snapshot, { now: NOW, status: 'settled', sort: 'newest', hideEnded: false })
+		expect(cards.map((card) => card.d)).toEqual(['accepted-lot'])
+		expect(total).toBe(1)
 	})
 })
 

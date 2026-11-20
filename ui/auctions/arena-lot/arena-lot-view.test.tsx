@@ -227,6 +227,24 @@ describe('ArenaLotView', () => {
 		expect(html).not.toContain('0 sats')
 	})
 
+	test('a lot the chain has not accepted shows the banner and no bid controller', () => {
+		// The bid controller is handed in ready to render, as the host does; the view
+		// must null it for an unaccepted lot, because nothing on it may move money.
+		const html = render({
+			model: {
+				...model,
+				phase: 'unaccepted',
+				acceptance: { accepted: false, acceptedHeight: null, admitEventId: null },
+			},
+		})
+		expect(html).toContain('data-testid="arena-lot-acceptance"')
+		expect(html).toContain('data-accepted="false"')
+		expect(html).toContain('no relay carried a create-admission fact')
+		expect(html).not.toContain('arena-lot-ladder')
+		expect(html).not.toContain('Sign in to bid')
+		expect(html).toContain('data-phase="unaccepted"')
+	})
+
 	test('no third-party hosts or Google in the view', () => {
 		const html = render()
 		expect(html).not.toMatch(/https?:\/\//)
