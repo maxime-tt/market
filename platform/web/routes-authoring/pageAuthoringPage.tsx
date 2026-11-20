@@ -23,7 +23,7 @@ import {
 import { useAmIAdmin } from '@platform/web/app-settings/appSettingsQuery'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { useDashboardTitle } from '@platform/web/app/dashboardTitle'
-import { StorefrontBuilder } from '@platform/web/storefront/StorefrontBuilder'
+import { StorefrontBuilder } from '@platform/web/storefront/LazyStorefrontBuilder'
 import { describePage, pageNameNotice, validatePageName } from './pageIdentity'
 import { useMyPages } from './pageListQuery'
 import { resolveAuthor, shortPubkey } from './routeAuthoring'

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { ExternalLink, QrCode } from 'lucide-react'
-import { Scanner } from '@yudiel/react-qr-scanner'
+import { Scanner } from '@ui/primitives/lazy-qr-scanner'
 import { Button } from '../primitives/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../primitives/dialog'
 import { Input } from '../primitives/input'

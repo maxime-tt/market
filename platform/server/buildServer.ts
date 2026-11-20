@@ -57,6 +57,8 @@ export interface BuildServerOptions {
 	/** Loaded once at boot, then mutated by route intents; an invalid file refuses boot, a missing one is the empty table. */
 	routing: RouteTable
 	pageStore?: PageStore
+	/** Routes the entrypoint adds, e.g. the prebuilt bundle's `/_app/:file` (ADR-0027). */
+	extraRoutes?: BunRoutes
 }
 
 export interface ContentRoutesOptions {
@@ -287,7 +289,12 @@ export function buildContentRoutes({
 	return routes
 }
 
-export function buildServer({ indexHtml, routing, pageStore = createPageStore() }: BuildServerOptions): Server<undefined> {
+export function buildServer({
+	indexHtml,
+	routing,
+	pageStore = createPageStore(),
+	extraRoutes = {},
+}: BuildServerOptions): Server<undefined> {
 	// Auction issuer endpoints used to live on this HTTP server
 	// (`/api/auctions/path-request`, `/api/auctions/settlement-plan`).
 	// They've moved to ContextVM `tools/call` over Nostr — see
@@ -299,6 +306,7 @@ export function buildServer({ indexHtml, routing, pageStore = createPageStore() 
 		...zapPurchaseRoutes,
 		...nip05Routes,
 		...staticRoutes,
+		...extraRoutes,
 		// Browse search proxy — mounted only when the instance selects the
 		// `rabbithole` provider; an empty record (nothing mounted) by default.
 		...buildBrowseSearchRoutes(),

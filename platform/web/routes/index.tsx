@@ -1,14 +1,17 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { lazyRetry } from '@ui/utils/lazy-retry'
 import { z } from 'zod'
 import { BrowseIndexHost } from '@platform/web/browse/BrowseIndexHost'
 import { StorefrontAddressPage } from '@platform/web/storefront/StorefrontAddressPage'
 import { StorefrontRenderer } from '@ui/storefront'
 import { storefrontBlockSlots } from '@platform/web/storefront/StorefrontBlockSlots'
 import { parseStorefrontPage, STOREFRONT_PAGE_VERSION } from '@sdk/commerce/storefront'
-import { IntroOverlay } from '@ui/browse/intro'
 import { useConfigQuery } from '@platform/web/config/publicConfigQuery'
 import { LEGACY_HOME_PUBKEY, useInstanceHomePage } from '@platform/web/storefront/instanceHomePage'
+
+// The intro animation (gsap) loads after the page, never ahead of it (ADR-0027).
+const IntroOverlay = lazyRetry(() => import('@ui/browse/intro').then((m) => ({ default: m.IntroOverlay })))
 
 /**
  * Browse URL state: ?q=&p=
@@ -91,7 +94,11 @@ function BrowseIndex() {
 		const page = arenaHome(publishedHome ?? (parseStorefrontPage(JSON.stringify(homePage)).page as never))
 		return (
 			<>
-				{!introDone && <IntroOverlay onDone={() => setIntroDone(true)} />}
+				{!introDone && (
+					<Suspense fallback={<div aria-hidden className="fixed inset-0 z-[60] bg-background pointer-events-none" />}>
+						<IntroOverlay onDone={() => setIntroDone(true)} />
+					</Suspense>
+				)}
 				{homeLoading ? (
 					// Hold the space while the published page is read: drawing the built-in
 					// composition here flashed a stand-in page before the real one.
