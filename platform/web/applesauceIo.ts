@@ -379,6 +379,42 @@ export interface RelayConnectorState {
 }
 
 /**
+ * The shared pool's own `Relay` for a URL, or null when the pool holds none.
+ * A lookup, never a creation: asking the pool about a relay must not add one.
+ */
+function poolRelay(url: string): Relay | null {
+	const pool = getPool() as unknown as { relays?: Map<string, Relay> }
+	const relays = pool.relays
+	if (relays === undefined) return null
+	try {
+		return relays.get(normalizeURL(url)) ?? null
+	} catch {
+		// An unparseable URL is a relay the pool cannot hold, not a crash.
+		return null
+	}
+}
+
+/**
+ * One relay's connection truth **on demand** — the pool's own socket, the same
+ * truth the transport's settle bound reads when its timer fires. `null` means
+ * the pool holds no relay for that URL, i.e. nothing was ever requested through
+ * it; a caller must read that as "no verdict", never as "unreachable".
+ *
+ * A consumer whose own deadline fires **before** the transport's settle bound
+ * asks this rather than waiting for the transport's marker: the transport's
+ * bound is scheduled when its stream opens, the read's deadline when the read
+ * starts, so the read's own give-up lands first. The arena read asks it there,
+ * once and synchronously, so a relay whose socket never opened is `unreachable`
+ * (a settled "no") instead of frozen `pending` — which is what made the lot page
+ * report `incomplete` ("3 of 7 relays answered") on every cold load (measured
+ * 2026-11-20; see `createWebArenaAuctionRead`).
+ */
+export function relayConnectionState(url: string): RelayConnectorState | null {
+	const relay = poolRelay(url)
+	return relay === null ? null : { connected: relay.connected, error: relay.error$.value }
+}
+
+/**
  * A `NOTICE` that says the relay will not serve the REQ — as opposed to a
  * courtesy notice ("welcome", an upgrade hint), which is not an answer either
  * way. Deliberately narrow: a notice that matches settles the relay `refused`.
@@ -418,9 +454,11 @@ export type RelayNoticeSource = (url: string) => ObservableLike<string> | null
  *
  * A relay that is connected at the bound but has said nothing stays in `pending`
  * — it may still answer, so the consumer must keep waiting for it. This is the
- * transport's own classification, kept a margin under the read's deadline by
- * the caller (`createWebArenaAuctionRead`), so a consumer sees it before it
- * gives up on the read.
+ * transport's own classification on the transport's own timer (`timeoutMs`). A
+ * consumer with a deadline of its **own** — one that lands before this bound,
+ * as the arena read's does — must not wait for this marker: it asks
+ * {@link relayConnectionState} when its deadline fires, and classifies what is
+ * left there (see `createWebArenaAuctionRead`).
  */
 export function createRelayStream(
 	filters: NostrFilter | NostrFilter[],
@@ -429,7 +467,7 @@ export function createRelayStream(
 		timeoutMs?: number
 		signal?: AbortSignal
 		group?: RelayRequestGroup
-		/** Connection truth for the settle bound. Defaults to the shared pool's relay when no `group` is injected. */
+		/** Connection truth for the settle bound. Defaults to {@link relayConnectionState} when no `group` is injected. */
 		relayState?: (url: string) => RelayConnectorState | null
 		/** Per-relay NOTICE stream. Defaults to the shared pool's relay when no `group` is injected. */
 		notices?: RelayNoticeSource
@@ -443,18 +481,7 @@ export function createRelayStream(
 	// (`group` defaults to it). A test hands its own `group` and, if it wants the
 	// classification, its own probes — reaching into the real pool from a test
 	// would open a socket (ADR-0005).
-	const poolRelay = (url: string): Relay | null => {
-		const pool = getPool() as unknown as { relay?: (u: string) => Relay }
-		return typeof pool.relay === 'function' ? pool.relay(url) : null
-	}
-	const relayState =
-		options.relayState ??
-		(options.group === undefined
-			? (url: string) => {
-					const relay = poolRelay(url)
-					return relay === null ? null : { connected: relay.connected, error: relay.error$.value }
-				}
-			: null)
+	const relayState = options.relayState ?? (options.group === undefined ? relayConnectionState : null)
 	const notices = options.notices ?? (options.group === undefined ? (url: string) => poolRelay(url)?.notice$ ?? null : null)
 	// The pool reports `from` normalized (a trailing slash); a consumer knows the
 	// configured URL. Map back so a refusal names the relay the consumer asked for.

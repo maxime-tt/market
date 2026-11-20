@@ -57,7 +57,8 @@
  * | no relay configured             | nothing is opened                                                   | `caught-up` at once; `health.noRelaysReachable === true`; `auctions: []` |
 * | every relay unreachable/errors  | each pump fails independently, nothing throws out of the read        | empty snapshot, `health.relays[*].status === 'unreachable'`/`'error'` |
  * | one relay down, others healthy  | the dead pump ends, the others keep delivering; no stall             | full data; `health.relays[dead].status === 'unreachable'`, `health.unreachable` names it |
- * | one relay slow / never EOSE     | it is dropped at `deadlineMs`, the others already delivered          | partial data at the deadline; that relay is `'timeout'`, in `health.pending` |
+ * | one relay slow — connected, silent | it is dropped at `deadlineMs`; the others already delivered | partial data at the deadline; that relay is `'timeout'`, in `health.pending` — it could still answer |
+ * | one relay never connects        | its socket never opened, so it cannot answer; the read classifies it at its own deadline from the transport's connect truth | partial data; that relay is `'unreachable'`, named in `health.unreachable` — **not** pending, so a read whose only non-answerers are dead relays is `settled` |
  * | one relay refuses the filter    | it CLOSEs with a reason (or NOTICEs a refusal); no follow-up REQ is opened on it | `health.relays[refuser].status === 'refused'`; `health.refused` names it; **not** pending |
  * | one relay lying                 | its events go through the same gate as everyone's: wrong kind, bad JSON, missing anchor, a 1440 update that changes an immutable field | dropped and counted in `health.relays[relay].refusals` + `snapshot.refusals`; never in `auctions` |
  *
@@ -75,11 +76,16 @@
  *   connection failure into an empty array, so a silent relay is
  *   indistinguishable from an empty one. `events()` is the live read and keeps
  *   the distinction; reach for it when it matters;
- * - the refusal/unreachable classification is the **transport's**, kept a margin
- *   under this read's deadline (`TRANSPORT_SETTLE_MARGIN_MS`) so it arrives
- *   before the read gives up on a relay. Without that margin the two timers race
- *   and a relay that had already answered "no" is recorded `timeout` — the bug
- *   this distinction exists to kill.
+ * - the refusal/unreachable classification is the **transport's** — a `CLOSED`
+ *   naming a filter error, a refusal `NOTICE`, a connection that fails — and it
+ *   arrives when the relay itself says so. The one classification the read makes
+ *   is at its own deadline, from the transport's connect truth
+ *   (`init.relayConnected`): a relay whose socket never opened cannot answer, so
+ *   it is `unreachable`, not still-waiting. Nothing settles early either way —
+ *   the read waits for the relay's own verdict for its whole deadline, there is
+ *   no per-relay margin that ends it first, and at the deadline the whole read
+ *   gives up together (see the note at the web host,
+ *   `createWebArenaAuctionRead`).
  *
  * `snapshot()` therefore **never rejects** because of the network; it resolves
  * with what arrived and a `health` that says what did not. It rejects only when
@@ -125,7 +131,7 @@
 import { parseLotMedia, type LotMediaItem } from '@sdk/commerce/auctions/lotMedia'
 import type { EventFilter, EventStorePort, EventStreamItem, NostrEventLike } from '@sdk/core'
 import type { Event } from '@sdk/core/nostr-io'
-import { createWebRelayReadContext } from '@platform/web/sdkNostrIo'
+import { createWebRelayReadContext, webRelayConnected } from '@platform/web/sdkNostrIo'
 import {
 	ARENA_AUCTION_BID_KIND,
 	ARENA_AUCTION_CREATE_KIND,
@@ -1718,11 +1724,29 @@ export interface ArenaAuctionReadInit {
 	relays: readonly string[]
 	openRelay: ArenaRelayOpenFactory
 	/**
-	 * Per-relay settle deadline, in ms. A relay that has not answered by then is
-	 * dropped and reported `'timeout'`; the read returns what it already has. The
-	 * production transport is given a slightly shorter bound
-	 * ({@link TRANSPORT_SETTLE_MARGIN_MS}) so its refusal/unreachable
-	 * classification arrives before this deadline. Defaults to 8000.
+	 * The transport's own connection truth for one relay, asked **once, when the
+	 * deadline fires**: `false` when the relay has no open socket, `null` when
+	 * the transport cannot speak for it (no verdict — the relay keeps the old
+	 * reading and stays `pending`).
+	 *
+	 * A relay that has said nothing and whose socket never opened cannot answer,
+	 * so at the deadline it is `unreachable` — a settled "no" — and not
+	 * `pending` ("we do not know yet"). This is the same truth the transport's
+	 * own settle bound reads, asked here rather than waited for, because that
+	 * bound is scheduled when its stream opens and so fires *after* this
+	 * deadline: waiting for it left every never-connected relay `pending` and
+	 * the lot page reported `incomplete` ("3 of 7 relays answered") on every
+	 * cold load (measured 2026-11-20). Absent, every unanswered relay keeps the
+	 * old `timeout` reading.
+	 */
+	relayConnected?: (url: string) => boolean | null
+	/**
+	 * The read's deadline, in ms — and, besides a caller abort, the only thing
+	 * that ends a live read. Every relay connection stays open until then; a relay
+	 * that has not answered by then is dropped and reported `'timeout'`, and the
+	 * read returns everything that arrived. The production transport is given the
+	 * same full bound, so there is no second, per-relay deadline. Defaults to
+	 * 8000.
 	 */
 	deadlineMs?: number
 	/**
@@ -1749,11 +1773,11 @@ export type ArenaReadStreamItem =
 export interface ArenaAuctionRead {
 	/**
 	 * Live read: opens synchronously, delivers decoded events in batches as
-	 * relays produce them, emits one `caught-up` once every subscription has
-	 * **settled** — it answered, refused the subscription, was unreachable, or was
-	 * dropped at the deadline — then keeps delivering. A relay the transport gave
-	 * up on but which then answers is counted as answered. Ends when aborted or
-	 * `close()`d.
+	 * relays produce them (optimistic lazy-loading), and ends at its deadline — or
+	 * a caller abort — with one final `caught-up` carrying the health. Every relay
+	 * connection stays open until then, so a relay that has signalled EOSE is
+	 * still read and a late event is still applied to the model. A relay the
+	 * transport gave up on but which then answers is counted as answered.
 	 */
 	events(options?: { signal?: AbortSignal }): AsyncIterable<ArenaReadStreamItem>
 	/**
@@ -1825,6 +1849,9 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 				let allDone = relays.length === 0
 				let caughtUpEmitted = false
 				let aborted = controller.signal.aborted
+				// The one thing that ends a live read: its deadline (or a caller abort).
+				// A settled subscription is *not* an end — see the settle marker below.
+				let deadlineFired = false
 
 				function push(item: QueueItem): void {
 					queue.push(item)
@@ -1898,11 +1925,8 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 				 * A relay the **transport classified**: it refused the subscription, or it
 				 * could not be reached. That is a fact about the relay, so it settles an
 				 * unsettled one and it upgrades the estimate the deadline already recorded
-				 * (`'timeout'`/`'closed'`) — the give-up was a guess, the classification is
-				 * a fact. `answer()` is this same rule for "yes". Without
-				 * the upgrade the `TRANSPORT_SETTLE_MARGIN_MS` margin would re-introduce the
-				 * race it exists to kill: a relay that had already answered "no" would stay
-				 * recorded `'timeout'`.
+				 * (`'timeout'`/`'closed'`) — the give-up was a guess, the classification is a
+				 * fact. `answer()` is this same rule for "yes".
 				 */
 				function classify(url: string, status: 'refused' | 'unreachable', error: string | null = null): void {
 					const entry = mutable.get(url)
@@ -1972,7 +1996,11 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 								signal: controller.signal,
 								bounded,
 							})) {
-								if (controller.signal.aborted) break
+								// The deadline ends the read: a relay that keeps
+								// delivering must not keep the drain alive past it. (A
+								// pump blocked on a quiet relay is ended by the loop's
+								// own `deadlineFired` check instead.)
+								if (controller.signal.aborted || deadlineFired) break
 								if (item.type === 'caught-up') {
 									// "Settled" is what this marker means: for a one-relay
 									// context it fires when that relay reached EOSE *or* when the
@@ -2063,14 +2091,37 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 					return
 				}
 
+				// The deadline ends the read. Everything that has arrived is already on
+				// the queue and will be drained by the loop below; the read then stops
+				// consuming — its sockets are torn down by the `finally`. Until then the
+				// relay connections stay open for the full `deadlineMs`, which is why a
+				// relay that signalled EOSE and then stayed quiet is still read.
 				const deadline = setTimeout(() => {
-					// A relay that delivered events (or an EOSE) answered, even when its
-					// transport never surfaced the EOSE — settling it `timeout` is what
-					// made a read that received events report `no-relays`.
-					for (const entry of mutable.values()) stopWaiting(entry)
+					// The deadline is where the read **knows**: it stops waiting on every
+					// relay that has not answered, and it settles each one synchronously
+					// from the transport's own connection truth — no second per-relay
+					// timer, because the transport's bound is scheduled later than this
+					// one and would land after the read had already reported.
+					for (const entry of mutable.values()) {
+						// A relay that delivered events (or an EOSE) answered, even when its
+						// transport never surfaced the EOSE — settling it `timeout` is what
+						// made a read that received events report `no-relays`.
+						if (entry.events > 0 || entry.eose) {
+							stopWaiting(entry)
+							continue
+						}
+						// It said nothing. If its socket never opened it cannot answer, so it
+						// is `unreachable` — a settled fact about the relay, the same one the
+						// transport's settle bound would record — and not `pending`, which
+						// means "we do not know yet"; at the deadline we do. `null` is the
+						// transport declining to speak: the relay keeps the silence reading.
+						if (init.relayConnected?.(entry.url) === false) classify(entry.url, 'unreachable')
+						else stopWaiting(entry)
+					}
 					// A follow-up REQ that never answered must not hold the read open past
 					// its deadline either; its subscription is dropped with the read.
 					for (const subscription of subscriptions) markSubscriptionSettled(subscription)
+					deadlineFired = true
 					push({ kind: 'wake' })
 				}, deadlineMs)
 
@@ -2086,7 +2137,10 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 							for (const subscription of subscriptions) markSubscriptionSettled(subscription)
 						}
 						if (queue.length === 0) {
-							if (allDone) break
+							// `allDone` is every pump having ended on its own; for a live
+							// read the pumps are held open by design, so `deadlineFired`
+							// is the normal exit: no subscription ending can shorten it.
+							if (allDone || deadlineFired) break
 							await wait()
 							continue
 						}
@@ -2103,15 +2157,14 @@ export function createArenaAuctionRead(init: ArenaAuctionReadInit): ArenaAuction
 						if (events.length > 0) yield { type: 'events', events }
 						if (refusals.length > 0) yield { type: 'refused', refusals }
 
-						// Every subscription that was opened — the base one per relay and any
-						// follow-up — must have reached its boundary. Without follow-ups this
-						// is exactly one subscription per relay.
-						const settleMarker = settledSubscriptions >= openSubscriptions
-						if (settleMarker && !caughtUpEmitted) {
-							caughtUpEmitted = true
-							yield { type: 'caught-up', health: healthSnapshot() }
-							if (bounded) break
-						}
+						// The **bounded** read is the one that ends on a marker: a paginated
+						// snapshot has no live budget to spend, and every subscription that
+						// was opened — the base one per relay and any follow-up — reaching
+						// its boundary is its completeness signal. The live read does not
+						// end here: a relay that has signalled EOSE may still deliver, so its
+						// connection stays open and the read ends at its deadline (or a
+						// caller abort). No subscription ending shortens a live read.
+						if (bounded && settledSubscriptions >= openSubscriptions) break
 					}
 
 					if (!caughtUpEmitted) {
@@ -2178,22 +2231,16 @@ export interface WebArenaAuctionReadInit {
 	followUpFilters?: (events: readonly ArenaAuctionEvent[]) => readonly EventFilter[]
 }
 
-/**
- * The transport's per-relay settle bound, kept a margin **under** the read's
- * deadline. At that bound the transport classifies each relay it has not heard
- * from: a relay whose socket never opened is `unreachable`, a relay that
- * connected and stayed silent is `pending`. The read needs that verdict before
- * it gives up, or the two timers race and a relay that had already answered "no"
- * is recorded `timeout` — which is the bug this margin kills (measured
- * 2026-11-19: the read's 8 s deadline and the transport's 8 s fallback fired
- * within 8 ms of each other).
- */
-export const TRANSPORT_SETTLE_MARGIN_MS = 1200
-
-/** The transport's per-relay settle bound for a read with `deadlineMs`; never under a second. */
-function transportDeadline(deadlineMs: number): number {
-	return Math.max(1000, deadlineMs - TRANSPORT_SETTLE_MARGIN_MS)
-}
+// There is deliberately **no** per-relay transport margin. The transport's
+// never-EOSE fallback is given the read's own full `deadlineMs`, so a relay's
+// connection is held open for exactly as long as the read is. A shorter,
+// per-relay bound was a second deadline: it let one relay's settle end a read
+// whose other relays could still deliver.
+//
+// That fallback is also later than the read's deadline — it is armed when a
+// stream opens, the deadline when the read starts — so the read does not wait
+// for the transport's verdicts: at its own deadline it asks the transport's
+// connect truth (`webRelayConnected`) and classifies what is left itself.
 
 /**
  * The production read: one `EventReadContext` **per relay** over the SDK seam
@@ -2205,16 +2252,27 @@ export function createWebArenaAuctionRead(init: WebArenaAuctionReadInit): ArenaA
 	const deadlineMs = init.deadlineMs ?? DEFAULT_DEADLINE_MS
 	return createArenaAuctionRead({
 		relays: init.relays,
-		deadlineMs: init.deadlineMs,
+		deadlineMs,
 		filters: init.filters,
 		followUpFilters: init.followUpFilters,
 		openRelay: (url) => {
 			const context = createWebRelayReadContext(init.store, [url], {
-				// The transport settles and classifies first; the read's own deadline
-				// stays the bound a silent relay is held to.
-				deadlineMs: transportDeadline(deadlineMs),
+				// One bound for the whole read, and the read's deadline is the earlier
+				// of the two: the transport's never-EOSE fallback is armed when this
+				// stream opens (inside the pump), the read's deadline when the read
+				// starts. So a relay that has said nothing is read for exactly as long
+				// as the read lives, and the read — not the transport's timer — is what
+				// gives up on it.
+				deadlineMs,
 			})
 			return (filters, options) => context.stream(filters, options)
 		},
+		// The connect truth the read asks at its own deadline: a relay whose socket
+		// never opened cannot answer, so it is `unreachable` and not `pending`. The
+		// transport's own bound fires after this deadline, so its verdict arrived too
+		// late: frozen as `pending`, the never-connected relays left the lot page
+		// `incomplete` ("3 of 7 relays answered") on every cold load (measured
+		// 2026-11-20). Nothing settles early: this is a classification, not an end.
+		relayConnected: webRelayConnected,
 	})
 }
