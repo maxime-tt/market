@@ -4,12 +4,23 @@ import type { NostrEvent, EventTemplate, Filter } from 'nostr-tools'
 import {
 	LIVE_ACTIVITY_KIND,
 	LIVE_CHAT_KIND,
-	AUCTION_KIND,
 	buildLiveActivityTags,
 	buildLiveActivityCoord,
 	deriveLiveActivityStatus,
 	type LiveActivityStatus,
 } from '@sdk/core/nostr/nip53'
+import { ARENA_AUCTION_CREATE_KIND, ARENA_LOT_STATE_KIND } from '@sdk/commerce/auctions/constants'
+import {
+	arenaAuctionCoordinate,
+	canonicalArenaCreate,
+	createDerivedEndSeconds,
+	parseArenaCreateEvent,
+	resolveArenaCreateVersions,
+	ArenaLotStateError,
+	parseArenaLotStateEvent,
+	type ParsedArenaCreate,
+	type ParsedArenaLotState,
+} from '@sdk/commerce/auctions/arena'
 
 export interface LiveActivityWorkerContext {
 	relayPool: ApplesauceRelayPool
@@ -70,14 +81,6 @@ export function countParticipants(
 	return { current: recentAuthors.size, total: authors.size }
 }
 
-function getTagValue(event: NostrEvent, name: string): string {
-	return event.tags.find((t) => t[0] === name)?.[1] ?? ''
-}
-
-function getTagValues(event: NostrEvent, name: string): string[] {
-	return event.tags.filter((t) => t[0] === name && t[1]).map((t) => t[1] ?? '')
-}
-
 async function fetchEventsUntilEose(relayPool: ApplesauceRelayPool, filters: Filter[], timeoutMs = 5000): Promise<NostrEvent[]> {
 	return new Promise((resolve) => {
 		const collected: NostrEvent[] = []
@@ -114,19 +117,71 @@ async function fetchEventsUntilEose(relayPool: ApplesauceRelayPool, filters: Fil
 	})
 }
 
-export async function fetchRecentLiveChatAuctions(ctx: LiveActivityWorkerContext): Promise<NostrEvent[]> {
+/**
+ * Discover the 1440 arena creates in the lookback window.
+ *
+ * The retired 30408 discovery asked for a seller-opt-in `#live_chat` tag; a
+ * 1440 create has no such tag (`auctionForm.ts` records `enableLiveChat` among
+ * the retired knobs). Ruling: **every** 1440 lot gets an activity, and the
+ * worker decides open/ended per lot from the create's own end and the chain's
+ * committed end ({@link committedEndsByCoordinate}).
+ */
+export async function fetchRecentArenaCreates(ctx: LiveActivityWorkerContext): Promise<NostrEvent[]> {
 	const lookbackSeconds = getLookbackDays() * 86400
 	const since = Math.floor(Date.now() / 1000) - lookbackSeconds
 
 	const events = await fetchEventsUntilEose(ctx.relayPool, [
 		{
-			kinds: [AUCTION_KIND],
-			'#live_chat': ['enabled'],
+			kinds: [ARENA_AUCTION_CREATE_KIND],
 			since,
 			limit: MAX_AUCTIONS_PER_POLL,
 		},
 	])
 	return events
+}
+
+/**
+ * The chain's **committed ends** (kind 1449) for the given lot coordinates,
+ * indexed by coordinate with the **highest anchored height** kept per
+ * coordinate — the chain's latest word on where the end is
+ * (`sdk/commerce/auctions/arena/arenaLotState.ts`). A lot with no 1449 has no
+ * committed end, which is not the same as its create-derived end.
+ */
+export async function committedEndsByCoordinate(
+	ctx: LiveActivityWorkerContext,
+	coordinates: readonly string[],
+): Promise<Map<string, ParsedArenaLotState>> {
+	const byCoordinate = new Map<string, ParsedArenaLotState>()
+	if (coordinates.length === 0) return byCoordinate
+
+	const events = await fetchEventsUntilEose(ctx.relayPool, [
+		{
+			kinds: [ARENA_LOT_STATE_KIND],
+			'#auction': [...coordinates],
+			limit: MAX_AUCTIONS_PER_POLL * 2,
+		},
+	])
+
+	for (const event of events) {
+		try {
+			const state = parseArenaLotStateEvent({
+				id: event.id,
+				pubkey: event.pubkey,
+				kind: event.kind,
+				created_at: event.created_at ?? 0,
+				tags: event.tags,
+				content: event.content,
+				sig: event.sig ?? '',
+			})
+			const prior = byCoordinate.get(state.auctionId)
+			if (prior === undefined || state.height > prior.height) byCoordinate.set(state.auctionId, state)
+		} catch (error) {
+			// A 1449 that does not verify is not a committed end; skip it, never guess.
+			if (!(error instanceof ArenaLotStateError)) throw error
+		}
+	}
+
+	return byCoordinate
 }
 
 export async function fetchExistingLiveActivity(ctx: LiveActivityWorkerContext, auctionCoord: string): Promise<NostrEvent | null> {
@@ -164,7 +219,7 @@ export async function fetchChatParticipants(
 export async function publishLiveActivityUpdate(
 	ctx: LiveActivityWorkerContext,
 	params: {
-		/** The kind-30408 coordinate the activity is for; the `d` is derived from it. */
+		/** The `1440:<seller>:<d>` arena coordinate the activity is for; the `d` is derived from it. */
 		auctionCoord: string
 		sellerPubkey: string
 		title: string
@@ -207,7 +262,7 @@ export async function publishLiveActivityUpdate(
 }
 
 type PublishFn = (params: {
-	/** The kind-30408 coordinate the activity is for; the `d` is derived from it. */
+	/** The `1440:<seller>:<d>` arena coordinate the activity is for; the `d` is derived from it. */
 	auctionCoord: string
 	sellerPubkey: string
 	title: string
@@ -235,43 +290,91 @@ export async function pollAndUpdateLiveActivities(
 	const now = Math.floor(Date.now() / 1000)
 	const stats = { checked: 0, created: 0, updated: 0, skipped: 0, errors: 0 }
 
-	let auctions: NostrEvent[]
+	let creates: NostrEvent[]
 	try {
-		auctions = await fetchRecentLiveChatAuctions(ctx)
+		creates = await fetchRecentArenaCreates(ctx)
 	} catch (err) {
-		console.error('[live-activity-worker] Failed to fetch auctions:', err)
+		console.error('[live-activity-worker] Failed to fetch arena creates:', err)
 		stats.errors++
 		return stats
 	}
 
+	// Parse the 1440 creates and group them by `(seller, d)`. One create may have
+	// several versions (1440 is a regular kind); `resolveArenaCreateVersions`
+	// picks the root and the canonical version the same way the web read does.
+	const parsedCreates: ParsedArenaCreate[] = []
+	for (const event of creates) {
+		const result = parseArenaCreateEvent({
+			id: event.id,
+			pubkey: event.pubkey,
+			created_at: event.created_at ?? 0,
+			tags: event.tags,
+			content: event.content,
+		})
+		if (result.ok) parsedCreates.push(result.create)
+	}
+
+	const groups = new Map<string, ParsedArenaCreate[]>()
+	for (const create of parsedCreates) {
+		const key = `${create.pubkey}\u0000${create.d}`
+		const list = groups.get(key)
+		if (list === undefined) groups.set(key, [create])
+		else list.push(create)
+	}
+
+	// The chain's committed ends for every discovered lot, in one query: a 1449
+	// publishes the end a bid moved the lot to, and it is the authority over the
+	// create-derived end. A failed query leaves the create-derived end in charge
+	// for this poll — refreshed on the next one — never a guess.
+	const coordinates = [...groups.values()].map((versions) => arenaAuctionCoordinate(versions[0].pubkey, versions[0].d))
+	let committedEnds = new Map<string, ParsedArenaLotState>()
+	try {
+		committedEnds = await committedEndsByCoordinate(ctx, coordinates)
+	} catch (err) {
+		console.error('[live-activity-worker] Failed to fetch committed ends; using create-derived ends only:', err)
+	}
+
 	const publish = opts?.publishOverride ?? ((p) => publishLiveActivityUpdate(ctx, p))
 
-	for (const auction of auctions) {
+	for (const versions of groups.values()) {
 		stats.checked++
 		try {
-			const auctionDTag = getTagValue(auction, 'd')
-			if (!auctionDTag) continue
+			const resolved = resolveArenaCreateVersions(versions)
+			const root = resolved.root
+			const canonical = canonicalArenaCreate(resolved)
 
-			const sellerPubkey = auction.pubkey
-			const startsAt = parseInt(getTagValue(auction, 'start_at') || '0', 10) || 0
-			const endAt = parseInt(getTagValue(auction, 'end_at') || '0', 10) || 0
-			const maxEndAt = parseInt(getTagValue(auction, 'max_end_at') || '0', 10) || endAt
+			const sellerPubkey = root.pubkey
+			const auctionCoord = arenaAuctionCoordinate(sellerPubkey, root.d)
+
+			// `starts` is the root create's own `created_at`: a 1440 carries no
+			// scheduled start (the 30408 `start_at`/`end_at` tags are gone).
+			const startsAt = root.createdAt
+			// `ends` is the committed end (1449) when the chain published one, else
+			// the create-derived end (`created_at + durationSec`). The two are never
+			// blurred (`ui/auction/arena/model.ts`, `endSource`).
+			const committedEnd = committedEnds.get(auctionCoord)?.endTime ?? null
+			const createDerivedEnd = createDerivedEndSeconds(root)
+			const maxEndAt = committedEnd ?? createDerivedEnd ?? 0
 			const status = deriveLiveActivityStatus(startsAt, maxEndAt, now)
-			const title = getTagValue(auction, 'title')
-			const summary = getTagValue(auction, 'summary')
-			const images = getTagValues(auction, 'image')
-			const image = images.length > 0 ? images[0] : undefined
-			const categories = getTagValues(auction, 't')
 
-			const auctionCoord = `${AUCTION_KIND}:${sellerPubkey}:${auctionDTag}`
-			// The activity's address, derived from the auction coordinate. Both
-			// this coordinate (the value chat messages carry in their `a` tag)
-			// and the activity's own `d` stay inside the relay tag-index budget —
-			// that is the whole point of the derivation. See
-			// RELAY_TAG_INDEX_VALUE_MAX_LENGTH in src/lib/nip53.ts.
+			// Every OPEN lot gets an activity. A lot with no readable end, or whose
+			// end has passed, is skipped — the worker does not refresh an activity
+			// for a lot the chain has closed.
+			if (maxEndAt === 0 || status === 'ended') continue
+
+			const title = canonical.content.title ?? ''
+			const summary = canonical.content.description ?? ''
+			const image = canonical.content.image ?? undefined
+			const categories: string[] = []
+
+			// The activity's address, derived from the `1440:<seller>:<d>`
+			// coordinate. Both this coordinate (the value chat messages carry in
+			// their `a` tag) and the activity's own `d` stay inside the relay
+			// tag-index budget — that is the whole point of the derivation. See
+			// RELAY_TAG_INDEX_VALUE_MAX_LENGTH in `sdk/core/nostr/nip53.ts`.
 			const liveActivityCoord = buildLiveActivityCoord(ctx.issuerPubkey, auctionCoord)
 
-			const dedupKey = `${sellerPubkey}:${auctionDTag}`
+			const dedupKey = auctionCoord
 
 			const existing = await fetchExistingLiveActivity(ctx, auctionCoord)
 
@@ -325,7 +428,7 @@ export async function pollAndUpdateLiveActivities(
 				stats.created++
 			}
 		} catch (err) {
-			console.error(`[live-activity-worker] Error processing auction:`, err)
+			console.error(`[live-activity-worker] Error processing lot:`, err)
 			stats.errors++
 		}
 	}
